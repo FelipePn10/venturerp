@@ -173,7 +173,7 @@ func (app *application) mount() chi.Router {
 			r.Route("/structure", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", structureHandler.Create)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/update", structureHandler.Update)
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentItemId}/children", structureHandler.GetAllDirectChildren)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentItemCode}/children", structureHandler.GetAllDirectChildren)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/resolve-for-mask", structureHandler.ResolveForMask)
 			})
 

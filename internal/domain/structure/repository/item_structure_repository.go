@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/valueobject"
 )
@@ -27,8 +28,10 @@ type ItemStructureRepository interface {
 
 	// GetAllDirectChildren retorna TODOS os filhos ativos de um pai,
 	// tanto genéricos quanto mascarados.
-	GetAllDirectChildren(ctx context.Context, parentItemCode int64) ([]*entity.ItemStructure, error)
-
+	GetAllDirectChildren(
+		ctx context.Context,
+		parentCode int64,
+	) ([]*response.StructureComponentResponse, error)
 	// GetGenericChildren retorna apenas os filhos genéricos (sem máscara) de um pai.
 	GetGenericChildren(ctx context.Context, parentItemCode int64) ([]*entity.ItemStructure, error)
 

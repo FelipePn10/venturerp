@@ -23,11 +23,27 @@ WHERE id = $1;
 
 
 -- name: GetAllDirectChildren :many
-SELECT *
-FROM item_structures
-WHERE parent_code= $1
-  AND is_active = TRUE
-ORDER BY position, id;
+SELECT
+    s.id,
+    s.parent_code,
+    s.child_code,
+    i.pdm_description_technique AS child_description,
+    s.parent_mask,
+    s.quantity,
+    s.loss_percentage,
+    s.unit_of_measurement,
+    s.health,
+    s.position,
+    s.notes,
+    s.is_active,
+    s.created_by,
+    s.created_at,
+    s.updated_at
+FROM item_structures s
+         JOIN items i ON i.code = s.child_code
+WHERE s.parent_code = $1
+  AND s.is_active = TRUE
+ORDER BY s.position, s.id;
 
 
 -- name: GetGenericChildren :many

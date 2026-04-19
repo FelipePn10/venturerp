@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/valueobject"
@@ -77,12 +78,55 @@ func (r *ItemStructureRepositorySQLC) GetByID(ctx context.Context, id int64) (*e
 func (r *ItemStructureRepositorySQLC) GetAllDirectChildren(
 	ctx context.Context,
 	parentCode int64,
-) ([]*entity.ItemStructure, error) {
+) ([]*response.StructureComponentResponse, error) {
+
 	rows, err := r.q.GetAllDirectChildren(ctx, parentCode)
 	if err != nil {
-		return nil, fmt.Errorf("searching for children of the item %d: %w", parentCode, err)
+		return nil, fmt.Errorf("searching for children of item %d: %w", parentCode, err)
 	}
-	return rowsToEntities(rows), nil
+
+	result := make([]*response.StructureComponentResponse, 0, len(rows))
+
+	for _, row := range rows {
+
+		var notes *string
+		if row.Notes.Valid {
+			notes = &row.Notes.String
+		}
+
+		var parentMask *string
+		if row.ParentMask.Valid {
+			parentMask = &row.ParentMask.String
+		}
+
+		result = append(result, &response.StructureComponentResponse{
+			ID:               row.ID,
+			ParentItemCode:   row.ParentCode,
+			ChildItemCode:    row.ChildCode,
+			ChildDescription: row.ChildDescription,
+
+			ParentMask: parentMask,
+			IsGeneric:  !row.ParentMask.Valid,
+
+			Quantity:          row.Quantity,
+			EffectiveQuantity: row.Quantity * (1 + row.LossPercentage/100),
+
+			UnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+			Health:            types.Health(row.Health),
+
+			LossPercentage: row.LossPercentage,
+			Position:       int(row.Position),
+
+			Notes: notes,
+
+			IsActive:  row.IsActive,
+			CreatedBy: row.CreatedBy,
+			CreatedAt: row.CreatedAt,
+			UpdatedAt: row.UpdatedAt,
+		})
+	}
+
+	return result, nil
 }
 
 func (r *ItemStructureRepositorySQLC) GetGenericChildren(

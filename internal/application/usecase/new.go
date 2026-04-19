@@ -242,7 +242,7 @@ func NewResolveStructureForMaskUseCase(
 }
 
 func NewGetAllDirectChildrenUseCase(
-	repo ItemStructureRepository,
+	repo repository.ItemStructureRepository,
 	auth ports.AuthService,
 ) *GetAllDirectChildrenUseCase {
 	return &GetAllDirectChildrenUseCase{
