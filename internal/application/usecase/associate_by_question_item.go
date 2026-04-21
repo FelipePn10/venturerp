@@ -31,7 +31,7 @@ func (uc *AssociateByQuestionItemUseCase) Execute(
 
 	exists, err := uc.repo.ExistsByItemAndQuestion(
 		ctx,
-		dto.ItemID,
+		dto.ItemCode,
 		dto.QuestionID,
 	)
 	if err != nil {
@@ -43,7 +43,7 @@ func (uc *AssociateByQuestionItemUseCase) Execute(
 
 	positionUsed, err := uc.repo.ExistsByItemAndPosition(
 		ctx,
-		dto.ItemID,
+		dto.ItemCode,
 		dto.Position,
 	)
 	if err != nil {
@@ -54,7 +54,7 @@ func (uc *AssociateByQuestionItemUseCase) Execute(
 	}
 
 	pq, err := entity.New(
-		dto.ItemID,
+		dto.ItemCode,
 		dto.QuestionID,
 		dto.Position,
 	)

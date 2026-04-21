@@ -105,33 +105,33 @@ func (h *ItemStructureHandler) GetAllDirectChildren(w http.ResponseWriter, r *ht
 	jsonResponse(w, http.StatusOK, result)
 }
 
-// ResolveForMask resolves BOM tree using a mask configuration.
-func (h *ItemStructureHandler) ResolveForMask(w http.ResponseWriter, r *http.Request) {
-	rootItemCode, err := parseCode(r, "rootItemCode")
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	maskValue := r.URL.Query().Get("mask")
-	if maskValue == "" {
-		jsonError(w, http.StatusBadRequest, "query param 'mask' is required (example: ?mask=100%23100%2350)")
-		return
-	}
-
-	dto := request.ResolveStructureForMaskDTO{
-		RootItemCode:  rootItemCode,
-		RootMaskValue: maskValue,
-	}
-
-	result, err := h.resolveUC.Execute(r.Context(), dto)
-	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
-		return
-	}
-
-	jsonResponse(w, http.StatusOK, result)
-}
+//// ResolveForMask resolves BOM tree using a mask configuration.
+//func (h *ItemStructureHandler) ResolveForMask(w http.ResponseWriter, r *http.Request) {
+//	rootItemCode, err := parseCode(r, "rootItemCode")
+//	if err != nil {
+//		jsonError(w, http.StatusBadRequest, err.Error())
+//		return
+//	}
+//
+//	maskValue := r.URL.Query().Get("mask")
+//	if maskValue == "" {
+//		jsonError(w, http.StatusBadRequest, "query param 'mask' is required (example: ?mask=100%23100%2350)")
+//		return
+//	}
+//
+//	dto := request.ResolveStructureForMaskDTO{
+//		RootItemCode:  rootItemCode,
+//		RootMaskValue: maskValue,
+//	}
+//
+//	result, err := h.resolveUC.Execute(r.Context(), dto)
+//	if err != nil {
+//		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+//		return
+//	}
+//
+//	jsonResponse(w, http.StatusOK, result)
+//}
 
 // parseCode extracts and validates a numeric code from URL params.
 func parseCode(r *http.Request, param string) (int64, error) {

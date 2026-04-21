@@ -52,6 +52,7 @@ func (r *RepositoryItemSQLC) Create(
 		Complement: nullable.ToNullString(item.Complement),
 
 		Nature:    int16(item.Nature),
+		Inherit:   item.Inherit,
 		Situation: int16(item.Situation),
 
 		// ✔ ENUM string → string
@@ -155,7 +156,8 @@ func (r *RepositoryItemSQLC) Create(
 
 		Complement: nullable.FromNullString(dbItem.Complement),
 
-		Nature: entity.ItemNature(dbItem.Nature),
+		Nature:  entity.ItemNature(dbItem.Nature),
+		Inherit: dbItem.Inherit,
 
 		PDM: entity.PDM{
 			GroupID:              dbItem.PdmGroupID,
@@ -254,6 +256,7 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 
 		Complement: nullable.FromNullString(dbItem.Complement),
 		Nature:     entity.ItemNature(dbItem.Nature),
+		Inherit:    dbItem.Inherit,
 
 		PDM: entity.PDM{
 			GroupID:              dbItem.PdmGroupID,

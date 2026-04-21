@@ -18,7 +18,7 @@ func (h *AssociateByQuestionItemHandler) AssociateQuestions(
 		return
 	}
 
-	if req.ItemID <= 0 || len(req.Questions) == 0 {
+	if req.ItemCode <= 0 || len(req.Questions) == 0 {
 		http.Error(w, "questions cannot be empty", http.StatusBadRequest)
 		return
 	}
@@ -26,7 +26,7 @@ func (h *AssociateByQuestionItemHandler) AssociateQuestions(
 	// one product N questions
 	for _, q := range req.Questions {
 		dto := applicationreq.AssociateByQuestionItemRequestDTO{
-			ItemID:     req.ItemID,
+			ItemCode:   req.ItemCode,
 			QuestionID: q.QuestionID,
 			Position:   q.Position,
 		}

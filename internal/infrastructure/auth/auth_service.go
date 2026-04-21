@@ -2,10 +2,13 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
+	"github.com/google/uuid"
 )
 
 type AuthService struct{}
@@ -99,6 +102,23 @@ func (a *AuthService) GetAllStructure(ctx context.Context) bool {
 func (a *AuthService) ResolveStructureForMask(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanResolveStructure(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
 func (a *AuthService) FindItemByCode(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) UserID(ctx context.Context) (uuid.UUID, error) {
+	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
+	if !ok {
+		return uuid.Nil, errors.New("unauthenticated request")
+	}
+	id, err := uuid.Parse(user.ID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid user id in context: %w", err)
+	}
+	return id, nil
 }

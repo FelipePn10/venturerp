@@ -1,6 +1,6 @@
 -- name: AssociateQuestionItem :exec
 INSERT INTO item_questions (
-    item_id,
+    item_code,
     question_id,
     position,
     created_at
@@ -10,7 +10,7 @@ INSERT INTO item_questions (
 SELECT EXISTS (
     SELECT 1
     FROM item_questions
-    WHERE item_id = $1
+    WHERE item_code = $1
       AND question_id = $2
 );
 
@@ -18,6 +18,6 @@ SELECT EXISTS (
 SELECT EXISTS (
     SELECT 1
     FROM item_questions
-    WHERE item_id = $1
+    WHERE item_code = $1
       AND position = $2
 );

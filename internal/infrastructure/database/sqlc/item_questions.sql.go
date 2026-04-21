@@ -12,7 +12,7 @@ import (
 
 const associateQuestionItem = `-- name: AssociateQuestionItem :exec
 INSERT INTO item_questions (
-    item_id,
+    item_code,
     question_id,
     position,
     created_at
@@ -20,7 +20,7 @@ INSERT INTO item_questions (
 `
 
 type AssociateQuestionItemParams struct {
-	ItemID     int64
+	ItemCode   int64
 	QuestionID int64
 	Position   int32
 	CreatedAt  time.Time
@@ -28,7 +28,7 @@ type AssociateQuestionItemParams struct {
 
 func (q *Queries) AssociateQuestionItem(ctx context.Context, arg AssociateQuestionItemParams) error {
 	_, err := q.db.ExecContext(ctx, associateQuestionItem,
-		arg.ItemID,
+		arg.ItemCode,
 		arg.QuestionID,
 		arg.Position,
 		arg.CreatedAt,
@@ -40,18 +40,18 @@ const existsByItemAndPosition = `-- name: ExistsByItemAndPosition :one
 SELECT EXISTS (
     SELECT 1
     FROM item_questions
-    WHERE item_id = $1
+    WHERE item_code = $1
       AND position = $2
 )
 `
 
 type ExistsByItemAndPositionParams struct {
-	ItemID   int64
+	ItemCode int64
 	Position int32
 }
 
 func (q *Queries) ExistsByItemAndPosition(ctx context.Context, arg ExistsByItemAndPositionParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, existsByItemAndPosition, arg.ItemID, arg.Position)
+	row := q.db.QueryRowContext(ctx, existsByItemAndPosition, arg.ItemCode, arg.Position)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -61,18 +61,18 @@ const existsByItemAndQuestion = `-- name: ExistsByItemAndQuestion :one
 SELECT EXISTS (
     SELECT 1
     FROM item_questions
-    WHERE item_id = $1
+    WHERE item_code = $1
       AND question_id = $2
 )
 `
 
 type ExistsByItemAndQuestionParams struct {
-	ItemID     int64
+	ItemCode   int64
 	QuestionID int64
 }
 
 func (q *Queries) ExistsByItemAndQuestion(ctx context.Context, arg ExistsByItemAndQuestionParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, existsByItemAndQuestion, arg.ItemID, arg.QuestionID)
+	row := q.db.QueryRowContext(ctx, existsByItemAndQuestion, arg.ItemCode, arg.QuestionID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

@@ -11,6 +11,7 @@ func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
 		d.Code,
 		d.Complement,
 		d.Nature,
+		d.Inherit,
 		toPDM(d.PDM),
 		d.Situation,
 		d.Health,

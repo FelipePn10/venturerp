@@ -310,6 +310,7 @@ type Item struct {
 	PlanningGhost                        bool
 	PlannerEmployeeID                    sql.NullInt32
 	SuppliesTypeOfUse                    int16
+	Inherit                              bool
 }
 
 type ItemMachineUsage struct {
@@ -337,7 +338,7 @@ type ItemMaskAnswer struct {
 }
 
 type ItemQuestion struct {
-	ItemID     int64
+	ItemCode   int64
 	QuestionID int64
 	Position   int32
 	CreatedAt  time.Time

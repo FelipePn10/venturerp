@@ -2,6 +2,8 @@ package ports
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type AuthService interface {
@@ -26,4 +28,6 @@ type AuthService interface {
 	GetAllStructure(ctx context.Context) bool
 	ResolveStructureForMask(ctx context.Context) bool
 	FindItemByCode(ctx context.Context) bool
+	CanResolveStructure(ctx context.Context) bool
+	UserID(ctx context.Context) (uuid.UUID, error)
 }

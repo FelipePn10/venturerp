@@ -172,15 +172,34 @@ func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([
 }
 
 const getDirectChildrenForMask = `-- name: GetDirectChildrenForMask :many
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, position, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health
-FROM item_structures
-WHERE parent_code = $1
-  AND is_active = TRUE
-  AND (parent_mask = $2 OR parent_mask IS NULL)
+SELECT
+    s.id,
+    s.parent_code,
+    s.child_code,
+    s.parent_mask,
+    s.quantity,
+    s.loss_percentage,
+    s.unit_of_measurement,
+    s.health,
+    s.position,
+    s.notes,
+    s.is_active,
+    s.created_by,
+    s.created_at,
+    s.updated_at,
+    i.pdm_description_technique AS child_description
+FROM item_structures s
+         JOIN items i ON i.code = s.child_code
+WHERE s.parent_code = $1
+  AND s.is_active = TRUE
+  AND (
+    s.parent_mask IS NULL
+        OR s.parent_mask = $2
+    )
 ORDER BY
-    CASE WHEN parent_mask IS NOT NULL THEN 0 ELSE 1 END,
-    position,
-    id
+    CASE WHEN s.parent_mask IS NOT NULL THEN 0 ELSE 1 END,
+    s.position,
+    s.id
 `
 
 type GetDirectChildrenForMaskParams struct {
@@ -188,30 +207,49 @@ type GetDirectChildrenForMaskParams struct {
 	ParentMask sql.NullString
 }
 
-func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChildrenForMaskParams) ([]ItemStructure, error) {
+type GetDirectChildrenForMaskRow struct {
+	ID                int64
+	ParentCode        int64
+	ChildCode         int64
+	ParentMask        sql.NullString
+	Quantity          float64
+	LossPercentage    float64
+	UnitOfMeasurement UnitOfMeasurementEnum
+	Health            HealthEnum
+	Position          int32
+	Notes             sql.NullString
+	IsActive          bool
+	CreatedBy         uuid.UUID
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	ChildDescription  string
+}
+
+func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChildrenForMaskParams) ([]GetDirectChildrenForMaskRow, error) {
 	rows, err := q.db.QueryContext(ctx, getDirectChildrenForMask, arg.ParentCode, arg.ParentMask)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ItemStructure
+	var items []GetDirectChildrenForMaskRow
 	for rows.Next() {
-		var i ItemStructure
+		var i GetDirectChildrenForMaskRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.ParentCode,
+			&i.ChildCode,
 			&i.ParentMask,
 			&i.Quantity,
-			&i.UnitOfMeasurement,
 			&i.LossPercentage,
+			&i.UnitOfMeasurement,
+			&i.Health,
 			&i.Position,
 			&i.Notes,
 			&i.IsActive,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.ParentCode,
-			&i.ChildCode,
-			&i.Health,
+			&i.ChildDescription,
 		); err != nil {
 			return nil, err
 		}
@@ -345,7 +383,7 @@ SELECT
     iq.question_id,
     iq.position
 FROM item_questions iq
-WHERE iq.item_id = $1
+WHERE iq.item_code = $1
 ORDER BY iq.position
 `
 
@@ -354,8 +392,8 @@ type GetItemQuestionsRow struct {
 	Position   int32
 }
 
-func (q *Queries) GetItemQuestions(ctx context.Context, itemID int64) ([]GetItemQuestionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getItemQuestions, itemID)
+func (q *Queries) GetItemQuestions(ctx context.Context, itemCode int64) ([]GetItemQuestionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getItemQuestions, itemCode)
 	if err != nil {
 		return nil, err
 	}

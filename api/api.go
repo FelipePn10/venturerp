@@ -19,11 +19,12 @@ import (
 	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
+	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_question"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
-	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/product_question"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure_query"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler"
@@ -121,9 +122,12 @@ func (app *application) mount() chi.Router {
 	updateStructureUc := usecase.NewUpdateStructureComponentUseCase(itemRepoStructure, authService)
 	getAllStructureUc := usecase.NewGetAllDirectChildrenUseCase(itemRepoStructure, authService)
 	treeStructureUc := usecase.NewGetStructureTreeUseCase(itemRepoStructure, authService)
-	resolveStructureUc := usecase.NewResolveStructureForMaskUseCase(itemRepoStructure, authService)
-	structureHandler := handler.NewItemStructureHandler(createStructureUc, updateStructureUc, getAllStructureUc, treeStructureUc, resolveStructureUc)
+	structureHandler := handler.NewItemStructureHandler(createStructureUc, updateStructureUc, getAllStructureUc, treeStructureUc)
 
+	// Item Structure Query
+	itemRepoStructureQuery := structure_query.NewStructureQueryRepository(queries)
+	queryStructureUc := usecase.NewResolveStructureQueryUseCase(itemRepoStructureQuery, authService)
+	queryStructureHandler := handler.NewQueryStructureHandler(queryStructureUc)
 	// bom
 	bomRepo := bom.NewRepostioryBomSQLC(queries)
 
@@ -167,6 +171,7 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/items", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemHandler.CreateItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search/{code}", itemHandler.FindItemByCodeHandler)
+
 			r.Route("/mask", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/generate", generateMaskItemHandler.GenerateMask)
 			})
@@ -174,7 +179,7 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", structureHandler.Create)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/update", structureHandler.Update)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentItemCode}/children", structureHandler.GetAllDirectChildren)
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/resolve-for-mask", structureHandler.ResolveForMask)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resolve/{itemCode}", queryStructureHandler.ResolveStructure)
 			})
 
 		})
@@ -216,7 +221,7 @@ func (app *application) healthHandler(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"status":    "ok",
 		"timestamp": time.Now().UTC(),
-		"service":   "core-api",
+		"mask":      "core-api",
 	}
 
 	w.Header().Set("Content-Type", "application/json")

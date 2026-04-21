@@ -88,6 +88,11 @@ type ItemStructureHandler struct {
 	updateUC        *usecase.UpdateStructureComponentUseCase
 	getAllStructure *usecase.GetAllDirectChildrenUseCase
 	treeUC          *usecase.GetStructureTreeUseCase
-	resolveUC       *usecase.ResolveStructureForMaskUseCase
+	resolveUC       *usecase.ResolveStructureQueryUseCase
 	//deleteUC  *usecase.DeleteStructureComponentUseCase
+}
+
+type ItemQueryStructureHandler struct {
+	*security.BaseHandler
+	resolveUC *usecase.ResolveStructureQueryUseCase
 }

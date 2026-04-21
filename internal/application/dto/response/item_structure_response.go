@@ -7,8 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// StructureComponentResponse representa um único componente de estrutura
-// (relação pai → filho) na resposta da API.
+// StructureComponentResponse representa a relação pai-filho persistida
 type StructureComponentResponse struct {
 	ID                int64                           `json:"id"`
 	ParentItemCode    int64                           `json:"parent_item_code"`
@@ -17,7 +16,7 @@ type StructureComponentResponse struct {
 	ParentMask        *string                         `json:"parent_mask,omitempty"`
 	IsGeneric         bool                            `json:"is_generic"`
 	Quantity          float64                         `json:"quantity"`
-	EffectiveQuantity float64                         `json:"effective_quantity"` // quantity + loss
+	EffectiveQuantity float64                         `json:"effective_quantity"`
 	UnitOfMeasurement types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
 	Health            types.Health                    `json:"health"`
 	LossPercentage    float64                         `json:"loss_percentage"`
@@ -29,26 +28,27 @@ type StructureComponentResponse struct {
 	UpdatedAt         time.Time                       `json:"updated_at"`
 }
 
-// StructureTreeNodeResponse representa um nó na árvore BOM serializada,
-// incluindo os filhos recursivamente.
+// StructureTreeNodeResponse representa o nó resolvido da estrutura
 type StructureTreeNodeResponse struct {
-	// Dados do componente (relação pai→filho)
 	Component StructureComponentResponse `json:"component"`
-	// Máscara calculada para este nó (apenas em modo resolved)
-	ResolvedMask *string `json:"resolved_mask,omitempty"`
-	// Profundidade na árvore (0 = primeiro nível abaixo da raiz)
+
+	// Máscara efetiva deste nó no contexto da resolução
+	Mask          *string `json:"mask,omitempty"`
+	EffectiveMask *string `json:"effective_mask,omitempty"` // era "Mask"
+	RequiresMask  bool    `json:"requires_mask,omitempty"`  // novo
+	// Profundidade na árvore (1 = primeiro nível abaixo da raiz)
 	Level int `json:"level"`
-	// Filhos resolvidos recursivamente
+
 	Children []*StructureTreeNodeResponse `json:"children"`
 }
 
-// StructureTreeResponse é a resposta completa da árvore BOM de um item.
+// StructureTreeResponse representa a árvore completa resolvida
 type StructureTreeResponse struct {
-	RootItemCode int64                        `json:"root_item_code"`
-	RootCode     int64                        `json:"root_code"`
-	RootDesc     string                       `json:"root_description"`
-	RootMask     *string                      `json:"root_mask,omitempty"`
-	Components   []*StructureTreeNodeResponse `json:"components"` // nós de 1º nível
-	TotalLevels  int                          `json:"total_levels"`
-	TotalNodes   int                          `json:"total_nodes"`
+	RootItemCode int64   `json:"root_item_code"`
+	RootMask     *string `json:"root_mask,omitempty"`
+
+	Components []*StructureTreeNodeResponse `json:"components"`
+
+	TotalLevels int `json:"total_levels"`
+	TotalNodes  int `json:"total_nodes"`
 }

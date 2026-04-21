@@ -18,6 +18,8 @@ type ItemStructure struct {
 	ID                int64
 	ParentCode        int64
 	ChildCode         int64
+	ChildDescription  string
+	Inherit           bool
 	ParentMask        *string // nil = genérico
 	Quantity          float64
 	LossPercentage    float64 // 0–100 (%)

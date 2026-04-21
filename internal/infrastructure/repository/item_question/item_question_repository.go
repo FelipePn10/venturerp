@@ -12,7 +12,7 @@ func (r *AssociateQuestionItemRepository) Associate(
 	pq *entity.AssociateQuestion,
 ) error {
 	return r.q.AssociateQuestionItem(ctx, sqlc.AssociateQuestionItemParams{
-		ItemID:     pq.ItemID,
+		ItemCode:   pq.ItemCode,
 		QuestionID: pq.QuestionID,
 		Position:   int32(pq.Position),
 		CreatedAt:  pq.CreatedAt,
@@ -25,7 +25,7 @@ func (r *AssociateQuestionItemRepository) ExistsByItemAndQuestion(
 	questionID int64,
 ) (bool, error) {
 	return r.q.ExistsByItemAndQuestion(ctx, sqlc.ExistsByItemAndQuestionParams{
-		ItemID:     itemID,
+		ItemCode:   itemID,
 		QuestionID: questionID,
 	})
 }
@@ -36,7 +36,7 @@ func (r *AssociateQuestionItemRepository) ExistsByItemAndPosition(
 	position int,
 ) (bool, error) {
 	return r.q.ExistsByItemAndPosition(ctx, sqlc.ExistsByItemAndPositionParams{
-		ItemID:   itemID,
+		ItemCode: itemID,
 		Position: int32(position),
 	})
 }

@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
+	"github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
+	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
-	"github.com/FelipePn10/panossoerp/internal/domain/structure/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -78,14 +78,14 @@ func (r *ItemStructureRepositorySQLC) GetByID(ctx context.Context, id int64) (*e
 func (r *ItemStructureRepositorySQLC) GetAllDirectChildren(
 	ctx context.Context,
 	parentCode int64,
-) ([]*response.StructureComponentResponse, error) {
+) ([]*entity.ItemStructure, error) {
 
 	rows, err := r.q.GetAllDirectChildren(ctx, parentCode)
 	if err != nil {
 		return nil, fmt.Errorf("searching for children of item %d: %w", parentCode, err)
 	}
 
-	result := make([]*response.StructureComponentResponse, 0, len(rows))
+	result := make([]*entity.ItemStructure, 0, len(rows))
 
 	for _, row := range rows {
 
@@ -99,23 +99,22 @@ func (r *ItemStructureRepositorySQLC) GetAllDirectChildren(
 			parentMask = &row.ParentMask.String
 		}
 
-		result = append(result, &response.StructureComponentResponse{
-			ID:               row.ID,
-			ParentItemCode:   row.ParentCode,
-			ChildItemCode:    row.ChildCode,
-			ChildDescription: row.ChildDescription,
+		result = append(result, &entity.ItemStructure{
+			ID:         row.ID,
+			ParentCode: row.ParentCode,
+			ChildCode:  row.ChildCode,
 
-			ParentMask: parentMask,
-			IsGeneric:  !row.ParentMask.Valid,
+			// regra de domínio: inherit = se NÃO tem máscara (genérico)
+			Inherit: !row.ParentMask.Valid,
 
-			Quantity:          row.Quantity,
-			EffectiveQuantity: row.Quantity * (1 + row.LossPercentage/100),
+			ParentMask:     parentMask,
+			Quantity:       row.Quantity,
+			LossPercentage: row.LossPercentage,
 
 			UnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
 			Health:            types.Health(row.Health),
 
-			LossPercentage: row.LossPercentage,
-			Position:       int(row.Position),
+			Sequence: int(row.Position),
 
 			Notes: notes,
 
@@ -129,16 +128,16 @@ func (r *ItemStructureRepositorySQLC) GetAllDirectChildren(
 	return result, nil
 }
 
-func (r *ItemStructureRepositorySQLC) GetGenericChildren(
-	ctx context.Context,
-	parentCode int64,
-) ([]*entity.ItemStructure, error) {
-	rows, err := r.q.GetGenericChildren(ctx, parentCode)
-	if err != nil {
-		return nil, fmt.Errorf("searching for generic children of the item %d: %w", parentCode, err)
-	}
-	return rowsToEntities(rows), nil
-}
+//func (r *ItemStructureRepositorySQLC) GetGenericChildren(
+//	ctx context.Context,
+//	parentCode int64,
+//) ([]*entity.ItemStructure, error) {
+//	rows, err := r.q.GetGenericChildren(ctx, parentCode)
+//	if err != nil {
+//		return nil, fmt.Errorf("searching for generic children of the item %d: %w", parentCode, err)
+//	}
+//	return rowsToEntities(rows), nil
+//}
 
 func (r *ItemStructureRepositorySQLC) GetDirectChildrenForMask(
 	ctx context.Context,
@@ -152,7 +151,38 @@ func (r *ItemStructureRepositorySQLC) GetDirectChildrenForMask(
 	if err != nil {
 		return nil, fmt.Errorf("searching for children of item %d for mask '%s': %w", parentCode, mask, err)
 	}
-	return rowsToEntities(rows), nil
+	return rowsWithDescToEntities(rows), nil
+}
+
+func rowsWithDescToEntities(rows []sqlc.GetDirectChildrenForMaskRow) []*entity.ItemStructure {
+	out := make([]*entity.ItemStructure, 0, len(rows))
+	for _, row := range rows {
+		e := &entity.ItemStructure{
+			ID:                row.ID,
+			ParentCode:        row.ParentCode,
+			ChildCode:         row.ChildCode,
+			ChildDescription:  row.ChildDescription,
+			Quantity:          row.Quantity,
+			LossPercentage:    row.LossPercentage,
+			UnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+			Health:            types.Health(row.Health),
+			Sequence:          int(row.Position),
+			IsActive:          row.IsActive,
+			CreatedBy:         row.CreatedBy,
+			CreatedAt:         row.CreatedAt,
+			UpdatedAt:         row.UpdatedAt,
+		}
+		if row.ParentMask.Valid {
+			v := row.ParentMask.String
+			e.ParentMask = &v
+		}
+		if row.Notes.Valid {
+			v := row.Notes.String
+			e.Notes = &v
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func (r *ItemStructureRepositorySQLC) ItemExists(ctx context.Context, itemCode int64) (bool, error) {
@@ -207,38 +237,49 @@ func (r *ItemStructureRepositorySQLC) GetMaskAnswersByItemAndValue(
 	ctx context.Context,
 	itemCode int64,
 	maskValue string,
-) ([]valueobject.MaskAnswer, error) {
+) ([]maskvo.MaskAnswer, error) {
+
 	rows, err := r.q.GetItemMaskAnswersByValue(ctx, sqlc.GetItemMaskAnswersByValueParams{
 		ItemCode: itemCode,
 		Mask:     maskValue,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("searching for answers from the '%s' mask of the item %d: %w", maskValue, itemCode, err)
+		return nil, fmt.Errorf("error fetching mask answers for item %d: %w", itemCode, err)
 	}
 
-	answers := make([]valueobject.MaskAnswer, 0, len(rows))
+	answers := make([]maskvo.MaskAnswer, 0, len(rows))
+
 	for _, row := range rows {
-		answers = append(answers, valueobject.MaskAnswer{
-			QuestionID: row.QuestionID,
-			Position:   row.Position,
-			OptionID:   row.OptionID,
-		})
+
+		answer, err := maskvo.NewMaskAnswer(
+			row.QuestionID,
+			row.OptionID,
+			int(row.Position),
+			"", // valor não necessário aqui
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		answers = append(answers, answer)
 	}
+
 	return answers, nil
 }
-
 func (r *ItemStructureRepositorySQLC) GetItemQuestions(
 	ctx context.Context,
-	itemID int64,
-) ([]valueobject.ItemQuestion, error) {
-	rows, err := r.q.GetItemQuestions(ctx, itemID)
+	itemCode int64,
+) ([]service.ItemQuestion, error) {
+
+	rows, err := r.q.GetItemQuestions(ctx, itemCode)
 	if err != nil {
-		return nil, fmt.Errorf("searching for questions from the item %d: %w", itemID, err)
+		return nil, fmt.Errorf("error fetching questions for item %d: %w", itemCode, err)
 	}
 
-	questions := make([]valueobject.ItemQuestion, 0, len(rows))
+	questions := make([]service.ItemQuestion, 0, len(rows))
+
 	for _, row := range rows {
-		questions = append(questions, valueobject.ItemQuestion{
+		questions = append(questions, service.ItemQuestion{
 			QuestionID: row.QuestionID,
 			Position:   row.Position,
 		})

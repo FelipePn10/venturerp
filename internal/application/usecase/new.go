@@ -15,6 +15,8 @@ import (
 	qst "github.com/FelipePn10/panossoerp/internal/domain/questions/repository"
 	qstops "github.com/FelipePn10/panossoerp/internal/domain/questions_options/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
+	qr "github.com/FelipePn10/panossoerp/internal/domain/structure_query/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/structure_query/service"
 	user "github.com/FelipePn10/panossoerp/internal/domain/user/repository"
 	warehouse "github.com/FelipePn10/panossoerp/internal/domain/warehouse/repository"
 )
@@ -231,13 +233,24 @@ func NewGetStructureTreeUseCase(
 	}
 }
 
-func NewResolveStructureForMaskUseCase(
-	repo repository.ItemStructureRepository,
+//func NewResolveStructureForMaskUseCase(
+//	repo repository.ItemStructureRepository,
+//	auth ports.AuthService,
+//) *ResolveStructureForMaskUseCase {
+//	return &ResolveStructureForMaskUseCase{
+//		repo: repo,
+//		auth: auth,
+//	}
+//}
+
+func NewResolveStructureQueryUseCase(
+	repo qr.StructureQueryRepository,
 	auth ports.AuthService,
-) *ResolveStructureForMaskUseCase {
-	return &ResolveStructureForMaskUseCase{
-		repo: repo,
-		auth: auth,
+) *ResolveStructureQueryUseCase {
+	return &ResolveStructureQueryUseCase{
+		repo:     repo,
+		resolver: service.NewResolver(repo),
+		auth:     auth,
 	}
 }
 

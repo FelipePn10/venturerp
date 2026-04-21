@@ -10,7 +10,7 @@ var (
 )
 
 func New(
-	item int64,
+	item_code int64,
 	questionId int64,
 	position int,
 ) (*AssociateQuestion, error) {
@@ -19,7 +19,7 @@ func New(
 	}
 
 	return &AssociateQuestion{
-		ItemID:     item,
+		ItemCode:   item_code,
 		QuestionID: questionId,
 		Position:   position,
 		CreatedAt:  time.Now(),

@@ -22,7 +22,7 @@ func (uc *GenerateMaskForItemUseCase) Execute(
 	dto request.GenerateMaskItemRequestDTO,
 ) (*entity.ItemMask, error) {
 	if uc.auth == nil {
-		return nil, errors.New("auth service not initialized")
+		return nil, errors.New("auth mask not initialized")
 	}
 	if uc.repo == nil {
 		return nil, errors.New("repository not initialized")

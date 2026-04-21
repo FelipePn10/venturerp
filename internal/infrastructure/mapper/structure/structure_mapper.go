@@ -13,7 +13,8 @@ func MapNodeToResponse(node *valueobject.StructureNode) *response.StructureTreeN
 	}
 
 	comp := node.Component
-	cr := response.StructureComponentResponse{
+
+	componentResp := response.StructureComponentResponse{
 		ID:                comp.ID,
 		ParentItemCode:    node.ItemCode,
 		ChildItemCode:     node.ItemCode,
@@ -34,14 +35,15 @@ func MapNodeToResponse(node *valueobject.StructureNode) *response.StructureTreeN
 	}
 
 	resp := &response.StructureTreeNodeResponse{
-		Component:    cr,
-		ResolvedMask: node.ResolvedMask,
-		Level:        node.Level,
-		Children:     make([]*response.StructureTreeNodeResponse, 0, len(node.Children)),
+		Component: componentResp,
+		Mask:      node.Mask, // atualizado (antes era ResolvedMask)
+		Level:     node.Level,
+		Children:  make([]*response.StructureTreeNodeResponse, 0, len(node.Children)),
 	}
 
 	for _, child := range node.Children {
-		if mapped := MapNodeToResponse(child); mapped != nil {
+		mapped := MapNodeToResponse(child)
+		if mapped != nil {
 			resp.Children = append(resp.Children, mapped)
 		}
 	}
@@ -49,7 +51,20 @@ func MapNodeToResponse(node *valueobject.StructureNode) *response.StructureTreeN
 	return resp
 }
 
-// CountNodes conta recursivamente o total de nós em uma lista de respostas.
+// MapNodes converte lista de nós
+func MapNodes(nodes []*valueobject.StructureNode) []*response.StructureTreeNodeResponse {
+	result := make([]*response.StructureTreeNodeResponse, 0, len(nodes))
+
+	for _, n := range nodes {
+		if mapped := MapNodeToResponse(n); mapped != nil {
+			result = append(result, mapped)
+		}
+	}
+
+	return result
+}
+
+// CountNodes conta recursivamente o total de nós
 func CountNodes(nodes []*response.StructureTreeNodeResponse) int {
 	total := 0
 	for _, n := range nodes {
@@ -59,16 +74,20 @@ func CountNodes(nodes []*response.StructureTreeNodeResponse) int {
 	return total
 }
 
-// MaxLevel retorna a profundidade máxima de uma lista de nós.
+// MaxLevel retorna profundidade máxima
 func MaxLevel(nodes []*response.StructureTreeNodeResponse) int {
-	m := 0
+	max := 0
+
 	for _, n := range nodes {
-		if n.Level > m {
-			m = n.Level
+		if n.Level > max {
+			max = n.Level
 		}
-		if childMax := MaxLevel(n.Children); childMax > m {
-			m = childMax
+
+		childMax := MaxLevel(n.Children)
+		if childMax > max {
+			max = childMax
 		}
 	}
-	return m
+
+	return max
 }

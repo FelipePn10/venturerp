@@ -56,16 +56,34 @@ ORDER BY position, id;
 
 
 -- name: GetDirectChildrenForMask :many
-SELECT *
-FROM item_structures
-WHERE parent_code = $1
-  AND is_active = TRUE
-  AND (parent_mask = $2 OR parent_mask IS NULL)
+SELECT
+    s.id,
+    s.parent_code,
+    s.child_code,
+    s.parent_mask,
+    s.quantity,
+    s.loss_percentage,
+    s.unit_of_measurement,
+    s.health,
+    s.position,
+    s.notes,
+    s.is_active,
+    s.created_by,
+    s.created_at,
+    s.updated_at,
+    i.pdm_description_technique AS child_description
+FROM item_structures s
+         JOIN items i ON i.code = s.child_code
+WHERE s.parent_code = $1
+  AND s.is_active = TRUE
+  AND (
+    s.parent_mask IS NULL
+        OR s.parent_mask = $2
+    )
 ORDER BY
-    CASE WHEN parent_mask IS NOT NULL THEN 0 ELSE 1 END,
-    position,
-    id;
-
+    CASE WHEN s.parent_mask IS NOT NULL THEN 0 ELSE 1 END,
+    s.position,
+    s.id;
 
 -- name: UpdateStructureComponent :one
 UPDATE item_structures
@@ -125,5 +143,5 @@ SELECT
     iq.question_id,
     iq.position
 FROM item_questions iq
-WHERE iq.item_id = $1
+WHERE iq.item_code = $1
 ORDER BY iq.position;

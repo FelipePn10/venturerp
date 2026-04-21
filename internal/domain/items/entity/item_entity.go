@@ -16,7 +16,8 @@ type Item struct {
 	Complement *string
 
 	// Checkbox
-	Nature ItemNature
+	Nature  ItemNature
+	Inherit bool
 	//---- PDM
 	PDM PDM
 

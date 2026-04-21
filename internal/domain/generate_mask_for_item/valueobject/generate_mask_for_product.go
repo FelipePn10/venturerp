@@ -104,3 +104,7 @@ func (ma MaskAnswer) OptionID() int64 {
 func (ma MaskAnswer) Position() int {
 	return ma.position
 }
+
+func (ma MaskAnswer) OptionValue() string {
+	return ma.optionValue
+}

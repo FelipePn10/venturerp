@@ -167,7 +167,6 @@ func NewItemStructureHandler(
 	updateUC *usecase.UpdateStructureComponentUseCase,
 	getAllStructureUC *usecase.GetAllDirectChildrenUseCase,
 	treeUC *usecase.GetStructureTreeUseCase,
-	resolveUC *usecase.ResolveStructureForMaskUseCase,
 	// deleteUC *usecase.DeleteStructureComponentUseCase,
 ) *ItemStructureHandler {
 	return &ItemStructureHandler{
@@ -175,7 +174,14 @@ func NewItemStructureHandler(
 		updateUC:        updateUC,
 		getAllStructure: getAllStructureUC,
 		treeUC:          treeUC,
-		resolveUC:       resolveUC,
 		//deleteUC:  deleteUC,
+	}
+}
+
+func NewQueryStructureHandler(
+	resolveUc *usecase.ResolveStructureQueryUseCase,
+) *ItemQueryStructureHandler {
+	return &ItemQueryStructureHandler{
+		resolveUC: resolveUc,
 	}
 }
