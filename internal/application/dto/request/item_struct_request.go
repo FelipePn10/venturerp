@@ -26,7 +26,10 @@ type CreateStructureComponentDTO struct {
 }
 
 type UpdateStructureComponentDTO struct {
-	ID                int64                           `json:"id"`
+	ParentCode int64   `json:"parent_code"`
+	ChildCode  int64   `json:"child_code"`
+	ParentMask *string `json:"parent_mask,omitempty"`
+
 	Quantity          float64                         `json:"quantity"`
 	UnitOfMeasurement types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
 	Health            types.Health                    `json:"health"`

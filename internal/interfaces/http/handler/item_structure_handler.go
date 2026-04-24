@@ -27,21 +27,20 @@ func (h *ItemStructureHandler) Create(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusCreated, result)
 }
 
-// Update updates a structure component identified by code.
 func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
-	code, err := parseCode(r, "code")
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	var dto request.UpdateStructureComponentDTO
+
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
 		return
 	}
 
-	result, err := h.updateUC.Execute(r.Context(), code, dto)
+	if dto.ParentCode == 0 || dto.ChildCode == 0 {
+		jsonError(w, http.StatusBadRequest, "parent_code and child_code are required")
+		return
+	}
+
+	result, err := h.updateUC.Execute(r.Context(), dto)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return

@@ -88,17 +88,21 @@ ORDER BY
 -- name: UpdateStructureComponent :one
 UPDATE item_structures
 SET
-    quantity            = $2,
-    unit_of_measurement = $3,
-    loss_percentage     = $4,
-    sequence            = $5,
-    health              = $6,
-    notes               = $7,
+    quantity            = $4,
+    unit_of_measurement = $5,
+    loss_percentage     = $6,
+    sequence            = $7,
+    health              = $8,
+    notes               = $9,
     updated_at          = NOW()
-WHERE id = $1
+WHERE parent_code = $1
+  AND child_code  = $2
+  AND (
+    parent_mask = $3
+        OR (parent_mask IS NULL AND $3 IS NULL)
+    )
   AND is_active = TRUE
     RETURNING *;
-
 
 -- name: DeactivateStructureComponent :exec
 UPDATE item_structures

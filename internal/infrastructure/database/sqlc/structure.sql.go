@@ -499,20 +499,27 @@ func (q *Queries) SequenceExists(ctx context.Context, arg SequenceExistsParams) 
 const updateStructureComponent = `-- name: UpdateStructureComponent :one
 UPDATE item_structures
 SET
-    quantity            = $2,
-    unit_of_measurement = $3,
-    loss_percentage     = $4,
-    sequence            = $5,
-    health              = $6,
-    notes               = $7,
+    quantity            = $4,
+    unit_of_measurement = $5,
+    loss_percentage     = $6,
+    sequence            = $7,
+    health              = $8,
+    notes               = $9,
     updated_at          = NOW()
-WHERE id = $1
+WHERE parent_code = $1
+  AND child_code  = $2
+  AND (
+    parent_mask = $3
+        OR (parent_mask IS NULL AND $3 IS NULL)
+    )
   AND is_active = TRUE
     RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health
 `
 
 type UpdateStructureComponentParams struct {
-	ID                int64
+	ParentCode        int64
+	ChildCode         int64
+	ParentMask        sql.NullString
 	Quantity          float64
 	UnitOfMeasurement UnitOfMeasurementEnum
 	LossPercentage    float64
@@ -523,7 +530,9 @@ type UpdateStructureComponentParams struct {
 
 func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStructureComponentParams) (ItemStructure, error) {
 	row := q.db.QueryRowContext(ctx, updateStructureComponent,
-		arg.ID,
+		arg.ParentCode,
+		arg.ChildCode,
+		arg.ParentMask,
 		arg.Quantity,
 		arg.UnitOfMeasurement,
 		arg.LossPercentage,

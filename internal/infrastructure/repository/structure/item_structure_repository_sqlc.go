@@ -39,21 +39,39 @@ func (r *ItemStructureRepositorySQLC) Update(
 	ctx context.Context,
 	s *entity.ItemStructure,
 ) (*entity.ItemStructure, error) {
-	row, err := r.q.UpdateStructureComponent(ctx, sqlc.UpdateStructureComponentParams{
-		ID:                s.ID,
-		Quantity:          s.Quantity,
-		UnitOfMeasurement: sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
-		Health:            sqlc.HealthEnum(s.Health),
-		LossPercentage:    s.LossPercentage,
-		Sequence:          int32(s.Sequence),
-		Notes:             toNullString(s.Notes),
-	})
+
+	row, err := r.q.UpdateStructureComponent(
+		ctx,
+		sqlc.UpdateStructureComponentParams{
+			ParentCode:        s.ParentCode,
+			ChildCode:         s.ChildCode,
+			ParentMask:        toNullString(s.ParentMask),
+			Quantity:          s.Quantity,
+			UnitOfMeasurement: sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
+			LossPercentage:    s.LossPercentage,
+			Sequence:          int32(s.Sequence),
+			Health:            sqlc.HealthEnum(s.Health),
+			Notes:             toNullString(s.Notes),
+		},
+	)
+
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("component %d not found or inactiveo", s.ID)
+			return nil, fmt.Errorf(
+				"component not found (parent=%d, child=%d, mask=%v) or inactive",
+				s.ParentCode,
+				s.ChildCode,
+				s.ParentMask,
+			)
 		}
-		return nil, fmt.Errorf("updating component %d: %w", s.ID, err)
+		return nil, fmt.Errorf(
+			"updating component (parent=%d, child=%d): %w",
+			s.ParentCode,
+			s.ChildCode,
+			err,
+		)
 	}
+
 	return rowToEntity(row), nil
 }
 
