@@ -2,8 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -23,7 +21,6 @@ type UpdateStructureComponentUseCase struct {
 
 func (uc *UpdateStructureComponentUseCase) Execute(
 	ctx context.Context,
-	code int64,
 	dto request.UpdateStructureComponentDTO,
 ) (*entity.ItemStructure, error) {
 
@@ -31,13 +28,10 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	structure, err := uc.repo.GetByID(ctx, code)
-	if err != nil {
-		return nil, fmt.Errorf("structural component %d not found: %w", code, err)
-	}
-
-	if !structure.IsActive {
-		return nil, errors.New("it is not possible to update an inactive component")
+	structure := &entity.ItemStructure{
+		ParentCode: dto.ParentCode,
+		ChildCode:  dto.ChildCode,
+		ParentMask: dto.ParentMask,
 	}
 
 	if err := structure.Update(
@@ -51,5 +45,11 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 		return nil, err
 	}
 
-	return uc.repo.Update(ctx, structure)
+	// Executa update direto via business key
+	updated, err := uc.repo.Update(ctx, structure)
+	if err != nil {
+		return nil, err
+	}
+
+	return updated, nil
 }

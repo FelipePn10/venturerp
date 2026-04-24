@@ -467,8 +467,8 @@ type Warehouse struct {
 	Description         string
 	CreatedAt           time.Time
 	CreatedBy           uuid.UUID
-	Location            interface{}
-	Type                interface{}
+	Location            WarehouseLocation
+	Type                WarehouseType
 	Disposition         bool
 	ReservationsAllowed bool
 }
