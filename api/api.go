@@ -12,6 +12,7 @@ import (
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
+	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
 	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
@@ -165,6 +166,12 @@ func (app *application) mount() chi.Router {
 	createEmployeeUc := usecase.NewCreateEmployeeUseCase(employeeRepo, authService)
 	employeeHandler := handler.NewCreateEmployeeHandler(createEmployeeUc)
 
+	// allocation_base
+	allocationBaseRepo := allocation.NewAllocationBaseRepositorySQLC(queries)
+	createAllocationBaseUC := usecase.NewCreateAllocationBaseUseCase(allocationBaseRepo, authService)
+	listAllocationBaseUC := usecase.NewListAllocationBasesUseCase(allocationBaseRepo, authService)
+	allocationBaseHandler := handler.NewAllocationBaseHandler(createAllocationBaseUC, listAllocationBaseUC)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -181,7 +188,10 @@ func (app *application) mount() chi.Router {
 				//r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentItemCode}/children", structureHandler.GetAllDirectChildren)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resolve/{itemCode}", queryStructureHandler.ResolveStructure)
 			})
-
+		})
+		r.Route("/api/allocations", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", allocationBaseHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", allocationBaseHandler.List)
 		})
 		r.Route("/api/questions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/questions/create", questionCreateHandler.CreateQuestion)

@@ -122,3 +122,11 @@ func (a *AuthService) UserID(ctx context.Context) (uuid.UUID, error) {
 	}
 	return id, nil
 }
+
+func (a *AuthService) CreateAllocation(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) ListAllocation(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

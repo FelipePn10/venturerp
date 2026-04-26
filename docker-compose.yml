@@ -1,20 +1,16 @@
 services:
   postgres:
     image: postgres:17
-    container_name: postgres_app
+    container_name: panossoerp-postgres
     restart: always
-    env_file:
-      - .env
+    environment:
+      POSTGRES_USER: panossoerp
+      POSTGRES_PASSWORD: panossoerp_10203040
+      POSTGRES_DB: panossoerpdatabase
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -U $POSTGRES_USER"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
 volumes:
   postgres_data:

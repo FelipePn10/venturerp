@@ -30,4 +30,6 @@ type AuthService interface {
 	FindItemByCode(ctx context.Context) bool
 	CanResolveStructure(ctx context.Context) bool
 	UserID(ctx context.Context) (uuid.UUID, error)
+	CreateAllocation(ctx context.Context) bool
+	ListAllocation(ctx context.Context) bool
 }

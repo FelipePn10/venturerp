@@ -53,3 +53,12 @@ func (h *BaseHandler) UnprocessableEntity(
 		"status": http.StatusUnprocessableEntity,
 	})
 }
+
+func RespondJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
+func RespondError(w http.ResponseWriter, status int, message string) {
+	RespondJSON(w, status, map[string]string{"error": message})
+}

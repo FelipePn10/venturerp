@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
 	bomitem "github.com/FelipePn10/panossoerp/internal/domain/bom_items/repository"
@@ -261,5 +263,25 @@ func NewGetAllDirectChildrenUseCase(
 	return &GetAllDirectChildrenUseCase{
 		repo: repo,
 		auth: auth,
+	}
+}
+
+func NewCreateAllocationBaseUseCase(
+	repo allocation.AllocationBaseRepository,
+	auth ports.AuthService,
+) *allocation_base_uc.CreateAllocationBaseUseCase {
+	return &allocation_base_uc.CreateAllocationBaseUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListAllocationBasesUseCase(
+	repo allocation.AllocationBaseRepository,
+	auth ports.AuthService,
+) *allocation_base_uc.ListAllocationBasesUseCase {
+	return &allocation_base_uc.ListAllocationBasesUseCase{
+		Repo: repo,
+		Auth: auth,
 	}
 }

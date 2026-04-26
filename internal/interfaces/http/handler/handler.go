@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
@@ -95,4 +96,10 @@ type ItemStructureHandler struct {
 type ItemQueryStructureHandler struct {
 	*security.BaseHandler
 	resolveUC *usecase.ResolveStructureQueryUseCase
+}
+
+type AllocationBaseHandler struct {
+	*security.BaseHandler
+	createUC *allocation_base_uc.CreateAllocationBaseUseCase
+	listUC   *allocation_base_uc.ListAllocationBasesUseCase
 }

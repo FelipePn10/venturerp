@@ -25,9 +25,7 @@ func (r *repositoryEmployeeSQLC) Create(
 	}
 
 	return &entity.Employee{
-		EnterpriseID: int(dbEmployee.EnterpriseID),
-		Code:         int(dbEmployee.Code),
-		Name:         dbEmployee.Name,
-		Description:  dbEmployee.Description.String,
+		Code: int(dbEmployee.Code),
+		Name: dbEmployee.Name,
 	}, nil
 }

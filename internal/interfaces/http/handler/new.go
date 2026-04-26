@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 )
 
 func NewCreateProductHandler(
@@ -183,5 +184,15 @@ func NewQueryStructureHandler(
 ) *ItemQueryStructureHandler {
 	return &ItemQueryStructureHandler{
 		resolveUC: resolveUc,
+	}
+}
+
+func NewAllocationBaseHandler(
+	createUC *allocation_base_uc.CreateAllocationBaseUseCase,
+	listUC *allocation_base_uc.ListAllocationBasesUseCase,
+) *AllocationBaseHandler {
+	return &AllocationBaseHandler{
+		createUC: createUC,
+		listUC:   listUC,
 	}
 }

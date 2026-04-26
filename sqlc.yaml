@@ -16,3 +16,9 @@ sql:
 
           - column: "item_structures.loss_percentage"
             go_type: "float64"
+
+          - column: "allocation_base_items.amount"
+            go_type: "float64"
+
+          - column: "allocation_base_items.percentage"
+            go_type: "float64"
