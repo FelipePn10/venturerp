@@ -905,17 +905,17 @@ func (ns NullUnitOfMeasurementEnum) Value() (driver.Value, error) {
 }
 
 type AllocationBaseItem struct {
-	ID               int64
-	AllocationBaseID int64
-	CostCenterID     int64
-	Amount           float64
-	Percentage       float64
-	CreatedAt        time.Time
+	ID                 int64
+	Amount             float64
+	Percentage         float64
+	CreatedAt          time.Time
+	AllocationBaseCode int32
+	CostCenterCode     int32
 }
 
 type AllocationBasis struct {
 	ID          int64
-	Code        string
+	Code        int32
 	Description string
 	Period      string
 	Observation sql.NullString
@@ -976,7 +976,7 @@ type ComplementB struct {
 type Component struct {
 	ID        int64
 	Code      string
-	Warehouse sql.NullInt64
+	Warehouse *int64
 	GroupCode string
 	Name      string
 	Type      interface{}
@@ -1010,13 +1010,13 @@ type ConfiguredItemRule struct {
 
 type CostCenter struct {
 	ID          int64
-	Code        string
+	Code        int32
 	Description string
-	ParentCode  sql.NullString
+	ParentCode  *int32
 	Type        TypeCcEnum
 	IsRatio     bool
 	StartDate   time.Time
-	EndDate     sql.NullTime
+	EndDate     *time.Time
 	IsActive    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -1085,7 +1085,7 @@ type IndependentDemand struct {
 	Code         int64
 	ItemCode     int64
 	Mask         sql.NullString
-	CostCenterID sql.NullInt64
+	CostCenterID *int64
 	Quantity     string
 	DemandDate   time.Time
 	IsActive     bool
@@ -1123,8 +1123,8 @@ type Item struct {
 	WarehouseAutomaticLow                bool
 	WarehouseCyclicalCountConfig         pqtype.NullRawMessage
 	WarehouseMinimumStock                int32
-	WarehouseAvgMonthlyConsumptionManual sql.NullInt32
-	EngineeringItemBaseCod               sql.NullInt32
+	WarehouseAvgMonthlyConsumptionManual *int32
+	EngineeringItemBaseCod               *int32
 	EngineeringWeight                    json.RawMessage
 	EngineeringDimensions                pqtype.NullRawMessage
 	EngineeringType                      int16
@@ -1133,9 +1133,9 @@ type Item struct {
 	PlanningTypeMrp                      int16
 	PlanningLlc                          int32
 	PlanningReorderPoint                 pqtype.NullRawMessage
-	PlanningTankID                       sql.NullInt32
+	PlanningTankID                       *int32
 	PlanningGhost                        bool
-	PlannerEmployeeID                    sql.NullInt32
+	PlannerEmployeeID                    *int32
 	SuppliesTypeOfUse                    int16
 	Inherit                              bool
 }
@@ -1228,7 +1228,7 @@ type Machine struct {
 	Code            int64
 	Name            string
 	MachineTypeID   int64
-	CostCenterID    sql.NullInt64
+	CostCenterID    *int64
 	CapacityPerHour string
 	EfficiencyRate  string
 	IsActive        bool
@@ -1248,7 +1248,7 @@ type MachineSchedule struct {
 	ProducedQty      string
 	Status           string
 	Sequence         int32
-	PriorityOverride sql.NullInt32
+	PriorityOverride *int32
 	Notes            sql.NullString
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
@@ -1341,12 +1341,12 @@ type OrderPriority struct {
 type OverheadAllocation struct {
 	ID             int64
 	CostCenterID   int64
-	PlanAccountID  sql.NullInt64
+	PlanAccountID  *int64
 	AccountCode    sql.NullString
 	PeriodStart    time.Time
 	PeriodEnd      time.Time
 	AllocationType string
-	BaseID         sql.NullInt64
+	BaseID         *int64
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	CreatedBy      uuid.UUID
@@ -1371,21 +1371,21 @@ type PlannedOrder struct {
 	QuantityCorrected string
 	OrderType         OrderTypeEnum
 	Status            OrderStatusEnum
-	PlanID            sql.NullInt64
+	PlanID            *int64
 	DemandType        DemandTypeEnum
-	DemandID          sql.NullInt64
+	DemandID          *int64
 	NeedDate          time.Time
 	StartDate         sql.NullTime
 	EndDate           sql.NullTime
-	CostCenterID      sql.NullInt64
-	EmployeeID        sql.NullInt64
-	MachineID         sql.NullInt64
+	CostCenterID      *int64
+	EmployeeID        *int64
+	MachineID         *int64
 	ProductionTime    sql.NullString
 	Priority          sql.NullString
 	Llc               int32
 	Notes             sql.NullString
-	ParentOrderID     sql.NullInt64
-	SalesOrderID      sql.NullInt64
+	ParentOrderID     *int64
+	SalesOrderID      *int64
 	IsFirm            bool
 	IsActive          bool
 	CreatedAt         time.Time
@@ -1419,7 +1419,7 @@ type ProductionOrder struct {
 	BomID              int64
 	Quantity           string
 	Status             string
-	CurrentOperationID sql.NullInt64
+	CurrentOperationID *int64
 	CreatedAt          time.Time
 }
 
@@ -1432,7 +1432,7 @@ type ProductionPlan struct {
 	PlanningTypes       []string
 	Classification      sql.NullString
 	ClassItemCodes      sql.NullString
-	OrderItemCode       sql.NullInt64
+	OrderItemCode       *int64
 	LastCalculatedAt    sql.NullTime
 	Parameters          json.RawMessage
 	IsActive            bool
@@ -1460,11 +1460,11 @@ type Restriction struct {
 	ID                   int64
 	Code                 sql.NullInt64
 	Situation            RestrictionSituationEnum
-	ItemCode             sql.NullInt64
-	ReasonCode           sql.NullInt64
+	ItemCode             *int64
+	ReasonCode           *int64
 	ClassificationType   sql.NullString
 	ClassificationOrigin sql.NullString
-	DivisionID           sql.NullInt64
+	DivisionID           *int64
 	Weight               int32
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
@@ -1503,7 +1503,7 @@ type SalesDivision struct {
 	FinancialDelayDays      int32
 	PisPercentage           string
 	CofinsPercentage        string
-	ParentDivisionID        sql.NullInt64
+	ParentDivisionID        *int64
 	IsActive                bool
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
@@ -1539,7 +1539,7 @@ type SalesOrderDemand struct {
 	Quantity     string
 	DeliveredQty string
 	DeliveryDate time.Time
-	DivisionID   sql.NullInt64
+	DivisionID   *int64
 	Status       string
 	IsActive     bool
 	CreatedAt    time.Time
@@ -1557,7 +1557,7 @@ type StockMovement struct {
 	MovementType  string
 	Quantity      string
 	ReferenceType sql.NullString
-	ReferenceID   sql.NullInt64
+	ReferenceID   *int64
 	CreatedAt     time.Time
 }
 

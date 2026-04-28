@@ -130,3 +130,15 @@ func (a *AuthService) CreateAllocation(ctx context.Context) bool {
 func (a *AuthService) ListAllocation(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanCreateCostCenter(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanListCostCenter(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanGetCostCenter(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

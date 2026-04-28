@@ -9,6 +9,7 @@ sql:
       go:
         package: "sqlc"
         out: "internal/infrastructure/database/sqlc/"
+        sql_package: "database/sql"
 
         overrides:
           - column: "item_structures.quantity"
@@ -22,3 +23,47 @@ sql:
 
           - column: "allocation_base_items.percentage"
             go_type: "float64"
+
+          - column: "cost_centers.parent_code"
+            go_type:
+              type: "int32"
+              pointer: true
+
+          - column: "cost_centers.end_date"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+
+          - db_type: "pg_catalog.int4"
+            nullable: true
+            go_type:
+              type: "int32"
+              pointer: true
+
+          - db_type: "pg_catalog.int8"
+            nullable: true
+            go_type:
+              type: "int64"
+              pointer: true
+
+          - db_type: "pg_catalog.date"
+            nullable: true
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+
+          - db_type: "pg_catalog.timestamp"
+            nullable: true
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+
+          - db_type: "pg_catalog.timestamptz"
+            nullable: true
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true

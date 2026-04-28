@@ -15,6 +15,7 @@ import (
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
 	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
 	enterprise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/enterprise"
 	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
@@ -166,11 +167,18 @@ func (app *application) mount() chi.Router {
 	createEmployeeUc := usecase.NewCreateEmployeeUseCase(employeeRepo, authService)
 	employeeHandler := handler.NewCreateEmployeeHandler(createEmployeeUc)
 
-	// allocation_base
+	// allocation base
 	allocationBaseRepo := allocation.NewAllocationBaseRepositorySQLC(queries)
 	createAllocationBaseUC := usecase.NewCreateAllocationBaseUseCase(allocationBaseRepo, authService)
 	listAllocationBaseUC := usecase.NewListAllocationBasesUseCase(allocationBaseRepo, authService)
 	allocationBaseHandler := handler.NewAllocationBaseHandler(createAllocationBaseUC, listAllocationBaseUC)
+
+	// cost center
+	costCenterRepo := cost_center.NewCostCenterRepositorySQLC(queries)
+	createCostCenterUC := usecase.NewCreateCostCenterUseCase(costCenterRepo, authService)
+	listCostCenterUC := usecase.NewListCostCentersUseCase(costCenterRepo, authService)
+	getCostCenterUC := usecase.NewGetCostCenterUseCase(costCenterRepo, authService)
+	costCenterHandler := handler.NewCostCenterHandler(createCostCenterUC, listCostCenterUC, getCostCenterUC)
 
 	// routes
 	r.Group(func(r chi.Router) {
@@ -192,6 +200,11 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/allocations", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", allocationBaseHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", allocationBaseHandler.List)
+		})
+		r.Route("/api/cost-center", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", costCenterHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", costCenterHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}", costCenterHandler.Get)
 		})
 		r.Route("/api/questions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/questions/create", questionCreateHandler.CreateQuestion)

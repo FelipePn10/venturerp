@@ -74,8 +74,8 @@ type CreateItemParams struct {
 	WarehouseAutomaticLow                bool
 	WarehouseCyclicalCountConfig         pqtype.NullRawMessage
 	WarehouseMinimumStock                int32
-	WarehouseAvgMonthlyConsumptionManual sql.NullInt32
-	EngineeringItemBaseCod               sql.NullInt32
+	WarehouseAvgMonthlyConsumptionManual *int32
+	EngineeringItemBaseCod               *int32
 	EngineeringWeight                    json.RawMessage
 	EngineeringDimensions                pqtype.NullRawMessage
 	EngineeringType                      int16
@@ -84,9 +84,9 @@ type CreateItemParams struct {
 	PlanningTypeMrp                      int16
 	PlanningLlc                          int32
 	PlanningReorderPoint                 pqtype.NullRawMessage
-	PlanningTankID                       sql.NullInt32
+	PlanningTankID                       *int32
 	PlanningGhost                        bool
-	PlannerEmployeeID                    sql.NullInt32
+	PlannerEmployeeID                    *int32
 	SuppliesTypeOfUse                    int16
 	CreatedBy                            uuid.UUID
 }

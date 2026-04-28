@@ -3,11 +3,13 @@ package usecase
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
 	bomitem "github.com/FelipePn10/panossoerp/internal/domain/bom_items/repository"
 	component "github.com/FelipePn10/panossoerp/internal/domain/component/repository"
+	cost_center "github.com/FelipePn10/panossoerp/internal/domain/cost_center/repository"
 	employee "github.com/FelipePn10/panossoerp/internal/domain/employee/repository"
 	enterprise "github.com/FelipePn10/panossoerp/internal/domain/enterprise/repository"
 	mask "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/repository"
@@ -281,6 +283,35 @@ func NewListAllocationBasesUseCase(
 	auth ports.AuthService,
 ) *allocation_base_uc.ListAllocationBasesUseCase {
 	return &allocation_base_uc.ListAllocationBasesUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewCreateCostCenterUseCase(
+	repo cost_center.CostCenterRepository,
+	auth ports.AuthService,
+) *cost_center_uc.CreateCostCenterUseCase {
+	return &cost_center_uc.CreateCostCenterUseCase{
+		Repo: repo,
+		Auth: auth}
+}
+
+func NewGetCostCenterUseCase(
+	repo cost_center.CostCenterRepository,
+	auth ports.AuthService,
+) *cost_center_uc.GetCostCenterUseCase {
+	return &cost_center_uc.GetCostCenterUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListCostCentersUseCase(
+	repo cost_center.CostCenterRepository,
+	auth ports.AuthService,
+) *cost_center_uc.ListCostCentersUseCase {
+	return &cost_center_uc.ListCostCentersUseCase{
 		Repo: repo,
 		Auth: auth,
 	}

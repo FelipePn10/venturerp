@@ -39,10 +39,10 @@ func (uc *CreateAllocationBaseUseCase) Execute(
 
 	for _, item := range dto.Items {
 		_, err := uc.Repo.AddItem(ctx, &entity.AllocationBaseItem{
-			AllocationBaseID: result.ID,
-			CostCenterID:     item.CostCenterID,
-			Amount:           item.Amount,
-			Percentage:       item.Percentage,
+			AllocationBaseCode: result.Code,
+			CostCenterCode:     item.CostCenterCode,
+			Amount:             item.Amount,
+			Percentage:         item.Percentage,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("adding base item: %w", err)

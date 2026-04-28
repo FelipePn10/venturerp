@@ -3,7 +3,7 @@ package request
 import "github.com/google/uuid"
 
 type CreateAllocationBaseDTO struct {
-	Code        string                        `json:"code"`
+	Code        int32                         `json:"code"`
 	Description string                        `json:"description"`
 	Period      string                        `json:"period"`
 	Observation *string                       `json:"observation,omitempty"`
@@ -12,7 +12,7 @@ type CreateAllocationBaseDTO struct {
 }
 
 type CreateAllocationBaseItemDTO struct {
-	CostCenterID int64   `json:"cost_center_id"`
-	Amount       float64 `json:"amount"`
-	Percentage   float64 `json:"percentage"`
+	CostCenterCode int32   `json:"cost_center_code"`
+	Amount         float64 `json:"amount"`
+	Percentage     float64 `json:"percentage"`
 }

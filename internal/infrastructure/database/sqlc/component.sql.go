@@ -7,7 +7,6 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -29,7 +28,7 @@ INSERT INTO components (
 type CreateComponentParams struct {
 	Name      string
 	GroupCode string
-	Warehouse sql.NullInt64
+	Warehouse *int64
 	CreatedBy uuid.UUID
 }
 

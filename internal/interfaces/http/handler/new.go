@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 )
 
 func NewCreateProductHandler(
@@ -194,5 +195,17 @@ func NewAllocationBaseHandler(
 	return &AllocationBaseHandler{
 		createUC: createUC,
 		listUC:   listUC,
+	}
+}
+
+func NewCostCenterHandler(
+	createUC *cost_center_uc.CreateCostCenterUseCase,
+	listUC *cost_center_uc.ListCostCentersUseCase,
+	getUC *cost_center_uc.GetCostCenterUseCase,
+) *CostCenterHandler {
+	return &CostCenterHandler{
+		createUC: createUC,
+		listUC:   listUC,
+		getUC:    getUC,
 	}
 }

@@ -13,33 +13,33 @@ import (
 )
 
 const addAllocationBaseItem = `-- name: AddAllocationBaseItem :one
-INSERT INTO allocation_base_items (allocation_base_id, cost_center_id, amount, percentage)
+INSERT INTO allocation_base_items (allocation_base_code, cost_center_code, amount, percentage)
 VALUES ($1, $2, $3, $4)
-    RETURNING id, allocation_base_id, cost_center_id, amount, percentage, created_at
+    RETURNING id, amount, percentage, created_at, allocation_base_code, cost_center_code
 `
 
 type AddAllocationBaseItemParams struct {
-	AllocationBaseID int64
-	CostCenterID     int64
-	Amount           float64
-	Percentage       float64
+	AllocationBaseCode int32
+	CostCenterCode     int32
+	Amount             float64
+	Percentage         float64
 }
 
 func (q *Queries) AddAllocationBaseItem(ctx context.Context, arg AddAllocationBaseItemParams) (AllocationBaseItem, error) {
 	row := q.db.QueryRowContext(ctx, addAllocationBaseItem,
-		arg.AllocationBaseID,
-		arg.CostCenterID,
+		arg.AllocationBaseCode,
+		arg.CostCenterCode,
 		arg.Amount,
 		arg.Percentage,
 	)
 	var i AllocationBaseItem
 	err := row.Scan(
 		&i.ID,
-		&i.AllocationBaseID,
-		&i.CostCenterID,
 		&i.Amount,
 		&i.Percentage,
 		&i.CreatedAt,
+		&i.AllocationBaseCode,
+		&i.CostCenterCode,
 	)
 	return i, err
 }
@@ -51,7 +51,7 @@ VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreateAllocationBaseParams struct {
-	Code        string
+	Code        int32
 	Description string
 	Period      string
 	Observation sql.NullString
@@ -81,29 +81,29 @@ func (q *Queries) CreateAllocationBase(ctx context.Context, arg CreateAllocation
 }
 
 const deleteAllocationBase = `-- name: DeleteAllocationBase :exec
-DELETE FROM allocation_bases WHERE id = $1
+DELETE FROM allocation_bases WHERE code = $1
 `
 
-func (q *Queries) DeleteAllocationBase(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteAllocationBase, id)
+func (q *Queries) DeleteAllocationBase(ctx context.Context, code int32) error {
+	_, err := q.db.ExecContext(ctx, deleteAllocationBase, code)
 	return err
 }
 
 const deleteAllocationBaseItems = `-- name: DeleteAllocationBaseItems :exec
-DELETE FROM allocation_base_items WHERE allocation_base_id = $1
+DELETE FROM allocation_base_items WHERE allocation_base_code = $1
 `
 
-func (q *Queries) DeleteAllocationBaseItems(ctx context.Context, allocationBaseID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteAllocationBaseItems, allocationBaseID)
+func (q *Queries) DeleteAllocationBaseItems(ctx context.Context, allocationBaseCode int32) error {
+	_, err := q.db.ExecContext(ctx, deleteAllocationBaseItems, allocationBaseCode)
 	return err
 }
 
-const getAllocationBaseByID = `-- name: GetAllocationBaseByID :one
-SELECT id, code, description, period, observation, created_at, updated_at, created_by FROM allocation_bases WHERE id = $1
+const getAllocationBaseByCode = `-- name: GetAllocationBaseByCode :one
+SELECT id, code, description, period, observation, created_at, updated_at, created_by FROM allocation_bases WHERE code = $1
 `
 
-func (q *Queries) GetAllocationBaseByID(ctx context.Context, id int64) (AllocationBasis, error) {
-	row := q.db.QueryRowContext(ctx, getAllocationBaseByID, id)
+func (q *Queries) GetAllocationBaseByCode(ctx context.Context, code int32) (AllocationBasis, error) {
+	row := q.db.QueryRowContext(ctx, getAllocationBaseByCode, code)
 	var i AllocationBasis
 	err := row.Scan(
 		&i.ID,
@@ -119,11 +119,11 @@ func (q *Queries) GetAllocationBaseByID(ctx context.Context, id int64) (Allocati
 }
 
 const getAllocationBaseItems = `-- name: GetAllocationBaseItems :many
-SELECT id, allocation_base_id, cost_center_id, amount, percentage, created_at FROM allocation_base_items WHERE allocation_base_id = $1
+SELECT id, amount, percentage, created_at, allocation_base_code, cost_center_code FROM allocation_base_items WHERE allocation_base_code = $1
 `
 
-func (q *Queries) GetAllocationBaseItems(ctx context.Context, allocationBaseID int64) ([]AllocationBaseItem, error) {
-	rows, err := q.db.QueryContext(ctx, getAllocationBaseItems, allocationBaseID)
+func (q *Queries) GetAllocationBaseItems(ctx context.Context, allocationBaseCode int32) ([]AllocationBaseItem, error) {
+	rows, err := q.db.QueryContext(ctx, getAllocationBaseItems, allocationBaseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -133,11 +133,11 @@ func (q *Queries) GetAllocationBaseItems(ctx context.Context, allocationBaseID i
 		var i AllocationBaseItem
 		if err := rows.Scan(
 			&i.ID,
-			&i.AllocationBaseID,
-			&i.CostCenterID,
 			&i.Amount,
 			&i.Percentage,
 			&i.CreatedAt,
+			&i.AllocationBaseCode,
+			&i.CostCenterCode,
 		); err != nil {
 			return nil, err
 		}

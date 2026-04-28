@@ -7,8 +7,7 @@ import (
 )
 
 type AllocationBase struct {
-	ID          int64
-	Code        string
+	Code        int32
 	Description string
 	Period      string
 	Observation *string
@@ -19,10 +18,9 @@ type AllocationBase struct {
 }
 
 type AllocationBaseItem struct {
-	ID               int64
-	AllocationBaseID int64
-	CostCenterID     int64
-	Amount           float64
-	Percentage       float64
-	CreatedAt        time.Time
+	AllocationBaseCode int32
+	CostCenterCode     int32
+	Amount             float64
+	Percentage         float64
+	CreatedAt          time.Time
 }

@@ -45,34 +45,29 @@ func (r *RepositoryItemSQLC) Create(
 
 	params := sqlc.CreateItemParams{
 		WarehouseID: int32(item.Warehouse.WarehouseID),
-
-		// ✔ bigint alinhado
-		Code: int64(item.Code),
+		Code:        int64(item.Code),
 
 		Complement: nullable.ToNullString(item.Complement),
 
 		Nature:    int16(item.Nature),
 		Inherit:   item.Inherit,
 		Situation: int16(item.Situation),
-
-		// ✔ ENUM string → string
-		Health: sqlc.HealthEnum(item.Health),
+		Health:    sqlc.HealthEnum(item.Health),
 
 		PdmGroupID:              item.PDM.GroupID,
 		PdmModifierID:           item.PDM.ModifierID,
 		PdmAttributes:           attributes,
 		PdmDescriptionTechnique: item.PDM.DescriptionTechnique,
 
-		WarehouseUnitOfMeasurement: sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
-
+		WarehouseUnitOfMeasurement:   sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
 		WarehouseAutomaticLow:        item.Warehouse.AutomaticLow,
 		WarehouseCyclicalCountConfig: cyclicalCountConfig,
 		WarehouseMinimumStock:        item.Warehouse.MinimumStock,
-		WarehouseAvgMonthlyConsumptionManual: nullable.ToNullInt32FromIntPtr(
+		WarehouseAvgMonthlyConsumptionManual: intPtrToInt32Ptr(
 			item.Warehouse.AverageMonthlyConsumptionManual,
 		),
 
-		EngineeringItemBaseCod: nullable.ToNullInt32FromIntPtr(item.Engineering.ItemBaseCod),
+		EngineeringItemBaseCod: intPtrToInt32Ptr(item.Engineering.ItemBaseCod),
 		EngineeringWeight:      weight,
 		EngineeringDimensions:  dimensions,
 		EngineeringType:        int16(item.Engineering.Type),
@@ -82,10 +77,11 @@ func (r *RepositoryItemSQLC) Create(
 		PlanningTypeMrp:      int16(item.Planning.TypeMRP),
 		PlanningLlc:          int32(item.Planning.LLC),
 		PlanningReorderPoint: reorderPoint,
-		PlanningTankID:       nullable.ToNullInt32FromIntPtr(item.Planning.TankID),
+		PlanningTankID:       intPtrToInt32Ptr(item.Planning.TankID),
 		PlanningGhost:        item.Planning.Ghost,
 
-		PlannerEmployeeID: nullable.ToNullInt32FromPtr(item.Planners.EmployeeID),
+		// CORRETO: domínio já usa *int32
+		PlannerEmployeeID: item.Planners.EmployeeID,
 
 		SuppliesTypeOfUse: int16(item.Supplies.TypeOfUse),
 
@@ -110,107 +106,7 @@ func (r *RepositoryItemSQLC) Create(
 		}
 	}
 
-	var pdmAttributes []valueobject.Attribute
-	if err := json.Unmarshal(dbItem.PdmAttributes, &pdmAttributes); err != nil {
-		return nil, fmt.Errorf("unmarshal pdm_attributes: %w", err)
-	}
-
-	var engineeringWeight valueobject.Weight
-	if err := json.Unmarshal(dbItem.EngineeringWeight, &engineeringWeight); err != nil {
-		return nil, fmt.Errorf("unmarshal engineering_weight: %w", err)
-	}
-
-	engineeringDimensions, err := nullable.UnmarshalNullRawMessage[valueobject.Dimensions](dbItem.EngineeringDimensions)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal engineering_dimensions: %w", err)
-	}
-
-	planningReorderPoint, err := nullable.UnmarshalNullRawMessage[valueobject.ReorderPoint](dbItem.PlanningReorderPoint)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal planning_reorder_point: %w", err)
-	}
-
-	cyclicalCount, err := nullable.UnmarshalNullRawMessage[valueobject.CyclicalCountConfig](dbItem.WarehouseCyclicalCountConfig)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal cyclical_count_config: %w", err)
-	}
-
-	var machines *[]machine.MachineUsage
-	if item.Planners.MachinesID != nil {
-		list := make([]machine.MachineUsage, len(*item.Planners.MachinesID))
-		for i, m := range *item.Planners.MachinesID {
-			list[i] = machine.MachineUsage{
-				ItemID:    dbItem.ID,
-				MachineID: m.MachineID,
-				UsageTime: m.UsageTime,
-			}
-		}
-		machines = &list
-	}
-
-	return &entity.Item{
-		ID: dbItem.ID,
-
-		// ✔ bigint → VO
-		Code: valueobject.ItemCode(dbItem.Code),
-
-		Complement: nullable.FromNullString(dbItem.Complement),
-
-		Nature:  entity.ItemNature(dbItem.Nature),
-		Inherit: dbItem.Inherit,
-
-		PDM: entity.PDM{
-			GroupID:              dbItem.PdmGroupID,
-			ModifierID:           dbItem.PdmModifierID,
-			Attributes:           pdmAttributes,
-			DescriptionTechnique: dbItem.PdmDescriptionTechnique,
-		},
-
-		Situation: types.TypeSituationItem(dbItem.Situation),
-
-		// ✔ string → enum
-		Health: types.Health(dbItem.Health),
-
-		Warehouse: entity.Warehouse{
-			WarehouseID: int(dbItem.WarehouseID),
-
-			UnitOfMeasurement: types.TypeUnitOfMeasurementItem(dbItem.WarehouseUnitOfMeasurement),
-
-			AutomaticLow:                    dbItem.WarehouseAutomaticLow,
-			CyclicalCountConfig:             cyclicalCount,
-			MinimumStock:                    dbItem.WarehouseMinimumStock,
-			AverageMonthlyConsumptionManual: nullable.FromNullInt32ToIntPtr(dbItem.WarehouseAvgMonthlyConsumptionManual),
-		},
-
-		Engineering: entity.Engineering{
-			ItemBaseCod: nullable.FromNullInt32ToIntPtr(dbItem.EngineeringItemBaseCod),
-			Weight:      engineeringWeight,
-			Dimensions:  engineeringDimensions,
-			Type:        types.TypeItem(dbItem.EngineeringType),
-			TypeStruct:  types.TypeStructItem(dbItem.EngineeringTypeStruct),
-			OEM:         dbItem.EngineeringOem,
-		},
-
-		Planning: entity.Planning{
-			TypeMRP:      types.TypeMRPItem(dbItem.PlanningTypeMrp),
-			LLC:          int(dbItem.PlanningLlc),
-			ReorderPoint: planningReorderPoint,
-			TankID:       nullable.FromNullInt32ToIntPtr(dbItem.PlanningTankID),
-			Ghost:        dbItem.PlanningGhost,
-		},
-
-		Planners: entity.Planners{
-			EmployeeID: nullable.FromNullInt32(dbItem.PlannerEmployeeID),
-			MachinesID: machines,
-		},
-
-		Supplies: entity.Supplies{
-			TypeOfUse: types.TypeOfUseItem(dbItem.SuppliesTypeOfUse),
-		},
-
-		CreatedBy: dbItem.CreatedBy,
-		CreatedAt: dbItem.CreatedAt,
-	}, nil
+	return mapDBItemToEntity(dbItem, item.Planners.MachinesID)
 }
 
 func (r *RepositoryItemSQLC) FindItemByCode(
@@ -223,6 +119,16 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 		return nil, err
 	}
 
+	var machines *[]machine.MachineUsage
+
+	return mapDBItemToEntity(dbItem, machines)
+}
+
+func mapDBItemToEntity(
+	dbItem sqlc.Item,
+	machines *[]machine.MachineUsage,
+) (*entity.Item, error) {
+
 	var pdmAttributes []valueobject.Attribute
 	if err := json.Unmarshal(dbItem.PdmAttributes, &pdmAttributes); err != nil {
 		return nil, fmt.Errorf("unmarshal pdm_attributes: %w", err)
@@ -248,15 +154,14 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 		return nil, fmt.Errorf("unmarshal cyclical_count_config: %w", err)
 	}
 
-	var machines *[]machine.MachineUsage
-
 	return &entity.Item{
 		ID:   dbItem.ID,
 		Code: valueobject.ItemCode(dbItem.Code),
 
 		Complement: nullable.FromNullString(dbItem.Complement),
-		Nature:     entity.ItemNature(dbItem.Nature),
-		Inherit:    dbItem.Inherit,
+
+		Nature:  entity.ItemNature(dbItem.Nature),
+		Inherit: dbItem.Inherit,
 
 		PDM: entity.PDM{
 			GroupID:              dbItem.PdmGroupID,
@@ -276,11 +181,11 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 			AutomaticLow:                    dbItem.WarehouseAutomaticLow,
 			CyclicalCountConfig:             cyclicalCount,
 			MinimumStock:                    dbItem.WarehouseMinimumStock,
-			AverageMonthlyConsumptionManual: nullable.FromNullInt32ToIntPtr(dbItem.WarehouseAvgMonthlyConsumptionManual),
+			AverageMonthlyConsumptionManual: int32PtrToIntPtr(dbItem.WarehouseAvgMonthlyConsumptionManual),
 		},
 
 		Engineering: entity.Engineering{
-			ItemBaseCod: nullable.FromNullInt32ToIntPtr(dbItem.EngineeringItemBaseCod),
+			ItemBaseCod: int32PtrToIntPtr(dbItem.EngineeringItemBaseCod),
 			Weight:      engineeringWeight,
 			Dimensions:  engineeringDimensions,
 			Type:        types.TypeItem(dbItem.EngineeringType),
@@ -292,12 +197,13 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 			TypeMRP:      types.TypeMRPItem(dbItem.PlanningTypeMrp),
 			LLC:          int(dbItem.PlanningLlc),
 			ReorderPoint: planningReorderPoint,
-			TankID:       nullable.FromNullInt32ToIntPtr(dbItem.PlanningTankID),
+			TankID:       int32PtrToIntPtr(dbItem.PlanningTankID),
 			Ghost:        dbItem.PlanningGhost,
 		},
 
 		Planners: entity.Planners{
-			EmployeeID: nullable.FromNullInt32(dbItem.PlannerEmployeeID),
+			// CORRETO: domínio usa *int32
+			EmployeeID: dbItem.PlannerEmployeeID,
 			MachinesID: machines,
 		},
 
@@ -308,4 +214,22 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 		CreatedBy: dbItem.CreatedBy,
 		CreatedAt: dbItem.CreatedAt,
 	}, nil
+}
+
+func intPtrToInt32Ptr(v *int) *int32 {
+	if v == nil {
+		return nil
+	}
+
+	value := int32(*v)
+	return &value
+}
+
+func int32PtrToIntPtr(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+
+	value := int(*v)
+	return &value
 }

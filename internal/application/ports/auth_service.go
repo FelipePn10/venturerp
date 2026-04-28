@@ -32,4 +32,7 @@ type AuthService interface {
 	UserID(ctx context.Context) (uuid.UUID, error)
 	CreateAllocation(ctx context.Context) bool
 	ListAllocation(ctx context.Context) bool
+	CanCreateCostCenter(ctx context.Context) bool
+	CanListCostCenter(ctx context.Context) bool
+	CanGetCostCenter(ctx context.Context) bool
 }
