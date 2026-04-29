@@ -16,6 +16,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
 	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
+	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
+	deliveryReschedule "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_reschedule"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
 	enterprise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/enterprise"
 	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
@@ -180,6 +182,17 @@ func (app *application) mount() chi.Router {
 	getCostCenterUC := usecase.NewGetCostCenterUseCase(costCenterRepo, authService)
 	costCenterHandler := handler.NewCostCenterHandler(createCostCenterUC, listCostCenterUC, getCostCenterUC)
 
+	// delivery promise params
+	deliveryPromiseParamsRepo := deliveryPromiseParams.NewDeliveryPromiseParamsRepositorySQLC(queries)
+	manageDeliveryPromiseParamsUC := usecase.NewManageDeliveryPromiseParamsUseCase(deliveryPromiseParamsRepo, authService)
+	deliveryPromiseParamsHandler := handler.NewDeliveryPromiseParamsHandler(manageDeliveryPromiseParamsUC)
+
+	// delivery reschedule
+	deliveryRescheduleRepo := deliveryReschedule.NewDeliveryRescheduleRepositorySQLC(queries)
+	createDeliveryRescheduleUC := usecase.NewCreateDeliveryRescheduleUseCase(deliveryRescheduleRepo, authService)
+	listDeliveryRescheduleUC := usecase.NewListDeliveryReschedulesUseCase(deliveryRescheduleRepo, authService)
+	deliveryRescheduleHandler := handler.NewDeliveryRescheduleHandler(createDeliveryRescheduleUC, listDeliveryRescheduleUC)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -205,6 +218,14 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", costCenterHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", costCenterHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}", costCenterHandler.Get)
+		})
+		r.Route("/api/delivery-promise-params", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", deliveryPromiseParamsHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", deliveryPromiseParamsHandler.Update)
+		})
+		r.Route("/api/delivery-reschedule", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", deliveryRescheduleHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list/{sales_order_code}", deliveryRescheduleHandler.ListByOrder)
 		})
 		r.Route("/api/questions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/questions/create", questionCreateHandler.CreateQuestion)

@@ -1040,14 +1040,15 @@ type DeliveryPromiseParam struct {
 }
 
 type DeliveryReschedule struct {
-	ID           int64
-	SalesOrderID int64
-	ItemCode     int64
-	OldDate      time.Time
-	NewDate      time.Time
-	Reason       sql.NullString
-	CreatedAt    time.Time
-	CreatedBy    uuid.UUID
+	ID             int64
+	Code           int64
+	SalesOrderCode int64
+	ItemCode       int64
+	OldDate        time.Time
+	NewDate        time.Time
+	Reason         sql.NullString
+	CreatedAt      time.Time
+	CreatedBy      uuid.UUID
 }
 
 type Employee struct {
@@ -1532,18 +1533,18 @@ type SalesForecastBlock struct {
 }
 
 type SalesOrderDemand struct {
-	ID           int64
-	SalesOrderID int64
-	ItemCode     int64
-	Mask         string
-	Quantity     string
-	DeliveredQty string
-	DeliveryDate time.Time
-	DivisionID   *int64
-	Status       string
-	IsActive     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID             int64
+	SalesOrderCode int64
+	ItemCode       int64
+	Mask           string
+	Quantity       string
+	DeliveredQty   string
+	DeliveryDate   time.Time
+	DivisionID     *int64
+	Status         string
+	IsActive       bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type Stock struct {

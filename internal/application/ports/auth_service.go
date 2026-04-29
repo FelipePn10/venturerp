@@ -35,4 +35,6 @@ type AuthService interface {
 	CanCreateCostCenter(ctx context.Context) bool
 	CanListCostCenter(ctx context.Context) bool
 	CanGetCostCenter(ctx context.Context) bool
+	CanCreateDeliveryReschedule(ctx context.Context) bool
+	CanListDeliveryReschedule(ctx context.Context) bool
 }

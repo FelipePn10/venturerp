@@ -317,17 +317,18 @@ CREATE INDEX idx_item_calendar_item ON item_calendar_promises(item_code);
 
 -- 16. DELIVERY RESCHEDULE
 CREATE TABLE delivery_reschedules (
-                                      id              BIGSERIAL PRIMARY KEY,
-                                      sales_order_id  BIGINT NOT NULL,
-                                      item_code       BIGINT NOT NULL,
-                                      old_date        DATE NOT NULL,
-                                      new_date        DATE NOT NULL,
-                                      reason          TEXT,
-                                      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                                      created_by      UUID NOT NULL
+                                      id               BIGSERIAL PRIMARY KEY,
+                                      code             BIGINT NOT NULL ,
+                                      sales_order_code BIGINT NOT NULL,
+                                      item_code        BIGINT NOT NULL,
+                                      old_date         DATE NOT NULL,
+                                      new_date         DATE NOT NULL,
+                                      reason           TEXT,
+                                      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                                      created_by       UUID NOT NULL
 );
 
-CREATE INDEX idx_delivery_reschedule_order ON delivery_reschedules(sales_order_id);
+CREATE INDEX idx_delivery_reschedule_order ON delivery_reschedules(sales_order_code);
 
 -- 17. PLANNING PARAMETERS
 CREATE TABLE planning_params (
@@ -526,7 +527,7 @@ CREATE INDEX idx_stock_snapshots_item ON stock_snapshots(item_code);
 -- 26. SALES ORDER DEMAND (for MRP)
 CREATE TABLE sales_order_demands (
                                      id              BIGSERIAL PRIMARY KEY,
-                                     sales_order_id  BIGINT NOT NULL,
+                                     sales_order_code  BIGINT NOT NULL,
                                      item_code       BIGINT NOT NULL,
                                      mask            VARCHAR(200) NOT NULL DEFAULT '',
                                      quantity        NUMERIC(15,4) NOT NULL,

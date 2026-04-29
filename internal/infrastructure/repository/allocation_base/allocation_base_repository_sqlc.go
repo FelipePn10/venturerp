@@ -9,14 +9,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
-type AllocationBaseRepositorySQLC struct {
-	q *sqlc.Queries
-}
-
-func NewAllocationBaseRepositorySQLC(q *sqlc.Queries) *AllocationBaseRepositorySQLC {
-	return &AllocationBaseRepositorySQLC{q: q}
-}
-
 func (r *AllocationBaseRepositorySQLC) Create(ctx context.Context, ab *entity.AllocationBase) (*entity.AllocationBase, error) {
 	row, err := r.q.CreateAllocationBase(ctx, sqlc.CreateAllocationBaseParams{
 		Code:        ab.Code,

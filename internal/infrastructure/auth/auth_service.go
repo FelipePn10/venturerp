@@ -142,3 +142,11 @@ func (a *AuthService) CanListCostCenter(ctx context.Context) bool {
 func (a *AuthService) CanGetCostCenter(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanCreateDeliveryReschedule(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanListDeliveryReschedule(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
