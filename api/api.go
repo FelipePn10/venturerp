@@ -16,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
 	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
+	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
 	enterprise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/enterprise"
 	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
@@ -180,6 +181,11 @@ func (app *application) mount() chi.Router {
 	getCostCenterUC := usecase.NewGetCostCenterUseCase(costCenterRepo, authService)
 	costCenterHandler := handler.NewCostCenterHandler(createCostCenterUC, listCostCenterUC, getCostCenterUC)
 
+	// delivery promise params
+	deliveryPromiseParams := deliveryPromiseParams.NewDeliveryPromiseParamsRepositorySQLC(queries)
+	manageDeliveryPromiseParamsUC := usecase.NewManageDeliveryPromiseParamsUseCase(deliveryPromiseParams, authService)
+	deliveryPromiseParamsHandler := handler.NewDeliveryPromiseParamsHandler(manageDeliveryPromiseParamsUC)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -205,6 +211,10 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", costCenterHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", costCenterHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}", costCenterHandler.Get)
+		})
+		r.Route("/api/delviery-promise-params", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", deliveryPromiseParamsHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", deliveryPromiseParamsHandler.Update)
 		})
 		r.Route("/api/questions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/questions/create", questionCreateHandler.CreateQuestion)

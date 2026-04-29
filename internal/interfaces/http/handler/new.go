@@ -4,6 +4,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 )
 
 func NewCreateProductHandler(
@@ -207,5 +208,13 @@ func NewCostCenterHandler(
 		createUC: createUC,
 		listUC:   listUC,
 		getUC:    getUC,
+	}
+}
+
+func NewDeliveryPromiseParamsHandler(
+	uc *delivery_promise_params_uc.ManageDeliveryPromiseParamsUseCase,
+) *DeliveryPromiseParamsHandler {
+	return &DeliveryPromiseParamsHandler{
+		uc: uc,
 	}
 }

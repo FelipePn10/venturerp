@@ -4,12 +4,14 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
 	bomitem "github.com/FelipePn10/panossoerp/internal/domain/bom_items/repository"
 	component "github.com/FelipePn10/panossoerp/internal/domain/component/repository"
 	cost_center "github.com/FelipePn10/panossoerp/internal/domain/cost_center/repository"
+	delivery_promise_params "github.com/FelipePn10/panossoerp/internal/domain/delivery_promise_params/repository"
 	employee "github.com/FelipePn10/panossoerp/internal/domain/employee/repository"
 	enterprise "github.com/FelipePn10/panossoerp/internal/domain/enterprise/repository"
 	mask "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/repository"
@@ -314,5 +316,15 @@ func NewListCostCentersUseCase(
 	return &cost_center_uc.ListCostCentersUseCase{
 		Repo: repo,
 		Auth: auth,
+	}
+}
+
+func NewManageDeliveryPromiseParamsUseCase(
+	repo delivery_promise_params.DeliveryPromiseParamsRepository,
+	auth ports.AuthService,
+) *delivery_promise_params_uc.ManageDeliveryPromiseParamsUseCase {
+	return &delivery_promise_params_uc.ManageDeliveryPromiseParamsUseCase{
+		Repo: repo,
+		auth: auth,
 	}
 }
