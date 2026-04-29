@@ -38,10 +38,10 @@ func (r *DeliveryRescheduleRepositorySQLC) GetByCode(ctx context.Context, code i
 	return rowToEntity(row), nil
 }
 
-func (r *DeliveryRescheduleRepositorySQLC) ListByOrder(ctx context.Context, orderCode int64) ([]*entity.DeliveryReschedule, error) {
-	rows, err := r.q.ListReschedulesByOrder(ctx, orderCode)
+func (r *DeliveryRescheduleRepositorySQLC) ListByOrder(ctx context.Context, salesOrderCode int64) ([]*entity.DeliveryReschedule, error) {
+	rows, err := r.q.ListReschedulesByOrder(ctx, salesOrderCode)
 	if err != nil {
-		return nil, fmt.Errorf("listing reschedules by order: %w", err)
+		return nil, fmt.Errorf("listing reschedules by salesOrderCode: %w", err)
 	}
 	return rowsToEntities(rows), nil
 }
