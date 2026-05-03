@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/questions_options/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -15,7 +16,7 @@ func (r *repositoryQuestionOptionsSQLC) Save(
 ) (*entity.QuestionsOptions, error) {
 	dbQuestionOption, err := r.q.CreateQuestionOption(ctx, sqlc.CreateQuestionOptionParams{
 		Value:      qstops.Value,
-		CreatedBy:  qstops.CreatedBy,
+		CreatedBy:  pgutil.ToPgUUID(qstops.CreatedBy),
 		QuestionID: qstops.QuestionId,
 	})
 	if err != nil {
@@ -27,7 +28,7 @@ func (r *repositoryQuestionOptionsSQLC) Save(
 
 	return &entity.QuestionsOptions{
 		QuestionId: dbQuestionOption.ID,
-		CreatedBy:  dbQuestionOption.CreatedBy,
+		CreatedBy:  pgutil.FromPgUUID(dbQuestionOption.CreatedBy),
 		Value:      dbQuestionOption.Value,
 	}, nil
 }

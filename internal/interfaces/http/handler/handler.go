@@ -4,7 +4,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
+	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
@@ -82,7 +84,7 @@ type ModifierHandler struct {
 
 type EmployeeHandler struct {
 	*security.BaseHandler
-	createEmployeeUC *usecase.CreateEmployeeUseCase
+	createEmployeeUC *employee.CreateEmployeeUseCase
 }
 
 type ItemStructureHandler struct {
@@ -121,4 +123,9 @@ type IndependentDemandHandler struct {
 	listByItemUC   *independent_demand_uc.ListIndependentDemandByItemUseCase
 	listUC         *independent_demand_uc.ListIndependentDemandsUseCase
 	getByCodeUC    *independent_demand_uc.GetIndependentDemandByCodeUseCase
+}
+
+type IndustrialCalendarHandler struct {
+	*security.BaseHandler
+	uc *industrial_calendar_uc.ManageCalendarUseCase
 }

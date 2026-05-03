@@ -1,4 +1,4 @@
-package usecase
+package employee
 
 import (
 	"context"
@@ -10,19 +10,19 @@ import (
 )
 
 type CreateEmployeeUseCase struct {
-	repo repository.EmployeeRepository
-	auth ports.AuthService
+	Repo repository.EmployeeRepository
+	Auth ports.AuthService
 }
 
 func (uc *CreateEmployeeUseCase) Execute(
 	ctx context.Context,
 	employee *entity.Employee,
 ) (*entity.Employee, error) {
-	if !uc.auth.CanCreateEmployee(ctx) {
+	if !uc.Auth.CanCreateEmployee(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	created, err := uc.repo.Create(ctx, employee)
+	created, err := uc.Repo.Create(ctx, employee)
 	if err != nil {
 		return nil, err
 	}

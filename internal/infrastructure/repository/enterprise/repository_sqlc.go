@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enterprise/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -12,10 +13,11 @@ func (r *repositoryEnterpriseSQLC) Create(
 	ctx context.Context,
 	enterprise *entity.Enterprise,
 ) (*entity.Enterprise, error) {
+
 	params := sqlc.CreateEnterpriseParams{
 		Code:      int32(enterprise.Code),
 		Name:      enterprise.Name,
-		CreatedBy: enterprise.CreatedBy,
+		CreatedBy: pgutil.ToPgUUID(enterprise.CreatedBy),
 	}
 
 	dbEnterprise, err := r.q.CreateEnterprise(ctx, params)
@@ -27,6 +29,6 @@ func (r *repositoryEnterpriseSQLC) Create(
 		ID:        int(dbEnterprise.ID),
 		Code:      int(dbEnterprise.Code),
 		Name:      dbEnterprise.Name,
-		CreatedBy: dbEnterprise.CreatedBy.UUID,
+		CreatedBy: pgutil.FromPgUUID(dbEnterprise.CreatedBy),
 	}, nil
 }

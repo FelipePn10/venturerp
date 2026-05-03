@@ -7,6 +7,8 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createEmployee = `-- name: CreateEmployee :one
@@ -24,12 +26,12 @@ RETURNING id, enterprise_id, code, description, name, created_at
 type CreateEmployeeParams struct {
 	EnterpriseID int32
 	Code         int32
-	Description  string
+	Description  pgtype.Text
 	Name         string
 }
 
 func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error) {
-	row := q.db.QueryRowContext(ctx, createEmployee,
+	row := q.db.QueryRow(ctx, createEmployee,
 		arg.EnterpriseID,
 		arg.Code,
 		arg.Description,

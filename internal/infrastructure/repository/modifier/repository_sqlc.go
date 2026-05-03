@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/modifier/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -14,7 +15,7 @@ func (r *repositoryModifierSQLC) Create(
 ) (*entity.Modifier, error) {
 	params := sqlc.CreateModifierParams{
 		Description: modifier.Description,
-		CreatedBy:   modifier.CreatedBy,
+		CreatedBy:   pgutil.ToPgUUID(modifier.CreatedBy),
 	}
 
 	dbModifier, err := r.q.CreateModifier(ctx, params)
@@ -23,8 +24,8 @@ func (r *repositoryModifierSQLC) Create(
 	}
 
 	return &entity.Modifier{
-		ID:          modifier.ID,
+		ID:          int(dbModifier.ID),
 		Description: dbModifier.Description,
-		CreatedBy:   dbModifier.CreatedBy,
+		CreatedBy:   pgutil.FromPgUUID(dbModifier.CreatedBy),
 	}, nil
 }

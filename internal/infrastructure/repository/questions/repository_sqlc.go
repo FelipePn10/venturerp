@@ -5,6 +5,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/product/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/questions/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -12,10 +13,12 @@ func (r *repositoryQuestionSQLC) Save(
 	ctx context.Context,
 	qst *entity.Question,
 ) (*entity.Question, error) {
+
 	params := sqlc.CreateQuestionParams{
 		Name:      qst.Name,
-		Createdby: qst.CreatedBy,
+		Createdby: pgutil.ToPgUUID(qst.CreatedBy),
 	}
+
 	dbQuestion, err := r.q.CreateQuestion(ctx, params)
 	if err != nil {
 		return nil, err
@@ -23,7 +26,7 @@ func (r *repositoryQuestionSQLC) Save(
 
 	return &entity.Question{
 		Name:      dbQuestion.Name,
-		CreatedBy: dbQuestion.Createdby,
+		CreatedBy: pgutil.FromPgUUID(dbQuestion.Createdby),
 	}, nil
 }
 
@@ -38,6 +41,7 @@ func (r *repositoryQuestionSQLC) FindQuestionByName(
 	ctx context.Context,
 	name string,
 ) (*entity.Question, error) {
+
 	dbQuestions, err := r.q.FindQuestionByName(ctx, name)
 	if err != nil {
 		return nil, err
@@ -47,16 +51,11 @@ func (r *repositoryQuestionSQLC) FindQuestionByName(
 		return nil, repository.ErrNotFound
 	}
 
-	// opcional: proteção contra inconsistência
-	// if len(dbQuestions) > 1 {
-	//     log.Warn("multiple questions with same name")
-	// }
-
 	dbQuestion := dbQuestions[0]
 
 	return &entity.Question{
 		Name:      dbQuestion.Name,
-		CreatedBy: dbQuestion.Createdby,
+		CreatedBy: pgutil.FromPgUUID(dbQuestion.Createdby),
 	}, nil
 }
 
@@ -64,9 +63,11 @@ func (r *repositoryQuestionSQLC) ExistsQuestionByName(
 	ctx context.Context,
 	name string,
 ) (bool, error) {
+
 	exists, err := r.q.ExistsQuestionByName(ctx, name)
 	if err != nil {
 		return false, err
 	}
+
 	return exists, nil
 }

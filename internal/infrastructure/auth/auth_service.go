@@ -170,3 +170,7 @@ func (a *AuthService) CanUpdateIndependentDemand(ctx context.Context) bool {
 func (a *AuthService) CanDeleteIndependentDemand(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanManageIndustrialCalendar(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

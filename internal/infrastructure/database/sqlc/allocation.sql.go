@@ -7,9 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addAllocationBaseItem = `-- name: AddAllocationBaseItem :one
@@ -26,7 +25,7 @@ type AddAllocationBaseItemParams struct {
 }
 
 func (q *Queries) AddAllocationBaseItem(ctx context.Context, arg AddAllocationBaseItemParams) (AllocationBaseItem, error) {
-	row := q.db.QueryRowContext(ctx, addAllocationBaseItem,
+	row := q.db.QueryRow(ctx, addAllocationBaseItem,
 		arg.AllocationBaseCode,
 		arg.CostCenterCode,
 		arg.Amount,
@@ -54,12 +53,12 @@ type CreateAllocationBaseParams struct {
 	Code        int32
 	Description string
 	Period      string
-	Observation sql.NullString
-	CreatedBy   uuid.UUID
+	Observation pgtype.Text
+	CreatedBy   pgtype.UUID
 }
 
 func (q *Queries) CreateAllocationBase(ctx context.Context, arg CreateAllocationBaseParams) (AllocationBasis, error) {
-	row := q.db.QueryRowContext(ctx, createAllocationBase,
+	row := q.db.QueryRow(ctx, createAllocationBase,
 		arg.Code,
 		arg.Description,
 		arg.Period,
@@ -85,7 +84,7 @@ DELETE FROM allocation_bases WHERE code = $1
 `
 
 func (q *Queries) DeleteAllocationBase(ctx context.Context, code int32) error {
-	_, err := q.db.ExecContext(ctx, deleteAllocationBase, code)
+	_, err := q.db.Exec(ctx, deleteAllocationBase, code)
 	return err
 }
 
@@ -94,7 +93,7 @@ DELETE FROM allocation_base_items WHERE allocation_base_code = $1
 `
 
 func (q *Queries) DeleteAllocationBaseItems(ctx context.Context, allocationBaseCode int32) error {
-	_, err := q.db.ExecContext(ctx, deleteAllocationBaseItems, allocationBaseCode)
+	_, err := q.db.Exec(ctx, deleteAllocationBaseItems, allocationBaseCode)
 	return err
 }
 
@@ -103,7 +102,7 @@ SELECT id, code, description, period, observation, created_at, updated_at, creat
 `
 
 func (q *Queries) GetAllocationBaseByCode(ctx context.Context, code int32) (AllocationBasis, error) {
-	row := q.db.QueryRowContext(ctx, getAllocationBaseByCode, code)
+	row := q.db.QueryRow(ctx, getAllocationBaseByCode, code)
 	var i AllocationBasis
 	err := row.Scan(
 		&i.ID,
@@ -123,7 +122,7 @@ SELECT id, amount, percentage, created_at, allocation_base_code, cost_center_cod
 `
 
 func (q *Queries) GetAllocationBaseItems(ctx context.Context, allocationBaseCode int32) ([]AllocationBaseItem, error) {
-	rows, err := q.db.QueryContext(ctx, getAllocationBaseItems, allocationBaseCode)
+	rows, err := q.db.Query(ctx, getAllocationBaseItems, allocationBaseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -143,9 +142,6 @@ func (q *Queries) GetAllocationBaseItems(ctx context.Context, allocationBaseCode
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -157,7 +153,7 @@ SELECT id, code, description, period, observation, created_at, updated_at, creat
 `
 
 func (q *Queries) ListAllocationBases(ctx context.Context) ([]AllocationBasis, error) {
-	rows, err := q.db.QueryContext(ctx, listAllocationBases)
+	rows, err := q.db.Query(ctx, listAllocationBases)
 	if err != nil {
 		return nil, err
 	}
@@ -178,9 +174,6 @@ func (q *Queries) ListAllocationBases(ctx context.Context) ([]AllocationBasis, e
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

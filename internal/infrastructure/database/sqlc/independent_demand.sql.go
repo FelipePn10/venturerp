@@ -7,10 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
-	"time"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createIndependentDemand = `-- name: CreateIndependentDemand :one
@@ -22,15 +20,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 type CreateIndependentDemandParams struct {
 	Code           int64
 	ItemCode       int64
-	Mask           sql.NullString
-	CostCenterCode sql.NullInt64
-	Quantity       string
-	DemandDate     time.Time
-	CreatedBy      uuid.UUID
+	Mask           pgtype.Text
+	CostCenterCode pgtype.Int8
+	Quantity       pgtype.Numeric
+	DemandDate     pgtype.Date
+	CreatedBy      pgtype.UUID
 }
 
 func (q *Queries) CreateIndependentDemand(ctx context.Context, arg CreateIndependentDemandParams) (IndependentDemand, error) {
-	row := q.db.QueryRowContext(ctx, createIndependentDemand,
+	row := q.db.QueryRow(ctx, createIndependentDemand,
 		arg.Code,
 		arg.ItemCode,
 		arg.Mask,
@@ -61,7 +59,7 @@ UPDATE independent_demands SET is_active = FALSE, updated_at = NOW() WHERE code 
 `
 
 func (q *Queries) DeleteIndependentDemand(ctx context.Context, code int64) error {
-	_, err := q.db.ExecContext(ctx, deleteIndependentDemand, code)
+	_, err := q.db.Exec(ctx, deleteIndependentDemand, code)
 	return err
 }
 
@@ -70,7 +68,7 @@ SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_ac
 `
 
 func (q *Queries) GetIndependentDemandByCode(ctx context.Context, code int64) (IndependentDemand, error) {
-	row := q.db.QueryRowContext(ctx, getIndependentDemandByCode, code)
+	row := q.db.QueryRow(ctx, getIndependentDemandByCode, code)
 	var i IndependentDemand
 	err := row.Scan(
 		&i.ID,
@@ -93,7 +91,7 @@ SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_ac
 `
 
 func (q *Queries) ListDemandsByItem(ctx context.Context, itemCode int64) ([]IndependentDemand, error) {
-	rows, err := q.db.QueryContext(ctx, listDemandsByItem, itemCode)
+	rows, err := q.db.Query(ctx, listDemandsByItem, itemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -117,9 +115,6 @@ func (q *Queries) ListDemandsByItem(ctx context.Context, itemCode int64) ([]Inde
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -131,8 +126,8 @@ const listDemandsFromDate = `-- name: ListDemandsFromDate :many
 SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by FROM independent_demands WHERE demand_date >= $1 AND is_active = TRUE ORDER BY demand_date
 `
 
-func (q *Queries) ListDemandsFromDate(ctx context.Context, demandDate time.Time) ([]IndependentDemand, error) {
-	rows, err := q.db.QueryContext(ctx, listDemandsFromDate, demandDate)
+func (q *Queries) ListDemandsFromDate(ctx context.Context, demandDate pgtype.Date) ([]IndependentDemand, error) {
+	rows, err := q.db.Query(ctx, listDemandsFromDate, demandDate)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +151,6 @@ func (q *Queries) ListDemandsFromDate(ctx context.Context, demandDate time.Time)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -171,7 +163,7 @@ SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_ac
 `
 
 func (q *Queries) ListIndependentDemands(ctx context.Context) ([]IndependentDemand, error) {
-	rows, err := q.db.QueryContext(ctx, listIndependentDemands)
+	rows, err := q.db.Query(ctx, listIndependentDemands)
 	if err != nil {
 		return nil, err
 	}
@@ -195,9 +187,6 @@ func (q *Queries) ListIndependentDemands(ctx context.Context) ([]IndependentDema
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -219,15 +208,15 @@ WHERE code = $6
 
 type UpdateIndependentDemandParams struct {
 	ItemCode       int64
-	Mask           sql.NullString
-	CostCenterCode sql.NullInt64
-	Quantity       string
-	DemandDate     time.Time
+	Mask           pgtype.Text
+	CostCenterCode pgtype.Int8
+	Quantity       pgtype.Numeric
+	DemandDate     pgtype.Date
 	Code           int64
 }
 
 func (q *Queries) UpdateIndependentDemand(ctx context.Context, arg UpdateIndependentDemandParams) (IndependentDemand, error) {
-	row := q.db.QueryRowContext(ctx, updateIndependentDemand,
+	row := q.db.QueryRow(ctx, updateIndependentDemand,
 		arg.ItemCode,
 		arg.Mask,
 		arg.CostCenterCode,

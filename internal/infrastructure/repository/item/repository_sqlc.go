@@ -9,7 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	machine "github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/nullable"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -28,17 +28,17 @@ func (r *RepositoryItemSQLC) Create(
 		return nil, fmt.Errorf("marshal engineering_weight: %w", err)
 	}
 
-	dimensions, err := nullable.ToNullRawMessage(item.Engineering.Dimensions)
+	dimensions, err := json.Marshal(item.Engineering.Dimensions)
 	if err != nil {
 		return nil, fmt.Errorf("marshal engineering_dimensions: %w", err)
 	}
 
-	reorderPoint, err := nullable.ToNullRawMessage(item.Planning.ReorderPoint)
+	reorderPoint, err := json.Marshal(item.Planning.ReorderPoint)
 	if err != nil {
 		return nil, fmt.Errorf("marshal planning_reorder_point: %w", err)
 	}
 
-	cyclicalCountConfig, err := nullable.ToNullRawMessage(item.Warehouse.CyclicalCountConfig)
+	cyclicalCountConfig, err := json.Marshal(item.Warehouse.CyclicalCountConfig)
 	if err != nil {
 		return nil, fmt.Errorf("marshal cyclical_count_config: %w", err)
 	}
@@ -47,7 +47,7 @@ func (r *RepositoryItemSQLC) Create(
 		WarehouseID: int32(item.Warehouse.WarehouseID),
 		Code:        int64(item.Code),
 
-		Complement: nullable.ToNullString(item.Complement),
+		Complement: pgutil.ToPgTextFromPtr(item.Complement),
 
 		Nature:    int16(item.Nature),
 		Inherit:   item.Inherit,
@@ -59,13 +59,11 @@ func (r *RepositoryItemSQLC) Create(
 		PdmAttributes:           attributes,
 		PdmDescriptionTechnique: item.PDM.DescriptionTechnique,
 
-		WarehouseUnitOfMeasurement:   sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
-		WarehouseAutomaticLow:        item.Warehouse.AutomaticLow,
-		WarehouseCyclicalCountConfig: cyclicalCountConfig,
-		WarehouseMinimumStock:        item.Warehouse.MinimumStock,
-		WarehouseAvgMonthlyConsumptionManual: intPtrToInt32Ptr(
-			item.Warehouse.AverageMonthlyConsumptionManual,
-		),
+		WarehouseUnitOfMeasurement:           sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
+		WarehouseAutomaticLow:                item.Warehouse.AutomaticLow,
+		WarehouseCyclicalCountConfig:         cyclicalCountConfig,
+		WarehouseMinimumStock:                item.Warehouse.MinimumStock,
+		WarehouseAvgMonthlyConsumptionManual: intPtrToInt32Ptr(item.Warehouse.AverageMonthlyConsumptionManual),
 
 		EngineeringItemBaseCod: intPtrToInt32Ptr(item.Engineering.ItemBaseCod),
 		EngineeringWeight:      weight,
@@ -80,12 +78,11 @@ func (r *RepositoryItemSQLC) Create(
 		PlanningTankID:       intPtrToInt32Ptr(item.Planning.TankID),
 		PlanningGhost:        item.Planning.Ghost,
 
-		// CORRETO: domínio já usa *int32
 		PlannerEmployeeID: item.Planners.EmployeeID,
 
 		SuppliesTypeOfUse: int16(item.Supplies.TypeOfUse),
 
-		CreatedBy: item.CreatedBy,
+		CreatedBy: pgutil.ToPgUUID(item.CreatedBy),
 	}
 
 	dbItem, err := r.q.CreateItem(ctx, params)
@@ -116,9 +113,11 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 
 	dbItem, err := r.q.FindItemByCode(ctx, int64(code))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("finding item by code: %w", err)
 	}
 
+	// Ainda não tem carregamento de machines aqui
+	// irei manter como nil
 	var machines *[]machine.MachineUsage
 
 	return mapDBItemToEntity(dbItem, machines)
@@ -128,6 +127,12 @@ func mapDBItemToEntity(
 	dbItem sqlc.Item,
 	machines *[]machine.MachineUsage,
 ) (*entity.Item, error) {
+
+	var complement *string
+	if dbItem.Complement.Valid {
+		v := dbItem.Complement.String
+		complement = &v
+	}
 
 	var pdmAttributes []valueobject.Attribute
 	if err := json.Unmarshal(dbItem.PdmAttributes, &pdmAttributes); err != nil {
@@ -139,26 +144,37 @@ func mapDBItemToEntity(
 		return nil, fmt.Errorf("unmarshal engineering_weight: %w", err)
 	}
 
-	engineeringDimensions, err := nullable.UnmarshalNullRawMessage[valueobject.Dimensions](dbItem.EngineeringDimensions)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal engineering_dimensions: %w", err)
+	var engineeringDimensions *valueobject.Dimensions
+	if len(dbItem.EngineeringDimensions) > 0 {
+		var v valueobject.Dimensions
+		if err := json.Unmarshal(dbItem.EngineeringDimensions, &v); err != nil {
+			return nil, fmt.Errorf("unmarshal engineering_dimensions: %w", err)
+		}
+		engineeringDimensions = &v
 	}
 
-	planningReorderPoint, err := nullable.UnmarshalNullRawMessage[valueobject.ReorderPoint](dbItem.PlanningReorderPoint)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal planning_reorder_point: %w", err)
+	var planningReorderPoint *valueobject.ReorderPoint
+	if len(dbItem.PlanningReorderPoint) > 0 {
+		var v valueobject.ReorderPoint
+		if err := json.Unmarshal(dbItem.PlanningReorderPoint, &v); err != nil {
+			return nil, fmt.Errorf("unmarshal planning_reorder_point: %w", err)
+		}
+		planningReorderPoint = &v
 	}
 
-	cyclicalCount, err := nullable.UnmarshalNullRawMessage[valueobject.CyclicalCountConfig](dbItem.WarehouseCyclicalCountConfig)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal cyclical_count_config: %w", err)
+	var cyclicalCount *valueobject.CyclicalCountConfig
+	if len(dbItem.WarehouseCyclicalCountConfig) > 0 {
+		var v valueobject.CyclicalCountConfig
+		if err := json.Unmarshal(dbItem.WarehouseCyclicalCountConfig, &v); err != nil {
+			return nil, fmt.Errorf("unmarshal cyclical_count_config: %w", err)
+		}
+		cyclicalCount = &v
 	}
 
 	return &entity.Item{
-		ID:   dbItem.ID,
-		Code: valueobject.ItemCode(dbItem.Code),
-
-		Complement: nullable.FromNullString(dbItem.Complement),
+		ID:         dbItem.ID,
+		Code:       valueobject.ItemCode(dbItem.Code),
+		Complement: complement,
 
 		Nature:  entity.ItemNature(dbItem.Nature),
 		Inherit: dbItem.Inherit,
@@ -174,10 +190,8 @@ func mapDBItemToEntity(
 		Health:    types.Health(dbItem.Health),
 
 		Warehouse: entity.Warehouse{
-			WarehouseID: int(dbItem.WarehouseID),
-			UnitOfMeasurement: types.TypeUnitOfMeasurementItem(
-				dbItem.WarehouseUnitOfMeasurement,
-			),
+			WarehouseID:                     int(dbItem.WarehouseID),
+			UnitOfMeasurement:               types.TypeUnitOfMeasurementItem(dbItem.WarehouseUnitOfMeasurement),
 			AutomaticLow:                    dbItem.WarehouseAutomaticLow,
 			CyclicalCountConfig:             cyclicalCount,
 			MinimumStock:                    dbItem.WarehouseMinimumStock,
@@ -202,7 +216,6 @@ func mapDBItemToEntity(
 		},
 
 		Planners: entity.Planners{
-			// CORRETO: domínio usa *int32
 			EmployeeID: dbItem.PlannerEmployeeID,
 			MachinesID: machines,
 		},
@@ -211,8 +224,8 @@ func mapDBItemToEntity(
 			TypeOfUse: types.TypeOfUseItem(dbItem.SuppliesTypeOfUse),
 		},
 
-		CreatedBy: dbItem.CreatedBy,
-		CreatedAt: dbItem.CreatedAt,
+		CreatedBy: pgutil.FromPgUUID(dbItem.CreatedBy),
+		CreatedAt: pgutil.FromPgTimestamp(dbItem.CreatedAt),
 	}, nil
 }
 
@@ -220,7 +233,6 @@ func intPtrToInt32Ptr(v *int) *int32 {
 	if v == nil {
 		return nil
 	}
-
 	value := int32(*v)
 	return &value
 }
@@ -229,7 +241,6 @@ func int32PtrToIntPtr(v *int32) *int {
 	if v == nil {
 		return nil
 	}
-
 	value := int(*v)
 	return &value
 }

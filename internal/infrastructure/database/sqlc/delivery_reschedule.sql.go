@@ -7,10 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
-	"time"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createDeliveryReschedule = `-- name: CreateDeliveryReschedule :one
@@ -36,14 +34,14 @@ type CreateDeliveryRescheduleParams struct {
 	Code           int64
 	SalesOrderCode int64
 	ItemCode       int64
-	OldDate        time.Time
-	NewDate        time.Time
-	Reason         sql.NullString
-	CreatedBy      uuid.UUID
+	OldDate        pgtype.Date
+	NewDate        pgtype.Date
+	Reason         pgtype.Text
+	CreatedBy      pgtype.UUID
 }
 
 func (q *Queries) CreateDeliveryReschedule(ctx context.Context, arg CreateDeliveryRescheduleParams) (DeliveryReschedule, error) {
-	row := q.db.QueryRowContext(ctx, createDeliveryReschedule,
+	row := q.db.QueryRow(ctx, createDeliveryReschedule,
 		arg.Code,
 		arg.SalesOrderCode,
 		arg.ItemCode,
@@ -72,7 +70,7 @@ DELETE FROM delivery_reschedules WHERE code = $1
 `
 
 func (q *Queries) DeleteDeliveryReschedule(ctx context.Context, code int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDeliveryReschedule, code)
+	_, err := q.db.Exec(ctx, deleteDeliveryReschedule, code)
 	return err
 }
 
@@ -81,7 +79,7 @@ SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, create
 `
 
 func (q *Queries) GetDeliveryRescheduleByCode(ctx context.Context, code int64) (DeliveryReschedule, error) {
-	row := q.db.QueryRowContext(ctx, getDeliveryRescheduleByCode, code)
+	row := q.db.QueryRow(ctx, getDeliveryRescheduleByCode, code)
 	var i DeliveryReschedule
 	err := row.Scan(
 		&i.ID,
@@ -102,7 +100,7 @@ SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, create
 `
 
 func (q *Queries) ListReschedulesByItem(ctx context.Context, itemCode int64) ([]DeliveryReschedule, error) {
-	rows, err := q.db.QueryContext(ctx, listReschedulesByItem, itemCode)
+	rows, err := q.db.Query(ctx, listReschedulesByItem, itemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -124,9 +122,6 @@ func (q *Queries) ListReschedulesByItem(ctx context.Context, itemCode int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -139,7 +134,7 @@ SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, create
 `
 
 func (q *Queries) ListReschedulesByOrder(ctx context.Context, salesOrderCode int64) ([]DeliveryReschedule, error) {
-	rows, err := q.db.QueryContext(ctx, listReschedulesByOrder, salesOrderCode)
+	rows, err := q.db.Query(ctx, listReschedulesByOrder, salesOrderCode)
 	if err != nil {
 		return nil, err
 	}
@@ -161,9 +156,6 @@ func (q *Queries) ListReschedulesByOrder(ctx context.Context, salesOrderCode int
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

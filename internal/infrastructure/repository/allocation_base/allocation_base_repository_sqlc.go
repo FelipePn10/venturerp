@@ -2,20 +2,26 @@ package allocation_base
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/allocation_base/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/jackc/pgx/v5"
 )
 
-func (r *AllocationBaseRepositorySQLC) Create(ctx context.Context, ab *entity.AllocationBase) (*entity.AllocationBase, error) {
+func (r *AllocationBaseRepositorySQLC) Create(
+	ctx context.Context,
+	ab *entity.AllocationBase,
+) (*entity.AllocationBase, error) {
+
 	row, err := r.q.CreateAllocationBase(ctx, sqlc.CreateAllocationBaseParams{
 		Code:        ab.Code,
 		Description: ab.Description,
 		Period:      ab.Period,
-		Observation: toNullString(ab.Observation),
-		CreatedBy:   ab.CreatedBy,
+		Observation: pgutil.ToPgTextFromPtr(ab.Observation),
+		CreatedBy:   pgutil.ToPgUUID(ab.CreatedBy),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating allocation base: %w", err)
@@ -24,7 +30,11 @@ func (r *AllocationBaseRepositorySQLC) Create(ctx context.Context, ab *entity.Al
 	return rowToEntity(row), nil
 }
 
-func (r *AllocationBaseRepositorySQLC) AddItem(ctx context.Context, item *entity.AllocationBaseItem) (*entity.AllocationBaseItem, error) {
+func (r *AllocationBaseRepositorySQLC) AddItem(
+	ctx context.Context,
+	item *entity.AllocationBaseItem,
+) (*entity.AllocationBaseItem, error) {
+
 	row, err := r.q.AddAllocationBaseItem(ctx, sqlc.AddAllocationBaseItemParams{
 		AllocationBaseCode: item.AllocationBaseCode,
 		CostCenterCode:     item.CostCenterCode,
@@ -38,10 +48,14 @@ func (r *AllocationBaseRepositorySQLC) AddItem(ctx context.Context, item *entity
 	return itemRowToEntity(row), nil
 }
 
-func (r *AllocationBaseRepositorySQLC) GetByCode(ctx context.Context, code int32) (*entity.AllocationBase, error) {
+func (r *AllocationBaseRepositorySQLC) GetByCode(
+	ctx context.Context,
+	code int32,
+) (*entity.AllocationBase, error) {
+
 	row, err := r.q.GetAllocationBaseByCode(ctx, code)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("allocation base %d not found", code)
 		}
 		return nil, fmt.Errorf("fetching allocation base: %w", err)
@@ -50,7 +64,11 @@ func (r *AllocationBaseRepositorySQLC) GetByCode(ctx context.Context, code int32
 	return rowToEntity(row), nil
 }
 
-func (r *AllocationBaseRepositorySQLC) GetItems(ctx context.Context, baseCode int32) ([]*entity.AllocationBaseItem, error) {
+func (r *AllocationBaseRepositorySQLC) GetItems(
+	ctx context.Context,
+	baseCode int32,
+) ([]*entity.AllocationBaseItem, error) {
+
 	rows, err := r.q.GetAllocationBaseItems(ctx, baseCode)
 	if err != nil {
 		return nil, fmt.Errorf("fetching allocation base items: %w", err)
@@ -59,7 +77,10 @@ func (r *AllocationBaseRepositorySQLC) GetItems(ctx context.Context, baseCode in
 	return itemsToEntities(rows), nil
 }
 
-func (r *AllocationBaseRepositorySQLC) List(ctx context.Context) ([]*entity.AllocationBase, error) {
+func (r *AllocationBaseRepositorySQLC) List(
+	ctx context.Context,
+) ([]*entity.AllocationBase, error) {
+
 	rows, err := r.q.ListAllocationBases(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing allocation bases: %w", err)
@@ -68,19 +89,23 @@ func (r *AllocationBaseRepositorySQLC) List(ctx context.Context) ([]*entity.Allo
 	return rowsToEntities(rows), nil
 }
 
-func (r *AllocationBaseRepositorySQLC) Delete(ctx context.Context, code int32) error {
-	if err := r.q.DeleteAllocationBaseItems(ctx, code); err != nil {
-		return fmt.Errorf("deleting items: %w", err)
+func (r *AllocationBaseRepositorySQLC) Delete(
+	ctx context.Context,
+	code int32,
+) error {
+
+	// remove dependências primeiro (consistência referencial)
+	if err := r.DeleteItems(ctx, code); err != nil {
+		return err
 	}
 
-	if err := r.q.DeleteAllocationBase(ctx, code); err != nil {
-		return fmt.Errorf("deleting allocation base: %w", err)
-	}
-
-	return nil
+	return r.q.DeleteAllocationBase(ctx, code)
 }
 
-func (r *AllocationBaseRepositorySQLC) DeleteItems(ctx context.Context, baseCode int32) error {
+func (r *AllocationBaseRepositorySQLC) DeleteItems(
+	ctx context.Context,
+	baseCode int32,
+) error {
 	return r.q.DeleteAllocationBaseItems(ctx, baseCode)
 }
 
@@ -89,9 +114,9 @@ func rowToEntity(row sqlc.AllocationBasis) *entity.AllocationBase {
 		Code:        row.Code,
 		Description: row.Description,
 		Period:      row.Period,
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
-		CreatedBy:   row.CreatedBy,
+		CreatedAt:   pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:   pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy:   pgutil.FromPgUUID(row.CreatedBy),
 	}
 
 	if row.Observation.Valid {
@@ -118,7 +143,7 @@ func itemRowToEntity(row sqlc.AllocationBaseItem) *entity.AllocationBaseItem {
 		CostCenterCode:     row.CostCenterCode,
 		Amount:             row.Amount,
 		Percentage:         row.Percentage,
-		CreatedAt:          row.CreatedAt,
+		CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
 	}
 }
 
@@ -130,15 +155,4 @@ func itemsToEntities(rows []sqlc.AllocationBaseItem) []*entity.AllocationBaseIte
 	}
 
 	return out
-}
-
-func toNullString(s *string) sql.NullString {
-	if s == nil {
-		return sql.NullString{}
-	}
-
-	return sql.NullString{
-		String: *s,
-		Valid:  true,
-	}
 }

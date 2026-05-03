@@ -7,7 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createBom = `-- name: CreateBom :one
@@ -35,11 +36,11 @@ type CreateBomParams struct {
 	BomType   string
 	Version   int32
 	Status    string
-	ValidFrom sql.NullTime
+	ValidFrom pgtype.Date
 }
 
 func (q *Queries) CreateBom(ctx context.Context, arg CreateBomParams) (Bom, error) {
-	row := q.db.QueryRowContext(ctx, createBom,
+	row := q.db.QueryRow(ctx, createBom,
 		arg.ProductID,
 		arg.Mask,
 		arg.BomType,

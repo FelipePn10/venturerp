@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createQuestion = `-- name: CreateQuestion :one
@@ -23,11 +23,11 @@ INSERT INTO questions (
 
 type CreateQuestionParams struct {
 	Name      string
-	Createdby uuid.UUID
+	Createdby pgtype.UUID
 }
 
 func (q *Queries) CreateQuestion(ctx context.Context, arg CreateQuestionParams) (Question, error) {
-	row := q.db.QueryRowContext(ctx, createQuestion, arg.Name, arg.Createdby)
+	row := q.db.QueryRow(ctx, createQuestion, arg.Name, arg.Createdby)
 	var i Question
 	err := row.Scan(
 		&i.ID,
@@ -44,7 +44,7 @@ WHERE id = $1
 `
 
 func (q *Queries) DeleteQuestion(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteQuestion, id)
+	_, err := q.db.Exec(ctx, deleteQuestion, id)
 	return err
 }
 
@@ -55,7 +55,7 @@ SELECT EXISTS (
 `
 
 func (q *Queries) ExistsQuestionByName(ctx context.Context, name string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, existsQuestionByName, name)
+	row := q.db.QueryRow(ctx, existsQuestionByName, name)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -68,7 +68,7 @@ WHERE name = $1
 `
 
 func (q *Queries) FindQuestionByName(ctx context.Context, name string) ([]Question, error) {
-	rows, err := q.db.QueryContext(ctx, findQuestionByName, name)
+	rows, err := q.db.Query(ctx, findQuestionByName, name)
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +86,6 @@ func (q *Queries) FindQuestionByName(ctx context.Context, name string) ([]Questi
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -102,7 +99,7 @@ WHERE id = $1
 `
 
 func (q *Queries) GetQuestionByID(ctx context.Context, id int64) (Question, error) {
-	row := q.db.QueryRowContext(ctx, getQuestionByID, id)
+	row := q.db.QueryRow(ctx, getQuestionByID, id)
 	var i Question
 	err := row.Scan(
 		&i.ID,

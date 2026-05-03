@@ -7,10 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
-	"time"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createStructureComponent = `-- name: CreateStructureComponent :one
@@ -34,18 +32,18 @@ INSERT INTO item_structures (
 type CreateStructureComponentParams struct {
 	ParentCode        int64
 	ChildCode         int64
-	ParentMask        sql.NullString
+	ParentMask        pgtype.Text
 	Quantity          float64
 	UnitOfMeasurement UnitOfMeasurementEnum
 	LossPercentage    float64
 	Sequence          int32
 	Health            HealthEnum
-	Notes             sql.NullString
-	CreatedBy         uuid.UUID
+	Notes             pgtype.Text
+	CreatedBy         pgtype.UUID
 }
 
 func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStructureComponentParams) (ItemStructure, error) {
-	row := q.db.QueryRowContext(ctx, createStructureComponent,
+	row := q.db.QueryRow(ctx, createStructureComponent,
 		arg.ParentCode,
 		arg.ChildCode,
 		arg.ParentMask,
@@ -86,7 +84,7 @@ WHERE id = $1
 `
 
 func (q *Queries) DeactivateStructureComponent(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deactivateStructureComponent, id)
+	_, err := q.db.Exec(ctx, deactivateStructureComponent, id)
 	return err
 }
 
@@ -119,21 +117,21 @@ type GetAllDirectChildrenRow struct {
 	ParentCode        int64
 	ChildCode         int64
 	ChildDescription  string
-	ParentMask        sql.NullString
+	ParentMask        pgtype.Text
 	Quantity          float64
 	LossPercentage    float64
 	UnitOfMeasurement UnitOfMeasurementEnum
 	Health            HealthEnum
 	Sequence          int32
-	Notes             sql.NullString
+	Notes             pgtype.Text
 	IsActive          bool
-	CreatedBy         uuid.UUID
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
 }
 
 func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([]GetAllDirectChildrenRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAllDirectChildren, parentCode)
+	rows, err := q.db.Query(ctx, getAllDirectChildren, parentCode)
 	if err != nil {
 		return nil, err
 	}
@@ -161,9 +159,6 @@ func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -204,29 +199,29 @@ ORDER BY
 
 type GetDirectChildrenForMaskParams struct {
 	ParentCode int64
-	ParentMask sql.NullString
+	ParentMask pgtype.Text
 }
 
 type GetDirectChildrenForMaskRow struct {
 	ID                int64
 	ParentCode        int64
 	ChildCode         int64
-	ParentMask        sql.NullString
+	ParentMask        pgtype.Text
 	Quantity          float64
 	LossPercentage    float64
 	UnitOfMeasurement UnitOfMeasurementEnum
 	Health            HealthEnum
 	Sequence          int32
-	Notes             sql.NullString
+	Notes             pgtype.Text
 	IsActive          bool
-	CreatedBy         uuid.UUID
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
 	ChildDescription  string
 }
 
 func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChildrenForMaskParams) ([]GetDirectChildrenForMaskRow, error) {
-	rows, err := q.db.QueryContext(ctx, getDirectChildrenForMask, arg.ParentCode, arg.ParentMask)
+	rows, err := q.db.Query(ctx, getDirectChildrenForMask, arg.ParentCode, arg.ParentMask)
 	if err != nil {
 		return nil, err
 	}
@@ -255,9 +250,6 @@ func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChi
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -274,7 +266,7 @@ ORDER BY sequence, id
 `
 
 func (q *Queries) GetGenericChildren(ctx context.Context, parentCode int64) ([]ItemStructure, error) {
-	rows, err := q.db.QueryContext(ctx, getGenericChildren, parentCode)
+	rows, err := q.db.Query(ctx, getGenericChildren, parentCode)
 	if err != nil {
 		return nil, err
 	}
@@ -302,9 +294,6 @@ func (q *Queries) GetGenericChildren(ctx context.Context, parentCode int64) ([]I
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -326,7 +315,7 @@ type GetItemCodeAndDescriptionRow struct {
 }
 
 func (q *Queries) GetItemCodeAndDescription(ctx context.Context, code int64) (GetItemCodeAndDescriptionRow, error) {
-	row := q.db.QueryRowContext(ctx, getItemCodeAndDescription, code)
+	row := q.db.QueryRow(ctx, getItemCodeAndDescription, code)
 	var i GetItemCodeAndDescriptionRow
 	err := row.Scan(&i.Code, &i.Description)
 	return i, err
@@ -356,7 +345,7 @@ type GetItemMaskAnswersByValueRow struct {
 }
 
 func (q *Queries) GetItemMaskAnswersByValue(ctx context.Context, arg GetItemMaskAnswersByValueParams) ([]GetItemMaskAnswersByValueRow, error) {
-	rows, err := q.db.QueryContext(ctx, getItemMaskAnswersByValue, arg.ItemCode, arg.Mask)
+	rows, err := q.db.Query(ctx, getItemMaskAnswersByValue, arg.ItemCode, arg.Mask)
 	if err != nil {
 		return nil, err
 	}
@@ -368,9 +357,6 @@ func (q *Queries) GetItemMaskAnswersByValue(ctx context.Context, arg GetItemMask
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -393,7 +379,7 @@ type GetItemQuestionsRow struct {
 }
 
 func (q *Queries) GetItemQuestions(ctx context.Context, itemCode int64) ([]GetItemQuestionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getItemQuestions, itemCode)
+	rows, err := q.db.Query(ctx, getItemQuestions, itemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -405,9 +391,6 @@ func (q *Queries) GetItemQuestions(ctx context.Context, itemCode int64) ([]GetIt
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -422,7 +405,7 @@ WHERE id = $1
 `
 
 func (q *Queries) GetStructureComponentByID(ctx context.Context, id int64) (ItemStructure, error) {
-	row := q.db.QueryRowContext(ctx, getStructureComponentByID, id)
+	row := q.db.QueryRow(ctx, getStructureComponentByID, id)
 	var i ItemStructure
 	err := row.Scan(
 		&i.ID,
@@ -453,7 +436,7 @@ type HasCyclicReferenceParams struct {
 }
 
 func (q *Queries) HasCyclicReference(ctx context.Context, arg HasCyclicReferenceParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasCyclicReference, arg.StartCode, arg.TargetCode)
+	row := q.db.QueryRow(ctx, hasCyclicReference, arg.StartCode, arg.TargetCode)
 	var has_cycle bool
 	err := row.Scan(&has_cycle)
 	return has_cycle, err
@@ -468,7 +451,7 @@ SELECT EXISTS (
 `
 
 func (q *Queries) ItemExists(ctx context.Context, code int64) (bool, error) {
-	row := q.db.QueryRowContext(ctx, itemExists, code)
+	row := q.db.QueryRow(ctx, itemExists, code)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -490,7 +473,7 @@ type SequenceExistsParams struct {
 }
 
 func (q *Queries) SequenceExists(ctx context.Context, arg SequenceExistsParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, sequenceExists, arg.ParentCode, arg.Sequence)
+	row := q.db.QueryRow(ctx, sequenceExists, arg.ParentCode, arg.Sequence)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -519,17 +502,17 @@ WHERE parent_code = $1
 type UpdateStructureComponentParams struct {
 	ParentCode        int64
 	ChildCode         int64
-	ParentMask        sql.NullString
+	ParentMask        pgtype.Text
 	Quantity          float64
 	UnitOfMeasurement UnitOfMeasurementEnum
 	LossPercentage    float64
 	Sequence          int32
 	Health            HealthEnum
-	Notes             sql.NullString
+	Notes             pgtype.Text
 }
 
 func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStructureComponentParams) (ItemStructure, error) {
-	row := q.db.QueryRowContext(ctx, updateStructureComponent,
+	row := q.db.QueryRow(ctx, updateStructureComponent,
 		arg.ParentCode,
 		arg.ChildCode,
 		arg.ParentMask,

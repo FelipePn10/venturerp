@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createComponent = `-- name: CreateComponent :one
@@ -29,11 +29,11 @@ type CreateComponentParams struct {
 	Name      string
 	GroupCode string
 	Warehouse *int64
-	CreatedBy uuid.UUID
+	CreatedBy pgtype.UUID
 }
 
 func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams) (Component, error) {
-	row := q.db.QueryRowContext(ctx, createComponent,
+	row := q.db.QueryRow(ctx, createComponent,
 		arg.Name,
 		arg.GroupCode,
 		arg.Warehouse,
@@ -60,7 +60,7 @@ WHERE code = $1
 `
 
 func (q *Queries) ExistsComponentByCode(ctx context.Context, code string) (Component, error) {
-	row := q.db.QueryRowContext(ctx, existsComponentByCode, code)
+	row := q.db.QueryRow(ctx, existsComponentByCode, code)
 	var i Component
 	err := row.Scan(
 		&i.ID,

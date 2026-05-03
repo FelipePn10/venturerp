@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createModifier = `-- name: CreateModifier :one
@@ -23,11 +23,11 @@ RETURNING id, description, created_by, created_at
 
 type CreateModifierParams struct {
 	Description string
-	CreatedBy   uuid.UUID
+	CreatedBy   pgtype.UUID
 }
 
 func (q *Queries) CreateModifier(ctx context.Context, arg CreateModifierParams) (Modifier, error) {
-	row := q.db.QueryRowContext(ctx, createModifier, arg.Description, arg.CreatedBy)
+	row := q.db.QueryRow(ctx, createModifier, arg.Description, arg.CreatedBy)
 	var i Modifier
 	err := row.Scan(
 		&i.ID,

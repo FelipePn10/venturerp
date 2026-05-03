@@ -7,7 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const associateQuestionItem = `-- name: AssociateQuestionItem :exec
@@ -23,11 +24,11 @@ type AssociateQuestionItemParams struct {
 	ItemCode   int64
 	QuestionID int64
 	Position   int32
-	CreatedAt  time.Time
+	CreatedAt  pgtype.Timestamptz
 }
 
 func (q *Queries) AssociateQuestionItem(ctx context.Context, arg AssociateQuestionItemParams) error {
-	_, err := q.db.ExecContext(ctx, associateQuestionItem,
+	_, err := q.db.Exec(ctx, associateQuestionItem,
 		arg.ItemCode,
 		arg.QuestionID,
 		arg.Position,
@@ -51,7 +52,7 @@ type ExistsByItemAndPositionParams struct {
 }
 
 func (q *Queries) ExistsByItemAndPosition(ctx context.Context, arg ExistsByItemAndPositionParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, existsByItemAndPosition, arg.ItemCode, arg.Position)
+	row := q.db.QueryRow(ctx, existsByItemAndPosition, arg.ItemCode, arg.Position)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -72,7 +73,7 @@ type ExistsByItemAndQuestionParams struct {
 }
 
 func (q *Queries) ExistsByItemAndQuestion(ctx context.Context, arg ExistsByItemAndQuestionParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, existsByItemAndQuestion, arg.ItemCode, arg.QuestionID)
+	row := q.db.QueryRow(ctx, existsByItemAndQuestion, arg.ItemCode, arg.QuestionID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
