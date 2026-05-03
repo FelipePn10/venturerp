@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createQuestionOption = `-- name: CreateQuestionOption :one
@@ -26,12 +26,12 @@ RETURNING id, question_id, value, created_at, created_by
 
 type CreateQuestionOptionParams struct {
 	QuestionID int64
-	CreatedBy  uuid.UUID
+	CreatedBy  pgtype.UUID
 	Value      string
 }
 
 func (q *Queries) CreateQuestionOption(ctx context.Context, arg CreateQuestionOptionParams) (QuestionOption, error) {
-	row := q.db.QueryRowContext(ctx, createQuestionOption, arg.QuestionID, arg.CreatedBy, arg.Value)
+	row := q.db.QueryRow(ctx, createQuestionOption, arg.QuestionID, arg.CreatedBy, arg.Value)
 	var i QuestionOption
 	err := row.Scan(
 		&i.ID,
@@ -49,7 +49,7 @@ WHERE id = $1
 `
 
 func (q *Queries) DeleteQuestionOption(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteQuestionOption, id)
+	_, err := q.db.Exec(ctx, deleteQuestionOption, id)
 	return err
 }
 
@@ -68,7 +68,7 @@ type ExistsQuestionOptionByValueParams struct {
 }
 
 func (q *Queries) ExistsQuestionOptionByValue(ctx context.Context, arg ExistsQuestionOptionByValueParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, existsQuestionOptionByValue, arg.Value, arg.QuestionID)
+	row := q.db.QueryRow(ctx, existsQuestionOptionByValue, arg.Value, arg.QuestionID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -81,7 +81,7 @@ WHERE id = $1
 `
 
 func (q *Queries) GetQuestionOptionByID(ctx context.Context, id int64) (QuestionOption, error) {
-	row := q.db.QueryRowContext(ctx, getQuestionOptionByID, id)
+	row := q.db.QueryRow(ctx, getQuestionOptionByID, id)
 	var i QuestionOption
 	err := row.Scan(
 		&i.ID,

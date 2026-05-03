@@ -6,7 +6,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
+	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 )
 
 func NewCreateProductHandler(
@@ -160,7 +162,7 @@ func NewCreateModifierHandler(
 }
 
 func NewCreateEmployeeHandler(
-	createEmployeeUc *usecase.CreateEmployeeUseCase,
+	createEmployeeUc *employee.CreateEmployeeUseCase,
 ) *EmployeeHandler {
 	return &EmployeeHandler{
 		createEmployeeUC: createEmployeeUc,
@@ -248,5 +250,13 @@ func NewIndependentDemandHandler(
 		listByItemUC:   listByItemCodeUC,
 		listUC:         listUC,
 		getByCodeUC:    getByCodeUC,
+	}
+}
+
+func NewIndustrialCalendarHandler(
+	uc *industrial_calendar_uc.ManageCalendarUseCase,
+) *IndustrialCalendarHandler {
+	return &IndustrialCalendarHandler{
+		uc: uc,
 	}
 }

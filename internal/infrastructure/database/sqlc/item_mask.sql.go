@@ -15,7 +15,7 @@ WHERE id = $1
 `
 
 func (q *Queries) DeleteItemMask(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteItemMask, id)
+	_, err := q.db.Exec(ctx, deleteItemMask, id)
 	return err
 }
 
@@ -28,7 +28,7 @@ LIMIT 1
 `
 
 func (q *Queries) GetProductMaskByItemCode(ctx context.Context, itemCode int64) (ItemMask, error) {
-	row := q.db.QueryRowContext(ctx, getProductMaskByItemCode, itemCode)
+	row := q.db.QueryRow(ctx, getProductMaskByItemCode, itemCode)
 	var i ItemMask
 	err := row.Scan(
 		&i.ID,

@@ -6,7 +6,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
+	employee2 "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
+	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
@@ -20,6 +22,7 @@ import (
 	mask "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/repository"
 	group "github.com/FelipePn10/panossoerp/internal/domain/group/repository"
 	independent_demand "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
+	industrial_calendar "github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
 	item "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	modifier "github.com/FelipePn10/panossoerp/internal/domain/modifier/repository"
 	qst "github.com/FelipePn10/panossoerp/internal/domain/questions/repository"
@@ -206,10 +209,10 @@ func NewCreateModifierUseCase(
 func NewCreateEmployeeUseCase(
 	repo employee.EmployeeRepository,
 	auth ports.AuthService,
-) *CreateEmployeeUseCase {
-	return &CreateEmployeeUseCase{
-		repo: repo,
-		auth: auth,
+) *employee2.CreateEmployeeUseCase {
+	return &employee2.CreateEmployeeUseCase{
+		Repo: repo,
+		Auth: auth,
 	}
 }
 
@@ -418,6 +421,15 @@ func NewDeleteIndependentDemandUseCase(
 	auth ports.AuthService,
 ) *independent_demand_uc.DeleteIndependentDemandUseCase {
 	return &independent_demand_uc.DeleteIndependentDemandUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+func NewManageCalendarUseCase(
+	repo industrial_calendar.IndustrialCalendarRepository,
+	auth ports.AuthService,
+) *industrial_calendar_uc.ManageCalendarUseCase {
+	return &industrial_calendar_uc.ManageCalendarUseCase{
 		Repo: repo,
 		Auth: auth,
 	}

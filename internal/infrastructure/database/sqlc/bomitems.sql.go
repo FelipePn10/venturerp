@@ -7,7 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createBomItem = `-- name: CreateBomItem :one
@@ -34,15 +35,15 @@ RETURNING id, bom_id, component_id, quantity, uom, scrap_percent, operation_id, 
 type CreateBomItemParams struct {
 	BomID         int64
 	ComponentID   int64
-	Quantity      string
-	Uom           sql.NullString
-	ScrapPercent  string
+	Quantity      pgtype.Numeric
+	Uom           pgtype.Text
+	ScrapPercent  pgtype.Numeric
 	OperationID   int64
 	MaskComponent int64
 }
 
 func (q *Queries) CreateBomItem(ctx context.Context, arg CreateBomItemParams) (BomItem, error) {
-	row := q.db.QueryRowContext(ctx, createBomItem,
+	row := q.db.QueryRow(ctx, createBomItem,
 		arg.BomID,
 		arg.ComponentID,
 		arg.Quantity,

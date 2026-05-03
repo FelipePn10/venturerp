@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createGroup = `-- name: CreateGroup :one
@@ -27,11 +27,11 @@ type CreateGroupParams struct {
 	Code         int32
 	Description  string
 	EnterpriseID int64
-	CreatedBy    uuid.UUID
+	CreatedBy    pgtype.UUID
 }
 
 func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error) {
-	row := q.db.QueryRowContext(ctx, createGroup,
+	row := q.db.QueryRow(ctx, createGroup,
 		arg.Code,
 		arg.Description,
 		arg.EnterpriseID,

@@ -24,7 +24,7 @@ type GetItemByCodeRow struct {
 
 // Retorna apenas os campos necessários para o resolver.
 func (q *Queries) GetItemByCode(ctx context.Context, code int64) (GetItemByCodeRow, error) {
-	row := q.db.QueryRowContext(ctx, getItemByCode, code)
+	row := q.db.QueryRow(ctx, getItemByCode, code)
 	var i GetItemByCodeRow
 	err := row.Scan(&i.Code, &i.Inherit)
 	return i, err
@@ -59,7 +59,7 @@ type GetMaskAnswersByItemAndValueRow struct {
 // JOIN obrigatório: sem option_value a propagação gera "3#7" ao invés de "1.94M#1.94M".
 // Nome diferente de GetItemMaskAnswersByValue (sem option_value) em structure.sql.
 func (q *Queries) GetMaskAnswersByItemAndValue(ctx context.Context, arg GetMaskAnswersByItemAndValueParams) ([]GetMaskAnswersByItemAndValueRow, error) {
-	rows, err := q.db.QueryContext(ctx, getMaskAnswersByItemAndValue, arg.ItemCode, arg.Mask)
+	rows, err := q.db.Query(ctx, getMaskAnswersByItemAndValue, arg.ItemCode, arg.Mask)
 	if err != nil {
 		return nil, err
 	}
@@ -76,9 +76,6 @@ func (q *Queries) GetMaskAnswersByItemAndValue(ctx context.Context, arg GetMaskA
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

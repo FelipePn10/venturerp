@@ -7,9 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createProduct = `-- name: CreateProduct :one
@@ -34,13 +33,13 @@ RETURNING id, code, group_code, name, created_by, created_at
 type CreateProductParams struct {
 	ID        int64
 	Code      string
-	GroupCode sql.NullString
+	GroupCode pgtype.Text
 	Name      string
-	CreatedBy uuid.UUID
+	CreatedBy pgtype.UUID
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
-	row := q.db.QueryRowContext(ctx, createProduct,
+	row := q.db.QueryRow(ctx, createProduct,
 		arg.ID,
 		arg.Code,
 		arg.GroupCode,
@@ -65,7 +64,7 @@ WHERE id = $1
 `
 
 func (q *Queries) DeleteProduct(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteProduct, id)
+	_, err := q.db.Exec(ctx, deleteProduct, id)
 	return err
 }
 
@@ -76,7 +75,7 @@ WHERE code = $1
 `
 
 func (q *Queries) ExistsProductByCode(ctx context.Context, code string) (Product, error) {
-	row := q.db.QueryRowContext(ctx, existsProductByCode, code)
+	row := q.db.QueryRow(ctx, existsProductByCode, code)
 	var i Product
 	err := row.Scan(
 		&i.ID,

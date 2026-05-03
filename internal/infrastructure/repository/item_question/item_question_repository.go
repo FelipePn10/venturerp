@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/associate_questions/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -15,7 +16,7 @@ func (r *AssociateQuestionItemRepository) Associate(
 		ItemCode:   pq.ItemCode,
 		QuestionID: pq.QuestionID,
 		Position:   int32(pq.Position),
-		CreatedAt:  pq.CreatedAt,
+		CreatedAt:  pgutil.ToPgTimestamptz(pq.CreatedAt),
 	})
 }
 

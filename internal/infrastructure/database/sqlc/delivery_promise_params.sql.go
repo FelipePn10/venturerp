@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getDeliveryPromiseParams = `-- name: GetDeliveryPromiseParams :one
@@ -16,7 +16,7 @@ SELECT id, use_delivery_promise, blocked_orders_in_promise, default_order_sort, 
 `
 
 func (q *Queries) GetDeliveryPromiseParams(ctx context.Context) (DeliveryPromiseParam, error) {
-	row := q.db.QueryRowContext(ctx, getDeliveryPromiseParams)
+	row := q.db.QueryRow(ctx, getDeliveryPromiseParams)
 	var i DeliveryPromiseParam
 	err := row.Scan(
 		&i.ID,
@@ -63,12 +63,12 @@ type UpdateDeliveryPromiseParamsParams struct {
 	RecalculateAfterRelease bool
 	ReprogramLoadedOrders   bool
 	AllowDeliveryDateChange bool
-	UpdatedBy               uuid.UUID
+	UpdatedBy               pgtype.UUID
 	ID                      int64
 }
 
 func (q *Queries) UpdateDeliveryPromiseParams(ctx context.Context, arg UpdateDeliveryPromiseParamsParams) (DeliveryPromiseParam, error) {
-	row := q.db.QueryRowContext(ctx, updateDeliveryPromiseParams,
+	row := q.db.QueryRow(ctx, updateDeliveryPromiseParams,
 		arg.UseDeliveryPromise,
 		arg.BlockedOrdersInPromise,
 		arg.DefaultOrderSort,
@@ -119,11 +119,11 @@ type UpsertDeliveryPromiseParamsParams struct {
 	RecalculateAfterRelease bool
 	ReprogramLoadedOrders   bool
 	AllowDeliveryDateChange bool
-	UpdatedBy               uuid.UUID
+	UpdatedBy               pgtype.UUID
 }
 
 func (q *Queries) UpsertDeliveryPromiseParams(ctx context.Context, arg UpsertDeliveryPromiseParamsParams) (DeliveryPromiseParam, error) {
-	row := q.db.QueryRowContext(ctx, upsertDeliveryPromiseParams,
+	row := q.db.QueryRow(ctx, upsertDeliveryPromiseParams,
 		arg.UseDeliveryPromise,
 		arg.BlockedOrdersInPromise,
 		arg.DefaultOrderSort,

@@ -9,7 +9,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createCostCenter = `-- name: CreateCostCenter :one
@@ -24,13 +24,13 @@ type CreateCostCenterParams struct {
 	ParentCode  *int32
 	Type        TypeCcEnum
 	IsRatio     bool
-	StartDate   time.Time
+	StartDate   pgtype.Date
 	EndDate     *time.Time
-	CreatedBy   uuid.UUID
+	CreatedBy   pgtype.UUID
 }
 
 func (q *Queries) CreateCostCenter(ctx context.Context, arg CreateCostCenterParams) (CostCenter, error) {
-	row := q.db.QueryRowContext(ctx, createCostCenter,
+	row := q.db.QueryRow(ctx, createCostCenter,
 		arg.Code,
 		arg.Description,
 		arg.ParentCode,
@@ -63,7 +63,7 @@ UPDATE cost_centers SET is_active = FALSE, updated_at = NOW() WHERE code = $1
 `
 
 func (q *Queries) DeleteCostCenter(ctx context.Context, code int32) error {
-	_, err := q.db.ExecContext(ctx, deleteCostCenter, code)
+	_, err := q.db.Exec(ctx, deleteCostCenter, code)
 	return err
 }
 
@@ -72,7 +72,7 @@ SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date,
 `
 
 func (q *Queries) GetCostCenterByCode(ctx context.Context, code int32) (CostCenter, error) {
-	row := q.db.QueryRowContext(ctx, getCostCenterByCode, code)
+	row := q.db.QueryRow(ctx, getCostCenterByCode, code)
 	var i CostCenter
 	err := row.Scan(
 		&i.ID,
@@ -96,7 +96,7 @@ SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date,
 `
 
 func (q *Queries) ListCostCenters(ctx context.Context) ([]CostCenter, error) {
-	rows, err := q.db.QueryContext(ctx, listCostCenters)
+	rows, err := q.db.Query(ctx, listCostCenters)
 	if err != nil {
 		return nil, err
 	}
@@ -121,9 +121,6 @@ func (q *Queries) ListCostCenters(ctx context.Context) ([]CostCenter, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -136,7 +133,7 @@ SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date,
 `
 
 func (q *Queries) ListCostCentersByType(ctx context.Context, type_ TypeCcEnum) ([]CostCenter, error) {
-	rows, err := q.db.QueryContext(ctx, listCostCentersByType, type_)
+	rows, err := q.db.Query(ctx, listCostCentersByType, type_)
 	if err != nil {
 		return nil, err
 	}
@@ -161,9 +158,6 @@ func (q *Queries) ListCostCentersByType(ctx context.Context, type_ TypeCcEnum) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -189,13 +183,13 @@ type UpdateCostCenterParams struct {
 	ParentCode  *int32
 	Type        TypeCcEnum
 	IsRatio     bool
-	StartDate   time.Time
+	StartDate   pgtype.Date
 	EndDate     *time.Time
 	ID          int64
 }
 
 func (q *Queries) UpdateCostCenter(ctx context.Context, arg UpdateCostCenterParams) (CostCenter, error) {
-	row := q.db.QueryRowContext(ctx, updateCostCenter,
+	row := q.db.QueryRow(ctx, updateCostCenter,
 		arg.Description,
 		arg.ParentCode,
 		arg.Type,

@@ -62,7 +62,7 @@ type CreateWarehouseRow struct {
 }
 
 func (q *Queries) CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (CreateWarehouseRow, error) {
-	row := q.db.QueryRowContext(ctx, createWarehouse,
+	row := q.db.QueryRow(ctx, createWarehouse,
 		arg.Code,
 		arg.Description,
 		arg.Location,

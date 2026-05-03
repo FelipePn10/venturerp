@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createEnterprise = `-- name: CreateEnterprise :one
@@ -27,11 +27,11 @@ type CreateEnterpriseParams struct {
 	ID        int64
 	Code      int32
 	Name      string
-	CreatedBy uuid.UUID
+	CreatedBy pgtype.UUID
 }
 
 func (q *Queries) CreateEnterprise(ctx context.Context, arg CreateEnterpriseParams) (Enterprise, error) {
-	row := q.db.QueryRowContext(ctx, createEnterprise,
+	row := q.db.QueryRow(ctx, createEnterprise,
 		arg.ID,
 		arg.Code,
 		arg.Name,

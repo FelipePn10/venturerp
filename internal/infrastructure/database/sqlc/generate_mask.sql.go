@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getOptionValueByID = `-- name: GetOptionValueByID :one
@@ -17,7 +17,7 @@ SELECT value FROM question_options WHERE id = $1
 
 // SQLC query
 func (q *Queries) GetOptionValueByID(ctx context.Context, id int64) (string, error) {
-	row := q.db.QueryRowContext(ctx, getOptionValueByID, id)
+	row := q.db.QueryRow(ctx, getOptionValueByID, id)
 	var value string
 	err := row.Scan(&value)
 	return value, err
@@ -36,7 +36,7 @@ type InsertItemMaskAnswerParams struct {
 }
 
 func (q *Queries) InsertItemMaskAnswer(ctx context.Context, arg InsertItemMaskAnswerParams) error {
-	_, err := q.db.ExecContext(ctx, insertItemMaskAnswer,
+	_, err := q.db.Exec(ctx, insertItemMaskAnswer,
 		arg.MaskID,
 		arg.QuestionID,
 		arg.OptionID,
@@ -61,11 +61,11 @@ type InsertItemtMaskParams struct {
 	ItemCode  int64
 	Mask      string
 	MaskHash  string
-	CreatedBy uuid.UUID
+	CreatedBy pgtype.UUID
 }
 
 func (q *Queries) InsertItemtMask(ctx context.Context, arg InsertItemtMaskParams) (ItemMask, error) {
-	row := q.db.QueryRowContext(ctx, insertItemtMask,
+	row := q.db.QueryRow(ctx, insertItemtMask,
 		arg.ItemCode,
 		arg.Mask,
 		arg.MaskHash,

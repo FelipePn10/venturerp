@@ -23,6 +23,7 @@ import (
 	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
 	independentDemand "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
+	industrialCalendar "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_question"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
@@ -205,6 +206,11 @@ func (app *application) mount() chi.Router {
 	getByCodeDemandUC := usecase.NewGetIndependentDemandByCodeUseCase(independentDemandRepo, authService)
 	independentDemandHandler := handler.NewIndependentDemandHandler(createIndependentDemandUC, updateIndependentDemandUC, deleteIndependentDemandUC, listFromDateIndependentDemandUC, listByItemIndependentDemandUC, listIndependentDemandUC, getByCodeDemandUC)
 
+	// industrial calendar
+	industrialCalendarRepo := industrialCalendar.NewIndustrialCalendarRepositorySQLC(queries)
+	manageIndustrialCalendarRepoUC := usecase.NewManageCalendarUseCase(industrialCalendarRepo, authService)
+	industrialCalendarHandler := handler.NewIndustrialCalendarHandler(manageIndustrialCalendarRepoUC)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -247,6 +253,11 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list-by-item/{itemCode}", independentDemandHandler.ListByItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", independentDemandHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/get-by-code/{code}", independentDemandHandler.GetByCode)
+		})
+		r.Route("/api/industrial-calendar", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", industrialCalendarHandler.CreateDay)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/month/{year}/{month}", industrialCalendarHandler.GetMonth)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/workdays/{year}/{month}", industrialCalendarHandler.GetWorkdays)
 		})
 		r.Route("/api/questions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/questions/create", questionCreateHandler.CreateQuestion)

@@ -7,11 +7,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 
-	"github.com/google/uuid"
-	"github.com/sqlc-dev/pqtype"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createItem = `-- name: CreateItem :one
@@ -61,38 +58,38 @@ RETURNING id, warehouse_id, code, health, created_by, created_at, complement, na
 type CreateItemParams struct {
 	WarehouseID                          int32
 	Code                                 int64
-	Complement                           sql.NullString
+	Complement                           pgtype.Text
 	Nature                               int16
 	Inherit                              bool
 	Situation                            int16
 	Health                               HealthEnum
 	PdmGroupID                           int32
 	PdmModifierID                        int32
-	PdmAttributes                        json.RawMessage
+	PdmAttributes                        []byte
 	PdmDescriptionTechnique              string
 	WarehouseUnitOfMeasurement           UnitOfMeasurementEnum
 	WarehouseAutomaticLow                bool
-	WarehouseCyclicalCountConfig         pqtype.NullRawMessage
+	WarehouseCyclicalCountConfig         []byte
 	WarehouseMinimumStock                int32
 	WarehouseAvgMonthlyConsumptionManual *int32
 	EngineeringItemBaseCod               *int32
-	EngineeringWeight                    json.RawMessage
-	EngineeringDimensions                pqtype.NullRawMessage
+	EngineeringWeight                    []byte
+	EngineeringDimensions                []byte
 	EngineeringType                      int16
 	EngineeringTypeStruct                int16
 	EngineeringOem                       bool
 	PlanningTypeMrp                      int16
 	PlanningLlc                          int32
-	PlanningReorderPoint                 pqtype.NullRawMessage
+	PlanningReorderPoint                 []byte
 	PlanningTankID                       *int32
 	PlanningGhost                        bool
 	PlannerEmployeeID                    *int32
 	SuppliesTypeOfUse                    int16
-	CreatedBy                            uuid.UUID
+	CreatedBy                            pgtype.UUID
 }
 
 func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, error) {
-	row := q.db.QueryRowContext(ctx, createItem,
+	row := q.db.QueryRow(ctx, createItem,
 		arg.WarehouseID,
 		arg.Code,
 		arg.Complement,
@@ -180,7 +177,7 @@ type CreateItemMachineUsageParams struct {
 }
 
 func (q *Queries) CreateItemMachineUsage(ctx context.Context, arg CreateItemMachineUsageParams) (ItemMachineUsage, error) {
-	row := q.db.QueryRowContext(ctx, createItemMachineUsage, arg.ItemID, arg.MachineID, arg.UsageTime)
+	row := q.db.QueryRow(ctx, createItemMachineUsage, arg.ItemID, arg.MachineID, arg.UsageTime)
 	var i ItemMachineUsage
 	err := row.Scan(
 		&i.ID,
@@ -198,7 +195,7 @@ WHERE code = $1
 `
 
 func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) {
-	row := q.db.QueryRowContext(ctx, findItemByCode, code)
+	row := q.db.QueryRow(ctx, findItemByCode, code)
 	var i Item
 	err := row.Scan(
 		&i.ID,
@@ -243,7 +240,7 @@ WHERE id = $1
 `
 
 func (q *Queries) GetItemByID(ctx context.Context, id int64) (Item, error) {
-	row := q.db.QueryRowContext(ctx, getItemByID, id)
+	row := q.db.QueryRow(ctx, getItemByID, id)
 	var i Item
 	err := row.Scan(
 		&i.ID,
@@ -288,7 +285,7 @@ WHERE item_id = $1
 `
 
 func (q *Queries) ListMachineUsagesByItem(ctx context.Context, itemID int64) ([]ItemMachineUsage, error) {
-	rows, err := q.db.QueryContext(ctx, listMachineUsagesByItem, itemID)
+	rows, err := q.db.Query(ctx, listMachineUsagesByItem, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -305,9 +302,6 @@ func (q *Queries) ListMachineUsagesByItem(ctx context.Context, itemID int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

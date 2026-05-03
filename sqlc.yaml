@@ -9,7 +9,7 @@ sql:
       go:
         package: "sqlc"
         out: "internal/infrastructure/database/sqlc/"
-        sql_package: "database/sql"
+        sql_package: "pgx/v5"
 
         overrides:
           - column: "item_structures.quantity"
