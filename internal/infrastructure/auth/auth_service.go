@@ -242,3 +242,11 @@ func (a *AuthService) CanGetItemMachineTime(ctx context.Context) bool {
 func (a *AuthService) ListByMachine(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanRunMRPCalculation(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanConfiguredRulesMRP(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

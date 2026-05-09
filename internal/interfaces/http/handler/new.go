@@ -11,6 +11,7 @@ import (
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
 )
 
 func NewCreateProductHandler(
@@ -302,5 +303,17 @@ func NewMachineHandler(
 		//getItemTimeUC:    getItemTimeUC,
 
 		scheduleUC: scheduleUC,
+	}
+}
+
+func NewMRPCalculationHandler(
+	runUC *mrp_calculation_uc.RunMRPCalculationUseCase,
+	getProfileUC *mrp_calculation_uc.GetItemProfileUseCase,
+	configuredRulesUC *mrp_calculation_uc.ManageConfiguredItemRulesUseCase,
+) *MRPCalculationHandler {
+	return &MRPCalculationHandler{
+		runUC:             runUC,
+		getProfileUC:      getProfileUC,
+		configuredRulesUC: configuredRulesUC,
 	}
 }

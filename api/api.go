@@ -28,6 +28,7 @@ import (
 	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_question"
 	machine "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
+	mrpCalculation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
@@ -230,6 +231,15 @@ func (app *application) mount() chi.Router {
 		scheduleUC,
 	)
 
+	// mrp_calculation
+	mrpRepo := mrpCalculation.NewMRPCalculationRepositorySQLC(queries)
+	// Wire PlannedOrderSupplyPort here when planned_order module is created (see mrp_planned_order_integration.txt).
+	mrpService := usecase.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, nil)
+	mrpRunUC := usecase.NewRunMRPCalculationUseCase(mrpService, authService)
+	mrpGetProfileUC := usecase.NewGetItemProfileUseCase(mrpRepo, authService)
+	mrpCreateConfiguredRule := usecase.NewManageConfiguredItemRulesUseCase(mrpRepo, authService)
+	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -298,6 +308,12 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListSchedules)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}", machineHandler.GetSchedule)
 			})
+		})
+		r.Route("/api/mrp-calculation", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/run", mrpHandler.Run)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/profile/{item_code}/{plan_code}", mrpHandler.GetProfile)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/configured-rules", mrpHandler.CreateConfiguredRule)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/configured-rules/{item_code}", mrpHandler.ListConfiguredRules)
 		})
 		r.Route("/api/item-calendar-promise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemCalendarPromiseHandler.UpsertDay)

@@ -154,6 +154,34 @@ func (r *ItemStructureRepositorySQLC) GetItemCodeAndDesc(
 	return row.Code, row.Description, nil
 }
 
+func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
+	ctx context.Context,
+	rootCodes []int64,
+) (map[int64][]*entity.ItemStructure, error) {
+
+	edges, err := r.q.LoadBOMForRoots(ctx, rootCodes)
+	if err != nil {
+		return nil, fmt.Errorf("loading BOM for roots: %w", err)
+	}
+
+	adjacency := make(map[int64][]*entity.ItemStructure, len(edges))
+	for _, e := range edges {
+		child := &entity.ItemStructure{
+			ParentCode:     e.ParentCode,
+			ChildCode:      e.ChildCode,
+			Quantity:       pgutil.FromPgNumericToFloat64(e.Quantity),
+			LossPercentage: pgutil.FromPgNumericToFloat64(e.LossPercentage),
+			IsActive:       true,
+		}
+		if e.ParentMask.Valid {
+			v := e.ParentMask.String
+			child.ParentMask = &v
+		}
+		adjacency[e.ParentCode] = append(adjacency[e.ParentCode], child)
+	}
+	return adjacency, nil
+}
+
 func (r *ItemStructureRepositorySQLC) GetMaskAnswersByItemAndValue(
 	ctx context.Context,
 	itemCode int64,

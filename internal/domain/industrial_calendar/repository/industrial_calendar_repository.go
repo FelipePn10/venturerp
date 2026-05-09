@@ -15,4 +15,8 @@ type IndustrialCalendarRepository interface {
 	GetNextWorkday(ctx context.Context, year, month, day int) (time.Time, error)
 	ListMonth(ctx context.Context, year, month int) ([]*entity.IndustrialCalendar, error)
 	DeleteDay(ctx context.Context, year, month, day int) error
+
+	// SubtractWorkdays moves `days` working days backward from `from` using the
+	// subtract_workdays PostgreSQL function — single round-trip to the database.
+	SubtractWorkdays(ctx context.Context, from time.Time, days int) (time.Time, error)
 }

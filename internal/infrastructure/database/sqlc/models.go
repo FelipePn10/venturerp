@@ -1095,6 +1095,7 @@ type ConfiguredItemRule struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 	CreatedBy pgtype.UUID
+	Code      pgtype.Int8
 }
 
 type CostCenter struct {
@@ -1376,7 +1377,7 @@ type Modifier struct {
 
 type MrpCalculationLog struct {
 	ID          int64
-	PlanID      int64
+	PlanCode    int64
 	StartedAt   pgtype.Timestamptz
 	FinishedAt  pgtype.Timestamptz
 	Status      string
@@ -1384,12 +1385,24 @@ type MrpCalculationLog struct {
 	TotalItems  int32
 	TotalOrders int32
 	CreatedAt   pgtype.Timestamptz
+	Code        pgtype.Int8
+}
+
+type MrpExceptionMessage struct {
+	Code        int64
+	PlanCode    int64
+	ItemCode    int64
+	MessageType string
+	SourceCode  *int64
+	SourceType  pgtype.Text
+	Description string
+	CreatedAt   pgtype.Timestamptz
 }
 
 type MrpItemProfile struct {
 	ID              int64
 	ItemCode        int64
-	PlanID          int64
+	PlanCode        int64
 	CalculationDate pgtype.Date
 	Demand          pgtype.Numeric
 	OrdersPlanned   pgtype.Numeric
@@ -1398,6 +1411,7 @@ type MrpItemProfile struct {
 	Llc             int32
 	NeedDate        pgtype.Date
 	CreatedAt       pgtype.Timestamptz
+	Code            pgtype.Int8
 }
 
 type MrpParameter struct {
@@ -1405,6 +1419,20 @@ type MrpParameter struct {
 	PlanningType string
 	LeadTimeDays int32
 	SafetyStock  pgtype.Numeric
+}
+
+type MrpPlannedSuggestion struct {
+	Code           int64
+	PlanCode       int64
+	ItemCode       int64
+	Quantity       pgtype.Numeric
+	NeedDate       pgtype.Date
+	StartDate      pgtype.Date
+	OrderType      string
+	DemandType     string
+	ParentItemCode *int64
+	Llc            int32
+	CreatedAt      pgtype.Timestamptz
 }
 
 type Operation struct {
@@ -1627,11 +1655,12 @@ type SalesOrderDemand struct {
 	Quantity       pgtype.Numeric
 	DeliveredQty   pgtype.Numeric
 	DeliveryDate   pgtype.Date
-	DivisionID     *int64
+	DivisionCode   *int64
 	Status         string
 	IsActive       bool
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	Code           pgtype.Int8
 }
 
 type Stock struct {
@@ -1650,14 +1679,14 @@ type StockMovement struct {
 }
 
 type StockSnapshot struct {
-	ID           int64
-	ItemCode     int64
-	WarehouseID  int64
-	Quantity     pgtype.Numeric
-	ReservedQty  pgtype.Numeric
-	SafetyStock  pgtype.Numeric
-	SnapshotDate pgtype.Timestamptz
-	CreatedAt    pgtype.Timestamptz
+	ID            int64
+	ItemCode      int64
+	WarehouseCode int64
+	Quantity      pgtype.Numeric
+	ReservedQty   pgtype.Numeric
+	SafetyStock   pgtype.Numeric
+	SnapshotDate  pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
 }
 
 type User struct {
@@ -1669,15 +1698,14 @@ type User struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
-
 type Warehouse struct {
 	ID                  int64
 	Code                string
 	Description         string
-	CreatedAt           pgtype.Timestamptz
+	CreatedAt           pgtype.Timestamp
 	CreatedBy           pgtype.UUID
-	Location            WarehouseLocation
-	Type                WarehouseType
+	Location            interface{}
+	Type                interface{}
 	Disposition         bool
 	ReservationsAllowed bool
 }

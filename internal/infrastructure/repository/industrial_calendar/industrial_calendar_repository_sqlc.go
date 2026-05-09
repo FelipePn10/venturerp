@@ -141,6 +141,14 @@ func (r *IndustrialCalendarRepositorySQLC) DeleteDay(
 	})
 }
 
+func (r *IndustrialCalendarRepositorySQLC) SubtractWorkdays(
+	ctx context.Context,
+	from time.Time,
+	days int,
+) (time.Time, error) {
+	return r.q.SubtractWorkdays(ctx, from, days)
+}
+
 func rowToEntity(row sqlc.IndustrialCalendar) *entity.IndustrialCalendar {
 	e := &entity.IndustrialCalendar{
 		Year:      int(row.Year),

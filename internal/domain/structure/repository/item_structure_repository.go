@@ -33,6 +33,11 @@ type ItemStructureRepository interface {
 		mask string,
 	) ([]*entity.ItemStructure, error)
 
+	// LoadBOMForRoots pre-loads the entire BOM tree for a set of root items in
+	// a single recursive query, returning an adjacency map parent→children.
+	// Used by the MRP engine to avoid N+1 queries during LLC computation and BOM explosion.
+	LoadBOMForRoots(ctx context.Context, rootCodes []int64) (map[int64][]*entity.ItemStructure, error)
+
 	// VALIDATIONS
 
 	ItemExists(ctx context.Context, itemCode int64) (bool, error)

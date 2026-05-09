@@ -60,4 +60,6 @@ type AuthService interface {
 	CanDeleteMachine(ctx context.Context) bool
 	CanGetItemMachineTime(ctx context.Context) bool
 	ListByMachine(ctx context.Context) bool
+	CanRunMRPCalculation(ctx context.Context) bool
+	CanConfiguredRulesMRP(ctx context.Context) bool
 }
