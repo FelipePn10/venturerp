@@ -2,17 +2,22 @@ package machine_uc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
+	machinesvc "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
 )
 
 type CreateItemMachineTimeUseCase struct {
-	Repo repository.MachineRepository
-	Auth ports.AuthService
+	Repo     repository.MachineRepository
+	ItemRepo itemrepo.ItemRepository
+	Auth     ports.AuthService
 }
 
 func (uc *CreateItemMachineTimeUseCase) Execute(
@@ -20,6 +25,10 @@ func (uc *CreateItemMachineTimeUseCase) Execute(
 ) (*entity.ItemMachineTime, error) {
 	if !uc.Auth.CanCreateItemTimeMachine(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+
+	if err := uc.validateUnitCompatibility(ctx, dto.ItemCode, dto.MachineCode); err != nil {
+		return nil, err
 	}
 
 	imt := &entity.ItemMachineTime{
@@ -39,6 +48,41 @@ func (uc *CreateItemMachineTimeUseCase) GetByCodeTime(
 	ctx context.Context,
 	code int64,
 ) (*entity.Machine, error) {
-
 	return uc.Repo.GetByCode(ctx, code)
+}
+
+func (uc *CreateItemMachineTimeUseCase) validateUnitCompatibility(
+	ctx context.Context,
+	itemCode int64,
+	machineCode int64,
+) error {
+	itemCodeVO, err := valueobject.NewItemCode(itemCode)
+	if err != nil {
+		return fmt.Errorf("item code is invalid: %w", err)
+	}
+
+	item, err := uc.ItemRepo.FindItemByCode(ctx, itemCodeVO)
+	if err != nil {
+		return fmt.Errorf("item %d not found: %w", itemCode, err)
+	}
+
+	machine, err := uc.Repo.GetByCode(ctx, machineCode)
+	if err != nil {
+		return fmt.Errorf("machine %d not found: %w", machineCode, err)
+	}
+
+	_, err = machinesvc.CheckUnitCompatibility(
+		item.Warehouse.UnitOfMeasurement,
+		machine.CapacityUnit,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"invalid configuration — item '%d' uses unit '%s' but machine '%d' operates on '%s': %w",
+			itemCode, item.Warehouse.UnitOfMeasurement,
+			machineCode, machine.CapacityUnit,
+			err,
+		)
+	}
+
+	return nil
 }

@@ -283,6 +283,7 @@ func NewMachineHandler(
 	createItemTimeUC *machine_uc.CreateItemMachineTimeUseCase,
 	listItemTimesUC *machine_uc.ListItemMachineTimesUseCase,
 	//getItemTimeUC *machine_uc.GetItemMachineTimeUseCase,
+	calculateProductionTimeUC *machine_uc.CalculateProductionTimeUseCase,
 
 	scheduleUC *machine_uc.ScheduleMachineUseCase,
 ) *MachineHandler {
@@ -295,8 +296,9 @@ func NewMachineHandler(
 		listTypesUC:      listTypesUC,
 		getMachineTypeUC: getMachineTypeUC,
 
-		createItemTimeUC: createItemTimeUC,
-		listItemTimesUC:  listItemTimesUC,
+		createItemTimeUC:          createItemTimeUC,
+		listItemTimesUC:           listItemTimesUC,
+		calculateProductionTimeUC: calculateProductionTimeUC,
 		//getItemTimeUC:    getItemTimeUC,
 
 		scheduleUC: scheduleUC,

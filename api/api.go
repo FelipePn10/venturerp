@@ -228,9 +228,10 @@ func (app *application) mount() chi.Router {
 	machineListTypesUC := usecase.NewListMachineTypesUseCase(machineRepo, authService)
 	machineTypeGetByCodeUC := usecase.NewGetMachineTypeUseCase(machineRepo, authService)
 	//item times
-	machineItemTimeUC := usecase.NewCreateItemMachineTimeUseCase(machineRepo, authService)
+	machineItemTimeUC := usecase.NewCreateItemMachineTimeUseCase(machineRepo, itemRepo, authService)
 	machineListItemTimeUC := usecase.NewListItemMachineTimesUseCase(machineRepo, authService)
 	//machineGetItemTimeUC := usecase.NewGetItemMachineTimeUseCase(machineRepo, authService)
+	machineCalcProductionUC := usecase.NewCalculateProductionTimeUseCase(machineRepo, itemRepo, authService)
 	// schedule
 	scheduleUC := usecase.NewScheduleMachineUseCase(machineRepo, authService)
 
@@ -244,6 +245,7 @@ func (app *application) mount() chi.Router {
 		machineItemTimeUC,
 		machineListItemTimeUC,
 		//machineGetItemTimeUC,
+		machineCalcProductionUC,
 		scheduleUC,
 	)
 
@@ -308,6 +310,7 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateItemTime)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListItemTimes)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}", machineHandler.GetItemTime)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/production/calculate", machineHandler.CalculateProductionTime)
 			})
 			r.Route("/schedule", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateSchedule)

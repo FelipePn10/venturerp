@@ -22,8 +22,9 @@ type MachineHandler struct {
 	listTypesUC      *machine_uc.ListMachineTypesUseCase
 	getMachineTypeUC *machine_uc.GetMachineTypeUseCase
 
-	createItemTimeUC *machine_uc.CreateItemMachineTimeUseCase
-	listItemTimesUC  *machine_uc.ListItemMachineTimesUseCase
+	createItemTimeUC         *machine_uc.CreateItemMachineTimeUseCase
+	listItemTimesUC          *machine_uc.ListItemMachineTimesUseCase
+	calculateProductionTimeUC *machine_uc.CalculateProductionTimeUseCase
 	//getItemTimeUC    *machine_uc.GetItemMachineTimeUseCase
 
 	scheduleUC *machine_uc.ScheduleMachineUseCase
@@ -305,6 +306,24 @@ func (h *MachineHandler) UpdateScheduleTimes(w http.ResponseWriter, r *http.Requ
 	)
 	if err != nil {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *MachineHandler) CalculateProductionTime(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var input machine_uc.ProductionTimeInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	result, err := h.calculateProductionTimeUC.Execute(r.Context(), input)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 

@@ -451,11 +451,25 @@ func NewManageItemCalendarPromiseUseCase(
 
 func NewCreateItemMachineTimeUseCase(
 	repo machine.MachineRepository,
+	itemRepo item.ItemRepository,
 	auth ports.AuthService,
 ) *machine_uc.CreateItemMachineTimeUseCase {
 	return &machine_uc.CreateItemMachineTimeUseCase{
-		Repo: repo,
-		Auth: auth,
+		Repo:     repo,
+		ItemRepo: itemRepo,
+		Auth:     auth,
+	}
+}
+
+func NewCalculateProductionTimeUseCase(
+	repo machine.MachineRepository,
+	itemRepo item.ItemRepository,
+	auth ports.AuthService,
+) *machine_uc.CalculateProductionTimeUseCase {
+	return &machine_uc.CalculateProductionTimeUseCase{
+		Repo:     repo,
+		ItemRepo: itemRepo,
+		Auth:     auth,
 	}
 }
 
