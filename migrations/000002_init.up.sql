@@ -1,4 +1,4 @@
-CREATE TABLE item_question_answers (
+CREATE TABLE IF NOT EXISTS item_question_answers (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     item_id BIGINT NOT NULL REFERENCES items(id),
     question_id BIGINT NOT NULL REFERENCES questions(id),

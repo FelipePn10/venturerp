@@ -1,0 +1,2 @@
+ALTER TABLE machine_types
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;

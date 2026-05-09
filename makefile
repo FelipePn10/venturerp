@@ -1,7 +1,7 @@
 include .env
+export
 
 PWD := $(shell pwd)
-
 MIGRATIONS_DIR := $(PWD)/migrations
 
 create_migration:
@@ -9,22 +9,25 @@ create_migration:
 
 migrate_up:
 	migrate -path=$(MIGRATIONS_DIR) \
-		-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable" \
+		-database "$(DATABASE_URL)" \
 		-verbose up
 
 migrate_down:
 	migrate -path=$(MIGRATIONS_DIR) \
-		-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable" \
+		-database "$(DATABASE_URL)" \
 		-verbose down
 
 migrate_force:
 	migrate -path=$(MIGRATIONS_DIR) \
-		-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable" \
+		-database "$(DATABASE_URL)" \
 		force 1
 
 reset:
 	migrate -path=$(MIGRATIONS_DIR) \
-		-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable" \
+		-database "$(DATABASE_URL)" \
 		-drop -verbose
 
-.PHONY: create_migration migrate_up migrate_down migrate_force reset
+print_db:
+	@echo $(DATABASE_URL)
+
+.PHONY: create_migration migrate_up migrate_down migrate_force reset print_db

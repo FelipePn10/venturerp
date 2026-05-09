@@ -1,4 +1,3 @@
-DROP TRIGGER IF EXISTS trigger_generate_product_mask ON product_question_answers;
 
 DROP FUNCTION IF EXISTS generate_product_mask();
 

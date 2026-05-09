@@ -102,6 +102,49 @@ func (ns NullWarehouseType) Value() (driver.Value, error) {
 	return string(ns.WarehouseType), nil
 }
 
+type CapacityPeriodEnum string
+
+const (
+	CapacityPeriodEnumMINUTO CapacityPeriodEnum = "MINUTO"
+	CapacityPeriodEnumHORA   CapacityPeriodEnum = "HORA"
+	CapacityPeriodEnumDIA    CapacityPeriodEnum = "DIA"
+)
+
+func (e *CapacityPeriodEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CapacityPeriodEnum(s)
+	case string:
+		*e = CapacityPeriodEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CapacityPeriodEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCapacityPeriodEnum struct {
+	CapacityPeriodEnum CapacityPeriodEnum
+	Valid              bool // Valid is true if CapacityPeriodEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCapacityPeriodEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CapacityPeriodEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CapacityPeriodEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCapacityPeriodEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CapacityPeriodEnum), nil
+}
+
 type DemandTypeEnum string
 
 const (
@@ -188,6 +231,55 @@ func (ns NullHealthEnum) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.HealthEnum), nil
+}
+
+type MachineCapacityUnitEnum string
+
+const (
+	MachineCapacityUnitEnumUN     MachineCapacityUnitEnum = "UN"
+	MachineCapacityUnitEnumPEAS   MachineCapacityUnitEnum = "PEÇAS"
+	MachineCapacityUnitEnumKG     MachineCapacityUnitEnum = "KG"
+	MachineCapacityUnitEnumT      MachineCapacityUnitEnum = "T"
+	MachineCapacityUnitEnumCHAPAS MachineCapacityUnitEnum = "CHAPAS"
+	MachineCapacityUnitEnumM      MachineCapacityUnitEnum = "M"
+	MachineCapacityUnitEnumM2     MachineCapacityUnitEnum = "M2"
+	MachineCapacityUnitEnumM3     MachineCapacityUnitEnum = "M3"
+	MachineCapacityUnitEnumLITROS MachineCapacityUnitEnum = "LITROS"
+)
+
+func (e *MachineCapacityUnitEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MachineCapacityUnitEnum(s)
+	case string:
+		*e = MachineCapacityUnitEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MachineCapacityUnitEnum: %T", src)
+	}
+	return nil
+}
+
+type NullMachineCapacityUnitEnum struct {
+	MachineCapacityUnitEnum MachineCapacityUnitEnum
+	Valid                   bool // Valid is true if MachineCapacityUnitEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMachineCapacityUnitEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.MachineCapacityUnitEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MachineCapacityUnitEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMachineCapacityUnitEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MachineCapacityUnitEnum), nil
 }
 
 type MachineTypeEnum string
@@ -1105,7 +1197,7 @@ type IndustrialCalendar struct {
 
 type Item struct {
 	ID                                   int64
-	WarehouseID                          int32
+	WarehouseCode                        int64
 	Code                                 int64
 	Health                               HealthEnum
 	CreatedBy                            pgtype.UUID
@@ -1113,8 +1205,8 @@ type Item struct {
 	Complement                           pgtype.Text
 	Nature                               int16
 	Situation                            int16
-	PdmGroupID                           int32
-	PdmModifierID                        int32
+	PdmGroupCode                         int64
+	PdmModifierCode                      int64
 	PdmAttributes                        []byte
 	PdmDescriptionTechnique              string
 	WarehouseUnitOfMeasurement           UnitOfMeasurementEnum
@@ -1122,7 +1214,7 @@ type Item struct {
 	WarehouseCyclicalCountConfig         []byte
 	WarehouseMinimumStock                int32
 	WarehouseAvgMonthlyConsumptionManual *int32
-	EngineeringItemBaseCod               *int32
+	EngineeringItemBaseCode              *int64
 	EngineeringWeight                    []byte
 	EngineeringDimensions                []byte
 	EngineeringType                      int16
@@ -1131,9 +1223,9 @@ type Item struct {
 	PlanningTypeMrp                      int16
 	PlanningLlc                          int32
 	PlanningReorderPoint                 []byte
-	PlanningTankID                       *int32
+	PlanningTankCode                     *int64
 	PlanningGhost                        bool
-	PlannerEmployeeID                    *int32
+	PlannerEmployeeCode                  *int64
 	SuppliesTypeOfUse                    int16
 	Inherit                              bool
 }
@@ -1152,23 +1244,17 @@ type ItemCalendarPromise struct {
 }
 
 type ItemMachineTime struct {
-	ID             int64
-	ItemCode       int64
-	Mask           string
-	MachineID      int64
-	ProductionTime pgtype.Numeric
-	SetupTime      pgtype.Numeric
-	Priority       int32
-	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-}
-
-type ItemMachineUsage struct {
-	ID        int64
-	ItemID    int64
-	MachineID int32
-	UsageTime int32
+	ID                 int64
+	ItemCode           int64
+	Mask               string
+	ProductionTime     pgtype.Numeric
+	SetupTime          pgtype.Numeric
+	Priority           int32
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	MachineCode        int64
+	ProductionTimeUnit CapacityPeriodEnum
+	ProductionBaseQty  int32
 }
 
 type ItemMask struct {
@@ -1225,20 +1311,20 @@ type Machine struct {
 	ID              int64
 	Code            int64
 	Name            string
-	MachineTypeID   int64
-	CostCenterID    *int64
-	CapacityPerHour pgtype.Numeric
+	Capacity        pgtype.Numeric
 	EfficiencyRate  pgtype.Numeric
 	IsActive        bool
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	CreatedBy       pgtype.UUID
+	MachineTypeCode int64
+	CostCenterCode  *int64
+	CapacityUnit    MachineCapacityUnitEnum
+	CapacityPeriod  CapacityPeriodEnum
 }
 
 type MachineSchedule struct {
 	ID               int64
-	MachineID        int64
-	OrderID          int64
 	ScheduleDate     pgtype.Date
 	StartTime        pgtype.Time
 	EndTime          pgtype.Time
@@ -1250,6 +1336,9 @@ type MachineSchedule struct {
 	Notes            pgtype.Text
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
+	MachineCode      int64
+	OrderCode        int64
+	Code             int64
 }
 
 type MachineType struct {
@@ -1389,6 +1478,7 @@ type PlannedOrder struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
+	Code              int64
 }
 
 type PlanningParam struct {
@@ -1578,6 +1668,7 @@ type User struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
+
 
 type Warehouse struct {
 	ID                  int64

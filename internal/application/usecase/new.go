@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
@@ -26,6 +27,7 @@ import (
 	industrial_calendar "github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
 	item_calendar_promise "github.com/FelipePn10/panossoerp/internal/domain/item_calendar_promise/repository"
 	item "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
+	machine "github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 	modifier "github.com/FelipePn10/panossoerp/internal/domain/modifier/repository"
 	qst "github.com/FelipePn10/panossoerp/internal/domain/questions/repository"
 	qstops "github.com/FelipePn10/panossoerp/internal/domain/questions_options/repository"
@@ -442,6 +444,166 @@ func NewManageItemCalendarPromiseUseCase(
 	auth ports.AuthService,
 ) *item_calendar_promise_uc.ManageItemCalendarPromiseUseCase {
 	return &item_calendar_promise_uc.ManageItemCalendarPromiseUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewCreateItemMachineTimeUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.CreateItemMachineTimeUseCase {
+	return &machine_uc.CreateItemMachineTimeUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewCreateMachineUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.CreateMachineUseCase {
+	return &machine_uc.CreateMachineUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewCreateMachineTypeUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.CreateMachineTypeUseCase {
+	return &machine_uc.CreateMachineTypeUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListItemMachineTimesUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.ListItemMachineTimesUseCase {
+	return &machine_uc.ListItemMachineTimesUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListMachinesUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.ListMachinesUseCase {
+	return &machine_uc.ListMachinesUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListMachineTypesUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.ListMachineTypesUseCase {
+	return &machine_uc.ListMachineTypesUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewScheduleMachineUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.ScheduleMachineUseCase {
+	return &machine_uc.ScheduleMachineUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewUpdateMachineTypeUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.UpdateMachineTypeUseCase {
+	return &machine_uc.UpdateMachineTypeUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewGetMachineTypeUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.GetMachineTypeUseCase {
+	return &machine_uc.GetMachineTypeUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewDeleteMachineTypeUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.DeleteMachineTypeUseCase {
+	return &machine_uc.DeleteMachineTypeUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewUpdateMachineUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.UpdateMachineUseCase {
+	return &machine_uc.UpdateMachineUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewGetMachineUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.GetMachineUseCase {
+	return &machine_uc.GetMachineUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListMachinesByTypeUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.ListMachinesByTypeUseCase {
+	return &machine_uc.ListMachinesByTypeUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewDeleteMachineUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.DeleteMachineUseCase {
+	return &machine_uc.DeleteMachineUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewGetItemMachineTimeUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.GetItemMachineTimeUseCase {
+	return &machine_uc.GetItemMachineTimeUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListItemsByMachineUseCase(
+	repo machine.MachineRepository,
+	auth ports.AuthService,
+) *machine_uc.ListItemsByMachineUseCase {
+	return &machine_uc.ListItemsByMachineUseCase{
 		Repo: repo,
 		Auth: auth,
 	}
