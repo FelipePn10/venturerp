@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,8 +28,6 @@ func NewDB(cfg *config.Config) (*DB, error) {
 		pool.Close()
 		return nil, fmt.Errorf("unable to ping DB: %w", err)
 	}
-
-	log.Println("Connected to the database successfully")
 
 	return &DB{
 		Pool: pool,

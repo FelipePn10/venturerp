@@ -2,8 +2,9 @@ package security
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
+
+	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 )
 
 type BaseHandler struct{}
@@ -36,18 +37,19 @@ func (h *BaseHandler) NotFound(w http.ResponseWriter, message ...string) {
 	WriteError(w, http.StatusNotFound, "not_found", msg)
 }
 
-func (h *BaseHandler) InternalError(w http.ResponseWriter, err error) {
-	slog.Error("internal error", "err", err, "path", http.StatusInternalServerError)
+// InternalError logs the real error (with request_id from context) and returns
+// a generic message to the client — never leaking internal details.
+func (h *BaseHandler) InternalError(w http.ResponseWriter, r *http.Request, err error) {
+	applogger.FromContext(r.Context()).Error(
+		"internal server error",
+		"error", err,
+	)
 	WriteError(w, http.StatusInternalServerError, "internal_error", "Something went wrong")
 }
 
-func (h *BaseHandler) UnprocessableEntity(
-	w http.ResponseWriter,
-	message string,
-) {
+func (h *BaseHandler) UnprocessableEntity(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnprocessableEntity)
-
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error":  message,
 		"status": http.StatusUnprocessableEntity,
@@ -55,8 +57,9 @@ func (h *BaseHandler) UnprocessableEntity(
 }
 
 func RespondJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func RespondError(w http.ResponseWriter, status int, message string) {

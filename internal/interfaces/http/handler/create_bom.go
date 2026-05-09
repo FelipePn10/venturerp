@@ -27,7 +27,7 @@ func (h *BomHandler) Create(
 		case errors.Is(err, errorsuc.ErrCreateBomNotFound):
 			h.NotFound(w, "try again later.")
 		default:
-			h.InternalError(w, err)
+			h.InternalError(w, r, err)
 			return
 		}
 		return

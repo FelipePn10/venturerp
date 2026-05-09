@@ -28,7 +28,7 @@ func (h *QuestionHandler) FindQuestionByName(
 			h.NotFound(w, "No question found with the given name")
 			return
 		default:
-			h.InternalError(w, err)
+			h.InternalError(w, r, err)
 			return
 		}
 	}

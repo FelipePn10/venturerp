@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log/slog"
 	"os"
+
+	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
@@ -11,27 +12,29 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
+		// Logger not yet ready — use a temporary one just for this fatal.
+		applogger.New("info").Fatal("failed to load config", "error", err)
 		os.Exit(1)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	log := applogger.New(cfg.LogLevel)
 
 	db, err := database.NewDB(cfg)
 	if err != nil {
-		slog.Error("failed to connect database", "error", err)
-		os.Exit(1)
+		log.Fatal("failed to connect to database", "error", err)
 	}
 	defer db.Close()
+	log.Info("database connected")
 
 	api := application{
 		config: cfg,
-		logger: logger,
+		logger: log,
 		db:     db,
 	}
 
+	log.Info("starting server", "port", cfg.ServerPort, "env", cfg.Env, "log_level", cfg.LogLevel)
+
 	if err := api.run(api.mount()); err != nil {
-		slog.Error("application error", "error", err)
-		os.Exit(1)
+		log.Fatal("application error", "error", err)
 	}
 }

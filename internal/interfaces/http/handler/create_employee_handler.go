@@ -24,7 +24,7 @@ func (h *EmployeeHandler) CreateEmployee(w http.ResponseWriter, r *http.Request)
 
 	created, err := h.createEmployeeUC.Execute(r.Context(), employee)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.InternalError(w, r, err)
 		return
 	}
 

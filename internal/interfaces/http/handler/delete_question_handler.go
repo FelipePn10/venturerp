@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
@@ -10,7 +9,6 @@ import (
 
 func (h *QuestionHandler) DeleteQuestion(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
-	log.Println("DEBUG idParam =", idParam)
 
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil || id <= 0 {
@@ -19,7 +17,7 @@ func (h *QuestionHandler) DeleteQuestion(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.deleteQuestionUC.Execute(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.InternalError(w, r, err)
 		return
 	}
 

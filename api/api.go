@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +10,7 @@ import (
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
+	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
 	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
@@ -29,6 +28,7 @@ import (
 	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_question"
 	machine "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
+	mrpCalculation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
@@ -43,37 +43,19 @@ import (
 
 type application struct {
 	config *config.Config
-	logger *slog.Logger
+	logger *applogger.Logger
 	db     *database.DB
-}
-
-func (app *application) traceMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-
-		next.ServeHTTP(ww, r)
-
-		app.logger.Info("request completed",
-			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path),
-			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
-			slog.String("client_ip", r.RemoteAddr),
-			slog.Int("status", ww.Status()),
-		)
-	})
 }
 
 func (app *application) mount() chi.Router {
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestID)
+	r.Use(httpmw.CorrelationMiddleware)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(middleware.StripSlashes)
-	r.Use(app.traceMiddleware)
+	r.Use(httpmw.RequestLoggerMiddleware(app.logger))
 
 	queries := app.db.Queries()
 	authService := &infraauth.AuthService{}
@@ -249,6 +231,15 @@ func (app *application) mount() chi.Router {
 		scheduleUC,
 	)
 
+	// mrp_calculation
+	mrpRepo := mrpCalculation.NewMRPCalculationRepositorySQLC(queries)
+	// Wire PlannedOrderSupplyPort here when planned_order module is created (see mrp_planned_order_integration.txt).
+	mrpService := usecase.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, nil)
+	mrpRunUC := usecase.NewRunMRPCalculationUseCase(mrpService, authService)
+	mrpGetProfileUC := usecase.NewGetItemProfileUseCase(mrpRepo, authService)
+	mrpCreateConfiguredRule := usecase.NewManageConfiguredItemRulesUseCase(mrpRepo, authService)
+	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -317,6 +308,12 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListSchedules)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}", machineHandler.GetSchedule)
 			})
+		})
+		r.Route("/api/mrp-calculation", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/run", mrpHandler.Run)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/profile/{item_code}/{plan_code}", mrpHandler.GetProfile)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/configured-rules", mrpHandler.CreateConfiguredRule)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/configured-rules/{item_code}", mrpHandler.ListConfiguredRules)
 		})
 		r.Route("/api/item-calendar-promise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemCalendarPromiseHandler.UpsertDay)
@@ -391,6 +388,6 @@ func (app *application) run(r chi.Router) error {
 		IdleTimeout:  time.Minute,
 	}
 
-	log.Printf("Starting server on %s", addr)
+	app.logger.Info("server listening", "addr", addr)
 	return srv.ListenAndServe()
 }

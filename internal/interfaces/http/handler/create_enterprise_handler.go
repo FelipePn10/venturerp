@@ -24,7 +24,7 @@ func (h *EnterpriseHandler) CreateEnterprise(w http.ResponseWriter, r *http.Requ
 
 	created, err := h.createEnterpriseUC.Execute(r.Context(), enterprise)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.InternalError(w, r, err)
 		return
 	}
 

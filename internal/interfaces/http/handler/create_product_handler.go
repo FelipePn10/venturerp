@@ -17,7 +17,7 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 
 	product, err := h.createProductUC.Execute(r.Context(), req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.InternalError(w, r, err)
 		return
 	}
 

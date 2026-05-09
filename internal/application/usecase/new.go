@@ -11,6 +11,9 @@ import (
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	mrpports "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
+	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
 	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
@@ -29,6 +32,7 @@ import (
 	item "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	machine "github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 	modifier "github.com/FelipePn10/panossoerp/internal/domain/modifier/repository"
+	mrp_calculation "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	qst "github.com/FelipePn10/panossoerp/internal/domain/questions/repository"
 	qstops "github.com/FelipePn10/panossoerp/internal/domain/questions_options/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
@@ -618,6 +622,47 @@ func NewListItemsByMachineUseCase(
 	auth ports.AuthService,
 ) *machine_uc.ListItemsByMachineUseCase {
 	return &machine_uc.ListItemsByMachineUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewMRPService(
+	mrpRepo mrp_calculation.MRPCalculationRepository,
+	structRepo repository.ItemStructureRepository,
+	demandRepo independent_demand.IndependentDemandRepository,
+	calRepo industrial_calendar.IndustrialCalendarRepository,
+	itemRepo item.ItemRepository,
+	supplyPort mrpports.PlannedOrderSupplyPort, // pass nil until planned_order is created
+) mrpservice.MRPService {
+	return mrpservice.NewMRPService(mrpRepo, structRepo, demandRepo, calRepo, itemRepo, supplyPort)
+}
+
+func NewRunMRPCalculationUseCase(
+	svc mrpservice.MRPService,
+	auth ports.AuthService,
+) *mrp_calculation_uc.RunMRPCalculationUseCase {
+	return &mrp_calculation_uc.RunMRPCalculationUseCase{
+		Service: svc,
+		Auth:    auth,
+	}
+}
+
+func NewManageConfiguredItemRulesUseCase(
+	repo mrp_calculation.MRPCalculationRepository,
+	auth ports.AuthService,
+) *mrp_calculation_uc.ManageConfiguredItemRulesUseCase {
+	return &mrp_calculation_uc.ManageConfiguredItemRulesUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewGetItemProfileUseCase(
+	repo mrp_calculation.MRPCalculationRepository,
+	auth ports.AuthService,
+) *mrp_calculation_uc.GetItemProfileUseCase {
+	return &mrp_calculation_uc.GetItemProfileUseCase{
 		Repo: repo,
 		Auth: auth,
 	}

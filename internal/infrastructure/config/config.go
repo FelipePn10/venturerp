@@ -11,6 +11,8 @@ type Config struct {
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
 	JWTSecret   string `mapstructure:"JWT_SECRET"`
 	Env         string `mapstructure:"ENV"`
+	// LogLevel controls verbosity: debug | info | warn | error (default: info)
+	LogLevel string `mapstructure:"LOG_LEVEL"`
 }
 
 func Load() (*Config, error) {
@@ -25,6 +27,7 @@ func Load() (*Config, error) {
 		"postgres://panossoerp:panossoerp_10203040@localhost:5432/panossoerpdatabase?sslmode=disable",
 	)
 	viper.SetDefault("ENV", "development")
+	viper.SetDefault("LOG_LEVEL", "info")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

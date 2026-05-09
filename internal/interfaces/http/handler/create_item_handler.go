@@ -23,7 +23,7 @@ func (h *ItemHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 
 	created, err := h.createItemUC.Execute(r.Context(), item)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.InternalError(w, r, err)
 		return
 	}
 

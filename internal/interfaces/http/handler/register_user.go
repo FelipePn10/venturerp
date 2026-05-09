@@ -19,7 +19,7 @@ func (h *UserHandler) RegisterUserHandler(w http.ResponseWriter, r *http.Request
 		r.Context(),
 		login,
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.InternalError(w, r, err)
 		return
 	}
 

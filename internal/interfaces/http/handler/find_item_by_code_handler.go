@@ -41,7 +41,7 @@ func (h *ItemHandler) FindItemByCodeHandler(
 			h.NotFound(w, "product not found")
 			return
 		default:
-			h.InternalError(w, err)
+			h.InternalError(w, r, err)
 			return
 		}
 	}

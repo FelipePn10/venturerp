@@ -9,11 +9,14 @@ import (
 
 func (h *QuestionHandler) CreateQuestion(w http.ResponseWriter, r *http.Request) {
 	var req request.CreateQuestionRequestDTO
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
 
 	question, err := h.createQuestionUC.Execute(r.Context(), req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.InternalError(w, r, err)
 		return
 	}
 	h.OK(w, question, "Created question success")

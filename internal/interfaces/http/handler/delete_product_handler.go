@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
@@ -10,7 +9,6 @@ import (
 
 func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
-	log.Println("idParam:", idParam)
 
 	id, err := strconv.ParseInt(idParam, 10, 64)
 

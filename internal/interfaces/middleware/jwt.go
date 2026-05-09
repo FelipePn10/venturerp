@@ -7,15 +7,12 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
+	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type Logger interface {
-	Warn(msg string, args ...any)
-}
-
-func JWT(secret string, logger Logger) func(http.Handler) http.Handler {
+func JWT(secret string, log *applogger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions {
@@ -36,7 +33,6 @@ func JWT(secret string, logger Logger) func(http.Handler) http.Handler {
 			}
 
 			claims := &auth.UserClaims{}
-
 			token, err := jwt.ParseWithClaims(
 				parts[1],
 				claims,
@@ -49,7 +45,12 @@ func JWT(secret string, logger Logger) func(http.Handler) http.Handler {
 			)
 
 			if err != nil || !token.Valid {
-				logger.Warn("invalid token attempt", "error", err)
+				// Use the per-request logger so the warning carries request_id.
+				applogger.FromContext(r.Context()).Warn(
+					"invalid token attempt",
+					"error", err,
+					"ip", realIP(r),
+				)
 				http.Error(w, `{"error": "Invalid token"}`, http.StatusUnauthorized)
 				return
 			}
@@ -58,11 +59,11 @@ func JWT(secret string, logger Logger) func(http.Handler) http.Handler {
 				ID:   claims.UserID,
 				Role: claims.Role,
 			}
-			ctx := context.WithValue(
-				r.Context(),
-				contextkey.UserKey,
-				user,
-			)
+
+			// Store user in context and propagate user_id to the logger.
+			ctx := context.WithValue(r.Context(), contextkey.UserKey, user)
+			ctx = applogger.WithUserID(ctx, claims.UserID)
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

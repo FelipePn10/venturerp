@@ -1,200 +1,193 @@
-# VentureERP — Gestão de Máquinas e Produção
+# PanossoERP
 
-> Documento de apresentação
+ERP industrial desenvolvido em Go com Clean Architecture, PostgreSQL (Supabase) e geração de queries via SQLC.
 
----
+## Stack
 
-## O que o sistema faz nessa área?
-
-O VentureERP organiza **como cada produto é fabricado, em qual máquina e quanto tempo isso leva**. Com essas informações o sistema consegue dizer automaticamente:
-
-- Quando uma ordem de produção vai ficar pronta.
-- Se a máquina tem capacidade para atender o pedido no prazo.
-- Qual máquina usar quando o produto pode ser feito em mais de uma.
-
----
-
-## Os três cadastros que sustentam tudo
-
-### 1. Tipo de Máquina
-
-Antes de cadastrar uma máquina, ela precisa ter um **tipo**. O tipo é simplesmente a categoria do equipamento — define o que aquela máquina faz dentro da fábrica.
-
-| Tipo | Exemplos de uso |
+| Camada | Tecnologia |
 |---|---|
-| Corte | Serra fita, guilhotina, plasma |
-| Dobrar | Dobradeira, prensa de dobra |
-| Soldar | Solda MIG, TIG, ponto |
-| Montar | Bancada de montagem |
-| Pintar | Cabine de pintura, estufa |
-| Torno | Torno mecânico, CNC |
-| Moinho | Fresadora |
-| Imprensa | Prensa hidráulica, excêntrica |
-| Injeção | Injetora de plástico |
+| Linguagem | Go 1.25.5 |
+| Router HTTP | chi v5 |
+| Driver de banco | pgx v5 |
+| Geração de queries | SQLC v1.31.1 |
+| Banco de dados | PostgreSQL (Supabase) |
+| Autenticação | JWT (golang-jwt v5) |
+| Configuração | Viper |
 
-> O tipo não define tempo nem custo — ele só organiza as máquinas em categorias lógicas.
+## Arquitetura
 
----
+```
+internal/
+├── domain/            # Entidades, repositórios (interfaces) e regras de negócio
+├── application/       # Use cases e DTOs
+├── infrastructure/    # Implementações concretas (SQLC, auth, repositórios)
+└── interfaces/        # Handlers HTTP
+```
 
-### 2. Máquina
+A dependência flui em uma única direção: `interfaces → application → domain ← infrastructure`.
 
-Aqui é onde cada equipamento físico da fábrica é cadastrado individualmente.
+## Módulos de domínio
 
-**O que é configurado por máquina:**
-
-| Campo | O que significa |
+| Módulo | Descrição |
 |---|---|
-| **Capacidade** | Quanto a máquina consegue produzir por período (ex: 100 peças por hora) |
-| **Unidade** | Em que medida ela trabalha: peças, kg, metros, m², toneladas... |
-| **Período** | O intervalo dessa capacidade: por minuto, por hora ou por dia |
-| **Eficiência** | O quanto da capacidade total ela realmente entrega (ex: 85%) |
+| `items` | Cadastro de itens/produtos |
+| `bom` / `bom_items` | Bill of Materials (estrutura de produto) |
+| `structure` | Estrutura de itens com hierarquia pai/filho |
+| `machine` | Tipos de máquina, máquinas e configuração de tempo por item |
+| `mrp_calculation` | Cálculo MRP — explosão de demanda, sugestões de ordens e exceções |
+| `industrial_calendar` | Calendário industrial com dias úteis |
+| `item_calendar_promise` | Promessa de entrega via calendário |
+| `independent_demand` | Demanda independente |
+| `delivery_promise_params` | Parâmetros de promessa de entrega |
+| `delivery_reschedule` | Reprogramação de entrega |
+| `allocation_base` | Base de alocação |
+| `cost_center` | Centro de custo |
+| `employee` | Funcionários |
+| `enterprise` | Empresa |
+| `warehouse` | Armazém |
+| `user` | Usuários e autenticação |
+| `questions` / `questions_options` | Perguntas configuráveis para itens |
+| `modifier` | Modificadores de produto |
+| `component` | Componentes |
 
-**Exemplo prático:**
-> A Serra Fita #1 tem capacidade de **50 peças por hora** com **eficiência de 90%** — ou seja, na prática ela entrega **45 peças por hora** considerando paradas, ajustes e variações normais de operação.
+## API — Endpoints
 
-A eficiência existe porque nenhuma máquina roda 100% do tempo disponível — há micro-paradas, aquecimento, variação de operador, entre outros fatores.
+Todos os endpoints abaixo exigem autenticação JWT. As roles aceitas são `ADMIN` e `USER`.
 
----
+### Autenticação
+```
+POST /users/register
+POST /users/login
+```
 
-### 3. Configuração de Tempo por Item e por Máquina
+### Itens
+```
+POST   /api/items/create
+GET    /api/items/search/{code}
+POST   /api/items/mask/generate
+POST   /api/items/structure/create
+PUT    /api/items/structure/update
+GET    /api/items/structure/resolve/{itemCode}
+```
 
-Este é o **cadastro mais importante** para o cálculo de produção. Aqui é definido, para cada produto fabricado em cada máquina, quanto tempo de produção é necessário.
+### Máquinas
+```
+POST   /api/machine/create
+GET    /api/machine/list
+GET    /api/machine/{code}
+POST   /api/machine/types/create
+GET    /api/machine/types/list
+GET    /api/machine/types/{code}
+POST   /api/machine/item-time/configure
+GET    /api/machine/item-time/{item_code}/{machine_code}
+```
 
-**O que é configurado:**
+### MRP
+```
+POST   /api/mrp-calculation/run
+GET    /api/mrp-calculation/profile/{item_code}/{plan_code}
+POST   /api/mrp-calculation/configured-rules
+GET    /api/mrp-calculation/configured-rules/{item_code}
+```
 
-| Campo | O que significa |
-|---|---|
-| **Item** | Qual produto está sendo configurado |
-| **Variante (máscara)** | Qual dimensão ou configuração específica do produto |
-| **Máquina** | Em qual máquina esse tempo foi medido |
-| **Tempo de produção** | Quanto tempo leva um ciclo de fabricação |
-| **Unidade do tempo** | Minutos, horas ou dias por ciclo |
-| **Quantidade base** | Quantas peças saem por ciclo |
-| **Tempo de setup** | Tempo para preparar a máquina antes de começar |
-| **Prioridade** | Qual máquina usar primeiro quando há opções |
+### Outros módulos
+```
+POST   /api/allocations/create
+GET    /api/allocations/list
 
----
+POST   /api/cost-center/create
+GET    /api/cost-center/list
+GET    /api/cost-center/{costCenterCode}
 
-## O conceito de Variante (máscara)
+GET    /api/delivery-promise-params/
+PUT    /api/delivery-promise-params/update
 
-Um mesmo produto pode ter **dimensões diferentes** — e cada dimensão pode ter um tempo de fabricação diferente. O sistema chama isso de **variante** (internamente chamada de máscara).
+POST   /api/delivery-reschedule/create
+GET    /api/delivery-reschedule/list/{sales_order_code}
 
-**Exemplo real — Mesa de escritório, item 2210:**
+POST   /api/independent-demand/create
+PUT    /api/independent-demand/update/{code}
+DELETE /api/independent-demand/delete/{code}
+GET    /api/independent-demand/list
+GET    /api/independent-demand/list-from-date/{date}
+GET    /api/independent-demand/list-by-item/{itemCode}
+GET    /api/independent-demand/get-by-code/{code}
 
-| Variante | Dimensões (C × L × A) | Tempo na Serra | Setup na Serra |
-|---|---|---|---|
-| Padrão (sem variante) | Configuração genérica | 5 min/peça | 10 min |
-| 130 × 240 × 234 | Grande | 8 min/peça | 20 min |
-| 60 × 80 × 75 | Pequena | 3 min/peça | 8 min |
+POST   /api/industrial-calendar/create
+GET    /api/industrial-calendar/month/{year}/{month}
+GET    /api/industrial-calendar/workdays/{year}/{month}
+```
 
-O setup maior para a mesa grande faz sentido: a máquina precisa ser reajustada, trocar gabaritos ou carregar um programa diferente — o que leva mais tempo do que para uma peça menor.
+## Módulo de Máquinas e Produção
 
-**Regra de funcionamento:**
-Quando o sistema vai calcular o tempo de produção de um pedido, ele busca a configuração exata daquela variante. Se não existir cadastro para aquela variante específica, ele usa a configuração padrão (sem variante).
+Gerencia como cada produto é fabricado, em qual máquina e quanto tempo leva.
 
----
-
-## Como o sistema calcula o tempo de produção
-
-Quando um pedido de produção entra no sistema, o cálculo funciona assim:
-
-### Passo a passo com exemplo:
-
-**Pedido:** 73 chapas dobradas, variante "250×120"
-**Máquina:** Prensa Hidráulica #2
-
-**Configuração cadastrada:**
-- Tempo por ciclo: 4 minutos
-- Quantidade por ciclo (lote): 10 chapas
-- Setup: 15 minutos
+**Cadastros:**
+- **Tipo de Máquina** — categoriza equipamentos (corte, solda, pintura, torno etc.)
+- **Máquina** — define capacidade, unidade, período e eficiência de cada equipamento
+- **Configuração de Tempo por Item/Máquina** — tempo de ciclo, quantidade por lote, setup e prioridade por variante de produto
 
 **Cálculo:**
-
 ```
-Número de ciclos = arredondar para cima (73 ÷ 10) = 8 ciclos
-                   (o 8º ciclo processa só 3 chapas, mas ainda ocupa a máquina)
-
-Tempo de fabricação = 8 ciclos × 4 minutos = 32 minutos
-Tempo de setup      = 15 minutos (uma vez só, no início)
-
-Tempo total         = 32 + 15 = 47 minutos
+ciclos = ceil(quantidade_pedido / quantidade_por_lote)
+tempo_fabricacao = ciclos × tempo_por_ciclo
+tempo_total = tempo_fabricacao + tempo_setup
 ```
 
-O **arredondamento para cima** no número de ciclos é fundamental: se a prensa faz 10 chapas por golpe e o pedido precisa de 73, o último golpe vai processar apenas 3 — mas a máquina foi ocupada por um ciclo completo. O sistema considera isso corretamente.
+O sistema converte automaticamente unidades entre item e máquina (kg↔t, mm↔m, m³↔L) e sinaliza gargalos de capacidade.
 
----
+## Módulo MRP (Material Requirements Planning)
 
-## Normalização de períodos
+Implementa a explosão de demanda multi-nível (Low-Level Code) para geração de ordens de compra e produção.
 
-O sistema aceita tempos cadastrados em **minutos, horas ou dias** e converte tudo automaticamente na hora do cálculo.
+**Fluxo do cálculo (`POST /api/mrp-calculation/run`):**
+1. Carrega demandas independentes e pedidos de venda ativos
+2. Explode a estrutura de produto (BOM) nível a nível via LLC
+3. Considera estoque disponível, ordens firmes e parâmetros de reposição
+4. Calcula datas de início via calendário industrial e lead time de máquina
+5. Persiste:
+   - `mrp_item_profiles` — perfil de necessidades por item/período
+   - `mrp_planned_suggestions` — sugestões de ordens planejadas
+   - `mrp_exception_messages` — mensagens de exceção (atrasos, gargalos, falta de configuração)
+6. Registra log de execução em `mrp_calculation_logs` com status, contadores e erros
 
-| Cadastrado como | Sistema converte para |
-|---|---|
-| 2 horas por lote | 120 minutos por lote |
-| 1 dia por lote | 480 minutos por lote (1 turno de 8h) |
-| 30 minutos por lote | 30 minutos por lote |
+**Regras configuráveis por item (`configured_item_rules`):**
+Permite parametrizar, por item, comportamentos de arredondamento de lote, lote mínimo, múltiplo de lote e outras regras de planejamento diretamente via API.
 
-Isso permite que cada produto seja cadastrado na unidade que faz mais sentido operacionalmente — sem necessidade de padronizar manualmente.
+## Como executar
 
----
+```bash
+# Configurar variáveis de ambiente (DATABASE_URL, JWT_SECRET, etc.)
+cp .env.example .env
 
-## Compatibilidade de unidades entre item e máquina
+# Rodar migrações
+make migrate-up
 
-O sistema verifica automaticamente se a unidade de medida do produto é compatível com a unidade de capacidade da máquina — e converte quando faz sentido.
+# Gerar código SQLC (se necessário)
+sqlc generate
 
-**Conversões aceitas automaticamente:**
+# Iniciar o servidor
+go run api/*.go
+```
 
-| Unidade do produto | Unidade da máquina | Conversão |
-|---|---|---|
-| Quilograma (kg) | Tonelada (t) | 1 kg = 0,001 t |
-| Tonelada (t) | Quilograma (kg) | 1 t = 1.000 kg |
-| Milímetro (mm) | Metro (m) | 1 mm = 0,001 m |
-| Metro cúbico (m³) | Litros | 1 m³ = 1.000 L |
-| Peças | Unidades | equivalente |
-
-**Incompatibilidades bloqueadas:**
-O sistema impede configurações sem sentido físico — por exemplo, cadastrar um produto medido em **quilogramas** numa máquina configurada em **metros**. Isso evita erros de cadastro que poderiam gerar cálculos incorretos de prazo e capacidade.
-
----
-
-## Verificação de gargalo
-
-Ao calcular o tempo de produção, o sistema também verifica se a máquina tem **capacidade suficiente** para atender a demanda dentro do tempo calculado.
-
-Se a velocidade exigida pelo pedido for maior do que a capacidade efetiva da máquina, o sistema sinaliza um **gargalo de produção** — indicando que pode ser necessário redistribuir a carga, fazer hora extra ou utilizar uma máquina alternativa.
-
----
-
-## Prioridade entre máquinas
-
-Um produto pode ser fabricado em mais de uma máquina. O sistema usa o campo **prioridade** para decidir automaticamente qual usar:
-
-- Prioridade **1** → máquina preferida (normalmente a mais rápida ou de menor custo)
-- Prioridade **2** → alternativa quando a primeira não está disponível
-- Prioridade **3** → terceira opção, e assim por diante
-
-Isso permite que o planejamento seja feito de forma automática sem intervenção manual a cada pedido.
-
----
-
-## Resumo do fluxo
+## Estrutura de arquivos relevantes
 
 ```
-Tipo de Máquina
-  └── agrupa as máquinas por categoria (corte, solda, pintura...)
-
-Máquina
-  └── define capacidade real + eficiência de cada equipamento
-
-Configuração de Tempo (por item + variante + máquina)
-  └── define tempo de ciclo, quantidade por ciclo e setup
-  └── o sistema seleciona a configuração correta pela variante do produto
-  └── se não houver variante específica, usa a configuração padrão
-
-Cálculo de Produção (MRP)
-  └── converte unidades automaticamente
-  └── calcula número de ciclos (arredondando para cima)
-  └── soma setup + fabricação = tempo total
-  └── verifica se a máquina é gargalo
-  └── retorna prazo de entrega em minutos, horas e dias
+api/                    # Ponto de entrada e wiring de dependências
+internal/
+  domain/mrp_calculation/
+    entity/             # MRPItemProfile, PlannedOrderSuggestion, MRPExceptionMessage
+    repository/         # Interface MRPCalculationRepository
+    service/            # Lógica MRP (explosão LLC, cálculo de datas)
+  application/usecase/mrp_calculation_uc/
+    calculate.go        # RunMRPCalculationUseCase
+    get_profile.go      # GetItemProfileUseCase
+    configured_rules.go # ManageConfiguredItemRulesUseCase
+  infrastructure/database/sqlc/
+    mrp_calculation.sql.go   # Queries geradas pelo SQLC
+    mrp_exception_messages.go # Queries de exceções (manual, tipo em models.go)
+    mrp_bulk.go              # ListLatestStockSnapshots (manual)
+  migrations/
+    000076_init.up.sql  # Tabelas MRP (mrp_calculation_logs, mrp_planned_suggestions, etc.)
+    000077_init.up.sql  # configured_item_rules
 ```

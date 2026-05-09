@@ -33,7 +33,7 @@ func (h *BomItemHandler) Create(
 		case errors.Is(err, errorsuc.ErrCreateBomItemNotFound):
 			h.NotFound(w, "related resource not found")
 		default:
-			h.InternalError(w, err)
+			h.InternalError(w, r, err)
 		}
 		return
 	}
