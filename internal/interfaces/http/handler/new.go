@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 )
 
 func NewCreateProductHandler(
@@ -267,5 +268,37 @@ func NewItemCalendarPromiseHandler(
 ) *ItemCalendarPromiseHandler {
 	return &ItemCalendarPromiseHandler{
 		uc: uc,
+	}
+}
+
+func NewMachineHandler(
+	createMachineUC *machine_uc.CreateMachineUseCase,
+	listMachinesUC *machine_uc.ListMachinesUseCase,
+	getMachineUC *machine_uc.GetMachineUseCase,
+
+	createTypeUC *machine_uc.CreateMachineTypeUseCase,
+	listTypesUC *machine_uc.ListMachineTypesUseCase,
+	getMachineTypeUC *machine_uc.GetMachineTypeUseCase,
+
+	createItemTimeUC *machine_uc.CreateItemMachineTimeUseCase,
+	listItemTimesUC *machine_uc.ListItemMachineTimesUseCase,
+	//getItemTimeUC *machine_uc.GetItemMachineTimeUseCase,
+
+	scheduleUC *machine_uc.ScheduleMachineUseCase,
+) *MachineHandler {
+	return &MachineHandler{
+		createMachineUC: createMachineUC,
+		listMachinesUC:  listMachinesUC,
+		getMachineUC:    getMachineUC,
+
+		createTypeUC:     createTypeUC,
+		listTypesUC:      listTypesUC,
+		getMachineTypeUC: getMachineTypeUC,
+
+		createItemTimeUC: createItemTimeUC,
+		listItemTimesUC:  listItemTimesUC,
+		//getItemTimeUC:    getItemTimeUC,
+
+		scheduleUC: scheduleUC,
 	}
 }

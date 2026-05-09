@@ -178,3 +178,67 @@ func (a *AuthService) CanManageIndustrialCalendar(ctx context.Context) bool {
 func (a *AuthService) CanManageItemCalendarPromise(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanCreateItemTimeMachine(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanCreateMachine(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanCreateType(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanListItemMachineTimes(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanListMachines(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanListTypes(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanSchedule(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanUpdateMachineType(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanGetMachineType(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanDeleteMachineType(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanUpdateMachine(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanGetMachine(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanListByType(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanDeleteMachine(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanGetItemMachineTime(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) ListByMachine(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

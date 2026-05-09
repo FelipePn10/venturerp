@@ -44,4 +44,20 @@ type AuthService interface {
 	CanDeleteIndependentDemand(ctx context.Context) bool
 	CanManageIndustrialCalendar(ctx context.Context) bool
 	CanManageItemCalendarPromise(ctx context.Context) bool
+	CanCreateItemTimeMachine(ctx context.Context) bool
+	CanCreateMachine(ctx context.Context) bool
+	CanCreateType(ctx context.Context) bool
+	CanListItemMachineTimes(ctx context.Context) bool
+	CanListMachines(ctx context.Context) bool
+	CanListTypes(ctx context.Context) bool
+	CanSchedule(ctx context.Context) bool
+	CanUpdateMachineType(ctx context.Context) bool
+	CanGetMachineType(ctx context.Context) bool
+	CanDeleteMachineType(ctx context.Context) bool
+	CanUpdateMachine(ctx context.Context) bool
+	CanGetMachine(ctx context.Context) bool
+	CanListByType(ctx context.Context) bool
+	CanDeleteMachine(ctx context.Context) bool
+	CanGetItemMachineTime(ctx context.Context) bool
+	ListByMachine(ctx context.Context) bool
 }

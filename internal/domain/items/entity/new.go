@@ -25,7 +25,6 @@ func NewItem(
 	warehouse Warehouse,
 	engineering Engineering,
 	planning Planning,
-	planners Planners,
 	supplies Supplies,
 	createdBy uuid.UUID,
 ) (*Item, error) {
@@ -47,7 +46,6 @@ func NewItem(
 		Warehouse:   warehouse,
 		Engineering: engineering,
 		Planning:    planning,
-		Planners:    planners,
 		Supplies:    supplies,
 		Situation:   situation,
 		Health:      health,

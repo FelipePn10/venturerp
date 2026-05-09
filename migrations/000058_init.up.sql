@@ -398,8 +398,8 @@ CREATE TABLE machines (
 CREATE INDEX idx_machines_type ON machines(machine_type_id);
 CREATE INDEX idx_machines_code ON machines(code);
 
--- 20. ITEM-MACHINE ASSOCIATION (production time per item per machine)
-CREATE TABLE item_machine_times (
+-- 20. ITEM-MACHINE ASSOCIATION (production time per item per machine_uc)
+CREATE TABLE IF NOT EXISTS item_machine_times (
                                     id                  BIGSERIAL PRIMARY KEY,
                                     item_code           BIGINT NOT NULL,
                                     mask                VARCHAR(200) NOT NULL DEFAULT '',
@@ -407,7 +407,6 @@ CREATE TABLE item_machine_times (
                                     production_time     NUMERIC(15,4) NOT NULL, -- tempo em minutos por unidade
                                     setup_time          NUMERIC(10,2) NOT NULL DEFAULT 0,
                                     priority            INT NOT NULL DEFAULT 0, -- prioridade na maquina
-                                    is_active           BOOLEAN NOT NULL DEFAULT TRUE,
                                     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                                     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                                     UNIQUE(item_code, mask, machine_id)
@@ -489,7 +488,7 @@ CREATE TABLE mrp_calculation_logs (
 
 CREATE INDEX idx_mrp_logs_plan ON mrp_calculation_logs(plan_id);
 
--- 24. MACHINE SCHEDULE (daily production queue per machine)
+-- 24. MACHINE SCHEDULE (daily production queue per machine_uc)
 CREATE TABLE machine_schedules (
                                    id              BIGSERIAL PRIMARY KEY,
                                    machine_id      BIGINT NOT NULL REFERENCES machines(id),

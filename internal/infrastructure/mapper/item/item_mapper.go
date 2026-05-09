@@ -3,7 +3,6 @@ package mapper
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
-	machineentity "github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 )
 
 func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
@@ -18,7 +17,6 @@ func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
 		toWarehouse(d.Warehouse),
 		toEngineering(d.Engineering),
 		toPlanning(d.Planning),
-		toPlanners(d.Planners),
 		toSupplies(d.Supplies),
 		d.CreatedBy,
 	)
@@ -26,8 +24,8 @@ func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
 
 func toPDM(d request.PDMDTO) itementity.PDM {
 	return itementity.PDM{
-		GroupID:              d.GroupID,
-		ModifierID:           d.ModifierID,
+		GroupCode:            d.GroupCode,
+		ModifierCode:         d.ModifierCode,
 		Attributes:           d.Attributes,
 		DescriptionTechnique: d.DescriptionTechnique,
 	}
@@ -35,7 +33,7 @@ func toPDM(d request.PDMDTO) itementity.PDM {
 
 func toWarehouse(d request.WarehouseDTO) itementity.Warehouse {
 	return itementity.Warehouse{
-		WarehouseID:                     d.WarehouseID,
+		WarehouseCode:                   d.WarehouseCode,
 		UnitOfMeasurement:               d.UnitOfMeasurement,
 		AutomaticLow:                    d.AutomaticLow,
 		CyclicalCountConfig:             d.CyclicalCountConfig,
@@ -60,28 +58,8 @@ func toPlanning(d request.PlanningDTO) itementity.Planning {
 		TypeMRP:      d.TypeMRP,
 		LLC:          d.LLC,
 		ReorderPoint: d.ReorderPoint,
-		TankID:       d.TankID,
+		TankCode:     d.TankCode,
 		Ghost:        d.Ghost,
-	}
-}
-
-func toPlanners(d request.PlannersDTO) itementity.Planners {
-	var machines *[]machineentity.MachineUsage
-
-	if d.Machines != nil {
-		list := make([]machineentity.MachineUsage, len(*d.Machines))
-		for i, m := range *d.Machines {
-			list[i] = machineentity.MachineUsage{
-				MachineID: m.MachineID,
-				UsageTime: m.UsageTime,
-			}
-		}
-		machines = &list
-	}
-
-	return itementity.Planners{
-		EmployeeID: d.EmployeeID,
-		MachinesID: machines,
 	}
 }
 

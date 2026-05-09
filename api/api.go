@@ -27,6 +27,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	itemCalendarPromise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_calendar_promise"
 	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_question"
+	machine "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
@@ -217,6 +218,35 @@ func (app *application) mount() chi.Router {
 	itemCalendarPromiseUC := usecase.NewManageItemCalendarPromiseUseCase(itemCalendarPromise, authService)
 	itemCalendarPromiseHandler := handler.NewItemCalendarPromiseHandler(itemCalendarPromiseUC)
 
+	// machine
+	machineRepo := machine.NewMachineRepositorySQLC(queries)
+	machineUC := usecase.NewCreateMachineUseCase(machineRepo, authService)
+	machineListUC := usecase.NewListMachinesUseCase(machineRepo, authService)
+	machineGetByCodeUC := usecase.NewGetMachineUseCase(machineRepo, authService)
+	//type
+	machineTypeCreateUC := usecase.NewCreateMachineTypeUseCase(machineRepo, authService)
+	machineListTypesUC := usecase.NewListMachineTypesUseCase(machineRepo, authService)
+	machineTypeGetByCodeUC := usecase.NewGetMachineTypeUseCase(machineRepo, authService)
+	//item times
+	machineItemTimeUC := usecase.NewCreateItemMachineTimeUseCase(machineRepo, authService)
+	machineListItemTimeUC := usecase.NewListItemMachineTimesUseCase(machineRepo, authService)
+	//machineGetItemTimeUC := usecase.NewGetItemMachineTimeUseCase(machineRepo, authService)
+	// schedule
+	scheduleUC := usecase.NewScheduleMachineUseCase(machineRepo, authService)
+
+	machineHandler := handler.NewMachineHandler(
+		machineUC,
+		machineListUC,
+		machineGetByCodeUC,
+		machineTypeCreateUC,
+		machineListTypesUC,
+		machineTypeGetByCodeUC,
+		machineItemTimeUC,
+		machineListItemTimeUC,
+		//machineGetItemTimeUC,
+		scheduleUC,
+	)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -264,6 +294,26 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", industrialCalendarHandler.CreateDay)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/month/{year}/{month}", industrialCalendarHandler.GetMonth)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/workdays/{year}/{month}", industrialCalendarHandler.GetWorkdays)
+		})
+		r.Route("/api/machine", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateMachine)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListMachines)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", machineHandler.GetMachineByCode)
+			r.Route("/types", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateType)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListTypes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", machineHandler.GetTypeByCode)
+			})
+			r.Route("/time", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateItemTime)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListItemTimes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}", machineHandler.GetItemTime)
+			})
+			r.Route("/schedule", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateSchedule)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListSchedules)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}", machineHandler.GetSchedule)
+			})
 		})
 		r.Route("/api/item-calendar-promise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemCalendarPromiseHandler.UpsertDay)

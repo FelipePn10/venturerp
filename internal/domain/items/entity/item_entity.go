@@ -6,7 +6,6 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
-	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/google/uuid"
 )
 
@@ -31,8 +30,6 @@ type Item struct {
 	Engineering Engineering
 	// Planejamento
 	Planning Planning
-	// Planejadores
-	Planners Planners
 	// Suprimentos
 	Supplies Supplies
 	//Status    types.Status
@@ -43,16 +40,16 @@ type Item struct {
 
 // PDM
 type PDM struct {
-	GroupID    int32                   // Grupo de um item, ex: CHAPAS, AÇÕS etc
-	ModifierID int32                   // Compor a descrição do item, ex: Grupo: CHAPAS Modificador: Chapa Aço Retax
-	Attributes []valueobject.Attribute // "nome" para compor, ex: Grupo: CHAPAS Modificador: Chapa Aço Retax Nome: Retax 5MM
+	GroupCode    int32                   // Grupo de um item, ex: CHAPAS, AÇÕS etc
+	ModifierCode int32                   // Compor a descrição do item, ex: Grupo: CHAPAS Modificador: Chapa Aço Retax
+	Attributes   []valueobject.Attribute // "nome" para compor, ex: Grupo: CHAPAS Modificador: Chapa Aço Retax Nome: Retax 5MM
 	// PDM gera a descrição tecnica:
 	DescriptionTechnique string
 }
 
 // Pastas
 type Warehouse struct {
-	WarehouseID                     int
+	WarehouseCode                   int
 	UnitOfMeasurement               types.TypeUnitOfMeasurementItem // Qual unidade de medida será armazenada para esse item
 	AutomaticLow                    bool                            // Faz baixa autom?
 	CyclicalCountConfig             *valueobject.CyclicalCountConfig
@@ -76,13 +73,8 @@ type Planning struct {
 	TypeMRP      types.TypeMRPItem
 	LLC          int // niveis 1 para o produto final, 2 há 8 para estruras e conjuntos e 9 sendo para matérias primas
 	ReorderPoint *valueobject.ReorderPoint
-	TankID       *int // Setor onde é feito
+	TankCode     *int // Setor onde é feito
 	Ghost        bool
-}
-
-type Planners struct {
-	EmployeeID *int32                 // Funcionário
-	MachinesID *[]entity.MachineUsage // maquina
 }
 
 type Supplies struct {

@@ -13,58 +13,63 @@ import (
 
 const createItem = `-- name: CreateItem :one
 INSERT INTO items (
-    warehouse_id,
+    warehouse_code,
     code,
     complement,
     nature,
     inherit,
     situation,
     health,
-    pdm_group_id,
-    pdm_modifier_id,
+
+    pdm_group_code,
+    pdm_modifier_code,
     pdm_attributes,
     pdm_description_technique,
+
     warehouse_unit_of_measurement,
     warehouse_automatic_low,
     warehouse_cyclical_count_config,
     warehouse_minimum_stock,
     warehouse_avg_monthly_consumption_manual,
-    engineering_item_base_cod,
+
+    engineering_item_base_code,
     engineering_weight,
     engineering_dimensions,
     engineering_type,
     engineering_type_struct,
     engineering_oem,
+
     planning_type_mrp,
     planning_llc,
     planning_reorder_point,
-    planning_tank_id,
+    planning_tank_code,
     planning_ghost,
-    planner_employee_id,
+
     supplies_type_of_use,
+
     created_by,
     created_at
 ) VALUES (
-    $1,  $2,  $3,  $4,  $5,
-    $6,  $7,  $8,  $9,  $10,
-    $11, $12, $13, $14, $15,
-    $16, $17, $18, $19, $20,
-    $21, $22, $23, $24, $25,
-    $26, $27, $28, $29, $30, NOW()
-)
-RETURNING id, warehouse_id, code, health, created_by, created_at, complement, nature, situation, pdm_group_id, pdm_modifier_id, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_cod, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_id, planning_ghost, planner_employee_id, supplies_type_of_use, inherit
+             $1,  $2,  $3,  $4,  $5,
+             $6,  $7,  $8,  $9,  $10,
+             $11, $12, $13, $14, $15,
+             $16, $17, $18, $19, $20,
+             $21, $22, $23, $24, $25,
+             $26, $27, $28, $29, NOW()
+         )
+    RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, inherit
 `
 
 type CreateItemParams struct {
-	WarehouseID                          int32
+	WarehouseCode                        int64
 	Code                                 int64
 	Complement                           pgtype.Text
 	Nature                               int16
 	Inherit                              bool
 	Situation                            int16
 	Health                               HealthEnum
-	PdmGroupID                           int32
-	PdmModifierID                        int32
+	PdmGroupCode                         int64
+	PdmModifierCode                      int64
 	PdmAttributes                        []byte
 	PdmDescriptionTechnique              string
 	WarehouseUnitOfMeasurement           UnitOfMeasurementEnum
@@ -72,7 +77,7 @@ type CreateItemParams struct {
 	WarehouseCyclicalCountConfig         []byte
 	WarehouseMinimumStock                int32
 	WarehouseAvgMonthlyConsumptionManual *int32
-	EngineeringItemBaseCod               *int32
+	EngineeringItemBaseCode              *int64
 	EngineeringWeight                    []byte
 	EngineeringDimensions                []byte
 	EngineeringType                      int16
@@ -81,24 +86,23 @@ type CreateItemParams struct {
 	PlanningTypeMrp                      int16
 	PlanningLlc                          int32
 	PlanningReorderPoint                 []byte
-	PlanningTankID                       *int32
+	PlanningTankCode                     *int64
 	PlanningGhost                        bool
-	PlannerEmployeeID                    *int32
 	SuppliesTypeOfUse                    int16
 	CreatedBy                            pgtype.UUID
 }
 
 func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, error) {
 	row := q.db.QueryRow(ctx, createItem,
-		arg.WarehouseID,
+		arg.WarehouseCode,
 		arg.Code,
 		arg.Complement,
 		arg.Nature,
 		arg.Inherit,
 		arg.Situation,
 		arg.Health,
-		arg.PdmGroupID,
-		arg.PdmModifierID,
+		arg.PdmGroupCode,
+		arg.PdmModifierCode,
 		arg.PdmAttributes,
 		arg.PdmDescriptionTechnique,
 		arg.WarehouseUnitOfMeasurement,
@@ -106,7 +110,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		arg.WarehouseCyclicalCountConfig,
 		arg.WarehouseMinimumStock,
 		arg.WarehouseAvgMonthlyConsumptionManual,
-		arg.EngineeringItemBaseCod,
+		arg.EngineeringItemBaseCode,
 		arg.EngineeringWeight,
 		arg.EngineeringDimensions,
 		arg.EngineeringType,
@@ -115,16 +119,15 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		arg.PlanningTypeMrp,
 		arg.PlanningLlc,
 		arg.PlanningReorderPoint,
-		arg.PlanningTankID,
+		arg.PlanningTankCode,
 		arg.PlanningGhost,
-		arg.PlannerEmployeeID,
 		arg.SuppliesTypeOfUse,
 		arg.CreatedBy,
 	)
 	var i Item
 	err := row.Scan(
 		&i.ID,
-		&i.WarehouseID,
+		&i.WarehouseCode,
 		&i.Code,
 		&i.Health,
 		&i.CreatedBy,
@@ -132,8 +135,8 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		&i.Complement,
 		&i.Nature,
 		&i.Situation,
-		&i.PdmGroupID,
-		&i.PdmModifierID,
+		&i.PdmGroupCode,
+		&i.PdmModifierCode,
 		&i.PdmAttributes,
 		&i.PdmDescriptionTechnique,
 		&i.WarehouseUnitOfMeasurement,
@@ -141,7 +144,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		&i.WarehouseCyclicalCountConfig,
 		&i.WarehouseMinimumStock,
 		&i.WarehouseAvgMonthlyConsumptionManual,
-		&i.EngineeringItemBaseCod,
+		&i.EngineeringItemBaseCode,
 		&i.EngineeringWeight,
 		&i.EngineeringDimensions,
 		&i.EngineeringType,
@@ -150,46 +153,17 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		&i.PlanningTypeMrp,
 		&i.PlanningLlc,
 		&i.PlanningReorderPoint,
-		&i.PlanningTankID,
+		&i.PlanningTankCode,
 		&i.PlanningGhost,
-		&i.PlannerEmployeeID,
+		&i.PlannerEmployeeCode,
 		&i.SuppliesTypeOfUse,
 		&i.Inherit,
 	)
 	return i, err
 }
 
-const createItemMachineUsage = `-- name: CreateItemMachineUsage :one
-INSERT INTO item_machine_usages (
-    item_id,
-    machine_id,
-    usage_time
-) VALUES (
-    $1, $2, $3
-)
-RETURNING id, item_id, machine_id, usage_time
-`
-
-type CreateItemMachineUsageParams struct {
-	ItemID    int64
-	MachineID int32
-	UsageTime int32
-}
-
-func (q *Queries) CreateItemMachineUsage(ctx context.Context, arg CreateItemMachineUsageParams) (ItemMachineUsage, error) {
-	row := q.db.QueryRow(ctx, createItemMachineUsage, arg.ItemID, arg.MachineID, arg.UsageTime)
-	var i ItemMachineUsage
-	err := row.Scan(
-		&i.ID,
-		&i.ItemID,
-		&i.MachineID,
-		&i.UsageTime,
-	)
-	return i, err
-}
-
 const findItemByCode = `-- name: FindItemByCode :one
-SELECT id, warehouse_id, code, health, created_by, created_at, complement, nature, situation, pdm_group_id, pdm_modifier_id, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_cod, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_id, planning_ghost, planner_employee_id, supplies_type_of_use, inherit
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, inherit
 FROM items
 WHERE code = $1
 `
@@ -199,7 +173,7 @@ func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) 
 	var i Item
 	err := row.Scan(
 		&i.ID,
-		&i.WarehouseID,
+		&i.WarehouseCode,
 		&i.Code,
 		&i.Health,
 		&i.CreatedBy,
@@ -207,8 +181,8 @@ func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) 
 		&i.Complement,
 		&i.Nature,
 		&i.Situation,
-		&i.PdmGroupID,
-		&i.PdmModifierID,
+		&i.PdmGroupCode,
+		&i.PdmModifierCode,
 		&i.PdmAttributes,
 		&i.PdmDescriptionTechnique,
 		&i.WarehouseUnitOfMeasurement,
@@ -216,7 +190,7 @@ func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) 
 		&i.WarehouseCyclicalCountConfig,
 		&i.WarehouseMinimumStock,
 		&i.WarehouseAvgMonthlyConsumptionManual,
-		&i.EngineeringItemBaseCod,
+		&i.EngineeringItemBaseCode,
 		&i.EngineeringWeight,
 		&i.EngineeringDimensions,
 		&i.EngineeringType,
@@ -225,9 +199,9 @@ func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) 
 		&i.PlanningTypeMrp,
 		&i.PlanningLlc,
 		&i.PlanningReorderPoint,
-		&i.PlanningTankID,
+		&i.PlanningTankCode,
 		&i.PlanningGhost,
-		&i.PlannerEmployeeID,
+		&i.PlannerEmployeeCode,
 		&i.SuppliesTypeOfUse,
 		&i.Inherit,
 	)
@@ -235,7 +209,8 @@ func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) 
 }
 
 const getItemByID = `-- name: GetItemByID :one
-SELECT id, warehouse_id, code, health, created_by, created_at, complement, nature, situation, pdm_group_id, pdm_modifier_id, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_cod, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_id, planning_ghost, planner_employee_id, supplies_type_of_use, inherit FROM items
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, inherit
+FROM items
 WHERE id = $1
 `
 
@@ -244,7 +219,7 @@ func (q *Queries) GetItemByID(ctx context.Context, id int64) (Item, error) {
 	var i Item
 	err := row.Scan(
 		&i.ID,
-		&i.WarehouseID,
+		&i.WarehouseCode,
 		&i.Code,
 		&i.Health,
 		&i.CreatedBy,
@@ -252,8 +227,8 @@ func (q *Queries) GetItemByID(ctx context.Context, id int64) (Item, error) {
 		&i.Complement,
 		&i.Nature,
 		&i.Situation,
-		&i.PdmGroupID,
-		&i.PdmModifierID,
+		&i.PdmGroupCode,
+		&i.PdmModifierCode,
 		&i.PdmAttributes,
 		&i.PdmDescriptionTechnique,
 		&i.WarehouseUnitOfMeasurement,
@@ -261,7 +236,7 @@ func (q *Queries) GetItemByID(ctx context.Context, id int64) (Item, error) {
 		&i.WarehouseCyclicalCountConfig,
 		&i.WarehouseMinimumStock,
 		&i.WarehouseAvgMonthlyConsumptionManual,
-		&i.EngineeringItemBaseCod,
+		&i.EngineeringItemBaseCode,
 		&i.EngineeringWeight,
 		&i.EngineeringDimensions,
 		&i.EngineeringType,
@@ -270,41 +245,11 @@ func (q *Queries) GetItemByID(ctx context.Context, id int64) (Item, error) {
 		&i.PlanningTypeMrp,
 		&i.PlanningLlc,
 		&i.PlanningReorderPoint,
-		&i.PlanningTankID,
+		&i.PlanningTankCode,
 		&i.PlanningGhost,
-		&i.PlannerEmployeeID,
+		&i.PlannerEmployeeCode,
 		&i.SuppliesTypeOfUse,
 		&i.Inherit,
 	)
 	return i, err
-}
-
-const listMachineUsagesByItem = `-- name: ListMachineUsagesByItem :many
-SELECT id, item_id, machine_id, usage_time FROM item_machine_usages
-WHERE item_id = $1
-`
-
-func (q *Queries) ListMachineUsagesByItem(ctx context.Context, itemID int64) ([]ItemMachineUsage, error) {
-	rows, err := q.db.Query(ctx, listMachineUsagesByItem, itemID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ItemMachineUsage
-	for rows.Next() {
-		var i ItemMachineUsage
-		if err := rows.Scan(
-			&i.ID,
-			&i.ItemID,
-			&i.MachineID,
-			&i.UsageTime,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
