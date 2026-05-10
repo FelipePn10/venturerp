@@ -62,4 +62,6 @@ type AuthService interface {
 	ListByMachine(ctx context.Context) bool
 	CanRunMRPCalculation(ctx context.Context) bool
 	CanConfiguredRulesMRP(ctx context.Context) bool
+	CanCreateOrderPriority(ctx context.Context) bool
+	CanOrderPriority(ctx context.Context) bool
 }

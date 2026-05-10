@@ -250,3 +250,11 @@ func (a *AuthService) CanRunMRPCalculation(ctx context.Context) bool {
 func (a *AuthService) CanConfiguredRulesMRP(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanCreateOrderPriority(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanOrderPriority(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

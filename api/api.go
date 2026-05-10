@@ -29,6 +29,7 @@ import (
 	machine "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
 	mrpCalculation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
+	op "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/order_priority"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
@@ -240,6 +241,13 @@ func (app *application) mount() chi.Router {
 	mrpCreateConfiguredRule := usecase.NewManageConfiguredItemRulesUseCase(mrpRepo, authService)
 	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule)
 
+	//order priority
+	opRepo := op.NewOrderPriorityRepositorySQLC(queries)
+	opCreateUC := usecase.NewCreateOrderPriorityUseCase(opRepo, authService)
+	opListUC := usecase.NewListOrderPrioritiesUseCase(opRepo, authService)
+	opFindUC := usecase.NewFindPriorityByValueUseCase(opRepo, authService)
+	opHandler := handler.NewOrderPriorityHandler(opCreateUC, opListUC, opFindUC)
+
 	// routes
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
@@ -321,6 +329,11 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{item_code}/{mask}/{year}/{month}/workdays", itemCalendarPromiseHandler.GetWorkdays)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{item_code}/{mask}/{year}/{month}/{day}", itemCalendarPromiseHandler.GetDay)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{item_code}/{mask}/{year}/{month}/{day}", itemCalendarPromiseHandler.DeleteDay)
+		})
+		r.Route("/api/order-priority", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", opHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", opHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/find/{value}", opHandler.FindByValue)
 		})
 		r.Route("/api/questions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/questions/create", questionCreateHandler.CreateQuestion)

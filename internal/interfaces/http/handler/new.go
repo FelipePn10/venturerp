@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 )
 
 func NewCreateProductHandler(
@@ -316,4 +317,12 @@ func NewMRPCalculationHandler(
 		getProfileUC:      getProfileUC,
 		configuredRulesUC: configuredRulesUC,
 	}
+}
+
+func NewOrderPriorityHandler(
+	createUC *order_priority_uc.CreateOrderPriorityUseCase,
+	listUC *order_priority_uc.ListOrderPrioritiesUseCase,
+	findUC *order_priority_uc.FindPriorityByValueUseCase,
+) *OrderPriorityHandler {
+	return &OrderPriorityHandler{createUC: createUC, listUC: listUC, findUC: findUC}
 }
