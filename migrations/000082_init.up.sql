@@ -1,0 +1,2 @@
+ALTER TABLE order_priorities
+    ADD COLUMN IF NOT EXISTS code BIGSERIAL NOT NULL;

@@ -9,6 +9,7 @@ import (
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
@@ -142,4 +143,10 @@ type MRPCalculationHandler struct {
 	runUC             *mrp_calculation_uc.RunMRPCalculationUseCase
 	getProfileUC      *mrp_calculation_uc.GetItemProfileUseCase
 	configuredRulesUC *mrp_calculation_uc.ManageConfiguredItemRulesUseCase
+}
+
+type OrderPriorityHandler struct {
+	createUC *order_priority_uc.CreateOrderPriorityUseCase
+	listUC   *order_priority_uc.ListOrderPrioritiesUseCase
+	findUC   *order_priority_uc.FindPriorityByValueUseCase
 }

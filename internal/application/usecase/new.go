@@ -12,8 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
-	mrpports "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
-	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
@@ -32,7 +31,10 @@ import (
 	item "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	machine "github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 	modifier "github.com/FelipePn10/panossoerp/internal/domain/modifier/repository"
+	mrpports "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
 	mrp_calculation "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
+	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
+	op "github.com/FelipePn10/panossoerp/internal/domain/order_priority/repository"
 	qst "github.com/FelipePn10/panossoerp/internal/domain/questions/repository"
 	qstops "github.com/FelipePn10/panossoerp/internal/domain/questions_options/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
@@ -663,6 +665,36 @@ func NewGetItemProfileUseCase(
 	auth ports.AuthService,
 ) *mrp_calculation_uc.GetItemProfileUseCase {
 	return &mrp_calculation_uc.GetItemProfileUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewCreateOrderPriorityUseCase(
+	repo op.OrderPriorityRepository,
+	auth ports.AuthService,
+) *order_priority_uc.CreateOrderPriorityUseCase {
+	return &order_priority_uc.CreateOrderPriorityUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewFindPriorityByValueUseCase(
+	repo op.OrderPriorityRepository,
+	auth ports.AuthService,
+) *order_priority_uc.FindPriorityByValueUseCase {
+	return &order_priority_uc.FindPriorityByValueUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListOrderPrioritiesUseCase(
+	repo op.OrderPriorityRepository,
+	auth ports.AuthService,
+) *order_priority_uc.ListOrderPrioritiesUseCase {
+	return &order_priority_uc.ListOrderPrioritiesUseCase{
 		Repo: repo,
 		Auth: auth,
 	}

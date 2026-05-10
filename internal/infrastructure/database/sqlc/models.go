@@ -102,6 +102,7 @@ func (ns NullWarehouseType) Value() (driver.Value, error) {
 	return string(ns.WarehouseType), nil
 }
 
+
 type CapacityPeriodEnum string
 
 const (
@@ -1142,16 +1143,12 @@ type DeliveryReschedule struct {
 }
 
 type Employee struct {
-	ID                 int64
-	Code               int64
-	Name               string
-	Situation          SituationEnum
-	ParticipatesBudget bool
-	TechnicalAssistant bool
-	Role               string
-	CreatedAt          pgtype.Timestamptz
-	UpdatedAt          pgtype.Timestamptz
-	CreatedBy          pgtype.UUID
+	ID           int64
+	EnterpriseID int32
+	Code         int32
+	Description  pgtype.Text
+	Name         string
+	CreatedAt    pgtype.Timestamptz
 }
 
 type Enterprise struct {
@@ -1451,6 +1448,7 @@ type OrderPriority struct {
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
 	CreatedBy     pgtype.UUID
+	Code          int64
 }
 
 type OverheadAllocation struct {
@@ -1704,8 +1702,8 @@ type Warehouse struct {
 	Description         string
 	CreatedAt           pgtype.Timestamp
 	CreatedBy           pgtype.UUID
-	Location            interface{}
-	Type                interface{}
+	Location            WarehouseLocation
+	Type                WarehouseType
 	Disposition         bool
 	ReservationsAllowed bool
 }
