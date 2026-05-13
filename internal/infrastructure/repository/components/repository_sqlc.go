@@ -2,9 +2,9 @@ package components
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/component/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
@@ -15,11 +15,8 @@ func (r *repositoryComponentsSQLC) Save(
 	params := sqlc.CreateComponentParams{
 		Name:      component.Name,
 		GroupCode: component.GroupCode,
-		Warehouse: sql.NullInt64{
-			Int64: component.Warehouse,
-			Valid: component.Warehouse > 0,
-		},
-		CreatedBy: component.CreatedBy,
+		Warehouse: &component.Warehouse,
+		CreatedBy: pgutil.ToPgUUID(component.CreatedBy),
 	}
 
 	_, err := r.q.CreateComponent(ctx, params)

@@ -8,16 +8,17 @@ type RunMRPCalculationDTO struct {
 }
 
 type CreatePlannedOrderDTO struct {
-	ItemCode       int64   `json:"item_code"`
-	Mask           *string `json:"mask,omitempty"`
-	Quantity       float64 `json:"quantity"`
-	OrderType      string  `json:"order_type"`
-	NeedDate       string  `json:"need_date"`
-	CostCenterCode *int64  `json:"cost_center_code,omitempty"`
-	EmployeeCode   *int64  `json:"employee_code,omitempty"`
-	MachineCode    *int64  `json:"machine_code,omitempty"`
-	ProductionTime float64 `json:"production_time"`
-	Notes          *string `json:"notes,omitempty"`
+	ItemCode       int64     `json:"item_code"`
+	Mask           *string   `json:"mask,omitempty"`
+	Quantity       float64   `json:"quantity"`
+	OrderType      string    `json:"order_type"`
+	NeedDate       string    `json:"need_date"`
+	CostCenterCode *int64    `json:"cost_center_code,omitempty"`
+	EmployeeCode   *int64    `json:"employee_code,omitempty"`
+	MachineCode    *int64    `json:"machine_code,omitempty"`
+	ProductionTime float64   `json:"production_time"`
+	Notes          *string   `json:"notes,omitempty"`
+	CreatedBy      uuid.UUID `json:"created_by"`
 }
 
 type FirmOrderDTO struct {

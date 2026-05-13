@@ -1,0 +1,2 @@
+ALTER TABLE public.planned_orders
+ADD COLUMN IF NOT EXISTS demand_code INTEGER NOT NULL

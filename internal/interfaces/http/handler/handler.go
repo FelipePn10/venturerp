@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
@@ -157,4 +158,11 @@ type OverheadAllocationHandler struct {
 	*security.BaseHandler
 	createUC *overhead_allocation_uc.CreateOverheadAllocationUseCase
 	listUC   *overhead_allocation_uc.ListOverheadAllocationsUseCase
+}
+
+type PlannedOrderHandler struct {
+	*security.BaseHandler
+	createUC *planned_order_uc.CreatePlannedOrderUseCase
+	listUC   *planned_order_uc.ListPlannedOrdersUseCase
+	firmUC   *planned_order_uc.FirmPlannedOrderUseCase
 }

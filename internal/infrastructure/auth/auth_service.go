@@ -266,3 +266,15 @@ func (a *AuthService) CanCreateOverheadAllocation(ctx context.Context) bool {
 func (a *AuthService) CanListOverheadAllocation(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanCreatePlannedOrder(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanReleaseOrder(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanListOrder(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

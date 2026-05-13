@@ -14,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	allocation "github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 	ast "github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 	bom "github.com/FelipePn10/panossoerp/internal/domain/bom/repository"
@@ -37,6 +38,7 @@ import (
 	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
 	op "github.com/FelipePn10/panossoerp/internal/domain/order_priority/repository"
 	over "github.com/FelipePn10/panossoerp/internal/domain/overhead_allocation/repository"
+	planned "github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
 	qst "github.com/FelipePn10/panossoerp/internal/domain/questions/repository"
 	qstops "github.com/FelipePn10/panossoerp/internal/domain/questions_options/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
@@ -717,6 +719,36 @@ func NewListOverheadAllocationsUseCase(
 	auth ports.AuthService,
 ) *overhead_allocation_uc.ListOverheadAllocationsUseCase {
 	return &overhead_allocation_uc.ListOverheadAllocationsUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewCreatePlannedOrderUseCase(
+	repo planned.PlannedOrderRepository,
+	auth ports.AuthService,
+) *planned_order_uc.CreatePlannedOrderUseCase {
+	return &planned_order_uc.CreatePlannedOrderUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewFirmPlannedOrderUseCase(
+	repo planned.PlannedOrderRepository,
+	auth ports.AuthService,
+) *planned_order_uc.FirmPlannedOrderUseCase {
+	return &planned_order_uc.FirmPlannedOrderUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListPlannedOrdersUseCase(
+	repo planned.PlannedOrderRepository,
+	auth ports.AuthService,
+) *planned_order_uc.ListPlannedOrdersUseCase {
+	return &planned_order_uc.ListPlannedOrdersUseCase{
 		Repo: repo,
 		Auth: auth,
 	}

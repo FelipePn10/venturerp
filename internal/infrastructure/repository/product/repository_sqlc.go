@@ -2,11 +2,13 @@ package product
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/product/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (r *repositoryProductSQLC) Save(
@@ -17,12 +19,12 @@ func (r *repositoryProductSQLC) Save(
 	params := sqlc.CreateProductParams{
 		ID:   product.ID,
 		Code: product.Code,
-		GroupCode: sql.NullString{
+		GroupCode: pgtype.Text{
 			String: product.GroupCode,
 			Valid:  product.GroupCode != "",
 		},
 		Name:      product.Name,
-		CreatedBy: product.CreatedBy,
+		CreatedBy: pgutil.ToPgUUID(product.CreatedBy),
 	}
 
 	dbProduct, err := r.q.CreateProduct(ctx, params)
@@ -35,8 +37,8 @@ func (r *repositoryProductSQLC) Save(
 		Code:      dbProduct.Code,
 		GroupCode: dbProduct.GroupCode.String,
 		Name:      dbProduct.Name,
-		CreatedBy: dbProduct.CreatedBy,
-		CreatedAt: dbProduct.CreatedAt,
+		CreatedBy: pgutil.FromPgUUID(dbProduct.CreatedBy),
+		CreatedAt: dbProduct.CreatedAt.Time,
 	}, nil
 
 }
@@ -54,7 +56,7 @@ func (r *repositoryProductSQLC) ExistsProductByCode(
 ) (bool, error) {
 	_, err := r.q.ExistsProductByCode(ctx, code)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
 		return false, err
