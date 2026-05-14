@@ -2,7 +2,9 @@ package employee
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/employee/entity"
@@ -16,16 +18,16 @@ type CreateEmployeeUseCase struct {
 
 func (uc *CreateEmployeeUseCase) Execute(
 	ctx context.Context,
-	employee *entity.Employee,
+	dto request.CreateEmployeeDTO,
 ) (*entity.Employee, error) {
 	if !uc.Auth.CanCreateEmployee(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	created, err := uc.Repo.Create(ctx, employee)
+	e, err := entity.NewEmployee(dto.Code, dto.Name, dto.Role, dto.ParticipatesBudget, dto.TechnicalAssistant, dto.CreatedBy)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("building employee: %w", err)
 	}
 
-	return created, nil
+	return uc.Repo.Create(ctx, e)
 }

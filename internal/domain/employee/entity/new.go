@@ -1,27 +1,31 @@
 package entity
 
-import "errors"
+import (
+	"errors"
+	"strings"
 
-var (
-	ErrInvalidCode = errors.New("invalid code")
+	"github.com/google/uuid"
 )
 
-func NewEmployee(
-	enterprise_id int,
-	code int,
-	name string,
-	description string,
-) (*Employee, error) {
+func NewEmployee(code int64, name, role string, participatesBudget, technicalAssistant bool, createdBy uuid.UUID) (*Employee, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("employee name is required")
+	}
 	if code <= 0 {
-		return nil, ErrInvalidCode
+		return nil, errors.New("employee code must be positive")
 	}
-
-	employee := &Employee{
-		EnterpriseID: enterprise_id,
-		Name:         name,
-		Description:  description,
-		Code:         code,
+	role = strings.TrimSpace(role)
+	if role == "" {
+		role = "PLANNER"
 	}
-
-	return employee, nil
+	return &Employee{
+		Code:               code,
+		Name:               name,
+		Situation:          EmployeeActive,
+		ParticipatesBudget: participatesBudget,
+		TechnicalAssistant: technicalAssistant,
+		Role:               role,
+		CreatedBy:          createdBy,
+	}, nil
 }

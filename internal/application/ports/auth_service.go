@@ -69,4 +69,27 @@ type AuthService interface {
 	CanCreatePlannedOrder(ctx context.Context) bool
 	CanReleaseOrder(ctx context.Context) bool
 	CanListOrder(ctx context.Context) bool
+	CanCreateSalesDivision(ctx context.Context) bool
+	CanListSalesDivisions(ctx context.Context) bool
+	CanGetSalesDivision(ctx context.Context) bool
+	CanUpdateSalesDivision(ctx context.Context) bool
+	CanDeleteSalesDivision(ctx context.Context) bool
+	CanCreateSalesForecast(ctx context.Context) bool
+	CanListSalesForecasts(ctx context.Context) bool
+	CanCreateForecastBlock(ctx context.Context) bool
+	CanListForecastBlocks(ctx context.Context) bool
+	CanCreateAppropriationTable(ctx context.Context) bool
+	CanListAppropriationTables(ctx context.Context) bool
+	CanManagePlanningParams(ctx context.Context) bool
+	CanCreateProductionPlan(ctx context.Context) bool
+	CanListProductionPlans(ctx context.Context) bool
+	CanUpdateProductionPlan(ctx context.Context) bool
+	CanDeleteProductionPlan(ctx context.Context) bool
+	CanCreateRestriction(ctx context.Context) bool
+	CanListRestrictions(ctx context.Context) bool
+	CanGetRestriction(ctx context.Context) bool
+	CanUpdateRestriction(ctx context.Context) bool
+	CanDeactivateRestriction(ctx context.Context) bool
+	CanListMRPExceptions(ctx context.Context) bool
+	CanDeleteSalesDivisionRecord(ctx context.Context) bool
 }

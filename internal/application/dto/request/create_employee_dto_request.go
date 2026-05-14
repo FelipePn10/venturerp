@@ -1,8 +1,21 @@
 package request
 
+import "github.com/google/uuid"
+
 type CreateEmployeeDTO struct {
-	EnterpriseID int    `json:"enterprise_id"`
-	Code         int    `json:"code"`
-	Name         string `json:"name"`
-	Description  string `json:"description"`
+	Code               int64     `json:"code"`
+	Name               string    `json:"name"`
+	Role               string    `json:"role"`
+	ParticipatesBudget bool      `json:"participates_budget"`
+	TechnicalAssistant bool      `json:"technical_assistant"`
+	CreatedBy          uuid.UUID `json:"created_by"`
+}
+
+type UpdateEmployeeDTO struct {
+	Code               int64  `json:"code"`
+	Name               string `json:"name"`
+	Role               string `json:"role"`
+	Situation          string `json:"situation"`
+	ParticipatesBudget bool   `json:"participates_budget"`
+	TechnicalAssistant bool   `json:"technical_assistant"`
 }

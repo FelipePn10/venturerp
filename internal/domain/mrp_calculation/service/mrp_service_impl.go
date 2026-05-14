@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
+	inddemandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 	inddemandrepo "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
 	calrepo "github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
@@ -14,6 +16,10 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
+	planentity "github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
+	planrepo "github.com/FelipePn10/panossoerp/internal/domain/production_plan/repository"
+	restrictionrepo "github.com/FelipePn10/panossoerp/internal/domain/restriction/repository"
+	forecastrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/repository"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	structrepo "github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
 )
@@ -27,16 +33,15 @@ const tooEarlyDays = 30
 const excessThreshold = 0.01
 
 type MRPServiceImpl struct {
-	MRPRepo    mrprepo.MRPCalculationRepository
-	StructRepo structrepo.ItemStructureRepository
-	DemandRepo inddemandrepo.IndependentDemandRepository
-	CalRepo    calrepo.IndustrialCalendarRepository
-	ItemRepo   itemrepo.ItemRepository
-
-	// SupplyPort is optional. When nil (planned_order not yet created), the MRP
-	// skips time-phased netting and exception-message generation — behaviour is
-	// identical to the pre-planned_order version. Wire it in once the module exists.
-	SupplyPort ports.PlannedOrderSupplyPort
+	MRPRepo         mrprepo.MRPCalculationRepository
+	StructRepo      structrepo.ItemStructureRepository
+	DemandRepo      inddemandrepo.IndependentDemandRepository
+	CalRepo         calrepo.IndustrialCalendarRepository
+	ItemRepo        itemrepo.ItemRepository
+	PlanRepo        planrepo.ProductionPlanRepository
+	ForecastRepo    forecastrepo.SalesForecastRepository
+	RestrictionRepo restrictionrepo.RestrictionRepository
+	SupplyPort      ports.PlannedOrderSupplyPort
 }
 
 func NewMRPService(
@@ -45,15 +50,21 @@ func NewMRPService(
 	demandRepo inddemandrepo.IndependentDemandRepository,
 	calRepo calrepo.IndustrialCalendarRepository,
 	itemRepo itemrepo.ItemRepository,
-	supplyPort ports.PlannedOrderSupplyPort, // pass nil until planned_order is created
+	supplyPort ports.PlannedOrderSupplyPort,
+	planRepo planrepo.ProductionPlanRepository,
+	forecastRepo forecastrepo.SalesForecastRepository,
+	restrictionRepo restrictionrepo.RestrictionRepository,
 ) MRPService {
 	return &MRPServiceImpl{
-		MRPRepo:    mrpRepo,
-		StructRepo: structRepo,
-		DemandRepo: demandRepo,
-		CalRepo:    calRepo,
-		ItemRepo:   itemRepo,
-		SupplyPort: supplyPort,
+		MRPRepo:         mrpRepo,
+		StructRepo:      structRepo,
+		DemandRepo:      demandRepo,
+		CalRepo:         calRepo,
+		ItemRepo:        itemRepo,
+		SupplyPort:      supplyPort,
+		PlanRepo:        planRepo,
+		ForecastRepo:    forecastRepo,
+		RestrictionRepo: restrictionRepo,
 	}
 }
 
@@ -83,22 +94,55 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	_ = s.MRPRepo.DeleteProfilesByPlan(ctx, planCode)
 	_ = s.MRPRepo.DeleteExceptionsByPlan(ctx, planCode)
 
-	demands, err := s.DemandRepo.List(ctx)
+	// Load the production plan to drive demand filtering and item scope.
+	plan, err := s.PlanRepo.GetByCode(ctx, planCode)
 	if err != nil {
-		errs["load_demands"] = err.Error()
+		errs["load_plan"] = err.Error()
 		return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
 	}
-	if len(demands) == 0 {
+
+	// Load independent demands unless the plan disables them.
+	var demands []*inddemandentity.IndependentDemand
+	if plan.IndependentDemands != planentity.IndependentDemandsNo {
+		demands, err = s.DemandRepo.List(ctx)
+		if err != nil {
+			errs["load_demands"] = err.Error()
+			return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+		}
+		if plan.IndependentDemands == planentity.IndependentDemandsFromDate {
+			demands = s.filterDemandsFromDate(demands, plan.Parameters)
+		}
+	}
+
+	// Load sales forecasts and merge as MRP inputs.
+	forecastInputs := s.loadForecastDemands(ctx, planCode)
+
+	if len(demands) == 0 && len(forecastInputs) == 0 {
 		return s.MRPRepo.FinishCalculation(ctx, log.Code, "COMPLETED", nil, 0, 0)
 	}
 
-	// Collect root items from independent demands.
-	seen := make(map[int64]bool, len(demands))
+	// Build allowed item set from plan classification / class item codes.
+	allowedItems := s.buildAllowedItemSet(plan)
+
+	// Collect root items from demands + forecasts (respecting plan scope).
+	seen := make(map[int64]bool)
 	var rootItems []int64
 	for _, d := range demands {
+		if !s.itemAllowed(allowedItems, d.ItemCode) {
+			continue
+		}
 		if !seen[d.ItemCode] {
 			seen[d.ItemCode] = true
 			rootItems = append(rootItems, d.ItemCode)
+		}
+	}
+	for _, fi := range forecastInputs {
+		if !s.itemAllowed(allowedItems, fi.ItemCode) {
+			continue
+		}
+		if !seen[fi.ItemCode] {
+			seen[fi.ItemCode] = true
+			rootItems = append(rootItems, fi.ItemCode)
 		}
 	}
 
@@ -122,13 +166,19 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	}
 
 	// Bulk load 4 (optional): firm supply from planned_order for time-phased netting.
+	allCodes := collectAllItemCodes(bomMap, rootItems)
 	var supplyMap map[int64][]ports.SupplyEntry
 	if s.SupplyPort != nil {
-		allCodes := collectAllItemCodes(bomMap, rootItems)
 		supplyMap, _ = s.SupplyPort.ListFirmSupplyForItems(ctx, allCodes)
 	}
 	if supplyMap == nil {
 		supplyMap = make(map[int64][]ports.SupplyEntry)
+	}
+
+	// Bulk load 5: restricted item codes — skip planning suggestions for these.
+	restrictedItems := make(map[int64]struct{})
+	if s.RestrictionRepo != nil {
+		restrictedItems, _ = s.RestrictionRepo.ListRestrictedItemCodes(ctx, allCodes)
 	}
 
 	// Lazy item-type cache: one ItemRepo call per unique item across the whole run.
@@ -141,6 +191,9 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	// Seed level 0 from independent demands.
 	levelQueues := make(map[int][]*entity.MRPInput)
 	for _, d := range demands {
+		if !s.itemAllowed(allowedItems, d.ItemCode) {
+			continue
+		}
 		mask := ""
 		if d.Mask != nil {
 			mask = *d.Mask
@@ -154,6 +207,15 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 			NeedDate: d.DemandDate,
 			LLC:      llc,
 		})
+	}
+	// Seed from sales forecast inputs.
+	for _, fi := range forecastInputs {
+		if !s.itemAllowed(allowedItems, fi.ItemCode) {
+			continue
+		}
+		llc := llcMap[fi.ItemCode]
+		fi.LLC = llc
+		levelQueues[llc] = append(levelQueues[llc], fi)
 	}
 
 	maxLevel := maxLLC(llcMap)
@@ -169,6 +231,12 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 		for _, input := range aggregateInputs(inputs) {
 			input.PlanCode = planCode
 			input.LLC = level
+
+			// Skip items blocked by an active restriction.
+			if _, blocked := restrictedItems[input.ItemCode]; blocked {
+				errs[fmt.Sprintf("item_%d_restricted", input.ItemCode)] = "item has active restriction — skipped"
+				continue
+			}
 
 			output, err := s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, supplyMap, itemCache)
 			if err != nil {
@@ -671,4 +739,124 @@ func aggregateInputs(inputs []*entity.MRPInput) []*entity.MRPInput {
 		return result[i].NeedDate.Before(result[j].NeedDate)
 	})
 	return result
+}
+
+// ---------- Production Plan helpers ----------
+
+// filterDemandsFromDate removes independent demands whose DemandDate is before
+// the "from_date" stored in plan Parameters. Falls back to no filtering if the
+// key is absent or unparseable.
+func (s *MRPServiceImpl) filterDemandsFromDate(
+	demands []*inddemandentity.IndependentDemand,
+	params map[string]interface{},
+) []*inddemandentity.IndependentDemand {
+	raw, ok := params["from_date"]
+	if !ok {
+		return demands
+	}
+	fromStr, _ := raw.(string)
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		return demands
+	}
+	filtered := demands[:0]
+	for _, d := range demands {
+		if !d.DemandDate.Before(from) {
+			filtered = append(filtered, d)
+		}
+	}
+	return filtered
+}
+
+// buildAllowedItemSet builds a set of permitted item codes based on
+// plan.ClassItemCodes (comma-separated). If nil/empty, all items are allowed
+// (nil map returned = no filter).
+func (s *MRPServiceImpl) buildAllowedItemSet(plan *planentity.ProductionPlan) map[int64]struct{} {
+	if plan.ClassItemCodes == nil || *plan.ClassItemCodes == "" {
+		return nil
+	}
+	parts := strings.Split(*plan.ClassItemCodes, ",")
+	set := make(map[int64]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if code, err := strconv.ParseInt(p, 10, 64); err == nil {
+			set[code] = struct{}{}
+		}
+	}
+	return set
+}
+
+// itemAllowed returns true when the item is within the plan scope.
+// A nil allowed map means all items are permitted.
+func (s *MRPServiceImpl) itemAllowed(allowed map[int64]struct{}, itemCode int64) bool {
+	if allowed == nil {
+		return true
+	}
+	_, ok := allowed[itemCode]
+	return ok
+}
+
+// ---------- Sales Forecast → MRP demand ----------
+
+// loadForecastDemands converts sales forecasts for the current year into
+// MRPInput entries, summing quantities per item and using Monday of each
+// ISO week as the need date.
+func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64) []*entity.MRPInput {
+	if s.ForecastRepo == nil {
+		return nil
+	}
+	year := time.Now().Year()
+	forecasts, err := s.ForecastRepo.ListForecasts(ctx, year)
+	if err != nil {
+		return nil
+	}
+	// Also include next year's forecasts for long-horizon plans.
+	nextYear, _ := s.ForecastRepo.ListForecasts(ctx, year+1)
+	forecasts = append(forecasts, nextYear...)
+
+	type key struct {
+		itemCode int64
+		mask     string
+	}
+	agg := make(map[key]*entity.MRPInput)
+	for _, f := range forecasts {
+		needDate := mrpWeekToDate(f.Year, f.Week)
+		mask := ""
+		if f.Mask != nil {
+			mask = *f.Mask
+		}
+		k := key{f.ItemCode, mask}
+		if existing, ok := agg[k]; ok {
+			existing.Quantity += f.Quantity
+			if needDate.Before(existing.NeedDate) {
+				existing.NeedDate = needDate
+			}
+		} else {
+			agg[k] = &entity.MRPInput{
+				PlanCode: planCode,
+				ItemCode: f.ItemCode,
+				Mask:     mask,
+				Quantity: f.Quantity,
+				NeedDate: needDate,
+			}
+		}
+	}
+	result := make([]*entity.MRPInput, 0, len(agg))
+	for _, v := range agg {
+		result = append(result, v)
+	}
+	return result
+}
+
+// mrpWeekToDate returns the Monday of the given ISO week/year.
+func mrpWeekToDate(year, week int) time.Time {
+	// Jan 4 is always in ISO week 1.
+	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
+	// Weekday of Jan 4: Monday=0 offset.
+	weekday := int(jan4.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	monday := jan4.AddDate(0, 0, -weekday+1)
+	return monday.AddDate(0, 0, (week-1)*7)
 }

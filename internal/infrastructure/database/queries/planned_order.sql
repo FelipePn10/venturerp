@@ -71,3 +71,11 @@ SELECT COALESCE(MAX(order_number), 0) + 1 AS next_number FROM planned_orders;
 
 -- name: DeleteOrdersByPlan :exec
 UPDATE planned_orders SET is_active = FALSE, updated_at = NOW() WHERE plan_code = $1;
+
+-- name: ListFirmPlannedOrdersByItems :many
+SELECT code, item_code, quantity, need_date
+FROM planned_orders
+WHERE item_code = ANY(@item_codes::bigint[])
+  AND is_firm = TRUE
+  AND is_active = TRUE
+ORDER BY item_code, need_date;

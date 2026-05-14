@@ -12,6 +12,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
@@ -89,7 +92,11 @@ type ModifierHandler struct {
 
 type EmployeeHandler struct {
 	*security.BaseHandler
-	createEmployeeUC *employee.CreateEmployeeUseCase
+	createUC     *employee.CreateEmployeeUseCase
+	listUC       *employee.ListEmployeesUseCase
+	getUC        *employee.GetEmployeeUseCase
+	updateUC     *employee.UpdateEmployeeUseCase
+	deactivateUC *employee.DeactivateEmployeeUseCase
 }
 
 type ItemStructureHandler struct {
@@ -142,9 +149,10 @@ type ItemCalendarPromiseHandler struct {
 
 type MRPCalculationHandler struct {
 	*security.BaseHandler
-	runUC             *mrp_calculation_uc.RunMRPCalculationUseCase
-	getProfileUC      *mrp_calculation_uc.GetItemProfileUseCase
+	runUC          *mrp_calculation_uc.RunMRPCalculationUseCase
+	getProfileUC   *mrp_calculation_uc.GetItemProfileUseCase
 	configuredRulesUC *mrp_calculation_uc.ManageConfiguredItemRulesUseCase
+	listExceptionsUC  *mrp_calculation_uc.ListMRPExceptionsUseCase
 }
 
 type OrderPriorityHandler struct {
@@ -165,4 +173,30 @@ type PlannedOrderHandler struct {
 	createUC *planned_order_uc.CreatePlannedOrderUseCase
 	listUC   *planned_order_uc.ListPlannedOrdersUseCase
 	firmUC   *planned_order_uc.FirmPlannedOrderUseCase
+}
+
+type PlanningParamsHandler struct {
+	*security.BaseHandler
+	getUC    *planning_params_uc.GetPlanningParamUseCase
+	listUC   *planning_params_uc.ListPlanningParamsUseCase
+	updateUC *planning_params_uc.UpdatePlanningParamUseCase
+}
+
+type ProductionPlanHandler struct {
+	*security.BaseHandler
+	createUC *production_plan_uc.CreateProductionPlanUseCase
+	getUC    *production_plan_uc.GetProductionPlanUseCase
+	listUC   *production_plan_uc.ListProductionPlansUseCase
+	updateUC *production_plan_uc.UpdateProductionPlanUseCase
+	deleteUC *production_plan_uc.DeleteProductionPlanUseCase
+}
+
+type RestrictionHandler struct {
+	*security.BaseHandler
+	createUC     *restriction_uc.CreateRestrictionUseCase
+	getUC        *restriction_uc.GetRestrictionUseCase
+	listUC       *restriction_uc.ListRestrictionsUseCase
+	getByItemUC  *restriction_uc.GetRestrictionsByItemUseCase
+	updateUC     *restriction_uc.UpdateRestrictionUseCase
+	deactivateUC *restriction_uc.DeactivateRestrictionUseCase
 }

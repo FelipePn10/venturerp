@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_division_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_forecast_uc"
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
@@ -18,6 +21,11 @@ import (
 	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
 	deliveryReschedule "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_reschedule"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
+	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
+	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
+	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
+	salesDivisionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_division"
+	salesForecastRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_forecast"
 	enterprise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/enterprise"
 	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
@@ -156,7 +164,60 @@ func (app *application) mount() chi.Router {
 	// employee
 	employeeRepo := employee.NewRepositoryEmployeeSQLC(queries)
 	createEmployeeUc := usecase.NewCreateEmployeeUseCase(employeeRepo, authService)
-	employeeHandler := handler.NewCreateEmployeeHandler(createEmployeeUc)
+	listEmployeesUC := usecase.NewListEmployeesUseCase(employeeRepo, authService)
+	getEmployeeUC := usecase.NewGetEmployeeUseCase(employeeRepo, authService)
+	updateEmployeeUC := usecase.NewUpdateEmployeeUseCase(employeeRepo, authService)
+	deactivateEmployeeUC := usecase.NewDeactivateEmployeeUseCase(employeeRepo, authService)
+	employeeHandler := handler.NewEmployeeHandler(createEmployeeUc, listEmployeesUC, getEmployeeUC, updateEmployeeUC, deactivateEmployeeUC)
+
+	// planning params
+	planningParamsRepo := planningParams.NewPlanningParamRepositorySQLC(queries)
+	getPlanningParamUC := usecase.NewGetPlanningParamUseCase(planningParamsRepo, authService)
+	listPlanningParamsUC := usecase.NewListPlanningParamsUseCase(planningParamsRepo, authService)
+	updatePlanningParamUC := usecase.NewUpdatePlanningParamUseCase(planningParamsRepo, authService)
+	planningParamsHandler := handler.NewPlanningParamsHandler(getPlanningParamUC, listPlanningParamsUC, updatePlanningParamUC)
+
+	// production plan
+	productionPlanRepo := productionPlan.NewProductionPlanRepositorySQLC(queries)
+	createProductionPlanUC := usecase.NewCreateProductionPlanUseCase(productionPlanRepo, authService)
+	getProductionPlanUC := usecase.NewGetProductionPlanUseCase(productionPlanRepo, authService)
+	listProductionPlansUC := usecase.NewListProductionPlansUseCase(productionPlanRepo, authService)
+	updateProductionPlanUC := usecase.NewUpdateProductionPlanUseCase(productionPlanRepo, authService)
+	deleteProductionPlanUC := usecase.NewDeleteProductionPlanUseCase(productionPlanRepo, authService)
+	productionPlanHandler := handler.NewProductionPlanHandler(createProductionPlanUC, getProductionPlanUC, listProductionPlansUC, updateProductionPlanUC, deleteProductionPlanUC)
+
+	// restriction
+	restrictionR := restrictionRepo.NewRestrictionRepositorySQLC(queries)
+	createRestrictionUC := usecase.NewCreateRestrictionUseCase(restrictionR, authService)
+	getRestrictionUC := usecase.NewGetRestrictionUseCase(restrictionR, authService)
+	listRestrictionsUC := usecase.NewListRestrictionsUseCase(restrictionR, authService)
+	getRestrictionsByItemUC := usecase.NewGetRestrictionsByItemUseCase(restrictionR, authService)
+	updateRestrictionUC := &restriction_uc.UpdateRestrictionUseCase{Repo: restrictionR, Auth: authService}
+	deactivateRestrictionUC := &restriction_uc.DeactivateRestrictionUseCase{Repo: restrictionR, Auth: authService}
+	restrictionHandler := handler.NewRestrictionHandler(createRestrictionUC, getRestrictionUC, listRestrictionsUC, getRestrictionsByItemUC, updateRestrictionUC, deactivateRestrictionUC)
+
+	// sales division
+	sdRepo := salesDivisionRepo.NewSalesDivisionRepositorySQLC(queries)
+	salesDivisionHandler := handler.NewSalesDivisionHandler(
+		&sales_division_uc.CreateSalesDivisionUseCase{Repo: sdRepo, Auth: authService},
+		&sales_division_uc.ListSalesDivisionsUseCase{Repo: sdRepo, Auth: authService},
+		&sales_division_uc.GetSalesDivisionUseCase{Repo: sdRepo, Auth: authService},
+		&sales_division_uc.UpdateSalesDivisionUseCase{Repo: sdRepo, Auth: authService},
+		&sales_division_uc.DeleteSalesDivisionUseCase{Repo: sdRepo, Auth: authService},
+	)
+
+	// sales forecast
+	sfRepo := salesForecastRepo.NewSalesForecastRepositorySQLC(queries)
+	salesForecastHandler := handler.NewSalesForecastHandler(
+		&sales_forecast_uc.CreateSalesForecastUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.ListSalesForecastsUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.GetForecastByItemUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.CreateForecastBlockUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.ListForecastBlocksUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.CreateAppropriationTableUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.ListAppropriationTablesUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.SetDefaultAppropriationUseCase{Repo: sfRepo, Auth: authService},
+	)
 
 	// allocation base
 	allocationBaseRepo := allocation.NewAllocationBaseRepositorySQLC(queries)
@@ -236,12 +297,13 @@ func (app *application) mount() chi.Router {
 
 	// mrp_calculation
 	mrpRepo := mrpCalculation.NewMRPCalculationRepositorySQLC(queries)
-	// Wire PlannedOrderSupplyPort here when planned_order module is created (see mrp_planned_order_integration.txt).
-	mrpService := usecase.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, nil)
+	supplyPort := planned.NewPlannedOrderSupplyAdapter(queries)
+	mrpService := usecase.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, supplyPort, productionPlanRepo, sfRepo, restrictionR)
 	mrpRunUC := usecase.NewRunMRPCalculationUseCase(mrpService, authService)
 	mrpGetProfileUC := usecase.NewGetItemProfileUseCase(mrpRepo, authService)
 	mrpCreateConfiguredRule := usecase.NewManageConfiguredItemRulesUseCase(mrpRepo, authService)
-	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule)
+	mrpListExceptionsUC := usecase.NewListMRPExceptionsUseCase(mrpRepo, authService)
+	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC)
 
 	//order priority
 	opRepo := op.NewOrderPriorityRepositorySQLC(queries)
@@ -337,6 +399,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/profile/{item_code}/{plan_code}", mrpHandler.GetProfile)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/configured-rules", mrpHandler.CreateConfiguredRule)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/configured-rules/{item_code}", mrpHandler.ListConfiguredRules)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exceptions/{plan_code}", mrpHandler.ListExceptions)
 		})
 		r.Route("/api/item-calendar-promise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemCalendarPromiseHandler.UpsertDay)
@@ -385,6 +448,51 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/employee", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", employeeHandler.CreateEmployee)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", employeeHandler.ListEmployees)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", employeeHandler.GetEmployee)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", employeeHandler.UpdateEmployee)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/deactivate", employeeHandler.DeactivateEmployee)
+		})
+		r.Route("/api/planning-params", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", planningParamsHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{number}", planningParamsHandler.GetByNumber)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", planningParamsHandler.Update)
+		})
+		r.Route("/api/production-plan", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", productionPlanHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", productionPlanHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", productionPlanHandler.GetByCode)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", productionPlanHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", productionPlanHandler.Delete)
+		})
+		r.Route("/api/restriction", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", restrictionHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", restrictionHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", restrictionHandler.GetByCode)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", restrictionHandler.GetByItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", restrictionHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/deactivate", restrictionHandler.Deactivate)
+		})
+		r.Route("/api/sales-division", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesDivisionHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesDivisionHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", salesDivisionHandler.GetByCode)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", salesDivisionHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", salesDivisionHandler.Delete)
+		})
+		r.Route("/api/sales-forecast", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesForecastHandler.CreateForecast)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list/{year}", salesForecastHandler.ListForecasts)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", salesForecastHandler.GetForecastByItem)
+			r.Route("/blocks", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesForecastHandler.CreateBlock)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesForecastHandler.ListBlocks)
+			})
+			r.Route("/appropriation", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesForecastHandler.CreateAppropriation)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesForecastHandler.ListAppropriations)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/set-default", salesForecastHandler.SetDefaultAppropriation)
+			})
 		})
 	})
 	// Health check

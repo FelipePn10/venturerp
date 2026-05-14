@@ -7,9 +7,11 @@ import (
 
 func ToEmployeeEntity(d request.CreateEmployeeDTO) (*entity.Employee, error) {
 	return entity.NewEmployee(
-		d.EnterpriseID,
 		d.Code,
-		d.Description,
 		d.Name,
+		d.Role,
+		d.ParticipatesBudget,
+		d.TechnicalAssistant,
+		d.CreatedBy,
 	)
 }

@@ -3,6 +3,7 @@ package structure
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
@@ -124,8 +125,8 @@ func (r *ItemStructureRepositorySQLC) HasCyclicReference(
 ) (bool, error) {
 
 	return r.q.HasCyclicReference(ctx, sqlc.HasCyclicReferenceParams{
-		StartCode:  parentCode,
-		TargetCode: childCode,
+		StartCode:  strconv.FormatInt(parentCode, 10),
+		TargetCode: strconv.FormatInt(childCode, 10),
 	})
 }
 

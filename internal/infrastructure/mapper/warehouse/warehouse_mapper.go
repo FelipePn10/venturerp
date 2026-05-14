@@ -2,10 +2,9 @@ package mapper
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 )
 
-func WarehouseTypeToDomain(t sqlc.WarehouseType) types.TypeWarehouse {
+func WarehouseTypeToDomain(t string) types.TypeWarehouse {
 	switch t {
 	case "INTERNO":
 		return types.TypeWarehouse(types.INTERNO)
@@ -24,11 +23,11 @@ func WarehouseTypeToDomain(t sqlc.WarehouseType) types.TypeWarehouse {
 	case "ESPECIAL":
 		return types.TypeWarehouse(types.ESPECIAL)
 	default:
-		panic("invalid warehouse type")
+		panic("invalid warehouse type: " + t)
 	}
 }
 
-func WarehouseTypeToDB(t types.TypeWarehouse) sqlc.WarehouseType {
+func WarehouseTypeToDB(t types.TypeWarehouse) string {
 	switch t {
 	case types.TypeWarehouse(types.INTERNO):
 		return "INTERNO"
@@ -51,18 +50,18 @@ func WarehouseTypeToDB(t types.TypeWarehouse) sqlc.WarehouseType {
 	}
 }
 
-func WarehouseLocationToDomain(l sqlc.WarehouseLocation) types.TypeLocation {
+func WarehouseLocationToDomain(l string) types.TypeLocation {
 	switch l {
 	case "LINHA_DE_PRODUCAO":
 		return types.TypeLocation(types.LINHA_DE_PRODUCAO)
 	case "NORMAL":
 		return types.TypeLocation(types.NORMAL)
 	default:
-		panic("invalid warehouse location")
+		panic("invalid warehouse location: " + l)
 	}
 }
 
-func WarehouseLocationToDB(l types.TypeLocation) sqlc.WarehouseLocation {
+func WarehouseLocationToDB(l types.TypeLocation) string {
 	switch l {
 	case types.TypeLocation(types.LINHA_DE_PRODUCAO):
 		return "LINHA_DE_PRODUCAO"

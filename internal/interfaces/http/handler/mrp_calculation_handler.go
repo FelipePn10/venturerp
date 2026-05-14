@@ -58,3 +58,17 @@ func (h *MRPCalculationHandler) ListConfiguredRules(w http.ResponseWriter, r *ht
 	}
 	security.RespondJSON(w, http.StatusOK, results)
 }
+
+func (h *MRPCalculationHandler) ListExceptions(w http.ResponseWriter, r *http.Request) {
+	planCode, err := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid plan_code")
+		return
+	}
+	results, err := h.listExceptionsUC.Execute(r.Context(), planCode)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}

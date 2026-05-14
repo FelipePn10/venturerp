@@ -15,6 +15,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 )
 
 func NewCreateProductHandler(
@@ -167,11 +170,19 @@ func NewCreateModifierHandler(
 	}
 }
 
-func NewCreateEmployeeHandler(
-	createEmployeeUc *employee.CreateEmployeeUseCase,
+func NewEmployeeHandler(
+	createUC *employee.CreateEmployeeUseCase,
+	listUC *employee.ListEmployeesUseCase,
+	getUC *employee.GetEmployeeUseCase,
+	updateUC *employee.UpdateEmployeeUseCase,
+	deactivateUC *employee.DeactivateEmployeeUseCase,
 ) *EmployeeHandler {
 	return &EmployeeHandler{
-		createEmployeeUC: createEmployeeUc,
+		createUC:     createUC,
+		listUC:       listUC,
+		getUC:        getUC,
+		updateUC:     updateUC,
+		deactivateUC: deactivateUC,
 	}
 }
 
@@ -313,11 +324,13 @@ func NewMRPCalculationHandler(
 	runUC *mrp_calculation_uc.RunMRPCalculationUseCase,
 	getProfileUC *mrp_calculation_uc.GetItemProfileUseCase,
 	configuredRulesUC *mrp_calculation_uc.ManageConfiguredItemRulesUseCase,
+	listExceptionsUC *mrp_calculation_uc.ListMRPExceptionsUseCase,
 ) *MRPCalculationHandler {
 	return &MRPCalculationHandler{
 		runUC:             runUC,
 		getProfileUC:      getProfileUC,
 		configuredRulesUC: configuredRulesUC,
+		listExceptionsUC:  listExceptionsUC,
 	}
 }
 
@@ -352,5 +365,51 @@ func NewPlannedOrderHandler(
 		createUC: createUC,
 		listUC:   listUC,
 		firmUC:   firmUC,
+	}
+}
+
+func NewPlanningParamsHandler(
+	getUC *planning_params_uc.GetPlanningParamUseCase,
+	listUC *planning_params_uc.ListPlanningParamsUseCase,
+	updateUC *planning_params_uc.UpdatePlanningParamUseCase,
+) *PlanningParamsHandler {
+	return &PlanningParamsHandler{
+		getUC:    getUC,
+		listUC:   listUC,
+		updateUC: updateUC,
+	}
+}
+
+func NewProductionPlanHandler(
+	createUC *production_plan_uc.CreateProductionPlanUseCase,
+	getUC *production_plan_uc.GetProductionPlanUseCase,
+	listUC *production_plan_uc.ListProductionPlansUseCase,
+	updateUC *production_plan_uc.UpdateProductionPlanUseCase,
+	deleteUC *production_plan_uc.DeleteProductionPlanUseCase,
+) *ProductionPlanHandler {
+	return &ProductionPlanHandler{
+		createUC: createUC,
+		getUC:    getUC,
+		listUC:   listUC,
+		updateUC: updateUC,
+		deleteUC: deleteUC,
+	}
+}
+
+func NewRestrictionHandler(
+	createUC *restriction_uc.CreateRestrictionUseCase,
+	getUC *restriction_uc.GetRestrictionUseCase,
+	listUC *restriction_uc.ListRestrictionsUseCase,
+	getByItemUC *restriction_uc.GetRestrictionsByItemUseCase,
+	updateUC *restriction_uc.UpdateRestrictionUseCase,
+	deactivateUC *restriction_uc.DeactivateRestrictionUseCase,
+) *RestrictionHandler {
+	return &RestrictionHandler{
+		createUC:     createUC,
+		getUC:        getUC,
+		listUC:       listUC,
+		getByItemUC:  getByItemUC,
+		updateUC:     updateUC,
+		deactivateUC: deactivateUC,
 	}
 }

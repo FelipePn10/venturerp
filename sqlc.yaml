@@ -11,6 +11,10 @@ sql:
         out: "internal/infrastructure/database/sqlc/"
         sql_package: "pgx/v5"
 
+        rename:
+          employee: "EmployeeLegacy"
+          employees: "Employee"
+
         overrides:
           - column: "item_structures.quantity"
             go_type: "float64"

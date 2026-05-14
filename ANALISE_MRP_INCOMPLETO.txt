@@ -1,0 +1,413 @@
+================================================================================
+   ANÁLISE DE COMPLETUDE DO MRP — PANOSSOERP
+   Data: 14/05/2026
+================================================================================
+
+RESUMO GERAL: O sistema possui uma base sólida de MRP clássico implementada,
+mas diversos modos de planejamento, parâmetros e integrações estão modelados
+no banco de dados sem a lógica de cálculo correspondente. Abaixo, o detalhamento
+do que está implementado, parcialmente implementado e ausente.
+
+================================================================================
+1. O QUE ESTÁ IMPLEMENTADO (FUNCIONANDO)
+================================================================================
+
+1.1 MRP CLÁSSICO (Material Requirements Planning)
+    - Cálculo multi-nível com explosão de BOM baseada em LLC (Low Level Code)
+    - Cálculo de LLC automático (DFS na árvore da estrutura)
+    - Netting temporal (firm supply vs. gross demand por data de necessidade)
+    - Geração de sugestões de ordens (fabricação e compra)
+    - Geração de mensagens de exceção: CANCEL, RESCHEDULE_IN, RESCHEDULE_OUT, EXCESS_PROJECTED
+    - Lead time calculado com dias úteis (função subtract_workdays no PG)
+    - Lote mínimo respeitado via ConfiguredItemRule
+    - Item type routing: COMPRADO → OP compra, FABRICADO → OP produção, TERCEIRO → skip, PROJETO → skip
+    - Restrições: itens com restrição ATIVA são pulados no cálculo
+    - Bulk loading otimizado (5 queries por execução, sem N+1)
+
+1.2 ESTRUTURA DE PRODUTO (BOM)
+    - Cadastro de componentes pai/filho com máscaras
+    - Suporte a itens configurados (máscara)
+    - Herança de estrutura (componentes genéricos vs. específicos por máscara)
+    - Propagação automática de máscara para filhos (CreateMaskForItem)
+    - Resolução de árvore completa (genérica e por máscara)
+    - Detecção de referência cíclica
+
+1.3 ENTIDADES DE DOMÍNIO
+    - Item (com pastas: Almoxarifado, Engenharia, Planejamento, Suprimentos)
+    - Plano de Produção (ProductionPlan) com tipos de planejamento e parâmetros
+    - Demanda Independente (IndependentDemand)
+    - Previsão de Vendas (SalesForecast) semanal
+    - Ordem Planejada (PlannedOrder) com ciclo de vida completo
+    - Parâmetros de Planejamento globais (21 parâmetros)
+    - Calendário Industrial (IndustrialCalendar)
+    - Máquinas, Tipos de Máquina, Tempos Item-Máquina, Schedule de Máquina
+    - Centros de Custo (CostCenter) com bases de rateio e overhead
+    - Prioridades de Ordem (OrderPriority)
+    - Restrições/Dependências de Item (Restriction, Dominants, Determinants)
+    - Divisão de Venda (SalesDivision)
+    - Promessa de Entrega (DeliveryPromiseParams, DeliveryReschedule)
+    - Calendário de Promessa por Item (ItemCalendarPromise)
+    - Regras de Itens Configurados (ConfiguredItemRule)
+    - Base de Rateio (AllocationBase) e Overhead (OverheadAllocation)
+
+1.4 API ENDPOINTS (todos com CRUD funcional)
+    /api/items, /api/items/structure, /api/items/mask
+    /api/questions, /api/bom, /api/warehouse, /api/pdm
+    /api/enterprise, /api/employee
+    /api/mrp-calculation (executar MRP, perfis, regras, exceções)
+    /api/planned-order
+    /api/production-plan
+    /api/independent-demand
+    /api/sales-forecast
+    /api/planning-params
+    /api/industrial-calendar
+    /api/item-calendar-promise
+    /api/machine (tipos, máquinas, tempos, schedules)
+    /api/cost-center
+    /api/allocations
+    /api/overhead-allocation
+    /api/order-priority
+    /api/restriction
+    /api/sales-division
+    /api/delivery-promise-params
+    /api/delivery-reschedule
+
+================================================================================
+2. O QUE ESTÁ MODELADO MAS NÃO IMPLEMENTADO (LÓGICA AUSENTE)
+================================================================================
+
+2.1 MODOS DE PLANEJAMENTO ALTERNATIVOS (NÃO FUNCIONAM)
+
+    O campo ProductionPlan.PlanningTypes aceita: MRP, MIN_MAX, REORDER_POINT,
+    MPS, KANBAN. Porém o motor de cálculo (mrp_service_impl.go) sempre executa
+    o mesmo loop MRP, independentemente do tipo selecionado no plano.
+
+    a) MÍNIMO E MÁXIMO (MIN_MAX):
+       - Fórmula: QTDC = LMA - (QTDE + QTDP) onde QTDE + QTDP <= LMI
+       - O campo item.Warehouse.MinimumStock existe mas NÃO é lido pelo motor
+       - NÃO HÁ implementação da lógica de mínimo/máximo em lugar algum
+       - IMPACTO: Itens configurados como "Mínimo e Máximo" não são planejados
+
+    b) PONTO DE REPOSIÇÃO (REORDER_POINT):
+       - Fórmula: PR = (TR * CM / 22) + ES
+       - A struct ReorderPoint (TR, CM, CR, ES) existe no Item com método Calculate()
+       - O método Calculate() NUNCA é chamado pelo motor MRP
+       - NÃO HÁ implementação da lógica de ponto de reposição
+       - IMPACTO: Itens com tipo "Ponto de Reposição" não são planejados
+
+    c) KANBAN:
+       - Tipo de planejamento existe no enum e nas tabelas
+       - NÃO HÁ implementação de cartões kanban, sinais de reposição,
+         ou lógica de pull-based replenishment
+       - IMPACTO: Itens tipo Kanban não são planejados
+
+    d) MPS (Master Production Schedule / Plano Mestre de Produção):
+       - Parâmetro 14 (UTILIZA_CALCULO_MPS) semeado como 'S'
+       - NÃO HÁ implementação de tela de MPS nem lógica de cálculo
+       - O motor atual trata previsões de venda como demandas MRP normais, mas
+         não há um plano mestre de produção separado com horizonte de tempo
+       - IMPACTO: Funcionalidade MPS inexistente
+
+2.2 PARÂMETROS DE PLANEJAMENTO NÃO CONSUMIDOS
+
+    Dos 21 parâmetros semeados na tabela planning_params, apenas ~2 são
+    efetivamente lidos pelo motor de cálculo. Os demais estão cadastrados
+    mas NÃO afetam o comportamento do sistema:
+
+    Parâmetro 1 - AGRUPA_DEMANDA_ESTOQUE (S/N):
+      Deveria agrupar demanda de segurança com primeira demanda ou gerar
+      ordens separadas. NÃO IMPLEMENTADO.
+
+    Parâmetro 4 - GERAR_DEMANDA_SEGURANCA_TODOS (S/N):
+      Deveria gerar demandas de estoque de segurança para todos os itens
+      ou apenas para itens com movimentação. NÃO IMPLEMENTADO.
+
+    Parâmetro 6 - DATA_NECESSIDADE_ESTOQUE (S/N):
+      Deveria definir se data de necessidade = hoje + lead time + 1
+      ou = hoje - lead time - 1. NÃO IMPLEMENTADO.
+
+    Parâmetro 7 - GERAR_PRIORIDADES_ORDENS (S/N):
+      Deveria gerar prioridades automaticamente nas ordens após o MRP,
+      usando a tabela order_priorities (FPLA0103).
+      NÃO IMPLEMENTADO (tabela e CRUD existem, lógica de atribuição não).
+
+    Parâmetro 8 - DIAS_PRIORIDADES (número):
+      Deveria limitar geração de prioridades a ordens com data de início
+      até X dias úteis no futuro. NÃO IMPLEMENTADO.
+
+    Parâmetro 10 - ITENS_FANTASMAS_GRAVAR (S/N):
+      Deveria tratar itens fantasmas (ghost) na explosão da estrutura,
+      explodindo seus filhos direto no pai sem gerar ordem para o fantasma.
+      O campo item.Planning.Ghost existe mas NÃO é lido pelo motor.
+      NÃO IMPLEMENTADO.
+
+    Parâmetro 12 - CONSIDERA_DATAS_TANQUES (S/N):
+      Deveria considerar datas de tanque na promessa de entrega.
+      NÃO IMPLEMENTADO.
+
+    Parâmetro 13 - VERIFICA_SITUACAO_PEDIDO_PROJETO (S/N):
+      Deveria verificar situação de pedidos de projeto ao ler ordens.
+      NÃO IMPLEMENTADO.
+
+    Parâmetro 15 - PROPORCAO_ENTREGA (T/E/A/N):
+      Deveria verificar proporcionalidade de requisições de itens filhos
+      na entrega e/ou apontamento de produção.
+      NÃO IMPLEMENTADO.
+
+    Parâmetro 17 - TRATA_ASSISTENCIA_TECNICA (S/N):
+      Deveria gerar ordens tipo OAT para pedidos com divisão de venda
+      de assistência técnica.
+      NÃO IMPLEMENTADO.
+
+2.3 INTEGRAÇÃO COM MÁQUINAS (NÃO FUNCIONAL NO MRP)
+
+    - Tipos de máquina, máquinas, tempos item-máquina: CRUD completo
+    - MachineSchedule (fila diária de produção por máquina): CRUD completo
+    - Porém o motor MRP NÃO:
+      a) Consulta tempos de produção item-máquina para calcular lead time
+         (usa apenas lead_time genérico do ConfiguredItemRule)
+      b) Gera schedules de máquina automaticamente ao gerar ordens
+      c) Faz finite capacity scheduling (nivelamento de capacidade)
+      d) Verifica capacidade da máquina vs. carga de ordens
+    - O schedule de máquina é criado apenas manualmente via API
+
+2.4 REGRAS DE ITENS CONFIGURADOS (PARCIAL)
+
+    - ConfiguredItemRule aceita rule_type: EQUAL, DIFFERENT, RANGE
+    - Apenas EQUAL é processado pelo motor MRP
+    - DIFFERENT e RANGE estão definidos mas NÃO são consumidos
+
+2.5 PREVISÃO DE VENDAS (PARCIAL)
+
+    - Previsão semanal carregada no MRP com data = segunda-feira da semana ISO
+    - Tabela de Apropriação (AppropriationTable) com % por dia da semana:
+      CRUD existe mas NÃO é usada para quebrar previsão semanal em diária
+    - Bloqueio de Previsão (SalesForecastBlock):
+      CRUD existe mas NÃO é consultado ao carregar previsões
+    - Geração automática de previsão (FPRE0251):
+      NÃO IMPLEMENTADA (não há cálculo de média móvel/histórico)
+
+2.6 MENSAGENS DE EXCEÇÃO (PARCIAL)
+
+    - 4 dos 5 tipos implementados: CANCEL, RESCHEDULE_IN, RESCHEDULE_OUT, EXCESS_PROJECTED
+    - EXPEDITE está definido como constante mas NUNCA é gerado pelo motor
+
+================================================================================
+3. O QUE ESTÁ COMPLETAMENTE AUSENTE
+================================================================================
+
+3.1 PEDIDO DE VENDA (Sales Order)
+    - NÃO EXISTE entidade, tabela, repositório, handler ou usecase
+    - Existe apenas sales_order_demands como tabela de entrada para o MRP
+    - IMPACTO: Não é possível cadastrar pedidos de venda, que são a principal
+      fonte de demanda para o MRP
+
+3.2 PEDIDO DE COMPRA (Purchase Order)
+    - NÃO EXISTE entidade separada, tabela, handler ou usecase
+    - Ordens de compra são modeladas apenas como PlannedOrder com order_type='PURCHASE'
+    - IMPACTO: Não há fluxo completo de compras (cotação, aprovação, recebimento)
+
+3.3 ORDEM DE PRODUÇÃO (Production Order - ciclo de vida separado)
+    - Existe PlannedOrder que pode ser "firmada", mas NÃO há entidade separada
+      para ordem de produção com:
+      a) Apontamento de produção (quantidade produzida por período)
+      b) Baixa de matéria-prima
+      c) Refugo (quantidade perdida)
+      d) Finalização da ordem
+    - IMPACTO: O chão de fábrica não consegue registrar produção real
+
+3.4 ESTOQUE / INVENTÁRIO (Stock Management)
+    - NÃO EXISTE API ou domínio para:
+      a) Movimentação de estoque (entradas, saídas, transferências)
+      b) Inventário físico / contagem cíclica
+      c) Reserva de estoque
+      d) Controle de lote/série
+    - O MRP usa stock_snapshots (carga estática), mas não há como o estoque
+      ser atualizado em tempo real
+    - Existem tabelas antigas (stock, stock_movements da migration 000015)
+      mas sem domínio/handler/usecase correspondente
+
+3.5 PROGRAMA MESTRE DE PRODUÇÃO (MPS)
+    - NÃO HÁ tela de entrada de MPS
+    - NÃO HÁ lógica de cálculo MPS
+    - IMPACTO: Empresas que usam MPS como entrada do MRP não conseguem operar
+
+3.6 LIBERAÇÃO DE ORDENS
+    Deveriam existir:
+    a) Liberação de Ordens de Fabricação:
+       Tela para selecionar ordens planejadas, alterar data/quantidade,
+       firmar e liberar ordens. NÃO EXISTE.
+    b) Liberação de Ordens de Compra Planejadas:
+       Tela para selecionar ordens de compra, escolher fornecedor,
+       e gerar pedido de compra. NÃO EXISTE.
+    c) Liberação de Ordens de Compra (Cotação):
+       Tela para gerar ordens de cotação firme. NÃO EXISTE.
+
+3.7 RELATÓRIOS (NÃO EXISTEM)
+    a) Relatório de Perfil de Itens
+    b) Relatório de Disponibilidades
+    c) Relatório das Necessidades Agrupadas
+    d) Relatório de Explosão de Itens
+    e) Relatório de Demandas para Itens de PR
+    f) Consulta Perfil de Itens (visão consolidada demandas/ordens/estoque)
+    g) Relatório Simplificado de Itens a Comprar PR
+
+3.8 GERAÇÃO DE PREVISÃO AUTOMÁTICA
+    - NÃO HÁ cálculo de média móvel baseada em histórico de vendas
+    - NÃO HÁ índice de projeção (crescimento %)
+    - Previsões só podem ser cadastradas manualmente
+
+3.9 FUNCIONÁRIOS / PLANEJADORES
+    - Funcionário básico existe (employee), mas faltam campos:
+      a) Função do funcionário (Planejador, Operador, etc.)
+      b) Pasta de funções vinculada ao funcionário
+      c) Indicador de "Participa do Orçamento"
+      d) Indicador de "Atendente Ass. Técnica"
+    - Sem o campo "Função = Planejador", a lógica de planejador por setor
+      descrita na documentação não funciona
+
+3.10 PASTA PLANEJAMENTO DO ITEM (campos faltando no Item)
+    Conforme documentado, a pasta planejamento do item deveria ter:
+    a) Tempo de Segurança - NÃO existe no modelo
+    b) Cobertura - NÃO existe no modelo
+    c) Agrupamento - NÃO existe no modelo
+    d) Crítico (checkbox) - NÃO existe
+    Estes campos são mencionados como "não configuráveis por regra de configurado",
+    mas deveriam existir no cadastro base do item.
+    OBS: O campo StockSafetyStock existe no StockSnapshot, mas não está
+    vinculado ao cadastro do item (está no snapshot, não no item).
+
+3.11 PLANEJADORES DO ITEM (Planners)
+    - A struct Planners existe no Item (EmployeeID, MachinesID)
+    - Mas não há endpoints ou lógica para:
+      a) Associar múltiplos planejadores a um item
+      b) Filtrar/Mostrar ordens por planejador na liberação
+
+3.12 JOB AGENDADO DO MRP
+    - NÃO HÁ implementação de agendamento automático
+    - O MRP só pode ser executado manualmente via API
+
+================================================================================
+4. PROBLEMAS DE ARQUITETURA / MELHORIAS SUGERIDAS
+================================================================================
+
+4.1 PARÂMETROS DE PLANEJAMENTO NÃO TIPADOS
+    - A tabela planning_params usa (param_number, param_key, value VARCHAR)
+    - Os parâmetros são lidos como string genérica
+    - SUGESTÃO: Criar uma struct fortemente tipada PlanningParams com campos
+      booleanos, inteiros e strings, e carregá-la uma vez no início do cálculo.
+      Isso evita typos e facilita a leitura do código.
+
+4.2 STOCK SNAPSHOT ESTÁTICO
+    - O MRP tira snapshot do estoque no início do cálculo
+    - Se houver movimentações durante o cálculo, os dados ficam inconsistentes
+    - SUGESTÃO: Bloquear movimentações de estoque durante o cálculo do MRP
+      (ou usar transação com isolation level SERIALIZABLE)
+
+4.3 ORDENS DE COMPRA NÃO GERAM PEDIDO REAL
+    - O MRP gera PlannedOrder com type='PURCHASE', mas não há fluxo para
+      converter isso em um pedido de compra real com fornecedor
+    - SUGESTÃO: Implementar entidade PurchaseOrder com workflow de aprovação
+
+4.4 MÁSCARA NO ITEM - LÓGICA EXISTE MAS NÃO ESTÁ 100% INTEGRADA
+    - A propagação de máscara na estrutura funciona (CreateMaskForItem)
+    - Porém no MRP, a máscara do pedido de venda (ex: 2.95#2.34#PRETO#1.23#FINO#AÇO#FERRO)
+      deve ser usada para:
+      a) Selecionar a estrutura correta (componentes específicos da máscara)
+      b) Ajustar quantidades por configuração
+    - Atualmente a estrutura_query resolve a árvore por máscara, mas o MRP
+      parece usar apenas os inputs (itemCode + mask) sem validação estrutural
+      por máscara durante a explosão
+
+4.5 MÁQUINAS - CAPACIDADE NÃO UTILIZADA
+    - Campos de capacidade existem (capacity, efficiency_rate, capacity_period)
+    - SUGESTÃO: Após gerar ordens, executar nivelamento de capacidade
+      (finite capacity scheduling) alocando ordens às máquinas conforme
+      disponibilidade e tempo de produção
+
+4.6 CONFIGURED ITEM RULES - TIPOS FALTANTES
+    - Apenas campos "lead_time" e "lote_minimo" são suportados
+    - Conforme documentação, deveriam existir regras para:
+      a) Estoque de Segurança por configuração
+      b) Tempo de Reposição por configuração
+      c) Ponto de Reposição por configuração
+    - OBS: A doc diz que NÃO se pode criar regras para Tempo Reposição,
+      Estoque Segurança Calculado e Ponto de Reposição, mas no modelo atual
+      o lead_time é exatamente o tempo de reposição, que está sendo usado.
+
+4.7 CAMPOS DE PERDA NA ESTRUTURA
+    - loss_percentage existe na estrutura
+    - Parâmetro 20 (FORMULA_PERDAS_ESTRUTURA) existe com opções 1, 2, 3
+    - O motor MRP NÃO aplica a fórmula de perdas ao calcular quantidades
+    - SUGESTÃO: Multiplicar quantidade necessária pelo fator de perda
+      conforme parâmetro 20
+
+================================================================================
+5. RESUMO DO QUE FALTA PARA O MRP ESTAR "COMPLETO"
+================================================================================
+
+PRIORIDADE ALTA (Funcionalidades centrais do MRP):
+  [ ] Implementar lógica de MÍNIMO E MÁXIMO no motor
+  [ ] Implementar lógica de PONTO DE REPOSIÇÃO no motor
+  [ ] Implementar lógica de KANBAN no motor
+  [ ] Implementar MPS (Plano Mestre de Produção)
+  [ ] Criar entidade/tabela de PEDIDO DE VENDA (fonte principal de demanda)
+  [ ] Criar entidade/tabela de PEDIDO DE COMPRA (destino das ordens de compra)
+  [ ] Criar módulo de ESTOQUE (movimentações, entradas, saídas, inventário)
+  [ ] Implementar ORDEM DE PRODUÇÃO com apontamento, baixa e refugo
+
+PRIORIDADE MÉDIA (Parâmetros e integrações):
+  [ ] Consumir parâmetros 1, 4, 6, 7, 8, 10, 12, 13, 15, 17 no motor MRP
+  [ ] Implementar geração automática de PRIORIDADES nas ordens (parâmetros 7 e 8)
+  [ ] Integrar MÁQUINAS ao MRP (usar tempos item-máquina, gerar schedules)
+  [ ] Implementar TRATAMENTO DE ITENS FANTASMAS na explosão (parâmetro 10)
+  [ ] Implementar DEMANDA DE ESTOQUE DE SEGURANÇA (parâmetro 4)
+  [ ] Implementar PERDAS NA ESTRUTURA (parâmetro 20)
+  [ ] Implementar TRATAMENTO DE ASSISTÊNCIA TÉCNICA (parâmetro 17)
+  [ ] Suportar rule_type DIFFERENT e RANGE no ConfiguredItemRule
+
+PRIORIDADE BAIXA (Telas, relatórios e melhorias):
+  [ ] Relatório de Perfil de Itens (FPLA0300)
+  [ ] Relatório de Disponibilidades (FPLA0301)
+  [ ] Relatório de Necessidades Agrupadas (FPLA0302)
+  [ ] Relatório de Explosão de Itens (FPLA0303)
+  [ ] Relatório de Demandas PR (FPLA0304)
+  [ ] Consulta Perfil de Itens (FPLA0400)
+  [ ] Job agendado do MRP (FUTL0230)
+  [ ] Geração automática de previsão de vendas (FPRE0251)
+  [ ] Completar cadastro de Funcionário (função, planejador)
+  [ ] Campos faltantes na pasta Planejamento do Item (Tempo Segurança, Cobertura, Agrupamento, Crítico)
+  [ ] Usar AppropriationTable na quebra semanal→diária de previsões
+  [ ] Consultar SalesForecastBlock ao carregar previsões
+  [ ] Gerar exceção EXPEDITE no motor MRP
+  [ ] Parâmetros fortemente tipados (struct PlanningParams)
+
+================================================================================
+6. NOTAS TÉCNICAS
+================================================================================
+
+- Linguagem: Go 1.25.6
+- Arquitetura: Clean Architecture (domain/usecase/infrastructure/interfaces)
+- Router: chi/v5
+- Banco: PostgreSQL com SQLC para queries tipadas
+- Migrations: 88 arquivos de migration
+- O motor MRP está em:
+  internal/domain/mrp_calculation/service/mrp_service_impl.go (862 linhas)
+- As tabelas principais estão na migration 000058 (560 linhas, 27 tabelas)
+- O fluxo de máscaras/configuração já funciona (questions → options → masks → structure)
+- O cálculo de lead time via dias úteis usa função PG subtract_workdays()
+
+OBSERVAÇÕES FINAIS:
+- A base de dados e o modelo de domínio estão BEM estruturados e cobrem
+  praticamente todos os conceitos descritos na documentação do MRP.
+- O gargalo principal está na camada de SERVIÇO/APLICAÇÃO: muitos parâmetros
+  e entidades existem no banco mas não têm código que os consuma.
+- O motor MRP atual cobre APENAS o cálculo clássico de MRP. Os demais modos
+  (Min-Max, Ponto Reposição, Kanban, MPS) precisam ser implementados como
+  estratégias separadas ou branches condicionais no mesmo motor.
+- Não há gestão de estoque operacional (movimentações), apenas snapshot
+  estático para o cálculo.
+- Não há pedido de venda nem pedido de compra como entidades separadas.
+- As máquinas estão modeladas mas não integradas ao motor de planejamento.
+
+================================================================================

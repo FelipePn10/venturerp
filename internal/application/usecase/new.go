@@ -8,6 +8,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	employee2 "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
@@ -24,6 +27,10 @@ import (
 	delivery_promise_params "github.com/FelipePn10/panossoerp/internal/domain/delivery_promise_params/repository"
 	delivery_reschedule "github.com/FelipePn10/panossoerp/internal/domain/delivery_reschedule/repository"
 	employee "github.com/FelipePn10/panossoerp/internal/domain/employee/repository"
+	planning_params "github.com/FelipePn10/panossoerp/internal/domain/planning_params/repository"
+	production_plan "github.com/FelipePn10/panossoerp/internal/domain/production_plan/repository"
+	restriction "github.com/FelipePn10/panossoerp/internal/domain/restriction/repository"
+	sales_forecast "github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/repository"
 	enterprise "github.com/FelipePn10/panossoerp/internal/domain/enterprise/repository"
 	mask "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/repository"
 	group "github.com/FelipePn10/panossoerp/internal/domain/group/repository"
@@ -639,9 +646,12 @@ func NewMRPService(
 	demandRepo independent_demand.IndependentDemandRepository,
 	calRepo industrial_calendar.IndustrialCalendarRepository,
 	itemRepo item.ItemRepository,
-	supplyPort mrpports.PlannedOrderSupplyPort, // pass nil until planned_order is created
+	supplyPort mrpports.PlannedOrderSupplyPort,
+	planRepo production_plan.ProductionPlanRepository,
+	forecastRepo sales_forecast.SalesForecastRepository,
+	restrictionRepo restriction.RestrictionRepository,
 ) mrpservice.MRPService {
-	return mrpservice.NewMRPService(mrpRepo, structRepo, demandRepo, calRepo, itemRepo, supplyPort)
+	return mrpservice.NewMRPService(mrpRepo, structRepo, demandRepo, calRepo, itemRepo, supplyPort, planRepo, forecastRepo, restrictionRepo)
 }
 
 func NewRunMRPCalculationUseCase(
@@ -659,6 +669,16 @@ func NewManageConfiguredItemRulesUseCase(
 	auth ports.AuthService,
 ) *mrp_calculation_uc.ManageConfiguredItemRulesUseCase {
 	return &mrp_calculation_uc.ManageConfiguredItemRulesUseCase{
+		Repo: repo,
+		Auth: auth,
+	}
+}
+
+func NewListMRPExceptionsUseCase(
+	repo mrp_calculation.MRPCalculationRepository,
+	auth ports.AuthService,
+) *mrp_calculation_uc.ListMRPExceptionsUseCase {
+	return &mrp_calculation_uc.ListMRPExceptionsUseCase{
 		Repo: repo,
 		Auth: auth,
 	}
@@ -752,4 +772,124 @@ func NewListPlannedOrdersUseCase(
 		Repo: repo,
 		Auth: auth,
 	}
+}
+
+// Employee additional use cases
+
+func NewListEmployeesUseCase(
+	repo employee.EmployeeRepository,
+	auth ports.AuthService,
+) *employee2.ListEmployeesUseCase {
+	return &employee2.ListEmployeesUseCase{Repo: repo, Auth: auth}
+}
+
+func NewGetEmployeeUseCase(
+	repo employee.EmployeeRepository,
+	auth ports.AuthService,
+) *employee2.GetEmployeeUseCase {
+	return &employee2.GetEmployeeUseCase{Repo: repo, Auth: auth}
+}
+
+func NewUpdateEmployeeUseCase(
+	repo employee.EmployeeRepository,
+	auth ports.AuthService,
+) *employee2.UpdateEmployeeUseCase {
+	return &employee2.UpdateEmployeeUseCase{Repo: repo, Auth: auth}
+}
+
+func NewDeactivateEmployeeUseCase(
+	repo employee.EmployeeRepository,
+	auth ports.AuthService,
+) *employee2.DeactivateEmployeeUseCase {
+	return &employee2.DeactivateEmployeeUseCase{Repo: repo, Auth: auth}
+}
+
+// Planning params use cases
+
+func NewGetPlanningParamUseCase(
+	repo planning_params.PlanningParamRepository,
+	auth ports.AuthService,
+) *planning_params_uc.GetPlanningParamUseCase {
+	return &planning_params_uc.GetPlanningParamUseCase{Repo: repo, Auth: auth}
+}
+
+func NewListPlanningParamsUseCase(
+	repo planning_params.PlanningParamRepository,
+	auth ports.AuthService,
+) *planning_params_uc.ListPlanningParamsUseCase {
+	return &planning_params_uc.ListPlanningParamsUseCase{Repo: repo, Auth: auth}
+}
+
+func NewUpdatePlanningParamUseCase(
+	repo planning_params.PlanningParamRepository,
+	auth ports.AuthService,
+) *planning_params_uc.UpdatePlanningParamUseCase {
+	return &planning_params_uc.UpdatePlanningParamUseCase{Repo: repo, Auth: auth}
+}
+
+// Production plan use cases
+
+func NewCreateProductionPlanUseCase(
+	repo production_plan.ProductionPlanRepository,
+	auth ports.AuthService,
+) *production_plan_uc.CreateProductionPlanUseCase {
+	return &production_plan_uc.CreateProductionPlanUseCase{Repo: repo, Auth: auth}
+}
+
+func NewGetProductionPlanUseCase(
+	repo production_plan.ProductionPlanRepository,
+	auth ports.AuthService,
+) *production_plan_uc.GetProductionPlanUseCase {
+	return &production_plan_uc.GetProductionPlanUseCase{Repo: repo, Auth: auth}
+}
+
+func NewListProductionPlansUseCase(
+	repo production_plan.ProductionPlanRepository,
+	auth ports.AuthService,
+) *production_plan_uc.ListProductionPlansUseCase {
+	return &production_plan_uc.ListProductionPlansUseCase{Repo: repo, Auth: auth}
+}
+
+func NewUpdateProductionPlanUseCase(
+	repo production_plan.ProductionPlanRepository,
+	auth ports.AuthService,
+) *production_plan_uc.UpdateProductionPlanUseCase {
+	return &production_plan_uc.UpdateProductionPlanUseCase{Repo: repo, Auth: auth}
+}
+
+func NewDeleteProductionPlanUseCase(
+	repo production_plan.ProductionPlanRepository,
+	auth ports.AuthService,
+) *production_plan_uc.DeleteProductionPlanUseCase {
+	return &production_plan_uc.DeleteProductionPlanUseCase{Repo: repo, Auth: auth}
+}
+
+// Restriction use cases
+
+func NewCreateRestrictionUseCase(
+	repo restriction.RestrictionRepository,
+	auth ports.AuthService,
+) *restriction_uc.CreateRestrictionUseCase {
+	return &restriction_uc.CreateRestrictionUseCase{Repo: repo, Auth: auth}
+}
+
+func NewGetRestrictionUseCase(
+	repo restriction.RestrictionRepository,
+	auth ports.AuthService,
+) *restriction_uc.GetRestrictionUseCase {
+	return &restriction_uc.GetRestrictionUseCase{Repo: repo, Auth: auth}
+}
+
+func NewListRestrictionsUseCase(
+	repo restriction.RestrictionRepository,
+	auth ports.AuthService,
+) *restriction_uc.ListRestrictionsUseCase {
+	return &restriction_uc.ListRestrictionsUseCase{Repo: repo, Auth: auth}
+}
+
+func NewGetRestrictionsByItemUseCase(
+	repo restriction.RestrictionRepository,
+	auth ports.AuthService,
+) *restriction_uc.GetRestrictionsByItemUseCase {
+	return &restriction_uc.GetRestrictionsByItemUseCase{Repo: repo, Auth: auth}
 }
