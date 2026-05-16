@@ -92,4 +92,83 @@ type AuthService interface {
 	CanDeactivateRestriction(ctx context.Context) bool
 	CanListMRPExceptions(ctx context.Context) bool
 	CanDeleteSalesDivisionRecord(ctx context.Context) bool
+	CanCreateSalesOrder(ctx context.Context) bool
+	CanUpdateSalesOrder(ctx context.Context) bool
+	CanGetSalesOrder(ctx context.Context) bool
+	CanListSalesOrders(ctx context.Context) bool
+	CanCreateStockMovement(ctx context.Context) bool
+	CanListStockMovements(ctx context.Context) bool
+	CanGetStockBalance(ctx context.Context) bool
+	CanReserveStock(ctx context.Context) bool
+	CanReleaseReservation(ctx context.Context) bool
+	CanConsumeReservation(ctx context.Context) bool
+	CanCreateInventory(ctx context.Context) bool
+	CanGetInventory(ctx context.Context) bool
+	CanListInventories(ctx context.Context) bool
+	CanCountInventoryItem(ctx context.Context) bool
+	CanAdjustInventory(ctx context.Context) bool
+	CanCloseInventory(ctx context.Context) bool
+	CanCreatePurchaseOrder(ctx context.Context) bool
+	CanUpdatePurchaseOrder(ctx context.Context) bool
+	CanGetPurchaseOrder(ctx context.Context) bool
+	CanListPurchaseOrders(ctx context.Context) bool
+
+	// Financial - Contas Bancarias
+	CanCreateContaBancaria(ctx context.Context) bool
+	CanListContasBancarias(ctx context.Context) bool
+
+	// Financial - Condicoes Pagamento
+	CanCreateCondicaoPagamento(ctx context.Context) bool
+	CanListCondicoesPagamento(ctx context.Context) bool
+
+	// Financial - Plano de Contas
+	CanCreatePlanoContas(ctx context.Context) bool
+	CanListPlanoContas(ctx context.Context) bool
+
+	// Financial - Centros de Custo
+	CanCreateCentroCustoFinancial(ctx context.Context) bool
+	CanListCentrosCustoFinancial(ctx context.Context) bool
+
+	// Financial - Contas a Pagar
+	CanCreateContaPagar(ctx context.Context) bool
+	CanGetContaPagar(ctx context.Context) bool
+	CanListContasPagar(ctx context.Context) bool
+	CanApproveContaPagar(ctx context.Context) bool
+	CanBaixarContaPagar(ctx context.Context) bool
+	CanCancelContaPagar(ctx context.Context) bool
+	CanGetAgingPagar(ctx context.Context) bool
+
+	// Financial - Contas a Receber
+	CanCreateContaReceber(ctx context.Context) bool
+	CanGetContaReceber(ctx context.Context) bool
+	CanListContasReceber(ctx context.Context) bool
+	CanBaixarContaReceber(ctx context.Context) bool
+	CanCancelContaReceber(ctx context.Context) bool
+	CanGetAgingReceber(ctx context.Context) bool
+
+	// Financial - Fluxo Caixa
+	CanGetFluxoCaixa(ctx context.Context) bool
+	CanGetFluxoProjetado(ctx context.Context) bool
+	CanGetSaldoContas(ctx context.Context) bool
+
+	// Financial - Tax Assessment
+	CanApurarImpostos(ctx context.Context) bool
+	CanGetTaxAssessment(ctx context.Context) bool
+	CanListTaxAssessments(ctx context.Context) bool
+
+	// Fiscal - Entries
+	CanCreateFiscalEntry(ctx context.Context) bool
+	CanApproveFiscalEntry(ctx context.Context) bool
+	CanListFiscalEntries(ctx context.Context) bool
+	CanGetFiscalEntry(ctx context.Context) bool
+
+	// Fiscal - Exits
+	CanCreateFiscalExit(ctx context.Context) bool
+	CanAuthorizeFiscalExit(ctx context.Context) bool
+	CanCancelFiscalExit(ctx context.Context) bool
+	CanListFiscalExits(ctx context.Context) bool
+	CanGetFiscalExit(ctx context.Context) bool
+
+	// Fiscal - Config
+	CanManageFiscalConfig(ctx context.Context) bool
 }

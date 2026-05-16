@@ -16,8 +16,10 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
 )
 
 func NewCreateProductHandler(
@@ -396,6 +398,40 @@ func NewProductionPlanHandler(
 	}
 }
 
+func NewSalesOrderHandler(
+	createUC *sales_order_uc.CreateSalesOrderUseCase,
+	updateUC *sales_order_uc.UpdateSalesOrderUseCase,
+	getUC *sales_order_uc.GetSalesOrderUseCase,
+	listUC *sales_order_uc.ListSalesOrdersUseCase,
+	listByCustomerUC *sales_order_uc.ListSalesOrdersByCustomerUseCase,
+	listByStatusUC *sales_order_uc.ListSalesOrdersByStatusUseCase,
+	cancelUC *sales_order_uc.CancelSalesOrderUseCase,
+	blockUC *sales_order_uc.BlockSalesOrderUseCase,
+	unblockUC *sales_order_uc.UnblockSalesOrderUseCase,
+	changeStatusUC *sales_order_uc.ChangeStatusSalesOrderUseCase,
+	createItemUC *sales_order_uc.CreateSalesOrderItemUseCase,
+	updateItemUC *sales_order_uc.UpdateSalesOrderItemUseCase,
+	listItemsUC *sales_order_uc.ListSalesOrderItemsUseCase,
+	cancelItemUC *sales_order_uc.CancelSalesOrderItemUseCase,
+) *SalesOrderHandler {
+	return &SalesOrderHandler{
+		createUC:         createUC,
+		updateUC:         updateUC,
+		getUC:            getUC,
+		listUC:           listUC,
+		listByCustomerUC: listByCustomerUC,
+		listByStatusUC:   listByStatusUC,
+		cancelUC:         cancelUC,
+		blockUC:          blockUC,
+		unblockUC:        unblockUC,
+		changeStatusUC:   changeStatusUC,
+		createItemUC:     createItemUC,
+		updateItemUC:     updateItemUC,
+		listItemsUC:      listItemsUC,
+		cancelItemUC:     cancelItemUC,
+	}
+}
+
 func NewRestrictionHandler(
 	createUC *restriction_uc.CreateRestrictionUseCase,
 	getUC *restriction_uc.GetRestrictionUseCase,
@@ -411,5 +447,33 @@ func NewRestrictionHandler(
 		getByItemUC:  getByItemUC,
 		updateUC:     updateUC,
 		deactivateUC: deactivateUC,
+	}
+}
+
+func NewProductionOrderHandler(
+	createUC *production_order_uc.CreateProductionOrderUseCase,
+	getByCodeUC *production_order_uc.GetProductionOrderUseCase,
+	listUC *production_order_uc.ListProductionOrdersUseCase,
+	startUC *production_order_uc.StartProductionOrderUseCase,
+	addAppointmentUC *production_order_uc.AddAppointmentUseCase,
+	addConsumptionUC *production_order_uc.AddConsumptionUseCase,
+	completeUC *production_order_uc.CompleteProductionOrderUseCase,
+	closeUC *production_order_uc.CloseProductionOrderUseCase,
+	cancelUC *production_order_uc.CancelProductionOrderUseCase,
+	getAppointmentsUC *production_order_uc.GetAppointmentsUseCase,
+	getConsumptionsUC *production_order_uc.GetConsumptionsUseCase,
+) *ProductionOrderHandler {
+	return &ProductionOrderHandler{
+		createUC:          createUC,
+		getByCodeUC:       getByCodeUC,
+		listUC:            listUC,
+		startUC:           startUC,
+		addAppointmentUC:  addAppointmentUC,
+		addConsumptionUC:  addConsumptionUC,
+		completeUC:        completeUC,
+		closeUC:           closeUC,
+		cancelUC:          cancelUC,
+		getAppointmentsUC: getAppointmentsUC,
+		getConsumptionsUC: getConsumptionsUC,
 	}
 }

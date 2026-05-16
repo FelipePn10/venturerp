@@ -1,0 +1,1684 @@
+================================================================================
+                        API REQUEST BODIES — PANOSSOERP
+================================================================================
+
+============================================================
+MÓDULO: USUÁRIOS (AUTH)
+============================================================
+
+POST /users/register
+{
+  "name": "João Silva",
+  "email": "joao.silva@empresa.com.br",
+  "password": "senha@123"
+}
+
+POST /users/login
+{
+  "email": "joao.silva@empresa.com.br",
+  "password": "senha@123"
+}
+
+============================================================
+MÓDULO: ENTERPRISE
+============================================================
+
+POST /api/enterprise/create
+{
+  "code": 1,
+  "name": "Panosso Indústria e Comércio Ltda",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+============================================================
+MÓDULO: PDM (GRUPOS E MODIFICADORES)
+============================================================
+
+POST /api/pdm/create-group
+{
+  "code": 10,
+  "description": "Serviços de Entrega",
+  "enterprise_id": 1,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+POST /api/pdm/create-modifier
+{
+  "description": "Frete Expresso Nacional",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+============================================================
+MÓDULO: ITEMS
+============================================================
+
+POST /api/items/create
+{
+  "code": 10001,
+  "complement": "Cadeira de escritório giratória preta",
+  "nature": "generic",
+  "inherit": false,
+  "pdm": {
+    "group_code": 10,
+    "modifier_code": 20,
+    "attributes": [
+      {"name": "COR", "value": "PRETO"},
+      {"name": "TAMANHO", "value": "M"}
+    ],
+    "description_technique": "CADEIRA GIRAT ESCRITORIO PDV PRETA"
+  },
+  "situation": "LINHA",
+  "health": "ATIVO",
+  "warehouse": {
+    "warehouse_code": 1,
+    "unit_of_measurement": "UN",
+    "automatic_low": true,
+    "cyclical_count_config": {
+      "abc_class": "A",
+      "count_frequency_days": 30
+    },
+    "minimum_stock": 50,
+    "average_monthly_consumption_manual": 200
+  },
+  "engineering": {
+    "item_base_cod": null,
+    "weight": 15.5,
+    "dimensions": {
+      "width": 0.600,
+      "height": 0.950,
+      "depth": 0.600
+    },
+    "type": "FABRICADO",
+    "type_struct": "COMERCIAL",
+    "oem": false
+  },
+  "planning": {
+    "type_mrp": "NORMAL_MRP",
+    "llc": 0,
+    "reorder_point": {
+      "quantity": 100,
+      "safety_stock": 30
+    },
+    "tank_code": null,
+    "ghost": false
+  },
+  "supplies": {
+    "type_of_use": "INDUSTRIALIZACAO"
+  },
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/items/search/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/items/search/10001
+
+POST /api/items/mask/generate
+{
+  "item_code": 10001,
+  "answers": [
+    {"question_id": 1, "option_id": 5, "position": 1},
+    {"question_id": 2, "option_id": 8, "position": 2}
+  ],
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+============================================================
+MÓDULO: STRUCTURE (ESTRUTURA DE ITENS)
+============================================================
+
+POST /api/items/structure/create
+{
+  "parent_code": 10001,
+  "child_code": 10002,
+  "parent_mask": "100#100#50",
+  "quantity": 2.5,
+  "unit_of_measurement": "UN",
+  "health": "ATIVO",
+  "loss_percentage": 2.0,
+  "sequence": 1,
+  "notes": "Componente principal da cadeira",
+  "is_active": true,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+PUT /api/items/structure/update
+{
+  "parent_code": 10001,
+  "child_code": 10002,
+  "parent_mask": "100#100#50",
+  "quantity": 3.0,
+  "unit_of_measurement": "UN",
+  "health": "ATIVO",
+  "loss_percentage": 1.5,
+  "position": 1,
+  "notes": "Quantidade ajustada após revisão de engenharia"
+}
+
+GET /api/items/structure/resolve/{itemCode}
+-- Parâmetro na URL: itemCode (int64)
+-- Exemplo: GET /api/items/structure/resolve/10001?mask=100%23100%2350
+
+============================================================
+MÓDULO: QUESTIONS (PERGUNTAS E CONFIGURAÇÃO)
+============================================================
+
+POST /api/questions/questions/create
+{
+  "name": "COR",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/questions/
+-- Parâmetro query: ?name=COR
+-- Exemplo: GET /api/questions/?name=TAMANHO
+
+POST /api/questions/options/create-option
+{
+  "value": "PRETO",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000",
+  "question_id": 1
+}
+
+POST /api/questions/associate
+{
+  "item_code": 10001,
+  "question_id": 1,
+  "position": 1
+}
+
+============================================================
+MÓDULO: BOM (BILL OF MATERIALS)
+============================================================
+
+POST /api/bom/create
+{
+  "product_id": 1,
+  "mask_id": 1,
+  "bom_type": "PRODUCTION",
+  "version": 1,
+  "status": "ACTIVE",
+  "valid_from": "2025-01-01T00:00:00Z"
+}
+
+POST /api/bom/bom-items/create
+{
+  "bom_id": 1,
+  "component_id": 1,
+  "quantity": "2.500",
+  "uom": "UN",
+  "scrap_percent": "2.00",
+  "operation_id": 1,
+  "mask_component": 0
+}
+
+============================================================
+MÓDULO: WAREHOUSE (ALMOXARIFADO)
+============================================================
+
+POST /api/warehouse/create
+{
+  "code": 1,
+  "description": "Almoxarifado Central",
+  "location": "INTERNO",
+  "type": "NORMAL",
+  "disposition": true,
+  "reservations_allowed": true,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+============================================================
+MÓDULO: EMPLOYEE (FUNCIONÁRIOS)
+============================================================
+
+POST /api/employee/create
+{
+  "code": 1001,
+  "name": "Carlos Oliveira",
+  "role": "Operador de Produção",
+  "participates_budget": true,
+  "technical_assistant": false,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/employee/list
+-- Sem corpo de requisição
+
+GET /api/employee/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/employee/1001
+
+PUT /api/employee/update
+{
+  "code": 1001,
+  "name": "Carlos Oliveira Junior",
+  "role": "Supervisor de Produção",
+  "situation": "ACTIVE",
+  "participates_budget": true,
+  "technical_assistant": true
+}
+
+DELETE /api/employee/{code}/deactivate
+-- Parâmetro na URL: code (int64)
+-- Exemplo: DELETE /api/employee/1001/deactivate
+
+============================================================
+MÓDULO: PLANNING PARAMS (PARÂMETROS DE PLANEJAMENTO)
+============================================================
+
+GET /api/planning-params/list
+-- Sem corpo de requisição
+
+GET /api/planning-params/{number}
+-- Parâmetro na URL: number (int)
+-- Exemplo: GET /api/planning-params/1
+
+PUT /api/planning-params/update
+{
+  "param_number": 1,
+  "value": "ATIVO",
+  "updated_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+============================================================
+MÓDULO: PRODUCTION PLAN (PLANO DE PRODUÇÃO)
+============================================================
+
+POST /api/production-plan/create
+{
+  "code": 1,
+  "name": "Plano Principal 2025",
+  "independent_demands": "ALL",
+  "group_same_date_orders": true,
+  "planning_types": ["NORMAL", "URGENTE"],
+  "classification": "TODOS",
+  "class_item_codes": "1,2,3,4,5",
+  "order_item_code": null,
+  "parameters": {
+    "lead_time_days": 15,
+    "safety_stock_percent": 10,
+    "lot_size_min": 50,
+    "lot_size_multiple": 1
+  },
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/production-plan/list
+-- Sem corpo de requisição
+
+GET /api/production-plan/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/production-plan/1
+
+PUT /api/production-plan/update
+{
+  "code": 1,
+  "name": "Plano Principal 2025 - Revisado",
+  "independent_demands": "FROM_DATE",
+  "group_same_date_orders": true,
+  "planning_types": ["NORMAL", "URGENTE", "PRIORITARIO"],
+  "classification": "TODOS",
+  "class_item_codes": "1,2,3,4,5,6",
+  "order_item_code": null,
+  "parameters": {
+    "lead_time_days": 10,
+    "safety_stock_percent": 15,
+    "lot_size_min": 100,
+    "lot_size_multiple": 5
+  }
+}
+
+DELETE /api/production-plan/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: DELETE /api/production-plan/1
+
+============================================================
+MÓDULO: INDEPENDENT DEMAND (DEMANDA INDEPENDENTE)
+============================================================
+
+POST /api/independent-demand/create
+{
+  "code_demand": 1,
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "cost_center_code": 10,
+  "quantity": 500.0,
+  "demand_date": "2025-06-15",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+PUT /api/independent-demand/update/{code}
+{
+  "code_demand": 1,
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "cost_center_code": 10,
+  "quantity": 750.0,
+  "demand_date": "2025-06-20"
+}
+
+DELETE /api/independent-demand/delete/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: DELETE /api/independent-demand/delete/1
+
+GET /api/independent-demand/list-from-date/{date}
+-- Parâmetro na URL: date (string, YYYY-MM-DD)
+-- Exemplo: GET /api/independent-demand/list-from-date/2025-06-01
+
+GET /api/independent-demand/list-by-item/{itemCode}
+-- Parâmetro na URL: itemCode (int64)
+-- Exemplo: GET /api/independent-demand/list-by-item/10001
+
+GET /api/independent-demand/list
+-- Sem corpo de requisição
+
+GET /api/independent-demand/get-by-code/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/independent-demand/get-by-code/1
+
+============================================================
+MÓDULO: SALES FORECAST (PREVISÃO DE VENDAS)
+============================================================
+
+POST /api/sales-forecast/create
+{
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "week": 24,
+  "year": 2025,
+  "quantity": 1200.0
+}
+
+GET /api/sales-forecast/list/{year}
+-- Parâmetro na URL: year (int)
+-- Exemplo: GET /api/sales-forecast/list/2025
+
+GET /api/sales-forecast/item/{itemCode}
+-- Parâmetro na URL: itemCode (int64)
+-- Exemplo: GET /api/sales-forecast/item/10001
+
+POST /api/sales-forecast/blocks/create
+{
+  "start_date": "2025-06-01",
+  "end_date": "2025-06-15",
+  "reason": "Férias coletivas da fábrica"
+}
+
+GET /api/sales-forecast/blocks/list
+-- Sem corpo de requisição
+
+POST /api/sales-forecast/appropriation/create
+{
+  "description": "Tabela Padrão Semanal",
+  "monday_pct": 18.0,
+  "tuesday_pct": 20.0,
+  "wednesday_pct": 20.0,
+  "thursday_pct": 18.0,
+  "friday_pct": 15.0,
+  "saturday_pct": 7.0,
+  "sunday_pct": 2.0,
+  "is_default": true
+}
+
+GET /api/sales-forecast/appropriation/list
+-- Sem corpo de requisição
+
+POST /api/sales-forecast/appropriation/set-default
+{
+  "id": 1
+}
+
+============================================================
+MÓDULO: INDUSTRIAL CALENDAR (CALENDÁRIO INDUSTRIAL)
+============================================================
+
+POST /api/industrial-calendar/create
+{
+  "year": 2025,
+  "month": 6,
+  "day": 15,
+  "is_workday": false,
+  "description": "Feriado Corpus Christi"
+}
+
+GET /api/industrial-calendar/month/{year}/{month}
+-- Parâmetros na URL: year (int), month (int)
+-- Exemplo: GET /api/industrial-calendar/month/2025/6
+
+GET /api/industrial-calendar/workdays/{year}/{month}
+-- Parâmetros na URL: year (int), month (int)
+-- Exemplo: GET /api/industrial-calendar/workdays/2025/6
+
+============================================================
+MÓDULO: MACHINE (MÁQUINAS E EQUIPAMENTOS)
+============================================================
+
+POST /api/machine/create
+{
+  "code": 100,
+  "name": "Torno CNC Mazak",
+  "machine_type_code": 1,
+  "cost_center_code": 10,
+  "capacity": 240.0,
+  "capacity_per_unit": "PEÇAS",
+  "capacity_period": "HORA",
+  "efficiency_rate": 0.92,
+  "is_active": true,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/machine/list
+-- Sem corpo de requisição
+
+GET /api/machine/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/machine/100
+
+POST /api/machine/types/create
+{
+  "code": 1,
+  "name": "Torno CNC",
+  "description": "Máquinas de usinagem com comando numérico computadorizado",
+  "type": "TORNO",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000",
+  "is_active": true
+}
+
+GET /api/machine/types/list
+-- Sem corpo de requisição
+
+GET /api/machine/types/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/machine/types/1
+
+POST /api/machine/time/create
+{
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "machine_code": 100,
+  "production_time": 5.5,
+  "production_time_unit": "MINUTO",
+  "production_base_qty": 10,
+  "setup_time": 30.0,
+  "priority": 1
+}
+
+GET /api/machine/time/list
+-- Sem corpo de requisição
+
+POST /api/machine/time/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: POST /api/machine/time/1
+
+POST /api/machine/time/production/calculate
+{
+  "item_code": 10001,
+  "machine_code": 100,
+  "quantity": 500.0
+}
+
+POST /api/machine/schedule/create
+{
+  "machine_code": 100,
+  "order_code": 1,
+  "schedule_date": "2025-06-15",
+  "start_time": "08:00",
+  "end_time": "12:00",
+  "planned_qty": 240.0,
+  "sequence": 1,
+  "priority_override": 1,
+  "notes": "Primeiro lote do dia - pedido urgente"
+}
+
+GET /api/machine/schedule/list
+-- Sem corpo de requisição
+
+POST /api/machine/schedule/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: POST /api/machine/schedule/1
+
+============================================================
+MÓDULO: MRP CALCULATION (CÁLCULO MRP)
+============================================================
+
+POST /api/mrp-calculation/run
+{
+  "plan_code": 1,
+  "generate_llc": true
+}
+
+GET /api/mrp-calculation/profile/{item_code}/{plan_code}
+-- Parâmetros na URL: item_code (int64), plan_code (int64)
+-- Exemplo: GET /api/mrp-calculation/profile/10001/1
+
+POST /api/mrp-calculation/configured-rules
+{
+  "item_code": 10001,
+  "table_type": "SUPPLY",
+  "field_name": "lead_time",
+  "rule_type": "FIXED",
+  "rule_value": "10",
+  "sequence": 1,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/mrp-calculation/configured-rules/{item_code}
+-- Parâmetro na URL: item_code (int64)
+-- Exemplo: GET /api/mrp-calculation/configured-rules/10001
+
+GET /api/mrp-calculation/exceptions/{plan_code}
+-- Parâmetro na URL: plan_code (int64)
+-- Exemplo: GET /api/mrp-calculation/exceptions/1
+
+============================================================
+MÓDULO: ORDER PRIORITY (PRIORIDADE DE ORDENS)
+============================================================
+
+POST /api/order-priority/create
+{
+  "code": 1,
+  "interval_start": 0.0,
+  "interval_end": 10.0,
+  "priority": "ALTA",
+  "description": "Prioridade para pedidos com atraso menor que 10 dias",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/order-priority/list
+-- Sem corpo de requisição
+
+GET /api/order-priority/find/{value}
+-- Parâmetro na URL: value (float64)
+-- Exemplo: GET /api/order-priority/find/5.5
+
+============================================================
+MÓDULO: OVERHEAD ALLOCATION (RATEIO DE CUSTOS INDIRETOS)
+============================================================
+
+POST /api/overhead-allocation/create
+{
+  "cost_center_code": 1,
+  "plan_account_code": 10,
+  "account_code": "5.1.01.001",
+  "period_start": "2025-06-01",
+  "period_end": "2025-06-30",
+  "allocation_type": "DIRECT",
+  "base_code": 1,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000",
+  "targets": [
+    {
+      "cost_center_code": 5,
+      "percentage": 60.0,
+      "amount": 3000.00
+    },
+    {
+      "cost_center_code": 8,
+      "percentage": 40.0,
+      "amount": 2000.00
+    }
+  ]
+}
+
+GET /api/overhead-allocation/list
+-- Sem corpo de requisição
+
+============================================================
+MÓDULO: PLANNED ORDER (ORDENS PLANEJADAS)
+============================================================
+
+POST /api/planned-order/create
+{
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "quantity": 500.0,
+  "order_type": "PRODUCTION",
+  "need_date": "2025-06-25",
+  "cost_center_code": 10,
+  "employee_code": 1001,
+  "machine_code": 100,
+  "production_time": 240.0,
+  "notes": "Ordem planejada gerada pelo MRP",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/planned-order/list
+-- Sem corpo de requisição
+
+GET /api/planned-order/{code}/firm
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/planned-order/1/firm
+
+============================================================
+MÓDULO: PRODUCTION ORDER (ORDENS DE PRODUÇÃO)
+============================================================
+
+POST /api/production-order/create
+{
+  "planned_order_id": 1,
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "planned_qty": 500.0,
+  "start_date": "2025-06-10",
+  "end_date": "2025-06-25",
+  "machine_id": 100,
+  "cost_center_id": 10,
+  "employee_id": 1001,
+  "priority": "ALTA",
+  "notes": "Ordem de produção para repor estoque de segurança",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/production-order/list
+-- Sem corpo de requisição
+
+GET /api/production-order/{id}
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/production-order/1
+
+POST /api/production-order/{id}/start
+{
+  "id": 1,
+  "start_date": "2025-06-10"
+}
+
+POST /api/production-order/appointment
+{
+  "production_order_id": 1,
+  "machine_id": 100,
+  "employee_id": 1001,
+  "appointment_date": "2025-06-10",
+  "start_time": "08:00",
+  "end_time": "12:00",
+  "produced_qty": 120.0,
+  "scrapped_qty": 3.0,
+  "scrap_reason": "Defeito de pintura detectado na inspeção",
+  "notes": "Produção do turno matutino",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+POST /api/production-order/consumption
+{
+  "production_order_id": 1,
+  "appointment_id": 1,
+  "item_code": 10002,
+  "consumed_qty": 50.0,
+  "warehouse_id": 1,
+  "lot": "LOTE-2025-06-001",
+  "consumption_date": "2025-06-10",
+  "notes": "Consumo de matéria-prima para lote do turno matutino",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+POST /api/production-order/{id}/complete
+{
+  "id": 1,
+  "end_date": "2025-06-25"
+}
+
+POST /api/production-order/{id}/close
+{
+  "id": 1
+}
+
+POST /api/production-order/{id}/cancel
+{
+  "id": 1
+}
+
+GET /api/production-order/{id}/appointments
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/production-order/1/appointments
+
+GET /api/production-order/{id}/consumptions
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/production-order/1/consumptions
+
+============================================================
+MÓDULO: SALES DIVISION (DIVISÃO DE VENDAS)
+============================================================
+
+POST /api/sales-division/create
+{
+  "code": 1,
+  "description": "Divisão Mercado Interno",
+  "commercial_analysis": "ANALISE_PADRAO",
+  "financial_analysis": "ANALISE_PADRAO",
+  "is_technical_assistance": false,
+  "consider_delivery_promise": true,
+  "consider_mrp": true,
+  "allow_outside_limits": false,
+  "minimum_delivery_days": 5,
+  "financial_delay_days": 7,
+  "pis_percentage": 1.65,
+  "cofins_percentage": 7.60,
+  "parent_division_id": null
+}
+
+GET /api/sales-division/list
+-- Sem corpo de requisição
+
+GET /api/sales-division/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/sales-division/1
+
+PUT /api/sales-division/{code}
+{
+  "description": "Divisão Mercado Interno - Revisada",
+  "commercial_analysis": "ANALISE_RIGOROSA",
+  "financial_analysis": "ANALISE_RIGOROSA",
+  "is_technical_assistance": false,
+  "consider_delivery_promise": true,
+  "consider_mrp": true,
+  "allow_outside_limits": true,
+  "minimum_delivery_days": 3,
+  "financial_delay_days": 5,
+  "pis_percentage": 1.65,
+  "cofins_percentage": 7.60,
+  "parent_division_id": null
+}
+
+DELETE /api/sales-division/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: DELETE /api/sales-division/1
+
+============================================================
+MÓDULO: RESTRICTION (RESTRIÇÕES)
+============================================================
+
+POST /api/restriction/create
+{
+  "situation": "ACTIVE",
+  "item_code": 10001,
+  "reason_code": 1,
+  "classification_type": "BLOQUEIO",
+  "classification_origin": "COMERCIAL",
+  "division_id": 1,
+  "dominants": [
+    {
+      "question_id": 1,
+      "operator": "EQ",
+      "condition_type": "AND",
+      "answer_value": "PRETO",
+      "sequence": 1
+    }
+  ],
+  "determinants": [
+    {
+      "question_id": 2,
+      "operator": "NEQ",
+      "answer_value": "GRANDE"
+    }
+  ],
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/restriction/list
+-- Sem corpo de requisição
+
+GET /api/restriction/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/restriction/1
+
+GET /api/restriction/item/{itemCode}
+-- Parâmetro na URL: itemCode (int64)
+-- Exemplo: GET /api/restriction/item/10001
+
+PUT /api/restriction/{code}
+{
+  "code": 1,
+  "situation": "ACTIVE",
+  "item_code": 10001,
+  "reason_code": 2,
+  "classification_type": "LIBERACAO_PARCIAL",
+  "classification_origin": "COMERCIAL",
+  "division_id": 1
+}
+
+PATCH /api/restriction/{code}/deactivate
+-- Parâmetro na URL: code (int64)
+-- Exemplo: PATCH /api/restriction/1/deactivate
+
+============================================================
+MÓDULO: SALES ORDER (PEDIDO DE VENDA)
+============================================================
+
+POST /api/sales-order/create
+{
+  "enterprise_code": 1,
+  "status": "R",
+  "origin": "NORMAL",
+  "emission_date": "2025-06-10",
+  "delivery_date": "2025-07-05",
+  "delivery_date_firm": false,
+  "customer_code": 5001,
+  "billing_address_code": 100,
+  "shipping_address_code": 200,
+  "representative_code": 3001,
+  "plan_code": 1,
+  "sales_division_code": 1,
+  "commission_pct": 5.0,
+  "tax_type_code": 1,
+  "presence_indicator": "PRESENCIAL",
+  "sales_channel": "DIRETO",
+  "default_nf_type": "NFe",
+  "price_table_code": 1,
+  "currency_code": "BRL",
+  "payment_term_code": 2,
+  "additional_days": 0,
+  "bearer_code": 1,
+  "sale_date": "2025-06-10",
+  "notes": "Cliente solicitou embalagem especial",
+  "obs_customer": "Entregar no período da manhã",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/sales-order/list
+-- Sem corpo de requisição
+
+GET /api/sales-order/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/sales-order/1
+
+PUT /api/sales-order/{code}
+{
+  "code": 1,
+  "status": "A",
+  "origin": "NORMAL",
+  "delivery_date": "2025-07-10",
+  "delivery_date_firm": true,
+  "customer_code": 5001,
+  "billing_address_code": 100,
+  "shipping_address_code": 200,
+  "representative_code": 3001,
+  "plan_code": 1,
+  "sales_division_code": 1,
+  "commission_pct": 5.0,
+  "tax_type_code": 1,
+  "presence_indicator": "PRESENCIAL",
+  "sales_channel": "DIRETO",
+  "default_nf_type": "NFe",
+  "price_table_code": 1,
+  "currency_code": "BRL",
+  "payment_term_code": 2,
+  "additional_days": 0,
+  "bearer_code": 1,
+  "sale_date": "2025-06-10",
+  "notes": "Cliente solicitou antecipação da entrega",
+  "obs_customer": "Entregar no período da manhã",
+  "is_firm": false
+}
+
+DELETE /api/sales-order/{code}/cancel
+-- Parâmetro na URL: code (int64)
+-- Exemplo: DELETE /api/sales-order/1/cancel
+
+PATCH /api/sales-order/{code}/block
+{
+  "code": 1,
+  "reason": "Pendência financeira - cliente com limite excedido"
+}
+
+PATCH /api/sales-order/{code}/unblock
+-- Parâmetro na URL: code (int64)
+-- Exemplo: PATCH /api/sales-order/1/unblock
+
+PATCH /api/sales-order/{code}/status
+{
+  "code": 1,
+  "status": "P"
+}
+
+GET /api/sales-order/customer/{customerCode}
+-- Parâmetro na URL: customerCode (int64)
+-- Exemplo: GET /api/sales-order/customer/5001
+
+GET /api/sales-order/status/{status}
+-- Parâmetro na URL: status (string: R, P, A, OA, OF)
+-- Exemplo: GET /api/sales-order/status/A
+
+POST /api/sales-order/items/create
+{
+  "sales_order_code": 1,
+  "sequence": 1,
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "digit_date": "2025-06-10",
+  "nf_type": "NFe",
+  "sales_uom": "UN",
+  "warehouse_code": 1,
+  "price_table_code": 1,
+  "requested_qty": 100.0,
+  "unit_price": 250.00,
+  "delivery_date": "2025-07-05",
+  "delivery_date_firm": false,
+  "customer_delivery": "Depósito Central",
+  "lot": null,
+  "coupon_delivery": null,
+  "paid_at_cashier": false,
+  "ipi_pct": 5.0,
+  "icms_pct": 18.0,
+  "pis_pct": 1.65,
+  "cofins_pct": 7.60,
+  "st_pct": 0.0,
+  "discount_pct": 2.5,
+  "unit_weight_net": 15.5,
+  "unit_weight_gross": 16.2,
+  "notes": "Item principal do pedido - cadeira giratória preta"
+}
+
+GET /api/sales-order/items/{code}
+-- Parâmetro na URL: code (int64) — código do pedido de venda
+-- Exemplo: GET /api/sales-order/items/1
+
+PUT /api/sales-order/items/{itemCode}
+{
+  "code": 1,
+  "requested_qty": 150.0,
+  "unit_price": 245.00,
+  "attended_qty": 0.0,
+  "cancelled_qty": 0.0,
+  "delivery_date": "2025-07-12",
+  "delivery_date_firm": false,
+  "customer_delivery": "Depósito Central",
+  "lot": null,
+  "coupon_delivery": null,
+  "paid_at_cashier": false,
+  "ipi_pct": 5.0,
+  "icms_pct": 18.0,
+  "pis_pct": 1.65,
+  "cofins_pct": 7.60,
+  "st_pct": 0.0,
+  "discount_pct": 3.0,
+  "unit_weight_net": 15.5,
+  "unit_weight_gross": 16.2,
+  "notes": "Quantidade ajustada conforme solicitação do cliente"
+}
+
+DELETE /api/sales-order/items/{itemCode}/cancel
+-- Parâmetro na URL: itemCode (int64)
+-- Exemplo: DELETE /api/sales-order/items/1/cancel
+
+============================================================
+MÓDULO: PURCHASE ORDER (PEDIDO DE COMPRA)
+============================================================
+
+POST /api/purchase-order/create
+{
+  "enterprise_code": 1,
+  "status": "R",
+  "origin": "NORMAL",
+  "emission_date": "2025-06-10",
+  "delivery_date": "2025-06-30",
+  "supplier_code": 2001,
+  "payment_term_code": 3,
+  "currency_code": "BRL",
+  "shipping_address_code": 200,
+  "notes": "Compra de matéria-prima para produção do mês",
+  "total_gross": 50000.00,
+  "total_net": 47500.00,
+  "total_discount": 2500.00,
+  "is_firm": false,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/purchase-order/list
+-- Sem corpo de requisição
+
+GET /api/purchase-order/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/purchase-order/1
+
+PUT /api/purchase-order/{code}
+{
+  "code": 1,
+  "status": "A",
+  "origin": "NORMAL",
+  "delivery_date": "2025-07-05",
+  "supplier_code": 2001,
+  "payment_term_code": 3,
+  "currency_code": "BRL",
+  "shipping_address_code": 200,
+  "notes": "Fornecedor solicitou ajuste na data de entrega",
+  "total_gross": 50000.00,
+  "total_net": 47500.00,
+  "total_discount": 2500.00,
+  "is_firm": true
+}
+
+DELETE /api/purchase-order/{code}/cancel
+-- Parâmetro na URL: code (int64)
+-- Exemplo: DELETE /api/purchase-order/1/cancel
+
+GET /api/purchase-order/supplier/{supplierCode}
+-- Parâmetro na URL: supplierCode (int64)
+-- Exemplo: GET /api/purchase-order/supplier/2001
+
+GET /api/purchase-order/status/{status}
+-- Parâmetro na URL: status (string: R, A, E, C)
+-- Exemplo: GET /api/purchase-order/status/A
+
+============================================================
+MÓDULO: STOCK (ESTOQUE)
+============================================================
+
+--- MOVIMENTAÇÕES DE ESTOQUE ---
+
+POST /api/stock/movements/create
+{
+  "item_code": 10002,
+  "mask": "100#100#50",
+  "warehouse_id": 1,
+  "movement_type": "ENTRADA",
+  "quantity": 1000.0,
+  "unit_price": 15.50,
+  "total_price": 15500.00,
+  "reference_type": "PURCHASE_ORDER",
+  "reference_code": 1,
+  "lot": "LOTE-2025-06-002",
+  "serial_number": "SN-20250610-0001",
+  "batch": "BATCH-2025-06-A",
+  "expiration_date": "2026-06-10",
+  "notes": "Recebimento de matéria-prima conforme pedido de compra"
+}
+
+GET /api/stock/movements/list
+-- Sem corpo de requisição
+
+GET /api/stock/movements/item/{itemCode}
+-- Parâmetro na URL: itemCode (int64)
+-- Exemplo: GET /api/stock/movements/item/10002
+
+GET /api/stock/movements/warehouse/{warehouseId}
+-- Parâmetro na URL: warehouseId (int64)
+-- Exemplo: GET /api/stock/movements/warehouse/1
+
+--- SALDOS DE ESTOQUE ---
+
+GET /api/stock/balances/get
+-- Parâmetros query: item_code, mask, warehouse_id
+-- Exemplo: GET /api/stock/balances/get?item_code=10002&mask=100%23100%2350&warehouse_id=1
+
+GET /api/stock/balances/list
+-- Sem corpo de requisição
+
+GET /api/stock/balances/warehouse/{warehouseId}
+-- Parâmetro na URL: warehouseId (int64)
+-- Exemplo: GET /api/stock/balances/warehouse/1
+
+GET /api/stock/balances/item/{itemCode}
+-- Parâmetro na URL: itemCode (int64)
+-- Exemplo: GET /api/stock/balances/item/10002
+
+--- RESERVAS DE ESTOQUE ---
+
+POST /api/stock/reservations/create
+{
+  "item_code": 10002,
+  "mask": "100#100#50",
+  "warehouse_id": 1,
+  "quantity": 200.0,
+  "reference_type": "PRODUCTION_ORDER",
+  "reference_code": 1,
+  "reference_item_code": null,
+  "reservation_date": "2025-06-10",
+  "expiration_date": "2025-06-25",
+  "notes": "Reserva de matéria-prima para ordem de produção"
+}
+
+PATCH /api/stock/reservations/{id}/release
+-- Parâmetro na URL: id (int64)
+-- Exemplo: PATCH /api/stock/reservations/1/release
+
+PATCH /api/stock/reservations/{id}/consume
+-- Parâmetro na URL: id (int64)
+-- Exemplo: PATCH /api/stock/reservations/1/consume
+
+--- INVENTÁRIO FÍSICO ---
+
+POST /api/stock/inventories/create
+{
+  "code": 1,
+  "description": "Inventário Geral Mensal - Junho 2025",
+  "warehouse_id": 1,
+  "start_date": "2025-06-01",
+  "end_date": "2025-06-05",
+  "notes": "Inventário cíclico programado para todos os itens classe A"
+}
+
+GET /api/stock/inventories/list
+-- Parâmetro query opcional: ?status=OPEN
+-- Exemplo: GET /api/stock/inventories/list?status=CLOSED
+
+GET /api/stock/inventories/{id}
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/stock/inventories/1
+
+POST /api/stock/inventories/{id}/close
+-- Parâmetro na URL: id (int64)
+-- Exemplo: POST /api/stock/inventories/1/close
+
+POST /api/stock/inventories/count
+{
+  "inventory_id": 1,
+  "item_code": 10002,
+  "mask": "100#100#50",
+  "warehouse_id": 1,
+  "counted_qty": 980.0,
+  "unit_cost": 15.50,
+  "adjustment_type": "CONTAGEM",
+  "adjustment_reason": "Divergência detectada na contagem física",
+  "counted_by": "Carlos Oliveira"
+}
+
+POST /api/stock/inventories/adjust
+{
+  "inventory_id": 1,
+  "item_code": 10002,
+  "mask": "100#100#50",
+  "warehouse_id": 1,
+  "adjustment_type": "AJUSTE_AUTOMATICO",
+  "adjustment_reason": "Correção de divergência de estoque após contagem"
+}
+
+GET /api/stock/inventories/{id}/items
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/stock/inventories/1/items
+
+============================================================
+MÓDULO: DELIVERY PROMISE PARAMS (PARÂMETROS DE PROMESSA DE ENTREGA)
+============================================================
+
+GET /api/delivery-promise-params/
+-- Sem corpo de requisição
+
+PUT /api/delivery-promise-params/update
+{
+  "use_delivery_promise": true,
+  "blocked_orders_in_promise": false,
+  "default_order_sort": "DATE_ASC",
+  "show_order_values": 1,
+  "blocked_export_in_promise": true,
+  "break_tank_occupation": false,
+  "recalculate_after_release": true,
+  "reprogram_loaded_orders": false,
+  "allow_delivery_date_change": true,
+  "updated_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+============================================================
+MÓDULO: DELIVERY RESCHEDULE (REAGENDAMENTO DE ENTREGA)
+============================================================
+
+POST /api/delivery-reschedule/create
+{
+  "code": 1,
+  "sales_order_code": 1,
+  "item_code": 10001,
+  "old_date": "2025-07-05T00:00:00Z",
+  "new_date": "2025-07-15T00:00:00Z",
+  "reason": "Atraso no fornecedor de matéria-prima",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/delivery-reschedule/list/{sales_order_code}
+-- Parâmetro na URL: sales_order_code (int64)
+-- Exemplo: GET /api/delivery-reschedule/list/1
+
+============================================================
+MÓDULO: ITEM CALENDAR PROMISE (CALENDÁRIO DE PROMESSA DO ITEM)
+============================================================
+
+POST /api/item-calendar-promise/create
+{
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "year": 2025,
+  "month": 6,
+  "day": 15,
+  "is_workday": false,
+  "description": "Manutenção programada da linha de produção"
+}
+
+GET /api/item-calendar-promise/{item_code}/{mask}/{year}/{month}
+-- Parâmetros na URL: item_code (int64), mask (string), year (int), month (int)
+-- Exemplo: GET /api/item-calendar-promise/10001/100%23100%2350/2025/6
+
+GET /api/item-calendar-promise/{item_code}/{mask}/{year}/{month}/workdays
+-- Parâmetros na URL: item_code (int64), mask (string), year (int), month (int)
+-- Exemplo: GET /api/item-calendar-promise/10001/100%23100%2350/2025/6/workdays
+
+GET /api/item-calendar-promise/{item_code}/{mask}/{year}/{month}/{day}
+-- Parâmetros na URL: item_code (int64), mask (string), year (int), month (int), day (int)
+-- Exemplo: GET /api/item-calendar-promise/10001/100%23100%2350/2025/6/15
+
+DELETE /api/item-calendar-promise/{item_code}/{mask}/{year}/{month}/{day}
+-- Parâmetros na URL: item_code (int64), mask (string), year (int), month (int), day (int)
+-- Exemplo: DELETE /api/item-calendar-promise/10001/100%23100%2350/2025/6/15
+
+============================================================
+MÓDULO: ALLOCATION BASE (BASE DE RATEIO)
+============================================================
+
+POST /api/allocations/create
+{
+  "code": 1,
+  "description": "Rateio de Energia Elétrica - Junho 2025",
+  "period": "MENSAL",
+  "observation": "Rateio baseado no consumo medido por centro de custo",
+  "items": [
+    {
+      "cost_center_code": 10,
+      "amount": 4500.00,
+      "percentage": 45.0
+    },
+    {
+      "cost_center_code": 20,
+      "amount": 5500.00,
+      "percentage": 55.0
+    }
+  ],
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/allocations/list
+-- Sem corpo de requisição
+
+============================================================
+MÓDULO: COST CENTER (CENTRO DE CUSTO)
+============================================================
+
+POST /api/cost-center/create
+{
+  "code": 10,
+  "description": "Centro de Custo - Produção",
+  "parent_code": null,
+  "type": "PRODUCTIVE",
+  "is_ratio": true,
+  "start_date": "2025-01-01",
+  "end_date": null,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+GET /api/cost-center/list
+-- Sem corpo de requisição
+
+GET /api/cost-center/{costCenterCode}
+-- Parâmetro na URL: costCenterCode (int32)
+-- Exemplo: GET /api/cost-center/10
+
+============================================================
+MÓDULO: FISCAL (ENTRADAS E SAÍDAS FISCAIS)
+============================================================
+
+--- ENTRADAS FISCAIS ---
+
+POST /api/fiscal/entries/create
+{
+  "chave_acesso": "35250612345678901234567890123456789012345678",
+  "numero_nf": 50001,
+  "serie": "1",
+  "modelo": "55",
+  "data_emissao": "2025-06-10",
+  "data_entrada": "2025-06-12",
+  "cnpj_emitente": "12345678000199",
+  "razao_social_emitente": "Distribuidora de Aços Ltda",
+  "ie_emitente": "123456789012",
+  "uf_emitente": "SP",
+  "valor_produtos": 45000.00,
+  "valor_frete": 1500.00,
+  "valor_seguro": 500.00,
+  "valor_desconto": 2250.00,
+  "valor_ipi": 2250.00,
+  "valor_icms": 8100.00,
+  "valor_pis": 742.50,
+  "valor_cofins": 3420.00,
+  "valor_total": 44750.00,
+  "tipo_documento": "NFE",
+  "purchase_order_code": 1,
+  "cte_code": null,
+  "notes": "Compra de chapas de aço para produção",
+  "itens": [
+    {
+      "sequence": 1,
+      "item_code": 10003,
+      "ncm": "7208.51.00",
+      "cfop": "1101",
+      "quantity": 1000.0,
+      "unit_price": 22.50,
+      "total_price": 22500.00,
+      "base_icms": 22500.00,
+      "aliq_icms": 18.0,
+      "valor_icms": 4050.00,
+      "base_ipi": 22500.00,
+      "aliq_ipi": 5.0,
+      "valor_ipi": 1125.00,
+      "valor_pis": 371.25,
+      "valor_cofins": 1710.00,
+      "cst_icms": "000",
+      "cst_ipi": "50",
+      "cst_pis": "50",
+      "cst_cofins": "50",
+      "gera_credito_icms": true,
+      "gera_credito_ipi": true,
+      "gera_credito_pis": true,
+      "gera_credito_cofins": true,
+      "description": "Chapa de aço carbono 1020 2mm",
+      "notes": null
+    },
+    {
+      "sequence": 2,
+      "item_code": 10004,
+      "ncm": "7208.52.00",
+      "cfop": "1101",
+      "quantity": 1000.0,
+      "unit_price": 22.50,
+      "total_price": 22500.00,
+      "base_icms": 22500.00,
+      "aliq_icms": 18.0,
+      "valor_icms": 4050.00,
+      "base_ipi": 22500.00,
+      "aliq_ipi": 5.0,
+      "valor_ipi": 1125.00,
+      "valor_pis": 371.25,
+      "valor_cofins": 1710.00,
+      "cst_icms": "000",
+      "cst_ipi": "50",
+      "cst_pis": "50",
+      "cst_cofins": "50",
+      "gera_credito_icms": true,
+      "gera_credito_ipi": true,
+      "gera_credito_pis": true,
+      "gera_credito_cofins": true,
+      "description": "Chapa de aço carbono 1020 3mm",
+      "notes": null
+    }
+  ]
+}
+
+POST /api/fiscal/entries/upload-nfe
+{
+  "xml_content": "<nfeProc xmlns=\"http://www.portalfiscal.inf.br/nfe\" versao=\"4.00\"><NFe>...</NFe></nfeProc>"
+}
+
+POST /api/fiscal/entries/{code}/approve
+-- Parâmetro na URL: code (int64)
+-- Exemplo: POST /api/fiscal/entries/1/approve
+
+GET /api/fiscal/entries/list
+-- Sem corpo de requisição
+
+GET /api/fiscal/entries/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/fiscal/entries/1
+
+--- SAÍDAS FISCAIS ---
+
+POST /api/fiscal/exits/create
+{
+  "numero_nf": 10001,
+  "serie": "1",
+  "data_emissao": "2025-06-15",
+  "data_saida": "2025-07-05",
+  "cnpj_destinatario": "98765432000155",
+  "razao_social_destinatario": "Comércio de Móveis Moderno Ltda",
+  "ie_destinatario": "987654321098",
+  "uf_destinatario": "RJ",
+  "tipo_pessoa": "JURIDICA",
+  "cfop": "5101",
+  "natureza_operacao": "VENDA DE PRODUCAO DO ESTABELECIMENTO",
+  "valor_produtos": 25000.00,
+  "valor_frete": 800.00,
+  "valor_seguro": 200.00,
+  "valor_desconto": 1250.00,
+  "sales_order_code": 1,
+  "itens": [
+    {
+      "sequence": 1,
+      "item_code": 10001,
+      "ncm": "9401.30.10",
+      "cfop": "5101",
+      "quantity": 100.0,
+      "unit_price": 250.00,
+      "total_price": 25000.00,
+      "origem_mercadoria": "NACIONAL",
+      "description": "Cadeira giratória de escritório preta"
+    }
+  ]
+}
+
+POST /api/fiscal/exits/{code}/authorize
+-- Parâmetro na URL: code (int64)
+-- Exemplo: POST /api/fiscal/exits/1/authorize
+
+POST /api/fiscal/exits/{code}/cancel
+-- Parâmetro na URL: code (int64)
+-- Exemplo: POST /api/fiscal/exits/1/cancel
+
+GET /api/fiscal/exits/list
+-- Sem corpo de requisição
+
+GET /api/fiscal/exits/{code}
+-- Parâmetro na URL: code (int64)
+-- Exemplo: GET /api/fiscal/exits/1
+
+--- CONFIGURAÇÃO FISCAL ---
+
+GET /api/fiscal/config
+-- Sem corpo de requisição
+
+PUT /api/fiscal/config
+{
+  "cnpj_empresa": "11222333000181",
+  "razao_social": "Panosso Indústria e Comércio Ltda",
+  "ie_empresa": "123456789012",
+  "regime_tributario": "LUCRO_REAL",
+  "uf_empresa": "SP",
+  "icms_interno_aliquota": 18.0,
+  "icms_diferimento_percentual": 0.0,
+  "focus_nfe_token": "token-integracao-focus-nfe-123456",
+  "focus_nfe_ambiente": "PRODUCAO",
+  "juros_mes": 1.0,
+  "multa_atraso": 2.0,
+  "vencimento_icms_dia": 20,
+  "vencimento_ipi_dia": 25,
+  "vencimento_pis_cofins_dia": 28
+}
+
+============================================================
+MÓDULO: FINANCIAL (FINANCEIRO)
+============================================================
+
+--- CONTAS BANCÁRIAS ---
+
+POST /api/financial/contas-bancarias/create
+{
+  "banco": "001",
+  "agencia": "1234-5",
+  "conta": "98765-4",
+  "digito": "8",
+  "descricao": "Conta Corrente Principal - Banco do Brasil",
+  "titular": "Panosso Indústria e Comércio Ltda",
+  "saldo_inicial": 150000.00,
+  "chave_pix": "11222333000181",
+  "tipo_chave_pix": "CNPJ"
+}
+
+GET /api/financial/contas-bancarias/list
+-- Sem corpo de requisição
+
+--- CONDIÇÕES DE PAGAMENTO ---
+
+POST /api/financial/condicoes-pagamento/create
+{
+  "nome": "30/60/90 Dias",
+  "parcelas": "33.33/33.33/33.34"
+}
+
+GET /api/financial/condicoes-pagamento/list
+-- Sem corpo de requisição
+
+--- PLANO DE CONTAS ---
+
+POST /api/financial/plano-contas/create
+{
+  "codigo": "1.1.01.001",
+  "descricao": "Caixa Geral",
+  "tipo": "ANALITICA",
+  "natureza": "DEVEDORA",
+  "parent_code": "1.1.01",
+  "nivel": 5
+}
+
+GET /api/financial/plano-contas/list
+-- Sem corpo de requisição
+
+--- CENTROS DE CUSTO (FINANCEIRO) ---
+
+POST /api/financial/centros-custo/create
+{
+  "codigo": "CC-001",
+  "descricao": "Centro de Custo Administrativo",
+  "tipo": "ADMINISTRATIVO"
+}
+
+GET /api/financial/centros-custo/list
+-- Sem corpo de requisição
+
+--- CONTAS A PAGAR ---
+
+POST /api/financial/contas-pagar/create
+{
+  "numero_documento": "NF-50001",
+  "tipo_documento": "NFE",
+  "fornecedor_id": 2001,
+  "fiscal_entry_id": 1,
+  "purchase_order_id": 1,
+  "data_emissao": "2025-06-10",
+  "data_vencimento": "2025-07-10",
+  "valor_bruto": 14916.67,
+  "desconto": 0.00,
+  "parcela_numero": 1,
+  "parcela_total": 3,
+  "forma_pagamento": "BOLETO",
+  "plano_contas_id": 5,
+  "centro_custo_id": 1,
+  "observacao": "Referente à compra de matéria-prima NF-50001"
+}
+
+GET /api/financial/contas-pagar/list
+{
+  "status": "PENDENTE",
+  "fornecedor_id": 2001,
+  "start_date": "2025-06-01",
+  "end_date": "2025-06-30"
+}
+
+GET /api/financial/contas-pagar/{id}
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/financial/contas-pagar/1
+
+POST /api/financial/contas-pagar/{id}/approve
+-- Parâmetro na URL: id (int64)
+-- Exemplo: POST /api/financial/contas-pagar/1/approve
+
+POST /api/financial/contas-pagar/{id}/baixar
+{
+  "conta_bancaria_id": 1,
+  "valor_pago": 14916.67,
+  "data_pagamento": "2025-07-05",
+  "observacao": "Pagamento antecipado conforme boleto"
+}
+
+POST /api/financial/contas-pagar/{id}/cancel
+-- Parâmetro na URL: id (int64)
+-- Exemplo: POST /api/financial/contas-pagar/1/cancel
+
+GET /api/financial/contas-pagar/aging
+-- Sem corpo de requisição
+
+--- CONTAS A RECEBER ---
+
+POST /api/financial/contas-receber/create
+{
+  "numero_documento": "NF-10001",
+  "cliente_id": 5001,
+  "fiscal_exit_id": 1,
+  "sales_order_id": 1,
+  "data_emissao": "2025-06-15",
+  "data_vencimento": "2025-07-15",
+  "valor_bruto": 8333.34,
+  "desconto": 0.00,
+  "parcela_numero": 1,
+  "parcela_total": 3,
+  "forma_pagamento": "BOLETO",
+  "plano_contas_id": 10,
+  "centro_custo_id": 1,
+  "observacao": "Referente ao pedido de venda - 1ª parcela"
+}
+
+GET /api/financial/contas-receber/list
+{
+  "status": "ABERTO",
+  "cliente_id": 5001,
+  "start_date": "2025-06-01",
+  "end_date": "2025-06-30"
+}
+
+GET /api/financial/contas-receber/{id}
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/financial/contas-receber/1
+
+POST /api/financial/contas-receber/{id}/baixar
+{
+  "conta_bancaria_id": 1,
+  "valor_recebido": 8333.34,
+  "data_recebimento": "2025-07-15",
+  "observacao": "Recebimento via boleto bancário"
+}
+
+POST /api/financial/contas-receber/{id}/cancel
+-- Parâmetro na URL: id (int64)
+-- Exemplo: POST /api/financial/contas-receber/1/cancel
+
+GET /api/financial/contas-receber/aging
+-- Sem corpo de requisição
+
+--- FLUXO DE CAIXA ---
+
+GET /api/financial/fluxo-caixa
+{
+  "start_date": "2025-06-01",
+  "end_date": "2025-06-30"
+}
+
+GET /api/financial/fluxo-projetado
+{
+  "start_date": "2025-06-15"
+}
+
+--- SALDO DE CONTAS ---
+
+GET /api/financial/saldo-contas
+-- Sem corpo de requisição
+
+--- APURAÇÃO DE IMPOSTOS ---
+
+POST /api/financial/apuracao-impostos
+{
+  "competencia": "2025-06"
+}
+
+GET /api/financial/apuracao-impostos/{competencia}
+-- Parâmetro na URL: competencia (string, formato YYYY-MM)
+-- Exemplo: GET /api/financial/apuracao-impostos/2025-06
+
+============================================================
+MÓDULO: HEALTH CHECK
+============================================================
+
+GET /health
+-- Sem corpo de requisição
+-- Resposta esperada: {"status":"ok","timestamp":"...","mask":"core-api"}
+
+================================================================================
+                        FIM DO DOCUMENTO
+================================================================================
