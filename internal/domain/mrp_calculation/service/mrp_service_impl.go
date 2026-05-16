@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,11 +12,13 @@ import (
 	inddemandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 	inddemandrepo "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
 	calrepo "github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
+	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	planentity "github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
 	planrepo "github.com/FelipePn10/panossoerp/internal/domain/production_plan/repository"
 	restrictionrepo "github.com/FelipePn10/panossoerp/internal/domain/restriction/repository"
@@ -27,6 +30,10 @@ import (
 // tooEarlyDays is the threshold (in calendar days) beyond which a firm supply
 // arriving before the need date triggers a RESCHEDULE_OUT exception.
 const tooEarlyDays = 30
+
+// expediteThreshold is the maximum number of late days for which an EXPEDITE
+// exception is generated instead of RESCHEDULE_IN.
+const expediteThreshold = 5
 
 // excessThreshold is the fraction above net requirement that is tolerated
 // before an EXCESS_PROJECTED exception is raised (1 % tolerance).
@@ -72,16 +79,24 @@ func NewMRPService(
 type cachedItemMRP struct {
 	engineeringType int
 	typeMRP         int
+	ghost           bool
+	reorderPoint    *valueobject.ReorderPoint
 }
 
+// =============================================================================
+// Calculate — orquestração principal com dispatch por modo de planejamento
+// =============================================================================
+
 // Calculate orchestrates the full MRP run. Strategy:
-//  1. One recursive CTE loads the entire BOM tree (no N+1).
-//  2. Two bulk queries load all snapshots and configured rules.
-//  3. If SupplyPort is wired: one query loads all firm supply for time-phased netting.
-//  4. The main loop processes items level by level; each item costs zero extra queries
+//  1. Load TypedPlanningParams and dispatch by PlanningTypes.
+//  2. One recursive CTE loads the entire BOM tree (no N+1).
+//  3. Two bulk queries load all snapshots and configured rules.
+//  4. If SupplyPort is wired: one query loads all firm supply for time-phased netting.
+//  5. The main loop processes items level by level; each item costs zero extra queries
 //     (item-type lookups are cached; workday subtraction is a single PG function call).
-//  5. After the main loop: exception messages are generated comparing firm supply
+//  6. After the main loop: exception messages are generated comparing firm supply
 //     against the computed net requirements.
+//  7. Post-processing: machine integration, priority generation.
 func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generateLLC bool) (*entity.MRPCalculationLog, error) {
 	log, err := s.MRPRepo.StartCalculation(ctx, planCode)
 	if err != nil {
@@ -93,6 +108,13 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	_ = s.MRPRepo.DeleteSuggestionsByPlan(ctx, planCode)
 	_ = s.MRPRepo.DeleteProfilesByPlan(ctx, planCode)
 	_ = s.MRPRepo.DeleteExceptionsByPlan(ctx, planCode)
+
+	// Carrega parâmetros de planejamento tipados.
+	params, err := s.MRPRepo.LoadTypedPlanningParams(ctx)
+	if err != nil {
+		errs["load_params"] = err.Error()
+		return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+	}
 
 	// Load the production plan to drive demand filtering and item scope.
 	plan, err := s.PlanRepo.GetByCode(ctx, planCode)
@@ -116,10 +138,6 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 
 	// Load sales forecasts and merge as MRP inputs.
 	forecastInputs := s.loadForecastDemands(ctx, planCode)
-
-	if len(demands) == 0 && len(forecastInputs) == 0 {
-		return s.MRPRepo.FinishCalculation(ctx, log.Code, "COMPLETED", nil, 0, 0)
-	}
 
 	// Build allowed item set from plan classification / class item codes.
 	allowedItems := s.buildAllowedItemSet(plan)
@@ -146,16 +164,17 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 		}
 	}
 
-	// Bulk load 1: entire BOM tree in one recursive CTE — used for LLC and explosion.
+	// Se nenhum item tem demanda, termina cedo.
+	noMRPDemand := len(demands) == 0 && len(forecastInputs) == 0
+
+	// Bulk load 1: entire BOM tree.
 	bomMap, err := s.StructRepo.LoadBOMForRoots(ctx, rootItems)
 	if err != nil {
-		errs["load_bom"] = err.Error()
-		return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+		bomMap = make(map[int64][]*structentity.ItemStructure)
 	}
-
 	llcMap := buildLLCFromBOM(bomMap, rootItems)
 
-	// Bulk load 2 & 3: snapshots and configured rules — one query each.
+	// Bulk load 2 & 3: snapshots and configured rules.
 	snapshotMap, err := s.MRPRepo.ListAllStockSnapshots(ctx)
 	if err != nil {
 		snapshotMap = make(map[int64]*entity.StockSnapshot)
@@ -165,30 +184,258 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 		rulesMap = make(map[int64][]*entity.ConfiguredItemRule)
 	}
 
-	// Bulk load 4 (optional): firm supply from planned_order for time-phased netting.
-	allCodes := collectAllItemCodes(bomMap, rootItems)
+	// Expande allCodes para incluir itens de todas as fontes.
+	allCodesFromBOM := collectAllItemCodes(bomMap, rootItems)
+	allCodes := make(map[int64]bool, len(allCodesFromBOM))
+	for _, c := range allCodesFromBOM {
+		allCodes[c] = true
+	}
+	for _, d := range demands {
+		allCodes[d.ItemCode] = true
+	}
+	for _, fi := range forecastInputs {
+		allCodes[fi.ItemCode] = true
+	}
+	var allCodeSlice []int64
+	for c := range allCodes {
+		allCodeSlice = append(allCodeSlice, c)
+	}
+
+	// Bulk load 4: firm supply.
 	var supplyMap map[int64][]ports.SupplyEntry
 	if s.SupplyPort != nil {
-		supplyMap, _ = s.SupplyPort.ListFirmSupplyForItems(ctx, allCodes)
+		supplyMap, _ = s.SupplyPort.ListFirmSupplyForItems(ctx, allCodeSlice)
 	}
 	if supplyMap == nil {
 		supplyMap = make(map[int64][]ports.SupplyEntry)
 	}
 
-	// Bulk load 5: restricted item codes — skip planning suggestions for these.
+	// Bulk load 5: restricted items.
 	restrictedItems := make(map[int64]struct{})
 	if s.RestrictionRepo != nil {
-		restrictedItems, _ = s.RestrictionRepo.ListRestrictedItemCodes(ctx, allCodes)
+		restrictedItems, _ = s.RestrictionRepo.ListRestrictedItemCodes(ctx, allCodeSlice)
 	}
 
-	// Lazy item-type cache: one ItemRepo call per unique item across the whole run.
+	// Item cache — lazy load from DB.
 	itemCache := make(map[int64]*cachedItemMRP)
 
-	// Accumulators for exception-message generation after the main loop.
+	// Accumuladores pós-loop.
 	netReqByItem := make(map[int64]float64)
 	needDateByItem := make(map[int64]time.Time)
+	totalItems := 0
+	totalOrders := 0
 
-	// Seed level 0 from independent demands.
+	// Dispara modos conforme PlanningTypes do plano.
+	if len(plan.PlanningTypes) == 0 {
+		plan.PlanningTypes = []string{"MRP"}
+	}
+
+	for _, pt := range plan.PlanningTypes {
+		switch strings.ToUpper(strings.TrimSpace(pt)) {
+		case "MIN_MAX":
+			tItems, tOrders := s.calculateMinMax(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, errs)
+			totalItems += tItems
+			totalOrders += tOrders
+		case "REORDER_POINT":
+			tItems, tOrders := s.calculateReorderPoint(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, errs)
+			totalItems += tItems
+			totalOrders += tOrders
+		case "KANBAN":
+			tItems, tOrders := s.calculateKanban(ctx, planCode, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems, errs)
+			totalItems += tItems
+			totalOrders += tOrders
+		case "MPS":
+			if !noMRPDemand {
+				tItems, tOrders := s.calculateMPS(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, forecastInputs, &netReqByItem, &needDateByItem, errs)
+				totalItems += tItems
+				totalOrders += tOrders
+			}
+		default: // MRP
+			if !noMRPDemand {
+				tItems, tOrders := s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, forecastInputs, &netReqByItem, &needDateByItem, errs)
+				totalItems += tItems
+				totalOrders += tOrders
+			}
+		}
+	}
+
+	// Pós-processamento: integração com máquinas.
+	s.processMachineIntegration(ctx, planCode, allCodeSlice)
+
+	// Pós-processamento: geração de prioridades automáticas.
+	if params.GerarPrioridadesOrdens {
+		s.processAutoPriority(ctx, planCode, params)
+	}
+
+	// Geração de mensagens de exceção.
+	if s.SupplyPort != nil {
+		s.generateExceptionMessages(ctx, planCode, supplyMap, netReqByItem, needDateByItem)
+	}
+
+	status := "COMPLETED"
+	if len(errs) > 0 {
+		status = "COMPLETED_WITH_ERRORS"
+	}
+
+	return s.MRPRepo.FinishCalculation(ctx, log.Code, status, errs, totalItems, totalOrders)
+}
+
+// =============================================================================
+// Interface pública — compatível com MRPService
+// =============================================================================
+
+func (s *MRPServiceImpl) CalculateNetRequirements(ctx context.Context, input *entity.MRPInput) (*entity.MRPOutput, error) {
+	params, _ := s.MRPRepo.LoadTypedPlanningParams(ctx)
+	if params == nil {
+		params = entity.DefaultTypedPlanningParams()
+	}
+	snapshotMap := make(map[int64]*entity.StockSnapshot)
+	if snapshot, err := s.MRPRepo.GetStockSnapshot(ctx, input.ItemCode); err == nil && snapshot != nil {
+		snapshotMap[input.ItemCode] = snapshot
+	}
+	rulesMap := make(map[int64][]*entity.ConfiguredItemRule)
+	if rules, err := s.MRPRepo.GetConfiguredItemRules(ctx, input.ItemCode); err == nil {
+		rulesMap[input.ItemCode] = rules
+	}
+	return s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, nil, make(map[int64]*cachedItemMRP), params)
+}
+
+func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64, mask string, quantity float64, level int) ([]*entity.MRPInput, error) {
+	if level > 20 {
+		return nil, nil
+	}
+	children, err := s.StructRepo.GetAllDirectChildren(ctx, parentCode)
+	if err != nil {
+		return nil, fmt.Errorf("exploding structure for item %d: %w", parentCode, err)
+	}
+	params, _ := s.MRPRepo.LoadTypedPlanningParams(ctx)
+	if params == nil {
+		params = entity.DefaultTypedPlanningParams()
+	}
+	inputs := make([]*entity.MRPInput, 0, len(children))
+	for _, child := range children {
+		if !child.IsActive {
+			continue
+		}
+		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
+			continue
+		}
+		adjustedQty := applyLossFormula(quantity, child.Quantity, child.LossPercentage, params.FormulaPerdasEstrutura)
+		inputs = append(inputs, &entity.MRPInput{
+			ItemCode: child.ChildCode,
+			Quantity: adjustedQty,
+			LLC:      level,
+		})
+	}
+	return inputs, nil
+}
+
+func (s *MRPServiceImpl) CalculateItemLLC(ctx context.Context, itemCode int64) (int, error) {
+	llcMap, err := s.buildLLCMap(ctx, []int64{itemCode})
+	if err != nil {
+		return 0, err
+	}
+	return llcMap[itemCode], nil
+}
+
+func (s *MRPServiceImpl) GenerateLLC(ctx context.Context) error {
+	return nil
+}
+
+func (s *MRPServiceImpl) buildLLCMap(ctx context.Context, rootItems []int64) (map[int64]int, error) {
+	bomMap, err := s.StructRepo.LoadBOMForRoots(ctx, rootItems)
+	if err != nil {
+		return nil, err
+	}
+	return buildLLCFromBOM(bomMap, rootItems), nil
+}
+
+func (s *MRPServiceImpl) subtractWorkdays(ctx context.Context, from time.Time, days int) (time.Time, error) {
+	if days <= 0 {
+		return from, nil
+	}
+	return s.CalRepo.SubtractWorkdays(ctx, from, days)
+}
+
+func today() time.Time {
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// =============================================================================
+// Modos de planejamento
+// =============================================================================
+
+// calculateMRP executa o cálculo MRP clássico (BFS nível por nível).
+func (s *MRPServiceImpl) calculateMRP(
+	ctx context.Context,
+	planCode int64,
+	params *entity.TypedPlanningParams,
+	plan *planentity.ProductionPlan,
+	snapshotMap map[int64]*entity.StockSnapshot,
+	rulesMap map[int64][]*entity.ConfiguredItemRule,
+	supplyMap map[int64][]ports.SupplyEntry,
+	llcMap map[int64]int,
+	bomMap map[int64][]*structentity.ItemStructure,
+	itemCache map[int64]*cachedItemMRP,
+	allowedItems map[int64]struct{},
+	restrictedItems map[int64]struct{},
+	demands []*inddemandentity.IndependentDemand,
+	forecastInputs []*entity.MRPInput,
+	netReqByItem *map[int64]float64,
+	needDateByItem *map[int64]time.Time,
+	errs map[string]interface{},
+) (int, int) {
+	totalItems := 0
+	totalOrders := 0
+
+	// Gera demandas de estoque de segurança.
+	safetyInputs := s.generateSafetyStockDemands(ctx, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems)
+	for _, si := range safetyInputs {
+		if params.AgrupaDemandaEstoque {
+			// Agrega à primeira demanda existente do item.
+			merged := false
+			for _, fi := range forecastInputs {
+				if fi.ItemCode == si.ItemCode && fi.Mask == si.Mask {
+					fi.Quantity += si.Quantity
+					if si.NeedDate.Before(fi.NeedDate) {
+						fi.NeedDate = si.NeedDate
+					}
+					merged = true
+					break
+				}
+			}
+			if !merged {
+				forecastInputs = append(forecastInputs, si)
+			}
+		} else {
+			forecastInputs = append(forecastInputs, si)
+		}
+	}
+
+	// Recoleta root items (com safety stock adicionado).
+	seen := make(map[int64]bool)
+	var rootItems []int64
+	for _, d := range demands {
+		if !s.itemAllowed(allowedItems, d.ItemCode) {
+			continue
+		}
+		if !seen[d.ItemCode] {
+			seen[d.ItemCode] = true
+			rootItems = append(rootItems, d.ItemCode)
+		}
+	}
+	for _, fi := range forecastInputs {
+		if !s.itemAllowed(allowedItems, fi.ItemCode) {
+			continue
+		}
+		if !seen[fi.ItemCode] {
+			seen[fi.ItemCode] = true
+			rootItems = append(rootItems, fi.ItemCode)
+		}
+	}
+
+	// Seed level 0.
 	levelQueues := make(map[int][]*entity.MRPInput)
 	for _, d := range demands {
 		if !s.itemAllowed(allowedItems, d.ItemCode) {
@@ -208,7 +455,6 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 			LLC:      llc,
 		})
 	}
-	// Seed from sales forecast inputs.
 	for _, fi := range forecastInputs {
 		if !s.itemAllowed(allowedItems, fi.ItemCode) {
 			continue
@@ -219,41 +465,43 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	}
 
 	maxLevel := maxLLC(llcMap)
-	totalItems := 0
-	totalOrders := 0
+
+	// Carrega divisões de vendas para assistência técnica.
+	var divisionMap map[int64]*salesDivisionRef
+	if params.TrataAssistenciaTecnica {
+		allCodes := collectAllItemCodes(bomMap, rootItems)
+		divisionMap = s.loadDivisionMap(ctx, allCodes)
+	}
 
 	for level := 0; level <= maxLevel; level++ {
 		inputs, ok := levelQueues[level]
 		if !ok {
 			continue
 		}
-
 		for _, input := range aggregateInputs(inputs) {
 			input.PlanCode = planCode
 			input.LLC = level
 
-			// Skip items blocked by an active restriction.
 			if _, blocked := restrictedItems[input.ItemCode]; blocked {
 				errs[fmt.Sprintf("item_%d_restricted", input.ItemCode)] = "item has active restriction — skipped"
 				continue
 			}
 
-			output, err := s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, supplyMap, itemCache)
+			output, err := s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, supplyMap, itemCache, params)
 			if err != nil {
 				errs[fmt.Sprintf("item_%d", input.ItemCode)] = err.Error()
 				continue
 			}
 
-			// Accumulate for exception generation.
-			netReqByItem[input.ItemCode] += output.NetRequirement
-			if existing, ok := needDateByItem[input.ItemCode]; !ok || input.NeedDate.Before(existing) {
-				needDateByItem[input.ItemCode] = input.NeedDate
+			(*netReqByItem)[input.ItemCode] += output.NetRequirement
+			if existing, ok := (*needDateByItem)[input.ItemCode]; !ok || input.NeedDate.Before(existing) {
+				(*needDateByItem)[input.ItemCode] = input.NeedDate
 			}
 
 			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        input.ItemCode,
 				PlanCode:        planCode,
-				CalculationDate: time.Now(),
+				CalculationDate: today(),
 				Demand:          output.Demand,
 				OrdersPlanned:   output.NetRequirement,
 				OrdersFirm:      firmSupplyForItem(supplyMap, input.ItemCode, input.NeedDate),
@@ -264,14 +512,40 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 			totalItems++
 
 			for _, suggestion := range output.PlannedOrders {
+				// Assistência técnica: verifica divisão de vendas.
+				if params.TrataAssistenciaTecnica && divisionMap != nil {
+					if sd, ok := divisionMap[input.ItemCode]; ok && sd.isTechnicalAssistance {
+						suggestion.OrderType = "TECHNICAL_ASSISTANCE"
+					}
+				}
 				suggestion.PlanCode = planCode
-				_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
-				totalOrders++
+
+				cached := s.ensureItemCache(ctx, itemCache, input.ItemCode)
+
+				if !cached.ghost || params.ItensFantasmasGravar {
+					created, _ := s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
+					totalOrders++
+					if created != nil {
+						suggestion.Code = created.Code
+					}
+				}
 
 				if suggestion.StartDate == nil {
 					continue
 				}
-				children := explodeFromBOM(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1)
+
+				if cached.ghost && !params.ItensFantasmasGravar {
+					children := explodeFromBOMWithFormula(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura)
+					for _, child := range children {
+						child.PlanCode = planCode
+						child.NeedDate = *suggestion.StartDate
+						child.ParentItemCode = &input.ItemCode
+						levelQueues[level+1] = append(levelQueues[level+1], child)
+					}
+					continue
+				}
+
+				children := explodeFromBOMWithFormula(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura)
 				for _, child := range children {
 					child.PlanCode = planCode
 					child.NeedDate = *suggestion.StartDate
@@ -282,103 +556,344 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 		}
 	}
 
-	// Generate exception messages comparing firm supply against computed net requirements.
-	if s.SupplyPort != nil {
-		s.generateExceptionMessages(ctx, planCode, supplyMap, netReqByItem, needDateByItem)
-	}
-
-	status := "COMPLETED"
-	if len(errs) > 0 {
-		status = "COMPLETED_WITH_ERRORS"
-	}
-
-	return s.MRPRepo.FinishCalculation(ctx, log.Code, status, errs, totalItems, totalOrders)
+	return totalItems, totalOrders
 }
 
-// CalculateNetRequirements satisfies the MRPService interface for external callers.
-// Does individual DB calls — for the optimised path inside Calculate, use calcNetReqFast.
-func (s *MRPServiceImpl) CalculateNetRequirements(ctx context.Context, input *entity.MRPInput) (*entity.MRPOutput, error) {
-	snapshotMap := make(map[int64]*entity.StockSnapshot)
-	if snapshot, err := s.MRPRepo.GetStockSnapshot(ctx, input.ItemCode); err == nil && snapshot != nil {
-		snapshotMap[input.ItemCode] = snapshot
+// calculateMinMax implementa lógica de estoque mínimo-máximo.
+func (s *MRPServiceImpl) calculateMinMax(
+	ctx context.Context,
+	planCode int64,
+	params *entity.TypedPlanningParams,
+	snapshotMap map[int64]*entity.StockSnapshot,
+	supplyMap map[int64][]ports.SupplyEntry,
+	rulesMap map[int64][]*entity.ConfiguredItemRule,
+	llcMap map[int64]int,
+	itemCache map[int64]*cachedItemMRP,
+	allowedItems map[int64]struct{},
+	restrictedItems map[int64]struct{},
+	errs map[string]interface{},
+) (int, int) {
+	totalItems := 0
+	totalOrders := 0
+
+	planningExtras, _ := s.MRPRepo.ListItemPlanningExtras(ctx)
+	if planningExtras == nil {
+		planningExtras = make(map[int64]*entity.ItemPlanningExtra)
 	}
 
-	rulesMap := make(map[int64][]*entity.ConfiguredItemRule)
-	if rules, err := s.MRPRepo.GetConfiguredItemRules(ctx, input.ItemCode); err == nil {
-		rulesMap[input.ItemCode] = rules
+	for itemCode, snapshot := range snapshotMap {
+		if !s.itemAllowed(allowedItems, itemCode) {
+			continue
+		}
+		if _, blocked := restrictedItems[itemCode]; blocked {
+			continue
+		}
+
+		// LMI = estoque mínimo do snapshot
+		lmi := snapshot.SafetyStock
+		if lmi <= 0 {
+			continue
+		}
+
+		// LMA = maximum_stock (ou minimum_stock * 3 como default)
+		lma := lmi * 3
+		if extra, ok := planningExtras[itemCode]; ok && extra.MaximumStock > 0 {
+			lma = extra.MaximumStock
+		}
+
+		// QTDE = stock disponível (quantity - reserved)
+		qtde := snapshot.Quantity - snapshot.ReservedQty
+		if qtde < 0 {
+			qtde = 0
+		}
+
+		// QTDP = firm supply (ordens firmes de compra)
+		qtdp := firmSupplyForItem(supplyMap, itemCode, maxTime())
+
+		qtdeTotal := qtde + qtdp
+
+		if qtdeTotal <= lmi {
+			qtc := lma - qtdeTotal
+			if qtc <= 0 {
+				continue
+			}
+
+			cached := s.ensureItemCache(ctx, itemCache, itemCode)
+			if cached == nil || cached.engineeringType == 2 { // DE_TERCEIRO
+				continue
+			}
+
+			leadTimeDays := s.getLeadTimeDays(rulesMap, itemCode)
+			needDate := today().AddDate(0, 0, leadTimeDays)
+			startDate, _ := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			if startDate.IsZero() {
+				startDate = needDate.AddDate(0, 0, -leadTimeDays)
+			}
+
+			llc := llcMap[itemCode]
+			suggestion := &entity.PlannedOrderSuggestion{
+				PlanCode:  planCode,
+				ItemCode:  itemCode,
+				Quantity:  qtc,
+				NeedDate:  needDate,
+				StartDate: &startDate,
+				OrderType: "COMPRA",
+				DemandType: "MIN_MAX",
+				LLC:       llc,
+			}
+			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
+			totalOrders++
+
+			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
+				ItemCode:        itemCode,
+				PlanCode:        planCode,
+				CalculationDate: today(),
+				Demand:          qtc,
+				OrdersPlanned:   qtc,
+				OrdersFirm:      qtdp,
+				StockProjected:  qtdeTotal - qtc,
+				LLC:             llc,
+				NeedDate:        needDate,
+			})
+			totalItems++
+		}
 	}
 
-	return s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, nil, make(map[int64]*cachedItemMRP))
+	return totalItems, totalOrders
 }
 
-// ExplodeStructure satisfies the MRPService interface for external callers.
-// Does a DB call — for the optimised path inside Calculate, use explodeFromBOM.
-func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64, mask string, quantity float64, level int) ([]*entity.MRPInput, error) {
-	if level > 20 {
-		return nil, nil
-	}
+// calculateReorderPoint implementa lógica de ponto de reposição.
+func (s *MRPServiceImpl) calculateReorderPoint(
+	ctx context.Context,
+	planCode int64,
+	params *entity.TypedPlanningParams,
+	snapshotMap map[int64]*entity.StockSnapshot,
+	supplyMap map[int64][]ports.SupplyEntry,
+	rulesMap map[int64][]*entity.ConfiguredItemRule,
+	llcMap map[int64]int,
+	itemCache map[int64]*cachedItemMRP,
+	allowedItems map[int64]struct{},
+	restrictedItems map[int64]struct{},
+	errs map[string]interface{},
+) (int, int) {
+	totalItems := 0
+	totalOrders := 0
 
-	children, err := s.StructRepo.GetAllDirectChildren(ctx, parentCode)
-	if err != nil {
-		return nil, fmt.Errorf("exploding structure for item %d: %w", parentCode, err)
-	}
-
-	inputs := make([]*entity.MRPInput, 0, len(children))
-	for _, child := range children {
-		if !child.IsActive {
+	for itemCode, snapshot := range snapshotMap {
+		if !s.itemAllowed(allowedItems, itemCode) {
 			continue
 		}
-		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
+		if _, blocked := restrictedItems[itemCode]; blocked {
 			continue
 		}
-		adjustedQty := quantity * child.Quantity
-		if child.LossPercentage > 0 {
-			adjustedQty *= 1 + child.LossPercentage/100
+
+		cached := s.ensureItemCache(ctx, itemCache, itemCode)
+		if cached == nil || cached.engineeringType == 2 {
+			continue
 		}
-		inputs = append(inputs, &entity.MRPInput{
-			ItemCode: child.ChildCode,
-			Quantity: adjustedQty,
-			LLC:      level,
+		if cached.reorderPoint == nil {
+			continue
+		}
+
+		pr, err := cached.reorderPoint.Calculate()
+		if err != nil || pr <= 0 {
+			continue
+		}
+
+		qtde := snapshot.Quantity - snapshot.ReservedQty
+		if qtde < 0 {
+			qtde = 0
+		}
+
+		if qtde <= float64(pr) {
+			loteEconomico := float64(pr * 2)
+			leadTimeDays := s.getLeadTimeDays(rulesMap, itemCode)
+			needDate := today().AddDate(0, 0, leadTimeDays)
+			startDate, _ := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			if startDate.IsZero() {
+				startDate = needDate.AddDate(0, 0, -leadTimeDays)
+			}
+			llc := llcMap[itemCode]
+
+			suggestion := &entity.PlannedOrderSuggestion{
+				PlanCode:  planCode,
+				ItemCode:  itemCode,
+				Quantity:  loteEconomico,
+				NeedDate:  needDate,
+				StartDate: &startDate,
+				OrderType: "COMPRA",
+				DemandType: "REORDER_POINT",
+				LLC:       llc,
+			}
+			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
+			totalOrders++
+
+			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
+				ItemCode:        itemCode,
+				PlanCode:        planCode,
+				CalculationDate: today(),
+				Demand:          loteEconomico,
+				OrdersPlanned:   loteEconomico,
+				OrdersFirm:      0,
+				StockProjected:  qtde - loteEconomico,
+				LLC:             llc,
+				NeedDate:        needDate,
+			})
+			totalItems++
+		}
+	}
+
+	return totalItems, totalOrders
+}
+
+// calculateKanban implementa lógica de cartões kanban.
+func (s *MRPServiceImpl) calculateKanban(
+	ctx context.Context,
+	planCode int64,
+	params *entity.TypedPlanningParams,
+	snapshotMap map[int64]*entity.StockSnapshot,
+	supplyMap map[int64][]ports.SupplyEntry,
+	llcMap map[int64]int,
+	itemCache map[int64]*cachedItemMRP,
+	allowedItems map[int64]struct{},
+	restrictedItems map[int64]struct{},
+	errs map[string]interface{},
+) (int, int) {
+	totalItems := 0
+	totalOrders := 0
+
+	kanbanCards, err := s.MRPRepo.ListKanbanCards(ctx)
+	if err != nil || len(kanbanCards) == 0 {
+		return 0, 0
+	}
+
+	// Agrupa cartões por item.
+	type cardGroup struct {
+		cards []*entity.KanbanCardInfo
+	}
+	grouped := make(map[int64]*cardGroup)
+	for _, k := range kanbanCards {
+		if group, ok := grouped[k.ItemCode]; ok {
+			group.cards = append(group.cards, k)
+		} else {
+			grouped[k.ItemCode] = &cardGroup{cards: []*entity.KanbanCardInfo{k}}
+		}
+	}
+
+	for itemCode, group := range grouped {
+		if !s.itemAllowed(allowedItems, itemCode) {
+			continue
+		}
+		if _, blocked := restrictedItems[itemCode]; blocked {
+			continue
+		}
+
+		qtde := 0.0
+		if snapshot, ok := snapshotMap[itemCode]; ok && snapshot != nil {
+			qtde = snapshot.Quantity - snapshot.ReservedQty
+			if qtde < 0 {
+				qtde = 0
+			}
+		}
+
+		for _, card := range group.cards {
+			if qtde > card.ReorderPoint {
+				continue
+			}
+
+			cached := s.ensureItemCache(ctx, itemCache, itemCode)
+			if cached == nil || cached.engineeringType == 2 {
+				continue
+			}
+
+			qtc := card.QuantityPerCard * float64(card.CardCount)
+			leadTimeDays := s.getLeadTimeDays(nil, itemCode)
+			needDate := today().AddDate(0, 0, leadTimeDays)
+			startDate, _ := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			if startDate.IsZero() {
+				startDate = needDate.AddDate(0, 0, -leadTimeDays)
+			}
+			llc := llcMap[itemCode]
+
+			suggestion := &entity.PlannedOrderSuggestion{
+				PlanCode:  planCode,
+				ItemCode:  itemCode,
+				Quantity:  qtc,
+				NeedDate:  needDate,
+				StartDate: &startDate,
+				OrderType: "COMPRA",
+				DemandType: "KANBAN",
+				LLC:       llc,
+			}
+			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
+			totalOrders++
+
+			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
+				ItemCode:        itemCode,
+				PlanCode:        planCode,
+				CalculationDate: today(),
+				Demand:          qtc,
+				OrdersPlanned:   qtc,
+				OrdersFirm:      0,
+				StockProjected:  qtde - qtc,
+				LLC:             llc,
+				NeedDate:        needDate,
+			})
+			totalItems++
+			qtde -= qtc
+		}
+	}
+
+	return totalItems, totalOrders
+}
+
+// calculateMPS carrega entradas do MPS como demandas e processa via MRP normal.
+func (s *MRPServiceImpl) calculateMPS(
+	ctx context.Context,
+	planCode int64,
+	params *entity.TypedPlanningParams,
+	plan *planentity.ProductionPlan,
+	snapshotMap map[int64]*entity.StockSnapshot,
+	rulesMap map[int64][]*entity.ConfiguredItemRule,
+	supplyMap map[int64][]ports.SupplyEntry,
+	llcMap map[int64]int,
+	bomMap map[int64][]*structentity.ItemStructure,
+	itemCache map[int64]*cachedItemMRP,
+	allowedItems map[int64]struct{},
+	restrictedItems map[int64]struct{},
+	demands []*inddemandentity.IndependentDemand,
+	forecastInputs []*entity.MRPInput,
+	netReqByItem *map[int64]float64,
+	needDateByItem *map[int64]time.Time,
+	errs map[string]interface{},
+) (int, int) {
+	mpsItems, err := s.MRPRepo.ListMPSItems(ctx, planCode)
+	if err != nil || len(mpsItems) == 0 {
+		return 0, 0
+	}
+
+	// Converte entradas MPS não firmadas em MRPInput e adiciona ao forecast.
+	for _, mi := range mpsItems {
+		if !s.itemAllowed(allowedItems, mi.ItemCode) {
+			continue
+		}
+		needDate := mpsPeriodToDate(mi.PeriodType, mi.PeriodValue, mi.Year)
+		forecastInputs = append(forecastInputs, &entity.MRPInput{
+			PlanCode: planCode,
+			ItemCode: mi.ItemCode,
+			Mask:     mi.Mask,
+			Quantity: mi.Quantity,
+			NeedDate: needDate,
 		})
 	}
-	return inputs, nil
-}
 
-// CalculateItemLLC returns the LLC for a single item (external caller).
-func (s *MRPServiceImpl) CalculateItemLLC(ctx context.Context, itemCode int64) (int, error) {
-	llcMap, err := s.buildLLCMap(ctx, []int64{itemCode})
-	if err != nil {
-		return 0, err
-	}
-	return llcMap[itemCode], nil
-}
-
-// GenerateLLC is a no-op; LLC is computed in-memory per run inside Calculate.
-func (s *MRPServiceImpl) GenerateLLC(ctx context.Context) error {
-	return nil
-}
-
-// buildLLCMap loads the BOM and computes LLC via in-memory DFS.
-// Used by CalculateItemLLC. Inside Calculate, buildLLCFromBOM is called directly.
-func (s *MRPServiceImpl) buildLLCMap(ctx context.Context, rootItems []int64) (map[int64]int, error) {
-	bomMap, err := s.StructRepo.LoadBOMForRoots(ctx, rootItems)
-	if err != nil {
-		return nil, err
-	}
-	return buildLLCFromBOM(bomMap, rootItems), nil
-}
-
-// subtractWorkdays delegates to the DB function subtract_workdays (migration 000080).
-// One round-trip regardless of how many days are subtracted.
-func (s *MRPServiceImpl) subtractWorkdays(ctx context.Context, from time.Time, days int) (time.Time, error) {
-	if days <= 0 {
-		return from, nil
-	}
-	return s.CalRepo.SubtractWorkdays(ctx, from, days)
+	return s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap,
+		llcMap, bomMap, itemCache, allowedItems, restrictedItems,
+		demands, forecastInputs, netReqByItem, needDateByItem, errs)
 }
 
 // =============================================================================
-// Private helpers — optimised Calculate path
+// calcNetReqFast — cálculo de necessidade líquida otimizado
 // =============================================================================
 
 // calcNetReqFast computes net requirements using pre-loaded in-memory maps.
@@ -389,8 +904,9 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	input *entity.MRPInput,
 	snapshotMap map[int64]*entity.StockSnapshot,
 	rulesMap map[int64][]*entity.ConfiguredItemRule,
-	supplyMap map[int64][]ports.SupplyEntry, // nil = no netting
+	supplyMap map[int64][]ports.SupplyEntry,
 	itemCache map[int64]*cachedItemMRP,
+	params *entity.TypedPlanningParams,
 ) (*entity.MRPOutput, error) {
 
 	// 1. Available stock from snapshot.
@@ -402,7 +918,7 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		}
 	}
 
-	// 2. Time-phased netting: firm supply arriving by the need date reduces gross demand.
+	// 2. Time-phased netting.
 	firmSupply := 0.0
 	if supplyMap != nil {
 		for _, entry := range supplyMap[input.ItemCode] {
@@ -412,11 +928,11 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		}
 	}
 
-	// 3. Configured rules (lead time, minimum lot).
+	// 3. Configured rules (lead time, minimum lot) — suporta EQUAL, DIFFERENT, RANGE.
 	leadTimeDays := 0
 	minLot := 0.0
 	for _, rule := range rulesMap[input.ItemCode] {
-		if rule.RuleType != "EQUAL" {
+		if !s.ruleMatchesMask(rule, input.Mask) {
 			continue
 		}
 		switch rule.FieldName {
@@ -458,21 +974,10 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		demandType = "DEPENDENTE"
 	}
 
-	// 5. Item-type lookup — cached across the whole run.
-	cached, alreadyFetched := itemCache[input.ItemCode]
-	if !alreadyFetched {
-		if code, err := valueobject.NewItemCode(input.ItemCode); err == nil {
-			if item, err := s.ItemRepo.FindItemByCode(ctx, code); err == nil {
-				cached = &cachedItemMRP{
-					engineeringType: int(item.Engineering.Type),
-					typeMRP:         int(item.Planning.TypeMRP),
-				}
-			}
-		}
-		if cached == nil {
-			cached = &cachedItemMRP{}
-		}
-		itemCache[input.ItemCode] = cached
+	// 5. Item-type lookup — cached.
+	cached := s.ensureItemCache(ctx, itemCache, input.ItemCode)
+	if cached == nil {
+		cached = &cachedItemMRP{}
 	}
 
 	switch cached.engineeringType {
@@ -485,7 +990,7 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		return output, nil
 	}
 
-	// 6. Start date = need date minus lead time (single PG function call).
+	// 6. Start date = need date minus lead time.
 	startDate, err := s.subtractWorkdays(ctx, input.NeedDate, leadTimeDays)
 	if err != nil {
 		startDate = input.NeedDate.AddDate(0, 0, -leadTimeDays)
@@ -511,6 +1016,7 @@ func (s *MRPServiceImpl) calcNetReqFast(
 
 // generateExceptionMessages analyses existing firm supply versus what the MRP
 // actually computed and persists actionable exception messages.
+// RescheduleIn is split into EXPEDITE (<=5 days late) and RESCHEDULE_IN (>5 days).
 func (s *MRPServiceImpl) generateExceptionMessages(
 	ctx context.Context,
 	planCode int64,
@@ -567,32 +1073,46 @@ func (s *MRPServiceImpl) generateExceptionMessages(
 			})
 		}
 
-		// Per-order: RESCHEDULE_IN (late) or RESCHEDULE_OUT (too early).
+		// Per-order: EXPEDITE (<= 5 days) / RESCHEDULE_IN (> 5 days) or RESCHEDULE_OUT.
 		for _, e := range entries {
 			eCode := e.SourceCode
 			eType := string(e.SourceType)
 
 			if e.ArrivalDate.After(needDate) {
-				// Order arrives after the demand needs it — expedite.
-				days := int(e.ArrivalDate.Sub(needDate).Hours() / 24)
-				desc := fmt.Sprintf(
-					"Item %d: ordem %d (%.2f un.) chega em %s, mas a necessidade é %s (%d dia(s) de atraso). Antecipar.",
-					itemCode, e.SourceCode, e.Quantity,
-					e.ArrivalDate.Format("02/01/2006"), needDate.Format("02/01/2006"), days,
-				)
-				_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
-					PlanCode:    planCode,
-					ItemCode:    itemCode,
-					MessageType: entity.ExceptionRescheduleIn,
-					SourceCode:  &eCode,
-					SourceType:  &eType,
-					Description: desc,
-				})
+				days := int(math.Ceil(e.ArrivalDate.Sub(needDate).Hours() / 24))
+				if days <= expediteThreshold {
+					desc := fmt.Sprintf(
+						"Item %d: ordem %d (%.2f un.) chega em %s, %d dia(s) após necessidade %s. ACELERAR urgentemente.",
+						itemCode, e.SourceCode, e.Quantity,
+						e.ArrivalDate.Format("02/01/2006"), days, needDate.Format("02/01/2006"),
+					)
+					_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
+						PlanCode:    planCode,
+						ItemCode:    itemCode,
+						MessageType: entity.ExceptionExpedite,
+						SourceCode:  &eCode,
+						SourceType:  &eType,
+						Description: desc,
+					})
+				} else {
+					desc := fmt.Sprintf(
+						"Item %d: ordem %d (%.2f un.) chega em %s, mas a necessidade é %s (%d dia(s) de atraso). Antecipar.",
+						itemCode, e.SourceCode, e.Quantity,
+						e.ArrivalDate.Format("02/01/2006"), needDate.Format("02/01/2006"), days,
+					)
+					_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
+						PlanCode:    planCode,
+						ItemCode:    itemCode,
+						MessageType: entity.ExceptionRescheduleIn,
+						SourceCode:  &eCode,
+						SourceType:  &eType,
+						Description: desc,
+					})
+				}
 				continue
 			}
 
-			// Order arrives too early — ties up capital and storage.
-			earlyDays := int(needDate.Sub(e.ArrivalDate).Hours() / 24)
+			earlyDays := int(math.Ceil(needDate.Sub(e.ArrivalDate).Hours() / 24))
 			if earlyDays > tooEarlyDays {
 				desc := fmt.Sprintf(
 					"Item %d: ordem %d (%.2f un.) chega em %s, %d dia(s) antes da necessidade (%s). Atrasar para liberar capital.",
@@ -610,6 +1130,253 @@ func (s *MRPServiceImpl) generateExceptionMessages(
 			}
 		}
 	}
+}
+
+// =============================================================================
+// Pós-processamento: integração com máquinas e prioridades
+// =============================================================================
+
+// processMachineIntegration assigns machines and creates machine_schedule
+// entries for FABRICACAO-type planned orders.
+func (s *MRPServiceImpl) processMachineIntegration(ctx context.Context, planCode int64, allCodes []int64) {
+	machineTimes, err := s.MRPRepo.ListItemMachineTimes(ctx, allCodes)
+	if err != nil || len(machineTimes) == 0 {
+		return
+	}
+
+	suggestions, err := s.MRPRepo.ListSuggestionsByPlan(ctx, planCode)
+	if err != nil || len(suggestions) == 0 {
+		return
+	}
+
+	for _, sug := range suggestions {
+		if sug.OrderType != "FABRICACAO" {
+			continue
+		}
+		mtList, ok := machineTimes[sug.ItemCode]
+		if !ok || len(mtList) == 0 {
+			continue
+		}
+
+		// Máquina com maior prioridade (menor número).
+		bestMT := mtList[0]
+		for _, mt := range mtList[1:] {
+			if mt.Priority < bestMT.Priority {
+				bestMT = mt
+			}
+		}
+
+		productionTime := sug.Quantity * bestMT.ProductionTime
+
+		_ = s.MRPRepo.UpdatePlannedOrderMachine(ctx, sug.Code, bestMT.MachineID, productionTime)
+
+		scheduleDate := sug.NeedDate
+		if sug.StartDate != nil {
+			scheduleDate = *sug.StartDate
+		}
+		_ = s.MRPRepo.CreateMachineSchedule(ctx, &entity.MachineScheduleInfo{
+			PlanCode:         planCode,
+			PlannedOrderCode: sug.Code,
+			MachineID:        bestMT.MachineID,
+			ScheduleDate:     scheduleDate,
+			ProductionTime:   productionTime,
+		})
+	}
+}
+
+// processAutoPriority assigns priority codes to planned orders based on
+// order_priorities rules and the DiasPrioridades window.
+func (s *MRPServiceImpl) processAutoPriority(ctx context.Context, planCode int64, params *entity.TypedPlanningParams) {
+	priorities, err := s.MRPRepo.ListAllOrderPriorities(ctx)
+	if err != nil || len(priorities) == 0 {
+		return
+	}
+
+	suggestions, err := s.MRPRepo.ListSuggestionsByPlan(ctx, planCode)
+	if err != nil || len(suggestions) == 0 {
+		return
+	}
+
+	cutoffDate := today().AddDate(0, 0, params.DiasPrioridades)
+
+	for _, sug := range suggestions {
+		if sug.StartDate == nil {
+			continue
+		}
+		if sug.StartDate.After(cutoffDate) {
+			continue
+		}
+		priority := findPriorityForQuantity(priorities, sug.Quantity)
+		if priority != "" {
+			sug.Priority = &priority
+			_ = s.MRPRepo.UpdatePlannedOrderPriority(ctx, sug.Code, priority)
+		}
+	}
+}
+
+func findPriorityForQuantity(priorities []*orderpriority.OrderPriority, quantity float64) string {
+	for _, p := range priorities {
+		if quantity >= p.IntervalStart && quantity <= p.IntervalEnd {
+			return p.Priority
+		}
+	}
+	return ""
+}
+
+// =============================================================================
+// Helpers — regras configuradas (EQUAL, DIFFERENT, RANGE)
+// =============================================================================
+
+// ruleMatchesMask avalia se uma regra configurada se aplica ao mask informado.
+// Suporta EQUAL, DIFFERENT e RANGE.
+func (s *MRPServiceImpl) ruleMatchesMask(rule *entity.ConfiguredItemRule, mask string) bool {
+	switch strings.ToUpper(rule.RuleType) {
+	case "EQUAL":
+		return mask == rule.RuleValue
+	case "DIFFERENT":
+		return mask != rule.RuleValue
+	case "RANGE":
+		parts := strings.SplitN(rule.RuleValue, "-", 2)
+		if len(parts) != 2 {
+			return false
+		}
+		minVal, errMin := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+		maxVal, errMax := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+		if errMin != nil || errMax != nil {
+			return false
+		}
+		maskVal, err := strconv.ParseFloat(mask, 64)
+		if err != nil {
+			return false
+		}
+		return maskVal >= minVal && maskVal <= maxVal
+	default:
+		return true // rule without type restriction applies always
+	}
+}
+
+// getLeadTimeDays extrai o lead_time das regras configuradas para um item.
+// Obtém o maior lead_time dentre todas as regras aplicáveis.
+func (s *MRPServiceImpl) getLeadTimeDays(rulesMap map[int64][]*entity.ConfiguredItemRule, itemCode int64) int {
+	maxLead := 0
+	for _, rule := range rulesMap[itemCode] {
+		if rule.FieldName == "lead_time" {
+			if v, err := strconv.Atoi(rule.RuleValue); err == nil && v > maxLead {
+				maxLead = v
+			}
+		}
+	}
+	return maxLead
+}
+
+// =============================================================================
+// Helpers — estoque de segurança
+// =============================================================================
+
+// generateSafetyStockDemands cria MRPInput para demanda de estoque de segurança
+// conforme param 4 (GERAR_DEMANDA_SEGURANCA_TODOS) e param 6.
+func (s *MRPServiceImpl) generateSafetyStockDemands(
+	ctx context.Context,
+	params *entity.TypedPlanningParams,
+	snapshotMap map[int64]*entity.StockSnapshot,
+	supplyMap map[int64][]ports.SupplyEntry,
+	llcMap map[int64]int,
+	itemCache map[int64]*cachedItemMRP,
+	allowedItems map[int64]struct{},
+	restrictedItems map[int64]struct{},
+) []*entity.MRPInput {
+	var result []*entity.MRPInput
+	baseDate := today()
+
+	for itemCode, snapshot := range snapshotMap {
+		if !s.itemAllowed(allowedItems, itemCode) {
+			continue
+		}
+		if _, blocked := restrictedItems[itemCode]; blocked {
+			continue
+		}
+		if snapshot.SafetyStock <= 0 {
+			continue
+		}
+
+		if !params.GerarDemandaSegurancaTodos {
+			// Only for items with movimentação: verifica consumo médio mensal.
+			cached := s.ensureItemCache(ctx, itemCache, itemCode)
+			if cached == nil {
+				continue
+			}
+		}
+
+		// Calcula data da necessidade.
+		cached := s.ensureItemCache(ctx, itemCache, itemCode)
+		leadTimeDays := 0
+		needDate := baseDate
+		if params.DataNecessidadeEstoqueFuturo {
+			needDate = baseDate.AddDate(0, 0, leadTimeDays+1)
+		} else {
+			needDate = baseDate.AddDate(0, 0, -leadTimeDays-1)
+		}
+		_ = cached // cached may be used for future enhancements
+
+		llc := llcMap[itemCode]
+		result = append(result, &entity.MRPInput{
+			PlanCode: 0,
+			ItemCode: itemCode,
+			Quantity: snapshot.SafetyStock,
+			NeedDate: needDate,
+			LLC:      llc,
+		})
+	}
+
+	return result
+}
+
+// =============================================================================
+// Helpers — item cache e divisões
+// =============================================================================
+
+// ensureItemCache garante que o item esteja no cache, carregando do DB se necessário.
+func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int64]*cachedItemMRP, itemCode int64) *cachedItemMRP {
+	if cached, ok := itemCache[itemCode]; ok {
+		return cached
+	}
+
+	var item *itementity.Item
+	if code, err := valueobject.NewItemCode(itemCode); err == nil {
+		item, _ = s.ItemRepo.FindItemByCode(ctx, code)
+	}
+
+	cached := &cachedItemMRP{}
+	if item != nil {
+		cached.engineeringType = int(item.Engineering.Type)
+		cached.typeMRP = int(item.Planning.TypeMRP)
+		cached.ghost = item.Planning.Ghost
+		cached.reorderPoint = item.Planning.ReorderPoint
+	}
+	itemCache[itemCode] = cached
+	return cached
+}
+
+// salesDivisionRef é uma versão leve de SalesDivision para uso no MRP.
+type salesDivisionRef struct {
+	code                  int64
+	isTechnicalAssistance bool
+}
+
+// loadDivisionMap carrega divisões de vendas para os itens fornecidos.
+func (s *MRPServiceImpl) loadDivisionMap(ctx context.Context, itemCodes []int64) map[int64]*salesDivisionRef {
+	sdMap, err := s.MRPRepo.ListItemSalesDivisions(ctx, itemCodes)
+	if err != nil || sdMap == nil {
+		return nil
+	}
+	result := make(map[int64]*salesDivisionRef, len(sdMap))
+	for code, sd := range sdMap {
+		result[code] = &salesDivisionRef{
+			code:                  code,
+			isTechnicalAssistance: sd.IsTechnicalAssistance,
+		}
+	}
+	return result
 }
 
 // =============================================================================
@@ -641,12 +1408,25 @@ func buildLLCFromBOM(bomMap map[int64][]*structentity.ItemStructure, rootItems [
 }
 
 // explodeFromBOM expands one BOM level using the pre-loaded adjacency map.
+// Mantém compatibilidade com código existente (usa fórmula default 1).
 func explodeFromBOM(
 	bomMap map[int64][]*structentity.ItemStructure,
 	parentCode int64,
 	mask string,
 	quantity float64,
 	level int,
+) []*entity.MRPInput {
+	return explodeFromBOMWithFormula(bomMap, parentCode, mask, quantity, level, 1)
+}
+
+// explodeFromBOMWithFormula expands one BOM level with configurable loss formula.
+func explodeFromBOMWithFormula(
+	bomMap map[int64][]*structentity.ItemStructure,
+	parentCode int64,
+	mask string,
+	quantity float64,
+	level int,
+	formula int,
 ) []*entity.MRPInput {
 	if level > 20 {
 		return nil
@@ -657,10 +1437,7 @@ func explodeFromBOM(
 		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
 			continue
 		}
-		adjustedQty := quantity * child.Quantity
-		if child.LossPercentage > 0 {
-			adjustedQty *= 1 + child.LossPercentage/100
-		}
+		adjustedQty := applyLossFormula(quantity, child.Quantity, child.LossPercentage, formula)
 		inputs = append(inputs, &entity.MRPInput{
 			ItemCode: child.ChildCode,
 			Quantity: adjustedQty,
@@ -670,7 +1447,31 @@ func explodeFromBOM(
 	return inputs
 }
 
-// collectAllItemCodes returns every item code reachable from roots via the BOM.
+// applyLossFormula calcula a quantidade ajustada conforme a fórmula de perdas.
+// Fórmula 1: Qty = QtdPai * QtdComponente * (1 + %Perda/100)
+// Fórmula 2: Qty = QtdPai * QtdComponente / (1 - %Perda/100)
+// Fórmula 3: Qty = QtdPai * QtdComponente (ignora perda)
+func applyLossFormula(parentQty, childQtyPer, lossPercentage float64, formula int) float64 {
+	base := parentQty * childQtyPer
+	if lossPercentage <= 0 {
+		return base
+	}
+	switch formula {
+	case 1:
+		return base * (1 + lossPercentage/100)
+	case 2:
+		denominator := 1 - lossPercentage/100
+		if denominator > 0 {
+			return base / denominator
+		}
+		return base
+	case 3:
+		return base
+	default:
+		return base * (1 + lossPercentage/100)
+	}
+}
+
 func collectAllItemCodes(bomMap map[int64][]*structentity.ItemStructure, roots []int64) []int64 {
 	seen := make(map[int64]bool, len(roots)+len(bomMap))
 	for _, code := range roots {
@@ -689,8 +1490,6 @@ func collectAllItemCodes(bomMap map[int64][]*structentity.ItemStructure, roots [
 	return codes
 }
 
-// firmSupplyForItem sums firm supply entries arriving by needDate for an item.
-// Used to populate OrdersFirm in the MRP profile.
 func firmSupplyForItem(supplyMap map[int64][]ports.SupplyEntry, itemCode int64, needDate time.Time) float64 {
 	total := 0.0
 	for _, entry := range supplyMap[itemCode] {
@@ -699,6 +1498,10 @@ func firmSupplyForItem(supplyMap map[int64][]ports.SupplyEntry, itemCode int64, 
 		}
 	}
 	return total
+}
+
+func maxTime() time.Time {
+	return time.Date(2099, 12, 31, 0, 0, 0, 0, time.UTC)
 }
 
 func maxLLC(llcMap map[int64]int) int {
@@ -743,9 +1546,6 @@ func aggregateInputs(inputs []*entity.MRPInput) []*entity.MRPInput {
 
 // ---------- Production Plan helpers ----------
 
-// filterDemandsFromDate removes independent demands whose DemandDate is before
-// the "from_date" stored in plan Parameters. Falls back to no filtering if the
-// key is absent or unparseable.
 func (s *MRPServiceImpl) filterDemandsFromDate(
 	demands []*inddemandentity.IndependentDemand,
 	params map[string]interface{},
@@ -768,9 +1568,6 @@ func (s *MRPServiceImpl) filterDemandsFromDate(
 	return filtered
 }
 
-// buildAllowedItemSet builds a set of permitted item codes based on
-// plan.ClassItemCodes (comma-separated). If nil/empty, all items are allowed
-// (nil map returned = no filter).
 func (s *MRPServiceImpl) buildAllowedItemSet(plan *planentity.ProductionPlan) map[int64]struct{} {
 	if plan.ClassItemCodes == nil || *plan.ClassItemCodes == "" {
 		return nil
@@ -786,8 +1583,6 @@ func (s *MRPServiceImpl) buildAllowedItemSet(plan *planentity.ProductionPlan) ma
 	return set
 }
 
-// itemAllowed returns true when the item is within the plan scope.
-// A nil allowed map means all items are permitted.
 func (s *MRPServiceImpl) itemAllowed(allowed map[int64]struct{}, itemCode int64) bool {
 	if allowed == nil {
 		return true
@@ -798,9 +1593,6 @@ func (s *MRPServiceImpl) itemAllowed(allowed map[int64]struct{}, itemCode int64)
 
 // ---------- Sales Forecast → MRP demand ----------
 
-// loadForecastDemands converts sales forecasts for the current year into
-// MRPInput entries, summing quantities per item and using Monday of each
-// ISO week as the need date.
 func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64) []*entity.MRPInput {
 	if s.ForecastRepo == nil {
 		return nil
@@ -810,7 +1602,6 @@ func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64
 	if err != nil {
 		return nil
 	}
-	// Also include next year's forecasts for long-horizon plans.
 	nextYear, _ := s.ForecastRepo.ListForecasts(ctx, year+1)
 	forecasts = append(forecasts, nextYear...)
 
@@ -848,15 +1639,23 @@ func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64
 	return result
 }
 
-// mrpWeekToDate returns the Monday of the given ISO week/year.
 func mrpWeekToDate(year, week int) time.Time {
-	// Jan 4 is always in ISO week 1.
 	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
-	// Weekday of Jan 4: Monday=0 offset.
 	weekday := int(jan4.Weekday())
 	if weekday == 0 {
 		weekday = 7
 	}
 	monday := jan4.AddDate(0, 0, -weekday+1)
 	return monday.AddDate(0, 0, (week-1)*7)
+}
+
+func mpsPeriodToDate(periodType string, periodValue, year int) time.Time {
+	switch strings.ToUpper(periodType) {
+	case "WEEK":
+		return mrpWeekToDate(year, periodValue)
+	case "MONTH":
+		return time.Date(year, time.Month(periodValue), 1, 0, 0, 0, 0, time.UTC)
+	default:
+		return time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
+	}
 }

@@ -1566,6 +1566,50 @@ type SalesForecastBlock struct {
 	CreatedBy pgtype.UUID
 }
 
+type SalesOrder struct {
+	Code                int64
+	OrderNumber         int64
+	EnterpriseCode      int64
+	Status              string
+	Origin              string
+	EmissionDate        pgtype.Date
+	DeliveryDate        pgtype.Date
+	DeliveryDateFirm    bool
+	DigitDate           pgtype.Date
+	CustomerCode        *int64
+	BillingAddressCode  *int64
+	ShippingAddressCode *int64
+	RepresentativeCode  *int64
+	PlanCode            *int64
+	SalesDivisionCode   *int64
+	CommissionPct       pgtype.Numeric
+	TaxTypeCode         *int64
+	PresenceIndicator   pgtype.Text
+	SalesChannel        pgtype.Text
+	DefaultNfType       pgtype.Text
+	PriceTableCode      *int64
+	CurrencyCode        string
+	PaymentTermCode     *int64
+	AdditionalDays      int32
+	BearerCode          *int64
+	SaleDate            pgtype.Date
+	TotalWeightNet      pgtype.Numeric
+	TotalWeightGross    pgtype.Numeric
+	TotalGross          pgtype.Numeric
+	TotalNet            pgtype.Numeric
+	TotalNetNoSt        pgtype.Numeric
+	TotalWithIpiWithSt  pgtype.Numeric
+	Notes               pgtype.Text
+	ObsCustomer         pgtype.Text
+	IsBlocked           bool
+	BlockReason         pgtype.Text
+	IsFirm              bool
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+}
+
 type SalesOrderDemand struct {
 	ID             int64
 	SalesOrderCode int64
@@ -1580,6 +1624,52 @@ type SalesOrderDemand struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	Code           pgtype.Int8
+}
+
+type SalesOrderItem struct {
+	Code             int64
+	SalesOrderCode   int64
+	Sequence         int32
+	ItemCode         int64
+	Mask             string
+	DigitDate        pgtype.Date
+	NfType           pgtype.Text
+	SalesUom         pgtype.Text
+	WarehouseCode    *int64
+	PriceTableCode   *int64
+	RequestedQty     pgtype.Numeric
+	UnitPrice        pgtype.Numeric
+	AttendedQty      pgtype.Numeric
+	CancelledQty     pgtype.Numeric
+	DeliveryDate     pgtype.Date
+	DeliveryDateFirm bool
+	CustomerDelivery pgtype.Text
+	Lot              pgtype.Text
+	CouponDelivery   pgtype.Text
+	PaidAtCashier    bool
+	IpiPct           pgtype.Numeric
+	IcmsPct          pgtype.Numeric
+	PisPct           pgtype.Numeric
+	CofinsPct        pgtype.Numeric
+	StPct            pgtype.Numeric
+	DiscountPct      pgtype.Numeric
+	TotalGross       pgtype.Numeric
+	TotalNet         pgtype.Numeric
+	TotalNetWithIpi  pgtype.Numeric
+	TotalIpi         pgtype.Numeric
+	TotalSt          pgtype.Numeric
+	UnitWeightNet    pgtype.Numeric
+	UnitWeightGross  pgtype.Numeric
+	Status           string
+	Notes            pgtype.Text
+	IsActive         bool
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
+type SalesOrderSequence struct {
+	EnterpriseCode int64
+	LastNumber     int64
 }
 
 type Stock struct {
