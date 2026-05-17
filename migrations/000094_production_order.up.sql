@@ -1,4 +1,8 @@
 BEGIN;
+-- Migration 015 created production_orders with an old schema (no item_code).
+-- Drop it so we can recreate with the correct schema.
+DROP TABLE IF EXISTS public.production_orders CASCADE;
+
 -- Production Order extends planned orders when they are firmed for production
 CREATE TABLE IF NOT EXISTS public.production_orders (
     id                      BIGSERIAL PRIMARY KEY,

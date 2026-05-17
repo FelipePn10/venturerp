@@ -171,4 +171,8 @@ type AuthService interface {
 
 	// Fiscal - Config
 	CanManageFiscalConfig(ctx context.Context) bool
+
+	// Reports & Conciliation
+	CanExportRelatorios(ctx context.Context) bool
+	CanImportarOFX(ctx context.Context) bool
 }

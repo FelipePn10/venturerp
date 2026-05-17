@@ -2,6 +2,8 @@ package fiscal_uc
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -25,6 +27,11 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	userID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	entry, err := uc.FiscalRepo.UpdateEntryStatus(ctx, dto.ID, entity.EntryStatusApproved)
 	if err != nil {
 		return nil, err
@@ -37,6 +44,7 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 
 	competencia := entry.DataEntrada.Format("01/2006")
 
+	// Accumulate tax credits per imposto
 	credits := map[string]float64{"ICMS": 0, "IPI": 0, "PIS": 0, "COFINS": 0}
 	for _, item := range items {
 		if item.GeraCreditoICMS {
@@ -54,17 +62,45 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 	}
 
 	for imposto, valor := range credits {
-		if valor > 0 {
-			ta := &financialEntity.TaxAssessment{
-				Imposto:     imposto,
-				Competencia: competencia,
-				Creditos:    decimal.NewFromFloat(valor),
-				Debitos:     decimal.Zero,
-				Status:      financialEntity.TaxStatusApurar,
-			}
-			if _, err := uc.FinancialRepo.CreateTaxAssessment(ctx, ta); err != nil {
-				return nil, err
-			}
+		if valor <= 0 {
+			continue
+		}
+		ta := &financialEntity.TaxAssessment{
+			Imposto:     imposto,
+			Competencia: competencia,
+			Creditos:    decimal.NewFromFloat(valor),
+			Debitos:     decimal.Zero,
+			Status:      financialEntity.TaxStatusApurar,
+		}
+		if err := uc.FinancialRepo.UpsertTaxAssessmentCredito(ctx, ta); err != nil {
+			return nil, fmt.Errorf("registrando crédito %s: %w", imposto, err)
+		}
+	}
+
+	// Auto-gerar Conta a Pagar para o fornecedor
+	if entry.ValorTotal > 0 {
+		nfNum := fmt.Sprintf("NF-%d/%s", entry.NumeroNF, entry.Serie)
+		cp := &financialEntity.ContaPagar{
+			NumeroDocumento: nfNum,
+			TipoDocumento:   "NFE",
+			FiscalEntryID:   &entry.ID,
+			DataLancamento:  time.Now(),
+			DataEmissao:     entry.DataEmissao,
+			DataVencimento:  entry.DataEmissao.AddDate(0, 0, 30), // padrão 30 dias; usuário pode ajustar
+			ValorBruto:      decimal.NewFromFloat(entry.ValorTotal),
+			Desconto:        decimal.Zero,
+			Juros:           decimal.Zero,
+			Multa:           decimal.Zero,
+			ValorPago:       decimal.Zero,
+			ParcelaNumero:   1,
+			ParcelaTotal:    1,
+			StatusAprovacao: financialEntity.AprovacaoPendente,
+			Status:          financialEntity.ContaPagarStatusPendente,
+			IsActive:        true,
+			CriadoPor:       userID,
+		}
+		if _, err := uc.FinancialRepo.CreateContaPagar(ctx, cp); err != nil {
+			return nil, fmt.Errorf("gerando conta a pagar: %w", err)
 		}
 	}
 

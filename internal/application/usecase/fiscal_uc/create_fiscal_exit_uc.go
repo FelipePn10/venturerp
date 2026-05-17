@@ -150,7 +150,8 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		ValorICMS:              taxResult.Totais.ValorICMS,
 		ValorPIS:               taxResult.Totais.ValorPIS,
 		ValorCOFINS:            taxResult.Totais.ValorCOFINS,
-		ValorTotal:             dto.ValorProdutos + taxResult.Totais.ValorIPI + taxResult.Totais.ValorICMS + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
+		// ValorTotal = produtos + IPI + frete + seguro - desconto (ICMS não soma no total NF-e)
+		ValorTotal: dto.ValorProdutos + taxResult.Totais.ValorIPI + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
 		SalesOrderCode:         dto.SalesOrderCode,
 		Status:                 entity.ExitStatusDraft,
 		CreatedBy:              userID,

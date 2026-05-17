@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	"github.com/google/uuid"
 )
 
 type FiscalRepository interface {
@@ -26,6 +27,7 @@ type FiscalRepository interface {
 	ListExitsByStatus(ctx context.Context, status entity.FiscalExitStatus) ([]*entity.FiscalExit, error)
 	UpdateExitStatus(ctx context.Context, id int64, status entity.FiscalExitStatus) (*entity.FiscalExit, error)
 	UpdateExitAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef string) (*entity.FiscalExit, error)
+	CancelExitWithMotivo(ctx context.Context, id int64, motivo string, userID uuid.UUID) (*entity.FiscalExit, error)
 
 	// Fiscal Config
 	GetFiscalConfig(ctx context.Context) (*entity.FiscalConfig, error)
@@ -34,6 +36,8 @@ type FiscalRepository interface {
 	// NCM Tax Table
 	GetNcmTax(ctx context.Context, ncm string) (*entity.NcmTaxTable, error)
 	ListNcmTaxes(ctx context.Context) ([]*entity.NcmTaxTable, error)
+	UpsertNcmTax(ctx context.Context, n *entity.NcmTaxTable) (*entity.NcmTaxTable, error)
+	DeleteNcmTax(ctx context.Context, ncm string) error
 
 	// Tax Scenarios
 	ListTaxScenarios(ctx context.Context) ([]*entity.TaxScenario, error)
@@ -43,4 +47,19 @@ type FiscalRepository interface {
 	GetICMSInternal(ctx context.Context, uf string) (*float64, *float64, error)
 	ListICMSInterstate(ctx context.Context) (map[string]float64, error)
 	ListICMSInternal(ctx context.Context) (map[string]struct{ ICMS, FCP float64 }, error)
+	UpsertICMSInterstate(ctx context.Context, originUF, destUF string, aliq float64) error
+	UpsertICMSInternal(ctx context.Context, uf string, aliqICMS, aliqFCP float64) error
+
+	// Focus NF-e Logs
+	SaveFocusLog(ctx context.Context, fiscalExitID int64, endpoint, method, reqBody, respBody string, statusCode, durationMs int) error
+
+	// Carta de Correção (CC-e)
+	SaveCartaCorrecao(ctx context.Context, fiscalExitID int64, texto, focusRef string, userID uuid.UUID) (int, error)
+	ListCartasCorrecao(ctx context.Context, fiscalExitID int64) ([]*entity.CartaCorrecao, error)
+
+	// CT-e
+	CreateCTe(ctx context.Context, c *entity.FiscalCTe) (*entity.FiscalCTe, error)
+	GetCTeByID(ctx context.Context, id int64) (*entity.FiscalCTe, error)
+	ListCTe(ctx context.Context) ([]*entity.FiscalCTe, error)
+	UpdateCTeStatus(ctx context.Context, id int64, status string) (*entity.FiscalCTe, error)
 }

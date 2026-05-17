@@ -606,3 +606,11 @@ func (a *AuthService) CanListFiscalExits(ctx context.Context) bool {
 func (a *AuthService) CanGetFiscalExit(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
+
+func (a *AuthService) CanExportRelatorios(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanImportarOFX(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}

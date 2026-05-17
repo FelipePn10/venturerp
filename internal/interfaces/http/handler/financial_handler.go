@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/financial_uc"
@@ -38,6 +39,25 @@ type FinancialHandler struct {
 	getSaldoContasUC          *financial_uc.GetSaldoContasUseCase
 	apurarImpostosUC          *financial_uc.ApurarImpostosUseCase
 	getTaxAssessmentUC        *financial_uc.GetTaxAssessmentUseCase
+	// Reports
+	getLivroEntradasUC          *financial_uc.GetLivroEntradasUseCase
+	getLivroSaidasUC            *financial_uc.GetLivroSaidasUseCase
+	getImpostosSaidasUC         *financial_uc.GetImpostosSaidasUseCase
+	getImpostosEntradasUC       *financial_uc.GetImpostosEntradasUseCase
+	getDREUC                    *financial_uc.GetDREUseCase
+	getAgingReceberDetUC        *financial_uc.GetAgingReceberDetalhadoUseCase
+	getAgingPagarDetUC          *financial_uc.GetAgingPagarDetalhadoUseCase
+	getExtratoPorFornecedorUC   *financial_uc.GetExtratoPorFornecedorUseCase
+	getExtratoPorClienteUC      *financial_uc.GetExtratoPorClienteUseCase
+	getProdutosVendidosUC       *financial_uc.GetProdutosVendidosUseCase
+	getProdutosProduzidosUC     *financial_uc.GetProdutosProduzidosUseCase
+	getHistoricoCustosUC        *financial_uc.GetHistoricoCustosUseCase
+	getFichaTecnicaCustoUC      *financial_uc.GetFichaTecnicaCustoUseCase
+	getCurvaABCClientesUC       *financial_uc.GetCurvaABCClientesUseCase
+	getCurvaABCProdutosUC       *financial_uc.GetCurvaABCProdutosUseCase
+	getComprasPeriodoUC         *financial_uc.GetComprasPeriodoUseCase
+	// Conciliação
+	importarOFXUC               *financial_uc.ImportarOFXUseCase
 }
 
 func NewFinancialHandler(
@@ -67,6 +87,23 @@ func NewFinancialHandler(
 	getSaldoContasUC *financial_uc.GetSaldoContasUseCase,
 	apurarImpostosUC *financial_uc.ApurarImpostosUseCase,
 	getTaxAssessmentUC *financial_uc.GetTaxAssessmentUseCase,
+	getLivroEntradasUC *financial_uc.GetLivroEntradasUseCase,
+	getLivroSaidasUC *financial_uc.GetLivroSaidasUseCase,
+	getImpostosSaidasUC *financial_uc.GetImpostosSaidasUseCase,
+	getImpostosEntradasUC *financial_uc.GetImpostosEntradasUseCase,
+	getDREUC *financial_uc.GetDREUseCase,
+	getAgingReceberDetUC *financial_uc.GetAgingReceberDetalhadoUseCase,
+	getAgingPagarDetUC *financial_uc.GetAgingPagarDetalhadoUseCase,
+	getExtratoPorFornecedorUC *financial_uc.GetExtratoPorFornecedorUseCase,
+	getExtratoPorClienteUC *financial_uc.GetExtratoPorClienteUseCase,
+	getProdutosVendidosUC *financial_uc.GetProdutosVendidosUseCase,
+	getProdutosProduzidosUC *financial_uc.GetProdutosProduzidosUseCase,
+	getHistoricoCustosUC *financial_uc.GetHistoricoCustosUseCase,
+	getFichaTecnicaCustoUC *financial_uc.GetFichaTecnicaCustoUseCase,
+	getCurvaABCClientesUC *financial_uc.GetCurvaABCClientesUseCase,
+	getCurvaABCProdutosUC *financial_uc.GetCurvaABCProdutosUseCase,
+	getComprasPeriodoUC *financial_uc.GetComprasPeriodoUseCase,
+	importarOFXUC *financial_uc.ImportarOFXUseCase,
 ) *FinancialHandler {
 	return &FinancialHandler{
 		createContaBancariaUC:     createContaBancariaUC,
@@ -95,6 +132,23 @@ func NewFinancialHandler(
 		getSaldoContasUC:          getSaldoContasUC,
 		apurarImpostosUC:          apurarImpostosUC,
 		getTaxAssessmentUC:        getTaxAssessmentUC,
+		getLivroEntradasUC:          getLivroEntradasUC,
+		getLivroSaidasUC:            getLivroSaidasUC,
+		getImpostosSaidasUC:         getImpostosSaidasUC,
+		getImpostosEntradasUC:       getImpostosEntradasUC,
+		getDREUC:                    getDREUC,
+		getAgingReceberDetUC:        getAgingReceberDetUC,
+		getAgingPagarDetUC:          getAgingPagarDetUC,
+		getExtratoPorFornecedorUC:   getExtratoPorFornecedorUC,
+		getExtratoPorClienteUC:      getExtratoPorClienteUC,
+		getProdutosVendidosUC:       getProdutosVendidosUC,
+		getProdutosProduzidosUC:     getProdutosProduzidosUC,
+		getHistoricoCustosUC:        getHistoricoCustosUC,
+		getFichaTecnicaCustoUC:      getFichaTecnicaCustoUC,
+		getCurvaABCClientesUC:       getCurvaABCClientesUC,
+		getCurvaABCProdutosUC:       getCurvaABCProdutosUC,
+		getComprasPeriodoUC:         getComprasPeriodoUC,
+		importarOFXUC:               importarOFXUC,
 	}
 }
 
@@ -443,4 +497,278 @@ func (h *FinancialHandler) GetTaxAssessment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── Reports helper ───────────────────────────────────────────────────────────
+
+func parseDateRange(r *http.Request) (start, end string) {
+	start = r.URL.Query().Get("start")
+	end = r.URL.Query().Get("end")
+	return
+}
+
+func parseTime(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
+// ─── R01 Livro de Entradas ────────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetLivroEntradas(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getLivroEntradasUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R02 Livro de Saídas ─────────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetLivroSaidas(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getLivroSaidasUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R03 Impostos Saídas ─────────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetImpostosSaidas(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getImpostosSaidasUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R04 Impostos Entradas ───────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetImpostosEntradas(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getImpostosEntradasUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R06 DRE ─────────────────────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetDRE(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	result, err := h.getDREUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// ─── R09 Aging Receber Detalhado ─────────────────────────────────────────────
+
+func (h *FinancialHandler) GetAgingReceberDetalhado(w http.ResponseWriter, r *http.Request) {
+	results, err := h.getAgingReceberDetUC.Execute(r.Context())
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R10 Aging Pagar Detalhado ───────────────────────────────────────────────
+
+func (h *FinancialHandler) GetAgingPagarDetalhado(w http.ResponseWriter, r *http.Request) {
+	results, err := h.getAgingPagarDetUC.Execute(r.Context())
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R11 Extrato por Fornecedor ──────────────────────────────────────────────
+
+func (h *FinancialHandler) GetExtratoPorFornecedor(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	results, err := h.getExtratoPorFornecedorUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R12 Extrato por Cliente ─────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetExtratoPorCliente(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	results, err := h.getExtratoPorClienteUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R13 Produtos Vendidos ───────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetProdutosVendidos(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getProdutosVendidosUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R14 Produtos Produzidos ─────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetProdutosProduzidos(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getProdutosProduzidosUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R15 Histórico de Custos ─────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetHistoricoCustos(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getHistoricoCustosUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R16 Ficha Técnica com Custo ─────────────────────────────────────────────
+
+func (h *FinancialHandler) GetFichaTecnicaCusto(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "item_code")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid item_code")
+		return
+	}
+	results, err := h.getFichaTecnicaCustoUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R17 Curva ABC Clientes ──────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetCurvaABCClientes(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getCurvaABCClientesUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R18 Curva ABC Produtos ──────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetCurvaABCProdutos(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getCurvaABCProdutosUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── R19 Compras no Período ──────────────────────────────────────────────────
+
+func (h *FinancialHandler) GetComprasPeriodo(w http.ResponseWriter, r *http.Request) {
+	start, end := parseDateRange(r)
+	results, err := h.getComprasPeriodoUC.Execute(r.Context(),
+		mustParseDate(parseTime(start, "2000-01-01")),
+		mustParseDate(parseTime(end, "2099-12-31")))
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── Conciliação Bancária ────────────────────────────────────────────────────
+
+func (h *FinancialHandler) ImportarOFX(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "conta_id")
+	contaID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid conta_id")
+		return
+	}
+	var body struct {
+		OFXContent string `json:"ofx_content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.importarOFXUC.Execute(r.Context(), contaID, body.OFXContent)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func mustParseDate(s string) time.Time {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }

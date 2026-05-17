@@ -419,6 +419,7 @@ func (app *application) mount() chi.Router {
 
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
+	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
 	financialHandler := handler.NewFinancialHandler(
 		&financial_uc.CreateContaBancariaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasBancariasUseCase{Repo: fRepo, Auth: authService},
@@ -432,13 +433,13 @@ func (app *application) mount() chi.Router {
 		&financial_uc.ListContasPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetContaPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ApproveContaPagarUseCase{Repo: fRepo, Auth: authService},
-		&financial_uc.BaixarContaPagarUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.BaixarContaPagarUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository},
 		&financial_uc.CancelContaPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetAgingPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.CreateContaReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetContaReceberUseCase{Repo: fRepo, Auth: authService},
-		&financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository},
 		&financial_uc.CancelContaReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetAgingReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetFluxoCaixaUseCase{Repo: fRepo, Auth: authService},
@@ -446,10 +447,27 @@ func (app *application) mount() chi.Router {
 		&financial_uc.GetSaldoContasUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ApurarImpostosUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetTaxAssessmentUseCase{Repo: fRepo, Auth: authService},
+		// Reports
+		&financial_uc.GetLivroEntradasUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetLivroSaidasUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetImpostosSaidasUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetImpostosEntradasUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetDREUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetAgingReceberDetalhadoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetAgingPagarDetalhadoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetExtratoPorFornecedorUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetExtratoPorClienteUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetProdutosVendidosUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetProdutosProduzidosUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetHistoricoCustosUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetFichaTecnicaCustoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetCurvaABCClientesUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetCurvaABCProdutosUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetComprasPeriodoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.ImportarOFXUseCase{Repo: fRepo, Auth: authService},
 	)
 
 	// fiscal module
-	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
 	fiscalHandler := handler.NewFiscalHandler(
 		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService},
@@ -457,12 +475,25 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
+		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalConfigUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.UpdateFiscalConfigUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.EmitirCCeUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.CreateCTeUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.ListCTeUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.GetCTeUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.UpsertNcmTaxUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.ListNcmTaxesUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.DeleteNcmTaxUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.UpsertICMSInterstateUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.ListICMSInterstateUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.UpsertICMSInternalUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.ListICMSInternalUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.ConsultarNFeUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.ListCartasCorrecaoUseCase{Repo: fiscalRepository, Auth: authService},
 	)
 
 	// routes
@@ -711,10 +742,26 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/create", fiscalHandler.CreateExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/authorize", fiscalHandler.AuthorizeExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/cancel", fiscalHandler.CancelExit)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/carta-correcao", fiscalHandler.EmitirCCe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/list", fiscalHandler.ListExits)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{code}", fiscalHandler.GetExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/config", fiscalHandler.GetConfig)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/config", fiscalHandler.UpdateConfig)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/cte/create", fiscalHandler.CreateCTe)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cte/list", fiscalHandler.ListCTe)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cte/{code}", fiscalHandler.GetCTe)
+			// NF-e status consultation & CC-e list
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/status", fiscalHandler.ConsultarNFe)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/cartas-correcao", fiscalHandler.ListCartasCorrecao)
+			// NCM tax table management
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tabelas/ncm", fiscalHandler.UpsertNcmTax)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/ncm", fiscalHandler.ListNcmTaxes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/tabelas/ncm/{ncm}", fiscalHandler.DeleteNcmTax)
+			// ICMS table management
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tabelas/icms-interestadual", fiscalHandler.UpsertICMSInterstate)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/icms-interestadual", fiscalHandler.ListICMSInterstate)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tabelas/icms-interno", fiscalHandler.UpsertICMSInternal)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/icms-interno", fiscalHandler.ListICMSInternal)
 		})
 		r.Route("/api/financial", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-bancarias/create", financialHandler.CreateContaBancaria)
@@ -743,6 +790,25 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/saldo-contas", financialHandler.GetSaldoContas)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/apuracao-impostos", financialHandler.ApurarImpostos)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/apuracao-impostos/{competencia}", financialHandler.GetTaxAssessment)
+			// Reports
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/livro-entradas", financialHandler.GetLivroEntradas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/livro-saidas", financialHandler.GetLivroSaidas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/impostos-saidas", financialHandler.GetImpostosSaidas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/impostos-entradas", financialHandler.GetImpostosEntradas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/dre", financialHandler.GetDRE)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/aging-receber", financialHandler.GetAgingReceberDetalhado)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/aging-pagar", financialHandler.GetAgingPagarDetalhado)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/extrato-fornecedor/{id}", financialHandler.GetExtratoPorFornecedor)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/extrato-cliente/{id}", financialHandler.GetExtratoPorCliente)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/produtos-vendidos", financialHandler.GetProdutosVendidos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/produtos-produzidos", financialHandler.GetProdutosProduzidos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/historico-custos", financialHandler.GetHistoricoCustos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/ficha-tecnica/{item_code}", financialHandler.GetFichaTecnicaCusto)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/curva-abc-clientes", financialHandler.GetCurvaABCClientes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/curva-abc-produtos", financialHandler.GetCurvaABCProdutos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/compras-periodo", financialHandler.GetComprasPeriodo)
+			// Bank statement reconciliation
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/conciliacao/{conta_id}/importar-ofx", financialHandler.ImportarOFX)
 		})
 	})
 	// Health check

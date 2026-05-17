@@ -33,7 +33,9 @@ type TaxItemResult struct {
 	BaseICMS          float64
 	AliquotaICMS      float64
 	ValorICMS         float64
-	ValorICMSDiferido float64
+	ValorICMSDiferido float64 // cenário 2: ICMS diferido (CST 51)
+	ValorDIFAL        float64 // cenário 1: DIFAL para não-contribuinte interestadual
+	ValorFCP          float64 // Fundo de Combate à Pobreza (DIFAL)
 	CSTICMS           string
 	BaseIPI           float64
 	AliquotaIPI       float64
@@ -48,15 +50,17 @@ type TaxItemResult struct {
 }
 
 type TaxTotals struct {
-	BaseICMS       float64
-	ValorICMS      float64
-	BaseIPI        float64
-	ValorIPI       float64
-	BasePIS        float64
-	ValorPIS       float64
-	BaseCOFINS     float64
-	ValorCOFINS    float64
-	DifalValorICMS float64
+	BaseICMS      float64
+	ValorICMS     float64
+	ValorDiferido float64
+	BaseIPI       float64
+	ValorIPI      float64
+	BasePIS       float64
+	ValorPIS      float64
+	BaseCOFINS    float64
+	ValorCOFINS   float64
+	ValorDIFAL    float64
+	ValorFCP      float64
 }
 
 type TaxScenarioConfig struct {
@@ -96,13 +100,15 @@ func CalcularImpostos(
 
 		result.Totais.BaseICMS += itemResult.BaseICMS
 		result.Totais.ValorICMS += itemResult.ValorICMS
+		result.Totais.ValorDiferido += itemResult.ValorICMSDiferido
 		result.Totais.BaseIPI += itemResult.BaseIPI
 		result.Totais.ValorIPI += itemResult.ValorIPI
 		result.Totais.BasePIS += itemResult.BasePIS
 		result.Totais.ValorPIS += itemResult.ValorPIS
 		result.Totais.BaseCOFINS += itemResult.BaseCOFINS
 		result.Totais.ValorCOFINS += itemResult.ValorCOFINS
-		result.Totais.DifalValorICMS += (itemResult.ValorICMSDiferido)
+		result.Totais.ValorDIFAL += itemResult.ValorDIFAL
+		result.Totais.ValorFCP += itemResult.ValorFCP
 	}
 
 	return result, nil
@@ -163,13 +169,9 @@ func calculateItemTax(
 	aliqCOFINS := decimal.NewFromFloat(0.076)
 	cstCOFINS := "01"
 	if hasNcm {
-		if ncmCfg.AliqPis > 0 {
-			aliqPIS = decimal.NewFromFloat(ncmCfg.AliqPis)
-		}
+		aliqPIS = decimal.NewFromFloat(ncmCfg.AliqPis)
 		cstPIS = ncmCfg.CstPis
-		if ncmCfg.AliqCofins > 0 {
-			aliqCOFINS = decimal.NewFromFloat(ncmCfg.AliqCofins)
-		}
+		aliqCOFINS = decimal.NewFromFloat(ncmCfg.AliqCofins)
 		cstCOFINS = ncmCfg.CstCofins
 	}
 
@@ -183,17 +185,23 @@ func calculateItemTax(
 
 	// ICMS
 	if isInterno {
-		// Cenario interno PR
-		aliqICMS := decimal.NewFromFloat(fiscalConfig.IcmsInternoAliquota)
-		baseICMS := totalComIPI.Add(freteItem).Sub(descontoItem)
+		// Cenário 2 (PR contribuinte) ou 3 (PR não contribuinte)
+		// Base ICMS: para não contribuinte inclui IPI; para contribuinte não inclui IPI
+		var baseICMS decimal.Decimal
+		if params.DestinoTipo == "contribuinte" {
+			baseICMS = itemTotal.Add(freteItem).Sub(descontoItem)
+		} else {
+			baseICMS = totalComIPI.Add(freteItem).Sub(descontoItem)
+		}
 
+		aliqICMS := decimal.NewFromFloat(fiscalConfig.IcmsInternoAliquota)
 		r.AliquotaICMS, _ = aliqICMS.Float64()
 		r.BaseICMS, _ = baseICMS.Round(2).Float64()
 		valorICMS := baseICMS.Mul(aliqICMS)
 		r.ValorICMS, _ = valorICMS.Round(2).Float64()
 
 		if params.DestinoTipo == "contribuinte" {
-			// Diferimento 38.46%
+			// Diferimento parcial 38.46% → CST 51
 			difPct := decimal.NewFromFloat(fiscalConfig.IcmsDiferimentoPercentual).Div(decimal.NewFromInt(100))
 			diferido := valorICMS.Mul(difPct)
 			r.ValorICMSDiferido, _ = diferido.Round(2).Float64()
@@ -203,30 +211,49 @@ func calculateItemTax(
 			r.CSTICMS = "00"
 		}
 	} else {
-		// Cenario interestadual
+		// Cenário 1 – Interestadual
 		interstateKey := params.EmitenteUF + params.DestinoUF
+
+		// Resolução SF 13/2012: mercadoria importada (origens 3,4,5,8) → 4%
+		importadaOrigens := map[string]bool{"3": true, "4": true, "5": true, "8": true}
 		var aliqInter decimal.Decimal
-		if item.OrigemMercadoria == "1" || item.OrigemMercadoria == "2" {
+		if importadaOrigens[item.OrigemMercadoria] {
 			aliqInter = decimal.NewFromFloat(0.04)
 		} else {
-			aliqInter = decimal.NewFromFloat(interstateTable[interstateKey])
+			aliq, ok := interstateTable[interstateKey]
+			if !ok || aliq == 0 {
+				aliq = 0.12 // default Sul/Sudeste quando não mapeado
+			}
+			aliqInter = decimal.NewFromFloat(aliq)
 		}
 
-		baseICMS := totalComIPI.Add(freteItem).Sub(descontoItem)
+		// Base ICMS interestadual para não contribuinte inclui IPI
+		var baseICMS decimal.Decimal
+		if params.DestinoTipo != "contribuinte" {
+			baseICMS = totalComIPI.Add(freteItem).Sub(descontoItem)
+		} else {
+			baseICMS = itemTotal.Add(freteItem).Sub(descontoItem)
+		}
+
 		r.AliquotaICMS, _ = aliqInter.Float64()
 		r.BaseICMS, _ = baseICMS.Round(2).Float64()
 		r.ValorICMS, _ = baseICMS.Mul(aliqInter).Round(2).Float64()
+		r.CSTICMS = "00"
 
-		// DIFAL for non-contributor
+		// DIFAL (EC 87/2015) para venda a não contribuinte interestadual
 		if params.DestinoTipo == "nao_contribuinte" || params.DestinoTipo == "pessoa_fisica" {
-			icmsInternal := decimal.NewFromFloat(internalTable[params.DestinoUF].ICMS)
-			difal := icmsInternal.Sub(aliqInter)
-			if difal.IsPositive() {
-				difalValor := baseICMS.Mul(difal)
-				r.ValorICMSDiferido, _ = difalValor.Round(2).Float64()
+			internalCfg, hasInternal := internalTable[params.DestinoUF]
+			if hasInternal && internalCfg.ICMS > 0 {
+				aliqInterna := decimal.NewFromFloat(internalCfg.ICMS)
+				difal := aliqInterna.Sub(aliqInter)
+				if difal.IsPositive() {
+					r.ValorDIFAL, _ = baseICMS.Mul(difal).Round(2).Float64()
+				}
+				if internalCfg.FCP > 0 {
+					r.ValorFCP, _ = baseICMS.Mul(decimal.NewFromFloat(internalCfg.FCP)).Round(2).Float64()
+				}
 			}
 		}
-		r.CSTICMS = "00"
 	}
 
 	roundResult(&r)
@@ -237,6 +264,8 @@ func roundResult(r *TaxItemResult) {
 	r.BaseICMS, _ = decimal.NewFromFloat(r.BaseICMS).Round(2).Float64()
 	r.ValorICMS, _ = decimal.NewFromFloat(r.ValorICMS).Round(2).Float64()
 	r.ValorICMSDiferido, _ = decimal.NewFromFloat(r.ValorICMSDiferido).Round(2).Float64()
+	r.ValorDIFAL, _ = decimal.NewFromFloat(r.ValorDIFAL).Round(2).Float64()
+	r.ValorFCP, _ = decimal.NewFromFloat(r.ValorFCP).Round(2).Float64()
 	r.BaseIPI, _ = decimal.NewFromFloat(r.BaseIPI).Round(2).Float64()
 	r.ValorIPI, _ = decimal.NewFromFloat(r.ValorIPI).Round(2).Float64()
 	r.BasePIS, _ = decimal.NewFromFloat(r.BasePIS).Round(2).Float64()

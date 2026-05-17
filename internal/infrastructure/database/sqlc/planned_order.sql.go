@@ -44,7 +44,7 @@ VALUES (
            $13, $14, $15, $16, $17, $18,
            $19, $20, $21, $22, $23, $24
        )
-    RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code
+    RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days
 `
 
 type CreatePlannedOrderParams struct {
@@ -134,6 +134,8 @@ func (q *Queries) CreatePlannedOrder(ctx context.Context, arg CreatePlannedOrder
 		&i.PlanCode,
 		&i.DemandCode,
 		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
 	)
 	return i, err
 }
@@ -157,7 +159,7 @@ func (q *Queries) DeletePlannedOrder(ctx context.Context, code int64) error {
 }
 
 const firmPlannedOrder = `-- name: FirmPlannedOrder :one
-UPDATE planned_orders SET is_firm = TRUE, status = 'RELEASED', updated_at = NOW() WHERE code = $1 RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code
+UPDATE planned_orders SET is_firm = TRUE, status = 'RELEASED', updated_at = NOW() WHERE code = $1 RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days
 `
 
 func (q *Queries) FirmPlannedOrder(ctx context.Context, code int64) (PlannedOrder, error) {
@@ -195,6 +197,8 @@ func (q *Queries) FirmPlannedOrder(ctx context.Context, code int64) (PlannedOrde
 		&i.PlanCode,
 		&i.DemandCode,
 		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
 	)
 	return i, err
 }
@@ -211,7 +215,7 @@ func (q *Queries) GetNextOrderNumber(ctx context.Context) (int32, error) {
 }
 
 const getPlannedOrderByCode = `-- name: GetPlannedOrderByCode :one
-SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code FROM planned_orders WHERE code = $1
+SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days FROM planned_orders WHERE code = $1
 `
 
 func (q *Queries) GetPlannedOrderByCode(ctx context.Context, code int64) (PlannedOrder, error) {
@@ -249,12 +253,14 @@ func (q *Queries) GetPlannedOrderByCode(ctx context.Context, code int64) (Planne
 		&i.PlanCode,
 		&i.DemandCode,
 		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
 	)
 	return i, err
 }
 
 const getPlannedOrderByNumber = `-- name: GetPlannedOrderByNumber :one
-SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code FROM planned_orders WHERE order_number = $1
+SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days FROM planned_orders WHERE order_number = $1
 `
 
 func (q *Queries) GetPlannedOrderByNumber(ctx context.Context, orderNumber int64) (PlannedOrder, error) {
@@ -292,6 +298,8 @@ func (q *Queries) GetPlannedOrderByNumber(ctx context.Context, orderNumber int64
 		&i.PlanCode,
 		&i.DemandCode,
 		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
 	)
 	return i, err
 }
@@ -338,7 +346,7 @@ func (q *Queries) ListFirmPlannedOrdersByItems(ctx context.Context, itemCodes []
 }
 
 const listPlannedOrders = `-- name: ListPlannedOrders :many
-SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code FROM planned_orders WHERE is_active = TRUE ORDER BY need_date
+SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days FROM planned_orders WHERE is_active = TRUE ORDER BY need_date
 `
 
 func (q *Queries) ListPlannedOrders(ctx context.Context) ([]PlannedOrder, error) {
@@ -382,6 +390,8 @@ func (q *Queries) ListPlannedOrders(ctx context.Context) ([]PlannedOrder, error)
 			&i.PlanCode,
 			&i.DemandCode,
 			&i.SalesOrderCode,
+			&i.SafetyTimeDays,
+			&i.CoverageDays,
 		); err != nil {
 			return nil, err
 		}
@@ -394,7 +404,7 @@ func (q *Queries) ListPlannedOrders(ctx context.Context) ([]PlannedOrder, error)
 }
 
 const listPlannedOrdersByItem = `-- name: ListPlannedOrdersByItem :many
-SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code FROM planned_orders WHERE item_code = $1 AND is_active = TRUE ORDER BY need_date
+SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days FROM planned_orders WHERE item_code = $1 AND is_active = TRUE ORDER BY need_date
 `
 
 func (q *Queries) ListPlannedOrdersByItem(ctx context.Context, itemCode int64) ([]PlannedOrder, error) {
@@ -438,6 +448,8 @@ func (q *Queries) ListPlannedOrdersByItem(ctx context.Context, itemCode int64) (
 			&i.PlanCode,
 			&i.DemandCode,
 			&i.SalesOrderCode,
+			&i.SafetyTimeDays,
+			&i.CoverageDays,
 		); err != nil {
 			return nil, err
 		}
@@ -450,7 +462,7 @@ func (q *Queries) ListPlannedOrdersByItem(ctx context.Context, itemCode int64) (
 }
 
 const listPlannedOrdersByPlan = `-- name: ListPlannedOrdersByPlan :many
-SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code FROM planned_orders WHERE plan_code = $1 AND is_active = TRUE ORDER BY need_date
+SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days FROM planned_orders WHERE plan_code = $1 AND is_active = TRUE ORDER BY need_date
 `
 
 func (q *Queries) ListPlannedOrdersByPlan(ctx context.Context, planCode *int64) ([]PlannedOrder, error) {
@@ -494,6 +506,8 @@ func (q *Queries) ListPlannedOrdersByPlan(ctx context.Context, planCode *int64) 
 			&i.PlanCode,
 			&i.DemandCode,
 			&i.SalesOrderCode,
+			&i.SafetyTimeDays,
+			&i.CoverageDays,
 		); err != nil {
 			return nil, err
 		}
@@ -506,7 +520,7 @@ func (q *Queries) ListPlannedOrdersByPlan(ctx context.Context, planCode *int64) 
 }
 
 const listPlannedOrdersByStatus = `-- name: ListPlannedOrdersByStatus :many
-SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code FROM planned_orders WHERE status = $1 AND is_active = TRUE ORDER BY need_date
+SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days FROM planned_orders WHERE status = $1 AND is_active = TRUE ORDER BY need_date
 `
 
 func (q *Queries) ListPlannedOrdersByStatus(ctx context.Context, status OrderStatusEnum) ([]PlannedOrder, error) {
@@ -550,6 +564,8 @@ func (q *Queries) ListPlannedOrdersByStatus(ctx context.Context, status OrderSta
 			&i.PlanCode,
 			&i.DemandCode,
 			&i.SalesOrderCode,
+			&i.SafetyTimeDays,
+			&i.CoverageDays,
 		); err != nil {
 			return nil, err
 		}
@@ -562,7 +578,7 @@ func (q *Queries) ListPlannedOrdersByStatus(ctx context.Context, status OrderSta
 }
 
 const listPlannedOrdersByType = `-- name: ListPlannedOrdersByType :many
-SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code FROM planned_orders WHERE order_type = $1 AND is_active = TRUE ORDER BY need_date
+SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days FROM planned_orders WHERE order_type = $1 AND is_active = TRUE ORDER BY need_date
 `
 
 func (q *Queries) ListPlannedOrdersByType(ctx context.Context, orderType OrderTypeEnum) ([]PlannedOrder, error) {
@@ -606,6 +622,8 @@ func (q *Queries) ListPlannedOrdersByType(ctx context.Context, orderType OrderTy
 			&i.PlanCode,
 			&i.DemandCode,
 			&i.SalesOrderCode,
+			&i.SafetyTimeDays,
+			&i.CoverageDays,
 		); err != nil {
 			return nil, err
 		}
@@ -618,7 +636,7 @@ func (q *Queries) ListPlannedOrdersByType(ctx context.Context, orderType OrderTy
 }
 
 const updatePlannedOrderDates = `-- name: UpdatePlannedOrderDates :one
-UPDATE planned_orders SET start_date = $1, end_date = $2, updated_at = NOW() WHERE code = $3 RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code
+UPDATE planned_orders SET start_date = $1, end_date = $2, updated_at = NOW() WHERE code = $3 RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days
 `
 
 type UpdatePlannedOrderDatesParams struct {
@@ -662,12 +680,14 @@ func (q *Queries) UpdatePlannedOrderDates(ctx context.Context, arg UpdatePlanned
 		&i.PlanCode,
 		&i.DemandCode,
 		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
 	)
 	return i, err
 }
 
 const updatePlannedOrderStatus = `-- name: UpdatePlannedOrderStatus :one
-UPDATE planned_orders SET status = $1, updated_at = NOW() WHERE code = $2 RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code
+UPDATE planned_orders SET status = $1, updated_at = NOW() WHERE code = $2 RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days
 `
 
 type UpdatePlannedOrderStatusParams struct {
@@ -710,6 +730,8 @@ func (q *Queries) UpdatePlannedOrderStatus(ctx context.Context, arg UpdatePlanne
 		&i.PlanCode,
 		&i.DemandCode,
 		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
 	)
 	return i, err
 }

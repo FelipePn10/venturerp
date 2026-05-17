@@ -7,22 +7,31 @@ import (
 )
 
 type FiscalConfig struct {
-	ID                       int64
-	CnpjEmpresa              string
-	RazaoSocial              string
-	IEEmpresa                *string
-	RegimeTributario         string
-	UFEmpresa                string
-	IcmsInternoAliquota      float64
+	ID                        int64
+	CnpjEmpresa               string
+	RazaoSocial               string
+	IEEmpresa                 *string
+	RegimeTributario          string
+	UFEmpresa                 string
+	IcmsInternoAliquota       float64
 	IcmsDiferimentoPercentual float64
-	FocusNfeToken            *string
-	FocusNfeAmbiente         string
-	JurosMes                 float64
-	MultaAtraso              float64
-	VencimentoIcmsDia        int
-	VencimentoIPIDia         int
-	VencimentoPisCofinsDia   int
-	CreatedAt                time.Time
-	UpdatedAt                time.Time
-	UpdatedBy                uuid.UUID
+	FocusNfeToken             *string
+	FocusNfeAmbiente          string
+	JurosMes                  float64
+	MultaAtraso               float64
+	VencimentoIcmsDia         int
+	VencimentoIPIDia          int
+	VencimentoPisCofinsDia    int
+	// Endereço do emitente (obrigatório para NF-e em produção)
+	Logradouro      string
+	Numero          string
+	Complemento     *string
+	Bairro          string
+	Municipio       string
+	CodigoMunicipio string
+	CEP             string
+	Telefone        *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	UpdatedBy       uuid.UUID
 }

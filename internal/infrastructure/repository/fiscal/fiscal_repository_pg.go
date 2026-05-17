@@ -3,12 +3,17 @@ package fiscal
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var _ = time.Now
+var _ = uuid.UUID{}
 
 type FiscalRepositoryPG struct {
 	pool *pgxpool.Pool
@@ -416,12 +421,18 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		        icms_interno_aliquota, icms_diferimento_percentual,
 		        focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		        vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
+		        COALESCE(logradouro,''), COALESCE(numero,''), complemento,
+		        COALESCE(bairro,''), COALESCE(municipio,''), COALESCE(codigo_municipio,''),
+		        COALESCE(cep,''), telefone,
 		        created_at, updated_at, updated_by
 		 FROM public.fiscal_configs ORDER BY id LIMIT 1`,
 	).Scan(&cfg.ID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
 		&cfg.FocusNfeToken, &cfg.FocusNfeAmbiente, &cfg.JurosMes, &cfg.MultaAtraso,
 		&cfg.VencimentoIcmsDia, &cfg.VencimentoIPIDia, &cfg.VencimentoPisCofinsDia,
+		&cfg.Logradouro, &cfg.Numero, &cfg.Complemento,
+		&cfg.Bairro, &cfg.Municipio, &cfg.CodigoMunicipio,
+		&cfg.CEP, &cfg.Telefone,
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -439,22 +450,29 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		     icms_interno_aliquota = $6, icms_diferimento_percentual = $7,
 		     focus_nfe_token = $8, focus_nfe_ambiente = $9, juros_mes = $10, multa_atraso = $11,
 		     vencimento_icms_dia = $12, vencimento_ipi_dia = $13, vencimento_pis_cofins_dia = $14,
-		     updated_at = NOW(), updated_by = $15
-		 WHERE id = $16
+		     logradouro = $15, numero = $16, complemento = $17, bairro = $18,
+		     municipio = $19, codigo_municipio = $20, cep = $21, telefone = $22,
+		     updated_at = NOW(), updated_by = $23
+		 WHERE id = $24
 		 RETURNING id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
 		           icms_interno_aliquota, icms_diferimento_percentual,
 		           focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		           vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
+		           logradouro, numero, complemento, bairro, municipio, codigo_municipio, cep, telefone,
 		           created_at, updated_at, updated_by`,
 		cfg.CnpjEmpresa, cfg.RazaoSocial, cfg.IEEmpresa, cfg.RegimeTributario, cfg.UFEmpresa,
 		cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual,
 		cfg.FocusNfeToken, cfg.FocusNfeAmbiente, cfg.JurosMes, cfg.MultaAtraso,
 		cfg.VencimentoIcmsDia, cfg.VencimentoIPIDia, cfg.VencimentoPisCofinsDia,
+		cfg.Logradouro, cfg.Numero, cfg.Complemento, cfg.Bairro,
+		cfg.Municipio, cfg.CodigoMunicipio, cfg.CEP, cfg.Telefone,
 		cfg.UpdatedBy, cfg.ID,
 	).Scan(&cfg.ID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
 		&cfg.FocusNfeToken, &cfg.FocusNfeAmbiente, &cfg.JurosMes, &cfg.MultaAtraso,
 		&cfg.VencimentoIcmsDia, &cfg.VencimentoIPIDia, &cfg.VencimentoPisCofinsDia,
+		&cfg.Logradouro, &cfg.Numero, &cfg.Complemento, &cfg.Bairro,
+		&cfg.Municipio, &cfg.CodigoMunicipio, &cfg.CEP, &cfg.Telefone,
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy)
 	if err != nil {
 		return nil, fmt.Errorf("updating fiscal config: %w", err)
@@ -593,4 +611,227 @@ func (r *FiscalRepositoryPG) ListICMSInternal(ctx context.Context) (map[string]s
 		result[uf] = struct{ ICMS, FCP float64 }{ICMS: icms, FCP: fcp}
 	}
 	return result, rows.Err()
+}
+
+// ---------- Cancel with motivo ----------
+
+func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64, motivo string, userID uuid.UUID) (*entity.FiscalExit, error) {
+	var e entity.FiscalExit
+	err := r.pool.QueryRow(ctx,
+		`UPDATE public.fiscal_exits SET
+		     status = 'CANCELLED',
+		     motivo_cancelamento = $1,
+		     data_cancelamento = NOW(),
+		     cancelado_por = $2,
+		     updated_at = NOW()
+		 WHERE id = $3
+		 RETURNING id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
+		           cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
+		           cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
+		           valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
+		           sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
+		           is_active, created_at, updated_at, created_by`,
+		motivo, userID, id,
+	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
+		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
+		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
+		&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
+		&e.SalesOrderCode, &e.Status, &e.Protocolo, &e.XmlPath, &e.DanfePath, &e.FocusRef,
+		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy)
+	if err != nil {
+		return nil, fmt.Errorf("cancelling fiscal exit with motivo: %w", err)
+	}
+	return &e, nil
+}
+
+// ---------- Focus NF-e Logs ----------
+
+func (r *FiscalRepositoryPG) SaveFocusLog(ctx context.Context, fiscalExitID int64, endpoint, method, reqBody, respBody string, statusCode, durationMs int) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO public.focus_nfe_logs (fiscal_exit_id, endpoint, method, request_body, response_body, status_code, duration_ms)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		fiscalExitID, endpoint, method, reqBody, respBody, statusCode, durationMs)
+	return err
+}
+
+// ---------- Carta de Correção ----------
+
+func (r *FiscalRepositoryPG) SaveCartaCorrecao(ctx context.Context, fiscalExitID int64, texto, focusRef string, userID uuid.UUID) (int, error) {
+	var seq int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(MAX(numero_seq), 0) + 1 FROM public.carta_correcao WHERE fiscal_exit_id = $1`,
+		fiscalExitID).Scan(&seq)
+	if err != nil {
+		return 0, fmt.Errorf("getting CC-e sequence: %w", err)
+	}
+	_, err = r.pool.Exec(ctx,
+		`INSERT INTO public.carta_correcao (fiscal_exit_id, numero_seq, texto_correcao, focus_ref, status, created_by)
+		 VALUES ($1,$2,$3,$4,'ENVIADA',$5)`,
+		fiscalExitID, seq, texto, focusRef, userID)
+	if err != nil {
+		return 0, fmt.Errorf("saving carta correcao: %w", err)
+	}
+	return seq, nil
+}
+
+func (r *FiscalRepositoryPG) ListCartasCorrecao(ctx context.Context, fiscalExitID int64) ([]*entity.CartaCorrecao, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, fiscal_exit_id, numero_seq, texto_correcao, focus_ref, status, protocolo, chave_evento, created_at, created_by
+		 FROM public.carta_correcao WHERE fiscal_exit_id = $1 ORDER BY numero_seq`, fiscalExitID)
+	if err != nil {
+		return nil, fmt.Errorf("listing cartas correcao: %w", err)
+	}
+	defer rows.Close()
+	var result []*entity.CartaCorrecao
+	for rows.Next() {
+		var c entity.CartaCorrecao
+		if err := rows.Scan(&c.ID, &c.FiscalExitID, &c.NumeroSeq, &c.TextoCorrecao,
+			&c.FocusRef, &c.Status, &c.Protocolo, &c.ChaveEvento, &c.CreatedAt, &c.CreatedBy); err != nil {
+			return nil, fmt.Errorf("scanning carta correcao: %w", err)
+		}
+		result = append(result, &c)
+	}
+	return result, rows.Err()
+}
+
+// ---------- CT-e ----------
+
+func (r *FiscalRepositoryPG) CreateCTe(ctx context.Context, c *entity.FiscalCTe) (*entity.FiscalCTe, error) {
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO public.fiscal_cte
+		     (chave_acesso, numero_cte, serie, data_emissao, data_entrada,
+		      cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
+		      cfop, valor_frete, valor_seguro, valor_outros, valor_total,
+		      valor_icms, base_icms, aliq_icms, cst_icms, tipo_rateio,
+		      fiscal_entry_id, status, xml_path, notes, created_by)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+		 RETURNING id, is_active, created_at, updated_at`,
+		c.ChaveAcesso, c.NumeroCTe, c.Serie, c.DataEmissao, c.DataEntrada,
+		c.CnpjEmitente, c.RazaoSocialEmitente, c.IEEmitente, c.UFEmitente,
+		c.Cfop, c.ValorFrete, c.ValorSeguro, c.ValorOutros, c.ValorTotal,
+		c.ValorICMS, c.BaseICMS, c.AliqICMS, c.CstICMS, c.TipoRateio,
+		c.FiscalEntryID, c.Status, c.XmlPath, c.Notes, c.CreatedBy,
+	).Scan(&c.ID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("creating CT-e: %w", err)
+	}
+	return c, nil
+}
+
+func (r *FiscalRepositoryPG) GetCTeByID(ctx context.Context, id int64) (*entity.FiscalCTe, error) {
+	var c entity.FiscalCTe
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, chave_acesso, numero_cte, serie, data_emissao, data_entrada,
+		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
+		        cfop, valor_frete, valor_seguro, valor_outros, valor_total,
+		        valor_icms, base_icms, aliq_icms, cst_icms, tipo_rateio,
+		        fiscal_entry_id, status, xml_path, notes, is_active, created_at, updated_at, created_by
+		 FROM public.fiscal_cte WHERE id = $1`, id,
+	).Scan(&c.ID, &c.ChaveAcesso, &c.NumeroCTe, &c.Serie, &c.DataEmissao, &c.DataEntrada,
+		&c.CnpjEmitente, &c.RazaoSocialEmitente, &c.IEEmitente, &c.UFEmitente,
+		&c.Cfop, &c.ValorFrete, &c.ValorSeguro, &c.ValorOutros, &c.ValorTotal,
+		&c.ValorICMS, &c.BaseICMS, &c.AliqICMS, &c.CstICMS, &c.TipoRateio,
+		&c.FiscalEntryID, &c.Status, &c.XmlPath, &c.Notes, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &c.CreatedBy)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("CT-e %d not found", id)
+		}
+		return nil, fmt.Errorf("getting CT-e: %w", err)
+	}
+	return &c, nil
+}
+
+func (r *FiscalRepositoryPG) ListCTe(ctx context.Context) ([]*entity.FiscalCTe, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, chave_acesso, numero_cte, serie, data_emissao, data_entrada,
+		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
+		        cfop, valor_frete, valor_seguro, valor_outros, valor_total,
+		        valor_icms, base_icms, aliq_icms, cst_icms, tipo_rateio,
+		        fiscal_entry_id, status, xml_path, notes, is_active, created_at, updated_at, created_by
+		 FROM public.fiscal_cte WHERE is_active = true ORDER BY data_emissao DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("listing CT-e: %w", err)
+	}
+	defer rows.Close()
+	var result []*entity.FiscalCTe
+	for rows.Next() {
+		var c entity.FiscalCTe
+		if err := rows.Scan(&c.ID, &c.ChaveAcesso, &c.NumeroCTe, &c.Serie, &c.DataEmissao, &c.DataEntrada,
+			&c.CnpjEmitente, &c.RazaoSocialEmitente, &c.IEEmitente, &c.UFEmitente,
+			&c.Cfop, &c.ValorFrete, &c.ValorSeguro, &c.ValorOutros, &c.ValorTotal,
+			&c.ValorICMS, &c.BaseICMS, &c.AliqICMS, &c.CstICMS, &c.TipoRateio,
+			&c.FiscalEntryID, &c.Status, &c.XmlPath, &c.Notes, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &c.CreatedBy); err != nil {
+			return nil, fmt.Errorf("scanning CT-e: %w", err)
+		}
+		result = append(result, &c)
+	}
+	return result, rows.Err()
+}
+
+func (r *FiscalRepositoryPG) UpdateCTeStatus(ctx context.Context, id int64, status string) (*entity.FiscalCTe, error) {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE public.fiscal_cte SET status = $1, updated_at = NOW() WHERE id = $2`, status, id)
+	if err != nil {
+		return nil, fmt.Errorf("updating CT-e status: %w", err)
+	}
+	return r.GetCTeByID(ctx, id)
+}
+
+// ---------- NCM Tax Table write operations ----------
+
+func (r *FiscalRepositoryPG) UpsertNcmTax(ctx context.Context, n *entity.NcmTaxTable) (*entity.NcmTaxTable, error) {
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO public.ncm_tax_table (ncm, aliq_ipi, aliq_pis, aliq_cofins, cst_pis, cst_cofins, cst_ipi, description, is_active)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+		 ON CONFLICT (ncm) DO UPDATE SET
+		     aliq_ipi    = EXCLUDED.aliq_ipi,
+		     aliq_pis    = EXCLUDED.aliq_pis,
+		     aliq_cofins = EXCLUDED.aliq_cofins,
+		     cst_pis     = EXCLUDED.cst_pis,
+		     cst_cofins  = EXCLUDED.cst_cofins,
+		     cst_ipi     = EXCLUDED.cst_ipi,
+		     description = EXCLUDED.description,
+		     is_active   = true
+		 RETURNING id, ncm, aliq_ipi, aliq_pis, aliq_cofins, cst_pis, cst_cofins, cst_ipi, description, is_active, created_at`,
+		n.Ncm, n.AliqIPI, n.AliqPis, n.AliqCofins, n.CstPis, n.CstCofins, n.CstIPI, n.Description,
+	).Scan(&n.ID, &n.Ncm, &n.AliqIPI, &n.AliqPis, &n.AliqCofins, &n.CstPis, &n.CstCofins, &n.CstIPI, &n.Description, &n.IsActive, &n.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("upserting NCM tax: %w", err)
+	}
+	return n, nil
+}
+
+func (r *FiscalRepositoryPG) DeleteNcmTax(ctx context.Context, ncm string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE public.ncm_tax_table SET is_active = false WHERE ncm = $1`, ncm)
+	if err != nil {
+		return fmt.Errorf("deleting NCM tax: %w", err)
+	}
+	return nil
+}
+
+// ---------- ICMS table write operations ----------
+
+func (r *FiscalRepositoryPG) UpsertICMSInterstate(ctx context.Context, originUF, destUF string, aliq float64) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO public.icms_interstate (origin_uf, destination_uf, aliq_icms, is_active)
+		 VALUES ($1, $2, $3, true)
+		 ON CONFLICT (origin_uf, destination_uf) DO UPDATE SET aliq_icms = EXCLUDED.aliq_icms, is_active = true`,
+		originUF, destUF, aliq)
+	if err != nil {
+		return fmt.Errorf("upserting ICMS interstate: %w", err)
+	}
+	return nil
+}
+
+func (r *FiscalRepositoryPG) UpsertICMSInternal(ctx context.Context, uf string, aliqICMS, aliqFCP float64) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO public.icms_internal (uf, aliq_icms, aliq_fcp, is_active)
+		 VALUES ($1, $2, $3, true)
+		 ON CONFLICT (uf) DO UPDATE SET aliq_icms = EXCLUDED.aliq_icms, aliq_fcp = EXCLUDED.aliq_fcp, is_active = true`,
+		uf, aliqICMS, aliqFCP)
+	if err != nil {
+		return fmt.Errorf("upserting ICMS internal: %w", err)
+	}
+	return nil
 }

@@ -928,3 +928,637 @@ func (r *FinancialRepositoryPG) scanContaReceber(rows pgx.Rows) (*entity.ContaRe
 	c.ValorRecebido = decimal.NewFromFloat(valorRecebido)
 	return &c, nil
 }
+
+// ---------- UpsertTaxAssessmentCredito ----------
+
+func (r *FinancialRepositoryPG) UpsertTaxAssessmentCredito(ctx context.Context, t *entity.TaxAssessment) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO tax_assessments (imposto, competencia, debitos, creditos, saldo_devedor, saldo_credor, status)
+		 VALUES ($1, $2, 0, $3, 0, $3, 'APURAR')
+		 ON CONFLICT (imposto, competencia) DO UPDATE SET
+		     creditos = tax_assessments.creditos + EXCLUDED.creditos,
+		     updated_at = NOW()`,
+		t.Imposto, t.Competencia, t.Creditos.InexactFloat64())
+	if err != nil {
+		return fmt.Errorf("upserting tax assessment credito: %w", err)
+	}
+	return nil
+}
+
+// ---------- CancelContasReceberByFiscalExit ----------
+
+func (r *FinancialRepositoryPG) CancelContasReceberByFiscalExit(ctx context.Context, fiscalExitID int64) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE contas_receber SET status = 'CANCELADO', is_active = false, updated_at = NOW()
+		 WHERE fiscal_exit_id = $1 AND status IN ('PENDENTE', 'APROVADO', 'VENCIDO')`, fiscalExitID)
+	if err != nil {
+		return fmt.Errorf("cancelling contas receber for exit %d: %w", fiscalExitID, err)
+	}
+	return nil
+}
+
+// ---------- Reports ----------
+
+func (r *FinancialRepositoryPG) GetLivroEntradas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT fe.id, fe.data_entrada, fe.numero_nf, fe.serie, fe.razao_social_emitente,
+		        fei.cfop, fe.valor_produtos, fe.valor_ipi, fe.valor_icms, fe.valor_pis, fe.valor_cofins, fe.valor_total
+		 FROM fiscal_entries fe
+		 LEFT JOIN fiscal_entry_items fei ON fei.fiscal_entry_id = fe.id
+		 WHERE fe.data_entrada BETWEEN $1 AND $2 AND fe.status = 'APPROVED'
+		 ORDER BY fe.data_entrada, fe.numero_nf`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("livro entradas: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"id", "data_entrada", "numero_nf", "serie", "emitente", "cfop", "valor_produtos", "valor_ipi", "valor_icms", "valor_pis", "valor_cofins", "valor_total"})
+}
+
+func (r *FinancialRepositoryPG) GetLivroSaidas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT fe.id, fe.data_emissao, fe.numero_nf, fe.serie, fe.razao_social_destinatario,
+		        fei.cfop, fe.valor_produtos, fe.valor_ipi, fe.valor_icms, fe.valor_pis, fe.valor_cofins, fe.valor_total
+		 FROM fiscal_exits fe
+		 LEFT JOIN fiscal_exit_items fei ON fei.fiscal_exit_id = fe.id
+		 WHERE fe.data_emissao BETWEEN $1 AND $2 AND fe.status = 'AUTHORIZED'
+		 ORDER BY fe.data_emissao, fe.numero_nf`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("livro saidas: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"id", "data_emissao", "numero_nf", "serie", "destinatario", "cfop", "valor_produtos", "valor_ipi", "valor_icms", "valor_pis", "valor_cofins", "valor_total"})
+}
+
+func (r *FinancialRepositoryPG) GetImpostosSaidas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT fe.numero_nf, fe.data_emissao, fe.razao_social_destinatario, fei.cfop,
+		        fei.base_icms, fei.valor_icms, fei.base_ipi, fei.valor_ipi, fei.valor_pis, fei.valor_cofins
+		 FROM fiscal_exits fe
+		 JOIN fiscal_exit_items fei ON fei.fiscal_exit_id = fe.id
+		 WHERE fe.data_emissao BETWEEN $1 AND $2 AND fe.status = 'AUTHORIZED'
+		 ORDER BY fe.data_emissao`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("impostos saidas: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"numero_nf", "data", "cliente", "cfop", "base_icms", "valor_icms", "base_ipi", "valor_ipi", "valor_pis", "valor_cofins"})
+}
+
+func (r *FinancialRepositoryPG) GetImpostosEntradas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT fe.numero_nf, fe.data_entrada, fe.razao_social_emitente, fei.cfop,
+		        fei.base_icms, fei.valor_icms, fei.base_ipi, fei.valor_ipi, fei.valor_pis, fei.valor_cofins
+		 FROM fiscal_entries fe
+		 JOIN fiscal_entry_items fei ON fei.fiscal_entry_id = fe.id
+		 WHERE fe.data_entrada BETWEEN $1 AND $2 AND fe.status = 'APPROVED'
+		 ORDER BY fe.data_entrada`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("impostos entradas: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"numero_nf", "data", "fornecedor", "cfop", "base_icms", "valor_icms", "base_ipi", "valor_ipi", "valor_pis", "valor_cofins"})
+}
+
+func (r *FinancialRepositoryPG) GetDRE(ctx context.Context, startDate, endDate time.Time) (map[string]interface{}, error) {
+	var receitaBruta, impostosVendas float64
+	_ = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(valor_produtos),0), COALESCE(SUM(valor_icms + valor_ipi + valor_pis + valor_cofins),0)
+		 FROM fiscal_exits WHERE data_emissao BETWEEN $1 AND $2 AND status = 'AUTHORIZED'`,
+		startDate, endDate).Scan(&receitaBruta, &impostosVendas)
+
+	var despesas float64
+	_ = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(valor_bruto - COALESCE(valor_pago,0)),0)
+		 FROM contas_pagar WHERE data_vencimento BETWEEN $1 AND $2 AND status IN ('PAGO','CANCELADO')`,
+		startDate, endDate).Scan(&despesas)
+
+	receitaLiquida := receitaBruta - impostosVendas
+	resultado := receitaLiquida - despesas
+
+	return map[string]interface{}{
+		"receita_bruta":    receitaBruta,
+		"impostos_vendas":  impostosVendas,
+		"receita_liquida":  receitaLiquida,
+		"despesas":         despesas,
+		"resultado_liquido": resultado,
+		"periodo_inicio":   startDate.Format("2006-01-02"),
+		"periodo_fim":      endDate.Format("2006-01-02"),
+	}, nil
+}
+
+func (r *FinancialRepositoryPG) GetAgingReceberDetalhado(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, numero_documento, cliente_id, data_vencimento, valor_bruto,
+		 CASE
+		     WHEN data_vencimento >= CURRENT_DATE THEN 'A vencer'
+		     WHEN data_vencimento >= CURRENT_DATE - 30 THEN '1-30 dias'
+		     WHEN data_vencimento >= CURRENT_DATE - 60 THEN '31-60 dias'
+		     WHEN data_vencimento >= CURRENT_DATE - 90 THEN '61-90 dias'
+		     WHEN data_vencimento >= CURRENT_DATE - 180 THEN '91-180 dias'
+		     ELSE '+180 dias'
+		 END AS faixa
+		 FROM contas_receber
+		 WHERE status IN ('PENDENTE','VENCIDO') AND is_active = true
+		 ORDER BY data_vencimento`)
+	if err != nil {
+		return nil, fmt.Errorf("aging receber: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"id", "numero_documento", "cliente_id", "data_vencimento", "valor_bruto", "faixa"})
+}
+
+func (r *FinancialRepositoryPG) GetAgingPagarDetalhado(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, numero_documento, fornecedor_id, data_vencimento, valor_bruto,
+		 CASE
+		     WHEN data_vencimento >= CURRENT_DATE THEN 'A vencer'
+		     WHEN data_vencimento >= CURRENT_DATE - 30 THEN '1-30 dias'
+		     WHEN data_vencimento >= CURRENT_DATE - 60 THEN '31-60 dias'
+		     WHEN data_vencimento >= CURRENT_DATE - 90 THEN '61-90 dias'
+		     WHEN data_vencimento >= CURRENT_DATE - 180 THEN '91-180 dias'
+		     ELSE '+180 dias'
+		 END AS faixa
+		 FROM contas_pagar
+		 WHERE status IN ('PENDENTE','APROVADO','VENCIDO') AND is_active = true
+		 ORDER BY data_vencimento`)
+	if err != nil {
+		return nil, fmt.Errorf("aging pagar: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"id", "numero_documento", "fornecedor_id", "data_vencimento", "valor_bruto", "faixa"})
+}
+
+func (r *FinancialRepositoryPG) GetExtratoPorFornecedor(ctx context.Context, fornecedorID int64) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT numero_documento, data_emissao, data_vencimento, data_pagamento,
+		        valor_bruto, desconto, juros, multa, COALESCE(valor_pago,0) as valor_pago, status
+		 FROM contas_pagar WHERE fornecedor_id = $1 AND is_active = true ORDER BY data_emissao`, fornecedorID)
+	if err != nil {
+		return nil, fmt.Errorf("extrato fornecedor: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"numero_documento", "data_emissao", "data_vencimento", "data_pagamento", "valor_bruto", "desconto", "juros", "multa", "valor_pago", "status"})
+}
+
+func (r *FinancialRepositoryPG) GetExtratoPorCliente(ctx context.Context, clienteID int64) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT numero_documento, data_emissao, data_vencimento, data_recebimento,
+		        valor_bruto, desconto, juros, multa, COALESCE(valor_recebido,0) as valor_recebido, status
+		 FROM contas_receber WHERE cliente_id = $1 AND is_active = true ORDER BY data_emissao`, clienteID)
+	if err != nil {
+		return nil, fmt.Errorf("extrato cliente: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"numero_documento", "data_emissao", "data_vencimento", "data_recebimento", "valor_bruto", "desconto", "juros", "multa", "valor_recebido", "status"})
+}
+
+// scanToMaps converts pgx rows to []map[string]interface{} using provided column names.
+func scanToMaps(rows pgx.Rows, cols []string) ([]map[string]interface{}, error) {
+	var result []map[string]interface{}
+	for rows.Next() {
+		vals, err := rows.Values()
+		if err != nil {
+			return nil, err
+		}
+		row := make(map[string]interface{}, len(cols))
+		for i, col := range cols {
+			if i < len(vals) {
+				row[col] = vals[i]
+			}
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+// ---------- BaixarContaPagarAtomico ----------
+
+func (r *FinancialRepositoryPG) BaixarContaPagarAtomico(ctx context.Context, id int64, params repository.BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	valorPago := decimal.NewFromFloat(params.ValorPago)
+	isParcial := valorPago.LessThan(valorOriginal)
+
+	// Update main CP
+	if isParcial {
+		_, err = tx.Exec(ctx,
+			`UPDATE contas_pagar SET status='PAGO', data_pagamento=$1, valor_pago=$2, juros=$3, multa=$4,
+			     conta_bancaria_id=$5, baixado_por=$6, updated_at=NOW() WHERE id=$7`,
+			params.DataPagamento, params.ValorPago, params.Juros, params.Multa,
+			params.ContaBancariaID, params.BaixadoPor, id)
+		if err != nil {
+			return fmt.Errorf("baixando CP parcial: %w", err)
+		}
+		// Create remaining CP
+		remaining := valorOriginal.Sub(valorPago)
+		_, err = tx.Exec(ctx,
+			`INSERT INTO contas_pagar (numero_documento, tipo_documento, fornecedor_id, fiscal_entry_id,
+			     data_lancamento, data_emissao, data_vencimento,
+			     valor_bruto, desconto, juros, multa, valor_pago,
+			     parcela_numero, parcela_total, status_aprovacao, status, is_active, criado_por)
+			 SELECT numero_documento || '/P', tipo_documento, fornecedor_id, fiscal_entry_id,
+			     NOW(), data_emissao, data_vencimento,
+			     $1, 0, 0, 0, 0,
+			     parcela_numero+1, parcela_total, 'APROVADO', 'PENDENTE', true, criado_por
+			 FROM contas_pagar WHERE id = $2`,
+			remaining.InexactFloat64(), id)
+		if err != nil {
+			return fmt.Errorf("creating remaining CP: %w", err)
+		}
+	} else {
+		_, err = tx.Exec(ctx,
+			`UPDATE contas_pagar SET status='PAGO', data_pagamento=$1, valor_pago=$2, juros=$3, multa=$4,
+			     conta_bancaria_id=$5, baixado_por=$6, updated_at=NOW() WHERE id=$7`,
+			params.DataPagamento, params.ValorPago, params.Juros, params.Multa,
+			params.ContaBancariaID, params.BaixadoPor, id)
+		if err != nil {
+			return fmt.Errorf("baixando CP: %w", err)
+		}
+	}
+
+	// Insert fluxo de caixa
+	_, err = tx.Exec(ctx,
+		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, contas_pagar_id, descricao, conciliado)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.ContasPagarID, fc.Descricao, false)
+	if err != nil {
+		return fmt.Errorf("creating fluxo caixa: %w", err)
+	}
+
+	// Update saldo
+	_, err = tx.Exec(ctx,
+		`UPDATE contas_bancarias SET saldo_inicial = saldo_inicial - $1, updated_at = NOW() WHERE id = $2`,
+		fc.Valor.InexactFloat64(), contaBancariaID)
+	if err != nil {
+		return fmt.Errorf("updating saldo: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// ---------- BaixarContaReceberAtomico ----------
+
+func (r *FinancialRepositoryPG) BaixarContaReceberAtomico(ctx context.Context, id int64, params repository.BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	valorRecebido := decimal.NewFromFloat(params.ValorPago)
+	isParcial := valorRecebido.LessThan(valorOriginal)
+
+	if isParcial {
+		_, err = tx.Exec(ctx,
+			`UPDATE contas_receber SET status='RECEBIDO', data_recebimento=$1, valor_recebido=$2, juros=$3, multa=$4,
+			     conta_bancaria_id=$5, baixado_por=$6, updated_at=NOW() WHERE id=$7`,
+			params.DataPagamento, params.ValorPago, params.Juros, params.Multa,
+			params.ContaBancariaID, params.BaixadoPor, id)
+		if err != nil {
+			return fmt.Errorf("baixando CR parcial: %w", err)
+		}
+		remaining := valorOriginal.Sub(valorRecebido)
+		_, err = tx.Exec(ctx,
+			`INSERT INTO contas_receber (numero_documento, cliente_id, fiscal_exit_id,
+			     data_lancamento, data_emissao, data_vencimento,
+			     valor_bruto, desconto, juros, multa, valor_recebido,
+			     parcela_numero, parcela_total, status, is_active, criado_por)
+			 SELECT numero_documento, cliente_id, fiscal_exit_id,
+			     NOW(), data_emissao, data_vencimento,
+			     $1, 0, 0, 0, 0,
+			     parcela_numero+1, parcela_total, 'PENDENTE', true, criado_por
+			 FROM contas_receber WHERE id = $2`,
+			remaining.InexactFloat64(), id)
+		if err != nil {
+			return fmt.Errorf("creating remaining CR: %w", err)
+		}
+	} else {
+		_, err = tx.Exec(ctx,
+			`UPDATE contas_receber SET status='RECEBIDO', data_recebimento=$1, valor_recebido=$2, juros=$3, multa=$4,
+			     conta_bancaria_id=$5, baixado_por=$6, updated_at=NOW() WHERE id=$7`,
+			params.DataPagamento, params.ValorPago, params.Juros, params.Multa,
+			params.ContaBancariaID, params.BaixadoPor, id)
+		if err != nil {
+			return fmt.Errorf("baixando CR: %w", err)
+		}
+	}
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, contas_receber_id, descricao, conciliado)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.ContasReceberID, fc.Descricao, false)
+	if err != nil {
+		return fmt.Errorf("creating fluxo caixa CR: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE contas_bancarias SET saldo_inicial = saldo_inicial + $1, updated_at = NOW() WHERE id = $2`,
+		fc.Valor.InexactFloat64(), contaBancariaID)
+	if err != nil {
+		return fmt.Errorf("updating saldo CR: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// ---------- Reports R13-R19 ----------
+
+func (r *FinancialRepositoryPG) GetProdutosVendidos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT fei.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
+		        fei.ncm, SUM(fei.quantity) AS qtd_vendida,
+		        ROUND(AVG(fei.unit_price)::numeric,2) AS preco_medio,
+		        COALESCE(AVG(sb.avg_cost),0) AS custo_medio,
+		        SUM(fei.total_price) AS valor_total,
+		        ROUND((AVG(fei.unit_price) - COALESCE(AVG(sb.avg_cost),0))::numeric,2) AS margem_bruta
+		 FROM fiscal_exit_items fei
+		 JOIN fiscal_exits fe ON fe.id = fei.fiscal_exit_id
+		 LEFT JOIN items i ON i.code = fei.item_code
+		 LEFT JOIN stock_balances sb ON sb.item_code = fei.item_code
+		 WHERE fe.data_emissao BETWEEN $1 AND $2 AND fe.status = 'AUTHORIZED'
+		 GROUP BY fei.item_code, i.mask, i.description, fei.ncm
+		 ORDER BY valor_total DESC`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("produtos vendidos: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"item_code", "codigo", "descricao", "ncm", "qtd_vendida", "preco_medio", "custo_medio", "valor_total", "margem_bruta"})
+}
+
+func (r *FinancialRepositoryPG) GetProdutosProduzidos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT po.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
+		        SUM(po.quantity) AS qtd_produzida,
+		        COALESCE(AVG(sb.avg_cost),0) AS custo_unitario,
+		        COALESCE(AVG(sb.avg_cost),0) * SUM(po.quantity) AS custo_total
+		 FROM production_orders po
+		 LEFT JOIN items i ON i.code = po.item_code
+		 LEFT JOIN stock_balances sb ON sb.item_code = po.item_code
+		 WHERE po.created_at BETWEEN $1 AND $2 AND po.status IN ('COMPLETED','CLOSED')
+		 GROUP BY po.item_code, i.mask, i.description
+		 ORDER BY custo_total DESC`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("produtos produzidos: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"item_code", "codigo", "descricao", "qtd_produzida", "custo_unitario", "custo_total"})
+}
+
+func (r *FinancialRepositoryPG) GetHistoricoCustos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT sb.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
+		        sb.avg_cost AS custo_medio_atual, sb.last_cost AS custo_ultima_compra,
+		        COALESCE((SELECT MIN(unit_price) FROM stock_movements sm WHERE sm.item_code = sb.item_code AND sm.created_at BETWEEN $1 AND $2 AND sm.movement_type='IN'),0) AS custo_minimo,
+		        COALESCE((SELECT MAX(unit_price) FROM stock_movements sm WHERE sm.item_code = sb.item_code AND sm.created_at BETWEEN $1 AND $2 AND sm.movement_type='IN'),0) AS custo_maximo
+		 FROM stock_balances sb
+		 LEFT JOIN items i ON i.code = sb.item_code
+		 ORDER BY sb.item_code`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("historico custos: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"item_code", "codigo", "descricao", "custo_medio_atual", "custo_ultima_compra", "custo_minimo", "custo_maximo"})
+}
+
+func (r *FinancialRepositoryPG) GetFichaTecnicaCusto(ctx context.Context, itemCode int64) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT b.child_item_code AS insumo_code, COALESCE(i.mask,'') AS insumo_codigo,
+		        COALESCE(i.description,'') AS insumo_descricao,
+		        b.quantity AS qtd_por_unidade,
+		        COALESCE(sb.avg_cost,0) AS custo_unitario,
+		        b.quantity * COALESCE(sb.avg_cost,0) AS custo_total
+		 FROM bom_items b
+		 JOIN boms bom ON bom.id = b.bom_id
+		 LEFT JOIN items i ON i.code = b.child_item_code
+		 LEFT JOIN stock_balances sb ON sb.item_code = b.child_item_code
+		 WHERE bom.item_code = $1
+		 ORDER BY custo_total DESC`, itemCode)
+	if err != nil {
+		return nil, fmt.Errorf("ficha tecnica: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"insumo_code", "insumo_codigo", "insumo_descricao", "qtd_por_unidade", "custo_unitario", "custo_total"})
+}
+
+func (r *FinancialRepositoryPG) GetCurvaABCClientes(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`WITH vendas AS (
+		     SELECT razao_social_destinatario AS cliente, SUM(valor_total) AS total
+		     FROM fiscal_exits
+		     WHERE status = 'AUTHORIZED' AND data_emissao BETWEEN $1 AND $2
+		     GROUP BY razao_social_destinatario
+		 ), soma AS (SELECT SUM(total) AS grand_total FROM vendas)
+		 SELECT cliente, total,
+		        ROUND((total / grand_total * 100)::numeric, 2) AS pct,
+		        ROUND(SUM(total) OVER (ORDER BY total DESC) / grand_total * 100::numeric, 2) AS pct_acum,
+		        CASE WHEN SUM(total) OVER (ORDER BY total DESC) / grand_total <= 0.8 THEN 'A'
+		             WHEN SUM(total) OVER (ORDER BY total DESC) / grand_total <= 0.95 THEN 'B'
+		             ELSE 'C' END AS classe
+		 FROM vendas, soma ORDER BY total DESC`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("curva abc clientes: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"cliente", "total", "pct", "pct_acum", "classe"})
+}
+
+func (r *FinancialRepositoryPG) GetCurvaABCProdutos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`WITH vendas AS (
+		     SELECT fei.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
+		            SUM(fei.total_price) AS total
+		     FROM fiscal_exit_items fei
+		     JOIN fiscal_exits fe ON fe.id = fei.fiscal_exit_id
+		     LEFT JOIN items i ON i.code = fei.item_code
+		     WHERE fe.status = 'AUTHORIZED' AND fe.data_emissao BETWEEN $1 AND $2
+		     GROUP BY fei.item_code, i.mask, i.description
+		 ), soma AS (SELECT SUM(total) AS grand_total FROM vendas)
+		 SELECT item_code, codigo, descricao, total,
+		        ROUND((total / grand_total * 100)::numeric, 2) AS pct,
+		        ROUND(SUM(total) OVER (ORDER BY total DESC) / grand_total * 100::numeric, 2) AS pct_acum,
+		        CASE WHEN SUM(total) OVER (ORDER BY total DESC) / grand_total <= 0.8 THEN 'A'
+		             WHEN SUM(total) OVER (ORDER BY total DESC) / grand_total <= 0.95 THEN 'B'
+		             ELSE 'C' END AS classe
+		 FROM vendas, soma ORDER BY total DESC`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("curva abc produtos: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"item_code", "codigo", "descricao", "total", "pct", "pct_acum", "classe"})
+}
+
+func (r *FinancialRepositoryPG) GetComprasPeriodo(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT fe.razao_social_emitente AS fornecedor, fei.item_code,
+		        COALESCE(i.mask,'') AS codigo_produto, COALESCE(i.description,'') AS descricao, fei.ncm,
+		        SUM(fei.quantity) AS qtd, ROUND(AVG(fei.unit_price)::numeric,4) AS preco_unitario,
+		        SUM(fei.total_price) AS valor_total, fe.numero_nf AS nfe
+		 FROM fiscal_entry_items fei
+		 JOIN fiscal_entries fe ON fe.id = fei.fiscal_entry_id
+		 LEFT JOIN items i ON i.code = fei.item_code
+		 WHERE fe.data_entrada BETWEEN $1 AND $2 AND fe.status = 'APPROVED'
+		 GROUP BY fe.razao_social_emitente, fei.item_code, i.mask, i.description, fei.ncm, fe.numero_nf
+		 ORDER BY fe.razao_social_emitente, valor_total DESC`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("compras periodo: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"fornecedor", "item_code", "codigo_produto", "descricao", "ncm", "qtd", "preco_unitario", "valor_total", "nfe"})
+}
+
+// ---------- DRE with CMV ----------
+
+func (r *FinancialRepositoryPG) GetDREComCMV(ctx context.Context, startDate, endDate time.Time) (map[string]interface{}, error) {
+	var receitaBruta, impostosVendas float64
+	_ = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(valor_produtos),0), COALESCE(SUM(valor_icms + valor_ipi + valor_pis + valor_cofins),0)
+		 FROM fiscal_exits WHERE data_emissao BETWEEN $1 AND $2 AND status = 'AUTHORIZED'`,
+		startDate, endDate).Scan(&receitaBruta, &impostosVendas)
+
+	// CMV: qty sold × avg_cost at time of sale (uses current avg_cost as best approximation)
+	var cmv float64
+	_ = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(fei.quantity * COALESCE(sb.avg_cost, fei.unit_price * 0.6)), 0)
+		 FROM fiscal_exit_items fei
+		 JOIN fiscal_exits fe ON fe.id = fei.fiscal_exit_id
+		 LEFT JOIN stock_balances sb ON sb.item_code = fei.item_code
+		 WHERE fe.data_emissao BETWEEN $1 AND $2 AND fe.status = 'AUTHORIZED'`,
+		startDate, endDate).Scan(&cmv)
+
+	var despesasOperacionais float64
+	_ = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(valor_bruto - COALESCE(desconto,0)),0)
+		 FROM contas_pagar
+		 WHERE data_vencimento BETWEEN $1 AND $2 AND status IN ('PAGO') AND tipo_documento NOT IN ('IMPOSTO')`,
+		startDate, endDate).Scan(&despesasOperacionais)
+
+	var despesasFinanceiras float64
+	_ = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(juros + multa),0) FROM contas_pagar WHERE data_pagamento BETWEEN $1 AND $2 AND status='PAGO'`,
+		startDate, endDate).Scan(&despesasFinanceiras)
+
+	var receitasFinanceiras float64
+	_ = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(juros + multa),0) FROM contas_receber WHERE data_recebimento BETWEEN $1 AND $2 AND status='RECEBIDO'`,
+		startDate, endDate).Scan(&receitasFinanceiras)
+
+	receitaLiquida := receitaBruta - impostosVendas
+	lucroBruto := receitaLiquida - cmv
+	resultado := lucroBruto - despesasOperacionais - despesasFinanceiras + receitasFinanceiras
+
+	return map[string]interface{}{
+		"receita_bruta":         receitaBruta,
+		"impostos_vendas":       impostosVendas,
+		"receita_liquida":       receitaLiquida,
+		"cmv":                   cmv,
+		"lucro_bruto":           lucroBruto,
+		"despesas_operacionais": despesasOperacionais,
+		"despesas_financeiras":  despesasFinanceiras,
+		"receitas_financeiras":  receitasFinanceiras,
+		"resultado_liquido":     resultado,
+		"periodo_inicio":        startDate.Format("2006-01-02"),
+		"periodo_fim":           endDate.Format("2006-01-02"),
+	}, nil
+}
+
+// ---------- OFX / Conciliacao Bancaria ----------
+
+func (r *FinancialRepositoryPG) SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO extrato_bancario (conta_bancaria_id, data_transacao, valor, tipo, descricao, fitid, extrato_hash)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		 ON CONFLICT (extrato_hash) DO NOTHING`,
+		contaID, data, valor, tipo, descricao, fitid, hash)
+	if err != nil {
+		return fmt.Errorf("saving extrato item: %w", err)
+	}
+	return nil
+}
+
+func (r *FinancialRepositoryPG) GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, data_transacao, valor, tipo, descricao, fitid, extrato_hash, conciliado
+		 FROM extrato_bancario WHERE conta_bancaria_id = $1 ORDER BY data_transacao`, contaID)
+	if err != nil {
+		return nil, fmt.Errorf("getting extrato pendente: %w", err)
+	}
+	defer rows.Close()
+	return scanToMaps(rows, []string{"id", "data_transacao", "valor", "tipo", "descricao", "fitid", "extrato_hash", "conciliado"})
+}
+
+func (r *FinancialRepositoryPG) ConciliarExtrato(ctx context.Context, extratoID, fluxoID int64) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	_, err = tx.Exec(ctx,
+		`UPDATE extrato_bancario SET conciliado=true, fluxo_caixa_id=$1 WHERE id=$2`,
+		fluxoID, extratoID)
+	if err != nil {
+		return fmt.Errorf("updating extrato: %w", err)
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE fluxo_caixa SET conciliado=true WHERE id=$1`, fluxoID)
+	if err != nil {
+		return fmt.Errorf("marking fluxo conciliado: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *FinancialRepositoryPG) AutoMatchExtrato(ctx context.Context, contaID int64) (int, error) {
+	// Try to match extrato entries to fluxo_caixa by exact value and date ±3 days
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, data_transacao, valor, tipo FROM extrato_bancario
+		 WHERE conta_bancaria_id=$1 AND conciliado=false`, contaID)
+	if err != nil {
+		return 0, fmt.Errorf("querying extrato for auto-match: %w", err)
+	}
+	defer rows.Close()
+
+	type entry struct {
+		id    int64
+		data  time.Time
+		valor float64
+		tipo  string
+	}
+	var entries []entry
+	for rows.Next() {
+		var e entry
+		if err := rows.Scan(&e.id, &e.data, &e.valor, &e.tipo); err != nil {
+			return 0, err
+		}
+		entries = append(entries, e)
+	}
+	_ = rows.Err()
+
+	matched := 0
+	for _, e := range entries {
+		fcTipo := "ENTRADA"
+		if e.tipo == "DEBIT" {
+			fcTipo = "SAIDA"
+		}
+		var fluxoID int64
+		err := r.pool.QueryRow(ctx,
+			`SELECT id FROM fluxo_caixa
+			 WHERE conta_bancaria_id=$1 AND tipo=$2
+			   AND ABS(valor - $3) < 0.01
+			   AND data BETWEEN $4 AND $5
+			   AND conciliado=false
+			 LIMIT 1`,
+			contaID, fcTipo, e.valor, e.data.AddDate(0, 0, -3), e.data.AddDate(0, 0, 3),
+		).Scan(&fluxoID)
+		if err != nil {
+			continue
+		}
+		if err := r.ConciliarExtrato(ctx, e.id, fluxoID); err == nil {
+			matched++
+		}
+	}
+	return matched, nil
+}

@@ -90,7 +90,7 @@ VALUES (
     $28, $29, $30, $31,
     $32, $33, $34, $35, $36, $37
 )
-RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by
+RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name
 `
 
 type CreateSalesOrderParams struct {
@@ -216,6 +216,25 @@ func (q *Queries) CreateSalesOrder(ctx context.Context, arg CreateSalesOrderPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RepresentativeOrderNumber,
+		&i.IsNfce,
+		&i.Street,
+		&i.StreetNumber,
+		&i.ForeignDocument,
+		&i.CollectionEstablishmentCode,
+		&i.NfTypeDescription,
+		&i.CarrierCode,
+		&i.FreightType,
+		&i.FreightValue,
+		&i.InsuranceValue,
+		&i.VolumeQuantity,
+		&i.VolumeType,
+		&i.NetWeight,
+		&i.GrossWeight,
+		&i.DiscountValue,
+		&i.SurchargeValue,
+		&i.ProjectCode,
+		&i.ProjectName,
 	)
 	return i, err
 }
@@ -365,7 +384,7 @@ func (q *Queries) CreateSalesOrderItem(ctx context.Context, arg CreateSalesOrder
 }
 
 const getSalesOrderByCode = `-- name: GetSalesOrderByCode :one
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by FROM public.sales_orders WHERE code = $1
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name FROM public.sales_orders WHERE code = $1
 `
 
 func (q *Queries) GetSalesOrderByCode(ctx context.Context, code int64) (SalesOrder, error) {
@@ -413,6 +432,25 @@ func (q *Queries) GetSalesOrderByCode(ctx context.Context, code int64) (SalesOrd
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RepresentativeOrderNumber,
+		&i.IsNfce,
+		&i.Street,
+		&i.StreetNumber,
+		&i.ForeignDocument,
+		&i.CollectionEstablishmentCode,
+		&i.NfTypeDescription,
+		&i.CarrierCode,
+		&i.FreightType,
+		&i.FreightValue,
+		&i.InsuranceValue,
+		&i.VolumeQuantity,
+		&i.VolumeType,
+		&i.NetWeight,
+		&i.GrossWeight,
+		&i.DiscountValue,
+		&i.SurchargeValue,
+		&i.ProjectCode,
+		&i.ProjectName,
 	)
 	return i, err
 }
@@ -483,7 +521,7 @@ func (q *Queries) ListSalesOrderItems(ctx context.Context, salesOrderCode int64)
 }
 
 const listSalesOrders = `-- name: ListSalesOrders :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by FROM public.sales_orders WHERE is_active = TRUE ORDER BY emission_date DESC, order_number DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name FROM public.sales_orders WHERE is_active = TRUE ORDER BY emission_date DESC, order_number DESC
 `
 
 func (q *Queries) ListSalesOrders(ctx context.Context) ([]SalesOrder, error) {
@@ -537,6 +575,25 @@ func (q *Queries) ListSalesOrders(ctx context.Context) ([]SalesOrder, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.RepresentativeOrderNumber,
+			&i.IsNfce,
+			&i.Street,
+			&i.StreetNumber,
+			&i.ForeignDocument,
+			&i.CollectionEstablishmentCode,
+			&i.NfTypeDescription,
+			&i.CarrierCode,
+			&i.FreightType,
+			&i.FreightValue,
+			&i.InsuranceValue,
+			&i.VolumeQuantity,
+			&i.VolumeType,
+			&i.NetWeight,
+			&i.GrossWeight,
+			&i.DiscountValue,
+			&i.SurchargeValue,
+			&i.ProjectCode,
+			&i.ProjectName,
 		); err != nil {
 			return nil, err
 		}
@@ -549,7 +606,7 @@ func (q *Queries) ListSalesOrders(ctx context.Context) ([]SalesOrder, error) {
 }
 
 const listSalesOrdersByCustomer = `-- name: ListSalesOrdersByCustomer :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by FROM public.sales_orders WHERE customer_code = $1 AND is_active = TRUE ORDER BY emission_date DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name FROM public.sales_orders WHERE customer_code = $1 AND is_active = TRUE ORDER BY emission_date DESC
 `
 
 func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, customerCode *int64) ([]SalesOrder, error) {
@@ -603,6 +660,25 @@ func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, customerCode *i
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.RepresentativeOrderNumber,
+			&i.IsNfce,
+			&i.Street,
+			&i.StreetNumber,
+			&i.ForeignDocument,
+			&i.CollectionEstablishmentCode,
+			&i.NfTypeDescription,
+			&i.CarrierCode,
+			&i.FreightType,
+			&i.FreightValue,
+			&i.InsuranceValue,
+			&i.VolumeQuantity,
+			&i.VolumeType,
+			&i.NetWeight,
+			&i.GrossWeight,
+			&i.DiscountValue,
+			&i.SurchargeValue,
+			&i.ProjectCode,
+			&i.ProjectName,
 		); err != nil {
 			return nil, err
 		}
@@ -615,7 +691,7 @@ func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, customerCode *i
 }
 
 const listSalesOrdersByDateRange = `-- name: ListSalesOrdersByDateRange :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by FROM public.sales_orders
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name FROM public.sales_orders
 WHERE emission_date BETWEEN $1 AND $2 AND is_active = TRUE
 ORDER BY emission_date DESC
 `
@@ -676,6 +752,25 @@ func (q *Queries) ListSalesOrdersByDateRange(ctx context.Context, arg ListSalesO
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.RepresentativeOrderNumber,
+			&i.IsNfce,
+			&i.Street,
+			&i.StreetNumber,
+			&i.ForeignDocument,
+			&i.CollectionEstablishmentCode,
+			&i.NfTypeDescription,
+			&i.CarrierCode,
+			&i.FreightType,
+			&i.FreightValue,
+			&i.InsuranceValue,
+			&i.VolumeQuantity,
+			&i.VolumeType,
+			&i.NetWeight,
+			&i.GrossWeight,
+			&i.DiscountValue,
+			&i.SurchargeValue,
+			&i.ProjectCode,
+			&i.ProjectName,
 		); err != nil {
 			return nil, err
 		}
@@ -688,7 +783,7 @@ func (q *Queries) ListSalesOrdersByDateRange(ctx context.Context, arg ListSalesO
 }
 
 const listSalesOrdersByStatus = `-- name: ListSalesOrdersByStatus :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by FROM public.sales_orders WHERE status = $1 AND is_active = TRUE ORDER BY emission_date DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name FROM public.sales_orders WHERE status = $1 AND is_active = TRUE ORDER BY emission_date DESC
 `
 
 func (q *Queries) ListSalesOrdersByStatus(ctx context.Context, status string) ([]SalesOrder, error) {
@@ -742,6 +837,25 @@ func (q *Queries) ListSalesOrdersByStatus(ctx context.Context, status string) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.RepresentativeOrderNumber,
+			&i.IsNfce,
+			&i.Street,
+			&i.StreetNumber,
+			&i.ForeignDocument,
+			&i.CollectionEstablishmentCode,
+			&i.NfTypeDescription,
+			&i.CarrierCode,
+			&i.FreightType,
+			&i.FreightValue,
+			&i.InsuranceValue,
+			&i.VolumeQuantity,
+			&i.VolumeType,
+			&i.NetWeight,
+			&i.GrossWeight,
+			&i.DiscountValue,
+			&i.SurchargeValue,
+			&i.ProjectCode,
+			&i.ProjectName,
 		); err != nil {
 			return nil, err
 		}
@@ -814,7 +928,7 @@ SET
     is_firm              = $30,
     updated_at           = NOW()
 WHERE code = $31 AND is_active = TRUE
-RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by
+RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name
 `
 
 type UpdateSalesOrderParams struct {
@@ -928,6 +1042,25 @@ func (q *Queries) UpdateSalesOrder(ctx context.Context, arg UpdateSalesOrderPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RepresentativeOrderNumber,
+		&i.IsNfce,
+		&i.Street,
+		&i.StreetNumber,
+		&i.ForeignDocument,
+		&i.CollectionEstablishmentCode,
+		&i.NfTypeDescription,
+		&i.CarrierCode,
+		&i.FreightType,
+		&i.FreightValue,
+		&i.InsuranceValue,
+		&i.VolumeQuantity,
+		&i.VolumeType,
+		&i.NetWeight,
+		&i.GrossWeight,
+		&i.DiscountValue,
+		&i.SurchargeValue,
+		&i.ProjectCode,
+		&i.ProjectName,
 	)
 	return i, err
 }

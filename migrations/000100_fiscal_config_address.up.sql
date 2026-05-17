@@ -1,0 +1,13 @@
+BEGIN;
+
+ALTER TABLE public.fiscal_configs
+    ADD COLUMN IF NOT EXISTS logradouro       VARCHAR(100) NOT NULL DEFAULT 'A preencher',
+    ADD COLUMN IF NOT EXISTS numero           VARCHAR(60)  NOT NULL DEFAULT 'S/N',
+    ADD COLUMN IF NOT EXISTS complemento      VARCHAR(60),
+    ADD COLUMN IF NOT EXISTS bairro           VARCHAR(60)  NOT NULL DEFAULT 'A preencher',
+    ADD COLUMN IF NOT EXISTS municipio        VARCHAR(60)  NOT NULL DEFAULT 'A preencher',
+    ADD COLUMN IF NOT EXISTS codigo_municipio VARCHAR(7)   NOT NULL DEFAULT '0000000',
+    ADD COLUMN IF NOT EXISTS cep              VARCHAR(8)   NOT NULL DEFAULT '00000000',
+    ADD COLUMN IF NOT EXISTS telefone         VARCHAR(11);
+
+COMMIT;

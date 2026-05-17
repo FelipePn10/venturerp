@@ -200,7 +200,7 @@ func (q *Queries) CreateSalesOrderDemand(ctx context.Context, arg CreateSalesOrd
 const createStockSnapshot = `-- name: CreateStockSnapshot :one
 INSERT INTO stock_snapshots (item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date)
 VALUES ($1, $2, $3, $4, $5, NOW())
-    RETURNING id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at
+    RETURNING id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at, maximum_stock, min_max_active
 `
 
 type CreateStockSnapshotParams struct {
@@ -229,6 +229,8 @@ func (q *Queries) CreateStockSnapshot(ctx context.Context, arg CreateStockSnapsh
 		&i.SafetyStock,
 		&i.SnapshotDate,
 		&i.CreatedAt,
+		&i.MaximumStock,
+		&i.MinMaxActive,
 	)
 	return i, err
 }
@@ -430,7 +432,7 @@ func (q *Queries) GetSalesOrderDemandByCode(ctx context.Context, code pgtype.Int
 }
 
 const getStockSnapshot = `-- name: GetStockSnapshot :one
-SELECT id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at FROM stock_snapshots WHERE item_code = $1 ORDER BY snapshot_date DESC LIMIT 1
+SELECT id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at, maximum_stock, min_max_active FROM stock_snapshots WHERE item_code = $1 ORDER BY snapshot_date DESC LIMIT 1
 `
 
 func (q *Queries) GetStockSnapshot(ctx context.Context, itemCode int64) (StockSnapshot, error) {
@@ -445,6 +447,8 @@ func (q *Queries) GetStockSnapshot(ctx context.Context, itemCode int64) (StockSn
 		&i.SafetyStock,
 		&i.SnapshotDate,
 		&i.CreatedAt,
+		&i.MaximumStock,
+		&i.MinMaxActive,
 	)
 	return i, err
 }

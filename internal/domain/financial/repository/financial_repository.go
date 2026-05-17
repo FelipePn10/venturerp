@@ -7,6 +7,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type BaixaParams struct {
@@ -72,6 +73,7 @@ type FinancialRepository interface {
 	UpdateContaPagar(ctx context.Context, c *entity.ContaPagar) (*entity.ContaPagar, error)
 	ApproveContaPagar(ctx context.Context, id int64, approvedBy uuid.UUID) error
 	BaixarContaPagar(ctx context.Context, id int64, params BaixaParams) error
+	BaixarContaPagarAtomico(ctx context.Context, id int64, params BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64) error
 	CancelContaPagar(ctx context.Context, id int64) error
 	GetAgingContasPagar(ctx context.Context) ([]*AgingResult, error)
 
@@ -80,6 +82,7 @@ type FinancialRepository interface {
 	GetContaReceber(ctx context.Context, id int64) (*entity.ContaReceber, error)
 	ListContasReceber(ctx context.Context, filters CRFilter) ([]*entity.ContaReceber, error)
 	BaixarContaReceber(ctx context.Context, id int64, params BaixaParams) error
+	BaixarContaReceberAtomico(ctx context.Context, id int64, params BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64) error
 	CancelContaReceber(ctx context.Context, id int64) error
 	GetAgingContasReceber(ctx context.Context) ([]*AgingResult, error)
 
@@ -93,6 +96,7 @@ type FinancialRepository interface {
 
 	// Tax Assessment
 	CreateTaxAssessment(ctx context.Context, t *entity.TaxAssessment) (*entity.TaxAssessment, error)
+	UpsertTaxAssessmentCredito(ctx context.Context, t *entity.TaxAssessment) error
 	GetTaxAssessment(ctx context.Context, imposto, competencia string) (*entity.TaxAssessment, error)
 	ListTaxAssessments(ctx context.Context, competencia string) ([]*entity.TaxAssessment, error)
 
@@ -100,4 +104,34 @@ type FinancialRepository interface {
 	GetFiscalDebits(ctx context.Context, competencia string) (map[string]float64, error)
 	GetFiscalCredits(ctx context.Context, competencia string) (map[string]float64, error)
 	GetFiscalConfig(ctx context.Context) (*fiscalEntity.FiscalConfig, error)
+
+	// Contas Receber helpers
+	CancelContasReceberByFiscalExit(ctx context.Context, fiscalExitID int64) error
+
+	// Reports R01-R12
+	GetLivroEntradas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetLivroSaidas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetImpostosSaidas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetImpostosEntradas(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetDRE(ctx context.Context, startDate, endDate time.Time) (map[string]interface{}, error)
+	GetDREComCMV(ctx context.Context, startDate, endDate time.Time) (map[string]interface{}, error)
+	GetAgingReceberDetalhado(ctx context.Context) ([]map[string]interface{}, error)
+	GetAgingPagarDetalhado(ctx context.Context) ([]map[string]interface{}, error)
+	GetExtratoPorFornecedor(ctx context.Context, fornecedorID int64) ([]map[string]interface{}, error)
+	GetExtratoPorCliente(ctx context.Context, clienteID int64) ([]map[string]interface{}, error)
+
+	// Reports R13-R19
+	GetProdutosVendidos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetProdutosProduzidos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetHistoricoCustos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetFichaTecnicaCusto(ctx context.Context, itemCode int64) ([]map[string]interface{}, error)
+	GetCurvaABCClientes(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetCurvaABCProdutos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	GetComprasPeriodo(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+
+	// Conciliação Bancária
+	SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) error
+	GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error)
+	ConciliarExtrato(ctx context.Context, extratoID, fluxoID int64) error
+	AutoMatchExtrato(ctx context.Context, contaID int64) (int, error)
 }

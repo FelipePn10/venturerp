@@ -37,13 +37,16 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 	}
 
 	if cp.Status != entity.ContaPagarStatusPendente && cp.Status != entity.ContaPagarStatusAprovado {
-		return fmt.Errorf("conta a pagar deve estar PENDENTE ou APROVADO para baixa")
+		return fmt.Errorf("conta a pagar deve estar PENDENTE ou APROVADO para baixa, status: %s", cp.Status)
 	}
 
-	dataPagamento, _ := time.Parse("2006-01-02", dto.DataPagamento)
+	dataPagamento, err := time.Parse("2006-01-02", dto.DataPagamento)
+	if err != nil {
+		return fmt.Errorf("data_pagamento inválida: %w", err)
+	}
+
 	valorPago := decimal.NewFromFloat(dto.ValorPago)
 	valorOriginal := cp.ValorBruto.Sub(cp.ValorPago)
-	var jurosDec, multaDec decimal.Decimal
 
 	jurosMes := 0.01
 	multaAtraso := 0.02
@@ -56,11 +59,11 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 		}
 	}
 
+	var jurosDec, multaDec decimal.Decimal
 	if dataPagamento.After(cp.DataVencimento) {
 		daysLate := int(math.Ceil(dataPagamento.Sub(cp.DataVencimento).Hours() / 24))
 		monthsLate := float64(daysLate) / 30.0
-		jurosVal := valorOriginal.Mul(decimal.NewFromFloat(jurosMes)).Mul(decimal.NewFromFloat(monthsLate))
-		jurosDec = jurosVal
+		jurosDec = valorOriginal.Mul(decimal.NewFromFloat(jurosMes)).Mul(decimal.NewFromFloat(monthsLate))
 		multaDec = valorOriginal.Mul(decimal.NewFromFloat(multaAtraso))
 	}
 
@@ -75,62 +78,10 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 		BaixadoPor:      userID,
 	}
 
-	// Handle partial payment
-	if valorPago.LessThan(valorOriginal) {
-		remaining := valorOriginal.Sub(valorPago)
-		if err := uc.Repo.BaixarContaPagar(ctx, id, repository.BaixaParams{
-			ContaBancariaID: dto.ContaBancariaID,
-			ValorPago:       valorPago.InexactFloat64(),
-			Juros:           jurosDec.InexactFloat64(),
-			Multa:           multaDec.InexactFloat64(),
-			Desconto:        0,
-			DataPagamento:   dataPagamento,
-			Observacao:      dto.Observacao,
-			BaixadoPor:      userID,
-		}); err != nil {
-			return err
-		}
-
-		// Create new CP for remaining
-		newCP := &entity.ContaPagar{
-			NumeroDocumento: cp.NumeroDocumento + "/P",
-			TipoDocumento:   cp.TipoDocumento,
-			FornecedorID:    cp.FornecedorID,
-			FiscalEntryID:   cp.FiscalEntryID,
-			PurchaseOrderID: cp.PurchaseOrderID,
-			DataLancamento:  time.Now(),
-			DataEmissao:     cp.DataEmissao,
-			DataVencimento:  cp.DataVencimento,
-			ValorBruto:      remaining,
-			Desconto:        decimal.Zero,
-			Juros:           decimal.Zero,
-			Multa:           decimal.Zero,
-			ValorPago:       decimal.Zero,
-			ParcelaNumero:   cp.ParcelaNumero + 1,
-			ParcelaTotal:    cp.ParcelaTotal,
-			FormaPagamento:  cp.FormaPagamento,
-			PlanoContasID:   cp.PlanoContasID,
-			CentroCustoID:   cp.CentroCustoID,
-			StatusAprovacao: entity.AprovacaoAprovado,
-			Status:          entity.ContaPagarStatusPendente,
-			IsActive:        true,
-			CriadoPor:       cp.CriadoPor,
-		}
-		newCP.CreatedAt = time.Now()
-		newCP.UpdatedAt = time.Now()
-
-		if _, err := uc.Repo.CreateContaPagar(ctx, newCP); err != nil {
-			return err
-		}
-	} else {
-		if err := uc.Repo.BaixarContaPagar(ctx, id, params); err != nil {
-			return err
-		}
-	}
-
-	// Create FluxoCaixa entry
 	totalFluxo := valorPago.Add(jurosDec).Add(multaDec)
-	fc := &entity.FluxoCaixa{
+
+	// All writes in a single atomic transaction
+	return uc.Repo.BaixarContaPagarAtomico(ctx, id, params, entity.FluxoCaixa{
 		Data:            dataPagamento,
 		Tipo:            entity.FluxoCaixaTipoSaida,
 		Valor:           totalFluxo,
@@ -138,16 +89,5 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 		ContasPagarID:   &id,
 		Descricao:       dto.Observacao,
 		Conciliado:      false,
-	}
-	if _, err := uc.Repo.CreateFluxoCaixa(ctx, fc); err != nil {
-		return err
-	}
-
-	// Update saldo conta bancaria
-	currentSaldo, err := uc.Repo.GetSaldoConta(ctx, dto.ContaBancariaID)
-	if err != nil {
-		return err
-	}
-	novoSaldo := currentSaldo - totalFluxo.InexactFloat64()
-	return uc.Repo.UpdateSaldo(ctx, dto.ContaBancariaID, novoSaldo)
+	}, valorOriginal, dto.ContaBancariaID)
 }

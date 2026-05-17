@@ -104,20 +104,75 @@ type CreateFiscalExitItemDTO struct {
 }
 
 type UpdateFiscalConfigDTO struct {
-	CnpjEmpresa              string   `json:"cnpj_empresa"`
-	RazaoSocial              string   `json:"razao_social"`
-	IEEmpresa                *string  `json:"ie_empresa,omitempty"`
-	RegimeTributario         string   `json:"regime_tributario"`
-	UFEmpresa                string   `json:"uf_empresa"`
-	IcmsInternoAliquota      float64  `json:"icms_interno_aliquota"`
+	CnpjEmpresa               string  `json:"cnpj_empresa"`
+	RazaoSocial               string  `json:"razao_social"`
+	IEEmpresa                 *string `json:"ie_empresa,omitempty"`
+	RegimeTributario          string  `json:"regime_tributario"`
+	UFEmpresa                 string  `json:"uf_empresa"`
+	IcmsInternoAliquota       float64 `json:"icms_interno_aliquota"`
 	IcmsDiferimentoPercentual float64 `json:"icms_diferimento_percentual"`
-	FocusNfeToken            *string  `json:"focus_nfe_token,omitempty"`
-	FocusNfeAmbiente         string   `json:"focus_nfe_ambiente"`
-	JurosMes                 float64  `json:"juros_mes"`
-	MultaAtraso              float64  `json:"multa_atraso"`
-	VencimentoIcmsDia        int      `json:"vencimento_icms_dia"`
-	VencimentoIPIDia         int      `json:"vencimento_ipi_dia"`
-	VencimentoPisCofinsDia   int      `json:"vencimento_pis_cofins_dia"`
+	FocusNfeToken             *string `json:"focus_nfe_token,omitempty"`
+	FocusNfeAmbiente          string  `json:"focus_nfe_ambiente"`
+	JurosMes                  float64 `json:"juros_mes"`
+	MultaAtraso               float64 `json:"multa_atraso"`
+	VencimentoIcmsDia         int     `json:"vencimento_icms_dia"`
+	VencimentoIPIDia          int     `json:"vencimento_ipi_dia"`
+	VencimentoPisCofinsDia    int     `json:"vencimento_pis_cofins_dia"`
+	// Endereço do emitente
+	Logradouro      string  `json:"logradouro"`
+	Numero          string  `json:"numero"`
+	Complemento     *string `json:"complemento,omitempty"`
+	Bairro          string  `json:"bairro"`
+	Municipio       string  `json:"municipio"`
+	CodigoMunicipio string  `json:"codigo_municipio"`
+	CEP             string  `json:"cep"`
+	Telefone        *string `json:"telefone,omitempty"`
+}
+
+type UpsertNcmTaxDTO struct {
+	Ncm        string  `json:"ncm"`
+	AliqIPI    float64 `json:"aliq_ipi"`
+	AliqPis    float64 `json:"aliq_pis"`
+	AliqCofins float64 `json:"aliq_cofins"`
+	CstPis     string  `json:"cst_pis"`
+	CstCofins  string  `json:"cst_cofins"`
+	CstIPI     string  `json:"cst_ipi"`
+	Description *string `json:"description,omitempty"`
+}
+
+type UpsertICMSInterstateDTO struct {
+	OriginUF      string  `json:"origin_uf"`
+	DestinationUF string  `json:"destination_uf"`
+	AliqICMS      float64 `json:"aliq_icms"`
+}
+
+type UpsertICMSInternalDTO struct {
+	UF       string  `json:"uf"`
+	AliqICMS float64 `json:"aliq_icms"`
+	AliqFCP  float64 `json:"aliq_fcp"`
+}
+
+type CreateCTeDTO struct {
+	NumeroCTe           int64    `json:"numero_cte"`
+	Serie               string   `json:"serie"`
+	DataEmissao         string   `json:"data_emissao"`
+	DataEntrada         string   `json:"data_entrada"`
+	CnpjEmitente        string   `json:"cnpj_emitente"`
+	RazaoSocialEmitente string   `json:"razao_social_emitente"`
+	IEEmitente          *string  `json:"ie_emitente,omitempty"`
+	UFEmitente          *string  `json:"uf_emitente,omitempty"`
+	Cfop                string   `json:"cfop"`
+	ValorFrete          float64  `json:"valor_frete"`
+	ValorSeguro         float64  `json:"valor_seguro"`
+	ValorOutros         float64  `json:"valor_outros"`
+	ValorTotal          float64  `json:"valor_total"`
+	ValorICMS           float64  `json:"valor_icms"`
+	BaseICMS            float64  `json:"base_icms"`
+	AliqICMS            float64  `json:"aliq_icms"`
+	CstICMS             *string  `json:"cst_icms,omitempty"`
+	TipoRateio          string   `json:"tipo_rateio"`
+	FiscalEntryID       *int64   `json:"fiscal_entry_id,omitempty"`
+	Notes               *string  `json:"notes,omitempty"`
 }
 
 var _ = time.Now
