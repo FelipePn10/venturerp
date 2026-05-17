@@ -131,7 +131,7 @@ Atualiza a configuração fiscal da empresa.
 | `cep` | Sim | CEP sem formatação (8 dígitos) |
 | `telefone` | Não | Telefone do emitente (DDD + número) |
 | `icms_interno_aliquota` | Sim | Alíquota interna (decimal, ex: `0.12` = 12%) |
-| `icms_diferimento_percentual` | Sim | % de diferimento CST 51 (ex: `38.46`) |
+| `icms_diferimento_percentual` | Sim | Percentual de diferimento CST 51 como ratio (ex: `0.3846` = 38,46%). Esse valor é lido dinamicamente ao autorizar a NF-e — alterar aqui reflete imediatamente no payload Focus NF-e. |
 | `regime_tributario` | Sim | `"1"` Simples, `"2"` Lucro Presumido, `"3"` Lucro Real |
 
 > **Importante:** os campos de endereço são obrigatórios para a autorização da NF-e na SEFAZ. Sem eles o Focus NF-e rejeita o payload.
@@ -148,7 +148,7 @@ O motor em `internal/domain/fiscal/engine/tax_engine.go` é chamado automaticame
 
 | Cenário | Condição | Regra |
 |---|---|---|
-| **INTERNA_CONTRIBUINTE** | Emitente UF == Destino UF e destinatário é contribuinte | ICMS à alíquota interna configurada + **diferimento parcial CST 51** (38,46%) |
+| **INTERNA_CONTRIBUINTE** | Emitente UF == Destino UF e destinatário é contribuinte | ICMS à alíquota interna configurada + **diferimento parcial CST 51** (percentual lido de `icms_diferimento_percentual` em `fiscal_configs`) |
 | **INTERNA_NAO_CONTRIBUINTE** | Emitente UF == Destino UF e não-contribuinte | Base inclui IPI, CST 00, sem diferimento |
 | **INTERESTADUAL contribuinte** | UFs diferentes, IE preenchida | Alíquota da tabela interestadual, base sem IPI, **sem DIFAL** |
 | **INTERESTADUAL não-contribuinte / PF** | UFs diferentes, IE ausente/ISENTO ou `tipo_pessoa = "F"` | Base inclui IPI, DIFAL calculado (EC 87/2015), FCP quando aplicável |
@@ -386,7 +386,9 @@ Cria a NF-e em rascunho e **calcula os impostos automaticamente** (ICMS, IPI, PI
       "base_ipi": 10000.00,
       "aliq_ipi": 0.05,
       "valor_ipi": 500.00,
+      "aliq_pis": 0.0165,
       "valor_pis": 165.00,
+      "aliq_cofins": 0.076,
       "valor_cofins": 760.00,
       "cst_icms": "00",
       "cst_ipi": "50",
@@ -398,6 +400,8 @@ Cria a NF-e em rascunho e **calcula os impostos automaticamente** (ICMS, IPI, PI
 ```
 
 > **Nota:** `valor_total = valor_produtos + valor_ipi + valor_frete + valor_seguro - valor_desconto` (ICMS não soma no total da NF-e).
+>
+> **`aliq_pis` / `aliq_cofins`** são lidos da tabela `ncm_taxes` para o NCM do item. Se o NCM não estiver cadastrado, usa o default de Lucro Real (1,65% e 7,6%). Itens com CST monofásico (04) devem ter alíquota `0` na tabela para que o payload Focus NF-e seja enviado corretamente com valor zerado. Esses campos são persistidos na tabela `fiscal_exit_items` (colunas adicionadas pela migration `000101`).
 
 ---
 

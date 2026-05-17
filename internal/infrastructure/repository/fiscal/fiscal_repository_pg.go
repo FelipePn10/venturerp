@@ -242,13 +242,13 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 		`INSERT INTO public.fiscal_exit_items
 			(fiscal_exit_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 			 base_icms, aliq_icms, valor_icms, valor_icms_diferido,
-			 base_ipi, aliq_ipi, valor_ipi, valor_pis, valor_cofins,
+			 base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 			 cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
 		 RETURNING id, created_at`,
 		item.FiscalExitID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.ValorICMSDiferido,
-		item.BaseIPI, item.AliqIPI, item.ValorIPI, item.ValorPIS, item.ValorCOFINS,
+		item.BaseIPI, item.AliqIPI, item.ValorIPI, item.AliqPIS, item.ValorPIS, item.AliqCOFINS, item.ValorCOFINS,
 		item.CstICMS, item.CstIPI, item.CstPIS, item.CstCOFINS, item.OrigemMercadoria, item.Description,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
@@ -286,7 +286,7 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, fiscal_exit_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 		        base_icms, aliq_icms, valor_icms, valor_icms_diferido,
-		        base_ipi, aliq_ipi, valor_ipi, valor_pis, valor_cofins,
+		        base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 		        cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description, created_at
 		 FROM public.fiscal_exit_items WHERE fiscal_exit_id = $1 ORDER BY sequence`, fiscalExitID)
 	if err != nil {
@@ -402,7 +402,7 @@ func scanExitItems(rows pgx.Rows) ([]*entity.FiscalExitItem, error) {
 		if err := rows.Scan(
 			&it.ID, &it.FiscalExitID, &it.Sequence, &it.ItemCode, &it.Ncm, &it.Cfop, &it.Quantity, &it.UnitPrice, &it.TotalPrice,
 			&it.BaseICMS, &it.AliqICMS, &it.ValorICMS, &it.ValorICMSDiferido,
-			&it.BaseIPI, &it.AliqIPI, &it.ValorIPI, &it.ValorPIS, &it.ValorCOFINS,
+			&it.BaseIPI, &it.AliqIPI, &it.ValorIPI, &it.AliqPIS, &it.ValorPIS, &it.AliqCOFINS, &it.ValorCOFINS,
 			&it.CstICMS, &it.CstIPI, &it.CstPIS, &it.CstCOFINS, &it.OrigemMercadoria, &it.Description, &it.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit item: %w", err)

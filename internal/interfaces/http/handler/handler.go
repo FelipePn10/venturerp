@@ -1,93 +1,104 @@
 package handler
 
 import (
-	"github.com/FelipePn10/panossoerp/internal/application/usecase"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/generate_mask_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/product_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
 type ProductHandler struct {
 	*security.BaseHandler
-	createProductUC *usecase.CreateProductUseCase
-	deleteProductUC *usecase.DeleteProductUseCase
+	createProductUC *product_uc.CreateProductUseCase
+	deleteProductUC *product_uc.DeleteProductUseCase
 }
 
 type ItemHandler struct {
 	*security.BaseHandler
-	createItemUC     *usecase.CreateItemUseCase
-	findItemByCodeUC *usecase.FindItemByCode
+	createItemUC     *item_uc.CreateItemUseCase
+	findItemByCodeUC *item_uc.FindItemByCode
 }
 
 type UserHandler struct {
 	*security.BaseHandler
-	registerUC *usecase.RegisterUserUseCase
-	loginUC    *usecase.LoginUserUseCase
+	registerUC *user_uc.RegisterUserUseCase
+	loginUC    *user_uc.LoginUserUseCase
 	jwtSecret  string
 }
 
 type QuestionHandler struct {
 	*security.BaseHandler
-	createQuestionUC     *usecase.CreateQuestion
-	deleteQuestionUC     *usecase.DeleteQuestionUseCase
-	findQuestionByNameUC *usecase.FindQuestionByName
+	createQuestionUC     *question_uc.CreateQuestion
+	deleteQuestionUC     *question_uc.DeleteQuestionUseCase
+	findQuestionByNameUC *question_uc.FindQuestionByName
 }
 
 type QuestionOptionHandler struct {
 	*security.BaseHandler
-	createQuestionOptionUC *usecase.CreateQuestionOptionUseCase
-	deleteQuestionOptionUC *usecase.DeleteQuestionOptionUseCase
+	createQuestionOptionUC *question_option_uc.CreateQuestionOptionUseCase
+	deleteQuestionOptionUC *question_option_uc.DeleteQuestionOptionUseCase
 }
 
 type AssociateByQuestionItemHandler struct {
 	*security.BaseHandler
-	associateByQuestionProductUC *usecase.AssociateByQuestionItemUseCase
+	associateByQuestionProductUC *question_uc.AssociateByQuestionItemUseCase
 }
 
 type GenerateMaskHandler struct {
 	*security.BaseHandler
-	generateMask *usecase.GenerateMaskForItemUseCase
+	generateMask *generate_mask_uc.GenerateMaskForItemUseCase
 }
 
 type BomHandler struct {
 	*security.BaseHandler
-	createBomUC *usecase.CreateBomUseCase
+	createBomUC *bom_uc.CreateBomUseCase
 }
 
 type BomItemHandler struct {
 	*security.BaseHandler
-	createBomItemUC *usecase.CreateBomItemUseCase
+	createBomItemUC *bom_uc.CreateBomItemUseCase
 }
 
 type WarehouseHandler struct {
 	*security.BaseHandler
-	createWarehouseUC *usecase.CreateWarehouseUseCase
+	createWarehouseUC *warehouse_uc.CreateWarehouseUseCase
 }
 
 type GroupHandler struct {
 	*security.BaseHandler
-	createGroupUC *usecase.CreateGroupUseCase
+	createGroupUC *group_uc.CreateGroupUseCase
 }
 
 type EnterpriseHandler struct {
 	*security.BaseHandler
-	createEnterpriseUC *usecase.CreateEnterpriseUseCase
+	createEnterpriseUC *enterprise_uc.CreateEnterpriseUseCase
 }
 
 type ModifierHandler struct {
 	*security.BaseHandler
-	createModifierUC *usecase.CreateModifierUseCase
+	createModifierUC *modifier_uc.CreateModifierUseCase
 }
 
 type EmployeeHandler struct {
@@ -101,17 +112,17 @@ type EmployeeHandler struct {
 
 type ItemStructureHandler struct {
 	*security.BaseHandler
-	createUC        *usecase.CreateStructureComponentUseCase
-	updateUC        *usecase.UpdateStructureComponentUseCase
-	getAllStructure *usecase.GetAllDirectChildrenUseCase
-	treeUC          *usecase.GetStructureTreeUseCase
-	resolveUC       *usecase.ResolveStructureQueryUseCase
-	//deleteUC  *usecase.DeleteStructureComponentUseCase
+	createUC       *structure_uc.CreateStructureComponentUseCase
+	updateUC       *structure_uc.UpdateStructureComponentUseCase
+	getAllStructure *structure_uc.GetAllDirectChildrenUseCase
+	treeUC         *structure_uc.GetStructureTreeUseCase
+	resolveUC      *structure_uc.ResolveStructureQueryUseCase
+	//deleteUC  *structure_uc.DeleteStructureComponentUseCase
 }
 
 type ItemQueryStructureHandler struct {
 	*security.BaseHandler
-	resolveUC *usecase.ResolveStructureQueryUseCase
+	resolveUC *structure_uc.ResolveStructureQueryUseCase
 }
 
 type AllocationBaseHandler struct {

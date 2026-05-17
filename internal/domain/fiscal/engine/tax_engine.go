@@ -42,9 +42,11 @@ type TaxItemResult struct {
 	ValorIPI          float64
 	CSTIPI            string
 	BasePIS           float64
+	AliquotaPIS       float64
 	ValorPIS          float64
 	CSTPIS            string
 	BaseCOFINS        float64
+	AliquotaCOFINS    float64
 	ValorCOFINS       float64
 	CSTCOFINS         string
 }
@@ -176,10 +178,12 @@ func calculateItemTax(
 	}
 
 	r.BasePIS, _ = basePisCofins.Round(2).Float64()
+	r.AliquotaPIS, _ = aliqPIS.Float64()
 	r.ValorPIS, _ = basePisCofins.Mul(aliqPIS).Round(2).Float64()
 	r.CSTPIS = cstPIS
 
 	r.BaseCOFINS, _ = basePisCofins.Round(2).Float64()
+	r.AliquotaCOFINS, _ = aliqCOFINS.Float64()
 	r.ValorCOFINS, _ = basePisCofins.Mul(aliqCOFINS).Round(2).Float64()
 	r.CSTCOFINS = cstCOFINS
 

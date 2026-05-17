@@ -67,7 +67,9 @@ type FiscalExitItem struct {
 	BaseIPI           float64
 	AliqIPI           float64
 	ValorIPI          float64
+	AliqPIS           float64
 	ValorPIS          float64
+	AliqCOFINS        float64
 	ValorCOFINS       float64
 	CstICMS           *string
 	CstIPI            *string

@@ -1,29 +1,40 @@
 package handler
 
 import (
-	"github.com/FelipePn10/panossoerp/internal/application/usecase"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/generate_mask_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/product_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
 )
 
 func NewCreateProductHandler(
-	createProductUC *usecase.CreateProductUseCase,
+	createProductUC *product_uc.CreateProductUseCase,
 ) *ProductHandler {
 	return &ProductHandler{
 		createProductUC: createProductUC,
@@ -31,7 +42,7 @@ func NewCreateProductHandler(
 }
 
 func NewDeleteProductHandler(
-	deleteProductUC *usecase.DeleteProductUseCase,
+	deleteProductUC *product_uc.DeleteProductUseCase,
 ) *ProductHandler {
 	return &ProductHandler{
 		deleteProductUC: deleteProductUC,
@@ -39,7 +50,7 @@ func NewDeleteProductHandler(
 }
 
 func NewFindItemCodeHandler(
-	findItemByCodeUC *usecase.FindItemByCode,
+	findItemByCodeUC *item_uc.FindItemByCode,
 ) *ItemHandler {
 	return &ItemHandler{
 		findItemByCodeUC: findItemByCodeUC,
@@ -47,7 +58,7 @@ func NewFindItemCodeHandler(
 }
 
 func NewFindQuestionByName(
-	findQuestionByNameUC *usecase.FindQuestionByName,
+	findQuestionByNameUC *question_uc.FindQuestionByName,
 ) *QuestionHandler {
 	return &QuestionHandler{
 		findQuestionByNameUC: findQuestionByNameUC,
@@ -55,8 +66,8 @@ func NewFindQuestionByName(
 }
 
 func NewUserHandler(
-	registerUC *usecase.RegisterUserUseCase,
-	loginUC *usecase.LoginUserUseCase,
+	registerUC *user_uc.RegisterUserUseCase,
+	loginUC *user_uc.LoginUserUseCase,
 	jwtSecret string,
 ) *UserHandler {
 	return &UserHandler{
@@ -67,7 +78,7 @@ func NewUserHandler(
 }
 
 func NewQuestionHandler(
-	createQuestionUC *usecase.CreateQuestion,
+	createQuestionUC *question_uc.CreateQuestion,
 ) *QuestionHandler {
 	return &QuestionHandler{
 		createQuestionUC: createQuestionUC,
@@ -75,7 +86,7 @@ func NewQuestionHandler(
 }
 
 func NewDeleteQuestionHandler(
-	deleteQuestionUC *usecase.DeleteQuestionUseCase,
+	deleteQuestionUC *question_uc.DeleteQuestionUseCase,
 ) *QuestionHandler {
 	return &QuestionHandler{
 		deleteQuestionUC: deleteQuestionUC,
@@ -83,7 +94,7 @@ func NewDeleteQuestionHandler(
 }
 
 func NewCreateQuestionOptionHandler(
-	createQuestionOptionUC *usecase.CreateQuestionOptionUseCase,
+	createQuestionOptionUC *question_option_uc.CreateQuestionOptionUseCase,
 ) *QuestionOptionHandler {
 	return &QuestionOptionHandler{
 		createQuestionOptionUC: createQuestionOptionUC,
@@ -91,7 +102,7 @@ func NewCreateQuestionOptionHandler(
 }
 
 func NewDeleteQuestionOptionHandler(
-	deleteQuestionOptionUC *usecase.DeleteQuestionOptionUseCase,
+	deleteQuestionOptionUC *question_option_uc.DeleteQuestionOptionUseCase,
 ) *QuestionOptionHandler {
 	return &QuestionOptionHandler{
 		deleteQuestionOptionUC: deleteQuestionOptionUC,
@@ -99,7 +110,7 @@ func NewDeleteQuestionOptionHandler(
 }
 
 func NewAssociateByQuestionItemHandler(
-	associateByQuestionProductUC *usecase.AssociateByQuestionItemUseCase,
+	associateByQuestionProductUC *question_uc.AssociateByQuestionItemUseCase,
 ) *AssociateByQuestionItemHandler {
 	return &AssociateByQuestionItemHandler{
 		associateByQuestionProductUC: associateByQuestionProductUC,
@@ -107,7 +118,7 @@ func NewAssociateByQuestionItemHandler(
 }
 
 func NewGeneratMaskItemHandler(
-	generateMaskProductUC *usecase.GenerateMaskForItemUseCase,
+	generateMaskProductUC *generate_mask_uc.GenerateMaskForItemUseCase,
 ) *GenerateMaskHandler {
 	return &GenerateMaskHandler{
 		generateMask: generateMaskProductUC,
@@ -115,7 +126,7 @@ func NewGeneratMaskItemHandler(
 }
 
 func NewCreateBomHandler(
-	createBomUC *usecase.CreateBomUseCase,
+	createBomUC *bom_uc.CreateBomUseCase,
 ) *BomHandler {
 	return &BomHandler{
 		createBomUC: createBomUC,
@@ -123,7 +134,7 @@ func NewCreateBomHandler(
 }
 
 func NewCreateBomItemHandler(
-	createBomItemUC *usecase.CreateBomItemUseCase,
+	createBomItemUC *bom_uc.CreateBomItemUseCase,
 ) *BomItemHandler {
 	return &BomItemHandler{
 		createBomItemUC: createBomItemUC,
@@ -131,8 +142,8 @@ func NewCreateBomItemHandler(
 }
 
 func NewCreateItemHandler(
-	createItemUc *usecase.CreateItemUseCase,
-	findItemByCodeUc *usecase.FindItemByCode,
+	createItemUc *item_uc.CreateItemUseCase,
+	findItemByCodeUc *item_uc.FindItemByCode,
 ) *ItemHandler {
 	return &ItemHandler{
 		createItemUC:     createItemUc,
@@ -141,7 +152,7 @@ func NewCreateItemHandler(
 }
 
 func NewCreateWarehouseHandler(
-	createWarehouse *usecase.CreateWarehouseUseCase,
+	createWarehouse *warehouse_uc.CreateWarehouseUseCase,
 ) *WarehouseHandler {
 	return &WarehouseHandler{
 		createWarehouseUC: createWarehouse,
@@ -149,7 +160,7 @@ func NewCreateWarehouseHandler(
 }
 
 func NewCreateGroupHandler(
-	createGroupUc *usecase.CreateGroupUseCase,
+	createGroupUc *group_uc.CreateGroupUseCase,
 ) *GroupHandler {
 	return &GroupHandler{
 		createGroupUC: createGroupUc,
@@ -157,7 +168,7 @@ func NewCreateGroupHandler(
 }
 
 func NewCreateEnterpriseHandler(
-	createEnterprisepUc *usecase.CreateEnterpriseUseCase,
+	createEnterprisepUc *enterprise_uc.CreateEnterpriseUseCase,
 ) *EnterpriseHandler {
 	return &EnterpriseHandler{
 		createEnterpriseUC: createEnterprisepUc,
@@ -165,7 +176,7 @@ func NewCreateEnterpriseHandler(
 }
 
 func NewCreateModifierHandler(
-	createModifierUc *usecase.CreateModifierUseCase,
+	createModifierUc *modifier_uc.CreateModifierUseCase,
 ) *ModifierHandler {
 	return &ModifierHandler{
 		createModifierUC: createModifierUc,
@@ -189,23 +200,23 @@ func NewEmployeeHandler(
 }
 
 func NewItemStructureHandler(
-	createUC *usecase.CreateStructureComponentUseCase,
-	updateUC *usecase.UpdateStructureComponentUseCase,
-	getAllStructureUC *usecase.GetAllDirectChildrenUseCase,
-	treeUC *usecase.GetStructureTreeUseCase,
-	// deleteUC *usecase.DeleteStructureComponentUseCase,
+	createUC *structure_uc.CreateStructureComponentUseCase,
+	updateUC *structure_uc.UpdateStructureComponentUseCase,
+	getAllStructureUC *structure_uc.GetAllDirectChildrenUseCase,
+	treeUC *structure_uc.GetStructureTreeUseCase,
+	// deleteUC *structure_uc.DeleteStructureComponentUseCase,
 ) *ItemStructureHandler {
 	return &ItemStructureHandler{
-		createUC:        createUC,
-		updateUC:        updateUC,
+		createUC:       createUC,
+		updateUC:       updateUC,
 		getAllStructure: getAllStructureUC,
-		treeUC:          treeUC,
+		treeUC:         treeUC,
 		//deleteUC:  deleteUC,
 	}
 }
 
 func NewQueryStructureHandler(
-	resolveUc *usecase.ResolveStructureQueryUseCase,
+	resolveUc *structure_uc.ResolveStructureQueryUseCase,
 ) *ItemQueryStructureHandler {
 	return &ItemQueryStructureHandler{
 		resolveUC: resolveUc,

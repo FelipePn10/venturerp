@@ -6,22 +6,48 @@ import (
 	"strings"
 	"time"
 
-	"github.com/FelipePn10/panossoerp/internal/application/usecase"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
+	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/financial_uc"
+	fiscalUC "github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/generate_mask_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
+	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	productionOrderUc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_division_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_forecast_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
-	productionOrderUc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	financialRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/financial"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	fiscalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
-	fiscalUC "github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
 	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
@@ -85,8 +111,8 @@ func (app *application) mount() chi.Router {
 
 	userRepo := user.NewRepositoryUserSQLC(queries)
 
-	registerUserUC := usecase.NewRegisterUserUseCase(userRepo)
-	loginUserUC := usecase.NewLoginUserUseCase(userRepo)
+	registerUserUC := user_uc.NewRegisterUserUseCase(userRepo)
+	loginUserUC := user_uc.NewLoginUserUseCase(userRepo)
 
 	userHandler := handler.NewUserHandler(
 		registerUserUC,
@@ -101,8 +127,8 @@ func (app *application) mount() chi.Router {
 
 	// question
 	questionRepo := questions.NewRepositoryQuestionSQLC(queries)
-	createQuestionUC := usecase.NewQuestionUserUseCase(questionRepo, authService)
-	findQuestionByNameUC := usecase.NewFindQuestionByName(questionRepo)
+	createQuestionUC := question_uc.NewCreateQuestion(questionRepo, authService)
+	findQuestionByNameUC := question_uc.NewFindQuestionByName(questionRepo)
 
 	questionCreateHandler := handler.NewQuestionHandler(createQuestionUC)
 	findQuestionByNameHandler := handler.NewFindQuestionByName(findQuestionByNameUC)
@@ -110,100 +136,100 @@ func (app *application) mount() chi.Router {
 	// question option
 	questionOptionRepo := questionsoptions.NewRepositoryQuestionOptionSQLC(queries)
 
-	createQuestionOptionUC := usecase.NewCreateQuestionOptionUseCase(questionOptionRepo, authService)
+	createQuestionOptionUC := question_option_uc.NewCreateQuestionOptionUseCase(questionOptionRepo, authService)
 	questionOptionCreateHandler := handler.NewCreateQuestionOptionHandler(createQuestionOptionUC)
 
 	// associate question in item
 	itemByQuestionItemRepo := itemquestion.NewAssociateQuestionItemRepositorySQLC(queries)
-	associateByQuestionItemUC := usecase.NewAssociateByQuestionItemUseCase(itemByQuestionItemRepo, authService)
+	associateByQuestionItemUC := question_uc.NewAssociateByQuestionItemUseCase(itemByQuestionItemRepo, authService)
 	associateByQuestionItemHandler := handler.NewAssociateByQuestionItemHandler(associateByQuestionItemUC)
 
 	// generate mask item
 	generateMaskItem := generatemask.NewRepositoryGenerateMaskSQLC(queries)
-	generateMaskItemUC := usecase.NewGenerateMaskItemUseCase(generateMaskItem, authService)
+	generateMaskItemUC := generate_mask_uc.NewGenerateMaskItemUseCase(generateMaskItem, authService)
 	generateMaskItemHandler := handler.NewGeneratMaskItemHandler(generateMaskItemUC)
 
 	// Item
 	itemRepo := item.NewRepositoryItemSQLC(queries)
-	createItemUc := usecase.NewCreateItem(itemRepo, authService)
-	findItemByCodeUc := usecase.NewFindItemByCode(itemRepo, authService)
+	createItemUc := item_uc.NewCreateItemUseCase(itemRepo, authService)
+	findItemByCodeUc := item_uc.NewFindItemByCode(itemRepo, authService)
 	itemHandler := handler.NewCreateItemHandler(createItemUc, findItemByCodeUc)
 
 	// Item Structure
 	itemRepoStructure := structure.NewItemStructureRepository(queries)
-	createStructureUc := usecase.NewCreateStructureComponentUseCase(itemRepoStructure, authService)
-	updateStructureUc := usecase.NewUpdateStructureComponentUseCase(itemRepoStructure, authService)
-	getAllStructureUc := usecase.NewGetAllDirectChildrenUseCase(itemRepoStructure, authService)
-	treeStructureUc := usecase.NewGetStructureTreeUseCase(itemRepoStructure, authService)
+	createStructureUc := structure_uc.NewCreateStructureComponentUseCase(itemRepoStructure, authService)
+	updateStructureUc := structure_uc.NewUpdateStructureComponentUseCase(itemRepoStructure, authService)
+	getAllStructureUc := structure_uc.NewGetAllDirectChildrenUseCase(itemRepoStructure, authService)
+	treeStructureUc := structure_uc.NewGetStructureTreeUseCase(itemRepoStructure, authService)
 	structureHandler := handler.NewItemStructureHandler(createStructureUc, updateStructureUc, getAllStructureUc, treeStructureUc)
 
 	// Item Structure Query
 	itemRepoStructureQuery := structure_query.NewStructureQueryRepository(queries)
-	queryStructureUc := usecase.NewResolveStructureQueryUseCase(itemRepoStructureQuery, authService)
+	queryStructureUc := structure_uc.NewResolveStructureQueryUseCase(itemRepoStructureQuery, authService)
 	queryStructureHandler := handler.NewQueryStructureHandler(queryStructureUc)
 	// bom
 	bomRepo := bom.NewRepostioryBomSQLC(queries)
 
-	createBomUc := usecase.NewCreateBomUseCase(bomRepo, authService)
+	createBomUc := bom_uc.NewCreateBomUseCase(bomRepo, authService)
 	bomHandler := handler.NewCreateBomHandler(createBomUc)
 
 	// bom item
 	bomItemRepo := bomitem.NewRepositoryBomItemSQLC(queries)
 
-	createBomItemUc := usecase.NewCreatBomItemUseCase(bomItemRepo, authService)
+	createBomItemUc := &bom_uc.CreateBomItemUseCase{Repo: bomItemRepo, Auth: authService}
 	bomItemHandler := handler.NewCreateBomItemHandler(createBomItemUc)
 
 	// warehouse
 	warehouseRepo := warehouse.NewRepositoryQuestionSQLC(queries)
-	createWarehouseUc := usecase.NewCreateWarehouseUseCase(warehouseRepo, authService)
+	createWarehouseUc := warehouse_uc.NewCreateWarehouseUseCase(warehouseRepo, authService)
 	warehouseHandler := handler.NewCreateWarehouseHandler(createWarehouseUc)
 
 	// group
 	groupRepo := group.NewRepositoryGroupSQLC(queries)
-	createGroupUc := usecase.NewCreateGroupUseCase(groupRepo, authService)
+	createGroupUc := group_uc.NewCreateGroupUseCase(groupRepo, authService)
 	groupHandler := handler.NewCreateGroupHandler(createGroupUc)
 
 	// enterprise
 	enterpriseRepo := enterprise.NewRepositoryEnterpriseSQLC(queries)
-	createEnterpriseUc := usecase.NewCreateEnterpriseUseCase(enterpriseRepo, authService)
+	createEnterpriseUc := enterprise_uc.NewCreateEnterpriseUseCase(enterpriseRepo, authService)
 	enterpriseHandler := handler.NewCreateEnterpriseHandler(createEnterpriseUc)
 
 	// modifier
 	modifierRepo := modifier.NewRepositoryModifierSQLC(queries)
-	createModifierUc := usecase.NewCreateModifierUseCase(modifierRepo, authService)
+	createModifierUc := modifier_uc.NewCreateModifierUseCase(modifierRepo, authService)
 	modifierHandler := handler.NewCreateModifierHandler(createModifierUc)
 
 	// employee
 	employeeRepo := employee.NewRepositoryEmployeeSQLC(queries)
-	createEmployeeUc := usecase.NewCreateEmployeeUseCase(employeeRepo, authService)
-	listEmployeesUC := usecase.NewListEmployeesUseCase(employeeRepo, authService)
-	getEmployeeUC := usecase.NewGetEmployeeUseCase(employeeRepo, authService)
-	updateEmployeeUC := usecase.NewUpdateEmployeeUseCase(employeeRepo, authService)
-	deactivateEmployeeUC := usecase.NewDeactivateEmployeeUseCase(employeeRepo, authService)
+	createEmployeeUc := &employeeUC.CreateEmployeeUseCase{Repo: employeeRepo, Auth: authService}
+	listEmployeesUC := &employeeUC.ListEmployeesUseCase{Repo: employeeRepo, Auth: authService}
+	getEmployeeUC := &employeeUC.GetEmployeeUseCase{Repo: employeeRepo, Auth: authService}
+	updateEmployeeUC := &employeeUC.UpdateEmployeeUseCase{Repo: employeeRepo, Auth: authService}
+	deactivateEmployeeUC := &employeeUC.DeactivateEmployeeUseCase{Repo: employeeRepo, Auth: authService}
 	employeeHandler := handler.NewEmployeeHandler(createEmployeeUc, listEmployeesUC, getEmployeeUC, updateEmployeeUC, deactivateEmployeeUC)
 
 	// planning params
 	planningParamsRepo := planningParams.NewPlanningParamRepositorySQLC(queries)
-	getPlanningParamUC := usecase.NewGetPlanningParamUseCase(planningParamsRepo, authService)
-	listPlanningParamsUC := usecase.NewListPlanningParamsUseCase(planningParamsRepo, authService)
-	updatePlanningParamUC := usecase.NewUpdatePlanningParamUseCase(planningParamsRepo, authService)
+	getPlanningParamUC := &planning_params_uc.GetPlanningParamUseCase{Repo: planningParamsRepo, Auth: authService}
+	listPlanningParamsUC := &planning_params_uc.ListPlanningParamsUseCase{Repo: planningParamsRepo, Auth: authService}
+	updatePlanningParamUC := &planning_params_uc.UpdatePlanningParamUseCase{Repo: planningParamsRepo, Auth: authService}
 	planningParamsHandler := handler.NewPlanningParamsHandler(getPlanningParamUC, listPlanningParamsUC, updatePlanningParamUC)
 
 	// production plan
 	productionPlanRepo := productionPlan.NewProductionPlanRepositorySQLC(queries)
-	createProductionPlanUC := usecase.NewCreateProductionPlanUseCase(productionPlanRepo, authService)
-	getProductionPlanUC := usecase.NewGetProductionPlanUseCase(productionPlanRepo, authService)
-	listProductionPlansUC := usecase.NewListProductionPlansUseCase(productionPlanRepo, authService)
-	updateProductionPlanUC := usecase.NewUpdateProductionPlanUseCase(productionPlanRepo, authService)
-	deleteProductionPlanUC := usecase.NewDeleteProductionPlanUseCase(productionPlanRepo, authService)
+	createProductionPlanUC := &production_plan_uc.CreateProductionPlanUseCase{Repo: productionPlanRepo, Auth: authService}
+	getProductionPlanUC := &production_plan_uc.GetProductionPlanUseCase{Repo: productionPlanRepo, Auth: authService}
+	listProductionPlansUC := &production_plan_uc.ListProductionPlansUseCase{Repo: productionPlanRepo, Auth: authService}
+	updateProductionPlanUC := &production_plan_uc.UpdateProductionPlanUseCase{Repo: productionPlanRepo, Auth: authService}
+	deleteProductionPlanUC := &production_plan_uc.DeleteProductionPlanUseCase{Repo: productionPlanRepo, Auth: authService}
 	productionPlanHandler := handler.NewProductionPlanHandler(createProductionPlanUC, getProductionPlanUC, listProductionPlansUC, updateProductionPlanUC, deleteProductionPlanUC)
 
 	// restriction
 	restrictionR := restrictionRepo.NewRestrictionRepositorySQLC(queries)
-	createRestrictionUC := usecase.NewCreateRestrictionUseCase(restrictionR, authService)
-	getRestrictionUC := usecase.NewGetRestrictionUseCase(restrictionR, authService)
-	listRestrictionsUC := usecase.NewListRestrictionsUseCase(restrictionR, authService)
-	getRestrictionsByItemUC := usecase.NewGetRestrictionsByItemUseCase(restrictionR, authService)
+	createRestrictionUC := &restriction_uc.CreateRestrictionUseCase{Repo: restrictionR, Auth: authService}
+	getRestrictionUC := &restriction_uc.GetRestrictionUseCase{Repo: restrictionR, Auth: authService}
+	listRestrictionsUC := &restriction_uc.ListRestrictionsUseCase{Repo: restrictionR, Auth: authService}
+	getRestrictionsByItemUC := &restriction_uc.GetRestrictionsByItemUseCase{Repo: restrictionR, Auth: authService}
 	updateRestrictionUC := &restriction_uc.UpdateRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	deactivateRestrictionUC := &restriction_uc.DeactivateRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	restrictionHandler := handler.NewRestrictionHandler(createRestrictionUC, getRestrictionUC, listRestrictionsUC, getRestrictionsByItemUC, updateRestrictionUC, deactivateRestrictionUC)
@@ -233,65 +259,65 @@ func (app *application) mount() chi.Router {
 
 	// allocation base
 	allocationBaseRepo := allocation.NewAllocationBaseRepositorySQLC(queries)
-	createAllocationBaseUC := usecase.NewCreateAllocationBaseUseCase(allocationBaseRepo, authService)
-	listAllocationBaseUC := usecase.NewListAllocationBasesUseCase(allocationBaseRepo, authService)
+	createAllocationBaseUC := &allocation_base_uc.CreateAllocationBaseUseCase{Repo: allocationBaseRepo, Auth: authService}
+	listAllocationBaseUC := &allocation_base_uc.ListAllocationBasesUseCase{Repo: allocationBaseRepo, Auth: authService}
 	allocationBaseHandler := handler.NewAllocationBaseHandler(createAllocationBaseUC, listAllocationBaseUC)
 
 	// cost center
 	costCenterRepo := cost_center.NewCostCenterRepositorySQLC(queries)
-	createCostCenterUC := usecase.NewCreateCostCenterUseCase(costCenterRepo, authService)
-	listCostCenterUC := usecase.NewListCostCentersUseCase(costCenterRepo, authService)
-	getCostCenterUC := usecase.NewGetCostCenterUseCase(costCenterRepo, authService)
+	createCostCenterUC := &cost_center_uc.CreateCostCenterUseCase{Repo: costCenterRepo, Auth: authService}
+	listCostCenterUC := &cost_center_uc.ListCostCentersUseCase{Repo: costCenterRepo, Auth: authService}
+	getCostCenterUC := &cost_center_uc.GetCostCenterUseCase{Repo: costCenterRepo, Auth: authService}
 	costCenterHandler := handler.NewCostCenterHandler(createCostCenterUC, listCostCenterUC, getCostCenterUC)
 
 	// delivery promise params
 	deliveryPromiseParamsRepo := deliveryPromiseParams.NewDeliveryPromiseParamsRepositorySQLC(queries)
-	manageDeliveryPromiseParamsUC := usecase.NewManageDeliveryPromiseParamsUseCase(deliveryPromiseParamsRepo, authService)
+	manageDeliveryPromiseParamsUC := &delivery_promise_params_uc.ManageDeliveryPromiseParamsUseCase{Repo: deliveryPromiseParamsRepo, Auth: authService}
 	deliveryPromiseParamsHandler := handler.NewDeliveryPromiseParamsHandler(manageDeliveryPromiseParamsUC)
 
 	// delivery reschedule
 	deliveryRescheduleRepo := deliveryReschedule.NewDeliveryRescheduleRepositorySQLC(queries)
-	createDeliveryRescheduleUC := usecase.NewCreateDeliveryRescheduleUseCase(deliveryRescheduleRepo, authService)
-	listDeliveryRescheduleUC := usecase.NewListDeliveryReschedulesUseCase(deliveryRescheduleRepo, authService)
+	createDeliveryRescheduleUC := &delivery_reschedule_uc.CreateDeliveryRescheduleUseCase{Repo: deliveryRescheduleRepo, Auth: authService}
+	listDeliveryRescheduleUC := &delivery_reschedule_uc.ListDeliveryReschedulesUseCase{Repo: deliveryRescheduleRepo, Auth: authService}
 	deliveryRescheduleHandler := handler.NewDeliveryRescheduleHandler(createDeliveryRescheduleUC, listDeliveryRescheduleUC)
 
 	// independent demand
 	independentDemandRepo := independentDemand.NewIndependentDemandRepositorySQLC(queries)
-	createIndependentDemandUC := usecase.NewCreateIndependentDemandUseCase(independentDemandRepo, authService)
-	updateIndependentDemandUC := usecase.NewUpdateIndependentDemandUseCase(independentDemandRepo, authService)
-	deleteIndependentDemandUC := usecase.NewDeleteIndependentDemandUseCase(independentDemandRepo, authService)
-	listFromDateIndependentDemandUC := usecase.NewListIndependentDemandFromDateUseCase(independentDemandRepo, authService)
-	listByItemIndependentDemandUC := usecase.NewListIndependentDemandByItemUseCase(independentDemandRepo, authService)
-	listIndependentDemandUC := usecase.NewListIndependentDemandsUseCase(independentDemandRepo, authService)
-	getByCodeDemandUC := usecase.NewGetIndependentDemandByCodeUseCase(independentDemandRepo, authService)
+	createIndependentDemandUC := &independent_demand_uc.CreateIndependentDemandUseCase{Repo: independentDemandRepo, Auth: authService}
+	updateIndependentDemandUC := &independent_demand_uc.UpdateIndependentDemandUseCase{Repo: independentDemandRepo, Auth: authService}
+	deleteIndependentDemandUC := &independent_demand_uc.DeleteIndependentDemandUseCase{Repo: independentDemandRepo, Auth: authService}
+	listFromDateIndependentDemandUC := &independent_demand_uc.ListIndependentDemandFromDateUseCase{Repo: independentDemandRepo, Auth: authService}
+	listByItemIndependentDemandUC := &independent_demand_uc.ListIndependentDemandByItemUseCase{Repo: independentDemandRepo, Auth: authService}
+	listIndependentDemandUC := &independent_demand_uc.ListIndependentDemandsUseCase{Repo: independentDemandRepo, Auth: authService}
+	getByCodeDemandUC := &independent_demand_uc.GetIndependentDemandByCodeUseCase{Repo: independentDemandRepo, Auth: authService}
 	independentDemandHandler := handler.NewIndependentDemandHandler(createIndependentDemandUC, updateIndependentDemandUC, deleteIndependentDemandUC, listFromDateIndependentDemandUC, listByItemIndependentDemandUC, listIndependentDemandUC, getByCodeDemandUC)
 
 	// industrial calendar
 	industrialCalendarRepo := industrialCalendar.NewIndustrialCalendarRepositorySQLC(queries)
-	manageIndustrialCalendarRepoUC := usecase.NewManageCalendarUseCase(industrialCalendarRepo, authService)
+	manageIndustrialCalendarRepoUC := &industrial_calendar_uc.ManageCalendarUseCase{Repo: industrialCalendarRepo, Auth: authService}
 	industrialCalendarHandler := handler.NewIndustrialCalendarHandler(manageIndustrialCalendarRepoUC)
 
 	// item calendar promise
 	itemCalendarPromise := itemCalendarPromise.NewItemCalendarPromiseRepositorySQLC(queries)
-	itemCalendarPromiseUC := usecase.NewManageItemCalendarPromiseUseCase(itemCalendarPromise, authService)
+	itemCalendarPromiseUC := &item_calendar_promise_uc.ManageItemCalendarPromiseUseCase{Repo: itemCalendarPromise, Auth: authService}
 	itemCalendarPromiseHandler := handler.NewItemCalendarPromiseHandler(itemCalendarPromiseUC)
 
 	// machine
 	machineRepo := machine.NewMachineRepositorySQLC(queries)
-	machineUC := usecase.NewCreateMachineUseCase(machineRepo, authService)
-	machineListUC := usecase.NewListMachinesUseCase(machineRepo, authService)
-	machineGetByCodeUC := usecase.NewGetMachineUseCase(machineRepo, authService)
+	machineUC := &machine_uc.CreateMachineUseCase{Repo: machineRepo, Auth: authService}
+	machineListUC := &machine_uc.ListMachinesUseCase{Repo: machineRepo, Auth: authService}
+	machineGetByCodeUC := &machine_uc.GetMachineUseCase{Repo: machineRepo, Auth: authService}
 	//type
-	machineTypeCreateUC := usecase.NewCreateMachineTypeUseCase(machineRepo, authService)
-	machineListTypesUC := usecase.NewListMachineTypesUseCase(machineRepo, authService)
-	machineTypeGetByCodeUC := usecase.NewGetMachineTypeUseCase(machineRepo, authService)
+	machineTypeCreateUC := &machine_uc.CreateMachineTypeUseCase{Repo: machineRepo, Auth: authService}
+	machineListTypesUC := &machine_uc.ListMachineTypesUseCase{Repo: machineRepo, Auth: authService}
+	machineTypeGetByCodeUC := &machine_uc.GetMachineTypeUseCase{Repo: machineRepo, Auth: authService}
 	//item times
-	machineItemTimeUC := usecase.NewCreateItemMachineTimeUseCase(machineRepo, itemRepo, authService)
-	machineListItemTimeUC := usecase.NewListItemMachineTimesUseCase(machineRepo, authService)
-	//machineGetItemTimeUC := usecase.NewGetItemMachineTimeUseCase(machineRepo, authService)
-	machineCalcProductionUC := usecase.NewCalculateProductionTimeUseCase(machineRepo, itemRepo, authService)
+	machineItemTimeUC := &machine_uc.CreateItemMachineTimeUseCase{Repo: machineRepo, ItemRepo: itemRepo, Auth: authService}
+	machineListItemTimeUC := &machine_uc.ListItemMachineTimesUseCase{Repo: machineRepo, Auth: authService}
+	//machineGetItemTimeUC := &machine_uc.GetItemMachineTimeUseCase{Repo: machineRepo, Auth: authService}
+	machineCalcProductionUC := &machine_uc.CalculateProductionTimeUseCase{Repo: machineRepo, ItemRepo: itemRepo, Auth: authService}
 	// schedule
-	scheduleUC := usecase.NewScheduleMachineUseCase(machineRepo, authService)
+	scheduleUC := &machine_uc.ScheduleMachineUseCase{Repo: machineRepo, Auth: authService}
 
 	machineHandler := handler.NewMachineHandler(
 		machineUC,
@@ -310,31 +336,31 @@ func (app *application) mount() chi.Router {
 	// mrp_calculation
 	mrpRepo := mrpCalculation.NewMRPCalculationRepositorySQLC(queries, app.db.Pool)
 	supplyPort := planned.NewPlannedOrderSupplyAdapter(queries)
-	mrpService := usecase.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, supplyPort, productionPlanRepo, sfRepo, restrictionR)
-	mrpRunUC := usecase.NewRunMRPCalculationUseCase(mrpService, authService)
-	mrpGetProfileUC := usecase.NewGetItemProfileUseCase(mrpRepo, authService)
-	mrpCreateConfiguredRule := usecase.NewManageConfiguredItemRulesUseCase(mrpRepo, authService)
-	mrpListExceptionsUC := usecase.NewListMRPExceptionsUseCase(mrpRepo, authService)
+	mrpService := mrpservice.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, supplyPort, productionPlanRepo, sfRepo, restrictionR)
+	mrpRunUC := &mrp_calculation_uc.RunMRPCalculationUseCase{Service: mrpService, Auth: authService}
+	mrpGetProfileUC := &mrp_calculation_uc.GetItemProfileUseCase{Repo: mrpRepo, Auth: authService}
+	mrpCreateConfiguredRule := &mrp_calculation_uc.ManageConfiguredItemRulesUseCase{Repo: mrpRepo, Auth: authService}
+	mrpListExceptionsUC := &mrp_calculation_uc.ListMRPExceptionsUseCase{Repo: mrpRepo, Auth: authService}
 	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC)
 
 	//order priority
 	opRepo := op.NewOrderPriorityRepositorySQLC(queries)
-	opCreateUC := usecase.NewCreateOrderPriorityUseCase(opRepo, authService)
-	opListUC := usecase.NewListOrderPrioritiesUseCase(opRepo, authService)
-	opFindUC := usecase.NewFindPriorityByValueUseCase(opRepo, authService)
+	opCreateUC := &order_priority_uc.CreateOrderPriorityUseCase{Repo: opRepo, Auth: authService}
+	opListUC := &order_priority_uc.ListOrderPrioritiesUseCase{Repo: opRepo, Auth: authService}
+	opFindUC := &order_priority_uc.FindPriorityByValueUseCase{Repo: opRepo, Auth: authService}
 	opHandler := handler.NewOrderPriorityHandler(opCreateUC, opListUC, opFindUC)
 
 	// overhead allocation
 	overRepo := over.NewOverheadAllocationRepositorySQLC(queries)
-	overCreateUC := usecase.NewCreateOverheadAllocationUseCase(overRepo, authService)
-	overListUC := usecase.NewListOverheadAllocationsUseCase(overRepo, authService)
+	overCreateUC := &overhead_allocation_uc.CreateOverheadAllocationUseCase{Repo: overRepo, Auth: authService}
+	overListUC := &overhead_allocation_uc.ListOverheadAllocationsUseCase{Repo: overRepo, Auth: authService}
 	overHandler := handler.NewOverheadAllocationHandler(overCreateUC, overListUC)
 
 	// planned order
 	plannedRepo := planned.NewPlannedOrderRepositorySQLC(queries)
-	plannedCreateUC := usecase.NewCreatePlannedOrderUseCase(plannedRepo, authService)
-	plannedListUC := usecase.NewListPlannedOrdersUseCase(plannedRepo, authService)
-	plannedFirmUC := usecase.NewFirmPlannedOrderUseCase(plannedRepo, authService)
+	plannedCreateUC := &planned_order_uc.CreatePlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
+	plannedListUC := &planned_order_uc.ListPlannedOrdersUseCase{Repo: plannedRepo, Auth: authService}
+	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
 	plannedHandler := handler.NewPlannedOrderHandler(plannedCreateUC, plannedListUC, plannedFirmUC)
 
 	// production order

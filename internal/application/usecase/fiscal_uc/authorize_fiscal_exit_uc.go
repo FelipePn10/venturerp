@@ -77,7 +77,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*e
 		ufDest = *exit.UFDestinatario
 	}
 
-	nfeItems := buildFocusItems(items)
+	nfeItems := buildFocusItems(items, cfg)
 
 	localDestino := 1
 	if ufDest != cfg.UFEmpresa {
@@ -164,7 +164,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*e
 	return updated, nil
 }
 
-func buildFocusItems(items []*entity.FiscalExitItem) []focusnfe.NFEItem {
+func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) []focusnfe.NFEItem {
 	result := make([]focusnfe.NFEItem, 0, len(items))
 	for i, it := range items {
 		ncm := ""
@@ -232,17 +232,17 @@ func buildFocusItems(items []*entity.FiscalExitItem) []focusnfe.NFEItem {
 			AliquotaIPI:                    it.AliqIPI * 100,
 			ValorIPI:                       it.ValorIPI,
 			CodigoSituacaoTributariaPIS:    cstPIS,
-			AliquotaPIS:                    1.65,
+			AliquotaPIS:                    it.AliqPIS * 100,
 			ValorPIS:                       it.ValorPIS,
 			CodigoSituacaoTributariaCOFINS: cstCOFINS,
-			AliquotaCOFINS:                 7.60,
+			AliquotaCOFINS:                 it.AliqCOFINS * 100,
 			ValorCOFINS:                    it.ValorCOFINS,
 			OrigemMercadoria:               origem,
 		}
 
 		// Diferimento parcial CST 51
 		if cstICMS == "51" && it.ValorICMSDiferido > 0 {
-			pct := 38.46
+			pct := cfg.IcmsDiferimentoPercentual * 100
 			nfeIt.PercentualDiferimento = &pct
 			nfeIt.ValorICMSDiferido = &it.ValorICMSDiferido
 		}

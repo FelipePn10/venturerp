@@ -1407,6 +1407,8 @@ type FiscalExitItem struct {
 	OrigemMercadoria  string
 	Description       pgtype.Text
 	CreatedAt         pgtype.Timestamptz
+	AliqPis           pgtype.Numeric
+	AliqCofins        pgtype.Numeric
 }
 
 type FluxoCaixa struct {
