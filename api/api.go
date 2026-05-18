@@ -147,6 +147,7 @@ func (app *application) mount() chi.Router {
 	// generate mask item
 	generateMaskItem := generatemask.NewRepositoryGenerateMaskSQLC(queries)
 	generateMaskItemUC := generate_mask_uc.NewGenerateMaskItemUseCase(generateMaskItem, authService)
+	// Evaluator is set after evaluateRestrictionsUC is declared (see restriction block below).
 	generateMaskItemHandler := handler.NewGeneratMaskItemHandler(generateMaskItemUC)
 
 	// Item
@@ -226,13 +227,29 @@ func (app *application) mount() chi.Router {
 
 	// restriction
 	restrictionR := restrictionRepo.NewRestrictionRepositorySQLC(queries)
+	restrictionReasonR := restrictionRepo.NewRestrictionReasonRepositorySQLC(queries)
 	createRestrictionUC := &restriction_uc.CreateRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	getRestrictionUC := &restriction_uc.GetRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	listRestrictionsUC := &restriction_uc.ListRestrictionsUseCase{Repo: restrictionR, Auth: authService}
 	getRestrictionsByItemUC := &restriction_uc.GetRestrictionsByItemUseCase{Repo: restrictionR, Auth: authService}
+	getRestrictionsByCustomerUC := &restriction_uc.GetRestrictionsByCustomerUseCase{Repo: restrictionR, Auth: authService}
 	updateRestrictionUC := &restriction_uc.UpdateRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	deactivateRestrictionUC := &restriction_uc.DeactivateRestrictionUseCase{Repo: restrictionR, Auth: authService}
-	restrictionHandler := handler.NewRestrictionHandler(createRestrictionUC, getRestrictionUC, listRestrictionsUC, getRestrictionsByItemUC, updateRestrictionUC, deactivateRestrictionUC)
+	evaluateRestrictionsUC := &restriction_uc.EvaluateRestrictionsUseCase{Repo: restrictionR}
+	// Wire restriction evaluator into generate mask so restrictions are enforced on mask creation.
+	generateMaskItemUC.Evaluator = evaluateRestrictionsUC
+	restrictionHandler := handler.NewRestrictionHandler(
+		createRestrictionUC, getRestrictionUC, listRestrictionsUC,
+		getRestrictionsByItemUC, getRestrictionsByCustomerUC,
+		updateRestrictionUC, deactivateRestrictionUC, evaluateRestrictionsUC,
+	)
+	restrictionReasonHandler := handler.NewRestrictionReasonHandler(
+		&restriction_uc.CreateRestrictionReasonUseCase{Repo: restrictionReasonR, Auth: authService},
+		&restriction_uc.GetRestrictionReasonUseCase{Repo: restrictionReasonR, Auth: authService},
+		&restriction_uc.ListRestrictionReasonsUseCase{Repo: restrictionReasonR, Auth: authService},
+		&restriction_uc.UpdateRestrictionReasonUseCase{Repo: restrictionReasonR, Auth: authService},
+		&restriction_uc.DeleteRestrictionReasonUseCase{Repo: restrictionReasonR, Auth: authService},
+	)
 
 	// sales division
 	sdRepo := salesDivisionRepo.NewSalesDivisionRepositorySQLC(queries)
@@ -680,8 +697,17 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", restrictionHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", restrictionHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", restrictionHandler.GetByItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/customer/{customerCode}", restrictionHandler.GetByCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/evaluate", restrictionHandler.Evaluate)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", restrictionHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/deactivate", restrictionHandler.Deactivate)
+		})
+		r.Route("/api/restriction-reason", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", restrictionReasonHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", restrictionReasonHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", restrictionReasonHandler.GetByCode)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", restrictionReasonHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", restrictionReasonHandler.Delete)
 		})
 		r.Route("/api/sales-division", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesDivisionHandler.Create)

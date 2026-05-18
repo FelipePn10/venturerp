@@ -2108,6 +2108,7 @@ type Restriction struct {
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
 	CreatedBy            pgtype.UUID
+	CustomerCode         *int64
 }
 
 type RestrictionDeterminant struct {
@@ -2126,6 +2127,15 @@ type RestrictionDominant struct {
 	ConditionType RestrictionConditionEnum
 	AnswerValue   string
 	Sequence      int32
+}
+
+type RestrictionReason struct {
+	ID          int64
+	Code        int64
+	Description string
+	Situation   string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type SaldoConta struct {

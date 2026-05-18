@@ -11,11 +11,59 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getItemQuestionPositions = `-- name: GetItemQuestionPositions :many
+SELECT question_id, position FROM item_questions
+WHERE item_code = $1
+ORDER BY position
+`
+
+type GetItemQuestionPositionsRow struct {
+	QuestionID int64
+	Position   int32
+}
+
+func (q *Queries) GetItemQuestionPositions(ctx context.Context, itemCode int64) ([]GetItemQuestionPositionsRow, error) {
+	rows, err := q.db.Query(ctx, getItemQuestionPositions, itemCode)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetItemQuestionPositionsRow
+	for rows.Next() {
+		var i GetItemQuestionPositionsRow
+		if err := rows.Scan(&i.QuestionID, &i.Position); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOptionIDByQuestionAndValue = `-- name: GetOptionIDByQuestionAndValue :one
+SELECT id FROM question_options
+WHERE question_id = $1 AND LOWER(value) = LOWER($2)
+LIMIT 1
+`
+
+type GetOptionIDByQuestionAndValueParams struct {
+	QuestionID int64
+	Lower      string
+}
+
+func (q *Queries) GetOptionIDByQuestionAndValue(ctx context.Context, arg GetOptionIDByQuestionAndValueParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getOptionIDByQuestionAndValue, arg.QuestionID, arg.Lower)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getOptionValueByID = `-- name: GetOptionValueByID :one
 SELECT value FROM question_options WHERE id = $1
 `
 
-// SQLC query
 func (q *Queries) GetOptionValueByID(ctx context.Context, id int64) (string, error) {
 	row := q.db.QueryRow(ctx, getOptionValueByID, id)
 	var value string

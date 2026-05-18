@@ -18,6 +18,7 @@ func (r *RestrictionRepositorySQLC) Create(
 ) (*entity.Restriction, error) {
 	row, err := r.q.CreateRestriction(ctx, sqlc.CreateRestrictionParams{
 		Situation:            sqlc.RestrictionSituationEnum(res.Situation),
+		CustomerCode:         res.CustomerCode,
 		ItemCode:             res.ItemCode,
 		ReasonCode:           res.ReasonCode,
 		ClassificationType:   pgutil.ToPgTextFromPtr(res.ClassificationType),
@@ -39,6 +40,7 @@ func (r *RestrictionRepositorySQLC) Update(
 	row, err := r.q.UpdateRestriction(ctx, sqlc.UpdateRestrictionParams{
 		Code:                 pgtype.Int8{Int64: res.Code, Valid: true},
 		Situation:            sqlc.RestrictionSituationEnum(res.Situation),
+		CustomerCode:         res.CustomerCode,
 		ItemCode:             res.ItemCode,
 		ReasonCode:           res.ReasonCode,
 		ClassificationType:   pgutil.ToPgTextFromPtr(res.ClassificationType),
@@ -84,10 +86,37 @@ func (r *RestrictionRepositorySQLC) GetByItemCode(
 	return out, nil
 }
 
+func (r *RestrictionRepositorySQLC) GetByCustomerCode(
+	ctx context.Context,
+	customerCode int64,
+) ([]*entity.Restriction, error) {
+	rows, err := r.q.GetRestrictionsByCustomerCode(ctx, &customerCode)
+	if err != nil {
+		return nil, fmt.Errorf("fetching restrictions for customer %d: %w", customerCode, err)
+	}
+	out := make([]*entity.Restriction, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, rowToEntity(row))
+	}
+	return out, nil
+}
+
 func (r *RestrictionRepositorySQLC) List(ctx context.Context) ([]*entity.Restriction, error) {
 	rows, err := r.q.ListRestrictions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing restrictions: %w", err)
+	}
+	out := make([]*entity.Restriction, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, rowToEntity(row))
+	}
+	return out, nil
+}
+
+func (r *RestrictionRepositorySQLC) ListActive(ctx context.Context) ([]*entity.Restriction, error) {
+	rows, err := r.q.ListActiveRestrictions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing active restrictions: %w", err)
 	}
 	out := make([]*entity.Restriction, 0, len(rows))
 	for _, row := range rows {
@@ -222,15 +251,16 @@ func (r *RestrictionRepositorySQLC) GetDeterminants(
 
 func rowToEntity(row sqlc.Restriction) *entity.Restriction {
 	e := &entity.Restriction{
-		ID:        row.ID,
-		Situation: entity.RestrictionSituation(row.Situation),
-		ItemCode:  row.ItemCode,
-		ReasonCode: row.ReasonCode,
-		DivisionID: row.DivisionID,
-		Weight:    int(row.Weight),
-		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt: pgutil.FromPgTimestamptz(row.UpdatedAt),
-		CreatedBy: pgutil.FromPgUUID(row.CreatedBy),
+		ID:           row.ID,
+		Situation:    entity.RestrictionSituation(row.Situation),
+		CustomerCode: row.CustomerCode,
+		ItemCode:     row.ItemCode,
+		ReasonCode:   row.ReasonCode,
+		DivisionID:   row.DivisionID,
+		Weight:       int(row.Weight),
+		CreatedAt:    pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:    pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy:    pgutil.FromPgUUID(row.CreatedBy),
 	}
 	if row.Code.Valid {
 		e.Code = row.Code.Int64

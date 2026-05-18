@@ -44,10 +44,31 @@ func (r *repositoryGenerateMaskSQLC) GetOptionValue(
 	ctx context.Context,
 	optionID int64,
 ) (string, error) {
+	return r.q.GetOptionValueByID(ctx, optionID)
+}
 
-	value, err := r.q.GetOptionValueByID(ctx, optionID)
+func (r *repositoryGenerateMaskSQLC) GetOptionIDByQuestionAndValue(
+	ctx context.Context,
+	questionID int64,
+	value string,
+) (int64, error) {
+	return r.q.GetOptionIDByQuestionAndValue(ctx, sqlc.GetOptionIDByQuestionAndValueParams{
+		QuestionID: questionID,
+		Lower:      value,
+	})
+}
+
+func (r *repositoryGenerateMaskSQLC) GetItemQuestionPositions(
+	ctx context.Context,
+	itemCode int64,
+) (map[int64]int, error) {
+	rows, err := r.q.GetItemQuestionPositions(ctx, itemCode)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return value, nil
+	out := make(map[int64]int, len(rows))
+	for _, row := range rows {
+		out[row.QuestionID] = int(row.Position)
+	}
+	return out, nil
 }

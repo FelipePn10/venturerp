@@ -448,16 +448,36 @@ func NewRestrictionHandler(
 	getUC *restriction_uc.GetRestrictionUseCase,
 	listUC *restriction_uc.ListRestrictionsUseCase,
 	getByItemUC *restriction_uc.GetRestrictionsByItemUseCase,
+	getByCustomerUC *restriction_uc.GetRestrictionsByCustomerUseCase,
 	updateUC *restriction_uc.UpdateRestrictionUseCase,
 	deactivateUC *restriction_uc.DeactivateRestrictionUseCase,
+	evaluateUC *restriction_uc.EvaluateRestrictionsUseCase,
 ) *RestrictionHandler {
 	return &RestrictionHandler{
-		createUC:     createUC,
-		getUC:        getUC,
-		listUC:       listUC,
-		getByItemUC:  getByItemUC,
-		updateUC:     updateUC,
-		deactivateUC: deactivateUC,
+		createUC:        createUC,
+		getUC:           getUC,
+		listUC:          listUC,
+		getByItemUC:     getByItemUC,
+		getByCustomerUC: getByCustomerUC,
+		updateUC:        updateUC,
+		deactivateUC:    deactivateUC,
+		evaluateUC:      evaluateUC,
+	}
+}
+
+func NewRestrictionReasonHandler(
+	createUC *restriction_uc.CreateRestrictionReasonUseCase,
+	getUC *restriction_uc.GetRestrictionReasonUseCase,
+	listUC *restriction_uc.ListRestrictionReasonsUseCase,
+	updateUC *restriction_uc.UpdateRestrictionReasonUseCase,
+	deleteUC *restriction_uc.DeleteRestrictionReasonUseCase,
+) *RestrictionReasonHandler {
+	return &RestrictionReasonHandler{
+		createUC: createUC,
+		getUC:    getUC,
+		listUC:   listUC,
+		updateUC: updateUC,
+		deleteUC: deleteUC,
 	}
 }
 

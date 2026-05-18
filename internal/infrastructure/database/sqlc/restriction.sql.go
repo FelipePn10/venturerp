@@ -85,15 +85,16 @@ func (q *Queries) AddRestrictionDominant(ctx context.Context, arg AddRestriction
 
 const createRestriction = `-- name: CreateRestriction :one
 INSERT INTO restrictions (
-    situation, item_code, reason_code, classification_type,
+    situation, customer_code, item_code, reason_code, classification_type,
     classification_origin, division_id, weight, created_by
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by, customer_code
 `
 
 type CreateRestrictionParams struct {
 	Situation            RestrictionSituationEnum
+	CustomerCode         *int64
 	ItemCode             *int64
 	ReasonCode           *int64
 	ClassificationType   pgtype.Text
@@ -106,6 +107,7 @@ type CreateRestrictionParams struct {
 func (q *Queries) CreateRestriction(ctx context.Context, arg CreateRestrictionParams) (Restriction, error) {
 	row := q.db.QueryRow(ctx, createRestriction,
 		arg.Situation,
+		arg.CustomerCode,
 		arg.ItemCode,
 		arg.ReasonCode,
 		arg.ClassificationType,
@@ -128,6 +130,7 @@ func (q *Queries) CreateRestriction(ctx context.Context, arg CreateRestrictionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.CustomerCode,
 	)
 	return i, err
 }
@@ -160,7 +163,7 @@ func (q *Queries) DeleteRestrictionDominant(ctx context.Context, id int64) error
 }
 
 const getRestrictionByCode = `-- name: GetRestrictionByCode :one
-SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by FROM restrictions WHERE code = $1
+SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by, customer_code FROM restrictions WHERE code = $1
 `
 
 func (q *Queries) GetRestrictionByCode(ctx context.Context, code pgtype.Int8) (Restriction, error) {
@@ -179,6 +182,7 @@ func (q *Queries) GetRestrictionByCode(ctx context.Context, code pgtype.Int8) (R
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.CustomerCode,
 	)
 	return i, err
 }
@@ -245,8 +249,48 @@ func (q *Queries) GetRestrictionDominants(ctx context.Context, restrictionID int
 	return items, nil
 }
 
+const getRestrictionsByCustomerCode = `-- name: GetRestrictionsByCustomerCode :many
+SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by, customer_code FROM restrictions
+WHERE customer_code = $1 AND situation = 'ACTIVE'
+ORDER BY weight DESC
+`
+
+func (q *Queries) GetRestrictionsByCustomerCode(ctx context.Context, customerCode *int64) ([]Restriction, error) {
+	rows, err := q.db.Query(ctx, getRestrictionsByCustomerCode, customerCode)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Restriction
+	for rows.Next() {
+		var i Restriction
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Situation,
+			&i.ItemCode,
+			&i.ReasonCode,
+			&i.ClassificationType,
+			&i.ClassificationOrigin,
+			&i.DivisionID,
+			&i.Weight,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.CustomerCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRestrictionsByItemCode = `-- name: GetRestrictionsByItemCode :many
-SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by FROM restrictions
+SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by, customer_code FROM restrictions
 WHERE item_code = $1 AND situation = 'ACTIVE'
 ORDER BY weight DESC
 `
@@ -273,6 +317,45 @@ func (q *Queries) GetRestrictionsByItemCode(ctx context.Context, itemCode *int64
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.CustomerCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveRestrictions = `-- name: ListActiveRestrictions :many
+SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by, customer_code FROM restrictions WHERE situation = 'ACTIVE' ORDER BY weight DESC
+`
+
+func (q *Queries) ListActiveRestrictions(ctx context.Context) ([]Restriction, error) {
+	rows, err := q.db.Query(ctx, listActiveRestrictions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Restriction
+	for rows.Next() {
+		var i Restriction
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Situation,
+			&i.ItemCode,
+			&i.ReasonCode,
+			&i.ClassificationType,
+			&i.ClassificationOrigin,
+			&i.DivisionID,
+			&i.Weight,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.CustomerCode,
 		); err != nil {
 			return nil, err
 		}
@@ -316,7 +399,7 @@ func (q *Queries) ListActiveRestrictionsByItems(ctx context.Context, itemCodes [
 }
 
 const listRestrictions = `-- name: ListRestrictions :many
-SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by FROM restrictions ORDER BY code
+SELECT id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by, customer_code FROM restrictions ORDER BY code
 `
 
 func (q *Queries) ListRestrictions(ctx context.Context) ([]Restriction, error) {
@@ -341,6 +424,7 @@ func (q *Queries) ListRestrictions(ctx context.Context) ([]Restriction, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.CustomerCode,
 		); err != nil {
 			return nil, err
 		}
@@ -355,20 +439,22 @@ func (q *Queries) ListRestrictions(ctx context.Context) ([]Restriction, error) {
 const updateRestriction = `-- name: UpdateRestriction :one
 UPDATE restrictions
 SET situation             = $2,
-    item_code             = $3,
-    reason_code           = $4,
-    classification_type   = $5,
-    classification_origin = $6,
-    division_id           = $7,
-    weight                = $8,
+    customer_code         = $3,
+    item_code             = $4,
+    reason_code           = $5,
+    classification_type   = $6,
+    classification_origin = $7,
+    division_id           = $8,
+    weight                = $9,
     updated_at            = NOW()
 WHERE code = $1
-RETURNING id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by
+RETURNING id, code, situation, item_code, reason_code, classification_type, classification_origin, division_id, weight, created_at, updated_at, created_by, customer_code
 `
 
 type UpdateRestrictionParams struct {
 	Code                 pgtype.Int8
 	Situation            RestrictionSituationEnum
+	CustomerCode         *int64
 	ItemCode             *int64
 	ReasonCode           *int64
 	ClassificationType   pgtype.Text
@@ -381,6 +467,7 @@ func (q *Queries) UpdateRestriction(ctx context.Context, arg UpdateRestrictionPa
 	row := q.db.QueryRow(ctx, updateRestriction,
 		arg.Code,
 		arg.Situation,
+		arg.CustomerCode,
 		arg.ItemCode,
 		arg.ReasonCode,
 		arg.ClassificationType,
@@ -402,6 +489,7 @@ func (q *Queries) UpdateRestriction(ctx context.Context, arg UpdateRestrictionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.CustomerCode,
 	)
 	return i, err
 }

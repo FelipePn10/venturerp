@@ -18,6 +18,7 @@ type DeterminantDTO struct {
 
 type CreateRestrictionDTO struct {
 	Situation            string           `json:"situation"` // ACTIVE, INACTIVE
+	CustomerCode         *int64           `json:"customer_code"`
 	ItemCode             *int64           `json:"item_code"`
 	ReasonCode           *int64           `json:"reason_code"`
 	ClassificationType   *string          `json:"classification_type"`
@@ -31,9 +32,20 @@ type CreateRestrictionDTO struct {
 type UpdateRestrictionDTO struct {
 	Code                 int64   `json:"code"`
 	Situation            string  `json:"situation"`
+	CustomerCode         *int64  `json:"customer_code"`
 	ItemCode             *int64  `json:"item_code"`
 	ReasonCode           *int64  `json:"reason_code"`
 	ClassificationType   *string `json:"classification_type"`
 	ClassificationOrigin *string `json:"classification_origin"`
 	DivisionID           *int64  `json:"division_id"`
+}
+
+type EvaluateRestrictionDTO struct {
+	CustomerCode         *int64  `json:"customer_code"`
+	ItemCode             *int64  `json:"item_code"`
+	ClassificationType   *string `json:"classification_type"`
+	ClassificationOrigin *string `json:"classification_origin"`
+	DivisionID           *int64  `json:"division_id"`
+	// Answers maps question_id to the current answer value being checked
+	Answers map[int64]string `json:"answers"`
 }

@@ -1,20 +1,21 @@
 -- name: CreateRestriction :one
 INSERT INTO restrictions (
-    situation, item_code, reason_code, classification_type,
+    situation, customer_code, item_code, reason_code, classification_type,
     classification_origin, division_id, weight, created_by
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: UpdateRestriction :one
 UPDATE restrictions
 SET situation             = $2,
-    item_code             = $3,
-    reason_code           = $4,
-    classification_type   = $5,
-    classification_origin = $6,
-    division_id           = $7,
-    weight                = $8,
+    customer_code         = $3,
+    item_code             = $4,
+    reason_code           = $5,
+    classification_type   = $6,
+    classification_origin = $7,
+    division_id           = $8,
+    weight                = $9,
     updated_at            = NOW()
 WHERE code = $1
 RETURNING *;
@@ -26,6 +27,14 @@ SELECT * FROM restrictions WHERE code = $1;
 SELECT * FROM restrictions
 WHERE item_code = $1 AND situation = 'ACTIVE'
 ORDER BY weight DESC;
+
+-- name: GetRestrictionsByCustomerCode :many
+SELECT * FROM restrictions
+WHERE customer_code = $1 AND situation = 'ACTIVE'
+ORDER BY weight DESC;
+
+-- name: ListActiveRestrictions :many
+SELECT * FROM restrictions WHERE situation = 'ACTIVE' ORDER BY weight DESC;
 
 -- name: ListRestrictions :many
 SELECT * FROM restrictions ORDER BY code;

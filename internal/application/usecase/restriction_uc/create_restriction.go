@@ -30,7 +30,7 @@ func (uc *CreateRestrictionUseCase) Execute(
 	}
 
 	res, err := entity.NewRestriction(
-		sit, dto.ItemCode, dto.ReasonCode,
+		sit, dto.CustomerCode, dto.ItemCode, dto.ReasonCode,
 		dto.ClassificationType, dto.ClassificationOrigin,
 		dto.DivisionID, dto.CreatedBy,
 	)

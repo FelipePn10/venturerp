@@ -36,6 +36,7 @@ type Restriction struct {
 	ID                   int64
 	Code                 int64
 	Situation            RestrictionSituation
+	CustomerCode         *int64
 	ItemCode             *int64
 	ReasonCode           *int64
 	ClassificationType   *string
