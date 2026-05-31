@@ -216,13 +216,21 @@ func (h *RoutingHandler) RemoveRouteOperation(w http.ResponseWriter, r *http.Req
 
 // ─── network ─────────────────────────────────────────────────────────────────
 
-func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) {
-	routeID, err := strconv.ParseInt(chi.URLParam(r, "routeId"), 10, 64)
+func (h *RoutingHandler) GetNetworkEdges(w http.ResponseWriter, r *http.Request) {
+	routeID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid routeId")
+		jsonError(w, http.StatusBadRequest, "invalid route id")
 		return
 	}
-	_ = routeID // route_id is used for validation context only; actual IDs come from body
+	edges, err := h.routeUC.GetEdges(r.Context(), routeID)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, edges)
+}
+
+func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) {
 	var dto request.SetNetworkEdgeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
@@ -237,12 +245,6 @@ func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *RoutingHandler) DeleteNetworkEdge(w http.ResponseWriter, r *http.Request) {
-	routeID, err := strconv.ParseInt(chi.URLParam(r, "routeId"), 10, 64)
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid routeId")
-		return
-	}
-	_ = routeID
 	var dto request.DeleteNetworkEdgeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())

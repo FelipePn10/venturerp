@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE machine_types
+    ADD COLUMN requires_operator BOOLEAN NOT NULL DEFAULT TRUE;
+
+COMMIT;

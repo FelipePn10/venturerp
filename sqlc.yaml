@@ -71,3 +71,128 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+
+          - db_type: "operation_origin_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "OperationOriginEnum"
+
+          - db_type: "operation_situation_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "OperationSituationEnum"
+
+          - db_type: "route_situation_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "RouteSituationEnum"
+
+          - db_type: "route_op_situation_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "RouteOpSituationEnum"
+
+          - db_type: "customer_category_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "CustomerCategoryEnum"
+
+          - db_type: "carrier_billing_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "CarrierBillingTypeEnum"
+
+          - db_type: "payment_analysis_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "PaymentAnalysisEnum"
+
+          - db_type: "payment_parcel_start_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "PaymentParcelStartEnum"
+
+          - db_type: "price_formation_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "PriceFormationEnum"
+
+          - db_type: "invoice_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "InvoiceTypeEnum"
+
+          - db_type: "invoice_stock_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "InvoiceStockEnum"
+
+          - db_type: "invoice_icms_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "InvoiceICMSTypeEnum"
+
+          - db_type: "document_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "DocumentTypeEnum"
+
+          - db_type: "customer_address_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "CustomerAddressTypeEnum"
+
+          - db_type: "payment_condition_visibility_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "PaymentCondVisibilityEnum"
+
+          - db_type: "table_composition_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "TableCompositionEnum"
+
+          - db_type: "table_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "TableTypeEnum"
+
+          - db_type: "base_date_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "BaseDateEnum"
+
+          - db_type: "cfop_utilization_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "CfopUtilizationEnum"
+
+          - db_type: "cfop_ind_operacao_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "CfopIndOperacaoEnum"
+
+          - db_type: "cfop_tipo_utilizacao_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "CfopTipoUtilizacaoEnum"
+
+          - db_type: "tax_param_operation_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "TaxParamOperationEnum"
+
+          - db_type: "icms_reduction_target_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "IcmsReductionTargetEnum"
+
+          - db_type: "icms_difal_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "IcmsDifalTypeEnum"
+
+          - db_type: "icms_acres_type_enum"
+            go_type:
+              import: "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+              type: "IcmsAcresTypeEnum"

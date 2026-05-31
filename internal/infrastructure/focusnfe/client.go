@@ -282,6 +282,39 @@ func (c *Client) ConsultarNFePorChave(ctx context.Context, chaveAcesso string) (
 	return &resp, nil
 }
 
+// CadastroResponse holds the relevant fields of Focus's registration query.
+type CadastroResponse struct {
+	CNPJ              string `json:"cnpj"`
+	Nome              string `json:"nome"`
+	UF                string `json:"uf"`
+	SituacaoCadastral string `json:"situacao_cadastral"`
+	Habilitado        bool   `json:"habilitado"`
+}
+
+// ConsultarCadastro queries the registration data for a CNPJ/CPF on SEFAZ/Receita
+// via Focus (GET /cnpjs/{cnpj}).
+func (c *Client) ConsultarCadastro(ctx context.Context, documento string) (*CadastroResponse, error) {
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, documento)
+	path := fmt.Sprintf("/cnpjs/%s", digits)
+	body, statusCode, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("consulting cadastro: %w", err)
+	}
+	if statusCode == 404 {
+		return nil, fmt.Errorf("documento %s não encontrado na SEFAZ/Receita", documento)
+	}
+	var resp CadastroResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshaling cadastro response (status %d): %w", statusCode, err)
+	}
+	return &resp, nil
+}
+
 // EmitirCCe sends POST /nfe/{ref}/carta_correcao.
 func (c *Client) EmitirCCe(ctx context.Context, ref, textoCorrecao string) (map[string]interface{}, error) {
 	payload := map[string]string{"descricao_correcao": textoCorrecao}

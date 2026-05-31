@@ -1,4 +1,4 @@
-# Documentação da API — Veture ERP
+# Visão Geral da API — PanossoERP
 
 > **Versão:** 1.0  
 > **Data:** Maio/2026  
@@ -8,7 +8,13 @@
 
 ## 1. INTRODUÇÃO
 
-O **Veture ERP** é um sistema de gestão empresarial (ERP) desenvolvido em **Go** com arquitetura **Clean Architecture** (Domain-Driven Design). Utiliza **PostgreSQL** como banco de dados relacional e o roteador HTTP **go-chi/chi v5** para exposição da API REST.
+O **PanossoERP** é um sistema de gestão empresarial (ERP) desenvolvido em **Go** com arquitetura **Clean Architecture** (Domain-Driven Design). Utiliza **PostgreSQL** como banco de dados relacional e o roteador HTTP **go-chi/chi v5** para exposição da API REST.
+
+> Este documento é a **visão geral** do sistema. Áreas aprofundadas têm documentos
+> dedicados (ver [`README.md`](README.md) da pasta `docs/`): **Fiscal & Financeiro** em
+> [`FISCAL_FINANCEIRO.md`](FISCAL_FINANCEIRO.md), **Manufatura/Compras** em
+> [`../DOCUMENTATION.md`](../DOCUMENTATION.md), e os cadastros de **Cliente/Fornecedor**
+> nos respectivos docs.
 
 ### Pilares Arquiteturais
 
@@ -21,7 +27,7 @@ O **Veture ERP** é um sistema de gestão empresarial (ERP) desenvolvido em **Go
 
 ### Stack Técnica
 
-- **Linguagem:** Go 1.22+
+- **Linguagem:** Go 1.25.5
 - **Banco de Dados:** PostgreSQL (via `pgx` e `sqlc`)
 - **Roteador:** `go-chi/chi/v5`
 - **Autenticação:** JWT (HMAC-SHA256) com controle de perfil (ADMIN/USER)
@@ -497,6 +503,17 @@ Geradas automaticamente quando ordens firmes divergem da necessidade:
 
 ### 4.2 Pedido de Compra (Purchase Order)
 
+> **Pedido de Compra completo** (capa e itens estendidos, resolução automática de
+> preço/UM/IPI, sugestões do MRP, solicitações de compra, geração de pedidos e cotação)
+> está em [`../DOCUMENTATION.md`](../DOCUMENTATION.md) **§13–§16**. Abaixo, apenas o
+> núcleo do recurso.
+
+Grupos de rotas relacionados (detalhados no `DOCUMENTATION.md`):
+`/api/purchase-order/{code}/items` (item com resolução automática),
+`/api/purchase-order/suggestions/*` (sugestões MRP),
+`/api/purchase-requisitions/*` (solicitações + geração de pedidos),
+`/api/purchase-quotations/*` (cotação).
+
 #### Rotas
 
 | Método | Path | Descrição |
@@ -714,528 +731,100 @@ OPEN → IN_PROGRESS → COMPLETED → CLOSED
 
 ---
 
-## 6. MÓDULO FISCAL
+## 6. Módulo Fiscal & Financeiro
 
-### 6.1 Motor de Cálculo de Impostos (`tax_engine.go`)
+> **A documentação fiscal e financeira é única e completa em
+> [FISCAL_FINANCEIRO.md](FISCAL_FINANCEIRO.md).** Esta seção é apenas um índice
+> navegacional — campos, regras, exemplos de request/response, parâmetros e cadastros
+> de apoio ficam no doc dedicado, para evitar duplicação.
 
-O motor implementa três cenários tributários com base na UF de origem/destino e tipo de destinatário:
+### Fiscal
 
-#### Cenário 1: Interestadual
+Motor tributário (ICMS com diferimento, DIFAL/FCP e Res. SF 13/2012; IPI; PIS/COFINS),
+NF-e de saída e de entrada (com importação por chave via FocusNFE), CT-e, apuração de
+impostos, SPED Contábil (ECD) e cadastros de apoio.
 
-- **ICMS:** alíquota interestadual conforme tabela `icms_interstate` (origem_uf × destino_uf)
-  - Mercadoria origem 1 ou 2 (importada): alíquota fixa 4%
-  - Demais: 12% (Sul/Sudeste) ou 7% (Norte/Nordeste/Centro-Oeste)
-- **DIFAL:** calculado para não contribuintes e pessoas físicas: `(alíquota interna destino − alíquota interestadual) × base`
-- **Base ICMS:** (valor unitário × quantidade) + IPI + frete rateado − desconto rateado
-- **CST ICMS:** `00`
-- **Alíquotas Padrão:** PIS 1,65%, COFINS 7,6%
+| Tema | FISCAL_FINANCEIRO.md |
+|---|---|
+| Configuração fiscal (pré-requisito) | §2 |
+| Motor tributário + tabelas | §3, §3.1 |
+| NF-e de saída | §4 |
+| NF-e de entrada (+ FocusNFE) | §5 |
+| CT-e | §6 |
+| Apuração de impostos / Simples Nacional | §11, §27 |
+| Relatórios fiscais | §12 |
+| Parâmetros e cadastros de apoio | §16–§26, §28–§31 |
+| SPED Contábil (ECD) | §32 |
+| Cadastro de Fornecedores (integração) | §33 |
+| Classificações Fiscais | §34 |
+| Tipos de Operação de Entrada | §35 |
 
-#### Cenário 2: Interna PR — Contribuinte
+### Financeiro
 
-- **ICMS:** 19,5% (padrão PR)
-- **Diferimento:** 38,46% do ICMS (diferido)
-- **CST ICMS:** `51` (diferimento)
-- **Base ICMS:** valor total + IPI + frete − desconto
+Contas a pagar/receber (aprovação, baixa, aging), fluxo de caixa projetado e realizado,
+saldos, conciliação bancária (OFX) e cadastros base (contas bancárias, condições/formas
+de pagamento, plano de contas, centros de custo).
 
-#### Cenário 3: Interna PR — Não Contribuinte
-
-- **ICMS:** 19,5%
-- **Sem diferimento**
-- **CST ICMS:** `00`
-
-#### Fórmulas por Imposto
-
-**IPI:**
-```
-Base IPI = ValorUnitario × Quantidade
-Valor IPI = Base IPI × AliquotaIPI (da tabela NCM)
-```
-
-**PIS/COFINS:**
-```
-Base PIS/COFINS = (ValorUnitario × Quantidade) + FreteRateado − DescontoRateado
-Valor PIS = Base × 1,65% (ou alíquota NCM)
-Valor COFINS = Base × 7,6% (ou alíquota NCM)
-```
-
-**Rateio de Frete e Desconto:**
-```
-Proporção = (ValorUnitario × Quantidade) / TotalGeralItens
-FreteRateado = FreteTotal × Proporção
-DescontoRateado = DescontoTotal × Proporção
-```
-
-### 6.2 Documentos Fiscais de Entrada
-
-#### Rotas
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/fiscal/entries/create` | Cria entrada fiscal manual |
-| POST | `/api/fiscal/entries/upload-nfe` | Upload de XML NF-e de entrada |
-| POST | `/api/fiscal/entries/{code}/approve` | Aprova entrada (PENDING → APPROVED) |
-| GET | `/api/fiscal/entries/list` | Lista entradas |
-| GET | `/api/fiscal/entries/{code}` | Busca entrada por código |
-
-#### Status da Entrada
-
-| Status | Descrição |
-|--------|-----------|
-| `PENDING` | Pendente de conferência |
-| `CONFERRED` | Conferida |
-| `APPROVED` | Aprovada (gera créditos) |
-| `WRITTEN_OFF` | Baixada |
-| `CANCELLED` | Cancelada |
-
-#### Campos da Entrada Fiscal
-
-**Cabeçalho:** chave acesso (44 dígitos), número NF, série, modelo (55=NF-e, 57=CT-e), data emissão, data entrada, CNPJ/razão social/IE/UF emitente, valores (produtos, frete, seguro, desconto, IPI, ICMS, PIS, COFINS, total), tipo documento (NFE, CTE), pedido de compra vinculado, CT-e vinculado, XML path.
-
-**Item:** sequência, item, NCM, CFOP, quantidade, preço unitário, bases e valores (ICMS, IPI, PIS, COFINS), CSTs, flags de crédito (ICMS, IPI, PIS, COFINS).
-
-#### Regras de Aprovação
-
-- Ao aprovar, os créditos fiscais são contabilizados para apuração
-- Itens com `gera_credito_icms/ipi/pis/cofins = true` geram crédito correspondente
-
-### 6.3 Documentos Fiscais de Saída
-
-#### Rotas
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/fiscal/exits/create` | Cria NF-e de saída |
-| POST | `/api/fiscal/exits/{code}/authorize` | Autoriza NF-e (DRAFT → AUTHORIZED) |
-| POST | `/api/fiscal/exits/{code}/cancel` | Cancela NF-e (→ CANCELLED) |
-| GET | `/api/fiscal/exits/list` | Lista saídas |
-| GET | `/api/fiscal/exits/{code}` | Busca saída por código |
-
-#### Status da Saída
-
-| Status | Descrição |
-|--------|-----------|
-| `DRAFT` | Rascunho |
-| `AUTHORIZED` | Autorizada (NF-e emitida) |
-| `CANCELLED` | Cancelada |
-| `REJECTED` | Rejeitada pela SEFAZ |
-
-#### Campos da Saída Fiscal
-
-**Cabeçalho:** chave acesso, número NF, série, data emissão, data saída, CNPJ/razão social/IE/UF destinatário, CFOP, natureza operação, valores (produtos, frete, seguro, desconto, IPI, ICMS, PIS, COFINS, total), pedido de venda vinculado, protocolo autorização, XML/DANFE path, referência Focus NFe.
-
-**Item:** similar à entrada, acrescido de `valor_icms_diferido` e `origem_mercadoria` (0=nacional, 1=estrangeira importação direta, 2=estrangeira mercado interno, etc.).
-
-#### Integração com Focus NFe
-
-- Token e ambiente configurados em `fiscal_configs`
-- `focus_ref` armazena referência da nota na API Focus
-- Autorização e cancelamento delegados à API Focus NFe
-
-### 6.4 Configurações Fiscais
-
-#### Rotas
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| GET | `/api/fiscal/config` | Busca configuração fiscal |
-| PUT | `/api/fiscal/config` | Atualiza configuração |
-
-#### Campos (`fiscal_configs`)
-
-| Campo | Descrição | Default |
-|-------|-----------|---------|
-| `cnpj_empresa` | CNPJ da empresa | — |
-| `razao_social` | Razão social | — |
-| `ie_empresa` | Inscrição Estadual | — |
-| `regime_tributario` | `lucro_real`, `lucro_presumido`, `simples_nacional` | `lucro_real` |
-| `uf_empresa` | UF da empresa | `PR` |
-| `icms_interno_aliquota` | Alíquota ICMS interna | 19,5% |
-| `icms_diferimento_percentual` | Percentual de diferimento | 38,46% |
-| `focus_nfe_token` | Token API Focus NFe | — |
-| `focus_nfe_ambiente` | `homologacao` ou `producao` | `homologacao` |
-| `juros_mes` | Juros ao mês para atraso | 1% |
-| `multa_atraso` | Multa por atraso | 2% |
-| `vencimento_icms_dia` | Dia vencimento ICMS | 20 |
-| `vencimento_ipi_dia` | Dia vencimento IPI | 25 |
-| `vencimento_pis_cofins_dia` | Dia vencimento PIS/COFINS | 25 |
-
-### 6.5 Tabelas Fiscais
-
-#### NCM (`ncm_tax_table`)
-
-| Campo | Descrição |
-|-------|-----------|
-| `ncm` | Código NCM (8 dígitos) |
-| `aliq_ipi` | Alíquota de IPI |
-| `aliq_pis` | Alíquota de PIS (default 1,65%) |
-| `aliq_cofins` | Alíquota de COFINS (default 7,6%) |
-| `cst_pis` / `cst_cofins` / `cst_ipi` | Códigos de Situação Tributária |
-
-**Seed incluso:** ~89 NCMs com alíquotas IPI variando de 0% a 15% (ex: 8528.52.00 com 15% IPI).
-
-#### Cenários Tributários (`tax_scenarios`)
-
-| Cenário | UF Destino | Tipo | ICMS | Diferimento | CST | DIFAL |
-|---------|-----------|------|------|-------------|-----|-------|
-| INTERESTADUAL_SUL_SUDESTE | — | contribuinte | 12% | — | 00 | não |
-| INTERESTADUAL_NORTE_NORDESTE | — | contribuinte | 7% | — | 00 | não |
-| INTERESTADUAL_IMPORTADA | — | contribuinte | 4% | — | 00 | não |
-| INTERNA_PR_CONTRIBUINTE | PR | contribuinte | 19,5% | 38,46% | 51 | não |
-| INTERNA_PR_NAO_CONTRIBUINTE | PR | nao_contribuinte | 19,5% | 0% | 00 | não |
-
-#### ICMS Interestadual (`icms_interstate`)
-
-Seed com 26 rotas partindo de PR (12% Sul/Sudeste, 7% demais).
-
-#### ICMS Interno por UF (`icms_internal`)
-
-Seed com 12 UFs (PR 19,5%, SP/RJ/MG/DF 18%, RS/SC/ES/GO/MT/MS 17%).
+| Tema | FISCAL_FINANCEIRO.md |
+|---|---|
+| Cadastros base | §7 |
+| Contas a pagar | §8 |
+| Contas a receber | §9 |
+| Fluxo de caixa & saldos | §10 |
+| Conciliação Bancária (OFX) | §13 |
+| Validação CNPJ/CPF | §14 |
 
 ---
 
-## 7. MÓDULO FINANCEIRO
+## 7. Status dos Módulos
 
-### 7.1 Contas a Pagar
+> Atualizado em 2026-05-31. Os cadastros de Cliente e Fornecedor e todo o épico de
+> Compras foram implementados — veja os docs dedicados.
 
-#### Rotas
+### Implementado
 
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/financial/contas-pagar/create` | Cria conta a pagar |
-| GET | `/api/financial/contas-pagar/list` | Lista contas a pagar |
-| GET | `/api/financial/contas-pagar/{id}` | Busca por ID |
-| POST | `/api/financial/contas-pagar/{id}/approve` | Aprova conta |
-| POST | `/api/financial/contas-pagar/{id}/baixar` | Baixa conta (pagamento) |
-| POST | `/api/financial/contas-pagar/{id}/cancel` | Cancela conta |
-| GET | `/api/financial/contas-pagar/aging` | Relatório de aging |
+| Área | Documentação |
+|---|---|
+| Itens, BOM, estrutura | `README.md` |
+| Máquina (tipos, tempos) | `MAQUINA.md` |
+| MRP (cálculo, exceções, parâmetros) | `mrp_calculation.md`, `DOCUMENTATION.md` |
+| Roteiro, CRP, APS, Qualidade, Manutenção, Previsão, Restrições | `DOCUMENTATION.md` |
+| Pedido de Venda · Produção · Estoque | esta visão geral (§4–§5) |
+| Cadastro de Cliente | `customer_registration.md` |
+| Cadastro de Fornecedor (+ consulta SEFAZ) | `supplier_registration.md` |
+| Compras: Pedido completo, Solicitação→Geração, Cotação, Conversão UM, Tabela de Preço, Fornecedor preferencial | `DOCUMENTATION.md` §10–§16 |
+| Fiscal (NF-e e/s, CT-e, apuração, SPED ECD) e Financeiro (CP/CR, fluxo, OFX) | `FISCAL_FINANCEIRO.md` |
 
-#### Status
+### Pendências conhecidas
 
-| Status | Descrição |
-|--------|-----------|
-| `PENDENTE` | Aguardando pagamento |
-| `APROVADO` | Aprovada para pagamento |
-| `PAGO` | Paga/baixada |
-| `VENCIDO` | Vencida |
-| `CANCELADO` | Cancelada |
-
-#### Status de Aprovação
-
-| Status | Descrição |
-|--------|-----------|
-| `PENDENTE` | Aguardando aprovação |
-| `APROVADO` | Aprovada |
-| `REJEITADO` | Rejeitada (com motivo) |
-
-#### Campos
-
-| Campo | Descrição |
-|-------|-----------|
-| `NumeroDocumento` | Número do documento |
-| `TipoDocumento` | Tipo (OUTROS, TAX, etc.) |
-| `FornecedorID` | Fornecedor vinculado |
-| `FiscalEntryID` | Entrada fiscal vinculada |
-| `PurchaseOrderID` | Pedido de compra vinculado |
-| `DataLancamento` / `DataEmissao` / `DataVencimento` / `DataPagamento` | Datas |
-| `ValorBruto` | Valor original (decimal, > 0) |
-| `Desconto` / `Juros` / `Multa` / `ValorPago` | Valores |
-| `ParcelaNumero` / `ParcelaTotal` / `ParcelaPaiID` | Controle de parcelas |
-| `ContaBancariaID` / `FormaPagamento` | Meio de pagamento |
-| `PlanoContasID` / `CentroCustoID` | Classificação contábil |
-| `AdiantamentoID` / `ValorAdiantamentoAbatido` | Controle de adiantamentos |
-
-#### Regras de Negócio — Baixa
-
-1. Conta deve estar `PENDENTE` ou `APROVADO`
-2. Se data de pagamento > data de vencimento:
-   - **Juros:** `(valor original − já pago) × (juros_mês) × (dias_atraso / 30)`
-   - **Multa:** `(valor original − já pago) × multa_atraso`
-   - Taxas vêm do `fiscal_configs` (default: 1% a.m., 2% multa)
-3. **Pagamento parcial:**
-   - Baixa o valor parcial na conta original
-   - Cria nova conta a pagar com o saldo remanescente
-   - Nova conta tem número `original/P` e status `APROVADO`
-4. Cria registro no **Fluxo de Caixa** (tipo `SAIDA`)
-5. Atualiza saldo da conta bancária
-
-### 7.2 Contas a Receber
-
-#### Rotas
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/financial/contas-receber/create` | Cria conta a receber |
-| GET | `/api/financial/contas-receber/list` | Lista contas a receber |
-| GET | `/api/financial/contas-receber/{id}` | Busca por ID |
-| POST | `/api/financial/contas-receber/{id}/baixar` | Baixa conta (recebimento) |
-| POST | `/api/financial/contas-receber/{id}/cancel` | Cancela conta |
-| GET | `/api/financial/contas-receber/aging` | Relatório de aging |
-
-#### Status
-
-| Status | Descrição |
-|--------|-----------|
-| `PENDENTE` | Aguardando recebimento |
-| `APROVADO` | Aprovada |
-| `RECEBIDO` | Recebida/baixada |
-| `VENCIDO` | Vencida |
-| `CANCELADO` | Cancelada |
-
-#### Campos
-
-Similar a Contas a Pagar, acrescido de:
-
-| Campo | Descrição |
-|-------|-----------|
-| `ClienteID` | Cliente vinculado |
-| `FiscalExitID` | Saída fiscal vinculada |
-| `SalesOrderID` | Pedido de venda vinculado |
-| `NossoNumero` | Nosso número (boleto) |
-| `LinhaDigitavel` | Linha digitável (boleto) |
-| `CodigoBarras` | Código de barras |
-| `ChavePixGerada` | Chave PIX gerada |
-| `EmProtesto` | Flag de protesto |
-
-### 7.3 Fluxo de Caixa
-
-#### Rotas
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| GET | `/api/financial/fluxo-caixa` | Fluxo de caixa realizado |
-| GET | `/api/financial/fluxo-projetado` | Fluxo de caixa projetado |
-| GET | `/api/financial/saldo-contas` | Saldo atual das contas bancárias |
-
-#### Tipos de Movimento
-
-| Tipo | Descrição |
-|------|-----------|
-| `ENTRADA` | Recebimento |
-| `SAIDA` | Pagamento |
-| `TRANSFERENCIA` | Transferência entre contas |
-
-#### Campos do Fluxo
-
-| Campo | Descrição |
-|-------|-----------|
-| `Data` | Data do movimento |
-| `Tipo` | ENTRADA, SAIDA, TRANSFERENCIA |
-| `Valor` | Valor (decimal) |
-| `ContaBancariaID` | Conta origem |
-| `ContaBancariaDestinoID` | Conta destino (transferência) |
-| `ContasPagarID` / `ContasReceberID` | Vinculação |
-| `Conciliado` | Flag de conciliação |
-| `ExtratoHash` | Hash do registro OFX |
-
-### 7.4 Apuração de Impostos
-
-#### Rotas
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/financial/apuracao-impostos` | Executa apuração |
-| GET | `/api/financial/apuracao-impostos/{competencia}` | Busca apuração |
-
-#### Regras de Apuração
-
-1. Para cada imposto (ICMS, IPI, PIS, COFINS):
-   - Soma débitos das saídas fiscais no período
-   - Soma créditos das entradas fiscais no período
-   - `Saldo = Débitos − Créditos`
-2. Se **saldo > 0** (a pagar):
-   - Cria **Conta a Pagar** automática com vencimento conforme config fiscal:
-     - ICMS: `vencimento_icms_dia` (default dia 20)
-     - IPI: `vencimento_ipi_dia` (default dia 25)
-     - PIS/COFINS: `vencimento_pis_cofins_dia` (default dia 25)
-   - Vencimento no mês seguinte à competência
-3. Se **saldo < 0** (a compensar):
-   - Registra saldo credor para compensação futura
-4. Status: `APURAR` → `APURADO` → `PAGO`
-
-#### Campos da Apuração
-
-| Campo | Descrição |
-|-------|-----------|
-| `Imposto` | ICMS, IPI, PIS, COFINS |
-| `Competencia` | Formato `MM/YYYY` |
-| `Debitos` | Total de débitos |
-| `Creditos` | Total de créditos |
-| `SaldoDevedor` | Valor a pagar |
-| `SaldoCredor` | Valor a compensar |
-| `CpID` | Conta a Pagar vinculada |
-
-### 7.5 Cadastros Financeiros
-
-#### Contas Bancárias
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/financial/contas-bancarias/create` | Cria conta bancária |
-| GET | `/api/financial/contas-bancarias/list` | Lista contas |
-
-**Campos:** Banco, Agência, Conta, Dígito, Descrição, Titular, Saldo Inicial, Chave PIX, Tipo Chave PIX.
-
-#### Condições de Pagamento
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/financial/condicoes-pagamento/create` | Cria condição |
-| GET | `/api/financial/condicoes-pagamento/list` | Lista condições |
-
-**Campos:** Nome, Parcelas (JSONB com definição de cada parcela), Ativo.
-
-#### Plano de Contas
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/financial/plano-contas/create` | Cria conta contábil |
-| GET | `/api/financial/plano-contas/list` | Lista plano de contas |
-
-**Campos:** Código (hierárquico), Descrição, Tipo, Natureza, ParentCode, Nível.
-
-#### Centros de Custo
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/api/financial/centros-custo/create` | Cria centro de custo |
-| GET | `/api/financial/centros-custo/list` | Lista centros de custo |
-
-**Campos:** Código, Descrição, Tipo (ADMINISTRATIVO, PRODUCAO, COMERCIAL, etc.).
-
-#### Formas de Pagamento
-
-Tabela `formas_pagamento` existe no banco (código, descrição, ativo) mas **não possui rotas HTTP expostas**.
+| Funcionalidade | Status |
+|---|---|
+| Boletos / CNAB 240/400 | ❌ apenas campos na entidade |
+| Manifestação do Destinatário | ❌ |
+| Inutilização de numeração NF-e | ❌ |
+| Importação IBPT/SCI (carga de NCMs) | ❌ seeds manuais |
+| Relatórios gerenciais (DRE, Balancete, Curva ABC) | ❌ (aging CP/CR prontos) |
+| Frente de Caixa (PDV) / Controle de Carregamento | ❌ |
 
 ---
 
-## 8. FUNCIONALIDADES PENDENTES
+## 8. Migrations
 
-Funcionalidades solicitadas na especificação original mas **não implementadas**:
+As migrações ficam em `migrations/` (formato `NNNNNN_nome.up.sql` / `.down.sql`),
+aplicadas via `make migrate_up`. A base começa em `000001` (núcleo: itens, BOM,
+estrutura, MRP) e segue incremental — marcos principais: Pedidos de Venda (`000089`),
+Pedido de Compra (`000092`), Estoque (`000093`), Produção (`000094`), Fiscal
+(`000095`), Financeiro (`000096`), Cliente (`000115`–`000118`), Fornecedor
+(`000135`–`000136`) e o épico de Compras/Fiscal (`000137`–`000144`).
 
-### 8.1 Cadastros Básicos
-
-| Funcionalidade | Status |
-|---------------|--------|
-| CRUD de Cliente/Fornecedor | ❌ Não implementado — campos `customer_code` e `supplier_code` existem mas apontam para tabelas inexistentes |
-| Cadastro de Séries NF | ❌ Não implementado |
-| Cadastro de Veículos | ❌ Não implementado |
-| Cadastro de Transportadoras | ❌ Não implementado |
-
-### 8.2 Pedido de Venda — Pastas
-
-| Pasta | Status |
-|-------|--------|
-| Transporte (transportadora, veículo, frete) | ❌ Campos não existem na entidade |
-| Descontos/Acréscimos | ❌ Percentual de desconto existe no item, mas não há tela/pasta dedicada |
-| Forma de Pagamento | ❌ Campo `payment_term_code` existe, mas sem CRUD de formas de pagamento associadas |
-
-### 8.3 Produção e Logística
-
-| Funcionalidade | Status |
-|---------------|--------|
-| Frente de Caixa (PDV) | ❌ Não implementado |
-| Controle de Carregamento | ❌ Não implementado |
-| Geração de Pedidos de Assistência Técnica | ❌ Não implementado (apenas flag e tipo de origem) |
-| Desmembra Pedidos | ❌ Não implementado |
-
-### 8.4 Fiscal
-
-| Funcionalidade | Status |
-|---------------|--------|
-| Importação IBPT/SCI (tabelas de alíquotas) | ❌ Não implementado — seeds manuais de NCM no migration 000095 |
-| Manifestação do Destinatário | ❌ Não implementado |
-| Carta de Correção Eletrônica (CC-e) | ❌ Não implementado |
-| Inutilização de Numeração | ❌ Não implementado |
-
-### 8.5 Financeiro
-
-| Funcionalidade | Status |
-|---------------|--------|
-| Cobrança Escritural / Boletos (CNAB) | ❌ Apenas campos `nosso_numero`, `linha_digitavel`, `codigo_barras` existem na entidade |
-| Conciliação Bancária (OFX) | ❌ Campo `extrato_hash` e flag `conciliado` existem, mas sem importação |
-| Conciliação de Cartões | ❌ Não implementado |
-| Geração de Borderô | ❌ Não implementado |
-| Controle de Adiantamentos | ❌ Campos existem na entidade mas sem lógica de negócio dedicada |
-
-### 8.6 Relatórios
-
-| Código | Nome | Status |
-|--------|------|--------|
-| R01 | Relatório de Vendas | ❌ |
-| R02 | Relatório de Compras | ❌ |
-| R03 | Relatório de Produção | ❌ |
-| R04 | Relatório de Estoque | ❌ |
-| R05 | Relatório Fiscal (Entradas) | ❌ |
-| R06 | Relatório Fiscal (Saídas) | ❌ |
-| R07 | Relatório Financeiro (Contas a Pagar) | ❌ |
-| R08 | Relatório Financeiro (Contas a Receber) | ❌ |
-| R09 | Fluxo de Caixa Realizado | ❌ |
-| R10 | DRE Gerencial | ❌ |
-| R11 | Balancete | ❌ |
-| R12 | Apuração de Impostos | ❌ |
-| R13 | Curva ABC de Itens | ❌ |
-| R14 | MRP — Necessidades Líquidas | ❌ |
-| R15 | MRP — Ordens Planejadas | ❌ |
-| R16 | MRP — Exceções | ❌ |
-| R17 | Aging Contas a Pagar | ✅ (endpoint GET) |
-| R18 | Aging Contas a Receber | ✅ (endpoint GET) |
-| R19 | Inventário Físico | ❌ |
-
-### 8.7 Próximos Passos Sugeridos (Ordem de Prioridade)
-
-1. **CRUD de Cliente/Fornecedor** — base para todos os módulos
-2. **Integração completa Focus NFe** — validação de schemas XML, retry em rejeições
-3. **Geração de Boletos (CNAB 240/400)** — com registro em banco
-4. **Importação OFX** — conciliação bancária automática
-5. **Relatórios** (R01, R04, R10, R12, R14) — começar pelos mais essenciais
-6. **Pastas do Pedido de Venda** — Transporte, Descontos, Forma Pagamento
-7. **Importação IBPT** — carga completa de NCMs e alíquotas
-8. **Frente de Caixa** — integração PDV
-9. **Controle de Carregamento** — logística de expedição
-10. **Desmembra Pedidos** — split de pedidos de venda
+> Consulte `migrations/` para a lista completa e atual; cada doc de módulo cita a
+> migração correspondente.
 
 ---
 
-## 9. MIGRATIONS
+## 9. Segurança e infraestrutura HTTP
 
-Lista completa das migrações do banco de dados (000001 a 000096):
-
-| Migration | Nome | Descrição |
-|-----------|------|-----------|
-| 000001 | init | Tabelas base: `users` (UUID PK), `items`, `questions`, `item_masks`, enum `component_type` |
-| 000002 | init | `item_question_answers`, função `generate_item_mask()` |
-| 000003 | init | `question_options` |
-| 000004 | init | Índice `idx_item_name_code` em items |
-| 000005 | init | (vazia) |
-| 000006 | init | Atualização função `generate_item_mask()` com position |
-| 000007 | init | Tabela `item_questions` (associação item-pergunta com posição) |
-| 000008 | init | (comentada — migração revertida) |
-| 000009 | init | Componentes e estruturas base |
-| 000010 | init | Extensões de estrutura |
-| 000011–000015 | init | Ajustes incrementais de schema |
-| 000016–000020 | init | Tabelas de suporte (almoxarifado, grupos, etc.) |
-| 000021–000030 | init | Refinamentos de itens, estruturas e PDM |
-| 000031–000040 | init | Extensões de planejamento, parâmetros |
-| 000041–000050 | init | Calendário industrial, promessas de entrega, máquinas |
-| 000051–000058 | init | Restrições, prioridades, centros de custo |
-| 000059–000065 | init | Divisões de vendas, previsões, alocações |
-| 000066–000072 | init | Demandas independentes, planos de produção, funcionários |
-| 000073–000080 | init | Ordens planejadas, regras configuradas, snapshots de estoque |
-| 000081–000088 | init | Perfis MRP, logs de cálculo, exceções, agendamento de máquinas |
-| 000089 | init | **Pedidos de Venda:** `sales_orders`, `sales_order_items`, `sales_order_sequences` |
-| 000090 | add_mrp_fields | Modos MIN_MAX, Kanban, MPS: `kanban_cards`, `mps_schedule`, colunas `maximum_stock`, `safety_time_days`, `coverage_days` |
-| 000091 | item_planning_fields | `item_planning_extras` (safety_time, coverage, grouping_key, is_critical, maximum_stock, use_tank_date) |
-| 000092 | purchase_order | **Pedidos de Compra:** `purchase_orders`, `purchase_order_items`, `purchase_order_sequences` |
-| 000093 | stock_management | **Estoque:** `stock_movements`, `stock_reservations`, `stock_balances`, `physical_inventories`, `physical_inventory_items` |
-| 000094 | production_order | **Ordens de Produção:** `production_orders`, `production_appointments`, `production_consumptions` |
-| 000095 | fiscal_foundation | **Fiscal:** `ncm_tax_table`, `tax_scenarios`, `icms_interstate`, `icms_internal`, `fiscal_entries`, `fiscal_entry_items`, `fiscal_exits`, `fiscal_exit_items`, `fiscal_configs` — com seeds de NCMs, cenários e alíquotas |
-| 000096 | financial | **Financeiro:** `contas_bancarias`, `condicoes_pagamento`, `formas_pagamento`, `plano_contas`, `centros_custo`, `contas_pagar`, `contas_receber`, `fluxo_caixa`, `tax_assessments` |
-
----
-
-## 10. SEGURANÇA
-
-### 10.1 Autenticação JWT
+### 9.1 Autenticação JWT
 
 - **Login:** `POST /users/login` — retorna token JWT
 - **Registro:** `POST /users/register` — cria usuário
@@ -1243,7 +832,7 @@ Lista completa das migrações do banco de dados (000001 a 000096):
 - **Expiração:** definida pelo servidor
 - **Claims:** `UserID` (UUID), `Role` (string)
 
-### 10.2 Middleware de Autorização
+### 9.2 Middleware de Autorização
 
 Todos os endpoints sob `/api/*` exigem:
 
@@ -1263,7 +852,7 @@ Todos os endpoints sob `/api/*` exigem:
    - `CanApurarImpostos()` — permissão fiscal
    - `UserID(ctx)` — extrai UUID do usuário autenticado
 
-### 10.3 Middlewares de Infraestrutura
+### 9.3 Middlewares de Infraestrutura
 
 | Middleware | Descrição |
 |-----------|-----------|
@@ -1274,7 +863,7 @@ Todos os endpoints sob `/api/*` exigem:
 | `StripSlashes` (chi) | Normaliza trailing slash |
 | `RequestLoggerMiddleware` | Loga método, path, status, duração |
 
-### 10.4 Health Check
+### 9.4 Health Check
 
 `GET /health` — endpoint público (sem autenticação), retorna `{"status": "ok", "timestamp": "...", "mask": "core-api"}`.
 

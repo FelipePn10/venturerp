@@ -6,12 +6,33 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// InvoiceTypeFlags carries the behavior flags from an InvoiceType record into the engine.
+type InvoiceTypeFlags struct {
+	// CalcReducao applies ICMSReductionPct to reduce the ICMS calculation base.
+	CalcReducao      bool
+	ICMSReductionPct float64 // e.g. 0.30 means base reduced by 30%
+
+	// SkipPISCOFINS — when true, PIS and COFINS are zeroed out (e.g. isento, não tributado).
+	// Default false means PIS/COFINS are calculated normally.
+	SkipPISCOFINS bool
+
+	// CalcFomentar applies the FOMENTAR/PRODUZIR incentive (e.g. Goiás):
+	// ICMS effectively paid = total ICMS × (1 - FomentarRetentionPct).
+	CalcFomentar          bool
+	FomentarRetentionPct  float64 // fraction of ICMS retained by state (e.g. 0.70 = 70%)
+
+	// IPITransferPrice: when > 0, overrides ValorUnitario as IPI base (used for
+	// transfer invoices where the IPI base comes from a sales table).
+	// Set this per-item in TaxItem.IPITransferPrice instead.
+}
+
 type TaxCalculationParams struct {
 	Itens       []TaxItem
 	EmitenteUF  string
 	DestinoUF   string
 	DestinoTipo string
 	Cfop        string
+	Flags       InvoiceTypeFlags
 }
 
 type TaxItem struct {
@@ -21,6 +42,9 @@ type TaxItem struct {
 	ValorFrete       float64
 	ValorDesconto    float64
 	OrigemMercadoria string
+	// IPITransferPrice, when > 0, replaces ValorUnitario as the IPI base.
+	// Populated by the use case when InvoiceType.IPITransferSalesTableId is set.
+	IPITransferPrice float64
 }
 
 type TaxCalculationResult struct {
@@ -36,6 +60,7 @@ type TaxItemResult struct {
 	ValorICMSDiferido float64 // cenário 2: ICMS diferido (CST 51)
 	ValorDIFAL        float64 // cenário 1: DIFAL para não-contribuinte interestadual
 	ValorFCP          float64 // Fundo de Combate à Pobreza (DIFAL)
+	ValorFomentar     float64 // ICMS retido via benefício FOMENTAR/PRODUZIR
 	CSTICMS           string
 	BaseIPI           float64
 	AliquotaIPI       float64
@@ -63,6 +88,7 @@ type TaxTotals struct {
 	ValorCOFINS   float64
 	ValorDIFAL    float64
 	ValorFCP      float64
+	ValorFomentar float64
 }
 
 type TaxScenarioConfig struct {
@@ -111,6 +137,7 @@ func CalcularImpostos(
 		result.Totais.ValorCOFINS += itemResult.ValorCOFINS
 		result.Totais.ValorDIFAL += itemResult.ValorDIFAL
 		result.Totais.ValorFCP += itemResult.ValorFCP
+		result.Totais.ValorFomentar += itemResult.ValorFomentar
 	}
 
 	return result, nil
@@ -130,6 +157,12 @@ func calculateItemTax(
 
 	itemTotal := decimal.NewFromFloat(item.ValorUnitario).Mul(decimal.NewFromFloat(item.Quantidade))
 
+	// IPI — use transfer price when provided (IPITransferSalesTableId lookup resolved upstream)
+	ipiBase := itemTotal
+	if item.IPITransferPrice > 0 {
+		ipiBase = decimal.NewFromFloat(item.IPITransferPrice).Mul(decimal.NewFromFloat(item.Quantidade))
+	}
+
 	// IPI
 	ncmCfg, hasNcm := ncmTable[item.Ncm]
 	aliqIPI := decimal.NewFromFloat(0)
@@ -141,11 +174,10 @@ func calculateItemTax(
 	r.AliquotaIPI, _ = aliqIPI.Float64()
 	r.CSTIPI = cstIPI
 
-	baseIPI := itemTotal
-	r.BaseIPI, _ = baseIPI.Round(2).Float64()
-	r.ValorIPI, _ = baseIPI.Mul(aliqIPI).Round(2).Float64()
+	r.BaseIPI, _ = ipiBase.Round(2).Float64()
+	r.ValorIPI, _ = ipiBase.Mul(aliqIPI).Round(2).Float64()
 
-	totalComIPI := itemTotal.Add(baseIPI.Mul(aliqIPI))
+	totalComIPI := itemTotal.Add(ipiBase.Mul(aliqIPI))
 
 	// Frete / desconto rateio
 	freteItem := decimal.Zero
@@ -179,13 +211,14 @@ func calculateItemTax(
 
 	r.BasePIS, _ = basePisCofins.Round(2).Float64()
 	r.AliquotaPIS, _ = aliqPIS.Float64()
-	r.ValorPIS, _ = basePisCofins.Mul(aliqPIS).Round(2).Float64()
 	r.CSTPIS = cstPIS
-
 	r.BaseCOFINS, _ = basePisCofins.Round(2).Float64()
 	r.AliquotaCOFINS, _ = aliqCOFINS.Float64()
-	r.ValorCOFINS, _ = basePisCofins.Mul(aliqCOFINS).Round(2).Float64()
 	r.CSTCOFINS = cstCOFINS
+	if !params.Flags.SkipPISCOFINS {
+		r.ValorPIS, _ = basePisCofins.Mul(aliqPIS).Round(2).Float64()
+		r.ValorCOFINS, _ = basePisCofins.Mul(aliqCOFINS).Round(2).Float64()
+	}
 
 	// ICMS
 	if isInterno {
@@ -260,6 +293,28 @@ func calculateItemTax(
 		}
 	}
 
+	// CalcReducao: apply ICMSReductionPct to reduce the effective ICMS base and recalculate.
+	// Example: ICMSReductionPct=0.30 → only 70% of the computed base is taxed.
+	if params.Flags.CalcReducao && params.Flags.ICMSReductionPct > 0 {
+		reductionFactor := decimal.NewFromFloat(1 - params.Flags.ICMSReductionPct)
+		reducedBase := decimal.NewFromFloat(r.BaseICMS).Mul(reductionFactor)
+		r.BaseICMS, _ = reducedBase.Round(2).Float64()
+		newValorICMS := reducedBase.Mul(decimal.NewFromFloat(r.AliquotaICMS))
+		r.ValorICMS, _ = newValorICMS.Round(2).Float64()
+		// Recalculate diferimento over the reduced amount
+		if r.ValorICMSDiferido > 0 {
+			difPct := decimal.NewFromFloat(fiscalConfig.IcmsDiferimentoPercentual).Div(decimal.NewFromInt(100))
+			r.ValorICMSDiferido, _ = newValorICMS.Mul(difPct).Round(2).Float64()
+		}
+	}
+
+	// CalcFomentar: portion of ICMS retained by state via FOMENTAR/PRODUZIR incentive.
+	// ValorFomentar = ValorICMS × FomentarRetentionPct (ICMS that is credited back to the company).
+	if params.Flags.CalcFomentar && params.Flags.FomentarRetentionPct > 0 {
+		r.ValorFomentar, _ = decimal.NewFromFloat(r.ValorICMS).
+			Mul(decimal.NewFromFloat(params.Flags.FomentarRetentionPct)).Round(2).Float64()
+	}
+
 	roundResult(&r)
 	return r
 }
@@ -270,6 +325,7 @@ func roundResult(r *TaxItemResult) {
 	r.ValorICMSDiferido, _ = decimal.NewFromFloat(r.ValorICMSDiferido).Round(2).Float64()
 	r.ValorDIFAL, _ = decimal.NewFromFloat(r.ValorDIFAL).Round(2).Float64()
 	r.ValorFCP, _ = decimal.NewFromFloat(r.ValorFCP).Round(2).Float64()
+	r.ValorFomentar, _ = decimal.NewFromFloat(r.ValorFomentar).Round(2).Float64()
 	r.BaseIPI, _ = decimal.NewFromFloat(r.BaseIPI).Round(2).Float64()
 	r.ValorIPI, _ = decimal.NewFromFloat(r.ValorIPI).Round(2).Float64()
 	r.BasePIS, _ = decimal.NewFromFloat(r.BasePIS).Round(2).Float64()

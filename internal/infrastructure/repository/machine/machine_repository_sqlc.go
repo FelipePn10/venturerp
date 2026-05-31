@@ -16,12 +16,13 @@ import (
 
 func (r *MachineRepositorySQLC) CreateType(ctx context.Context, mt *entity.MachineType) (*entity.MachineType, error) {
 	row, err := r.q.CreateMachineType(ctx, sqlc.CreateMachineTypeParams{
-		Code:        mt.Code,
-		Name:        mt.Name,
-		Description: pgutil.ToPgTextFromPtr(mt.Description),
-		Type:        sqlc.MachineTypeEnum(mt.Type),
-		IsActive:    mt.IsActive,
-		CreatedBy:   pgutil.ToPgUUID(mt.CreatedBy),
+		Code:             mt.Code,
+		Name:             mt.Name,
+		Description:      pgutil.ToPgTextFromPtr(mt.Description),
+		Type:             sqlc.MachineTypeEnum(mt.Type),
+		RequiresOperator: mt.RequiresOperator,
+		IsActive:         mt.IsActive,
+		CreatedBy:        pgutil.ToPgUUID(mt.CreatedBy),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create machine type: %w", err)
@@ -31,11 +32,12 @@ func (r *MachineRepositorySQLC) CreateType(ctx context.Context, mt *entity.Machi
 
 func (r *MachineRepositorySQLC) UpdateType(ctx context.Context, mt *entity.MachineType) (*entity.MachineType, error) {
 	row, err := r.q.UpdateMachineType(ctx, sqlc.UpdateMachineTypeParams{
-		Code:        mt.Code,
-		Name:        mt.Name,
-		Description: pgutil.ToPgTextFromPtr(mt.Description),
-		Type:        sqlc.MachineTypeEnum(mt.Type),
-		IsActive:    mt.IsActive,
+		Code:             mt.Code,
+		Name:             mt.Name,
+		Description:      pgutil.ToPgTextFromPtr(mt.Description),
+		Type:             sqlc.MachineTypeEnum(mt.Type),
+		RequiresOperator: mt.RequiresOperator,
+		IsActive:         mt.IsActive,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("update machine type: %w", err)
@@ -343,14 +345,15 @@ func (r *MachineRepositorySQLC) DeleteSchedule(
 
 func machineTypeToEntity(row sqlc.MachineType) *entity.MachineType {
 	return &entity.MachineType{
-		Code:        row.Code,
-		Name:        row.Name,
-		Type:        types.MachineTypeEnum(row.Type),
-		Description: pgutil.FromPgTextPtr(row.Description),
-		IsActive:    row.IsActive,
-		CreatedAt:   pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt:   pgutil.FromPgTimestamptz(row.UpdatedAt),
-		CreatedBy:   pgutil.FromPgUUID(row.CreatedBy),
+		Code:             row.Code,
+		Name:             row.Name,
+		Type:             types.MachineTypeEnum(row.Type),
+		Description:      pgutil.FromPgTextPtr(row.Description),
+		RequiresOperator: row.RequiresOperator,
+		IsActive:         row.IsActive,
+		CreatedAt:        pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:        pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy:        pgutil.FromPgUUID(row.CreatedBy),
 	}
 }
 

@@ -39,6 +39,19 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_classification_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_conversion_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_price_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_supplier_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_requisition_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_quotation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/entry_operation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_classification_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/location_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_movement_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/maintenance_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
@@ -94,6 +107,21 @@ import (
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
 	standardCostRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/standard_cost"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
+	accountingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
+	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
+	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
+	supplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/supplier"
+	fiscalClassRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal_classification"
+	itemConversionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_conversion"
+	purchasePriceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_price"
+	itemSupplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_supplier"
+	purchaseReqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
+	purchaseQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_quotation"
+	entryOperationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/entry_operation"
+	fiscalParamsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
+	itemClassificationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_classification"
+	locationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/location"
+	stockMovementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock_movement"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure_query"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
@@ -450,16 +478,87 @@ func (app *application) mount() chi.Router {
 		prodOrderGetAppointmentsUC, prodOrderGetConsumptionsUC,
 	).WithOrderOps(orderOpsUC)
 
+	// supplier (created before purchase order so it can provide purchasing defaults)
+	suppRepo := supplierRepo.New(queries, app.db.Pool)
+	supplierUC := supplier_uc.NewSupplierUseCase(suppRepo)
+	supplierHandler := handler.NewSupplierHandler(supplierUC)
+
+	// fiscal classifications (Cadastro de Classificações Fiscais)
+	fiscalClassUC := fiscal_classification_uc.NewFiscalClassificationUseCase(fiscalClassRepo.New(queries, app.db.Pool))
+	fiscalClassHandler := handler.NewFiscalClassificationHandler(fiscalClassUC)
+
+	// entry operation types + state groups (Cadastro de Tipos de Operação de Entrada)
+	entryOperationUC := entry_operation_uc.NewEntryOperationUseCase(entryOperationRepo.New(queries, app.db.Pool))
+	entryOperationHandler := handler.NewEntryOperationHandler(entryOperationUC)
+
+	// item unit conversions (Cadastro de Conversões por Item)
+	itemConversionUC := item_conversion_uc.NewItemConversionUseCase(itemConversionRepo.New(queries, app.db.Pool))
+	itemConversionHandler := handler.NewItemConversionHandler(itemConversionUC)
+
+	// purchase price tables (Tabela de Preço de Compra)
+	purchasePriceUC := purchase_price_uc.NewPurchasePriceUseCase(purchasePriceRepo.New(queries, app.db.Pool))
+	purchasePriceHandler := handler.NewPurchasePriceHandler(purchasePriceUC)
+
+	// preferred supplier per item (Fornecedor preferencial / Descrição por fornecedor)
+	itemSupplierUC := item_supplier_uc.NewItemSupplierUseCase(itemSupplierRepo.New(queries, app.db.Pool))
+	itemSupplierHandler := handler.NewItemSupplierHandler(itemSupplierUC)
+
 	// purchase order
 	poRepo := purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(app.db.Pool)
 	purchaseOrderHandler := handler.NewPurchaseOrderHandler(
-		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService},
+		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC},
 		&purchase_order_uc.UpdatePurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.GetPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersBySupplierUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersByStatusUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.CancelPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
+	)
+
+	// purchase order item with cross-module resolution (price table / UOM / IPI).
+	// Providers are wired after their use cases are created below.
+	purchaseOrderItemHandler := handler.NewPurchaseOrderItemHandler(
+		&purchase_order_uc.AddPurchaseOrderItemUseCase{
+			Repo:          poRepo,
+			Auth:          authService,
+			PriceProvider: purchasePriceUC,
+			UOMConverter:  itemConversionUC,
+			FiscalClass:   fiscalClassUC,
+		},
+	)
+
+	// MRP purchase suggestions (PURCHASE planned orders → purchase order)
+	purchaseSuggestionHandler := handler.NewPurchaseSuggestionHandler(
+		&purchase_order_uc.ListPurchaseSuggestionsUseCase{Planned: plannedRepo, Auth: authService},
+		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC},
+		&purchase_order_uc.RejectPurchaseSuggestionUseCase{Planned: plannedRepo, Auth: authService},
+	)
+
+	// purchase requisitions + generation of purchase orders from requisitions
+	purchaseReqRepository := purchaseReqRepo.New(queries, app.db.Pool)
+	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
+		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository),
+		&purchase_requisition_uc.GeneratePurchaseOrdersUseCase{
+			Reqs:             purchaseReqRepository,
+			POs:              poRepo,
+			Auth:             authService,
+			Preferred:        itemSupplierUC,
+			SupplierDefaults: supplierUC,
+			PriceProvider:    purchasePriceUC,
+		},
+	)
+
+	// purchase quotations (liberação p/ cotação → preços → seleção → pedidos)
+	purchaseQuotationRepository := purchaseQuotationRepo.New(queries, app.db.Pool)
+	purchaseQuotationHandler := handler.NewPurchaseQuotationHandler(
+		purchase_quotation_uc.NewPurchaseQuotationUseCase(purchaseQuotationRepository, purchaseReqRepository, plannedRepo),
+		&purchase_quotation_uc.GenerateOrdersFromQuotationUseCase{
+			Quotations:       purchaseQuotationRepository,
+			Reqs:             purchaseReqRepository,
+			POs:              poRepo,
+			Auth:             authService,
+			SupplierDefaults: supplierUC,
+		},
 	)
 
 	// sales order
@@ -513,6 +612,14 @@ func (app *application) mount() chi.Router {
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
 	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
+
+	// supplier SEFAZ cadastral query (FocusNFE)
+	supplierSefazHandler := handler.NewSupplierSefazHandler(&supplier_uc.ConsultSupplierSefazUseCase{
+		Repo:       suppRepo,
+		FiscalRepo: fiscalRepository,
+		Auth:       authService,
+	})
+
 	financialHandler := handler.NewFinancialHandler(
 		&financial_uc.CreateContaBancariaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasBancariasUseCase{Repo: fRepo, Auth: authService},
@@ -608,11 +715,65 @@ func (app *application) mount() chi.Router {
 
 	// NF-e purchase import
 	importNFeUC := &fiscalUC.ImportNFePurchaseUseCase{
-		FiscalRepo: fiscalRepository,
-		StockRepo:  stockRepository,
-		Auth:       authService,
+		FiscalRepo:       fiscalRepository,
+		StockRepo:        stockRepository,
+		Auth:             authService,
+		SupplierDefaults: supplierUC,
 	}
 	importNFeHandler := handler.NewImportNFePurchaseHandler(importNFeUC)
+
+	// customer
+	custRepo := customerRepo.New(queries, app.db.Pool)
+	customerUC := customer_uc.NewCustomerUseCase(custRepo)
+	customerHandler := handler.NewCustomerHandler(customerUC)
+
+	// fiscal params (legal devices, CFOPs, ICMS/IPI tax params + ICMS apuração + Simples Nacional)
+	fpRepo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
+	legalDeviceUC := &fiscal_params_uc.LegalDeviceUseCase{Repo: fpRepo}
+	cfopUC := &fiscal_params_uc.CFOPUseCase{Repo: fpRepo}
+	taxParamUC := &fiscal_params_uc.TaxParamUseCase{Repo: fpRepo}
+	fiscalParamsHandler := handler.NewFiscalParamsHandler(legalDeviceUC, cfopUC, taxParamUC)
+
+	dapiUC := &fiscal_params_uc.DAPITransferReasonUseCase{Repo: fpRepo}
+	apuracaoAdjUC := &fiscal_params_uc.ICMSApuracaoAdjCodeUseCase{Repo: fpRepo}
+	adjCodeUC := &fiscal_params_uc.ICMSAdjustmentCodeUseCase{Repo: fpRepo}
+	apuracaoLineUC := &fiscal_params_uc.ICMSApuracaoLineUseCase{Repo: fpRepo}
+	summaryUC := &fiscal_params_uc.ICMSSummaryEntryUseCase{Repo: fpRepo}
+	simplesUC := &fiscal_params_uc.SimplesNacionalUseCase{Repo: fpRepo}
+	icmsApuracaoHandler := handler.NewICMSApuracaoHandler(dapiUC, apuracaoAdjUC, adjCodeUC, apuracaoLineUC, summaryUC, simplesUC)
+
+	reductionUC := &fiscal_params_uc.ICMSReductionSubstitutionUseCase{Repo: fpRepo}
+	summaryAdditionalUC := &fiscal_params_uc.ICMSSummaryAdditionalUseCase{Repo: fpRepo}
+	stRestUC := &fiscal_params_uc.ICMSSTRestitutionUseCase{Repo: fpRepo}
+	specialNoteUC := &fiscal_params_uc.SpecialAdjustmentNoteUseCase{Repo: fpRepo}
+	icmsReductionHandler := handler.NewICMSReductionHandler(reductionUC, summaryAdditionalUC, stRestUC, specialNoteUC)
+
+	spedUC := &fiscalUC.SPEDUseCase{FiscalParamsRepo: fpRepo}
+	spedHandler := handler.NewSPEDHandler(spedUC)
+
+	// accounting / SPED ECD
+	acctRepo := accountingRepo.New(queries, app.db.Pool)
+	acctPlanUC := &accounting_uc.AccountingPlanUseCase{Repo: acctRepo}
+	acctAccountUC := &accounting_uc.AccountingAccountUseCase{Repo: acctRepo}
+	acctEntryUC := &accounting_uc.JournalEntryUseCase{Repo: acctRepo}
+	acctDemUC := &accounting_uc.DemonstrativeUseCase{Repo: acctRepo}
+	acctECDUC := &accounting_uc.ECDUseCase{Repo: acctRepo}
+	accountingHandler := handler.NewAccountingHandler(acctPlanUC, acctAccountUC, acctEntryUC, acctDemUC, acctECDUC)
+
+	// stock movement types
+	smtRepo := stockMovementRepo.New(app.db.Pool)
+	smtUC := stock_movement_uc.New(smtRepo)
+	smtHandler := handler.NewStockMovementTypeHandler(smtUC)
+
+	// location (countries + UFs)
+	locRepo := locationRepo.New(queries)
+	locationUC := location_uc.New(locRepo)
+	locationHandler := handler.NewLocationHandler(locationUC)
+
+	// item classifications
+	itemClassRepo := itemClassificationRepo.New(queries)
+	itemClassUC := item_classification_uc.New(itemClassRepo)
+	itemClassHandler := handler.NewItemClassificationHandler(itemClassUC)
 
 	// routes
 	r.Group(func(r chi.Router) {
@@ -829,6 +990,11 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/cancel", purchaseOrderHandler.Cancel)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier/{supplierCode}", purchaseOrderHandler.ListBySupplier)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/status/{status}", purchaseOrderHandler.ListByStatus)
+			// MRP purchase suggestions
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suggestions", purchaseSuggestionHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/approve", purchaseSuggestionHandler.Approve)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/reject", purchaseSuggestionHandler.Reject)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items", purchaseOrderItemHandler.AddItem)
 		})
 		r.Route("/api/sales-forecast", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesForecastHandler.CreateForecast)
@@ -901,6 +1067,117 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/icms-interestadual", fiscalHandler.ListICMSInterstate)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tabelas/icms-interno", fiscalHandler.UpsertICMSInternal)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/icms-interno", fiscalHandler.ListICMSInternal)
+			// Fiscal params support tables
+			r.Route("/support", func(r chi.Router) {
+				r.Route("/dispositivos-legais", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", fiscalParamsHandler.CreateLegalDevice)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", fiscalParamsHandler.UpdateLegalDevice)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", fiscalParamsHandler.ListLegalDevices)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", fiscalParamsHandler.GetLegalDevice)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tipo/{type}", fiscalParamsHandler.ListLegalDevicesByType)
+				})
+				r.Route("/cfops", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", fiscalParamsHandler.CreateCFOP)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", fiscalParamsHandler.UpdateCFOP)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", fiscalParamsHandler.ListCFOPs)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", fiscalParamsHandler.GetCFOP)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/direcao/{direction}", fiscalParamsHandler.ListCFOPsByDirection)
+				})
+				r.Route("/parametros-icms-ipi", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", fiscalParamsHandler.CreateTaxParam)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", fiscalParamsHandler.UpdateTaxParam)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", fiscalParamsHandler.ListTaxParams)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", fiscalParamsHandler.GetTaxParam)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/uf/{uf}", fiscalParamsHandler.ListTaxParamsByUF)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", fiscalParamsHandler.ListTaxParamsByItem)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/ncm/{ncmCode}", fiscalParamsHandler.ListTaxParamsByNCM)
+				})
+				// DAPI Transfer Reasons
+				r.Route("/motivos-transferencia-dapi", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsApuracaoHandler.CreateDAPIReason)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsApuracaoHandler.UpdateDAPIReason)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsApuracaoHandler.ListDAPIReasons)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", icmsApuracaoHandler.GetDAPIReason)
+				})
+				// ICMS Apuração Adjustment Codes (tabela 5.1.1)
+				r.Route("/codigos-ajuste-apuracao-icms", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsApuracaoHandler.CreateApuracaoAdjCode)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsApuracaoHandler.UpdateApuracaoAdjCode)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsApuracaoHandler.ListApuracaoAdjCodes)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsApuracaoHandler.GetApuracaoAdjCode)
+				})
+				// ICMS Adjustment Codes (tabelas 5.2/5.3/5.6/5.7)
+				r.Route("/codigos-ajuste-icms", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsApuracaoHandler.CreateAdjCode)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsApuracaoHandler.UpdateAdjCode)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsApuracaoHandler.ListAdjCodes)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsApuracaoHandler.GetAdjCode)
+				})
+				// ICMS Apuração Lines
+				r.Route("/linhas-apuracao-icms", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsApuracaoHandler.CreateApuracaoLine)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsApuracaoHandler.UpdateApuracaoLine)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsApuracaoHandler.ListApuracaoLines)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", icmsApuracaoHandler.GetApuracaoLine)
+				})
+				// ICMS Summary Entries
+				r.Route("/lancamentos-resumo-icms", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsApuracaoHandler.CreateSummaryEntry)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsApuracaoHandler.UpdateSummaryEntry)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsApuracaoHandler.ListSummaryEntries)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsApuracaoHandler.GetSummaryEntry)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/notas", icmsApuracaoHandler.AddSummaryEntryNote)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/notas", icmsApuracaoHandler.ListSummaryEntryNotes)
+				})
+				// Simples Nacional Apuração
+				r.Route("/apuracao-simples-nacional", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsApuracaoHandler.CreateSimplesApuracao)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsApuracaoHandler.UpdateSimplesApuracao)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsApuracaoHandler.ListSimplesApuracoes)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{period}/{annex}", icmsApuracaoHandler.GetSimplesApuracao)
+				})
+			})
+		})
+		// ICMS Reduction / Substitution / Deferral
+		r.Route("/api/fiscal/icms-reducao", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsReductionHandler.CreateReduction)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsReductionHandler.UpdateReduction)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsReductionHandler.ListReductions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/find", icmsReductionHandler.FindReduction)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsReductionHandler.GetReduction)
+		})
+		// ICMS Summary Entry Additionals (aba Adicionais)
+		r.Route("/api/fiscal/icms-resumo-adicionais", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsReductionHandler.AddSummaryAdditional)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsReductionHandler.ListSummaryAdditionals)
+		})
+		// ICMS ST Restitution / Ressarcimento / Complementação
+		r.Route("/api/fiscal/icms-st-restituicao", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsReductionHandler.CreateSTRestitution)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsReductionHandler.UpdateSTRestitution)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsReductionHandler.ListSTRestitutions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsReductionHandler.GetSTRestitution)
+		})
+		// Special Adjustment Notes
+		r.Route("/api/fiscal/notas-especiais", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsReductionHandler.CreateSpecialNote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsReductionHandler.UpdateSpecialNote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsReductionHandler.ListSpecialNotes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsReductionHandler.GetSpecialNote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/itens", icmsReductionHandler.AddSpecialNoteItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/itens", icmsReductionHandler.ListSpecialNoteItems)
+		})
+		// SPED EFD
+		r.Route("/api/fiscal/sped", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/efd", spedHandler.GenerateEFD)
+		})
+		// Stock Movement Types
+		r.Route("/api/estoque/tipos-movimento", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", smtHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", smtHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", smtHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", smtHandler.GetByID)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sigla/{sigla}", smtHandler.GetBySigla)
 		})
 		r.Route("/api/financial", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-bancarias/create", financialHandler.CreateContaBancaria)
@@ -965,6 +1242,9 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", routingHandler.UpdateRoute)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/", routingHandler.DeactivateRoute)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lead-time", routingHandler.GetLeadTime)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/edges", routingHandler.GetNetworkEdges)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/edges", routingHandler.SetNetworkEdge)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/edges", routingHandler.DeleteNetworkEdge)
 				})
 			})
 			r.Route("/route-operations", func(r chi.Router) {
@@ -1047,6 +1327,224 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/fiscal/entries/import-nfe", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", importNFeHandler.Import)
+		})
+		r.Route("/api/location", func(r chi.Router) {
+			r.Route("/countries", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", locationHandler.CreateCountry)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", locationHandler.UpdateCountry)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", locationHandler.ListCountries)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{sigla}", locationHandler.GetCountry)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{sigla}/ufs", locationHandler.ListUFsByCountry)
+			})
+			r.Route("/ufs", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", locationHandler.CreateUF)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", locationHandler.UpdateUF)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", locationHandler.ListUFs)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{sigla}", locationHandler.GetUF)
+			})
+		})
+		r.Route("/api/items/classifications", func(r chi.Router) {
+			r.Route("/masks", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemClassHandler.CreateMask)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", itemClassHandler.UpdateMask)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", itemClassHandler.ListMasks)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", itemClassHandler.GetMask)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{maskID}/items", itemClassHandler.ListByMask)
+			})
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemClassHandler.CreateClassification)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", itemClassHandler.UpdateClassification)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{maskCode}/{code}", itemClassHandler.GetClassification)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentID}/children", itemClassHandler.ListChildren)
+		})
+		r.Route("/api/accounting", func(r chi.Router) {
+			r.Route("/plans", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", accountingHandler.CreatePlan)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", accountingHandler.ListPlans)
+			})
+			r.Route("/accounts", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", accountingHandler.CreateAccount)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", accountingHandler.ListAccounts)
+			})
+			r.Route("/journal-entries", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", accountingHandler.CreateJournalEntry)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", accountingHandler.ListJournalEntries)
+			})
+			r.Route("/demonstratives", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", accountingHandler.CreateDemonstrative)
+			})
+			r.Route("/sped/ecd", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", accountingHandler.GenerateECD)
+			})
+		})
+		r.Route("/api/customers", func(r chi.Router) {
+			// ── Support tables (cadastros de apoio) ──────────────────────────
+			r.Route("/support", func(r chi.Router) {
+				r.Route("/regions", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateRegion)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", customerHandler.UpdateRegion)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListRegions)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", customerHandler.GetRegion)
+				})
+				r.Route("/market-segments", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateMarketSegment)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListMarketSegments)
+				})
+				r.Route("/contact-types", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateContactType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListContactTypes)
+				})
+				r.Route("/customer-types", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCustomerType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCustomerTypes)
+				})
+				r.Route("/carriers", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCarrier)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCarriers)
+				})
+				r.Route("/carrier-groups", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCarrierGroup)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCarrierGroups)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/members", customerHandler.AddCarrierToGroup)
+				})
+				r.Route("/payment-conditions", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreatePaymentCondition)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListPaymentConditions)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/installments", customerHandler.AddInstallment)
+				})
+				r.Route("/sales-tables", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateSalesTable)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListSalesTables)
+					r.Route("/{tableID}/prices", func(r chi.Router) {
+						r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateSalesTablePrice)
+						r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListSalesTablePrices)
+						r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{itemCode}", customerHandler.GetSalesTablePrice)
+					})
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/prices/", customerHandler.UpdateSalesTablePrice)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/prices/{id}", customerHandler.DeleteSalesTablePrice)
+				})
+				r.Route("/invoice-types", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateInvoiceType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", customerHandler.UpdateInvoiceType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListInvoiceTypes)
+				})
+				r.Route("/tax-types", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateTaxType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListTaxTypes)
+				})
+			})
+			// ── Main customer CRUD ───────────────────────────────────────────
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCustomers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", customerHandler.GetCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", customerHandler.BlockCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/unblock", customerHandler.UnblockCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/establishments", customerHandler.ListEstablishments)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/addresses", customerHandler.AddAddress)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/contacts", customerHandler.AddContact)
+		})
+
+		r.Route("/api/suppliers", func(r chi.Router) {
+			// ── Support tables (cadastros de apoio) ──────────────────────────
+			r.Route("/support", func(r chi.Router) {
+				r.Route("/supplier-types", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", supplierHandler.CreateSupplierType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", supplierHandler.UpdateSupplierType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", supplierHandler.ListSupplierTypes)
+				})
+				r.Route("/contact-types", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", supplierHandler.CreateContactType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", supplierHandler.ListContactTypes)
+				})
+				r.Route("/parameters", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", supplierHandler.UpsertParameters)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{enterpriseCode}", supplierHandler.GetParameters)
+				})
+			})
+			// ── Main supplier CRUD ───────────────────────────────────────────
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", supplierHandler.CreateSupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", supplierHandler.ListSuppliers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", supplierHandler.GetSupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", supplierHandler.UpdateSupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", supplierHandler.BlockSupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/unblock", supplierHandler.UnblockSupplier)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", supplierHandler.DeleteSupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/establishments", supplierHandler.ListEstablishments)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/purchasing-defaults", supplierHandler.GetPurchasingDefaults)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/sefaz-query", supplierSefazHandler.Query)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/addresses", supplierHandler.AddAddress)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/phones", supplierHandler.AddPhone)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/emails", supplierHandler.AddEmail)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/due-dates", supplierHandler.AddDueDate)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contacts", supplierHandler.AddContact)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contacts/phones", supplierHandler.AddContactPhone)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contacts/emails", supplierHandler.AddContactEmail)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/enterprises", supplierHandler.ListEnterprises)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/enterprises", supplierHandler.AddEnterprise)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/enterprises", supplierHandler.UpdateEnterprise)
+		})
+
+		r.Route("/api/fiscal-classifications", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", fiscalClassHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", fiscalClassHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", fiscalClassHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", fiscalClassHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/languages", fiscalClassHandler.AddLanguage)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/export-attributes", fiscalClassHandler.AddExportAttribute)
+		})
+
+		r.Route("/api/item-conversions", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemConversionHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/convert", itemConversionHandler.Convert)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemConversionHandler.ListByItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemConversionHandler.Delete)
+		})
+
+		r.Route("/api/purchase-requisitions", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", purchaseRequisitionHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", purchaseRequisitionHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", purchaseRequisitionHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items", purchaseRequisitionHandler.AddItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/generate-orders", purchaseRequisitionHandler.GeneratePurchaseOrders)
+		})
+
+		r.Route("/api/purchase-quotations", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", purchaseQuotationHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", purchaseQuotationHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", purchaseQuotationHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/suppliers", purchaseQuotationHandler.AddSupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/prices", purchaseQuotationHandler.RecordPrice)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/prices/{priceID}/select", purchaseQuotationHandler.SelectPrice)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/generate-orders", purchaseQuotationHandler.GenerateOrders)
+		})
+
+		r.Route("/api/entry-operations", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", entryOperationHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", entryOperationHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", entryOperationHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", entryOperationHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/validate", entryOperationHandler.Validate)
+			r.Route("/state-groups", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", entryOperationHandler.CreateStateGroup)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", entryOperationHandler.ListStateGroups)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", entryOperationHandler.GetStateGroup)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/ufs", entryOperationHandler.AddStateGroupUF)
+			})
+		})
+
+		r.Route("/api/item-suppliers", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemSupplierHandler.Upsert)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemSupplierHandler.ListByItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemSupplierHandler.Delete)
+		})
+
+		r.Route("/api/purchase-price-tables", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", purchasePriceHandler.CreateTable)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", purchasePriceHandler.UpdateTable)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", purchasePriceHandler.ListTables)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", purchasePriceHandler.GetTable)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/items", purchasePriceHandler.ListItems)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/items", purchasePriceHandler.AddItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/items/{id}", purchasePriceHandler.DeleteItem)
 		})
 	})
 	// Health check

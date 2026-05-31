@@ -34,14 +34,14 @@ func (r *FiscalRepositoryPG) CreateEntry(ctx context.Context, e *entity.FiscalEn
 			 cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 			 valor_produtos, valor_frete, valor_seguro, valor_desconto,
 			 valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
-			 tipo_documento, purchase_order_code, cte_code, status, xml_path, notes, created_by)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+			 tipo_documento, purchase_order_code, cte_code, status, xml_path, notes, created_by, supplier_code)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.Modelo, e.DataEmissao, e.DataEntrada,
 		e.CnpjEmitente, e.RazaoSocialEmitente, e.IEEmitente, e.UFEmitente,
 		e.ValorProdutos, e.ValorFrete, e.ValorSeguro, e.ValorDesconto,
 		e.ValorIPI, e.ValorICMS, e.ValorPIS, e.ValorCOFINS, e.ValorTotal,
-		e.TipoDocumento, e.PurchaseOrderCode, e.CteCode, e.Status, e.XmlPath, e.Notes, e.CreatedBy,
+		e.TipoDocumento, e.PurchaseOrderCode, e.CteCode, e.Status, e.XmlPath, e.Notes, e.CreatedBy, e.SupplierCode,
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal entry: %w", err)
@@ -79,14 +79,14 @@ func (r *FiscalRepositoryPG) GetEntryByID(ctx context.Context, id int64) (*entit
 		        valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
-		        is_active, created_at, updated_at, created_by
+		        is_active, created_at, updated_at, created_by, supplier_code
 		 FROM public.fiscal_entries WHERE id = $1`, id,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.Modelo, &e.DataEmissao, &e.DataEntrada,
 		&e.CnpjEmitente, &e.RazaoSocialEmitente, &e.IEEmitente, &e.UFEmitente,
 		&e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
 		&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 		&e.TipoDocumento, &e.PurchaseOrderCode, &e.CteCode, &e.Status, &e.XmlPath, &e.Notes,
-		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy)
+		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.SupplierCode)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("fiscal entry %d not found", id)
@@ -118,7 +118,7 @@ func (r *FiscalRepositoryPG) ListEntries(ctx context.Context) ([]*entity.FiscalE
 		        valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
-		        is_active, created_at, updated_at, created_by
+		        is_active, created_at, updated_at, created_by, supplier_code
 		 FROM public.fiscal_entries ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal entries: %w", err)
@@ -134,7 +134,7 @@ func (r *FiscalRepositoryPG) ListEntriesByStatus(ctx context.Context, status ent
 		        valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
-		        is_active, created_at, updated_at, created_by
+		        is_active, created_at, updated_at, created_by, supplier_code
 		 FROM public.fiscal_entries WHERE status = $1 ORDER BY created_at DESC`, status)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal entries by status: %w", err)
@@ -152,14 +152,14 @@ func (r *FiscalRepositoryPG) UpdateEntryStatus(ctx context.Context, id int64, st
 		           valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		           valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		           tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
-		           is_active, created_at, updated_at, created_by`,
+		           is_active, created_at, updated_at, created_by, supplier_code`,
 		status, id,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.Modelo, &e.DataEmissao, &e.DataEntrada,
 		&e.CnpjEmitente, &e.RazaoSocialEmitente, &e.IEEmitente, &e.UFEmitente,
 		&e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
 		&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 		&e.TipoDocumento, &e.PurchaseOrderCode, &e.CteCode, &e.Status, &e.XmlPath, &e.Notes,
-		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy)
+		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.SupplierCode)
 	if err != nil {
 		return nil, fmt.Errorf("updating fiscal entry status: %w", err)
 	}
@@ -186,7 +186,7 @@ func scanEntries(rows pgx.Rows) ([]*entity.FiscalEntry, error) {
 			&e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
 			&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 			&e.TipoDocumento, &e.PurchaseOrderCode, &e.CteCode, &e.Status, &e.XmlPath, &e.Notes,
-			&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy,
+			&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.SupplierCode,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal entry: %w", err)
 		}

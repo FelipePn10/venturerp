@@ -122,7 +122,8 @@ SELECT
     op.origin AS operation_origin,
     op.standard_time AS op_standard_time,
     op.setup_time AS op_setup_time,
-    mt.name AS work_center_name
+    mt.name AS work_center_name,
+    COALESCE(mt.requires_operator, TRUE) AS requires_operator
 FROM route_operations ro
 JOIN operations op ON op.id = ro.operation_id
 LEFT JOIN machine_types mt ON mt.id = COALESCE(ro.work_center_id, op.default_work_center_id)

@@ -9,8 +9,140 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type ApuracaoLineTypeEnum string
+
+const (
+	ApuracaoLineTypeEnumDEBITO  ApuracaoLineTypeEnum = "DEBITO"
+	ApuracaoLineTypeEnumCREDITO ApuracaoLineTypeEnum = "CREDITO"
+	ApuracaoLineTypeEnumSALDO   ApuracaoLineTypeEnum = "SALDO"
+	ApuracaoLineTypeEnumDEDUCAO ApuracaoLineTypeEnum = "DEDUCAO"
+	ApuracaoLineTypeEnumOUTROS  ApuracaoLineTypeEnum = "OUTROS"
+)
+
+func (e *ApuracaoLineTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ApuracaoLineTypeEnum(s)
+	case string:
+		*e = ApuracaoLineTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ApuracaoLineTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullApuracaoLineTypeEnum struct {
+	ApuracaoLineTypeEnum ApuracaoLineTypeEnum
+	Valid                bool // Valid is true if ApuracaoLineTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullApuracaoLineTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.ApuracaoLineTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ApuracaoLineTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullApuracaoLineTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ApuracaoLineTypeEnum), nil
+}
+
+type ArrecadacaoIndicatorEnum string
+
+const (
+	ArrecadacaoIndicatorEnumSEFAZ           ArrecadacaoIndicatorEnum = "SEFAZ"
+	ArrecadacaoIndicatorEnumJUSTICAFEDERAL  ArrecadacaoIndicatorEnum = "JUSTICA_FEDERAL"
+	ArrecadacaoIndicatorEnumJUSTICAESTADUAL ArrecadacaoIndicatorEnum = "JUSTICA_ESTADUAL"
+	ArrecadacaoIndicatorEnumOUTROS          ArrecadacaoIndicatorEnum = "OUTROS"
+)
+
+func (e *ArrecadacaoIndicatorEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ArrecadacaoIndicatorEnum(s)
+	case string:
+		*e = ArrecadacaoIndicatorEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ArrecadacaoIndicatorEnum: %T", src)
+	}
+	return nil
+}
+
+type NullArrecadacaoIndicatorEnum struct {
+	ArrecadacaoIndicatorEnum ArrecadacaoIndicatorEnum
+	Valid                    bool // Valid is true if ArrecadacaoIndicatorEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullArrecadacaoIndicatorEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.ArrecadacaoIndicatorEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ArrecadacaoIndicatorEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullArrecadacaoIndicatorEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ArrecadacaoIndicatorEnum), nil
+}
+
+type BaseDateEnum string
+
+const (
+	BaseDateEnumPEDIDO    BaseDateEnum = "PEDIDO"
+	BaseDateEnumDATAATUAL BaseDateEnum = "DATA_ATUAL"
+)
+
+func (e *BaseDateEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BaseDateEnum(s)
+	case string:
+		*e = BaseDateEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BaseDateEnum: %T", src)
+	}
+	return nil
+}
+
+type NullBaseDateEnum struct {
+	BaseDateEnum BaseDateEnum
+	Valid        bool // Valid is true if BaseDateEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullBaseDateEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.BaseDateEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BaseDateEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullBaseDateEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BaseDateEnum), nil
+}
 
 type CapacityPeriodEnum string
 
@@ -53,6 +185,265 @@ func (ns NullCapacityPeriodEnum) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.CapacityPeriodEnum), nil
+}
+
+type CarrierBillingTypeEnum string
+
+const (
+	CarrierBillingTypeEnumCARTEIRA           CarrierBillingTypeEnum = "CARTEIRA"
+	CarrierBillingTypeEnumCOBRANCAESCRITURAL CarrierBillingTypeEnum = "COBRANCA_ESCRITURAL"
+	CarrierBillingTypeEnumBOLETO             CarrierBillingTypeEnum = "BOLETO"
+)
+
+func (e *CarrierBillingTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CarrierBillingTypeEnum(s)
+	case string:
+		*e = CarrierBillingTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CarrierBillingTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCarrierBillingTypeEnum struct {
+	CarrierBillingTypeEnum CarrierBillingTypeEnum
+	Valid                  bool // Valid is true if CarrierBillingTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCarrierBillingTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CarrierBillingTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CarrierBillingTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCarrierBillingTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CarrierBillingTypeEnum), nil
+}
+
+type CfopIndOperacaoEnum string
+
+const (
+	CfopIndOperacaoEnumNORMAL          CfopIndOperacaoEnum = "NORMAL"
+	CfopIndOperacaoEnumENERGIAELETRICA CfopIndOperacaoEnum = "ENERGIA_ELETRICA"
+	CfopIndOperacaoEnumTELECOMUNICACAO CfopIndOperacaoEnum = "TELECOMUNICACAO"
+)
+
+func (e *CfopIndOperacaoEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CfopIndOperacaoEnum(s)
+	case string:
+		*e = CfopIndOperacaoEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CfopIndOperacaoEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCfopIndOperacaoEnum struct {
+	CfopIndOperacaoEnum CfopIndOperacaoEnum
+	Valid               bool // Valid is true if CfopIndOperacaoEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCfopIndOperacaoEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CfopIndOperacaoEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CfopIndOperacaoEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCfopIndOperacaoEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CfopIndOperacaoEnum), nil
+}
+
+type CfopTipoUtilizacaoEnum string
+
+const (
+	CfopTipoUtilizacaoEnumNORMAL                        CfopTipoUtilizacaoEnum = "NORMAL"
+	CfopTipoUtilizacaoEnumVENDACOMERCIALEXPORTADORA     CfopTipoUtilizacaoEnum = "VENDA_COMERCIAL_EXPORTADORA"
+	CfopTipoUtilizacaoEnumCOMPRAFIMESPECIFICOEXPORTACAO CfopTipoUtilizacaoEnum = "COMPRA_FIM_ESPECIFICO_EXPORTACAO"
+	CfopTipoUtilizacaoEnumEXPORTACAO                    CfopTipoUtilizacaoEnum = "EXPORTACAO"
+)
+
+func (e *CfopTipoUtilizacaoEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CfopTipoUtilizacaoEnum(s)
+	case string:
+		*e = CfopTipoUtilizacaoEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CfopTipoUtilizacaoEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCfopTipoUtilizacaoEnum struct {
+	CfopTipoUtilizacaoEnum CfopTipoUtilizacaoEnum
+	Valid                  bool // Valid is true if CfopTipoUtilizacaoEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCfopTipoUtilizacaoEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CfopTipoUtilizacaoEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CfopTipoUtilizacaoEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCfopTipoUtilizacaoEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CfopTipoUtilizacaoEnum), nil
+}
+
+type CfopUtilizationEnum string
+
+const (
+	CfopUtilizationEnumINDUSTRIALIZACAOCOMERCIO CfopUtilizationEnum = "INDUSTRIALIZACAO_COMERCIO"
+	CfopUtilizationEnumIMOBILIZADO              CfopUtilizationEnum = "IMOBILIZADO"
+	CfopUtilizationEnumUSOCONSUMO               CfopUtilizationEnum = "USO_CONSUMO"
+)
+
+func (e *CfopUtilizationEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CfopUtilizationEnum(s)
+	case string:
+		*e = CfopUtilizationEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CfopUtilizationEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCfopUtilizationEnum struct {
+	CfopUtilizationEnum CfopUtilizationEnum
+	Valid               bool // Valid is true if CfopUtilizationEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCfopUtilizationEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CfopUtilizationEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CfopUtilizationEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCfopUtilizationEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CfopUtilizationEnum), nil
+}
+
+type CustomerAddressTypeEnum string
+
+const (
+	CustomerAddressTypeEnumCOBRANCA  CustomerAddressTypeEnum = "COBRANCA"
+	CustomerAddressTypeEnumENTREGA   CustomerAddressTypeEnum = "ENTREGA"
+	CustomerAddressTypeEnumCOMERCIAL CustomerAddressTypeEnum = "COMERCIAL"
+	CustomerAddressTypeEnumOUTRO     CustomerAddressTypeEnum = "OUTRO"
+)
+
+func (e *CustomerAddressTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CustomerAddressTypeEnum(s)
+	case string:
+		*e = CustomerAddressTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CustomerAddressTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCustomerAddressTypeEnum struct {
+	CustomerAddressTypeEnum CustomerAddressTypeEnum
+	Valid                   bool // Valid is true if CustomerAddressTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCustomerAddressTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CustomerAddressTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CustomerAddressTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCustomerAddressTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CustomerAddressTypeEnum), nil
+}
+
+type CustomerCategoryEnum string
+
+const (
+	CustomerCategoryEnumNORMAL     CustomerCategoryEnum = "NORMAL"
+	CustomerCategoryEnumCONSUMIDOR CustomerCategoryEnum = "CONSUMIDOR"
+)
+
+func (e *CustomerCategoryEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CustomerCategoryEnum(s)
+	case string:
+		*e = CustomerCategoryEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CustomerCategoryEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCustomerCategoryEnum struct {
+	CustomerCategoryEnum CustomerCategoryEnum
+	Valid                bool // Valid is true if CustomerCategoryEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCustomerCategoryEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CustomerCategoryEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CustomerCategoryEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCustomerCategoryEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CustomerCategoryEnum), nil
 }
 
 type DemandTypeEnum string
@@ -100,6 +491,50 @@ func (ns NullDemandTypeEnum) Value() (driver.Value, error) {
 	return string(ns.DemandTypeEnum), nil
 }
 
+type DocumentTypeEnum string
+
+const (
+	DocumentTypeEnumCNPJ        DocumentTypeEnum = "CNPJ"
+	DocumentTypeEnumCPF         DocumentTypeEnum = "CPF"
+	DocumentTypeEnumESTRANGEIRO DocumentTypeEnum = "ESTRANGEIRO"
+	DocumentTypeEnumISENTO      DocumentTypeEnum = "ISENTO"
+)
+
+func (e *DocumentTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DocumentTypeEnum(s)
+	case string:
+		*e = DocumentTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DocumentTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullDocumentTypeEnum struct {
+	DocumentTypeEnum DocumentTypeEnum
+	Valid            bool // Valid is true if DocumentTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDocumentTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.DocumentTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DocumentTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDocumentTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DocumentTypeEnum), nil
+}
+
 type HealthEnum string
 
 const (
@@ -141,6 +576,310 @@ func (ns NullHealthEnum) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.HealthEnum), nil
+}
+
+type IcmsAcresTypeEnum string
+
+const (
+	IcmsAcresTypeEnumFUNDOCOMBATEPOBREZA IcmsAcresTypeEnum = "FUNDO_COMBATE_POBREZA"
+	IcmsAcresTypeEnumOUTROS              IcmsAcresTypeEnum = "OUTROS"
+)
+
+func (e *IcmsAcresTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IcmsAcresTypeEnum(s)
+	case string:
+		*e = IcmsAcresTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IcmsAcresTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullIcmsAcresTypeEnum struct {
+	IcmsAcresTypeEnum IcmsAcresTypeEnum
+	Valid             bool // Valid is true if IcmsAcresTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIcmsAcresTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.IcmsAcresTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IcmsAcresTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIcmsAcresTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IcmsAcresTypeEnum), nil
+}
+
+type IcmsAdjustmentTableRefEnum string
+
+const (
+	IcmsAdjustmentTableRefEnum52 IcmsAdjustmentTableRefEnum = "5.2"
+	IcmsAdjustmentTableRefEnum53 IcmsAdjustmentTableRefEnum = "5.3"
+	IcmsAdjustmentTableRefEnum56 IcmsAdjustmentTableRefEnum = "5.6"
+	IcmsAdjustmentTableRefEnum57 IcmsAdjustmentTableRefEnum = "5.7"
+)
+
+func (e *IcmsAdjustmentTableRefEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IcmsAdjustmentTableRefEnum(s)
+	case string:
+		*e = IcmsAdjustmentTableRefEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IcmsAdjustmentTableRefEnum: %T", src)
+	}
+	return nil
+}
+
+type NullIcmsAdjustmentTableRefEnum struct {
+	IcmsAdjustmentTableRefEnum IcmsAdjustmentTableRefEnum
+	Valid                      bool // Valid is true if IcmsAdjustmentTableRefEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIcmsAdjustmentTableRefEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.IcmsAdjustmentTableRefEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IcmsAdjustmentTableRefEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIcmsAdjustmentTableRefEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IcmsAdjustmentTableRefEnum), nil
+}
+
+type IcmsDifalTypeEnum string
+
+const (
+	IcmsDifalTypeEnumTRIBUTADO    IcmsDifalTypeEnum = "TRIBUTADO"
+	IcmsDifalTypeEnumISENTOOUTRAS IcmsDifalTypeEnum = "ISENTO_OUTRAS"
+	IcmsDifalTypeEnumNAOCONSIDERA IcmsDifalTypeEnum = "NAO_CONSIDERA"
+)
+
+func (e *IcmsDifalTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IcmsDifalTypeEnum(s)
+	case string:
+		*e = IcmsDifalTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IcmsDifalTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullIcmsDifalTypeEnum struct {
+	IcmsDifalTypeEnum IcmsDifalTypeEnum
+	Valid             bool // Valid is true if IcmsDifalTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIcmsDifalTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.IcmsDifalTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IcmsDifalTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIcmsDifalTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IcmsDifalTypeEnum), nil
+}
+
+type IcmsOperationTypeEnum string
+
+const (
+	IcmsOperationTypeEnumENTRADA IcmsOperationTypeEnum = "ENTRADA"
+	IcmsOperationTypeEnumSAIDA   IcmsOperationTypeEnum = "SAIDA"
+	IcmsOperationTypeEnumAMBAS   IcmsOperationTypeEnum = "AMBAS"
+	IcmsOperationTypeEnumCUSTOS  IcmsOperationTypeEnum = "CUSTOS"
+)
+
+func (e *IcmsOperationTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IcmsOperationTypeEnum(s)
+	case string:
+		*e = IcmsOperationTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IcmsOperationTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullIcmsOperationTypeEnum struct {
+	IcmsOperationTypeEnum IcmsOperationTypeEnum
+	Valid                 bool // Valid is true if IcmsOperationTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIcmsOperationTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.IcmsOperationTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IcmsOperationTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIcmsOperationTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IcmsOperationTypeEnum), nil
+}
+
+type IcmsReductionTargetEnum string
+
+const (
+	IcmsReductionTargetEnumBASE       IcmsReductionTargetEnum = "BASE"
+	IcmsReductionTargetEnumPERCENTUAL IcmsReductionTargetEnum = "PERCENTUAL"
+)
+
+func (e *IcmsReductionTargetEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IcmsReductionTargetEnum(s)
+	case string:
+		*e = IcmsReductionTargetEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IcmsReductionTargetEnum: %T", src)
+	}
+	return nil
+}
+
+type NullIcmsReductionTargetEnum struct {
+	IcmsReductionTargetEnum IcmsReductionTargetEnum
+	Valid                   bool // Valid is true if IcmsReductionTargetEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIcmsReductionTargetEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.IcmsReductionTargetEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IcmsReductionTargetEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIcmsReductionTargetEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IcmsReductionTargetEnum), nil
+}
+
+type IcmsStRestitutionTypeEnum string
+
+const (
+	IcmsStRestitutionTypeEnumRESTITUICAO    IcmsStRestitutionTypeEnum = "RESTITUICAO"
+	IcmsStRestitutionTypeEnumRESSARCIMENTO  IcmsStRestitutionTypeEnum = "RESSARCIMENTO"
+	IcmsStRestitutionTypeEnumCOMPLEMENTACAO IcmsStRestitutionTypeEnum = "COMPLEMENTACAO"
+)
+
+func (e *IcmsStRestitutionTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IcmsStRestitutionTypeEnum(s)
+	case string:
+		*e = IcmsStRestitutionTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IcmsStRestitutionTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullIcmsStRestitutionTypeEnum struct {
+	IcmsStRestitutionTypeEnum IcmsStRestitutionTypeEnum
+	Valid                     bool // Valid is true if IcmsStRestitutionTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIcmsStRestitutionTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.IcmsStRestitutionTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IcmsStRestitutionTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIcmsStRestitutionTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IcmsStRestitutionTypeEnum), nil
+}
+
+type ImpostosNfeEnum string
+
+const (
+	ImpostosNfeEnumICMS    ImpostosNfeEnum = "ICMS"
+	ImpostosNfeEnumIPI     ImpostosNfeEnum = "IPI"
+	ImpostosNfeEnumPIS     ImpostosNfeEnum = "PIS"
+	ImpostosNfeEnumCOFINS  ImpostosNfeEnum = "COFINS"
+	ImpostosNfeEnumICMSIPI ImpostosNfeEnum = "ICMS_IPI"
+	ImpostosNfeEnumTODOS   ImpostosNfeEnum = "TODOS"
+)
+
+func (e *ImpostosNfeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ImpostosNfeEnum(s)
+	case string:
+		*e = ImpostosNfeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ImpostosNfeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullImpostosNfeEnum struct {
+	ImpostosNfeEnum ImpostosNfeEnum
+	Valid           bool // Valid is true if ImpostosNfeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullImpostosNfeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.ImpostosNfeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ImpostosNfeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullImpostosNfeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ImpostosNfeEnum), nil
 }
 
 type InspectionPointType string
@@ -228,6 +967,149 @@ func (ns NullInspectionResultEnum) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.InspectionResultEnum), nil
+}
+
+type InvoiceIcmsTypeEnum string
+
+const (
+	InvoiceIcmsTypeEnumTRIBUTADO InvoiceIcmsTypeEnum = "TRIBUTADO"
+	InvoiceIcmsTypeEnumISENTO    InvoiceIcmsTypeEnum = "ISENTO"
+	InvoiceIcmsTypeEnumOUTROS    InvoiceIcmsTypeEnum = "OUTROS"
+)
+
+func (e *InvoiceIcmsTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = InvoiceIcmsTypeEnum(s)
+	case string:
+		*e = InvoiceIcmsTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for InvoiceIcmsTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullInvoiceIcmsTypeEnum struct {
+	InvoiceIcmsTypeEnum InvoiceIcmsTypeEnum
+	Valid               bool // Valid is true if InvoiceIcmsTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullInvoiceIcmsTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.InvoiceIcmsTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.InvoiceIcmsTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullInvoiceIcmsTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.InvoiceIcmsTypeEnum), nil
+}
+
+type InvoiceStockEnum string
+
+const (
+	InvoiceStockEnumATUALIZA             InvoiceStockEnum = "ATUALIZA"
+	InvoiceStockEnumNAOATUALIZA          InvoiceStockEnum = "NAO_ATUALIZA"
+	InvoiceStockEnumTRANSFERENCIAEXTERNA InvoiceStockEnum = "TRANSFERENCIA_EXTERNA"
+)
+
+func (e *InvoiceStockEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = InvoiceStockEnum(s)
+	case string:
+		*e = InvoiceStockEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for InvoiceStockEnum: %T", src)
+	}
+	return nil
+}
+
+type NullInvoiceStockEnum struct {
+	InvoiceStockEnum InvoiceStockEnum
+	Valid            bool // Valid is true if InvoiceStockEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullInvoiceStockEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.InvoiceStockEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.InvoiceStockEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullInvoiceStockEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.InvoiceStockEnum), nil
+}
+
+type InvoiceTypeEnum string
+
+const (
+	InvoiceTypeEnumVENDA                 InvoiceTypeEnum = "VENDA"
+	InvoiceTypeEnumDEVOLUCAO             InvoiceTypeEnum = "DEVOLUCAO"
+	InvoiceTypeEnumREMESSA               InvoiceTypeEnum = "REMESSA"
+	InvoiceTypeEnumREMESSACONSIGNACAO    InvoiceTypeEnum = "REMESSA_CONSIGNACAO"
+	InvoiceTypeEnumREMESSAARMAZENAGEM    InvoiceTypeEnum = "REMESSA_ARMAZENAGEM"
+	InvoiceTypeEnumREMESSABENEFICIAMENTO InvoiceTypeEnum = "REMESSA_BENEFICIAMENTO"
+	InvoiceTypeEnumRETORNOBENEFICIAMENTO InvoiceTypeEnum = "RETORNO_BENEFICIAMENTO"
+	InvoiceTypeEnumSIMPLESREMESSA        InvoiceTypeEnum = "SIMPLES_REMESSA"
+	InvoiceTypeEnumTRANSFERENCIA         InvoiceTypeEnum = "TRANSFERENCIA"
+	InvoiceTypeEnumVENDACONSIGNACAO      InvoiceTypeEnum = "VENDA_CONSIGNACAO"
+	InvoiceTypeEnumCOMPLEMENTARICM       InvoiceTypeEnum = "COMPLEMENTAR_ICM"
+	InvoiceTypeEnumCOMPLEMENTARIPI       InvoiceTypeEnum = "COMPLEMENTAR_IPI"
+	InvoiceTypeEnumDEMONSTRACAO          InvoiceTypeEnum = "DEMONSTRACAO"
+	InvoiceTypeEnumEMPRESTIMO            InvoiceTypeEnum = "EMPRESTIMO"
+	InvoiceTypeEnumFATURAMENTOANTECIPADO InvoiceTypeEnum = "FATURAMENTO_ANTECIPADO"
+	InvoiceTypeEnumPRESTACAOSERVICOS     InvoiceTypeEnum = "PRESTACAO_SERVICOS"
+	InvoiceTypeEnumOUTROS                InvoiceTypeEnum = "OUTROS"
+)
+
+func (e *InvoiceTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = InvoiceTypeEnum(s)
+	case string:
+		*e = InvoiceTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for InvoiceTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullInvoiceTypeEnum struct {
+	InvoiceTypeEnum InvoiceTypeEnum
+	Valid           bool // Valid is true if InvoiceTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullInvoiceTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.InvoiceTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.InvoiceTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullInvoiceTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.InvoiceTypeEnum), nil
 }
 
 type MachineCapacityUnitEnum string
@@ -593,6 +1475,227 @@ func (ns NullOrderTypeEnum) Value() (driver.Value, error) {
 	return string(ns.OrderTypeEnum), nil
 }
 
+type PaymentAnalysisEnum string
+
+const (
+	PaymentAnalysisEnumSEMPREANALISA    PaymentAnalysisEnum = "SEMPRE_ANALISA"
+	PaymentAnalysisEnumBLOQUEIASEMPRE   PaymentAnalysisEnum = "BLOQUEIA_SEMPRE"
+	PaymentAnalysisEnumLIBERASEMANALISE PaymentAnalysisEnum = "LIBERA_SEM_ANALISE"
+)
+
+func (e *PaymentAnalysisEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentAnalysisEnum(s)
+	case string:
+		*e = PaymentAnalysisEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentAnalysisEnum: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentAnalysisEnum struct {
+	PaymentAnalysisEnum PaymentAnalysisEnum
+	Valid               bool // Valid is true if PaymentAnalysisEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentAnalysisEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentAnalysisEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentAnalysisEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentAnalysisEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentAnalysisEnum), nil
+}
+
+type PaymentConditionVisibilityEnum string
+
+const (
+	PaymentConditionVisibilityEnumSOMENTEVINCULADOS PaymentConditionVisibilityEnum = "SOMENTE_VINCULADOS"
+	PaymentConditionVisibilityEnumVINCULADOSENENHUM PaymentConditionVisibilityEnum = "VINCULADOS_E_NENHUM"
+	PaymentConditionVisibilityEnumTODOS             PaymentConditionVisibilityEnum = "TODOS"
+)
+
+func (e *PaymentConditionVisibilityEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentConditionVisibilityEnum(s)
+	case string:
+		*e = PaymentConditionVisibilityEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentConditionVisibilityEnum: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentConditionVisibilityEnum struct {
+	PaymentConditionVisibilityEnum PaymentConditionVisibilityEnum
+	Valid                          bool // Valid is true if PaymentConditionVisibilityEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentConditionVisibilityEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentConditionVisibilityEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentConditionVisibilityEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentConditionVisibilityEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentConditionVisibilityEnum), nil
+}
+
+type PaymentParcelStartEnum string
+
+const (
+	PaymentParcelStartEnumEMISSAO         PaymentParcelStartEnum = "EMISSAO"
+	PaymentParcelStartEnumPROXIMOMES      PaymentParcelStartEnum = "PROXIMO_MES"
+	PaymentParcelStartEnumPROXIMAQUINZENA PaymentParcelStartEnum = "PROXIMA_QUINZENA"
+)
+
+func (e *PaymentParcelStartEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentParcelStartEnum(s)
+	case string:
+		*e = PaymentParcelStartEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentParcelStartEnum: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentParcelStartEnum struct {
+	PaymentParcelStartEnum PaymentParcelStartEnum
+	Valid                  bool // Valid is true if PaymentParcelStartEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentParcelStartEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentParcelStartEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentParcelStartEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentParcelStartEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentParcelStartEnum), nil
+}
+
+type PriceFormationEnum string
+
+const (
+	PriceFormationEnumINFORMADO             PriceFormationEnum = "INFORMADO"
+	PriceFormationEnumCUSTOMEDIO            PriceFormationEnum = "CUSTO_MEDIO"
+	PriceFormationEnumCUSTOSTANDARDTOTAL    PriceFormationEnum = "CUSTO_STANDARD_TOTAL"
+	PriceFormationEnumCUSTOSTANDARDMATERIAL PriceFormationEnum = "CUSTO_STANDARD_MATERIAL"
+	PriceFormationEnumINFORMADOSEMICMS      PriceFormationEnum = "INFORMADO_SEM_ICMS"
+	PriceFormationEnumMATOPER               PriceFormationEnum = "MAT_OPER"
+	PriceFormationEnumTABELACUSTO           PriceFormationEnum = "TABELA_CUSTO"
+	PriceFormationEnumTRANSFERENCIAIPI      PriceFormationEnum = "TRANSFERENCIA_IPI"
+	PriceFormationEnumTRANSFERENCIAUF       PriceFormationEnum = "TRANSFERENCIA_UF"
+)
+
+func (e *PriceFormationEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PriceFormationEnum(s)
+	case string:
+		*e = PriceFormationEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PriceFormationEnum: %T", src)
+	}
+	return nil
+}
+
+type NullPriceFormationEnum struct {
+	PriceFormationEnum PriceFormationEnum
+	Valid              bool // Valid is true if PriceFormationEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPriceFormationEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.PriceFormationEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PriceFormationEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPriceFormationEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PriceFormationEnum), nil
+}
+
+type PriceSituationEnum string
+
+const (
+	PriceSituationEnumATIVO       PriceSituationEnum = "ATIVO"
+	PriceSituationEnumINATIVO     PriceSituationEnum = "INATIVO"
+	PriceSituationEnumPROMOCIONAL PriceSituationEnum = "PROMOCIONAL"
+)
+
+func (e *PriceSituationEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PriceSituationEnum(s)
+	case string:
+		*e = PriceSituationEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PriceSituationEnum: %T", src)
+	}
+	return nil
+}
+
+type NullPriceSituationEnum struct {
+	PriceSituationEnum PriceSituationEnum
+	Valid              bool // Valid is true if PriceSituationEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPriceSituationEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.PriceSituationEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PriceSituationEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPriceSituationEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PriceSituationEnum), nil
+}
+
 type RestrictionConditionEnum string
 
 const (
@@ -767,6 +1870,52 @@ func (ns NullSalesDivisionAnalysisEnum) Value() (driver.Value, error) {
 	return string(ns.SalesDivisionAnalysisEnum), nil
 }
 
+type SimplesNacionalAnnexEnum string
+
+const (
+	SimplesNacionalAnnexEnumI   SimplesNacionalAnnexEnum = "I"
+	SimplesNacionalAnnexEnumII  SimplesNacionalAnnexEnum = "II"
+	SimplesNacionalAnnexEnumIII SimplesNacionalAnnexEnum = "III"
+	SimplesNacionalAnnexEnumIV  SimplesNacionalAnnexEnum = "IV"
+	SimplesNacionalAnnexEnumV   SimplesNacionalAnnexEnum = "V"
+	SimplesNacionalAnnexEnumVI  SimplesNacionalAnnexEnum = "VI"
+)
+
+func (e *SimplesNacionalAnnexEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SimplesNacionalAnnexEnum(s)
+	case string:
+		*e = SimplesNacionalAnnexEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SimplesNacionalAnnexEnum: %T", src)
+	}
+	return nil
+}
+
+type NullSimplesNacionalAnnexEnum struct {
+	SimplesNacionalAnnexEnum SimplesNacionalAnnexEnum
+	Valid                    bool // Valid is true if SimplesNacionalAnnexEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSimplesNacionalAnnexEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.SimplesNacionalAnnexEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SimplesNacionalAnnexEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSimplesNacionalAnnexEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SimplesNacionalAnnexEnum), nil
+}
+
 type SituationEnum string
 
 const (
@@ -807,6 +1956,310 @@ func (ns NullSituationEnum) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.SituationEnum), nil
+}
+
+type SpecialNotePurposeEnum string
+
+const (
+	SpecialNotePurposeEnumCOMPLEMENTAR SpecialNotePurposeEnum = "COMPLEMENTAR"
+	SpecialNotePurposeEnumAJUSTE       SpecialNotePurposeEnum = "AJUSTE"
+)
+
+func (e *SpecialNotePurposeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SpecialNotePurposeEnum(s)
+	case string:
+		*e = SpecialNotePurposeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SpecialNotePurposeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullSpecialNotePurposeEnum struct {
+	SpecialNotePurposeEnum SpecialNotePurposeEnum
+	Valid                  bool // Valid is true if SpecialNotePurposeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSpecialNotePurposeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.SpecialNotePurposeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SpecialNotePurposeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSpecialNotePurposeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SpecialNotePurposeEnum), nil
+}
+
+type SpecialNoteStatusEnum string
+
+const (
+	SpecialNoteStatusEnumRASCUNHO  SpecialNoteStatusEnum = "RASCUNHO"
+	SpecialNoteStatusEnumEMITIDA   SpecialNoteStatusEnum = "EMITIDA"
+	SpecialNoteStatusEnumCANCELADA SpecialNoteStatusEnum = "CANCELADA"
+)
+
+func (e *SpecialNoteStatusEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SpecialNoteStatusEnum(s)
+	case string:
+		*e = SpecialNoteStatusEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SpecialNoteStatusEnum: %T", src)
+	}
+	return nil
+}
+
+type NullSpecialNoteStatusEnum struct {
+	SpecialNoteStatusEnum SpecialNoteStatusEnum
+	Valid                 bool // Valid is true if SpecialNoteStatusEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSpecialNoteStatusEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.SpecialNoteStatusEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SpecialNoteStatusEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSpecialNoteStatusEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SpecialNoteStatusEnum), nil
+}
+
+type StockMovementDirectionEnum string
+
+const (
+	StockMovementDirectionEnumENTRADA       StockMovementDirectionEnum = "ENTRADA"
+	StockMovementDirectionEnumSAIDA         StockMovementDirectionEnum = "SAIDA"
+	StockMovementDirectionEnumTRANSFERENCIA StockMovementDirectionEnum = "TRANSFERENCIA"
+	StockMovementDirectionEnumAMBOS         StockMovementDirectionEnum = "AMBOS"
+)
+
+func (e *StockMovementDirectionEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StockMovementDirectionEnum(s)
+	case string:
+		*e = StockMovementDirectionEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StockMovementDirectionEnum: %T", src)
+	}
+	return nil
+}
+
+type NullStockMovementDirectionEnum struct {
+	StockMovementDirectionEnum StockMovementDirectionEnum
+	Valid                      bool // Valid is true if StockMovementDirectionEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullStockMovementDirectionEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.StockMovementDirectionEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.StockMovementDirectionEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullStockMovementDirectionEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.StockMovementDirectionEnum), nil
+}
+
+type StockMovementUsageEnum string
+
+const (
+	StockMovementUsageEnumPRODUCAO      StockMovementUsageEnum = "PRODUCAO"
+	StockMovementUsageEnumCOMPRAS       StockMovementUsageEnum = "COMPRAS"
+	StockMovementUsageEnumVENDAS        StockMovementUsageEnum = "VENDAS"
+	StockMovementUsageEnumGERAL         StockMovementUsageEnum = "GERAL"
+	StockMovementUsageEnumAJUSTE        StockMovementUsageEnum = "AJUSTE"
+	StockMovementUsageEnumTRANSFERENCIA StockMovementUsageEnum = "TRANSFERENCIA"
+)
+
+func (e *StockMovementUsageEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StockMovementUsageEnum(s)
+	case string:
+		*e = StockMovementUsageEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StockMovementUsageEnum: %T", src)
+	}
+	return nil
+}
+
+type NullStockMovementUsageEnum struct {
+	StockMovementUsageEnum StockMovementUsageEnum
+	Valid                  bool // Valid is true if StockMovementUsageEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullStockMovementUsageEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.StockMovementUsageEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.StockMovementUsageEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullStockMovementUsageEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.StockMovementUsageEnum), nil
+}
+
+type TableCompositionEnum string
+
+const (
+	TableCompositionEnumEXWORK TableCompositionEnum = "EXWORK"
+	TableCompositionEnumCIF    TableCompositionEnum = "CIF"
+	TableCompositionEnumFOB    TableCompositionEnum = "FOB"
+)
+
+func (e *TableCompositionEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TableCompositionEnum(s)
+	case string:
+		*e = TableCompositionEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TableCompositionEnum: %T", src)
+	}
+	return nil
+}
+
+type NullTableCompositionEnum struct {
+	TableCompositionEnum TableCompositionEnum
+	Valid                bool // Valid is true if TableCompositionEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTableCompositionEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.TableCompositionEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TableCompositionEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTableCompositionEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TableCompositionEnum), nil
+}
+
+type TableTypeEnum string
+
+const (
+	TableTypeEnumNORMAL      TableTypeEnum = "NORMAL"
+	TableTypeEnumPROMOCIONAL TableTypeEnum = "PROMOCIONAL"
+)
+
+func (e *TableTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TableTypeEnum(s)
+	case string:
+		*e = TableTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TableTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullTableTypeEnum struct {
+	TableTypeEnum TableTypeEnum
+	Valid         bool // Valid is true if TableTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTableTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.TableTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TableTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTableTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TableTypeEnum), nil
+}
+
+type TaxParamOperationEnum string
+
+const (
+	TaxParamOperationEnumAMBAS   TaxParamOperationEnum = "AMBAS"
+	TaxParamOperationEnumENTRADA TaxParamOperationEnum = "ENTRADA"
+	TaxParamOperationEnumSAIDA   TaxParamOperationEnum = "SAIDA"
+	TaxParamOperationEnumCUSTOS  TaxParamOperationEnum = "CUSTOS"
+)
+
+func (e *TaxParamOperationEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TaxParamOperationEnum(s)
+	case string:
+		*e = TaxParamOperationEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TaxParamOperationEnum: %T", src)
+	}
+	return nil
+}
+
+type NullTaxParamOperationEnum struct {
+	TaxParamOperationEnum TaxParamOperationEnum
+	Valid                 bool // Valid is true if TaxParamOperationEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTaxParamOperationEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.TaxParamOperationEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TaxParamOperationEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTaxParamOperationEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TaxParamOperationEnum), nil
 }
 
 type TypeCcEnum string
@@ -1166,6 +2619,92 @@ func (ns NullUnitOfMeasurementEnum) Value() (driver.Value, error) {
 	return string(ns.UnitOfMeasurementEnum), nil
 }
 
+type AccountingAccount struct {
+	ID                 int64
+	PlanID             int64
+	ParentID           *int64
+	AccountNumber      string
+	Description        string
+	NatureCode         string
+	ReducedCode        pgtype.Text
+	RequiresCostCenter bool
+	ValidFrom          pgtype.Date
+	ValidTo            pgtype.Date
+	IsAnalytic         bool
+	CreatedAt          pgtype.Timestamptz
+}
+
+type AccountingAccountRef struct {
+	ID           int64
+	AccountID    int64
+	RefAccountID int64
+	EmpresaID    int32
+	CostCenterID *int64
+	CreatedAt    pgtype.Timestamptz
+}
+
+type AccountingDemonstrative struct {
+	ID          int64
+	Code        string
+	Description string
+	TermText    string
+	CreatedAt   pgtype.Timestamptz
+}
+
+type AccountingDemonstrativeItem struct {
+	ID              int64
+	DemonstrativeID int64
+	ItemCode        int32
+	Description     string
+	Formula         string
+	IndicatorGroup  string
+	ShowInReport    bool
+	ShowBold        bool
+	IsResult        bool
+	Is100pct        bool
+	SpedEcfDigit    string
+	SpedEcfType     string
+	CreatedAt       pgtype.Timestamptz
+}
+
+type AccountingJournalEntry struct {
+	ID              int64
+	PlanID          int64
+	EmpresaID       int32
+	EntryDate       pgtype.Date
+	EntryNumber     string
+	BatchNumber     string
+	DebitAccountID  int64
+	CreditAccountID int64
+	DebitCcID       *int64
+	CreditCcID      *int64
+	Value           pgtype.Numeric
+	HistoryCode     string
+	Description     string
+	EntryType       string
+	CreatedAt       pgtype.Timestamptz
+}
+
+type AccountingPlan struct {
+	ID          int64
+	PlanNumber  int32
+	Description string
+	ValidFrom   pgtype.Date
+	ValidTo     pgtype.Date
+	Status      string
+	CreatedAt   pgtype.Timestamptz
+}
+
+type AccountingReferenceAccount struct {
+	ID              int64
+	InstitutionCode int32
+	ParentRefID     *int64
+	AccountNumber   string
+	Description     string
+	AccountType     string
+	CreatedAt       pgtype.Timestamptz
+}
+
 type AllocationBaseItem struct {
 	ID                 int64
 	Amount             float64
@@ -1236,6 +2775,32 @@ type CapacityRequirement struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
+type Carrier struct {
+	ID                int64
+	Code              int64
+	Description       string
+	BillingType       sqltypes.CarrierBillingTypeEnum
+	UsesCreditLimit   bool
+	ConsiderAvailable bool
+	PostponeDueDate   bool
+	ReceiptDays       int16
+	PaymentDays       int16
+	IsActive          bool
+	CreatedAt         pgtype.Timestamptz
+}
+
+type CarrierGroup struct {
+	ID          int64
+	Code        int64
+	Description string
+	CreatedAt   pgtype.Timestamptz
+}
+
+type CarrierGroupCarrier struct {
+	CarrierGroupID int64
+	CarrierID      int64
+}
+
 type CartaCorrecao struct {
 	ID            int64
 	FiscalExitID  int64
@@ -1256,6 +2821,22 @@ type CentrosCusto struct {
 	Tipo      string
 	IsActive  bool
 	CreatedAt pgtype.Timestamptz
+}
+
+type Cfop struct {
+	ID              int64
+	Code            int32
+	Description     string
+	DescriptionFull pgtype.Text
+	Utilization     sqltypes.CfopUtilizationEnum
+	OrigemClasIpi   pgtype.Text
+	IndOperacao     sqltypes.CfopIndOperacaoEnum
+	TipoUtilizacao  sqltypes.CfopTipoUtilizacaoEnum
+	CodigoAnexoSn   pgtype.Text
+	Difal           bool
+	Doacao          bool
+	IsActive        bool
+	CreatedAt       pgtype.Timestamptz
 }
 
 type ComplementA struct {
@@ -1432,11 +3013,114 @@ type CostRollupLog struct {
 	RunAt        pgtype.Timestamptz
 }
 
+type Country struct {
+	ID        int64
+	Sigla     string
+	Name      string
+	Ddi       pgtype.Text
+	BacenCode pgtype.Text
+	SisComex  pgtype.Text
+	IsActive  bool
+	CreatedAt pgtype.Timestamptz
+}
+
 type CteNfeAssociation struct {
 	CteID         int64
 	FiscalEntryID int64
 	RateioValor   pgtype.Numeric
 	RateioPct     pgtype.Numeric
+}
+
+type Customer struct {
+	ID                    int64
+	Code                  int64
+	CorporateCode         *int64
+	IsCorporate           bool
+	Name                  string
+	TradeName             pgtype.Text
+	DocumentType          sqltypes.DocumentTypeEnum
+	DocumentNumber        string
+	StateRegistration     pgtype.Text
+	MunicipalRegistration pgtype.Text
+	SuframaCode           pgtype.Text
+	SuframaExpiry         pgtype.Date
+	RegionID              *int64
+	MarketSegmentID       *int64
+	CustomerTypeID        *int64
+	PaymentConditionID    *int64
+	SalesTableID          *int64
+	CarrierID             *int64
+	CarrierGroupID        *int64
+	InvoiceTypeID         *int64
+	TaxTypeID             *int64
+	PaymentCondVisibility sqltypes.PaymentCondVisibilityEnum
+	CreditLimit           pgtype.Numeric
+	Website               pgtype.Text
+	IsActive              bool
+	Blocked               bool
+	BlockReason           pgtype.Text
+	CreatedAt             pgtype.Timestamptz
+	CreatedBy             pgtype.UUID
+	UpdatedAt             pgtype.Timestamptz
+}
+
+type CustomerAddress struct {
+	ID           int64
+	CustomerID   int64
+	AddressType  sqltypes.CustomerAddressTypeEnum
+	ZipCode      pgtype.Text
+	Street       pgtype.Text
+	Number       pgtype.Text
+	Complement   pgtype.Text
+	Neighborhood pgtype.Text
+	City         pgtype.Text
+	Uf           pgtype.Text
+	Country      string
+	IsDefault    bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type CustomerContact struct {
+	ID            int64
+	CustomerID    int64
+	ContactTypeID *int64
+	Name          string
+	Email         pgtype.Text
+	Phone         pgtype.Text
+	Mobile        pgtype.Text
+	Position      pgtype.Text
+	IsPrimary     bool
+	IsActive      bool
+	CreatedAt     pgtype.Timestamptz
+}
+
+type CustomerContactType struct {
+	ID          int64
+	Code        int64
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+}
+
+type CustomerType struct {
+	ID           int64
+	Code         int64
+	Description  string
+	Category     sqltypes.CustomerCategoryEnum
+	DeliveryDays int16
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type DapiTransferReason struct {
+	ID          int64
+	Code        string
+	Reason      string
+	Destination pgtype.Text
+	ValidFrom   pgtype.Date
+	ValidTo     pgtype.Date
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
 }
 
 type DeliveryPromiseParam struct {
@@ -1488,6 +3172,21 @@ type Enterprise struct {
 	CreatedBy pgtype.UUID
 }
 
+type EntryOperationType struct {
+	ID                 int64
+	Code               int64
+	Description        string
+	InvoiceTypeCode    *int64
+	NatureOperation    string
+	ClassificationType pgtype.Text
+	ClassificationCode pgtype.Text
+	StateGroupCode     *int64
+	SupplierTypeCode   *int64
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	CreatedBy          pgtype.UUID
+}
+
 type ExtratoBancario struct {
 	ID              int64
 	ContaBancariaID int64
@@ -1500,6 +3199,75 @@ type ExtratoBancario struct {
 	FluxoCaixaID    *int64
 	Conciliado      bool
 	CreatedAt       pgtype.Timestamptz
+}
+
+type FiscalClassification struct {
+	ID                      int64
+	Code                    int64
+	Description             string
+	Ncm                     pgtype.Text
+	Cest                    pgtype.Text
+	IpiRate                 pgtype.Numeric
+	IpiIndicator            string
+	Apuracao                pgtype.Text
+	CstIpiEntrada           pgtype.Text
+	CstIpiSaida             pgtype.Text
+	PisRate                 pgtype.Numeric
+	PisIndicator            string
+	CstPisEntrada           pgtype.Text
+	CstPisSaida             pgtype.Text
+	CofinsRate              pgtype.Numeric
+	CofinsIndicator         string
+	CstCofinsEntrada        pgtype.Text
+	CstCofinsSaida          pgtype.Text
+	CofinsMajoradoPct       pgtype.Numeric
+	PisStPct                pgtype.Numeric
+	CofinsStPct             pgtype.Numeric
+	PisConsumoPct           pgtype.Numeric
+	CstPisConsumoEntrada    pgtype.Text
+	CstPisConsumoSaida      pgtype.Text
+	CofinsConsumoPct        pgtype.Numeric
+	CstCofinsConsumoEntrada pgtype.Text
+	CstCofinsConsumoSaida   pgtype.Text
+	PisRetencaoPct          pgtype.Numeric
+	CstPisRetencao          pgtype.Text
+	CofinsRetencaoPct       pgtype.Numeric
+	CstCofinsRetencao       pgtype.Text
+	PisReducaoPct           pgtype.Numeric
+	CstPisReducao           pgtype.Text
+	CofinsReducaoPct        pgtype.Numeric
+	CstCofinsReducao        pgtype.Text
+	DescPisZfPct            pgtype.Numeric
+	DescCofinsZfPct         pgtype.Numeric
+	ExTarifario             pgtype.Text
+	UnIpi                   pgtype.Text
+	UnTributacao            pgtype.Text
+	ModBcIcms               pgtype.Text
+	ModBcIcmsSt             pgtype.Text
+	CodClasTrib             pgtype.Text
+	CodClasTribTribReg      pgtype.Text
+	ObsFiscal               pgtype.Text
+	IsActive                bool
+	CreatedAt               pgtype.Timestamptz
+	CreatedBy               pgtype.UUID
+	UpdatedAt               pgtype.Timestamptz
+}
+
+type FiscalClassificationExportAttribute struct {
+	ID               int64
+	ClassificationID int64
+	Code             string
+	Description      pgtype.Text
+	Domain           pgtype.Text
+	StartDate        pgtype.Date
+	EndDate          pgtype.Date
+}
+
+type FiscalClassificationLanguage struct {
+	ID               int64
+	ClassificationID int64
+	Language         string
+	Description      string
 }
 
 type FiscalConfig struct {
@@ -1593,6 +3361,7 @@ type FiscalEntry struct {
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
 	CreatedBy           pgtype.UUID
+	SupplierCode        *int64
 }
 
 type FiscalEntryItem struct {
@@ -1740,6 +3509,41 @@ type Group struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type IcmsAdjustmentCode struct {
+	ID          int64
+	Uf          string
+	Code        string
+	Description string
+	TableRef    IcmsAdjustmentTableRefEnum
+	ValidFrom   pgtype.Date
+	ValidTo     pgtype.Date
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+}
+
+type IcmsApuracaoAdjustmentCode struct {
+	ID          int64
+	Code        string
+	Uf          string
+	Description string
+	ValidFrom   pgtype.Date
+	ValidTo     pgtype.Date
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+}
+
+type IcmsApuracaoLine struct {
+	ID                       int64
+	Code                     string
+	Description              string
+	LineType                 ApuracaoLineTypeEnum
+	AcceptsEntries           bool
+	Nature                   pgtype.Text
+	ApuracaoAdjustmentCodeID *int64
+	IsActive                 bool
+	CreatedAt                pgtype.Timestamptz
+}
+
 type IcmsInternal struct {
 	ID        int64
 	Uf        string
@@ -1756,6 +3560,251 @@ type IcmsInterstate struct {
 	AliqIcms      pgtype.Numeric
 	Description   pgtype.Text
 	IsActive      bool
+}
+
+type IcmsIpiTaxParam struct {
+	ID                               int64
+	NcmCode                          pgtype.Text
+	ItemCode                         *int64
+	ItemConfigMask                   pgtype.Text
+	Uf                               string
+	OperationType                    sqltypes.TaxParamOperationEnum
+	CustomerCode                     *int64
+	CustomerEstablishmentCode        *int64
+	MarketSegmentID                  *int64
+	InvoiceTypeExitID                *int64
+	InvoiceTypeEntryID               *int64
+	TaxTypeID                        *int64
+	IsPreferred                      bool
+	IsSimplesOptante                 bool
+	IcmsPctContrib                   pgtype.Numeric
+	LegalDeviceIcmsContribID         *int64
+	IcmsPctNonContrib                pgtype.Numeric
+	LegalDeviceIcmsNonContribID      *int64
+	IcmsRedPctContrib                pgtype.Numeric
+	IcmsRedTargetContrib             NullIcmsReductionTargetEnum
+	LegalDeviceIcmsRedContribID      *int64
+	IcmsRedPctNonContrib             pgtype.Numeric
+	IcmsRedTargetNonContrib          NullIcmsReductionTargetEnum
+	LegalDeviceIcmsRedNonContribID   *int64
+	IcmsDeferralPct                  pgtype.Numeric
+	IcmsDeferralTarget               NullIcmsReductionTargetEnum
+	LegalDeviceIcmsDeferralID        *int64
+	CodBenefRbc                      pgtype.Text
+	IcmsSubstPctContrib              pgtype.Numeric
+	LegalDeviceIcmsSubstContribID    *int64
+	IcmsSubstPctNonContrib           pgtype.Numeric
+	LegalDeviceIcmsSubstNonContribID *int64
+	IcmsSubstPctContribUc            pgtype.Numeric
+	IcmsSubstRedPct                  pgtype.Numeric
+	LegalDeviceIcmsSubstRedID        *int64
+	IcmsInternalPct                  pgtype.Numeric
+	BcIcmsStModality                 pgtype.Text
+	IcmsPctForStContrib              pgtype.Numeric
+	IcmsPctForStNonContrib           pgtype.Numeric
+	CstSituationB                    pgtype.Text
+	CsosnIcms                        pgtype.Text
+	CstIcmsContrib                   pgtype.Text
+	CstIcmsNonContrib                pgtype.Text
+	CodBeneficioFiscal               pgtype.Text
+	CstIcmsContribDev                pgtype.Text
+	CstIcmsNonContribDev             pgtype.Text
+	IpiRedPctContrib                 pgtype.Numeric
+	IpiRedTargetContrib              NullIcmsReductionTargetEnum
+	LegalDeviceIpiContribID          *int64
+	IpiRedPctNonContrib              pgtype.Numeric
+	IpiRedTargetNonContrib           NullIcmsReductionTargetEnum
+	LegalDeviceIpiNonContribID       *int64
+	CstIpiExit                       pgtype.Text
+	CstIpiEntry                      pgtype.Text
+	IcmsPctOrigins1238               pgtype.Numeric
+	CalcBaseRedFci                   bool
+	IcmsSubstPctOrigins1238          pgtype.Numeric
+	CstIcmsFci                       pgtype.Text
+	UsesIcmsZonaFranca               bool
+	DifAliqStContribUc               pgtype.Numeric
+	CodBenefContrib                  pgtype.Text
+	CodBenefNonContrib               pgtype.Text
+	IcmsAcresPctContrib              pgtype.Numeric
+	IcmsAcresTypeContrib             NullIcmsAcresTypeEnum
+	IcmsAcresSumContrib              bool
+	IcmsAcresPctNonContrib           pgtype.Numeric
+	IcmsAcresTypeNonContrib          NullIcmsAcresTypeEnum
+	IcmsAcresSumNonContrib           bool
+	IcmsStAcresPctContrib            pgtype.Numeric
+	IcmsStAcresTypeContrib           NullIcmsAcresTypeEnum
+	IcmsStAcresSumContrib            bool
+	IcmsStAcresPctNonContrib         pgtype.Numeric
+	IcmsStAcresTypeNonContrib        NullIcmsAcresTypeEnum
+	IcmsStAcresSumNonContrib         bool
+	FcpStPartilhaPct                 pgtype.Numeric
+	IcmsDifalRedPct                  pgtype.Numeric
+	IcmsDifalType                    NullIcmsDifalTypeEnum
+	DifalPurchaseRedPct              pgtype.Numeric
+	DifalPurchaseRedTarget           NullIcmsReductionTargetEnum
+	IsActive                         bool
+	CreatedAt                        pgtype.Timestamptz
+	UpdatedAt                        pgtype.Timestamptz
+}
+
+type IcmsReductionSubstitution struct {
+	ID                               int64
+	ItemID                           *int64
+	ItemMask                         pgtype.Text
+	NcmCode                          pgtype.Text
+	Uf                               string
+	OperationType                    IcmsOperationTypeEnum
+	CustomerID                       *int64
+	EstablishmentID                  *int64
+	SupplierID                       *int64
+	InvoiceTypeOutID                 *int64
+	InvoiceTypeInID                  *int64
+	MarketSegmentID                  *int64
+	IsPreferential                   bool
+	IcmsPctContrib                   pgtype.Numeric
+	IcmsPctNonContrib                pgtype.Numeric
+	LegalDeviceIcmsContribID         *int64
+	LegalDeviceIcmsNonContribID      *int64
+	IcmsRedPctContrib                pgtype.Numeric
+	IcmsRedTargetContrib             NullIcmsReductionTargetEnum
+	IcmsRedPctNonContrib             pgtype.Numeric
+	IcmsRedTargetNonContrib          NullIcmsReductionTargetEnum
+	LegalDeviceIcmsRedContribID      *int64
+	LegalDeviceIcmsRedNonContribID   *int64
+	IcmsDeferralPct                  pgtype.Numeric
+	IcmsDeferralTarget               NullIcmsReductionTargetEnum
+	LegalDeviceIcmsDeferralID        *int64
+	IcmsDeferralBenefitCode          pgtype.Text
+	IcmsSubstPctContrib              pgtype.Numeric
+	IcmsSubstPctNonContrib           pgtype.Numeric
+	IcmsSubstPctContribUc            pgtype.Numeric
+	IcmsSubstRedPct                  pgtype.Numeric
+	IcmsInternalPct                  pgtype.Numeric
+	LegalDeviceIcmsSubstContribID    *int64
+	LegalDeviceIcmsSubstNonContribID *int64
+	LegalDeviceIcmsSubstRedID        *int64
+	ModBcIcmsSt                      pgtype.Text
+	IcmsPctForStContrib              pgtype.Numeric
+	IcmsPctForStNonContrib           pgtype.Numeric
+	CstIcmsContrib                   pgtype.Text
+	CstIcmsNonContrib                pgtype.Text
+	CsosnIcms                        pgtype.Text
+	CstIcmsContribDev                pgtype.Text
+	CstIcmsNonContribDev             pgtype.Text
+	CstSitTribB                      pgtype.Text
+	FiscalBenefitCodeContrib         pgtype.Text
+	FiscalBenefitCodeNonContrib      pgtype.Text
+	FiscalBenefitCode                pgtype.Text
+	IpiRedPctContrib                 pgtype.Numeric
+	IpiRedTargetContrib              NullIcmsReductionTargetEnum
+	IpiRedPctNonContrib              pgtype.Numeric
+	IpiRedTargetNonContrib           NullIcmsReductionTargetEnum
+	LegalDeviceIpiContribID          *int64
+	LegalDeviceIpiNonContribID       *int64
+	CstIpiOut                        pgtype.Text
+	CstIpiIn                         pgtype.Text
+	FciIcmsPct                       pgtype.Numeric
+	FciReduceBase                    bool
+	FciIcmsSubstPct                  pgtype.Numeric
+	FciCstIcms                       pgtype.Text
+	FciUseIcmsZf                     bool
+	FciDifalStContribUcPct           pgtype.Numeric
+	IcmsAddPctContrib                pgtype.Numeric
+	IcmsAddTypeContrib               pgtype.Text
+	IcmsAddSumAliqContrib            bool
+	IcmsAddPctNonContrib             pgtype.Numeric
+	IcmsAddTypeNonContrib            pgtype.Text
+	IcmsAddSumAliqNonContrib         bool
+	IcmsStAddPctContrib              pgtype.Numeric
+	IcmsStAddTypeContrib             pgtype.Text
+	IcmsStAddPctNonContrib           pgtype.Numeric
+	IcmsStAddTypeNonContrib          pgtype.Text
+	FcpPartitionPct                  pgtype.Numeric
+	DifalIcmsRedPct                  pgtype.Numeric
+	DifalIcmsType                    pgtype.Text
+	DifalPurchaseRedPct              pgtype.Numeric
+	IsSimplesOptante                 bool
+	IsActive                         bool
+	CreatedAt                        pgtype.Timestamptz
+}
+
+type IcmsStRestitution struct {
+	ID                      int64
+	EmpresaID               int32
+	Period                  string
+	RestitutionType         IcmsStRestitutionTypeEnum
+	Uf                      string
+	OrigDocModel            pgtype.Text
+	OrigDocSeries           pgtype.Text
+	OrigDocNumber           pgtype.Text
+	OrigDocDate             pgtype.Date
+	OrigEmitterCnpj         pgtype.Text
+	OrigEmitterIe           pgtype.Text
+	ItemID                  *int64
+	ItemCode                pgtype.Text
+	Cfop                    pgtype.Text
+	MotivoCode              pgtype.Text
+	CstIcms                 pgtype.Text
+	IcmsStBase              pgtype.Numeric
+	IcmsStAliq              pgtype.Numeric
+	IcmsStValue             pgtype.Numeric
+	IcmsStBaseRestitution   pgtype.Numeric
+	IcmsStValueRestitution  pgtype.Numeric
+	IcmsStConsolidatedBase  pgtype.Numeric
+	IcmsStConsolidatedValue pgtype.Numeric
+	H030IndEstoque          pgtype.Text
+	SpedBlock               pgtype.Text
+	IsActive                bool
+	CreatedAt               pgtype.Timestamptz
+}
+
+type IcmsSummaryEntry struct {
+	ID             int64
+	Period         string
+	Uf             string
+	CfopID         *int64
+	IcmsBase       pgtype.Numeric
+	IcmsValue      pgtype.Numeric
+	IcmsBaseOther  pgtype.Numeric
+	IcmsValueOther pgtype.Numeric
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+}
+
+type IcmsSummaryEntryAdditional struct {
+	ID                   int64
+	SummaryEntryID       int64
+	Sequence             int32
+	ArrecadacaoIndicator ArrecadacaoIndicatorEnum
+	Processo             pgtype.Text
+	Arrecadacao          pgtype.Text
+	Description          pgtype.Text
+	DiefTable            pgtype.Text
+	DiefCode             pgtype.Text
+	CreatedAt            pgtype.Timestamptz
+}
+
+type IcmsSummaryEntryNote struct {
+	ID              int64
+	SummaryEntryID  int64
+	NoteNumber      string
+	NoteSeries      pgtype.Text
+	EmitterCnpj     pgtype.Text
+	IssueDate       pgtype.Date
+	ItemValue       pgtype.Numeric
+	IcmsBase        pgtype.Numeric
+	IcmsValue       pgtype.Numeric
+	Observation     pgtype.Text
+	CreatedAt       pgtype.Timestamptz
+	AdjustmentValue pgtype.Numeric
+	Aliquota        pgtype.Numeric
+	CalcBase        pgtype.Numeric
+	OtherValue      pgtype.Numeric
+	NoteType        pgtype.Text
+	MotivoID        *int64
+	VistoDate       pgtype.Date
+	C190ObsCode     pgtype.Text
+	ObsCodeC190     bool
 }
 
 type IndependentDemand struct {
@@ -1809,6 +3858,84 @@ type InspectionPlanCharacteristic struct {
 	IsCritical     bool
 }
 
+type InvoiceType struct {
+	ID                       int64
+	Code                     int64
+	Description              string
+	Type                     sqltypes.InvoiceTypeEnum
+	StockMovement            sqltypes.InvoiceStockEnum
+	IcmsType                 sqltypes.InvoiceICMSTypeEnum
+	IcmsPct                  pgtype.Numeric
+	IcmsReductionPct         pgtype.Numeric
+	IpiPct                   pgtype.Numeric
+	PisPct                   pgtype.Numeric
+	CofinsPct                pgtype.Numeric
+	IssqnPct                 pgtype.Numeric
+	IrPct                    pgtype.Numeric
+	CsllPct                  pgtype.Numeric
+	InssPct                  pgtype.Numeric
+	GeneratesRevenue         bool
+	UpdatesInventory         bool
+	GeneratesFinancialTitle  bool
+	ConsidersGoals           bool
+	CalcSubstitutionTax      bool
+	CalcIcmsDeferral         bool
+	CalcPisCofins            bool
+	CalcDifal                bool
+	RequiresSalesOrder       bool
+	ListsFiscalBooks         bool
+	IsActive                 bool
+	CreatedAt                pgtype.Timestamptz
+	ModelNf                  pgtype.Text
+	CstIcms                  pgtype.Text
+	CsosnIcms                pgtype.Text
+	CstIpi                   pgtype.Text
+	CstPis                   pgtype.Text
+	CstCofins                pgtype.Text
+	BaixaPedido              bool
+	GeraTituloDev            bool
+	ExigeSuframa             bool
+	IrPctPresumption         pgtype.Numeric
+	CsllPctPresumption       pgtype.Numeric
+	DescriptionNf            pgtype.Text
+	ImpostosNfe              NullImpostosNfeEnum
+	CfopID                   *int64
+	DispositivoLegalIpiID    *int64
+	DispositivoLegalIcmsID   *int64
+	DispositivoLegalIcmsStID *int64
+	DispositivoLegalPisID    *int64
+	DispositivoLegalCofinsID *int64
+	HierarchyIpi             pgtype.Text
+	HierarchyIcms            pgtype.Text
+	HierarchyIcmsSt          pgtype.Text
+	HierarchyPis             pgtype.Text
+	HierarchyCofins          pgtype.Text
+	IpiTransferSalesTableID  *int64
+	ListaValorContabil       bool
+	ListaRegistroSaida       bool
+	ListaIcmsIpi             bool
+	SintegraSpedFiscal       bool
+	CalcFomentar             bool
+	ExcecaoFomentar          bool
+	CompRessRetSt            bool
+	CalcReducao              bool
+	ComplementoItens         bool
+	BuscaTipoNf              bool
+	IcmsStUltEntrada         bool
+	SomenteConsultaLotes     bool
+	CalcImpIbpt              bool
+	CredPresumidoIcms        bool
+	Ciap                     bool
+	VlrAgregadoBaseSubst     bool
+	ContratoFacon            bool
+	DescIcmsLicitacoes       bool
+	Sisdeclara               bool
+	CodClasTrib              pgtype.Text
+	CodClasTribTribReg       pgtype.Text
+	CodMotivoRestCompIcmsSt  pgtype.Text
+	CodBeneficioFiscal       pgtype.Text
+}
+
 type Item struct {
 	ID                                   int64
 	WarehouseCode                        int64
@@ -1856,6 +3983,26 @@ type ItemCalendarPromise struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type ItemClassification struct {
+	ID          int64
+	Code        string
+	MaskID      int64
+	ParentID    *int64
+	Level       int32
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+}
+
+type ItemClassificationMask struct {
+	ID          int64
+	Code        int64
+	Mask        string
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+}
+
 type ItemMachineTime struct {
 	ID                 int64
 	ItemCode           int64
@@ -1898,6 +4045,20 @@ type ItemPlanningExtra struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	UseTankDate  bool
+}
+
+type ItemPreferredSupplier struct {
+	ID                  int64
+	ItemCode            int64
+	SupplierCode        int64
+	Ranking             int32
+	SupplierItemCode    pgtype.Text
+	SupplierDescription pgtype.Text
+	Uom                 pgtype.Text
+	LeadTimeDays        int32
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
 }
 
 type ItemPurchaseCost struct {
@@ -1959,6 +4120,17 @@ type ItemStructure struct {
 	LossFormula       pgtype.Text
 }
 
+type ItemUnitConversion struct {
+	ID        int64
+	ItemCode  int64
+	FromUom   string
+	ToUom     string
+	Factor    pgtype.Numeric
+	IsActive  bool
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
 type KanbanCard struct {
 	ID              int64
 	ItemCode        int64
@@ -1970,6 +4142,15 @@ type KanbanCard struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	CreatedBy       pgtype.UUID
+}
+
+type LegalDevice struct {
+	ID          int64
+	Code        int64
+	Type        string
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
 }
 
 type Machine struct {
@@ -2007,16 +4188,17 @@ type MachineSchedule struct {
 }
 
 type MachineType struct {
-	ID          int64
-	Code        int64
-	Name        string
-	Description pgtype.Text
-	Type        MachineTypeEnum
-	SetupTime   pgtype.Numeric
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID               int64
+	Code             int64
+	Name             string
+	Description      pgtype.Text
+	Type             MachineTypeEnum
+	SetupTime        pgtype.Numeric
+	IsActive         bool
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	CreatedBy        pgtype.UUID
+	RequiresOperator bool
 }
 
 type MaintenanceOrder struct {
@@ -2060,12 +4242,23 @@ type ManufacturingRoute struct {
 	Mask        pgtype.Text
 	Alternative int16
 	Description pgtype.Text
-	Situation   interface{}
+	Situation   sqltypes.RouteSituationEnum
 	IsStandard  bool
 	IsActive    bool
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 	CreatedBy   pgtype.UUID
+}
+
+type MarketSegment struct {
+	ID                    int64
+	Code                  int64
+	Description           string
+	ParentID              *int64
+	HasPisCofinsRetention bool
+	RetentionIndicator    pgtype.Int2
+	IsActive              bool
+	CreatedAt             pgtype.Timestamptz
 }
 
 type MaskComposition struct {
@@ -2204,8 +4397,8 @@ type Operation struct {
 	Code                int64
 	Name                string
 	Description         pgtype.Text
-	Origin              interface{}
-	Situation           interface{}
+	Origin              sqltypes.OperationOriginEnum
+	Situation           sqltypes.OperationSituationEnum
 	DefaultWorkCenterID *int64
 	StandardTime        pgtype.Numeric
 	SetupTime           pgtype.Numeric
@@ -2256,6 +4449,34 @@ type OverheadAllocationTarget struct {
 	Code           int64
 	OverheadCode   *int64
 	CostCenterCode *int32
+}
+
+type PaymentCondition struct {
+	ID           int64
+	Code         int64
+	Description  string
+	CarrierID    *int64
+	AnalysisType sqltypes.PaymentAnalysisEnum
+	ParcelStart  sqltypes.PaymentParcelStartEnum
+	Expenses     pgtype.Numeric
+	AverageTerm  int16
+	IsSpecial    bool
+	IsRevenue    bool
+	IsAtSight    bool
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type PaymentConditionInstallment struct {
+	ID                 int64
+	PaymentConditionID int64
+	InstallmentNumber  int16
+	DueDays            int16
+	Description        pgtype.Text
+	DocumentType       pgtype.Text
+	MovementType       pgtype.Text
+	CarrierID          *int64
+	IsActive           bool
 }
 
 type PerfisUsuario struct {
@@ -2481,53 +4702,196 @@ type ProductionSequence struct {
 }
 
 type PurchaseOrder struct {
-	Code                int64
-	OrderNumber         int64
-	EnterpriseCode      int64
-	Status              string
-	Origin              string
-	EmissionDate        pgtype.Date
-	DeliveryDate        pgtype.Date
-	SupplierCode        *int64
-	PaymentTermCode     *int64
-	CurrencyCode        string
-	ShippingAddressCode *int64
-	Notes               pgtype.Text
-	TotalGross          pgtype.Numeric
-	TotalNet            pgtype.Numeric
-	TotalDiscount       pgtype.Numeric
-	IsActive            bool
-	IsFirm              bool
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	CreatedBy           pgtype.UUID
+	Code                   int64
+	OrderNumber            int64
+	EnterpriseCode         int64
+	Status                 string
+	Origin                 string
+	EmissionDate           pgtype.Date
+	DeliveryDate           pgtype.Date
+	SupplierCode           *int64
+	PaymentTermCode        *int64
+	CurrencyCode           string
+	ShippingAddressCode    *int64
+	Notes                  pgtype.Text
+	TotalGross             pgtype.Numeric
+	TotalNet               pgtype.Numeric
+	TotalDiscount          pgtype.Numeric
+	IsActive               bool
+	IsFirm                 bool
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	CreatedBy              pgtype.UUID
+	PriceTableCode         *int64
+	InvoiceTypeCode        *int64
+	FinancialAccount       pgtype.Text
+	RequestTypeCode        *int64
+	CurrencyDate           pgtype.Date
+	FreightType            string
+	FreightValueType       pgtype.Text
+	FreightValueMode       pgtype.Text
+	FreightValue           pgtype.Numeric
+	CarrierCode            *int64
+	RedispatchCarrierCode  *int64
+	RedispatchFreightType  pgtype.Text
+	RedispatchFreightValue pgtype.Numeric
+	AdvanceDate            pgtype.Date
+	AdvanceValue           pgtype.Numeric
+	IncotermCode           pgtype.Text
+	ShipmentDate           pgtype.Date
+	TalaoNumber            pgtype.Text
+	AlcadaStatus           string
 }
 
 type PurchaseOrderItem struct {
-	Code              int64
-	PurchaseOrderCode int64
-	Sequence          int32
-	ItemCode          int64
-	Mask              string
-	RequestedQty      pgtype.Numeric
-	ReceivedQty       pgtype.Numeric
-	CancelledQty      pgtype.Numeric
-	UnitPrice         pgtype.Numeric
-	TotalPrice        pgtype.Numeric
-	DiscountPct       pgtype.Numeric
-	IpiPct            pgtype.Numeric
-	IcmsPct           pgtype.Numeric
-	Status            string
-	DeliveryDate      pgtype.Date
-	Notes             pgtype.Text
-	IsActive          bool
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
+	Code                     int64
+	PurchaseOrderCode        int64
+	Sequence                 int32
+	ItemCode                 int64
+	Mask                     string
+	RequestedQty             pgtype.Numeric
+	ReceivedQty              pgtype.Numeric
+	CancelledQty             pgtype.Numeric
+	UnitPrice                pgtype.Numeric
+	TotalPrice               pgtype.Numeric
+	DiscountPct              pgtype.Numeric
+	IpiPct                   pgtype.Numeric
+	IcmsPct                  pgtype.Numeric
+	Status                   string
+	DeliveryDate             pgtype.Date
+	Notes                    pgtype.Text
+	IsActive                 bool
+	CreatedAt                pgtype.Timestamptz
+	UpdatedAt                pgtype.Timestamptz
+	PurchaseUom              pgtype.Text
+	InternalUom              pgtype.Text
+	InternalQty              pgtype.Numeric
+	InternalPrice            pgtype.Numeric
+	PromisedDate             pgtype.Date
+	TolerancePct             pgtype.Numeric
+	CancelledToleranceQty    pgtype.Numeric
+	IcmsStPct                pgtype.Numeric
+	OperationTypeCode        *int64
+	InvoiceTypeCode          *int64
+	AccountingAccount        pgtype.Text
+	CostCenterCode           *int64
+	RequesterEmployeeCode    *int64
+	ContractCode             *int64
+	QuotationCode            *int64
+	UtilizationType          pgtype.Text
+	FiscalClassificationCode *int64
 }
 
 type PurchaseOrderSequence struct {
 	EnterpriseCode int64
 	LastNumber     int64
+}
+
+type PurchasePriceTable struct {
+	ID            int64
+	Code          int64
+	Description   string
+	CurrencyCode  string
+	ValidityStart pgtype.Date
+	ValidityEnd   pgtype.Date
+	IsActive      bool
+	CreatedAt     pgtype.Timestamptz
+	CreatedBy     pgtype.UUID
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type PurchasePriceTableItem struct {
+	ID           int64
+	TableID      int64
+	ItemCode     int64
+	SupplierCode *int64
+	Uom          pgtype.Text
+	Price        pgtype.Numeric
+	MinQty       pgtype.Numeric
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type PurchaseQuotation struct {
+	ID             int64
+	Code           int64
+	EnterpriseCode int64
+	Status         string
+	EmissionDate   pgtype.Date
+	Notes          pgtype.Text
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type PurchaseQuotationItem struct {
+	ID            int64
+	QuotationCode int64
+	Sequence      int32
+	ItemCode      int64
+	Quantity      pgtype.Numeric
+	Uom           pgtype.Text
+	DeliveryDate  pgtype.Date
+	SourceType    string
+	SourceCode    *int64
+	SourceItemID  *int64
+	IsConfigured  bool
+	CreatedAt     pgtype.Timestamptz
+}
+
+type PurchaseQuotationPrice struct {
+	ID              int64
+	QuotationItemID int64
+	SupplierCode    int64
+	UnitPrice       pgtype.Numeric
+	LeadTimeDays    int32
+	PaymentTermCode *int64
+	Notes           pgtype.Text
+	IsSelected      bool
+	CreatedAt       pgtype.Timestamptz
+}
+
+type PurchaseQuotationSupplier struct {
+	ID            int64
+	QuotationCode int64
+	SupplierCode  int64
+	InvitedAt     pgtype.Timestamptz
+}
+
+type PurchaseRequisition struct {
+	ID                    int64
+	Code                  int64
+	EnterpriseCode        int64
+	RequestTypeCode       *int64
+	RequesterEmployeeCode *int64
+	EmissionDate          pgtype.Date
+	Status                string
+	Notes                 pgtype.Text
+	IsActive              bool
+	CreatedAt             pgtype.Timestamptz
+	CreatedBy             pgtype.UUID
+	UpdatedAt             pgtype.Timestamptz
+}
+
+type PurchaseRequisitionItem struct {
+	ID                int64
+	RequisitionCode   int64
+	Sequence          int32
+	ItemCode          int64
+	Quantity          pgtype.Numeric
+	AttendedQty       pgtype.Numeric
+	CancelledQty      pgtype.Numeric
+	Uom               pgtype.Text
+	CostCenterCode    *int64
+	AccountingAccount pgtype.Text
+	SuggestedPrice    pgtype.Numeric
+	DeliveryDate      pgtype.Date
+	Application       pgtype.Text
+	UtilizationType   pgtype.Text
+	Status            string
+	IsActive          bool
+	CreatedAt         pgtype.Timestamptz
 }
 
 type QualityMeasurement struct {
@@ -2568,6 +4932,17 @@ type QuestionOption struct {
 	Value      string
 	CreatedAt  pgtype.Timestamptz
 	CreatedBy  pgtype.UUID
+}
+
+type Region struct {
+	ID          int64
+	Code        int64
+	Description string
+	Uf          string
+	City        string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
 }
 
 type Restriction struct {
@@ -2621,7 +4996,7 @@ type RouteOperation struct {
 	WorkCenterID *int64
 	StandardTime pgtype.Numeric
 	SetupTime    pgtype.Numeric
-	Situation    interface{}
+	Situation    sqltypes.RouteOpSituationEnum
 	Notes        pgtype.Text
 	IsActive     bool
 	CreatedAt    pgtype.Timestamptz
@@ -2810,6 +5185,125 @@ type SalesOrderSequence struct {
 	LastNumber     int64
 }
 
+type SalesTable struct {
+	ID                         int64
+	Code                       int64
+	Description                string
+	ValidityStart              pgtype.Date
+	ValidityEnd                pgtype.Date
+	ToleranceMinPct            pgtype.Numeric
+	ToleranceMaxPct            pgtype.Numeric
+	PriceFormation             sqltypes.PriceFormationEnum
+	DecimalPlaces              int16
+	IsActive                   bool
+	CreatedAt                  pgtype.Timestamptz
+	Composition                sqltypes.TableCompositionEnum
+	TableType                  sqltypes.TableTypeEnum
+	BaseDate                   sqltypes.BaseDateEnum
+	AllowItemsBelowCent        bool
+	IcmsInterestadualPorDentro bool
+	Observation                pgtype.Text
+}
+
+type SalesTablePrice struct {
+	ID            int64
+	SalesTableID  int64
+	ItemCode      string
+	Price         pgtype.Numeric
+	Ume           pgtype.Text
+	Umc           pgtype.Text
+	PriceConv     pgtype.Numeric
+	Formula       pgtype.Text
+	Situation     PriceSituationEnum
+	Blocked       bool
+	Observation   pgtype.Text
+	ProductLineID *int64
+	ItemMask      pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+}
+
+type SimplesNacionalApuraco struct {
+	ID                  int64
+	Period              string
+	Annex               SimplesNacionalAnnexEnum
+	ReceitaInterna      pgtype.Numeric
+	ReceitaExterna      pgtype.Numeric
+	FolhaPagamento      pgtype.Numeric
+	ReceitaBruta12m     pgtype.Numeric
+	SimplesRecolhido    pgtype.Numeric
+	AliquotaNominal     pgtype.Numeric
+	AliquotaEfetiva     pgtype.Numeric
+	AliquotaEfetivaIcms pgtype.Numeric
+	ParcelaDeduzir      pgtype.Numeric
+	Observation         pgtype.Text
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+}
+
+type SpecialAdjustmentNote struct {
+	ID                      int64
+	EmpresaID               int32
+	Purpose                 SpecialNotePurposeEnum
+	Status                  SpecialNoteStatusEnum
+	Number                  pgtype.Text
+	Series                  pgtype.Text
+	IssueDate               pgtype.Date
+	Period                  string
+	InvoiceTypeID           *int64
+	CfopID                  *int64
+	IcmsApuracaoLineID      *int64
+	AdjustmentCodeID        *int64
+	AdjustmentDocCodeID     *int64
+	History                 pgtype.Text
+	AutoGenerateSummary     bool
+	GeneratedSummaryEntryID *int64
+	TotalValue              pgtype.Numeric
+	TotalIcms               pgtype.Numeric
+	TotalIpi                pgtype.Numeric
+	Observation             pgtype.Text
+	CreatedAt               pgtype.Timestamptz
+}
+
+type SpecialAdjustmentNoteItem struct {
+	ID                int64
+	NoteID            int64
+	Sequence          int32
+	ItemID            *int64
+	ItemCode          pgtype.Text
+	Description       pgtype.Text
+	Quantity          pgtype.Numeric
+	Unit              pgtype.Text
+	UnitValue         pgtype.Numeric
+	TotalValue        pgtype.Numeric
+	IcmsBase          pgtype.Numeric
+	IcmsPct           pgtype.Numeric
+	IcmsDeferralPct   pgtype.Numeric
+	IcmsValue         pgtype.Numeric
+	IcmsDeferredValue pgtype.Numeric
+	IpiBase           pgtype.Numeric
+	IpiPct            pgtype.Numeric
+	IpiValue          pgtype.Numeric
+	CstIcms           pgtype.Text
+	CstIpi            pgtype.Text
+	CfopID            *int64
+	CreatedAt         pgtype.Timestamptz
+}
+
+type StateGroup struct {
+	ID          int64
+	Code        int64
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type StateGroupUf struct {
+	ID             int64
+	StateGroupCode int64
+	Uf             string
+}
+
 type Stock struct {
 	ProductID int64
 	Quantity  pgtype.Numeric
@@ -2843,6 +5337,24 @@ type StockMovement struct {
 	CreatedAt     pgtype.Timestamp
 }
 
+type StockMovementType struct {
+	ID                   int64
+	Sigla                string
+	Description          string
+	UsageType            StockMovementUsageEnum
+	EntryOrder           bool
+	ExitOrder            bool
+	ConsidersConsumption bool
+	UpdatesAvgCost       bool
+	IsAdjustment         bool
+	UpdatesCycleCount    bool
+	ShowsInSummary       bool
+	EntryExit            StockMovementDirectionEnum
+	GeneratesFciMovement bool
+	IsActive             bool
+	CreatedAt            pgtype.Timestamptz
+}
+
 type StockReservation struct {
 	ID                int64
 	ItemCode          int64
@@ -2874,6 +5386,168 @@ type StockSnapshot struct {
 	MinMaxActive  bool
 }
 
+type Supplier struct {
+	ID                              int64
+	Code                            int64
+	CorporateCode                   *int64
+	IsActive                        bool
+	IsRepresentative                bool
+	IsCustomer                      bool
+	Name                            string
+	TradeName                       pgtype.Text
+	PersonType                      string
+	DocumentType                    string
+	DocumentNumber                  string
+	StateRegistration               pgtype.Text
+	MunicipalRegistration           pgtype.Text
+	SupplierTypeID                  *int64
+	PaymentConditionID              *int64
+	CarrierID                       *int64
+	RegionID                        *int64
+	FreightType                     string
+	RegisterDate                    pgtype.Date
+	ViticolaObligation              string
+	GlnCode                         pgtype.Text
+	AgricultureMinistryRegistration pgtype.Text
+	IcmsContributor                 string
+	IsMei                           bool
+	TrackingPlatform                string
+	Homologated                     bool
+	LastSefazQuery                  pgtype.Date
+	BillingReceiptStatus            pgtype.Text
+	LastSefazUpdate                 pgtype.Date
+	SefazUpdateUser                 pgtype.Text
+	Blocked                         bool
+	BlockReason                     pgtype.Text
+	CreatedAt                       pgtype.Timestamptz
+	CreatedBy                       pgtype.UUID
+	UpdatedAt                       pgtype.Timestamptz
+}
+
+type SupplierAddress struct {
+	ID           int64
+	SupplierID   int64
+	AddressType  string
+	ZipCode      pgtype.Text
+	Street       pgtype.Text
+	Number       pgtype.Text
+	Complement   pgtype.Text
+	Neighborhood pgtype.Text
+	City         pgtype.Text
+	Uf           pgtype.Text
+	Country      string
+	IsDefault    bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type SupplierContact struct {
+	ID               int64
+	SupplierID       int64
+	ContactTypeID    *int64
+	Name             string
+	Position         pgtype.Text
+	Department       pgtype.Text
+	Ranking          int32
+	Observation      pgtype.Text
+	PurchaseOrderTag pgtype.Text
+	IsActive         bool
+	CreatedAt        pgtype.Timestamptz
+}
+
+type SupplierContactEmail struct {
+	ID        int64
+	ContactID int64
+	Value     string
+	Ranking   int32
+}
+
+type SupplierContactPhone struct {
+	ID        int64
+	ContactID int64
+	Value     string
+	Ranking   int32
+}
+
+type SupplierContactType struct {
+	ID          int64
+	Code        int64
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+}
+
+type SupplierDueDate struct {
+	ID                 int64
+	SupplierID         int64
+	Description        string
+	Ranking            int32
+	BaseDate           string
+	PaymentConditionID *int64
+	PaymentType        string
+	SubsequentMonth    bool
+	Rounding           string
+	ReceiptStartTime   pgtype.Text
+	ReceiptEndTime     pgtype.Text
+	AvgUnloadMinutes   *int32
+	CreatedAt          pgtype.Timestamptz
+}
+
+type SupplierEmail struct {
+	ID         int64
+	SupplierID int64
+	Email      string
+	Ranking    int32
+	IsActive   bool
+	CreatedAt  pgtype.Timestamptz
+}
+
+type SupplierEnterprise struct {
+	ID                   int64
+	SupplierID           int64
+	EnterpriseCode       int64
+	FinancialAccount     pgtype.Text
+	AppliesIpi           bool
+	DefaultInvoiceTypeID *int64
+	PurchasePriceTableID *int64
+	IsActive             bool
+	CreatedAt            pgtype.Timestamptz
+}
+
+type SupplierParameter struct {
+	ID                        int64
+	EnterpriseCode            int64
+	DefaultFinancialAccount   pgtype.Text
+	UniqueItemCodePerSupplier bool
+	RequiresFinancialAccount  bool
+	PurchaseSupplierTypeID    *int64
+	CopyObsToPurchaseOrder    bool
+	CopyObsToEntryInvoice     bool
+	HomologationDefault       bool
+	UseStockUom               bool
+	GenericSupplierCode       *int64
+	DefaultDueBaseDate        string
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
+}
+
+type SupplierPhone struct {
+	ID         int64
+	SupplierID int64
+	Number     string
+	Ranking    int32
+	IsActive   bool
+	CreatedAt  pgtype.Timestamptz
+}
+
+type SupplierType struct {
+	ID          int64
+	Code        int64
+	Description string
+	Kind        string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+}
+
 type TaxAssessment struct {
 	ID             int64
 	Imposto        string
@@ -2902,6 +5576,45 @@ type TaxScenario struct {
 	IsActive        bool
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+}
+
+type TaxType struct {
+	ID                            int64
+	Code                          int64
+	Description                   string
+	IpiBaseTotalItems             bool
+	IpiBaseSubtractDiscount       bool
+	IpiBaseAddFreight             bool
+	IpiBaseAddExpenses            bool
+	IcmsBaseTotalItems            bool
+	IcmsBaseSubtractDiscount      bool
+	IcmsBaseAddFreight            bool
+	IcmsBaseAddIpi                bool
+	IcmsBaseAddExpenses           bool
+	PisCofinsBaseTotalItems       bool
+	PisCofinsBaseSubtractDiscount bool
+	PisCofinsBaseAddFreight       bool
+	PisCofinsBaseAddInsurance     bool
+	PisCofinsBaseAddExpenses      bool
+	CsllBaseTotalItems            bool
+	CsllBaseSubtractDiscount      bool
+	CsllBaseAddFreight            bool
+	IrBaseTotalItems              bool
+	IrBaseSubtractDiscount        bool
+	IrBaseAddFreight              bool
+	IsConsumer                    bool
+	IsActive                      bool
+	CreatedAt                     pgtype.Timestamptz
+}
+
+type Uf struct {
+	ID        int64
+	Sigla     string
+	Name      string
+	CountryID int64
+	IbgeCode  pgtype.Text
+	IsActive  bool
+	CreatedAt pgtype.Timestamptz
 }
 
 type User struct {
