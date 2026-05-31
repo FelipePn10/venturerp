@@ -20,12 +20,13 @@ func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.Cre
 		return nil, errorsuc.ErrUnauthorized
 	}
 	mt := &entity.MachineType{
-		Code:        dto.Code,
-		Name:        dto.Name,
-		Description: dto.Description,
-		Type:        dto.Type,
-		IsActive:    dto.IsActive,
-		CreatedBy:   dto.CreatedBy,
+		Code:             dto.Code,
+		Name:             dto.Name,
+		Description:      dto.Description,
+		Type:             dto.Type,
+		RequiresOperator: dto.RequiresOperator,
+		IsActive:         dto.IsActive,
+		CreatedBy:        dto.CreatedBy,
 	}
 	return uc.Repo.CreateType(ctx, mt)
 }

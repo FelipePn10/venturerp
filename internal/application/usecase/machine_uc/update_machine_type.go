@@ -25,11 +25,12 @@ func (uc *UpdateMachineTypeUseCase) Execute(
 	}
 
 	mt := &entity.MachineType{
-		Code:        dto.Code,
-		Name:        dto.Name,
-		Description: dto.Description,
-		Type:        types.MachineTypeEnum(dto.Type),
-		IsActive:    dto.IsActive,
+		Code:             dto.Code,
+		Name:             dto.Name,
+		Description:      dto.Description,
+		Type:             types.MachineTypeEnum(dto.Type),
+		RequiresOperator: dto.RequiresOperator,
+		IsActive:         dto.IsActive,
 	}
 
 	return uc.Repo.UpdateType(ctx, mt)

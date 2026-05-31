@@ -19,7 +19,12 @@ func NewLeadTimeUseCase(repo repository.RoutingRepository) *LeadTimeUseCase {
 
 // Execute computes the critical-path lead time for the standard route of an item.
 // It uses PERT/CPM on the operation network:
-//   earlyFinish[op] = max over predecessors { earlyFinish[pred] * (1 - overlap%) } + effective_time[op]
+//
+//	earlyFinish[op] = max over predecessors { earlyFinish[pred] * (1 - overlap%) } + effective_time[op]
+//
+// When the predecessor operation's work center has requires_operator = true, overlap is
+// forced to 0: the operator will not leave the machine until it finishes, so the
+// successor cannot start early regardless of the configured overlap_pct.
 func (uc *LeadTimeUseCase) Execute(ctx context.Context, routeID int64) (*response.RouteLeadTimeResponse, error) {
 	ops, err := uc.repo.GetRouteOperations(ctx, routeID)
 	if err != nil {
@@ -105,14 +110,22 @@ func criticalPath(ops []*entity.RouteOperation, edges []*entity.NetworkEdge) ent
 		op := opByID[cur]
 		opTime := op.EffectiveStdTime + op.EffectiveSetup
 
-		// earliest finish for cur = max contribution from preds + opTime
-		ef := opTime // no preds → starts at t=0
+		// earliest finish for cur:
+		//   earlyStart[cur] = earlyFinish[pred] - overlap * predDuration
+		//   earlyFinish[cur] = earlyStart[cur] + opTime
+		// When the predecessor machine requires an operator, overlap is forced
+		// to 0 — the operator won't leave until that operation is 100% done.
+		ef := opTime // no preds → earlyStart = 0
 		bestPred := int64(0)
 		for _, predID := range predecessors[cur] {
 			overlap := overlapByEdge[[2]int64{predID, cur}] / 100.0
-			contribution := earlyFinish[predID] * (1 - overlap)
-			if contribution+opTime > ef {
-				ef = contribution + opTime
+			if opByID[predID].RequiresOperator {
+				overlap = 0
+			}
+			predDuration := opByID[predID].EffectiveStdTime + opByID[predID].EffectiveSetup
+			earlyStart := earlyFinish[predID] - overlap*predDuration
+			if earlyStart+opTime > ef {
+				ef = earlyStart + opTime
 				bestPred = predID
 			}
 		}

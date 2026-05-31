@@ -8,6 +8,7 @@ package sqlc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -29,7 +30,7 @@ type AddRouteOperationParams struct {
 	WorkCenterID *int64
 	StandardTime pgtype.Numeric
 	SetupTime    pgtype.Numeric
-	Situation    interface{}
+	Situation    sqltypes.RouteOpSituationEnum
 	Notes        pgtype.Text
 }
 
@@ -80,8 +81,8 @@ type CreateOperationParams struct {
 	Code                int64
 	Name                string
 	Description         pgtype.Text
-	Origin              interface{}
-	Situation           interface{}
+	Origin              sqltypes.OperationOriginEnum
+	Situation           sqltypes.OperationSituationEnum
 	DefaultWorkCenterID *int64
 	StandardTime        pgtype.Numeric
 	SetupTime           pgtype.Numeric
@@ -137,7 +138,7 @@ type CreateRouteParams struct {
 	Mask        pgtype.Text
 	Alternative int16
 	Description pgtype.Text
-	Situation   interface{}
+	Situation   sqltypes.RouteSituationEnum
 	IsStandard  bool
 	CreatedBy   pgtype.UUID
 }
@@ -228,7 +229,7 @@ type GetExternalRouteOpsForItemRow struct {
 	OperationID    int64
 	WorkCenterID   *int64
 	OperationName  string
-	Origin         interface{}
+	Origin         sqltypes.OperationOriginEnum
 	EffectiveHours pgtype.Numeric
 }
 
@@ -383,7 +384,8 @@ SELECT
     op.origin AS operation_origin,
     op.standard_time AS op_standard_time,
     op.setup_time AS op_setup_time,
-    mt.name AS work_center_name
+    mt.name AS work_center_name,
+    COALESCE(mt.requires_operator, TRUE) AS requires_operator
 FROM route_operations ro
 JOIN operations op ON op.id = ro.operation_id
 LEFT JOIN machine_types mt ON mt.id = COALESCE(ro.work_center_id, op.default_work_center_id)
@@ -392,23 +394,24 @@ ORDER BY ro.sequence
 `
 
 type GetRouteOperationsRow struct {
-	ID              int64
-	RouteID         int64
-	Sequence        int16
-	OperationID     int64
-	WorkCenterID    *int64
-	StandardTime    pgtype.Numeric
-	SetupTime       pgtype.Numeric
-	Situation       interface{}
-	Notes           pgtype.Text
-	IsActive        bool
-	CreatedAt       pgtype.Timestamptz
-	UpdatedAt       pgtype.Timestamptz
-	OperationName   string
-	OperationOrigin interface{}
-	OpStandardTime  pgtype.Numeric
-	OpSetupTime     pgtype.Numeric
-	WorkCenterName  pgtype.Text
+	ID               int64
+	RouteID          int64
+	Sequence         int16
+	OperationID      int64
+	WorkCenterID     *int64
+	StandardTime     pgtype.Numeric
+	SetupTime        pgtype.Numeric
+	Situation        sqltypes.RouteOpSituationEnum
+	Notes            pgtype.Text
+	IsActive         bool
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	OperationName    string
+	OperationOrigin  sqltypes.OperationOriginEnum
+	OpStandardTime   pgtype.Numeric
+	OpSetupTime      pgtype.Numeric
+	WorkCenterName   pgtype.Text
+	RequiresOperator bool
 }
 
 func (q *Queries) GetRouteOperations(ctx context.Context, routeID int64) ([]GetRouteOperationsRow, error) {
@@ -438,6 +441,7 @@ func (q *Queries) GetRouteOperations(ctx context.Context, routeID int64) ([]GetR
 			&i.OpStandardTime,
 			&i.OpSetupTime,
 			&i.WorkCenterName,
+			&i.RequiresOperator,
 		); err != nil {
 			return nil, err
 		}
@@ -625,8 +629,8 @@ type UpdateOperationParams struct {
 	ID                  int64
 	Name                string
 	Description         pgtype.Text
-	Origin              interface{}
-	Situation           interface{}
+	Origin              sqltypes.OperationOriginEnum
+	Situation           sqltypes.OperationSituationEnum
 	DefaultWorkCenterID *int64
 	StandardTime        pgtype.Numeric
 	SetupTime           pgtype.Numeric
@@ -675,7 +679,7 @@ RETURNING id, code, item_code, mask, alternative, description, situation, is_sta
 type UpdateRouteParams struct {
 	ID          int64
 	Description pgtype.Text
-	Situation   interface{}
+	Situation   sqltypes.RouteSituationEnum
 	IsStandard  bool
 }
 
@@ -721,7 +725,7 @@ type UpdateRouteOperationParams struct {
 	WorkCenterID *int64
 	StandardTime pgtype.Numeric
 	SetupTime    pgtype.Numeric
-	Situation    interface{}
+	Situation    sqltypes.RouteOpSituationEnum
 	Notes        pgtype.Text
 }
 

@@ -37,37 +37,42 @@ func main() {
 	fmt.Println("models.go: removed duplicate EmployeeLegacy struct (old 'employee' table)")
 }
 
-// removeOldEmployeeLegacy finds and removes the first `type EmployeeLegacy struct`
+// removeOldEmployeeLegacy finds and removes the `type EmployeeLegacy struct`
 // block that contains the `EnterpriseID` field (generated from the legacy
-// `employee` table in migration 000033). The second, full struct—generated from
-// the `employees` table—is kept intact.
+// `employee` table in migration 000033). The other, full struct—generated from
+// the `employees` table—is kept intact. The search is order-independent: sqlc
+// may emit the two structs in either order, so we scan every EmployeeLegacy
+// block and remove the one carrying EnterpriseID.
 func removeOldEmployeeLegacy(text string) (string, bool) {
 	const marker = "type EmployeeLegacy struct {"
 
-	idx := strings.Index(text, marker)
-	if idx == -1 {
-		return text, false
-	}
+	for searchFrom := 0; ; {
+		rel := strings.Index(text[searchFrom:], marker)
+		if rel == -1 {
+			return text, false
+		}
+		idx := searchFrom + rel
 
-	// Find the closing brace of this struct.
-	rest := text[idx:]
-	closeRel := strings.Index(rest, "\n}\n")
-	if closeRel == -1 {
-		return text, false
-	}
-	blockEnd := idx + closeRel + len("\n}\n")
-	block := text[idx:blockEnd]
+		// Find the closing brace of this struct.
+		closeRel := strings.Index(text[idx:], "\n}\n")
+		if closeRel == -1 {
+			return text, false
+		}
+		blockEnd := idx + closeRel + len("\n}\n")
+		block := text[idx:blockEnd]
 
-	// Safety: only remove if this is the OLD struct (has EnterpriseID).
-	if !strings.Contains(block, "EnterpriseID") {
-		return text, false
-	}
+		// Only remove the OLD struct (the one with EnterpriseID).
+		if !strings.Contains(block, "EnterpriseID") {
+			searchFrom = blockEnd
+			continue
+		}
 
-	// Include the blank line that precedes the struct declaration.
-	blockStart := idx
-	if blockStart >= 2 && text[blockStart-1] == '\n' && text[blockStart-2] == '\n' {
-		blockStart--
-	}
+		// Include the blank line that precedes the struct declaration.
+		blockStart := idx
+		if blockStart >= 2 && text[blockStart-1] == '\n' && text[blockStart-2] == '\n' {
+			blockStart--
+		}
 
-	return text[:blockStart] + text[blockEnd:], true
+		return text[:blockStart] + text[blockEnd:], true
+	}
 }

@@ -179,6 +179,23 @@ func (uc *RouteUseCase) DeleteEdge(ctx context.Context, dto request.DeleteNetwor
 	return uc.repo.DeleteNetworkEdge(ctx, dto.PredecessorID, dto.SuccessorID)
 }
 
+func (uc *RouteUseCase) GetEdges(ctx context.Context, routeID int64) ([]response.NetworkEdgeResponse, error) {
+	edges, err := uc.repo.GetNetworkEdges(ctx, routeID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching network edges for route %d: %w", routeID, err)
+	}
+	out := make([]response.NetworkEdgeResponse, 0, len(edges))
+	for _, e := range edges {
+		out = append(out, response.NetworkEdgeResponse{
+			ID:            e.ID,
+			PredecessorID: e.PredecessorID,
+			SuccessorID:   e.SuccessorID,
+			OverlapPct:    e.OverlapPct,
+		})
+	}
+	return out, nil
+}
+
 func toRouteResponse(rt *entity.ManufacturingRoute) *response.ManufacturingRouteResponse {
 	return &response.ManufacturingRouteResponse{
 		ID:          rt.ID,

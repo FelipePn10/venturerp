@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -26,33 +27,94 @@ func (r *PurchaseOrderRepositorySQLC) NextOrderNumber(ctx context.Context, enter
 	return lastNum, nil
 }
 
+// pgQuerier is satisfied by both *pgxpool.Pool and pgx.Tx, letting the insert
+// helpers run either standalone or inside a transaction.
+type pgQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 func (r *PurchaseOrderRepositorySQLC) Create(ctx context.Context, o *entity.PurchaseOrder) (*entity.PurchaseOrder, error) {
+	return insertOrder(ctx, r.db, o)
+}
+
+// CreateWithItems creates the order and its items atomically in one transaction.
+func (r *PurchaseOrderRepositorySQLC) CreateWithItems(ctx context.Context, o *entity.PurchaseOrder, items []*entity.PurchaseOrderItem) (*entity.PurchaseOrder, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	created, err := insertOrder(ctx, tx, o)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		item.PurchaseOrderCode = created.Code
+		ci, ierr := insertItem(ctx, tx, item)
+		if ierr != nil {
+			return nil, ierr
+		}
+		created.Items = append(created.Items, ci)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+	return created, nil
+}
+
+func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*entity.PurchaseOrder, error) {
 	var deliveryDate pgtype.Date
 	if o.DeliveryDate != nil {
 		deliveryDate = pgtype.Date{Time: *o.DeliveryDate, Valid: true}
 	}
+	freightType := o.FreightType
+	if freightType == "" {
+		freightType = "SEM_FRETE"
+	}
+	alcada := o.AlcadaStatus
+	if alcada == "" {
+		alcada = "N"
+	}
 
 	var row purchaseOrderRow
-	err := r.db.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`INSERT INTO public.purchase_orders (
 			order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
-			is_firm, created_by
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+			is_firm, created_by,
+			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
+			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
+			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+			$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
 		RETURNING code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
-			is_active, is_firm, created_at, updated_at, created_by`,
+			is_active, is_firm, created_at, updated_at, created_by,
+			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
+			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
+			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status`,
 		o.OrderNumber, o.EnterpriseCode, string(o.Status), string(o.Origin), o.EmissionDate,
 		deliveryDate, o.SupplierCode, o.PaymentTermCode, o.CurrencyCode,
 		o.ShippingAddressCode, o.Notes, o.TotalGross, o.TotalNet, o.TotalDiscount,
 		o.IsFirm, o.CreatedBy,
+		o.PriceTableCode, o.InvoiceTypeCode, pgutil.ToPgTextFromPtr(o.FinancialAccount), o.RequestTypeCode, pgutil.ToPgDateFromPtr(o.CurrencyDate),
+		freightType, pgutil.ToPgTextFromPtr(o.FreightValueType), pgutil.ToPgTextFromPtr(o.FreightValueMode), o.FreightValue, o.CarrierCode,
+		o.RedispatchCarrierCode, pgutil.ToPgTextFromPtr(o.RedispatchFreightType), o.RedispatchFreightValue,
+		pgutil.ToPgDateFromPtr(o.AdvanceDate), o.AdvanceValue, pgutil.ToPgTextFromPtr(o.IncotermCode), pgutil.ToPgDateFromPtr(o.ShipmentDate), pgutil.ToPgTextFromPtr(o.TalaoNumber), alcada,
 	).Scan(
 		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
 		&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
 		&row.ShippingAddressCode, &row.Notes, &row.TotalGross, &row.TotalNet, &row.TotalDiscount,
 		&row.IsActive, &row.IsFirm, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy,
+		&row.PriceTableCode, &row.InvoiceTypeCode, &row.FinancialAccount, &row.RequestTypeCode, &row.CurrencyDate,
+		&row.FreightType, &row.FreightValueType, &row.FreightValueMode, &row.FreightValue, &row.CarrierCode,
+		&row.RedispatchCarrierCode, &row.RedispatchFreightType, &row.RedispatchFreightValue,
+		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating purchase order: %w", err)
@@ -102,13 +164,21 @@ func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64)
 		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
-			is_active, is_firm, created_at, updated_at, created_by
+			is_active, is_firm, created_at, updated_at, created_by,
+			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
+			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
+			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status
 		FROM public.purchase_orders WHERE code = $1`, code,
 	).Scan(
 		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
 		&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
 		&row.ShippingAddressCode, &row.Notes, &row.TotalGross, &row.TotalNet, &row.TotalDiscount,
 		&row.IsActive, &row.IsFirm, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy,
+		&row.PriceTableCode, &row.InvoiceTypeCode, &row.FinancialAccount, &row.RequestTypeCode, &row.CurrencyDate,
+		&row.FreightType, &row.FreightValueType, &row.FreightValueMode, &row.FreightValue, &row.CarrierCode,
+		&row.RedispatchCarrierCode, &row.RedispatchFreightType, &row.RedispatchFreightValue,
+		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -216,6 +286,10 @@ func (r *PurchaseOrderRepositorySQLC) ListByStatus(ctx context.Context, status e
 }
 
 func (r *PurchaseOrderRepositorySQLC) CreateItem(ctx context.Context, item *entity.PurchaseOrderItem) (*entity.PurchaseOrderItem, error) {
+	return insertItem(ctx, r.db, item)
+}
+
+func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem) (*entity.PurchaseOrderItem, error) {
 	var deliveryDate pgtype.Date
 	if item.DeliveryDate != nil {
 		deliveryDate = pgtype.Date{Time: *item.DeliveryDate, Valid: true}
@@ -226,27 +300,49 @@ func (r *PurchaseOrderRepositorySQLC) CreateItem(ctx context.Context, item *enti
 		notes = pgtype.Text{String: *item.Notes, Valid: true}
 	}
 
+	var promisedDate pgtype.Date
+	if item.PromisedDate != nil {
+		promisedDate = pgtype.Date{Time: *item.PromisedDate, Valid: true}
+	}
+
 	var result purchaseOrderItemRow
-	err := r.db.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`INSERT INTO public.purchase_order_items (
 			purchase_order_code, sequence, item_code, mask, requested_qty,
 			received_qty, cancelled_qty, unit_price, total_price, discount_pct,
-			ipi_pct, icms_pct, status, delivery_date, notes
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+			ipi_pct, icms_pct, status, delivery_date, notes,
+			icms_st_pct, promised_date, purchase_uom, internal_uom, internal_qty, internal_price,
+			tolerance_pct, cancelled_tolerance_qty, operation_type_code, invoice_type_code,
+			accounting_account, cost_center_code, requester_employee_code, contract_code,
+			quotation_code, utilization_type, fiscal_classification_code
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+			$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
 		RETURNING code, purchase_order_code, sequence, item_code, mask,
 			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
 			discount_pct, ipi_pct, icms_pct, status, delivery_date, notes,
-			is_active, created_at, updated_at`,
+			is_active, created_at, updated_at,
+			icms_st_pct, promised_date, purchase_uom, internal_uom, internal_qty, internal_price,
+			tolerance_pct, cancelled_tolerance_qty, operation_type_code, invoice_type_code,
+			accounting_account, cost_center_code, requester_employee_code, contract_code,
+			quotation_code, utilization_type, fiscal_classification_code`,
 		item.PurchaseOrderCode, item.Sequence, item.ItemCode, item.Mask,
 		item.RequestedQty, item.ReceivedQty, item.CancelledQty,
 		item.UnitPrice, item.TotalPrice, item.DiscountPct,
 		item.IPIPct, item.ICMSPct, string(item.Status), deliveryDate, notes,
+		item.ICMSSTPct, promisedDate, pgutil.ToPgTextFromPtr(item.PurchaseUOM), pgutil.ToPgTextFromPtr(item.InternalUOM), item.InternalQty, item.InternalPrice,
+		item.TolerancePct, item.CancelledToleranceQty, item.OperationTypeCode, item.InvoiceTypeCode,
+		pgutil.ToPgTextFromPtr(item.AccountingAccount), item.CostCenterCode, item.RequesterEmployeeCode, item.ContractCode,
+		item.QuotationCode, pgutil.ToPgTextFromPtr(item.UtilizationType), item.FiscalClassificationCode,
 	).Scan(
 		&result.Code, &result.PurchaseOrderCode, &result.Sequence, &result.ItemCode, &result.Mask,
 		&result.RequestedQty, &result.ReceivedQty, &result.CancelledQty,
 		&result.UnitPrice, &result.TotalPrice, &result.DiscountPct,
 		&result.IPIPct, &result.ICMSPct, &result.Status, &result.DeliveryDate,
 		&result.Notes, &result.IsActive, &result.CreatedAt, &result.UpdatedAt,
+		&result.ICMSSTPct, &result.PromisedDate, &result.PurchaseUOM, &result.InternalUOM, &result.InternalQty, &result.InternalPrice,
+		&result.TolerancePct, &result.CancelledToleranceQty, &result.OperationTypeCode, &result.InvoiceTypeCode,
+		&result.AccountingAccount, &result.CostCenterCode, &result.RequesterEmployeeCode, &result.ContractCode,
+		&result.QuotationCode, &result.UtilizationType, &result.FiscalClassificationCode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating purchase order item: %w", err)
@@ -302,7 +398,11 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 		`SELECT code, purchase_order_code, sequence, item_code, mask,
 			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
 			discount_pct, ipi_pct, icms_pct, status, delivery_date, notes,
-			is_active, created_at, updated_at
+			is_active, created_at, updated_at,
+			icms_st_pct, promised_date, purchase_uom, internal_uom, internal_qty, internal_price,
+			tolerance_pct, cancelled_tolerance_qty, operation_type_code, invoice_type_code,
+			accounting_account, cost_center_code, requester_employee_code, contract_code,
+			quotation_code, utilization_type, fiscal_classification_code
 		FROM public.purchase_order_items
 		WHERE purchase_order_code = $1 AND is_active = true ORDER BY sequence`,
 		purchaseOrderCode)
@@ -320,6 +420,10 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 			&row.UnitPrice, &row.TotalPrice, &row.DiscountPct,
 			&row.IPIPct, &row.ICMSPct, &row.Status, &row.DeliveryDate,
 			&row.Notes, &row.IsActive, &row.CreatedAt, &row.UpdatedAt,
+			&row.ICMSSTPct, &row.PromisedDate, &row.PurchaseUOM, &row.InternalUOM, &row.InternalQty, &row.InternalPrice,
+			&row.TolerancePct, &row.CancelledToleranceQty, &row.OperationTypeCode, &row.InvoiceTypeCode,
+			&row.AccountingAccount, &row.CostCenterCode, &row.RequesterEmployeeCode, &row.ContractCode,
+			&row.QuotationCode, &row.UtilizationType, &row.FiscalClassificationCode,
 		); err != nil {
 			return nil, fmt.Errorf("scanning purchase order item: %w", err)
 		}
@@ -359,6 +463,26 @@ type purchaseOrderRow struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CreatedBy          [16]byte
+	// extended (migration 000140)
+	PriceTableCode         *int64
+	InvoiceTypeCode        *int64
+	FinancialAccount       pgtype.Text
+	RequestTypeCode        *int64
+	CurrencyDate           pgtype.Date
+	FreightType            string
+	FreightValueType       pgtype.Text
+	FreightValueMode       pgtype.Text
+	FreightValue           float64
+	CarrierCode            *int64
+	RedispatchCarrierCode  *int64
+	RedispatchFreightType  pgtype.Text
+	RedispatchFreightValue float64
+	AdvanceDate            pgtype.Date
+	AdvanceValue           float64
+	IncotermCode           pgtype.Text
+	ShipmentDate           pgtype.Date
+	TalaoNumber            pgtype.Text
+	AlcadaStatus           string
 }
 
 type purchaseOrderItemRow struct {
@@ -381,6 +505,24 @@ type purchaseOrderItemRow struct {
 	IsActive          bool
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	// extended (migration 000140)
+	ICMSSTPct                float64
+	PromisedDate             pgtype.Date
+	PurchaseUOM              pgtype.Text
+	InternalUOM              pgtype.Text
+	InternalQty              float64
+	InternalPrice            float64
+	TolerancePct             float64
+	CancelledToleranceQty    float64
+	OperationTypeCode        *int64
+	InvoiceTypeCode          *int64
+	AccountingAccount        pgtype.Text
+	CostCenterCode           *int64
+	RequesterEmployeeCode    *int64
+	ContractCode             *int64
+	QuotationCode            *int64
+	UtilizationType          pgtype.Text
+	FiscalClassificationCode *int64
 }
 
 func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {
@@ -410,6 +552,27 @@ func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {
 	if row.Notes.Valid {
 		e.Notes = &row.Notes.String
 	}
+
+	// extended fields
+	e.PriceTableCode = row.PriceTableCode
+	e.InvoiceTypeCode = row.InvoiceTypeCode
+	e.FinancialAccount = pgutil.FromPgTextPtr(row.FinancialAccount)
+	e.RequestTypeCode = row.RequestTypeCode
+	e.CurrencyDate = pgutil.FromPgDateToPtr(row.CurrencyDate)
+	e.FreightType = row.FreightType
+	e.FreightValueType = pgutil.FromPgTextPtr(row.FreightValueType)
+	e.FreightValueMode = pgutil.FromPgTextPtr(row.FreightValueMode)
+	e.FreightValue = row.FreightValue
+	e.CarrierCode = row.CarrierCode
+	e.RedispatchCarrierCode = row.RedispatchCarrierCode
+	e.RedispatchFreightType = pgutil.FromPgTextPtr(row.RedispatchFreightType)
+	e.RedispatchFreightValue = row.RedispatchFreightValue
+	e.AdvanceDate = pgutil.FromPgDateToPtr(row.AdvanceDate)
+	e.AdvanceValue = row.AdvanceValue
+	e.IncotermCode = pgutil.FromPgTextPtr(row.IncotermCode)
+	e.ShipmentDate = pgutil.FromPgDateToPtr(row.ShipmentDate)
+	e.TalaoNumber = pgutil.FromPgTextPtr(row.TalaoNumber)
+	e.AlcadaStatus = row.AlcadaStatus
 
 	copy(e.CreatedBy[:], row.CreatedBy[:])
 
@@ -443,6 +606,25 @@ func rowItemToEntity(row purchaseOrderItemRow) *entity.PurchaseOrderItem {
 	if row.Notes.Valid {
 		item.Notes = &row.Notes.String
 	}
+
+	// extended fields
+	item.ICMSSTPct = row.ICMSSTPct
+	item.PromisedDate = pgutil.FromPgDateToPtr(row.PromisedDate)
+	item.PurchaseUOM = pgutil.FromPgTextPtr(row.PurchaseUOM)
+	item.InternalUOM = pgutil.FromPgTextPtr(row.InternalUOM)
+	item.InternalQty = row.InternalQty
+	item.InternalPrice = row.InternalPrice
+	item.TolerancePct = row.TolerancePct
+	item.CancelledToleranceQty = row.CancelledToleranceQty
+	item.OperationTypeCode = row.OperationTypeCode
+	item.InvoiceTypeCode = row.InvoiceTypeCode
+	item.AccountingAccount = pgutil.FromPgTextPtr(row.AccountingAccount)
+	item.CostCenterCode = row.CostCenterCode
+	item.RequesterEmployeeCode = row.RequesterEmployeeCode
+	item.ContractCode = row.ContractCode
+	item.QuotationCode = row.QuotationCode
+	item.UtilizationType = pgutil.FromPgTextPtr(row.UtilizationType)
+	item.FiscalClassificationCode = row.FiscalClassificationCode
 
 	return item
 }

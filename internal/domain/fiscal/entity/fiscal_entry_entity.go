@@ -39,6 +39,7 @@ type FiscalEntry struct {
 	ValorTotal           float64
 	TipoDocumento        string
 	PurchaseOrderCode    *int64
+	SupplierCode         *int64
 	CteCode              *int64
 	Status               FiscalEntryStatus
 	XmlPath              *string

@@ -9,6 +9,9 @@ import (
 type PurchaseOrderRepository interface {
 	NextOrderNumber(ctx context.Context, enterpriseCode int64) (int64, error)
 	Create(ctx context.Context, o *entity.PurchaseOrder) (*entity.PurchaseOrder, error)
+	// CreateWithItems atomically creates a purchase order and its items in a
+	// single transaction (used by the MRP suggestion approval).
+	CreateWithItems(ctx context.Context, o *entity.PurchaseOrder, items []*entity.PurchaseOrderItem) (*entity.PurchaseOrder, error)
 	Update(ctx context.Context, o *entity.PurchaseOrder) (*entity.PurchaseOrder, error)
 	GetByCode(ctx context.Context, code int64) (*entity.PurchaseOrder, error)
 	List(ctx context.Context) ([]*entity.PurchaseOrder, error)

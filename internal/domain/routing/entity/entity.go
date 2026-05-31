@@ -144,6 +144,7 @@ type RouteOperation struct {
 	WorkCenterName   string
 	EffectiveStdTime float64
 	EffectiveSetup   float64
+	RequiresOperator bool // herdado de machine_types; quando true o CPM ignora overlap_pct
 }
 
 // ExternalOp is a value object representing an external/third-party operation

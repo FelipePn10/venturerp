@@ -6,20 +6,22 @@ import (
 )
 
 type CreateMachineTypeDTO struct {
-	Code        int64                 `json:"code"`
-	Name        string                `json:"name"`
-	Description *string               `json:"description,omitempty"`
-	Type        types.MachineTypeEnum `json:"type"`
-	CreatedBy   uuid.UUID             `json:"created_by"`
-	IsActive    bool                  `json:"is_active"`
+	Code             int64                 `json:"code"`
+	Name             string                `json:"name"`
+	Description      *string               `json:"description,omitempty"`
+	Type             types.MachineTypeEnum `json:"type"`
+	RequiresOperator bool                  `json:"requires_operator"`
+	CreatedBy        uuid.UUID             `json:"created_by"`
+	IsActive         bool                  `json:"is_active"`
 }
 
 type UpdateMachineTypeDTO struct {
-	Code        int64   `json:"code"`
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
-	Type        string  `json:"type"`
-	IsActive    bool    `json:"is_active"`
+	Code             int64   `json:"code"`
+	Name             string  `json:"name"`
+	Description      *string `json:"description,omitempty"`
+	Type             string  `json:"type"`
+	RequiresOperator bool    `json:"requires_operator"`
+	IsActive         bool    `json:"is_active"`
 }
 
 type CreateMachineDTO struct {

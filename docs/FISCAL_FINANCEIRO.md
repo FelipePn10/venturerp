@@ -1,4 +1,8 @@
-# Módulo Fiscal & Financeiro — Venture ERP
+# Módulo Fiscal & Financeiro — PanossoERP
+
+> **Este é o documento único e completo do módulo Fiscal & Financeiro do ERP.**
+> Nenhuma outra documentação detalha fiscal/financeiro — a visão geral da API
+> (`API_OVERVIEW.md`) apenas aponta para cá.
 
 > **Autenticação:** todos os endpoints exigem `Authorization: Bearer <JWT>`.
 > Obtenha o token em `POST /users/login`.
@@ -24,6 +28,26 @@
 13. [Conciliação Bancária (OFX)](#13-conciliação-bancária-ofx)
 14. [Validação de CNPJ/CPF](#14-validação-de-cnpjcpf)
 15. [Limitações conhecidas](#15-limitações-conhecidas)
+16. [Parâmetros Fiscais — Cadastros de Apoio](#16-parâmetros-fiscais--cadastros-de-apoio)
+17. [Localização — Países e UFs](#17-localização--países-e-ufs)
+18. [Classificação de Itens](#18-classificação-de-itens)
+19. [Preços da Tabela de Vendas](#19-preços-da-tabela-de-vendas)
+20. [Tipos de Movimento de Estoque](#20-tipos-de-movimento-de-estoque)
+21. [Tipo de NF Saída — Campos Estendidos](#21-tipo-de-nota-fiscal-saída--campos-estendidos)
+22. [Motivos de Transferência DAPI](#22-motivos-de-transferência-dapi)
+23. [Códigos de Ajuste ICMS — Tabela 5.1.1](#23-códigos-de-ajuste-icms--tabela-511)
+24. [Códigos de Ajuste ICMS — Tabelas 5.2/5.3/5.6/5.7](#24-códigos-de-ajuste-icms--tabelas-52--53--56--57)
+25. [Linhas de Apuração de ICMS](#25-linhas-de-apuração-de-icms)
+26. [Lançamentos Resumo de ICMS](#26-lançamentos-resumo-de-icms)
+27. [Apuração do Simples Nacional](#27-apuração-do-simples-nacional)
+28. [Redução / Substituição / Diferimento de ICMS/IPI](#28-cadastro-de-redução--substituição--diferimento-de-icmsipi)
+29. [Aba Adicionais do Resumo de ICMS](#29-aba-adicionais-do-resumo-de-icms-c197--processos-judiciais)
+30. [Restituição / Ressarcimento / Complementação de ICMS ST](#30-restituição--ressarcimento--complementação-de-icms-st)
+31. [Notas Especiais de Ajuste](#31-notas-especiais-de-ajuste)
+32. [SPED Contábil — ECD](#32-sped-contábil--ecd-escrituração-contábil-digital)
+33. [Cadastro de Fornecedores (integração fiscal)](#33-cadastro-de-fornecedores-integração-fiscal)
+34. [Cadastro de Classificações Fiscais](#34-cadastro-de-classificações-fiscais)
+35. [Tipos de Operação de Entrada](#35-tipos-de-operação-de-entrada)
 
 ---
 
@@ -309,9 +333,9 @@ Retorna as alíquotas internas de ICMS e FCP por estado.
 
 ```
 1. POST /api/fiscal/exits/create      → cria NF-e (status: rascunho, calcula impostos)
-2. POST /api/fiscal/exits/{id}/authorize → envia para Focus NF-e → status: autorizada
-3. (opcional) POST /exits/{id}/carta-correcao → CC-e para correção de dados
-4. (opcional) POST /exits/{id}/cancel → cancela NF-e autorizada
+2. POST /api/fiscal/exits/{code}/authorize → envia para Focus NF-e → status: autorizada
+3. (opcional) POST /exits/{code}/carta-correcao → CC-e para correção de dados
+4. (opcional) POST /exits/{code}/cancel → cancela NF-e autorizada
 ```
 
 ---
@@ -405,7 +429,7 @@ Cria a NF-e em rascunho e **calcula os impostos automaticamente** (ICMS, IPI, PI
 
 ---
 
-### `POST /api/fiscal/exits/{id}/authorize`
+### `POST /api/fiscal/exits/{code}/authorize`
 
 Envia a NF-e para a SEFAZ via API Focus NF-e. Só funciona se o status for `"rascunho"`.
 
@@ -438,7 +462,7 @@ Envia a NF-e para a SEFAZ via API Focus NF-e. Só funciona se o status for `"ras
 
 ---
 
-### `POST /api/fiscal/exits/{id}/cancel`
+### `POST /api/fiscal/exits/{code}/cancel`
 
 Cancela uma NF-e autorizada. Só pode ser cancelada dentro do prazo legal (24h em homologação, até 30 dias em produção dependendo do estado).
 
@@ -462,7 +486,7 @@ Cancela uma NF-e autorizada. Só pode ser cancelada dentro do prazo legal (24h e
 
 ---
 
-### `POST /api/fiscal/exits/{id}/carta-correcao`
+### `POST /api/fiscal/exits/{code}/carta-correcao`
 
 Emite uma CC-e (Carta de Correção Eletrônica). Só pode ser emitida para NF-e com status `"autorizada"`.
 
@@ -511,7 +535,7 @@ Lista todas as NF-e de saída.
 
 ---
 
-### `GET /api/fiscal/exits/{id}`
+### `GET /api/fiscal/exits/{code}`
 
 Retorna os dados completos de uma NF-e de saída incluindo todos os itens.
 
@@ -571,6 +595,13 @@ Lista todas as CC-e emitidas para uma NF-e.
 ## 5. Módulo Fiscal — NF-e de Entrada
 
 NF-e de entrada representa compras/recebimento de mercadorias. Os impostos são informados pelo emitente (não calculados pelo sistema).
+
+> **Vínculo com o fornecedor.** Na importação de NF-e de compra por chave de acesso, o
+> sistema casa o **CNPJ/CPF do emitente** a um fornecedor cadastrado e grava o vínculo
+> em `fiscal_entries.supplier_code` (campo `supplier_matched` no retorno indica se
+> houve correspondência). Esse vínculo habilita a geração de Conta a Pagar por
+> fornecedor e o uso de `icms_contributor` e do Tipo de NF default do fornecedor.
+> Ver seção 33 e [`docs/supplier_registration.md`](supplier_registration.md).
 
 ### `POST /api/fiscal/entries/create`
 
@@ -1363,4 +1394,851 @@ validation.ValidateCNPJOrCPF("98765432000188")   // detecta automaticamente
 | **Nota Fiscal de Serviços (NFS-e)** | Não implementado. O sistema cobre apenas NF-e (modelo 55) e CT-e. |
 | **Substituição Tributária (ST)** | O motor tributário não calcula MVA/ST. O CST de ST pode ser informado manualmente nos itens. |
 | **Múltiplos ambientes simultâneos** | A config de ambiente (homologação/produção) é global. Não há separação por empresa. |
+
+---
+
+## 16. Parâmetros Fiscais — Cadastros de Apoio
+
+### Dispositivos Legais
+
+Cadastro de dispositivos legais referenciados nos parâmetros de ICMS/IPI.
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/dispositivos-legais/` | Criar dispositivo legal |
+| `PUT /api/fiscal/support/dispositivos-legais/` | Atualizar dispositivo legal |
+| `GET /api/fiscal/support/dispositivos-legais/` | Listar dispositivos (`?only_active=false` para inativos) |
+| `GET /api/fiscal/support/dispositivos-legais/{code}` | Buscar por código |
+| `GET /api/fiscal/support/dispositivos-legais/tipo/{type}` | Filtrar por tipo (`ICMS`, `IPI`, `LAUDO`, `PIS`, `COFINS`) |
+
+**Payload `POST`:**
+```json
+{
+  "type": "ICMS",
+  "description": "Art. 12 do Dec. 45.490/2000 — Isenção ICMS"
+}
+```
+
+---
+
+### Naturezas de Operação (CFOP)
+
+Cadastro dos códigos CFOP e suas classificações.
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/cfops/` | Criar CFOP |
+| `PUT /api/fiscal/support/cfops/` | Atualizar CFOP |
+| `GET /api/fiscal/support/cfops/` | Listar CFOPs (`?only_active=false`) |
+| `GET /api/fiscal/support/cfops/{code}` | Buscar por código (ex: `5102`) |
+| `GET /api/fiscal/support/cfops/direcao/{direction}` | Filtrar por direção (`ENTRADA`/`SAIDA`) |
+
+**Payload `POST`:**
+```json
+{
+  "code": 5102,
+  "description": "Venda de mercadoria adquirida ou recebida de terceiros",
+  "utilization": "INDUSTRIALIZACAO_COMERCIO",
+  "ind_operacao": "NORMAL",
+  "tipo_utilizacao": "NORMAL",
+  "difal": false,
+  "doacao": false
+}
+```
+
+**Enums:**
+- `utilization`: `INDUSTRIALIZACAO_COMERCIO` | `IMOBILIZADO` | `USO_CONSUMO`
+- `ind_operacao`: `NORMAL` | `ENERGIA_ELETRICA` | `TELECOMUNICACAO`
+- `tipo_utilizacao`: `NORMAL` | `VENDA_COMERCIAL_EXPORTADORA` | `COMPRA_FIM_ESPECIFICO_EXPORTACAO` | `EXPORTACAO`
+
+---
+
+### Parâmetros Básicos de ICMS/IPI por NCM/Item
+
+Tabela simplificada de alíquotas e CSTs por NCM/Item + UF + Tipo de Operação. Para parametrização completa com FCI, DIFAL, substituição tributária, diferimento, benefícios fiscais e hierarquia de busca, utilize o módulo **Seção 28 — Cadastro de Redução/Substituição/Diferimento**.
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/parametros-icms-ipi/` | Criar parâmetro |
+| `PUT /api/fiscal/support/parametros-icms-ipi/` | Atualizar parâmetro |
+| `GET /api/fiscal/support/parametros-icms-ipi/` | Listar todos (`?only_active=false`) |
+| `GET /api/fiscal/support/parametros-icms-ipi/{id}` | Buscar por ID |
+| `GET /api/fiscal/support/parametros-icms-ipi/uf/{uf}` | Filtrar por UF (ex: `SP`) |
+| `GET /api/fiscal/support/parametros-icms-ipi/item/{itemCode}` | Filtrar por código de item |
+| `GET /api/fiscal/support/parametros-icms-ipi/ncm/{ncmCode}` | Filtrar por NCM |
+
+**Payload `POST` (campos obrigatórios):**
+```json
+{
+  "uf": "SP",
+  "ncm_code": "84149000",
+  "operation_type": "SAIDA",
+  "icms_pct_contrib": 12.0,
+  "icms_pct_non_contrib": 12.0,
+  "cst_icms_contrib": "00",
+  "cst_icms_non_contrib": "00"
+}
+```
+
+> Forneça `ncm_code` **ou** `item_code` (nunca ambos). O campo `uf` é obrigatório.
+
+**Enums `operation_type`:** `AMBAS` | `ENTRADA` | `SAIDA` | `CUSTOS`
+
+---
+
+## 17. Localização — Países e UFs
+
+### Países
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/location/countries/` | Criar país |
+| `PUT /api/location/countries/` | Atualizar país |
+| `GET /api/location/countries/` | Listar países (`?only_active=false`) |
+| `GET /api/location/countries/{sigla}` | Buscar por sigla (ex: `BRA`) |
+| `GET /api/location/countries/{sigla}/ufs` | Listar UFs de um país |
+
+**Payload `POST`:**
+```json
+{
+  "sigla": "BRA",
+  "name": "Brasil",
+  "ddi": "55",
+  "bacen_code": "1058",
+  "sis_comex": "BR"
+}
+```
+
+### UFs
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/location/ufs/` | Criar UF |
+| `PUT /api/location/ufs/` | Atualizar UF |
+| `GET /api/location/ufs/` | Listar UFs (`?only_active=false`) |
+| `GET /api/location/ufs/{sigla}` | Buscar por sigla (ex: `SP`) |
+
+> As 27 UFs brasileiras são **pré-populadas** pela migration `000125_countries_ufs.up.sql`.
+
+---
+
+## 18. Classificação de Itens
+
+Cadastro hierárquico de classificações de itens (FITE0105). Usa **máscaras** para definir o formato dos códigos.
+
+### Máscaras de Classificação
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/items/classifications/masks/` | Criar máscara |
+| `PUT /api/items/classifications/masks/` | Atualizar máscara |
+| `GET /api/items/classifications/masks/` | Listar máscaras (`?only_active=false`) |
+| `GET /api/items/classifications/masks/{code}` | Buscar máscara por código |
+| `GET /api/items/classifications/masks/{maskID}/items` | Listar classificações de uma máscara |
+
+### Classificações
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/items/classifications/` | Criar classificação |
+| `PUT /api/items/classifications/` | Atualizar classificação |
+| `GET /api/items/classifications/{maskCode}/{code}` | Buscar classificação por máscara + código |
+| `GET /api/items/classifications/{parentID}/children` | Listar filhos de uma classificação |
+
+**Payload `POST` classificação:**
+```json
+{
+  "code": "01.01",
+  "mask_code": 1,
+  "description": "Matéria-Prima Metálica",
+  "parent_code": "01"
+}
+```
+
+> O nível hierárquico (`level`) é calculado automaticamente a partir do `parent_code`.
+
 | **DANFE e XML** | O sistema não gera DANFE. O PDF e o XML ficam disponíveis pela URL do Focus NF-e após a autorização. |
+
+---
+
+## 19. Preços da Tabela de Vendas
+
+Manutenção de preços por item dentro de uma tabela de vendas (migration `000127`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/customers/support/sales-tables/` | Criar tabela de vendas |
+| `GET /api/customers/support/sales-tables/` | Listar tabelas de vendas |
+| `POST /api/customers/support/sales-tables/{tableID}/prices/` | Criar preço na tabela |
+| `GET /api/customers/support/sales-tables/{tableID}/prices/` | Listar preços da tabela |
+| `GET /api/customers/support/sales-tables/{tableID}/prices/{itemCode}` | Buscar preço por item |
+| `PUT /api/customers/support/sales-tables/prices/` | Atualizar preço (envia `id` no body) |
+| `DELETE /api/customers/support/sales-tables/prices/{id}` | Excluir preço por ID |
+
+**Payload `POST`:**
+```json
+{
+  "sales_table_id": 1,
+  "item_code": "10001",
+  "price": 149.90,
+  "ume": "UN",
+  "umc": "CX",
+  "price_conv": 12.0,
+  "situation": "ATIVO",
+  "blocked": false,
+  "observation": "Preço especial cliente A"
+}
+```
+
+**Enums `situation`:** `ATIVO` | `INATIVO` | `PROMOCIONAL`
+
+> O par `(sales_table_id, item_code)` é único. A conversão de preço entre unidades é gerida pelos campos `ume`, `umc` e `price_conv`.
+
+---
+
+## 20. Tipos de Movimento de Estoque
+
+Cadastro de tipos de movimento de estoque — define o comportamento de cada movimentação (migration `000127`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/estoque/tipos-movimento/` | Criar tipo de movimento |
+| `PUT /api/estoque/tipos-movimento/` | Atualizar tipo de movimento |
+| `GET /api/estoque/tipos-movimento/` | Listar (`?only_active=false`) |
+| `GET /api/estoque/tipos-movimento/{id}` | Buscar por ID |
+| `GET /api/estoque/tipos-movimento/sigla/{sigla}` | Buscar por sigla |
+
+**Payload `POST`:**
+```json
+{
+  "sigla": "ENT",
+  "description": "Entrada por compra",
+  "usage_type": "COMPRAS",
+  "entry_order": true,
+  "exit_order": false,
+  "considers_consumption": false,
+  "updates_avg_cost": true,
+  "is_adjustment": false,
+  "updates_cycle_count": false,
+  "shows_in_summary": true,
+  "entry_exit": "ENTRADA",
+  "generates_fci_movement": false,
+  "is_active": true
+}
+```
+
+**Enums `usage_type`:** `PRODUCAO` | `COMPRAS` | `VENDAS` | `GERAL` | `AJUSTE` | `TRANSFERENCIA`
+
+**Enums `entry_exit`:** `ENTRADA` | `SAIDA` | `TRANSFERENCIA` | `AMBOS`
+
+---
+
+## 21. Tipo de Nota Fiscal Saída — Campos Estendidos
+
+Os campos abaixo foram adicionados à entidade `Tipo de NF Saída` pela migration `000126`.
+
+### Novos campos fiscais
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `description_nf` | string | Descrição específica para o corpo da NF |
+| `impostos_nfe` | enum | Impostos que incidem no documento |
+| `cfop_id` | int64 | CFOP padrão associado ao tipo de NF |
+| `dispositivo_legal_ipi_id` | int64 | Dispositivo legal para IPI |
+| `dispositivo_legal_icms_id` | int64 | Dispositivo legal para ICMS |
+| `dispositivo_legal_icms_st_id` | int64 | Dispositivo legal para ICMS-ST |
+| `dispositivo_legal_pis_id` | int64 | Dispositivo legal para PIS |
+| `dispositivo_legal_cofins_id` | int64 | Dispositivo legal para COFINS |
+| `hierarchy_ipi/icms/icms_st/pis/cofins` | string | Hierarquia de busca de alíquota por imposto |
+| `ipi_transfer_sales_table_id` | int64 | Tabela de vendas para transferência IPI |
+
+**Enum `impostos_nfe`:** `ICMS` | `IPI` | `PIS` | `COFINS` | `ICMS_IPI` | `TODOS`
+
+### Flags SPED/SINTEGRA
+
+| Flag | Descrição |
+|------|-----------|
+| `lista_valor_contabil` | Inclui valor contábil no SPED |
+| `lista_registro_saida` | Lista registro de saída |
+| `lista_icms_ipi` | Lista ICMS/IPI no livro fiscal |
+| `sintegra_sped_fiscal` | Inclui no SINTEGRA/SPED |
+
+### Flags de cálculo e comportamento
+
+| Flag | Descrição |
+|------|-----------|
+| `calc_fomentar` | Calcula incentivo FOMENTAR/PRODUZIR |
+| `excecao_fomentar` | Exceção ao benefício FOMENTAR |
+| `comp_ress_ret_st` | Complemento/ressarcimento de ICMS-ST retido |
+| `calc_reducao` | Aplica redução de base de cálculo |
+| `complemento_itens` | NF complementar de itens |
+| `busca_tipo_nf` | Busca automática do tipo de NF |
+| `icms_st_ult_entrada` | Base ICMS-ST = valor da última entrada |
+| `somente_consulta_lotes` | Apenas consulta lotes, não movimenta |
+| `calc_imp_ibpt` | Calcula impostos IBPT (lei da transparência) |
+| `cred_presumido_icms` | Usa crédito presumido de ICMS |
+| `ciap` | Integra ao CIAP (crédito IPI/ICMS ativo permanente) |
+| `vlr_agregado_base_subst` | Usa valor agregado como base de substituição |
+| `contrato_facon` | Operação de facção/beneficiamento |
+| `desc_icms_licitacoes` | Desconto ICMS em licitações |
+| `sisdeclara` | Envia para SISDECLARA |
+
+### Códigos de classificação
+
+| Campo | Descrição |
+|-------|-----------|
+| `cod_clas_trib` | Código de classificação tributária |
+| `cod_clas_trib_trib_reg` | Código de classificação para regime tributário |
+| `cod_motivo_rest_comp_icms_st` | Código do motivo de ressarcimento/complemento ICMS-ST |
+| `cod_beneficio_fiscal` | Código do benefício fiscal (cBenef) |
+
+---
+
+## 22. Motivos de Transferência DAPI
+
+Cadastro de motivos de transferência utilizados na DAPI (migration `000128`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/motivos-transferencia-dapi/` | Criar motivo |
+| `PUT /api/fiscal/support/motivos-transferencia-dapi/` | Atualizar motivo |
+| `GET /api/fiscal/support/motivos-transferencia-dapi/` | Listar (`?only_active=false`) |
+| `GET /api/fiscal/support/motivos-transferencia-dapi/{code}` | Buscar por código |
+
+**Payload `POST`:**
+```json
+{
+  "code": "01",
+  "reason": "Transferência entre estabelecimentos",
+  "destination": "SP",
+  "valid_from": "2024-01-01",
+  "is_active": true
+}
+```
+
+---
+
+## 23. Códigos de Ajuste ICMS — Tabela 5.1.1
+
+Códigos de ajuste de apuração ICMS do SPED Fiscal (Tabela 5.1.1), por UF (migration `000128`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/codigos-ajuste-apuracao-icms/` | Criar código |
+| `PUT /api/fiscal/support/codigos-ajuste-apuracao-icms/` | Atualizar código |
+| `GET /api/fiscal/support/codigos-ajuste-apuracao-icms/` | Listar (`?only_active=false`) |
+| `GET /api/fiscal/support/codigos-ajuste-apuracao-icms/{id}` | Buscar por ID |
+
+**Payload `POST`:**
+```json
+{
+  "code": "SP10000000",
+  "uf": "SP",
+  "description": "Ajuste a crédito — ICMS antecipado",
+  "valid_from": "2024-01-01",
+  "is_active": true
+}
+```
+
+> O par `(code, uf)` é único.
+
+---
+
+## 24. Códigos de Ajuste ICMS — Tabelas 5.2 / 5.3 / 5.6 / 5.7
+
+Códigos de ajuste para operações específicas: benefícios fiscais, incentivos, contribuições e estornos (migration `000128`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/codigos-ajuste-icms/` | Criar código |
+| `PUT /api/fiscal/support/codigos-ajuste-icms/` | Atualizar código |
+| `GET /api/fiscal/support/codigos-ajuste-icms/` | Listar (`?only_active=false`) |
+| `GET /api/fiscal/support/codigos-ajuste-icms/{id}` | Buscar por ID |
+
+**Payload `POST`:**
+```json
+{
+  "uf": "SP",
+  "code": "SP20000100",
+  "description": "Benefício fiscal — isenção parcial",
+  "table_ref": "5.2",
+  "valid_from": "2024-01-01",
+  "is_active": true
+}
+```
+
+**Enums `table_ref`:** `5.2` | `5.3` | `5.6` | `5.7`
+
+> A chave única é `(uf, code, table_ref)`.
+
+---
+
+## 25. Linhas de Apuração de ICMS
+
+Linhas do bloco E do SPED Fiscal (apuração de ICMS) (migration `000128`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/linhas-apuracao-icms/` | Criar linha |
+| `PUT /api/fiscal/support/linhas-apuracao-icms/` | Atualizar linha |
+| `GET /api/fiscal/support/linhas-apuracao-icms/` | Listar (`?only_active=false`) |
+| `GET /api/fiscal/support/linhas-apuracao-icms/{code}` | Buscar por código |
+
+**Payload `POST`:**
+```json
+{
+  "code": "E110",
+  "description": "Saldo credor do período anterior",
+  "line_type": "CREDITO",
+  "accepts_entries": true,
+  "nature": "Saldo credor transportado",
+  "is_active": true
+}
+```
+
+**Enums `line_type`:** `DEBITO` | `CREDITO` | `SALDO` | `DEDUCAO` | `OUTROS`
+
+---
+
+## 26. Lançamentos Resumo de ICMS
+
+Resumo de ICMS por período, UF e CFOP — alimenta o bloco C do SPED Fiscal (migration `000128`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/lancamentos-resumo-icms/` | Criar lançamento |
+| `PUT /api/fiscal/support/lancamentos-resumo-icms/` | Atualizar lançamento |
+| `GET /api/fiscal/support/lancamentos-resumo-icms/` | Listar (`?only_active=false`) |
+| `GET /api/fiscal/support/lancamentos-resumo-icms/{id}` | Buscar por ID |
+| `POST /api/fiscal/support/lancamentos-resumo-icms/{id}/notas` | Adicionar nota ao lançamento |
+| `GET /api/fiscal/support/lancamentos-resumo-icms/{id}/notas` | Listar notas do lançamento |
+
+**Payload `POST` lançamento:**
+```json
+{
+  "period": "2024-01",
+  "uf": "SP",
+  "cfop_id": 5,
+  "icms_base": 10000.00,
+  "icms_value": 1200.00,
+  "is_active": true
+}
+```
+
+**Payload `POST` nota:**
+```json
+{
+  "note_number": "000123456",
+  "note_series": "1",
+  "emitter_cnpj": "12.345.678/0001-90",
+  "issue_date": "2024-01-15",
+  "item_value": 5000.00,
+  "icms_base": 5000.00,
+  "icms_value": 600.00
+}
+```
+
+> O par `(period, uf, cfop_id)` é único por lançamento.
+
+---
+
+## 27. Apuração do Simples Nacional
+
+Registro da apuração mensal do Simples Nacional por anexo (migration `000129`).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/support/apuracao-simples-nacional/` | Criar apuração |
+| `PUT /api/fiscal/support/apuracao-simples-nacional/` | Atualizar apuração |
+| `GET /api/fiscal/support/apuracao-simples-nacional/` | Listar (`?only_active=false`) |
+| `GET /api/fiscal/support/apuracao-simples-nacional/{period}/{annex}` | Buscar por período e anexo |
+
+**Payload `POST`:**
+```json
+{
+  "period": "2024-01",
+  "annex": "I",
+  "receita_interna": 80000.00,
+  "receita_externa": 20000.00,
+  "folha_pagamento": 15000.00,
+  "receita_bruta_12m": 1200000.00,
+  "simples_recolhido": 8500.00,
+  "aliquota_nominal": 7.30,
+  "aliquota_efetiva": 6.84,
+  "aliquota_efetiva_icms": 1.25,
+  "parcela_deduzir": 5940.00,
+  "observation": "Apuração referente ao mês de janeiro/2024",
+  "is_active": true
+}
+```
+
+**Enums `annex`:** `I` | `II` | `III` | `IV` | `V` | `VI`
+
+> O par `(period, annex)` é único. `period` deve estar no formato `YYYY-MM`.
+
+---
+
+## 28. Cadastro de Redução / Substituição / Diferimento de ICMS/IPI
+
+Tabela de parametrização avançada de ICMS por item, NCM, UF, tipo de operação e segmento de cliente. Implementa a hierarquia de busca em 11 níveis (preferencial > item+máscara+cliente+estabelecimento > classificação).
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/icms-reducao/` | Criar registro |
+| `PUT /api/fiscal/icms-reducao/` | Atualizar registro |
+| `GET /api/fiscal/icms-reducao/` | Listar (`?uf=SP&item_id=123&active=true`) |
+| `GET /api/fiscal/icms-reducao/find` | Buscar regra prioritária (`?uf=SP&item_id=1&customer_id=2&op_type=SAIDA`) |
+| `GET /api/fiscal/icms-reducao/{id}` | Buscar por ID |
+
+**Payload `POST` (campos obrigatórios mínimos):**
+```json
+{
+  "uf": "SP",
+  "operation_type": "SAIDA",
+  "icms_pct_contrib": 12.0,
+  "icms_pct_non_contrib": 12.0,
+  "cst_icms_contrib": "00",
+  "cst_icms_non_contrib": "00"
+}
+```
+
+**Campos opcionais principais:**
+- `item_id`, `item_mask`, `ncm_code` — escopo do item
+- `customer_id`, `establishment_id`, `supplier_id`, `market_segment_id` — escopo do parceiro
+- `invoice_type_out_id`, `invoice_type_in_id` — restringir ao tipo de nota
+- `is_preferential: true` — sobrepõe qualquer outra regra (nível 1 da hierarquia)
+- Campos de redução: `icms_red_pct_contrib`, `icms_red_target_contrib` (`BASE`|`PERCENTUAL`)
+- Campos de diferimento: `icms_deferral_pct`, `icms_deferral_target`
+- Campos de substituição tributária: `icms_subst_pct_contrib`, `mod_bc_icms_st`
+- Campos FCI: `fci_icms_pct`, `fci_reduce_base`
+- Campos DIFAL EC 87/2015: `difal_icms_red_pct`, `difal_icms_type`
+
+**Enums:**
+- `operation_type`: `ENTRADA` | `SAIDA` | `AMBAS` | `CUSTOS`
+- `icms_red_target_contrib` / `icms_deferral_target` / `ipi_red_target_*`: `BASE` | `PERCENTUAL`
+
+---
+
+## 29. Aba Adicionais do Resumo de ICMS (C197 / Processos Judiciais)
+
+Registros adicionais vinculados a um lançamento resumo de ICMS (tabela 5.x SPED). Mapeiam indicadores de arrecadação, processos judiciais e códigos DIEF.
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/icms-resumo-adicionais/` | Adicionar registro adicional |
+| `GET /api/fiscal/icms-resumo-adicionais/{id}` | Listar adicionais do lançamento resumo `id` |
+
+**Payload `POST`:**
+```json
+{
+  "summary_entry_id": 42,
+  "arrecadacao_indicator": "SEFAZ",
+  "processo": "0012345-12.2023.8.26.0001",
+  "description": "Decisão judicial — suspensão ICMS ST"
+}
+```
+
+**Enums `arrecadacao_indicator`:** `SEFAZ` | `JUSTICA_FEDERAL` | `JUSTICA_ESTADUAL` | `OUTROS`
+
+---
+
+## 30. Restituição / Ressarcimento / Complementação de ICMS ST
+
+Módulo para registro e geração de pedidos de restituição de ICMS ST conforme STF RE 593.849/MG. Mapeia os registros SPED Fiscal C180, C181, C185, C186, 1250 e 1251.
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/icms-st-restituicao/` | Criar pedido |
+| `PUT /api/fiscal/icms-st-restituicao/` | Atualizar pedido |
+| `GET /api/fiscal/icms-st-restituicao/` | Listar (`?empresa_id=1&period=2024-01&uf=SP`) |
+| `GET /api/fiscal/icms-st-restituicao/{id}` | Buscar por ID |
+
+**Payload `POST`:**
+```json
+{
+  "empresa_id": 1,
+  "period": "2024-01",
+  "restitution_type": "RESTITUICAO",
+  "uf": "SP",
+  "orig_doc_model": "55",
+  "orig_doc_number": "000001234",
+  "orig_doc_date": "2024-01-15T00:00:00Z",
+  "orig_emitter_cnpj": "12.345.678/0001-90",
+  "item_code": "PROD-001",
+  "cfop": "6102",
+  "cst_icms": "10",
+  "icms_st_base": 1000.00,
+  "icms_st_aliq": 12.0,
+  "icms_st_value": 120.00,
+  "icms_st_base_restitution": 850.00,
+  "icms_st_value_restitution": 102.00
+}
+```
+
+**Enums `restitution_type`:** `RESTITUICAO` | `RESSARCIMENTO` | `COMPLEMENTACAO`
+
+> `period` deve estar no formato `YYYY-MM`. O par `(empresa_id, period, uf)` pode ter múltiplos registros (um por nota/item).
+
+---
+
+## 31. Notas Especiais de Ajuste
+
+Notas fiscais complementares e de ajuste emitidas para correção de apuração de ICMS. Suporta geração automática de lançamento resumo (`auto_generate_summary`). Tipo `COMPLEMENTAR` complementa base/alíquota; tipo `AJUSTE` gera linha de ajuste na apuração.
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/fiscal/notas-especiais/` | Criar nota (status inicial: RASCUNHO) |
+| `PUT /api/fiscal/notas-especiais/` | Atualizar nota |
+| `GET /api/fiscal/notas-especiais/` | Listar (`?empresa_id=1&period=2024-01`) |
+| `GET /api/fiscal/notas-especiais/{id}` | Buscar nota por ID |
+| `POST /api/fiscal/notas-especiais/{id}/itens` | Adicionar item à nota |
+| `GET /api/fiscal/notas-especiais/{id}/itens` | Listar itens da nota |
+
+**Payload `POST` nota:**
+```json
+{
+  "empresa_id": 1,
+  "purpose": "AJUSTE",
+  "issue_date": "2024-01-31T00:00:00Z",
+  "period": "2024-01",
+  "cfop_id": 12,
+  "icms_apuracao_line_id": 3,
+  "adjustment_code_id": 7,
+  "auto_generate_summary": true,
+  "total_value": 5000.00,
+  "total_icms": 600.00,
+  "observation": "Ajuste referente ao diferimento parcial"
+}
+```
+
+**Payload `POST` item:**
+```json
+{
+  "item_code": "MP-001",
+  "description": "Matéria Prima X",
+  "quantity": 100.0,
+  "unit": "KG",
+  "unit_value": 50.0,
+  "total_value": 5000.00,
+  "icms_base": 5000.00,
+  "icms_pct": 12.0,
+  "icms_value": 600.00,
+  "cst_icms": "00",
+  "cfop_id": 12
+}
+```
+
+**Enums `purpose`:** `COMPLEMENTAR` | `AJUSTE`
+**Enums `status`:** `RASCUNHO` | `EMITIDA` | `CANCELADA`
+
+> O campo `period` deve estar no formato `YYYY-MM`. A sequência dos itens é atribuída automaticamente.
+
+---
+
+## 32. SPED Contábil — ECD (Escrituração Contábil Digital)
+
+Módulo de escrituração contábil com geração do arquivo SPED ECD (Blocos 0, I, J, 9). Cobre plano de contas, contas contábeis, lançamentos contábeis e demonstrativos financeiros.
+
+### Planos de Contas
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/accounting/plans/` | Criar plano de contas |
+| `GET /api/accounting/plans/` | Listar planos (`?empresa_id=1`) |
+
+**Payload:**
+```json
+{
+  "empresa_id": 1,
+  "name": "Plano de Contas 2024",
+  "year": 2024,
+  "is_active": true
+}
+```
+
+### Contas Contábeis
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/accounting/accounts/` | Criar conta |
+| `GET /api/accounting/accounts/` | Listar contas (`?plan_id=1`) |
+
+**Payload:**
+```json
+{
+  "plan_id": 1,
+  "code": "1.1.1.01",
+  "name": "Caixa",
+  "account_type": "ANALITICA",
+  "nature": "DEVEDORA",
+  "parent_id": null
+}
+```
+
+### Lançamentos Contábeis
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/accounting/journal-entries/` | Criar lançamento |
+| `GET /api/accounting/journal-entries/` | Listar (`?empresa_id=1&period=2024-01`) |
+
+**Payload:**
+```json
+{
+  "empresa_id": 1,
+  "entry_date": "2024-01-31T00:00:00Z",
+  "period": "2024-01",
+  "history": "Venda de mercadorias ref. NF 1234",
+  "debit_account_id": 10,
+  "credit_account_id": 25,
+  "value": 5000.00
+}
+```
+
+### Demonstrativos Contábeis
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/accounting/demonstratives/` | Criar demonstrativo (DRE, BP, etc.) |
+
+**Payload:**
+```json
+{
+  "empresa_id": 1,
+  "type": "DRE",
+  "period": "2024-01",
+  "name": "DRE Janeiro 2024"
+}
+```
+
+### Geração do Arquivo SPED ECD
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `POST /api/accounting/sped/ecd` | Gerar arquivo SPED Contábil (ECD) |
+
+**Payload:**
+```json
+{
+  "empresa_id": 1,
+  "period": "2024-01",
+  "cnpj": "12.345.678/0001-90",
+  "razao_social": "Empresa Exemplo S.A.",
+  "municipio": "São Paulo",
+  "uf": "SP"
+}
+```
+
+O endpoint retorna o arquivo `.txt` pipe-delimitado como attachment (`Content-Disposition: attachment`), pronto para transmissão à SEFAZ via PVA.
+
+**Blocos gerados:** `0000`, `0001`, `0990`, `I001`, `I010`, `I050`, `I100`, `I200`, `I300`, `I350`, `I990`, `J001`, `J005`, `J100`, `J150`, `J990`, `K001`, `K990`, `9001`, `9900`, `9990`, `9999`
+
+---
+
+## 33. Cadastro de Fornecedores (integração fiscal)
+
+O cadastro de fornecedores/transportadoras é documentado em detalhe em
+[`docs/supplier_registration.md`](supplier_registration.md). Esta seção resume os
+pontos que tocam o módulo fiscal.
+
+### Campos fiscais do fornecedor
+
+- **Contrib. ICMS** (`icms_contributor`): `CONTRIBUINTE`, `NAO_CONTRIBUINTE` ou
+  `ISENTO` — usado no enquadramento da NF de entrada.
+- **Inscrição Estadual** (`state_registration`): obrigatória, exceto para fornecedores
+  do tipo `TRANSPORTADORA`, `TRANSP_REDESP` ou `REDESPACHO`.
+- **Tipo Frete** (`freight_type`): default do frete no pedido de compra / NF de entrada.
+- **Registro M.A.**, **Obr. Vitícola**, **MEI**, **GLN** e os campos de consulta SEFAZ
+  (situação de recebimento, última consulta) compõem o cadastro.
+
+### Vínculo por empresa (pasta Empresas → `supplier_enterprises`)
+
+Por empresa, o fornecedor define a **conta financeira**, o checkbox **IPI**, a
+**tabela de preço de compra** e o **Tipo de NF default** (`default_invoice_type_id`),
+usado na entrada conforme a hierarquia do sistema (Cadastro de Redução/Substituição
+de ICMS → Cadastro de Fornecedores).
+
+### Redução / Substituição / Diferimento de ICMS
+
+A tabela `icms_reduction_substitutions` (seção 28) possui o filtro `supplier_id`,
+permitindo regras tributárias específicas por fornecedor. Seguindo a convenção do
+módulo fiscal, a coluna é um `BIGINT` sem FK rígida (validação em nível de aplicação).
+
+### Provider de defaults
+
+`GET /api/suppliers/{code}/purchasing-defaults?enterprise=<código>` retorna, num único
+payload, os defaults consumidos pelo pedido de compra e pela entrada fiscal: condição
+de pagamento, tipo de frete, contribuinte de ICMS, inscrição estadual, conta
+financeira, Tipo de NF default e tabela de preço de compra.
+
+---
+
+## 34. Cadastro de Classificações Fiscais
+
+Cadastro da **classificação fiscal de mercadorias** (migration `000137`), base para o
+cálculo de I.I., IPI, PIS, COFINS e ICMS por item. Tabela `fiscal_classifications` +
+filhas `fiscal_classification_languages` (idiomas) e
+`fiscal_classification_export_attributes` (atributos de exportação SISCOMEX).
+
+### Campos
+
+- Identificação: **Classificação** (`code`), **Descrição**, **NCM**, **CEST**, **Ex Tarifário**.
+- **IPI**: `ipi_rate` + `ipi_indicator` (`PERCENTUAL`/`VALOR`), **Apuração** (periodicidade),
+  CST IPI entrada/saída, **UN p/ IPI**, **UN de Tributação**.
+- **PIS** e **COFINS**: alíquota + indicador, CST entrada/saída, **COFINS Majorado**,
+  além de variantes **ST**, **Consumo** (com CSTs), **Retenção** (com CST), **Redução**
+  (com CST) e **Desconto ZF** (Zona Franca de Manaus) para PIS e COFINS.
+- **ICMS**: modalidade da BC (`mod_bc_icms`) e da BC ST (`mod_bc_icms_st`).
+- **CBS/IBS**: `cod_clas_trib` e `cod_clas_trib_trib_reg` (Tributação Regular).
+- **Obs Fiscal** (`obs_fiscal`): texto incorporado à tag `infAdFisco` da NF-e.
+
+### Pastas
+
+- **Idiomas** — descrição da classificação por idioma.
+- **Atributos de Exportação** — por NCM: código, descrição, domínio e vigência
+  (`start_date`/`end_date`); a mesma NCM pode ter vários atributos/domínios.
+
+### Endpoints (`/api/fiscal-classifications`)
+
+- `POST /` — criar (gera `code`); `PUT /` — atualizar; `GET /` — listar
+  (`?only_active=false` inclui inativas); `GET /{code}` — obter (com idiomas e atributos).
+- `POST /languages` — adicionar/atualizar descrição por idioma.
+- `POST /export-attributes` — adicionar atributo de exportação.
+
+> Esta classificação será consumida pelo cálculo de impostos do item do Pedido de
+> Compra (%IPI da classificação, hierarquia com o Cadastro de Redução/Substituição de
+> ICMS — seção 28) nas fases seguintes do módulo de compras.
+
+> O par `(empresa_id, period)` identifica um ECD. Utilize um plano de contas ativo com pelo menos uma conta analítica antes de gerar o arquivo.
+
+---
+
+## 35. Tipos de Operação de Entrada
+
+Cadastro de **Tipos de Operação de Entrada** (migration `000144`) usado na inclusão da
+NF de entrada. Tabelas: `entry_operation_types` + **Grupo de Estado** (`state_groups`
++ `state_group_ufs`).
+
+### Campos
+
+Código, descrição, **Tipo de Nota** (`invoice_type_code`), **Natureza de Operação**
+(`nature_operation`), classificação (tipo + código), **Grupo Estado**
+(`state_group_code`) e **Tipo Fornecedor** (`supplier_type_code`).
+
+### Validação UF × Natureza
+
+O 1º dígito da natureza determina a regra contra a UF da empresa:
+
+| 1º dígito | Significado | Regra |
+| --- | --- | --- |
+| `1` | dentro do estado | UF da empresa **deve** pertencer ao Grupo de Estado |
+| `2` | fora do estado | UF da empresa **não deve** pertencer ao Grupo de Estado |
+| `3` | fora do país | operação estrangeira (sem validação de grupo) |
+
+`GET /api/entry-operations/{code}/validate?uf=XX` retorna `{valid, reason}`.
+
+### Endpoints
+
+- `/api/entry-operations` — `POST` · `PUT` · `GET` · `GET /{code}` · `GET /{code}/validate`.
+- `/api/entry-operations/state-groups` — `POST` · `GET` · `GET /{code}` ·
+  `POST /{code}/ufs` (adicionar UF ao grupo).

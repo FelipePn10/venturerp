@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS ufs;
+DROP TABLE IF EXISTS countries;

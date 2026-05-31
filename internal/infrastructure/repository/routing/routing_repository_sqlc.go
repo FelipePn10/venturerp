@@ -7,6 +7,7 @@ import (
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -30,8 +31,8 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 		Code:                op.Code,
 		Name:                op.Name,
 		Description:         pgutil.ToPgTextFromPtr(op.Description),
-		Origin:              string(op.Origin),
-		Situation:           string(op.Situation),
+		Origin:              sqltypes.OperationOriginEnum(op.Origin),
+		Situation:           sqltypes.OperationSituationEnum(op.Situation),
 		DefaultWorkCenterID: op.DefaultWorkCenterID,
 		StandardTime:        pgutil.ToPgNumericFromFloat64(op.StandardTime),
 		SetupTime:           pgutil.ToPgNumericFromFloat64(op.SetupTime),
@@ -48,8 +49,8 @@ func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.
 		ID:                  op.ID,
 		Name:                op.Name,
 		Description:         pgutil.ToPgTextFromPtr(op.Description),
-		Origin:              string(op.Origin),
-		Situation:           string(op.Situation),
+		Origin:              sqltypes.OperationOriginEnum(op.Origin),
+		Situation:           sqltypes.OperationSituationEnum(op.Situation),
 		DefaultWorkCenterID: op.DefaultWorkCenterID,
 		StandardTime:        pgutil.ToPgNumericFromFloat64(op.StandardTime),
 		SetupTime:           pgutil.ToPgNumericFromFloat64(op.SetupTime),
@@ -98,7 +99,7 @@ func (r *RoutingRepositorySQLC) CreateRoute(ctx context.Context, rt *entity.Manu
 		Mask:        pgutil.ToPgTextFromPtr(rt.Mask),
 		Alternative: rt.Alternative,
 		Description: pgutil.ToPgTextFromPtr(rt.Description),
-		Situation:   string(rt.Situation),
+		Situation:   sqltypes.RouteSituationEnum(rt.Situation),
 		IsStandard:  rt.IsStandard,
 		CreatedBy:   pgutil.ToPgUUID(rt.CreatedBy),
 	})
@@ -112,7 +113,7 @@ func (r *RoutingRepositorySQLC) UpdateRoute(ctx context.Context, rt *entity.Manu
 	row, err := r.q.UpdateRoute(ctx, sqlc.UpdateRouteParams{
 		ID:          rt.ID,
 		Description: pgutil.ToPgTextFromPtr(rt.Description),
-		Situation:   string(rt.Situation),
+		Situation:   sqltypes.RouteSituationEnum(rt.Situation),
 		IsStandard:  rt.IsStandard,
 	})
 	if err != nil {
@@ -187,7 +188,7 @@ func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entit
 		WorkCenterID: op.WorkCenterID,
 		StandardTime: pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
 		SetupTime:    pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
-		Situation:    string(op.Situation),
+		Situation:    sqltypes.RouteOpSituationEnum(op.Situation),
 		Notes:        pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
@@ -202,7 +203,7 @@ func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *en
 		WorkCenterID: op.WorkCenterID,
 		StandardTime: pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
 		SetupTime:    pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
-		Situation:    string(op.Situation),
+		Situation:    sqltypes.RouteOpSituationEnum(op.Situation),
 		Notes:        pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
@@ -279,8 +280,8 @@ func operationRowToEntity(row sqlc.Operation) *entity.Operation {
 		ID:                  row.ID,
 		Code:                row.Code,
 		Name:                row.Name,
-		Origin:              entity.OperationOrigin(ifaceToString(row.Origin)),
-		Situation:           entity.OperationSituation(ifaceToString(row.Situation)),
+		Origin:              entity.OperationOrigin(row.Origin),
+		Situation:           entity.OperationSituation(row.Situation),
 		StandardTime:        pgutil.FromPgNumericToFloat64(row.StandardTime),
 		SetupTime:           pgutil.FromPgNumericToFloat64(row.SetupTime),
 		IsActive:            row.IsActive,
@@ -302,7 +303,7 @@ func routeRowToEntity(row sqlc.ManufacturingRoute) *entity.ManufacturingRoute {
 		Code:        row.Code,
 		ItemCode:    row.ItemCode,
 		Alternative: row.Alternative,
-		Situation:   entity.RouteSituation(ifaceToString(row.Situation)),
+		Situation:   entity.RouteSituation(row.Situation),
 		IsStandard:  row.IsStandard,
 		IsActive:    row.IsActive,
 		CreatedAt:   pgutil.FromPgTimestamptz(row.CreatedAt),
@@ -327,7 +328,7 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 		Sequence:     row.Sequence,
 		OperationID:  row.OperationID,
 		WorkCenterID: row.WorkCenterID,
-		Situation:    entity.RouteOpSituation(ifaceToString(row.Situation)),
+		Situation:    entity.RouteOpSituation(row.Situation),
 		IsActive:     row.IsActive,
 		CreatedAt:    pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:    pgutil.FromPgTimestamptz(row.UpdatedAt),
@@ -363,7 +364,8 @@ func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOp
 		UpdatedAt:    row.UpdatedAt,
 	})
 	e.OperationName = row.OperationName
-	e.OperationOrigin = entity.OperationOrigin(ifaceToString(row.OperationOrigin))
+	e.OperationOrigin = entity.OperationOrigin(row.OperationOrigin)
+	e.RequiresOperator = row.RequiresOperator
 	e.EffectiveStdTime = effectiveTime(row.StandardTime, row.OpStandardTime)
 	e.EffectiveSetup = effectiveTime(row.SetupTime, row.OpSetupTime)
 	if row.WorkCenterName.Valid {
@@ -384,7 +386,7 @@ func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCo
 			OperationID:    row.OperationID,
 			OperationName:  row.OperationName,
 			EffectiveHours: pgutil.FromPgNumericToFloat64(row.EffectiveHours),
-			Origin:         entity.OperationOrigin(ifaceToString(row.Origin)),
+			Origin:         entity.OperationOrigin(row.Origin),
 			WorkCenterID:   row.WorkCenterID,
 		}
 		out = append(out, op)
@@ -397,14 +399,4 @@ func effectiveTime(override pgtype.Numeric, fallback pgtype.Numeric) float64 {
 		return pgutil.FromPgNumericToFloat64(override)
 	}
 	return pgutil.FromPgNumericToFloat64(fallback)
-}
-
-func ifaceToString(v interface{}) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	if v == nil {
-		return ""
-	}
-	return fmt.Sprint(v)
 }

@@ -8,14 +8,15 @@ import (
 )
 
 type MachineType struct {
-	Code        int64
-	Name        string
-	Description *string
-	Type        types.MachineTypeEnum
-	IsActive    bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	CreatedBy   uuid.UUID
+	Code             int64
+	Name             string
+	Description      *string
+	Type             types.MachineTypeEnum
+	RequiresOperator bool // true = operador humano controla a máquina; overlap ignorado no CPM
+	IsActive         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	CreatedBy        uuid.UUID
 }
 
 type Machine struct {

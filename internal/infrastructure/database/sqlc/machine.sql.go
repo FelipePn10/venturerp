@@ -136,20 +136,22 @@ INSERT INTO machine_types (
     name,
     description,
     type,
+    requires_operator,
     is_active,
     created_by
 )
-VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
 `
 
 type CreateMachineTypeParams struct {
-	Code        int64
-	Name        string
-	Description pgtype.Text
-	Type        MachineTypeEnum
-	IsActive    bool
-	CreatedBy   pgtype.UUID
+	Code             int64
+	Name             string
+	Description      pgtype.Text
+	Type             MachineTypeEnum
+	RequiresOperator bool
+	IsActive         bool
+	CreatedBy        pgtype.UUID
 }
 
 func (q *Queries) CreateMachineType(ctx context.Context, arg CreateMachineTypeParams) (MachineType, error) {
@@ -158,6 +160,7 @@ func (q *Queries) CreateMachineType(ctx context.Context, arg CreateMachineTypePa
 		arg.Name,
 		arg.Description,
 		arg.Type,
+		arg.RequiresOperator,
 		arg.IsActive,
 		arg.CreatedBy,
 	)
@@ -173,6 +176,7 @@ func (q *Queries) CreateMachineType(ctx context.Context, arg CreateMachineTypePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RequiresOperator,
 	)
 	return i, err
 }
@@ -304,7 +308,7 @@ func (q *Queries) GetMachineByCode(ctx context.Context, code int64) (Machine, er
 }
 
 const getMachineTypeByCode = `-- name: GetMachineTypeByCode :one
-SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by
+SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
 FROM machine_types
 WHERE code = $1
 `
@@ -323,6 +327,7 @@ func (q *Queries) GetMachineTypeByCode(ctx context.Context, code int64) (Machine
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RequiresOperator,
 	)
 	return i, err
 }
@@ -437,7 +442,7 @@ func (q *Queries) ListItemsByMachine(ctx context.Context, machineCode int64) ([]
 }
 
 const listMachineTypes = `-- name: ListMachineTypes :many
-SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by
+SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
 FROM machine_types
 WHERE is_active = TRUE
 ORDER BY code
@@ -463,6 +468,7 @@ func (q *Queries) ListMachineTypes(ctx context.Context) ([]MachineType, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.RequiresOperator,
 		); err != nil {
 			return nil, err
 		}
@@ -718,18 +724,20 @@ SET
     name = $1,
     description = $2,
     type = $3,
-    is_active = $4,
+    requires_operator = $4,
+    is_active = $5,
     updated_at = NOW()
-WHERE code = $5
-    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by
+WHERE code = $6
+    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
 `
 
 type UpdateMachineTypeParams struct {
-	Name        string
-	Description pgtype.Text
-	Type        MachineTypeEnum
-	IsActive    bool
-	Code        int64
+	Name             string
+	Description      pgtype.Text
+	Type             MachineTypeEnum
+	RequiresOperator bool
+	IsActive         bool
+	Code             int64
 }
 
 func (q *Queries) UpdateMachineType(ctx context.Context, arg UpdateMachineTypeParams) (MachineType, error) {
@@ -737,6 +745,7 @@ func (q *Queries) UpdateMachineType(ctx context.Context, arg UpdateMachineTypePa
 		arg.Name,
 		arg.Description,
 		arg.Type,
+		arg.RequiresOperator,
 		arg.IsActive,
 		arg.Code,
 	)
@@ -752,6 +761,7 @@ func (q *Queries) UpdateMachineType(ctx context.Context, arg UpdateMachineTypePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RequiresOperator,
 	)
 	return i, err
 }

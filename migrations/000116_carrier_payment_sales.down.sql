@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS sales_tables;
+DROP TYPE  IF EXISTS price_formation_enum;
+DROP TABLE IF EXISTS payment_condition_installments;
+DROP TABLE IF EXISTS payment_conditions;
+DROP TYPE  IF EXISTS payment_parcel_start_enum;
+DROP TYPE  IF EXISTS payment_analysis_enum;
+DROP TABLE IF EXISTS carrier_group_carriers;
+DROP TABLE IF EXISTS carriers;
+DROP TYPE  IF EXISTS carrier_billing_type_enum;
+DROP TABLE IF EXISTS carrier_groups;

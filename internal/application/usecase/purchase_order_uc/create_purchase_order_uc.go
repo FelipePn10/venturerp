@@ -14,6 +14,9 @@ import (
 type CreatePurchaseOrderUseCase struct {
 	Repo repository.PurchaseOrderRepository
 	Auth ports.AuthService
+	// SupplierDefaults is optional. When set, missing header fields (payment
+	// term) are defaulted from the supplier's registration. Nil disables it.
+	SupplierDefaults ports.SupplierPurchasingDefaultsProvider
 }
 
 func (uc *CreatePurchaseOrderUseCase) Execute(
@@ -44,6 +47,32 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 		currency = dto.CurrencyCode
 	}
 
+	// Default header fields from the supplier registration when not provided.
+	paymentTerm := dto.PaymentTermCode
+	priceTable := dto.PriceTableCode
+	invoiceType := dto.InvoiceTypeCode
+	financialAccount := dto.FinancialAccount
+	freightType := dto.FreightType
+	if uc.SupplierDefaults != nil && dto.SupplierCode != nil {
+		if def, derr := uc.SupplierDefaults.GetPurchasingDefaults(ctx, *dto.SupplierCode, dto.EnterpriseCode); derr == nil && def != nil {
+			if paymentTerm == nil {
+				paymentTerm = def.PaymentConditionID
+			}
+			if priceTable == nil {
+				priceTable = def.PurchasePriceTableID
+			}
+			if invoiceType == nil {
+				invoiceType = def.DefaultInvoiceTypeID
+			}
+			if financialAccount == nil {
+				financialAccount = def.FinancialAccount
+			}
+			if freightType == "" {
+				freightType = def.FreightType
+			}
+		}
+	}
+
 	o := &entity.PurchaseOrder{
 		OrderNumber:         orderNum,
 		EnterpriseCode:      dto.EnterpriseCode,
@@ -51,7 +80,7 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 		Origin:              origin,
 		EmissionDate:        emissionDate,
 		SupplierCode:        dto.SupplierCode,
-		PaymentTermCode:     dto.PaymentTermCode,
+		PaymentTermCode:     paymentTerm,
 		CurrencyCode:        currency,
 		ShippingAddressCode: dto.ShippingAddressCode,
 		Notes:               dto.Notes,
@@ -60,12 +89,42 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 		TotalDiscount:       dto.TotalDiscount,
 		IsFirm:              dto.IsFirm,
 		CreatedBy:           dto.CreatedBy,
+		// extended header
+		PriceTableCode:         priceTable,
+		InvoiceTypeCode:        invoiceType,
+		FinancialAccount:       financialAccount,
+		RequestTypeCode:        dto.RequestTypeCode,
+		FreightType:            freightType,
+		FreightValueType:       dto.FreightValueType,
+		FreightValueMode:       dto.FreightValueMode,
+		FreightValue:           dto.FreightValue,
+		CarrierCode:            dto.CarrierCode,
+		RedispatchCarrierCode:  dto.RedispatchCarrierCode,
+		RedispatchFreightType:  dto.RedispatchFreightType,
+		RedispatchFreightValue: dto.RedispatchFreightValue,
+		AdvanceValue:           dto.AdvanceValue,
+		IncotermCode:           dto.IncotermCode,
+		TalaoNumber:            dto.TalaoNumber,
 	}
 
 	if dto.DeliveryDate != nil {
 		t, _ := time.Parse("2006-01-02", *dto.DeliveryDate)
 		o.DeliveryDate = &t
 	}
+	o.CurrencyDate = parsePODate(dto.CurrencyDate)
+	o.AdvanceDate = parsePODate(dto.AdvanceDate)
+	o.ShipmentDate = parsePODate(dto.ShipmentDate)
 
 	return uc.Repo.Create(ctx, o)
+}
+
+func parsePODate(s *string) *time.Time {
+	if s == nil || *s == "" {
+		return nil
+	}
+	t, err := time.Parse("2006-01-02", *s)
+	if err != nil {
+		return nil
+	}
+	return &t
 }

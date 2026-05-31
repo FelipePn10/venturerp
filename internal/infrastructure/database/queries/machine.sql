@@ -4,10 +4,11 @@ INSERT INTO machine_types (
     name,
     description,
     type,
+    requires_operator,
     is_active,
     created_by
 )
-VALUES ($1, $2, $3, $4, $5, $6)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *;
 
 -- name: UpdateMachineType :one
@@ -16,9 +17,10 @@ SET
     name = $1,
     description = $2,
     type = $3,
-    is_active = $4,
+    requires_operator = $4,
+    is_active = $5,
     updated_at = NOW()
-WHERE code = $5
+WHERE code = $6
     RETURNING *;
 
 -- name: GetMachineTypeByCode :one

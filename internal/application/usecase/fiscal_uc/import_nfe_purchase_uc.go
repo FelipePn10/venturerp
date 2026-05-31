@@ -21,6 +21,9 @@ type ImportNFePurchaseUseCase struct {
 	FiscalRepo fiscalrepo.FiscalRepository
 	StockRepo  stockrepo.StockRepository
 	Auth       ports.AuthService
+	// SupplierDefaults is optional. When set, the emitter CNPJ is matched to a
+	// registered supplier and linked on the fiscal entry. Nil disables it.
+	SupplierDefaults ports.SupplierPurchasingDefaultsProvider
 }
 
 type ImportNFePurchaseDTO struct {
@@ -33,6 +36,7 @@ type ImportNFePurchaseResult struct {
 	Entry            *entity.FiscalEntry `json:"entry"`
 	MovementsCreated int                 `json:"movements_created"`
 	Skipped          []string            `json:"skipped,omitempty"`
+	SupplierMatched  bool                `json:"supplier_matched"`
 }
 
 func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePurchaseDTO) (*ImportNFePurchaseResult, error) {
@@ -68,6 +72,17 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 		numNF = n
 	}
 
+	// Best-effort: link the emitter to a registered supplier by CNPJ/CPF.
+	var supplierCode *int64
+	supplierMatched := false
+	if uc.SupplierDefaults != nil && nfe.CnpjEmitente != "" {
+		if code, found, _ := uc.SupplierDefaults.FindSupplierCodeByDocument(ctx, nfe.CnpjEmitente); found {
+			c := code
+			supplierCode = &c
+			supplierMatched = true
+		}
+	}
+
 	entry := &entity.FiscalEntry{
 		ChaveAcesso:         &dto.ChaveAcesso,
 		NumeroNF:            numNF,
@@ -79,6 +94,7 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 		ValorTotal:          nfe.ValorTotal,
 		TipoDocumento:       "NFE",
 		PurchaseOrderCode:   dto.PurchaseOrderCode,
+		SupplierCode:        supplierCode,
 		Status:              entity.EntryStatusPending,
 		CreatedBy:           userID,
 	}
@@ -137,5 +153,6 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 		Entry:            created,
 		MovementsCreated: movementsCreated,
 		Skipped:          skipped,
+		SupplierMatched:  supplierMatched,
 	}, nil
 }
