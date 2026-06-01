@@ -34,4 +34,19 @@ sqlc:
 	sqlc generate
 	go run scripts/fix_sqlc_output.go
 
-.PHONY: create_migration migrate_up migrate_down migrate_force reset print_db sqlc
+# Unit tests (no database) — fast, run on every change.
+test:
+	go test ./...
+
+# Coverage report for unit tests.
+test-cover:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out | tail -1
+
+# Integration tests (require a MIGRATED Postgres). Uses TEST_DATABASE_URL when set,
+# falling back to DATABASE_URL from .env. Tests create rows with high unique codes
+# and clean up after themselves.
+test-integration:
+	TEST_DATABASE_URL="$${TEST_DATABASE_URL:-$(DATABASE_URL)}" go test -tags=integration -count=1 ./...
+
+.PHONY: create_migration migrate_up migrate_down migrate_force reset print_db sqlc test test-cover test-integration

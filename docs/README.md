@@ -26,6 +26,27 @@ não há duplicação entre eles.
 - **Geração de queries:** SQLC (`make sqlc`); ver `project_sqlc_conventions` para
   gotchas (nullable BIGINT → `*int64`, enums via `VARCHAR + CHECK`, etc.).
 
+## Testes
+
+Duas camadas, separadas por **build tag** para que a suíte unitária seja rápida e
+não dependa de banco:
+
+| Tipo | Como rodar | O que cobre |
+|---|---|---|
+| **Unitários** | `make test` (ou `go test ./...`) | Value objects, domain services (máquina), engines (MRP/CPM, APS, CRP, Fiscal), regras de entidade e use cases com *fakes*. Sem banco. |
+| **Cobertura** | `make test-cover` | Gera `coverage.out` e imprime o total. |
+| **Integração** | `make test-integration` | Repositórios e fluxos ponta-a-ponta contra um **Postgres migrado**. Compilados só com `-tags=integration` e **pulados** se `TEST_DATABASE_URL` não estiver setado. |
+
+- Os testes de integração ficam em `*_integration_test.go` com `//go:build integration`
+  e usam `internal/infrastructure/testutil` (conexão, `UniqueCode()` em faixa alta
+  `9_000_000_000+` e limpeza via `defer`).
+- `make test-integration` usa `TEST_DATABASE_URL` (ou `DATABASE_URL` do `.env`). **O
+  banco precisa estar migrado** (`make migrate_up`); cada teste cria e remove os
+  próprios dados.
+- Cobrem, entre outros: resolução de preço (específico×genérico), recomputo de status
+  de atendimento da solicitação, `UFInGroup`, sequence/transação do pedido e o E2E
+  **Solicitação → Geração de Pedidos**.
+
 ## Onde está cada assunto?
 
 - **Fiscal ou financeiro?** → sempre `FISCAL_FINANCEIRO.md` (fonte única).

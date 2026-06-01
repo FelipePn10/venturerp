@@ -5,3 +5,7 @@
 .claude
 .docker
 .docs
+
+# Test/build artifacts
+coverage.out
+cloc-go.txt
