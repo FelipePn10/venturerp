@@ -1,4 +1,4 @@
-# Visão Geral da API — PanossoERP
+# Visão Geral da API — VentureERP
 
 > **Versão:** 1.0  
 > **Data:** Maio/2026  
@@ -8,12 +8,12 @@
 
 ## 1. INTRODUÇÃO
 
-O **PanossoERP** é um sistema de gestão empresarial (ERP) desenvolvido em **Go** com arquitetura **Clean Architecture** (Domain-Driven Design). Utiliza **PostgreSQL** como banco de dados relacional e o roteador HTTP **go-chi/chi v5** para exposição da API REST.
+O **VentureERP** é um sistema de gestão empresarial (ERP) desenvolvido em **Go** com arquitetura **Clean Architecture** (Domain-Driven Design). Utiliza **PostgreSQL** como banco de dados relacional e o roteador HTTP **go-chi/chi v5** para exposição da API REST.
 
 > Este documento é a **visão geral** do sistema. Áreas aprofundadas têm documentos
-> dedicados (ver [`README.md`](README.md) da pasta `docs/`): **Fiscal & Financeiro** em
-> [`FISCAL_FINANCEIRO.md`](FISCAL_FINANCEIRO.md), **Manufatura/Compras** em
-> [`../DOCUMENTATION.md`](../DOCUMENTATION.md), e os cadastros de **Cliente/Fornecedor**
+> dedicados (ver [`README.md`](../README.md) da pasta `docs/`): **Fiscal & Financeiro** em
+> [`fiscal-financeiro.md`](fiscal-financeiro.md), **Manufatura/Compras** em
+> [`manufatura-e-compras.md`](manufatura-e-compras.md), e os cadastros de **Cliente/Fornecedor**
 > nos respectivos docs.
 
 ### Pilares Arquiteturais
@@ -84,6 +84,7 @@ O módulo MRP é o coração do planejamento de materiais. Suporta 5 modos de pl
 | Método | Path | Descrição |
 |--------|------|-----------|
 | POST | `/api/mrp-calculation/run` | Executa o cálculo MRP para um plano |
+| POST | `/api/planning/run-pipeline` | **Pipeline MRP→CRP→APS** num disparo + parecer de viabilidade (escopo `planning:run`) |
 | GET | `/api/mrp-calculation/profile/{item_code}/{plan_code}` | Perfil MRP de um item |
 | POST | `/api/mrp-calculation/configured-rules` | Cria regra configurada para item |
 | GET | `/api/mrp-calculation/configured-rules/{item_code}` | Lista regras configuradas |
@@ -442,7 +443,7 @@ Geradas automaticamente quando ordens firmes divergem da necessidade:
 | DELETE | `/api/sales-order/{code}/cancel` | Cancela pedido |
 | PATCH | `/api/sales-order/{code}/block` | Bloqueia pedido |
 | PATCH | `/api/sales-order/{code}/unblock` | Desbloqueia pedido |
-| PATCH | `/api/sales-order/{code}/status` | Altera status |
+| PATCH | `/api/sales-order/{code}/status` | Altera status (status `"P"` ✅ **gera demanda independente** por item; `"F"` = Faturado, marcado ao autorizar a NF-e de saída) |
 | GET | `/api/sales-order/customer/{customerCode}` | Lista por cliente |
 | GET | `/api/sales-order/status/{status}` | Lista por status |
 | POST | `/api/sales-order/items/create` | Adiciona item ao pedido |
@@ -505,10 +506,10 @@ Geradas automaticamente quando ordens firmes divergem da necessidade:
 
 > **Pedido de Compra completo** (capa e itens estendidos, resolução automática de
 > preço/UM/IPI, sugestões do MRP, solicitações de compra, geração de pedidos e cotação)
-> está em [`../DOCUMENTATION.md`](../DOCUMENTATION.md) **§13–§16**. Abaixo, apenas o
+> está em [`manufatura-e-compras.md`](manufatura-e-compras.md) **§13–§16**. Abaixo, apenas o
 > núcleo do recurso.
 
-Grupos de rotas relacionados (detalhados no `DOCUMENTATION.md`):
+Grupos de rotas relacionados (detalhados no `manufatura-e-compras.md`):
 `/api/purchase-order/{code}/items` (item com resolução automática),
 `/api/purchase-order/suggestions/*` (sugestões MRP),
 `/api/purchase-requisitions/*` (solicitações + geração de pedidos),
@@ -533,9 +534,13 @@ Grupos de rotas relacionados (detalhados no `DOCUMENTATION.md`):
 | `DRAFT` | Rascunho |
 | `REQUESTED` | Solicitado |
 | `APPROVED` | Aprovado |
-| `PARTIAL` | Parcialmente recebido |
-| `RECEIVED` | Totalmente recebido |
+| `PARTIAL` | Parcialmente recebido (✅ atualizado pela entrada de NF-e) |
+| `RECEIVED` | Totalmente recebido (✅ atualizado pela entrada de NF-e) |
 | `CANCELLED` | Cancelado |
+
+> ✅ Ao importar a **NF-e de entrada** com `purchase_order_code`, as quantidades
+> recebidas baixam os itens (`received_qty`) e recalculam o status da linha e do
+> cabeçalho (`PARTIAL`/`RECEIVED`). Ver `fiscal-financeiro.md` §5.
 
 #### Origem
 
@@ -570,9 +575,9 @@ Similar ao pedido de venda, utiliza tabela `purchase_order_sequences` por empres
 | GET | `/api/production-order/list` | Lista ordens |
 | GET | `/api/production-order/{id}` | Busca por ID |
 | POST | `/api/production-order/{id}/start` | Inicia produção (OPEN → IN_PROGRESS) |
-| POST | `/api/production-order/appointment` | Registra apontamento (tempo + quantidade) |
-| POST | `/api/production-order/consumption` | Registra consumo de matéria-prima |
-| POST | `/api/production-order/{id}/complete` | Conclui produção (IN_PROGRESS → COMPLETED) |
+| POST | `/api/production-order/appointment` | Registra apontamento (tempo + quantidade); com `backflush_warehouse_id` ✅ **baixa a BOM** (movimentos `OUT`) |
+| POST | `/api/production-order/consumption` | Registra consumo de matéria-prima; com `warehouse_id` ✅ gera movimento **`OUT`** do insumo |
+| POST | `/api/production-order/{id}/complete` | Conclui produção (IN_PROGRESS → COMPLETED); com `warehouse_id` ✅ gera movimento **`IN`** do acabado |
 | POST | `/api/production-order/{id}/close` | Fecha ordem (COMPLETED → CLOSED) |
 | POST | `/api/production-order/{id}/cancel` | Cancela ordem (→ CANCELLED) |
 | GET | `/api/production-order/{id}/appointments` | Lista apontamentos |
@@ -639,9 +644,14 @@ OPEN → IN_PROGRESS → COMPLETED → CLOSED
 
 **Movimentos:**
 
+> ✅ Todo movimento **atualiza o saldo** (`stock_balances`) na mesma transação:
+> quantidade (`IN`/`TRANSFER_IN` somam, `OUT`/`TRANSFER_OUT` subtraem), custo médio
+> ponderado (recalculado nas entradas) e último custo. Tipos canônicos: `IN`, `OUT`,
+> `TRANSFER_IN`, `TRANSFER_OUT`, `ADJUSTMENT`.
+
 | Método | Path | Descrição |
 |--------|------|-----------|
-| POST | `/api/stock/movements/create` | Cria movimento de estoque |
+| POST | `/api/stock/movements/create` | Cria movimento de estoque (atualiza saldo) |
 | GET | `/api/stock/movements/list` | Lista movimentos |
 | GET | `/api/stock/movements/item/{itemCode}` | Movimentos por item |
 | GET | `/api/stock/movements/warehouse/{warehouseId}` | Movimentos por depósito |
@@ -729,12 +739,29 @@ OPEN → IN_PROGRESS → COMPLETED → CLOSED
 | `LastCost` | Último custo |
 | `TotalCost` | Custo total |
 
+### 5.3 Expedição / Carregamento (romaneio)
+
+Logística de saída (separação → conferência → despacho). Detalhe em
+`manufatura-e-compras.md` §19. Migration `000146`.
+
+| Método | Path | Descrição |
+|--------|------|-----------|
+| POST | `/api/shipments` | Cria romaneio (vincula a pedido de venda/transportadora) |
+| GET | `/api/shipments` · `/api/shipments/{code}` | Lista / detalha |
+| POST | `/api/shipments/{code}/items` | Adiciona item ao romaneio |
+| POST | `/api/shipments/items/confer` | Confere um item (qtd conferida) |
+| POST | `/api/shipments/{code}/confer` | Marca o romaneio como conferido |
+| POST | `/api/shipments/{code}/ship` | Despacha (exige todos os itens conferidos) |
+| POST | `/api/shipments/{code}/cancel` | Cancela o romaneio |
+
+Status: `OPEN` → `SEPARATED` → `CONFERRED` → `SHIPPED` (`CANCELLED`).
+
 ---
 
 ## 6. Módulo Fiscal & Financeiro
 
 > **A documentação fiscal e financeira é única e completa em
-> [FISCAL_FINANCEIRO.md](FISCAL_FINANCEIRO.md).** Esta seção é apenas um índice
+> [fiscal-financeiro.md](fiscal-financeiro.md).** Esta seção é apenas um índice
 > navegacional — campos, regras, exemplos de request/response, parâmetros e cadastros
 > de apoio ficam no doc dedicado, para evitar duplicação.
 
@@ -744,7 +771,7 @@ Motor tributário (ICMS com diferimento, DIFAL/FCP e Res. SF 13/2012; IPI; PIS/C
 NF-e de saída e de entrada (com importação por chave via FocusNFE), CT-e, apuração de
 impostos, SPED Contábil (ECD) e cadastros de apoio.
 
-| Tema | FISCAL_FINANCEIRO.md |
+| Tema | fiscal-financeiro.md |
 |---|---|
 | Configuração fiscal (pré-requisito) | §2 |
 | Motor tributário + tabelas | §3, §3.1 |
@@ -758,6 +785,10 @@ impostos, SPED Contábil (ECD) e cadastros de apoio.
 | Cadastro de Fornecedores (integração) | §33 |
 | Classificações Fiscais | §34 |
 | Tipos de Operação de Entrada | §35 |
+| Manifestação do Destinatário / Inutilização | §36 |
+| IBPT/SCI (carga tributária aproximada) | §37 |
+| CNAB 240 (remessa de boletos) | §38 |
+| Balancete contábil | §39 |
 
 ### Financeiro
 
@@ -765,7 +796,7 @@ Contas a pagar/receber (aprovação, baixa, aging), fluxo de caixa projetado e r
 saldos, conciliação bancária (OFX) e cadastros base (contas bancárias, condições/formas
 de pagamento, plano de contas, centros de custo).
 
-| Tema | FISCAL_FINANCEIRO.md |
+| Tema | fiscal-financeiro.md |
 |---|---|
 | Cadastros base | §7 |
 | Contas a pagar | §8 |
@@ -786,25 +817,39 @@ de pagamento, plano de contas, centros de custo).
 | Área | Documentação |
 |---|---|
 | Itens, BOM, estrutura | `README.md` |
-| Máquina (tipos, tempos) | `MAQUINA.md` |
-| MRP (cálculo, exceções, parâmetros) | `mrp_calculation.md`, `DOCUMENTATION.md` |
-| Roteiro, CRP, APS, Qualidade, Manutenção, Previsão, Restrições | `DOCUMENTATION.md` |
+| Máquina (tipos, tempos) | `maquinas-e-roteiro.md` |
+| MRP (cálculo, exceções, parâmetros) | `mrp-calculo.md`, `manufatura-e-compras.md` |
+| Roteiro, CRP, APS, Qualidade, Manutenção, Previsão, Restrições | `manufatura-e-compras.md` |
 | Pedido de Venda · Produção · Estoque | esta visão geral (§4–§5) |
-| Cadastro de Cliente | `customer_registration.md` |
-| Cadastro de Fornecedor (+ consulta SEFAZ) | `supplier_registration.md` |
-| Compras: Pedido completo, Solicitação→Geração, Cotação, Conversão UM, Tabela de Preço, Fornecedor preferencial | `DOCUMENTATION.md` §10–§16 |
-| Fiscal (NF-e e/s, CT-e, apuração, SPED ECD) e Financeiro (CP/CR, fluxo, OFX) | `FISCAL_FINANCEIRO.md` |
+| Cadastro de Cliente | `cadastros-cliente.md` |
+| Cadastro de Fornecedor (+ consulta SEFAZ) | `cadastros-fornecedor.md` |
+| Compras: Pedido completo, Solicitação→Geração, Cotação, Conversão UM, Tabela de Preço, Fornecedor preferencial | `manufatura-e-compras.md` §10–§16 |
+| Pipeline de Planejamento (MRP→CRP→APS), Backflush, Expedição/romaneio, Idempotência/Escopos | `manufatura-e-compras.md` §17–§20 |
+| Fiscal (NF-e e/s, CT-e, apuração, SPED ECD) e Financeiro (CP/CR, fluxo, OFX) | `fiscal-financeiro.md` |
+| Manifestação/Inutilização, IBPT/SCI, CNAB 240, Balancete | `fiscal-financeiro.md` §36–§39 |
+
+### Automações do fluxo (2026-06-03)
+
+| Automação | Onde |
+|---|---|
+| Pedido de venda confirmado (`P`) → demanda independente | `sales_order_uc` |
+| Firmar ordem planejada PRODUCTION → cria a OF | `planned_order_uc` |
+| Consumo da OF → `OUT`; conclusão → `IN`; apontamento → backflush da BOM | `production_order_uc` |
+| Movimento de estoque → atualiza saldo (qtd + custo médio) | `repository/stock` |
+| NF-e entrada → baixa o pedido de compra (`received_qty`/status) | `fiscal_uc` + `purchase_order` |
+| NF-e saída autorizada → `OUT` + baixa de reservas + pedido Faturado (`F`) + Conta a Receber | `fiscal_uc` |
 
 ### Pendências conhecidas
 
 | Funcionalidade | Status |
 |---|---|
-| Boletos / CNAB 240/400 | ❌ apenas campos na entidade |
-| Manifestação do Destinatário | ❌ |
-| Inutilização de numeração NF-e | ❌ |
-| Importação IBPT/SCI (carga de NCMs) | ❌ seeds manuais |
-| Relatórios gerenciais (DRE, Balancete, Curva ABC) | ❌ (aging CP/CR prontos) |
-| Frente de Caixa (PDV) / Controle de Carregamento | ❌ |
+| Conciliação de cartões / borderô | ❌ (exige layouts de adquirentes) |
+| ATP / reserva automática no pedido de venda | ❌ |
+| Workflow de alçada do pedido de compra | ❌ (hoje só um campo) |
+| Cálculo automático de consumo médio (CM) | ❌ |
+| Execução do inventário cíclico | ❌ (só configuração) |
+| Frente de Caixa (PDV) | ❌ |
+| Testes de integração E2E do MRP | ❌ |
 
 ---
 
@@ -815,7 +860,8 @@ aplicadas via `make migrate_up`. A base começa em `000001` (núcleo: itens, BOM
 estrutura, MRP) e segue incremental — marcos principais: Pedidos de Venda (`000089`),
 Pedido de Compra (`000092`), Estoque (`000093`), Produção (`000094`), Fiscal
 (`000095`), Financeiro (`000096`), Cliente (`000115`–`000118`), Fornecedor
-(`000135`–`000136`) e o épico de Compras/Fiscal (`000137`–`000144`).
+(`000135`–`000136`), o épico de Compras/Fiscal (`000137`–`000144`), IBPT/SCI
+(`000145`) e Expedição/romaneio (`000146`).
 
 > Consulte `migrations/` para a lista completa e atual; cada doc de módulo cita a
 > migração correspondente.
@@ -842,11 +888,17 @@ Todos os endpoints sob `/api/*` exigem:
    - Loga tentativas inválidas com IP
 
 2. **Role Middleware:**
-   - `RequireRole("ADMIN", "USER")` em todas as rotas
-   - Ambos perfis têm acesso total atualmente
-   - Middleware preparado para granularidade futura
+   - `RequireRole("ADMIN", "USER")` na maioria das rotas
 
-3. **AuthService (porta):**
+3. **Permission Middleware (escopos):**
+   - `RequirePermission(scope)` com mapa papel→escopos: `ADMIN` (tudo), `USER`
+     (operacional, sem `admin`), `VIEWER` (somente leitura)
+   - Escopos: `planning:run`, `purchase:approve`, `fiscal:authorize`,
+     `financial:manage`, `item:activate`, `admin`
+   - Aplicado às rotas sensíveis novas (pipeline, fiscal manifestação/inutilização/
+     IBPT, CNAB, prontidão de item)
+
+4. **AuthService (porta):**
    - `CanCreate()` — verifica permissão de criação
    - `CanBaixarContaPagar()` / `CanBaixarContaReceber()` — permissões financeiras
    - `CanApurarImpostos()` — permissão fiscal
@@ -862,6 +914,7 @@ Todos os endpoints sob `/api/*` exigem:
 | `Timeout(60s)` (chi) | Timeout global de 60 segundos |
 | `StripSlashes` (chi) | Normaliza trailing slash |
 | `RequestLoggerMiddleware` | Loga método, path, status, duração |
+| `Idempotency` | Em `POST/PUT/PATCH`, reproduz a resposta original quando o header `Idempotency-Key` se repete (TTL 24h, por instância). Marca replays com `Idempotent-Replayed: true`. |
 
 ### 9.4 Health Check
 

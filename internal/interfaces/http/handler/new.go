@@ -2,8 +2,11 @@ package handler
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
@@ -24,13 +27,10 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/product_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
@@ -222,10 +222,10 @@ func NewItemStructureHandler(
 	// deleteUC *structure_uc.DeleteStructureComponentUseCase,
 ) *ItemStructureHandler {
 	return &ItemStructureHandler{
-		createUC:       createUC,
-		updateUC:       updateUC,
+		createUC:        createUC,
+		updateUC:        updateUC,
 		getAllStructure: getAllStructureUC,
-		treeUC:         treeUC,
+		treeUC:          treeUC,
 		//deleteUC:  deleteUC,
 	}
 }

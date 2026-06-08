@@ -22,22 +22,22 @@ type BaixaParams struct {
 }
 
 type CPFilter struct {
-	Status      *string `json:"status,omitempty"`
-	FornecedorID *int64  `json:"fornecedor_id,omitempty"`
-	StartDate   *time.Time `json:"start_date,omitempty"`
-	EndDate     *time.Time `json:"end_date,omitempty"`
+	Status       *string    `json:"status,omitempty"`
+	FornecedorID *int64     `json:"fornecedor_id,omitempty"`
+	StartDate    *time.Time `json:"start_date,omitempty"`
+	EndDate      *time.Time `json:"end_date,omitempty"`
 }
 
 type CRFilter struct {
-	Status    *string `json:"status,omitempty"`
-	ClienteID *int64  `json:"cliente_id,omitempty"`
+	Status    *string    `json:"status,omitempty"`
+	ClienteID *int64     `json:"cliente_id,omitempty"`
 	StartDate *time.Time `json:"start_date,omitempty"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 }
 
 type AgingResult struct {
-	Period   string  `json:"period"`
-	Total    float64 `json:"total"`
+	Period string  `json:"period"`
+	Total  float64 `json:"total"`
 }
 
 type ProjectedFlow struct {
@@ -128,6 +128,13 @@ type FinancialRepository interface {
 	GetCurvaABCClientes(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
 	GetCurvaABCProdutos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
 	GetComprasPeriodo(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+
+	// Adiantamentos (advance payments)
+	CreateAdiantamentoAtomico(ctx context.Context, a *entity.Adiantamento, fc entity.FluxoCaixa) (*entity.Adiantamento, error)
+	GetAdiantamento(ctx context.Context, id int64) (*entity.Adiantamento, error)
+	ListAdiantamentos(ctx context.Context, tipo *string, parceiroID *int64) ([]*entity.Adiantamento, error)
+	AplicarAdiantamentoAtomico(ctx context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, userID uuid.UUID, dataAplicacao time.Time) (*entity.AdiantamentoAplicacao, error)
+	ListAplicacoesByAdiantamento(ctx context.Context, advID int64) ([]*entity.AdiantamentoAplicacao, error)
 
 	// Conciliação Bancária
 	SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) error

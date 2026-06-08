@@ -88,7 +88,11 @@ func (q *Queries) DeleteCRPByPlan(ctx context.Context, planCode int64) error {
 	return err
 }
 
-func scanCRPRows(rows interface{ Next() bool; Scan(...any) error; Err() error }) ([]DBCapacityRequirement, error) {
+func scanCRPRows(rows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}) ([]DBCapacityRequirement, error) {
 	var items []DBCapacityRequirement
 	for rows.Next() {
 		var i DBCapacityRequirement

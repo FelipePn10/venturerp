@@ -57,9 +57,9 @@ func (uc *StandardCostUseCase) UpsertItemPurchaseCost(ctx context.Context, dto r
 		return nil, fmt.Errorf("invalid updated_by UUID: %w", err)
 	}
 	ipc := &entity.ItemPurchaseCost{
-		ItemCode: dto.ItemCode,
-		UnitCost: dto.UnitCost,
-		Currency: dto.Currency,
+		ItemCode:  dto.ItemCode,
+		UnitCost:  dto.UnitCost,
+		Currency:  dto.Currency,
 		UpdatedBy: uid,
 	}
 	saved, err := uc.repo.UpsertItemPurchaseCost(ctx, ipc)
@@ -82,9 +82,9 @@ func (uc *StandardCostUseCase) GetItemPurchaseCost(ctx context.Context, itemCode
 // RollUp calculates and saves the standard cost for itemCode + mask using
 // bottom-up BOM traversal:
 //
-//  material_cost = Σ (child.unit_cost × qty × (1 + loss%))
-//  labor_cost    = route_hours × work_center_cost_per_hour
-//  overhead_cost = overhead_rate × (material_cost + labor_cost)   [currently 0 unless configured]
+//	material_cost = Σ (child.unit_cost × qty × (1 + loss%))
+//	labor_cost    = route_hours × work_center_cost_per_hour
+//	overhead_cost = overhead_rate × (material_cost + labor_cost)   [currently 0 unless configured]
 func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollupDTO) (*response.CostRollupResponse, error) {
 	calculatedBy, err := uuid.Parse(dto.CalculatedBy)
 	if err != nil {

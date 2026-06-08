@@ -24,7 +24,7 @@ func TestNewPurchaseRequisition(t *testing.T) {
 
 func TestRequisitionItem_Balance(t *testing.T) {
 	cases := []struct {
-		name                            string
+		name                           string
 		qty, attended, cancelled, want float64
 	}{
 		{"nothing attended", 100, 0, 0, 100},

@@ -637,14 +637,14 @@ func (s *MRPServiceImpl) calculateMinMax(
 
 			llc := llcMap[itemCode]
 			suggestion := &entity.PlannedOrderSuggestion{
-				PlanCode:  planCode,
-				ItemCode:  itemCode,
-				Quantity:  qtc,
-				NeedDate:  needDate,
-				StartDate: &startDate,
-				OrderType: "COMPRA",
+				PlanCode:   planCode,
+				ItemCode:   itemCode,
+				Quantity:   qtc,
+				NeedDate:   needDate,
+				StartDate:  &startDate,
+				OrderType:  "COMPRA",
 				DemandType: "MIN_MAX",
-				LLC:       llc,
+				LLC:        llc,
 			}
 			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
 			totalOrders++
@@ -721,14 +721,14 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 			llc := llcMap[itemCode]
 
 			suggestion := &entity.PlannedOrderSuggestion{
-				PlanCode:  planCode,
-				ItemCode:  itemCode,
-				Quantity:  loteEconomico,
-				NeedDate:  needDate,
-				StartDate: &startDate,
-				OrderType: "COMPRA",
+				PlanCode:   planCode,
+				ItemCode:   itemCode,
+				Quantity:   loteEconomico,
+				NeedDate:   needDate,
+				StartDate:  &startDate,
+				OrderType:  "COMPRA",
 				DemandType: "REORDER_POINT",
-				LLC:       llc,
+				LLC:        llc,
 			}
 			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
 			totalOrders++
@@ -821,14 +821,14 @@ func (s *MRPServiceImpl) calculateKanban(
 			llc := llcMap[itemCode]
 
 			suggestion := &entity.PlannedOrderSuggestion{
-				PlanCode:  planCode,
-				ItemCode:  itemCode,
-				Quantity:  qtc,
-				NeedDate:  needDate,
-				StartDate: &startDate,
-				OrderType: "COMPRA",
+				PlanCode:   planCode,
+				ItemCode:   itemCode,
+				Quantity:   qtc,
+				NeedDate:   needDate,
+				StartDate:  &startDate,
+				OrderType:  "COMPRA",
 				DemandType: "KANBAN",
-				LLC:       llc,
+				LLC:        llc,
 			}
 			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
 			totalOrders++

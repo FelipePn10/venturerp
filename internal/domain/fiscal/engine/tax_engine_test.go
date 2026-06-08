@@ -572,6 +572,128 @@ func TestScenario_Interstate_DefaultRate(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Scenario 19: ICMS-ST intra-state — MVA 40%, contributor
+// ---------------------------------------------------------------------------
+
+func TestScenario_ST_IntraState_MVA40(t *testing.T) {
+	params := TaxCalculationParams{
+		Itens: []TaxItem{
+			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.40},
+		},
+		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5401",
+	}
+
+	res, err := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := res.Itens[0]
+
+	// Own ICMS: base 1000 × 12% = 120 (contributor, no IPI in own base)
+	near(t, "ValorICMS", 120.00, item.ValorICMS)
+
+	// BaseST = (1000 + 50 IPI) × 1.40 = 1470
+	near(t, "BaseICMSST", 1470.00, item.BaseICMSST)
+	near(t, "AliquotaICMSST", 0.12, item.AliquotaICMSST)
+	// ICMS-ST = 1470 × 12% − 120 = 176.40 − 120 = 56.40
+	near(t, "ValorICMSST", 56.40, item.ValorICMSST)
+
+	if item.CSTICMS != "10" {
+		t.Errorf("CSTICMS: want 10 (tributada com ST), got %s", item.CSTICMS)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 20: ICMS-ST interstate — destination internal rate is the ST rate
+// ---------------------------------------------------------------------------
+
+func TestScenario_ST_Interstate_DestinationInternalRate(t *testing.T) {
+	params := TaxCalculationParams{
+		Itens: []TaxItem{
+			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.50},
+		},
+		EmitenteUF: "PR", DestinoUF: "SP", DestinoTipo: "contribuinte", Cfop: "6401",
+	}
+
+	res, _ := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
+	item := res.Itens[0]
+
+	// Own ICMS interstate PR→SP 12%, base 1000 (contributor) = 120
+	near(t, "ValorICMS", 120.00, item.ValorICMS)
+
+	// BaseST = (1000 + 50) × 1.50 = 1575
+	near(t, "BaseICMSST", 1575.00, item.BaseICMSST)
+	// ST rate = SP internal 18%
+	near(t, "AliquotaICMSST", 0.18, item.AliquotaICMSST)
+	// ICMS-ST = 1575 × 18% − 120 = 283.50 − 120 = 163.50
+	near(t, "ValorICMSST", 163.50, item.ValorICMSST)
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 21: ICMS-ST with reduced ST base
+// ---------------------------------------------------------------------------
+
+func TestScenario_ST_ReducedBase(t *testing.T) {
+	params := TaxCalculationParams{
+		Itens: []TaxItem{
+			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.40, RedBaseSTPct: 0.20},
+		},
+		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5401",
+	}
+
+	res, _ := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
+	item := res.Itens[0]
+
+	// BaseST = (1050) × 1.40 × 0.80 = 1176
+	near(t, "BaseICMSST", 1176.00, item.BaseICMSST)
+	// ICMS-ST = 1176 × 12% − 120 = 141.12 − 120 = 21.12
+	near(t, "ValorICMSST", 21.12, item.ValorICMSST)
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 22: ST not computed when MVA is zero (default behavior preserved)
+// ---------------------------------------------------------------------------
+
+func TestScenario_ST_NotComputed_WhenNoMVA(t *testing.T) {
+	params := TaxCalculationParams{
+		Itens: []TaxItem{
+			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1},
+		},
+		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
+	}
+
+	res, _ := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
+	item := res.Itens[0]
+
+	near(t, "BaseICMSST", 0, item.BaseICMSST)
+	near(t, "ValorICMSST", 0, item.ValorICMSST)
+	// CST unchanged (diferimento path) when no ST
+	if item.CSTICMS != "51" {
+		t.Errorf("CSTICMS: want 51 (no ST), got %s", item.CSTICMS)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 23: ST override of destination internal rate via AliqInternaDestinoST
+// ---------------------------------------------------------------------------
+
+func TestScenario_ST_OverrideRate(t *testing.T) {
+	params := TaxCalculationParams{
+		Itens: []TaxItem{
+			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.40, AliqInternaDestinoST: 0.25},
+		},
+		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5401",
+	}
+
+	res, _ := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
+	item := res.Itens[0]
+
+	near(t, "AliquotaICMSST", 0.25, item.AliquotaICMSST)
+	// BaseST 1470 × 25% − 120 = 367.50 − 120 = 247.50
+	near(t, "ValorICMSST", 247.50, item.ValorICMSST)
+}
+
+// ---------------------------------------------------------------------------
 // Scenario 18: Cenário string is set correctly for each case
 // ---------------------------------------------------------------------------
 

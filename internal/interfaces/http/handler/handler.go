@@ -2,7 +2,10 @@ package handler
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
@@ -20,13 +23,10 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/product_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
@@ -64,9 +64,9 @@ type QuestionHandler struct {
 
 type QuestionOptionHandler struct {
 	*security.BaseHandler
-	createQuestionOptionUC       *question_option_uc.CreateQuestionOptionUseCase
-	deleteQuestionOptionUC       *question_option_uc.DeleteQuestionOptionUseCase
-	listOptionsByQuestionUC      *question_option_uc.ListOptionsByQuestionUseCase
+	createQuestionOptionUC  *question_option_uc.CreateQuestionOptionUseCase
+	deleteQuestionOptionUC  *question_option_uc.DeleteQuestionOptionUseCase
+	listOptionsByQuestionUC *question_option_uc.ListOptionsByQuestionUseCase
 }
 
 type AssociateByQuestionItemHandler struct {
@@ -122,11 +122,11 @@ type EmployeeHandler struct {
 
 type ItemStructureHandler struct {
 	*security.BaseHandler
-	createUC       *structure_uc.CreateStructureComponentUseCase
-	updateUC       *structure_uc.UpdateStructureComponentUseCase
+	createUC        *structure_uc.CreateStructureComponentUseCase
+	updateUC        *structure_uc.UpdateStructureComponentUseCase
 	getAllStructure *structure_uc.GetAllDirectChildrenUseCase
-	treeUC         *structure_uc.GetStructureTreeUseCase
-	resolveUC      *structure_uc.ResolveStructureQueryUseCase
+	treeUC          *structure_uc.GetStructureTreeUseCase
+	resolveUC       *structure_uc.ResolveStructureQueryUseCase
 	//deleteUC  *structure_uc.DeleteStructureComponentUseCase
 }
 
@@ -172,8 +172,8 @@ type ItemCalendarPromiseHandler struct {
 
 type MRPCalculationHandler struct {
 	*security.BaseHandler
-	runUC          *mrp_calculation_uc.RunMRPCalculationUseCase
-	getProfileUC   *mrp_calculation_uc.GetItemProfileUseCase
+	runUC             *mrp_calculation_uc.RunMRPCalculationUseCase
+	getProfileUC      *mrp_calculation_uc.GetItemProfileUseCase
 	configuredRulesUC *mrp_calculation_uc.ManageConfiguredItemRulesUseCase
 	listExceptionsUC  *mrp_calculation_uc.ListMRPExceptionsUseCase
 }

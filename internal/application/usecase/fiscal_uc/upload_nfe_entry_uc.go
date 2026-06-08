@@ -24,11 +24,11 @@ type nfeXML struct {
 	XMLName xml.Name `xml:"NFe"`
 	InfNFe  struct {
 		Ide struct {
-			NUF      string `xml:"cUF"`
-			NF       string `xml:"nNF"`
-			Serie    string `xml:"serie"`
-			Mod      string `xml:"mod"`
-			DhEmi    string `xml:"dhEmi"`
+			NUF   string `xml:"cUF"`
+			NF    string `xml:"nNF"`
+			Serie string `xml:"serie"`
+			Mod   string `xml:"mod"`
+			DhEmi string `xml:"dhEmi"`
 		} `xml:"ide"`
 		Emit struct {
 			CNPJ  string `xml:"CNPJ"`
@@ -52,12 +52,12 @@ type nfeXML struct {
 		Det []struct {
 			NItem string `xml:"nItem,attr"`
 			Prod  struct {
-				CProd string `xml:"cProd"`
-				NCM   string `xml:"NCM"`
-				CFOP  string `xml:"CFOP"`
-				QCom  string `xml:"qCom"`
+				CProd  string `xml:"cProd"`
+				NCM    string `xml:"NCM"`
+				CFOP   string `xml:"CFOP"`
+				QCom   string `xml:"qCom"`
 				VUnCom string `xml:"vUnCom"`
-				VProd string `xml:"vProd"`
+				VProd  string `xml:"vProd"`
 			} `xml:"prod"`
 			Imposto struct {
 				ICMS struct {
@@ -80,10 +80,10 @@ type nfeXML struct {
 					VPIS string `xml:"vPIS"`
 				} `xml:"PIS"`
 				COFINS struct {
-					CST      string `xml:"CST"`
-					VBC      string `xml:"vBC"`
-					PCOFINS  string `xml:"pCOFINS"`
-					VCOFINS  string `xml:"vCOFINS"`
+					CST     string `xml:"CST"`
+					VBC     string `xml:"vBC"`
+					PCOFINS string `xml:"pCOFINS"`
+					VCOFINS string `xml:"vCOFINS"`
 				} `xml:"COFINS"`
 			} `xml:"imposto"`
 		} `xml:"det"`
@@ -142,26 +142,26 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 	for i, det := range inf.Det {
 		itemCode := int64PtrFromStr(det.Prod.CProd)
 		item := &entity.FiscalEntryItem{
-			FiscalEntryID: created.ID,
-			Sequence:      i + 1,
-			ItemCode:      itemCode,
-			Ncm:           strPtr(det.Prod.NCM),
-			Cfop:          det.Prod.CFOP,
-			Quantity:      parseFloat(det.Prod.QCom),
-			UnitPrice:     parseFloat(det.Prod.VUnCom),
-			TotalPrice:    parseFloat(det.Prod.VProd),
-			BaseICMS:      parseFloat(det.Imposto.ICMS.VBC),
-			AliqICMS:      parseFloat(det.Imposto.ICMS.PICMS) / 100,
-			ValorICMS:     parseFloat(det.Imposto.ICMS.VICMS),
-			BaseIPI:       parseFloat(det.Imposto.IPI.VBC),
-			AliqIPI:       parseFloat(det.Imposto.IPI.PIPI) / 100,
-			ValorIPI:      parseFloat(det.Imposto.IPI.VIPI),
-			ValorPIS:      parseFloat(det.Imposto.PIS.VPIS),
-			ValorCOFINS:   parseFloat(det.Imposto.COFINS.VCOFINS),
-			CstICMS:       strPtr(det.Imposto.ICMS.CST),
-			CstIPI:        strPtr(det.Imposto.IPI.CST),
-			CstPIS:        strPtr(det.Imposto.PIS.CST),
-			CstCOFINS:     strPtr(det.Imposto.COFINS.CST),
+			FiscalEntryID:     created.ID,
+			Sequence:          i + 1,
+			ItemCode:          itemCode,
+			Ncm:               strPtr(det.Prod.NCM),
+			Cfop:              det.Prod.CFOP,
+			Quantity:          parseFloat(det.Prod.QCom),
+			UnitPrice:         parseFloat(det.Prod.VUnCom),
+			TotalPrice:        parseFloat(det.Prod.VProd),
+			BaseICMS:          parseFloat(det.Imposto.ICMS.VBC),
+			AliqICMS:          parseFloat(det.Imposto.ICMS.PICMS) / 100,
+			ValorICMS:         parseFloat(det.Imposto.ICMS.VICMS),
+			BaseIPI:           parseFloat(det.Imposto.IPI.VBC),
+			AliqIPI:           parseFloat(det.Imposto.IPI.PIPI) / 100,
+			ValorIPI:          parseFloat(det.Imposto.IPI.VIPI),
+			ValorPIS:          parseFloat(det.Imposto.PIS.VPIS),
+			ValorCOFINS:       parseFloat(det.Imposto.COFINS.VCOFINS),
+			CstICMS:           strPtr(det.Imposto.ICMS.CST),
+			CstIPI:            strPtr(det.Imposto.IPI.CST),
+			CstPIS:            strPtr(det.Imposto.PIS.CST),
+			CstCOFINS:         strPtr(det.Imposto.COFINS.CST),
 			GeraCreditoICMS:   true,
 			GeraCreditoIPI:    true,
 			GeraCreditoPIS:    true,

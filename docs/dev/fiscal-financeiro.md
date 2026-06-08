@@ -1,8 +1,8 @@
-# Módulo Fiscal & Financeiro — PanossoERP
+# Módulo Fiscal & Financeiro — VentureERP
 
 > **Este é o documento único e completo do módulo Fiscal & Financeiro do ERP.**
 > Nenhuma outra documentação detalha fiscal/financeiro — a visão geral da API
-> (`API_OVERVIEW.md`) apenas aponta para cá.
+> (`visao-geral.md`) apenas aponta para cá.
 
 > **Autenticação:** todos os endpoints exigem `Authorization: Bearer <JWT>`.
 > Obtenha o token em `POST /users/login`.
@@ -198,6 +198,24 @@ DIFAL = (alíq. interna do estado destino − alíq. interestadual) × base ICMS
 FCP   = alíq. FCP do estado destino × base ICMS
 ```
 
+### ICMS-ST (Substituição Tributária)
+
+Calculado por item **quando o item informa `mva_pct`** (a MVA pode já ser a "MVA
+ajustada" para operações interestaduais — o motor aplica como recebida):
+```
+BaseST  = (BaseICMS próprio + IPI) × (1 + MVA) × (1 − red_base_st_pct)
+ICMS-ST = BaseST × alíq. interna do destino − ICMS próprio   (mínimo 0)
+```
+- A **alíquota interna do destino** (a empresa é o substituto) é resolvida da tabela
+  de ICMS interno para a UF de destino (interestadual) ou da configuração fiscal
+  (operação interna). Pode ser sobreposta por `aliq_interna_destino_st`.
+- O **CST de ICMS** é promovido para a variante de ST: `00 → 10`, `20 → 70`,
+  `51 → 10` (a ST prevalece sobre o diferimento, que é zerado).
+- Os valores (`base_icms_st`, `aliq_icms_st`, `valor_icms_st`, `mva`) são
+  persistidos por item, somados no cabeçalho da nota (`base_icms_st`,
+  `valor_icms_st`) e enviados no payload Focus NF-e. O **ICMS-ST soma ao total
+  da NF-e** (cobrado do destinatário), diferentemente do ICMS próprio.
+
 ---
 
 ## 3.1 Gestão de Tabelas Tributárias
@@ -387,6 +405,9 @@ Cria a NF-e em rascunho e **calcula os impostos automaticamente** (ICMS, IPI, PI
 | `ie_destinatario` | Não | Ausente ou `"ISENTO"` → destinatário não-contribuinte → DIFAL |
 | `tipo_pessoa` | Não | `"F"` = Pessoa Física → tratada como não-contribuinte para DIFAL |
 | `origem_mercadoria` | Sim (por item) | `"0"` nacional, `"3"/"4"/"5"/"8"` importada → 4% interestadual |
+| `mva_pct` | Não (por item) | MVA como ratio (ex: `0.40` = 40%). Quando `> 0`, dispara o cálculo de ICMS-ST do item |
+| `aliq_interna_destino_st` | Não (por item) | Sobrepõe a alíquota interna do destino usada na ST (ratio) |
+| `red_base_st_pct` | Não (por item) | Redução da base de ST (ratio, ex: `0.20` = 20%) |
 
 **Resposta esperada (`201 Created`):**
 ```json
@@ -442,7 +463,15 @@ Envia a NF-e para a SEFAZ via API Focus NF-e. Só funciona se o status for `"ras
 4. Chama `POST https://homologacao.focusnfe.com.br/v2/nfe/{ref}?substituicao=true`
 5. Salva a chave de acesso, protocolo e ref retornados pelo Focus
 6. Cria automaticamente uma **Conta a Receber** vinculada à NF-e (vencimento em 30 dias)
-7. Registra o log da requisição/resposta no banco
+7. **Baixa o estoque**: posta um movimento **`OUT`** por item (depósito resolvido a
+   partir do item do **pedido de venda** vinculado), reduzindo o saldo de acabados
+8. **Consome as reservas** ativas do pedido de venda (`SALES_ORDER`)
+9. Marca o **pedido de venda como Faturado** (`status = "F"`)
+10. Registra o log da requisição/resposta no banco
+
+> Os passos 7–9 são *best-effort* e **não desfazem** uma NF-e já autorizada na SEFAZ;
+> exigem `sales_order_code` na NF-e e `warehouse_code` no item do pedido. A
+> **expedição/romaneio** (logística) é tratada à parte (ver `manufatura-e-compras.md` §19).
 
 **Resposta esperada (`200 OK`):**
 ```json
@@ -601,7 +630,7 @@ NF-e de entrada representa compras/recebimento de mercadorias. Os impostos são 
 > em `fiscal_entries.supplier_code` (campo `supplier_matched` no retorno indica se
 > houve correspondência). Esse vínculo habilita a geração de Conta a Pagar por
 > fornecedor e o uso de `icms_contributor` e do Tipo de NF default do fornecedor.
-> Ver seção 33 e [`docs/supplier_registration.md`](supplier_registration.md).
+> Ver seção 33 e [`cadastros-fornecedor.md`](cadastros-fornecedor.md).
 
 ### `POST /api/fiscal/entries/create`
 
@@ -695,8 +724,15 @@ Importa uma NF-e de entrada diretamente pela **chave de acesso**, consultando a 
 **O que acontece internamente:**
 1. Consulta a Focus NF-e com a chave de acesso
 2. Baixa o XML e extrai todos os dados da NF-e (emitente, itens, impostos)
-3. Cria a nota de entrada com status `"aprovada"` (entrada direta, sem etapa de aprovação manual)
-4. Movimenta o estoque de cada item da nota
+3. Casa o **CNPJ do emitente** com um fornecedor cadastrado (quando habilitado)
+4. Cria a nota de entrada com status `"aprovada"` (entrada direta, sem etapa de aprovação manual)
+5. Movimenta o estoque de cada item da nota com tipo **`IN`** — o movimento
+   **atualiza o saldo** (`stock_balances`: quantidade + custo médio ponderado) na
+   mesma transação
+6. Quando informado `purchase_order_code`, **baixa o pedido de compra**: soma as
+   quantidades recebidas em cada item (`received_qty`) e recalcula o status da linha
+   e do cabeçalho (`PARTIAL`/`RECEIVED`) — via `PurchaseOrderRepository.RegisterReceipts`.
+   O resultado traz `purchase_order_lines_written_down`.
 
 **Resposta esperada (`201 Created`):**
 ```json
@@ -747,7 +783,7 @@ Retorna uma NF-e de entrada por ID com todos os itens.
 
 ## 6. CT-e (Conhecimento de Transporte)
 
-O CT-e é registrado localmente para fins de custeio do frete e vinculação com NF-e de entrada. **Não há integração com SEFAZ para autorização do CT-e** (apenas NF-e de saída usa Focus API).
+O CT-e é registrado localmente para fins de custeio do frete e vinculação com NF-e de entrada. **A autorização na SEFAZ via Focus está disponível** (ver `POST /api/fiscal/cte/{code}/authorize` abaixo) — o registro local continua sendo o ponto de partida.
 
 ### `POST /api/fiscal/cte/create`
 
@@ -791,6 +827,47 @@ Lista todos os CT-es.
 ### `GET /api/fiscal/cte/{id}`
 
 Retorna um CT-e por ID.
+
+---
+
+### `POST /api/fiscal/cte/{code}/authorize`
+
+Transmite o CT-e para a SEFAZ via Focus (escopo `fiscal:authorize`). Exige que o
+CT-e tenha sido criado com o campo **`emission_data`** — um JSON com o detalhe de
+emissão exigido pelo documento. O **emitente** é preenchido automaticamente a partir
+da configuração fiscal; valores e ICMS, quando ausentes no `emission_data`, são
+herdados do CT-e registrado.
+
+**`emission_data` (exemplo):**
+```json
+{
+  "natureza_operacao": "Prestação de serviço de transporte",
+  "tipo_cte": 0,
+  "tipo_servico": 0,
+  "modal": "01",
+  "uf_inicio": "PR", "municipio_inicio": "Curitiba",
+  "uf_fim": "SP", "municipio_fim": "São Paulo",
+  "tomador_servico": 3,
+  "remetente":   { "cnpj": "11222333000181", "nome": "Remetente LTDA", "uf": "PR", "codigo_municipio": "4106902" },
+  "destinatario":{ "cnpj": "98765432000188", "nome": "Destinatário SA", "uf": "SP", "codigo_municipio": "3550308" },
+  "produto_predominante": "Peças metálicas",
+  "valor_carga": 50000.00,
+  "valor_total_prestacao": 500.00,
+  "icms": { "situacao_tributaria": "00", "base_calculo": 500.00, "aliquota": 12.0, "valor": 60.00 }
+}
+```
+
+**O que acontece:** monta o payload Focus CT-e, chama `POST /v2/cte?ref=...`, faz
+*poll* até estado terminal e, autorizado, grava `chave_acesso`, `protocolo` e
+`focus_ref`, mudando o status para `AUTORIZADO`.
+
+**Resposta esperada (`200 OK`):** o CT-e atualizado com `status: "AUTORIZADO"`,
+`chave_acesso`, `protocolo` e `focus_ref`.
+
+**Erros comuns:**
+- `"CT-e X não possui emission_data..."` → crie o CT-e com o campo `emission_data`
+- `"token Focus NF-e não configurado"` → configure em `PUT /api/fiscal/config`
+- `"Focus CT-e: ..."` → rejeição da SEFAZ (mensagem encaminhada)
 
 ---
 
@@ -1389,10 +1466,10 @@ validation.ValidateCNPJOrCPF("98765432000188")   // detecta automaticamente
 | Item | Situação |
 |---|---|
 | **Endereço do emitente na NF-e** | Implementado. Configure via `PUT /api/fiscal/config` com os campos `logradouro`, `numero`, `bairro`, `municipio`, `codigo_municipio`, `cep` e `telefone`. Esses valores são enviados diretamente ao Focus NF-e. |
-| **CT-e — autorização SEFAZ** | O CT-e é registrado localmente mas **não é enviado para a SEFAZ**. A integração Focus para CT-e não foi implementada — apenas NF-e de saída usa o Focus API. |
-| **Adiantamentos (advance payment)** | O schema possui o campo `adiantamento` em contas a pagar/receber, mas não há use case específico para aplicar adiantamentos. |
-| **Nota Fiscal de Serviços (NFS-e)** | Não implementado. O sistema cobre apenas NF-e (modelo 55) e CT-e. |
-| **Substituição Tributária (ST)** | O motor tributário não calcula MVA/ST. O CST de ST pode ser informado manualmente nos itens. |
+| **CT-e — autorização SEFAZ** | **Implementado.** Além do registro local, o CT-e pode ser autorizado na SEFAZ via Focus em `POST /api/fiscal/cte/{code}/authorize`. Os dados de remetente/destinatário/tomador/modal/municípios são enviados no campo `emission_data` (JSON) na criação; o emitente vem da config fiscal. Ver seção 6. |
+| **Adiantamentos (advance payment)** | **Implementado.** Módulo de adiantamentos (`/api/financial/adiantamentos`): registra o adiantamento com movimento de caixa e aplica o saldo sobre contas a pagar/receber. Ver seção 40. |
+| **Nota Fiscal de Serviços (NFS-e)** | **Implementado.** Módulo NFS-e (modelo ABRASF) via Focus em `/api/fiscal/nfse`: criação, autorização, cancelamento, consulta e listagem, com cálculo de ISS. Ver seção 41. |
+| **Substituição Tributária (ST)** | **Implementado.** O motor calcula a ST quando o item informa `mva_pct` (MVA, podendo já ser a MVA ajustada). Fórmula: `BaseST = (BaseICMS + IPI) × (1 + MVA) × (1 − red_base_st_pct)` e `ICMS-ST = BaseST × alíq. interna do destino − ICMS próprio`. A alíquota interna do destino é resolvida da tabela de ICMS interno (interestadual) ou da config (interno), podendo ser sobreposta por `aliq_interna_destino_st`. O CST é promovido a `10`/`70` e os valores (`base_icms_st`, `aliq_icms_st`, `valor_icms_st`, `mva`) são persistidos por item e somados na nota; também são enviados no payload Focus NF-e. |
 | **Múltiplos ambientes simultâneos** | A config de ambiente (homologação/produção) é global. Não há separação por empresa. |
 
 ---
@@ -1557,7 +1634,7 @@ Cadastro hierárquico de classificações de itens (FITE0105). Usa **máscaras**
 
 > O nível hierárquico (`level`) é calculado automaticamente a partir do `parent_code`.
 
-| **DANFE e XML** | O sistema não gera DANFE. O PDF e o XML ficam disponíveis pela URL do Focus NF-e após a autorização. |
+| **DANFE e XML** | O sistema não renderiza o PDF do DANFE localmente, mas **expõe as URLs** do DANFE (PDF) e do XML emitidos pela Focus NF-e. Consulte `GET /api/fiscal/exits/{id}/status`: a resposta inclui `danfe_url` e `xml_url` quando a nota está autorizada (montadas via `focusnfe.Client.DocumentURL`). |
 
 ---
 
@@ -2138,7 +2215,7 @@ O endpoint retorna o arquivo `.txt` pipe-delimitado como attachment (`Content-Di
 ## 33. Cadastro de Fornecedores (integração fiscal)
 
 O cadastro de fornecedores/transportadoras é documentado em detalhe em
-[`docs/supplier_registration.md`](supplier_registration.md). Esta seção resume os
+[`cadastros-fornecedor.md`](cadastros-fornecedor.md). Esta seção resume os
 pontos que tocam o módulo fiscal.
 
 ### Campos fiscais do fornecedor
@@ -2242,3 +2319,187 @@ O 1º dígito da natureza determina a regra contra a UF da empresa:
 - `/api/entry-operations` — `POST` · `PUT` · `GET` · `GET /{code}` · `GET /{code}/validate`.
 - `/api/entry-operations/state-groups` — `POST` · `GET` · `GET /{code}` ·
   `POST /{code}/ufs` (adicionar UF ao grupo).
+
+## 36. Manifestação do Destinatário e Inutilização de Numeração
+
+Operações de eventos da NF-e via FocusNFE (exigem token configurado em §2 e o
+escopo `fiscal:authorize`).
+
+### Manifestação do Destinatário
+`POST /api/fiscal/manifestacao` — body `{ "chave_nfe": "<44 dígitos>", "tipo": "ciencia|confirmacao|desconhecimento|nao_realizada", "justificativa": "..." }`.
+Usa o CNPJ da empresa (config fiscal). `justificativa` é obrigatória para
+`desconhecimento`/`nao_realizada`. Cliente: `focusnfe.ManifestarDestinatario`.
+
+### Inutilização de Numeração
+`POST /api/fiscal/inutilizacao` — body `{ "serie": 1, "numero_inicial": 100, "numero_final": 110, "justificativa": "..." }`.
+Invalida no SEFAZ uma faixa de números **não utilizados**. Cliente:
+`focusnfe.InutilizarNumeracao`.
+
+> Junto com **Carta de Correção** (CC-e) e **Cancelamento** (§4), completam os
+> eventos fiscais da NF-e.
+
+## 37. IBPT / SCI — Carga Tributária Aproximada (Lei da Transparência) — migration 000145
+
+Importa a tabela oficial **IBPT (TabelaIBPTax)** por UF e permite consultar a carga
+tributária aproximada por NCM (Lei 12.741/2012). Tabela `ibpt_rates`
+(NCM/EX/UF/versão único; %federal nacional/importado, estadual, municipal,
+vigências, chave, fonte).
+
+### Endpoints (`/api/fiscal/ibpt`)
+| Ação | Endpoint | Escopo |
+|---|---|---|
+| Importar CSV | `POST /api/fiscal/ibpt/import` (`{ "uf": "PR", "csv": "<conteúdo do arquivo>" }`) | `admin` |
+| Consultar NCM | `GET /api/fiscal/ibpt/lookup?ncm=72085400&uf=PR` | ADMIN/USER |
+
+O parser aceita o CSV oficial (delimitado por `;`, decimais com vírgula) com as
+colunas `codigo;ex;tipo;descricao;nacionalfederal;importadosfederal;estadual;municipal;vigenciainicio;vigenciafim;chave;versao;fonte`; faz **upsert** por (NCM, EX, UF, versão).
+
+## 38. CNAB 240 — Remessa de Boletos
+
+`POST /api/financial/cnab/remessa-240` (escopo `financial:manage`) gera o arquivo
+de **remessa CNAB 240** (layout-padrão FEBRABAN) a partir de uma configuração de
+cedente/banco e uma lista de títulos. Retorna `text/plain` (anexo `remessa.rem`),
+com registros de 240 colunas: header de arquivo/lote, segmentos **P** e **Q** por
+título, trailers de lote/arquivo. Gerador: `internal/infrastructure/cnab`.
+
+**Perfis por banco.** O gerador agora resolve um **perfil por código de banco**
+(`internal/infrastructure/cnab` → `bankProfiles`) que ajusta os campos que mais
+divergem dentro do padrão FEBRABAN: **carteira** (segmento P, pos. 058), **espécie
+do título** (pos. 107-108) e as **versões de layout** do arquivo (pos. 164-166) e do
+lote (pos. 014-016). Os trailers de lote/arquivo passam a gravar o **código do
+banco** (antes fixo em `000`). Perfis embutidos: Itaú `341`, Bradesco `237`,
+Santander `033`, Banco do Brasil `001` e Caixa `104`; bancos não mapeados usam um
+perfil padrão. Qualquer campo pode ser sobreposto explicitamente em `RemessaConfig`
+(`Carteira`, `EspecieTitulo`, `LayoutArquivo`, `LayoutLote`).
+
+> ⚠️ Os perfis cobrem as divergências mais comuns, mas a composição do
+> **nosso-número** e blocos de convênio ainda variam por contrato/carteira —
+> **homologar com o banco** antes de uso em produção.
+
+## 39. Balancete (Contábil)
+
+`GET /api/accounting/balancete?plan_id=&empresa_id=&from=YYYY-MM-DD&to=YYYY-MM-DD`
+agrega os **lançamentos contábeis** do período por conta (débitos e créditos),
+devolvendo saldo por conta, totais e o indicador `balanced` (partidas dobradas:
+total de débitos = total de créditos). Implementado em
+`accounting_uc.BalanceteUseCase`.
+
+> Os demais relatórios gerenciais — **DRE** (`/api/financial/relatorios/dre`),
+> **Curva ABC** de clientes/produtos e **conciliação de extrato** — já existem no
+> módulo financeiro (§12–§13).
+
+---
+
+## 40. Adiantamentos (Advance Payments) — migration 000148
+
+Controle de **adiantamentos** a fornecedores (PAGAR) e de clientes (RECEBER), com
+aplicação do saldo sobre contas a pagar/receber. Tabelas: `adiantamentos` (saldo) e
+`adiantamento_aplicacoes` (auditoria de cada aplicação). Use case:
+`financial_uc` (`CreateAdiantamentoUseCase`, `AplicarAdiantamentoUseCase`, etc.).
+
+### `POST /api/financial/adiantamentos/create`
+
+Registra um adiantamento e **movimenta o caixa** na mesma transação: tipo `PAGAR`
+gera saída (paga-se o fornecedor antecipadamente); tipo `RECEBER` gera entrada
+(cliente paga antecipadamente). Atualiza o saldo da conta bancária.
+
+**Request:**
+```json
+{
+  "tipo": "PAGAR",
+  "parceiro_id": 3,
+  "conta_bancaria_id": 1,
+  "numero_documento": "ADV-001",
+  "data_adiantamento": "2024-05-10",
+  "valor_original": 2000.00,
+  "descricao": "Sinal de pedido de compra 15"
+}
+```
+
+**Resposta esperada (`201 Created`):** o adiantamento com `status: "ABERTO"` e
+`valor_utilizado: 0`.
+
+### `POST /api/financial/adiantamentos/{id}/aplicar`
+
+Aplica parte (ou todo) o saldo do adiantamento sobre um título. **Não move caixa**
+(o dinheiro já se moveu na criação) — apenas quita o título contra o adiantamento.
+
+**Request:**
+```json
+{ "conta_tipo": "PAGAR", "conta_id": 42, "valor": 500.00, "data_aplicacao": "2024-06-10" }
+```
+
+**Regras:** valida que o tipo do adiantamento casa com `conta_tipo`, que há saldo no
+adiantamento e que o valor não excede o saldo do título. Para `PAGAR`, abate em
+`valor_adiantamento_abatido` e marca `PAGO` quando quitado; para `RECEBER`, soma em
+`valor_recebido` e marca `RECEBIDO` quando quitado. Atualiza o `valor_utilizado` e o
+status do adiantamento (`ABERTO`→`PARCIAL`→`QUITADO`).
+
+### `GET /api/financial/adiantamentos/list`
+
+Lista adiantamentos. Filtros opcionais: `?tipo=PAGAR` e `?parceiro_id=3`.
+
+### `GET /api/financial/adiantamentos/{id}`
+
+Retorna o adiantamento com o **saldo** e o histórico de **aplicações**.
+
+---
+
+## 41. NFS-e (Nota Fiscal de Serviços eletrônica) — migration 000150
+
+Módulo de **NFS-e** (modelo ABRASF) emitida via Focus. O prestador é a empresa
+(config fiscal); a tabela `nfse` guarda o RPS, o tomador, o serviço e o resultado da
+autorização. Use cases em `nfse_uc`.
+
+### `POST /api/fiscal/nfse/create`
+
+Cria a NFS-e em rascunho e **calcula o ISS** (`base = valor_servicos − deducoes`,
+`ISS = base × aliquota_iss`) e o valor líquido (se `iss_retido`, desconta o ISS).
+
+**Request:**
+```json
+{
+  "numero_rps": 100,
+  "serie_rps": "1",
+  "tipo_rps": 1,
+  "data_emissao": "2024-05-15",
+  "natureza_operacao": 1,
+  "optante_simples": false,
+  "tomador_cnpj_cpf": "98765432000188",
+  "tomador_razao_social": "Cliente Serviços SA",
+  "tomador_email": "financeiro@cliente.com",
+  "tomador_codigo_municipio": "3550308",
+  "tomador_uf": "SP",
+  "item_lista_servico": "14.01",
+  "codigo_tributario_municipio": "140100",
+  "discriminacao": "Manutenção de equipamento industrial",
+  "codigo_municipio": "4106902",
+  "valor_servicos": 1000.00,
+  "valor_deducoes": 0.00,
+  "aliquota_iss": 0.05,
+  "iss_retido": false
+}
+```
+
+**Resposta esperada (`201 Created`):** a NFS-e com `status: "RASCUNHO"`, `valor_iss`
+e `valor_liquido` calculados.
+
+### `POST /api/fiscal/nfse/{code}/authorize`
+
+Transmite a NFS-e para a prefeitura via Focus (escopo `fiscal:authorize`). Monta o
+payload ABRASF (prestador da config fiscal + tomador + serviço), faz *poll* até
+estado terminal e, autorizada, grava `numero_nfse`, `codigo_verificacao`, `url` e
+`focus_ref` com `status: "AUTORIZADA"`.
+
+### `POST /api/fiscal/nfse/{code}/cancel`
+
+Cancela uma NFS-e autorizada na prefeitura. **Request:** `{ "justificativa": "..." }`
+(mínimo 15 caracteres).
+
+### `GET /api/fiscal/nfse/list` · `GET /api/fiscal/nfse/{code}`
+
+Lista as NFS-e e retorna uma por ID.
+
+> **Observação:** o layout da NFS-e **varia por município**. Os campos
+> `item_lista_servico`, `codigo_tributario_municipio` e `codigo_municipio` devem
+> seguir a tabela da prefeitura; homologue com o município antes de produção.

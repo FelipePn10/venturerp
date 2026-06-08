@@ -3,16 +3,16 @@ package ecd
 import "time"
 
 type ECDParams struct {
-	Empresa      ECDEmpresa
-	Periodo      ECDPeriodo
-	Plano        ECDPlano
-	Contas       []ECDConta
-	CostCenters  []ECDCentroCusto
-	Livros       []ECDLivro
+	Empresa       ECDEmpresa
+	Periodo       ECDPeriodo
+	Plano         ECDPlano
+	Contas        []ECDConta
+	CostCenters   []ECDCentroCusto
+	Livros        []ECDLivro
 	Participantes []ECDParticipante
-	Lancamentos  []ECDLancamento
-	Balancetes   []ECDBalancete
-	DRE          []ECDDREItem
+	Lancamentos   []ECDLancamento
+	Balancetes    []ECDBalancete
+	DRE           []ECDDREItem
 }
 
 type ECDEmpresa struct {
@@ -47,21 +47,21 @@ type ECDPeriodo struct {
 }
 
 type ECDPlano struct {
-	Numero      int
-	Descricao   string
+	Numero    int
+	Descricao string
 }
 
 type ECDConta struct {
-	CodCta      string
-	CodECD      string
-	TipoCta     string
-	Nivel       int
-	CodCtaSup   string
-	CtaRef      string
-	IndCtaCons  string
-	DescCta     string
-	Codigo      string
-	NIF         string
+	CodCta     string
+	CodECD     string
+	TipoCta    string
+	Nivel      int
+	CodCtaSup  string
+	CtaRef     string
+	IndCtaCons string
+	DescCta    string
+	Codigo     string
+	NIF        string
 }
 
 type ECDCentroCusto struct {
@@ -70,16 +70,16 @@ type ECDCentroCusto struct {
 }
 
 type ECDLivro struct {
-	NumOrd      string
-	NatLivro    string
-	NumLiv      string
-	DescLiv     string
-	CodHash     string
-	NumHash     string
-	PerIni      time.Time
-	PerFin      time.Time
-	CodHashAnt  string
-	NumHashAnt  string
+	NumOrd     string
+	NatLivro   string
+	NumLiv     string
+	DescLiv    string
+	CodHash    string
+	NumHash    string
+	PerIni     time.Time
+	PerFin     time.Time
+	CodHashAnt string
+	NumHashAnt string
 }
 
 type ECDParticipante struct {

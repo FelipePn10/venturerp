@@ -24,7 +24,7 @@ func (uc *ListContasPagarUseCase) Execute(
 	}
 
 	filters := repository.CPFilter{
-		Status:      dto.Status,
+		Status:       dto.Status,
 		FornecedorID: dto.FornecedorID,
 	}
 	if dto.StartDate != nil {

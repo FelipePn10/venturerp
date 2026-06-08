@@ -22,6 +22,11 @@ func (uc *CreateCTeUseCase) Execute(ctx context.Context, dto request.CreateCTeDT
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	userID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	dataEmissao, err := time.Parse("2006-01-02", dto.DataEmissao)
 	if err != nil {
 		return nil, fmt.Errorf("data_emissao inválida: %w", err)
@@ -33,6 +38,12 @@ func (uc *CreateCTeUseCase) Execute(ctx context.Context, dto request.CreateCTeDT
 
 	if dto.TipoRateio == "" {
 		dto.TipoRateio = "VALOR"
+	}
+
+	var emissionData *string
+	if len(dto.EmissionData) > 0 {
+		s := string(dto.EmissionData)
+		emissionData = &s
 	}
 
 	cte := &entity.FiscalCTe{
@@ -56,8 +67,10 @@ func (uc *CreateCTeUseCase) Execute(ctx context.Context, dto request.CreateCTeDT
 		TipoRateio:          dto.TipoRateio,
 		FiscalEntryID:       dto.FiscalEntryID,
 		Status:              "PENDENTE",
+		EmissionData:        emissionData,
 		Notes:               dto.Notes,
 		IsActive:            true,
+		CreatedBy:           userID,
 	}
 
 	return uc.Repo.CreateCTe(ctx, cte)

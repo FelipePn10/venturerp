@@ -2705,6 +2705,34 @@ type AccountingReferenceAccount struct {
 	CreatedAt       pgtype.Timestamptz
 }
 
+type Adiantamento struct {
+	ID               int64
+	Tipo             string
+	ParceiroID       *int64
+	ContaBancariaID  int64
+	NumeroDocumento  pgtype.Text
+	DataAdiantamento pgtype.Date
+	ValorOriginal    pgtype.Numeric
+	ValorUtilizado   pgtype.Numeric
+	Status           string
+	Descricao        pgtype.Text
+	IsActive         bool
+	CreatedBy        pgtype.UUID
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
+type AdiantamentoAplicaco struct {
+	ID             int64
+	AdiantamentoID int64
+	ContaTipo      string
+	ContaID        int64
+	ValorAplicado  pgtype.Numeric
+	DataAplicacao  pgtype.Date
+	CreatedBy      pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+}
+
 type AllocationBaseItem struct {
 	ID                 int64
 	Amount             float64
@@ -3328,6 +3356,9 @@ type FiscalCte struct {
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
 	CreatedBy           pgtype.UUID
+	FocusRef            pgtype.Text
+	Protocolo           pgtype.Text
+	EmissionData        []byte
 }
 
 type FiscalEntry struct {
@@ -3433,6 +3464,8 @@ type FiscalExit struct {
 	EmitidaContingencia     bool
 	CondicaoPagamentoID     *int64
 	TipoPagamento           pgtype.Text
+	BaseIcmsSt              pgtype.Numeric
+	ValorIcmsSt             pgtype.Numeric
 }
 
 type FiscalExitItem struct {
@@ -3463,6 +3496,10 @@ type FiscalExitItem struct {
 	CreatedAt         pgtype.Timestamptz
 	AliqPis           pgtype.Numeric
 	AliqCofins        pgtype.Numeric
+	BaseIcmsSt        pgtype.Numeric
+	AliqIcmsSt        pgtype.Numeric
+	ValorIcmsSt       pgtype.Numeric
+	Mva               pgtype.Numeric
 }
 
 type FluxoCaixa struct {
@@ -3507,6 +3544,25 @@ type Group struct {
 	EnterpriseID int64
 	CreatedBy    pgtype.UUID
 	CreatedAt    pgtype.Timestamptz
+}
+
+type IbptRate struct {
+	ID               int64
+	Ncm              string
+	Ex               string
+	Uf               string
+	Tipo             int16
+	Descricao        string
+	NacionalFederal  pgtype.Numeric
+	ImportadoFederal pgtype.Numeric
+	Estadual         pgtype.Numeric
+	Municipal        pgtype.Numeric
+	VigenciaInicio   pgtype.Date
+	VigenciaFim      pgtype.Date
+	Chave            pgtype.Text
+	Versao           string
+	Fonte            string
+	CreatedAt        pgtype.Timestamptz
 }
 
 type IcmsAdjustmentCode struct {
@@ -4371,6 +4427,49 @@ type NcmTaxTable struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type Nfse struct {
+	ID                        int64
+	NumeroRps                 *int64
+	SerieRps                  pgtype.Text
+	TipoRps                   int32
+	DataEmissao               pgtype.Date
+	Status                    string
+	NaturezaOperacao          int32
+	OptanteSimples            bool
+	IncentivadorCultural      bool
+	TomadorCnpjCpf            pgtype.Text
+	TomadorRazaoSocial        pgtype.Text
+	TomadorEmail              pgtype.Text
+	TomadorLogradouro         pgtype.Text
+	TomadorNumero             pgtype.Text
+	TomadorComplemento        pgtype.Text
+	TomadorBairro             pgtype.Text
+	TomadorCodigoMunicipio    pgtype.Text
+	TomadorUf                 pgtype.Text
+	TomadorCep                pgtype.Text
+	ItemListaServico          string
+	CodigoTributarioMunicipio pgtype.Text
+	Discriminacao             string
+	CodigoMunicipio           string
+	ValorServicos             pgtype.Numeric
+	ValorDeducoes             pgtype.Numeric
+	AliquotaIss               pgtype.Numeric
+	IssRetido                 bool
+	ValorIss                  pgtype.Numeric
+	ValorLiquido              pgtype.Numeric
+	FocusRef                  pgtype.Text
+	NumeroNfse                pgtype.Text
+	CodigoVerificacao         pgtype.Text
+	Url                       pgtype.Text
+	XmlPath                   pgtype.Text
+	SalesOrderCode            *int64
+	Notes                     pgtype.Text
+	IsActive                  bool
+	CreatedBy                 pgtype.UUID
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
+}
+
 type NonConformance struct {
 	ID                int64
 	Code              int64
@@ -5220,6 +5319,40 @@ type SalesTablePrice struct {
 	ProductLineID *int64
 	ItemMask      pgtype.Text
 	CreatedAt     pgtype.Timestamptz
+}
+
+type Shipment struct {
+	ID             int64
+	Code           int64
+	SalesOrderCode *int64
+	CarrierCode    *int64
+	Status         string
+	TotalVolumes   int32
+	TotalWeight    pgtype.Numeric
+	Notes          pgtype.Text
+	ShippedAt      pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+}
+
+type ShipmentItem struct {
+	ID                 int64
+	ShipmentID         int64
+	Sequence           int32
+	ItemCode           int64
+	SalesOrderItemCode *int64
+	WarehouseID        *int64
+	Quantity           pgtype.Numeric
+	ConferredQty       pgtype.Numeric
+	IsConferred        bool
+	Notes              pgtype.Text
+	CreatedAt          pgtype.Timestamptz
+}
+
+type ShipmentSequence struct {
+	ID         int32
+	LastNumber int64
 }
 
 type SimplesNacionalApuraco struct {

@@ -12,17 +12,17 @@ import (
 )
 
 type StockHandler struct {
-	createMovementUC *stock_uc.CreateStockMovementUseCase
-	listMovementsUC  *stock_uc.ListStockMovementsUseCase
-	getBalanceUC     *stock_uc.GetStockBalanceUseCase
-	reserveStockUC   *stock_uc.ReserveStockUseCase
-	releaseReserveUC *stock_uc.ReleaseReservationUseCase
-	consumeReserveUC *stock_uc.ConsumeReservationUseCase
+	createMovementUC  *stock_uc.CreateStockMovementUseCase
+	listMovementsUC   *stock_uc.ListStockMovementsUseCase
+	getBalanceUC      *stock_uc.GetStockBalanceUseCase
+	reserveStockUC    *stock_uc.ReserveStockUseCase
+	releaseReserveUC  *stock_uc.ReleaseReservationUseCase
+	consumeReserveUC  *stock_uc.ConsumeReservationUseCase
 	createInventoryUC *stock_uc.CreateInventoryUseCase
-	countInventoryUC *stock_uc.CountInventoryItemUseCase
+	countInventoryUC  *stock_uc.CountInventoryItemUseCase
 	adjustInventoryUC *stock_uc.AdjustInventoryUseCase
-	closeInventoryUC *stock_uc.CloseInventoryUseCase
-	getInventoryUC   *stock_uc.GetInventoryUseCase
+	closeInventoryUC  *stock_uc.CloseInventoryUseCase
+	getInventoryUC    *stock_uc.GetInventoryUseCase
 	listInventoriesUC *stock_uc.ListInventoriesUseCase
 }
 

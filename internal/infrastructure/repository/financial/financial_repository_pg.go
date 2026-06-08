@@ -1036,13 +1036,13 @@ func (r *FinancialRepositoryPG) GetDRE(ctx context.Context, startDate, endDate t
 	resultado := receitaLiquida - despesas
 
 	return map[string]interface{}{
-		"receita_bruta":    receitaBruta,
-		"impostos_vendas":  impostosVendas,
-		"receita_liquida":  receitaLiquida,
-		"despesas":         despesas,
+		"receita_bruta":     receitaBruta,
+		"impostos_vendas":   impostosVendas,
+		"receita_liquida":   receitaLiquida,
+		"despesas":          despesas,
 		"resultado_liquido": resultado,
-		"periodo_inicio":   startDate.Format("2006-01-02"),
-		"periodo_fim":      endDate.Format("2006-01-02"),
+		"periodo_inicio":    startDate.Format("2006-01-02"),
+		"periodo_fim":       endDate.Format("2006-01-02"),
 	}, nil
 }
 

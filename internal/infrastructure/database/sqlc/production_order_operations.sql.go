@@ -105,12 +105,12 @@ WHERE ro.route_id = $1 AND ro.is_active = TRUE
 ORDER BY ro.sequence`
 
 type DBRouteOpForExplode struct {
-	ID           int64
-	Sequence     int16
+	ID            int64
+	Sequence      int16
 	OperationName string
-	WorkCenterID pgtype.Int8
-	PlannedHours float64
-	SetupHours   float64
+	WorkCenterID  pgtype.Int8
+	PlannedHours  float64
+	SetupHours    float64
 }
 
 func (q *Queries) GetRouteOpsForExplode(ctx context.Context, routeID int64) ([]DBRouteOpForExplode, error) {

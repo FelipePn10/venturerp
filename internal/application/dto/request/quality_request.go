@@ -3,13 +3,13 @@ package request
 import "github.com/google/uuid"
 
 type CreateInspectionPlanDTO struct {
-	ItemCode         int64   `json:"item_code"`
-	RouteOperationID *int64  `json:"route_operation_id,omitempty"`
-	PointType        string  `json:"point_type"` // RECEBIMENTO | PROCESSO | EXPEDICAO
-	Description      string  `json:"description"`
-	SampleSize       float64 `json:"sample_size"`
-	AcceptanceLevel  float64 `json:"acceptance_level"`
-	Instructions     *string `json:"instructions,omitempty"`
+	ItemCode         int64     `json:"item_code"`
+	RouteOperationID *int64    `json:"route_operation_id,omitempty"`
+	PointType        string    `json:"point_type"` // RECEBIMENTO | PROCESSO | EXPEDICAO
+	Description      string    `json:"description"`
+	SampleSize       float64   `json:"sample_size"`
+	AcceptanceLevel  float64   `json:"acceptance_level"`
+	Instructions     *string   `json:"instructions,omitempty"`
 	CreatedBy        uuid.UUID `json:"created_by"`
 }
 
@@ -24,17 +24,17 @@ type AddCharacteristicDTO struct {
 }
 
 type CreateQualityRecordDTO struct {
-	PlanID            int64     `json:"plan_id"`
-	ProductionOrderID *int64    `json:"production_order_id,omitempty"`
-	Lot               *string   `json:"lot,omitempty"`
-	ItemCode          int64     `json:"item_code"`
-	InspectedQty      float64   `json:"inspected_qty"`
-	ApprovedQty       float64   `json:"approved_qty"`
-	RejectedQty       float64   `json:"rejected_qty"`
-	Result            string    `json:"result"` // APROVADO | REJEITADO | CONDICIONAL | PENDENTE
-	InspectorID       *int64    `json:"inspector_id,omitempty"`
-	Notes             *string   `json:"notes,omitempty"`
-	CreatedBy         uuid.UUID `json:"created_by"`
+	PlanID            int64               `json:"plan_id"`
+	ProductionOrderID *int64              `json:"production_order_id,omitempty"`
+	Lot               *string             `json:"lot,omitempty"`
+	ItemCode          int64               `json:"item_code"`
+	InspectedQty      float64             `json:"inspected_qty"`
+	ApprovedQty       float64             `json:"approved_qty"`
+	RejectedQty       float64             `json:"rejected_qty"`
+	Result            string              `json:"result"` // APROVADO | REJEITADO | CONDICIONAL | PENDENTE
+	InspectorID       *int64              `json:"inspector_id,omitempty"`
+	Notes             *string             `json:"notes,omitempty"`
+	CreatedBy         uuid.UUID           `json:"created_by"`
 	Measurements      []AddMeasurementDTO `json:"measurements,omitempty"`
 }
 

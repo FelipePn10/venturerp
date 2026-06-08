@@ -44,26 +44,26 @@ const (
 type CfopTipoUtilizacao string
 
 const (
-	CfopTipoUtilizacaoNormal                     CfopTipoUtilizacao = "NORMAL"
-	CfopTipoUtilizacaoVendaComercialExportadora   CfopTipoUtilizacao = "VENDA_COMERCIAL_EXPORTADORA"
+	CfopTipoUtilizacaoNormal                        CfopTipoUtilizacao = "NORMAL"
+	CfopTipoUtilizacaoVendaComercialExportadora     CfopTipoUtilizacao = "VENDA_COMERCIAL_EXPORTADORA"
 	CfopTipoUtilizacaoCompraFimEspecificoExportacao CfopTipoUtilizacao = "COMPRA_FIM_ESPECIFICO_EXPORTACAO"
-	CfopTipoUtilizacaoExportacao                  CfopTipoUtilizacao = "EXPORTACAO"
+	CfopTipoUtilizacaoExportacao                    CfopTipoUtilizacao = "EXPORTACAO"
 )
 
 type CFOP struct {
-	ID               int64
-	Code             int32
-	Description      string
-	DescriptionFull  *string
-	Utilization      CfopUtilization
-	OrigemClasIPI    *string
-	IndOperacao      CfopIndOperacao
-	TipoUtilizacao   CfopTipoUtilizacao
-	CodigoAnexoSN    *string
-	DIFAL            bool
-	Doacao           bool
-	IsActive         bool
-	CreatedAt        time.Time
+	ID              int64
+	Code            int32
+	Description     string
+	DescriptionFull *string
+	Utilization     CfopUtilization
+	OrigemClasIPI   *string
+	IndOperacao     CfopIndOperacao
+	TipoUtilizacao  CfopTipoUtilizacao
+	CodigoAnexoSN   *string
+	DIFAL           bool
+	Doacao          bool
+	IsActive        bool
+	CreatedAt       time.Time
 }
 
 // ─── ICMS/IPI Tax Params (Redução, Substituição, Diferimento) ─────────────────
@@ -103,11 +103,11 @@ type ICMSIPITaxParam struct {
 	ID int64
 
 	// ── Search keys ─────────────────────────────────────────────────────────
-	NCMCode               *string
-	ItemCode              *int64
-	ItemConfigMask        *string
-	UF                    string
-	OperationType         TaxParamOperation
+	NCMCode        *string
+	ItemCode       *int64
+	ItemConfigMask *string
+	UF             string
+	OperationType  TaxParamOperation
 
 	// ── Optional FK filters ──────────────────────────────────────────────────
 	CustomerCode              *int64
@@ -118,91 +118,91 @@ type ICMSIPITaxParam struct {
 	TaxTypeID                 *int64
 
 	// ── Flags ────────────────────────────────────────────────────────────────
-	IsPreferred       bool
-	IsSimpleOptante   bool
+	IsPreferred     bool
+	IsSimpleOptante bool
 
 	// ── ICMS rates ───────────────────────────────────────────────────────────
-	ICMSPctContrib          float64
-	LegalDeviceICMSContribID *int64
-	ICMSPctNonContrib       float64
+	ICMSPctContrib              float64
+	LegalDeviceICMSContribID    *int64
+	ICMSPctNonContrib           float64
 	LegalDeviceICMSNonContribID *int64
 
 	// ── ICMS reduction ───────────────────────────────────────────────────────
-	ICMSRedPctContrib           float64
-	ICMSRedTargetContrib        *IcmsReductionTarget
-	LegalDeviceICMSRedContribID *int64
-	ICMSRedPctNonContrib        float64
-	ICMSRedTargetNonContrib     *IcmsReductionTarget
+	ICMSRedPctContrib              float64
+	ICMSRedTargetContrib           *IcmsReductionTarget
+	LegalDeviceICMSRedContribID    *int64
+	ICMSRedPctNonContrib           float64
+	ICMSRedTargetNonContrib        *IcmsReductionTarget
 	LegalDeviceICMSRedNonContribID *int64
 
 	// ── ICMS deferral ────────────────────────────────────────────────────────
-	ICMSDeferralPct            float64
-	ICMSDeferralTarget         *IcmsReductionTarget
-	LegalDeviceICMSDeferralID  *int64
-	CodBenefRBC                *string
+	ICMSDeferralPct           float64
+	ICMSDeferralTarget        *IcmsReductionTarget
+	LegalDeviceICMSDeferralID *int64
+	CodBenefRBC               *string
 
 	// ── ICMS substitution ────────────────────────────────────────────────────
-	ICMSSubstPctContrib          float64
-	LegalDeviceICMSSubstContribID *int64
-	ICMSSubstPctNonContrib       float64
+	ICMSSubstPctContrib              float64
+	LegalDeviceICMSSubstContribID    *int64
+	ICMSSubstPctNonContrib           float64
 	LegalDeviceICMSSubstNonContribID *int64
-	ICMSSubstPctContribUC        float64
-	ICMSSubstRedPct              float64
-	LegalDeviceICMSSubstRedID    *int64
+	ICMSSubstPctContribUC            float64
+	ICMSSubstRedPct                  float64
+	LegalDeviceICMSSubstRedID        *int64
 
 	// ── ICMS ST calculation ──────────────────────────────────────────────────
-	ICMSInternalPct         float64
-	BCICMSSTModality        *string
-	ICMSPctForSTContrib     float64
-	ICMSPctForSTNonContrib  float64
+	ICMSInternalPct        float64
+	BCICMSSTModality       *string
+	ICMSPctForSTContrib    float64
+	ICMSPctForSTNonContrib float64
 
 	// ── CST / CSOSN ──────────────────────────────────────────────────────────
-	CSTSituationB       *string
-	CSOSNIGMS           *string
-	CSTICMSContrib      *string
-	CSTICMSNonContrib   *string
-	CodBeneficioFiscal  *string
-	CSTICMSContribDev   *string
+	CSTSituationB        *string
+	CSOSNIGMS            *string
+	CSTICMSContrib       *string
+	CSTICMSNonContrib    *string
+	CodBeneficioFiscal   *string
+	CSTICMSContribDev    *string
 	CSTICMSNonContribDev *string
 
 	// ── IPI reduction ────────────────────────────────────────────────────────
-	IPIRedPctContrib          float64
-	IPIRedTargetContrib       *IcmsReductionTarget
-	LegalDeviceIPIContribID   *int64
-	IPIRedPctNonContrib       float64
-	IPIRedTargetNonContrib    *IcmsReductionTarget
+	IPIRedPctContrib           float64
+	IPIRedTargetContrib        *IcmsReductionTarget
+	LegalDeviceIPIContribID    *int64
+	IPIRedPctNonContrib        float64
+	IPIRedTargetNonContrib     *IcmsReductionTarget
 	LegalDeviceIPINonContribID *int64
-	CSTIPIExit                *string
-	CSTIPIEntry               *string
+	CSTIPIExit                 *string
+	CSTIPIEntry                *string
 
 	// ── FCI ──────────────────────────────────────────────────────────────────
-	ICMSPctOrigins1238       float64
-	CalcBaseRedFCI           bool
-	ICMSSubstPctOrigins1238  float64
-	CSTICMSFci               *string
-	UsesICMSZonaFranca       bool
-	DifAliqSTContribUC       float64
-	CodBenefContrib          *string
-	CodBenefNonContrib       *string
+	ICMSPctOrigins1238      float64
+	CalcBaseRedFCI          bool
+	ICMSSubstPctOrigins1238 float64
+	CSTICMSFci              *string
+	UsesICMSZonaFranca      bool
+	DifAliqSTContribUC      float64
+	CodBenefContrib         *string
+	CodBenefNonContrib      *string
 
 	// ── ICMS additions ───────────────────────────────────────────────────────
-	ICMSAcresPctContrib        float64
-	ICMSAcresTypeContrib       *IcmsAcresType
-	ICMSAcresSumContrib        bool
-	ICMSAcresPctNonContrib     float64
-	ICMSAcresTypeNonContrib    *IcmsAcresType
-	ICMSAcresSumNonContrib     bool
-	ICMSSTAcresPctContrib      float64
-	ICMSSTAcresTypeContrib     *IcmsAcresType
-	ICMSSTAcresSumContrib      bool
-	ICMSSTAcresPctNonContrib   float64
-	ICMSSTAcresTypeNonContrib  *IcmsAcresType
-	ICMSSTAcresSumNonContrib   bool
-	FCPSTPartilhaPct           float64
+	ICMSAcresPctContrib       float64
+	ICMSAcresTypeContrib      *IcmsAcresType
+	ICMSAcresSumContrib       bool
+	ICMSAcresPctNonContrib    float64
+	ICMSAcresTypeNonContrib   *IcmsAcresType
+	ICMSAcresSumNonContrib    bool
+	ICMSSTAcresPctContrib     float64
+	ICMSSTAcresTypeContrib    *IcmsAcresType
+	ICMSSTAcresSumContrib     bool
+	ICMSSTAcresPctNonContrib  float64
+	ICMSSTAcresTypeNonContrib *IcmsAcresType
+	ICMSSTAcresSumNonContrib  bool
+	FCPSTPartilhaPct          float64
 
 	// ── DIFAL (EC/87) ────────────────────────────────────────────────────────
-	ICMSDifalRedPct   float64
-	ICMSDifalType     *IcmsDifalType
+	ICMSDifalRedPct float64
+	ICMSDifalType   *IcmsDifalType
 
 	// ── DIFAL purchases ──────────────────────────────────────────────────────
 	DifalPurchaseRedPct    float64
@@ -275,15 +275,15 @@ const (
 )
 
 type ICMSApuracaoLine struct {
-	ID                       int64
-	Code                     string
-	Description              string
-	LineType                 ApuracaoLineType
-	AcceptsEntries           bool
-	Nature                   *string
-	ApuracaoAdjCodeID        *int64
-	IsActive                 bool
-	CreatedAt                time.Time
+	ID                int64
+	Code              string
+	Description       string
+	LineType          ApuracaoLineType
+	AcceptsEntries    bool
+	Nature            *string
+	ApuracaoAdjCodeID *int64
+	IsActive          bool
+	CreatedAt         time.Time
 }
 
 // ─── ICMS Summary Entry ───────────────────────────────────────────────────────
@@ -365,95 +365,95 @@ const (
 )
 
 type ICMSReductionSubstitution struct {
-	ID                              int64
-	ItemID                          *int64
-	ItemMask                        *string
-	NCMCode                         *string
-	UF                              string
-	OperationType                   ICMSOperationType
-	CustomerID                      *int64
-	EstablishmentID                 *int64
-	SupplierID                      *int64
-	InvoiceTypeOutID                *int64
-	InvoiceTypeInID                 *int64
-	MarketSegmentID                 *int64
-	IsPreferential                  bool
+	ID               int64
+	ItemID           *int64
+	ItemMask         *string
+	NCMCode          *string
+	UF               string
+	OperationType    ICMSOperationType
+	CustomerID       *int64
+	EstablishmentID  *int64
+	SupplierID       *int64
+	InvoiceTypeOutID *int64
+	InvoiceTypeInID  *int64
+	MarketSegmentID  *int64
+	IsPreferential   bool
 	// ICMS alíquotas
-	ICMSPctContrib                  *float64
-	ICMSPctNonContrib               *float64
-	LegalDeviceICMSContribID        *int64
-	LegalDeviceICMSNonContribID     *int64
+	ICMSPctContrib              *float64
+	ICMSPctNonContrib           *float64
+	LegalDeviceICMSContribID    *int64
+	LegalDeviceICMSNonContribID *int64
 	// Redução ICMS
-	ICMSRedPctContrib               *float64
-	ICMSRedTargetContrib            ICMSReductionTarget
-	ICMSRedPctNonContrib            *float64
-	ICMSRedTargetNonContrib         ICMSReductionTarget
-	LegalDeviceICMSRedContribID     *int64
-	LegalDeviceICMSRedNonContribID  *int64
+	ICMSRedPctContrib              *float64
+	ICMSRedTargetContrib           ICMSReductionTarget
+	ICMSRedPctNonContrib           *float64
+	ICMSRedTargetNonContrib        ICMSReductionTarget
+	LegalDeviceICMSRedContribID    *int64
+	LegalDeviceICMSRedNonContribID *int64
 	// Diferimento
-	ICMSDeferralPct                 *float64
-	ICMSDeferralTarget              ICMSReductionTarget
-	LegalDeviceICMSDeferralID       *int64
-	ICMSDeferralBenefitCode         *string
+	ICMSDeferralPct           *float64
+	ICMSDeferralTarget        ICMSReductionTarget
+	LegalDeviceICMSDeferralID *int64
+	ICMSDeferralBenefitCode   *string
 	// Substituição tributária
-	ICMSSubstPctContrib             *float64
-	ICMSSubstPctNonContrib          *float64
-	ICMSSubstPctContribUC           *float64
-	ICMSSubstRedPct                 *float64
-	ICMSInternalPct                 *float64
-	LegalDeviceICMSSubstContribID   *int64
+	ICMSSubstPctContrib              *float64
+	ICMSSubstPctNonContrib           *float64
+	ICMSSubstPctContribUC            *float64
+	ICMSSubstRedPct                  *float64
+	ICMSInternalPct                  *float64
+	LegalDeviceICMSSubstContribID    *int64
 	LegalDeviceICMSSubstNonContribID *int64
-	LegalDeviceICMSSubstRedID       *int64
-	ModBCICMSST                     *string
-	ICMSPctForSTContrib             *float64
-	ICMSPctForSTNonContrib          *float64
+	LegalDeviceICMSSubstRedID        *int64
+	ModBCICMSST                      *string
+	ICMSPctForSTContrib              *float64
+	ICMSPctForSTNonContrib           *float64
 	// CST / CSOSN
-	CSTICMSContrib                  *string
-	CSTICMSNonContrib               *string
-	CSOSNTICMS                      *string
-	CSTICMSContribDev               *string
-	CSTICMSNonContribDev            *string
-	CSTSitTribB                     *string
+	CSTICMSContrib       *string
+	CSTICMSNonContrib    *string
+	CSOSNTICMS           *string
+	CSTICMSContribDev    *string
+	CSTICMSNonContribDev *string
+	CSTSitTribB          *string
 	// Benefício fiscal
-	FiscalBenefitCodeContrib        *string
-	FiscalBenefitCodeNonContrib     *string
-	FiscalBenefitCode               *string
+	FiscalBenefitCodeContrib    *string
+	FiscalBenefitCodeNonContrib *string
+	FiscalBenefitCode           *string
 	// IPI redução
-	IPIRedPctContrib                *float64
-	IPIRedTargetContrib             ICMSReductionTarget
-	IPIRedPctNonContrib             *float64
-	IPIRedTargetNonContrib          ICMSReductionTarget
-	LegalDeviceIPIContribID         *int64
-	LegalDeviceIPINonContribID      *int64
-	CSTIPIOut                       *string
-	CSTIPIIn                        *string
+	IPIRedPctContrib           *float64
+	IPIRedTargetContrib        ICMSReductionTarget
+	IPIRedPctNonContrib        *float64
+	IPIRedTargetNonContrib     ICMSReductionTarget
+	LegalDeviceIPIContribID    *int64
+	LegalDeviceIPINonContribID *int64
+	CSTIPIOut                  *string
+	CSTIPIIn                   *string
 	// FCI
-	FCIICMSPct                      *float64
-	FCIReduceBase                   bool
-	FCIICMSSubstPct                 *float64
-	FCICSTICMs                      *string
-	FCIUseICMSZF                    bool
-	FCIDIFALSTContribUCPct          *float64
+	FCIICMSPct             *float64
+	FCIReduceBase          bool
+	FCIICMSSubstPct        *float64
+	FCICSTICMs             *string
+	FCIUseICMSZF           bool
+	FCIDIFALSTContribUCPct *float64
 	// Acréscimos ICMS
-	ICMSAddPctContrib               *float64
-	ICMSAddTypeContrib              *string
-	ICMSAddSumAliqContrib           bool
-	ICMSAddPctNonContrib            *float64
-	ICMSAddTypeNonContrib           *string
-	ICMSAddSumAliqNonContrib        bool
-	ICMSSTAddPctContrib             *float64
-	ICMSSTAddTypeContrib            *string
-	ICMSSTAddPctNonContrib          *float64
-	ICMSSTAddTypeNonContrib         *string
-	FCPPartitionPct                 *float64
+	ICMSAddPctContrib        *float64
+	ICMSAddTypeContrib       *string
+	ICMSAddSumAliqContrib    bool
+	ICMSAddPctNonContrib     *float64
+	ICMSAddTypeNonContrib    *string
+	ICMSAddSumAliqNonContrib bool
+	ICMSSTAddPctContrib      *float64
+	ICMSSTAddTypeContrib     *string
+	ICMSSTAddPctNonContrib   *float64
+	ICMSSTAddTypeNonContrib  *string
+	FCPPartitionPct          *float64
 	// DIFAL EC 87/2015
-	DIFALICMSRedPct                 *float64
-	DIFALICMSType                   *string
-	DIFALPurchaseRedPct             *float64
+	DIFALICMSRedPct     *float64
+	DIFALICMSType       *string
+	DIFALPurchaseRedPct *float64
 	// Optante Simples
-	IsSimplesOptante                bool
-	IsActive                        bool
-	CreatedAt                       time.Time
+	IsSimplesOptante bool
+	IsActive         bool
+	CreatedAt        time.Time
 }
 
 // ─── ICMS Summary Entry Additional (Aba Adicionais) ──────────────────────────
@@ -468,16 +468,16 @@ const (
 )
 
 type ICMSSummaryEntryAdditional struct {
-	ID                  int64
-	SummaryEntryID      int64
-	Sequence            int
+	ID                   int64
+	SummaryEntryID       int64
+	Sequence             int
 	ArrecadacaoIndicator ArrecadacaoIndicator
-	Processo            *string
-	Arrecadacao         *string
-	Description         *string
-	DIEFTable           *string
-	DIEFCode            *string
-	CreatedAt           time.Time
+	Processo             *string
+	Arrecadacao          *string
+	Description          *string
+	DIEFTable            *string
+	DIEFCode             *string
+	CreatedAt            time.Time
 }
 
 // ─── ICMS ST Restitution / Ressarcimento / Complementação ────────────────────
@@ -491,33 +491,33 @@ const (
 )
 
 type ICMSSTRestitution struct {
-	ID                       int64
-	EmpresaID                int
-	Period                   string
-	RestitutionType          ICMSSTRestitutionType
-	UF                       string
-	OrigDocModel             *string
-	OrigDocSeries            *string
-	OrigDocNumber            *string
-	OrigDocDate              *time.Time
-	OrigEmitterCNPJ          *string
-	OrigEmitterIE            *string
-	ItemID                   *int64
-	ItemCode                 *string
-	CFOP                     *string
-	MotivoCode               *string
-	CSTICMS                  *string
-	ICMSSTBase               float64
-	ICMSSTAliq               float64
-	ICMSSTValue              float64
-	ICMSSTBaseRestitution    float64
-	ICMSSTValueRestitution   float64
-	ICMSSTConsolidatedBase   float64
-	ICMSSTConsolidatedValue  float64
-	H030IndEstoque           *string
-	SpedBlock                *string
-	IsActive                 bool
-	CreatedAt                time.Time
+	ID                      int64
+	EmpresaID               int
+	Period                  string
+	RestitutionType         ICMSSTRestitutionType
+	UF                      string
+	OrigDocModel            *string
+	OrigDocSeries           *string
+	OrigDocNumber           *string
+	OrigDocDate             *time.Time
+	OrigEmitterCNPJ         *string
+	OrigEmitterIE           *string
+	ItemID                  *int64
+	ItemCode                *string
+	CFOP                    *string
+	MotivoCode              *string
+	CSTICMS                 *string
+	ICMSSTBase              float64
+	ICMSSTAliq              float64
+	ICMSSTValue             float64
+	ICMSSTBaseRestitution   float64
+	ICMSSTValueRestitution  float64
+	ICMSSTConsolidatedBase  float64
+	ICMSSTConsolidatedValue float64
+	H030IndEstoque          *string
+	SpedBlock               *string
+	IsActive                bool
+	CreatedAt               time.Time
 }
 
 // ─── Nota Especial de Ajuste ──────────────────────────────────────────────────
@@ -563,26 +563,26 @@ type SpecialAdjustmentNote struct {
 }
 
 type SpecialAdjustmentNoteItem struct {
-	ID               int64
-	NoteID           int64
-	Sequence         int
-	ItemID           *int64
-	ItemCode         *string
-	Description      *string
-	Quantity         float64
-	Unit             *string
-	UnitValue        float64
-	TotalValue       float64
-	ICMSBase         float64
-	ICMSPct          float64
-	ICMSDeferralPct  float64
-	ICMSValue        float64
+	ID                int64
+	NoteID            int64
+	Sequence          int
+	ItemID            *int64
+	ItemCode          *string
+	Description       *string
+	Quantity          float64
+	Unit              *string
+	UnitValue         float64
+	TotalValue        float64
+	ICMSBase          float64
+	ICMSPct           float64
+	ICMSDeferralPct   float64
+	ICMSValue         float64
 	ICMSDeferredValue float64
-	IPIBase          float64
-	IPIPct           float64
-	IPIValue         float64
-	CSTICMS          *string
-	CSTIPI           *string
-	CFOPID           *int64
-	CreatedAt        time.Time
+	IPIBase           float64
+	IPIPct            float64
+	IPIValue          float64
+	CSTICMS           *string
+	CSTIPI            *string
+	CFOPID            *int64
+	CreatedAt         time.Time
 }

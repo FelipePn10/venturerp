@@ -40,24 +40,24 @@ type FinancialHandler struct {
 	apurarImpostosUC          *financial_uc.ApurarImpostosUseCase
 	getTaxAssessmentUC        *financial_uc.GetTaxAssessmentUseCase
 	// Reports
-	getLivroEntradasUC          *financial_uc.GetLivroEntradasUseCase
-	getLivroSaidasUC            *financial_uc.GetLivroSaidasUseCase
-	getImpostosSaidasUC         *financial_uc.GetImpostosSaidasUseCase
-	getImpostosEntradasUC       *financial_uc.GetImpostosEntradasUseCase
-	getDREUC                    *financial_uc.GetDREUseCase
-	getAgingReceberDetUC        *financial_uc.GetAgingReceberDetalhadoUseCase
-	getAgingPagarDetUC          *financial_uc.GetAgingPagarDetalhadoUseCase
-	getExtratoPorFornecedorUC   *financial_uc.GetExtratoPorFornecedorUseCase
-	getExtratoPorClienteUC      *financial_uc.GetExtratoPorClienteUseCase
-	getProdutosVendidosUC       *financial_uc.GetProdutosVendidosUseCase
-	getProdutosProduzidosUC     *financial_uc.GetProdutosProduzidosUseCase
-	getHistoricoCustosUC        *financial_uc.GetHistoricoCustosUseCase
-	getFichaTecnicaCustoUC      *financial_uc.GetFichaTecnicaCustoUseCase
-	getCurvaABCClientesUC       *financial_uc.GetCurvaABCClientesUseCase
-	getCurvaABCProdutosUC       *financial_uc.GetCurvaABCProdutosUseCase
-	getComprasPeriodoUC         *financial_uc.GetComprasPeriodoUseCase
+	getLivroEntradasUC        *financial_uc.GetLivroEntradasUseCase
+	getLivroSaidasUC          *financial_uc.GetLivroSaidasUseCase
+	getImpostosSaidasUC       *financial_uc.GetImpostosSaidasUseCase
+	getImpostosEntradasUC     *financial_uc.GetImpostosEntradasUseCase
+	getDREUC                  *financial_uc.GetDREUseCase
+	getAgingReceberDetUC      *financial_uc.GetAgingReceberDetalhadoUseCase
+	getAgingPagarDetUC        *financial_uc.GetAgingPagarDetalhadoUseCase
+	getExtratoPorFornecedorUC *financial_uc.GetExtratoPorFornecedorUseCase
+	getExtratoPorClienteUC    *financial_uc.GetExtratoPorClienteUseCase
+	getProdutosVendidosUC     *financial_uc.GetProdutosVendidosUseCase
+	getProdutosProduzidosUC   *financial_uc.GetProdutosProduzidosUseCase
+	getHistoricoCustosUC      *financial_uc.GetHistoricoCustosUseCase
+	getFichaTecnicaCustoUC    *financial_uc.GetFichaTecnicaCustoUseCase
+	getCurvaABCClientesUC     *financial_uc.GetCurvaABCClientesUseCase
+	getCurvaABCProdutosUC     *financial_uc.GetCurvaABCProdutosUseCase
+	getComprasPeriodoUC       *financial_uc.GetComprasPeriodoUseCase
 	// Conciliação
-	importarOFXUC               *financial_uc.ImportarOFXUseCase
+	importarOFXUC *financial_uc.ImportarOFXUseCase
 }
 
 func NewFinancialHandler(
@@ -132,23 +132,23 @@ func NewFinancialHandler(
 		getSaldoContasUC:          getSaldoContasUC,
 		apurarImpostosUC:          apurarImpostosUC,
 		getTaxAssessmentUC:        getTaxAssessmentUC,
-		getLivroEntradasUC:          getLivroEntradasUC,
-		getLivroSaidasUC:            getLivroSaidasUC,
-		getImpostosSaidasUC:         getImpostosSaidasUC,
-		getImpostosEntradasUC:       getImpostosEntradasUC,
-		getDREUC:                    getDREUC,
-		getAgingReceberDetUC:        getAgingReceberDetUC,
-		getAgingPagarDetUC:          getAgingPagarDetUC,
-		getExtratoPorFornecedorUC:   getExtratoPorFornecedorUC,
-		getExtratoPorClienteUC:      getExtratoPorClienteUC,
-		getProdutosVendidosUC:       getProdutosVendidosUC,
-		getProdutosProduzidosUC:     getProdutosProduzidosUC,
-		getHistoricoCustosUC:        getHistoricoCustosUC,
-		getFichaTecnicaCustoUC:      getFichaTecnicaCustoUC,
-		getCurvaABCClientesUC:       getCurvaABCClientesUC,
-		getCurvaABCProdutosUC:       getCurvaABCProdutosUC,
-		getComprasPeriodoUC:         getComprasPeriodoUC,
-		importarOFXUC:               importarOFXUC,
+		getLivroEntradasUC:        getLivroEntradasUC,
+		getLivroSaidasUC:          getLivroSaidasUC,
+		getImpostosSaidasUC:       getImpostosSaidasUC,
+		getImpostosEntradasUC:     getImpostosEntradasUC,
+		getDREUC:                  getDREUC,
+		getAgingReceberDetUC:      getAgingReceberDetUC,
+		getAgingPagarDetUC:        getAgingPagarDetUC,
+		getExtratoPorFornecedorUC: getExtratoPorFornecedorUC,
+		getExtratoPorClienteUC:    getExtratoPorClienteUC,
+		getProdutosVendidosUC:     getProdutosVendidosUC,
+		getProdutosProduzidosUC:   getProdutosProduzidosUC,
+		getHistoricoCustosUC:      getHistoricoCustosUC,
+		getFichaTecnicaCustoUC:    getFichaTecnicaCustoUC,
+		getCurvaABCClientesUC:     getCurvaABCClientesUC,
+		getCurvaABCProdutosUC:     getCurvaABCProdutosUC,
+		getComprasPeriodoUC:       getComprasPeriodoUC,
+		importarOFXUC:             importarOFXUC,
 	}
 }
 

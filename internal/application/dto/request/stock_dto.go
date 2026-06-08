@@ -1,20 +1,20 @@
 package request
 
 type CreateStockMovementDTO struct {
-	ItemCode       int64    `json:"item_code"`
-	Mask           string   `json:"mask"`
-	WarehouseID    int64    `json:"warehouse_id"`
-	MovementType   string   `json:"movement_type"`
-	Quantity       float64  `json:"quantity"`
-	UnitPrice      float64  `json:"unit_price"`
-	TotalPrice     float64  `json:"total_price"`
-	ReferenceType  *string  `json:"reference_type,omitempty"`
-	ReferenceCode  *int64   `json:"reference_code,omitempty"`
-	Lot            *string  `json:"lot,omitempty"`
-	SerialNumber   *string  `json:"serial_number,omitempty"`
-	Batch          *string  `json:"batch,omitempty"`
-	ExpirationDate *string  `json:"expiration_date,omitempty"`
-	Notes          *string  `json:"notes,omitempty"`
+	ItemCode       int64   `json:"item_code"`
+	Mask           string  `json:"mask"`
+	WarehouseID    int64   `json:"warehouse_id"`
+	MovementType   string  `json:"movement_type"`
+	Quantity       float64 `json:"quantity"`
+	UnitPrice      float64 `json:"unit_price"`
+	TotalPrice     float64 `json:"total_price"`
+	ReferenceType  *string `json:"reference_type,omitempty"`
+	ReferenceCode  *int64  `json:"reference_code,omitempty"`
+	Lot            *string `json:"lot,omitempty"`
+	SerialNumber   *string `json:"serial_number,omitempty"`
+	Batch          *string `json:"batch,omitempty"`
+	ExpirationDate *string `json:"expiration_date,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 }
 
 type CreateReservationDTO struct {

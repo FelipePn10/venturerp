@@ -35,19 +35,19 @@ type FiscalClassification struct {
 	CSTPISEntrada *string
 	CSTPISSaida   *string
 	// COFINS
-	COFINSRate       float64
-	COFINSIndicator  RateIndicator
-	CSTCOFINSEntrada *string
-	CSTCOFINSSaida   *string
+	COFINSRate        float64
+	COFINSIndicator   RateIndicator
+	CSTCOFINSEntrada  *string
+	CSTCOFINSSaida    *string
 	COFINSMajoradoPct float64
 	// Substituição tributária
 	PISSTPct    float64
 	COFINSSTPct float64
 	// Consumo
-	PISConsumoPct          float64
-	CSTPISConsumoEntrada   *string
-	CSTPISConsumoSaida     *string
-	COFINSConsumoPct       float64
+	PISConsumoPct           float64
+	CSTPISConsumoEntrada    *string
+	CSTPISConsumoSaida      *string
+	COFINSConsumoPct        float64
 	CSTCOFINSConsumoEntrada *string
 	CSTCOFINSConsumoSaida   *string
 	// Retenção

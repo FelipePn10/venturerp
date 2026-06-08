@@ -1,0 +1,17 @@
+# Keep the build context small and free of secrets/artifacts.
+.git
+.gitignore
+.env
+*.env
+!.env.example
+coverage.out
+*.test
+*.out
+backups/
+docs/
+README.md
+Jenkinsfile
+.idea/
+.vscode/
+bin/
+dist/

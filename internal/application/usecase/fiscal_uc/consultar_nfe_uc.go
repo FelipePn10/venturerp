@@ -23,6 +23,9 @@ type ConsultarNFeResult struct {
 	ChaveNFe  string `json:"chave_nfe,omitempty"`
 	Protocolo string `json:"protocolo,omitempty"`
 	Motivo    string `json:"motivo,omitempty"`
+	// Document URLs (DANFE PDF and XML) served by Focus NF-e once authorized.
+	DanfeURL string `json:"danfe_url,omitempty"`
+	XMLURL   string `json:"xml_url,omitempty"`
 }
 
 func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*ConsultarNFeResult, error) {
@@ -83,6 +86,8 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 		result.Status = resp.Status
 		result.ChaveNFe = resp.ChaveNFe
 		result.Protocolo = resp.Protocolo
+		result.DanfeURL = cli.DocumentURL(resp.PathDANFE)
+		result.XMLURL = cli.DocumentURL(resp.PathXML)
 	}
 	return result, nil
 }

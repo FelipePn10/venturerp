@@ -5,24 +5,24 @@ import "github.com/google/uuid"
 // ─── operations ──────────────────────────────────────────────────────────────
 
 type CreateOperationDTO struct {
-	Name                string   `json:"name"`
-	Description         *string  `json:"description,omitempty"`
-	Origin              string   `json:"origin"` // INTERNA | EXTERNA | TERCEIROS
-	DefaultWorkCenterID *int64   `json:"default_work_center_id,omitempty"`
-	StandardTime        float64  `json:"standard_time"` // hours
-	SetupTime           float64  `json:"setup_time"`    // hours
+	Name                string    `json:"name"`
+	Description         *string   `json:"description,omitempty"`
+	Origin              string    `json:"origin"` // INTERNA | EXTERNA | TERCEIROS
+	DefaultWorkCenterID *int64    `json:"default_work_center_id,omitempty"`
+	StandardTime        float64   `json:"standard_time"` // hours
+	SetupTime           float64   `json:"setup_time"`    // hours
 	CreatedBy           uuid.UUID `json:"created_by"`
 }
 
 type UpdateOperationDTO struct {
-	ID                  int64    `json:"id"`
-	Name                string   `json:"name"`
-	Description         *string  `json:"description,omitempty"`
-	Origin              string   `json:"origin"`
-	Situation           string   `json:"situation"` // APROVADA | INATIVA
-	DefaultWorkCenterID *int64   `json:"default_work_center_id,omitempty"`
-	StandardTime        float64  `json:"standard_time"`
-	SetupTime           float64  `json:"setup_time"`
+	ID                  int64   `json:"id"`
+	Name                string  `json:"name"`
+	Description         *string `json:"description,omitempty"`
+	Origin              string  `json:"origin"`
+	Situation           string  `json:"situation"` // APROVADA | INATIVA
+	DefaultWorkCenterID *int64  `json:"default_work_center_id,omitempty"`
+	StandardTime        float64 `json:"standard_time"`
+	SetupTime           float64 `json:"setup_time"`
 }
 
 // ─── routes ──────────────────────────────────────────────────────────────────

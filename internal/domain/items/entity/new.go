@@ -37,10 +37,10 @@ func NewItem(
 	}
 
 	item := &Item{
-		Code:       code,
-		Complement: complement,
-		Nature:     nature,
-		PDM:        pdm,
+		Code:        code,
+		Complement:  complement,
+		Nature:      nature,
+		PDM:         pdm,
 		Warehouse:   warehouse,
 		Engineering: engineering,
 		Planning:    planning,

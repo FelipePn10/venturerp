@@ -16,10 +16,10 @@ const (
 type Direction string
 
 const (
-	DirEntrada      Direction = "ENTRADA"
-	DirSaida        Direction = "SAIDA"
+	DirEntrada       Direction = "ENTRADA"
+	DirSaida         Direction = "SAIDA"
 	DirTransferencia Direction = "TRANSFERENCIA"
-	DirAmbos        Direction = "AMBOS"
+	DirAmbos         Direction = "AMBOS"
 )
 
 type StockMovementType struct {

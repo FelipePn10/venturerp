@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/accounting/ecd"
+	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/accounting/repository"
 )
 
@@ -136,11 +136,11 @@ func (uc *ECDUseCase) GenerateECD(ctx context.Context, req ECDRequest) (string, 
 			rc = *a.ReducedCode
 		}
 		contas = append(contas, ecd.ECDConta{
-			CodCta:    a.AccountNumber,
-			CodECD:    a.AccountNumber,
-			TipoCta:   tipoCta,
-			DescCta:   a.Description,
-			CtaRef:    rc,
+			CodCta:  a.AccountNumber,
+			CodECD:  a.AccountNumber,
+			TipoCta: tipoCta,
+			DescCta: a.Description,
+			CtaRef:  rc,
 		})
 	}
 

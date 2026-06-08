@@ -1,31 +1,34 @@
 package request
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type CreateFiscalEntryDTO struct {
-	ChaveAcesso         *string                   `json:"chave_acesso,omitempty"`
-	NumeroNF            int64                     `json:"numero_nf"`
-	Serie               string                    `json:"serie"`
-	Modelo              string                    `json:"modelo"`
-	DataEmissao         string                    `json:"data_emissao"`
-	DataEntrada         string                    `json:"data_entrada"`
-	CnpjEmitente        string                    `json:"cnpj_emitente"`
-	RazaoSocialEmitente string                    `json:"razao_social_emitente"`
-	IEEmitente          *string                   `json:"ie_emitente,omitempty"`
-	UFEmitente          *string                   `json:"uf_emitente,omitempty"`
-	ValorProdutos       float64                   `json:"valor_produtos"`
-	ValorFrete          float64                   `json:"valor_frete"`
-	ValorSeguro         float64                   `json:"valor_seguro"`
-	ValorDesconto       float64                   `json:"valor_desconto"`
-	ValorIPI            float64                   `json:"valor_ipi"`
-	ValorICMS           float64                   `json:"valor_icms"`
-	ValorPIS            float64                   `json:"valor_pis"`
-	ValorCOFINS         float64                   `json:"valor_cofins"`
-	ValorTotal          float64                   `json:"valor_total"`
-	TipoDocumento       string                    `json:"tipo_documento"`
-	PurchaseOrderCode   *int64                    `json:"purchase_order_code,omitempty"`
-	CteCode             *int64                    `json:"cte_code,omitempty"`
-	Notes               *string                   `json:"notes,omitempty"`
+	ChaveAcesso         *string                    `json:"chave_acesso,omitempty"`
+	NumeroNF            int64                      `json:"numero_nf"`
+	Serie               string                     `json:"serie"`
+	Modelo              string                     `json:"modelo"`
+	DataEmissao         string                     `json:"data_emissao"`
+	DataEntrada         string                     `json:"data_entrada"`
+	CnpjEmitente        string                     `json:"cnpj_emitente"`
+	RazaoSocialEmitente string                     `json:"razao_social_emitente"`
+	IEEmitente          *string                    `json:"ie_emitente,omitempty"`
+	UFEmitente          *string                    `json:"uf_emitente,omitempty"`
+	ValorProdutos       float64                    `json:"valor_produtos"`
+	ValorFrete          float64                    `json:"valor_frete"`
+	ValorSeguro         float64                    `json:"valor_seguro"`
+	ValorDesconto       float64                    `json:"valor_desconto"`
+	ValorIPI            float64                    `json:"valor_ipi"`
+	ValorICMS           float64                    `json:"valor_icms"`
+	ValorPIS            float64                    `json:"valor_pis"`
+	ValorCOFINS         float64                    `json:"valor_cofins"`
+	ValorTotal          float64                    `json:"valor_total"`
+	TipoDocumento       string                     `json:"tipo_documento"`
+	PurchaseOrderCode   *int64                     `json:"purchase_order_code,omitempty"`
+	CteCode             *int64                     `json:"cte_code,omitempty"`
+	Notes               *string                    `json:"notes,omitempty"`
 	Itens               []CreateFiscalEntryItemDTO `json:"itens"`
 }
 
@@ -58,9 +61,9 @@ type CreateFiscalEntryItemDTO struct {
 }
 
 type UpdateFiscalEntryDTO struct {
-	ID          int64   `json:"id"`
-	Notes       *string `json:"notes,omitempty"`
-	XmlPath     *string `json:"xml_path,omitempty"`
+	ID      int64   `json:"id"`
+	Notes   *string `json:"notes,omitempty"`
+	XmlPath *string `json:"xml_path,omitempty"`
 }
 
 type ApproveFiscalEntryDTO struct {
@@ -101,6 +104,13 @@ type CreateFiscalExitItemDTO struct {
 	TotalPrice       float64 `json:"total_price"`
 	OrigemMercadoria string  `json:"origem_mercadoria"`
 	Description      *string `json:"description,omitempty"`
+	// ICMS-ST: when MvaPct > 0 the engine computes Substituição Tributária for
+	// this item. MvaPct is a ratio (0.40 = 40%); it may already be the adjusted
+	// MVA for interstate operations. AliqInternaDestinoST overrides the
+	// destination internal rate, and RedBaseSTPct reduces the ST base (ratio).
+	MvaPct               float64 `json:"mva_pct,omitempty"`
+	AliqInternaDestinoST float64 `json:"aliq_interna_destino_st,omitempty"`
+	RedBaseSTPct         float64 `json:"red_base_st_pct,omitempty"`
 }
 
 type UpdateFiscalConfigDTO struct {
@@ -130,13 +140,13 @@ type UpdateFiscalConfigDTO struct {
 }
 
 type UpsertNcmTaxDTO struct {
-	Ncm        string  `json:"ncm"`
-	AliqIPI    float64 `json:"aliq_ipi"`
-	AliqPis    float64 `json:"aliq_pis"`
-	AliqCofins float64 `json:"aliq_cofins"`
-	CstPis     string  `json:"cst_pis"`
-	CstCofins  string  `json:"cst_cofins"`
-	CstIPI     string  `json:"cst_ipi"`
+	Ncm         string  `json:"ncm"`
+	AliqIPI     float64 `json:"aliq_ipi"`
+	AliqPis     float64 `json:"aliq_pis"`
+	AliqCofins  float64 `json:"aliq_cofins"`
+	CstPis      string  `json:"cst_pis"`
+	CstCofins   string  `json:"cst_cofins"`
+	CstIPI      string  `json:"cst_ipi"`
 	Description *string `json:"description,omitempty"`
 }
 
@@ -153,26 +163,31 @@ type UpsertICMSInternalDTO struct {
 }
 
 type CreateCTeDTO struct {
-	NumeroCTe           int64    `json:"numero_cte"`
-	Serie               string   `json:"serie"`
-	DataEmissao         string   `json:"data_emissao"`
-	DataEntrada         string   `json:"data_entrada"`
-	CnpjEmitente        string   `json:"cnpj_emitente"`
-	RazaoSocialEmitente string   `json:"razao_social_emitente"`
-	IEEmitente          *string  `json:"ie_emitente,omitempty"`
-	UFEmitente          *string  `json:"uf_emitente,omitempty"`
-	Cfop                string   `json:"cfop"`
-	ValorFrete          float64  `json:"valor_frete"`
-	ValorSeguro         float64  `json:"valor_seguro"`
-	ValorOutros         float64  `json:"valor_outros"`
-	ValorTotal          float64  `json:"valor_total"`
-	ValorICMS           float64  `json:"valor_icms"`
-	BaseICMS            float64  `json:"base_icms"`
-	AliqICMS            float64  `json:"aliq_icms"`
-	CstICMS             *string  `json:"cst_icms,omitempty"`
-	TipoRateio          string   `json:"tipo_rateio"`
-	FiscalEntryID       *int64   `json:"fiscal_entry_id,omitempty"`
-	Notes               *string  `json:"notes,omitempty"`
+	NumeroCTe           int64   `json:"numero_cte"`
+	Serie               string  `json:"serie"`
+	DataEmissao         string  `json:"data_emissao"`
+	DataEntrada         string  `json:"data_entrada"`
+	CnpjEmitente        string  `json:"cnpj_emitente"`
+	RazaoSocialEmitente string  `json:"razao_social_emitente"`
+	IEEmitente          *string `json:"ie_emitente,omitempty"`
+	UFEmitente          *string `json:"uf_emitente,omitempty"`
+	Cfop                string  `json:"cfop"`
+	ValorFrete          float64 `json:"valor_frete"`
+	ValorSeguro         float64 `json:"valor_seguro"`
+	ValorOutros         float64 `json:"valor_outros"`
+	ValorTotal          float64 `json:"valor_total"`
+	ValorICMS           float64 `json:"valor_icms"`
+	BaseICMS            float64 `json:"base_icms"`
+	AliqICMS            float64 `json:"aliq_icms"`
+	CstICMS             *string `json:"cst_icms,omitempty"`
+	TipoRateio          string  `json:"tipo_rateio"`
+	FiscalEntryID       *int64  `json:"fiscal_entry_id,omitempty"`
+	Notes               *string `json:"notes,omitempty"`
+	// EmissionData carries the full CT-e emission detail (natureza, tipo_cte,
+	// tipo_servico, modal, remetente, destinatário, tomador, municípios,
+	// produto predominante, valores). Required only when the CT-e will be
+	// authorized at SEFAZ; stored as-is and used by the authorize use case.
+	EmissionData json.RawMessage `json:"emission_data,omitempty"`
 }
 
 var _ = time.Now

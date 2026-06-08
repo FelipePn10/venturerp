@@ -9,11 +9,16 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 )
 
 type AddConsumptionUseCase struct {
 	Repo repository.ProductionOrderRepository
 	Auth ports.AuthService
+	// StockRepo is optional. When set, registering a consumption also posts an
+	// OUT stock movement (which updates the balance) for the consumed item.
+	StockRepo stockrepo.StockRepository
 }
 
 func (uc *AddConsumptionUseCase) Execute(
@@ -38,5 +43,31 @@ func (uc *AddConsumptionUseCase) Execute(
 		CreatedBy:         dto.CreatedBy,
 	}
 
-	return uc.Repo.AddConsumption(ctx, consumption)
+	saved, err := uc.Repo.AddConsumption(ctx, consumption)
+	if err != nil {
+		return nil, err
+	}
+
+	// Post the OUT movement for the consumed input so the warehouse balance is
+	// reduced automatically. Requires a target warehouse on the consumption.
+	if uc.StockRepo != nil && saved.WarehouseID != nil {
+		refType := stockentity.ReferenceTypeProductionOrder
+		refCode := saved.ProductionOrderID
+		mov := &stockentity.StockMovement{
+			ItemCode:      saved.ItemCode,
+			WarehouseID:   *saved.WarehouseID,
+			MovementType:  stockentity.MovementTypeOut,
+			Quantity:      saved.ConsumedQty,
+			ReferenceType: &refType,
+			ReferenceCode: &refCode,
+			Lot:           saved.Lot,
+			Notes:         saved.Notes,
+			CreatedBy:     saved.CreatedBy,
+		}
+		if _, moveErr := uc.StockRepo.CreateMovement(ctx, mov); moveErr != nil {
+			return nil, moveErr
+		}
+	}
+
+	return saved, nil
 }

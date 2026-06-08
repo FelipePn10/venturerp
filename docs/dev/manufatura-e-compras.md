@@ -3,7 +3,8 @@
 Cobre os módulos implementados neste ciclo:
 **Roteiro de Fabricação · CRP · APS · Custo Padrão · Qualidade · Manutenção Preventiva · Previsão Estatística · Alertas MRP (e-mail + webhook)**
 
-> Documentação fiscal em separado: **docs/FISCAL_FINANCEIRO.md**
+> Documentação fiscal em separado: **fiscal-financeiro.md** (mesma pasta `docs/`).
+> Índice geral da documentação: **README.md** (pasta `docs/`).
 
 ---
 
@@ -801,7 +802,7 @@ Permite definir regras de negócio que controlam quais combinações de atributo
 Cadastro de fornecedores/transportadoras e o fluxo que transforma sugestões de
 compra do MRP em pedidos de compra. A documentação completa do cadastro (campos,
 pastas, parâmetros, regras de IE/MEI/vitícola/SEFAZ e endpoints) está em
-[`docs/supplier_registration.md`](docs/supplier_registration.md).
+[`cadastros-fornecedor.md`](cadastros-fornecedor.md).
 
 ### Integrações principais
 
@@ -1028,10 +1029,84 @@ Cotação de compra (migration `000143`): libera itens de **solicitações de co
 
 ---
 
+## 17. Pipeline de Planejamento (MRP → CRP → APS)
+
+### O que é
+Um único disparo que encadeia os três motores de planejamento que antes eram
+chamados separadamente, devolvendo um **parecer de viabilidade consolidado**.
+
+### Como funciona
+1. **MRP** — explode a BOM e gera ordens planejadas (`generate_llc`).
+2. **CRP** — soma a carga por centro de trabalho/dia e detecta sobrecarga.
+3. **APS** — sequencia as ordens em capacidade finita (EDD).
+
+O resultado traz itens/ordens do MRP, entradas e contagem de sobrecarga do CRP,
+operações sequenciadas do APS e o veredito `viable` (falso quando o MRP não
+concluiu ou o CRP achou sobrecarga), com `notes` explicativas.
+
+### Endpoint
+- `POST /api/planning/run-pipeline` — body `{ "plan_code": <P>, "generate_llc": true, "start_from": "2026-06-10T00:00:00Z" }`.
+  Requer o escopo `planning:run` (ver §20). Implementado em
+  `planning_uc.RunPlanningPipelineUseCase`. As chamadas individuais
+  (`/api/mrp-calculation/run`, `/api/crp/calculate`, `/api/aps/sequence`) seguem disponíveis.
+
+## 18. Backflush no apontamento
+
+### O que é
+Baixa automática dos componentes da estrutura (BOM) ao **apontar** produção, em
+proporção à quantidade produzida.
+
+### Como funciona
+No `POST /api/production-order/appointment`, informando `backflush_warehouse_id`,
+o sistema resolve a BOM do item da OF (`GetDirectChildrenForMask` quando há
+máscara, senão `GetAllDirectChildren`) e gera um movimento **`OUT`** por componente:
+`consumo = qtd_produzida × qtd_componente × (1 + perda%/100)` (fórmula 1). Os
+movimentos atualizam o saldo (ver Estoque). Omitir `backflush_warehouse_id`
+desliga o backflush para aquele apontamento. Implementado em
+`production_order_uc/add_appointment_uc.go`.
+
+## 19. Expedição / Carregamento (romaneio) — migration 000146
+
+### O que é
+Logística de saída: separação, conferência e despacho de mercadorias por
+**romaneio** (shipment). Complementa — sem substituir — a baixa fiscal da NF-e de
+saída (ver `fiscal-financeiro.md`).
+
+### Ciclo de vida
+`OPEN` → `SEPARATED` → `CONFERRED` → `SHIPPED` (`CANCELLED`). O despacho (`ship`)
+exige **todos os itens conferidos**.
+
+### Endpoints (`/api/shipments`)
+| Ação | Endpoint |
+|---|---|
+| Criar romaneio | `POST /api/shipments` (`sales_order_code`, `carrier_code`, volumes, peso) |
+| Listar / detalhar | `GET /api/shipments` · `GET /api/shipments/{code}` |
+| Adicionar item | `POST /api/shipments/{code}/items` |
+| Conferir item | `POST /api/shipments/items/confer` (`item_id`, `conferred_qty`) |
+| Conferir romaneio | `POST /api/shipments/{code}/confer` |
+| Despachar | `POST /api/shipments/{code}/ship` |
+| Cancelar | `POST /api/shipments/{code}/cancel` |
+
+## 20. Plataforma: Idempotência e Escopos de permissão
+
+### Idempotência
+Métodos mutantes (`POST/PUT/PATCH`) aceitam o header **`Idempotency-Key`**. Numa
+repetição com a mesma chave (mesmo método+rota+usuário) dentro da janela (TTL
+24 h), a resposta original é **reproduzida** (header `Idempotent-Replayed: true`),
+evitando duplicidade em retries. Memória por instância (não persiste reinício).
+
+### Escopos de permissão
+Além do `RequireRole(ADMIN/USER)`, há um middleware **`RequirePermission(scope)`**
+com mapa papel→escopos: `ADMIN` (tudo), `USER` (operacional, sem `admin`),
+`VIEWER` (somente leitura). Escopos: `planning:run`, `purchase:approve`,
+`fiscal:authorize`, `financial:manage`, `item:activate`, `admin`. Aplicado às
+rotas sensíveis novas (pipeline, fiscal manifestação/inutilização/IBPT, CNAB,
+prontidão de item).
+
 ## Relação entre módulos
 
 ```
-Pedido de Venda
+Pedido de Venda  (confirmar → demanda independente automática)
       │
       ▼
     MRP ──────── BOM (estrutura do produto)
@@ -1056,4 +1131,18 @@ Pedido de Venda
           │
           └── Manutenção Preventiva
               (desconta horas de parada da capacidade disponível)
+
+  (MRP→CRP→APS num disparo: POST /api/planning/run-pipeline — §17)
+
+Ordem de Fabricação
+   start → consumo (OUT) → apontamento (backflush opcional, §18) → conclusão (IN)
+                                   │
+                                   ▼
+                         Estoque de acabados
+                                   │
+                                   ▼
+   NF-e de saída (autorizar → OUT + baixa de reservas + pedido Faturado + Conta a Receber)
+                                   │
+                                   ▼
+                   Expedição / romaneio (§19): separar → conferir → despachar
 ```

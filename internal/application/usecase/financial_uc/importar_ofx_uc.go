@@ -20,8 +20,8 @@ type ImportarOFXUseCase struct {
 }
 
 type ImportarOFXResult struct {
-	Importados int `json:"importados"`
-	Duplicados int `json:"duplicados"`
+	Importados  int `json:"importados"`
+	Duplicados  int `json:"duplicados"`
 	Conciliados int `json:"conciliados"`
 }
 

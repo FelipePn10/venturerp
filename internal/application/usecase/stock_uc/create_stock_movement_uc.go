@@ -27,20 +27,20 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 	}
 
 	m := &entity.StockMovement{
-		ItemCode:       dto.ItemCode,
-		Mask:           dto.Mask,
-		WarehouseID:    dto.WarehouseID,
-		MovementType:   dto.MovementType,
-		Quantity:       dto.Quantity,
-		UnitPrice:      dto.UnitPrice,
-		TotalPrice:     dto.TotalPrice,
-		ReferenceType:  dto.ReferenceType,
-		ReferenceCode:  dto.ReferenceCode,
-		Lot:            dto.Lot,
-		SerialNumber:   dto.SerialNumber,
-		Batch:          dto.Batch,
-		Notes:          dto.Notes,
-		CreatedBy:      userID,
+		ItemCode:      dto.ItemCode,
+		Mask:          dto.Mask,
+		WarehouseID:   dto.WarehouseID,
+		MovementType:  dto.MovementType,
+		Quantity:      dto.Quantity,
+		UnitPrice:     dto.UnitPrice,
+		TotalPrice:    dto.TotalPrice,
+		ReferenceType: dto.ReferenceType,
+		ReferenceCode: dto.ReferenceCode,
+		Lot:           dto.Lot,
+		SerialNumber:  dto.SerialNumber,
+		Batch:         dto.Batch,
+		Notes:         dto.Notes,
+		CreatedBy:     userID,
 	}
 
 	if dto.ExpirationDate != nil {

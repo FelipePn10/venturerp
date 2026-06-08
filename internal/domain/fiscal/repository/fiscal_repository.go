@@ -62,4 +62,5 @@ type FiscalRepository interface {
 	GetCTeByID(ctx context.Context, id int64) (*entity.FiscalCTe, error)
 	ListCTe(ctx context.Context) ([]*entity.FiscalCTe, error)
 	UpdateCTeStatus(ctx context.Context, id int64, status string) (*entity.FiscalCTe, error)
+	UpdateCTeAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef string) (*entity.FiscalCTe, error)
 }

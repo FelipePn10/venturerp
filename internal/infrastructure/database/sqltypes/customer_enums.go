@@ -10,7 +10,7 @@ import (
 type CustomerCategoryEnum string
 
 const (
-	CustomerCategoryEnumNORMAL    CustomerCategoryEnum = "NORMAL"
+	CustomerCategoryEnumNORMAL     CustomerCategoryEnum = "NORMAL"
 	CustomerCategoryEnumCONSUMIDOR CustomerCategoryEnum = "CONSUMIDOR"
 )
 
@@ -57,7 +57,7 @@ type CarrierBillingTypeEnum string
 
 const (
 	CarrierBillingTypeEnumCARTEIRA            CarrierBillingTypeEnum = "CARTEIRA"
-	CarrierBillingTypeEnumCOBRANCA_ESCRITURAL  CarrierBillingTypeEnum = "COBRANCA_ESCRITURAL"
+	CarrierBillingTypeEnumCOBRANCA_ESCRITURAL CarrierBillingTypeEnum = "COBRANCA_ESCRITURAL"
 	CarrierBillingTypeEnumBOLETO              CarrierBillingTypeEnum = "BOLETO"
 )
 
@@ -108,9 +108,9 @@ func (e PaymentAnalysisEnum) Value() (driver.Value, error) {
 type PaymentParcelStartEnum string
 
 const (
-	PaymentParcelStartEnumEMISSAO           PaymentParcelStartEnum = "EMISSAO"
-	PaymentParcelStartEnumPROXIMO_MES       PaymentParcelStartEnum = "PROXIMO_MES"
-	PaymentParcelStartEnumPROXIMA_QUINZENA  PaymentParcelStartEnum = "PROXIMA_QUINZENA"
+	PaymentParcelStartEnumEMISSAO          PaymentParcelStartEnum = "EMISSAO"
+	PaymentParcelStartEnumPROXIMO_MES      PaymentParcelStartEnum = "PROXIMO_MES"
+	PaymentParcelStartEnumPROXIMA_QUINZENA PaymentParcelStartEnum = "PROXIMA_QUINZENA"
 )
 
 func (e *PaymentParcelStartEnum) Scan(src interface{}) error {
@@ -134,15 +134,15 @@ func (e PaymentParcelStartEnum) Value() (driver.Value, error) {
 type PriceFormationEnum string
 
 const (
-	PriceFormationEnumINFORMADO              PriceFormationEnum = "INFORMADO"
-	PriceFormationEnumCUSTO_MEDIO            PriceFormationEnum = "CUSTO_MEDIO"
-	PriceFormationEnumCUSTO_STANDARD_TOTAL   PriceFormationEnum = "CUSTO_STANDARD_TOTAL"
+	PriceFormationEnumINFORMADO               PriceFormationEnum = "INFORMADO"
+	PriceFormationEnumCUSTO_MEDIO             PriceFormationEnum = "CUSTO_MEDIO"
+	PriceFormationEnumCUSTO_STANDARD_TOTAL    PriceFormationEnum = "CUSTO_STANDARD_TOTAL"
 	PriceFormationEnumCUSTO_STANDARD_MATERIAL PriceFormationEnum = "CUSTO_STANDARD_MATERIAL"
-	PriceFormationEnumINFORMADO_SEM_ICMS     PriceFormationEnum = "INFORMADO_SEM_ICMS"
-	PriceFormationEnumMAT_OPER               PriceFormationEnum = "MAT_OPER"
-	PriceFormationEnumTABELA_CUSTO           PriceFormationEnum = "TABELA_CUSTO"
-	PriceFormationEnumTRANSFERENCIA_IPI      PriceFormationEnum = "TRANSFERENCIA_IPI"
-	PriceFormationEnumTRANSFERENCIA_UF       PriceFormationEnum = "TRANSFERENCIA_UF"
+	PriceFormationEnumINFORMADO_SEM_ICMS      PriceFormationEnum = "INFORMADO_SEM_ICMS"
+	PriceFormationEnumMAT_OPER                PriceFormationEnum = "MAT_OPER"
+	PriceFormationEnumTABELA_CUSTO            PriceFormationEnum = "TABELA_CUSTO"
+	PriceFormationEnumTRANSFERENCIA_IPI       PriceFormationEnum = "TRANSFERENCIA_IPI"
+	PriceFormationEnumTRANSFERENCIA_UF        PriceFormationEnum = "TRANSFERENCIA_UF"
 )
 
 func (e *PriceFormationEnum) Scan(src interface{}) error {
@@ -312,9 +312,9 @@ func (e CustomerAddressTypeEnum) Value() (driver.Value, error) {
 type PaymentCondVisibilityEnum string
 
 const (
-	PaymentCondVisibilityEnumSOMENTE_VINCULADOS PaymentCondVisibilityEnum = "SOMENTE_VINCULADOS"
+	PaymentCondVisibilityEnumSOMENTE_VINCULADOS  PaymentCondVisibilityEnum = "SOMENTE_VINCULADOS"
 	PaymentCondVisibilityEnumVINCULADOS_E_NENHUM PaymentCondVisibilityEnum = "VINCULADOS_E_NENHUM"
-	PaymentCondVisibilityEnumTODOS              PaymentCondVisibilityEnum = "TODOS"
+	PaymentCondVisibilityEnumTODOS               PaymentCondVisibilityEnum = "TODOS"
 )
 
 func (e *PaymentCondVisibilityEnum) Scan(src interface{}) error {
@@ -389,8 +389,8 @@ func (e TableTypeEnum) Value() (driver.Value, error) {
 type BaseDateEnum string
 
 const (
-	BaseDateEnumPEDIDO     BaseDateEnum = "PEDIDO"
-	BaseDateEnumDATAATUAL  BaseDateEnum = "DATA_ATUAL"
+	BaseDateEnumPEDIDO    BaseDateEnum = "PEDIDO"
+	BaseDateEnumDATAATUAL BaseDateEnum = "DATA_ATUAL"
 )
 
 func (e *BaseDateEnum) Scan(src interface{}) error {

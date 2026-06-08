@@ -9,3 +9,8 @@
 # Test/build artifacts
 coverage.out
 cloc-go.txt
+bin/
+/erp
+
+# Local backup dumps (the directory is kept via backups/.gitignore)
+backups/*.dump

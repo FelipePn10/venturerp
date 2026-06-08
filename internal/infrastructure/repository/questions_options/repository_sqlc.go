@@ -34,7 +34,6 @@ func (r *repositoryQuestionOptionsSQLC) Save(
 	}, nil
 }
 
-
 func (r *repositoryQuestionOptionsSQLC) ExistsQuestionOptionByValue(
 	ctx context.Context,
 	value string,

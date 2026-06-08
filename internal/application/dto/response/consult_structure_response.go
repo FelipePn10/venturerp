@@ -38,7 +38,7 @@ type ConsultStructureRowResponse struct {
 
 // ConsultStructureResponse é o payload completo retornado pelo endpoint VENG0401.
 type ConsultStructureResponse struct {
-	RootItemCode int64                          `json:"root_item_code"`
-	Mask         string                         `json:"mask,omitempty"`
-	Rows         []ConsultStructureRowResponse  `json:"rows"`
+	RootItemCode int64                         `json:"root_item_code"`
+	Mask         string                        `json:"mask,omitempty"`
+	Rows         []ConsultStructureRowResponse `json:"rows"`
 }

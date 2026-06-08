@@ -16,38 +16,40 @@ const (
 )
 
 type FiscalExit struct {
-	ID                     int64
-	ChaveAcesso            *string
-	NumeroNF               int64
-	Serie                  string
-	DataEmissao            time.Time
-	DataSaida              *time.Time
-	CnpjDestinatario       *string
+	ID                      int64
+	ChaveAcesso             *string
+	NumeroNF                int64
+	Serie                   string
+	DataEmissao             time.Time
+	DataSaida               *time.Time
+	CnpjDestinatario        *string
 	RazaoSocialDestinatario *string
-	IEDestinatario         *string
-	UFDestinatario         *string
-	Cfop                   string
-	NaturezaOperacao       string
-	ValorProdutos          float64
-	ValorFrete             float64
-	ValorSeguro            float64
-	ValorDesconto          float64
-	ValorIPI               float64
-	ValorICMS              float64
-	ValorPIS               float64
-	ValorCOFINS            float64
-	ValorTotal             float64
-	SalesOrderCode         *int64
-	Status                 FiscalExitStatus
-	Protocolo              *string
-	XmlPath                *string
-	DanfePath              *string
-	FocusRef               *string
-	IsActive               bool
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
-	CreatedBy              uuid.UUID
-	Itens                  []*FiscalExitItem
+	IEDestinatario          *string
+	UFDestinatario          *string
+	Cfop                    string
+	NaturezaOperacao        string
+	ValorProdutos           float64
+	ValorFrete              float64
+	ValorSeguro             float64
+	ValorDesconto           float64
+	ValorIPI                float64
+	ValorICMS               float64
+	ValorPIS                float64
+	ValorCOFINS             float64
+	BaseICMSST              float64
+	ValorICMSST             float64
+	ValorTotal              float64
+	SalesOrderCode          *int64
+	Status                  FiscalExitStatus
+	Protocolo               *string
+	XmlPath                 *string
+	DanfePath               *string
+	FocusRef                *string
+	IsActive                bool
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	CreatedBy               uuid.UUID
+	Itens                   []*FiscalExitItem
 }
 
 type FiscalExitItem struct {
@@ -71,6 +73,10 @@ type FiscalExitItem struct {
 	ValorPIS          float64
 	AliqCOFINS        float64
 	ValorCOFINS       float64
+	BaseICMSST        float64
+	AliqICMSST        float64
+	ValorICMSST       float64
+	MVA               float64
 	CstICMS           *string
 	CstIPI            *string
 	CstPIS            *string

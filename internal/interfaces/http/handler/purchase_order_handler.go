@@ -12,13 +12,13 @@ import (
 )
 
 type PurchaseOrderHandler struct {
-	createUC          *purchase_order_uc.CreatePurchaseOrderUseCase
-	updateUC          *purchase_order_uc.UpdatePurchaseOrderUseCase
-	getUC             *purchase_order_uc.GetPurchaseOrderUseCase
-	listUC            *purchase_order_uc.ListPurchaseOrdersUseCase
-	listBySupplierUC  *purchase_order_uc.ListPurchaseOrdersBySupplierUseCase
-	listByStatusUC    *purchase_order_uc.ListPurchaseOrdersByStatusUseCase
-	cancelUC          *purchase_order_uc.CancelPurchaseOrderUseCase
+	createUC         *purchase_order_uc.CreatePurchaseOrderUseCase
+	updateUC         *purchase_order_uc.UpdatePurchaseOrderUseCase
+	getUC            *purchase_order_uc.GetPurchaseOrderUseCase
+	listUC           *purchase_order_uc.ListPurchaseOrdersUseCase
+	listBySupplierUC *purchase_order_uc.ListPurchaseOrdersBySupplierUseCase
+	listByStatusUC   *purchase_order_uc.ListPurchaseOrdersByStatusUseCase
+	cancelUC         *purchase_order_uc.CancelPurchaseOrderUseCase
 }
 
 func NewPurchaseOrderHandler(

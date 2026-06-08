@@ -18,8 +18,8 @@ type InvoiceTypeFlags struct {
 
 	// CalcFomentar applies the FOMENTAR/PRODUZIR incentive (e.g. Goiás):
 	// ICMS effectively paid = total ICMS × (1 - FomentarRetentionPct).
-	CalcFomentar          bool
-	FomentarRetentionPct  float64 // fraction of ICMS retained by state (e.g. 0.70 = 70%)
+	CalcFomentar         bool
+	FomentarRetentionPct float64 // fraction of ICMS retained by state (e.g. 0.70 = 70%)
 
 	// IPITransferPrice: when > 0, overrides ValorUnitario as IPI base (used for
 	// transfer invoices where the IPI base comes from a sales table).
@@ -45,6 +45,18 @@ type TaxItem struct {
 	// IPITransferPrice, when > 0, replaces ValorUnitario as the IPI base.
 	// Populated by the use case when InvoiceType.IPITransferSalesTableId is set.
 	IPITransferPrice float64
+
+	// ── Substituição Tributária (ICMS-ST) ──────────────────────────────────
+	// MvaPct is the "Margem de Valor Agregado" as a ratio (e.g. 0.40 = 40%).
+	// When > 0, the engine computes ICMS-ST for the item. The MVA may already be
+	// the "MVA ajustada" for interstate operations — the engine applies it as-is.
+	MvaPct float64
+	// AliqInternaDestinoST optionally overrides the destination internal ICMS
+	// rate used as the ST rate. When 0, the engine resolves it from the internal
+	// table (interstate) or from the fiscal config (intra-state).
+	AliqInternaDestinoST float64
+	// RedBaseSTPct optionally reduces the ST base (ratio, e.g. 0.20 = 20% off).
+	RedBaseSTPct float64
 }
 
 type TaxCalculationResult struct {
@@ -61,6 +73,10 @@ type TaxItemResult struct {
 	ValorDIFAL        float64 // cenário 1: DIFAL para não-contribuinte interestadual
 	ValorFCP          float64 // Fundo de Combate à Pobreza (DIFAL)
 	ValorFomentar     float64 // ICMS retido via benefício FOMENTAR/PRODUZIR
+	BaseICMSST        float64 // base de cálculo da Substituição Tributária
+	AliquotaICMSST    float64 // alíquota interna do destino usada na ST
+	ValorICMSST       float64 // ICMS-ST a recolher (substituto tributário)
+	MVA               float64 // margem de valor agregado aplicada (ratio)
 	CSTICMS           string
 	BaseIPI           float64
 	AliquotaIPI       float64
@@ -89,6 +105,8 @@ type TaxTotals struct {
 	ValorDIFAL    float64
 	ValorFCP      float64
 	ValorFomentar float64
+	BaseICMSST    float64
+	ValorICMSST   float64
 }
 
 type TaxScenarioConfig struct {
@@ -138,6 +156,8 @@ func CalcularImpostos(
 		result.Totais.ValorDIFAL += itemResult.ValorDIFAL
 		result.Totais.ValorFCP += itemResult.ValorFCP
 		result.Totais.ValorFomentar += itemResult.ValorFomentar
+		result.Totais.BaseICMSST += itemResult.BaseICMSST
+		result.Totais.ValorICMSST += itemResult.ValorICMSST
 	}
 
 	return result, nil
@@ -308,6 +328,51 @@ func calculateItemTax(
 		}
 	}
 
+	// ── Substituição Tributária (ICMS-ST) ──────────────────────────────────────
+	// Computed when the item carries an MVA. Formula (RICMS / Convênio ICMS 142/18):
+	//   BaseST  = (BaseICMSpróprio + IPI) × (1 + MVA) × (1 − redBaseST)
+	//   ICMS-ST = BaseST × aliqInternaDestino − ICMSpróprio   (mínimo 0)
+	// The destination internal rate is the ST rate (the company is the substituto).
+	if item.MvaPct > 0 {
+		aliqST := decimal.NewFromFloat(item.AliqInternaDestinoST)
+		if aliqST.IsZero() {
+			if isInterno {
+				aliqST = decimal.NewFromFloat(fiscalConfig.IcmsInternoAliquota)
+			} else if cfg, ok := internalTable[params.DestinoUF]; ok && cfg.ICMS > 0 {
+				aliqST = decimal.NewFromFloat(cfg.ICMS)
+			} else {
+				aliqST = decimal.NewFromFloat(fiscalConfig.IcmsInternoAliquota)
+			}
+		}
+
+		basePropriaComIPI := decimal.NewFromFloat(r.BaseICMS).Add(decimal.NewFromFloat(r.ValorIPI))
+		baseST := basePropriaComIPI.Mul(decimal.NewFromFloat(1).Add(decimal.NewFromFloat(item.MvaPct)))
+		if item.RedBaseSTPct > 0 {
+			baseST = baseST.Mul(decimal.NewFromFloat(1 - item.RedBaseSTPct))
+		}
+
+		valorST := baseST.Mul(aliqST).Sub(decimal.NewFromFloat(r.ValorICMS))
+		if valorST.IsNegative() {
+			valorST = decimal.Zero
+		}
+
+		r.MVA = item.MvaPct
+		r.BaseICMSST, _ = baseST.Round(2).Float64()
+		r.AliquotaICMSST, _ = aliqST.Float64()
+		r.ValorICMSST, _ = valorST.Round(2).Float64()
+
+		// Promote the CST to a substitution variant: 00→10 (tributada+ST),
+		// 20→70 (com redução de base + ST). ST and diferimento (51) are mutually
+		// exclusive, so ST prevails: 51→10 and the diferido amount is cleared.
+		switch r.CSTICMS {
+		case "00", "51":
+			r.CSTICMS = "10"
+			r.ValorICMSDiferido = 0
+		case "20":
+			r.CSTICMS = "70"
+		}
+	}
+
 	// CalcFomentar: portion of ICMS retained by state via FOMENTAR/PRODUZIR incentive.
 	// ValorFomentar = ValorICMS × FomentarRetentionPct (ICMS that is credited back to the company).
 	if params.Flags.CalcFomentar && params.Flags.FomentarRetentionPct > 0 {
@@ -326,6 +391,8 @@ func roundResult(r *TaxItemResult) {
 	r.ValorDIFAL, _ = decimal.NewFromFloat(r.ValorDIFAL).Round(2).Float64()
 	r.ValorFCP, _ = decimal.NewFromFloat(r.ValorFCP).Round(2).Float64()
 	r.ValorFomentar, _ = decimal.NewFromFloat(r.ValorFomentar).Round(2).Float64()
+	r.BaseICMSST, _ = decimal.NewFromFloat(r.BaseICMSST).Round(2).Float64()
+	r.ValorICMSST, _ = decimal.NewFromFloat(r.ValorICMSST).Round(2).Float64()
 	r.BaseIPI, _ = decimal.NewFromFloat(r.BaseIPI).Round(2).Float64()
 	r.ValorIPI, _ = decimal.NewFromFloat(r.ValorIPI).Round(2).Float64()
 	r.BasePIS, _ = decimal.NewFromFloat(r.BasePIS).Round(2).Float64()
@@ -349,8 +416,8 @@ type ICMSInternalConfig struct {
 }
 
 type FiscalConfig struct {
-	UFEmpresa                string
-	IcmsInternoAliquota      float64
+	UFEmpresa                 string
+	IcmsInternoAliquota       float64
 	IcmsDiferimentoPercentual float64
 }
 

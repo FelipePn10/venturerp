@@ -1021,8 +1021,6 @@ func (r *FiscalParamsRepositorySQLC) ListSimplesNacionalApuracoes(ctx context.Co
 	return out, rows.Err()
 }
 
-
-
 // ─── ICMS Reduction / Substitution / Deferral ────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateICMSReductionSubstitution(ctx context.Context, rs *fiscalEntity.ICMSReductionSubstitution) (*fiscalEntity.ICMSReductionSubstitution, error) {

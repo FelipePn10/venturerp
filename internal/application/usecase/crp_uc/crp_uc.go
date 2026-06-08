@@ -13,8 +13,8 @@ import (
 )
 
 type CRPUseCase struct {
-	repo        repository.CRPRepository
-	maintRepo   maintenancerepo.MaintenanceRepository
+	repo      repository.CRPRepository
+	maintRepo maintenancerepo.MaintenanceRepository
 }
 
 func New(repo repository.CRPRepository) *CRPUseCase {
