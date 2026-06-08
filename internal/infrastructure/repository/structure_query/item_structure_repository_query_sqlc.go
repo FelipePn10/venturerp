@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
-	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
 	str "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/google/uuid"

@@ -1,129 +1,142 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
+	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/entry_operation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/financial_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_classification_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
 	fiscalUC "github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/generate_mask_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/ibpt_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_classification_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_conversion_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_supplier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/location_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/maintenance_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
-	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/nfse_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_uc"
 	productionOrderUc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_price_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_quotation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_requisition_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_classification_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_conversion_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_price_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_supplier_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_requisition_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_quotation_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/entry_operation_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_classification_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/location_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_movement_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/maintenance_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_division_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_forecast_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_movement_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
+	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/audit"
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
-	financialRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/financial"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
-	fiscalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
+	accountingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
+	apsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aps"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
 	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
+	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
+	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
 	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
 	deliveryReschedule "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_reschedule"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
-	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
-	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
-	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
-	salesDivisionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_division"
-	salesForecastRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_forecast"
-	salesOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
-	stockRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	enterprise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/enterprise"
+	entryOperationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/entry_operation"
+	financialRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/financial"
+	fiscalParamsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
+	fiscalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
+	fiscalClassRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal_classification"
 	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
+	ibptRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/ibpt"
 	independentDemand "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
 	industrialCalendar "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	itemCalendarPromise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_calendar_promise"
+	itemClassificationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_classification"
+	itemConversionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_conversion"
 	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_question"
+	itemSupplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_supplier"
+	locationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/location"
 	machine "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine"
+	maintenanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/maintenance"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
 	mrpCalculation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
+	nfseRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/nfse"
 	op "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/order_priority"
-	over 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
+	over "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
 	planned "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
+	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
 	productionOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
+	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
 	purchaseOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_order"
+	purchasePriceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_price"
+	purchaseQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_quotation"
+	purchaseReqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
+	qualityRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
-	maintenanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/maintenance"
-	qualityRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
-	apsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aps"
-	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
-	standardCostRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/standard_cost"
+	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
-	accountingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
-	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
-	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
-	supplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/supplier"
-	fiscalClassRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal_classification"
-	itemConversionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_conversion"
-	purchasePriceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_price"
-	itemSupplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_supplier"
-	purchaseReqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
-	purchaseQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_quotation"
-	entryOperationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/entry_operation"
-	fiscalParamsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
-	itemClassificationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_classification"
-	locationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/location"
+	salesDivisionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_division"
+	salesForecastRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_forecast"
+	salesOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
+	shipmentRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/shipment"
+	standardCostRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/standard_cost"
+	stockRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	stockMovementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock_movement"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure_query"
+	supplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/supplier"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler"
@@ -133,9 +146,11 @@ import (
 )
 
 type application struct {
-	config *config.Config
-	logger *applogger.Logger
-	db     *database.DB
+	config    *config.Config
+	logger    *applogger.Logger
+	db        *database.DB
+	metrics   *httpmw.Metrics
+	auditSink *audit.PgSink
 }
 
 func (app *application) mount() chi.Router {
@@ -144,9 +159,20 @@ func (app *application) mount() chi.Router {
 	r.Use(httpmw.CorrelationMiddleware)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
+	r.Use(httpmw.SecurityHeaders)
+	r.Use(httpmw.CORS(app.corsOrigins(), app.config.IsDevelopment() && app.config.CORSAllowedOrigins == ""))
+	r.Use(httpmw.MaxBodyBytes(app.config.MaxBodyBytes))
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(middleware.StripSlashes)
+	if app.metrics != nil {
+		r.Use(app.metrics.Middleware)
+	}
 	r.Use(httpmw.RequestLoggerMiddleware(app.logger))
+	r.Use(httpmw.NewRateLimiter(float64(app.config.RateLimitRPS), float64(app.config.RateLimitBurst)).Middleware)
+
+	// Auth endpoints get a stricter, separate bucket to blunt credential
+	// stuffing / brute force, independent of the global API budget.
+	authLimiter := httpmw.NewRateLimiter(float64(app.config.AuthRateLimitRPM)/60.0, float64(app.config.AuthRateLimitBurst))
 
 	queries := app.db.Queries()
 	authService := &infraauth.AuthService{}
@@ -163,6 +189,7 @@ func (app *application) mount() chi.Router {
 	)
 
 	r.Route("/users", func(r chi.Router) {
+		r.Use(authLimiter.Middleware)
 		r.Post("/register", userHandler.RegisterUserHandler)
 		r.Post("/login", userHandler.LoginHandler)
 	})
@@ -437,6 +464,10 @@ func (app *application) mount() chi.Router {
 	mrpListExceptionsUC := &mrp_calculation_uc.ListMRPExceptionsUseCase{Repo: mrpRepo, Auth: authService}
 	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC)
 
+	// planning pipeline (MRP → CRP → APS in one shot)
+	planningPipelineUC := &planning_uc.RunPlanningPipelineUseCase{MRP: mrpRunUC, CRP: crpUC, APS: apsUC}
+	planningHandler := handler.NewPlanningHandler(planningPipelineUC)
+
 	//order priority
 	opRepo := op.NewOrderPriorityRepositorySQLC(queries)
 	opCreateUC := &order_priority_uc.CreateOrderPriorityUseCase{Repo: opRepo, Auth: authService}
@@ -459,6 +490,8 @@ func (app *application) mount() chi.Router {
 
 	// production order
 	prodOrderRepo := productionOrderRepo.NewProductionOrderRepositoryPGX(app.db.Pool)
+	// Firming a PRODUCTION planned order auto-creates its OF.
+	plannedFirmUC.ProdOrderRepo = prodOrderRepo
 	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderGetByCodeUC := &productionOrderUc.GetProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderListUC := &productionOrderUc.ListProductionOrdersUseCase{Repo: prodOrderRepo, Auth: authService}
@@ -502,6 +535,17 @@ func (app *application) mount() chi.Router {
 	// preferred supplier per item (Fornecedor preferencial / Descrição por fornecedor)
 	itemSupplierUC := item_supplier_uc.NewItemSupplierUseCase(itemSupplierRepo.New(queries, app.db.Pool))
 	itemSupplierHandler := handler.NewItemSupplierHandler(itemSupplierUC)
+
+	// item activation readiness (cross-validation BOM/routing/supplier/UOM)
+	itemActivationUC := &item_uc.ValidateItemActivationUseCase{
+		ItemRepo:      itemRepo,
+		StructureRepo: itemRepoStructure,
+		RoutingRepo:   rRepo,
+		Suppliers:     itemSupplierUC,
+		Conversions:   itemConversionRepo.New(queries, app.db.Pool),
+		Auth:          authService,
+	}
+	itemActivationHandler := handler.NewItemActivationHandler(itemActivationUC)
 
 	// purchase order
 	poRepo := purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(app.db.Pool)
@@ -573,7 +617,7 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.CancelSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.BlockSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.UnblockSalesOrderUseCase{Repo: soRepo, Auth: authService},
-		&sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService, DemandRepo: independentDemandRepo},
 		&sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.UpdateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrderItemsUseCase{Repo: soRepo, Auth: authService},
@@ -582,6 +626,12 @@ func (app *application) mount() chi.Router {
 
 	// stock management
 	stockRepository := stockRepo.NewStockRepositorySQLC(app.db.Pool)
+	// Production consumption/completion post stock movements automatically.
+	prodOrderAddConsumptionUC.StockRepo = stockRepository
+	prodOrderCompleteUC.StockRepo = stockRepository
+	// Appointment backflush: auto-consume BOM components from stock.
+	prodOrderAddAppointmentUC.StructureRepo = itemRepoStructure
+	prodOrderAddAppointmentUC.StockRepo = stockRepository
 	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService}
 	listStockMovementsUC := &stock_uc.ListStockMovementsUseCase{Repo: stockRepository, Auth: authService}
 	getStockBalanceUC := &stock_uc.GetStockBalanceUseCase{Repo: stockRepository, Auth: authService}
@@ -620,6 +670,9 @@ func (app *application) mount() chi.Router {
 		Auth:       authService,
 	})
 
+	cnabHandler := handler.NewCNABHandler()
+	ibptHandler := handler.NewIBPTHandler(&ibpt_uc.IBPTUseCase{Repo: ibptRepo.NewIBPTRepositoryPG(app.db.Pool)})
+	shipmentHandler := handler.NewShipmentHandler(&shipment_uc.ShipmentUseCase{Repo: shipmentRepo.NewShipmentRepositoryPG(app.db.Pool)})
 	financialHandler := handler.NewFinancialHandler(
 		&financial_uc.CreateContaBancariaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasBancariasUseCase{Repo: fRepo, Auth: authService},
@@ -667,6 +720,14 @@ func (app *application) mount() chi.Router {
 		&financial_uc.ImportarOFXUseCase{Repo: fRepo, Auth: authService},
 	)
 
+	// adiantamentos (advance payments)
+	adiantamentoHandler := handler.NewAdiantamentoHandler(
+		&financial_uc.CreateAdiantamentoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.ListAdiantamentosUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.GetAdiantamentoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.AplicarAdiantamentoUseCase{Repo: fRepo, Auth: authService},
+	)
+
 	// fiscal module
 	fiscalHandler := handler.NewFiscalHandler(
 		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
@@ -675,7 +736,7 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
+		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo},
 		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
@@ -715,12 +776,34 @@ func (app *application) mount() chi.Router {
 
 	// NF-e purchase import
 	importNFeUC := &fiscalUC.ImportNFePurchaseUseCase{
-		FiscalRepo:       fiscalRepository,
-		StockRepo:        stockRepository,
-		Auth:             authService,
-		SupplierDefaults: supplierUC,
+		FiscalRepo:        fiscalRepository,
+		StockRepo:         stockRepository,
+		Auth:              authService,
+		SupplierDefaults:  supplierUC,
+		PurchaseOrderRepo: poRepo,
 	}
 	importNFeHandler := handler.NewImportNFePurchaseHandler(importNFeUC)
+
+	// fiscal: CT-e SEFAZ authorization
+	cteAuthorizeHandler := handler.NewCTeAuthorizeHandler(
+		&fiscalUC.AuthorizeCTeUseCase{Repo: fiscalRepository, Auth: authService},
+	)
+
+	// fiscal: NFS-e (service invoices)
+	nfseRepository := nfseRepo.NewNFSeRepositoryPG(app.db.Pool)
+	nfseHandler := handler.NewNFSeHandler(
+		&nfse_uc.CreateNFSeUseCase{Repo: nfseRepository, Auth: authService},
+		&nfse_uc.AuthorizeNFSeUseCase{Repo: nfseRepository, Config: fiscalRepository, Auth: authService},
+		&nfse_uc.CancelNFSeUseCase{Repo: nfseRepository, Config: fiscalRepository, Auth: authService},
+		&nfse_uc.ListNFSeUseCase{Repo: nfseRepository, Auth: authService},
+		&nfse_uc.GetNFSeUseCase{Repo: nfseRepository, Auth: authService},
+	)
+
+	// fiscal: manifestação do destinatário + inutilização de numeração
+	fiscalManifestHandler := handler.NewFiscalManifestHandler(
+		&fiscalUC.ManifestarDestinatarioUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.InutilizarNumeracaoUseCase{Repo: fiscalRepository, Auth: authService},
+	)
 
 	// customer
 	custRepo := customerRepo.New(queries, app.db.Pool)
@@ -758,7 +841,8 @@ func (app *application) mount() chi.Router {
 	acctEntryUC := &accounting_uc.JournalEntryUseCase{Repo: acctRepo}
 	acctDemUC := &accounting_uc.DemonstrativeUseCase{Repo: acctRepo}
 	acctECDUC := &accounting_uc.ECDUseCase{Repo: acctRepo}
-	accountingHandler := handler.NewAccountingHandler(acctPlanUC, acctAccountUC, acctEntryUC, acctDemUC, acctECDUC)
+	acctBalanceteUC := &accounting_uc.BalanceteUseCase{Repo: acctRepo}
+	accountingHandler := handler.NewAccountingHandler(acctPlanUC, acctAccountUC, acctEntryUC, acctDemUC, acctECDUC, acctBalanceteUC)
 
 	// stock movement types
 	smtRepo := stockMovementRepo.New(app.db.Pool)
@@ -775,14 +859,26 @@ func (app *application) mount() chi.Router {
 	itemClassUC := item_classification_uc.New(itemClassRepo)
 	itemClassHandler := handler.NewItemClassificationHandler(itemClassUC)
 
+	// Audit trail reader (ADMIN-only query side; writes happen in middleware).
+	auditHandler := handler.NewAuditHandler(audit.NewReader(app.db.Pool))
+
 	// routes
+	idempotencyStore := httpmw.NewIdempotencyStore(24 * time.Hour)
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
+		// Audit trail for authenticated mutations (after JWT so the actor is known).
+		r.Use(httpmw.Audit(app.auditSink))
+		// Idempotency-Key support for mutating requests (safe retries).
+		r.Use(httpmw.Idempotency(idempotencyStore))
+
+		// Audit trail (read): who changed what, when. Restricted to ADMIN.
+		r.With(httpmw.RequireRole("ADMIN")).Get("/api/audit-log", auditHandler.List)
 		r.Route("/api/items", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemHandler.CreateItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", itemHandler.ListItems)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/with-masks", itemHandler.ListItemsWithMasks)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search/{code}", itemHandler.FindItemByCodeHandler)
+			r.With(httpmw.RequirePermission(httpmw.PermItemActivate)).Get("/{code}/activation-readiness", itemActivationHandler.ValidateActivation)
 
 			r.Route("/mask", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/generate", generateMaskItemHandler.GenerateMask)
@@ -1039,6 +1135,10 @@ func (app *application) mount() chi.Router {
 			})
 		})
 		r.Route("/api/fiscal", func(r chi.Router) {
+			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/manifestacao", fiscalManifestHandler.Manifestar)
+			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/inutilizacao", fiscalManifestHandler.Inutilizar)
+			r.With(httpmw.RequirePermission(httpmw.PermAdmin)).Post("/ibpt/import", ibptHandler.Import)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/ibpt/lookup", ibptHandler.Lookup)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/create", fiscalHandler.CreateEntry)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/upload-nfe", fiscalHandler.UploadNFE)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/approve", fiscalHandler.ApproveEntry)
@@ -1055,6 +1155,13 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/cte/create", fiscalHandler.CreateCTe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cte/list", fiscalHandler.ListCTe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cte/{code}", fiscalHandler.GetCTe)
+			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/cte/{code}/authorize", cteAuthorizeHandler.Authorize)
+			// NFS-e (service invoices)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/nfse/create", nfseHandler.Create)
+			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/nfse/{code}/authorize", nfseHandler.Authorize)
+			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/nfse/{code}/cancel", nfseHandler.Cancel)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/list", nfseHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/{code}", nfseHandler.Get)
 			// NF-e status consultation & CC-e list
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/status", fiscalHandler.ConsultarNFe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/cartas-correcao", fiscalHandler.ListCartasCorrecao)
@@ -1180,6 +1287,12 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sigla/{sigla}", smtHandler.GetBySigla)
 		})
 		r.Route("/api/financial", func(r chi.Router) {
+			r.With(httpmw.RequirePermission(httpmw.PermFinancialManage)).Post("/cnab/remessa-240", cnabHandler.GenerateRemessa240)
+			// Adiantamentos (advance payments)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adiantamentos/create", adiantamentoHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/adiantamentos/list", adiantamentoHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/adiantamentos/{id}", adiantamentoHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adiantamentos/{id}/aplicar", adiantamentoHandler.Aplicar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-bancarias/create", financialHandler.CreateContaBancaria)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-bancarias/list", financialHandler.ListContasBancarias)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/condicoes-pagamento/create", financialHandler.CreateCondicaoPagamento)
@@ -1261,6 +1374,19 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence", apsHandler.SequenceOrders)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/gantt/order/{orderID}", apsHandler.GetGanttByOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/gantt/work-center", apsHandler.GetGanttByWorkCenter)
+		})
+		r.Route("/api/planning", func(r chi.Router) {
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/run-pipeline", planningHandler.RunPipeline)
+		})
+		r.Route("/api/shipments", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", shipmentHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", shipmentHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", shipmentHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items", shipmentHandler.AddItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/items/confer", shipmentHandler.ConferItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/confer", shipmentHandler.Confer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/ship", shipmentHandler.Ship)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/cancel", shipmentHandler.Cancel)
 		})
 		r.Route("/api/crp", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calculate", crpHandler.CalculateCRP)
@@ -1369,6 +1495,7 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", accountingHandler.CreateJournalEntry)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", accountingHandler.ListJournalEntries)
 			})
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/balancete", accountingHandler.Balancete)
 			r.Route("/demonstratives", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", accountingHandler.CreateDemonstrative)
 			})
@@ -1547,25 +1674,84 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/items/{id}", purchasePriceHandler.DeleteItem)
 		})
 	})
-	// Health check
-	r.Get("/health", app.healthHandler)
+	// Liveness: process is up (no dependency checks). Kept at /health for
+	// backward compatibility, plus the conventional /health/live alias.
+	r.Get("/health", app.livenessHandler)
+	r.Get("/health/live", app.livenessHandler)
+
+	// Readiness: the process can serve traffic — i.e. the database answers.
+	// Load balancers / orchestrators should route only when this is 200.
+	r.Get("/health/ready", app.readinessHandler)
+
+	// Prometheus metrics, optionally guarded by a bearer token.
+	if app.metrics != nil && app.config.MetricsEnabled {
+		r.Get("/metrics", app.metricsHandler())
+	}
 
 	return r
 }
 
-func (app *application) healthHandler(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]any{
+// corsOrigins splits the comma-separated CORS_ALLOWED_ORIGINS config value.
+func (app *application) corsOrigins() []string {
+	raw := strings.TrimSpace(app.config.CORSAllowedOrigins)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (app *application) livenessHandler(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
 		"timestamp": time.Now().UTC(),
-		"mask":      "core-api",
-	}
+		"service":   "core-api",
+	})
+}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err := json.NewEncoder(w).Encode(resp)
-	if err != nil {
+func (app *application) readinessHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := app.db.Pool.Ping(ctx); err != nil {
+		app.logger.Error("readiness check failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status":   "unavailable",
+			"database": "down",
+		})
 		return
 	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ready",
+		"database": "up",
+	})
+}
+
+// metricsHandler exposes Prometheus metrics, optionally behind a static bearer
+// token (METRICS_TOKEN) so the endpoint can be scraped over an untrusted network.
+func (app *application) metricsHandler() http.HandlerFunc {
+	h := app.metrics.Handler()
+	token := app.config.MetricsToken
+	return func(w http.ResponseWriter, r *http.Request) {
+		if token != "" && r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		h(w, r)
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func (app *application) run(r chi.Router) error {
@@ -1585,6 +1771,37 @@ func (app *application) run(r chi.Router) error {
 		IdleTimeout:  time.Minute,
 	}
 
-	app.logger.Info("server listening", "addr", addr)
-	return srv.ListenAndServe()
+	// Listen for SIGINT/SIGTERM so the orchestrator (or Ctrl-C) can drain
+	// in-flight requests instead of cutting connections mid-transaction.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		app.logger.Info("server listening", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+	}()
+
+	select {
+	case err := <-serverErr:
+		return err
+	case <-ctx.Done():
+		timeout := time.Duration(app.config.ShutdownTimeoutSec) * time.Second
+		if timeout <= 0 {
+			timeout = 15 * time.Second
+		}
+		app.logger.Info("shutdown signal received, draining", "timeout", timeout.String())
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			app.logger.Error("graceful shutdown failed, forcing close", "error", err)
+			return srv.Close()
+		}
+		app.logger.Info("server stopped cleanly")
+		return nil
+	}
 }

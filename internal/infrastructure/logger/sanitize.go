@@ -55,20 +55,20 @@ func redactAuthHeader(value string) string {
 // sensitiveBodyFields contains JSON field names whose values should never be logged.
 // Comparison is case-insensitive.
 var sensitiveBodyFields = map[string]struct{}{
-	"password":        {},
-	"senha":           {},
-	"token":           {},
-	"secret":          {},
-	"access_token":    {},
-	"refresh_token":   {},
-	"card_number":     {},
-	"numero_cartao":   {},
-	"cvv":             {},
-	"pin":             {},
-	"private_key":     {},
-	"chave_privada":   {},
-	"api_key":         {},
-	"authorization":   {},
+	"password":      {},
+	"senha":         {},
+	"token":         {},
+	"secret":        {},
+	"access_token":  {},
+	"refresh_token": {},
+	"card_number":   {},
+	"numero_cartao": {},
+	"cvv":           {},
+	"pin":           {},
+	"private_key":   {},
+	"chave_privada": {},
+	"api_key":       {},
+	"authorization": {},
 }
 
 // IsSensitiveField returns true if the field name matches a known sensitive key.

@@ -16,9 +16,9 @@ type SPEDUseCase struct {
 
 // SpedRequest carries parameters for a single EFD generation run.
 type SpedRequest struct {
-	Empresa      sped.EFDEmpresa
-	DataInicial  time.Time
-	DataFinal    time.Time
+	Empresa     sped.EFDEmpresa
+	DataInicial time.Time
+	DataFinal   time.Time
 	// IndicadorSituacaoEspecial: "0" regular, "1" retificadora
 	IndicadorSituacao string
 	// DocumentosFiscais, Inventario etc. would be populated from NF repository

@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
-	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
+	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/go-chi/chi/v5"
 )
 

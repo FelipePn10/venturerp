@@ -199,7 +199,7 @@ type NetworkEdge struct {
 
 // LeadTimeResult holds the critical-path lead time for a route.
 type LeadTimeResult struct {
-	RouteID       int64
-	CriticalPath  []int64 // route_operation IDs in order
-	TotalHours    float64
+	RouteID      int64
+	CriticalPath []int64 // route_operation IDs in order
+	TotalHours   float64
 }

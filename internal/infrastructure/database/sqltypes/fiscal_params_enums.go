@@ -62,10 +62,10 @@ func (e CfopIndOperacaoEnum) Value() (driver.Value, error) {
 type CfopTipoUtilizacaoEnum string
 
 const (
-	CfopTipoUtilizacaoEnumNORMAL                       CfopTipoUtilizacaoEnum = "NORMAL"
-	CfopTipoUtilizacaoEnumVENDA_COMERCIAL_EXPORTADORA   CfopTipoUtilizacaoEnum = "VENDA_COMERCIAL_EXPORTADORA"
+	CfopTipoUtilizacaoEnumNORMAL                           CfopTipoUtilizacaoEnum = "NORMAL"
+	CfopTipoUtilizacaoEnumVENDA_COMERCIAL_EXPORTADORA      CfopTipoUtilizacaoEnum = "VENDA_COMERCIAL_EXPORTADORA"
 	CfopTipoUtilizacaoEnumCOMPRA_FIM_ESPECIFICO_EXPORTACAO CfopTipoUtilizacaoEnum = "COMPRA_FIM_ESPECIFICO_EXPORTACAO"
-	CfopTipoUtilizacaoEnumEXPORTACAO                   CfopTipoUtilizacaoEnum = "EXPORTACAO"
+	CfopTipoUtilizacaoEnumEXPORTACAO                       CfopTipoUtilizacaoEnum = "EXPORTACAO"
 )
 
 func (e *CfopTipoUtilizacaoEnum) Scan(src interface{}) error {
@@ -141,9 +141,9 @@ func (e IcmsReductionTargetEnum) Value() (driver.Value, error) {
 type IcmsDifalTypeEnum string
 
 const (
-	IcmsDifalTypeEnumTRIBUTADO      IcmsDifalTypeEnum = "TRIBUTADO"
-	IcmsDifalTypeEnumISENTO_OUTRAS   IcmsDifalTypeEnum = "ISENTO_OUTRAS"
-	IcmsDifalTypeEnumNAO_CONSIDERA   IcmsDifalTypeEnum = "NAO_CONSIDERA"
+	IcmsDifalTypeEnumTRIBUTADO     IcmsDifalTypeEnum = "TRIBUTADO"
+	IcmsDifalTypeEnumISENTO_OUTRAS IcmsDifalTypeEnum = "ISENTO_OUTRAS"
+	IcmsDifalTypeEnumNAO_CONSIDERA IcmsDifalTypeEnum = "NAO_CONSIDERA"
 )
 
 func (e *IcmsDifalTypeEnum) Scan(src interface{}) error {

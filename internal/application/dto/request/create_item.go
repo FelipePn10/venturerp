@@ -8,10 +8,10 @@ import (
 )
 
 type CreateItemDTO struct {
-	Code       valueobject.ItemCode   `json:"code"`
-	Complement *string                `json:"complement,omitempty"`
-	Nature     itementity.ItemNature  `json:"nature"`
-	PDM        PDMDTO                 `json:"pdm"`
+	Code        valueobject.ItemCode    `json:"code"`
+	Complement  *string                 `json:"complement,omitempty"`
+	Nature      itementity.ItemNature   `json:"nature"`
+	PDM         PDMDTO                  `json:"pdm"`
 	Situation   types.TypeSituationItem `json:"situation"`
 	Health      types.Health            `json:"health"`
 	Warehouse   WarehouseDTO            `json:"warehouse"`

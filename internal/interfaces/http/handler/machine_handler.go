@@ -22,8 +22,8 @@ type MachineHandler struct {
 	listTypesUC      *machine_uc.ListMachineTypesUseCase
 	getMachineTypeUC *machine_uc.GetMachineTypeUseCase
 
-	createItemTimeUC         *machine_uc.CreateItemMachineTimeUseCase
-	listItemTimesUC          *machine_uc.ListItemMachineTimesUseCase
+	createItemTimeUC          *machine_uc.CreateItemMachineTimeUseCase
+	listItemTimesUC           *machine_uc.ListItemMachineTimesUseCase
 	calculateProductionTimeUC *machine_uc.CalculateProductionTimeUseCase
 	//getItemTimeUC    *machine_uc.GetItemMachineTimeUseCase
 

@@ -23,8 +23,17 @@ var _ repository.StockRepository = (*StockRepositorySQLC)(nil)
 
 // ---------- Stock Movements ----------
 
+// CreateMovement records the movement and atomically updates the stock balance
+// snapshot (on-hand quantity, weighted average cost and last cost) in the same
+// transaction, so balances always reflect the movements that were posted.
 func (r *StockRepositorySQLC) CreateMovement(ctx context.Context, m *entity.StockMovement) (*entity.StockMovement, error) {
-	err := r.pool.QueryRow(ctx,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning stock movement tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	err = tx.QueryRow(ctx,
 		`INSERT INTO public.stock_movements
 			(item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
 			 reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, created_by)
@@ -36,7 +45,65 @@ func (r *StockRepositorySQLC) CreateMovement(ctx context.Context, m *entity.Stoc
 	if err != nil {
 		return nil, fmt.Errorf("creating stock movement: %w", err)
 	}
+
+	if err := applyMovementToBalance(ctx, tx, m); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing stock movement: %w", err)
+	}
 	return m, nil
+}
+
+// applyMovementToBalance updates stock_balances within the given transaction
+// according to the movement direction. Weighted average cost is recomputed on
+// inbound movements; outbound movements consume at the current average cost.
+func applyMovementToBalance(ctx context.Context, tx pgx.Tx, m *entity.StockMovement) error {
+	delta := entity.SignedQuantity(m.MovementType, m.Quantity)
+	if delta == 0 {
+		// Movement type does not affect on-hand quantity (e.g. reservation).
+		return nil
+	}
+
+	var qty, avgCost, totalCost float64
+	exists := true
+	err := tx.QueryRow(ctx,
+		`SELECT quantity, avg_cost, total_cost FROM public.stock_balances
+		 WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 FOR UPDATE`,
+		m.ItemCode, m.Mask, m.WarehouseID,
+	).Scan(&qty, &avgCost, &totalCost)
+	if err == pgx.ErrNoRows {
+		exists = false
+	} else if err != nil {
+		return fmt.Errorf("reading stock balance for update: %w", err)
+	}
+
+	// Weighted-average costing is computed by the domain (single source of truth,
+	// unit-tested); the repository only persists the result.
+	next, lastCost := entity.ApplyMovementCosting(
+		entity.CostingState{Quantity: qty, AvgCost: avgCost, TotalCost: totalCost},
+		delta, m.UnitPrice,
+	)
+	newQty, newAvg, newTotal := next.Quantity, next.AvgCost, next.TotalCost
+
+	if exists {
+		_, err = tx.Exec(ctx,
+			`UPDATE public.stock_balances
+			 SET quantity=$4, avg_cost=$5, last_cost=$6, total_cost=$7, last_movement_at=$8, updated_at=NOW()
+			 WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3`,
+			m.ItemCode, m.Mask, m.WarehouseID, newQty, newAvg, lastCost, newTotal, m.CreatedAt)
+	} else {
+		_, err = tx.Exec(ctx,
+			`INSERT INTO public.stock_balances
+				(item_code, mask, warehouse_id, quantity, avg_cost, last_cost, total_cost, last_movement_at)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+			m.ItemCode, m.Mask, m.WarehouseID, newQty, newAvg, lastCost, newTotal, m.CreatedAt)
+	}
+	if err != nil {
+		return fmt.Errorf("updating stock balance: %w", err)
+	}
+	return nil
 }
 
 func (r *StockRepositorySQLC) ListMovements(ctx context.Context) ([]*entity.StockMovement, error) {

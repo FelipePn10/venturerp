@@ -111,3 +111,23 @@ type GetFluxoProjetadoDTO struct {
 type ApurarImpostosDTO struct {
 	Competencia string `json:"competencia"`
 }
+
+// CreateAdiantamentoDTO registers an advance payment (to a supplier) or advance
+// receipt (from a customer). The cash movement happens immediately.
+type CreateAdiantamentoDTO struct {
+	Tipo             string  `json:"tipo"` // PAGAR | RECEBER
+	ParceiroID       *int64  `json:"parceiro_id,omitempty"`
+	ContaBancariaID  int64   `json:"conta_bancaria_id"`
+	NumeroDocumento  *string `json:"numero_documento,omitempty"`
+	DataAdiantamento string  `json:"data_adiantamento"`
+	ValorOriginal    float64 `json:"valor_original"`
+	Descricao        *string `json:"descricao,omitempty"`
+}
+
+// AplicarAdiantamentoDTO applies an advance balance onto a conta a pagar / receber.
+type AplicarAdiantamentoDTO struct {
+	ContaTipo     string  `json:"conta_tipo"` // PAGAR | RECEBER
+	ContaID       int64   `json:"conta_id"`
+	Valor         float64 `json:"valor"`
+	DataAplicacao *string `json:"data_aplicacao,omitempty"`
+}

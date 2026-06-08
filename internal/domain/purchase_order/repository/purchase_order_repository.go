@@ -22,6 +22,12 @@ type PurchaseOrderRepository interface {
 	ListItems(ctx context.Context, purchaseOrderCode int64) ([]*entity.PurchaseOrderItem, error)
 	CancelItem(ctx context.Context, itemCode int64) error
 
+	// RegisterReceipts increments received_qty for the order lines matching the
+	// given item codes (e.g. from an inbound NF-e), recomputes each line status
+	// (OPEN/PARTIAL/RECEIVED) and the header status, all in one transaction.
+	// Returns the number of order lines that matched a receipt.
+	RegisterReceipts(ctx context.Context, purchaseOrderCode int64, receivedByItemCode map[int64]float64) (int, error)
+
 	ListBySupplier(ctx context.Context, supplierCode int64) ([]*entity.PurchaseOrder, error)
 	ListByStatus(ctx context.Context, status entity.PurchaseOrderStatus) ([]*entity.PurchaseOrder, error)
 }

@@ -36,18 +36,18 @@ const (
 )
 
 type PurchaseOrder struct {
-	Code               int64
-	OrderNumber        int64
-	EnterpriseCode     int64
-	Status             PurchaseOrderStatus
-	Origin             PurchaseOrderOrigin
-	EmissionDate       time.Time
-	DeliveryDate       *time.Time
-	SupplierCode       *int64
-	PaymentTermCode    *int64
-	CurrencyCode       string
+	Code                int64
+	OrderNumber         int64
+	EnterpriseCode      int64
+	Status              PurchaseOrderStatus
+	Origin              PurchaseOrderOrigin
+	EmissionDate        time.Time
+	DeliveryDate        *time.Time
+	SupplierCode        *int64
+	PaymentTermCode     *int64
+	CurrencyCode        string
 	ShippingAddressCode *int64
-	Notes              *string
+	Notes               *string
 
 	TotalGross    float64
 	TotalNet      float64

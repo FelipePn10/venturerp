@@ -1,0 +1,3 @@
+BEGIN;
+DROP TABLE IF EXISTS ibpt_rates;
+COMMIT;

@@ -21,27 +21,27 @@ func Generate(p ECDParams) string {
 
 	// ── Bloco 0 ──────────────────────────────────────────────────────────────
 	line("0000",
-		"S-001",                    // LEIAUTE (versão)
-		p.Empresa.IndSitEsp,        // IND_SIT_ESP
-		p.Empresa.IndSitEsp,        // NUM_ORD (reused field placeholder)
-		p.Empresa.NumOrd,           // NUM_ORD
-		p.Empresa.NomeAudi,         // NOME_AUDI
-		dtIni,                      // DT_INI
-		dtFin,                      // DT_FIN
-		p.Empresa.Nome,             // NOME
-		p.Empresa.CNPJ,             // CNPJ
-		p.Empresa.CPF,              // CPF
-		p.Empresa.UF,               // UF
-		p.Empresa.Email,            // EMAIL
-		p.Empresa.IE,               // IE
-		p.Empresa.CodigoMunicipio,  // COD_MUN
-		p.Empresa.NIRE,             // NIRE
-		p.Empresa.IndSitAtiv,       // IND_SIT_ATIV
-		p.Empresa.IndNireCert,      // IND_NIRE_CERT
-		p.Empresa.IndGrandePorte,   // IND_GRANDE_PORTE
-		p.Empresa.HashECDSub,       // HASH_ECD_SUB
-		p.Empresa.IndEscCons,       // IND_ESC_CONS
-		p.Empresa.TipoECD,          // TIPO_ECD
+		"S-001",                   // LEIAUTE (versão)
+		p.Empresa.IndSitEsp,       // IND_SIT_ESP
+		p.Empresa.IndSitEsp,       // NUM_ORD (reused field placeholder)
+		p.Empresa.NumOrd,          // NUM_ORD
+		p.Empresa.NomeAudi,        // NOME_AUDI
+		dtIni,                     // DT_INI
+		dtFin,                     // DT_FIN
+		p.Empresa.Nome,            // NOME
+		p.Empresa.CNPJ,            // CNPJ
+		p.Empresa.CPF,             // CPF
+		p.Empresa.UF,              // UF
+		p.Empresa.Email,           // EMAIL
+		p.Empresa.IE,              // IE
+		p.Empresa.CodigoMunicipio, // COD_MUN
+		p.Empresa.NIRE,            // NIRE
+		p.Empresa.IndSitAtiv,      // IND_SIT_ATIV
+		p.Empresa.IndNireCert,     // IND_NIRE_CERT
+		p.Empresa.IndGrandePorte,  // IND_GRANDE_PORTE
+		p.Empresa.HashECDSub,      // HASH_ECD_SUB
+		p.Empresa.IndEscCons,      // IND_ESC_CONS
+		p.Empresa.TipoECD,         // TIPO_ECD
 	)
 
 	line("0001", "0")

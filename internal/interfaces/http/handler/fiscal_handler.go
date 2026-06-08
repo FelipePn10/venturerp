@@ -12,31 +12,31 @@ import (
 )
 
 type FiscalHandler struct {
-	createEntryUC         *fiscal_uc.CreateFiscalEntryUseCase
-	uploadNFEUC           *fiscal_uc.UploadNFEEntryUseCase
-	approveEntryUC        *fiscal_uc.ApproveFiscalEntryUseCase
-	listEntriesUC         *fiscal_uc.ListFiscalEntriesUseCase
-	getEntryUC            *fiscal_uc.GetFiscalEntryUseCase
-	createExitUC          *fiscal_uc.CreateFiscalExitUseCase
-	authorizeExitUC       *fiscal_uc.AuthorizeFiscalExitUseCase
-	cancelExitUC          *fiscal_uc.CancelFiscalExitUseCase
-	listExitsUC           *fiscal_uc.ListFiscalExitsUseCase
-	getExitUC             *fiscal_uc.GetFiscalExitUseCase
-	getConfigUC           *fiscal_uc.GetFiscalConfigUseCase
-	updateConfigUC        *fiscal_uc.UpdateFiscalConfigUseCase
-	emitirCCeUC           *fiscal_uc.EmitirCCeUseCase
-	createCTeUC           *fiscal_uc.CreateCTeUseCase
-	listCTeUC             *fiscal_uc.ListCTeUseCase
-	getCTeUC              *fiscal_uc.GetCTeUseCase
-	upsertNcmUC           *fiscal_uc.UpsertNcmTaxUseCase
-	listNcmUC             *fiscal_uc.ListNcmTaxesUseCase
-	deleteNcmUC           *fiscal_uc.DeleteNcmTaxUseCase
-	upsertInterstateUC    *fiscal_uc.UpsertICMSInterstateUseCase
-	listInterstateUC      *fiscal_uc.ListICMSInterstateUseCase
-	upsertInternalUC      *fiscal_uc.UpsertICMSInternalUseCase
-	listInternalUC        *fiscal_uc.ListICMSInternalUseCase
-	consultarNFeUC        *fiscal_uc.ConsultarNFeUseCase
-	listCartasCorrecaoUC  *fiscal_uc.ListCartasCorrecaoUseCase
+	createEntryUC        *fiscal_uc.CreateFiscalEntryUseCase
+	uploadNFEUC          *fiscal_uc.UploadNFEEntryUseCase
+	approveEntryUC       *fiscal_uc.ApproveFiscalEntryUseCase
+	listEntriesUC        *fiscal_uc.ListFiscalEntriesUseCase
+	getEntryUC           *fiscal_uc.GetFiscalEntryUseCase
+	createExitUC         *fiscal_uc.CreateFiscalExitUseCase
+	authorizeExitUC      *fiscal_uc.AuthorizeFiscalExitUseCase
+	cancelExitUC         *fiscal_uc.CancelFiscalExitUseCase
+	listExitsUC          *fiscal_uc.ListFiscalExitsUseCase
+	getExitUC            *fiscal_uc.GetFiscalExitUseCase
+	getConfigUC          *fiscal_uc.GetFiscalConfigUseCase
+	updateConfigUC       *fiscal_uc.UpdateFiscalConfigUseCase
+	emitirCCeUC          *fiscal_uc.EmitirCCeUseCase
+	createCTeUC          *fiscal_uc.CreateCTeUseCase
+	listCTeUC            *fiscal_uc.ListCTeUseCase
+	getCTeUC             *fiscal_uc.GetCTeUseCase
+	upsertNcmUC          *fiscal_uc.UpsertNcmTaxUseCase
+	listNcmUC            *fiscal_uc.ListNcmTaxesUseCase
+	deleteNcmUC          *fiscal_uc.DeleteNcmTaxUseCase
+	upsertInterstateUC   *fiscal_uc.UpsertICMSInterstateUseCase
+	listInterstateUC     *fiscal_uc.ListICMSInterstateUseCase
+	upsertInternalUC     *fiscal_uc.UpsertICMSInternalUseCase
+	listInternalUC       *fiscal_uc.ListICMSInternalUseCase
+	consultarNFeUC       *fiscal_uc.ConsultarNFeUseCase
+	listCartasCorrecaoUC *fiscal_uc.ListCartasCorrecaoUseCase
 }
 
 func NewFiscalHandler(

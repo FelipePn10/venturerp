@@ -7,16 +7,17 @@ import (
 	"time"
 
 	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
-	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/accounting/ecd"
+	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
 )
 
 type AccountingHandler struct {
-	planUC  *accounting_uc.AccountingPlanUseCase
-	acctUC  *accounting_uc.AccountingAccountUseCase
-	entryUC *accounting_uc.JournalEntryUseCase
-	demUC   *accounting_uc.DemonstrativeUseCase
-	ecdUC   *accounting_uc.ECDUseCase
+	planUC      *accounting_uc.AccountingPlanUseCase
+	acctUC      *accounting_uc.AccountingAccountUseCase
+	entryUC     *accounting_uc.JournalEntryUseCase
+	demUC       *accounting_uc.DemonstrativeUseCase
+	ecdUC       *accounting_uc.ECDUseCase
+	balanceteUC *accounting_uc.BalanceteUseCase
 }
 
 func NewAccountingHandler(
@@ -25,14 +26,39 @@ func NewAccountingHandler(
 	entryUC *accounting_uc.JournalEntryUseCase,
 	demUC *accounting_uc.DemonstrativeUseCase,
 	ecdUC *accounting_uc.ECDUseCase,
+	balanceteUC *accounting_uc.BalanceteUseCase,
 ) *AccountingHandler {
 	return &AccountingHandler{
-		planUC:  planUC,
-		acctUC:  acctUC,
-		entryUC: entryUC,
-		demUC:   demUC,
-		ecdUC:   ecdUC,
+		planUC:      planUC,
+		acctUC:      acctUC,
+		entryUC:     entryUC,
+		demUC:       demUC,
+		ecdUC:       ecdUC,
+		balanceteUC: balanceteUC,
 	}
+}
+
+// Balancete returns the trial balance (per-account debits/credits/balance) for a
+// plan and period. Query: plan_id, empresa_id, from, to (YYYY-MM-DD).
+func (h *AccountingHandler) Balancete(w http.ResponseWriter, r *http.Request) {
+	planID, _ := strconv.ParseInt(r.URL.Query().Get("plan_id"), 10, 64)
+	empresaID, _ := strconv.Atoi(r.URL.Query().Get("empresa_id"))
+	from, err := time.Parse("2006-01-02", r.URL.Query().Get("from"))
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid from date")
+		return
+	}
+	to, err := time.Parse("2006-01-02", r.URL.Query().Get("to"))
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid to date")
+		return
+	}
+	result, err := h.balanceteUC.Execute(r.Context(), planID, empresaID, from, to)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ─── Plans ────────────────────────────────────────────────────────────────────

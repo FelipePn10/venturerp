@@ -432,6 +432,105 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 	return result, rows.Err()
 }
 
+func (r *PurchaseOrderRepositorySQLC) RegisterReceipts(ctx context.Context, purchaseOrderCode int64, receivedByItemCode map[int64]float64) (int, error) {
+	if len(receivedByItemCode) == 0 {
+		return 0, nil
+	}
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin receipt tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx,
+		`SELECT code, item_code, requested_qty, received_qty, cancelled_qty
+		 FROM public.purchase_order_items
+		 WHERE purchase_order_code = $1 AND is_active = true AND status <> 'CANCELLED'
+		 FOR UPDATE`, purchaseOrderCode)
+	if err != nil {
+		return 0, fmt.Errorf("loading purchase order items for receipt: %w", err)
+	}
+
+	type lineState struct {
+		code      int64
+		itemCode  int64
+		requested float64
+		received  float64
+		cancelled float64
+	}
+	var lines []lineState
+	for rows.Next() {
+		var l lineState
+		if err := rows.Scan(&l.code, &l.itemCode, &l.requested, &l.received, &l.cancelled); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scanning purchase order line: %w", err)
+		}
+		lines = append(lines, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	const eps = 0.0001
+	matched := 0
+	allReceived := len(lines) > 0
+	anyReceived := false
+
+	for _, l := range lines {
+		add, ok := receivedByItemCode[l.itemCode]
+		newReceived := l.received
+		if ok && add > 0 {
+			newReceived = l.received + add
+			matched++
+		}
+
+		status := entity.PurchaseOrderItemStatusOPEN
+		switch {
+		case newReceived+l.cancelled >= l.requested-eps && newReceived > 0:
+			status = entity.PurchaseOrderItemStatusRECEIVED
+		case newReceived > 0:
+			status = entity.PurchaseOrderItemStatusPARTIAL
+		}
+		if status != entity.PurchaseOrderItemStatusRECEIVED {
+			allReceived = false
+		}
+		if newReceived > 0 {
+			anyReceived = true
+		}
+
+		if ok && add > 0 {
+			if _, err := tx.Exec(ctx,
+				`UPDATE public.purchase_order_items
+				 SET received_qty = $2, status = $3, updated_at = NOW()
+				 WHERE code = $1`, l.code, newReceived, string(status)); err != nil {
+				return 0, fmt.Errorf("updating received qty: %w", err)
+			}
+		}
+	}
+
+	headerStatus := ""
+	switch {
+	case allReceived:
+		headerStatus = string(entity.PurchaseOrderStatusRECEIVED)
+	case anyReceived:
+		headerStatus = string(entity.PurchaseOrderStatusPARTIAL)
+	}
+	if headerStatus != "" {
+		if _, err := tx.Exec(ctx,
+			`UPDATE public.purchase_orders SET status = $2, updated_at = NOW() WHERE code = $1`,
+			purchaseOrderCode, headerStatus); err != nil {
+			return 0, fmt.Errorf("updating purchase order status: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("committing receipt tx: %w", err)
+	}
+	return matched, nil
+}
+
 func (r *PurchaseOrderRepositorySQLC) CancelItem(ctx context.Context, itemCode int64) error {
 	_, err := r.db.Exec(ctx,
 		`UPDATE public.purchase_order_items SET status = 'CANCELLED', is_active = false, updated_at = NOW()
@@ -443,26 +542,26 @@ func (r *PurchaseOrderRepositorySQLC) CancelItem(ctx context.Context, itemCode i
 }
 
 type purchaseOrderRow struct {
-	Code               int64
-	OrderNumber        int64
-	EnterpriseCode     int64
-	Status             string
-	Origin             string
-	EmissionDate       time.Time
-	DeliveryDate       pgtype.Date
-	SupplierCode       *int64
-	PaymentTermCode    *int64
-	CurrencyCode       string
+	Code                int64
+	OrderNumber         int64
+	EnterpriseCode      int64
+	Status              string
+	Origin              string
+	EmissionDate        time.Time
+	DeliveryDate        pgtype.Date
+	SupplierCode        *int64
+	PaymentTermCode     *int64
+	CurrencyCode        string
 	ShippingAddressCode *int64
-	Notes              pgtype.Text
-	TotalGross         float64
-	TotalNet           float64
-	TotalDiscount      float64
-	IsActive           bool
-	IsFirm             bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	CreatedBy          [16]byte
+	Notes               pgtype.Text
+	TotalGross          float64
+	TotalNet            float64
+	TotalDiscount       float64
+	IsActive            bool
+	IsFirm              bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CreatedBy           [16]byte
 	// extended (migration 000140)
 	PriceTableCode         *int64
 	InvoiceTypeCode        *int64
@@ -527,23 +626,23 @@ type purchaseOrderItemRow struct {
 
 func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {
 	e := &entity.PurchaseOrder{
-		Code:               row.Code,
-		OrderNumber:        row.OrderNumber,
-		EnterpriseCode:     row.EnterpriseCode,
-		Status:             entity.PurchaseOrderStatus(row.Status),
-		Origin:             entity.PurchaseOrderOrigin(row.Origin),
-		EmissionDate:       row.EmissionDate,
-		SupplierCode:       row.SupplierCode,
-		PaymentTermCode:    row.PaymentTermCode,
-		CurrencyCode:       row.CurrencyCode,
+		Code:                row.Code,
+		OrderNumber:         row.OrderNumber,
+		EnterpriseCode:      row.EnterpriseCode,
+		Status:              entity.PurchaseOrderStatus(row.Status),
+		Origin:              entity.PurchaseOrderOrigin(row.Origin),
+		EmissionDate:        row.EmissionDate,
+		SupplierCode:        row.SupplierCode,
+		PaymentTermCode:     row.PaymentTermCode,
+		CurrencyCode:        row.CurrencyCode,
 		ShippingAddressCode: row.ShippingAddressCode,
-		TotalGross:         row.TotalGross,
-		TotalNet:           row.TotalNet,
-		TotalDiscount:      row.TotalDiscount,
-		IsActive:           row.IsActive,
-		IsFirm:             row.IsFirm,
-		CreatedAt:          row.CreatedAt,
-		UpdatedAt:          row.UpdatedAt,
+		TotalGross:          row.TotalGross,
+		TotalNet:            row.TotalNet,
+		TotalDiscount:       row.TotalDiscount,
+		IsActive:            row.IsActive,
+		IsFirm:              row.IsFirm,
+		CreatedAt:           row.CreatedAt,
+		UpdatedAt:           row.UpdatedAt,
 	}
 
 	if row.DeliveryDate.Valid {

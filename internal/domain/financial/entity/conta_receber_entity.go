@@ -55,9 +55,9 @@ type ContaReceber struct {
 	Status     ContaReceberStatus
 	EmProtesto bool
 
-	IsActive    bool
-	CriadoPor   uuid.UUID
-	BaixadoPor  *uuid.UUID
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	IsActive   bool
+	CriadoPor  uuid.UUID
+	BaixadoPor *uuid.UUID
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }

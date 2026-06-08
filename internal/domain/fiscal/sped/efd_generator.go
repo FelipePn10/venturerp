@@ -22,39 +22,39 @@ func Generate(p EFDParams) string {
 
 	// ── Bloco 0 ──────────────────────────────────────────────────────────────
 	line("0000",
-		"010",                                   // COD_VER
-		p.Periodo.IndicadorSituacaoEspecial,     // COD_FIN
-		dtIni,                                   // DT_INI
-		dtFin,                                   // DT_FIN
-		p.Empresa.Nome,                          // NOME
-		p.Empresa.CNPJ,                          // CNPJ
-		"",                                      // CPF
-		p.Empresa.UF,                            // UF
-		p.Empresa.IE,                            // IE
-		p.Empresa.CodigoMunicipio,               // COD_MUN
-		p.Empresa.IM,                            // IM
-		p.Empresa.SUFRAMA,                       // SUFRAMA
-		p.Empresa.RegimeTributario,              // IND_PERFIL (A=completo, B=simplificado, C=micro)
-		p.Empresa.CodigoFinalizacao,             // IND_ATIV
+		"010",                               // COD_VER
+		p.Periodo.IndicadorSituacaoEspecial, // COD_FIN
+		dtIni,                               // DT_INI
+		dtFin,                               // DT_FIN
+		p.Empresa.Nome,                      // NOME
+		p.Empresa.CNPJ,                      // CNPJ
+		"",                                  // CPF
+		p.Empresa.UF,                        // UF
+		p.Empresa.IE,                        // IE
+		p.Empresa.CodigoMunicipio,           // COD_MUN
+		p.Empresa.IM,                        // IM
+		p.Empresa.SUFRAMA,                   // SUFRAMA
+		p.Empresa.RegimeTributario,          // IND_PERFIL (A=completo, B=simplificado, C=micro)
+		p.Empresa.CodigoFinalizacao,         // IND_ATIV
 	)
 
 	line("0001", "0") // abertura bloco 0
 
 	line("0005",
-		"SPED EFD",          // DTEC
-		"",                  // NIRE
-		p.Empresa.CNPJ,      // CNPJ
-		p.Empresa.Nome,      // NAME
-		"",                  // END
-		"",                  // NUM
-		"",                  // COMPL
-		"",                  // BAIRRO
+		"SPED EFD",     // DTEC
+		"",             // NIRE
+		p.Empresa.CNPJ, // CNPJ
+		p.Empresa.Nome, // NAME
+		"",             // END
+		"",             // NUM
+		"",             // COMPL
+		"",             // BAIRRO
 		p.Empresa.CodigoMunicipio,
 		p.Empresa.UF,
-		"",  // CEP
-		"",  // TEL
-		"",  // FAX
-		"",  // EMAIL
+		"", // CEP
+		"", // TEL
+		"", // FAX
+		"", // EMAIL
 	)
 
 	if p.Empresa.ContabilistaNome != "" {

@@ -126,4 +126,3 @@ func seqSlice(rows []sqlc.DBProductionSequence) []*entity.ProductionSequence {
 	}
 	return out
 }
-

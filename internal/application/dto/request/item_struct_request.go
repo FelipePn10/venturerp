@@ -56,7 +56,6 @@ type ConsultStructureDTO struct {
 	Levels            int        `json:"levels"` // 0 = todos os níveis; N > 0 = máximo N níveis
 }
 
-
 // GetStructureTreeDTO representa a entrada para buscar a árvore BOM genérica
 // de um item (sem resolução de máscara).
 type GetStructureTreeDTO struct {

@@ -30,7 +30,6 @@ type EvaluationResult struct {
 	CleanedAnswers map[int64]string `json:"cleaned_answers"`
 }
 
-
 type EvaluateRestrictionsUseCase struct {
 	Repo repository.RestrictionRepository
 }

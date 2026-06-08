@@ -17,38 +17,38 @@ const (
 )
 
 type FiscalEntry struct {
-	ID                   int64
-	ChaveAcesso          *string
-	NumeroNF             int64
-	Serie                string
-	Modelo               string
-	DataEmissao          time.Time
-	DataEntrada          time.Time
-	CnpjEmitente         string
-	RazaoSocialEmitente  string
-	IEEmitente           *string
-	UFEmitente           *string
-	ValorProdutos        float64
-	ValorFrete           float64
-	ValorSeguro          float64
-	ValorDesconto        float64
-	ValorIPI             float64
-	ValorICMS            float64
-	ValorPIS             float64
-	ValorCOFINS          float64
-	ValorTotal           float64
-	TipoDocumento        string
-	PurchaseOrderCode    *int64
-	SupplierCode         *int64
-	CteCode              *int64
-	Status               FiscalEntryStatus
-	XmlPath              *string
-	Notes                *string
-	IsActive             bool
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	CreatedBy            uuid.UUID
-	Itens                []*FiscalEntryItem
+	ID                  int64
+	ChaveAcesso         *string
+	NumeroNF            int64
+	Serie               string
+	Modelo              string
+	DataEmissao         time.Time
+	DataEntrada         time.Time
+	CnpjEmitente        string
+	RazaoSocialEmitente string
+	IEEmitente          *string
+	UFEmitente          *string
+	ValorProdutos       float64
+	ValorFrete          float64
+	ValorSeguro         float64
+	ValorDesconto       float64
+	ValorIPI            float64
+	ValorICMS           float64
+	ValorPIS            float64
+	ValorCOFINS         float64
+	ValorTotal          float64
+	TipoDocumento       string
+	PurchaseOrderCode   *int64
+	SupplierCode        *int64
+	CteCode             *int64
+	Status              FiscalEntryStatus
+	XmlPath             *string
+	Notes               *string
+	IsActive            bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CreatedBy           uuid.UUID
+	Itens               []*FiscalEntryItem
 }
 
 type FiscalEntryItem struct {

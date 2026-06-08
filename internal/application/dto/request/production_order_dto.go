@@ -34,6 +34,10 @@ type AddAppointmentDTO struct {
 	ScrapReason       *string   `json:"scrap_reason,omitempty"`
 	Notes             *string   `json:"notes,omitempty"`
 	CreatedBy         uuid.UUID `json:"created_by"`
+	// Backflush         WarehouseID, when set, triggers backflush: the BOM
+	// components are auto-consumed (OUT) from this warehouse in proportion to the
+	// produced quantity. Omit to disable backflush for this appointment.
+	BackflushWarehouseID *int64 `json:"backflush_warehouse_id,omitempty"`
 }
 
 type AddConsumptionDTO struct {
@@ -51,6 +55,9 @@ type AddConsumptionDTO struct {
 type CompleteProductionOrderDTO struct {
 	ID      int64  `json:"id"`
 	EndDate string `json:"end_date"`
+	// WarehouseID is the finished-goods warehouse that receives the produced
+	// quantity. When set, completing the order posts an IN stock movement.
+	WarehouseID *int64 `json:"warehouse_id,omitempty"`
 }
 
 type CloseProductionOrderDTO struct {

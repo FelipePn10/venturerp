@@ -11,6 +11,10 @@ import (
 	financialRepo "github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
+	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -20,6 +24,13 @@ type AuthorizeFiscalExitUseCase struct {
 	Repo          repository.FiscalRepository
 	FinancialRepo financialRepo.FinancialRepository
 	Auth          ports.AuthService
+	// StockRepo is optional. When set, authorizing the exit posts an OUT stock
+	// movement per item (warehouse resolved from the linked sales order line).
+	StockRepo stockrepo.StockRepository
+	// SalesOrderRepo is optional. When set together with a linked sales order,
+	// authorizing the exit marks the order as invoiced and resolves the
+	// warehouse for the stock write-down, and active reservations are consumed.
+	SalesOrderRepo salesrepo.SalesOrderRepository
 }
 
 func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*entity.FiscalExit, error) {
@@ -161,7 +172,75 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*e
 		_, _ = uc.FinancialRepo.CreateContaReceber(ctx, cr)
 	}
 
+	// Stock write-down + sales order settlement. Best-effort: a failure here does
+	// not undo an already-authorized NF-e (which lives at SEFAZ), but is surfaced
+	// via the returned exit being authorized regardless.
+	uc.settleStockAndOrder(ctx, exit, items, userID)
+
 	return updated, nil
+}
+
+// settleStockAndOrder posts the OUT movements for the exit items, consumes the
+// sales order reservations and flags the linked order as invoiced.
+func (uc *AuthorizeFiscalExitUseCase) settleStockAndOrder(
+	ctx context.Context,
+	exit *entity.FiscalExit,
+	items []*entity.FiscalExitItem,
+	userID uuid.UUID,
+) {
+	// Build item_code -> warehouse from the linked sales order lines.
+	warehouseByItem := map[int64]int64{}
+	if uc.SalesOrderRepo != nil && exit.SalesOrderCode != nil {
+		if soItems, err := uc.SalesOrderRepo.ListItems(ctx, *exit.SalesOrderCode); err == nil {
+			for _, si := range soItems {
+				if si.WarehouseCode != nil {
+					warehouseByItem[si.ItemCode] = *si.WarehouseCode
+				}
+			}
+		}
+	}
+
+	if uc.StockRepo != nil {
+		for _, it := range items {
+			if it.ItemCode == nil {
+				continue
+			}
+			wh, ok := warehouseByItem[*it.ItemCode]
+			if !ok {
+				continue // no resolvable warehouse; skip silently
+			}
+			refType := stockentity.ReferenceTypeNFExit
+			refCode := exit.ID
+			mov := &stockentity.StockMovement{
+				ItemCode:      *it.ItemCode,
+				WarehouseID:   wh,
+				MovementType:  stockentity.MovementTypeOut,
+				Quantity:      it.Quantity,
+				UnitPrice:     it.UnitPrice,
+				TotalPrice:    it.TotalPrice,
+				ReferenceType: &refType,
+				ReferenceCode: &refCode,
+				CreatedBy:     userID,
+			}
+			_, _ = uc.StockRepo.CreateMovement(ctx, mov)
+		}
+
+		// Consume any active reservations tied to the sales order.
+		if exit.SalesOrderCode != nil {
+			if reservations, err := uc.StockRepo.ListActiveReservations(ctx); err == nil {
+				for _, r := range reservations {
+					if r.ReferenceType == stockentity.ReferenceTypeSalesOrder && r.ReferenceCode == *exit.SalesOrderCode {
+						_ = uc.StockRepo.ConsumeReservation(ctx, r.ID)
+					}
+				}
+			}
+		}
+	}
+
+	// Flag the sales order as invoiced.
+	if uc.SalesOrderRepo != nil && exit.SalesOrderCode != nil {
+		_ = uc.SalesOrderRepo.ChangeStatus(ctx, *exit.SalesOrderCode, salesentity.SalesOrderStatusInvoiced)
+	}
 }
 
 func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) []focusnfe.NFEItem {
@@ -172,7 +251,7 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			ncm = *it.Ncm
 		}
 		cfop := it.Cfop
-		desc := fmt.Sprintf("Produto %d", it.ItemCode)
+		desc := fmt.Sprintf("Produto %d", safeInt64(it.ItemCode))
 		if it.Description != nil {
 			desc = *it.Description
 		}
@@ -245,6 +324,20 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			pct := cfg.IcmsDiferimentoPercentual * 100
 			nfeIt.PercentualDiferimento = &pct
 			nfeIt.ValorICMSDiferido = &it.ValorICMSDiferido
+		}
+
+		// Substituição Tributária (CST 10/70) — populated when the engine computed ST
+		if it.ValorICMSST > 0 || it.BaseICMSST > 0 {
+			modST := 4 // 4 = MVA (margem de valor agregado)
+			mvaPct := it.MVA * 100
+			aliqST := it.AliqICMSST * 100
+			baseST := it.BaseICMSST
+			valorST := it.ValorICMSST
+			nfeIt.ModalidadeBaseCalculoICMSST = &modST
+			nfeIt.PercentualMVAICMSST = &mvaPct
+			nfeIt.BaseCalculoICMSST = &baseST
+			nfeIt.AliquotaICMSST = &aliqST
+			nfeIt.ValorICMSST = &valorST
 		}
 
 		result = append(result, nfeIt)

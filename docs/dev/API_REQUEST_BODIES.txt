@@ -1672,6 +1672,170 @@ GET /api/financial/apuracao-impostos/{competencia}
 -- Exemplo: GET /api/financial/apuracao-impostos/2025-06
 
 ============================================================
+MÓDULO: PLANEJAMENTO — PIPELINE (MRP→CRP→APS)
+============================================================
+
+POST /api/planning/run-pipeline
+-- Escopo: planning:run. Roda MRP, CRP e APS e devolve parecer de viabilidade.
+{
+  "plan_code": 1,
+  "generate_llc": true,
+  "start_from": "2026-06-10T00:00:00Z"
+}
+
+============================================================
+MÓDULO: PRODUÇÃO — APONTAMENTO/CONSUMO/CONCLUSÃO (estoque automático)
+============================================================
+
+POST /api/production-order/consumption
+-- Com warehouse_id, gera movimento OUT do insumo (baixa de estoque).
+{
+  "production_order_id": 10,
+  "item_code": 1020,
+  "consumed_qty": 5,
+  "warehouse_id": 1,
+  "consumption_date": "2026-06-10",
+  "created_by": "<uuid>"
+}
+
+POST /api/production-order/appointment
+-- Com backflush_warehouse_id, baixa a BOM (OUT) proporcional ao produzido.
+{
+  "production_order_id": 10,
+  "machine_id": 1,
+  "appointment_date": "2026-06-10",
+  "produced_qty": 20,
+  "scrapped_qty": 0,
+  "backflush_warehouse_id": 1,
+  "created_by": "<uuid>"
+}
+
+POST /api/production-order/{id}/complete
+-- Com warehouse_id, gera movimento IN do produto acabado.
+{
+  "id": 10,
+  "end_date": "2026-06-12",
+  "warehouse_id": 2
+}
+
+============================================================
+MÓDULO: EXPEDIÇÃO / CARREGAMENTO (ROMANEIO)
+============================================================
+
+POST /api/shipments
+{
+  "sales_order_code": 1001,
+  "carrier_code": 50,
+  "total_volumes": 3,
+  "total_weight": 120.5,
+  "notes": "Entregar em horário comercial",
+  "created_by": "<uuid>"
+}
+
+POST /api/shipments/{code}/items
+{
+  "sequence": 1,
+  "item_code": 100,
+  "sales_order_item_code": 5001,
+  "warehouse_id": 2,
+  "quantity": 10
+}
+
+POST /api/shipments/items/confer
+{
+  "item_id": 1,
+  "conferred_qty": 10
+}
+
+POST /api/shipments/{code}/confer
+-- Sem corpo. Marca o romaneio como conferido.
+
+POST /api/shipments/{code}/ship
+-- Sem corpo. Despacha (exige todos os itens conferidos).
+
+POST /api/shipments/{code}/cancel
+-- Sem corpo.
+
+============================================================
+MÓDULO: FISCAL — EVENTOS NF-e (MANIFESTAÇÃO / INUTILIZAÇÃO)
+============================================================
+
+POST /api/fiscal/manifestacao
+-- Escopo: fiscal:authorize. tipo: ciencia|confirmacao|desconhecimento|nao_realizada
+{
+  "chave_nfe": "35260512345678000100550010000012341123456789",
+  "tipo": "confirmacao",
+  "justificativa": ""
+}
+
+POST /api/fiscal/inutilizacao
+-- Escopo: fiscal:authorize. Invalida faixa de numeração não usada.
+{
+  "serie": 1,
+  "numero_inicial": 100,
+  "numero_final": 110,
+  "justificativa": "Falha de numeração no sistema emissor"
+}
+
+============================================================
+MÓDULO: FISCAL — IBPT / SCI (LEI DA TRANSPARÊNCIA)
+============================================================
+
+POST /api/fiscal/ibpt/import
+-- Escopo: admin. csv = conteúdo do arquivo IBPT (delimitado por ';').
+{
+  "uf": "PR",
+  "csv": "72085400;0;0;Chapas de aco;12,50;15,00;18,00;0,00;01/01/2026;30/06/2026;ABC123;26.1.A;IBPT"
+}
+
+GET /api/fiscal/ibpt/lookup?ncm=72085400&uf=PR
+-- Sem corpo. Retorna a carga tributária aproximada do NCM/UF.
+
+============================================================
+MÓDULO: FINANCEIRO — CNAB 240 (REMESSA DE BOLETOS)
+============================================================
+
+POST /api/financial/cnab/remessa-240
+-- Escopo: financial:manage. Retorna text/plain (arquivo remessa.rem).
+{
+  "config": {
+    "BankCode": "341", "BankName": "Banco Itau",
+    "CompanyName": "Panosso ERP LTDA", "CompanyCNPJ": "12345678000199",
+    "Agencia": "1234", "AgenciaDV": "5", "Conta": "67890", "ContaDV": "1",
+    "Convenio": "123456", "SequenceNSA": 1
+  },
+  "titulos": [
+    {
+      "nosso_numero": "123", "numero_documento": "NF-1",
+      "vencimento": "2026-07-01", "valor": 1500.50, "emissao": "2026-06-01",
+      "sacado_nome": "Cliente Teste", "sacado_tipo": 2,
+      "sacado_documento": "99888777000166", "sacado_cidade": "Curitiba",
+      "sacado_uf": "PR", "sacado_cep": "80000000"
+    }
+  ]
+}
+
+============================================================
+MÓDULO: CONTABILIDADE — BALANCETE
+============================================================
+
+GET /api/accounting/balancete?plan_id=1&empresa_id=1&from=2026-06-01&to=2026-06-30
+-- Sem corpo. Débitos/créditos/saldo por conta + totais + indicador "balanced".
+
+============================================================
+MÓDULO: ITENS — VALIDAÇÃO DE PRONTIDÃO
+============================================================
+
+GET /api/items/{code}/activation-readiness
+-- Escopo: item:activate. Retorna {ready, issues, warnings}.
+
+============================================================
+NOTA: IDEMPOTÊNCIA
+============================================================
+-- Em POST/PUT/PATCH, envie o header "Idempotency-Key: <uuid>" para que retries
+   com a mesma chave reproduzam a resposta original (TTL 24h).
+
+============================================================
 MÓDULO: HEALTH CHECK
 ============================================================
 

@@ -3,7 +3,7 @@ package request
 // ─── Legal Devices ─────────────────────────────────────────────────────────────
 
 type CreateLegalDeviceDTO struct {
-	Type        string `json:"type"`        // ICMS | IPI | LAUDO | PIS | COFINS
+	Type        string `json:"type"` // ICMS | IPI | LAUDO | PIS | COFINS
 	Description string `json:"description"`
 }
 
@@ -20,10 +20,10 @@ type CreateCFOPDTO struct {
 	Code            int32   `json:"code"`
 	Description     string  `json:"description"`
 	DescriptionFull *string `json:"description_full,omitempty"`
-	Utilization     string  `json:"utilization"` // INDUSTRIALIZACAO_COMERCIO | IMOBILIZADO | USO_CONSUMO
+	Utilization     string  `json:"utilization"`               // INDUSTRIALIZACAO_COMERCIO | IMOBILIZADO | USO_CONSUMO
 	OrigemClasIPI   *string `json:"origem_clas_ipi,omitempty"` // COMPRA | VENDA
-	IndOperacao     string  `json:"ind_operacao"`   // NORMAL | ENERGIA_ELETRICA | TELECOMUNICACAO
-	TipoUtilizacao  string  `json:"tipo_utilizacao"` // NORMAL | VENDA_COMERCIAL_EXPORTADORA | COMPRA_FIM_ESPECIFICO_EXPORTACAO | EXPORTACAO
+	IndOperacao     string  `json:"ind_operacao"`              // NORMAL | ENERGIA_ELETRICA | TELECOMUNICACAO
+	TipoUtilizacao  string  `json:"tipo_utilizacao"`           // NORMAL | VENDA_COMERCIAL_EXPORTADORA | COMPRA_FIM_ESPECIFICO_EXPORTACAO | EXPORTACAO
 	CodigoAnexoSN   *string `json:"codigo_anexo_sn,omitempty"`
 	DIFAL           bool    `json:"difal"`
 	Doacao          bool    `json:"doacao"`
@@ -48,11 +48,11 @@ type UpdateCFOPDTO struct {
 
 type CreateTaxParamDTO struct {
 	// Search keys
-	NCMCode               *string `json:"ncm_code,omitempty"`
-	ItemCode              *int64  `json:"item_code,omitempty"`
-	ItemConfigMask        *string `json:"item_config_mask,omitempty"`
-	UF                    string  `json:"uf"`
-	OperationType         string  `json:"operation_type"` // AMBAS | ENTRADA | SAIDA | CUSTOS
+	NCMCode        *string `json:"ncm_code,omitempty"`
+	ItemCode       *int64  `json:"item_code,omitempty"`
+	ItemConfigMask *string `json:"item_config_mask,omitempty"`
+	UF             string  `json:"uf"`
+	OperationType  string  `json:"operation_type"` // AMBAS | ENTRADA | SAIDA | CUSTOS
 
 	// Optional FK filters
 	CustomerCode              *int64 `json:"customer_code,omitempty"`
@@ -67,18 +67,18 @@ type CreateTaxParamDTO struct {
 	IsSimpleOptante bool `json:"is_simples_optante"`
 
 	// ICMS rates
-	ICMSPctContrib          float64 `json:"icms_pct_contrib"`
-	LegalDeviceICMSContribID *int64  `json:"legal_device_icms_contrib_id,omitempty"`
-	ICMSPctNonContrib       float64 `json:"icms_pct_non_contrib"`
-	LegalDeviceICMSNonContribID *int64 `json:"legal_device_icms_non_contrib_id,omitempty"`
+	ICMSPctContrib              float64 `json:"icms_pct_contrib"`
+	LegalDeviceICMSContribID    *int64  `json:"legal_device_icms_contrib_id,omitempty"`
+	ICMSPctNonContrib           float64 `json:"icms_pct_non_contrib"`
+	LegalDeviceICMSNonContribID *int64  `json:"legal_device_icms_non_contrib_id,omitempty"`
 
 	// ICMS reduction
-	ICMSRedPctContrib           float64 `json:"icms_red_pct_contrib"`
-	ICMSRedTargetContrib        *string `json:"icms_red_target_contrib,omitempty"` // BASE | PERCENTUAL
-	LegalDeviceICMSRedContribID *int64  `json:"legal_device_icms_red_contrib_id,omitempty"`
-	ICMSRedPctNonContrib        float64 `json:"icms_red_pct_non_contrib"`
-	ICMSRedTargetNonContrib     *string `json:"icms_red_target_non_contrib,omitempty"`
-	LegalDeviceICMSRedNonContribID *int64 `json:"legal_device_icms_red_non_contrib_id,omitempty"`
+	ICMSRedPctContrib              float64 `json:"icms_red_pct_contrib"`
+	ICMSRedTargetContrib           *string `json:"icms_red_target_contrib,omitempty"` // BASE | PERCENTUAL
+	LegalDeviceICMSRedContribID    *int64  `json:"legal_device_icms_red_contrib_id,omitempty"`
+	ICMSRedPctNonContrib           float64 `json:"icms_red_pct_non_contrib"`
+	ICMSRedTargetNonContrib        *string `json:"icms_red_target_non_contrib,omitempty"`
+	LegalDeviceICMSRedNonContribID *int64  `json:"legal_device_icms_red_non_contrib_id,omitempty"`
 
 	// ICMS deferral
 	ICMSDeferralPct           float64 `json:"icms_deferral_pct"`
@@ -87,13 +87,13 @@ type CreateTaxParamDTO struct {
 	CodBenefRBC               *string `json:"cod_benef_rbc,omitempty"`
 
 	// ICMS substitution
-	ICMSSubstPctContrib          float64 `json:"icms_subst_pct_contrib"`
-	LegalDeviceICMSSubstContribID *int64  `json:"legal_device_icms_subst_contrib_id,omitempty"`
-	ICMSSubstPctNonContrib       float64 `json:"icms_subst_pct_non_contrib"`
-	LegalDeviceICMSSubstNonContribID *int64 `json:"legal_device_icms_subst_non_contrib_id,omitempty"`
-	ICMSSubstPctContribUC        float64 `json:"icms_subst_pct_contrib_uc"`
-	ICMSSubstRedPct              float64 `json:"icms_subst_red_pct"`
-	LegalDeviceICMSSubstRedID    *int64  `json:"legal_device_icms_subst_red_id,omitempty"`
+	ICMSSubstPctContrib              float64 `json:"icms_subst_pct_contrib"`
+	LegalDeviceICMSSubstContribID    *int64  `json:"legal_device_icms_subst_contrib_id,omitempty"`
+	ICMSSubstPctNonContrib           float64 `json:"icms_subst_pct_non_contrib"`
+	LegalDeviceICMSSubstNonContribID *int64  `json:"legal_device_icms_subst_non_contrib_id,omitempty"`
+	ICMSSubstPctContribUC            float64 `json:"icms_subst_pct_contrib_uc"`
+	ICMSSubstRedPct                  float64 `json:"icms_subst_red_pct"`
+	LegalDeviceICMSSubstRedID        *int64  `json:"legal_device_icms_subst_red_id,omitempty"`
 
 	// ICMS ST calculation
 	ICMSInternalPct        float64 `json:"icms_internal_pct"`
@@ -102,23 +102,23 @@ type CreateTaxParamDTO struct {
 	ICMSPctForSTNonContrib float64 `json:"icms_pct_for_st_non_contrib"`
 
 	// CST / CSOSN
-	CSTSituationB      *string `json:"cst_situation_b,omitempty"`
-	CSOSNIGMS          *string `json:"csosn_icms,omitempty"`
-	CSTICMSContrib     *string `json:"cst_icms_contrib,omitempty"`
-	CSTICMSNonContrib  *string `json:"cst_icms_non_contrib,omitempty"`
-	CodBeneficioFiscal *string `json:"cod_beneficio_fiscal,omitempty"`
-	CSTICMSContribDev  *string `json:"cst_icms_contrib_dev,omitempty"`
+	CSTSituationB        *string `json:"cst_situation_b,omitempty"`
+	CSOSNIGMS            *string `json:"csosn_icms,omitempty"`
+	CSTICMSContrib       *string `json:"cst_icms_contrib,omitempty"`
+	CSTICMSNonContrib    *string `json:"cst_icms_non_contrib,omitempty"`
+	CodBeneficioFiscal   *string `json:"cod_beneficio_fiscal,omitempty"`
+	CSTICMSContribDev    *string `json:"cst_icms_contrib_dev,omitempty"`
 	CSTICMSNonContribDev *string `json:"cst_icms_non_contrib_dev,omitempty"`
 
 	// IPI reduction
-	IPIRedPctContrib          float64 `json:"ipi_red_pct_contrib"`
-	IPIRedTargetContrib       *string `json:"ipi_red_target_contrib,omitempty"`
-	LegalDeviceIPIContribID   *int64  `json:"legal_device_ipi_contrib_id,omitempty"`
-	IPIRedPctNonContrib       float64 `json:"ipi_red_pct_non_contrib"`
-	IPIRedTargetNonContrib    *string `json:"ipi_red_target_non_contrib,omitempty"`
+	IPIRedPctContrib           float64 `json:"ipi_red_pct_contrib"`
+	IPIRedTargetContrib        *string `json:"ipi_red_target_contrib,omitempty"`
+	LegalDeviceIPIContribID    *int64  `json:"legal_device_ipi_contrib_id,omitempty"`
+	IPIRedPctNonContrib        float64 `json:"ipi_red_pct_non_contrib"`
+	IPIRedTargetNonContrib     *string `json:"ipi_red_target_non_contrib,omitempty"`
 	LegalDeviceIPINonContribID *int64  `json:"legal_device_ipi_non_contrib_id,omitempty"`
-	CSTIPIExit                *string `json:"cst_ipi_exit,omitempty"`
-	CSTIPIEntry               *string `json:"cst_ipi_entry,omitempty"`
+	CSTIPIExit                 *string `json:"cst_ipi_exit,omitempty"`
+	CSTIPIEntry                *string `json:"cst_ipi_entry,omitempty"`
 
 	// FCI
 	ICMSPctOrigins1238      float64 `json:"icms_pct_origins_1238"`

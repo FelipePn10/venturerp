@@ -12,13 +12,13 @@ import (
 
 func TestApplyLossFormula(t *testing.T) {
 	cases := []struct {
-		name                            string
-		parentQty, childPer, lossPct    float64
-		formula                         int
-		want                            float64
+		name                         string
+		parentQty, childPer, lossPct float64
+		formula                      int
+		want                         float64
 	}{
 		{"no loss", 2, 3, 0, 1, 6},
-		{"formula1 +10%", 2, 3, 10, 1, 6.6},        // 6 * 1.10
+		{"formula1 +10%", 2, 3, 10, 1, 6.6}, // 6 * 1.10
 		{"formula2 /(1-10%)", 2, 3, 10, 2, 6.0 / 0.9},
 		{"formula3 ignores loss", 2, 3, 10, 3, 6},
 		{"default = formula1", 2, 3, 10, 9, 6.6},
@@ -66,8 +66,8 @@ func TestExplodeFromBOMWithFormula_MaskFilter(t *testing.T) {
 	maskA := "A"
 	bom := map[int64][]*structentity.ItemStructure{
 		1: {
-			{ChildCode: 10, Quantity: 2},                       // generic (no parent mask)
-			{ChildCode: 20, Quantity: 1, ParentMask: &maskA},   // only for mask A
+			{ChildCode: 10, Quantity: 2},                     // generic (no parent mask)
+			{ChildCode: 20, Quantity: 1, ParentMask: &maskA}, // only for mask A
 		},
 	}
 	// With mask "A": both apply (generic + A).

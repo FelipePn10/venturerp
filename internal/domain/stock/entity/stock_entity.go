@@ -6,6 +6,46 @@ import (
 	"github.com/google/uuid"
 )
 
+// Movement type values stored in stock_movements.movement_type.
+// These are the canonical strings expected by the stock_balances update logic
+// and by the financial reports that filter on movement_type.
+const (
+	MovementTypeIn          = "IN"
+	MovementTypeOut         = "OUT"
+	MovementTypeTransferIn  = "TRANSFER_IN"
+	MovementTypeTransferOut = "TRANSFER_OUT"
+	MovementTypeAdjustment  = "ADJUSTMENT"
+)
+
+// Reference type values stored in stock_movements.reference_type, identifying the
+// document that originated the movement.
+const (
+	ReferenceTypePurchaseOrder   = "PURCHASE_ORDER"
+	ReferenceTypeProductionOrder = "PRODUCTION_ORDER"
+	ReferenceTypeSalesOrder      = "SALES_ORDER"
+	ReferenceTypeNFEntry         = "NF_ENTRADA"
+	ReferenceTypeNFExit          = "NF_SAIDA"
+	ReferenceTypeInventory       = "INVENTORY"
+	ReferenceTypeManual          = "MANUAL"
+)
+
+// SignedQuantity returns the delta that a movement of the given type applies to
+// the on-hand balance: positive for inbound, negative for outbound. ADJUSTMENT
+// is assumed to carry an already-signed quantity. Types that do not change the
+// on-hand quantity (e.g. reservations) return 0.
+func SignedQuantity(movementType string, quantity float64) float64 {
+	switch movementType {
+	case MovementTypeIn, MovementTypeTransferIn, "ENTRADA":
+		return quantity
+	case MovementTypeOut, MovementTypeTransferOut, "SAIDA":
+		return -quantity
+	case MovementTypeAdjustment:
+		return quantity
+	default:
+		return 0
+	}
+}
+
 type StockMovement struct {
 	ID             int64
 	ItemCode       int64
@@ -45,21 +85,21 @@ type StockReservation struct {
 }
 
 type StockBalance struct {
-	ID              int64
-	ItemCode        int64
-	Mask            string
-	WarehouseID     int64
-	Quantity        float64
-	ReservedQty     float64
-	AvailableQty    float64
-	MinimumStock    float64
-	MaximumStock    float64
-	SafetyStock     float64
-	AvgCost         float64
-	LastCost        float64
-	TotalCost       float64
-	LastMovementAt  *time.Time
-	UpdatedAt       time.Time
+	ID             int64
+	ItemCode       int64
+	Mask           string
+	WarehouseID    int64
+	Quantity       float64
+	ReservedQty    float64
+	AvailableQty   float64
+	MinimumStock   float64
+	MaximumStock   float64
+	SafetyStock    float64
+	AvgCost        float64
+	LastCost       float64
+	TotalCost      float64
+	LastMovementAt *time.Time
+	UpdatedAt      time.Time
 }
 
 type PhysicalInventory struct {

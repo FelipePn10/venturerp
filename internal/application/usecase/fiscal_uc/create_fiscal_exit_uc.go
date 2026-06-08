@@ -82,12 +82,15 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		itemFrete := dto.ValorFrete
 		itemDesconto := dto.ValorDesconto
 		taxItems = append(taxItems, engine.TaxItem{
-			Ncm:              ncm,
-			ValorUnitario:    it.UnitPrice,
-			Quantidade:       it.Quantity,
-			ValorFrete:       itemFrete,
-			ValorDesconto:    itemDesconto,
-			OrigemMercadoria: it.OrigemMercadoria,
+			Ncm:                  ncm,
+			ValorUnitario:        it.UnitPrice,
+			Quantidade:           it.Quantity,
+			ValorFrete:           itemFrete,
+			ValorDesconto:        itemDesconto,
+			OrigemMercadoria:     it.OrigemMercadoria,
+			MvaPct:               it.MvaPct,
+			AliqInternaDestinoST: it.AliqInternaDestinoST,
+			RedBaseSTPct:         it.RedBaseSTPct,
 		})
 	}
 
@@ -107,8 +110,8 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 	}
 
 	fiscalCfg := engine.FiscalConfig{
-		UFEmpresa:               config.UFEmpresa,
-		IcmsInternoAliquota:     config.IcmsInternoAliquota,
+		UFEmpresa:                 config.UFEmpresa,
+		IcmsInternoAliquota:       config.IcmsInternoAliquota,
 		IcmsDiferimentoPercentual: config.IcmsDiferimentoPercentual,
 	}
 
@@ -132,29 +135,32 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 	}
 
 	exit := &entity.FiscalExit{
-		NumeroNF:               dto.NumeroNF,
-		Serie:                  dto.Serie,
-		DataEmissao:            dataEmissao,
-		DataSaida:              dataSaida,
-		CnpjDestinatario:       dto.CnpjDestinatario,
+		NumeroNF:                dto.NumeroNF,
+		Serie:                   dto.Serie,
+		DataEmissao:             dataEmissao,
+		DataSaida:               dataSaida,
+		CnpjDestinatario:        dto.CnpjDestinatario,
 		RazaoSocialDestinatario: dto.RazaoSocialDestinatario,
-		IEDestinatario:         dto.IEDestinatario,
-		UFDestinatario:         dto.UFDestinatario,
-		Cfop:                   dto.Cfop,
-		NaturezaOperacao:       dto.NaturezaOperacao,
-		ValorProdutos:          dto.ValorProdutos,
-		ValorFrete:             dto.ValorFrete,
-		ValorSeguro:            dto.ValorSeguro,
-		ValorDesconto:          dto.ValorDesconto,
-		ValorIPI:               taxResult.Totais.ValorIPI,
-		ValorICMS:              taxResult.Totais.ValorICMS,
-		ValorPIS:               taxResult.Totais.ValorPIS,
-		ValorCOFINS:            taxResult.Totais.ValorCOFINS,
-		// ValorTotal = produtos + IPI + frete + seguro - desconto (ICMS não soma no total NF-e)
-		ValorTotal: dto.ValorProdutos + taxResult.Totais.ValorIPI + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
-		SalesOrderCode:         dto.SalesOrderCode,
-		Status:                 entity.ExitStatusDraft,
-		CreatedBy:              userID,
+		IEDestinatario:          dto.IEDestinatario,
+		UFDestinatario:          dto.UFDestinatario,
+		Cfop:                    dto.Cfop,
+		NaturezaOperacao:        dto.NaturezaOperacao,
+		ValorProdutos:           dto.ValorProdutos,
+		ValorFrete:              dto.ValorFrete,
+		ValorSeguro:             dto.ValorSeguro,
+		ValorDesconto:           dto.ValorDesconto,
+		ValorIPI:                taxResult.Totais.ValorIPI,
+		ValorICMS:               taxResult.Totais.ValorICMS,
+		ValorPIS:                taxResult.Totais.ValorPIS,
+		ValorCOFINS:             taxResult.Totais.ValorCOFINS,
+		BaseICMSST:              taxResult.Totais.BaseICMSST,
+		ValorICMSST:             taxResult.Totais.ValorICMSST,
+		// ValorTotal = produtos + IPI + ICMS-ST + frete + seguro - desconto
+		// (ICMS próprio não soma no total da NF-e; o ICMS-ST soma, pois é cobrado do destinatário)
+		ValorTotal:     dto.ValorProdutos + taxResult.Totais.ValorIPI + taxResult.Totais.ValorICMSST + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
+		SalesOrderCode: dto.SalesOrderCode,
+		Status:         entity.ExitStatusDraft,
+		CreatedBy:      userID,
 	}
 
 	created, err := uc.Repo.CreateExit(ctx, exit)
@@ -188,6 +194,10 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 			ValorPIS:          itemTax.ValorPIS,
 			AliqCOFINS:        itemTax.AliquotaCOFINS,
 			ValorCOFINS:       itemTax.ValorCOFINS,
+			BaseICMSST:        itemTax.BaseICMSST,
+			AliqICMSST:        itemTax.AliquotaICMSST,
+			ValorICMSST:       itemTax.ValorICMSST,
+			MVA:               itemTax.MVA,
 			CstICMS:           &itemTax.CSTICMS,
 			CstIPI:            &itemTax.CSTIPI,
 			CstPIS:            &itemTax.CSTPIS,

@@ -20,12 +20,12 @@ type ItemStandardCost struct {
 }
 
 type WorkCenterCost struct {
-	ID            int64
-	WorkCenterID  int64
-	CostPerHour   float64
-	Currency      string
-	UpdatedAt     time.Time
-	UpdatedBy     uuid.UUID
+	ID           int64
+	WorkCenterID int64
+	CostPerHour  float64
+	Currency     string
+	UpdatedAt    time.Time
+	UpdatedBy    uuid.UUID
 }
 
 type ItemPurchaseCost struct {

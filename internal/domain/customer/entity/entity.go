@@ -12,16 +12,16 @@ import (
 type CustomerCategory string
 
 const (
-	CategoryNormal    CustomerCategory = "NORMAL"
+	CategoryNormal     CustomerCategory = "NORMAL"
 	CategoryConsumidor CustomerCategory = "CONSUMIDOR"
 )
 
 type CarrierBillingType string
 
 const (
-	BillingCarteira          CarrierBillingType = "CARTEIRA"
+	BillingCarteira           CarrierBillingType = "CARTEIRA"
 	BillingCobrancaEscritural CarrierBillingType = "COBRANCA_ESCRITURAL"
-	BillingBoleto            CarrierBillingType = "BOLETO"
+	BillingBoleto             CarrierBillingType = "BOLETO"
 )
 
 type PaymentAnalysis string
@@ -35,23 +35,23 @@ const (
 type PaymentParcelStart string
 
 const (
-	ParcelStartEmissao          PaymentParcelStart = "EMISSAO"
-	ParcelStartProximoMes       PaymentParcelStart = "PROXIMO_MES"
-	ParcelStartProximaQuinzena  PaymentParcelStart = "PROXIMA_QUINZENA"
+	ParcelStartEmissao         PaymentParcelStart = "EMISSAO"
+	ParcelStartProximoMes      PaymentParcelStart = "PROXIMO_MES"
+	ParcelStartProximaQuinzena PaymentParcelStart = "PROXIMA_QUINZENA"
 )
 
 type PriceFormation string
 
 const (
-	PriceInformado            PriceFormation = "INFORMADO"
-	PriceCustoMedio           PriceFormation = "CUSTO_MEDIO"
-	PriceCustoStandardTotal   PriceFormation = "CUSTO_STANDARD_TOTAL"
+	PriceInformado             PriceFormation = "INFORMADO"
+	PriceCustoMedio            PriceFormation = "CUSTO_MEDIO"
+	PriceCustoStandardTotal    PriceFormation = "CUSTO_STANDARD_TOTAL"
 	PriceCustoStandardMaterial PriceFormation = "CUSTO_STANDARD_MATERIAL"
-	PriceInformadoSemICMS     PriceFormation = "INFORMADO_SEM_ICMS"
-	PriceMatOper              PriceFormation = "MAT_OPER"
-	PriceTabelaCusto          PriceFormation = "TABELA_CUSTO"
-	PriceTransferenciaIPI     PriceFormation = "TRANSFERENCIA_IPI"
-	PriceTransferenciaUF      PriceFormation = "TRANSFERENCIA_UF"
+	PriceInformadoSemICMS      PriceFormation = "INFORMADO_SEM_ICMS"
+	PriceMatOper               PriceFormation = "MAT_OPER"
+	PriceTabelaCusto           PriceFormation = "TABELA_CUSTO"
+	PriceTransferenciaIPI      PriceFormation = "TRANSFERENCIA_IPI"
+	PriceTransferenciaUF       PriceFormation = "TRANSFERENCIA_UF"
 )
 
 type TableComposition string
@@ -79,23 +79,23 @@ const (
 type InvoiceTypeKind string
 
 const (
-	InvoiceVenda               InvoiceTypeKind = "VENDA"
-	InvoiceDevolucao           InvoiceTypeKind = "DEVOLUCAO"
-	InvoiceRemessa             InvoiceTypeKind = "REMESSA"
-	InvoiceRemessaConsignacao  InvoiceTypeKind = "REMESSA_CONSIGNACAO"
-	InvoiceRemessaArmazenagem  InvoiceTypeKind = "REMESSA_ARMAZENAGEM"
+	InvoiceVenda                 InvoiceTypeKind = "VENDA"
+	InvoiceDevolucao             InvoiceTypeKind = "DEVOLUCAO"
+	InvoiceRemessa               InvoiceTypeKind = "REMESSA"
+	InvoiceRemessaConsignacao    InvoiceTypeKind = "REMESSA_CONSIGNACAO"
+	InvoiceRemessaArmazenagem    InvoiceTypeKind = "REMESSA_ARMAZENAGEM"
 	InvoiceRemessaBeneficiamento InvoiceTypeKind = "REMESSA_BENEFICIAMENTO"
 	InvoiceRetornoBeneficiamento InvoiceTypeKind = "RETORNO_BENEFICIAMENTO"
-	InvoiceSimplesRemessa      InvoiceTypeKind = "SIMPLES_REMESSA"
-	InvoiceTransferencia       InvoiceTypeKind = "TRANSFERENCIA"
-	InvoiceVendaConsignacao    InvoiceTypeKind = "VENDA_CONSIGNACAO"
-	InvoiceComplementarICM     InvoiceTypeKind = "COMPLEMENTAR_ICM"
-	InvoiceComplementarIPI     InvoiceTypeKind = "COMPLEMENTAR_IPI"
-	InvoiceDemonstracao        InvoiceTypeKind = "DEMONSTRACAO"
-	InvoiceEmprestimo          InvoiceTypeKind = "EMPRESTIMO"
+	InvoiceSimplesRemessa        InvoiceTypeKind = "SIMPLES_REMESSA"
+	InvoiceTransferencia         InvoiceTypeKind = "TRANSFERENCIA"
+	InvoiceVendaConsignacao      InvoiceTypeKind = "VENDA_CONSIGNACAO"
+	InvoiceComplementarICM       InvoiceTypeKind = "COMPLEMENTAR_ICM"
+	InvoiceComplementarIPI       InvoiceTypeKind = "COMPLEMENTAR_IPI"
+	InvoiceDemonstracao          InvoiceTypeKind = "DEMONSTRACAO"
+	InvoiceEmprestimo            InvoiceTypeKind = "EMPRESTIMO"
 	InvoiceFaturamentoAntecipado InvoiceTypeKind = "FATURAMENTO_ANTECIPADO"
-	InvoicePrestacaoServicos   InvoiceTypeKind = "PRESTACAO_SERVICOS"
-	InvoiceOutros              InvoiceTypeKind = "OUTROS"
+	InvoicePrestacaoServicos     InvoiceTypeKind = "PRESTACAO_SERVICOS"
+	InvoiceOutros                InvoiceTypeKind = "OUTROS"
 )
 
 type InvoiceStock string
@@ -109,22 +109,21 @@ const (
 type ImpostosNFe string
 
 const (
-	ImpostosICMS       ImpostosNFe = "ICMS"
-	ImpostosIPI        ImpostosNFe = "IPI"
-	ImpostosPIS        ImpostosNFe = "PIS"
-	ImpostosCOFINS     ImpostosNFe = "COFINS"
-	ImpostosICMSIPI    ImpostosNFe = "ICMS_IPI"
-	ImpostosTodos      ImpostosNFe = "TODOS"
+	ImpostosICMS    ImpostosNFe = "ICMS"
+	ImpostosIPI     ImpostosNFe = "IPI"
+	ImpostosPIS     ImpostosNFe = "PIS"
+	ImpostosCOFINS  ImpostosNFe = "COFINS"
+	ImpostosICMSIPI ImpostosNFe = "ICMS_IPI"
+	ImpostosTodos   ImpostosNFe = "TODOS"
 )
 
 type PriceSituation string
 
 const (
-	PriceSituationAtivo      PriceSituation = "ATIVO"
-	PriceSituationInativo    PriceSituation = "INATIVO"
+	PriceSituationAtivo       PriceSituation = "ATIVO"
+	PriceSituationInativo     PriceSituation = "INATIVO"
 	PriceSituationPromocional PriceSituation = "PROMOCIONAL"
 )
-
 
 type InvoiceICMSType string
 
@@ -137,10 +136,10 @@ const (
 type DocumentType string
 
 const (
-	DocumentCNPJ       DocumentType = "CNPJ"
-	DocumentCPF        DocumentType = "CPF"
+	DocumentCNPJ        DocumentType = "CNPJ"
+	DocumentCPF         DocumentType = "CPF"
 	DocumentEstrangeiro DocumentType = "ESTRANGEIRO"
-	DocumentIsento     DocumentType = "ISENTO"
+	DocumentIsento      DocumentType = "ISENTO"
 )
 
 type AddressType string
@@ -197,14 +196,14 @@ func NewRegion(code int64, description string, uf, city string, createdBy uuid.U
 // ─── Market Segment ───────────────────────────────────────────────────────────
 
 type MarketSegment struct {
-	ID                     int64
-	Code                   int64
-	Description            string
-	ParentID               *int64
-	HasPISCOFINSRetention  bool
-	RetentionIndicator     *int16
-	IsActive               bool
-	CreatedAt              time.Time
+	ID                    int64
+	Code                  int64
+	Description           string
+	ParentID              *int64
+	HasPISCOFINSRetention bool
+	RetentionIndicator    *int16
+	IsActive              bool
+	CreatedAt             time.Time
 }
 
 func NewMarketSegment(code int64, description string, parentID *int64, hasRetention bool, retentionIndicator *int16) (*MarketSegment, error) {
@@ -291,17 +290,17 @@ type CarrierGroup struct {
 // ─── Carrier ─────────────────────────────────────────────────────────────────
 
 type Carrier struct {
-	ID                 int64
-	Code               int64
-	Description        string
-	BillingType        CarrierBillingType
-	UsesCreditLimit    bool
-	ConsiderAvailable  bool
-	PostponeDueDate    bool
-	ReceiptDays        int16
-	PaymentDays        int16
-	IsActive           bool
-	CreatedAt          time.Time
+	ID                int64
+	Code              int64
+	Description       string
+	BillingType       CarrierBillingType
+	UsesCreditLimit   bool
+	ConsiderAvailable bool
+	PostponeDueDate   bool
+	ReceiptDays       int16
+	PaymentDays       int16
+	IsActive          bool
+	CreatedAt         time.Time
 }
 
 func NewCarrier(code int64, description string, billingType CarrierBillingType) (*Carrier, error) {
@@ -340,15 +339,15 @@ type PaymentCondition struct {
 }
 
 type PaymentInstallment struct {
-	ID                  int64
-	PaymentConditionID  int64
-	InstallmentNumber   int16
-	DueDays             int16
-	Description         *string
-	DocumentType        *string
-	MovementType        *string
-	CarrierID           *int64
-	IsActive            bool
+	ID                 int64
+	PaymentConditionID int64
+	InstallmentNumber  int16
+	DueDays            int16
+	Description        *string
+	DocumentType       *string
+	MovementType       *string
+	CarrierID          *int64
+	IsActive           bool
 }
 
 func NewPaymentCondition(code int64, description string, analysisType PaymentAnalysis) (*PaymentCondition, error) {
@@ -371,23 +370,23 @@ func NewPaymentCondition(code int64, description string, analysisType PaymentAna
 // ─── Sales Table ──────────────────────────────────────────────────────────────
 
 type SalesTable struct {
-	ID                        int64
-	Code                      int64
-	Description               string
-	ValidityStart             *time.Time
-	ValidityEnd               *time.Time
-	ToleranceMinPct           float64
-	ToleranceMaxPct           float64
-	PriceFormation            PriceFormation
-	DecimalPlaces             int16
-	IsActive                  bool
-	Composition               TableComposition
-	TableType                 TableType
-	BaseDate                  BaseDate
-	AllowItemsBelowCent       bool
+	ID                         int64
+	Code                       int64
+	Description                string
+	ValidityStart              *time.Time
+	ValidityEnd                *time.Time
+	ToleranceMinPct            float64
+	ToleranceMaxPct            float64
+	PriceFormation             PriceFormation
+	DecimalPlaces              int16
+	IsActive                   bool
+	Composition                TableComposition
+	TableType                  TableType
+	BaseDate                   BaseDate
+	AllowItemsBelowCent        bool
 	ICMSInterestadualPorDentro bool
-	Observation               *string
-	CreatedAt                 time.Time
+	Observation                *string
+	CreatedAt                  time.Time
 }
 
 func NewSalesTable(code int64, description string, formation PriceFormation) (*SalesTable, error) {
@@ -413,86 +412,86 @@ func NewSalesTable(code int64, description string, formation PriceFormation) (*S
 // ─── Invoice Type ─────────────────────────────────────────────────────────────
 
 type InvoiceType struct {
-	ID                       int64
-	Code                     int64
-	Description              string
-	Type                     InvoiceTypeKind
-	StockMovement            InvoiceStock
-	ICMSType                 InvoiceICMSType
-	ICMSPct                  float64
-	ICMSReductionPct         float64
-	IPIPct                   float64
-	PISPct                   float64
-	COFINSPct                float64
-	ISSQNPct                 float64
-	IRPct                    float64
-	CSLLPct                  float64
-	INSSPct                  float64
-	GeneratesRevenue         bool
-	UpdatesInventory         bool
-	GeneratesFinancialTitle  bool
-	ConsidersGoals           bool
-	CalcSubstitutionTax      bool
-	CalcICMSDeferral         bool
-	CalcPISCOFINS            bool
-	CalcDIFAL                bool
-	RequiresSalesOrder       bool
-	ListsFiscalBooks         bool
-	IsActive                 bool
+	ID                      int64
+	Code                    int64
+	Description             string
+	Type                    InvoiceTypeKind
+	StockMovement           InvoiceStock
+	ICMSType                InvoiceICMSType
+	ICMSPct                 float64
+	ICMSReductionPct        float64
+	IPIPct                  float64
+	PISPct                  float64
+	COFINSPct               float64
+	ISSQNPct                float64
+	IRPct                   float64
+	CSLLPct                 float64
+	INSSPct                 float64
+	GeneratesRevenue        bool
+	UpdatesInventory        bool
+	GeneratesFinancialTitle bool
+	ConsidersGoals          bool
+	CalcSubstitutionTax     bool
+	CalcICMSDeferral        bool
+	CalcPISCOFINS           bool
+	CalcDIFAL               bool
+	RequiresSalesOrder      bool
+	ListsFiscalBooks        bool
+	IsActive                bool
 	// NF-e / FocusNFE fields
-	ModelNF             *string // "55" = NF-e, "65" = NFC-e
-	DescriptionNF       *string
-	ImpostosNFe         *ImpostosNFe
-	CSTICMS             *string
-	CSOSNTICMS          *string
-	CSTIPI              *string
-	CSTPIS              *string
-	CSTCOFINS           *string
-	BaixaPedido         bool
-	GeraTituloDev       bool
-	ExigeSuframa        bool
-	IRPctPresumption    float64
-	CSLLPctPresumption  float64
+	ModelNF            *string // "55" = NF-e, "65" = NFC-e
+	DescriptionNF      *string
+	ImpostosNFe        *ImpostosNFe
+	CSTICMS            *string
+	CSOSNTICMS         *string
+	CSTIPI             *string
+	CSTPIS             *string
+	CSTCOFINS          *string
+	BaixaPedido        bool
+	GeraTituloDev      bool
+	ExigeSuframa       bool
+	IRPctPresumption   float64
+	CSLLPctPresumption float64
 	// FKs
-	CFOPId                      *int64
-	DispositivoLegalIPIId       *int64
-	DispositivoLegalICMSId      *int64
-	DispositivoLegalICMSSTId    *int64
-	DispositivoLegalPISId       *int64
-	DispositivoLegalCOFINSId    *int64
-	HierarchyIPI                *string
-	HierarchyICMS               *string
-	HierarchyICMSST             *string
-	HierarchyPIS                *string
-	HierarchyCOFINS             *string
-	IPITransferSalesTableId     *int64
+	CFOPId                   *int64
+	DispositivoLegalIPIId    *int64
+	DispositivoLegalICMSId   *int64
+	DispositivoLegalICMSSTId *int64
+	DispositivoLegalPISId    *int64
+	DispositivoLegalCOFINSId *int64
+	HierarchyIPI             *string
+	HierarchyICMS            *string
+	HierarchyICMSST          *string
+	HierarchyPIS             *string
+	HierarchyCOFINS          *string
+	IPITransferSalesTableId  *int64
 	// SPED/SINTEGRA flags
-	ListaValorContabil          bool
-	ListaRegistroSaida          bool
-	ListaICMSIPI                bool
-	SintegraSpedFiscal          bool
+	ListaValorContabil bool
+	ListaRegistroSaida bool
+	ListaICMSIPI       bool
+	SintegraSpedFiscal bool
 	// Calculation/behavior flags
-	CalcFomentar                bool
-	ExcecaoFomentar             bool
-	CompRessRetST               bool
-	CalcReducao                 bool
-	ComplementoItens            bool
-	BuscaTipoNF                 bool
-	ICMSSTUltEntrada            bool
-	SomenteConsultaLotes        bool
-	CalcImpIBPT                 bool
-	CredPresumidoICMS           bool
-	CIAP                        bool
-	VlrAgregadoBaseSubst        bool
-	ContratoFacon               bool
-	DescICMSLicitacoes          bool
-	Sisdeclara                  bool
+	CalcFomentar         bool
+	ExcecaoFomentar      bool
+	CompRessRetST        bool
+	CalcReducao          bool
+	ComplementoItens     bool
+	BuscaTipoNF          bool
+	ICMSSTUltEntrada     bool
+	SomenteConsultaLotes bool
+	CalcImpIBPT          bool
+	CredPresumidoICMS    bool
+	CIAP                 bool
+	VlrAgregadoBaseSubst bool
+	ContratoFacon        bool
+	DescICMSLicitacoes   bool
+	Sisdeclara           bool
 	// Classification codes
-	CodClasTrib                 *string
-	CodClasTribTribReg          *string
-	CodMotivoRestCompICMSST     *string
-	CodBeneficioFiscal          *string
-	CreatedAt                   time.Time
+	CodClasTrib             *string
+	CodClasTribTribReg      *string
+	CodMotivoRestCompICMSST *string
+	CodBeneficioFiscal      *string
+	CreatedAt               time.Time
 }
 
 func NewInvoiceType(code int64, description string, kind InvoiceTypeKind) (*InvoiceType, error) {
@@ -522,32 +521,32 @@ func NewInvoiceType(code int64, description string, kind InvoiceTypeKind) (*Invo
 // ─── Tax Type ─────────────────────────────────────────────────────────────────
 
 type TaxType struct {
-	ID                           int64
-	Code                         int64
-	Description                  string
-	IPIBaseTotalItems            bool
-	IPIBaseSubtractDiscount      bool
-	IPIBaseAddFreight            bool
-	IPIBaseAddExpenses           bool
-	ICMSBaseTotalItems           bool
-	ICMSBaseSubtractDiscount     bool
-	ICMSBaseAddFreight           bool
-	ICMSBaseAddIPI               bool
-	ICMSBaseAddExpenses          bool
-	PISCOFINSBaseTotalItems      bool
+	ID                            int64
+	Code                          int64
+	Description                   string
+	IPIBaseTotalItems             bool
+	IPIBaseSubtractDiscount       bool
+	IPIBaseAddFreight             bool
+	IPIBaseAddExpenses            bool
+	ICMSBaseTotalItems            bool
+	ICMSBaseSubtractDiscount      bool
+	ICMSBaseAddFreight            bool
+	ICMSBaseAddIPI                bool
+	ICMSBaseAddExpenses           bool
+	PISCOFINSBaseTotalItems       bool
 	PISCOFINSBaseSubtractDiscount bool
-	PISCOFINSBaseAddFreight      bool
-	PISCOFINSBaseAddInsurance    bool
-	PISCOFINSBaseAddExpenses     bool
-	CSLLBaseTotalItems           bool
-	CSLLBaseSubtractDiscount     bool
-	CSLLBaseAddFreight           bool
-	IRBaseTotalItems             bool
-	IRBaseSubtractDiscount       bool
-	IRBaseAddFreight             bool
-	IsConsumer                   bool
-	IsActive                     bool
-	CreatedAt                    time.Time
+	PISCOFINSBaseAddFreight       bool
+	PISCOFINSBaseAddInsurance     bool
+	PISCOFINSBaseAddExpenses      bool
+	CSLLBaseTotalItems            bool
+	CSLLBaseSubtractDiscount      bool
+	CSLLBaseAddFreight            bool
+	IRBaseTotalItems              bool
+	IRBaseSubtractDiscount        bool
+	IRBaseAddFreight              bool
+	IsConsumer                    bool
+	IsActive                      bool
+	CreatedAt                     time.Time
 }
 
 func NewTaxType(code int64, description string) (*TaxType, error) {
@@ -555,58 +554,58 @@ func NewTaxType(code int64, description string) (*TaxType, error) {
 		return nil, fmt.Errorf("description is required")
 	}
 	return &TaxType{
-		Code:                         code,
-		Description:                  description,
-		IPIBaseTotalItems:            true,
-		ICMSBaseTotalItems:           true,
-		ICMSBaseSubtractDiscount:     true,
-		ICMSBaseAddFreight:           true,
-		PISCOFINSBaseTotalItems:      true,
+		Code:                          code,
+		Description:                   description,
+		IPIBaseTotalItems:             true,
+		ICMSBaseTotalItems:            true,
+		ICMSBaseSubtractDiscount:      true,
+		ICMSBaseAddFreight:            true,
+		PISCOFINSBaseTotalItems:       true,
 		PISCOFINSBaseSubtractDiscount: true,
-		CSLLBaseTotalItems:           true,
-		CSLLBaseSubtractDiscount:     true,
-		IRBaseTotalItems:             true,
-		IRBaseSubtractDiscount:       true,
-		IsActive:                     true,
-		CreatedAt:                    time.Now(),
+		CSLLBaseTotalItems:            true,
+		CSLLBaseSubtractDiscount:      true,
+		IRBaseTotalItems:              true,
+		IRBaseSubtractDiscount:        true,
+		IsActive:                      true,
+		CreatedAt:                     time.Now(),
 	}, nil
 }
 
 // ─── Customer ─────────────────────────────────────────────────────────────────
 
 type Customer struct {
-	ID                     int64
-	Code                   int64
-	CorporateCode          *int64
-	IsCorporate            bool
-	Name                   string
-	TradeName              *string
-	DocumentType           DocumentType
-	DocumentNumber         string
-	StateRegistration      *string
-	MunicipalRegistration  *string
-	SuframaCode            *string
-	SuframaExpiry          *time.Time
-	RegionID               *int64
-	MarketSegmentID        *int64
-	CustomerTypeID         *int64
-	PaymentConditionID     *int64
-	SalesTableID           *int64
-	CarrierID              *int64
-	CarrierGroupID         *int64
-	InvoiceTypeID          *int64
-	TaxTypeID              *int64
-	PaymentCondVisibility  PaymentCondVisibility
-	CreditLimit            float64
-	Website                *string
-	IsActive               bool
-	Blocked                bool
-	BlockReason            *string
-	CreatedAt              time.Time
-	CreatedBy              uuid.UUID
-	UpdatedAt              time.Time
-	Addresses              []*CustomerAddress
-	Contacts               []*CustomerContact
+	ID                    int64
+	Code                  int64
+	CorporateCode         *int64
+	IsCorporate           bool
+	Name                  string
+	TradeName             *string
+	DocumentType          DocumentType
+	DocumentNumber        string
+	StateRegistration     *string
+	MunicipalRegistration *string
+	SuframaCode           *string
+	SuframaExpiry         *time.Time
+	RegionID              *int64
+	MarketSegmentID       *int64
+	CustomerTypeID        *int64
+	PaymentConditionID    *int64
+	SalesTableID          *int64
+	CarrierID             *int64
+	CarrierGroupID        *int64
+	InvoiceTypeID         *int64
+	TaxTypeID             *int64
+	PaymentCondVisibility PaymentCondVisibility
+	CreditLimit           float64
+	Website               *string
+	IsActive              bool
+	Blocked               bool
+	BlockReason           *string
+	CreatedAt             time.Time
+	CreatedBy             uuid.UUID
+	UpdatedAt             time.Time
+	Addresses             []*CustomerAddress
+	Contacts              []*CustomerContact
 }
 
 func NewCustomer(code int64, name string, docType DocumentType, docNumber string, createdBy uuid.UUID) (*Customer, error) {
@@ -658,17 +657,17 @@ type CustomerAddress struct {
 // ─── Customer Contact ─────────────────────────────────────────────────────────
 
 type CustomerContact struct {
-	ID              int64
-	CustomerID      int64
-	ContactTypeID   *int64
-	Name            string
-	Email           *string
-	Phone           *string
-	Mobile          *string
-	Position        *string
-	IsPrimary       bool
-	IsActive        bool
-	CreatedAt       time.Time
+	ID            int64
+	CustomerID    int64
+	ContactTypeID *int64
+	Name          string
+	Email         *string
+	Phone         *string
+	Mobile        *string
+	Position      *string
+	IsPrimary     bool
+	IsActive      bool
+	CreatedAt     time.Time
 }
 
 // ─── Sales Table Price ────────────────────────────────────────────────────────
@@ -689,4 +688,3 @@ type SalesTablePrice struct {
 	ItemMask      *string
 	CreatedAt     time.Time
 }
-

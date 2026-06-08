@@ -33,10 +33,10 @@ func TestDimensions(t *testing.T) {
 
 func TestWeight(t *testing.T) {
 	cases := []struct {
-		name              string
-		gross, net        float64
-		unit              string
-		wantValid         bool
+		name       string
+		gross, net float64
+		unit       string
+		wantValid  bool
 	}{
 		{"valid", 10, 8, "KG", true},
 		{"empty unit", 10, 8, "", false},

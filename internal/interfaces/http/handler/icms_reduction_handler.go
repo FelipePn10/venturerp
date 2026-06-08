@@ -5,15 +5,15 @@ import (
 	"net/http"
 	"strconv"
 
-	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
+	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/go-chi/chi/v5"
 )
 
 type ICMSReductionHandler struct {
-	reductionUC  *fiscal_params_uc.ICMSReductionSubstitutionUseCase
-	additionalUC *fiscal_params_uc.ICMSSummaryAdditionalUseCase
-	stRestUC     *fiscal_params_uc.ICMSSTRestitutionUseCase
+	reductionUC   *fiscal_params_uc.ICMSReductionSubstitutionUseCase
+	additionalUC  *fiscal_params_uc.ICMSSummaryAdditionalUseCase
+	stRestUC      *fiscal_params_uc.ICMSSTRestitutionUseCase
 	specialNoteUC *fiscal_params_uc.SpecialAdjustmentNoteUseCase
 }
 

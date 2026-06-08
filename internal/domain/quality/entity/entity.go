@@ -13,9 +13,9 @@ type NCSeverity string
 type NCDisposition string
 
 const (
-	PointReceiving  InspectionPointType = "RECEBIMENTO"
-	PointInProcess  InspectionPointType = "PROCESSO"
-	PointShipping   InspectionPointType = "EXPEDICAO"
+	PointReceiving InspectionPointType = "RECEBIMENTO"
+	PointInProcess InspectionPointType = "PROCESSO"
+	PointShipping  InspectionPointType = "EXPEDICAO"
 
 	ResultApproved    InspectionResult = "APROVADO"
 	ResultRejected    InspectionResult = "REJEITADO"
@@ -61,21 +61,21 @@ type InspectionCharacteristic struct {
 }
 
 type QualityRecord struct {
-	ID                 int64
-	PlanID             int64
-	ProductionOrderID  *int64
-	Lot                *string
-	ItemCode           int64
-	InspectedQty       float64
-	ApprovedQty        float64
-	RejectedQty        float64
-	Result             InspectionResult
-	InspectorID        *int64
-	InspectedAt        time.Time
-	Notes              *string
-	Measurements       []QualityMeasurement
-	CreatedAt          time.Time
-	CreatedBy          uuid.UUID
+	ID                int64
+	PlanID            int64
+	ProductionOrderID *int64
+	Lot               *string
+	ItemCode          int64
+	InspectedQty      float64
+	ApprovedQty       float64
+	RejectedQty       float64
+	Result            InspectionResult
+	InspectorID       *int64
+	InspectedAt       time.Time
+	Notes             *string
+	Measurements      []QualityMeasurement
+	CreatedAt         time.Time
+	CreatedBy         uuid.UUID
 }
 
 type QualityMeasurement struct {
@@ -87,24 +87,24 @@ type QualityMeasurement struct {
 }
 
 type NonConformance struct {
-	ID                 int64
-	Code               int64
-	QualityRecordID    *int64
-	ProductionOrderID  *int64
-	ItemCode           int64
-	Lot                *string
-	NonConformQty      float64
-	Description        string
-	Severity           NCSeverity
-	RootCause          *string
-	CorrectiveAction   *string
-	Disposition        *NCDisposition
-	DisposedAt         *time.Time
-	DisposedBy         *uuid.UUID
-	IsOpen             bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	CreatedBy          uuid.UUID
+	ID                int64
+	Code              int64
+	QualityRecordID   *int64
+	ProductionOrderID *int64
+	ItemCode          int64
+	Lot               *string
+	NonConformQty     float64
+	Description       string
+	Severity          NCSeverity
+	RootCause         *string
+	CorrectiveAction  *string
+	Disposition       *NCDisposition
+	DisposedAt        *time.Time
+	DisposedBy        *uuid.UUID
+	IsOpen            bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	CreatedBy         uuid.UUID
 }
 
 func NewInspectionPlan(itemCode int64, pointType InspectionPointType, description string,

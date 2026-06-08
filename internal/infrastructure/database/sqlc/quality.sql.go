@@ -305,7 +305,11 @@ func (q *Queries) NextNCCode(ctx context.Context) (int64, error) {
 	return n, row.Scan(&n)
 }
 
-func scanNCs(rows interface{ Next() bool; Scan(...any) error; Err() error }) ([]NonConformance, error) {
+func scanNCs(rows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}) ([]NonConformance, error) {
 	var items []NonConformance
 	for rows.Next() {
 		var i NonConformance

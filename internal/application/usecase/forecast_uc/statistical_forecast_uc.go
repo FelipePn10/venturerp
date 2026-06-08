@@ -7,10 +7,10 @@ import (
 
 // Model names
 const (
-	ModelMovingAverage  = "MOVING_AVERAGE"
-	ModelExpSmoothing   = "EXP_SMOOTHING"
-	ModelHoltWinters    = "HOLT_WINTERS"
-	ModelAuto           = "AUTO"
+	ModelMovingAverage = "MOVING_AVERAGE"
+	ModelExpSmoothing  = "EXP_SMOOTHING"
+	ModelHoltWinters   = "HOLT_WINTERS"
+	ModelAuto          = "AUTO"
 )
 
 // DataPoint is a single historical observation.
@@ -22,25 +22,25 @@ type DataPoint struct {
 // ForecastResult contains the chosen model's forecasts and its MAPE.
 type ForecastResult struct {
 	Model     string    `json:"model"`
-	MAPE      float64   `json:"mape_pct"` // Mean Absolute Percentage Error
+	MAPE      float64   `json:"mape_pct"`  // Mean Absolute Percentage Error
 	Forecasts []float64 `json:"forecasts"` // qty per future period
 }
 
 type StatisticalForecastDTO struct {
-	ItemCode    int64       `json:"item_code"`
-	History     []DataPoint `json:"history"`     // historical demand, ordered by period asc
-	Periods     int         `json:"periods"`     // how many future periods to forecast
-	Model       string      `json:"model"`       // AUTO | MOVING_AVERAGE | EXP_SMOOTHING | HOLT_WINTERS
-	MAWindow    int         `json:"ma_window"`   // for moving average (default 3)
-	Alpha       float64     `json:"alpha"`       // for exp smoothing / HW (0..1, default 0.3)
-	Beta        float64     `json:"beta"`        // for HW trend (0..1, default 0.1)
-	Gamma       float64     `json:"gamma"`       // for HW season (0..1, default 0.1)
-	SeasonLen   int         `json:"season_len"`  // HW season length (default 12)
+	ItemCode  int64       `json:"item_code"`
+	History   []DataPoint `json:"history"`    // historical demand, ordered by period asc
+	Periods   int         `json:"periods"`    // how many future periods to forecast
+	Model     string      `json:"model"`      // AUTO | MOVING_AVERAGE | EXP_SMOOTHING | HOLT_WINTERS
+	MAWindow  int         `json:"ma_window"`  // for moving average (default 3)
+	Alpha     float64     `json:"alpha"`      // for exp smoothing / HW (0..1, default 0.3)
+	Beta      float64     `json:"beta"`       // for HW trend (0..1, default 0.1)
+	Gamma     float64     `json:"gamma"`      // for HW season (0..1, default 0.1)
+	SeasonLen int         `json:"season_len"` // HW season length (default 12)
 }
 
 type StatisticalForecastResponse struct {
-	ItemCode int64          `json:"item_code"`
-	Result   ForecastResult `json:"result"`
+	ItemCode int64            `json:"item_code"`
+	Result   ForecastResult   `json:"result"`
 	All      []ForecastResult `json:"all_models,omitempty"` // all model results for AUTO
 }
 

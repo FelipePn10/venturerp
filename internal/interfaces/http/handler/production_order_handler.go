@@ -13,18 +13,18 @@ import (
 
 type ProductionOrderHandler struct {
 	*security.BaseHandler
-	createUC         *production_order_uc.CreateProductionOrderUseCase
-	getByCodeUC      *production_order_uc.GetProductionOrderUseCase
-	listUC           *production_order_uc.ListProductionOrdersUseCase
-	startUC          *production_order_uc.StartProductionOrderUseCase
-	addAppointmentUC *production_order_uc.AddAppointmentUseCase
-	addConsumptionUC *production_order_uc.AddConsumptionUseCase
-	completeUC       *production_order_uc.CompleteProductionOrderUseCase
-	closeUC          *production_order_uc.CloseProductionOrderUseCase
-	cancelUC         *production_order_uc.CancelProductionOrderUseCase
+	createUC          *production_order_uc.CreateProductionOrderUseCase
+	getByCodeUC       *production_order_uc.GetProductionOrderUseCase
+	listUC            *production_order_uc.ListProductionOrdersUseCase
+	startUC           *production_order_uc.StartProductionOrderUseCase
+	addAppointmentUC  *production_order_uc.AddAppointmentUseCase
+	addConsumptionUC  *production_order_uc.AddConsumptionUseCase
+	completeUC        *production_order_uc.CompleteProductionOrderUseCase
+	closeUC           *production_order_uc.CloseProductionOrderUseCase
+	cancelUC          *production_order_uc.CancelProductionOrderUseCase
 	getAppointmentsUC *production_order_uc.GetAppointmentsUseCase
 	getConsumptionsUC *production_order_uc.GetConsumptionsUseCase
-	orderOpsUC       *production_order_uc.OrderOperationsUseCase
+	orderOpsUC        *production_order_uc.OrderOperationsUseCase
 }
 
 func (h *ProductionOrderHandler) Create(w http.ResponseWriter, r *http.Request) {

@@ -14,8 +14,8 @@ type GetSaldoContasUseCase struct {
 }
 
 type SaldoContasResponse struct {
-	SaldoConsolidado float64                        `json:"saldo_consolidado"`
-	Contas           []SaldoContaItem               `json:"contas"`
+	SaldoConsolidado float64          `json:"saldo_consolidado"`
+	Contas           []SaldoContaItem `json:"contas"`
 }
 
 type SaldoContaItem struct {

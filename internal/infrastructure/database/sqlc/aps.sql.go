@@ -81,7 +81,11 @@ func (q *Queries) DeleteSequencesByOrder(ctx context.Context, orderID int64) err
 	return err
 }
 
-func scanSequences(rows interface{ Next() bool; Scan(...any) error; Err() error }) ([]DBProductionSequence, error) {
+func scanSequences(rows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}) ([]DBProductionSequence, error) {
 	var items []DBProductionSequence
 	for rows.Next() {
 		var i DBProductionSequence

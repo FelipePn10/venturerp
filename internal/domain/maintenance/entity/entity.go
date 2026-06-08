@@ -23,20 +23,20 @@ const (
 )
 
 type MaintenancePlan struct {
-	ID               int64
-	Code             int64
-	MachineID        int64
-	WorkCenterID     *int64
-	Description      string
-	Frequency        Frequency
-	FrequencyDays    int
-	EstimatedHours   float64
-	LastExecutedAt   *time.Time
-	NextScheduledAt  *time.Time
-	IsActive         bool
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	CreatedBy        uuid.UUID
+	ID              int64
+	Code            int64
+	MachineID       int64
+	WorkCenterID    *int64
+	Description     string
+	Frequency       Frequency
+	FrequencyDays   int
+	EstimatedHours  float64
+	LastExecutedAt  *time.Time
+	NextScheduledAt *time.Time
+	IsActive        bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatedBy       uuid.UUID
 }
 
 type MaintenanceOrder struct {
