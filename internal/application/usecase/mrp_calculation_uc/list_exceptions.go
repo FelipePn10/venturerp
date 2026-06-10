@@ -3,9 +3,9 @@ package mrp_calculation_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 )
 
@@ -17,9 +17,13 @@ type ListMRPExceptionsUseCase struct {
 func (uc *ListMRPExceptionsUseCase) Execute(
 	ctx context.Context,
 	planCode int64,
-) ([]*entity.MRPExceptionMessage, error) {
+) ([]*response.MRPExceptionMessageResponse, error) {
 	if !uc.Auth.CanListMRPExceptions(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListExceptionsByPlan(ctx, planCode)
+	list, err := uc.Repo.ListExceptionsByPlan(ctx, planCode)
+	if err != nil {
+		return nil, err
+	}
+	return toMRPExceptionResponses(list), nil
 }

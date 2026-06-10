@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -19,7 +20,7 @@ type CreateSalesOrderItemUseCase struct {
 func (uc *CreateSalesOrderItemUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateSalesOrderItemDTO,
-) (*entity.SalesOrderItem, error) {
+) (*response.SalesOrderItemResponse, error) {
 	if !uc.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -72,7 +73,11 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	item.UnitWeightNet = dto.UnitWeightNet
 	item.UnitWeightGross = dto.UnitWeightGross
 
-	return uc.Repo.CreateItem(ctx, item)
+	created, err := uc.Repo.CreateItem(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderItemResponse(created), nil
 }
 
 type UpdateSalesOrderItemUseCase struct {
@@ -83,7 +88,7 @@ type UpdateSalesOrderItemUseCase struct {
 func (uc *UpdateSalesOrderItemUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdateSalesOrderItemDTO,
-) (*entity.SalesOrderItem, error) {
+) (*response.SalesOrderItemResponse, error) {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -137,7 +142,11 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 	item.TotalNetWithIPI = item.TotalGross + ipiAmt
 	item.TotalST = item.TotalGross * dto.STPct / 100
 
-	return uc.Repo.UpdateItem(ctx, item)
+	updated, err := uc.Repo.UpdateItem(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderItemResponse(updated), nil
 }
 
 type ListSalesOrderItemsUseCase struct {
@@ -145,11 +154,15 @@ type ListSalesOrderItemsUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListSalesOrderItemsUseCase) Execute(ctx context.Context, salesOrderCode int64) ([]*entity.SalesOrderItem, error) {
+func (uc *ListSalesOrderItemsUseCase) Execute(ctx context.Context, salesOrderCode int64) ([]*response.SalesOrderItemResponse, error) {
 	if !uc.Auth.CanGetSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListItems(ctx, salesOrderCode)
+	items, err := uc.Repo.ListItems(ctx, salesOrderCode)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderItemResponsePtrs(items), nil
 }
 
 type CancelSalesOrderItemUseCase struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
@@ -18,7 +19,7 @@ type UpdateMachineUseCase struct {
 func (uc *UpdateMachineUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdateMachineDTO,
-) (*entity.Machine, error) {
+) (*response.MachineResponse, error) {
 	if !uc.Auth.CanUpdateMachine(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -35,5 +36,9 @@ func (uc *UpdateMachineUseCase) Execute(
 		EfficiencyRate:  dto.EfficiencyRate,
 	}
 
-	return uc.Repo.Update(ctx, m)
+	updated, err := uc.Repo.Update(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineResponse(updated), nil
 }

@@ -342,7 +342,7 @@ func TestApuracaoLine_UnknownLineTypeDefaultsToOutros(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.LineType != fiscalEntity.LineTypeOutros {
+	if d.LineType != string(fiscalEntity.LineTypeOutros) {
 		t.Errorf("expected LineTypeOutros, got %v", d.LineType)
 	}
 }

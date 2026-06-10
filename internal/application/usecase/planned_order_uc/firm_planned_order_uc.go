@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -22,7 +23,7 @@ type FirmPlannedOrderUseCase struct {
 	ProdOrderRepo productionrepo.ProductionOrderRepository
 }
 
-func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.FirmOrderDTO) (*entity.PlannedOrder, error) {
+func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
 	if !uc.Auth.CanReleaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -47,7 +48,7 @@ func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.Firm
 		}
 	}
 
-	return order, nil
+	return toPlannedOrderResponse(order), nil
 }
 
 // createProductionOrder builds the OF from the firmed planned order, mirroring

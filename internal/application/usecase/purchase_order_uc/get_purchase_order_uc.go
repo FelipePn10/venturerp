@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
@@ -14,7 +15,7 @@ type GetPurchaseOrderUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *GetPurchaseOrderUseCase) Execute(ctx context.Context, code int64) (*entity.PurchaseOrder, error) {
+func (uc *GetPurchaseOrderUseCase) Execute(ctx context.Context, code int64) (*response.PurchaseOrderResponse, error) {
 	if !uc.Auth.CanGetPurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -27,7 +28,7 @@ func (uc *GetPurchaseOrderUseCase) Execute(ctx context.Context, code int64) (*en
 		return nil, err
 	}
 	o.Items = items
-	return o, nil
+	return toPurchaseOrderResponse(o), nil
 }
 
 type ListPurchaseOrdersUseCase struct {
@@ -35,11 +36,15 @@ type ListPurchaseOrdersUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListPurchaseOrdersUseCase) Execute(ctx context.Context) ([]*entity.PurchaseOrder, error) {
+func (uc *ListPurchaseOrdersUseCase) Execute(ctx context.Context) ([]*response.PurchaseOrderResponse, error) {
 	if !uc.Auth.CanListPurchaseOrders(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.List(ctx)
+	orders, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toPurchaseOrderResponses(orders), nil
 }
 
 type ListPurchaseOrdersBySupplierUseCase struct {
@@ -47,11 +52,15 @@ type ListPurchaseOrdersBySupplierUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListPurchaseOrdersBySupplierUseCase) Execute(ctx context.Context, supplierCode int64) ([]*entity.PurchaseOrder, error) {
+func (uc *ListPurchaseOrdersBySupplierUseCase) Execute(ctx context.Context, supplierCode int64) ([]*response.PurchaseOrderResponse, error) {
 	if !uc.Auth.CanListPurchaseOrders(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListBySupplier(ctx, supplierCode)
+	orders, err := uc.Repo.ListBySupplier(ctx, supplierCode)
+	if err != nil {
+		return nil, err
+	}
+	return toPurchaseOrderResponses(orders), nil
 }
 
 type ListPurchaseOrdersByStatusUseCase struct {
@@ -59,9 +68,13 @@ type ListPurchaseOrdersByStatusUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListPurchaseOrdersByStatusUseCase) Execute(ctx context.Context, status string) ([]*entity.PurchaseOrder, error) {
+func (uc *ListPurchaseOrdersByStatusUseCase) Execute(ctx context.Context, status string) ([]*response.PurchaseOrderResponse, error) {
 	if !uc.Auth.CanListPurchaseOrders(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListByStatus(ctx, entity.PurchaseOrderStatus(status))
+	orders, err := uc.Repo.ListByStatus(ctx, entity.PurchaseOrderStatus(status))
+	if err != nil {
+		return nil, err
+	}
+	return toPurchaseOrderResponses(orders), nil
 }

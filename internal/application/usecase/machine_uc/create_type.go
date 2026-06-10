@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
@@ -15,7 +16,7 @@ type CreateMachineTypeUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.CreateMachineTypeDTO, userID string) (*entity.MachineType, error) {
+func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.CreateMachineTypeDTO, userID string) (*response.MachineTypeResponse, error) {
 	if !uc.Auth.CanCreateType(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -28,5 +29,9 @@ func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.Cre
 		IsActive:         dto.IsActive,
 		CreatedBy:        dto.CreatedBy,
 	}
-	return uc.Repo.CreateType(ctx, mt)
+	created, err := uc.Repo.CreateType(ctx, mt)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineTypeResponse(created), nil
 }

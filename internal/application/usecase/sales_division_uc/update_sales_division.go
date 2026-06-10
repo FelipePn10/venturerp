@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
@@ -19,7 +20,7 @@ func (uc *UpdateSalesDivisionUseCase) Execute(
 	ctx context.Context,
 	code int64,
 	dto request.UpdateSalesDivisionDTO,
-) (*entity.SalesDivision, error) {
+) (*response.SalesDivisionResponse, error) {
 	if !uc.Auth.CanUpdateSalesDivision(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -40,5 +41,9 @@ func (uc *UpdateSalesDivisionUseCase) Execute(
 		ParentDivisionID:        dto.ParentDivisionID,
 	}
 
-	return uc.Repo.Update(ctx, sd)
+	updated, err := uc.Repo.Update(ctx, sd)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesDivisionResponse(updated), nil
 }

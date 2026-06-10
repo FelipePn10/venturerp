@@ -3,6 +3,7 @@ package enterprise_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/enterprise/entity"
@@ -27,7 +28,7 @@ func NewCreateEnterpriseUseCase(
 func (uc *CreateEnterpriseUseCase) Execute(
 	ctx context.Context,
 	enterprise *entity.Enterprise,
-) (*entity.Enterprise, error) {
+) (*response.EnterpriseResponse, error) {
 	if !uc.Auth.CanCreateEnterprise(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -37,5 +38,5 @@ func (uc *CreateEnterpriseUseCase) Execute(
 		return nil, err
 	}
 
-	return created, nil
+	return toEnterpriseResponse(created), nil
 }

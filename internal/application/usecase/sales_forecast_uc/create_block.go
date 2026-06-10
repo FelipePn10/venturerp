@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/entity"
@@ -19,7 +20,7 @@ type CreateForecastBlockUseCase struct {
 func (uc *CreateForecastBlockUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateForecastBlockDTO,
-) (*entity.SalesForecastBlock, error) {
+) (*response.SalesForecastBlockResponse, error) {
 	if !uc.Auth.CanCreateForecastBlock(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -43,5 +44,9 @@ func (uc *CreateForecastBlockUseCase) Execute(
 		return nil, err
 	}
 
-	return uc.Repo.CreateBlock(ctx, block)
+	created, err := uc.Repo.CreateBlock(ctx, block)
+	if err != nil {
+		return nil, err
+	}
+	return toForecastBlockResponse(created), nil
 }

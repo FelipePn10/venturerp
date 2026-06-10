@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/overhead_allocation/entity"
@@ -20,7 +21,7 @@ type CreateOverheadAllocationUseCase struct {
 func (uc *CreateOverheadAllocationUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateOverheadAllocationDTO,
-) (*entity.OverheadAllocation, error) {
+) (*response.OverheadAllocationResponse, error) {
 	if !uc.Auth.CanCreateOverheadAllocation(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -55,5 +56,5 @@ func (uc *CreateOverheadAllocationUseCase) Execute(
 		}
 	}
 
-	return result, nil
+	return toOverheadAllocationResponse(result), nil
 }

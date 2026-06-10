@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -16,7 +17,7 @@ type CreateFiscalEntryUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.CreateFiscalEntryDTO) (*entity.FiscalEntry, error) {
+func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.CreateFiscalEntryDTO) (*response.FiscalEntryResponse, error) {
 	if !uc.Auth.CanCreateFiscalEntry(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -99,5 +100,5 @@ func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.Cre
 	items, _ := uc.Repo.GetEntryItems(ctx, created.ID)
 	created.Itens = items
 
-	return created, nil
+	return toFiscalEntryResponse(created), nil
 }

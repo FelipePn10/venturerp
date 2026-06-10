@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/questions/entity"
@@ -28,7 +29,7 @@ func NewCreateQuestion(
 func (uc *CreateQuestion) Execute(
 	ctx context.Context,
 	dto request.CreateQuestionRequestDTO,
-) (*entity.Question, error) {
+) (*response.QuestionResponse, error) {
 	if !uc.Auth.CanCreateQuestion(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -53,5 +54,5 @@ func (uc *CreateQuestion) Execute(
 	if err != nil {
 		return nil, err
 	}
-	return crate, nil
+	return toQuestionResponse(crate), nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 )
@@ -13,7 +14,7 @@ type TaxParamUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *TaxParamUseCase) Create(ctx context.Context, dto request.CreateTaxParamDTO) (*entity.ICMSIPITaxParam, error) {
+func (uc *TaxParamUseCase) Create(ctx context.Context, dto request.CreateTaxParamDTO) (*response.TaxParamResponse, error) {
 	if dto.UF == "" {
 		return nil, errors.New("uf is required")
 	}
@@ -25,10 +26,14 @@ func (uc *TaxParamUseCase) Create(ctx context.Context, dto request.CreateTaxPara
 	}
 	p := dtoToTaxParamEntity(dto)
 	p.IsActive = true
-	return uc.Repo.CreateTaxParam(ctx, p)
+	created, err := uc.Repo.CreateTaxParam(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxParamResponse(created), nil
 }
 
-func (uc *TaxParamUseCase) Update(ctx context.Context, dto request.UpdateTaxParamDTO) (*entity.ICMSIPITaxParam, error) {
+func (uc *TaxParamUseCase) Update(ctx context.Context, dto request.UpdateTaxParamDTO) (*response.TaxParamResponse, error) {
 	if dto.UF == "" {
 		return nil, errors.New("uf is required")
 	}
@@ -36,27 +41,51 @@ func (uc *TaxParamUseCase) Update(ctx context.Context, dto request.UpdateTaxPara
 	p := dtoToTaxParamEntity(createDTO)
 	p.ID = dto.ID
 	p.IsActive = dto.IsActive
-	return uc.Repo.UpdateTaxParam(ctx, p)
+	updated, err := uc.Repo.UpdateTaxParam(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxParamResponse(updated), nil
 }
 
-func (uc *TaxParamUseCase) GetByID(ctx context.Context, id int64) (*entity.ICMSIPITaxParam, error) {
-	return uc.Repo.GetTaxParamByID(ctx, id)
+func (uc *TaxParamUseCase) GetByID(ctx context.Context, id int64) (*response.TaxParamResponse, error) {
+	p, err := uc.Repo.GetTaxParamByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxParamResponse(p), nil
 }
 
-func (uc *TaxParamUseCase) List(ctx context.Context, onlyActive bool) ([]*entity.ICMSIPITaxParam, error) {
-	return uc.Repo.ListTaxParams(ctx, onlyActive)
+func (uc *TaxParamUseCase) List(ctx context.Context, onlyActive bool) ([]*response.TaxParamResponse, error) {
+	list, err := uc.Repo.ListTaxParams(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxParamResponses(list), nil
 }
 
-func (uc *TaxParamUseCase) ListByUF(ctx context.Context, uf string, onlyActive bool) ([]*entity.ICMSIPITaxParam, error) {
-	return uc.Repo.ListTaxParamsByUF(ctx, uf, onlyActive)
+func (uc *TaxParamUseCase) ListByUF(ctx context.Context, uf string, onlyActive bool) ([]*response.TaxParamResponse, error) {
+	list, err := uc.Repo.ListTaxParamsByUF(ctx, uf, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxParamResponses(list), nil
 }
 
-func (uc *TaxParamUseCase) ListByItem(ctx context.Context, itemCode int64, onlyActive bool) ([]*entity.ICMSIPITaxParam, error) {
-	return uc.Repo.ListTaxParamsByItem(ctx, itemCode, onlyActive)
+func (uc *TaxParamUseCase) ListByItem(ctx context.Context, itemCode int64, onlyActive bool) ([]*response.TaxParamResponse, error) {
+	list, err := uc.Repo.ListTaxParamsByItem(ctx, itemCode, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxParamResponses(list), nil
 }
 
-func (uc *TaxParamUseCase) ListByNCM(ctx context.Context, ncmCode string, onlyActive bool) ([]*entity.ICMSIPITaxParam, error) {
-	return uc.Repo.ListTaxParamsByNCM(ctx, ncmCode, onlyActive)
+func (uc *TaxParamUseCase) ListByNCM(ctx context.Context, ncmCode string, onlyActive bool) ([]*response.TaxParamResponse, error) {
+	list, err := uc.Repo.ListTaxParamsByNCM(ctx, ncmCode, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxParamResponses(list), nil
 }
 
 func toReductionTarget(s *string) *entity.IcmsReductionTarget {

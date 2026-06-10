@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
 )
 
@@ -18,10 +18,14 @@ type ListIndependentDemandFromDateUseCase struct {
 func (uc *ListIndependentDemandFromDateUseCase) Execute(
 	ctx context.Context,
 	date time.Time,
-) ([]*entity.IndependentDemand, error) {
+) ([]*response.IndependentDemandResponse, error) {
 	if !uc.Auth.CanViewIndependentDemand(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	return uc.Repo.ListFromDate(ctx, date)
+	list, err := uc.Repo.ListFromDate(ctx, date)
+	if err != nil {
+		return nil, err
+	}
+	return toIndependentDemandResponses(list), nil
 }

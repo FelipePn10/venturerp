@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	financialEntity "github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -33,7 +34,7 @@ type AuthorizeFiscalExitUseCase struct {
 	SalesOrderRepo salesrepo.SalesOrderRepository
 }
 
-func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*entity.FiscalExit, error) {
+func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*response.FiscalExitResponse, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -177,7 +178,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*e
 	// via the returned exit being authorized regardless.
 	uc.settleStockAndOrder(ctx, exit, items, userID)
 
-	return updated, nil
+	return toFiscalExitResponse(updated), nil
 }
 
 // settleStockAndOrder posts the OUT movements for the exit items, consumes the

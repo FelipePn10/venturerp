@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/location/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/location/repository"
 )
@@ -18,7 +19,7 @@ func New(repo repository.LocationRepository) *LocationUseCase {
 
 // ─── Countries ────────────────────────────────────────────────────────────────
 
-func (uc *LocationUseCase) CreateCountry(ctx context.Context, dto request.CreateCountryDTO) (*entity.Country, error) {
+func (uc *LocationUseCase) CreateCountry(ctx context.Context, dto request.CreateCountryDTO) (*response.CountryResponse, error) {
 	c := &entity.Country{
 		Sigla:     dto.Sigla,
 		Name:      dto.Name,
@@ -27,10 +28,14 @@ func (uc *LocationUseCase) CreateCountry(ctx context.Context, dto request.Create
 		SisComex:  dto.SisComex,
 		IsActive:  true,
 	}
-	return uc.Repo.CreateCountry(ctx, c)
+	created, err := uc.Repo.CreateCountry(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toCountryResponse(created), nil
 }
 
-func (uc *LocationUseCase) UpdateCountry(ctx context.Context, dto request.UpdateCountryDTO) (*entity.Country, error) {
+func (uc *LocationUseCase) UpdateCountry(ctx context.Context, dto request.UpdateCountryDTO) (*response.CountryResponse, error) {
 	c := &entity.Country{
 		ID:        dto.ID,
 		Sigla:     dto.Sigla,
@@ -40,20 +45,32 @@ func (uc *LocationUseCase) UpdateCountry(ctx context.Context, dto request.Update
 		SisComex:  dto.SisComex,
 		IsActive:  dto.IsActive,
 	}
-	return uc.Repo.UpdateCountry(ctx, c)
+	updated, err := uc.Repo.UpdateCountry(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toCountryResponse(updated), nil
 }
 
-func (uc *LocationUseCase) GetCountryBySigla(ctx context.Context, sigla string) (*entity.Country, error) {
-	return uc.Repo.GetCountryBySigla(ctx, sigla)
+func (uc *LocationUseCase) GetCountryBySigla(ctx context.Context, sigla string) (*response.CountryResponse, error) {
+	c, err := uc.Repo.GetCountryBySigla(ctx, sigla)
+	if err != nil {
+		return nil, err
+	}
+	return toCountryResponse(c), nil
 }
 
-func (uc *LocationUseCase) ListCountries(ctx context.Context, onlyActive bool) ([]*entity.Country, error) {
-	return uc.Repo.ListCountries(ctx, onlyActive)
+func (uc *LocationUseCase) ListCountries(ctx context.Context, onlyActive bool) ([]*response.CountryResponse, error) {
+	list, err := uc.Repo.ListCountries(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toCountryResponses(list), nil
 }
 
 // ─── UFs ──────────────────────────────────────────────────────────────────────
 
-func (uc *LocationUseCase) CreateUF(ctx context.Context, dto request.CreateUFDTO) (*entity.UF, error) {
+func (uc *LocationUseCase) CreateUF(ctx context.Context, dto request.CreateUFDTO) (*response.UFResponse, error) {
 	country, err := uc.Repo.GetCountryBySigla(ctx, dto.CountrySigla)
 	if err != nil {
 		return nil, err
@@ -65,10 +82,14 @@ func (uc *LocationUseCase) CreateUF(ctx context.Context, dto request.CreateUFDTO
 		IBGECode:  dto.IBGECode,
 		IsActive:  true,
 	}
-	return uc.Repo.CreateUF(ctx, u)
+	created, err := uc.Repo.CreateUF(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+	return toUFResponse(created), nil
 }
 
-func (uc *LocationUseCase) UpdateUF(ctx context.Context, dto request.UpdateUFDTO) (*entity.UF, error) {
+func (uc *LocationUseCase) UpdateUF(ctx context.Context, dto request.UpdateUFDTO) (*response.UFResponse, error) {
 	u := &entity.UF{
 		ID:       dto.ID,
 		Sigla:    dto.Sigla,
@@ -76,17 +97,33 @@ func (uc *LocationUseCase) UpdateUF(ctx context.Context, dto request.UpdateUFDTO
 		IBGECode: dto.IBGECode,
 		IsActive: dto.IsActive,
 	}
-	return uc.Repo.UpdateUF(ctx, u)
+	updated, err := uc.Repo.UpdateUF(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+	return toUFResponse(updated), nil
 }
 
-func (uc *LocationUseCase) GetUFBySigla(ctx context.Context, sigla string) (*entity.UF, error) {
-	return uc.Repo.GetUFBySigla(ctx, sigla)
+func (uc *LocationUseCase) GetUFBySigla(ctx context.Context, sigla string) (*response.UFResponse, error) {
+	u, err := uc.Repo.GetUFBySigla(ctx, sigla)
+	if err != nil {
+		return nil, err
+	}
+	return toUFResponse(u), nil
 }
 
-func (uc *LocationUseCase) ListUFs(ctx context.Context, onlyActive bool) ([]*entity.UF, error) {
-	return uc.Repo.ListUFs(ctx, onlyActive)
+func (uc *LocationUseCase) ListUFs(ctx context.Context, onlyActive bool) ([]*response.UFResponse, error) {
+	list, err := uc.Repo.ListUFs(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toUFResponses(list), nil
 }
 
-func (uc *LocationUseCase) ListUFsByCountry(ctx context.Context, countrySigla string, onlyActive bool) ([]*entity.UF, error) {
-	return uc.Repo.ListUFsByCountry(ctx, countrySigla, onlyActive)
+func (uc *LocationUseCase) ListUFsByCountry(ctx context.Context, countrySigla string, onlyActive bool) ([]*response.UFResponse, error) {
+	list, err := uc.Repo.ListUFsByCountry(ctx, countrySigla, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toUFResponses(list), nil
 }

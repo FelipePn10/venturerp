@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -17,7 +18,7 @@ type CreateCTeUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CreateCTeUseCase) Execute(ctx context.Context, dto request.CreateCTeDTO) (*entity.FiscalCTe, error) {
+func (uc *CreateCTeUseCase) Execute(ctx context.Context, dto request.CreateCTeDTO) (*response.FiscalCTeResponse, error) {
 	if !uc.Auth.CanCreateFiscalEntry(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -73,5 +74,9 @@ func (uc *CreateCTeUseCase) Execute(ctx context.Context, dto request.CreateCTeDT
 		CreatedBy:           userID,
 	}
 
-	return uc.Repo.CreateCTe(ctx, cte)
+	created, err := uc.Repo.CreateCTe(ctx, cte)
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalCTeResponse(created), nil
 }

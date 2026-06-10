@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
@@ -19,7 +20,7 @@ type UpdateIndependentDemandUseCase struct {
 func (uc *UpdateIndependentDemandUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdateIndependentDemandDTO,
-) (*entity.IndependentDemand, error) {
+) (*response.IndependentDemandResponse, error) {
 	if !uc.Auth.CanUpdateIndependentDemand(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -34,5 +35,9 @@ func (uc *UpdateIndependentDemandUseCase) Execute(
 		DemandDate:     date,
 	}
 
-	return uc.Repo.Update(ctx, demand)
+	updated, err := uc.Repo.Update(ctx, demand)
+	if err != nil {
+		return nil, err
+	}
+	return toIndependentDemandResponse(updated), nil
 }

@@ -3,6 +3,7 @@ package group_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/group/entity"
@@ -27,7 +28,7 @@ func NewCreateGroupUseCase(
 func (uc *CreateGroupUseCase) Execute(
 	ctx context.Context,
 	group *entity.Group,
-) (*entity.Group, error) {
+) (*response.GroupResponse, error) {
 	if !uc.Auth.CanCreateGroup(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -36,5 +37,5 @@ func (uc *CreateGroupUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	return created, nil
+	return toGroupResponse(created), nil
 }

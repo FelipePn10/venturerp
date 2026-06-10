@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -15,7 +16,7 @@ type UpsertNcmTaxUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *UpsertNcmTaxUseCase) Execute(ctx context.Context, dto request.UpsertNcmTaxDTO) (*entity.NcmTaxTable, error) {
+func (uc *UpsertNcmTaxUseCase) Execute(ctx context.Context, dto request.UpsertNcmTaxDTO) (*response.NcmTaxTableResponse, error) {
 	if !uc.Auth.CanManageFiscalConfig(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -30,7 +31,11 @@ func (uc *UpsertNcmTaxUseCase) Execute(ctx context.Context, dto request.UpsertNc
 		Description: dto.Description,
 		IsActive:    true,
 	}
-	return uc.Repo.UpsertNcmTax(ctx, n)
+	saved, err := uc.Repo.UpsertNcmTax(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	return toNcmTaxTableResponse(saved), nil
 }
 
 type ListNcmTaxesUseCase struct {
@@ -38,11 +43,15 @@ type ListNcmTaxesUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListNcmTaxesUseCase) Execute(ctx context.Context) ([]*entity.NcmTaxTable, error) {
+func (uc *ListNcmTaxesUseCase) Execute(ctx context.Context) ([]*response.NcmTaxTableResponse, error) {
 	if !uc.Auth.CanManageFiscalConfig(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListNcmTaxes(ctx)
+	list, err := uc.Repo.ListNcmTaxes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toNcmTaxTableResponses(list), nil
 }
 
 type DeleteNcmTaxUseCase struct {

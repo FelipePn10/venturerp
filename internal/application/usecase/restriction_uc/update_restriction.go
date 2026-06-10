@@ -3,6 +3,7 @@ package restriction_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
@@ -17,9 +18,13 @@ type UpdateRestrictionUseCase struct {
 func (uc *UpdateRestrictionUseCase) Execute(
 	ctx context.Context,
 	res *entity.Restriction,
-) (*entity.Restriction, error) {
+) (*response.RestrictionResponse, error) {
 	if !uc.Auth.CanUpdateRestriction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.Update(ctx, res)
+	updated, err := uc.Repo.Update(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+	return toRestrictionResponse(updated), nil
 }

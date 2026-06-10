@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
 )
@@ -29,7 +30,7 @@ func parseDate(s *string) *time.Time {
 	return &t
 }
 
-func (uc *PurchaseRequisitionUseCase) Create(ctx context.Context, dto request.CreatePurchaseRequisitionDTO) (*entity.PurchaseRequisition, error) {
+func (uc *PurchaseRequisitionUseCase) Create(ctx context.Context, dto request.CreatePurchaseRequisitionDTO) (*response.PurchaseRequisitionResponse, error) {
 	code, err := uc.repo.NextCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
@@ -54,7 +55,7 @@ func (uc *PurchaseRequisitionUseCase) Create(ctx context.Context, dto request.Cr
 		}
 		created.Items = append(created.Items, createdItem)
 	}
-	return created, nil
+	return toRequisitionResponse(created), nil
 }
 
 func buildItem(reqCode int64, seq int32, in request.RequisitionItemInput) *entity.PurchaseRequisitionItem {
@@ -74,7 +75,7 @@ func buildItem(reqCode int64, seq int32, in request.RequisitionItemInput) *entit
 	}
 }
 
-func (uc *PurchaseRequisitionUseCase) Get(ctx context.Context, code int64) (*entity.PurchaseRequisition, error) {
+func (uc *PurchaseRequisitionUseCase) Get(ctx context.Context, code int64) (*response.PurchaseRequisitionResponse, error) {
 	req, err := uc.repo.GetByCode(ctx, code)
 	if err != nil {
 		return nil, err
@@ -82,22 +83,34 @@ func (uc *PurchaseRequisitionUseCase) Get(ctx context.Context, code int64) (*ent
 	if req.Items, err = uc.repo.ListItems(ctx, code); err != nil {
 		return nil, err
 	}
-	return req, nil
+	return toRequisitionResponse(req), nil
 }
 
-func (uc *PurchaseRequisitionUseCase) List(ctx context.Context, onlyOpen bool) ([]*entity.PurchaseRequisition, error) {
-	return uc.repo.List(ctx, onlyOpen)
+func (uc *PurchaseRequisitionUseCase) List(ctx context.Context, onlyOpen bool) ([]*response.PurchaseRequisitionResponse, error) {
+	reqs, err := uc.repo.List(ctx, onlyOpen)
+	if err != nil {
+		return nil, err
+	}
+	return toRequisitionResponses(reqs), nil
 }
 
-func (uc *PurchaseRequisitionUseCase) AddItem(ctx context.Context, dto request.AddRequisitionItemDTO) (*entity.PurchaseRequisitionItem, error) {
+func (uc *PurchaseRequisitionUseCase) AddItem(ctx context.Context, dto request.AddRequisitionItemDTO) (*response.PurchaseRequisitionItemResponse, error) {
 	existing, err := uc.repo.ListItems(ctx, dto.RequisitionCode)
 	if err != nil {
 		return nil, err
 	}
 	item := buildItem(dto.RequisitionCode, int32(len(existing)+1), dto.RequisitionItemInput)
-	return uc.repo.AddItem(ctx, item)
+	created, err := uc.repo.AddItem(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	return toRequisitionItemResponse(created), nil
 }
 
-func (uc *PurchaseRequisitionUseCase) ListItems(ctx context.Context, code int64) ([]*entity.PurchaseRequisitionItem, error) {
-	return uc.repo.ListItems(ctx, code)
+func (uc *PurchaseRequisitionUseCase) ListItems(ctx context.Context, code int64) ([]*response.PurchaseRequisitionItemResponse, error) {
+	items, err := uc.repo.ListItems(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toRequisitionItemResponses(items), nil
 }

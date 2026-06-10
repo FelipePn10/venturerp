@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -21,7 +22,7 @@ type ApurarImpostosUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.ApurarImpostosDTO) ([]*entity.TaxAssessment, error) {
+func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.ApurarImpostosDTO) ([]*response.TaxAssessmentResponse, error) {
 	if !uc.Auth.CanApurarImpostos(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -114,7 +115,7 @@ func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.Apurar
 		results = append(results, created)
 	}
 
-	return results, nil
+	return toTaxAssessmentResponses(results), nil
 }
 
 func calculateVencimento(competencia, imposto string, config *fiscalEntity.FiscalConfig) time.Time {

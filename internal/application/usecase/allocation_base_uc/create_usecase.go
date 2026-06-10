@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/allocation_base/entity"
@@ -19,7 +20,7 @@ type CreateAllocationBaseUseCase struct {
 func (uc *CreateAllocationBaseUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateAllocationBaseDTO,
-) (*entity.AllocationBase, error) {
+) (*response.AllocationBaseResponse, error) {
 	if !uc.Auth.CreateAllocation(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -49,5 +50,5 @@ func (uc *CreateAllocationBaseUseCase) Execute(
 		}
 	}
 
-	return result, nil
+	return toAllocationBaseResponse(result), nil
 }

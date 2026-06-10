@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/questions_options/entity"
@@ -28,7 +29,7 @@ func NewCreateQuestionOptionUseCase(
 func (uc *CreateQuestionOptionUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateQuestionOptionRequest,
-) (*entity.QuestionsOptions, error) {
+) (*response.QuestionOptionResponse, error) {
 	if !uc.Auth.CanCreateQuestionOption(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -58,5 +59,5 @@ func (uc *CreateQuestionOptionUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	return create, nil
+	return toQuestionOptionResponse(create), nil
 }

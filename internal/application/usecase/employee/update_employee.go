@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/employee/entity"
@@ -19,7 +20,7 @@ type UpdateEmployeeUseCase struct {
 func (uc *UpdateEmployeeUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdateEmployeeDTO,
-) (*entity.Employee, error) {
+) (*response.EmployeeResponse, error) {
 	if !uc.Auth.CanCreateEmployee(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -40,5 +41,9 @@ func (uc *UpdateEmployeeUseCase) Execute(
 		TechnicalAssistant: dto.TechnicalAssistant,
 		Role:               dto.Role,
 	}
-	return uc.Repo.Update(ctx, e)
+	updated, err := uc.Repo.Update(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	return toEmployeeResponse(updated), nil
 }

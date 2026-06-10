@@ -3,9 +3,9 @@ package item_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 )
 
@@ -18,9 +18,13 @@ func NewListItemsWithMasksUseCase(repo repository.ItemRepository, auth ports.Aut
 	return &ListItemsWithMasksUseCase{Repo: repo, Auth: auth}
 }
 
-func (uc *ListItemsWithMasksUseCase) Execute(ctx context.Context) ([]entity.ItemWithMasks, error) {
+func (uc *ListItemsWithMasksUseCase) Execute(ctx context.Context) ([]response.ItemWithMasksResponse, error) {
 	if !uc.Auth.FindItemByCode(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListAllWithMasks(ctx)
+	list, err := uc.Repo.ListAllWithMasks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toItemWithMasksResponses(list), nil
 }

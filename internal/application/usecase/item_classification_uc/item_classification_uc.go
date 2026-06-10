@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 )
@@ -19,7 +20,7 @@ func New(repo repository.ItemClassificationRepository) *ItemClassificationUseCas
 
 // ─── Masks ────────────────────────────────────────────────────────────────────
 
-func (uc *ItemClassificationUseCase) CreateMask(ctx context.Context, dto request.CreateClassificationMaskDTO) (*entity.ItemClassificationMask, error) {
+func (uc *ItemClassificationUseCase) CreateMask(ctx context.Context, dto request.CreateClassificationMaskDTO) (*response.ItemClassificationMaskResponse, error) {
 	if dto.Mask == "" || dto.Description == "" {
 		return nil, errors.New("mask and description are required")
 	}
@@ -28,29 +29,45 @@ func (uc *ItemClassificationUseCase) CreateMask(ctx context.Context, dto request
 		Description: dto.Description,
 		IsActive:    true,
 	}
-	return uc.Repo.CreateClassificationMask(ctx, m)
+	created, err := uc.Repo.CreateClassificationMask(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	return toClassificationMaskResponse(created), nil
 }
 
-func (uc *ItemClassificationUseCase) UpdateMask(ctx context.Context, dto request.UpdateClassificationMaskDTO) (*entity.ItemClassificationMask, error) {
+func (uc *ItemClassificationUseCase) UpdateMask(ctx context.Context, dto request.UpdateClassificationMaskDTO) (*response.ItemClassificationMaskResponse, error) {
 	m := &entity.ItemClassificationMask{
 		ID:          dto.ID,
 		Description: dto.Description,
 		IsActive:    dto.IsActive,
 	}
-	return uc.Repo.UpdateClassificationMask(ctx, m)
+	updated, err := uc.Repo.UpdateClassificationMask(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	return toClassificationMaskResponse(updated), nil
 }
 
-func (uc *ItemClassificationUseCase) GetMaskByCode(ctx context.Context, code int64) (*entity.ItemClassificationMask, error) {
-	return uc.Repo.GetClassificationMaskByCode(ctx, code)
+func (uc *ItemClassificationUseCase) GetMaskByCode(ctx context.Context, code int64) (*response.ItemClassificationMaskResponse, error) {
+	m, err := uc.Repo.GetClassificationMaskByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toClassificationMaskResponse(m), nil
 }
 
-func (uc *ItemClassificationUseCase) ListMasks(ctx context.Context, onlyActive bool) ([]*entity.ItemClassificationMask, error) {
-	return uc.Repo.ListClassificationMasks(ctx, onlyActive)
+func (uc *ItemClassificationUseCase) ListMasks(ctx context.Context, onlyActive bool) ([]*response.ItemClassificationMaskResponse, error) {
+	list, err := uc.Repo.ListClassificationMasks(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toClassificationMaskResponses(list), nil
 }
 
 // ─── Classifications ──────────────────────────────────────────────────────────
 
-func (uc *ItemClassificationUseCase) CreateClassification(ctx context.Context, dto request.CreateItemClassificationDTO) (*entity.ItemClassification, error) {
+func (uc *ItemClassificationUseCase) CreateClassification(ctx context.Context, dto request.CreateItemClassificationDTO) (*response.ItemClassificationResponse, error) {
 	if dto.Code == "" || dto.Description == "" {
 		return nil, errors.New("code and description are required")
 	}
@@ -83,26 +100,46 @@ func (uc *ItemClassificationUseCase) CreateClassification(ctx context.Context, d
 		}
 	}
 
-	return uc.Repo.CreateItemClassification(ctx, c)
+	created, err := uc.Repo.CreateItemClassification(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toItemClassificationResponse(created), nil
 }
 
-func (uc *ItemClassificationUseCase) UpdateClassification(ctx context.Context, dto request.UpdateItemClassificationDTO) (*entity.ItemClassification, error) {
+func (uc *ItemClassificationUseCase) UpdateClassification(ctx context.Context, dto request.UpdateItemClassificationDTO) (*response.ItemClassificationResponse, error) {
 	c := &entity.ItemClassification{
 		ID:          dto.ID,
 		Description: dto.Description,
 		IsActive:    dto.IsActive,
 	}
-	return uc.Repo.UpdateItemClassification(ctx, c)
+	updated, err := uc.Repo.UpdateItemClassification(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toItemClassificationResponse(updated), nil
 }
 
-func (uc *ItemClassificationUseCase) GetByCode(ctx context.Context, code string, maskCode int64) (*entity.ItemClassification, error) {
-	return uc.Repo.GetItemClassificationByCode(ctx, code, maskCode)
+func (uc *ItemClassificationUseCase) GetByCode(ctx context.Context, code string, maskCode int64) (*response.ItemClassificationResponse, error) {
+	c, err := uc.Repo.GetItemClassificationByCode(ctx, code, maskCode)
+	if err != nil {
+		return nil, err
+	}
+	return toItemClassificationResponse(c), nil
 }
 
-func (uc *ItemClassificationUseCase) ListByMask(ctx context.Context, maskID int64, onlyActive bool) ([]*entity.ItemClassification, error) {
-	return uc.Repo.ListItemClassificationsByMask(ctx, maskID, onlyActive)
+func (uc *ItemClassificationUseCase) ListByMask(ctx context.Context, maskID int64, onlyActive bool) ([]*response.ItemClassificationResponse, error) {
+	list, err := uc.Repo.ListItemClassificationsByMask(ctx, maskID, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toItemClassificationResponses(list), nil
 }
 
-func (uc *ItemClassificationUseCase) ListChildren(ctx context.Context, parentID int64, onlyActive bool) ([]*entity.ItemClassification, error) {
-	return uc.Repo.ListItemClassificationChildren(ctx, parentID, onlyActive)
+func (uc *ItemClassificationUseCase) ListChildren(ctx context.Context, parentID int64, onlyActive bool) ([]*response.ItemClassificationResponse, error) {
+	list, err := uc.Repo.ListItemClassificationChildren(ctx, parentID, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toItemClassificationResponses(list), nil
 }

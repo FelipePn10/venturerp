@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
@@ -19,7 +20,7 @@ type CreateProductionPlanUseCase struct {
 func (uc *CreateProductionPlanUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateProductionPlanDTO,
-) (*entity.ProductionPlan, error) {
+) (*response.ProductionPlanResponse, error) {
 	if !uc.Auth.CanCreateProductionPlan(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -38,5 +39,9 @@ func (uc *CreateProductionPlanUseCase) Execute(
 		plan.Parameters = dto.Parameters
 	}
 
-	return uc.Repo.Create(ctx, plan)
+	created, err := uc.Repo.Create(ctx, plan)
+	if err != nil {
+		return nil, err
+	}
+	return toProductionPlanResponse(created), nil
 }

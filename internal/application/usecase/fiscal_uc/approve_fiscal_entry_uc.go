@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	financialEntity "github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -22,7 +23,7 @@ type ApproveFiscalEntryUseCase struct {
 	Auth          ports.AuthService
 }
 
-func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.ApproveFiscalEntryDTO) (*entity.FiscalEntry, error) {
+func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.ApproveFiscalEntryDTO) (*response.FiscalEntryResponse, error) {
 	if !uc.Auth.CanApproveFiscalEntry(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -104,5 +105,5 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 		}
 	}
 
-	return entry, nil
+	return toFiscalEntryResponse(entry), nil
 }

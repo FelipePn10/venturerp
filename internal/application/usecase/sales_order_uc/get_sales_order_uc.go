@@ -3,6 +3,7 @@ package sales_order_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -14,7 +15,7 @@ type GetSalesOrderUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *GetSalesOrderUseCase) Execute(ctx context.Context, code int64) (*entity.SalesOrder, error) {
+func (uc *GetSalesOrderUseCase) Execute(ctx context.Context, code int64) (*response.SalesOrderResponse, error) {
 	if !uc.Auth.CanGetSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -27,7 +28,7 @@ func (uc *GetSalesOrderUseCase) Execute(ctx context.Context, code int64) (*entit
 		return nil, err
 	}
 	o.Items = items
-	return o, nil
+	return toSalesOrderResponse(o), nil
 }
 
 type ListSalesOrdersUseCase struct {
@@ -35,11 +36,15 @@ type ListSalesOrdersUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListSalesOrdersUseCase) Execute(ctx context.Context) ([]*entity.SalesOrder, error) {
+func (uc *ListSalesOrdersUseCase) Execute(ctx context.Context) ([]*response.SalesOrderResponse, error) {
 	if !uc.Auth.CanListSalesOrders(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.List(ctx)
+	orders, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderResponses(orders), nil
 }
 
 type ListSalesOrdersByCustomerUseCase struct {
@@ -47,11 +52,15 @@ type ListSalesOrdersByCustomerUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListSalesOrdersByCustomerUseCase) Execute(ctx context.Context, customerCode int64) ([]*entity.SalesOrder, error) {
+func (uc *ListSalesOrdersByCustomerUseCase) Execute(ctx context.Context, customerCode int64) ([]*response.SalesOrderResponse, error) {
 	if !uc.Auth.CanListSalesOrders(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListByCustomer(ctx, customerCode)
+	orders, err := uc.Repo.ListByCustomer(ctx, customerCode)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderResponses(orders), nil
 }
 
 type ListSalesOrdersByStatusUseCase struct {
@@ -59,9 +68,13 @@ type ListSalesOrdersByStatusUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListSalesOrdersByStatusUseCase) Execute(ctx context.Context, status string) ([]*entity.SalesOrder, error) {
+func (uc *ListSalesOrdersByStatusUseCase) Execute(ctx context.Context, status string) ([]*response.SalesOrderResponse, error) {
 	if !uc.Auth.CanListSalesOrders(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListByStatus(ctx, entity.SalesOrderStatus(status))
+	orders, err := uc.Repo.ListByStatus(ctx, entity.SalesOrderStatus(status))
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderResponses(orders), nil
 }

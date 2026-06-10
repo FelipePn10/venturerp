@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 )
@@ -21,7 +21,7 @@ type AuthorizeCTeUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*entity.FiscalCTe, error) {
+func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response.FiscalCTeResponse, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -108,5 +108,9 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*entity.F
 		return nil, fmt.Errorf("Focus CT-e: %w", err)
 	}
 
-	return uc.Repo.UpdateCTeAuthorization(ctx, id, resp.ChaveCTe, resp.Protocolo, ref)
+	authorized, err := uc.Repo.UpdateCTeAuthorization(ctx, id, resp.ChaveCTe, resp.Protocolo, ref)
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalCTeResponse(authorized), nil
 }

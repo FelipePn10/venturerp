@@ -3,6 +3,7 @@ package item_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
@@ -27,7 +28,7 @@ func NewCreateItemUseCase(
 func (uc *CreateItemUseCase) Execute(
 	ctx context.Context,
 	item *entity.Item,
-) (*entity.Item, error) {
+) (*response.ItemResponse, error) {
 	if !uc.Auth.CanCreateItem(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -37,5 +38,5 @@ func (uc *CreateItemUseCase) Execute(
 		return nil, err
 	}
 
-	return created, nil
+	return toItemResponse(created), nil
 }

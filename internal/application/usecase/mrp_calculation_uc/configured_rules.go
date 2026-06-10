@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
@@ -18,7 +19,7 @@ type ManageConfiguredItemRulesUseCase struct {
 func (uc *ManageConfiguredItemRulesUseCase) Create(
 	ctx context.Context,
 	dto request.CreateConfiguredItemRuleDTO,
-) (*entity.ConfiguredItemRule, error) {
+) (*response.ConfiguredItemRuleResponse, error) {
 	if !uc.Auth.CanConfiguredRulesMRP(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -31,12 +32,20 @@ func (uc *ManageConfiguredItemRulesUseCase) Create(
 		Sequence:  dto.Sequence,
 		CreatedBy: dto.CreatedBy,
 	}
-	return uc.Repo.CreateConfiguredItemRule(ctx, rule)
+	created, err := uc.Repo.CreateConfiguredItemRule(ctx, rule)
+	if err != nil {
+		return nil, err
+	}
+	return toConfiguredItemRuleResponse(created), nil
 }
 
 func (uc *ManageConfiguredItemRulesUseCase) ListByItem(
 	ctx context.Context,
 	itemCode int64,
-) ([]*entity.ConfiguredItemRule, error) {
-	return uc.Repo.GetConfiguredItemRules(ctx, itemCode)
+) ([]*response.ConfiguredItemRuleResponse, error) {
+	list, err := uc.Repo.GetConfiguredItemRules(ctx, itemCode)
+	if err != nil {
+		return nil, err
+	}
+	return toConfiguredItemRuleResponses(list), nil
 }

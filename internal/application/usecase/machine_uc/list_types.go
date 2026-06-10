@@ -3,9 +3,9 @@ package machine_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 )
 
@@ -16,17 +16,25 @@ type ListMachineTypesUseCase struct {
 
 func (uc *ListMachineTypesUseCase) Execute(
 	ctx context.Context,
-) ([]*entity.MachineType, error) {
+) ([]*response.MachineTypeResponse, error) {
 	if !uc.Auth.CanListTypes(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListTypes(ctx)
+	list, err := uc.Repo.ListTypes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineTypeResponses(list), nil
 }
 
 func (uc *ListMachineTypesUseCase) GetByCodeType(
 	ctx context.Context,
 	code int64,
-) (*entity.Machine, error) {
+) (*response.MachineResponse, error) {
 
-	return uc.Repo.GetByCode(ctx, code)
+	m, err := uc.Repo.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineResponse(m), nil
 }

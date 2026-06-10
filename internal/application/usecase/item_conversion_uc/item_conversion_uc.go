@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/repository"
 )
@@ -21,16 +22,24 @@ func NewItemConversionUseCase(repo repository.ItemConversionRepository) *ItemCon
 	return &ItemConversionUseCase{repo: repo}
 }
 
-func (uc *ItemConversionUseCase) Create(ctx context.Context, dto request.CreateItemConversionDTO) (*entity.ItemUnitConversion, error) {
+func (uc *ItemConversionUseCase) Create(ctx context.Context, dto request.CreateItemConversionDTO) (*response.ItemUnitConversionResponse, error) {
 	c, err := entity.NewItemUnitConversion(dto.ItemCode, dto.FromUOM, dto.ToUOM, dto.Factor, dto.CreatedBy)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.Create(ctx, c)
+	created, err := uc.repo.Create(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toItemConversionResponse(created), nil
 }
 
-func (uc *ItemConversionUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*entity.ItemUnitConversion, error) {
-	return uc.repo.ListByItem(ctx, itemCode)
+func (uc *ItemConversionUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*response.ItemUnitConversionResponse, error) {
+	list, err := uc.repo.ListByItem(ctx, itemCode)
+	if err != nil {
+		return nil, err
+	}
+	return toItemConversionResponses(list), nil
 }
 
 func (uc *ItemConversionUseCase) Delete(ctx context.Context, id int64) error {

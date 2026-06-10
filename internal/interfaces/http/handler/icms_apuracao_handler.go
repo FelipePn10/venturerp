@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/go-chi/chi/v5"
@@ -51,7 +50,7 @@ func (h *ICMSApuracaoHandler) CreateDAPIReason(w http.ResponseWriter, r *http.Re
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusCreated, toDAPIResponse(result))
+	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *ICMSApuracaoHandler) UpdateDAPIReason(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +64,7 @@ func (h *ICMSApuracaoHandler) UpdateDAPIReason(w http.ResponseWriter, r *http.Re
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toDAPIResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) GetDAPIReason(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +74,7 @@ func (h *ICMSApuracaoHandler) GetDAPIReason(w http.ResponseWriter, r *http.Reque
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toDAPIResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) ListDAPIReasons(w http.ResponseWriter, r *http.Request) {
@@ -85,18 +84,7 @@ func (h *ICMSApuracaoHandler) ListDAPIReasons(w http.ResponseWriter, r *http.Req
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := make([]*response.DAPITransferReasonResponse, 0, len(result))
-	for _, d := range result {
-		out = append(out, toDAPIResponse(d))
-	}
-	jsonResponse(w, http.StatusOK, out)
-}
-
-func toDAPIResponse(d *fiscalEntity.DAPITransferReason) *response.DAPITransferReasonResponse {
-	return &response.DAPITransferReasonResponse{
-		ID: d.ID, Code: d.Code, Reason: d.Reason, Destination: d.Destination,
-		ValidFrom: d.ValidFrom, ValidTo: d.ValidTo, IsActive: d.IsActive, CreatedAt: d.CreatedAt,
-	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ─── ICMS Apuração Adjustment Codes ──────────────────────────────────────────
@@ -112,7 +100,7 @@ func (h *ICMSApuracaoHandler) CreateApuracaoAdjCode(w http.ResponseWriter, r *ht
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusCreated, toApuracaoAdjResponse(result))
+	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *ICMSApuracaoHandler) UpdateApuracaoAdjCode(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +114,7 @@ func (h *ICMSApuracaoHandler) UpdateApuracaoAdjCode(w http.ResponseWriter, r *ht
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toApuracaoAdjResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) GetApuracaoAdjCode(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +128,7 @@ func (h *ICMSApuracaoHandler) GetApuracaoAdjCode(w http.ResponseWriter, r *http.
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toApuracaoAdjResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) ListApuracaoAdjCodes(w http.ResponseWriter, r *http.Request) {
@@ -151,18 +139,7 @@ func (h *ICMSApuracaoHandler) ListApuracaoAdjCodes(w http.ResponseWriter, r *htt
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := make([]*response.ICMSApuracaoAdjCodeResponse, 0, len(result))
-	for _, c := range result {
-		out = append(out, toApuracaoAdjResponse(c))
-	}
-	jsonResponse(w, http.StatusOK, out)
-}
-
-func toApuracaoAdjResponse(c *fiscalEntity.ICMSApuracaoAdjustmentCode) *response.ICMSApuracaoAdjCodeResponse {
-	return &response.ICMSApuracaoAdjCodeResponse{
-		ID: c.ID, Code: c.Code, UF: c.UF, Description: c.Description,
-		ValidFrom: c.ValidFrom, ValidTo: c.ValidTo, IsActive: c.IsActive, CreatedAt: c.CreatedAt,
-	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ─── ICMS Adjustment Codes ────────────────────────────────────────────────────
@@ -178,7 +155,7 @@ func (h *ICMSApuracaoHandler) CreateAdjCode(w http.ResponseWriter, r *http.Reque
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusCreated, toAdjCodeResponse(result))
+	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *ICMSApuracaoHandler) UpdateAdjCode(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +169,7 @@ func (h *ICMSApuracaoHandler) UpdateAdjCode(w http.ResponseWriter, r *http.Reque
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toAdjCodeResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) GetAdjCode(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +183,7 @@ func (h *ICMSApuracaoHandler) GetAdjCode(w http.ResponseWriter, r *http.Request)
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toAdjCodeResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) ListAdjCodes(w http.ResponseWriter, r *http.Request) {
@@ -218,18 +195,7 @@ func (h *ICMSApuracaoHandler) ListAdjCodes(w http.ResponseWriter, r *http.Reques
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := make([]*response.ICMSAdjustmentCodeResponse, 0, len(result))
-	for _, c := range result {
-		out = append(out, toAdjCodeResponse(c))
-	}
-	jsonResponse(w, http.StatusOK, out)
-}
-
-func toAdjCodeResponse(c *fiscalEntity.ICMSAdjustmentCode) *response.ICMSAdjustmentCodeResponse {
-	return &response.ICMSAdjustmentCodeResponse{
-		ID: c.ID, UF: c.UF, Code: c.Code, Description: c.Description, TableRef: string(c.TableRef),
-		ValidFrom: c.ValidFrom, ValidTo: c.ValidTo, IsActive: c.IsActive, CreatedAt: c.CreatedAt,
-	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ─── ICMS Apuração Lines ──────────────────────────────────────────────────────
@@ -245,7 +211,7 @@ func (h *ICMSApuracaoHandler) CreateApuracaoLine(w http.ResponseWriter, r *http.
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusCreated, toApuracaoLineResponse(result))
+	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *ICMSApuracaoHandler) UpdateApuracaoLine(w http.ResponseWriter, r *http.Request) {
@@ -259,7 +225,7 @@ func (h *ICMSApuracaoHandler) UpdateApuracaoLine(w http.ResponseWriter, r *http.
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toApuracaoLineResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) GetApuracaoLine(w http.ResponseWriter, r *http.Request) {
@@ -269,7 +235,7 @@ func (h *ICMSApuracaoHandler) GetApuracaoLine(w http.ResponseWriter, r *http.Req
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toApuracaoLineResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) ListApuracaoLines(w http.ResponseWriter, r *http.Request) {
@@ -279,19 +245,7 @@ func (h *ICMSApuracaoHandler) ListApuracaoLines(w http.ResponseWriter, r *http.R
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := make([]*response.ICMSApuracaoLineResponse, 0, len(result))
-	for _, l := range result {
-		out = append(out, toApuracaoLineResponse(l))
-	}
-	jsonResponse(w, http.StatusOK, out)
-}
-
-func toApuracaoLineResponse(l *fiscalEntity.ICMSApuracaoLine) *response.ICMSApuracaoLineResponse {
-	return &response.ICMSApuracaoLineResponse{
-		ID: l.ID, Code: l.Code, Description: l.Description, LineType: string(l.LineType),
-		AcceptsEntries: l.AcceptsEntries, Nature: l.Nature, ApuracaoAdjCodeID: l.ApuracaoAdjCodeID,
-		IsActive: l.IsActive, CreatedAt: l.CreatedAt,
-	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ─── ICMS Summary Entries ─────────────────────────────────────────────────────
@@ -307,7 +261,7 @@ func (h *ICMSApuracaoHandler) CreateSummaryEntry(w http.ResponseWriter, r *http.
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusCreated, toSummaryEntryResponse(result))
+	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *ICMSApuracaoHandler) UpdateSummaryEntry(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +275,7 @@ func (h *ICMSApuracaoHandler) UpdateSummaryEntry(w http.ResponseWriter, r *http.
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toSummaryEntryResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) GetSummaryEntry(w http.ResponseWriter, r *http.Request) {
@@ -335,7 +289,7 @@ func (h *ICMSApuracaoHandler) GetSummaryEntry(w http.ResponseWriter, r *http.Req
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toSummaryEntryResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) ListSummaryEntries(w http.ResponseWriter, r *http.Request) {
@@ -346,11 +300,7 @@ func (h *ICMSApuracaoHandler) ListSummaryEntries(w http.ResponseWriter, r *http.
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := make([]*response.ICMSSummaryEntryResponse, 0, len(result))
-	for _, e := range result {
-		out = append(out, toSummaryEntryResponse(e))
-	}
-	jsonResponse(w, http.StatusOK, out)
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) AddSummaryEntryNote(w http.ResponseWriter, r *http.Request) {
@@ -381,14 +331,6 @@ func (h *ICMSApuracaoHandler) ListSummaryEntryNotes(w http.ResponseWriter, r *ht
 	jsonResponse(w, http.StatusOK, result)
 }
 
-func toSummaryEntryResponse(e *fiscalEntity.ICMSSummaryEntry) *response.ICMSSummaryEntryResponse {
-	return &response.ICMSSummaryEntryResponse{
-		ID: e.ID, Period: e.Period, UF: e.UF, CFOPID: e.CFOPID,
-		ICMSBase: e.ICMSBase, ICMSValue: e.ICMSValue, ICMSBaseOther: e.ICMSBaseOther,
-		ICMSValueOther: e.ICMSValueOther, IsActive: e.IsActive, CreatedAt: e.CreatedAt,
-	}
-}
-
 // ─── Simples Nacional ─────────────────────────────────────────────────────────
 
 func (h *ICMSApuracaoHandler) CreateSimplesApuracao(w http.ResponseWriter, r *http.Request) {
@@ -402,7 +344,7 @@ func (h *ICMSApuracaoHandler) CreateSimplesApuracao(w http.ResponseWriter, r *ht
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusCreated, toSimplesResponse(result))
+	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *ICMSApuracaoHandler) UpdateSimplesApuracao(w http.ResponseWriter, r *http.Request) {
@@ -416,7 +358,7 @@ func (h *ICMSApuracaoHandler) UpdateSimplesApuracao(w http.ResponseWriter, r *ht
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toSimplesResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) GetSimplesApuracao(w http.ResponseWriter, r *http.Request) {
@@ -427,7 +369,7 @@ func (h *ICMSApuracaoHandler) GetSimplesApuracao(w http.ResponseWriter, r *http.
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toSimplesResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *ICMSApuracaoHandler) ListSimplesApuracoes(w http.ResponseWriter, r *http.Request) {
@@ -437,20 +379,5 @@ func (h *ICMSApuracaoHandler) ListSimplesApuracoes(w http.ResponseWriter, r *htt
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := make([]*response.SimplesNacionalApuracaoResponse, 0, len(result))
-	for _, s := range result {
-		out = append(out, toSimplesResponse(s))
-	}
-	jsonResponse(w, http.StatusOK, out)
-}
-
-func toSimplesResponse(s *fiscalEntity.SimplesNacionalApuracao) *response.SimplesNacionalApuracaoResponse {
-	return &response.SimplesNacionalApuracaoResponse{
-		ID: s.ID, Period: s.Period, Annex: string(s.Annex),
-		ReceitaInterna: s.ReceitaInterna, ReceitaExterna: s.ReceitaExterna, FolhaPagamento: s.FolhaPagamento,
-		ReceitaBruta12M: s.ReceitaBruta12M, SimplesRecolhido: s.SimplesRecolhido,
-		AliquotaNominal: s.AliquotaNominal, AliquotaEfetiva: s.AliquotaEfetiva,
-		AliquotaEfetivaICMS: s.AliquotaEfetivaICMS, ParcelaDeduzir: s.ParcelaDeduzir,
-		Observation: s.Observation, IsActive: s.IsActive, CreatedAt: s.CreatedAt,
-	}
+	jsonResponse(w, http.StatusOK, result)
 }

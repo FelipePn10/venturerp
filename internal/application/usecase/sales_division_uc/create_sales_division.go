@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
@@ -18,7 +19,7 @@ type CreateSalesDivisionUseCase struct {
 func (uc *CreateSalesDivisionUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateSalesDivisionDTO,
-) (*entity.SalesDivision, error) {
+) (*response.SalesDivisionResponse, error) {
 	if !uc.Auth.CanCreateSalesDivision(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -48,5 +49,9 @@ func (uc *CreateSalesDivisionUseCase) Execute(
 		return nil, err
 	}
 
-	return uc.Repo.Create(ctx, sd)
+	created, err := uc.Repo.Create(ctx, sd)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesDivisionResponse(created), nil
 }

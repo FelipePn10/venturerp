@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -29,7 +30,7 @@ type CreateNFSeUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSeDTO) (*entity.NFSe, error) {
+func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSeDTO) (*response.NFSeResponse, error) {
 	if !uc.Auth.CanCreateFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -109,7 +110,11 @@ func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSe
 		Notes:                     dto.Notes,
 		CreatedBy:                 userID,
 	}
-	return uc.Repo.Create(ctx, n)
+	created, err := uc.Repo.Create(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	return toNFSeResponse(created), nil
 }
 
 // AuthorizeNFSeUseCase transmits a draft NFS-e to the city hall via Focus.
@@ -119,7 +124,7 @@ type AuthorizeNFSeUseCase struct {
 	Auth   ports.AuthService
 }
 
-func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*entity.NFSe, error) {
+func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*response.NFSeResponse, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -190,7 +195,11 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*entity.
 		_, _ = uc.Repo.UpdateStatus(ctx, id, entity.NFSeStatusRejeitada)
 		return nil, fmt.Errorf("Focus NFS-e: %w", err)
 	}
-	return uc.Repo.UpdateAuthorization(ctx, id, resp.NumeroNFSe, resp.CodigoVerificacao, resp.URL, ref)
+	authorized, err := uc.Repo.UpdateAuthorization(ctx, id, resp.NumeroNFSe, resp.CodigoVerificacao, resp.URL, ref)
+	if err != nil {
+		return nil, err
+	}
+	return toNFSeResponse(authorized), nil
 }
 
 // CancelNFSeUseCase cancels an authorized NFS-e at the city hall.
@@ -200,7 +209,7 @@ type CancelNFSeUseCase struct {
 	Auth   ports.AuthService
 }
 
-func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.CancelNFSeDTO) (*entity.NFSe, error) {
+func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.CancelNFSeDTO) (*response.NFSeResponse, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -228,7 +237,11 @@ func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.
 	if _, err := cli.CancelarNFSe(ctx, *n.FocusRef, dto.Justificativa); err != nil {
 		return nil, fmt.Errorf("Focus NFS-e cancelamento: %w", err)
 	}
-	return uc.Repo.UpdateStatus(ctx, id, entity.NFSeStatusCancelada)
+	cancelled, err := uc.Repo.UpdateStatus(ctx, id, entity.NFSeStatusCancelada)
+	if err != nil {
+		return nil, err
+	}
+	return toNFSeResponse(cancelled), nil
 }
 
 // ListNFSeUseCase lists service invoices.
@@ -237,11 +250,15 @@ type ListNFSeUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListNFSeUseCase) Execute(ctx context.Context) ([]*entity.NFSe, error) {
+func (uc *ListNFSeUseCase) Execute(ctx context.Context) ([]*response.NFSeResponse, error) {
 	if !uc.Auth.CanGetFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.List(ctx)
+	list, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toNFSeResponses(list), nil
 }
 
 // GetNFSeUseCase returns one NFS-e by ID.
@@ -250,11 +267,15 @@ type GetNFSeUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *GetNFSeUseCase) Execute(ctx context.Context, id int64) (*entity.NFSe, error) {
+func (uc *GetNFSeUseCase) Execute(ctx context.Context, id int64) (*response.NFSeResponse, error) {
 	if !uc.Auth.CanGetFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.GetByID(ctx, id)
+	n, err := uc.Repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toNFSeResponse(n), nil
 }
 
 func deref(p *string) string {

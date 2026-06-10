@@ -3,9 +3,9 @@ package question_option_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/questions_options/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/questions_options/repository"
 )
 
@@ -24,9 +24,13 @@ func NewListOptionsByQuestionUseCase(
 func (uc *ListOptionsByQuestionUseCase) Execute(
 	ctx context.Context,
 	questionID int64,
-) ([]entity.QuestionsOptions, error) {
+) ([]*response.QuestionOptionResponse, error) {
 	if !uc.Auth.CanCreateQuestionOption(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListByQuestionID(ctx, questionID)
+	list, err := uc.Repo.ListByQuestionID(ctx, questionID)
+	if err != nil {
+		return nil, err
+	}
+	return toQuestionOptionResponsesFromValues(list), nil
 }
