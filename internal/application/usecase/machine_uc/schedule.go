@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
@@ -18,7 +19,7 @@ type ScheduleMachineUseCase struct {
 
 func (uc *ScheduleMachineUseCase) CreateSchedule(
 	ctx context.Context,
-	dto request.CreateMachineScheduleDTO) (*entity.MachineSchedule, error) {
+	dto request.CreateMachineScheduleDTO) (*response.MachineScheduleResponse, error) {
 	if !uc.Auth.CanSchedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -44,7 +45,11 @@ func (uc *ScheduleMachineUseCase) CreateSchedule(
 		PriorityOverride: dto.PriorityOverride,
 		Notes:            dto.Notes,
 	}
-	return uc.Repo.CreateSchedule(ctx, schedule)
+	created, err := uc.Repo.CreateSchedule(ctx, schedule)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineScheduleResponse(created), nil
 }
 
 func (uc *ScheduleMachineUseCase) ReorderSchedule(
@@ -67,25 +72,29 @@ func (uc *ScheduleMachineUseCase) UpdateStatus(
 	ctx context.Context,
 	code int64,
 	dto request.UpdateScheduleStatusDTO,
-) (*entity.MachineSchedule, error) {
+) (*response.MachineScheduleResponse, error) {
 
 	if !uc.Auth.CanSchedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	return uc.Repo.UpdateScheduleStatus(
+	updated, err := uc.Repo.UpdateScheduleStatus(
 		ctx,
 		code,
 		dto.Status,
 		dto.ProducedQty,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineScheduleResponse(updated), nil
 }
 
 func (uc *ScheduleMachineUseCase) UpdateTimes(
 	ctx context.Context,
 	code int64,
 	dto request.UpdateScheduleTimesDTO,
-) (*entity.MachineSchedule, error) {
+) (*response.MachineScheduleResponse, error) {
 
 	if !uc.Auth.CanSchedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -112,12 +121,16 @@ func (uc *ScheduleMachineUseCase) UpdateTimes(
 		end = &t
 	}
 
-	return uc.Repo.UpdateScheduleTimes(
+	updated, err := uc.Repo.UpdateScheduleTimes(
 		ctx,
 		code,
 		start,
 		end,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineScheduleResponse(updated), nil
 }
 
 func (uc *ScheduleMachineUseCase) DeleteSchedule(
@@ -132,30 +145,42 @@ func (uc *ScheduleMachineUseCase) DeleteSchedule(
 	return uc.Repo.DeleteSchedule(ctx, code)
 }
 
-func (uc *ScheduleMachineUseCase) GetSchedule(ctx context.Context, code int64) (*entity.MachineSchedule, error) {
+func (uc *ScheduleMachineUseCase) GetSchedule(ctx context.Context, code int64) (*response.MachineScheduleResponse, error) {
 	if !uc.Auth.CanSchedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	return uc.Repo.GetSchedule(ctx, code)
+	s, err := uc.Repo.GetSchedule(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineScheduleResponse(s), nil
 }
 
 func (uc *ScheduleMachineUseCase) ListSchedules(
 	ctx context.Context,
 	machineID int64,
 	date time.Time,
-) ([]*entity.MachineSchedule, error) {
+) ([]*response.MachineScheduleResponse, error) {
 	if !uc.Auth.CanSchedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	return uc.Repo.ListSchedules(ctx, machineID, date)
+	list, err := uc.Repo.ListSchedules(ctx, machineID, date)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineScheduleResponses(list), nil
 }
 
-func (uc *ScheduleMachineUseCase) ListSchedulesByRange(ctx context.Context, machineID int64, start, end time.Time) ([]*entity.MachineSchedule, error) {
+func (uc *ScheduleMachineUseCase) ListSchedulesByRange(ctx context.Context, machineID int64, start, end time.Time) ([]*response.MachineScheduleResponse, error) {
 	if !uc.Auth.CanSchedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	return uc.Repo.ListSchedulesByRange(ctx, machineID, start, end)
+	list, err := uc.Repo.ListSchedulesByRange(ctx, machineID, start, end)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineScheduleResponses(list), nil
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal_classification/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal_classification/repository"
 )
@@ -71,7 +72,7 @@ func indicatorOrDefault(v string) entity.RateIndicator {
 	return entity.IndicatorPercentual
 }
 
-func (uc *FiscalClassificationUseCase) Create(ctx context.Context, dto request.CreateFiscalClassificationDTO) (*entity.FiscalClassification, error) {
+func (uc *FiscalClassificationUseCase) Create(ctx context.Context, dto request.CreateFiscalClassificationDTO) (*response.FiscalClassificationResponse, error) {
 	code, err := uc.repo.NextCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
@@ -81,20 +82,28 @@ func (uc *FiscalClassificationUseCase) Create(ctx context.Context, dto request.C
 		return nil, err
 	}
 	applyFields(c, dto.FiscalClassificationFields)
-	return uc.repo.Create(ctx, c)
+	created, err := uc.repo.Create(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalClassificationResponse(created), nil
 }
 
-func (uc *FiscalClassificationUseCase) Update(ctx context.Context, dto request.UpdateFiscalClassificationDTO) (*entity.FiscalClassification, error) {
+func (uc *FiscalClassificationUseCase) Update(ctx context.Context, dto request.UpdateFiscalClassificationDTO) (*response.FiscalClassificationResponse, error) {
 	c, err := uc.repo.GetByCode(ctx, dto.Code)
 	if err != nil {
 		return nil, err
 	}
 	applyFields(c, dto.FiscalClassificationFields)
 	c.IsActive = dto.IsActive
-	return uc.repo.Update(ctx, c)
+	updated, err := uc.repo.Update(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalClassificationResponse(updated), nil
 }
 
-func (uc *FiscalClassificationUseCase) Get(ctx context.Context, code int64) (*entity.FiscalClassification, error) {
+func (uc *FiscalClassificationUseCase) Get(ctx context.Context, code int64) (*response.FiscalClassificationResponse, error) {
 	c, err := uc.repo.GetByCode(ctx, code)
 	if err != nil {
 		return nil, err
@@ -105,11 +114,15 @@ func (uc *FiscalClassificationUseCase) Get(ctx context.Context, code int64) (*en
 	if c.ExportAttributes, err = uc.repo.ListExportAttributes(ctx, c.ID); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return toFiscalClassificationResponse(c), nil
 }
 
-func (uc *FiscalClassificationUseCase) List(ctx context.Context, onlyActive bool) ([]*entity.FiscalClassification, error) {
-	return uc.repo.List(ctx, onlyActive)
+func (uc *FiscalClassificationUseCase) List(ctx context.Context, onlyActive bool) ([]*response.FiscalClassificationResponse, error) {
+	list, err := uc.repo.List(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalClassificationResponses(list), nil
 }
 
 // GetIPIRate implements ports.FiscalClassificationProvider.
@@ -121,19 +134,23 @@ func (uc *FiscalClassificationUseCase) GetIPIRate(ctx context.Context, classific
 	return c.IPIRate, true, nil
 }
 
-func (uc *FiscalClassificationUseCase) AddLanguage(ctx context.Context, dto request.AddFiscalClassificationLanguageDTO) (*entity.FiscalClassificationLanguage, error) {
+func (uc *FiscalClassificationUseCase) AddLanguage(ctx context.Context, dto request.AddFiscalClassificationLanguageDTO) (*response.FiscalClassificationLanguageResponse, error) {
 	c, err := uc.repo.GetByCode(ctx, dto.ClassificationCode)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.AddLanguage(ctx, &entity.FiscalClassificationLanguage{
+	created, err := uc.repo.AddLanguage(ctx, &entity.FiscalClassificationLanguage{
 		ClassificationID: c.ID,
 		Language:         dto.Language,
 		Description:      dto.Description,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalClassificationLanguageResponse(created), nil
 }
 
-func (uc *FiscalClassificationUseCase) AddExportAttribute(ctx context.Context, dto request.AddFiscalClassificationExportAttributeDTO) (*entity.FiscalClassificationExportAttribute, error) {
+func (uc *FiscalClassificationUseCase) AddExportAttribute(ctx context.Context, dto request.AddFiscalClassificationExportAttributeDTO) (*response.FiscalClassificationExportAttributeResponse, error) {
 	c, err := uc.repo.GetByCode(ctx, dto.ClassificationCode)
 	if err != nil {
 		return nil, err
@@ -154,5 +171,9 @@ func (uc *FiscalClassificationUseCase) AddExportAttribute(ctx context.Context, d
 			attr.EndDate = &t
 		}
 	}
-	return uc.repo.AddExportAttribute(ctx, attr)
+	created, err := uc.repo.AddExportAttribute(ctx, attr)
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalClassificationExportAttributeResponse(created), nil
 }

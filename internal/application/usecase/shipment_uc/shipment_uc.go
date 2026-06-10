@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
 	"github.com/google/uuid"
@@ -24,7 +25,7 @@ type CreateShipmentInput struct {
 	CreatedBy      uuid.UUID
 }
 
-func (uc *ShipmentUseCase) Create(ctx context.Context, in CreateShipmentInput) (*entity.Shipment, error) {
+func (uc *ShipmentUseCase) Create(ctx context.Context, in CreateShipmentInput) (*response.ShipmentResponse, error) {
 	code, err := uc.Repo.NextCode(ctx)
 	if err != nil {
 		return nil, err
@@ -39,7 +40,11 @@ func (uc *ShipmentUseCase) Create(ctx context.Context, in CreateShipmentInput) (
 		Notes:          in.Notes,
 		CreatedBy:      in.CreatedBy,
 	}
-	return uc.Repo.Create(ctx, s)
+	created, err := uc.Repo.Create(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toShipmentResponse(created), nil
 }
 
 type AddShipmentItemInput struct {
@@ -52,7 +57,7 @@ type AddShipmentItemInput struct {
 	Notes              *string
 }
 
-func (uc *ShipmentUseCase) AddItem(ctx context.Context, in AddShipmentItemInput) (*entity.ShipmentItem, error) {
+func (uc *ShipmentUseCase) AddItem(ctx context.Context, in AddShipmentItemInput) (*response.ShipmentItemResponse, error) {
 	ship, err := uc.Repo.GetByCode(ctx, in.ShipmentCode)
 	if err != nil {
 		return nil, err
@@ -69,15 +74,27 @@ func (uc *ShipmentUseCase) AddItem(ctx context.Context, in AddShipmentItemInput)
 		Quantity:           in.Quantity,
 	}
 	item.Notes = in.Notes
-	return uc.Repo.AddItem(ctx, item)
+	created, err := uc.Repo.AddItem(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	return toShipmentItemResponse(created), nil
 }
 
-func (uc *ShipmentUseCase) Get(ctx context.Context, code int64) (*entity.Shipment, error) {
-	return uc.Repo.GetByCode(ctx, code)
+func (uc *ShipmentUseCase) Get(ctx context.Context, code int64) (*response.ShipmentResponse, error) {
+	s, err := uc.Repo.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toShipmentResponse(s), nil
 }
 
-func (uc *ShipmentUseCase) List(ctx context.Context) ([]*entity.Shipment, error) {
-	return uc.Repo.List(ctx)
+func (uc *ShipmentUseCase) List(ctx context.Context) ([]*response.ShipmentResponse, error) {
+	list, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toShipmentResponses(list), nil
 }
 
 func (uc *ShipmentUseCase) ConferItem(ctx context.Context, itemID int64, conferredQty float64) error {

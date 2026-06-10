@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/entry_operation/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/entry_operation/repository"
 )
@@ -20,7 +21,7 @@ func NewEntryOperationUseCase(repo repository.EntryOperationRepository) *EntryOp
 
 // ─── State Groups ─────────────────────────────────────────────────────────────
 
-func (uc *EntryOperationUseCase) CreateStateGroup(ctx context.Context, dto request.CreateStateGroupDTO) (*entity.StateGroup, error) {
+func (uc *EntryOperationUseCase) CreateStateGroup(ctx context.Context, dto request.CreateStateGroupDTO) (*response.StateGroupResponse, error) {
 	code, err := uc.repo.NextStateGroupCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
@@ -43,15 +44,23 @@ func (uc *EntryOperationUseCase) CreateStateGroup(ctx context.Context, dto reque
 		}
 		created.UFs = append(created.UFs, uf)
 	}
-	return created, nil
+	return toStateGroupResponse(created), nil
 }
 
-func (uc *EntryOperationUseCase) GetStateGroup(ctx context.Context, code int64) (*entity.StateGroup, error) {
-	return uc.repo.GetStateGroupByCode(ctx, code)
+func (uc *EntryOperationUseCase) GetStateGroup(ctx context.Context, code int64) (*response.StateGroupResponse, error) {
+	g, err := uc.repo.GetStateGroupByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toStateGroupResponse(g), nil
 }
 
-func (uc *EntryOperationUseCase) ListStateGroups(ctx context.Context) ([]*entity.StateGroup, error) {
-	return uc.repo.ListStateGroups(ctx)
+func (uc *EntryOperationUseCase) ListStateGroups(ctx context.Context) ([]*response.StateGroupResponse, error) {
+	list, err := uc.repo.ListStateGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toStateGroupResponses(list), nil
 }
 
 func (uc *EntryOperationUseCase) AddStateGroupUF(ctx context.Context, dto request.AddStateGroupUFDTO) error {
@@ -64,7 +73,7 @@ func (uc *EntryOperationUseCase) AddStateGroupUF(ctx context.Context, dto reques
 
 // ─── Entry Operation Types ────────────────────────────────────────────────────
 
-func (uc *EntryOperationUseCase) CreateEntryOperation(ctx context.Context, dto request.CreateEntryOperationDTO) (*entity.EntryOperationType, error) {
+func (uc *EntryOperationUseCase) CreateEntryOperation(ctx context.Context, dto request.CreateEntryOperationDTO) (*response.EntryOperationTypeResponse, error) {
 	code, err := uc.repo.NextEntryOperationCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
@@ -78,10 +87,14 @@ func (uc *EntryOperationUseCase) CreateEntryOperation(ctx context.Context, dto r
 	o.ClassificationCode = dto.ClassificationCode
 	o.StateGroupCode = dto.StateGroupCode
 	o.SupplierTypeCode = dto.SupplierTypeCode
-	return uc.repo.CreateEntryOperation(ctx, o)
+	created, err := uc.repo.CreateEntryOperation(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	return toEntryOperationTypeResponse(created), nil
 }
 
-func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto request.UpdateEntryOperationDTO) (*entity.EntryOperationType, error) {
+func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto request.UpdateEntryOperationDTO) (*response.EntryOperationTypeResponse, error) {
 	o, err := uc.repo.GetEntryOperationByCode(ctx, dto.Code)
 	if err != nil {
 		return nil, err
@@ -96,15 +109,27 @@ func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto r
 	o.StateGroupCode = dto.StateGroupCode
 	o.SupplierTypeCode = dto.SupplierTypeCode
 	o.IsActive = dto.IsActive
-	return uc.repo.UpdateEntryOperation(ctx, o)
+	updated, err := uc.repo.UpdateEntryOperation(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	return toEntryOperationTypeResponse(updated), nil
 }
 
-func (uc *EntryOperationUseCase) GetEntryOperation(ctx context.Context, code int64) (*entity.EntryOperationType, error) {
-	return uc.repo.GetEntryOperationByCode(ctx, code)
+func (uc *EntryOperationUseCase) GetEntryOperation(ctx context.Context, code int64) (*response.EntryOperationTypeResponse, error) {
+	o, err := uc.repo.GetEntryOperationByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toEntryOperationTypeResponse(o), nil
 }
 
-func (uc *EntryOperationUseCase) ListEntryOperations(ctx context.Context, onlyActive bool) ([]*entity.EntryOperationType, error) {
-	return uc.repo.ListEntryOperations(ctx, onlyActive)
+func (uc *EntryOperationUseCase) ListEntryOperations(ctx context.Context, onlyActive bool) ([]*response.EntryOperationTypeResponse, error) {
+	list, err := uc.repo.ListEntryOperations(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toEntryOperationTypeResponses(list), nil
 }
 
 // ValidateUF applies the UF × Grupo de Estado rule for an entry operation type.

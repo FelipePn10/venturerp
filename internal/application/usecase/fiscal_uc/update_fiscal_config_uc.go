@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -15,7 +16,7 @@ type UpdateFiscalConfigUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.UpdateFiscalConfigDTO) (*entity.FiscalConfig, error) {
+func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.UpdateFiscalConfigDTO) (*response.FiscalConfigResponse, error) {
 	if !uc.Auth.CanManageFiscalConfig(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -57,5 +58,9 @@ func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.Up
 		UpdatedBy:                 userID,
 	}
 
-	return uc.Repo.UpdateFiscalConfig(ctx, cfg)
+	updated, err := uc.Repo.UpdateFiscalConfig(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return toFiscalConfigResponse(updated), nil
 }

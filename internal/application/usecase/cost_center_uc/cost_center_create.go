@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/cost_center/entity"
@@ -19,7 +20,7 @@ type CreateCostCenterUseCase struct {
 func (uc *CreateCostCenterUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateCostCenterDTO,
-) (*entity.CostCenter, error) {
+) (*response.CostCenterResponse, error) {
 	if !uc.Auth.CanCreateCostCenter(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -39,5 +40,9 @@ func (uc *CreateCostCenterUseCase) Execute(
 		EndDate:     end,
 		CreatedBy:   dto.CreatedBy,
 	}
-	return uc.Repo.Create(ctx, cc)
+	created, err := uc.Repo.Create(ctx, cc)
+	if err != nil {
+		return nil, err
+	}
+	return toCostCenterResponse(created), nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
@@ -19,7 +20,7 @@ type CreateRestrictionUseCase struct {
 func (uc *CreateRestrictionUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateRestrictionDTO,
-) (*entity.Restriction, error) {
+) (*response.RestrictionResponse, error) {
 	if !uc.Auth.CanCreateRestriction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -73,5 +74,5 @@ func (uc *CreateRestrictionUseCase) Execute(
 		created.Determinants = append(created.Determinants, d)
 	}
 
-	return created, nil
+	return toRestrictionResponse(created), nil
 }

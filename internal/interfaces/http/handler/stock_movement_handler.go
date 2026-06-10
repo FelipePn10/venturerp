@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_movement_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock_movement/entity"
 	"github.com/go-chi/chi/v5"
@@ -30,7 +29,7 @@ func (h *StockMovementTypeHandler) Create(w http.ResponseWriter, r *http.Request
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusCreated, toSMTResponse(result))
+	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *StockMovementTypeHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +43,7 @@ func (h *StockMovementTypeHandler) Update(w http.ResponseWriter, r *http.Request
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toSMTResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *StockMovementTypeHandler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +57,7 @@ func (h *StockMovementTypeHandler) GetByID(w http.ResponseWriter, r *http.Reques
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toSMTResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *StockMovementTypeHandler) GetBySigla(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +67,7 @@ func (h *StockMovementTypeHandler) GetBySigla(w http.ResponseWriter, r *http.Req
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, toSMTResponse(result))
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *StockMovementTypeHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -78,19 +77,5 @@ func (h *StockMovementTypeHandler) List(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := make([]*response.StockMovementTypeResponse, 0, len(result))
-	for _, s := range result {
-		out = append(out, toSMTResponse(s))
-	}
-	jsonResponse(w, http.StatusOK, out)
-}
-
-func toSMTResponse(s *entity.StockMovementType) *response.StockMovementTypeResponse {
-	return &response.StockMovementTypeResponse{
-		ID: s.ID, Sigla: s.Sigla, Description: s.Description, UsageType: string(s.UsageType),
-		EntryOrder: s.EntryOrder, ExitOrder: s.ExitOrder, ConsidersConsumption: s.ConsidersConsumption,
-		UpdatesAvgCost: s.UpdatesAvgCost, IsAdjustment: s.IsAdjustment, UpdatesCycleCount: s.UpdatesCycleCount,
-		ShowsInSummary: s.ShowsInSummary, EntryExit: string(s.EntryExit), GeneratesFCIMovement: s.GeneratesFCIMovement,
-		IsActive: s.IsActive, CreatedAt: s.CreatedAt,
-	}
+	jsonResponse(w, http.StatusOK, result)
 }

@@ -3,9 +3,9 @@ package order_priority_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/order_priority/repository"
 )
 
@@ -16,9 +16,13 @@ type FindPriorityByValueUseCase struct {
 
 func (uc *FindPriorityByValueUseCase) Execute(
 	ctx context.Context, value float64,
-) (*entity.OrderPriority, error) {
+) (*response.OrderPriorityResponse, error) {
 	if !uc.Auth.CanOrderPriority(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.FindByValue(ctx, value)
+	p, err := uc.Repo.FindByValue(ctx, value)
+	if err != nil {
+		return nil, err
+	}
+	return toOrderPriorityResponse(p), nil
 }

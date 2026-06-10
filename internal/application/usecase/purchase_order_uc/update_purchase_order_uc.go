@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
@@ -19,7 +20,7 @@ type UpdatePurchaseOrderUseCase struct {
 func (uc *UpdatePurchaseOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdatePurchaseOrderDTO,
-) (*entity.PurchaseOrder, error) {
+) (*response.PurchaseOrderResponse, error) {
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -44,5 +45,9 @@ func (uc *UpdatePurchaseOrderUseCase) Execute(
 		o.DeliveryDate = &t
 	}
 
-	return uc.Repo.Update(ctx, o)
+	updated, err := uc.Repo.Update(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	return toPurchaseOrderResponse(updated), nil
 }

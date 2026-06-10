@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 )
@@ -17,7 +18,7 @@ var validLegalDeviceTypes = map[string]bool{
 	"ICMS": true, "IPI": true, "LAUDO": true, "PIS": true, "COFINS": true,
 }
 
-func (uc *LegalDeviceUseCase) Create(ctx context.Context, dto request.CreateLegalDeviceDTO) (*entity.LegalDevice, error) {
+func (uc *LegalDeviceUseCase) Create(ctx context.Context, dto request.CreateLegalDeviceDTO) (*response.LegalDeviceResponse, error) {
 	if dto.Description == "" {
 		return nil, errors.New("description is required")
 	}
@@ -29,10 +30,14 @@ func (uc *LegalDeviceUseCase) Create(ctx context.Context, dto request.CreateLega
 		Description: dto.Description,
 		IsActive:    true,
 	}
-	return uc.Repo.CreateLegalDevice(ctx, d)
+	created, err := uc.Repo.CreateLegalDevice(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	return toLegalDeviceResponse(created), nil
 }
 
-func (uc *LegalDeviceUseCase) Update(ctx context.Context, dto request.UpdateLegalDeviceDTO) (*entity.LegalDevice, error) {
+func (uc *LegalDeviceUseCase) Update(ctx context.Context, dto request.UpdateLegalDeviceDTO) (*response.LegalDeviceResponse, error) {
 	if !validLegalDeviceTypes[dto.Type] {
 		return nil, errors.New("type must be one of: ICMS, IPI, LAUDO, PIS, COFINS")
 	}
@@ -42,17 +47,33 @@ func (uc *LegalDeviceUseCase) Update(ctx context.Context, dto request.UpdateLega
 		Description: dto.Description,
 		IsActive:    dto.IsActive,
 	}
-	return uc.Repo.UpdateLegalDevice(ctx, d)
+	updated, err := uc.Repo.UpdateLegalDevice(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	return toLegalDeviceResponse(updated), nil
 }
 
-func (uc *LegalDeviceUseCase) GetByCode(ctx context.Context, code int64) (*entity.LegalDevice, error) {
-	return uc.Repo.GetLegalDeviceByCode(ctx, code)
+func (uc *LegalDeviceUseCase) GetByCode(ctx context.Context, code int64) (*response.LegalDeviceResponse, error) {
+	d, err := uc.Repo.GetLegalDeviceByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toLegalDeviceResponse(d), nil
 }
 
-func (uc *LegalDeviceUseCase) List(ctx context.Context, onlyActive bool) ([]*entity.LegalDevice, error) {
-	return uc.Repo.ListLegalDevices(ctx, onlyActive)
+func (uc *LegalDeviceUseCase) List(ctx context.Context, onlyActive bool) ([]*response.LegalDeviceResponse, error) {
+	list, err := uc.Repo.ListLegalDevices(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toLegalDeviceResponses(list), nil
 }
 
-func (uc *LegalDeviceUseCase) ListByType(ctx context.Context, devType string, onlyActive bool) ([]*entity.LegalDevice, error) {
-	return uc.Repo.ListLegalDevicesByType(ctx, entity.LegalDeviceType(devType), onlyActive)
+func (uc *LegalDeviceUseCase) ListByType(ctx context.Context, devType string, onlyActive bool) ([]*response.LegalDeviceResponse, error) {
+	list, err := uc.Repo.ListLegalDevicesByType(ctx, entity.LegalDeviceType(devType), onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toLegalDeviceResponses(list), nil
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/entity"
@@ -19,7 +20,7 @@ type ManageCalendarUseCase struct {
 func (uc *ManageCalendarUseCase) CreateDay(
 	ctx context.Context,
 	dto request.CreateCalendarDayDTO,
-) (*entity.IndustrialCalendar, error) {
+) (*response.IndustrialCalendarResponse, error) {
 	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -30,14 +31,22 @@ func (uc *ManageCalendarUseCase) CreateDay(
 		IsWorkday:   dto.IsWorkday,
 		Description: dto.Description,
 	}
-	return uc.Repo.CreateDay(ctx, cal)
+	created, err := uc.Repo.CreateDay(ctx, cal)
+	if err != nil {
+		return nil, err
+	}
+	return toIndustrialCalendarResponse(created), nil
 }
 
-func (uc *ManageCalendarUseCase) GetMonth(ctx context.Context, year, month int) ([]*entity.IndustrialCalendar, error) {
+func (uc *ManageCalendarUseCase) GetMonth(ctx context.Context, year, month int) ([]*response.IndustrialCalendarResponse, error) {
 	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListMonth(ctx, year, month)
+	list, err := uc.Repo.ListMonth(ctx, year, month)
+	if err != nil {
+		return nil, err
+	}
+	return toIndustrialCalendarResponses(list), nil
 }
 
 func (uc *ManageCalendarUseCase) IsWorkday(ctx context.Context, year, month, day int) (bool, error) {
@@ -54,22 +63,30 @@ func (uc *ManageCalendarUseCase) GetNextWorkday(ctx context.Context, year, month
 	return uc.Repo.GetNextWorkday(ctx, year, month, day)
 }
 
-func (uc *ManageCalendarUseCase) GetWorkdaysInMonth(ctx context.Context, year, month int) ([]*entity.IndustrialCalendar, error) {
+func (uc *ManageCalendarUseCase) GetWorkdaysInMonth(ctx context.Context, year, month int) ([]*response.IndustrialCalendarResponse, error) {
 	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.GetWorkdaysInMonth(ctx, year, month)
+	list, err := uc.Repo.GetWorkdaysInMonth(ctx, year, month)
+	if err != nil {
+		return nil, err
+	}
+	return toIndustrialCalendarResponses(list), nil
 }
 
 func (uc *ManageCalendarUseCase) GetDay(
 	ctx context.Context,
 	year, month, day int,
-) (*entity.IndustrialCalendar, error) {
+) (*response.IndustrialCalendarResponse, error) {
 	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	return uc.Repo.GetDay(ctx, year, month, day)
+	c, err := uc.Repo.GetDay(ctx, year, month, day)
+	if err != nil {
+		return nil, err
+	}
+	return toIndustrialCalendarResponse(c), nil
 }
 
 func (uc *ManageCalendarUseCase) DeleteDay(

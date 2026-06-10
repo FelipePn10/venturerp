@@ -3,6 +3,7 @@ package modifier_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/modifier/entity"
@@ -27,7 +28,7 @@ func NewCreateModifierUseCase(
 func (uc *CreateModifierUseCase) Execute(
 	ctx context.Context,
 	modifier *entity.Modifier,
-) (*entity.Modifier, error) {
+) (*response.ModifierResponse, error) {
 	if !uc.Auth.CanCreateModifier(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -37,5 +38,5 @@ func (uc *CreateModifierUseCase) Execute(
 		return nil, err
 	}
 
-	return created, nil
+	return toModifierResponse(created), nil
 }

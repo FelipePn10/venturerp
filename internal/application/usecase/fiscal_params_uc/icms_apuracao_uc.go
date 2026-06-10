@@ -5,6 +5,7 @@ import (
 	"errors"
 	"regexp"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 )
@@ -24,7 +25,7 @@ type DAPITransferReasonUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *DAPITransferReasonUseCase) Create(ctx context.Context, d *entity.DAPITransferReason) (*entity.DAPITransferReason, error) {
+func (uc *DAPITransferReasonUseCase) Create(ctx context.Context, d *entity.DAPITransferReason) (*response.DAPITransferReasonResponse, error) {
 	if d.Code == "" {
 		return nil, errors.New("code is required")
 	}
@@ -32,22 +33,38 @@ func (uc *DAPITransferReasonUseCase) Create(ctx context.Context, d *entity.DAPIT
 		return nil, errors.New("reason is required")
 	}
 	d.IsActive = true
-	return uc.Repo.CreateDAPITransferReason(ctx, d)
+	created, err := uc.Repo.CreateDAPITransferReason(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	return toDAPITransferReasonResponse(created), nil
 }
 
-func (uc *DAPITransferReasonUseCase) Update(ctx context.Context, d *entity.DAPITransferReason) (*entity.DAPITransferReason, error) {
+func (uc *DAPITransferReasonUseCase) Update(ctx context.Context, d *entity.DAPITransferReason) (*response.DAPITransferReasonResponse, error) {
 	if d.ID == 0 {
 		return nil, errors.New("id is required")
 	}
-	return uc.Repo.UpdateDAPITransferReason(ctx, d)
+	updated, err := uc.Repo.UpdateDAPITransferReason(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	return toDAPITransferReasonResponse(updated), nil
 }
 
-func (uc *DAPITransferReasonUseCase) GetByCode(ctx context.Context, code string) (*entity.DAPITransferReason, error) {
-	return uc.Repo.GetDAPITransferReasonByCode(ctx, code)
+func (uc *DAPITransferReasonUseCase) GetByCode(ctx context.Context, code string) (*response.DAPITransferReasonResponse, error) {
+	d, err := uc.Repo.GetDAPITransferReasonByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toDAPITransferReasonResponse(d), nil
 }
 
-func (uc *DAPITransferReasonUseCase) List(ctx context.Context, onlyActive bool) ([]*entity.DAPITransferReason, error) {
-	return uc.Repo.ListDAPITransferReasons(ctx, onlyActive)
+func (uc *DAPITransferReasonUseCase) List(ctx context.Context, onlyActive bool) ([]*response.DAPITransferReasonResponse, error) {
+	list, err := uc.Repo.ListDAPITransferReasons(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toDAPITransferReasonResponses(list), nil
 }
 
 // ─── ICMS Apuração Adjustment Codes ──────────────────────────────────────────
@@ -56,7 +73,7 @@ type ICMSApuracaoAdjCodeUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *ICMSApuracaoAdjCodeUseCase) Create(ctx context.Context, c *entity.ICMSApuracaoAdjustmentCode) (*entity.ICMSApuracaoAdjustmentCode, error) {
+func (uc *ICMSApuracaoAdjCodeUseCase) Create(ctx context.Context, c *entity.ICMSApuracaoAdjustmentCode) (*response.ICMSApuracaoAdjCodeResponse, error) {
 	if c.Code == "" {
 		return nil, errors.New("code is required")
 	}
@@ -67,22 +84,38 @@ func (uc *ICMSApuracaoAdjCodeUseCase) Create(ctx context.Context, c *entity.ICMS
 		return nil, errors.New("description is required")
 	}
 	c.IsActive = true
-	return uc.Repo.CreateICMSApuracaoAdjCode(ctx, c)
+	created, err := uc.Repo.CreateICMSApuracaoAdjCode(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoAdjCodeResponse(created), nil
 }
 
-func (uc *ICMSApuracaoAdjCodeUseCase) Update(ctx context.Context, c *entity.ICMSApuracaoAdjustmentCode) (*entity.ICMSApuracaoAdjustmentCode, error) {
+func (uc *ICMSApuracaoAdjCodeUseCase) Update(ctx context.Context, c *entity.ICMSApuracaoAdjustmentCode) (*response.ICMSApuracaoAdjCodeResponse, error) {
 	if c.ID == 0 {
 		return nil, errors.New("id is required")
 	}
-	return uc.Repo.UpdateICMSApuracaoAdjCode(ctx, c)
+	updated, err := uc.Repo.UpdateICMSApuracaoAdjCode(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoAdjCodeResponse(updated), nil
 }
 
-func (uc *ICMSApuracaoAdjCodeUseCase) GetByID(ctx context.Context, id int64) (*entity.ICMSApuracaoAdjustmentCode, error) {
-	return uc.Repo.GetICMSApuracaoAdjCode(ctx, id)
+func (uc *ICMSApuracaoAdjCodeUseCase) GetByID(ctx context.Context, id int64) (*response.ICMSApuracaoAdjCodeResponse, error) {
+	c, err := uc.Repo.GetICMSApuracaoAdjCode(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoAdjCodeResponse(c), nil
 }
 
-func (uc *ICMSApuracaoAdjCodeUseCase) List(ctx context.Context, uf string, onlyActive bool) ([]*entity.ICMSApuracaoAdjustmentCode, error) {
-	return uc.Repo.ListICMSApuracaoAdjCodes(ctx, uf, onlyActive)
+func (uc *ICMSApuracaoAdjCodeUseCase) List(ctx context.Context, uf string, onlyActive bool) ([]*response.ICMSApuracaoAdjCodeResponse, error) {
+	list, err := uc.Repo.ListICMSApuracaoAdjCodes(ctx, uf, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoAdjCodeResponses(list), nil
 }
 
 // ─── ICMS Adjustment Codes ────────────────────────────────────────────────────
@@ -93,7 +126,7 @@ type ICMSAdjustmentCodeUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *ICMSAdjustmentCodeUseCase) Create(ctx context.Context, c *entity.ICMSAdjustmentCode) (*entity.ICMSAdjustmentCode, error) {
+func (uc *ICMSAdjustmentCodeUseCase) Create(ctx context.Context, c *entity.ICMSAdjustmentCode) (*response.ICMSAdjustmentCodeResponse, error) {
 	if c.UF == "" {
 		return nil, errors.New("uf is required")
 	}
@@ -104,22 +137,38 @@ func (uc *ICMSAdjustmentCodeUseCase) Create(ctx context.Context, c *entity.ICMSA
 		return nil, errors.New("table_ref must be one of: 5.2, 5.3, 5.6, 5.7")
 	}
 	c.IsActive = true
-	return uc.Repo.CreateICMSAdjustmentCode(ctx, c)
+	created, err := uc.Repo.CreateICMSAdjustmentCode(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSAdjustmentCodeResponse(created), nil
 }
 
-func (uc *ICMSAdjustmentCodeUseCase) Update(ctx context.Context, c *entity.ICMSAdjustmentCode) (*entity.ICMSAdjustmentCode, error) {
+func (uc *ICMSAdjustmentCodeUseCase) Update(ctx context.Context, c *entity.ICMSAdjustmentCode) (*response.ICMSAdjustmentCodeResponse, error) {
 	if c.ID == 0 {
 		return nil, errors.New("id is required")
 	}
-	return uc.Repo.UpdateICMSAdjustmentCode(ctx, c)
+	updated, err := uc.Repo.UpdateICMSAdjustmentCode(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSAdjustmentCodeResponse(updated), nil
 }
 
-func (uc *ICMSAdjustmentCodeUseCase) GetByID(ctx context.Context, id int64) (*entity.ICMSAdjustmentCode, error) {
-	return uc.Repo.GetICMSAdjustmentCode(ctx, id)
+func (uc *ICMSAdjustmentCodeUseCase) GetByID(ctx context.Context, id int64) (*response.ICMSAdjustmentCodeResponse, error) {
+	c, err := uc.Repo.GetICMSAdjustmentCode(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSAdjustmentCodeResponse(c), nil
 }
 
-func (uc *ICMSAdjustmentCodeUseCase) List(ctx context.Context, uf, tableRef string, onlyActive bool) ([]*entity.ICMSAdjustmentCode, error) {
-	return uc.Repo.ListICMSAdjustmentCodes(ctx, uf, tableRef, onlyActive)
+func (uc *ICMSAdjustmentCodeUseCase) List(ctx context.Context, uf, tableRef string, onlyActive bool) ([]*response.ICMSAdjustmentCodeResponse, error) {
+	list, err := uc.Repo.ListICMSAdjustmentCodes(ctx, uf, tableRef, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSAdjustmentCodeResponses(list), nil
 }
 
 // ─── ICMS Apuração Lines ──────────────────────────────────────────────────────
@@ -132,7 +181,7 @@ type ICMSApuracaoLineUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *ICMSApuracaoLineUseCase) Create(ctx context.Context, l *entity.ICMSApuracaoLine) (*entity.ICMSApuracaoLine, error) {
+func (uc *ICMSApuracaoLineUseCase) Create(ctx context.Context, l *entity.ICMSApuracaoLine) (*response.ICMSApuracaoLineResponse, error) {
 	if l.Code == "" {
 		return nil, errors.New("code is required")
 	}
@@ -144,22 +193,38 @@ func (uc *ICMSApuracaoLineUseCase) Create(ctx context.Context, l *entity.ICMSApu
 	}
 	l.IsActive = true
 	l.AcceptsEntries = true
-	return uc.Repo.CreateICMSApuracaoLine(ctx, l)
+	created, err := uc.Repo.CreateICMSApuracaoLine(ctx, l)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoLineResponse(created), nil
 }
 
-func (uc *ICMSApuracaoLineUseCase) Update(ctx context.Context, l *entity.ICMSApuracaoLine) (*entity.ICMSApuracaoLine, error) {
+func (uc *ICMSApuracaoLineUseCase) Update(ctx context.Context, l *entity.ICMSApuracaoLine) (*response.ICMSApuracaoLineResponse, error) {
 	if l.ID == 0 {
 		return nil, errors.New("id is required")
 	}
-	return uc.Repo.UpdateICMSApuracaoLine(ctx, l)
+	updated, err := uc.Repo.UpdateICMSApuracaoLine(ctx, l)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoLineResponse(updated), nil
 }
 
-func (uc *ICMSApuracaoLineUseCase) GetByCode(ctx context.Context, code string) (*entity.ICMSApuracaoLine, error) {
-	return uc.Repo.GetICMSApuracaoLine(ctx, code)
+func (uc *ICMSApuracaoLineUseCase) GetByCode(ctx context.Context, code string) (*response.ICMSApuracaoLineResponse, error) {
+	l, err := uc.Repo.GetICMSApuracaoLine(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoLineResponse(l), nil
 }
 
-func (uc *ICMSApuracaoLineUseCase) List(ctx context.Context, onlyActive bool) ([]*entity.ICMSApuracaoLine, error) {
-	return uc.Repo.ListICMSApuracaoLines(ctx, onlyActive)
+func (uc *ICMSApuracaoLineUseCase) List(ctx context.Context, onlyActive bool) ([]*response.ICMSApuracaoLineResponse, error) {
+	list, err := uc.Repo.ListICMSApuracaoLines(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSApuracaoLineResponses(list), nil
 }
 
 // ─── ICMS Summary Entries ─────────────────────────────────────────────────────
@@ -168,7 +233,7 @@ type ICMSSummaryEntryUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *ICMSSummaryEntryUseCase) Create(ctx context.Context, e *entity.ICMSSummaryEntry) (*entity.ICMSSummaryEntry, error) {
+func (uc *ICMSSummaryEntryUseCase) Create(ctx context.Context, e *entity.ICMSSummaryEntry) (*response.ICMSSummaryEntryResponse, error) {
 	if err := validatePeriod(e.Period); err != nil {
 		return nil, err
 	}
@@ -179,10 +244,14 @@ func (uc *ICMSSummaryEntryUseCase) Create(ctx context.Context, e *entity.ICMSSum
 		return nil, errors.New("icms_base and icms_value must be >= 0")
 	}
 	e.IsActive = true
-	return uc.Repo.CreateICMSSummaryEntry(ctx, e)
+	created, err := uc.Repo.CreateICMSSummaryEntry(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSSummaryEntryResponse(created), nil
 }
 
-func (uc *ICMSSummaryEntryUseCase) Update(ctx context.Context, e *entity.ICMSSummaryEntry) (*entity.ICMSSummaryEntry, error) {
+func (uc *ICMSSummaryEntryUseCase) Update(ctx context.Context, e *entity.ICMSSummaryEntry) (*response.ICMSSummaryEntryResponse, error) {
 	if e.ID == 0 {
 		return nil, errors.New("id is required")
 	}
@@ -194,29 +263,53 @@ func (uc *ICMSSummaryEntryUseCase) Update(ctx context.Context, e *entity.ICMSSum
 	if e.ICMSBase < 0 || e.ICMSValue < 0 {
 		return nil, errors.New("icms_base and icms_value must be >= 0")
 	}
-	return uc.Repo.UpdateICMSSummaryEntry(ctx, e)
+	updated, err := uc.Repo.UpdateICMSSummaryEntry(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSSummaryEntryResponse(updated), nil
 }
 
-func (uc *ICMSSummaryEntryUseCase) GetByID(ctx context.Context, id int64) (*entity.ICMSSummaryEntry, error) {
-	return uc.Repo.GetICMSSummaryEntry(ctx, id)
+func (uc *ICMSSummaryEntryUseCase) GetByID(ctx context.Context, id int64) (*response.ICMSSummaryEntryResponse, error) {
+	e, err := uc.Repo.GetICMSSummaryEntry(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSSummaryEntryResponse(e), nil
 }
 
-func (uc *ICMSSummaryEntryUseCase) List(ctx context.Context, period, uf string) ([]*entity.ICMSSummaryEntry, error) {
-	return uc.Repo.ListICMSSummaryEntries(ctx, period, uf)
+func (uc *ICMSSummaryEntryUseCase) List(ctx context.Context, period, uf string) ([]*response.ICMSSummaryEntryResponse, error) {
+	list, err := uc.Repo.ListICMSSummaryEntries(ctx, period, uf)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSSummaryEntryResponses(list), nil
 }
 
-func (uc *ICMSSummaryEntryUseCase) AddNote(ctx context.Context, n *entity.ICMSSummaryEntryNote) (*entity.ICMSSummaryEntryNote, error) {
+func (uc *ICMSSummaryEntryUseCase) AddNote(ctx context.Context, n *entity.ICMSSummaryEntryNote) (*response.ICMSSummaryEntryNoteResponse, error) {
 	if n.SummaryEntryID == 0 {
 		return nil, errors.New("summary_entry_id is required")
 	}
 	if n.NoteNumber == "" {
 		return nil, errors.New("note_number is required")
 	}
-	return uc.Repo.AddICMSSummaryEntryNote(ctx, n)
+	created, err := uc.Repo.AddICMSSummaryEntryNote(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	return toICMSSummaryEntryNoteResponse(created), nil
 }
 
-func (uc *ICMSSummaryEntryUseCase) ListNotes(ctx context.Context, summaryEntryID int64) ([]*entity.ICMSSummaryEntryNote, error) {
-	return uc.Repo.ListICMSSummaryEntryNotes(ctx, summaryEntryID)
+func (uc *ICMSSummaryEntryUseCase) ListNotes(ctx context.Context, summaryEntryID int64) ([]*response.ICMSSummaryEntryNoteResponse, error) {
+	list, err := uc.Repo.ListICMSSummaryEntryNotes(ctx, summaryEntryID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*response.ICMSSummaryEntryNoteResponse, 0, len(list))
+	for _, n := range list {
+		out = append(out, toICMSSummaryEntryNoteResponse(n))
+	}
+	return out, nil
 }
 
 // ─── Simples Nacional Apuração ────────────────────────────────────────────────
@@ -227,7 +320,7 @@ type SimplesNacionalUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *SimplesNacionalUseCase) Create(ctx context.Context, s *entity.SimplesNacionalApuracao) (*entity.SimplesNacionalApuracao, error) {
+func (uc *SimplesNacionalUseCase) Create(ctx context.Context, s *entity.SimplesNacionalApuracao) (*response.SimplesNacionalApuracaoResponse, error) {
 	if err := validatePeriod(s.Period); err != nil {
 		return nil, err
 	}
@@ -238,20 +331,36 @@ func (uc *SimplesNacionalUseCase) Create(ctx context.Context, s *entity.SimplesN
 		return nil, errors.New("receita values must be >= 0")
 	}
 	s.IsActive = true
-	return uc.Repo.CreateSimplesNacionalApuracao(ctx, s)
+	created, err := uc.Repo.CreateSimplesNacionalApuracao(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toSimplesNacionalApuracaoResponse(created), nil
 }
 
-func (uc *SimplesNacionalUseCase) Update(ctx context.Context, s *entity.SimplesNacionalApuracao) (*entity.SimplesNacionalApuracao, error) {
+func (uc *SimplesNacionalUseCase) Update(ctx context.Context, s *entity.SimplesNacionalApuracao) (*response.SimplesNacionalApuracaoResponse, error) {
 	if s.ID == 0 {
 		return nil, errors.New("id is required")
 	}
-	return uc.Repo.UpdateSimplesNacionalApuracao(ctx, s)
+	updated, err := uc.Repo.UpdateSimplesNacionalApuracao(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toSimplesNacionalApuracaoResponse(updated), nil
 }
 
-func (uc *SimplesNacionalUseCase) Get(ctx context.Context, period string, annex entity.SimplesNacionalAnnex) (*entity.SimplesNacionalApuracao, error) {
-	return uc.Repo.GetSimplesNacionalApuracao(ctx, period, annex)
+func (uc *SimplesNacionalUseCase) Get(ctx context.Context, period string, annex entity.SimplesNacionalAnnex) (*response.SimplesNacionalApuracaoResponse, error) {
+	s, err := uc.Repo.GetSimplesNacionalApuracao(ctx, period, annex)
+	if err != nil {
+		return nil, err
+	}
+	return toSimplesNacionalApuracaoResponse(s), nil
 }
 
-func (uc *SimplesNacionalUseCase) List(ctx context.Context, period string) ([]*entity.SimplesNacionalApuracao, error) {
-	return uc.Repo.ListSimplesNacionalApuracoes(ctx, period)
+func (uc *SimplesNacionalUseCase) List(ctx context.Context, period string) ([]*response.SimplesNacionalApuracaoResponse, error) {
+	list, err := uc.Repo.ListSimplesNacionalApuracoes(ctx, period)
+	if err != nil {
+		return nil, err
+	}
+	return toSimplesNacionalApuracaoResponses(list), nil
 }

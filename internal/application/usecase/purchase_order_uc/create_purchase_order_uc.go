@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
@@ -22,7 +23,7 @@ type CreatePurchaseOrderUseCase struct {
 func (uc *CreatePurchaseOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.CreatePurchaseOrderDTO,
-) (*entity.PurchaseOrder, error) {
+) (*response.PurchaseOrderResponse, error) {
 	if !uc.Auth.CanCreatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -115,7 +116,11 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 	o.AdvanceDate = parsePODate(dto.AdvanceDate)
 	o.ShipmentDate = parsePODate(dto.ShipmentDate)
 
-	return uc.Repo.Create(ctx, o)
+	created, err := uc.Repo.Create(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	return toPurchaseOrderResponse(created), nil
 }
 
 func parsePODate(s *string) *time.Time {

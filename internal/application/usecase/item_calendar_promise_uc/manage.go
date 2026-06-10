@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_calendar_promise/entity"
@@ -18,7 +19,7 @@ type ManageItemCalendarPromiseUseCase struct {
 func (uc *ManageItemCalendarPromiseUseCase) UpsertDay(
 	ctx context.Context,
 	dto request.CreateItemCalendarDayDTO,
-) (*entity.ItemCalendarPromise, error) {
+) (*response.ItemCalendarPromiseResponse, error) {
 	if !uc.Auth.CanManageItemCalendarPromise(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -33,7 +34,11 @@ func (uc *ManageItemCalendarPromiseUseCase) UpsertDay(
 		Description: dto.Description,
 	}
 
-	return uc.Repo.UpsertDay(ctx, cal)
+	saved, err := uc.Repo.UpsertDay(ctx, cal)
+	if err != nil {
+		return nil, err
+	}
+	return toItemCalendarPromiseResponse(saved), nil
 }
 
 func (uc *ManageItemCalendarPromiseUseCase) GetDay(
@@ -41,11 +46,15 @@ func (uc *ManageItemCalendarPromiseUseCase) GetDay(
 	itemCode int64,
 	mask string,
 	year, month, day int,
-) (*entity.ItemCalendarPromise, error) {
+) (*response.ItemCalendarPromiseResponse, error) {
 	if !uc.Auth.CanManageItemCalendarPromise(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.GetDay(ctx, itemCode, mask, year, month, day)
+	c, err := uc.Repo.GetDay(ctx, itemCode, mask, year, month, day)
+	if err != nil {
+		return nil, err
+	}
+	return toItemCalendarPromiseResponse(c), nil
 }
 
 func (uc *ManageItemCalendarPromiseUseCase) ListMonth(
@@ -53,11 +62,15 @@ func (uc *ManageItemCalendarPromiseUseCase) ListMonth(
 	itemCode int64,
 	mask string,
 	year, month int,
-) ([]*entity.ItemCalendarPromise, error) {
+) ([]*response.ItemCalendarPromiseResponse, error) {
 	if !uc.Auth.CanManageItemCalendarPromise(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListMonth(ctx, itemCode, mask, year, month)
+	list, err := uc.Repo.ListMonth(ctx, itemCode, mask, year, month)
+	if err != nil {
+		return nil, err
+	}
+	return toItemCalendarPromiseResponses(list), nil
 }
 
 func (uc *ManageItemCalendarPromiseUseCase) GetWorkdaysInMonth(
@@ -65,11 +78,15 @@ func (uc *ManageItemCalendarPromiseUseCase) GetWorkdaysInMonth(
 	itemCode int64,
 	mask string,
 	year, month int,
-) ([]*entity.ItemCalendarPromise, error) {
+) ([]*response.ItemCalendarPromiseResponse, error) {
 	if !uc.Auth.CanManageItemCalendarPromise(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.GetWorkdaysInMonth(ctx, itemCode, mask, year, month)
+	list, err := uc.Repo.GetWorkdaysInMonth(ctx, itemCode, mask, year, month)
+	if err != nil {
+		return nil, err
+	}
+	return toItemCalendarPromiseResponses(list), nil
 }
 
 func (uc *ManageItemCalendarPromiseUseCase) DeleteDay(

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
@@ -22,7 +23,7 @@ type CreateItemMachineTimeUseCase struct {
 
 func (uc *CreateItemMachineTimeUseCase) Execute(
 	ctx context.Context, dto request.CreateItemMachineTimeDTO,
-) (*entity.ItemMachineTime, error) {
+) (*response.ItemMachineTimeResponse, error) {
 	if !uc.Auth.CanCreateItemTimeMachine(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -41,14 +42,22 @@ func (uc *CreateItemMachineTimeUseCase) Execute(
 		SetupTime:          dto.SetupTime,
 		Priority:           dto.Priority,
 	}
-	return uc.Repo.CreateItemMachineTime(ctx, imt)
+	created, err := uc.Repo.CreateItemMachineTime(ctx, imt)
+	if err != nil {
+		return nil, err
+	}
+	return toItemMachineTimeResponse(created), nil
 }
 
 func (uc *CreateItemMachineTimeUseCase) GetByCodeTime(
 	ctx context.Context,
 	code int64,
-) (*entity.Machine, error) {
-	return uc.Repo.GetByCode(ctx, code)
+) (*response.MachineResponse, error) {
+	m, err := uc.Repo.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toMachineResponse(m), nil
 }
 
 func (uc *CreateItemMachineTimeUseCase) validateUnitCompatibility(

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -19,7 +20,7 @@ type CreateSalesOrderUseCase struct {
 func (uc *CreateSalesOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateSalesOrderDTO,
-) (*entity.SalesOrder, error) {
+) (*response.SalesOrderResponse, error) {
 	if !uc.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -82,5 +83,9 @@ func (uc *CreateSalesOrderUseCase) Execute(
 		o.SaleDate = &t
 	}
 
-	return uc.Repo.Create(ctx, o)
+	created, err := uc.Repo.Create(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderResponse(created), nil
 }

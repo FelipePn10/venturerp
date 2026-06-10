@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/supplier/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/supplier/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
@@ -21,7 +22,7 @@ func NewSupplierUseCase(repo repository.SupplierRepository) *SupplierUseCase {
 
 // ─── Supplier Types ─────────────────────────────────────────────────────────
 
-func (uc *SupplierUseCase) CreateSupplierType(ctx context.Context, dto request.CreateSupplierTypeDTO) (*entity.SupplierType, error) {
+func (uc *SupplierUseCase) CreateSupplierType(ctx context.Context, dto request.CreateSupplierTypeDTO) (*response.SupplierTypeResponse, error) {
 	code, err := uc.repo.NextSupplierTypeCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating supplier type code: %w", err)
@@ -30,10 +31,14 @@ func (uc *SupplierUseCase) CreateSupplierType(ctx context.Context, dto request.C
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.CreateSupplierType(ctx, t)
+	created, err := uc.repo.CreateSupplierType(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	return toSupplierTypeResponse(created), nil
 }
 
-func (uc *SupplierUseCase) UpdateSupplierType(ctx context.Context, dto request.UpdateSupplierTypeDTO) (*entity.SupplierType, error) {
+func (uc *SupplierUseCase) UpdateSupplierType(ctx context.Context, dto request.UpdateSupplierTypeDTO) (*response.SupplierTypeResponse, error) {
 	t, err := uc.repo.GetSupplierTypeByCode(ctx, dto.Code)
 	if err != nil {
 		return nil, err
@@ -43,20 +48,32 @@ func (uc *SupplierUseCase) UpdateSupplierType(ctx context.Context, dto request.U
 		t.Kind = entity.SupplierKind(dto.Kind)
 	}
 	t.IsActive = dto.IsActive
-	return uc.repo.UpdateSupplierType(ctx, t)
+	updated, err := uc.repo.UpdateSupplierType(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	return toSupplierTypeResponse(updated), nil
 }
 
-func (uc *SupplierUseCase) GetSupplierType(ctx context.Context, code int64) (*entity.SupplierType, error) {
-	return uc.repo.GetSupplierTypeByCode(ctx, code)
+func (uc *SupplierUseCase) GetSupplierType(ctx context.Context, code int64) (*response.SupplierTypeResponse, error) {
+	t, err := uc.repo.GetSupplierTypeByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return toSupplierTypeResponse(t), nil
 }
 
-func (uc *SupplierUseCase) ListSupplierTypes(ctx context.Context, onlyActive bool) ([]*entity.SupplierType, error) {
-	return uc.repo.ListSupplierTypes(ctx, onlyActive)
+func (uc *SupplierUseCase) ListSupplierTypes(ctx context.Context, onlyActive bool) ([]*response.SupplierTypeResponse, error) {
+	list, err := uc.repo.ListSupplierTypes(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toSupplierTypeResponses(list), nil
 }
 
 // ─── Supplier Contact Types ───────────────────────────────────────────────────
 
-func (uc *SupplierUseCase) CreateContactType(ctx context.Context, dto request.CreateSupplierContactTypeDTO) (*entity.SupplierContactType, error) {
+func (uc *SupplierUseCase) CreateContactType(ctx context.Context, dto request.CreateSupplierContactTypeDTO) (*response.SupplierContactTypeResponse, error) {
 	code, err := uc.repo.NextContactTypeCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating contact type code: %w", err)
@@ -65,16 +82,24 @@ func (uc *SupplierUseCase) CreateContactType(ctx context.Context, dto request.Cr
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.CreateContactType(ctx, ct)
+	created, err := uc.repo.CreateContactType(ctx, ct)
+	if err != nil {
+		return nil, err
+	}
+	return toContactTypeResponse(created), nil
 }
 
-func (uc *SupplierUseCase) ListContactTypes(ctx context.Context, onlyActive bool) ([]*entity.SupplierContactType, error) {
-	return uc.repo.ListContactTypes(ctx, onlyActive)
+func (uc *SupplierUseCase) ListContactTypes(ctx context.Context, onlyActive bool) ([]*response.SupplierContactTypeResponse, error) {
+	list, err := uc.repo.ListContactTypes(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toContactTypeResponses(list), nil
 }
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 
-func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.CreateSupplierDTO) (*entity.Supplier, error) {
+func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.CreateSupplierDTO) (*response.SupplierResponse, error) {
 	// Reject duplicate document (spec: existing register for the same CPF/CNPJ).
 	if existing, err := uc.repo.GetSupplierByDocument(ctx, dto.DocumentNumber); err == nil && existing != nil {
 		return nil, fmt.Errorf("já existe um fornecedor (código %d) cadastrado para o documento %s", existing.Code, dto.DocumentNumber)
@@ -136,10 +161,14 @@ func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.Creat
 	}
 	s.GLNCode = dto.GLNCode
 
-	return uc.repo.CreateSupplier(ctx, s)
+	created, err := uc.repo.CreateSupplier(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toSupplierResponse(created), nil
 }
 
-func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.UpdateSupplierDTO) (*entity.Supplier, error) {
+func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.UpdateSupplierDTO) (*response.SupplierResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.Code)
 	if err != nil {
 		return nil, err
@@ -216,7 +245,7 @@ func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.Updat
 			return nil, fmt.Errorf("propagating state registration: %w", perr)
 		}
 	}
-	return updated, nil
+	return toSupplierResponse(updated), nil
 }
 
 // DeleteSupplier hard-deletes a supplier. Blocked (friendly error) when purchase
@@ -225,7 +254,7 @@ func (uc *SupplierUseCase) DeleteSupplier(ctx context.Context, code int64) error
 	return uc.repo.DeleteSupplier(ctx, code)
 }
 
-func (uc *SupplierUseCase) GetSupplier(ctx context.Context, code int64) (*entity.Supplier, error) {
+func (uc *SupplierUseCase) GetSupplier(ctx context.Context, code int64) (*response.SupplierResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, code)
 	if err != nil {
 		return nil, err
@@ -256,15 +285,23 @@ func (uc *SupplierUseCase) GetSupplier(ctx context.Context, code int64) (*entity
 		}
 	}
 	s.Contacts = contacts
-	return s, nil
+	return toSupplierResponse(s), nil
 }
 
-func (uc *SupplierUseCase) ListSuppliers(ctx context.Context, onlyActive bool) ([]*entity.Supplier, error) {
-	return uc.repo.ListSuppliers(ctx, onlyActive)
+func (uc *SupplierUseCase) ListSuppliers(ctx context.Context, onlyActive bool) ([]*response.SupplierResponse, error) {
+	list, err := uc.repo.ListSuppliers(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toSupplierResponses(list), nil
 }
 
-func (uc *SupplierUseCase) ListEstablishments(ctx context.Context, corporateCode int64) ([]*entity.Supplier, error) {
-	return uc.repo.ListEstablishments(ctx, corporateCode)
+func (uc *SupplierUseCase) ListEstablishments(ctx context.Context, corporateCode int64) ([]*response.SupplierResponse, error) {
+	list, err := uc.repo.ListEstablishments(ctx, corporateCode)
+	if err != nil {
+		return nil, err
+	}
+	return toSupplierResponses(list), nil
 }
 
 func (uc *SupplierUseCase) BlockSupplier(ctx context.Context, dto request.BlockSupplierDTO) error {
@@ -277,7 +314,7 @@ func (uc *SupplierUseCase) UnblockSupplier(ctx context.Context, code int64) erro
 
 // ─── Folders ──────────────────────────────────────────────────────────────────
 
-func (uc *SupplierUseCase) AddAddress(ctx context.Context, dto request.AddSupplierAddressDTO) (*entity.SupplierAddress, error) {
+func (uc *SupplierUseCase) AddAddress(ctx context.Context, dto request.AddSupplierAddressDTO) (*response.SupplierAddressResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.SupplierCode)
 	if err != nil {
 		return nil, err
@@ -290,7 +327,7 @@ func (uc *SupplierUseCase) AddAddress(ctx context.Context, dto request.AddSuppli
 	if addrType == "" {
 		addrType = entity.AddressComercial
 	}
-	return uc.repo.AddAddress(ctx, &entity.SupplierAddress{
+	created, err := uc.repo.AddAddress(ctx, &entity.SupplierAddress{
 		SupplierID:   s.ID,
 		AddressType:  addrType,
 		ZipCode:      dto.ZipCode,
@@ -303,17 +340,25 @@ func (uc *SupplierUseCase) AddAddress(ctx context.Context, dto request.AddSuppli
 		Country:      country,
 		IsDefault:    dto.IsDefault,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return toAddressResponse(created), nil
 }
 
-func (uc *SupplierUseCase) ListAddresses(ctx context.Context, supplierCode int64) ([]*entity.SupplierAddress, error) {
+func (uc *SupplierUseCase) ListAddresses(ctx context.Context, supplierCode int64) ([]*response.SupplierAddressResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, supplierCode)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.ListAddresses(ctx, s.ID)
+	list, err := uc.repo.ListAddresses(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+	return toAddressResponses(list), nil
 }
 
-func (uc *SupplierUseCase) AddPhone(ctx context.Context, dto request.AddSupplierPhoneDTO) (*entity.SupplierPhone, error) {
+func (uc *SupplierUseCase) AddPhone(ctx context.Context, dto request.AddSupplierPhoneDTO) (*response.SupplierPhoneResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.SupplierCode)
 	if err != nil {
 		return nil, err
@@ -322,10 +367,14 @@ func (uc *SupplierUseCase) AddPhone(ctx context.Context, dto request.AddSupplier
 	if ranking == 0 {
 		ranking = 1
 	}
-	return uc.repo.AddPhone(ctx, &entity.SupplierPhone{SupplierID: s.ID, Number: dto.Number, Ranking: ranking})
+	created, err := uc.repo.AddPhone(ctx, &entity.SupplierPhone{SupplierID: s.ID, Number: dto.Number, Ranking: ranking})
+	if err != nil {
+		return nil, err
+	}
+	return toPhoneResponse(created), nil
 }
 
-func (uc *SupplierUseCase) AddEmail(ctx context.Context, dto request.AddSupplierEmailDTO) (*entity.SupplierEmail, error) {
+func (uc *SupplierUseCase) AddEmail(ctx context.Context, dto request.AddSupplierEmailDTO) (*response.SupplierEmailResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.SupplierCode)
 	if err != nil {
 		return nil, err
@@ -334,10 +383,14 @@ func (uc *SupplierUseCase) AddEmail(ctx context.Context, dto request.AddSupplier
 	if ranking == 0 {
 		ranking = 1
 	}
-	return uc.repo.AddEmail(ctx, &entity.SupplierEmail{SupplierID: s.ID, Email: dto.Email, Ranking: ranking})
+	created, err := uc.repo.AddEmail(ctx, &entity.SupplierEmail{SupplierID: s.ID, Email: dto.Email, Ranking: ranking})
+	if err != nil {
+		return nil, err
+	}
+	return toEmailResponse(created), nil
 }
 
-func (uc *SupplierUseCase) AddDueDate(ctx context.Context, dto request.AddSupplierDueDateDTO) (*entity.SupplierDueDate, error) {
+func (uc *SupplierUseCase) AddDueDate(ctx context.Context, dto request.AddSupplierDueDateDTO) (*response.SupplierDueDateResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.SupplierCode)
 	if err != nil {
 		return nil, err
@@ -358,10 +411,14 @@ func (uc *SupplierUseCase) AddDueDate(ctx context.Context, dto request.AddSuppli
 	if d.Ranking == 0 {
 		d.Ranking = 1
 	}
-	return uc.repo.AddDueDate(ctx, d)
+	created, err := uc.repo.AddDueDate(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	return toDueDateResponse(created), nil
 }
 
-func (uc *SupplierUseCase) AddContact(ctx context.Context, dto request.AddSupplierContactDTO) (*entity.SupplierContact, error) {
+func (uc *SupplierUseCase) AddContact(ctx context.Context, dto request.AddSupplierContactDTO) (*response.SupplierContactResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.SupplierCode)
 	if err != nil {
 		return nil, err
@@ -373,7 +430,7 @@ func (uc *SupplierUseCase) AddContact(ctx context.Context, dto request.AddSuppli
 	if ranking == 0 {
 		ranking = 1
 	}
-	return uc.repo.AddContact(ctx, &entity.SupplierContact{
+	created, err := uc.repo.AddContact(ctx, &entity.SupplierContact{
 		SupplierID:       s.ID,
 		ContactTypeID:    dto.ContactTypeID,
 		Name:             dto.Name,
@@ -383,40 +440,56 @@ func (uc *SupplierUseCase) AddContact(ctx context.Context, dto request.AddSuppli
 		Observation:      dto.Observation,
 		PurchaseOrderTag: dto.PurchaseOrderTag,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return toContactResponse(created), nil
 }
 
-func (uc *SupplierUseCase) ListContacts(ctx context.Context, supplierCode int64) ([]*entity.SupplierContact, error) {
+func (uc *SupplierUseCase) ListContacts(ctx context.Context, supplierCode int64) ([]*response.SupplierContactResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, supplierCode)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.ListContacts(ctx, s.ID)
+	list, err := uc.repo.ListContacts(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+	return toContactResponses(list), nil
 }
 
-func (uc *SupplierUseCase) AddContactPhone(ctx context.Context, dto request.AddSupplierContactPhoneDTO) (*entity.SupplierContactPhone, error) {
+func (uc *SupplierUseCase) AddContactPhone(ctx context.Context, dto request.AddSupplierContactPhoneDTO) (*response.SupplierContactPhoneResponse, error) {
 	ranking := dto.Ranking
 	if ranking == 0 {
 		ranking = 1
 	}
-	return uc.repo.AddContactPhone(ctx, &entity.SupplierContactPhone{ContactID: dto.ContactID, Value: dto.Value, Ranking: ranking})
+	created, err := uc.repo.AddContactPhone(ctx, &entity.SupplierContactPhone{ContactID: dto.ContactID, Value: dto.Value, Ranking: ranking})
+	if err != nil {
+		return nil, err
+	}
+	return toContactPhoneResponse(created), nil
 }
 
-func (uc *SupplierUseCase) AddContactEmail(ctx context.Context, dto request.AddSupplierContactEmailDTO) (*entity.SupplierContactEmail, error) {
+func (uc *SupplierUseCase) AddContactEmail(ctx context.Context, dto request.AddSupplierContactEmailDTO) (*response.SupplierContactEmailResponse, error) {
 	ranking := dto.Ranking
 	if ranking == 0 {
 		ranking = 1
 	}
-	return uc.repo.AddContactEmail(ctx, &entity.SupplierContactEmail{ContactID: dto.ContactID, Value: dto.Value, Ranking: ranking})
+	created, err := uc.repo.AddContactEmail(ctx, &entity.SupplierContactEmail{ContactID: dto.ContactID, Value: dto.Value, Ranking: ranking})
+	if err != nil {
+		return nil, err
+	}
+	return toContactEmailResponse(created), nil
 }
 
 // ─── Enterprise links ──────────────────────────────────────────────────────
 
-func (uc *SupplierUseCase) AddEnterprise(ctx context.Context, dto request.AddSupplierEnterpriseDTO) (*entity.SupplierEnterprise, error) {
+func (uc *SupplierUseCase) AddEnterprise(ctx context.Context, dto request.AddSupplierEnterpriseDTO) (*response.SupplierEnterpriseResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.SupplierCode)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.AddEnterprise(ctx, &entity.SupplierEnterprise{
+	created, err := uc.repo.AddEnterprise(ctx, &entity.SupplierEnterprise{
 		SupplierID:           s.ID,
 		EnterpriseCode:       dto.EnterpriseCode,
 		FinancialAccount:     dto.FinancialAccount,
@@ -425,10 +498,14 @@ func (uc *SupplierUseCase) AddEnterprise(ctx context.Context, dto request.AddSup
 		PurchasePriceTableID: dto.PurchasePriceTableID,
 		IsActive:             true,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return toEnterpriseResponse(created), nil
 }
 
-func (uc *SupplierUseCase) UpdateEnterprise(ctx context.Context, dto request.UpdateSupplierEnterpriseDTO) (*entity.SupplierEnterprise, error) {
-	return uc.repo.UpdateEnterprise(ctx, &entity.SupplierEnterprise{
+func (uc *SupplierUseCase) UpdateEnterprise(ctx context.Context, dto request.UpdateSupplierEnterpriseDTO) (*response.SupplierEnterpriseResponse, error) {
+	updated, err := uc.repo.UpdateEnterprise(ctx, &entity.SupplierEnterprise{
 		ID:                   dto.ID,
 		FinancialAccount:     dto.FinancialAccount,
 		AppliesIPI:           dto.AppliesIPI,
@@ -436,24 +513,36 @@ func (uc *SupplierUseCase) UpdateEnterprise(ctx context.Context, dto request.Upd
 		PurchasePriceTableID: dto.PurchasePriceTableID,
 		IsActive:             dto.IsActive,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return toEnterpriseResponse(updated), nil
 }
 
-func (uc *SupplierUseCase) ListEnterprises(ctx context.Context, supplierCode int64) ([]*entity.SupplierEnterprise, error) {
+func (uc *SupplierUseCase) ListEnterprises(ctx context.Context, supplierCode int64) ([]*response.SupplierEnterpriseResponse, error) {
 	s, err := uc.repo.GetSupplierByCode(ctx, supplierCode)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.ListEnterprises(ctx, s.ID)
+	list, err := uc.repo.ListEnterprises(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+	return toEnterpriseResponses(list), nil
 }
 
 // ─── Parameters ─────────────────────────────────────────────────────────────
 
-func (uc *SupplierUseCase) GetParameters(ctx context.Context, enterpriseCode int64) (*entity.SupplierParameters, error) {
-	return uc.repo.GetParameters(ctx, enterpriseCode)
+func (uc *SupplierUseCase) GetParameters(ctx context.Context, enterpriseCode int64) (*response.SupplierParametersResponse, error) {
+	p, err := uc.repo.GetParameters(ctx, enterpriseCode)
+	if err != nil {
+		return nil, err
+	}
+	return toParametersResponse(p), nil
 }
 
-func (uc *SupplierUseCase) UpsertParameters(ctx context.Context, dto request.UpsertSupplierParametersDTO) (*entity.SupplierParameters, error) {
-	return uc.repo.UpsertParameters(ctx, &entity.SupplierParameters{
+func (uc *SupplierUseCase) UpsertParameters(ctx context.Context, dto request.UpsertSupplierParametersDTO) (*response.SupplierParametersResponse, error) {
+	saved, err := uc.repo.UpsertParameters(ctx, &entity.SupplierParameters{
 		EnterpriseCode:            dto.EnterpriseCode,
 		DefaultFinancialAccount:   dto.DefaultFinancialAccount,
 		UniqueItemCodePerSupplier: dto.UniqueItemCodePerSupplier,
@@ -466,6 +555,10 @@ func (uc *SupplierUseCase) UpsertParameters(ctx context.Context, dto request.Ups
 		GenericSupplierCode:       dto.GenericSupplierCode,
 		DefaultDueBaseDate:        entity.BaseDate(orDefault(dto.DefaultDueBaseDate, string(entity.BaseDateEmissao))),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return toParametersResponse(saved), nil
 }
 
 func orDefault(v, def string) string {

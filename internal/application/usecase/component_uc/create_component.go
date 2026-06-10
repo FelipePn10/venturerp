@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/component/entity"
@@ -29,7 +30,7 @@ func NewCreateComponentUseCase(
 func (uc *CreateComponentUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateComponentRequestDTO,
-) (*entity.Component, error) {
+) (*response.ComponentResponse, error) {
 
 	if !uc.Auth.CanCreateComponent(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -37,7 +38,7 @@ func (uc *CreateComponentUseCase) Execute(
 
 	code, err := valueobject.NewComponentCode(dto.GroupCode)
 	if err != nil {
-		return &entity.Component{}, err
+		return nil, err
 	}
 
 	exists, err := uc.Repo.ExistsComponentByCode(ctx, code.String())
@@ -63,5 +64,5 @@ func (uc *CreateComponentUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	return saved, nil
+	return toComponentResponse(saved), nil
 }

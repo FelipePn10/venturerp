@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/entity"
@@ -29,7 +30,7 @@ func NewGenerateMaskItemUseCase(
 func (uc *GenerateMaskForItemUseCase) Execute(
 	ctx context.Context,
 	dto request.GenerateMaskItemRequestDTO,
-) (*entity.ItemMask, error) {
+) (*response.ItemMaskResponse, error) {
 	if uc.Auth == nil {
 		return nil, errors.New("auth mask not initialized")
 	}
@@ -155,5 +156,9 @@ func (uc *GenerateMaskForItemUseCase) Execute(
 	}
 	itemMask.Answers = answers
 
-	return uc.Repo.Generate(ctx, itemMask)
+	generated, err := uc.Repo.Generate(ctx, itemMask)
+	if err != nil {
+		return nil, err
+	}
+	return toItemMaskResponse(generated), nil
 }

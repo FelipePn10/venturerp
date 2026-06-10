@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/product/entity"
@@ -29,7 +30,7 @@ func NewCreateProductUseCase(
 func (uc *CreateProductUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateProductDTO,
-) (*entity.Product, error) {
+) (*response.ProductResponse, error) {
 	if !uc.Auth.CanCreateProduct(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -62,5 +63,5 @@ func (uc *CreateProductUseCase) Execute(
 		return nil, err
 	}
 
-	return saved, nil
+	return toProductResponse(saved), nil
 }

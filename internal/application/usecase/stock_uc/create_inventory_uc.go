@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -16,7 +17,7 @@ type CreateInventoryUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CreateInventoryUseCase) Execute(ctx context.Context, dto request.CreateInventoryDTO) (*entity.PhysicalInventory, error) {
+func (uc *CreateInventoryUseCase) Execute(ctx context.Context, dto request.CreateInventoryDTO) (*response.PhysicalInventoryResponse, error) {
 	if !uc.Auth.CanCreateInventory(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -43,5 +44,9 @@ func (uc *CreateInventoryUseCase) Execute(ctx context.Context, dto request.Creat
 		inv.EndDate = &t
 	}
 
-	return uc.Repo.CreateInventory(ctx, inv)
+	created, err := uc.Repo.CreateInventory(ctx, inv)
+	if err != nil {
+		return nil, err
+	}
+	return toPhysicalInventoryResponse(created), nil
 }

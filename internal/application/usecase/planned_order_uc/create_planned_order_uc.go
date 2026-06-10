@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -20,7 +21,7 @@ type CreatePlannedOrderUseCase struct {
 func (uc *CreatePlannedOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.CreatePlannedOrderDTO,
-) (*entity.PlannedOrder, error) {
+) (*response.PlannedOrderResponse, error) {
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -47,5 +48,9 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 		Notes:          dto.Notes,
 		CreatedBy:      dto.CreatedBy,
 	}
-	return uc.Repo.Create(ctx, order)
+	created, err := uc.Repo.Create(ctx, order)
+	if err != nil {
+		return nil, err
+	}
+	return toPlannedOrderResponse(created), nil
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
@@ -23,7 +24,7 @@ type AddPurchaseOrderItemUseCase struct {
 	FiscalClass   ports.FiscalClassificationProvider
 }
 
-func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.CreatePurchaseOrderItemDTO) (*entity.PurchaseOrderItem, error) {
+func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.CreatePurchaseOrderItemDTO) (*response.PurchaseOrderItemResponse, error) {
 	if !uc.Auth.CanCreatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -119,5 +120,9 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		}
 	}
 
-	return uc.Repo.CreateItem(ctx, item)
+	created, err := uc.Repo.CreateItem(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	return toPurchaseOrderItemResponse(created), nil
 }

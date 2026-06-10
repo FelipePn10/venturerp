@@ -3,6 +3,7 @@ package restriction_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
@@ -17,15 +18,19 @@ type CreateRestrictionReasonUseCase struct {
 func (uc *CreateRestrictionReasonUseCase) Execute(
 	ctx context.Context,
 	description, situation string,
-) (*entity.RestrictionReason, error) {
+) (*response.RestrictionReasonResponse, error) {
 	if !uc.Auth.CanCreateRestriction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if situation == "" {
 		situation = "ACTIVE"
 	}
-	return uc.Repo.Create(ctx, &entity.RestrictionReason{
+	created, err := uc.Repo.Create(ctx, &entity.RestrictionReason{
 		Description: description,
 		Situation:   situation,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return toRestrictionReasonResponse(created), nil
 }

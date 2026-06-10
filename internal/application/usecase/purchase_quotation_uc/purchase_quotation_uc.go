@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	plannedrepo "github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/entity"
 	qrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/repository"
@@ -26,7 +27,7 @@ func NewPurchaseQuotationUseCase(
 }
 
 // Create releases requisition items / planned orders into a new quotation.
-func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.CreatePurchaseQuotationDTO) (*entity.PurchaseQuotation, error) {
+func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.CreatePurchaseQuotationDTO) (*response.PurchaseQuotationResponse, error) {
 	code, err := uc.repo.NextCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
@@ -104,10 +105,10 @@ func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.Crea
 		created.Suppliers = append(created.Suppliers, s)
 	}
 
-	return created, nil
+	return toQuotationResponse(created), nil
 }
 
-func (uc *PurchaseQuotationUseCase) Get(ctx context.Context, code int64) (*entity.PurchaseQuotation, error) {
+func (uc *PurchaseQuotationUseCase) Get(ctx context.Context, code int64) (*response.PurchaseQuotationResponse, error) {
 	q, err := uc.repo.GetByCode(ctx, code)
 	if err != nil {
 		return nil, err
@@ -125,18 +126,26 @@ func (uc *PurchaseQuotationUseCase) Get(ctx context.Context, code int64) (*entit
 	if q.Suppliers, err = uc.repo.ListSuppliers(ctx, code); err != nil {
 		return nil, err
 	}
-	return q, nil
+	return toQuotationResponse(q), nil
 }
 
-func (uc *PurchaseQuotationUseCase) List(ctx context.Context, onlyOpen bool) ([]*entity.PurchaseQuotation, error) {
-	return uc.repo.List(ctx, onlyOpen)
+func (uc *PurchaseQuotationUseCase) List(ctx context.Context, onlyOpen bool) ([]*response.PurchaseQuotationResponse, error) {
+	qs, err := uc.repo.List(ctx, onlyOpen)
+	if err != nil {
+		return nil, err
+	}
+	return toQuotationResponses(qs), nil
 }
 
-func (uc *PurchaseQuotationUseCase) AddSupplier(ctx context.Context, dto request.AddQuotationSupplierDTO) (*entity.PurchaseQuotationSupplier, error) {
-	return uc.repo.AddSupplier(ctx, &entity.PurchaseQuotationSupplier{QuotationCode: dto.QuotationCode, SupplierCode: dto.SupplierCode})
+func (uc *PurchaseQuotationUseCase) AddSupplier(ctx context.Context, dto request.AddQuotationSupplierDTO) (*response.PurchaseQuotationSupplierResponse, error) {
+	s, err := uc.repo.AddSupplier(ctx, &entity.PurchaseQuotationSupplier{QuotationCode: dto.QuotationCode, SupplierCode: dto.SupplierCode})
+	if err != nil {
+		return nil, err
+	}
+	return toQuotationSupplierResponse(s), nil
 }
 
-func (uc *PurchaseQuotationUseCase) RecordPrice(ctx context.Context, dto request.RecordQuotationPriceDTO) (*entity.PurchaseQuotationPrice, error) {
+func (uc *PurchaseQuotationUseCase) RecordPrice(ctx context.Context, dto request.RecordQuotationPriceDTO) (*response.PurchaseQuotationPriceResponse, error) {
 	item, err := uc.repo.GetItem(ctx, dto.QuotationItemID)
 	if err != nil {
 		return nil, err
@@ -153,9 +162,13 @@ func (uc *PurchaseQuotationUseCase) RecordPrice(ctx context.Context, dto request
 		return nil, err
 	}
 	_ = uc.repo.UpdateStatus(ctx, item.QuotationCode, string(entity.QuotationQuoted))
-	return price, nil
+	return toQuotationPriceResponse(price), nil
 }
 
-func (uc *PurchaseQuotationUseCase) SelectPrice(ctx context.Context, priceID int64) (*entity.PurchaseQuotationPrice, error) {
-	return uc.repo.SelectPrice(ctx, priceID)
+func (uc *PurchaseQuotationUseCase) SelectPrice(ctx context.Context, priceID int64) (*response.PurchaseQuotationPriceResponse, error) {
+	price, err := uc.repo.SelectPrice(ctx, priceID)
+	if err != nil {
+		return nil, err
+	}
+	return toQuotationPriceResponse(price), nil
 }

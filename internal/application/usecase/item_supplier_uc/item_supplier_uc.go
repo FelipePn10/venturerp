@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/repository"
 )
@@ -16,7 +17,7 @@ func NewItemSupplierUseCase(repo repository.ItemSupplierRepository) *ItemSupplie
 	return &ItemSupplierUseCase{repo: repo}
 }
 
-func (uc *ItemSupplierUseCase) Upsert(ctx context.Context, dto request.UpsertItemPreferredSupplierDTO) (*entity.ItemPreferredSupplier, error) {
+func (uc *ItemSupplierUseCase) Upsert(ctx context.Context, dto request.UpsertItemPreferredSupplierDTO) (*response.ItemPreferredSupplierResponse, error) {
 	s, err := entity.NewItemPreferredSupplier(dto.ItemCode, dto.SupplierCode, dto.Ranking, dto.CreatedBy)
 	if err != nil {
 		return nil, err
@@ -25,11 +26,19 @@ func (uc *ItemSupplierUseCase) Upsert(ctx context.Context, dto request.UpsertIte
 	s.SupplierDescription = dto.SupplierDescription
 	s.UOM = dto.UOM
 	s.LeadTimeDays = dto.LeadTimeDays
-	return uc.repo.Upsert(ctx, s)
+	saved, err := uc.repo.Upsert(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toItemPreferredSupplierResponse(saved), nil
 }
 
-func (uc *ItemSupplierUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*entity.ItemPreferredSupplier, error) {
-	return uc.repo.ListByItem(ctx, itemCode)
+func (uc *ItemSupplierUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*response.ItemPreferredSupplierResponse, error) {
+	list, err := uc.repo.ListByItem(ctx, itemCode)
+	if err != nil {
+		return nil, err
+	}
+	return toItemPreferredSupplierResponses(list), nil
 }
 
 func (uc *ItemSupplierUseCase) Delete(ctx context.Context, id int64) error {

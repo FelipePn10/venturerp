@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -16,7 +17,7 @@ type CreateStockMovementUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.CreateStockMovementDTO) (*entity.StockMovement, error) {
+func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.CreateStockMovementDTO) (*response.StockMovementResponse, error) {
 	if !uc.Auth.CanCreateStockMovement(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -48,5 +49,9 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 		m.ExpirationDate = &t
 	}
 
-	return uc.Repo.CreateMovement(ctx, m)
+	created, err := uc.Repo.CreateMovement(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	return toStockMovementResponse(created), nil
 }

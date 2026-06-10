@@ -3,9 +3,9 @@ package stock_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 )
 
@@ -14,7 +14,7 @@ type GetInventoryUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *GetInventoryUseCase) Execute(ctx context.Context, id int64) (*entity.PhysicalInventory, error) {
+func (uc *GetInventoryUseCase) Execute(ctx context.Context, id int64) (*response.PhysicalInventoryResponse, error) {
 	if !uc.Auth.CanGetInventory(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -27,12 +27,16 @@ func (uc *GetInventoryUseCase) Execute(ctx context.Context, id int64) (*entity.P
 		return nil, err
 	}
 	inv.TotalItems = len(items)
-	return inv, nil
+	return toPhysicalInventoryResponse(inv), nil
 }
 
-func (uc *GetInventoryUseCase) ListItems(ctx context.Context, inventoryID int64) ([]*entity.PhysicalInventoryItem, error) {
+func (uc *GetInventoryUseCase) ListItems(ctx context.Context, inventoryID int64) ([]*response.PhysicalInventoryItemResponse, error) {
 	if !uc.Auth.CanGetInventory(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListInventoryItems(ctx, inventoryID)
+	items, err := uc.Repo.ListInventoryItems(ctx, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+	return toPhysicalInventoryItemResponses(items), nil
 }

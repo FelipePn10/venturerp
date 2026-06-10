@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
@@ -29,7 +29,7 @@ func NewFindItemByCode(
 func (uc *FindItemByCode) Execute(
 	ctx context.Context,
 	dto request.FindItemByCodeDTO,
-) (*entity.Item, error) {
+) (*response.ItemResponse, error) {
 	if !uc.Auth.FindItemByCode(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -44,5 +44,5 @@ func (uc *FindItemByCode) Execute(
 		return nil, err
 	}
 
-	return item, nil
+	return toItemResponse(item), nil
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/ibpt/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/ibpt/repository"
 )
@@ -78,8 +79,12 @@ func (uc *IBPTUseCase) ImportFromCSV(ctx context.Context, uf, csvText string) (i
 }
 
 // Lookup returns the most recent IBPT rate for an NCM in a UF.
-func (uc *IBPTUseCase) Lookup(ctx context.Context, ncm, uf string) (*entity.IBPTRate, error) {
-	return uc.Repo.GetByNCM(ctx, strings.TrimSpace(ncm), strings.ToUpper(strings.TrimSpace(uf)))
+func (uc *IBPTUseCase) Lookup(ctx context.Context, ncm, uf string) (*response.IBPTRateResponse, error) {
+	r, err := uc.Repo.GetByNCM(ctx, strings.TrimSpace(ncm), strings.ToUpper(strings.TrimSpace(uf)))
+	if err != nil {
+		return nil, err
+	}
+	return toIBPTRateResponse(r), nil
 }
 
 func firstNonEmpty(s, def string) string {

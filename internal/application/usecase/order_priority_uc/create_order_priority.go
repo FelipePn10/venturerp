@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
@@ -18,7 +19,7 @@ type CreateOrderPriorityUseCase struct {
 func (uc *CreateOrderPriorityUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateOrderPriorityDTO,
-) (*entity.OrderPriority, error) {
+) (*response.OrderPriorityResponse, error) {
 	if !uc.Auth.CanCreateOrderPriority(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -29,5 +30,9 @@ func (uc *CreateOrderPriorityUseCase) Execute(
 		Description:   dto.Description,
 		CreatedBy:     dto.CreatedBy,
 	}
-	return uc.Repo.Create(ctx, op)
+	created, err := uc.Repo.Create(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	return toOrderPriorityResponse(created), nil
 }

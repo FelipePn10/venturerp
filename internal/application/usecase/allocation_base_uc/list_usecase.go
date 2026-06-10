@@ -3,9 +3,9 @@ package allocation_base_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/allocation_base/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/allocation_base/repository"
 )
 
@@ -16,9 +16,13 @@ type ListAllocationBasesUseCase struct {
 
 func (uc *ListAllocationBasesUseCase) Execute(
 	ctx context.Context,
-) ([]*entity.AllocationBase, error) {
+) ([]*response.AllocationBaseResponse, error) {
 	if !uc.Auth.ListAllocation(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.List(ctx)
+	list, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toAllocationBaseResponses(list), nil
 }

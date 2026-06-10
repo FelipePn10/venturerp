@@ -3,9 +3,9 @@ package production_plan_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/repository"
 )
 
@@ -14,9 +14,13 @@ type ListProductionPlansUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListProductionPlansUseCase) Execute(ctx context.Context) ([]*entity.ProductionPlan, error) {
+func (uc *ListProductionPlansUseCase) Execute(ctx context.Context) ([]*response.ProductionPlanResponse, error) {
 	if !uc.Auth.CanListProductionPlans(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.List(ctx)
+	list, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toProductionPlanResponses(list), nil
 }

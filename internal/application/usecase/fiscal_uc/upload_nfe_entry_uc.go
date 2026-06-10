@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -90,7 +91,7 @@ type nfeXML struct {
 	} `xml:"NFe>infNFe"`
 }
 
-func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.UploadNFEDTO) (*entity.FiscalEntry, error) {
+func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.UploadNFEDTO) (*response.FiscalEntryResponse, error) {
 	if !uc.Auth.CanCreateFiscalEntry(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -175,7 +176,7 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 	items, _ := uc.Repo.GetEntryItems(ctx, created.ID)
 	created.Itens = items
 
-	return created, nil
+	return toFiscalEntryResponse(created), nil
 }
 
 func parseNFEDate(s string) time.Time {

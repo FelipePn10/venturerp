@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
 )
 
@@ -15,9 +15,13 @@ type RunMRPCalculationUseCase struct {
 	Auth    ports.AuthService
 }
 
-func (uc *RunMRPCalculationUseCase) Execute(ctx context.Context, dto request.RunMRPCalculationDTO) (*entity.MRPCalculationLog, error) {
+func (uc *RunMRPCalculationUseCase) Execute(ctx context.Context, dto request.RunMRPCalculationDTO) (*response.MRPCalculationLogResponse, error) {
 	if !uc.Auth.CanRunMRPCalculation(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Service.Calculate(ctx, dto.PlanCode, dto.GenerateLLC)
+	log, err := uc.Service.Calculate(ctx, dto.PlanCode, dto.GenerateLLC)
+	if err != nil {
+		return nil, err
+	}
+	return toMRPCalculationLogResponse(log), nil
 }

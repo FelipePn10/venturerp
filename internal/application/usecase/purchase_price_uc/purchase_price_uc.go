@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/repository"
 )
@@ -29,7 +30,7 @@ func parseDatePtr(s *string) *time.Time {
 	return &t
 }
 
-func (uc *PurchasePriceUseCase) CreateTable(ctx context.Context, dto request.CreatePurchasePriceTableDTO) (*entity.PurchasePriceTable, error) {
+func (uc *PurchasePriceUseCase) CreateTable(ctx context.Context, dto request.CreatePurchasePriceTableDTO) (*response.PurchasePriceTableResponse, error) {
 	code, err := uc.repo.NextTableCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
@@ -40,10 +41,14 @@ func (uc *PurchasePriceUseCase) CreateTable(ctx context.Context, dto request.Cre
 	}
 	t.ValidityStart = parseDatePtr(dto.ValidityStart)
 	t.ValidityEnd = parseDatePtr(dto.ValidityEnd)
-	return uc.repo.CreateTable(ctx, t)
+	created, err := uc.repo.CreateTable(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	return toPriceTableResponse(created), nil
 }
 
-func (uc *PurchasePriceUseCase) UpdateTable(ctx context.Context, dto request.UpdatePurchasePriceTableDTO) (*entity.PurchasePriceTable, error) {
+func (uc *PurchasePriceUseCase) UpdateTable(ctx context.Context, dto request.UpdatePurchasePriceTableDTO) (*response.PurchasePriceTableResponse, error) {
 	t, err := uc.repo.GetTableByCode(ctx, dto.Code)
 	if err != nil {
 		return nil, err
@@ -55,10 +60,14 @@ func (uc *PurchasePriceUseCase) UpdateTable(ctx context.Context, dto request.Upd
 	t.ValidityStart = parseDatePtr(dto.ValidityStart)
 	t.ValidityEnd = parseDatePtr(dto.ValidityEnd)
 	t.IsActive = dto.IsActive
-	return uc.repo.UpdateTable(ctx, t)
+	updated, err := uc.repo.UpdateTable(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	return toPriceTableResponse(updated), nil
 }
 
-func (uc *PurchasePriceUseCase) GetTable(ctx context.Context, code int64) (*entity.PurchasePriceTable, error) {
+func (uc *PurchasePriceUseCase) GetTable(ctx context.Context, code int64) (*response.PurchasePriceTableResponse, error) {
 	t, err := uc.repo.GetTableByCode(ctx, code)
 	if err != nil {
 		return nil, err
@@ -66,14 +75,18 @@ func (uc *PurchasePriceUseCase) GetTable(ctx context.Context, code int64) (*enti
 	if t.Items, err = uc.repo.ListItems(ctx, t.ID); err != nil {
 		return nil, err
 	}
-	return t, nil
+	return toPriceTableResponse(t), nil
 }
 
-func (uc *PurchasePriceUseCase) ListTables(ctx context.Context, onlyActive bool) ([]*entity.PurchasePriceTable, error) {
-	return uc.repo.ListTables(ctx, onlyActive)
+func (uc *PurchasePriceUseCase) ListTables(ctx context.Context, onlyActive bool) ([]*response.PurchasePriceTableResponse, error) {
+	tables, err := uc.repo.ListTables(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toPriceTableResponses(tables), nil
 }
 
-func (uc *PurchasePriceUseCase) AddItem(ctx context.Context, dto request.AddPurchasePriceItemDTO) (*entity.PurchasePriceTableItem, error) {
+func (uc *PurchasePriceUseCase) AddItem(ctx context.Context, dto request.AddPurchasePriceItemDTO) (*response.PurchasePriceTableItemResponse, error) {
 	t, err := uc.repo.GetTableByCode(ctx, dto.TableCode)
 	if err != nil {
 		return nil, err
@@ -85,15 +98,23 @@ func (uc *PurchasePriceUseCase) AddItem(ctx context.Context, dto request.AddPurc
 	item.SupplierCode = dto.SupplierCode
 	item.UOM = dto.UOM
 	item.MinQty = dto.MinQty
-	return uc.repo.AddItem(ctx, item)
+	created, err := uc.repo.AddItem(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	return toPriceTableItemResponse(created), nil
 }
 
-func (uc *PurchasePriceUseCase) ListItems(ctx context.Context, tableCode int64) ([]*entity.PurchasePriceTableItem, error) {
+func (uc *PurchasePriceUseCase) ListItems(ctx context.Context, tableCode int64) ([]*response.PurchasePriceTableItemResponse, error) {
 	t, err := uc.repo.GetTableByCode(ctx, tableCode)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.ListItems(ctx, t.ID)
+	items, err := uc.repo.ListItems(ctx, t.ID)
+	if err != nil {
+		return nil, err
+	}
+	return toPriceTableItemResponses(items), nil
 }
 
 func (uc *PurchasePriceUseCase) DeleteItem(ctx context.Context, id int64) error {

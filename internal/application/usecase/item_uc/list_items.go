@@ -3,9 +3,9 @@ package item_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 )
 
@@ -18,9 +18,13 @@ func NewListItemsUseCase(repo repository.ItemRepository, auth ports.AuthService)
 	return &ListItemsUseCase{Repo: repo, Auth: auth}
 }
 
-func (uc *ListItemsUseCase) Execute(ctx context.Context) ([]*entity.Item, error) {
+func (uc *ListItemsUseCase) Execute(ctx context.Context) ([]*response.ItemResponse, error) {
 	if !uc.Auth.FindItemByCode(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListAll(ctx)
+	list, err := uc.Repo.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toItemResponses(list), nil
 }

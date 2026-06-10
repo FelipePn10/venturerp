@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/warehouse/entity"
@@ -28,7 +29,7 @@ func NewCreateWarehouseUseCase(
 func (uc *CreateWarehouseUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateWarehouseRequestDTO,
-) (*entity.Warehouse, error) {
+) (*response.WarehouseResponse, error) {
 	if !uc.Auth.CanCreateWarehouse(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -50,5 +51,5 @@ func (uc *CreateWarehouseUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	return create, nil
+	return toWarehouseResponse(create), nil
 }

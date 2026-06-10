@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock_movement/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock_movement/repository"
 )
@@ -16,7 +17,7 @@ func New(repo repository.StockMovementTypeRepository) *StockMovementTypeUseCase 
 	return &StockMovementTypeUseCase{Repo: repo}
 }
 
-func (uc *StockMovementTypeUseCase) Create(ctx context.Context, s *entity.StockMovementType) (*entity.StockMovementType, error) {
+func (uc *StockMovementTypeUseCase) Create(ctx context.Context, s *entity.StockMovementType) (*response.StockMovementTypeResponse, error) {
 	if s.Sigla == "" {
 		return nil, errors.New("sigla is required")
 	}
@@ -31,24 +32,44 @@ func (uc *StockMovementTypeUseCase) Create(ctx context.Context, s *entity.StockM
 	}
 	s.ShowsInSummary = true
 	s.IsActive = true
-	return uc.Repo.Create(ctx, s)
+	created, err := uc.Repo.Create(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toStockMovementTypeResponse(created), nil
 }
 
-func (uc *StockMovementTypeUseCase) Update(ctx context.Context, s *entity.StockMovementType) (*entity.StockMovementType, error) {
+func (uc *StockMovementTypeUseCase) Update(ctx context.Context, s *entity.StockMovementType) (*response.StockMovementTypeResponse, error) {
 	if s.ID == 0 {
 		return nil, errors.New("id is required")
 	}
-	return uc.Repo.Update(ctx, s)
+	updated, err := uc.Repo.Update(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toStockMovementTypeResponse(updated), nil
 }
 
-func (uc *StockMovementTypeUseCase) GetByID(ctx context.Context, id int64) (*entity.StockMovementType, error) {
-	return uc.Repo.GetByID(ctx, id)
+func (uc *StockMovementTypeUseCase) GetByID(ctx context.Context, id int64) (*response.StockMovementTypeResponse, error) {
+	s, err := uc.Repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toStockMovementTypeResponse(s), nil
 }
 
-func (uc *StockMovementTypeUseCase) GetBySigla(ctx context.Context, sigla string) (*entity.StockMovementType, error) {
-	return uc.Repo.GetBySigla(ctx, sigla)
+func (uc *StockMovementTypeUseCase) GetBySigla(ctx context.Context, sigla string) (*response.StockMovementTypeResponse, error) {
+	s, err := uc.Repo.GetBySigla(ctx, sigla)
+	if err != nil {
+		return nil, err
+	}
+	return toStockMovementTypeResponse(s), nil
 }
 
-func (uc *StockMovementTypeUseCase) List(ctx context.Context, onlyActive bool) ([]*entity.StockMovementType, error) {
-	return uc.Repo.List(ctx, onlyActive)
+func (uc *StockMovementTypeUseCase) List(ctx context.Context, onlyActive bool) ([]*response.StockMovementTypeResponse, error) {
+	list, err := uc.Repo.List(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toStockMovementTypeResponses(list), nil
 }

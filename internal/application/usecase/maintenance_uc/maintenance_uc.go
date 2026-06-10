@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/maintenance/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/maintenance/repository"
 	"github.com/google/uuid"
@@ -30,7 +31,7 @@ type CreatePlanDTO struct {
 	CreatedBy      string  `json:"created_by"`
 }
 
-func (uc *MaintenanceUseCase) CreatePlan(ctx context.Context, dto CreatePlanDTO) (*entity.MaintenancePlan, error) {
+func (uc *MaintenanceUseCase) CreatePlan(ctx context.Context, dto CreatePlanDTO) (*response.MaintenancePlanResponse, error) {
 	createdBy, err := uuid.Parse(dto.CreatedBy)
 	if err != nil {
 		return nil, fmt.Errorf("invalid created_by UUID: %w", err)
@@ -47,19 +48,35 @@ func (uc *MaintenanceUseCase) CreatePlan(ctx context.Context, dto CreatePlanDTO)
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.CreatePlan(ctx, plan)
+	created, err := uc.repo.CreatePlan(ctx, plan)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenancePlanResponse(created), nil
 }
 
-func (uc *MaintenanceUseCase) GetPlan(ctx context.Context, id int64) (*entity.MaintenancePlan, error) {
-	return uc.repo.GetPlanByID(ctx, id)
+func (uc *MaintenanceUseCase) GetPlan(ctx context.Context, id int64) (*response.MaintenancePlanResponse, error) {
+	p, err := uc.repo.GetPlanByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenancePlanResponse(p), nil
 }
 
-func (uc *MaintenanceUseCase) ListPlans(ctx context.Context, onlyActive bool) ([]*entity.MaintenancePlan, error) {
-	return uc.repo.ListPlans(ctx, onlyActive)
+func (uc *MaintenanceUseCase) ListPlans(ctx context.Context, onlyActive bool) ([]*response.MaintenancePlanResponse, error) {
+	list, err := uc.repo.ListPlans(ctx, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenancePlanResponses(list), nil
 }
 
-func (uc *MaintenanceUseCase) ListPlansByMachine(ctx context.Context, machineID int64) ([]*entity.MaintenancePlan, error) {
-	return uc.repo.ListPlansByMachine(ctx, machineID)
+func (uc *MaintenanceUseCase) ListPlansByMachine(ctx context.Context, machineID int64) ([]*response.MaintenancePlanResponse, error) {
+	list, err := uc.repo.ListPlansByMachine(ctx, machineID)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenancePlanResponses(list), nil
 }
 
 func (uc *MaintenanceUseCase) DeactivatePlan(ctx context.Context, id int64) error {
@@ -75,7 +92,7 @@ type CreateOrderDTO struct {
 	EstimatedHours float64 `json:"estimated_hours"`
 }
 
-func (uc *MaintenanceUseCase) CreateOrder(ctx context.Context, dto CreateOrderDTO) (*entity.MaintenanceOrder, error) {
+func (uc *MaintenanceUseCase) CreateOrder(ctx context.Context, dto CreateOrderDTO) (*response.MaintenanceOrderResponse, error) {
 	scheduledDate, err := time.Parse("2006-01-02", dto.ScheduledDate)
 	if err != nil {
 		return nil, fmt.Errorf("invalid scheduled_date: %w", err)
@@ -97,7 +114,11 @@ func (uc *MaintenanceUseCase) CreateOrder(ctx context.Context, dto CreateOrderDT
 	if err != nil {
 		return nil, err
 	}
-	return uc.repo.CreateOrder(ctx, order)
+	created, err := uc.repo.CreateOrder(ctx, order)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenanceOrderResponse(created), nil
 }
 
 type AdvanceOrderDTO struct {
@@ -107,7 +128,7 @@ type AdvanceOrderDTO struct {
 	Notes       *string  `json:"notes,omitempty"`
 }
 
-func (uc *MaintenanceUseCase) AdvanceOrder(ctx context.Context, dto AdvanceOrderDTO) (*entity.MaintenanceOrder, error) {
+func (uc *MaintenanceUseCase) AdvanceOrder(ctx context.Context, dto AdvanceOrderDTO) (*response.MaintenanceOrderResponse, error) {
 	order, err := uc.repo.GetOrderByID(ctx, dto.OrderID)
 	if err != nil {
 		return nil, fmt.Errorf("order %d not found: %w", dto.OrderID, err)
@@ -127,15 +148,27 @@ func (uc *MaintenanceUseCase) AdvanceOrder(ctx context.Context, dto AdvanceOrder
 		order.CompletedAt = &now
 	}
 
-	return uc.repo.UpdateOrder(ctx, order)
+	updated, err := uc.repo.UpdateOrder(ctx, order)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenanceOrderResponse(updated), nil
 }
 
-func (uc *MaintenanceUseCase) ListOrdersByPlan(ctx context.Context, planID int64) ([]*entity.MaintenanceOrder, error) {
-	return uc.repo.ListOrdersByPlan(ctx, planID)
+func (uc *MaintenanceUseCase) ListOrdersByPlan(ctx context.Context, planID int64) ([]*response.MaintenanceOrderResponse, error) {
+	list, err := uc.repo.ListOrdersByPlan(ctx, planID)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenanceOrderResponses(list), nil
 }
 
-func (uc *MaintenanceUseCase) ListOrdersByWorkCenter(ctx context.Context, workCenterID int64, from, to time.Time) ([]*entity.MaintenanceOrder, error) {
-	return uc.repo.ListOrdersByWorkCenter(ctx, workCenterID, from, to)
+func (uc *MaintenanceUseCase) ListOrdersByWorkCenter(ctx context.Context, workCenterID int64, from, to time.Time) ([]*response.MaintenanceOrderResponse, error) {
+	list, err := uc.repo.ListOrdersByWorkCenter(ctx, workCenterID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return toMaintenanceOrderResponses(list), nil
 }
 
 // GenerateOrders auto-creates maintenance orders for all active plans whose

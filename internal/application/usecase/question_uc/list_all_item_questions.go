@@ -3,9 +3,9 @@ package question_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/associate_questions/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/associate_questions/repository"
 )
 
@@ -23,9 +23,13 @@ func NewListAllItemQuestionsUseCase(
 
 func (uc *ListAllItemQuestionsUseCase) Execute(
 	ctx context.Context,
-) ([]entity.ItemQuestionRow, error) {
+) ([]response.ItemQuestionRowResponse, error) {
 	if !uc.Auth.CanAssociateByQuestionProduct(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListAll(ctx)
+	list, err := uc.Repo.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toItemQuestionRowResponses(list), nil
 }

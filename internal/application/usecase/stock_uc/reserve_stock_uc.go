@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -16,7 +17,7 @@ type ReserveStockUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ReserveStockUseCase) Execute(ctx context.Context, dto request.CreateReservationDTO) (*entity.StockReservation, error) {
+func (uc *ReserveStockUseCase) Execute(ctx context.Context, dto request.CreateReservationDTO) (*response.StockReservationResponse, error) {
 	if !uc.Auth.CanReserveStock(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -51,5 +52,9 @@ func (uc *ReserveStockUseCase) Execute(ctx context.Context, dto request.CreateRe
 		res.ExpirationDate = &t
 	}
 
-	return uc.Repo.CreateReservation(ctx, res)
+	created, err := uc.Repo.CreateReservation(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+	return toStockReservationResponse(created), nil
 }

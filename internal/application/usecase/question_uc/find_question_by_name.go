@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/questions/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/questions/repository"
 )
 
@@ -25,7 +25,7 @@ func NewFindQuestionByName(
 func (uc *FindQuestionByName) Execute(
 	ctx context.Context,
 	name string,
-) (*entity.Question, error) {
+) (*response.QuestionResponse, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errorsuc.ErrInvalidSearchParams
@@ -38,5 +38,5 @@ func (uc *FindQuestionByName) Execute(
 		}
 		return nil, err
 	}
-	return question, nil
+	return toQuestionResponse(question), nil
 }

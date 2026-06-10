@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -19,7 +20,7 @@ type CreateAdiantamentoUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.CreateAdiantamentoDTO) (*entity.Adiantamento, error) {
+func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.CreateAdiantamentoDTO) (*response.AdiantamentoResponse, error) {
 	if !uc.Auth.CanBaixarContaPagar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -73,7 +74,11 @@ func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.Cr
 		Descricao:       &desc,
 	}
 
-	return uc.Repo.CreateAdiantamentoAtomico(ctx, adv, fc)
+	created, err := uc.Repo.CreateAdiantamentoAtomico(ctx, adv, fc)
+	if err != nil {
+		return nil, err
+	}
+	return toAdiantamentoResponse(created), nil
 }
 
 // ListAdiantamentosUseCase lists advances, optionally filtered by tipo/parceiro.
@@ -82,11 +87,15 @@ type ListAdiantamentosUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListAdiantamentosUseCase) Execute(ctx context.Context, tipo *string, parceiroID *int64) ([]*entity.Adiantamento, error) {
+func (uc *ListAdiantamentosUseCase) Execute(ctx context.Context, tipo *string, parceiroID *int64) ([]*response.AdiantamentoResponse, error) {
 	if !uc.Auth.CanGetContaPagar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListAdiantamentos(ctx, tipo, parceiroID)
+	list, err := uc.Repo.ListAdiantamentos(ctx, tipo, parceiroID)
+	if err != nil {
+		return nil, err
+	}
+	return toAdiantamentoResponses(list), nil
 }
 
 // GetAdiantamentoUseCase returns one advance with its applications.
@@ -96,9 +105,8 @@ type GetAdiantamentoUseCase struct {
 }
 
 type AdiantamentoDetail struct {
-	*entity.Adiantamento
-	Saldo      float64                         `json:"saldo"`
-	Aplicacoes []*entity.AdiantamentoAplicacao `json:"aplicacoes"`
+	*response.AdiantamentoResponse
+	Aplicacoes []*response.AdiantamentoAplicacaoResponse `json:"aplicacoes"`
 }
 
 func (uc *GetAdiantamentoUseCase) Execute(ctx context.Context, id int64) (*AdiantamentoDetail, error) {
@@ -113,8 +121,11 @@ func (uc *GetAdiantamentoUseCase) Execute(ctx context.Context, id int64) (*Adian
 	if err != nil {
 		return nil, err
 	}
-	saldo, _ := adv.Saldo().Float64()
-	return &AdiantamentoDetail{Adiantamento: adv, Saldo: saldo, Aplicacoes: aplicacoes}, nil
+	aps := make([]*response.AdiantamentoAplicacaoResponse, 0, len(aplicacoes))
+	for _, a := range aplicacoes {
+		aps = append(aps, toAdiantamentoAplicacaoResponse(a))
+	}
+	return &AdiantamentoDetail{AdiantamentoResponse: toAdiantamentoResponse(adv), Aplicacoes: aps}, nil
 }
 
 // AplicarAdiantamentoUseCase applies an advance balance onto a title.
@@ -123,7 +134,7 @@ type AplicarAdiantamentoUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, dto request.AplicarAdiantamentoDTO) (*entity.AdiantamentoAplicacao, error) {
+func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, dto request.AplicarAdiantamentoDTO) (*response.AdiantamentoAplicacaoResponse, error) {
 	contaTipo := dto.ContaTipo
 	if contaTipo == string(entity.AdiantamentoTipoReceber) {
 		if !uc.Auth.CanBaixarContaReceber(ctx) {
@@ -153,5 +164,9 @@ func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, 
 		}
 	}
 
-	return uc.Repo.AplicarAdiantamentoAtomico(ctx, advID, contaTipo, dto.ContaID, decimal.NewFromFloat(dto.Valor), userID, data)
+	created, err := uc.Repo.AplicarAdiantamentoAtomico(ctx, advID, contaTipo, dto.ContaID, decimal.NewFromFloat(dto.Valor), userID, data)
+	if err != nil {
+		return nil, err
+	}
+	return toAdiantamentoAplicacaoResponse(created), nil
 }

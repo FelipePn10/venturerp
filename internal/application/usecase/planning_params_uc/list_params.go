@@ -3,9 +3,9 @@ package planning_params_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/planning_params/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/planning_params/repository"
 )
 
@@ -14,9 +14,13 @@ type ListPlanningParamsUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListPlanningParamsUseCase) Execute(ctx context.Context) ([]*entity.PlanningParam, error) {
+func (uc *ListPlanningParamsUseCase) Execute(ctx context.Context) ([]*response.PlanningParamResponse, error) {
 	if !uc.Auth.CanManagePlanningParams(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.List(ctx)
+	list, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toPlanningParamResponses(list), nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	financialRepo "github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
@@ -24,7 +25,7 @@ type CancelFiscalExitParams struct {
 	Motivo string
 }
 
-func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFiscalExitParams) (*entity.FiscalExit, error) {
+func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFiscalExitParams) (*response.FiscalExitResponse, error) {
 	if !uc.Auth.CanCancelFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -78,5 +79,5 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 		_ = uc.FinancialRepo.CancelContasReceberByFiscalExit(ctx, params.ID)
 	}
 
-	return updated, nil
+	return toFiscalExitResponse(updated), nil
 }

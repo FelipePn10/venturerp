@@ -3,9 +3,9 @@ package restriction_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/repository"
 )
 
@@ -14,9 +14,13 @@ type ListRestrictionsUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListRestrictionsUseCase) Execute(ctx context.Context) ([]*entity.Restriction, error) {
+func (uc *ListRestrictionsUseCase) Execute(ctx context.Context) ([]*response.RestrictionResponse, error) {
 	if !uc.Auth.CanListRestrictions(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.List(ctx)
+	list, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toRestrictionResponses(list), nil
 }

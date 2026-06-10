@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
@@ -18,7 +19,7 @@ type UpdateProductionPlanUseCase struct {
 func (uc *UpdateProductionPlanUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdateProductionPlanDTO,
-) (*entity.ProductionPlan, error) {
+) (*response.ProductionPlanResponse, error) {
 	if !uc.Auth.CanUpdateProductionPlan(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -34,5 +35,9 @@ func (uc *UpdateProductionPlanUseCase) Execute(
 		OrderItemCode:       dto.OrderItemCode,
 		Parameters:          dto.Parameters,
 	}
-	return uc.Repo.Update(ctx, plan)
+	updated, err := uc.Repo.Update(ctx, plan)
+	if err != nil {
+		return nil, err
+	}
+	return toProductionPlanResponse(updated), nil
 }

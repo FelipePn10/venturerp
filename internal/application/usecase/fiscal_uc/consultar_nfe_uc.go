@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -97,9 +98,13 @@ type ListCartasCorrecaoUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *ListCartasCorrecaoUseCase) Execute(ctx context.Context, exitID int64) ([]*entity.CartaCorrecao, error) {
+func (uc *ListCartasCorrecaoUseCase) Execute(ctx context.Context, exitID int64) ([]*response.CartaCorrecaoResponse, error) {
 	if !uc.Auth.CanGetFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListCartasCorrecao(ctx, exitID)
+	list, err := uc.Repo.ListCartasCorrecao(ctx, exitID)
+	if err != nil {
+		return nil, err
+	}
+	return toCartaCorrecaoResponses(list), nil
 }
