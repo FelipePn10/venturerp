@@ -562,3 +562,19 @@ func (h *ProductionOrderHandler) WithOrderOps(uc *production_order_uc.OrderOpera
 	h.orderOpsUC = uc
 	return h
 }
+
+// WithCost attaches the cost-settlement use cases (custo real da OF) to the handler.
+func (h *ProductionOrderHandler) WithCost(
+	settleUC *production_order_uc.SettleProductionCostUseCase,
+	getUC *production_order_uc.GetProductionCostUseCase,
+) *ProductionOrderHandler {
+	h.settleCostUC = settleUC
+	h.getCostUC = getUC
+	return h
+}
+
+// WithScrap attaches the scrap-return use case (sucata valorizada) to the handler.
+func (h *ProductionOrderHandler) WithScrap(uc *production_order_uc.ReturnScrapUseCase) *ProductionOrderHandler {
+	h.returnScrapUC = uc
+	return h
+}

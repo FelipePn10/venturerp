@@ -1,3 +1,5 @@
+BEGIN;
+
 ALTER TABLE overhead_allocations
     ADD COLUMN IF NOT EXISTS cost_center_code INTEGER;
 
@@ -7,10 +9,13 @@ ALTER TABLE overhead_allocations
 ALTER TABLE overhead_allocations
     ADD COLUMN IF NOT EXISTS base_code BIGINT;
 
--- Garantir UNIQUE no code
-ALTER TABLE overhead_allocations
-    ADD CONSTRAINT uq_overhead_allocations_code
-        UNIQUE (code);
+-- Garantir UNIQUE no code (idempotente: a constraint já é criada na migration 084)
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_overhead_allocations_code') THEN
+        ALTER TABLE overhead_allocations
+            ADD CONSTRAINT uq_overhead_allocations_code UNIQUE (code);
+    END IF;
+END $$;
 
 -- Popular cost_center_code
 UPDATE overhead_allocations oa
@@ -20,10 +25,13 @@ WHERE oa.cost_center_id = cc.id
   AND oa.cost_center_code IS NULL;
 
 -- FK
-ALTER TABLE overhead_allocations
-    ADD CONSTRAINT fk_overhead_allocations_cost_center_code
-        FOREIGN KEY (cost_center_code)
-            REFERENCES cost_centers(code);
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_overhead_allocations_cost_center_code') THEN
+        ALTER TABLE overhead_allocations
+            ADD CONSTRAINT fk_overhead_allocations_cost_center_code
+                FOREIGN KEY (cost_center_code) REFERENCES cost_centers(code);
+    END IF;
+END $$;
 
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_overhead_allocations_cost_center_code
@@ -57,15 +65,21 @@ WHERE oat.cost_center_id = cc.id
   AND oat.cost_center_code IS NULL;
 
 -- FKs
-ALTER TABLE overhead_allocation_targets
-    ADD CONSTRAINT fk_oat_overhead_code
-        FOREIGN KEY (overhead_code)
-            REFERENCES overhead_allocations(code);
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_oat_overhead_code') THEN
+        ALTER TABLE overhead_allocation_targets
+            ADD CONSTRAINT fk_oat_overhead_code
+                FOREIGN KEY (overhead_code) REFERENCES overhead_allocations(code);
+    END IF;
+END $$;
 
-ALTER TABLE overhead_allocation_targets
-    ADD CONSTRAINT fk_oat_cost_center_code
-        FOREIGN KEY (cost_center_code)
-            REFERENCES cost_centers(code);
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_oat_cost_center_code') THEN
+        ALTER TABLE overhead_allocation_targets
+            ADD CONSTRAINT fk_oat_cost_center_code
+                FOREIGN KEY (cost_center_code) REFERENCES cost_centers(code);
+    END IF;
+END $$;
 
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_oat_overhead_code
@@ -73,3 +87,5 @@ CREATE INDEX IF NOT EXISTS idx_oat_overhead_code
 
 CREATE INDEX IF NOT EXISTS idx_oat_cost_center_code
     ON overhead_allocation_targets(cost_center_code);
+
+COMMIT;

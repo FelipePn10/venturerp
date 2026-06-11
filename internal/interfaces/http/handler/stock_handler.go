@@ -24,6 +24,33 @@ type StockHandler struct {
 	closeInventoryUC  *stock_uc.CloseInventoryUseCase
 	getInventoryUC    *stock_uc.GetInventoryUseCase
 	listInventoriesUC *stock_uc.ListInventoriesUseCase
+	registerLotUC     *stock_uc.RegisterLotUseCase
+	listLotBalancesUC *stock_uc.ListLotBalancesUseCase
+	getGenealogyUC    *stock_uc.GetLotGenealogyUseCase
+	recalcCMUC        *stock_uc.RecalcConsumptionAverageUseCase
+	getCMUC           *stock_uc.GetConsumptionAverageUseCase
+}
+
+// WithConsumptionAverage attaches the consumption-average use cases (consumo médio).
+func (h *StockHandler) WithConsumptionAverage(
+	recalcUC *stock_uc.RecalcConsumptionAverageUseCase,
+	getUC *stock_uc.GetConsumptionAverageUseCase,
+) *StockHandler {
+	h.recalcCMUC = recalcUC
+	h.getCMUC = getUC
+	return h
+}
+
+// WithLot attaches the lot-traceability use cases (registro/saldo/genealogia).
+func (h *StockHandler) WithLot(
+	registerLotUC *stock_uc.RegisterLotUseCase,
+	listLotBalancesUC *stock_uc.ListLotBalancesUseCase,
+	getGenealogyUC *stock_uc.GetLotGenealogyUseCase,
+) *StockHandler {
+	h.registerLotUC = registerLotUC
+	h.listLotBalancesUC = listLotBalancesUC
+	h.getGenealogyUC = getGenealogyUC
+	return h
 }
 
 func NewStockHandler(
@@ -174,6 +201,117 @@ func (h *StockHandler) ListBalancesByItem(w http.ResponseWriter, r *http.Request
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// GetATP returns the available-to-promise of an item (optionally filtered by
+// ?mask=). Total available = on-hand − reservations across all warehouses.
+func (h *StockHandler) GetATP(w http.ResponseWriter, r *http.Request) {
+	codeStr := chi.URLParam(r, "itemCode")
+	code, err := strconv.ParseInt(codeStr, 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		return
+	}
+	mask := r.URL.Query().Get("mask")
+	result, err := h.getBalanceUC.ATP(r.Context(), code, mask)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// ---------- Consumption Average ----------
+
+func (h *StockHandler) RecalcConsumptionAverage(w http.ResponseWriter, r *http.Request) {
+	if h.recalcCMUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "consumption average not configured")
+		return
+	}
+	var dto request.RecalcConsumptionAverageDTO
+	// Body is optional: an empty body recalculates all items with the default window.
+	_ = json.NewDecoder(r.Body).Decode(&dto)
+	result, err := h.recalcCMUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *StockHandler) GetConsumptionAverage(w http.ResponseWriter, r *http.Request) {
+	if h.getCMUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "consumption average not configured")
+		return
+	}
+	code, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		return
+	}
+	result, err := h.getCMUC.Execute(r.Context(), code)
+	if err != nil {
+		security.RespondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// ---------- Lot Traceability ----------
+
+func (h *StockHandler) RegisterLot(w http.ResponseWriter, r *http.Request) {
+	if h.registerLotUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "lot traceability not configured")
+		return
+	}
+	var dto request.RegisterLotDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.registerLotUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
+}
+
+func (h *StockHandler) ListLotBalances(w http.ResponseWriter, r *http.Request) {
+	if h.listLotBalancesUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "lot traceability not configured")
+		return
+	}
+	code, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		return
+	}
+	results, err := h.listLotBalancesUC.Execute(r.Context(), code)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}
+
+func (h *StockHandler) GetLotGenealogy(w http.ResponseWriter, r *http.Request) {
+	if h.getGenealogyUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "lot traceability not configured")
+		return
+	}
+	code, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		return
+	}
+	lot := chi.URLParam(r, "lot")
+	result, err := h.getGenealogyUC.Execute(r.Context(), code, lot)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 // ---------- Stock Reservations ----------

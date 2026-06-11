@@ -145,4 +145,13 @@ As paradas de manutenção são **respeitadas automaticamente** pelo CRP (capaci
 | **Backflush** | Baixa automática dos componentes ao apontar |
 | **Não-conformidade (NC)** | Registro de uma peça/lote fora do padrão de qualidade |
 
-> A versão técnica (operações, endpoints, regras) está em `../dev/manufatura-e-compras.md` (Roteiro, Qualidade, Manutenção) e `../dev/visao-geral.md` (§5 Produção).
+## Novidades (2026-06)
+
+- **Custo real da ordem:** ao fechar a OF, o sistema apura o custo real (material +
+  transformação) e o desvio contra o padrão — ver `../apresentacao/custos.md`.
+- **Sucata/retalho valorizado:** a sucata e o retalho (sobras de chapa/barra) podem
+  **voltar ao estoque como subproduto com valor**, para revenda ou reaproveitamento.
+- **Lote produzido:** ao concluir a OF informando o lote do acabado, fica registrada
+  a **genealogia** (quais lotes de matéria-prima compõem o produto).
+
+> A versão técnica (operações, endpoints, regras) está em `../dev/producao.md` (§3 Custo real, §4 Sucata, §5 Lote), `../dev/manufatura-e-compras.md` (Roteiro, Qualidade, Manutenção) e `../dev/visao-geral.md` (§5 Produção).

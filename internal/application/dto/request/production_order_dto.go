@@ -58,6 +58,23 @@ type CompleteProductionOrderDTO struct {
 	// WarehouseID is the finished-goods warehouse that receives the produced
 	// quantity. When set, completing the order posts an IN stock movement.
 	WarehouseID *int64 `json:"warehouse_id,omitempty"`
+	// Lot is the finished-goods lot produced by this order. When set, it is
+	// stamped on the IN movement so the produced lot is traceable back to the
+	// consumed (raw-material) lots through the order genealogy.
+	Lot *string `json:"lot,omitempty"`
+}
+
+// ReturnScrapDTO returns the scrap/offcut of a production order to stock as a
+// valued by-product (IN movement of the scrap item at the informed unit value).
+type ReturnScrapDTO struct {
+	ProductionOrderID int64   `json:"production_order_id"`
+	ScrapItemCode     int64   `json:"scrap_item_code"`
+	Mask              string  `json:"mask,omitempty"`
+	WarehouseID       int64   `json:"warehouse_id"`
+	Quantity          float64 `json:"quantity"`
+	UnitValue         float64 `json:"unit_value,omitempty"`
+	Lot               *string `json:"lot,omitempty"`
+	Notes             *string `json:"notes,omitempty"`
 }
 
 type CloseProductionOrderDTO struct {

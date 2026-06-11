@@ -578,10 +578,13 @@ Similar ao pedido de venda, utiliza tabela `purchase_order_sequences` por empres
 | POST | `/api/production-order/appointment` | Registra apontamento (tempo + quantidade); com `backflush_warehouse_id` ✅ **baixa a BOM** (movimentos `OUT`) |
 | POST | `/api/production-order/consumption` | Registra consumo de matéria-prima; com `warehouse_id` ✅ gera movimento **`OUT`** do insumo |
 | POST | `/api/production-order/{id}/complete` | Conclui produção (IN_PROGRESS → COMPLETED); com `warehouse_id` ✅ gera movimento **`IN`** do acabado |
-| POST | `/api/production-order/{id}/close` | Fecha ordem (COMPLETED → CLOSED) |
+| POST | `/api/production-order/{id}/close` | Fecha ordem (COMPLETED → CLOSED); ✅ **apura o custo real** |
 | POST | `/api/production-order/{id}/cancel` | Cancela ordem (→ CANCELLED) |
 | GET | `/api/production-order/{id}/appointments` | Lista apontamentos |
 | GET | `/api/production-order/{id}/consumptions` | Lista consumos |
+| POST | `/api/production-order/{id}/settle-cost` | Apura/recalcula o custo real da OF (material a custo médio + conversão) |
+| GET | `/api/production-order/{id}/cost` | Consulta a apuração de custo real + variâncias |
+| POST | `/api/production-order/{id}/scrap-return` | Retorna sucata/retalho ao estoque como subproduto valorizado (`IN`) |
 
 #### Ciclo de Vida
 
@@ -664,6 +667,22 @@ OPEN → IN_PROGRESS → COMPLETED → CLOSED
 | GET | `/api/stock/balances/list` | Lista todos saldos |
 | GET | `/api/stock/balances/warehouse/{warehouseId}` | Saldos por depósito |
 | GET | `/api/stock/balances/item/{itemCode}` | Saldos por item |
+| GET | `/api/stock/balances/atp/{itemCode}` | **Disponível para promessa (ATP)** — saldo − reservas (opcional `?mask=`) |
+
+**Rastreabilidade de Lote / Corrida:**
+
+| Método | Path | Descrição |
+|--------|------|-----------|
+| POST | `/api/stock/lots/register` | Registra lote/corrida (heat number) + certificado de qualidade |
+| GET | `/api/stock/lots/item/{itemCode}` | Saldos por lote do item |
+| GET | `/api/stock/lots/genealogy/{itemCode}/{lot}` | Genealogia do lote (consumido em / produzido por + lotes de entrada) |
+
+**Consumo Médio (ROP):**
+
+| Método | Path | Descrição |
+|--------|------|-----------|
+| POST | `/api/stock/consumption-average/recalc` | Recalcula consumo médio mensal (item específico ou todos) |
+| GET | `/api/stock/consumption-average/{itemCode}` | Consulta consumo médio do item |
 
 **Reservas:**
 
@@ -828,14 +847,18 @@ de pagamento, plano de contas, centros de custo).
 | Fiscal (NF-e e/s, CT-e, apuração, SPED ECD) e Financeiro (CP/CR, fluxo, OFX) | `fiscal-financeiro.md` |
 | Manifestação/Inutilização, IBPT/SCI, CNAB 240, Balancete | `fiscal-financeiro.md` §36–§39 |
 
-### Automações do fluxo (2026-06-03)
+### Automações do fluxo (2026-06-03 · atualizado 2026-06-10)
 
 | Automação | Onde |
 |---|---|
 | Pedido de venda confirmado (`P`) → demanda independente | `sales_order_uc` |
+| Pedido de venda confirmado (`P`) → **checagem de limite de crédito** (bloqueia se exceder) | `sales_order_uc/credit_check.go` |
+| Pedido de venda confirmado (`P`) → **reserva de estoque disponível por item (ATP)** | `sales_order_uc/order_reserve.go` |
 | Firmar ordem planejada PRODUCTION → cria a OF | `planned_order_uc` |
-| Consumo da OF → `OUT`; conclusão → `IN`; apontamento → backflush da BOM | `production_order_uc` |
-| Movimento de estoque → atualiza saldo (qtd + custo médio) | `repository/stock` |
+| Consumo da OF → `OUT`; conclusão → `IN` (com lote produzido); apontamento → backflush da BOM | `production_order_uc` |
+| Fechar a OF (`close`) → **apura o custo real e a variância vs. padrão** | `production_order_uc/settle_production_cost_uc.go` |
+| Movimento de estoque → atualiza saldo (qtd + custo médio) **e o saldo por lote/corrida** | `repository/stock` |
+| Reserva criada/liberada/consumida → atualiza `reserved_qty` do saldo | `repository/stock` |
 | NF-e entrada → baixa o pedido de compra (`received_qty`/status) | `fiscal_uc` + `purchase_order` |
 | NF-e saída autorizada → `OUT` + baixa de reservas + pedido Faturado (`F`) + Conta a Receber | `fiscal_uc` |
 
@@ -843,10 +866,14 @@ de pagamento, plano de contas, centros de custo).
 
 | Funcionalidade | Status |
 |---|---|
+| ATP / reserva automática no pedido de venda | ✅ (reserva o disponível por linha ao confirmar; `GET /api/stock/balances/atp/{itemCode}`) |
+| Limite de crédito do cliente no pedido | ✅ (checa exposição = contas a receber + pedidos em aberto ao confirmar) |
+| Custo real da OF + variância vs. padrão | ✅ (apurado ao fechar; `GET /api/production-order/{id}/cost`) |
+| Rastreabilidade de lote/corrida + genealogia | ✅ (saldo por lote + `GET /api/stock/lots/genealogy/{itemCode}/{lot}`) |
+| Sucata/retalho valorizado como subproduto | ✅ (`POST /api/production-order/{id}/scrap-return`) |
+| Cálculo automático de consumo médio (CM) | ✅ (`POST /api/stock/consumption-average/recalc`) |
 | Conciliação de cartões / borderô | ❌ (exige layouts de adquirentes) |
-| ATP / reserva automática no pedido de venda | ❌ |
 | Workflow de alçada do pedido de compra | ❌ (hoje só um campo) |
-| Cálculo automático de consumo médio (CM) | ❌ |
 | Execução do inventário cíclico | ❌ (só configuração) |
 | Frente de Caixa (PDV) | ❌ |
 | Testes de integração E2E do MRP | ❌ |
@@ -861,7 +888,8 @@ estrutura, MRP) e segue incremental — marcos principais: Pedidos de Venda (`00
 Pedido de Compra (`000092`), Estoque (`000093`), Produção (`000094`), Fiscal
 (`000095`), Financeiro (`000096`), Cliente (`000115`–`000118`), Fornecedor
 (`000135`–`000136`), o épico de Compras/Fiscal (`000137`–`000144`), IBPT/SCI
-(`000145`) e Expedição/romaneio (`000146`).
+(`000145`), Expedição/romaneio (`000146`), auditoria (`000151`), custo real da OF
+(`000152`), rastreabilidade de lote/corrida (`000153`) e consumo médio (`000154`).
 
 > Consulte `migrations/` para a lista completa e atual; cada doc de módulo cita a
 > migração correspondente.

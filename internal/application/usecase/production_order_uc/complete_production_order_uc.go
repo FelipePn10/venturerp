@@ -56,6 +56,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				Quantity:      qty,
 				ReferenceType: &refType,
 				ReferenceCode: &refCode,
+				Lot:           dto.Lot,
 				CreatedBy:     order.CreatedBy,
 			}
 			if _, moveErr := uc.StockRepo.CreateMovement(ctx, mov); moveErr != nil {

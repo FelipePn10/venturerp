@@ -42,6 +42,15 @@ Pedido de Venda também em [`visao-geral.md`](visao-geral.md) §4.
 > (`código_pedido × 100000 + sequência`). Ver `sales_order_uc/manage_sales_order_uc.go`
 > e [`00-fluxo-geral.md`](00-fluxo-geral.md).
 >
+> ✅ **Automação (crédito):** confirmar (`P`) roda a **checagem de limite de
+> crédito** (exposição = contas a receber em aberto + outros pedidos em aberto).
+> Excedeu o limite (ou cliente bloqueado) → pedido **bloqueado** automaticamente,
+> sem gerar demanda nem reserva. Ver `sales_order_uc/credit_check.go`.
+>
+> ✅ **Automação (ATP/reserva):** aprovado no crédito, cada linha **reserva o
+> estoque disponível** no depósito da linha (limitado ao disponível). ATP em
+> `GET /api/stock/balances/atp/{itemCode}`. Ver `sales_order_uc/order_reserve.go`.
+>
 > ✅ **Automação (faturamento):** a autorização da NF-e de saída posta `OUT` por item,
 > consome reservas do pedido e marca o pedido como `F`. Ver
 > `fiscal_uc/authorize_fiscal_exit_uc.go` e [`fiscal-financeiro.md`](fiscal-financeiro.md).

@@ -54,3 +54,31 @@ A OF normalmente nasce ao **firmar** uma ordem planejada `PRODUCTION`
 (`GET /api/planned-order/{code}/firm`), que cria a OF automaticamente na primeira
 firmação. Ver `planned_order_uc/firm_planned_order_uc.go` e
 [`mrp-calculo.md`](mrp-calculo.md).
+
+---
+
+## 3. Custo real da OF
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/{id}/settle-cost` | Apura/recalcula o custo real (material + conversão) |
+| GET | `/{id}/cost` | Consulta a apuração + variâncias vs. padrão |
+
+> ✅ **automático:** fechar a OF (`/{id}/close`) apura o custo real. Detalhes da
+> fórmula em [`custos.md`](custos.md) §4.
+
+## 4. Sucata / retalho valorizado
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/{id}/scrap-return` | Retorna sucata/retalho como subproduto valorizado (`IN`) |
+
+Corpo: `scrap_item_code`, `warehouse_id`, `quantity`, `unit_value`, `lot?`, `notes?`.
+O movimento `IN` valoriza a sucata no estoque (custo médio do item de sucata), para
+revenda ou reaproveitamento de retalho de chapa/barra.
+
+## 5. Lote produzido (rastreabilidade)
+
+Ao concluir a OF (`/{id}/complete`) informando `lot`, o lote do acabado é gravado no
+movimento `IN`, habilitando a **genealogia** em
+`GET /api/stock/lots/genealogy/{itemCode}/{lot}` (ver [`estoque.md`](estoque.md)).

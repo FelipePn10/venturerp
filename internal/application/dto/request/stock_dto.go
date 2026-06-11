@@ -59,3 +59,22 @@ type AdjustInventoryItemDTO struct {
 	AdjustmentType   string  `json:"adjustment_type"`
 	AdjustmentReason *string `json:"adjustment_reason,omitempty"`
 }
+
+// RecalcConsumptionAverageDTO triggers recomputation of average monthly
+// consumption. When ItemCode is nil, all items with recent outbound movements
+// are recalculated. WindowMonths defaults to 6 when not provided.
+type RecalcConsumptionAverageDTO struct {
+	ItemCode     *int64 `json:"item_code,omitempty"`
+	WindowMonths int    `json:"window_months,omitempty"`
+}
+
+// RegisterLotDTO records the traceability metadata of a raw-material lot.
+type RegisterLotDTO struct {
+	ItemCode     int64   `json:"item_code"`
+	Lot          string  `json:"lot"`
+	HeatNumber   *string `json:"heat_number,omitempty"` // corrida
+	Certificate  *string `json:"certificate,omitempty"` // certificado de qualidade
+	SupplierCode *int64  `json:"supplier_code,omitempty"`
+	ReceivedAt   *string `json:"received_at,omitempty"` // YYYY-MM-DD
+	Notes        *string `json:"notes,omitempty"`
+}

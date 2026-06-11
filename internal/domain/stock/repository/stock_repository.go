@@ -30,6 +30,20 @@ type StockRepository interface {
 	ListActiveReservations(ctx context.Context) ([]*entity.StockReservation, error)
 	CancelReservation(ctx context.Context, id int64) error
 	ConsumeReservation(ctx context.Context, id int64) error
+	// HasActiveReservationByReference reports whether an originating document
+	// already has active reservations, so reserving is idempotent.
+	HasActiveReservationByReference(ctx context.Context, referenceType string, referenceCode int64) (bool, error)
+
+	// Consumption average (consumo médio mensal, alimenta o ROP)
+	RecalcConsumptionAverage(ctx context.Context, itemCode int64, windowMonths int) (*entity.ItemConsumptionAverage, error)
+	RecalcAllConsumptionAverages(ctx context.Context, windowMonths int) (int, error)
+	GetConsumptionAverage(ctx context.Context, itemCode int64) (*entity.ItemConsumptionAverage, error)
+
+	// Lot traceability (rastreabilidade de lote/corrida)
+	UpsertLot(ctx context.Context, lot *entity.StockLot) (*entity.StockLot, error)
+	GetLot(ctx context.Context, itemCode int64, lot string) (*entity.StockLot, error)
+	ListLotBalancesByItem(ctx context.Context, itemCode int64) ([]*entity.StockLotBalance, error)
+	GetLotGenealogy(ctx context.Context, itemCode int64, lot string) (*entity.LotGenealogy, error)
 
 	// Physical inventory
 	CreateInventory(ctx context.Context, inv *entity.PhysicalInventory) (*entity.PhysicalInventory, error)

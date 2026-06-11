@@ -25,6 +25,9 @@ type ProductionOrderHandler struct {
 	getAppointmentsUC *production_order_uc.GetAppointmentsUseCase
 	getConsumptionsUC *production_order_uc.GetConsumptionsUseCase
 	orderOpsUC        *production_order_uc.OrderOperationsUseCase
+	settleCostUC      *production_order_uc.SettleProductionCostUseCase
+	getCostUC         *production_order_uc.GetProductionCostUseCase
+	returnScrapUC     *production_order_uc.ReturnScrapUseCase
 }
 
 func (h *ProductionOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +196,70 @@ func (h *ProductionOrderHandler) GetConsumptions(w http.ResponseWriter, r *http.
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// ─── cost settlement (custo real da OF) ───────────────────────────────────────
+
+func (h *ProductionOrderHandler) SettleCost(w http.ResponseWriter, r *http.Request) {
+	if h.settleCostUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "cost settlement not configured")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	result, err := h.settleCostUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *ProductionOrderHandler) GetCost(w http.ResponseWriter, r *http.Request) {
+	if h.getCostUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "cost settlement not configured")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	result, err := h.getCostUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// ─── scrap return (sucata valorizada) ─────────────────────────────────────────
+
+func (h *ProductionOrderHandler) ReturnScrap(w http.ResponseWriter, r *http.Request) {
+	if h.returnScrapUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "scrap return not configured")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var dto request.ReturnScrapDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	dto.ProductionOrderID = id
+	result, err := h.returnScrapUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
 }
 
 // ─── order operations (route explosion) ──────────────────────────────────────

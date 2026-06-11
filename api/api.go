@@ -503,13 +503,20 @@ func (app *application) mount() chi.Router {
 	prodOrderCancelUC := &productionOrderUc.CancelProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderGetAppointmentsUC := &productionOrderUc.GetAppointmentsUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderGetConsumptionsUC := &productionOrderUc.GetConsumptionsUseCase{Repo: prodOrderRepo, Auth: authService}
+	// Custo real da OF: apuração (material a custo médio + conversão por horas
+	// apontadas × custo/hora do CT) e consulta. Fechar a OF apura automaticamente.
+	prodOrderSettleCostUC := &productionOrderUc.SettleProductionCostUseCase{Repo: prodOrderRepo, Auth: authService, StdCostRepo: scRepo}
+	prodOrderGetCostUC := &productionOrderUc.GetProductionCostUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderCloseUC.SettleUC = prodOrderSettleCostUC
+	// Scrap return (sucata valorizada). StockRepo is wired below once available.
+	prodOrderReturnScrapUC := &productionOrderUc.ReturnScrapUseCase{Repo: prodOrderRepo, Auth: authService}
 	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries}
 	prodOrderHandler := handler.NewProductionOrderHandler(
 		prodOrderCreateUC, prodOrderGetByCodeUC, prodOrderListUC,
 		prodOrderStartUC, prodOrderAddAppointmentUC, prodOrderAddConsumptionUC,
 		prodOrderCompleteUC, prodOrderCloseUC, prodOrderCancelUC,
 		prodOrderGetAppointmentsUC, prodOrderGetConsumptionsUC,
-	).WithOrderOps(orderOpsUC)
+	).WithOrderOps(orderOpsUC).WithCost(prodOrderSettleCostUC, prodOrderGetCostUC).WithScrap(prodOrderReturnScrapUC)
 
 	// supplier (created before purchase order so it can provide purchasing defaults)
 	suppRepo := supplierRepo.New(queries, app.db.Pool)
@@ -607,6 +614,9 @@ func (app *application) mount() chi.Router {
 
 	// sales order
 	soRepo := salesOrderRepo.NewSalesOrderRepositorySQLC(queries)
+	// Captured so the automatic credit check and stock reservation (ATP) can be
+	// attached once the customer/financial/stock repositories are available below.
+	changeStatusSalesOrderUC := &sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService, DemandRepo: independentDemandRepo}
 	salesOrderHandler := handler.NewSalesOrderHandler(
 		&sales_order_uc.CreateSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.UpdateSalesOrderUseCase{Repo: soRepo, Auth: authService},
@@ -617,7 +627,7 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.CancelSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.BlockSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.UnblockSalesOrderUseCase{Repo: soRepo, Auth: authService},
-		&sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService, DemandRepo: independentDemandRepo},
+		changeStatusSalesOrderUC,
 		&sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.UpdateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrderItemsUseCase{Repo: soRepo, Auth: authService},
@@ -629,6 +639,8 @@ func (app *application) mount() chi.Router {
 	// Production consumption/completion post stock movements automatically.
 	prodOrderAddConsumptionUC.StockRepo = stockRepository
 	prodOrderCompleteUC.StockRepo = stockRepository
+	// Scrap return posts a valued IN movement of the scrap by-product.
+	prodOrderReturnScrapUC.StockRepo = stockRepository
 	// Appointment backflush: auto-consume BOM components from stock.
 	prodOrderAddAppointmentUC.StructureRepo = itemRepoStructure
 	prodOrderAddAppointmentUC.StockRepo = stockRepository
@@ -644,6 +656,13 @@ func (app *application) mount() chi.Router {
 	closeInventoryUC := &stock_uc.CloseInventoryUseCase{Repo: stockRepository, Auth: authService}
 	getInventoryUC := &stock_uc.GetInventoryUseCase{Repo: stockRepository, Auth: authService}
 	listInventoriesUC := &stock_uc.ListInventoriesUseCase{Repo: stockRepository, Auth: authService}
+	// lot traceability (rastreabilidade de lote/corrida + genealogia)
+	registerLotUC := &stock_uc.RegisterLotUseCase{Repo: stockRepository, Auth: authService}
+	listLotBalancesUC := &stock_uc.ListLotBalancesUseCase{Repo: stockRepository, Auth: authService}
+	getLotGenealogyUC := &stock_uc.GetLotGenealogyUseCase{Repo: stockRepository, Auth: authService}
+	// consumption average (consumo médio mensal → ROP)
+	recalcCMUC := &stock_uc.RecalcConsumptionAverageUseCase{Repo: stockRepository, Auth: authService}
+	getCMUC := &stock_uc.GetConsumptionAverageUseCase{Repo: stockRepository, Auth: authService}
 	stockHandler := handler.NewStockHandler(
 		createStockMovementUC,
 		listStockMovementsUC,
@@ -657,7 +676,8 @@ func (app *application) mount() chi.Router {
 		closeInventoryUC,
 		getInventoryUC,
 		listInventoriesUC,
-	)
+	).WithLot(registerLotUC, listLotBalancesUC, getLotGenealogyUC).
+		WithConsumptionAverage(recalcCMUC, getCMUC)
 
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
@@ -809,6 +829,20 @@ func (app *application) mount() chi.Router {
 	custRepo := customerRepo.New(queries, app.db.Pool)
 	customerUC := customer_uc.NewCustomerUseCase(custRepo)
 	customerHandler := handler.NewCustomerHandler(customerUC)
+
+	// Confirming a sales order (status "P") now runs an automatic credit-limit
+	// check (exposure = open receivables + other open orders) and reserves
+	// available stock per line (ATP). A credit-blocked order neither feeds the
+	// MRP nor reserves stock.
+	changeStatusSalesOrderUC.CreditChecker = &sales_order_uc.CreditChecker{
+		SalesRepo:     soRepo,
+		CustomerRepo:  custRepo,
+		FinancialRepo: fRepo,
+	}
+	changeStatusSalesOrderUC.Reserver = &sales_order_uc.OrderStockReserver{
+		SalesRepo: soRepo,
+		StockRepo: stockRepository,
+	}
 
 	// fiscal params (legal devices, CFOPs, ICMS/IPI tax params + ICMS apuração + Simples Nacional)
 	fpRepo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
@@ -984,6 +1018,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancel", prodOrderHandler.Cancel)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/appointments", prodOrderHandler.GetAppointments)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/consumptions", prodOrderHandler.GetConsumptions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/settle-cost", prodOrderHandler.SettleCost)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/cost", prodOrderHandler.GetCost)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/scrap-return", prodOrderHandler.ReturnScrap)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/explode", prodOrderHandler.ExplodeRoute)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/operations", prodOrderHandler.ListOrderOperations)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/advance", prodOrderHandler.AdvanceOperation)
@@ -1118,6 +1155,16 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", stockHandler.ListBalances)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/warehouse/{warehouseId}", stockHandler.ListBalancesByWarehouse)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListBalancesByItem)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/atp/{itemCode}", stockHandler.GetATP)
+			})
+			r.Route("/lots", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/register", stockHandler.RegisterLot)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListLotBalances)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/genealogy/{itemCode}/{lot}", stockHandler.GetLotGenealogy)
+			})
+			r.Route("/consumption-average", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/recalc", stockHandler.RecalcConsumptionAverage)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{itemCode}", stockHandler.GetConsumptionAverage)
 			})
 			r.Route("/reservations", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", stockHandler.ReserveStock)
