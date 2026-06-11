@@ -56,6 +56,13 @@ type ChangeStatusSalesOrderUseCase struct {
 	// automatically feeds the MRP by creating an independent demand per order
 	// line, so the planner no longer has to register demand by hand.
 	DemandRepo demandrepo.IndependentDemandRepository
+	// CreditChecker is optional. When set, confirming an order runs an automatic
+	// credit-limit check; an order that exceeds the customer's limit is blocked
+	// (and does not feed the MRP) instead of flowing through unchecked.
+	CreditChecker *CreditChecker
+	// Reserver is optional. When set, confirming an order reserves available
+	// stock per line (ATP) so the promise is backed by real availability.
+	Reserver *OrderStockReserver
 }
 
 func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto request.ChangeStatusDTO) error {
@@ -67,9 +74,26 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 		return err
 	}
 
-	// On confirmation, project each open order line as MRP demand.
-	if uc.DemandRepo != nil && newStatus == entity.SalesOrderStatusOrder {
+	if newStatus != entity.SalesOrderStatusOrder {
+		return nil
+	}
+
+	// On confirmation: run the credit check first. A blocked order must not feed
+	// the MRP nor reserve stock.
+	approved := true
+	if uc.CreditChecker != nil {
+		approved = uc.CreditChecker.Check(ctx, dto.Code)
+	}
+	if !approved {
+		return nil
+	}
+
+	// Project each open order line as MRP demand and reserve available stock.
+	if uc.DemandRepo != nil {
 		uc.generateDemands(ctx, dto.Code)
+	}
+	if uc.Reserver != nil {
+		uc.Reserver.Reserve(ctx, dto.Code)
 	}
 	return nil
 }

@@ -130,4 +130,14 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 | **Reprogramação** | Remarcação registrada de uma data de entrega |
 | **Romaneio** | Lista de carregamento usada na expedição |
 
+## Novidades (2026-06)
+
+- **Limite de crédito automático:** ao confirmar um pedido, o sistema soma o que o
+  cliente já deve (contas a receber em aberto) com os pedidos ainda não faturados.
+  Se passar do limite do cliente (ou se ele estiver bloqueado), o pedido é
+  **bloqueado automaticamente** — ninguém precisa lembrar de conferir crédito.
+- **Reserva automática (promessa firme):** ao confirmar, o sistema **separa o
+  estoque disponível** de cada item para o pedido. A consulta de **disponível para
+  promessa** mostra, por item, quanto ainda pode ser vendido (saldo menos reservas).
+
 > A versão técnica está em `../dev/visao-geral.md` (§4 Pedidos, §5.3 Expedição) e `../dev/00-fluxo-geral.md`.

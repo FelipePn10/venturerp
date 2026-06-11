@@ -72,6 +72,20 @@ Registro manual (ainda disponível para demandas avulsas / previsões):
 `POST /api/independent-demand/create` para o item desejado (qtd e data de
 necessidade).
 
+> ✅ **automático (crédito):** ao confirmar (`"P"`), o sistema roda uma
+> **checagem de limite de crédito** do cliente — exposição = contas a receber em
+> aberto + outros pedidos em aberto. Se confirmar o pedido ultrapassar o limite
+> (ou o cliente estiver bloqueado), o pedido é **bloqueado** automaticamente (com
+> motivo) e **não** gera demanda nem reserva. Limite `0` = sem limite.
+> Implementado em `sales_order_uc/credit_check.go` (`entity.EvaluateCredit`).
+>
+> ✅ **automático (ATP/reserva):** se aprovado no crédito, cada linha **reserva o
+> estoque disponível** no depósito da linha (limitado ao disponível, nunca além).
+> A reserva atualiza `reserved_qty` do saldo, então o disponível-para-promessa
+> (`GET /api/stock/balances/atp/{itemCode}`) reflete a reserva. Idempotente: um
+> pedido que já tem reservas ativas não é reservado de novo. Implementado em
+> `sales_order_uc/order_reserve.go`.
+
 ---
 
 ## Etapa 2 — Plano de Produção
@@ -219,8 +233,17 @@ Ciclo de vida da OF (`/api/production-order`):
 > (ver Etapa 6), o saldo de insumos e de acabados fica consistente sem lançamento
 > manual.
 
-> ⚙️ **melhoria (pendente):** *backflush* (baixa automática de componentes pela BOM ao
-> apontar a operação) e baixa automática de **reservas** ao consumir.
+> ✅ **automático (lote produzido):** ao **concluir** a OF com `lot`, o lote do
+> acabado é gravado no movimento `IN`, permitindo a **genealogia** (lotes de
+> matéria-prima consumidos → OF → lote produzido). Consulta:
+> `GET /api/stock/lots/genealogy/{itemCode}/{lot}`.
+>
+> ✅ **automático (sucata valorizada):** `POST /api/production-order/{id}/scrap-return`
+> retorna a sucata/retalho ao estoque como **subproduto valorizado** (movimento
+> `IN` do item de sucata ao valor informado), para revenda ou reaproveitamento.
+>
+> ✅ **automático (reservas):** criar, liberar e consumir reservas mantém o
+> `reserved_qty` do saldo consistente (na mesma transação).
 
 Reservas de estoque (disponíveis): `POST /api/stock/reservations/create`,
 `PATCH /{id}/release`, `PATCH /{id}/consume`.

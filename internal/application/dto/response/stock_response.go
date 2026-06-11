@@ -65,6 +65,18 @@ type StockBalanceResponse struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+// ATPResponse is the available-to-promise summary of an item: how much can be
+// promised right now (on-hand minus reservations), with the per-warehouse
+// breakdown.
+type ATPResponse struct {
+	ItemCode       int64                   `json:"item_code"`
+	Mask           string                  `json:"mask"`
+	TotalOnHand    float64                 `json:"total_on_hand"`
+	TotalReserved  float64                 `json:"total_reserved"`
+	TotalAvailable float64                 `json:"total_available"`
+	Warehouses     []*StockBalanceResponse `json:"warehouses"`
+}
+
 // PhysicalInventoryResponse is the API representation of a physical inventory.
 type PhysicalInventoryResponse struct {
 	ID           int64      `json:"id"`

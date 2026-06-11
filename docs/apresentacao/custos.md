@@ -107,4 +107,13 @@ O custo padrão é o **planejado**; a produção registra o **realizado** (tempo
 | **Base de alocação** | O critério usado para distribuir o overhead |
 | **Desvio** | Diferença entre o custo padrão e o custo real |
 
-> A versão técnica está em `../dev/manufatura-e-compras.md` (§4 Custo Padrão) e em `../dev/visao-geral.md`.
+## Novidades (2026-06) — Custo real da ordem de produção
+
+Além do **custo padrão** (planejado), cada ordem de produção agora apura o **custo
+real**: o material baixado é valorizado pelo custo médio do estoque e a
+transformação vem das horas apontadas × o custo/hora do centro de trabalho. Ao
+fechar a ordem, o sistema calcula sozinho o custo real e o **desvio** (real −
+padrão) de material, mão-de-obra e overhead — então dá para saber a **margem real**
+de cada peça, e não só a teórica.
+
+> A versão técnica está em `../dev/custos.md` (§4 Custo Real), `../dev/manufatura-e-compras.md` (§4 Custo Padrão) e em `../dev/visao-geral.md`.

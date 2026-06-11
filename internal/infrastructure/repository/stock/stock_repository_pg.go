@@ -50,10 +50,42 @@ func (r *StockRepositorySQLC) CreateMovement(ctx context.Context, m *entity.Stoc
 		return nil, err
 	}
 
+	if err := applyMovementToLotBalance(ctx, tx, m); err != nil {
+		return nil, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("committing stock movement: %w", err)
 	}
 	return m, nil
+}
+
+// applyMovementToLotBalance keeps the lot-segregated balance in sync when a
+// movement carries a lot, so a metallurgy shop can tell how much of each heat
+// remains in each warehouse. Movements without a lot are ignored here.
+func applyMovementToLotBalance(ctx context.Context, tx pgx.Tx, m *entity.StockMovement) error {
+	if m.Lot == nil || *m.Lot == "" {
+		return nil
+	}
+	delta := entity.SignedQuantity(m.MovementType, m.Quantity)
+	if delta == 0 {
+		return nil
+	}
+	lastCost := m.UnitPrice
+	_, err := tx.Exec(ctx,
+		`INSERT INTO public.stock_lot_balances
+			(item_code, mask, warehouse_id, lot, quantity, last_cost, last_movement_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		 ON CONFLICT (item_code, mask, warehouse_id, lot) DO UPDATE SET
+			 quantity = public.stock_lot_balances.quantity + EXCLUDED.quantity,
+			 last_cost = CASE WHEN EXCLUDED.last_cost > 0 THEN EXCLUDED.last_cost ELSE public.stock_lot_balances.last_cost END,
+			 last_movement_at = EXCLUDED.last_movement_at,
+			 updated_at = NOW()`,
+		m.ItemCode, m.Mask, m.WarehouseID, *m.Lot, delta, lastCost, m.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("updating lot balance: %w", err)
+	}
+	return nil
 }
 
 // applyMovementToBalance updates stock_balances within the given transaction
@@ -272,8 +304,17 @@ func scanBalances(rows pgx.Rows) ([]*entity.StockBalance, error) {
 
 // ---------- Stock Reservations ----------
 
+// CreateReservation records the reservation and atomically increases the
+// reserved quantity of the balance, so available_qty (= quantity − reserved_qty)
+// reflects the reservation immediately.
 func (r *StockRepositorySQLC) CreateReservation(ctx context.Context, res *entity.StockReservation) (*entity.StockReservation, error) {
-	err := r.pool.QueryRow(ctx,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning reservation tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	err = tx.QueryRow(ctx,
 		`INSERT INTO public.stock_reservations
 			(item_code, mask, warehouse_id, quantity, reference_type, reference_code, reference_item_code,
 			 reservation_date, expiration_date, status, notes, created_by)
@@ -285,7 +326,46 @@ func (r *StockRepositorySQLC) CreateReservation(ctx context.Context, res *entity
 	if err != nil {
 		return nil, fmt.Errorf("creating stock reservation: %w", err)
 	}
+
+	if res.Status == "ACTIVE" {
+		if err := adjustReservedTx(ctx, tx, res.ItemCode, res.Mask, res.WarehouseID, res.Quantity); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing reservation: %w", err)
+	}
 	return res, nil
+}
+
+// adjustReservedTx adds delta to reserved_qty of a balance within a transaction,
+// creating the balance row if it does not exist yet.
+func adjustReservedTx(ctx context.Context, tx pgx.Tx, itemCode int64, mask string, warehouseID int64, delta float64) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO public.stock_balances (item_code, mask, warehouse_id, reserved_qty)
+		 VALUES ($1,$2,$3,$4)
+		 ON CONFLICT (item_code, mask, warehouse_id) DO UPDATE
+		   SET reserved_qty = GREATEST(public.stock_balances.reserved_qty + EXCLUDED.reserved_qty, 0),
+		       updated_at = NOW()`,
+		itemCode, mask, warehouseID, delta)
+	if err != nil {
+		return fmt.Errorf("adjusting reserved quantity: %w", err)
+	}
+	return nil
+}
+
+func (r *StockRepositorySQLC) HasActiveReservationByReference(ctx context.Context, referenceType string, referenceCode int64) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM public.stock_reservations
+			WHERE reference_type = $1 AND reference_code = $2 AND status = 'ACTIVE'
+		 )`, referenceType, referenceCode).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("checking active reservations: %w", err)
+	}
+	return exists, nil
 }
 
 func (r *StockRepositorySQLC) GetReservation(ctx context.Context, id int64) (*entity.StockReservation, error) {
@@ -343,19 +423,50 @@ func (r *StockRepositorySQLC) ListActiveReservations(ctx context.Context) ([]*en
 }
 
 func (r *StockRepositorySQLC) CancelReservation(ctx context.Context, id int64) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE public.stock_reservations SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, id)
-	if err != nil {
-		return fmt.Errorf("cancelling reservation %d: %w", id, err)
-	}
-	return nil
+	return r.closeReservation(ctx, id, "CANCELLED")
 }
 
 func (r *StockRepositorySQLC) ConsumeReservation(ctx context.Context, id int64) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE public.stock_reservations SET status = 'CONSUMED', updated_at = NOW() WHERE id = $1`, id)
+	return r.closeReservation(ctx, id, "CONSUMED")
+}
+
+// closeReservation moves a reservation to a terminal status and, if it was still
+// ACTIVE, releases its quantity from the balance's reserved_qty so available_qty
+// is restored. No-op on the reserved_qty if the reservation was already closed.
+func (r *StockRepositorySQLC) closeReservation(ctx context.Context, id int64, status string) error {
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("consuming reservation %d: %w", id, err)
+		return fmt.Errorf("beginning reservation close tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var itemCode, warehouseID int64
+	var mask, prevStatus string
+	var qty float64
+	err = tx.QueryRow(ctx,
+		`SELECT item_code, mask, warehouse_id, quantity, status
+		 FROM public.stock_reservations WHERE id = $1 FOR UPDATE`, id,
+	).Scan(&itemCode, &mask, &warehouseID, &qty, &prevStatus)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("stock reservation %d not found", id)
+		}
+		return fmt.Errorf("reading reservation %d: %w", id, err)
+	}
+
+	if _, err = tx.Exec(ctx,
+		`UPDATE public.stock_reservations SET status = $2, updated_at = NOW() WHERE id = $1`, id, status); err != nil {
+		return fmt.Errorf("closing reservation %d: %w", id, err)
+	}
+
+	if prevStatus == "ACTIVE" {
+		if err := adjustReservedTx(ctx, tx, itemCode, mask, warehouseID, -qty); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing reservation close: %w", err)
 	}
 	return nil
 }
@@ -374,6 +485,253 @@ func scanReservations(rows pgx.Rows) ([]*entity.StockReservation, error) {
 		result = append(result, &res)
 	}
 	return result, rows.Err()
+}
+
+// ---------- Consumption Average ----------
+
+// RecalcConsumptionAverage computes the average monthly consumption of an item
+// from its outbound movements over the trailing window and upserts the result.
+func (r *StockRepositorySQLC) RecalcConsumptionAverage(ctx context.Context, itemCode int64, windowMonths int) (*entity.ItemConsumptionAverage, error) {
+	if windowMonths <= 0 {
+		windowMonths = 6
+	}
+
+	var totalConsumed float64
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(quantity), 0)
+		 FROM public.stock_movements
+		 WHERE item_code = $1
+		   AND movement_type IN ('OUT', 'TRANSFER_OUT')
+		   AND created_at >= NOW() - make_interval(months => $2)`,
+		itemCode, windowMonths).Scan(&totalConsumed)
+	if err != nil {
+		return nil, fmt.Errorf("summing item consumption: %w", err)
+	}
+
+	avg := totalConsumed / float64(windowMonths)
+
+	var out entity.ItemConsumptionAverage
+	err = r.pool.QueryRow(ctx,
+		`INSERT INTO public.item_consumption_averages
+			(item_code, avg_monthly_consumption, total_consumed, window_months, calculated_at)
+		 VALUES ($1,$2,$3,$4,NOW())
+		 ON CONFLICT (item_code) DO UPDATE SET
+			 avg_monthly_consumption = EXCLUDED.avg_monthly_consumption,
+			 total_consumed          = EXCLUDED.total_consumed,
+			 window_months           = EXCLUDED.window_months,
+			 calculated_at           = NOW()
+		 RETURNING id, item_code, avg_monthly_consumption, total_consumed, window_months, calculated_at`,
+		itemCode, avg, totalConsumed, windowMonths,
+	).Scan(&out.ID, &out.ItemCode, &out.AvgMonthlyConsumption, &out.TotalConsumed, &out.WindowMonths, &out.CalculatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("upserting consumption average: %w", err)
+	}
+	return &out, nil
+}
+
+// RecalcAllConsumptionAverages recomputes the average for every item that had
+// outbound movements within the window, returning how many items were updated.
+func (r *StockRepositorySQLC) RecalcAllConsumptionAverages(ctx context.Context, windowMonths int) (int, error) {
+	if windowMonths <= 0 {
+		windowMonths = 6
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT item_code FROM public.stock_movements
+		 WHERE movement_type IN ('OUT', 'TRANSFER_OUT')
+		   AND created_at >= NOW() - make_interval(months => $1)`, windowMonths)
+	if err != nil {
+		return 0, fmt.Errorf("listing items with consumption: %w", err)
+	}
+	var items []int64
+	for rows.Next() {
+		var code int64
+		if err := rows.Scan(&code); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scanning item code: %w", err)
+		}
+		items = append(items, code)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, code := range items {
+		if _, err := r.RecalcConsumptionAverage(ctx, code, windowMonths); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (r *StockRepositorySQLC) GetConsumptionAverage(ctx context.Context, itemCode int64) (*entity.ItemConsumptionAverage, error) {
+	var out entity.ItemConsumptionAverage
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, item_code, avg_monthly_consumption, total_consumed, window_months, calculated_at
+		 FROM public.item_consumption_averages WHERE item_code = $1`, itemCode,
+	).Scan(&out.ID, &out.ItemCode, &out.AvgMonthlyConsumption, &out.TotalConsumed, &out.WindowMonths, &out.CalculatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("consumption average not found for item %d", itemCode)
+		}
+		return nil, fmt.Errorf("getting consumption average: %w", err)
+	}
+	return &out, nil
+}
+
+// ---------- Lot Traceability ----------
+
+func (r *StockRepositorySQLC) UpsertLot(ctx context.Context, lot *entity.StockLot) (*entity.StockLot, error) {
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO public.stock_lots
+			(item_code, lot, heat_number, certificate, supplier_code, received_at, notes, created_by)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		 ON CONFLICT (item_code, lot) DO UPDATE SET
+			 heat_number   = EXCLUDED.heat_number,
+			 certificate   = EXCLUDED.certificate,
+			 supplier_code = EXCLUDED.supplier_code,
+			 received_at   = EXCLUDED.received_at,
+			 notes         = EXCLUDED.notes
+		 RETURNING id, created_at`,
+		lot.ItemCode, lot.Lot, lot.HeatNumber, lot.Certificate, lot.SupplierCode, lot.ReceivedAt, lot.Notes, lot.CreatedBy,
+	).Scan(&lot.ID, &lot.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("upserting stock lot: %w", err)
+	}
+	return lot, nil
+}
+
+func (r *StockRepositorySQLC) GetLot(ctx context.Context, itemCode int64, lot string) (*entity.StockLot, error) {
+	var l entity.StockLot
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, item_code, lot, heat_number, certificate, supplier_code, received_at, notes, created_at, created_by
+		 FROM public.stock_lots WHERE item_code = $1 AND lot = $2`, itemCode, lot,
+	).Scan(&l.ID, &l.ItemCode, &l.Lot, &l.HeatNumber, &l.Certificate, &l.SupplierCode, &l.ReceivedAt, &l.Notes, &l.CreatedAt, &l.CreatedBy)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("getting stock lot: %w", err)
+	}
+	return &l, nil
+}
+
+func (r *StockRepositorySQLC) ListLotBalancesByItem(ctx context.Context, itemCode int64) ([]*entity.StockLotBalance, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, item_code, mask, warehouse_id, lot, quantity, last_cost, last_movement_at, updated_at
+		 FROM public.stock_lot_balances WHERE item_code = $1 ORDER BY lot, warehouse_id`, itemCode)
+	if err != nil {
+		return nil, fmt.Errorf("listing lot balances: %w", err)
+	}
+	defer rows.Close()
+	return scanLotBalances(rows)
+}
+
+func scanLotBalances(rows pgx.Rows) ([]*entity.StockLotBalance, error) {
+	var out []*entity.StockLotBalance
+	for rows.Next() {
+		var b entity.StockLotBalance
+		if err := rows.Scan(&b.ID, &b.ItemCode, &b.Mask, &b.WarehouseID, &b.Lot, &b.Quantity, &b.LastCost, &b.LastMovementAt, &b.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scanning lot balance: %w", err)
+		}
+		out = append(out, &b)
+	}
+	return out, rows.Err()
+}
+
+// GetLotGenealogy traces an item lot in both directions: the production orders
+// that consumed it (where this raw material went) and the production orders that
+// produced it together with the input lots that compose it.
+func (r *StockRepositorySQLC) GetLotGenealogy(ctx context.Context, itemCode int64, lot string) (*entity.LotGenealogy, error) {
+	g := &entity.LotGenealogy{ItemCode: itemCode, Lot: lot}
+
+	registry, err := r.GetLot(ctx, itemCode, lot)
+	if err != nil {
+		return nil, err
+	}
+	g.Registry = registry
+
+	balRows, err := r.pool.Query(ctx,
+		`SELECT id, item_code, mask, warehouse_id, lot, quantity, last_cost, last_movement_at, updated_at
+		 FROM public.stock_lot_balances WHERE item_code = $1 AND lot = $2 ORDER BY warehouse_id`, itemCode, lot)
+	if err != nil {
+		return nil, fmt.Errorf("listing lot genealogy balances: %w", err)
+	}
+	balances, err := scanLotBalances(balRows)
+	balRows.Close()
+	if err != nil {
+		return nil, err
+	}
+	g.Balances = balances
+
+	// Forward: production orders that consumed this lot.
+	consRows, err := r.pool.Query(ctx,
+		`SELECT pc.production_order_id, po.order_number, po.item_code, pc.consumed_qty
+		 FROM public.production_consumptions pc
+		 JOIN public.production_orders po ON po.id = pc.production_order_id
+		 WHERE pc.item_code = $1 AND pc.lot = $2
+		 ORDER BY pc.production_order_id`, itemCode, lot)
+	if err != nil {
+		return nil, fmt.Errorf("listing lot consumptions: %w", err)
+	}
+	for consRows.Next() {
+		var c entity.LotConsumption
+		if err := consRows.Scan(&c.ProductionOrderID, &c.OrderNumber, &c.ProducedItemCode, &c.ConsumedQty); err != nil {
+			consRows.Close()
+			return nil, fmt.Errorf("scanning lot consumption: %w", err)
+		}
+		g.ConsumedIn = append(g.ConsumedIn, c)
+	}
+	consRows.Close()
+
+	// Backward: production orders that produced this lot (recorded on the IN
+	// movement) and the input lots that went into each of them.
+	prodRows, err := r.pool.Query(ctx,
+		`SELECT sm.reference_code, po.order_number, COALESCE(SUM(sm.quantity), 0)
+		 FROM public.stock_movements sm
+		 JOIN public.production_orders po ON po.id = sm.reference_code
+		 WHERE sm.item_code = $1 AND sm.lot = $2
+		   AND sm.reference_type = 'PRODUCTION_ORDER' AND sm.movement_type = 'IN'
+		 GROUP BY sm.reference_code, po.order_number
+		 ORDER BY sm.reference_code`, itemCode, lot)
+	if err != nil {
+		return nil, fmt.Errorf("listing lot productions: %w", err)
+	}
+	var productions []entity.LotProduction
+	for prodRows.Next() {
+		var p entity.LotProduction
+		if err := prodRows.Scan(&p.ProductionOrderID, &p.OrderNumber, &p.ProducedQty); err != nil {
+			prodRows.Close()
+			return nil, fmt.Errorf("scanning lot production: %w", err)
+		}
+		productions = append(productions, p)
+	}
+	prodRows.Close()
+
+	for i := range productions {
+		inputRows, err := r.pool.Query(ctx,
+			`SELECT pc.item_code, COALESCE(pc.lot, ''), pc.consumed_qty
+			 FROM public.production_consumptions pc
+			 WHERE pc.production_order_id = $1 AND pc.lot IS NOT NULL AND pc.lot <> ''
+			 ORDER BY pc.item_code`, productions[i].ProductionOrderID)
+		if err != nil {
+			return nil, fmt.Errorf("listing lot inputs: %w", err)
+		}
+		for inputRows.Next() {
+			var in entity.LotInput
+			if err := inputRows.Scan(&in.ItemCode, &in.Lot, &in.ConsumedQty); err != nil {
+				inputRows.Close()
+				return nil, fmt.Errorf("scanning lot input: %w", err)
+			}
+			productions[i].InputLots = append(productions[i].InputLots, in)
+		}
+		inputRows.Close()
+	}
+	g.ProducedBy = productions
+
+	return g, nil
 }
 
 // ---------- Physical Inventory ----------

@@ -108,4 +108,16 @@ Para conferir o estoque físico contra o sistema, há o módulo de **inventário
 | **Reserva** | Estoque separado para um pedido |
 | **Inventário** | Conferência física × sistema, com contagem e ajuste |
 
-> A versão técnica está em `../dev/visao-geral.md` (§5.2 Movimentos de Estoque).
+## Novidades (2026-06)
+
+- **Rastreabilidade por lote/corrida:** cada lote de matéria-prima guarda o número
+  da **corrida (heat number)** e o **certificado de qualidade** do material. O saldo
+  passa a ser conhecido **por lote**, e a **genealogia** responde "de qual corrida
+  saiu esta peça?" — ligando o lote de matéria-prima à ordem de produção e ao lote
+  do produto acabado (exigência comum de clientes de metalurgia).
+- **Disponível para promessa:** mostra, por item, quanto pode ser prometido agora
+  (saldo menos reservas).
+- **Consumo médio automático:** o sistema calcula o consumo médio mensal a partir
+  das saídas, alimentando o ponto de reposição sem digitação manual.
+
+> A versão técnica está em `../dev/estoque.md` (§6 ATP, §7 Lote, §8 Consumo médio) e `../dev/visao-geral.md` (§5.2 Movimentos de Estoque).

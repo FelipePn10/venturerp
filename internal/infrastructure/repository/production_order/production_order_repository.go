@@ -346,6 +346,114 @@ func (r *ProductionOrderRepositoryPGX) GetConsumptions(ctx context.Context, prod
 	return consumptions, rows.Err()
 }
 
+// ComputeActualCostInputs aggregates the actual material and labor cost incurred
+// by an order. Material is the sum of each consumption valued at the item's
+// weighted-average cost (preferring the consumption warehouse, falling back to
+// the most recently updated balance for the item). Labor is the sum of appointed
+// durations × the cost/hour of the work center the appointment's machine belongs
+// to (a work center is a machine_type, which is what work_center_costs keys on).
+func (r *ProductionOrderRepositoryPGX) ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (float64, float64, error) {
+	var materialReal float64
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(c.consumed_qty * COALESCE(sb.avg_cost, 0)), 0)
+		 FROM public.production_consumptions c
+		 LEFT JOIN LATERAL (
+		     SELECT b.avg_cost FROM public.stock_balances b
+		     WHERE b.item_code = c.item_code
+		     ORDER BY CASE WHEN b.warehouse_id = c.warehouse_id THEN 0 ELSE 1 END, b.updated_at DESC
+		     LIMIT 1
+		 ) sb ON TRUE
+		 WHERE c.production_order_id = $1`, productionOrderID).Scan(&materialReal)
+	if err != nil {
+		return 0, 0, fmt.Errorf("computing actual material cost: %w", err)
+	}
+
+	var laborReal float64
+	err = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(
+		     EXTRACT(EPOCH FROM (a.end_time - a.start_time)) / 3600.0 * wcc.cost_per_hour
+		 ), 0)
+		 FROM public.production_appointments a
+		 JOIN public.machines m ON m.id = a.machine_id
+		 JOIN public.machine_types mt ON mt.code = m.machine_type_code
+		 JOIN public.work_center_costs wcc ON wcc.work_center_id = mt.id
+		 WHERE a.production_order_id = $1
+		   AND a.start_time IS NOT NULL AND a.end_time IS NOT NULL`, productionOrderID).Scan(&laborReal)
+	if err != nil {
+		return 0, 0, fmt.Errorf("computing actual labor cost: %w", err)
+	}
+
+	return materialReal, laborReal, nil
+}
+
+// SettleCost upserts the cost settlement of a production order (one row per OF).
+func (r *ProductionOrderRepositoryPGX) SettleCost(ctx context.Context, c *entity.ProductionOrderCost) (*entity.ProductionOrderCost, error) {
+	row := r.pool.QueryRow(ctx,
+		`INSERT INTO public.production_order_costs
+			(production_order_id, produced_qty,
+			 material_cost_real, labor_cost_real, overhead_cost_real, total_cost_real, unit_cost_real,
+			 material_cost_std, labor_cost_std, overhead_cost_std, total_cost_std,
+			 material_variance, labor_variance, overhead_variance, total_variance,
+			 currency, settled_by)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+		 ON CONFLICT (production_order_id) DO UPDATE SET
+			 produced_qty       = EXCLUDED.produced_qty,
+			 material_cost_real = EXCLUDED.material_cost_real,
+			 labor_cost_real    = EXCLUDED.labor_cost_real,
+			 overhead_cost_real = EXCLUDED.overhead_cost_real,
+			 total_cost_real    = EXCLUDED.total_cost_real,
+			 unit_cost_real     = EXCLUDED.unit_cost_real,
+			 material_cost_std  = EXCLUDED.material_cost_std,
+			 labor_cost_std     = EXCLUDED.labor_cost_std,
+			 overhead_cost_std  = EXCLUDED.overhead_cost_std,
+			 total_cost_std     = EXCLUDED.total_cost_std,
+			 material_variance  = EXCLUDED.material_variance,
+			 labor_variance     = EXCLUDED.labor_variance,
+			 overhead_variance  = EXCLUDED.overhead_variance,
+			 total_variance     = EXCLUDED.total_variance,
+			 currency           = EXCLUDED.currency,
+			 settled_at         = NOW(),
+			 settled_by         = EXCLUDED.settled_by
+		 RETURNING id, settled_at`,
+		c.ProductionOrderID, pgutil.ToPgNumericFromFloat64(c.ProducedQty),
+		pgutil.ToPgNumericFromFloat64(c.MaterialCostReal), pgutil.ToPgNumericFromFloat64(c.LaborCostReal),
+		pgutil.ToPgNumericFromFloat64(c.OverheadCostReal), pgutil.ToPgNumericFromFloat64(c.TotalCostReal),
+		pgutil.ToPgNumericFromFloat64(c.UnitCostReal),
+		pgutil.ToPgNumericFromFloat64(c.MaterialCostStd), pgutil.ToPgNumericFromFloat64(c.LaborCostStd),
+		pgutil.ToPgNumericFromFloat64(c.OverheadCostStd), pgutil.ToPgNumericFromFloat64(c.TotalCostStd),
+		pgutil.ToPgNumericFromFloat64(c.MaterialVariance), pgutil.ToPgNumericFromFloat64(c.LaborVariance),
+		pgutil.ToPgNumericFromFloat64(c.OverheadVariance), pgutil.ToPgNumericFromFloat64(c.TotalVariance),
+		c.Currency, pgutil.ToPgUUID(c.SettledBy),
+	)
+	if err := row.Scan(&c.ID, &c.SettledAt); err != nil {
+		return nil, fmt.Errorf("settling production order cost: %w", err)
+	}
+	return c, nil
+}
+
+func (r *ProductionOrderRepositoryPGX) GetCost(ctx context.Context, productionOrderID int64) (*entity.ProductionOrderCost, error) {
+	var c entity.ProductionOrderCost
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, production_order_id, produced_qty,
+		        material_cost_real, labor_cost_real, overhead_cost_real, total_cost_real, unit_cost_real,
+		        material_cost_std, labor_cost_std, overhead_cost_std, total_cost_std,
+		        material_variance, labor_variance, overhead_variance, total_variance,
+		        currency, settled_at, settled_by
+		 FROM public.production_order_costs WHERE production_order_id = $1`, productionOrderID,
+	).Scan(&c.ID, &c.ProductionOrderID, &c.ProducedQty,
+		&c.MaterialCostReal, &c.LaborCostReal, &c.OverheadCostReal, &c.TotalCostReal, &c.UnitCostReal,
+		&c.MaterialCostStd, &c.LaborCostStd, &c.OverheadCostStd, &c.TotalCostStd,
+		&c.MaterialVariance, &c.LaborVariance, &c.OverheadVariance, &c.TotalVariance,
+		&c.Currency, &c.SettledAt, &c.SettledBy)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("cost settlement not found for production order %d", productionOrderID)
+		}
+		return nil, fmt.Errorf("getting production order cost: %w", err)
+	}
+	return &c, nil
+}
+
 func (r *ProductionOrderRepositoryPGX) GetNextOrderNumber(ctx context.Context) (int64, error) {
 	var num int64
 	err := r.pool.QueryRow(ctx,

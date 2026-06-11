@@ -22,4 +22,12 @@ type ProductionOrderRepository interface {
 	GetAppointments(ctx context.Context, productionOrderID int64) ([]*entity.ProductionAppointment, error)
 	GetConsumptions(ctx context.Context, productionOrderID int64) ([]*entity.ProductionConsumption, error)
 	GetNextOrderNumber(ctx context.Context) (int64, error)
+
+	// Cost settlement (custo real da OF).
+	// ComputeActualCostInputs aggregates the shop-floor actuals: material valued
+	// at the consumed items' weighted-average cost and labor from the appointed
+	// hours × the work center's cost/hour.
+	ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (materialReal, laborReal float64, err error)
+	SettleCost(ctx context.Context, c *entity.ProductionOrderCost) (*entity.ProductionOrderCost, error)
+	GetCost(ctx context.Context, productionOrderID int64) (*entity.ProductionOrderCost, error)
 }

@@ -65,6 +65,45 @@ Classificação (com sigla) de cada lançamento de estoque.
 
 ---
 
+## 6. Disponível para promessa (ATP)
+
+| Método | Rota | Ação |
+|---|---|---|
+| GET | `/api/stock/balances/atp/{itemCode}` | Disponível = saldo − reservas (todos os depósitos; opcional `?mask=`) |
+
+As **reservas** mantêm o `reserved_qty` do saldo consistente (criar/liberar/consumir,
+na mesma transação), então o ATP reflete o que realmente pode ser prometido.
+Confirmar um pedido de venda (`"P"`) reserva o disponível por linha automaticamente
+(ver [`00-fluxo-geral.md`](00-fluxo-geral.md)).
+
+## 7. Rastreabilidade de lote / corrida (genealogia)
+
+Migration `000153`. Saldo segregado por lote (`stock_lot_balances`) + registro de
+corrida/certificado (`stock_lots`). Todo movimento com `lot` atualiza o saldo do lote.
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/api/stock/lots/register` | Registra lote: `heat_number` (corrida), `certificate`, fornecedor, recebimento |
+| GET | `/api/stock/lots/item/{itemCode}` | Saldos por lote do item |
+| GET | `/api/stock/lots/genealogy/{itemCode}/{lot}` | Genealogia bidirecional do lote |
+
+A **genealogia** devolve: registro (corrida/certificado), saldos do lote,
+`consumed_in` (OFs que consumiram o lote → item produzido) e `produced_by` (OFs que
+produziram o lote + `input_lots` que o compõem). O lote do acabado é gravado ao
+concluir a OF com `lot`.
+
+## 8. Consumo médio mensal (ROP)
+
+Migration `000154`. Calculado das saídas (`OUT`/`TRANSFER_OUT`) numa janela móvel
+(padrão 6 meses); alimenta o ponto de reposição.
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/api/stock/consumption-average/recalc` | Recalcula (item específico via `item_code`, ou todos) |
+| GET | `/api/stock/consumption-average/{itemCode}` | Consulta consumo médio mensal do item |
+
+---
+
 ## Cadastros relacionados
 Armazém (`/api/warehouse`) e Localização (`/api/location` — países/UFs não; ver
 [`cadastros-apoio.md`](cadastros-apoio.md) para armazém/localização física). Tipos de

@@ -1,4 +1,13 @@
 BEGIN;
+-- As migrations 014/015 criaram esquemas preliminares destas tabelas (com
+-- product_id, sem item_code). Removemos esses esquemas antigos para recriar com
+-- o schema correto deste módulo — mesmo padrão da migration 094 (production_orders).
+DROP TABLE IF EXISTS public.physical_inventory_items CASCADE;
+DROP TABLE IF EXISTS public.physical_inventories CASCADE;
+DROP TABLE IF EXISTS public.stock_reservations CASCADE;
+DROP TABLE IF EXISTS public.stock_balances CASCADE;
+DROP TABLE IF EXISTS public.stock_movements CASCADE;
+
 -- Stock movements (movimentacao de estoque)
 CREATE TABLE IF NOT EXISTS public.stock_movements (
     id                      BIGSERIAL PRIMARY KEY,

@@ -57,3 +57,27 @@ func (uc *GetStockBalanceUseCase) ByItem(ctx context.Context, itemCode int64) ([
 	}
 	return toStockBalanceResponses(list), nil
 }
+
+// ATP returns the available-to-promise of an item across all warehouses. When
+// mask is non-empty, only balances of that configuration are considered.
+func (uc *GetStockBalanceUseCase) ATP(ctx context.Context, itemCode int64, mask string) (*response.ATPResponse, error) {
+	if !uc.Auth.CanGetStockBalance(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	list, err := uc.Repo.ListBalancesByItem(ctx, itemCode)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &response.ATPResponse{ItemCode: itemCode, Mask: mask, Warehouses: []*response.StockBalanceResponse{}}
+	for _, b := range list {
+		if mask != "" && b.Mask != mask {
+			continue
+		}
+		out.TotalOnHand += b.Quantity
+		out.TotalReserved += b.ReservedQty
+		out.TotalAvailable += b.AvailableQty
+		out.Warehouses = append(out.Warehouses, toStockBalanceResponse(b))
+	}
+	return out, nil
+}
