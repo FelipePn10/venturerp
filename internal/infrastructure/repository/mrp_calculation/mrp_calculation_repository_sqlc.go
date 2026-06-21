@@ -157,17 +157,34 @@ func (r *MRPCalculationRepositorySQLC) GetStockSnapshot(
 	ctx context.Context,
 	itemCode int64,
 ) (*entity.StockSnapshot, error) {
-
+	// Try the manual snapshot table first.
 	row, err := r.q.GetStockSnapshot(ctx, itemCode)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-
+	if err == nil {
+		return snapshotToEntity(row), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("fetching stock snapshot: %w", err)
 	}
 
-	return snapshotToEntity(row), nil
+	// Fall back to live stock_balances aggregated per item.
+	var qty, reservedQty, safetyStock float64
+	err = r.db.QueryRow(ctx, `
+		SELECT
+			COALESCE(SUM(quantity), 0),
+			COALESCE(SUM(reserved_qty), 0),
+			COALESCE(SUM(safety_stock), 0)
+		FROM stock_balances
+		WHERE item_code = $1
+	`, itemCode).Scan(&qty, &reservedQty, &safetyStock)
+	if err != nil {
+		return nil, nil
+	}
+	return &entity.StockSnapshot{
+		ItemCode:    itemCode,
+		Quantity:    qty,
+		ReservedQty: reservedQty,
+		SafetyStock: safetyStock,
+	}, nil
 }
 
 func (r *MRPCalculationRepositorySQLC) CreateSalesOrderDemand(
@@ -332,6 +349,23 @@ func (r *MRPCalculationRepositorySQLC) CreatePlannedOrderSuggestion(
 	return suggestionToEntity(row), nil
 }
 
+func (r *MRPCalculationRepositorySQLC) GetSuggestionByCode(
+	ctx context.Context,
+	code int64,
+) (*entity.PlannedOrderSuggestion, error) {
+	var row sqlc.MrpPlannedSuggestion
+	err := r.db.QueryRow(ctx,
+		`SELECT code, plan_code, item_code, quantity, need_date, start_date,
+		        order_type, demand_type, parent_item_code, llc, notes
+		   FROM public.mrp_planned_suggestions WHERE code = $1`, code,
+	).Scan(&row.Code, &row.PlanCode, &row.ItemCode, &row.Quantity, &row.NeedDate, &row.StartDate,
+		&row.OrderType, &row.DemandType, &row.ParentItemCode, &row.Llc, &row.Notes)
+	if err != nil {
+		return nil, fmt.Errorf("getting suggestion %d: %w", code, err)
+	}
+	return suggestionToEntity(row), nil
+}
+
 func (r *MRPCalculationRepositorySQLC) ListSuggestionsByPlan(
 	ctx context.Context,
 	planCode int64,
@@ -412,15 +446,38 @@ func (r *MRPCalculationRepositorySQLC) DeleteExceptionsByPlan(
 func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 	ctx context.Context,
 ) (map[int64]*entity.StockSnapshot, error) {
-
-	rows, err := r.q.ListLatestStockSnapshots(ctx)
+	// stock_snapshots is a manual freeze mechanism that may be empty;
+	// fall back to stock_balances which always reflects the live position.
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			item_code,
+			COALESCE(SUM(quantity), 0)      AS quantity,
+			COALESCE(SUM(reserved_qty), 0)  AS reserved_qty,
+			COALESCE(SUM(safety_stock), 0)  AS safety_stock
+		FROM stock_balances
+		GROUP BY item_code
+	`)
 	if err != nil {
-		return nil, fmt.Errorf("loading all stock snapshots: %w", err)
+		return nil, fmt.Errorf("loading stock balances for MRP: %w", err)
 	}
+	defer rows.Close()
 
-	m := make(map[int64]*entity.StockSnapshot, len(rows))
-	for _, row := range rows {
-		m[row.ItemCode] = snapshotToEntity(row)
+	m := make(map[int64]*entity.StockSnapshot)
+	for rows.Next() {
+		var itemCode int64
+		var qty, reservedQty, safetyStock float64
+		if err := rows.Scan(&itemCode, &qty, &reservedQty, &safetyStock); err != nil {
+			return nil, fmt.Errorf("scanning stock balance: %w", err)
+		}
+		m[itemCode] = &entity.StockSnapshot{
+			ItemCode:    itemCode,
+			Quantity:    qty,
+			ReservedQty: reservedQty,
+			SafetyStock: safetyStock,
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating stock balances: %w", err)
 	}
 	return m, nil
 }

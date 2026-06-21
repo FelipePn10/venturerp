@@ -16,7 +16,7 @@
 2. [Pré-requisito: Configuração Fiscal](#2-pré-requisito-configuração-fiscal)
 3. [Motor Tributário](#3-motor-tributário)
    - 3.1 [Gestão de Tabelas Tributárias](#31-gestão-de-tabelas-tributárias)
-4. [Módulo Fiscal — NF-e de Saída](#4-módulo-fiscal--nf-e-de-saída)
+4. [Módulo Fiscal — NF-e de Saída](#4-módulo-fiscal--nf-e-de-saída) *(inclui DANFE, CC-e, cancelamento, consulta de status)*
 5. [Módulo Fiscal — NF-e de Entrada](#5-módulo-fiscal--nf-e-de-entrada) *(inclui importação por chave de acesso via Focus)*
 6. [CT-e (Conhecimento de Transporte)](#6-ct-e-conhecimento-de-transporte)
 7. [Módulo Financeiro — Cadastros Base](#7-módulo-financeiro--cadastros-base)
@@ -114,25 +114,25 @@ Retorna a configuração atual da empresa.
 
 Atualiza a configuração fiscal da empresa.
 
-**Request:**
+**Request (dados reais da Tecnofer para homologação):**
 ```json
 {
-  "cnpj_empresa": "12345678000195",
-  "razao_social": "Empresa Teste LTDA",
-  "ie_empresa": "1234567890",
+  "cnpj_empresa": "52454668000102",
+  "razao_social": "TECNOFER FABRICACAO E MONTAGEM DE ESTRUTURAS METALICAS LTDA",
+  "ie_empresa": "9103144679",
   "regime_tributario": "3",
   "uf_empresa": "PR",
-  "logradouro": "Rua das Industrias",
-  "numero": "100",
-  "complemento": "Galpão A",
-  "bairro": "Distrito Industrial",
-  "municipio": "Curitiba",
-  "codigo_municipio": "4106902",
-  "cep": "80000000",
-  "telefone": "41999990000",
+  "logradouro": "Preencher conforme endereço cadastrado no SEFAZ",
+  "numero": "S/N",
+  "complemento": "",
+  "bairro": "Zona Rural",
+  "municipio": "Preencher conforme cadastro",
+  "codigo_municipio": "Preencher conforme IBGE",
+  "cep": "86975000",
+  "telefone": "",
   "icms_interno_aliquota": 0.12,
-  "icms_diferimento_percentual": 38.46,
-  "focus_nfe_token": "Djya39nqXUn3w93TB2dvPGBda3ho1mY1",
+  "icms_diferimento_percentual": 0.3846,
+  "focus_nfe_token": "YvCRephh2ZiwEmpawutMj83uPJxAYMD9",
   "focus_nfe_ambiente": "homologacao",
   "juros_mes": 0.01,
   "multa_atraso": 0.02,
@@ -141,6 +141,10 @@ Atualiza a configuração fiscal da empresa.
   "vencimento_pis_cofins_dia": 25
 }
 ```
+
+> **Empresa cadastrada no FocusNFE:** CNPJ `52.454.668/0001-02`, IE `9103144679`,
+> nome fantasia **Tecnofer**, CEP `86975-000` (PR). Token de homologação
+> `YvCRephh2ZiwEmpawutMj83uPJxAYMD9` — ambiente **sempre** `"homologacao"` para testes.
 
 | Campo | Obrigatório | Descrição |
 |---|---|---|
@@ -621,6 +625,39 @@ Lista todas as CC-e emitidas para uma NF-e.
 
 ---
 
+### `GET /api/fiscal/exits/{id}/danfe`
+
+Retorna as URLs do **DANFE** (PDF) e do **XML** da NF-e autorizada. O sistema
+persiste os paths retornados pelo Focus na autorização; se não estiverem
+armazenados (NF-es autorizadas antes dessa implementação), o endpoint consulta
+a API Focus automaticamente e os persiste.
+
+**Quando usar:** para exibir ou baixar o DANFE no front-end sem expor o token
+Focus NF-e ao cliente — o back-end entrega a URL absoluta, e o download é feito
+diretamente do CDN do Focus.
+
+**Resposta esperada (`200 OK`):**
+```json
+{
+  "exit_id": 1,
+  "danfe_url": "https://homologacao.focusnfe.com.br/notas_fiscais/NFe35240512345678000195550010000010011000000001-nfe.pdf",
+  "xml_url": "https://homologacao.focusnfe.com.br/notas_fiscais/NFe35240512345678000195550010000010011000000001-nfe.xml",
+  "status": "autorizada"
+}
+```
+
+| Campo | Descrição |
+|---|---|
+| `danfe_url` | URL absoluta do PDF do DANFE no servidor Focus NF-e |
+| `xml_url` | URL absoluta do XML da NF-e no servidor Focus NF-e |
+| `status` | Status atual da NF-e no banco local |
+
+**Erros comuns:**
+- `"NF-e deve estar autorizada para consultar DANFE"` → NF-e em rascunho ou cancelada
+- `"token Focus NF-e não configurado"` → execute `PUT /api/fiscal/config` primeiro
+
+---
+
 ## 5. Módulo Fiscal — NF-e de Entrada
 
 NF-e de entrada representa compras/recebimento de mercadorias. Os impostos são informados pelo emitente (não calculados pelo sistema).
@@ -848,7 +885,7 @@ herdados do CT-e registrado.
   "uf_inicio": "PR", "municipio_inicio": "Curitiba",
   "uf_fim": "SP", "municipio_fim": "São Paulo",
   "tomador_servico": 3,
-  "remetente":   { "cnpj": "11222333000181", "nome": "Remetente LTDA", "uf": "PR", "codigo_municipio": "4106902" },
+  "remetente":   { "cnpj": "52454668000102", "nome": "TECNOFER FABRICACAO E MONTAGEM DE ESTRUTURAS METALICAS LTDA", "uf": "PR", "codigo_municipio": "4106902" },
   "destinatario":{ "cnpj": "98765432000188", "nome": "Destinatário SA", "uf": "SP", "codigo_municipio": "3550308" },
   "produto_predominante": "Peças metálicas",
   "valor_carga": 50000.00,
@@ -1470,6 +1507,7 @@ validation.ValidateCNPJOrCPF("98765432000188")   // detecta automaticamente
 | **Adiantamentos (advance payment)** | **Implementado.** Módulo de adiantamentos (`/api/financial/adiantamentos`): registra o adiantamento com movimento de caixa e aplica o saldo sobre contas a pagar/receber. Ver seção 40. |
 | **Nota Fiscal de Serviços (NFS-e)** | **Implementado.** Módulo NFS-e (modelo ABRASF) via Focus em `/api/fiscal/nfse`: criação, autorização, cancelamento, consulta e listagem, com cálculo de ISS. Ver seção 41. |
 | **Substituição Tributária (ST)** | **Implementado.** O motor calcula a ST quando o item informa `mva_pct` (MVA, podendo já ser a MVA ajustada). Fórmula: `BaseST = (BaseICMS + IPI) × (1 + MVA) × (1 − red_base_st_pct)` e `ICMS-ST = BaseST × alíq. interna do destino − ICMS próprio`. A alíquota interna do destino é resolvida da tabela de ICMS interno (interestadual) ou da config (interno), podendo ser sobreposta por `aliq_interna_destino_st`. O CST é promovido a `10`/`70` e os valores (`base_icms_st`, `aliq_icms_st`, `valor_icms_st`, `mva`) são persistidos por item e somados na nota; também são enviados no payload Focus NF-e. |
+| **DANFE e XML** | **Implementado.** Ao autorizar a NF-e, os paths do DANFE e do XML são persistidos em `fiscal_exits.danfe_path` e `xml_path`. Consulte `GET /api/fiscal/exits/{id}/danfe` para obter as URLs absolutas (ver seção 4). |
 | **Múltiplos ambientes simultâneos** | A config de ambiente (homologação/produção) é global. Não há separação por empresa. |
 
 ---
@@ -1633,8 +1671,6 @@ Cadastro hierárquico de classificações de itens (FITE0105). Usa **máscaras**
 ```
 
 > O nível hierárquico (`level`) é calculado automaticamente a partir do `parent_code`.
-
-| **DANFE e XML** | O sistema não renderiza o PDF do DANFE localmente, mas **expõe as URLs** do DANFE (PDF) e do XML emitidos pela Focus NF-e. Consulte `GET /api/fiscal/exits/{id}/status`: a resposta inclui `danfe_url` e `xml_url` quando a nota está autorizada (montadas via `focusnfe.Client.DocumentURL`). |
 
 ---
 

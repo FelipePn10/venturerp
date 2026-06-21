@@ -27,6 +27,8 @@ Este documento cobre **todos** os cadastros do sistema, agrupados por assunto.
 13. [Funcionário](#13-funcionário)
 14. [Armazém e Localização de estoque](#14-armazém-e-localização-de-estoque)
 15. [Ordem recomendada de cadastro](#15-ordem-recomendada-de-cadastro)
+16. [Busca automática por CNPJ](#16-busca-automática-por-cnpj)
+17. [Exportação de relatórios (Excel, PDF e CSV)](#17-exportação-de-relatórios-excel-pdf-e-csv)
 
 ---
 
@@ -267,5 +269,42 @@ Para começar do zero sem retrabalho, esta é a sequência ideal:
 
 Com esses cadastros prontos, o sistema já consegue receber um pedido de venda e planejar tudo automaticamente.
 
+---
+
+## 16. Busca automática por CNPJ
+
+No cadastro de **cliente**, **fornecedor** ou **empresa**, basta digitar o CNPJ e
+clicar em buscar: o sistema consulta a base da Receita Federal e **preenche
+sozinho** os campos:
+
+- **Razão social** e **nome fantasia**
+- **Inscrição Estadual** (quando disponível na consulta)
+- **Endereço completo** — CEP, logradouro, número, bairro, cidade e UF
+- **Atividade econômica (CNAE)**, natureza jurídica e porte
+- Indicação de **Simples Nacional / MEI**
+
+Isso elimina digitação, evita erro de transcrição e deixa o cadastro padronizado
+igual ao registro oficial. O operador confere e ajusta o que for preciso antes de
+salvar.
+
+> Observação: a Inscrição Estadual depende da fonte consultada. Quando ela não
+> vier automaticamente, o sistema avisa e o campo deve ser preenchido à mão.
+
+---
+
+## 17. Exportação de relatórios (Excel, PDF e CSV)
+
+Toda consulta/listagem que aparece na tela pode ser **exportada** para os
+formatos que as empresas usam no dia a dia:
+
+- **Excel (.xlsx)** — para trabalhar os dados em planilha
+- **PDF** — para imprimir ou enviar um relatório formatado
+- **CSV** — para importar em outros sistemas
+
+Exemplos: lista de clientes, lista de fornecedores e qualquer relatório montado
+na tela podem virar um arquivo pronto para baixar, com cabeçalho, título e data
+de geração. O conteúdo exportado é exatamente o que está sendo exibido.
+
 > A versão técnica (endpoints, campos e regras internas) está em
-> `../dev/cadastros-cliente.md`, `../dev/cadastros-fornecedor.md` e `../dev/cadastros-item.md`.
+> `../dev/cadastros-cliente.md`, `../dev/cadastros-fornecedor.md`,
+> `../dev/cadastros-item.md` e `../dev/integracao-cnpj-e-exportacao.md`.

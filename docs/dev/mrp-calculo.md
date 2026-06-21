@@ -365,9 +365,152 @@ Uma sugestão do MRP é apenas uma proposta. Quando o planejador "firma" (aprova
 
 ---
 
-## O que ainda está sendo construído
+## Endpoints da API
 
-- **Ordens Planejadas**: o módulo que vai armazenar e gerenciar as ordens geradas pelo MRP (firmar, cancelar, acompanhar execução)
-- **Integração com Pedidos de Venda**: leitura automática dos pedidos confirmados para alimentar o MRP
-- **Motor de cálculo completo**: a lógica que executa os passos 2 ao 4 descritos acima (a estrutura já existe, a implementação será adicionada em breve)
-- **Agendamento automático de máquinas**: após gerar as ordens, distribuir automaticamente na agenda de cada máquina considerando capacidade e prioridade
+Todos os endpoints exigem `Authorization: Bearer <JWT>` (ADMIN ou USER).
+
+### Execução do MRP
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `POST` | `/api/mrp-calculation/run` | Executa o cálculo MRP para um plano — `{ "plan_code": 1 }` |
+| `GET` | `/api/mrp-calculation/profile/{item_code}/{plan_code}` | Perfil do item: demanda, estoque projetado, ordens |
+| `POST` | `/api/mrp-calculation/configured-rules` | Cria regra configurada por item |
+| `GET` | `/api/mrp-calculation/configured-rules/{item_code}` | Lista regras configuradas de um item |
+| `GET` | `/api/mrp-calculation/exceptions/{plan_code}` | Lista exceções e alertas do cálculo |
+
+### Sugestões e Ponte para Ordens Planejadas
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/mrp-calculation/suggestions/{plan_code}` | Lista todas as sugestões geradas pelo plano |
+| `POST` | `/api/mrp-calculation/suggestions/{code}/firm` | **Firma uma sugestão** — converte em Ordem Planejada real |
+
+#### `GET /api/mrp-calculation/suggestions/{plan_code}`
+
+Lista as sugestões de ordens geradas pelo último cálculo do plano. Cada sugestão é
+uma proposta pendente de análise — ainda não é uma Ordem Planejada.
+
+**Resposta esperada (`200 OK`):**
+```json
+[
+  {
+    "code": 42,
+    "plan_code": 1,
+    "item_code": 2001,
+    "quantity": 150.0,
+    "need_date": "2026-07-15T00:00:00Z",
+    "start_date": "2026-07-05T00:00:00Z",
+    "order_type": "PURCHASE",
+    "demand_type": "INDEPENDENT",
+    "parent_item_code": null,
+    "llc": 1,
+    "notes": null
+  }
+]
+```
+
+---
+
+#### `POST /api/mrp-calculation/suggestions/{code}/firm`
+
+**Ponte MRP → Ordem Planejada** (a etapa de "firmar sugestão").
+
+Converte a sugestão `{code}` em uma Ordem Planejada real (`planned_orders`),
+com `is_firm = true`. Atribui um número de ordem único. Para sugestões do tipo
+`PRODUCTION`, a firmação automática do `FirmPlannedOrderUseCase` também cria a
+Ordem de Fabricação (`production_orders`) correspondente.
+
+**Request:** body vazio `{}`
+
+**Resposta esperada (`201 Created`):**
+```json
+{
+  "suggestion_code": 42,
+  "planned_code": 199,
+  "order_number": 7001,
+  "item_code": 2001,
+  "quantity": 150.0,
+  "order_type": "PURCHASE",
+  "need_date": "2026-07-15T00:00:00Z",
+  "status": "PLANNED",
+  "is_firm": true,
+  "plan_code": 1
+}
+```
+
+| Campo | Significado |
+|---|---|
+| `suggestion_code` | Código da sugestão que deu origem à ordem |
+| `planned_code` | ID da Ordem Planejada criada (chave primária) |
+| `order_number` | Número sequencial único da ordem (visível no chão de fábrica) |
+| `is_firm` | Sempre `true` — firmar é uma ação irreversível |
+| `status` | `PLANNED` (ordem criada, aguardando liberação para produção/compra) |
+
+---
+
+### Ordens Planejadas
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `POST` | `/api/planned-order/create` | Cria Ordem Planejada manualmente (sem passar pelo MRP) |
+| `GET` | `/api/planned-order/list` | Lista todas as Ordens Planejadas |
+| `GET` | `/api/planned-order/{code}/firm` | Firma uma Ordem Planejada já existente |
+
+---
+
+## Fluxo Completo — Do Pedido à Ordem Firmada
+
+```
+CLIENTE FAZ PEDIDO
+        │
+        ▼
+Pedido de Venda confirmado
+→ Demanda de Pedido de Venda gerada automaticamente
+        │
+        ▼
+PLANEJADOR ACIONA O MRP
+POST /api/mrp-calculation/run { "plan_code": 1 }
+        │
+        ├─ 1. Snapshot de estoque
+        ├─ 2. Calcula LLC
+        ├─ 3. Para cada item (do LLC mais alto ao mais baixo):
+        │       ├─ Lê demanda (independente + dependente acumulada)
+        │       ├─ Subtrai estoque disponível e ordens firmes abertas
+        │       ├─ Aplica regras do item (lote mínimo, lead time, segurança)
+        │       ├─ Calcula necessidade líquida
+        │       ├─ Gera sugestão (mrp_planned_suggestions)
+        │       ├─ Explode a BOM → demanda dependente para os filhos
+        │       └─ Salva o perfil MRP do item
+        ├─ 4. Registra log (status COMPLETED)
+        │
+        ▼
+PLANEJADOR ANALISA AS SUGESTÕES
+GET /api/mrp-calculation/suggestions/{plan_code}
+        │
+        ├─ ACEITA → firma a sugestão
+        │   POST /api/mrp-calculation/suggestions/{code}/firm
+        │   → cria planned_orders (is_firm = true)
+        │   → se OrderType = PRODUCTION: cria production_orders automaticamente
+        │
+        └─ REJEITA → descarta (sugestão permanece em mrp_planned_suggestions
+                              sem virar ordem, e é apagada na próxima execução)
+```
+
+---
+
+## Status de Suporte — Módulos Implementados
+
+| Funcionalidade | Status |
+|---|---|
+| Motor de cálculo (BFS + LLC + time-phased netting) | ✅ Completo |
+| Explosão de BOM multi-nível | ✅ Completo |
+| Integração com Pedido de Venda → Demanda | ✅ Completo (automático ao confirmar pedido) |
+| Sugestões `mrp_planned_suggestions` | ✅ Completo |
+| Perfil MRP por item | ✅ Completo |
+| Log de execução | ✅ Completo |
+| Exceções automáticas | ✅ Completo |
+| Ponte sugestão → Ordem Planejada (firmar) | ✅ Completo |
+| Ordens Planejadas (`planned_orders`) | ✅ Completo |
+| Firmação automática de OF para tipo PRODUCTION | ✅ Completo |
+| Agendamento automático de máquinas por APS | 🚧 Parcial (agenda criada manualmente via `POST /api/machine/schedule/create`; o APS sequencia, mas não cria agendas automaticamente ainda) |

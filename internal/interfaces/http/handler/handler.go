@@ -17,6 +17,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
@@ -94,6 +95,8 @@ type BomItemHandler struct {
 type WarehouseHandler struct {
 	*security.BaseHandler
 	createWarehouseUC *warehouse_uc.CreateWarehouseUseCase
+	listWarehousesUC  *warehouse_uc.ListWarehousesUseCase
+	getWarehouseUC    *warehouse_uc.GetWarehouseUseCase
 }
 
 type GroupHandler struct {
@@ -176,6 +179,7 @@ type MRPCalculationHandler struct {
 	getProfileUC      *mrp_calculation_uc.GetItemProfileUseCase
 	configuredRulesUC *mrp_calculation_uc.ManageConfiguredItemRulesUseCase
 	listExceptionsUC  *mrp_calculation_uc.ListMRPExceptionsUseCase
+	firmarSugestaoUC  *mrp_uc.FirmarSugestaoMRPUseCase
 }
 
 type OrderPriorityHandler struct {

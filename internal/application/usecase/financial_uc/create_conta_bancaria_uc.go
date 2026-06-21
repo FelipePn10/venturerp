@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -19,7 +20,7 @@ type CreateContaBancariaUseCase struct {
 
 func (uc *CreateContaBancariaUseCase) Execute(
 	ctx context.Context, dto request.CreateContaBancariaDTO,
-) (*entity.ContaBancaria, error) {
+) (*response.ContaBancariaResponse, error) {
 	if !uc.Auth.CanCreateContaBancaria(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -50,5 +51,5 @@ func (uc *CreateContaBancariaUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	return created, nil
+	return toContaBancariaResponse(created), nil
 }

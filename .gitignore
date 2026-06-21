@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .idea
 .vscode
 .junie
@@ -14,3 +16,8 @@ bin/
 
 # Local backup dumps (the directory is kept via backups/.gitignore)
 backups/*.dump
+
+# Test scripts with sensitive data (tokens, CNPJs, credentials)
+scripts/test-e2e.sh
+scripts/test-flow.sh
+scripts/test-focusnfe.sh

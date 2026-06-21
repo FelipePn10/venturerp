@@ -23,12 +23,16 @@ func (uc *CreateOrderPriorityUseCase) Execute(
 	if !uc.Auth.CanCreateOrderPriority(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	userID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	op := &entity.OrderPriority{
 		IntervalStart: dto.IntervalStart,
 		IntervalEnd:   dto.IntervalEnd,
 		Priority:      dto.Priority,
 		Description:   dto.Description,
-		CreatedBy:     dto.CreatedBy,
+		CreatedBy:     userID,
 	}
 	created, err := uc.Repo.Create(ctx, op)
 	if err != nil {

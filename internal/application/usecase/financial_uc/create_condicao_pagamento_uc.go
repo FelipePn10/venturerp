@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -18,7 +19,7 @@ type CreateCondicaoPagamentoUseCase struct {
 
 func (uc *CreateCondicaoPagamentoUseCase) Execute(
 	ctx context.Context, dto request.CreateCondicaoPagamentoDTO,
-) (*entity.CondicaoPagamento, error) {
+) (*response.CondicaoPagamentoResponse, error) {
 	if !uc.Auth.CanCreateCondicaoPagamento(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -36,5 +37,5 @@ func (uc *CreateCondicaoPagamentoUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	return created, nil
+	return toCondicaoPagamentoResponse(created), nil
 }

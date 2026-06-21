@@ -7,13 +7,13 @@ import (
 )
 
 type BomItems struct {
-	ID            int64
-	BomID         int64
-	ComponentID   int64
-	Quantity      decimal.Decimal
-	Uom           string
-	ScrapPercent  decimal.Decimal
-	OperationID   int64
-	CreatedAt     time.Time
-	MaskComponent int64
+	ID            int64           `json:"id"`
+	BomID         int64           `json:"bom_id"`
+	ComponentID   int64           `json:"component_id"`
+	Quantity      decimal.Decimal `json:"quantity"`
+	Uom           string          `json:"uom"`
+	ScrapPercent  decimal.Decimal `json:"scrap_percent"`
+	OperationID   int64           `json:"operation_id"`
+	CreatedAt     time.Time       `json:"created_at"`
+	MaskComponent int64           `json:"mask_component"`
 }

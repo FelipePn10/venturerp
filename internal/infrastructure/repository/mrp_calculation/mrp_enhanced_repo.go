@@ -14,7 +14,7 @@ import (
 
 func (r *MRPCalculationRepositorySQLC) LoadTypedPlanningParams(ctx context.Context) (*entity.TypedPlanningParams, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT param_code, param_value FROM planning_params WHERE is_active = true`)
+		`SELECT param_number, value FROM planning_params ORDER BY param_number`)
 	if err != nil {
 		return nil, fmt.Errorf("loading typed planning params: %w", err)
 	}

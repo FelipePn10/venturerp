@@ -1,7 +1,7 @@
 # Visão Geral da API — VentureERP
 
-> **Versão:** 1.0  
-> **Data:** Maio/2026  
+> **Versão:** 1.1  
+> **Data:** Junho/2026  
 > **Idioma:** Português (Brasil)
 
 ---
@@ -89,6 +89,8 @@ O módulo MRP é o coração do planejamento de materiais. Suporta 5 modos de pl
 | POST | `/api/mrp-calculation/configured-rules` | Cria regra configurada para item |
 | GET | `/api/mrp-calculation/configured-rules/{item_code}` | Lista regras configuradas |
 | GET | `/api/mrp-calculation/exceptions/{plan_code}` | Lista exceções do plano |
+| GET | `/api/mrp-calculation/suggestions/{plan_code}` | Lista sugestões geradas pelo plano |
+| POST | `/api/mrp-calculation/suggestions/{code}/firm` | **Firma sugestão** → cria Ordem Planejada real |
 
 **POST /api/mrp-calculation/run**
 

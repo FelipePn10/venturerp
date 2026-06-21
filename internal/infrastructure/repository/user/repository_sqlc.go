@@ -36,5 +36,6 @@ func (r *repositoryUserSQLC) FindByEmail(
 		Name:     u.Name,
 		Email:    u.Email,
 		Password: u.Password,
+		Role:     u.Role,
 	}, nil
 }

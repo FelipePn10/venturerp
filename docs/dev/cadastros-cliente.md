@@ -414,6 +414,12 @@ Cada conjunto de flags controla a **composição da base de cálculo** de cada i
 
 ## 2. Cadastro do Cliente (`/api/customers`)
 
+> **Auto-fill por CNPJ:** antes de digitar, a tela pode chamar
+> `GET /api/cnpj/{cnpj}` para pré-preencher razão social, inscrição estadual,
+> endereço e CNAE. **Exportação:** `GET /api/customers?format=xlsx|pdf|csv` baixa
+> a lista de clientes como arquivo. Ver
+> [`integracao-cnpj-e-exportacao.md`](integracao-cnpj-e-exportacao.md).
+
 Com todos os cadastros de apoio prontos, crie o cliente:
 
 ```http

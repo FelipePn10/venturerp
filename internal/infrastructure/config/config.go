@@ -30,6 +30,13 @@ type Config struct {
 	MetricsEnabled     bool   `mapstructure:"METRICS_ENABLED"`       // expose /metrics
 	MetricsToken       string `mapstructure:"METRICS_TOKEN"`         // optional bearer token guarding /metrics
 	ShutdownTimeoutSec int    `mapstructure:"SHUTDOWN_TIMEOUT_SEC"`  // graceful drain budget in seconds
+
+	// CNPJ auto-lookup — pre-fills cadastro forms (razão social, IE, endereço)
+	// from public registries. Disabled gracefully when the provider is offline.
+	CNPJProvider     string `mapstructure:"CNPJ_PROVIDER"`      // "auto" (default), "brasilapi" or "cnpja"
+	CNPJBrasilAPIURL string `mapstructure:"CNPJ_BRASILAPI_URL"` // base URL (no trailing slash)
+	CNPJaURL         string `mapstructure:"CNPJ_CNPJA_URL"`     // base URL (no trailing slash)
+	CNPJTimeoutSec   int    `mapstructure:"CNPJ_TIMEOUT_SEC"`   // per-request timeout in seconds
 }
 
 // IsDevelopment reports whether the process is NOT running in production. Used
@@ -65,6 +72,10 @@ func Load() (*Config, error) {
 	viper.SetDefault("METRICS_ENABLED", true)
 	viper.SetDefault("METRICS_TOKEN", "")
 	viper.SetDefault("SHUTDOWN_TIMEOUT_SEC", 15)
+	viper.SetDefault("CNPJ_PROVIDER", "auto")
+	viper.SetDefault("CNPJ_BRASILAPI_URL", "https://brasilapi.com.br/api/cnpj/v1")
+	viper.SetDefault("CNPJ_CNPJA_URL", "https://open.cnpja.com")
+	viper.SetDefault("CNPJ_TIMEOUT_SEC", 8)
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

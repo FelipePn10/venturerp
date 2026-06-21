@@ -72,3 +72,35 @@ func (h *MRPCalculationHandler) ListExceptions(w http.ResponseWriter, r *http.Re
 	}
 	security.RespondJSON(w, http.StatusOK, results)
 }
+
+// FirmarSugestao converts a single mrp_planned_suggestions row into a firm planned order.
+// POST /api/mrp-calculation/suggestions/{code}/firm
+func (h *MRPCalculationHandler) FirmarSugestao(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "invalid suggestion code")
+		return
+	}
+	result, err := h.firmarSugestaoUC.Execute(r.Context(), code)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
+}
+
+// ListSuggestionsByPlan lists all MRP suggestions for a plan.
+// GET /api/mrp-calculation/suggestions/{plan_code}
+func (h *MRPCalculationHandler) ListSuggestions(w http.ResponseWriter, r *http.Request) {
+	planCode, err := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
+	if err != nil || planCode <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "invalid plan_code")
+		return
+	}
+	results, err := h.firmarSugestaoUC.MRPRepo.ListSuggestionsByPlan(r.Context(), planCode)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, results)
+}

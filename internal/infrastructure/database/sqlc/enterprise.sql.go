@@ -13,30 +13,23 @@ import (
 
 const createEnterprise = `-- name: CreateEnterprise :one
 INSERT INTO enterprise (
-    id,
     code,
     name,
     created_by,
     created_at
 ) VALUES (
-    $1, $2, $3, $4, now()
+    $1, $2, $3, now()
 ) RETURNING id, code, name, created_at, created_by
 `
 
 type CreateEnterpriseParams struct {
-	ID        int64
 	Code      int32
 	Name      string
 	CreatedBy pgtype.UUID
 }
 
 func (q *Queries) CreateEnterprise(ctx context.Context, arg CreateEnterpriseParams) (Enterprise, error) {
-	row := q.db.QueryRow(ctx, createEnterprise,
-		arg.ID,
-		arg.Code,
-		arg.Name,
-		arg.CreatedBy,
-	)
+	row := q.db.QueryRow(ctx, createEnterprise, arg.Code, arg.Name, arg.CreatedBy)
 	var i Enterprise
 	err := row.Scan(
 		&i.ID,

@@ -2769,6 +2769,22 @@ type AppropriationTable struct {
 	CreatedBy    pgtype.UUID
 }
 
+type AuditLog struct {
+	ID         int64
+	OccurredAt pgtype.Timestamptz
+	RequestID  pgtype.Text
+	UserID     pgtype.Text
+	UserRole   pgtype.Text
+	Method     string
+	Route      string
+	Path       string
+	Query      pgtype.Text
+	Status     int32
+	Ip         pgtype.Text
+	UserAgent  pgtype.Text
+	LatencyMs  *int64
+}
+
 type Bom struct {
 	ID        int64
 	ProductID int64
@@ -3190,6 +3206,15 @@ type EmployeeLegacy struct {
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
 	CreatedBy          pgtype.UUID
+}
+
+type EmployeeLegacyOld struct {
+	ID           int64
+	EnterpriseID int32
+	Code         int32
+	Description  pgtype.Text
+	Name         string
+	CreatedAt    pgtype.Timestamptz
 }
 
 type Enterprise struct {
@@ -4059,6 +4084,15 @@ type ItemClassificationMask struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type ItemConsumptionAverage struct {
+	ID                    int64
+	ItemCode              int64
+	AvgMonthlyConsumption pgtype.Numeric
+	TotalConsumed         pgtype.Numeric
+	WindowMonths          int32
+	CalculatedAt          pgtype.Timestamptz
+}
+
 type ItemMachineTime struct {
 	ID                 int64
 	ItemCode           int64
@@ -4749,6 +4783,28 @@ type ProductionOrder struct {
 	UpdatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
 	RouteID        *int64
+}
+
+type ProductionOrderCost struct {
+	ID                int64
+	ProductionOrderID int64
+	ProducedQty       pgtype.Numeric
+	MaterialCostReal  pgtype.Numeric
+	LaborCostReal     pgtype.Numeric
+	OverheadCostReal  pgtype.Numeric
+	TotalCostReal     pgtype.Numeric
+	UnitCostReal      pgtype.Numeric
+	MaterialCostStd   pgtype.Numeric
+	LaborCostStd      pgtype.Numeric
+	OverheadCostStd   pgtype.Numeric
+	TotalCostStd      pgtype.Numeric
+	MaterialVariance  pgtype.Numeric
+	LaborVariance     pgtype.Numeric
+	OverheadVariance  pgtype.Numeric
+	TotalVariance     pgtype.Numeric
+	Currency          string
+	SettledAt         pgtype.Timestamptz
+	SettledBy         pgtype.UUID
 }
 
 type ProductionOrderOperation struct {
@@ -5460,14 +5516,49 @@ type StockBalance struct {
 	UpdatedAt      pgtype.Timestamptz
 }
 
+type StockLot struct {
+	ID           int64
+	ItemCode     int64
+	Lot          string
+	HeatNumber   pgtype.Text
+	Certificate  pgtype.Text
+	SupplierCode *int64
+	ReceivedAt   pgtype.Date
+	Notes        pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+}
+
+type StockLotBalance struct {
+	ID             int64
+	ItemCode       int64
+	Mask           string
+	WarehouseID    int64
+	Lot            string
+	Quantity       pgtype.Numeric
+	LastCost       pgtype.Numeric
+	LastMovementAt pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type StockMovement struct {
-	ID            int64
-	ProductID     int64
-	MovementType  string
-	Quantity      pgtype.Numeric
-	ReferenceType pgtype.Text
-	ReferenceID   *int64
-	CreatedAt     pgtype.Timestamp
+	ID             int64
+	ItemCode       int64
+	Mask           string
+	WarehouseID    int64
+	MovementType   string
+	Quantity       pgtype.Numeric
+	UnitPrice      pgtype.Numeric
+	TotalPrice     pgtype.Numeric
+	ReferenceType  pgtype.Text
+	ReferenceCode  *int64
+	Lot            pgtype.Text
+	SerialNumber   pgtype.Text
+	Batch          pgtype.Text
+	ExpirationDate pgtype.Date
+	Notes          pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
 }
 
 type StockMovementType struct {
@@ -5757,6 +5848,7 @@ type User struct {
 	Password  string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+	Role      string
 }
 
 type UsuariosPerfi struct {

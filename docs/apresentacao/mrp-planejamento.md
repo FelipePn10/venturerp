@@ -110,21 +110,37 @@ Tudo isso o sistema faz em segundos, para milhares de itens.
 
 ---
 
-## 6. O resultado: ordens planejadas, perfil e exceções
+## 6. O resultado: sugestões, ordens planejadas, perfil e exceções
 
 O MRP **não compra nem produz sozinho** — ele **sugere**, e uma pessoa decide. Ele entrega:
 
 | Saída | O que é |
 |---|---|
-| **Ordens planejadas** | Sugestões de **compra** e de **produção**, com quantidade e data |
+| **Sugestões de ordens** | Propostas automáticas de **compra** e de **produção**, com quantidade e data — ainda não são ordens reais |
+| **Ordens planejadas** | Sugestões aceitas e confirmadas pelo planejador; tornam-se ordens reais no sistema |
 | **Perfil do item** | A "linha do tempo" de cada item: necessidades, estoque projetado e suprimentos por período |
 | **Mensagens de exceção** | Avisos quando algo não fecha: atraso inevitável, item sem cadastro completo, gargalo de máquina |
 
 As exceções podem ser **notificadas por e-mail/alerta**, para que o planejador aja antes de o problema virar atraso de entrega.
 
-Depois, as sugestões viram documentos reais:
-- **Compra:** aprovar a sugestão → **Pedido de Compra** (ver `compras.md`).
-- **Produção:** "firmar" a sugestão → **Ordem de Produção** (ver `producao.md`).
+### O passo de "firmar" a sugestão
+
+O MRP gera **sugestões** — propostas que ficam em análise. O planejador as revisa
+e pode **firmar** cada uma individualmente. "Firmar" é o ato de converter uma
+sugestão em uma **Ordem Planejada real**, com número de ordem, que passa a contar
+como suprimento firme para os próximos cálculos MRP.
+
+```
+Sugestão MRP (proposta) ──firmar──▶ Ordem Planejada ──────────▶ Ordem de Produção
+                                    (número de ordem)             (se tipo = Fabricação)
+                                          │
+                                          └─────────────────────▶ Pedido de Compra
+                                                                  (se tipo = Compra)
+```
+
+- **Compra:** a sugestão firmada vira uma Ordem Planejada de compra, que o comprador converte em Pedido de Compra (ver `compras.md`).
+- **Produção:** firmar uma sugestão de fabricação cria automaticamente a Ordem de Fabricação (ver `producao.md`).
+- **Rejeitar:** basta não firmar — a sugestão será substituída na próxima execução do MRP.
 
 ---
 

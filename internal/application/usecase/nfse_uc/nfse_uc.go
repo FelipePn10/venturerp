@@ -185,6 +185,9 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 	}
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
+	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
+		_ = uc.Repo.SaveFocusLog(ctx, endpoint, method, reqBody, respBody, statusCode, durationMs)
+	})
 	ref := fmt.Sprintf("nfse%d%d", id, time.Now().UnixNano()%1000000)
 	if len(ref) > 50 {
 		ref = ref[:50]
@@ -234,6 +237,9 @@ func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.
 		return nil, fmt.Errorf("token Focus NF-e não configurado")
 	}
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
+	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
+		_ = uc.Repo.SaveFocusLog(ctx, endpoint, method, reqBody, respBody, statusCode, durationMs)
+	})
 	if _, err := cli.CancelarNFSe(ctx, *n.FocusRef, dto.Justificativa); err != nil {
 		return nil, fmt.Errorf("Focus NFS-e cancelamento: %w", err)
 	}

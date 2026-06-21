@@ -437,12 +437,10 @@ func (h *FinancialHandler) GetAgingReceber(w http.ResponseWriter, r *http.Reques
 // Fluxo de Caixa
 
 func (h *FinancialHandler) GetFluxoCaixa(w http.ResponseWriter, r *http.Request) {
-	var dto request.GetFluxoCaixaDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	results, err := h.getFluxoCaixaUC.Execute(r.Context(), dto.StartDate, dto.EndDate)
+	start, end := parseDateRange(r)
+	results, err := h.getFluxoCaixaUC.Execute(r.Context(),
+		parseTime(start, "2000-01-01"),
+		parseTime(end, "2099-12-31"))
 	if err != nil {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -451,12 +449,8 @@ func (h *FinancialHandler) GetFluxoCaixa(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *FinancialHandler) GetFluxoProjetado(w http.ResponseWriter, r *http.Request) {
-	var dto request.GetFluxoProjetadoDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	results, err := h.getFluxoProjetadoUC.Execute(r.Context(), dto.StartDate)
+	start, _ := parseDateRange(r)
+	results, err := h.getFluxoProjetadoUC.Execute(r.Context(), parseTime(start, "2000-01-01"))
 	if err != nil {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return

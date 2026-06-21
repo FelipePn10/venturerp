@@ -345,6 +345,7 @@ func (r *MachineRepositorySQLC) DeleteSchedule(
 
 func machineTypeToEntity(row sqlc.MachineType) *entity.MachineType {
 	return &entity.MachineType{
+		ID:               row.ID,
 		Code:             row.Code,
 		Name:             row.Name,
 		Type:             types.MachineTypeEnum(row.Type),

@@ -19,6 +19,7 @@ func (r *repositoryEnterpriseSQLC) Create(
 		Name:      enterprise.Name,
 		CreatedBy: pgutil.ToPgUUID(enterprise.CreatedBy),
 	}
+	// Note: ID is omitted — BIGSERIAL auto-generates it.
 
 	dbEnterprise, err := r.q.CreateEnterprise(ctx, params)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/export"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -381,6 +382,11 @@ func (h *CustomerHandler) ListCustomers(w http.ResponseWriter, r *http.Request) 
 	result, err := h.uc.ListCustomers(r.Context(), onlyActive)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// When ?format=xlsx|pdf|csv is present, stream the same rows as a file
+	// instead of JSON. Any other list endpoint can opt in the same way.
+	if done, _ := export.WriteSlice(w, r, "Clientes", "clientes", result); done {
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

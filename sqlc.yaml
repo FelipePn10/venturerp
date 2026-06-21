@@ -13,7 +13,6 @@ sql:
 
         rename:
           employee: "EmployeeLegacy"
-          employees: "Employee"
 
         overrides:
           - column: "item_structures.quantity"

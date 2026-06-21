@@ -10,6 +10,7 @@ func toMachineTypeResponse(t *entity.MachineType) *response.MachineTypeResponse 
 		return nil
 	}
 	return &response.MachineTypeResponse{
+		ID:               t.ID,
 		Code:             t.Code,
 		Name:             t.Name,
 		Description:      t.Description,

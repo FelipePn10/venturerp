@@ -16,6 +16,7 @@ SELECT
     name,
     email,
     password,
+    role,
     created_at,
     updated_at
 FROM users
@@ -26,6 +27,7 @@ SELECT
     id,
     name,
     email,
+    role,
     created_at,
     updated_at
 FROM users

@@ -15,6 +15,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cnpj_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
@@ -74,6 +75,7 @@ import (
 	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/audit"
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
+	cnpjinfra "github.com/FelipePn10/panossoerp/internal/infrastructure/cnpj"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
@@ -259,7 +261,9 @@ func (app *application) mount() chi.Router {
 	// warehouse
 	warehouseRepo := warehouse.NewRepositoryQuestionSQLC(queries)
 	createWarehouseUc := warehouse_uc.NewCreateWarehouseUseCase(warehouseRepo, authService)
-	warehouseHandler := handler.NewCreateWarehouseHandler(createWarehouseUc)
+	listWarehousesUc := warehouse_uc.NewListWarehousesUseCase(warehouseRepo, authService)
+	getWarehouseUc := warehouse_uc.NewGetWarehouseUseCase(warehouseRepo, authService)
+	warehouseHandler := handler.NewCreateWarehouseHandler(createWarehouseUc, listWarehousesUc, getWarehouseUc)
 
 	// group
 	groupRepo := group.NewRepositoryGroupSQLC(queries)
@@ -270,6 +274,16 @@ func (app *application) mount() chi.Router {
 	enterpriseRepo := enterprise.NewRepositoryEnterpriseSQLC(queries)
 	createEnterpriseUc := enterprise_uc.NewCreateEnterpriseUseCase(enterpriseRepo, authService)
 	enterpriseHandler := handler.NewCreateEnterpriseHandler(createEnterpriseUc)
+
+	// CNPJ auto-lookup (cadastro auto-fill) + generic report export
+	cnpjProvider := cnpjinfra.New(cnpjinfra.Config{
+		Provider:     app.config.CNPJProvider,
+		BrasilAPIURL: app.config.CNPJBrasilAPIURL,
+		CNPJaURL:     app.config.CNPJaURL,
+		Timeout:      time.Duration(app.config.CNPJTimeoutSec) * time.Second,
+	})
+	cnpjHandler := handler.NewCNPJHandler(cnpj_uc.NewLookupCNPJUseCase(cnpjProvider))
+	reportExportHandler := handler.NewReportExportHandler()
 
 	// modifier
 	modifierRepo := modifier.NewRepositoryModifierSQLC(queries)
@@ -462,7 +476,6 @@ func (app *application) mount() chi.Router {
 	mrpGetProfileUC := &mrp_calculation_uc.GetItemProfileUseCase{Repo: mrpRepo, Auth: authService}
 	mrpCreateConfiguredRule := &mrp_calculation_uc.ManageConfiguredItemRulesUseCase{Repo: mrpRepo, Auth: authService}
 	mrpListExceptionsUC := &mrp_calculation_uc.ListMRPExceptionsUseCase{Repo: mrpRepo, Auth: authService}
-	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC)
 
 	// planning pipeline (MRP → CRP → APS in one shot)
 	planningPipelineUC := &planning_uc.RunPlanningPipelineUseCase{MRP: mrpRunUC, CRP: crpUC, APS: apsUC}
@@ -487,6 +500,9 @@ func (app *application) mount() chi.Router {
 	plannedListUC := &planned_order_uc.ListPlannedOrdersUseCase{Repo: plannedRepo, Auth: authService}
 	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
 	plannedHandler := handler.NewPlannedOrderHandler(plannedCreateUC, plannedListUC, plannedFirmUC)
+
+	mrpFirmarSugestaoUC := &mrp_uc.FirmarSugestaoMRPUseCase{MRPRepo: mrpRepo, PlannedRepo: plannedRepo, Auth: authService}
+	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC, mrpFirmarSugestaoUC)
 
 	// production order
 	prodOrderRepo := productionOrderRepo.NewProductionOrderRepositoryPGX(app.db.Pool)
@@ -775,6 +791,7 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.ListICMSInternalUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.ConsultarNFeUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.ListCartasCorrecaoUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService},
 	)
 
 	// maintenance
@@ -920,7 +937,7 @@ func (app *application) mount() chi.Router {
 			r.Route("/structure", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", structureHandler.Create)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", structureHandler.Update)
-				//r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentItemCode}/children", structureHandler.GetAllDirectChildren)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentItemCode}/children", structureHandler.GetAllDirectChildren)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resolve/{itemCode}", queryStructureHandler.ResolveStructure)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consult", queryStructureHandler.ConsultStructure)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/where-used/{itemCode}", queryStructureHandler.WhereUsed)
@@ -983,7 +1000,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/profile/{item_code}/{plan_code}", mrpHandler.GetProfile)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/configured-rules", mrpHandler.CreateConfiguredRule)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/configured-rules/{item_code}", mrpHandler.ListConfiguredRules)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exceptions/{plan_code}", mrpHandler.ListExceptions)
+			// MRP suggestion bridge: list suggestions for a plan, firm one into planned_orders
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suggestions/{plan_code}", mrpHandler.ListSuggestions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/firm", mrpHandler.FirmarSugestao)
 		})
 		r.Route("/api/item-calendar-promise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemCalendarPromiseHandler.UpsertDay)
@@ -1046,6 +1065,8 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/warehouse", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", warehouseHandler.CreateWarehouse)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", warehouseHandler.ListWarehouses)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", warehouseHandler.GetWarehouse)
 		})
 		r.Route("/api/pdm", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create-group", groupHandler.CreateGroup)
@@ -1053,6 +1074,14 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/enterprise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", enterpriseHandler.CreateEnterprise)
+		})
+		// CNPJ auto-fill: GET /api/cnpj/{cnpj} returns razão social, IE, endereço…
+		r.Route("/api/cnpj", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{cnpj}", cnpjHandler.Lookup)
+		})
+		// Generic report export: POST /api/reports/export?format=xlsx|pdf|csv
+		r.Route("/api/reports", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/export", reportExportHandler.Export)
 		})
 		r.Route("/api/employee", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", employeeHandler.CreateEmployee)
@@ -1209,9 +1238,10 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/nfse/{code}/cancel", nfseHandler.Cancel)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/list", nfseHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/{code}", nfseHandler.Get)
-			// NF-e status consultation & CC-e list
+			// NF-e status consultation, CC-e list, DANFE PDF URL
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/status", fiscalHandler.ConsultarNFe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/cartas-correcao", fiscalHandler.ListCartasCorrecao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/danfe", fiscalHandler.GetDANFE)
 			// NCM tax table management
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tabelas/ncm", fiscalHandler.UpsertNcmTax)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/ncm", fiscalHandler.ListNcmTaxes)
@@ -1496,6 +1526,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/statistical", handler.StatisticalForecastHandler)
 		})
 		r.Route("/api/mrp-calculation/exceptions", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{plan_code}", mrpHandler.ListExceptions)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/notify", mrpExcHandler.Notify)
 		})
 		r.Route("/api/fiscal/entries/import-nfe", func(r chi.Router) {
@@ -1813,7 +1844,7 @@ func (app *application) run(r chi.Router) error {
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      r,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 120 * time.Second,
 		ReadTimeout:  30 * time.Second,
 		IdleTimeout:  time.Minute,
 	}

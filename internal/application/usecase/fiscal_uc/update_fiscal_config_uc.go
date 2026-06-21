@@ -26,13 +26,7 @@ func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.Up
 		return nil, err
 	}
 
-	existing, err := uc.Repo.GetFiscalConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	cfg := &entity.FiscalConfig{
-		ID:                        existing.ID,
 		CnpjEmpresa:               dto.CnpjEmpresa,
 		RazaoSocial:               dto.RazaoSocial,
 		IEEmpresa:                 dto.IEEmpresa,
