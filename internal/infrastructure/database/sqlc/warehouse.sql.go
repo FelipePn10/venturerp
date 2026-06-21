@@ -23,16 +23,17 @@ INSERT INTO warehouse (
 ) VALUES (
     $1,
     $2,
-    $3,
-    $4,
+    $3::warehouse_location,
+    $4::warehouse_type,
     $5,
     $6,
     $7
 ) RETURNING
+    id,
     code,
     description,
-    location,
-    type,
+    location::text,
+    type::text,
     disposition,
     reservations_allowed,
     created_by,
@@ -42,18 +43,19 @@ INSERT INTO warehouse (
 type CreateWarehouseParams struct {
 	Code                string
 	Description         string
-	Location            interface{}
-	Type                interface{}
+	Column3             interface{}
+	Column4             interface{}
 	Disposition         bool
 	ReservationsAllowed bool
 	CreatedBy           pgtype.UUID
 }
 
 type CreateWarehouseRow struct {
+	ID                  int64
 	Code                string
 	Description         string
-	Location            interface{}
-	Type                interface{}
+	Location            string
+	Type                string
 	Disposition         bool
 	ReservationsAllowed bool
 	CreatedBy           pgtype.UUID
@@ -64,14 +66,15 @@ func (q *Queries) CreateWarehouse(ctx context.Context, arg CreateWarehouseParams
 	row := q.db.QueryRow(ctx, createWarehouse,
 		arg.Code,
 		arg.Description,
-		arg.Location,
-		arg.Type,
+		arg.Column3,
+		arg.Column4,
 		arg.Disposition,
 		arg.ReservationsAllowed,
 		arg.CreatedBy,
 	)
 	var i CreateWarehouseRow
 	err := row.Scan(
+		&i.ID,
 		&i.Code,
 		&i.Description,
 		&i.Location,
@@ -82,4 +85,95 @@ func (q *Queries) CreateWarehouse(ctx context.Context, arg CreateWarehouseParams
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getWarehouseByCode = `-- name: GetWarehouseByCode :one
+SELECT
+    id, code, description,
+    location::text, type::text,
+    disposition, reservations_allowed,
+    created_by, created_at
+FROM warehouse
+WHERE code = $1
+`
+
+type GetWarehouseByCodeRow struct {
+	ID                  int64
+	Code                string
+	Description         string
+	Location            string
+	Type                string
+	Disposition         bool
+	ReservationsAllowed bool
+	CreatedBy           pgtype.UUID
+	CreatedAt           pgtype.Timestamp
+}
+
+func (q *Queries) GetWarehouseByCode(ctx context.Context, code string) (GetWarehouseByCodeRow, error) {
+	row := q.db.QueryRow(ctx, getWarehouseByCode, code)
+	var i GetWarehouseByCodeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Description,
+		&i.Location,
+		&i.Type,
+		&i.Disposition,
+		&i.ReservationsAllowed,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listWarehouses = `-- name: ListWarehouses :many
+SELECT
+    id, code, description,
+    location::text, type::text,
+    disposition, reservations_allowed,
+    created_by, created_at
+FROM warehouse
+ORDER BY id
+`
+
+type ListWarehousesRow struct {
+	ID                  int64
+	Code                string
+	Description         string
+	Location            string
+	Type                string
+	Disposition         bool
+	ReservationsAllowed bool
+	CreatedBy           pgtype.UUID
+	CreatedAt           pgtype.Timestamp
+}
+
+func (q *Queries) ListWarehouses(ctx context.Context) ([]ListWarehousesRow, error) {
+	rows, err := q.db.Query(ctx, listWarehouses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWarehousesRow
+	for rows.Next() {
+		var i ListWarehousesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Description,
+			&i.Location,
+			&i.Type,
+			&i.Disposition,
+			&i.ReservationsAllowed,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

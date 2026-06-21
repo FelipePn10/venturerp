@@ -1,6 +1,10 @@
 package response
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type WhereUsedRowResponse struct {
 	Level             int     `json:"level"`
@@ -41,4 +45,26 @@ type ConsultStructureResponse struct {
 	RootItemCode int64                         `json:"root_item_code"`
 	Mask         string                        `json:"mask,omitempty"`
 	Rows         []ConsultStructureRowResponse `json:"rows"`
+}
+
+// ItemStructureResponse is the API representation of a BOM component (direct child).
+type ItemStructureResponse struct {
+	ID               int64      `json:"id"`
+	ParentCode       int64      `json:"parent_code"`
+	ChildCode        int64      `json:"child_code"`
+	ChildDescription string     `json:"child_description"`
+	Inherit          bool       `json:"inherit"`
+	ParentMask       *string    `json:"parent_mask,omitempty"`
+	Quantity         float64    `json:"quantity"`
+	LossPercentage   float64    `json:"loss_percentage"`
+	LossFormula      *string    `json:"loss_formula,omitempty"`
+	UnitOfMeasurement string    `json:"unit_of_measurement"`
+	Sequence         int        `json:"sequence"`
+	Notes            *string    `json:"notes,omitempty"`
+	StartDate        *time.Time `json:"start_date,omitempty"`
+	EndDate          *time.Time `json:"end_date,omitempty"`
+	IsActive         bool       `json:"is_active"`
+	CreatedBy        uuid.UUID  `json:"created_by"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }

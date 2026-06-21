@@ -20,6 +20,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
@@ -168,9 +169,13 @@ func NewCreateItemHandler(
 
 func NewCreateWarehouseHandler(
 	createWarehouse *warehouse_uc.CreateWarehouseUseCase,
+	listWarehouses *warehouse_uc.ListWarehousesUseCase,
+	getWarehouse *warehouse_uc.GetWarehouseUseCase,
 ) *WarehouseHandler {
 	return &WarehouseHandler{
 		createWarehouseUC: createWarehouse,
+		listWarehousesUC:  listWarehouses,
+		getWarehouseUC:    getWarehouse,
 	}
 }
 
@@ -357,12 +362,14 @@ func NewMRPCalculationHandler(
 	getProfileUC *mrp_calculation_uc.GetItemProfileUseCase,
 	configuredRulesUC *mrp_calculation_uc.ManageConfiguredItemRulesUseCase,
 	listExceptionsUC *mrp_calculation_uc.ListMRPExceptionsUseCase,
+	firmarSugestaoUC *mrp_uc.FirmarSugestaoMRPUseCase,
 ) *MRPCalculationHandler {
 	return &MRPCalculationHandler{
 		runUC:             runUC,
 		getProfileUC:      getProfileUC,
 		configuredRulesUC: configuredRulesUC,
 		listExceptionsUC:  listExceptionsUC,
+		firmarSugestaoUC:  firmarSugestaoUC,
 	}
 }
 

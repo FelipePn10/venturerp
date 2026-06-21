@@ -37,6 +37,7 @@ type FiscalHandler struct {
 	listInternalUC       *fiscal_uc.ListICMSInternalUseCase
 	consultarNFeUC       *fiscal_uc.ConsultarNFeUseCase
 	listCartasCorrecaoUC *fiscal_uc.ListCartasCorrecaoUseCase
+	getDANFEUC           *fiscal_uc.GetDANFEUseCase
 }
 
 func NewFiscalHandler(
@@ -65,6 +66,7 @@ func NewFiscalHandler(
 	listInternalUC *fiscal_uc.ListICMSInternalUseCase,
 	consultarNFeUC *fiscal_uc.ConsultarNFeUseCase,
 	listCartasCorrecaoUC *fiscal_uc.ListCartasCorrecaoUseCase,
+	getDANFEUC *fiscal_uc.GetDANFEUseCase,
 ) *FiscalHandler {
 	return &FiscalHandler{
 		createEntryUC:        createEntryUC,
@@ -92,7 +94,24 @@ func NewFiscalHandler(
 		listInternalUC:       listInternalUC,
 		consultarNFeUC:       consultarNFeUC,
 		listCartasCorrecaoUC: listCartasCorrecaoUC,
+		getDANFEUC:           getDANFEUC,
 	}
+}
+
+// GetDANFE returns the DANFE PDF URL and XML URL for an authorized NF-e.
+// GET /api/fiscal/exits/{id}/danfe
+func (h *FiscalHandler) GetDANFE(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "invalid exit id")
+		return
+	}
+	result, err := h.getDANFEUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func (h *FiscalHandler) CreateEntry(w http.ResponseWriter, r *http.Request) {

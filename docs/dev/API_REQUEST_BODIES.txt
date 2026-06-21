@@ -26,7 +26,7 @@ MÓDULO: ENTERPRISE
 POST /api/enterprise/create
 {
   "code": 1,
-  "name": "Panosso Indústria e Comércio Ltda",
+  "name": "TECNOFER FABRICACAO E MONTAGEM DE ESTRUTURAS METALICAS LTDA",
   "created_by": "550e8400-e29b-41d4-a716-446655440000"
 }
 
@@ -568,6 +568,19 @@ GET /api/mrp-calculation/configured-rules/{item_code}
 GET /api/mrp-calculation/exceptions/{plan_code}
 -- Parâmetro na URL: plan_code (int64)
 -- Exemplo: GET /api/mrp-calculation/exceptions/1
+
+GET /api/mrp-calculation/suggestions/{plan_code}
+-- Lista as sugestões de ordens geradas pelo último cálculo do plano
+-- Parâmetro na URL: plan_code (int64)
+-- Exemplo: GET /api/mrp-calculation/suggestions/1
+-- Sem corpo de requisição
+
+POST /api/mrp-calculation/suggestions/{code}/firm
+-- Firma uma sugestão MRP, criando uma Ordem Planejada real (is_firm=true)
+-- Para sugestões do tipo PRODUCTION, cria a OF automaticamente
+-- Parâmetro na URL: code (int64) — código da sugestão em mrp_planned_suggestions
+-- Exemplo: POST /api/mrp-calculation/suggestions/42/firm
+-- Sem corpo de requisição (body vazio {})
 
 ============================================================
 MÓDULO: ORDER PRIORITY (PRIORIDADE DE ORDENS)
@@ -1460,27 +1473,56 @@ GET /api/fiscal/exits/{code}
 -- Parâmetro na URL: code (int64)
 -- Exemplo: GET /api/fiscal/exits/1
 
+GET /api/fiscal/exits/{id}/status
+-- Consulta o status atual da NF-e na Focus NF-e (sincroniza o status local)
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/fiscal/exits/1/status
+-- Sem corpo de requisição
+
+GET /api/fiscal/exits/{id}/cartas-correcao
+-- Lista todas as CC-e (Carta de Correção) emitidas para a NF-e
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/fiscal/exits/1/cartas-correcao
+-- Sem corpo de requisição
+
+GET /api/fiscal/exits/{id}/danfe
+-- Retorna as URLs do DANFE (PDF) e do XML da NF-e autorizada
+-- Persiste os paths na primeira consulta se não estiverem armazenados
+-- Parâmetro na URL: id (int64)
+-- Exemplo: GET /api/fiscal/exits/1/danfe
+-- Sem corpo de requisição
+-- Resposta: { "exit_id": 1, "danfe_url": "https://...", "xml_url": "https://...", "status": "autorizada" }
+
 --- CONFIGURAÇÃO FISCAL ---
 
 GET /api/fiscal/config
 -- Sem corpo de requisição
 
 PUT /api/fiscal/config
+-- Dados reais da empresa cadastrada no FocusNFE (homologação)
 {
-  "cnpj_empresa": "11222333000181",
-  "razao_social": "Panosso Indústria e Comércio Ltda",
-  "ie_empresa": "123456789012",
-  "regime_tributario": "LUCRO_REAL",
-  "uf_empresa": "SP",
-  "icms_interno_aliquota": 18.0,
-  "icms_diferimento_percentual": 0.0,
-  "focus_nfe_token": "token-integracao-focus-nfe-123456",
-  "focus_nfe_ambiente": "PRODUCAO",
-  "juros_mes": 1.0,
-  "multa_atraso": 2.0,
-  "vencimento_icms_dia": 20,
-  "vencimento_ipi_dia": 25,
-  "vencimento_pis_cofins_dia": 28
+  "cnpj_empresa": "52454668000102",
+  "razao_social": "TECNOFER FABRICACAO E MONTAGEM DE ESTRUTURAS METALICAS LTDA",
+  "ie_empresa": "9103144679",
+  "regime_tributario": "3",
+  "uf_empresa": "PR",
+  "logradouro": "Preencher conforme endereço SEFAZ",
+  "numero": "S/N",
+  "complemento": "",
+  "bairro": "Zona Rural",
+  "municipio": "Preencher conforme IBGE",
+  "codigo_municipio": "Preencher conforme IBGE",
+  "cep": "86975000",
+  "telefone": "",
+  "icms_interno_aliquota": 0.12,
+  "icms_diferimento_percentual": 0.3846,
+  "focus_nfe_token": "YvCRephh2ZiwEmpawutMj83uPJxAYMD9",
+  "focus_nfe_ambiente": "homologacao",
+  "juros_mes": 0.01,
+  "multa_atraso": 0.02,
+  "vencimento_icms_dia": 10,
+  "vencimento_ipi_dia": 15,
+  "vencimento_pis_cofins_dia": 25
 }
 
 ============================================================
@@ -1496,9 +1538,9 @@ POST /api/financial/contas-bancarias/create
   "conta": "98765-4",
   "digito": "8",
   "descricao": "Conta Corrente Principal - Banco do Brasil",
-  "titular": "Panosso Indústria e Comércio Ltda",
+  "titular": "TECNOFER FABRICACAO E MONTAGEM DE ESTRUTURAS METALICAS LTDA",
   "saldo_inicial": 150000.00,
-  "chave_pix": "11222333000181",
+  "chave_pix": "52454668000102",
   "tipo_chave_pix": "CNPJ"
 }
 
@@ -1834,6 +1876,66 @@ NOTA: IDEMPOTÊNCIA
 ============================================================
 -- Em POST/PUT/PATCH, envie o header "Idempotency-Key: <uuid>" para que retries
    com a mesma chave reproduzam a resposta original (TTL 24h).
+
+============================================================
+MÓDULO: CNPJ — BUSCA AUTOMÁTICA (AUTO-FILL DE CADASTRO)
+============================================================
+
+GET /api/cnpj/{cnpj}
+-- Papéis: ADMIN, USER. Sem corpo. {cnpj} pode vir com ou sem máscara.
+-- Consulta a Receita Federal (via provedor configurado) e devolve os dados
+   para pré-preencher cadastro de cliente/fornecedor/empresa.
+-- Resposta (200):
+{
+  "cnpj": "19131243000197",
+  "legal_name": "OPEN KNOWLEDGE BRASIL",
+  "trade_name": "REDE PELO CONHECIMENTO LIVRE",
+  "registration_status": "ATIVA",
+  "legal_nature": "Associação Privada",
+  "size": "EPP",
+  "opening_date": "2013-06-26",
+  "email": "contato@empresa.com.br",
+  "phone": "1133334444",
+  "simples_optant": false,
+  "mei": false,
+  "state_registration": "111222333444",
+  "state_registrations": [{"uf":"SP","number":"111222333444","enabled":true}],
+  "address": {
+    "zip_code":"01310100","street":"AV PAULISTA","number":"37",
+    "complement":"","neighborhood":"BELA VISTA","city":"SAO PAULO","uf":"SP"
+  },
+  "main_activity": {"code":"9430800","description":"Atividades associativas"},
+  "secondary_activities": [],
+  "source": "cnpja"
+}
+-- Erros: 400 (CNPJ inválido), 404 (não encontrado), 502 (provedor indisponível).
+-- "source"="brasilapi" indica que a Inscrição Estadual NÃO veio (digite manual).
+
+============================================================
+MÓDULO: RELATÓRIOS — EXPORTAÇÃO (EXCEL / PDF / CSV)
+============================================================
+
+POST /api/reports/export?format=xlsx        (formatos: xlsx | pdf | csv)
+{
+  "title": "Clientes Ativos",
+  "subtitle": "Tecnofer — 21/06/2026",
+  "filename": "clientes_ativos",
+  "columns": ["Código", "Razão Social", "CNPJ", "Cidade/UF"],
+  "rows": [
+    ["1001", "Indústria Metalúrgica São José Ltda", "12.345.678/0001-90", "Maringá/PR"],
+    ["1002", "MetalFix Comércio de Aços Ltda",       "22.334.455/0001-86", "Londrina/PR"]
+  ]
+}
+-- Papéis: ADMIN, USER. Devolve o arquivo (Content-Disposition: attachment).
+-- Cada linha de "rows" deve ter o mesmo número de colunas de "columns".
+-- O front-end manda as linhas que já exibe; serve para qualquer relatório.
+
+EXPORTAÇÃO DIRETA EM ENDPOINTS DE LISTA (?format=)
+-- Endpoints de lista aceitam ?format=xlsx|pdf|csv para baixar a mesma consulta
+   como arquivo em vez de JSON. Já habilitado em:
+     GET /api/customers?format=xlsx
+     GET /api/suppliers?format=pdf
+-- Sem o parâmetro, o endpoint responde JSON normalmente.
 
 ============================================================
 MÓDULO: HEALTH CHECK

@@ -119,3 +119,11 @@ func (r *NFSeRepositoryPG) UpdateAuthorization(ctx context.Context, id int64, nu
 	}
 	return r.GetByID(ctx, id)
 }
+
+func (r *NFSeRepositoryPG) SaveFocusLog(ctx context.Context, endpoint, method, reqBody, respBody string, statusCode, durationMs int) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO public.focus_nfe_logs (fiscal_exit_id, endpoint, method, request_body, response_body, status_code, duration_ms)
+		 VALUES (NULL, $1, $2, $3, $4, $5, $6)`,
+		endpoint, method, reqBody, respBody, statusCode, durationMs)
+	return err
+}

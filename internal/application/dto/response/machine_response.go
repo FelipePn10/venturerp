@@ -8,6 +8,7 @@ import (
 
 // MachineTypeResponse is the API representation of a machine type.
 type MachineTypeResponse struct {
+	ID               int64     `json:"id"`
 	Code             int64     `json:"code"`
 	Name             string    `json:"name"`
 	Description      *string   `json:"description,omitempty"`

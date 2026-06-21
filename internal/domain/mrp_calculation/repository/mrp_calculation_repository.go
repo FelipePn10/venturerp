@@ -31,6 +31,7 @@ type MRPCalculationRepository interface {
 	DeleteConfiguredItemRule(ctx context.Context, code int64) error
 
 	CreatePlannedOrderSuggestion(ctx context.Context, s *entity.PlannedOrderSuggestion) (*entity.PlannedOrderSuggestion, error)
+	GetSuggestionByCode(ctx context.Context, code int64) (*entity.PlannedOrderSuggestion, error)
 	ListSuggestionsByPlan(ctx context.Context, planCode int64) ([]*entity.PlannedOrderSuggestion, error)
 	DeleteSuggestionsByPlan(ctx context.Context, planCode int64) error
 

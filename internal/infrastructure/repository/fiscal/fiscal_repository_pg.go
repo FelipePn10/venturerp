@@ -354,11 +354,14 @@ func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, sta
 	return &e, nil
 }
 
-func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef string) (*entity.FiscalExit, error) {
+func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef, xmlPath, danfePath string) (*entity.FiscalExit, error) {
 	var e entity.FiscalExit
 	err := r.pool.QueryRow(ctx,
 		`UPDATE public.fiscal_exits SET
-		     chave_acesso = $1, protocolo = $2, focus_ref = $3, status = 'AUTHORIZED', updated_at = NOW()
+		     chave_acesso = $1, protocolo = $2, focus_ref = $3,
+		     xml_path    = NULLIF($5, ''),
+		     danfe_path  = NULLIF($6, ''),
+		     status = 'AUTHORIZED', updated_at = NOW()
 		 WHERE id = $4
 		 RETURNING id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		           cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
@@ -366,7 +369,7 @@ func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int
 		           valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		           sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
 		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st`,
-		chaveAcesso, protocolo, focusRef, id,
+		chaveAcesso, protocolo, focusRef, id, xmlPath, danfePath,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
@@ -448,21 +451,39 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 }
 
 func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity.FiscalConfig) (*entity.FiscalConfig, error) {
+	// Upsert: singleton row with id=1. Works on first call (no prior row) and subsequent updates.
 	err := r.pool.QueryRow(ctx,
-		`UPDATE public.fiscal_configs SET
-		     cnpj_empresa = $1, razao_social = $2, ie_empresa = $3, regime_tributario = $4, uf_empresa = $5,
-		     icms_interno_aliquota = $6, icms_diferimento_percentual = $7,
-		     focus_nfe_token = $8, focus_nfe_ambiente = $9, juros_mes = $10, multa_atraso = $11,
-		     vencimento_icms_dia = $12, vencimento_ipi_dia = $13, vencimento_pis_cofins_dia = $14,
-		     logradouro = $15, numero = $16, complemento = $17, bairro = $18,
-		     municipio = $19, codigo_municipio = $20, cep = $21, telefone = $22,
-		     updated_at = NOW(), updated_by = $23
-		 WHERE id = $24
+		`INSERT INTO public.fiscal_configs
+		     (id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
+		      icms_interno_aliquota, icms_diferimento_percentual,
+		      focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
+		      vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
+		      logradouro, numero, complemento, bairro, municipio, codigo_municipio, cep, telefone,
+		      updated_at, updated_by)
+		 VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW(),$23)
+		 ON CONFLICT (id) DO UPDATE SET
+		     cnpj_empresa = EXCLUDED.cnpj_empresa, razao_social = EXCLUDED.razao_social,
+		     ie_empresa = EXCLUDED.ie_empresa, regime_tributario = EXCLUDED.regime_tributario,
+		     uf_empresa = EXCLUDED.uf_empresa,
+		     icms_interno_aliquota = EXCLUDED.icms_interno_aliquota,
+		     icms_diferimento_percentual = EXCLUDED.icms_diferimento_percentual,
+		     focus_nfe_token = EXCLUDED.focus_nfe_token, focus_nfe_ambiente = EXCLUDED.focus_nfe_ambiente,
+		     juros_mes = EXCLUDED.juros_mes, multa_atraso = EXCLUDED.multa_atraso,
+		     vencimento_icms_dia = EXCLUDED.vencimento_icms_dia,
+		     vencimento_ipi_dia = EXCLUDED.vencimento_ipi_dia,
+		     vencimento_pis_cofins_dia = EXCLUDED.vencimento_pis_cofins_dia,
+		     logradouro = EXCLUDED.logradouro, numero = EXCLUDED.numero,
+		     complemento = EXCLUDED.complemento, bairro = EXCLUDED.bairro,
+		     municipio = EXCLUDED.municipio, codigo_municipio = EXCLUDED.codigo_municipio,
+		     cep = EXCLUDED.cep, telefone = EXCLUDED.telefone,
+		     updated_at = NOW(), updated_by = EXCLUDED.updated_by
 		 RETURNING id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
 		           icms_interno_aliquota, icms_diferimento_percentual,
 		           focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		           vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
-		           logradouro, numero, complemento, bairro, municipio, codigo_municipio, cep, telefone,
+		           COALESCE(logradouro,''), COALESCE(numero,''), complemento,
+		           COALESCE(bairro,''), COALESCE(municipio,''), COALESCE(codigo_municipio,''),
+		           COALESCE(cep,''), telefone,
 		           created_at, updated_at, updated_by`,
 		cfg.CnpjEmpresa, cfg.RazaoSocial, cfg.IEEmpresa, cfg.RegimeTributario, cfg.UFEmpresa,
 		cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual,
@@ -470,7 +491,7 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		cfg.VencimentoIcmsDia, cfg.VencimentoIPIDia, cfg.VencimentoPisCofinsDia,
 		cfg.Logradouro, cfg.Numero, cfg.Complemento, cfg.Bairro,
 		cfg.Municipio, cfg.CodigoMunicipio, cfg.CEP, cfg.Telefone,
-		cfg.UpdatedBy, cfg.ID,
+		cfg.UpdatedBy,
 	).Scan(&cfg.ID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
 		&cfg.FocusNfeToken, &cfg.FocusNfeAmbiente, &cfg.JurosMes, &cfg.MultaAtraso,
@@ -479,7 +500,7 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		&cfg.Municipio, &cfg.CodigoMunicipio, &cfg.CEP, &cfg.Telefone,
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy)
 	if err != nil {
-		return nil, fmt.Errorf("updating fiscal config: %w", err)
+		return nil, fmt.Errorf("upserting fiscal config: %w", err)
 	}
 	return cfg, nil
 }

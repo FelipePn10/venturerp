@@ -28,6 +28,7 @@ Toda a documentação do ERP, organizada em **duas versões** de cada área:
 | **Custos** (custo padrão, centro de custo, overhead) | [`custos`](apresentacao/custos.md) | [`custos`](dev/custos.md) |
 | **Fiscal & Financeiro** | [`fiscal-financeiro`](apresentacao/fiscal-financeiro.md) | [`fiscal-financeiro`](dev/fiscal-financeiro.md) |
 | **Contabilidade, NFS-e, Operações de entrada** | [`fiscal-financeiro`](apresentacao/fiscal-financeiro.md) (§10) | [`contabilidade-e-fiscal-complementos`](dev/contabilidade-e-fiscal-complementos.md) |
+| **Integrações & Relatórios** (busca por CNPJ, exportação Excel/PDF/CSV) | [`cadastros`](apresentacao/cadastros.md) (§Busca por CNPJ / Exportação) | [`integracao-cnpj-e-exportacao`](dev/integracao-cnpj-e-exportacao.md) |
 
 **Referência de apoio (dev):** [`API_REQUEST_BODIES.txt`](dev/API_REQUEST_BODIES.txt) — exemplos de corpo de request (JSON) por módulo.
 

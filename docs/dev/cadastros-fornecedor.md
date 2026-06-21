@@ -123,7 +123,7 @@ Base: `/api/suppliers` (todas exigem papel `ADMIN` ou `USER`).
 
 ### Fornecedor
 - `POST /` — criar (gera código; 409 se documento duplicado)
-- `GET /` — listar (`?only_active=false` inclui inativos)
+- `GET /` — listar (`?only_active=false` inclui inativos; `?format=xlsx|pdf|csv` baixa como arquivo)
 - `GET /{code}` — obter (com pastas hidratadas)
 - `PUT /` — atualizar
 - `PATCH /{code}/block` · `PATCH /{code}/unblock`
@@ -157,6 +157,14 @@ POST /api/suppliers
 ---
 
 ## 6. Integrações
+
+### Auto-fill por CNPJ (Receita Federal)
+
+`GET /api/cnpj/{cnpj}` devolve razão social, nome fantasia, **inscrição
+estadual**, endereço, CNAE, porte e Simples/MEI para pré-preencher o cadastro
+antes do `POST /api/suppliers`. Diferente da consulta SEFAZ (que valida situação
+fiscal), esta serve para **digitar menos** ao criar o fornecedor. Detalhes em
+[`integracao-cnpj-e-exportacao.md`](integracao-cnpj-e-exportacao.md).
 
 ### Consulta Cadastral SEFAZ (via FocusNFE)
 

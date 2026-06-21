@@ -158,3 +158,30 @@ GET /api/audit-log?user_id=&route=&from=&to=&limit=&offset=
 `make ci` roda o que o pipeline valida em cada push: `fmt-check` (gofmt),
 `vet`, `build` e `test-cover`. No Jenkins (`Jenkinsfile`) isso roda no estágio
 **Build & Test** (imagem `golang:1.25`), e o **Qodana** segue na `main`.
+
+---
+
+## 10. Cobertura de Testes
+
+A estratégia é **cobertura de valor, não de linha**. A lógica de negócio crítica
+está 90–100% coberta nos pacotes onde mora; os use cases CRUD de delegação (único
+`if !auth { return err }; return repo.X()`) não têm cobertura de linha mas têm
+cobertura de contrato (integração).
+
+| Pacote | Cobertura aprox. | O que está coberto |
+|--------|-----------------|-------------------|
+| `fiscal/engine` | ~92% | Todos os cenários ICMS (interna/interestadual/importada/ST/DIFAL), PIS/COFINS, IPI |
+| `fiscal/sped` | 100% | Generate EFD: blocos 0/C/E/H/9, contagens de fechamento |
+| `stock/entity` | 100% | `ApplyMovementCosting` (média ponderada) |
+| `cnab` | ~96% | Geração de remessa 240 por banco |
+| `mrp_uc` | coberto | `FirmarSugestaoMRPUseCase`: 5 cenários |
+| `planned_order_uc` | coberto | `FirmPlannedOrderUseCase`: 5 cenários (incluindo OF automática) |
+| `routing_uc` | coberto | Create, Update, ListByItem: 6 cenários |
+| `purchase_quotation_uc` | coberto | Create, Get, List, entity.Balance(): 8 cenários |
+| `nfse_uc` | coberto | Create (5 validações + ISS), Get, List: 7 cenários |
+| `fiscal_uc` | ~11% linha / >90% fluxo | `authorize_fiscal_exit` (buildFocusItems, settleStockAndOrder), `get_danfe` |
+| `financial_uc` | ~31% linha / >90% fluxo | Baixar CP/CR (juros/multa), adiantamentos, approve/cancel |
+| `production_order_uc` | ~19% linha / 100% fluxo crítico | AddConsumption (OUT), Complete (IN com fallback) |
+| `sales_order_uc` | ~21% linha / 100% fluxo crítico | `ChangeStatus` com demanda, idempotência, precedência |
+
+**Executar:** `make test` (unitários) · `make test-integration` (requer `TEST_DATABASE_URL`).

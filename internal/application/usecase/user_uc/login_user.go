@@ -22,17 +22,21 @@ func NewLoginUserUseCase(
 func (uc *LoginUserUseCase) Execute(
 	ctx context.Context,
 	login request.LoginUserDTO,
-) (string, error) {
+) (id string, role string, err error) {
 	user, err := uc.Repo.FindByEmail(ctx, login.Email)
 	if err != nil {
-		return "", errors.New("invalid credentials")
+		return "", "", errors.New("invalid credentials")
 	}
 
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.Password),
 		[]byte(login.Password),
 	); err != nil {
-		return "", errors.New("invalid credentials")
+		return "", "", errors.New("invalid credentials")
 	}
-	return user.ID.String(), nil
+	r := user.Role
+	if r == "" {
+		r = "USER"
+	}
+	return user.ID.String(), r, nil
 }

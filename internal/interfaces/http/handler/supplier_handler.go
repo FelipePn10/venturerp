@@ -8,6 +8,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/export"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -136,6 +137,9 @@ func (h *SupplierHandler) ListSuppliers(w http.ResponseWriter, r *http.Request) 
 	res, err := h.uc.ListSuppliers(r.Context(), onlyActiveParam(r))
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if done, _ := export.WriteSlice(w, r, "Fornecedores", "fornecedores", res); done {
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

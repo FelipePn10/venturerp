@@ -1269,7 +1269,7 @@ func (r *FinancialRepositoryPG) BaixarContaReceberAtomico(ctx context.Context, i
 
 func (r *FinancialRepositoryPG) GetProdutosVendidos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT fei.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
+		`SELECT fei.item_code, COALESCE(CAST(i.code AS text),'') AS codigo, COALESCE(i.pdm_description_technique,'') AS descricao,
 		        fei.ncm, SUM(fei.quantity) AS qtd_vendida,
 		        ROUND(AVG(fei.unit_price)::numeric,2) AS preco_medio,
 		        COALESCE(AVG(sb.avg_cost),0) AS custo_medio,
@@ -1280,7 +1280,7 @@ func (r *FinancialRepositoryPG) GetProdutosVendidos(ctx context.Context, startDa
 		 LEFT JOIN items i ON i.code = fei.item_code
 		 LEFT JOIN stock_balances sb ON sb.item_code = fei.item_code
 		 WHERE fe.data_emissao BETWEEN $1 AND $2 AND fe.status = 'AUTHORIZED'
-		 GROUP BY fei.item_code, i.mask, i.description, fei.ncm
+		 GROUP BY fei.item_code, i.code, i.pdm_description_technique, fei.ncm
 		 ORDER BY valor_total DESC`, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("produtos vendidos: %w", err)
@@ -1291,15 +1291,15 @@ func (r *FinancialRepositoryPG) GetProdutosVendidos(ctx context.Context, startDa
 
 func (r *FinancialRepositoryPG) GetProdutosProduzidos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT po.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
-		        SUM(po.quantity) AS qtd_produzida,
+		`SELECT po.item_code, COALESCE(CAST(i.code AS text),'') AS codigo, COALESCE(i.pdm_description_technique,'') AS descricao,
+		        SUM(po.produced_qty) AS qtd_produzida,
 		        COALESCE(AVG(sb.avg_cost),0) AS custo_unitario,
-		        COALESCE(AVG(sb.avg_cost),0) * SUM(po.quantity) AS custo_total
+		        COALESCE(AVG(sb.avg_cost),0) * SUM(po.produced_qty) AS custo_total
 		 FROM production_orders po
 		 LEFT JOIN items i ON i.code = po.item_code
 		 LEFT JOIN stock_balances sb ON sb.item_code = po.item_code
 		 WHERE po.created_at BETWEEN $1 AND $2 AND po.status IN ('COMPLETED','CLOSED')
-		 GROUP BY po.item_code, i.mask, i.description
+		 GROUP BY po.item_code, i.code, i.pdm_description_technique
 		 ORDER BY custo_total DESC`, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("produtos produzidos: %w", err)
@@ -1310,7 +1310,7 @@ func (r *FinancialRepositoryPG) GetProdutosProduzidos(ctx context.Context, start
 
 func (r *FinancialRepositoryPG) GetHistoricoCustos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT sb.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
+		`SELECT sb.item_code, COALESCE(CAST(i.code AS text),'') AS codigo, COALESCE(i.pdm_description_technique,'') AS descricao,
 		        sb.avg_cost AS custo_medio_atual, sb.last_cost AS custo_ultima_compra,
 		        COALESCE((SELECT MIN(unit_price) FROM stock_movements sm WHERE sm.item_code = sb.item_code AND sm.created_at BETWEEN $1 AND $2 AND sm.movement_type='IN'),0) AS custo_minimo,
 		        COALESCE((SELECT MAX(unit_price) FROM stock_movements sm WHERE sm.item_code = sb.item_code AND sm.created_at BETWEEN $1 AND $2 AND sm.movement_type='IN'),0) AS custo_maximo
@@ -1326,8 +1326,8 @@ func (r *FinancialRepositoryPG) GetHistoricoCustos(ctx context.Context, startDat
 
 func (r *FinancialRepositoryPG) GetFichaTecnicaCusto(ctx context.Context, itemCode int64) ([]map[string]interface{}, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT b.child_item_code AS insumo_code, COALESCE(i.mask,'') AS insumo_codigo,
-		        COALESCE(i.description,'') AS insumo_descricao,
+		`SELECT b.child_item_code AS insumo_code, COALESCE(CAST(i.code AS text),'') AS insumo_codigo,
+		        COALESCE(i.pdm_description_technique,'') AS insumo_descricao,
 		        b.quantity AS qtd_por_unidade,
 		        COALESCE(sb.avg_cost,0) AS custo_unitario,
 		        b.quantity * COALESCE(sb.avg_cost,0) AS custo_total
@@ -1369,13 +1369,13 @@ func (r *FinancialRepositoryPG) GetCurvaABCClientes(ctx context.Context, startDa
 func (r *FinancialRepositoryPG) GetCurvaABCProdutos(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
 	rows, err := r.pool.Query(ctx,
 		`WITH vendas AS (
-		     SELECT fei.item_code, COALESCE(i.mask,'') AS codigo, COALESCE(i.description,'') AS descricao,
+		     SELECT fei.item_code, COALESCE(CAST(i.code AS text),'') AS codigo, COALESCE(i.pdm_description_technique,'') AS descricao,
 		            SUM(fei.total_price) AS total
 		     FROM fiscal_exit_items fei
 		     JOIN fiscal_exits fe ON fe.id = fei.fiscal_exit_id
 		     LEFT JOIN items i ON i.code = fei.item_code
 		     WHERE fe.status = 'AUTHORIZED' AND fe.data_emissao BETWEEN $1 AND $2
-		     GROUP BY fei.item_code, i.mask, i.description
+		     GROUP BY fei.item_code, i.code, i.pdm_description_technique
 		 ), soma AS (SELECT SUM(total) AS grand_total FROM vendas)
 		 SELECT item_code, codigo, descricao, total,
 		        ROUND((total / grand_total * 100)::numeric, 2) AS pct,
@@ -1394,14 +1394,14 @@ func (r *FinancialRepositoryPG) GetCurvaABCProdutos(ctx context.Context, startDa
 func (r *FinancialRepositoryPG) GetComprasPeriodo(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT fe.razao_social_emitente AS fornecedor, fei.item_code,
-		        COALESCE(i.mask,'') AS codigo_produto, COALESCE(i.description,'') AS descricao, fei.ncm,
+		        COALESCE(CAST(i.code AS text),'') AS codigo_produto, COALESCE(i.pdm_description_technique,'') AS descricao, fei.ncm,
 		        SUM(fei.quantity) AS qtd, ROUND(AVG(fei.unit_price)::numeric,4) AS preco_unitario,
 		        SUM(fei.total_price) AS valor_total, fe.numero_nf AS nfe
 		 FROM fiscal_entry_items fei
 		 JOIN fiscal_entries fe ON fe.id = fei.fiscal_entry_id
 		 LEFT JOIN items i ON i.code = fei.item_code
 		 WHERE fe.data_entrada BETWEEN $1 AND $2 AND fe.status = 'APPROVED'
-		 GROUP BY fe.razao_social_emitente, fei.item_code, i.mask, i.description, fei.ncm, fe.numero_nf
+		 GROUP BY fe.razao_social_emitente, fei.item_code, i.code, i.pdm_description_technique, fei.ncm, fe.numero_nf
 		 ORDER BY fe.razao_social_emitente, valor_total DESC`, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("compras periodo: %w", err)

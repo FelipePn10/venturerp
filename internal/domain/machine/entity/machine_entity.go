@@ -8,6 +8,7 @@ import (
 )
 
 type MachineType struct {
+	ID               int64
 	Code             int64
 	Name             string
 	Description      *string

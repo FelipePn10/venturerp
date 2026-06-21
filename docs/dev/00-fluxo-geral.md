@@ -115,7 +115,8 @@ O motor (`mrp_calculation/service`):
 Consultas:
 - `GET /api/mrp-calculation/profile/{item_code}/{plan_code}` — perfil por período.
 - `GET /api/mrp-calculation/exceptions/{plan_code}` — exceções (e alertas por e-mail/webhook).
-- `GET /api/planned-order/list` — ordens planejadas geradas.
+- `GET /api/mrp-calculation/suggestions/{plan_code}` — **sugestões geradas pelo plano** (lista para análise do planejador).
+- `GET /api/planned-order/list` — ordens planejadas já firmadas.
 
 Modos suportados por item (`TipoMRP`): MRP, MIN_MAX, Kanban, Ponto de Pedido (ROP), MPS.
 
@@ -162,16 +163,24 @@ Caminhos alternativos de compra:
 - **Cotação:** `/api/purchase-quotations` (liberar → preços → selecionar → gerar pedidos).
 
 ### 5b. Sugestões de FABRICAÇÃO (itens produzidos)
-- **Firmar** a ordem planejada: `GET /api/planned-order/{code}/firm`
+
+Dois caminhos para firmar, dependendo de onde a sugestão está:
+
+**Caminho A — sugestão do motor MRP (`mrp_planned_suggestions`):**
+- `POST /api/mrp-calculation/suggestions/{code}/firm`
+  → cria **Ordem Planejada** real (`planned_orders`) com `is_firm = true` e gera a **OF automaticamente** (tipo `PRODUCTION`).
+
+**Caminho B — ordem planejada já existente (`planned_orders`):**
+- `GET /api/planned-order/{code}/firm`
   (marca `is_firm = true`, status `RELEASED`).
 
-> ✅ **automático:** firmar uma ordem planejada do tipo **PRODUCTION** agora **gera a
-> Ordem de Produção (OF)** automaticamente (status `OPEN`, vinculada à ordem
-> planejada via `planned_order_id`, com item/quantidade/centro de custo/máquina/
-> datas copiados do planejamento), espelhando o aprovar→pedido do lado de compras.
-> A criação ocorre só na **primeira** firmação (guarda contra duplicidade lendo o
-> `is_firm` anterior). Implementado em
-> `planned_order_uc/firm_planned_order_uc.go`.
+> ✅ **automático:** firmar uma ordem planejada do tipo **PRODUCTION** (seja via
+> caminho A ou B) **gera a Ordem de Produção (OF)** automaticamente (status `OPEN`,
+> vinculada à ordem planejada via `planned_order_id`, com item/quantidade/centro de
+> custo/máquina/datas copiados do planejamento), espelhando o aprovar→pedido do lado
+> de compras. A criação ocorre só na **primeira** firmação (guarda contra duplicidade
+> lendo o `is_firm` anterior). Implementado em
+> `planned_order_uc/firm_planned_order_uc.go` e `mrp_uc/firmar_sugestao_uc.go`.
 
 - **Criação manual da OF** (ainda disponível p/ casos avulsos):
   `POST /api/production-order/create` informando `planned_order_id`, `item_code`,
@@ -257,7 +266,10 @@ Reservas de estoque (disponíveis): `POST /api/stock/reservations/create`,
    (emissão via FocusNFE) — o **motor tributário** calcula ICMS/IPI/PIS/COFINS,
    diferimento, DIFAL/FCP (ver `fiscal-financeiro.md` §3–§4).
 3. A autorização dispara, de forma encadeada, a baixa de estoque, a baixa de
-   reservas e a baixa do pedido de venda + o financeiro.
+   reservas e a baixa do pedido de venda + o financeiro. Os paths do **DANFE e XML**
+   são persistidos na mesma operação.
+4. **DANFE:** `GET /api/fiscal/exits/{id}/danfe` — retorna URLs absolutas do PDF e
+   do XML (ver `fiscal-financeiro.md` §4).
 
 > ✅ **automático:** ao **autorizar** a NF-e de saída, além de gerar a **Conta a
 > Receber**, o sistema agora:
@@ -304,16 +316,20 @@ Reservas de estoque (disponíveis): `POST /api/stock/reservations/create`,
    automaticamente; não é mais preciso chamar `/api/independent-demand/create`).
 4. `POST /api/mrp-calculation/run`.
 5. `POST /api/crp/calculate` e `POST /api/aps/sequence` (analisar capacidade).
-6. Compras: aprovar sugestões (`/suggestions/{code}/approve`) → pedido de compra.
-7. Produção: firmar ordem planejada (`GET /api/planned-order/{code}/firm`) → ✅ a OF é
-   criada automaticamente (não é mais preciso `POST /api/production-order/create`).
+6. Compras: aprovar sugestões MRP (`/purchase-order/suggestions/{code}/approve`) → pedido de compra.
+7. Produção (caminho recomendado): listar sugestões do MRP
+   (`GET /api/mrp-calculation/suggestions/{plan_code}`) → firmar via bridge
+   (`POST /api/mrp-calculation/suggestions/{code}/firm`) → ✅ Ordem Planejada +
+   OF criadas automaticamente. Alternativa: `GET /api/planned-order/{code}/firm`
+   para ordens planejadas já existentes.
 8. Recebimento: `POST /api/fiscal/entries/upload-nfe` → `approve` (estoque entra com
    movimento `IN` + saldo atualizado).
 9. Fabricar: `start` → `consumption` (✅ `OUT` dos insumos) → `appointment`
    (opcional `backflush_warehouse_id` → ✅ baixa componentes da BOM) →
    `complete` com `warehouse_id` (✅ `IN` do acabado) → `close`.
 10. Faturar: `POST /api/fiscal/exits/create` → `authorize` (✅ NF-e + Conta a Receber +
-    `OUT` do estoque + baixa de reservas + pedido de venda → Faturado).
+    `OUT` do estoque + baixa de reservas + pedido de venda → Faturado + DANFE persiste).
+    DANFE: `GET /api/fiscal/exits/{id}/danfe`.
 11. Expedir: `POST /api/shipments` (+ itens, conferência) → `ship`.
 
 > 💡 Atalho de planejamento: em vez dos passos 4–5, use
