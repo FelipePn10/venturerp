@@ -257,6 +257,26 @@ Ciclo de vida da OF (`/api/production-order`):
 Reservas de estoque (disponíveis): `POST /api/stock/reservations/create`,
 `PATCH /{id}/release`, `PATCH /{id}/consume`.
 
+### 7b. Plano de Corte (opcional — metalurgia/moveleiro)
+
+Quando o produto leva peças **cortadas de matéria-prima** (barras, perfis, chapas,
+MDF), o **Plano de Corte** (`/api/cutting-plans`) entra entre a OF e a fabricação:
+
+1. **Demanda automática** — `POST /api/cutting-plans/from-orders` explode o BOM das
+   OPs, transforma cada componente cortado em peça e **agrega várias ordens do mesmo
+   material** num plano (melhor aproveitamento).
+2. **Otimização** — `POST /{id}/optimize` nesta as peças no estoque (1D linear, 2D
+   guilhotinado de chapa, ou true-shape irregular).
+3. **Firmar** — `POST /{id}/release` dá a **baixa real** do material (na UoM correta:
+   metro, m², peça, kg…), ligada à OP, gera **retalhos rastreáveis** e a trilha de
+   consumo. A sobra volta ao estoque para o próximo corte.
+4. **Chão-de-fábrica** — `GET /{id}/export?format=svg|dxf|pdf` (mapa de corte),
+   `GET /{id}/program` (sequência de cortes), `POST /{id}/schedule` (agenda na
+   seccionadora), `GET /{id}/order-costs` (rateio do custo por OP).
+
+> Detalhes técnicos completos em [`plano-de-corte.md`](plano-de-corte.md). É um passo
+> **opcional**: produtos sem peças cortadas seguem direto para a fabricação.
+
 ---
 
 ## Etapa 8 — Atendimento do Pedido de Venda e saída fiscal

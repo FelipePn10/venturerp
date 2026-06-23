@@ -34,9 +34,14 @@ func (uc *ScheduleMachineUseCase) CreateSchedule(
 		e, _ := time.Parse("15:04:05", *dto.EndTime)
 		end = &e
 	}
+	var orderCode *int64
+	if dto.OrderCode != 0 {
+		oc := dto.OrderCode
+		orderCode = &oc
+	}
 	schedule := &entity.MachineSchedule{
 		MachineCode:      dto.MachineCode,
-		OrderCode:        dto.OrderCode,
+		OrderCode:        orderCode,
 		ScheduleDate:     date,
 		StartTime:        start,
 		EndTime:          end,

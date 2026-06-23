@@ -1938,6 +1938,151 @@ EXPORTAÇÃO DIRETA EM ENDPOINTS DE LISTA (?format=)
 -- Sem o parâmetro, o endpoint responde JSON normalmente.
 
 ============================================================
+MÓDULO: PLANO DE CORTE (cutting-plans) — Fase 1 (corte linear 1D)
+============================================================
+
+POST /api/cutting-plans
+{
+  "material_item_code": 5001,
+  "description": "Corte cantoneira 2pol",
+  "cut_type": "LINEAR_1D",          -- opcional (default LINEAR_1D)
+  "source": "MANUAL",               -- opcional (default MANUAL)
+  "machine_code": null,             -- opcional
+  "kerf_mm": 3,                     -- espessura da serra (descontada por corte)
+  "trim_mm": 0,                     -- refile da cabeça da barra
+  "min_remnant_mm": 300,            -- sobra >= isso é retalho aproveitável
+  "warehouse_id": 7,                -- (fase 2) depósito da baixa ao firmar
+  "production_order_code": 1234,    -- (fase 2) OP vinculada (opcional)
+  "lot_consumption_mode": "AUTOMATIC", -- (fase 2) AUTOMATIC|MANUAL; vazio = padrão da empresa
+  "include_remnants": true,         -- (fase 2) semeia retalhos disponíveis na otimização
+  "stock_uom": "M",                 -- UoM de estoque (UN/M/CM/MM/IN/M2/M3/KG/TONELADA); vazio = copia do item
+  "uom_factor": 0,                  -- só p/ KG/M2/M3/TONELADA: qtd de estoque por metro linear (kg/m, m²/m, m³/m)
+  "parts": [                        -- opcional: demanda inline
+    { "label": "Perna 720",     "length_mm": 720,  "quantity": 8 },
+    { "label": "Travessa 1200", "length_mm": 1200, "quantity": 4, "item_code": 7010, "source_ref": "OP-123" }
+  ],
+  "stock_pieces": [                 -- opcional: estoque inline (comprimentos próprios)
+    { "length_mm": 6000, "quantity": 5 },
+    { "length_mm": 2300, "quantity": 1, "is_remnant": true, "lot": "L-998" }
+  ],
+  "created_by": "<uuid>"
+}
+-- Papéis: ADMIN, USER. Cria o plano em RASCUNHO.
+
+POST /api/cutting-plans/{id}/optimize
+-- Sem corpo. Roda o otimizador, grava os padrões e devolve o detalhe:
+   { "plan": {...métricas...}, "parts": [...], "stock_pieces": [...],
+     "patterns": [ { "stock_length_mm": 6000, "repeat_count": 2,
+                     "utilization_pct": 98.5, "remnant_mm": 90, "reusable_remnant": false,
+                     "placements": [ {"sequence":1,"label":"Perna 720","length_mm":720,"offset_mm":0}, ... ] } ],
+     "unplaced": [ {"label":"...","length_mm":7000,"quantity":1} ] }
+
+POST   /api/cutting-plans/{id}/parts          -- { "label": "...", "length_mm": 500, "quantity": 2 }
+DELETE /api/cutting-plans/{id}/parts/{partId}
+POST   /api/cutting-plans/{id}/stock          -- { "length_mm": 6000, "quantity": 3, "is_remnant": false, "lot": "L-1" }
+DELETE /api/cutting-plans/{id}/stock/{stockId}
+GET    /api/cutting-plans?only_open=true      -- lista (only_open filtra RASCUNHO/OTIMIZADO)
+GET    /api/cutting-plans/{id}                -- detalhe (cabeçalho + demanda + estoque + padrões)
+DELETE /api/cutting-plans/{id}                -- remove (cascata)
+
+-- FASE 2: firmar (baixa real de estoque) + retalhos rastreáveis
+POST /api/cutting-plans/{id}/release
+-- Sem corpo. Exige status OTIMIZADO. Posta a baixa (OUT) do material ligada à OP
+   (ou ao plano), marca retalhos reusados como consumidos, gera os retalhos novos e
+   grava a trilha de consumo. Resposta (resumo):
+   { "plan_id":1, "status":"FIRMADO", "consumption_mode":"AUTOMATIC", "warehouse_id":7,
+     "bars_consumed":2, "remnants_consumed":1, "remnants_generated":2 }
+
+GET /api/cutting-settings
+-- Padrão da empresa: { "default_consumption_mode":"AUTOMATIC", "default_min_remnant_mm":300, "default_warehouse_id":7 }
+PUT /api/cutting-settings          (papel ADMIN)
+{ "default_consumption_mode": "MANUAL", "default_min_remnant_mm": 300, "default_warehouse_id": 7 }
+
+GET /api/stock-remnants?item_code=5001&only_available=true
+-- Lista os retalhos do material no inventário (id, comprimento OU largura/altura, lote/corrida, status, custo).
+
+
+-- FASE 3: corte 2D guilhotinado (chapa / painel MDF) — mesmo endpoint, cut_type=GUILLOTINE_2D
+POST /api/cutting-plans
+{
+  "material_item_code": 6001,
+  "cut_type": "GUILLOTINE_2D",
+  "stock_uom": "M2",                -- chapa por m² (UN=por chapa; KG/M3 exigem uom_factor)
+  "kerf_mm": 4,
+  "trim_mm": 10,
+  "min_remnant_mm": 200,            -- retalho 2D só se largura E altura >= isso
+  "parts": [                        -- peças retangulares (width_mm × height_mm)
+    { "label": "Lateral", "width_mm": 600, "height_mm": 700, "quantity": 4, "grain": "LENGTH" },
+    { "label": "Prateleira", "width_mm": 564, "height_mm": 300, "quantity": 6, "allow_rotation": true }
+  ],
+  "stock_pieces": [                 -- chapas (width_mm × height_mm)
+    { "width_mm": 2750, "height_mm": 1830, "quantity": 10 }
+  ],
+  "created_by": "<uuid>"
+}
+-- optimize/release iguais ao 1D. O detalhe traz, por padrão, placements com
+   pos_x_mm/pos_y_mm/width_mm/height_mm/rotated (para desenhar o mapa da chapa) e
+   stock_width_mm/stock_height_mm/used_area_mm2/remnant_width_mm/remnant_height_mm.
+
+
+-- FASE 4: corte true-shape (irregular, laser/plasma) — cut_type=TRUE_SHAPE_2D
+POST /api/cutting-plans
+{
+  "material_item_code": 6001,
+  "cut_type": "TRUE_SHAPE_2D",
+  "stock_uom": "M2",
+  "kerf_mm": 1,
+  "parts": [                        -- peça com contorno (polígono fechado, mm)
+    { "label": "Flange", "allow_rotation": true, "quantity": 3,
+      "geometry": [ {"x":0,"y":0}, {"x":300,"y":0}, {"x":300,"y":150}, {"x":150,"y":150}, {"x":150,"y":300}, {"x":0,"y":300} ] }
+  ],
+  "stock_pieces": [ { "width_mm": 2000, "height_mm": 1000, "quantity": 5 } ],
+  "created_by": "<uuid>"
+}
+-- Sem motor externo, o ERP encaixa pela caixa envolvente (bounding-box). Definindo a
+   variável de ambiente NESTING_SERVICE_URL, ele delega o nesting irregular a um
+   serviço externo (DeepNest/ProNest). O detalhe traz rotation_deg por peça (ângulo).
+-- optimize/release iguais ao 2D (baixa por área, retalhos retangulares).
+
+
+-- FASE 5: demanda automática a partir de OP / ordens planejadas (MRP)
+POST /api/cutting-plans/from-orders
+{
+  "production_order_codes": [ 1234, 1235 ],   -- OPs a explodir (agrega no mesmo material)
+  "planned_order_codes":    [ 88 ],           -- ordens planejadas (MRP) de produção
+  "kerf_mm": 4,
+  "trim_mm": 10,
+  "min_remnant_mm": 200,
+  "warehouse_id": 7,
+  "include_remnants": true,
+  "allow_rotation": true,                      -- aplicado às peças 2D geradas
+  "created_by": "<uuid>"
+}
+-- Explode o BOM das ordens, cada componente cortado (com dimensões) vira peça,
+   resolve a matéria-prima (filho LLC 9 / único filho / item-base) e cria UM PLANO POR
+   MATERIAL agregando todas as ordens. Resposta:
+   { "plans": [ { "plan_id": 101, "plan_code": 900, "cut_type": "GUILLOTINE_2D",
+                  "material_item_code": 6001, "part_count": 12, "total_pieces": 48,
+                  "order_refs": ["OP-1234","OP-1235"] } ],
+     "warnings": [ "OP-1235: component 7777 has cut dimensions but no resolvable raw material" ] }
+-- Depois: adicione estoque (POST .../stock) e rode optimize/release normalmente.
+
+
+-- FASE DE COMPLEMENTOS
+GET  /api/cutting-plans/{id}/export?format=svg   -- mapa de corte (svg | dxf | pdf); baixa o arquivo
+GET  /api/cutting-plans/{id}/program             -- sequência ordenada de cortes por padrão (JSON)
+POST /api/cutting-plans/{id}/schedule            -- agenda o corte na máquina do plano (machine_code); sem corpo
+GET  /api/cutting-plans/{id}/order-costs         -- rateio do custo da baixa por OP (após firmar)
+
+-- Fita de borda: campos no item de peça 2D (em POST / from-orders)
+--   "edge_top": true, "edge_bottom": true, "edge_left": false, "edge_right": true,
+--   "band_item_code": 7001, "band_cost_per_m": 2.50
+--   → o detalhe do plano (GET /{id}) passa a trazer "banding": { total_length_mm, total_cost }
+--     e cada peça traz "banding_length_mm".
+-- Nesting irregular (TRUE_SHAPE_2D) agora usa nester nativo shape-aware (raster) por padrão.
+
+
+============================================================
 MÓDULO: HEALTH CHECK
 ============================================================
 

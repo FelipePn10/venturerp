@@ -34,9 +34,9 @@ func (r *fakeMRPRepo) ListSuggestionsByPlan(_ context.Context, _ int64) ([]*mrpe
 
 type fakePlannedRepo struct {
 	plannedrepo.PlannedOrderRepository
-	created    *plannedentity.PlannedOrder
-	nextNum    int64
-	errCreate  error
+	created   *plannedentity.PlannedOrder
+	nextNum   int64
+	errCreate error
 }
 
 func (r *fakePlannedRepo) GetNextOrderNumber(_ context.Context) (int64, error) {
@@ -66,8 +66,8 @@ func baseSuggestion() *mrpentity.PlannedOrderSuggestion {
 		PlanCode:   100,
 		ItemCode:   2001,
 		Quantity:   150,
-		OrderType:  "PURCHASE",
-		DemandType: "INDEPENDENT",
+		OrderType:  "COMPRA", // valores internos do motor MRP (PT); mapeados p/ enum "PURCHASE"
+		DemandType: "INDEPENDENTE",
 		NeedDate:   nd,
 	}
 }

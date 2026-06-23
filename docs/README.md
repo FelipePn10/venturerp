@@ -24,6 +24,7 @@ Toda a documentação do ERP, organizada em **duas versões** de cada área:
 | **Produção** (OF, operações, qualidade, manutenção) | [`producao`](apresentacao/producao.md) | [`producao`](dev/producao.md) · [`manufatura-e-compras`](dev/manufatura-e-compras.md) |
 | **Compras** (solicitação, cotação, pedido, operações de entrada) | [`compras`](apresentacao/compras.md) | [`manufatura-e-compras`](dev/manufatura-e-compras.md) (§10–§16) |
 | **Vendas e Expedição** | [`vendas`](apresentacao/vendas.md) | [`vendas`](dev/vendas.md) |
+| **Plano de Corte** (otimização 1D de barras/perfis/tubos + 2D de chapas/MDF) | [`plano-de-corte`](apresentacao/plano-de-corte.md) | [`plano-de-corte`](dev/plano-de-corte.md) |
 | **Estoque** | [`estoque`](apresentacao/estoque.md) | [`estoque`](dev/estoque.md) |
 | **Custos** (custo padrão, centro de custo, overhead) | [`custos`](apresentacao/custos.md) | [`custos`](dev/custos.md) |
 | **Fiscal & Financeiro** | [`fiscal-financeiro`](apresentacao/fiscal-financeiro.md) | [`fiscal-financeiro`](dev/fiscal-financeiro.md) |
@@ -56,6 +57,7 @@ não dependa de banco:
 | **Unitários** | `make test` (ou `go test ./...`) | Value objects, domain services (máquina), engines (MRP/CPM, APS, CRP, Fiscal), regras de entidade e use cases com *fakes*. Sem banco. |
 | **Cobertura** | `make test-cover` | Gera `coverage.out` e imprime o total. |
 | **Integração** | `make test-integration` | Repositórios e fluxos ponta-a-ponta contra um **Postgres migrado**. Compilados só com `-tags=integration` e **pulados** se `TEST_DATABASE_URL` não estiver setado. |
+| **E2E HTTP (corte)** | `make test-cutting` | Fluxo completo do **Plano de Corte** (1D/2D/true-shape, firmar, demanda de OP, export, agenda, rateio) via HTTP contra a API rodando. Define `BASE_URL`. Script: `scripts/test-cutting.sh`. |
 
 ---
 

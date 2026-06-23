@@ -104,6 +104,8 @@ Quando a matéria-prima chega, a **nota fiscal do fornecedor** é importada. O s
 ### Etapa 7 — Fabricação
 A ordem de produção é executada no chão de fábrica: **inicia**, **consome** a matéria-prima (que sai do estoque), **aponta** o tempo e a quantidade produzida e **conclui** — quando o produto acabado **entra no estoque**.
 
+**Plano de Corte (quando há peças cortadas):** para barras, perfis e chapas/MDF, o sistema gera o **plano de corte** direto das ordens, **otimiza o aproveitamento** do material, dá a **baixa real** (em metro, m², peça ou quilo), guarda as **sobras** para reuso e entrega o **mapa de corte** (para imprimir ou mandar à máquina). É opcional — produtos sem corte seguem direto. Detalhes em [`plano-de-corte`](plano-de-corte.md).
+
 ### Etapa 8 — Faturamento e saída
 Com o produto pronto, o pedido de venda é atendido: o sistema emite a **Nota Fiscal Eletrônica (NF-e)** junto à SEFAZ, calcula todos os impostos, **baixa o estoque**, gera a **conta a receber** e marca o pedido como faturado.
 

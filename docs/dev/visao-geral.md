@@ -499,9 +499,12 @@ Geradas automaticamente quando ordens firmes divergem da necessidade:
 
 #### Pendente (não implementado)
 
+> Nota: o **CRUD de Cliente já existe** (`/api/customers`); o item correspondente, válido
+> em 2026-05-31, foi resolvido depois e removido desta lista. As lacunas abaixo seguem
+> abertas (módulo Pedido de Venda, fora do escopo do Plano de Corte).
+
 - Pastas: Transporte, Descontos/Acréscimos, Forma de Pagamento no pedido
 - Cálculo automático de impostos nos itens (campos de alíquota existem mas não são preenchidos automaticamente)
-- Integração com cadastro de clientes (campo `customer_code` existe mas não há CRUD de cliente)
 - Workflow de aprovação (análise comercial/financeira)
 
 ### 4.2 Pedido de Compra (Purchase Order)

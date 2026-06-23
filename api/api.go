@@ -20,6 +20,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cutting_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
@@ -79,6 +80,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/nesting"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
 	accountingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
@@ -88,6 +90,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
 	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
+	cuttingPlanRepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cutting_plan"
 	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
 	deliveryReschedule "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_reschedule"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
@@ -447,6 +450,9 @@ func (app *application) mount() chi.Router {
 	routingLeadTimeUC := routing_uc.NewLeadTimeUseCase(rRepo)
 	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC)
 
+	// cutting plan repo (handler wired after the stock repository is built — fase 2)
+	cuttingPlanRepo := cuttingPlanRepository.New(queries, app.db.Pool)
+
 	// quality
 	qRepo := qualityRepo.New(queries)
 	qualityUC := quality_uc.New(qRepo)
@@ -652,6 +658,20 @@ func (app *application) mount() chi.Router {
 
 	// stock management
 	stockRepository := stockRepo.NewStockRepositorySQLC(app.db.Pool)
+
+	// cutting plan (plano de corte — fase 1: 1D; fase 2: firmar/baixa + retalhos)
+	cuttingPlanUC := cutting_plan_uc.NewCuttingPlanUseCase(cuttingPlanRepo, stockRepository, itemRepo)
+	// Optional external true-shape nesting engine (DeepNest/ProNest-style service).
+	// When NESTING_SERVICE_URL is set it overrides the native bounding-box provider.
+	if nestingURL := strings.TrimSpace(os.Getenv("NESTING_SERVICE_URL")); nestingURL != "" {
+		cuttingPlanUC = cuttingPlanUC.WithTrueShapeProvider(nesting.NewHTTPProvider(nestingURL))
+	}
+	// Machine scheduling for cut plans (fase de complementos).
+	cuttingPlanUC = cuttingPlanUC.WithMachineRepo(machineRepo)
+	// Auto-generate cutting demand from production/planned orders (fase 5).
+	cuttingDemandUC := cutting_plan_uc.NewDemandUseCase(cuttingPlanRepo, itemRepo, itemRepoStructureQuery, prodOrderRepo, plannedRepo)
+	cuttingPlanHandler := handler.NewCuttingPlanHandler(cuttingPlanUC, cuttingDemandUC)
+
 	// Production consumption/completion post stock movements automatically.
 	prodOrderAddConsumptionUC.StockRepo = stockRepository
 	prodOrderCompleteUC.StockRepo = stockRepository
@@ -1446,6 +1466,32 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/network", routingHandler.DeleteNetworkEdge)
 				})
 			})
+		})
+		r.Route("/api/cutting-plans", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", cuttingPlanHandler.CreatePlan)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/from-orders", cuttingPlanHandler.GenerateFromOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", cuttingPlanHandler.ListPlans)
+			r.Route("/{id}", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", cuttingPlanHandler.GetPlan)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/", cuttingPlanHandler.DeletePlan)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/optimize", cuttingPlanHandler.Optimize)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/release", cuttingPlanHandler.Release)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/export", cuttingPlanHandler.ExportMap)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/program", cuttingPlanHandler.GetProgram)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/schedule", cuttingPlanHandler.Schedule)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/order-costs", cuttingPlanHandler.ListOrderCosts)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/parts", cuttingPlanHandler.AddPart)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/parts/{partId}", cuttingPlanHandler.RemovePart)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/stock", cuttingPlanHandler.AddStock)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/stock/{stockId}", cuttingPlanHandler.RemoveStock)
+			})
+		})
+		r.Route("/api/cutting-settings", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", cuttingPlanHandler.GetSettings)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/", cuttingPlanHandler.UpdateSettings)
+		})
+		r.Route("/api/stock-remnants", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", cuttingPlanHandler.ListRemnants)
 		})
 		r.Route("/api/aps", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence", apsHandler.SequenceOrders)
