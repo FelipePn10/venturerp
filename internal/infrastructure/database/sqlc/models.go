@@ -3156,6 +3156,141 @@ type CustomerType struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type CuttingPattern struct {
+	ID              int64
+	PlanID          int64
+	Sequence        int32
+	StockLengthMm   pgtype.Numeric
+	RepeatCount     int32
+	UsedMm          pgtype.Numeric
+	KerfLossMm      pgtype.Numeric
+	RemnantMm       pgtype.Numeric
+	UtilizationPct  pgtype.Numeric
+	IsRemnant       bool
+	CreatedAt       pgtype.Timestamptz
+	StockWidthMm    pgtype.Numeric
+	StockHeightMm   pgtype.Numeric
+	UsedAreaMm2     pgtype.Numeric
+	RemnantAreaMm2  pgtype.Numeric
+	RemnantWidthMm  pgtype.Numeric
+	RemnantHeightMm pgtype.Numeric
+}
+
+type CuttingPatternPlacement struct {
+	ID          int64
+	PatternID   int64
+	Sequence    int32
+	PartID      *int64
+	Label       string
+	LengthMm    pgtype.Numeric
+	OffsetMm    pgtype.Numeric
+	PosXMm      pgtype.Numeric
+	PosYMm      pgtype.Numeric
+	WidthMm     pgtype.Numeric
+	HeightMm    pgtype.Numeric
+	Rotated     bool
+	RotationDeg pgtype.Numeric
+}
+
+type CuttingPlan struct {
+	ID                  int64
+	Code                int64
+	Description         pgtype.Text
+	CutType             string
+	Source              string
+	Status              string
+	MaterialItemCode    int64
+	MachineCode         *int64
+	KerfMm              pgtype.Numeric
+	TrimMm              pgtype.Numeric
+	MinRemnantMm        pgtype.Numeric
+	UtilizationPct      pgtype.Numeric
+	ScrapPct            pgtype.Numeric
+	StockUsedCount      int32
+	CutCount            int32
+	TotalDemand         pgtype.Numeric
+	TotalStock          pgtype.Numeric
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+	WarehouseID         *int64
+	ProductionOrderCode *int64
+	LotConsumptionMode  pgtype.Text
+	IncludeRemnants     bool
+	ReleasedAt          pgtype.Timestamptz
+	StockUom            string
+	UomFactor           pgtype.Numeric
+}
+
+type CuttingPlanConsumption struct {
+	ID          int64
+	PlanID      int64
+	ItemCode    int64
+	SourceType  string
+	Lot         pgtype.Text
+	RemnantID   *int64
+	Quantity    pgtype.Numeric
+	LengthMm    pgtype.Numeric
+	UnitCost    pgtype.Numeric
+	TotalCost   pgtype.Numeric
+	WarehouseID int64
+	MovementID  *int64
+	CreatedAt   pgtype.Timestamptz
+}
+
+type CuttingPlanOrderCost struct {
+	ID            int64
+	PlanID        int64
+	OrderRef      string
+	DemandMeasure pgtype.Numeric
+	AllocatedCost pgtype.Numeric
+	CreatedAt     pgtype.Timestamptz
+}
+
+type CuttingPlanPart struct {
+	ID            int64
+	PlanID        int64
+	ItemCode      *int64
+	Label         string
+	LengthMm      pgtype.Numeric
+	Quantity      int32
+	SourceRef     pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+	WidthMm       pgtype.Numeric
+	HeightMm      pgtype.Numeric
+	Grain         string
+	AllowRotation bool
+	Geometry      pgtype.Text
+	EdgeTop       bool
+	EdgeBottom    bool
+	EdgeLeft      bool
+	EdgeRight     bool
+	BandItemCode  *int64
+	BandCostPerM  pgtype.Numeric
+}
+
+type CuttingSetting struct {
+	ID                     int64
+	DefaultConsumptionMode string
+	DefaultMinRemnantMm    pgtype.Numeric
+	DefaultWarehouseID     *int64
+	UpdatedAt              pgtype.Timestamptz
+}
+
+type CuttingStockPiece struct {
+	ID         int64
+	PlanID     int64
+	LengthMm   pgtype.Numeric
+	Quantity   int32
+	Lot        pgtype.Text
+	IsRemnant  bool
+	CreatedAt  pgtype.Timestamptz
+	RemnantID  *int64
+	HeatNumber pgtype.Text
+	WidthMm    pgtype.Numeric
+	HeightMm   pgtype.Numeric
+}
+
 type DapiTransferReason struct {
 	ID          int64
 	Code        string
@@ -4273,7 +4408,7 @@ type MachineSchedule struct {
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
 	MachineCode      int64
-	OrderCode        int64
+	OrderCode        *int64
 	Code             int64
 }
 
@@ -5378,18 +5513,21 @@ type SalesTablePrice struct {
 }
 
 type Shipment struct {
-	ID             int64
-	Code           int64
-	SalesOrderCode *int64
-	CarrierCode    *int64
-	Status         string
-	TotalVolumes   int32
-	TotalWeight    pgtype.Numeric
-	Notes          pgtype.Text
-	ShippedAt      pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	CreatedBy      pgtype.UUID
+	ID                  int64
+	Code                int64
+	SalesOrderCode      *int64
+	CarrierCode         *int64
+	Status              string
+	TotalVolumes        int32
+	TotalWeight         pgtype.Numeric
+	Notes               pgtype.Text
+	ShippedAt           pgtype.Timestamptz
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+	ReferenceType       pgtype.Text
+	PurchaseOrderCode   *int64
+	ProductionOrderCode *int64
 }
 
 type ShipmentItem struct {
@@ -5577,6 +5715,25 @@ type StockMovementType struct {
 	GeneratesFciMovement bool
 	IsActive             bool
 	CreatedAt            pgtype.Timestamptz
+}
+
+type StockRemnant struct {
+	ID             int64
+	ItemCode       int64
+	WarehouseID    int64
+	LengthMm       pgtype.Numeric
+	Lot            pgtype.Text
+	HeatNumber     pgtype.Text
+	Certificate    pgtype.Text
+	Status         string
+	UnitCost       pgtype.Numeric
+	OriginPlanID   *int64
+	ConsumedPlanID *int64
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+	WidthMm        pgtype.Numeric
+	HeightMm       pgtype.Numeric
 }
 
 type StockReservation struct {

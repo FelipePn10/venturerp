@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cutting_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
@@ -244,6 +245,12 @@ type RoutingHandler struct {
 	operationUC *routing_uc.OperationUseCase
 	routeUC     *routing_uc.RouteUseCase
 	leadTimeUC  *routing_uc.LeadTimeUseCase
+}
+
+type CuttingPlanHandler struct {
+	*security.BaseHandler
+	uc     *cutting_plan_uc.CuttingPlanUseCase
+	demand *cutting_plan_uc.DemandUseCase
 }
 
 type QualityHandler struct {

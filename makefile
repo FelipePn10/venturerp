@@ -51,6 +51,12 @@ test-cover:
 test-integration:
 	TEST_DATABASE_URL="$${TEST_DATABASE_URL:-$(DATABASE_URL)}" go test -tags=integration -count=1 ./...
 
+# End-to-end HTTP test of the Plano de Corte module (1D/2D/true-shape, firmar,
+# demanda de OP, export, agenda, rateio). Needs the API running + the test DB.
+# Override BASE_URL to point at a running server.
+test-cutting:
+	BASE_URL="$${BASE_URL:-http://localhost:5071}" bash scripts/test-cutting.sh
+
 # ── Build & run ──────────────────────────────────────────────────────────────
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/erp ./api
@@ -97,5 +103,5 @@ restore:
 	DATABASE_URL="$(DATABASE_URL)" ./scripts/restore.sh "$(FILE)"
 
 .PHONY: create_migration migrate_up migrate_down migrate_force reset print_db sqlc \
-	test test-cover test-integration build run vet fmt-check ci \
+	test test-cover test-integration test-cutting build run vet fmt-check ci \
 	docker-build up down up-backup logs backup restore

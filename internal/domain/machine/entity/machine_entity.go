@@ -52,7 +52,7 @@ type ItemMachineTime struct {
 type MachineSchedule struct {
 	Code             int64
 	MachineCode      int64
-	OrderCode        int64
+	OrderCode        *int64 // optional: a slot need not come from a planned order
 	ScheduleDate     time.Time
 	StartTime        *time.Time
 	EndTime          *time.Time

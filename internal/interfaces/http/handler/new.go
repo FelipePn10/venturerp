@@ -7,6 +7,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cutting_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
@@ -517,6 +518,10 @@ func NewRoutingHandler(
 		routeUC:     routeUC,
 		leadTimeUC:  leadTimeUC,
 	}
+}
+
+func NewCuttingPlanHandler(uc *cutting_plan_uc.CuttingPlanUseCase, demand *cutting_plan_uc.DemandUseCase) *CuttingPlanHandler {
+	return &CuttingPlanHandler{uc: uc, demand: demand}
 }
 
 func NewQualityHandler(uc *quality_uc.QualityUseCase) *QualityHandler {

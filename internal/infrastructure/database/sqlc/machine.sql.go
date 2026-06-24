@@ -184,6 +184,7 @@ func (q *Queries) CreateMachineType(ctx context.Context, arg CreateMachineTypePa
 const createSchedule = `-- name: CreateSchedule :one
 
 INSERT INTO machine_schedules (
+    code,
     machine_code,
     order_code,
     schedule_date,
@@ -194,13 +195,15 @@ INSERT INTO machine_schedules (
     priority_override,
     notes
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES (
+    COALESCE((SELECT MAX(code) FROM machine_schedules), 0) + 1,
+    $1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
 `
 
 type CreateScheduleParams struct {
 	MachineCode      int64
-	OrderCode        int64
+	OrderCode        *int64
 	ScheduleDate     pgtype.Date
 	StartTime        pgtype.Time
 	EndTime          pgtype.Time
@@ -214,6 +217,8 @@ type CreateScheduleParams struct {
 // UPDATE item_machine_times
 // SET is_active = FALSE, updated_at = NOW()
 // WHERE code = $1;
+// code is auto-assigned (MAX+1) so callers don't have to manage the business key;
+// the column is NOT NULL UNIQUE with no DB default.
 func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) (MachineSchedule, error) {
 	row := q.db.QueryRow(ctx, createSchedule,
 		arg.MachineCode,

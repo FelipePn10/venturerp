@@ -55,7 +55,7 @@ type ItemMachineTimeResponse struct {
 type MachineScheduleResponse struct {
 	Code             int64      `json:"code"`
 	MachineCode      int64      `json:"machine_code"`
-	OrderCode        int64      `json:"order_code"`
+	OrderCode        *int64     `json:"order_code,omitempty"`
 	ScheduleDate     time.Time  `json:"schedule_date"`
 	StartTime        *time.Time `json:"start_time,omitempty"`
 	EndTime          *time.Time `json:"end_time,omitempty"`

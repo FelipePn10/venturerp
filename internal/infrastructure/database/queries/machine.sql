@@ -132,7 +132,10 @@ ORDER BY priority;
 -- WHERE code = $1;
 
 -- name: CreateSchedule :one
+-- code is auto-assigned (MAX+1) so callers don't have to manage the business key;
+-- the column is NOT NULL UNIQUE with no DB default.
 INSERT INTO machine_schedules (
+    code,
     machine_code,
     order_code,
     schedule_date,
@@ -143,7 +146,9 @@ INSERT INTO machine_schedules (
     priority_override,
     notes
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES (
+    COALESCE((SELECT MAX(code) FROM machine_schedules), 0) + 1,
+    $1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *;
 
 -- name: GetSchedule :one
