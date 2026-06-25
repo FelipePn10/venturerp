@@ -8,27 +8,27 @@ import (
 
 // ItemResponse is the API representation of an item with all its folders.
 type ItemResponse struct {
-	ID          int64                  `json:"id"`
-	Code        int64                  `json:"code"`
-	Complement  *string                `json:"complement,omitempty"`
-	Nature      int                    `json:"nature"`
-	PDM         ItemPDMResponse        `json:"pdm"`
-	Situation   string                 `json:"situation"`
-	Health      string                 `json:"health"`
-	Warehouse   ItemWarehouseResponse  `json:"warehouse"`
+	ID          int64                   `json:"id"`
+	Code        int64                   `json:"code"`
+	Complement  *string                 `json:"complement,omitempty"`
+	Nature      int                     `json:"nature"`
+	PDM         ItemPDMResponse         `json:"pdm"`
+	Situation   string                  `json:"situation"`
+	Health      string                  `json:"health"`
+	Warehouse   ItemWarehouseResponse   `json:"warehouse"`
 	Engineering ItemEngineeringResponse `json:"engineering"`
-	Planning    ItemPlanningResponse   `json:"planning"`
-	Supplies    ItemSuppliesResponse   `json:"supplies"`
-	CreatedBy   uuid.UUID              `json:"created_by"`
-	CreatedAt   time.Time              `json:"created_at"`
+	Planning    ItemPlanningResponse    `json:"planning"`
+	Supplies    ItemSuppliesResponse    `json:"supplies"`
+	CreatedBy   uuid.UUID               `json:"created_by"`
+	CreatedAt   time.Time               `json:"created_at"`
 }
 
 // ItemPDMResponse is the PDM (descriptive) folder of an item.
 type ItemPDMResponse struct {
-	GroupCode            int32                  `json:"group_code"`
-	ModifierCode         int32                  `json:"modifier_code"`
+	GroupCode            int32                   `json:"group_code"`
+	ModifierCode         int32                   `json:"modifier_code"`
 	Attributes           []ItemAttributeResponse `json:"attributes,omitempty"`
-	DescriptionTechnique string                 `json:"description_technique"`
+	DescriptionTechnique string                  `json:"description_technique"`
 }
 
 // ItemAttributeResponse is a single PDM attribute.
@@ -49,12 +49,12 @@ type ItemWarehouseResponse struct {
 
 // ItemEngineeringResponse is the engineering folder of an item.
 type ItemEngineeringResponse struct {
-	ItemBaseCod *int                  `json:"item_base_cod,omitempty"`
-	Weight      ItemWeightResponse    `json:"weight"`
+	ItemBaseCod *int                    `json:"item_base_cod,omitempty"`
+	Weight      ItemWeightResponse      `json:"weight"`
 	Dimensions  *ItemDimensionsResponse `json:"dimensions,omitempty"`
-	Type        string                `json:"type"`
-	TypeStruct  string                `json:"type_struct"`
-	OEM         bool                  `json:"oem"`
+	Type        string                  `json:"type"`
+	TypeStruct  string                  `json:"type_struct"`
+	OEM         bool                    `json:"oem"`
 }
 
 // ItemWeightResponse is an item weight value.
@@ -73,11 +73,11 @@ type ItemDimensionsResponse struct {
 
 // ItemPlanningResponse is the planning folder of an item.
 type ItemPlanningResponse struct {
-	TypeMRP      string                   `json:"type_mrp"`
-	LLC          int                      `json:"llc"`
+	TypeMRP      string                    `json:"type_mrp"`
+	LLC          int                       `json:"llc"`
 	ReorderPoint *ItemReorderPointResponse `json:"reorder_point,omitempty"`
-	TankCode     *int                     `json:"tank_code,omitempty"`
-	Ghost        bool                     `json:"ghost"`
+	TankCode     *int                      `json:"tank_code,omitempty"`
+	Ghost        bool                      `json:"ghost"`
 }
 
 // ItemReorderPointResponse is an item reorder point value.

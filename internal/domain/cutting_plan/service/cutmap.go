@@ -3,9 +3,19 @@ package service
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
 )
+
+// MapBranding is the optional letterhead applied to the PDF cutting map. All
+// fields are plain values so the domain stays free of infrastructure deps; the
+// caller fills CompanyName/BrandColorHex from the company's fiscal config.
+type MapBranding struct {
+	CompanyName   string
+	BrandColorHex string // #RRGGBB; defaults to corporate navy when empty/invalid
+	GeneratedAt   time.Time
+}
 
 // MapFormat is a supported cutting-map export format.
 type MapFormat string
@@ -23,14 +33,14 @@ const mapGap = 120.0 // vertical gap between patterns (mm)
 // RenderCutMap draws the plan's patterns as a cutting map in the requested vector
 // format (SVG / DXF / PDF). It is pure: given the patterns it returns the file
 // bytes and MIME type, with no persistence or HTTP knowledge.
-func RenderCutMap(planCode int64, patterns []*entity.CuttingPattern, format MapFormat) (data []byte, contentType string, err error) {
+func RenderCutMap(planCode int64, patterns []*entity.CuttingPattern, format MapFormat, b MapBranding) (data []byte, contentType string, err error) {
 	switch format {
 	case MapSVG:
 		return []byte(renderSVG(planCode, patterns)), "image/svg+xml", nil
 	case MapDXF:
 		return []byte(renderDXF(patterns)), "application/dxf", nil
 	case MapPDF:
-		return renderPDF(planCode, patterns), "application/pdf", nil
+		return renderPDF(planCode, patterns, b), "application/pdf", nil
 	default:
 		return nil, "", fmt.Errorf("unsupported map format %q (svg|dxf|pdf)", format)
 	}
@@ -131,22 +141,45 @@ func renderDXF(patterns []*entity.CuttingPattern) string {
 
 func dxfText(s string) string { return strings.ReplaceAll(s, "\n", " ") }
 
-// renderPDF writes a single-page vector PDF: the map is scaled to fit an A4-ish
-// page; rectangles are stroked and labels drawn in Helvetica. Hand-rolled and
-// dependency-free, matching the rest of the export stack.
-func renderPDF(planCode int64, patterns []*entity.CuttingPattern) []byte {
+// renderPDF writes a single-page vector PDF: a branded header band, the cutting
+// map scaled to fit the body, and a footer with the generation stamp. Stroked
+// rectangles and Helvetica labels; hand-rolled and dependency-free, matching the
+// rest of the export stack.
+func renderPDF(planCode int64, patterns []*entity.CuttingPattern, b MapBranding) []byte {
 	rects, w, h := layout(patterns)
 	const pageW, pageH = 595.0, 842.0 // A4 in points
-	margin := 28.0
+	const margin = 28.0
+	const headerH = 48.0
+	const footerH = 26.0
+
+	br, bg, bb := parseHexRGB(b.BrandColorHex)
+	bodyTop := margin + headerH + 14    // first usable y (from top) below the header
+	bodyBottom := pageH - footerH       // last usable y (PDF space, from bottom)
+	bodyH := (pageH - bodyTop) - footerH
+	bodyW := pageW - 2*margin
+
 	scale := 1.0
 	if w > 0 && h > 0 {
-		scale = min((pageW-2*margin)/w, (pageH-2*margin)/h)
+		scale = min(bodyW/w, bodyH/h)
 	}
 	tx := func(x float64) float64 { return margin + x*scale }
-	ty := func(y float64) float64 { return pageH - margin - y*scale } // PDF Y grows up
+	ty := func(y float64) float64 { return (pageH - bodyTop) - y*scale } // map top at bodyTop
 
 	var c strings.Builder
-	c.WriteString("0.12 0.23 0.37 RG\n1 w\n")
+
+	// Header band.
+	fmt.Fprintf(&c, "%.3f %.3f %.3f rg\n%.2f %.2f %.2f %.2f re f\n",
+		br, bg, bb, margin, pageH-margin-headerH, pageW-2*margin, headerH)
+	c.WriteString("BT 1 1 1 rg\n")
+	if b.CompanyName != "" {
+		fmt.Fprintf(&c, "/F2 13 Tf 1 0 0 1 %.2f %.2f Tm (%s) Tj\n", margin+12, pageH-margin-22, pdfText(b.CompanyName))
+	}
+	fmt.Fprintf(&c, "/F2 11 Tf 1 0 0 1 %.2f %.2f Tm (PLANO DE CORTE #%d) Tj\n", margin+12, pageH-margin-38, planCode)
+	fmt.Fprintf(&c, "/F1 8 Tf 1 0 0 1 %.2f %.2f Tm (%d padroes) Tj\n", pageW-margin-90, pageH-margin-22, len(patterns))
+	c.WriteString("ET\n")
+
+	// Map rectangles.
+	fmt.Fprintf(&c, "%.3f %.3f %.3f RG\n", br, bg, bb)
 	for _, r := range rects {
 		lw := 1.4
 		if !r.outer {
@@ -154,21 +187,123 @@ func renderPDF(planCode int64, patterns []*entity.CuttingPattern) []byte {
 		}
 		fmt.Fprintf(&c, "%.2f w\n%.2f %.2f %.2f %.2f re S\n", lw, tx(r.x), ty(r.y+r.h), r.w*scale, r.h*scale)
 	}
-	c.WriteString("BT /F1 7 Tf 0 0 0 rg\n")
-	fmt.Fprintf(&c, "1 0 0 1 %.2f %.2f Tm (Plano de corte #%d) Tj\n", margin, pageH-margin+6, planCode)
+
+	// Part labels (inside each placement, near the top-left).
+	c.WriteString("BT /F1 7 Tf 0.13 0.15 0.16 rg\n")
 	for _, r := range rects {
-		if r.label == "" {
+		if r.label == "" || r.outer {
 			continue
 		}
 		fmt.Fprintf(&c, "1 0 0 1 %.2f %.2f Tm (%s) Tj\n", tx(r.x)+2, ty(r.y)-9, pdfText(r.label))
 	}
 	c.WriteString("ET\n")
+
+	// Stock/pattern labels, bold, just above each stock outline so they never
+	// collide with the first part's label.
+	fmt.Fprintf(&c, "BT /F2 7.5 Tf %.3f %.3f %.3f rg\n", br, bg, bb)
+	for _, r := range rects {
+		if r.label == "" || !r.outer {
+			continue
+		}
+		fmt.Fprintf(&c, "1 0 0 1 %.2f %.2f Tm (%s) Tj\n", tx(r.x), ty(r.y)+3, pdfText(r.label))
+	}
+	c.WriteString("ET\n")
+
+	// Footer.
+	fmt.Fprintf(&c, "0.78 0.80 0.82 RG\n0.5 w\n%.2f %.2f m %.2f %.2f l S\n",
+		margin, bodyBottom, pageW-margin, bodyBottom)
+	gen := b.GeneratedAt
+	if gen.IsZero() {
+		gen = time.Now()
+	}
+	c.WriteString("BT /F1 7.5 Tf 0.42 0.46 0.49 rg\n")
+	fmt.Fprintf(&c, "1 0 0 1 %.2f %.2f Tm (Gerado em %s) Tj\n", margin, bodyBottom-12, pdfText(gen.Format("02/01/2006 15:04")))
+	fmt.Fprintf(&c, "1 0 0 1 %.2f %.2f Tm (Plano #%d) Tj\n", pageW-margin-70, bodyBottom-12, planCode)
+	c.WriteString("ET\n")
+
 	return assemblePDF(c.String())
 }
 
+// parseHexRGB parses "#RRGGBB" into 0..1 RGB components, defaulting to the
+// corporate navy (#1B3A5B) on empty or malformed input.
+func parseHexRGB(s string) (r, g, b float64) {
+	s = strings.TrimPrefix(strings.TrimSpace(s), "#")
+	if len(s) != 6 {
+		return 0.106, 0.227, 0.357
+	}
+	var v [3]int64
+	for i := 0; i < 3; i++ {
+		n, err := parseHexByte(s[i*2 : i*2+2])
+		if err != nil {
+			return 0.106, 0.227, 0.357
+		}
+		v[i] = n
+	}
+	return float64(v[0]) / 255, float64(v[1]) / 255, float64(v[2]) / 255
+}
+
+func parseHexByte(s string) (int64, error) {
+	var n int64
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		var d int64
+		switch {
+		case c >= '0' && c <= '9':
+			d = int64(c - '0')
+		case c >= 'a' && c <= 'f':
+			d = int64(c-'a') + 10
+		case c >= 'A' && c <= 'F':
+			d = int64(c-'A') + 10
+		default:
+			return 0, fmt.Errorf("bad hex")
+		}
+		n = n*16 + d
+	}
+	return n, nil
+}
+
+// pdfText escapes PDF literal syntax and re-encodes the string to single WinAnsi
+// bytes so Portuguese accents render correctly under WinAnsiEncoding.
 func pdfText(s string) string {
-	r := strings.NewReplacer("\\", `\\`, "(", `\(`, ")", `\)`, "\n", " ")
-	return r.Replace(s)
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '(':
+			b.WriteString(`\(`)
+		case ')':
+			b.WriteString(`\)`)
+		case '\n', '\r':
+			b.WriteByte(' ')
+		default:
+			b.WriteByte(winAnsiByte(r))
+		}
+	}
+	return b.String()
+}
+
+// winAnsiByte maps a rune to its Windows-1252 byte. Latin-1 (0xA0–0xFF) — which
+// covers áàâãéêíóôõúç and uppercase — coincides with WinAnsi; other runes fall
+// back to '?'.
+func winAnsiByte(r rune) byte {
+	switch {
+	case r < 0x80:
+		return byte(r)
+	case r >= 0xA0 && r <= 0xFF:
+		return byte(r)
+	}
+	switch r {
+	case '–', '—':
+		return 0x2D
+	case '•':
+		return 0x95
+	case '“', '”':
+		return 0x22
+	case '‘', '’':
+		return 0x27
+	}
+	return '?'
 }
 
 // assemblePDF wraps a content stream into a minimal valid one-page PDF, tracking
@@ -177,9 +312,10 @@ func assemblePDF(content string) []byte {
 	objs := []string{
 		"<< /Type /Catalog /Pages 2 0 R >>",
 		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>",
 		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(content)+1, content),
-		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
 	}
 	var b strings.Builder
 	b.WriteString("%PDF-1.4\n")

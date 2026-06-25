@@ -110,7 +110,7 @@ A ordem de produção é executada no chão de fábrica: **inicia**, **consome**
 Com o produto pronto, o pedido de venda é atendido: o sistema emite a **Nota Fiscal Eletrônica (NF-e)** junto à SEFAZ, calcula todos os impostos, **baixa o estoque**, gera a **conta a receber** e marca o pedido como faturado.
 
 ### Etapa 9 — Expedição
-O **romaneio** organiza a separação e a conferência das mercadorias e registra o **despacho** ao cliente, encerrando o ciclo.
+O **romaneio** organiza a **separação** (com reserva de estoque), a **conferência** (detectando divergências), a **embalagem em volumes** e o **transporte** da carga, amarra a **NF-e** e registra o **despacho** ao cliente — com documento profissional impresso. Detalhes em [`romaneio`](romaneio.md).
 
 ---
 
@@ -161,6 +161,7 @@ Esta pasta (`apresentacao/`) tem um documento por área, todos no mesmo estilo s
 | Como uma ordem é fabricada (qualidade, manutenção) | `producao.md` |
 | Como funcionam as compras (cotação, pedido) | `compras.md` |
 | Pedido de venda, expedição e prazos de entrega | `vendas.md` |
+| Romaneio: separação, conferência, volumes e despacho | `romaneio.md` |
 | Almoxarifado e movimentações de estoque | `estoque.md` |
 | Custo padrão e centros de custo | `custos.md` |
 | Notas fiscais, impostos e financeiro | `fiscal-financeiro.md` |

@@ -73,12 +73,12 @@ type AccountingJournalEntry struct {
 }
 
 type AccountingDemonstrative struct {
-	ID          int64                        `json:"id"`
-	Code        string                       `json:"code"`
-	Description string                       `json:"description"`
-	TermText    string                       `json:"term_text"`
+	ID          int64                         `json:"id"`
+	Code        string                        `json:"code"`
+	Description string                        `json:"description"`
+	TermText    string                        `json:"term_text"`
 	Items       []AccountingDemonstrativeItem `json:"items"`
-	CreatedAt   time.Time                    `json:"created_at"`
+	CreatedAt   time.Time                     `json:"created_at"`
 }
 
 type AccountingDemonstrativeItem struct {

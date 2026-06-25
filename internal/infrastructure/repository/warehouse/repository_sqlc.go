@@ -42,7 +42,6 @@ func (r *repositoryWarehouseSQLC) Create(
 	}, nil
 }
 
-
 func rowToWarehouse(row sqlc.CreateWarehouseRow) *entity.Warehouse {
 	c, _ := strconv.Atoi(row.Code)
 	return &entity.Warehouse{

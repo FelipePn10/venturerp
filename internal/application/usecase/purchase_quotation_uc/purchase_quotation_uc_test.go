@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	plannedrepo "github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/entity"
 	qrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/repository"
 	reqentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	reqrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
-	plannedrepo "github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
 	"github.com/google/uuid"
 )
 
@@ -18,9 +18,9 @@ import (
 
 type fakeQuotRepo struct {
 	qrepo.PurchaseQuotationRepository
-	nextCode int64
-	created  *entity.PurchaseQuotation
-	errCode  error
+	nextCode  int64
+	created   *entity.PurchaseQuotation
+	errCode   error
 	errCreate error
 }
 

@@ -27,7 +27,7 @@ func samplefPatterns() []*entity.CuttingPattern {
 }
 
 func TestRenderCutMap_SVG(t *testing.T) {
-	data, ct, err := RenderCutMap(900, samplefPatterns(), MapSVG)
+	data, ct, err := RenderCutMap(900, samplefPatterns(), MapSVG, MapBranding{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestRenderCutMap_SVG(t *testing.T) {
 }
 
 func TestRenderCutMap_DXF(t *testing.T) {
-	data, _, err := RenderCutMap(900, samplefPatterns(), MapDXF)
+	data, _, err := RenderCutMap(900, samplefPatterns(), MapDXF, MapBranding{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestRenderCutMap_DXF(t *testing.T) {
 }
 
 func TestRenderCutMap_PDF(t *testing.T) {
-	data, ct, err := RenderCutMap(900, samplefPatterns(), MapPDF)
+	data, ct, err := RenderCutMap(900, samplefPatterns(), MapPDF, MapBranding{CompanyName: "Tecnofer Ltda", BrandColorHex: "#1B3A5B"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestRenderCutMap_PDF(t *testing.T) {
 }
 
 func TestRenderCutMap_BadFormat(t *testing.T) {
-	if _, _, err := RenderCutMap(1, samplefPatterns(), "png"); err == nil {
+	if _, _, err := RenderCutMap(1, samplefPatterns(), "png", MapBranding{}); err == nil {
 		t.Fatal("expected error for unsupported format")
 	}
 }

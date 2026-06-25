@@ -14,11 +14,18 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/service"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
+	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	machinerepo "github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 )
+
+// mapBrandingReader supplies the company name and brand colour stamped on the
+// PDF cutting map. Implemented by the fiscal repository.
+type mapBrandingReader interface {
+	GetFiscalConfig(ctx context.Context) (*fiscalentity.FiscalConfig, error)
+}
 
 // remnantPriority is opened before fullBarPriority, so reusable remnants are
 // consumed ahead of full bars.
@@ -37,6 +44,15 @@ type CuttingPlanUseCase struct {
 	trueShape service.CuttingOptimizer
 	// machines optionally enables booking a plan onto a machine schedule.
 	machines machinerepo.MachineRepository
+	// branding optionally supplies the company letterhead for the PDF map.
+	branding mapBrandingReader
+}
+
+// WithBranding injects the source of the company name/brand colour used on the
+// exported PDF cutting map.
+func (uc *CuttingPlanUseCase) WithBranding(r mapBrandingReader) *CuttingPlanUseCase {
+	uc.branding = r
+	return uc
 }
 
 func NewCuttingPlanUseCase(repo repository.CuttingPlanRepository, stock stockrepo.StockRepository, items itemrepo.ItemRepository) *CuttingPlanUseCase {

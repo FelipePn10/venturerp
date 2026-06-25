@@ -23,7 +23,16 @@ func (uc *CuttingPlanUseCase) ExportMap(ctx context.Context, planID int64, forma
 	if len(patterns) == 0 {
 		return nil, "", fmt.Errorf("plan has no patterns; optimise it first")
 	}
-	return service.RenderCutMap(plan.Code, patterns, service.MapFormat(format))
+	b := service.MapBranding{GeneratedAt: time.Now()}
+	if uc.branding != nil {
+		if cfg, err := uc.branding.GetFiscalConfig(ctx); err == nil && cfg != nil {
+			b.CompanyName = cfg.RazaoSocial
+			if cfg.BrandColor != nil {
+				b.BrandColorHex = *cfg.BrandColor
+			}
+		}
+	}
+	return service.RenderCutMap(plan.Code, patterns, service.MapFormat(format), b)
 }
 
 // GetProgram returns the ordered cut program (the shop-floor cut sequence) per

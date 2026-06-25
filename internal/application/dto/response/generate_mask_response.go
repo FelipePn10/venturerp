@@ -8,12 +8,12 @@ import (
 
 // ItemMaskResponse is the API representation of a generated item mask.
 type ItemMaskResponse struct {
-	ID        int64               `json:"id"`
-	ItemCode  int64               `json:"item_code"`
-	Mask      string              `json:"mask"`
-	MaskHash  string              `json:"mask_hash"`
-	CreatedBy uuid.UUID           `json:"created_by"`
-	CreatedAt time.Time           `json:"created_at"`
+	ID        int64                `json:"id"`
+	ItemCode  int64                `json:"item_code"`
+	Mask      string               `json:"mask"`
+	MaskHash  string               `json:"mask_hash"`
+	CreatedBy uuid.UUID            `json:"created_by"`
+	CreatedAt time.Time            `json:"created_at"`
 	Answers   []MaskAnswerResponse `json:"answers,omitempty"`
 }
 

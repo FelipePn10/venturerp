@@ -3485,6 +3485,9 @@ type FiscalConfig struct {
 	CodigoMunicipio           string
 	Cep                       string
 	Telefone                  pgtype.Text
+	Logo                      []byte
+	LogoMime                  pgtype.Text
+	BrandColor                pgtype.Text
 }
 
 type FiscalCte struct {
@@ -5528,6 +5531,34 @@ type Shipment struct {
 	ReferenceType       pgtype.Text
 	PurchaseOrderCode   *int64
 	ProductionOrderCode *int64
+	TotalNetWeight      pgtype.Numeric
+	TotalGrossWeight    pgtype.Numeric
+	TotalCubageM3       pgtype.Numeric
+	FreightModality     pgtype.Text
+	FreightValue        pgtype.Numeric
+	InsuranceValue      pgtype.Numeric
+	VehiclePlate        pgtype.Text
+	DriverName          pgtype.Text
+	DriverDocument      pgtype.Text
+	AnttCode            pgtype.Text
+	Seals               pgtype.Text
+	EstimatedDelivery   pgtype.Date
+	FiscalExitID        *int64
+	NfeNumber           *int64
+	NfeKey              pgtype.Text
+	SeparatedAt         pgtype.Timestamptz
+	ConferredAt         pgtype.Timestamptz
+	CancelledAt         pgtype.Timestamptz
+	UpdatedBy           pgtype.UUID
+}
+
+type ShipmentEvent struct {
+	ID         int64
+	ShipmentID int64
+	Event      string
+	Note       pgtype.Text
+	CreatedBy  pgtype.UUID
+	CreatedAt  pgtype.Timestamptz
 }
 
 type ShipmentItem struct {
@@ -5542,11 +5573,29 @@ type ShipmentItem struct {
 	IsConferred        bool
 	Notes              pgtype.Text
 	CreatedAt          pgtype.Timestamptz
+	UnitNetWeight      pgtype.Numeric
+	UnitGrossWeight    pgtype.Numeric
 }
 
 type ShipmentSequence struct {
 	ID         int32
 	LastNumber int64
+}
+
+type ShipmentVolume struct {
+	ID           int64
+	ShipmentID   int64
+	VolumeNumber int32
+	PackageType  string
+	NetWeight    pgtype.Numeric
+	GrossWeight  pgtype.Numeric
+	LengthCm     pgtype.Numeric
+	WidthCm      pgtype.Numeric
+	HeightCm     pgtype.Numeric
+	CubageM3     pgtype.Numeric
+	Marking      pgtype.Text
+	Contents     pgtype.Text
+	CreatedAt    pgtype.Timestamptz
 }
 
 type SimplesNacionalApuraco struct {

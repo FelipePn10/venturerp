@@ -431,6 +431,7 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		        COALESCE(logradouro,''), COALESCE(numero,''), complemento,
 		        COALESCE(bairro,''), COALESCE(municipio,''), COALESCE(codigo_municipio,''),
 		        COALESCE(cep,''), telefone,
+		        logo, logo_mime, brand_color,
 		        created_at, updated_at, updated_by
 		 FROM public.fiscal_configs ORDER BY id LIMIT 1`,
 	).Scan(&cfg.ID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
@@ -440,6 +441,7 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		&cfg.Logradouro, &cfg.Numero, &cfg.Complemento,
 		&cfg.Bairro, &cfg.Municipio, &cfg.CodigoMunicipio,
 		&cfg.CEP, &cfg.Telefone,
+		&cfg.Logo, &cfg.LogoMime, &cfg.BrandColor,
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -503,6 +505,48 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		return nil, fmt.Errorf("upserting fiscal config: %w", err)
 	}
 	return cfg, nil
+}
+
+// SetBranding stores (or clears) the company logo and/or brand colour on the
+// singleton fiscal config. Nil/empty arguments leave the corresponding column
+// untouched, so callers can update the logo and the colour independently.
+func (r *FiscalRepositoryPG) SetBranding(ctx context.Context, logo []byte, logoMime, brandColor string, by uuid.UUID) error {
+	// Ensure the singleton row exists before patching individual columns.
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO public.fiscal_configs (id, cnpj_empresa, razao_social, updated_by)
+		 VALUES (1, '00000000000000', 'Empresa', $1)
+		 ON CONFLICT (id) DO NOTHING`, by)
+	if err != nil {
+		return fmt.Errorf("ensuring fiscal config row: %w", err)
+	}
+
+	_, err = r.pool.Exec(ctx,
+		`UPDATE public.fiscal_configs SET
+		     logo        = COALESCE($1, logo),
+		     logo_mime   = COALESCE($2, logo_mime),
+		     brand_color = COALESCE($3, brand_color),
+		     updated_at  = NOW(),
+		     updated_by  = $4
+		 WHERE id = 1`,
+		nullBytes(logo), nullStr(logoMime), nullStr(brandColor), by)
+	if err != nil {
+		return fmt.Errorf("setting branding: %w", err)
+	}
+	return nil
+}
+
+func nullBytes(b []byte) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
+}
+
+func nullStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // ---------- NCM Tax Table ----------

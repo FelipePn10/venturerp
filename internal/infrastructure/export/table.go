@@ -20,10 +20,12 @@ const (
 	FormatCSV  Format = "csv"
 	FormatXLSX Format = "xlsx"
 	FormatPDF  Format = "pdf"
+	FormatDOCX Format = "docx"
 )
 
 // ParseFormat normalises a user-supplied format string. It accepts a few common
-// aliases (xls→xlsx, excel→xlsx) and reports whether the value was recognised.
+// aliases (xls→xlsx, excel→xlsx, word/doc→docx) and reports whether the value
+// was recognised.
 func ParseFormat(s string) (Format, bool) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "csv":
@@ -32,6 +34,8 @@ func ParseFormat(s string) (Format, bool) {
 		return FormatXLSX, true
 	case "pdf":
 		return FormatPDF, true
+	case "docx", "doc", "word":
+		return FormatDOCX, true
 	default:
 		return "", false
 	}
@@ -46,6 +50,59 @@ type Table struct {
 	Columns     []string   // header labels
 	Rows        [][]string // each row must have len(Columns) cells
 	GeneratedAt time.Time  // stamped on PDF/XLSX footers; defaults to now
+	Branding    *Branding  // optional company letterhead (PDF/XLSX/DOCX)
+}
+
+// Branding is the company letterhead rendered at the top of PDF, XLSX and DOCX
+// exports so reports look like the documents an industrial company issues. Only
+// non-sensitive identifying data lives here; it is filled server-side from the
+// company's fiscal configuration, never by the client. CSV stays branding-free
+// on purpose, as it is a raw data-interchange format.
+type Branding struct {
+	CompanyName string
+	CNPJ        string
+	IE          string
+	Address     string // single pre-formatted line (street, city/UF, CEP)
+	Phone       string
+	Email       string
+
+	// BrandColorHex tints the PDF letterhead/table header (e.g. "#1B3A5B").
+	// Empty falls back to the default corporate navy.
+	BrandColorHex string
+	// Logo is the company logo as raw PNG or JPEG bytes, embedded in the PDF
+	// letterhead. Optional; a decode failure simply omits the image.
+	Logo []byte
+}
+
+// infoLines returns the letterhead's secondary lines (identification, address,
+// contact), each already joined for display. Empty fields are skipped so the
+// block never shows dangling labels.
+func (b *Branding) infoLines() []string {
+	var lines []string
+	var ids []string
+	if b.CNPJ != "" {
+		ids = append(ids, "CNPJ: "+b.CNPJ)
+	}
+	if b.IE != "" {
+		ids = append(ids, "IE: "+b.IE)
+	}
+	if len(ids) > 0 {
+		lines = append(lines, strings.Join(ids, "   "))
+	}
+	if b.Address != "" {
+		lines = append(lines, b.Address)
+	}
+	var contact []string
+	if b.Phone != "" {
+		contact = append(contact, "Tel: "+b.Phone)
+	}
+	if b.Email != "" {
+		contact = append(contact, "Email: "+b.Email)
+	}
+	if len(contact) > 0 {
+		lines = append(lines, strings.Join(contact, "   "))
+	}
+	return lines
 }
 
 // Validate guards the invariants the encoders rely on.
@@ -80,6 +137,8 @@ func (f Format) ContentType() string {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	case FormatPDF:
 		return "application/pdf"
+	case FormatDOCX:
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	default:
 		return "application/octet-stream"
 	}

@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.env.demo
 .idea
 .vscode
 .junie
@@ -21,3 +22,4 @@ backups/*.dump
 scripts/test-e2e.sh
 scripts/test-flow.sh
 scripts/test-focusnfe.sh
+pdfs_test/
