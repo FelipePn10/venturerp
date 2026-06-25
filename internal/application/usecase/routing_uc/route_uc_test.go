@@ -15,9 +15,9 @@ import (
 
 type fakeRoutingRepo struct {
 	repository.RoutingRepository
-	nextCode int64
-	route    *entity.ManufacturingRoute
-	errCode  error
+	nextCode  int64
+	route     *entity.ManufacturingRoute
+	errCode   error
 	errCreate error
 }
 

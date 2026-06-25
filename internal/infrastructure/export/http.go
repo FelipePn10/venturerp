@@ -37,6 +37,8 @@ func Encode(w interface {
 		return EncodeXLSX(w, t)
 	case FormatPDF:
 		return EncodePDF(w, t)
+	case FormatDOCX:
+		return EncodeDOCX(w, t)
 	default:
 		return EncodeCSV(w, t)
 	}

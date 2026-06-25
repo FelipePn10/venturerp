@@ -19,9 +19,9 @@ import (
 
 type fakePORepo struct {
 	repository.PlannedOrderRepository
-	order    *entity.PlannedOrder
-	errFirm  error
-	errGet   error
+	order   *entity.PlannedOrder
+	errFirm error
+	errGet  error
 }
 
 func (r *fakePORepo) FirmOrder(_ context.Context, code int64) (*entity.PlannedOrder, error) {
@@ -43,9 +43,9 @@ func (r *fakePORepo) GetByCode(_ context.Context, _ int64) (*entity.PlannedOrder
 
 type fakeProdOrderRepo struct {
 	productionrepo.ProductionOrderRepository
-	created    *productionentity.ProductionOrder
-	nextNum    int64
-	errCreate  error
+	created   *productionentity.ProductionOrder
+	nextNum   int64
+	errCreate error
 }
 
 func (r *fakeProdOrderRepo) GetNextOrderNumber(_ context.Context) (int64, error) {
@@ -64,7 +64,7 @@ type firmAuth struct {
 	canRelease bool
 }
 
-func (a *firmAuth) CanReleaseOrder(_ context.Context) bool     { return a.canRelease }
+func (a *firmAuth) CanReleaseOrder(_ context.Context) bool      { return a.canRelease }
 func (a *firmAuth) UserID(_ context.Context) (uuid.UUID, error) { return uuid.Nil, nil }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

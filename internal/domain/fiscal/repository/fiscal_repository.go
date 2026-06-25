@@ -32,6 +32,7 @@ type FiscalRepository interface {
 	// Fiscal Config
 	GetFiscalConfig(ctx context.Context) (*entity.FiscalConfig, error)
 	UpdateFiscalConfig(ctx context.Context, cfg *entity.FiscalConfig) (*entity.FiscalConfig, error)
+	SetBranding(ctx context.Context, logo []byte, logoMime, brandColor string, by uuid.UUID) error
 
 	// NCM Tax Table
 	GetNcmTax(ctx context.Context, ncm string) (*entity.NcmTaxTable, error)

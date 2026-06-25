@@ -60,16 +60,16 @@ type FirmarSugestaoMRPUseCase struct {
 }
 
 type FirmarSugestaoMRPResponse struct {
-	SuggestionCode  int64     `json:"suggestion_code"`
-	PlannedCode     int64     `json:"planned_code"`
-	OrderNumber     int64     `json:"order_number"`
-	ItemCode        int64     `json:"item_code"`
-	Quantity        float64   `json:"quantity"`
-	OrderType       string    `json:"order_type"`
-	NeedDate        time.Time `json:"need_date"`
-	Status          string    `json:"status"`
-	IsFirm          bool      `json:"is_firm"`
-	PlanCode        *int64    `json:"plan_code"`
+	SuggestionCode int64     `json:"suggestion_code"`
+	PlannedCode    int64     `json:"planned_code"`
+	OrderNumber    int64     `json:"order_number"`
+	ItemCode       int64     `json:"item_code"`
+	Quantity       float64   `json:"quantity"`
+	OrderType      string    `json:"order_type"`
+	NeedDate       time.Time `json:"need_date"`
+	Status         string    `json:"status"`
+	IsFirm         bool      `json:"is_firm"`
+	PlanCode       *int64    `json:"plan_code"`
 }
 
 func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode int64) (*FirmarSugestaoMRPResponse, error) {

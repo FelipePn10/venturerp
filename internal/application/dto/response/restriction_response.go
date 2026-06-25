@@ -8,21 +8,21 @@ import (
 
 // RestrictionResponse is the API representation of a restriction.
 type RestrictionResponse struct {
-	ID                   int64                          `json:"id"`
-	Code                 int64                          `json:"code"`
-	Situation            string                         `json:"situation"`
-	CustomerCode         *int64                         `json:"customer_code,omitempty"`
-	ItemCode             *int64                         `json:"item_code,omitempty"`
-	ReasonCode           *int64                         `json:"reason_code,omitempty"`
-	ClassificationType   *string                        `json:"classification_type,omitempty"`
-	ClassificationOrigin *string                        `json:"classification_origin,omitempty"`
-	DivisionID           *int64                         `json:"division_id,omitempty"`
-	Weight               int                            `json:"weight"`
-	Dominants            []RestrictionDominantResponse  `json:"dominants,omitempty"`
+	ID                   int64                            `json:"id"`
+	Code                 int64                            `json:"code"`
+	Situation            string                           `json:"situation"`
+	CustomerCode         *int64                           `json:"customer_code,omitempty"`
+	ItemCode             *int64                           `json:"item_code,omitempty"`
+	ReasonCode           *int64                           `json:"reason_code,omitempty"`
+	ClassificationType   *string                          `json:"classification_type,omitempty"`
+	ClassificationOrigin *string                          `json:"classification_origin,omitempty"`
+	DivisionID           *int64                           `json:"division_id,omitempty"`
+	Weight               int                              `json:"weight"`
+	Dominants            []RestrictionDominantResponse    `json:"dominants,omitempty"`
 	Determinants         []RestrictionDeterminantResponse `json:"determinants,omitempty"`
-	CreatedAt            time.Time                      `json:"created_at"`
-	UpdatedAt            time.Time                      `json:"updated_at"`
-	CreatedBy            uuid.UUID                      `json:"created_by"`
+	CreatedAt            time.Time                        `json:"created_at"`
+	UpdatedAt            time.Time                        `json:"updated_at"`
+	CreatedBy            uuid.UUID                        `json:"created_by"`
 }
 
 // RestrictionDominantResponse is the API representation of a restriction dominant.

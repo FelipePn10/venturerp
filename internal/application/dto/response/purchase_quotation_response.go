@@ -8,18 +8,18 @@ import (
 
 // PurchaseQuotationResponse is the API representation of a purchase quotation.
 type PurchaseQuotationResponse struct {
-	ID             int64                                `json:"id"`
-	Code           int64                                `json:"code"`
-	EnterpriseCode int64                                `json:"enterprise_code"`
-	Status         string                               `json:"status"`
-	EmissionDate   time.Time                            `json:"emission_date"`
-	Notes          *string                              `json:"notes,omitempty"`
-	IsActive       bool                                 `json:"is_active"`
-	CreatedAt      time.Time                            `json:"created_at"`
-	CreatedBy      uuid.UUID                            `json:"created_by"`
-	UpdatedAt      time.Time                            `json:"updated_at"`
-	Items          []PurchaseQuotationItemResponse      `json:"items,omitempty"`
-	Suppliers      []PurchaseQuotationSupplierResponse  `json:"suppliers,omitempty"`
+	ID             int64                               `json:"id"`
+	Code           int64                               `json:"code"`
+	EnterpriseCode int64                               `json:"enterprise_code"`
+	Status         string                              `json:"status"`
+	EmissionDate   time.Time                           `json:"emission_date"`
+	Notes          *string                             `json:"notes,omitempty"`
+	IsActive       bool                                `json:"is_active"`
+	CreatedAt      time.Time                           `json:"created_at"`
+	CreatedBy      uuid.UUID                           `json:"created_by"`
+	UpdatedAt      time.Time                           `json:"updated_at"`
+	Items          []PurchaseQuotationItemResponse     `json:"items,omitempty"`
+	Suppliers      []PurchaseQuotationSupplierResponse `json:"suppliers,omitempty"`
 }
 
 // PurchaseQuotationItemResponse is the API representation of a quotation line.

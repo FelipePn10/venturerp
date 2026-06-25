@@ -53,7 +53,7 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 		return &DANFEResult{
 			ExitID:   exitID,
 			DanfeURL: cli.DocumentURL(*exit.DanfePath),
-			XMLURL:   func() string {
+			XMLURL: func() string {
 				if exit.XmlPath != nil {
 					return cli.DocumentURL(*exit.XmlPath)
 				}
@@ -93,4 +93,3 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 		Status:   resp.Status,
 	}, nil
 }
-

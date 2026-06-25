@@ -57,6 +57,11 @@ test-integration:
 test-cutting:
 	BASE_URL="$${BASE_URL:-http://localhost:5071}" bash scripts/test-cutting.sh
 
+# Romaneio (expedição) — gera PDF e Excel de teste com base em dados reais do banco.
+# Requer API rodando + banco de testes com dados (execute test-e2e.sh primeiro).
+test-romaneio:
+	BASE_URL="$${BASE_URL:-http://localhost:5071}" bash scripts/test-romaneio.sh
+
 # ── Build & run ──────────────────────────────────────────────────────────────
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/erp ./api
@@ -92,6 +97,45 @@ up-backup:
 logs:
 	docker compose logs -f api
 
+# ── Ambiente de APRESENTAÇÃO (demo) ──────────────────────────────────────────
+# Banco isolado (porta 5434) + API (porta 5072) populado com ~1 ano de operação
+# fictícia para demonstrações a clientes. Ver docs/dev/demo-environment.md.
+DEMO_COMPOSE      := docker-compose.demo.yml
+DEMO_DB_CONTAINER := panossoerp-postgres-demo
+DEMO_DB_USER      := panossoerp_demo
+DEMO_DB_NAME      := panossoerpdatabase_demo
+DEMO_DB_PASS      := panossoerp_demo_pass
+
+# Sobe postgres + migra + api do ambiente demo (constrói a imagem se preciso).
+demo-up:
+	docker compose -f $(DEMO_COMPOSE) up -d --build
+
+# Derruba os containers (mantém o volume/dados).
+demo-down:
+	docker compose -f $(DEMO_COMPOSE) down
+
+# Derruba E apaga o volume (zera o banco demo).
+demo-reset:
+	docker compose -f $(DEMO_COMPOSE) down -v
+
+# Reaplica as migrations no banco demo.
+demo-migrate:
+	docker compose -f $(DEMO_COMPOSE) run --rm migrate-demo
+
+# Popula o banco demo com dados de apresentação (idempotente; recria tudo).
+demo-seed:
+	docker exec -i -e PGPASSWORD=$(DEMO_DB_PASS) $(DEMO_DB_CONTAINER) \
+		psql -U $(DEMO_DB_USER) -d $(DEMO_DB_NAME) -v ON_ERROR_STOP=1 < scripts/seed-demo.sql
+
+# Atalho: sobe a stack e popula em seguida.
+demo-bootstrap: demo-up
+	@echo "aguardando postgres-demo ficar saudável..."
+	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' $(DEMO_DB_CONTAINER) 2>/dev/null)" = "healthy" ]; do sleep 2; done
+	$(MAKE) demo-seed
+
+demo-logs:
+	docker compose -f $(DEMO_COMPOSE) logs -f api-demo
+
 # ── Backup / restore ─────────────────────────────────────────────────────────
 # One-off logical backup against DATABASE_URL (custom format, into ./backups).
 backup:
@@ -104,4 +148,5 @@ restore:
 
 .PHONY: create_migration migrate_up migrate_down migrate_force reset print_db sqlc \
 	test test-cover test-integration test-cutting build run vet fmt-check ci \
-	docker-build up down up-backup logs backup restore
+	docker-build up down up-backup logs backup restore \
+	demo-up demo-down demo-reset demo-migrate demo-seed demo-bootstrap demo-logs

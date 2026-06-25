@@ -51,28 +51,56 @@ func EncodeXLSX(w io.Writer, t *Table) error {
 	return zw.Close()
 }
 
-// sheetXML renders the rows. The header row uses style index 1 (bold).
+// sheetXML renders the rows. The optional letterhead and the report title sit
+// above the table; the column header row uses style index 1 (bold).
 func sheetXML(t *Table) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`)
 	b.WriteString(`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`)
 	b.WriteString(`<sheetData>`)
 
-	// Header.
-	b.WriteString(`<row r="1">`)
+	row := 1
+	textRow := func(text string, style int) {
+		b.WriteString(`<row r="` + strconv.Itoa(row) + `">`)
+		b.WriteString(inlineCell(cellRef(0, row), text, style))
+		b.WriteString(`</row>`)
+		row++
+	}
+
+	// Letterhead.
+	if br := t.Branding; br != nil && br.CompanyName != "" {
+		textRow(br.CompanyName, 1)
+		for _, ln := range br.infoLines() {
+			textRow(ln, 0)
+		}
+		row++ // blank spacer
+	}
+
+	// Title + subtitle/timestamp.
+	textRow(t.Title, 1)
+	meta := "Gerado em " + t.GeneratedAt.Format("02/01/2006 15:04")
+	if t.Subtitle != "" {
+		meta = t.Subtitle + " • " + meta
+	}
+	textRow(meta, 0)
+	row++ // blank spacer before the table
+
+	// Column header.
+	b.WriteString(`<row r="` + strconv.Itoa(row) + `">`)
 	for c, col := range t.Columns {
-		b.WriteString(inlineCell(cellRef(c, 1), col, 1))
+		b.WriteString(inlineCell(cellRef(c, row), col, 1))
 	}
 	b.WriteString(`</row>`)
+	row++
 
-	// Data rows (sheet rows are 1-based and the header took row 1).
-	for i, row := range t.Rows {
-		r := i + 2
-		b.WriteString(`<row r="` + strconv.Itoa(r) + `">`)
-		for c, val := range row {
-			b.WriteString(inlineCell(cellRef(c, r), val, 0))
+	// Data rows.
+	for _, dataRow := range t.Rows {
+		b.WriteString(`<row r="` + strconv.Itoa(row) + `">`)
+		for c, val := range dataRow {
+			b.WriteString(inlineCell(cellRef(c, row), val, 0))
 		}
 		b.WriteString(`</row>`)
+		row++
 	}
 
 	b.WriteString(`</sheetData></worksheet>`)

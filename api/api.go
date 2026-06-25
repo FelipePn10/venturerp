@@ -286,7 +286,8 @@ func (app *application) mount() chi.Router {
 		Timeout:      time.Duration(app.config.CNPJTimeoutSec) * time.Second,
 	})
 	cnpjHandler := handler.NewCNPJHandler(cnpj_uc.NewLookupCNPJUseCase(cnpjProvider))
-	reportExportHandler := handler.NewReportExportHandler()
+	// The generic report export brands its output with the company's fiscal data.
+	reportExportHandler := handler.NewReportExportHandler(fiscalRepo.NewFiscalRepositoryPG(app.db.Pool))
 
 	// modifier
 	modifierRepo := modifier.NewRepositoryModifierSQLC(queries)
@@ -719,6 +720,9 @@ func (app *application) mount() chi.Router {
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
 	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
 
+	// Brand the PDF cutting map with the company letterhead from fiscal config.
+	cuttingPlanUC.WithBranding(fiscalRepository)
+
 	// supplier SEFAZ cadastral query (FocusNFE)
 	supplierSefazHandler := handler.NewSupplierSefazHandler(&supplier_uc.ConsultSupplierSefazUseCase{
 		Repo:       suppRepo,
@@ -728,7 +732,21 @@ func (app *application) mount() chi.Router {
 
 	cnabHandler := handler.NewCNABHandler()
 	ibptHandler := handler.NewIBPTHandler(&ibpt_uc.IBPTUseCase{Repo: ibptRepo.NewIBPTRepositoryPG(app.db.Pool)})
-	shipmentHandler := handler.NewShipmentHandler(&shipment_uc.ShipmentUseCase{Repo: shipmentRepo.NewShipmentRepositoryPG(app.db.Pool)})
+	shipmentRepoPG := shipmentRepo.NewShipmentRepositoryPG(app.db.Pool)
+	shipmentBaseUC := &shipment_uc.ShipmentUseCase{Repo: shipmentRepoPG, Stock: stockRepository}
+	shipmentAutoFillUC := &shipment_uc.ShipmentAutoFillUseCase{
+		ShipmentRepo:   shipmentRepoPG,
+		SalesRepo:      &shipmentRepo.SalesOrderAdapter{Repo: soRepo},
+		PurchaseRepo:   &shipmentRepo.PurchaseOrderAdapter{Repo: poRepo},
+		ProductionRepo: &shipmentRepo.ProductionOrderAdapter{Repo: prodOrderRepo},
+	}
+	shipmentExportUC := &shipment_uc.ShipmentExportUseCase{
+		ShipmentRepo: shipmentRepoPG,
+		Enricher:     nil,
+	}
+	shipmentHandler := handler.NewShipmentHandler(shipmentBaseUC).
+		WithAutoFill(shipmentAutoFillUC).
+		WithExport(shipmentExportUC)
 	financialHandler := handler.NewFinancialHandler(
 		&financial_uc.CreateContaBancariaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasBancariasUseCase{Repo: fRepo, Auth: authService},
@@ -814,6 +832,12 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService},
 	)
 
+	// company branding (report letterhead logo + brand colour)
+	fiscalBrandingHandler := handler.NewFiscalBrandingHandler(
+		&fiscalUC.UpdateBrandingUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.GetBrandingUseCase{Repo: fiscalRepository, Auth: authService},
+	)
+
 	// maintenance
 	maintRepo := maintenanceRepo.New(queries)
 	maintUC := maintenance_uc.New(maintRepo)
@@ -866,6 +890,18 @@ func (app *application) mount() chi.Router {
 	custRepo := customerRepo.New(queries, app.db.Pool)
 	customerUC := customer_uc.NewCustomerUseCase(custRepo)
 	customerHandler := handler.NewCustomerHandler(customerUC)
+
+	// Romaneio export enrichment: real company (with branding), parties, carrier
+	// and item data, so exported romaneios carry the professional letterhead.
+	shipmentExportUC.Enricher = &shipmentRepo.RomaneioEnricherAdapter{
+		Fiscal:     fiscalRepository,
+		Customers:  custRepo,
+		Suppliers:  suppRepo,
+		Items:      itemRepo,
+		Sales:      &shipmentRepo.SalesOrderAdapter{Repo: soRepo},
+		Purchases:  &shipmentRepo.PurchaseOrderAdapter{Repo: poRepo},
+		Production: &shipmentRepo.ProductionOrderAdapter{Repo: prodOrderRepo},
+	}
 
 	// Confirming a sales order (status "P") now runs an automatic credit-limit
 	// check (exposure = open receivables + other open orders) and reserves
@@ -1248,6 +1284,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{code}", fiscalHandler.GetExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/config", fiscalHandler.GetConfig)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/config", fiscalHandler.UpdateConfig)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/config/branding", fiscalBrandingHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/config/logo", fiscalBrandingHandler.Logo)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/cte/create", fiscalHandler.CreateCTe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cte/list", fiscalHandler.ListCTe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cte/{code}", fiscalHandler.GetCTe)
@@ -1506,10 +1544,28 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", shipmentHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", shipmentHandler.Get)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items", shipmentHandler.AddItem)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/items/confer", shipmentHandler.ConferItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items/confer", shipmentHandler.ConferItem)
+
+			// Ciclo de vida (máquina de estado): separar → conferir → despachar.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/separate", shipmentHandler.Separate)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/confer", shipmentHandler.Confer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/ship", shipmentHandler.Ship)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/cancel", shipmentHandler.Cancel)
+
+			// Transporte / viagem, volumes (packing), vínculo NF-e e auditoria.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/transport", shipmentHandler.UpdateTransport)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/volumes", shipmentHandler.AddVolume)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/volumes", shipmentHandler.ListVolumes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/volumes/{volumeID}", shipmentHandler.DeleteVolume)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/nfe-link", shipmentHandler.LinkFiscalExit)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/events", shipmentHandler.ListEvents)
+
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/auto-fill/sales-order", shipmentHandler.AutoFillFromSalesOrder)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/auto-fill/purchase-order", shipmentHandler.AutoFillFromPurchaseOrder)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/auto-fill/production-order", shipmentHandler.AutoFillFromProductionOrder)
+
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/export/pdf", shipmentHandler.ExportPDF)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/export/xlsx", shipmentHandler.ExportXLSX)
 		})
 		r.Route("/api/crp", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calculate", crpHandler.CalculateCRP)

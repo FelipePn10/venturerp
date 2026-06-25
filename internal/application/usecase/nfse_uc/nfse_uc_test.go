@@ -119,7 +119,7 @@ func TestCreateNFSe_ValidationErrors(t *testing.T) {
 	auth := &fakeNFSeAuth{canCreate: true}
 
 	cases := []struct {
-		name string
+		name   string
 		mutate func(*request.CreateNFSeDTO)
 	}{
 		{"missing valor_servicos", func(d *request.CreateNFSeDTO) { d.ValorServicos = 0 }},
