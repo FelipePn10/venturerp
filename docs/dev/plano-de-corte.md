@@ -41,13 +41,27 @@ testável isoladamente e permite que 1D, 2D-guilhotina e true-shape coexistam.
 ```
 internal/domain/cutting_plan/service/
   optimizer.go                  // interface CuttingOptimizer + tipos + registry por CutType
-  optimizer_1d.go               // Best-Fit Decreasing linear (FASE 1)
-  optimizer_2d_guillotine.go    // retângulos livres + corte guilhotina (FASE 3)
+  optimizer_1d.go               // Best-Fit Decreasing linear — fallback/residual (FASE 1)
+  optimizer_1d_cg.go            // ★ 1D column generation (Gilmore-Gomory) — engine LINEAR_1D
+  optimizer_2d_guillotine.go    // retângulos livres + corte guilhotina — fallback/residual (FASE 3)
+  optimizer_2d_cg.go            // ★ 2D column generation guilhotina — engine GUILLOTINE_2D
+  optimizer_cg_round.go         // ★ rounding inteiro compartilhado (set-cover guloso) + seeds
+  guillotine_knapsack.go        // ★ pricer 2D: DP guilhotina (Gilmore-Gomory)
+  knapsack.go                   // ★ pricer 1D: knapsack limitado (DP)
+  lp/simplex.go                 // ★ solver LP nativo (simplex 2 fases + duais)
   nesting_trueshape.go          // provedor true-shape nativo (bounding-box) (FASE 4)
+  nesting_raster.go             // nesting irregular raster shape-aware + núcleo de ordem + rotação livre
+  nesting_meta.go               // ★ true-shape metaheurística (simulated annealing sobre a ordem)
+  geometry.go                   // ★ rotação de polígono + bbox (rotação livre, FASE 7)
   uom.go                        // conversão comprimento/área → UoM de estoque
 internal/infrastructure/nesting/
   http_provider.go              // adapter HTTP p/ engine externo de nesting (FASE 4)
 ```
+
+> ★ = **otimização nível enterprise** (FASE 6). Os engines registrados para cada
+> `CutType` passaram a ser os otimizadores de alta qualidade (column generation no
+> 1D/2D, metaheurística no true-shape); as heurísticas originais permanecem como
+> **rede de segurança** (fallback e mop-up do resíduo inteiro). Ver **§3g**.
 
 ```go
 type CuttingOptimizer interface {
@@ -101,8 +115,9 @@ Heurística **Best-Fit Decreasing** com estoque heterogêneo:
    **agrupados** em um padrão com `repeat_count`.
 
 Peças mais longas que qualquer estoque viram `Unplaced` (aviso ao operador).
-É uma heurística rápida e aceitável no chão-de-fábrica; o contrato permite trocar por
-um método exato (column generation / Gilmore-Gomory) sem alterar chamadores.
+É uma heurística rápida e aceitável no chão-de-fábrica. **A partir da Fase 6 (§3g), o
+engine registrado para `LINEAR_1D` é o *column generation* (Gilmore-Gomory); este
+Best-Fit Decreasing permanece como fallback e para completar o resíduo inteiro.**
 
 ### Métricas calculadas
 - **Aproveitamento** = demanda total / estoque consumido.
@@ -193,6 +208,9 @@ peso kg/m²). O retalho 2D gerado é o maior retângulo de sobra quando **ambos 
 
 O mesmo `cut_type` no plano (`GUILLOTINE_2D`) seleciona o otimizador no registry; o
 restante do fluxo (criar, otimizar, firmar, retalhos, settings) é idêntico ao 1D.
+**A partir da Fase 6 (§3g), o engine registrado para `GUILLOTINE_2D` é o *column
+generation* com pricer guilhotina; esta heurística de retângulos livres permanece como
+fallback e para completar o resíduo inteiro.**
 
 ## 3d. Corte true-shape (irregular) — Fase 4
 
@@ -253,17 +271,31 @@ Seis complementos sobre o módulo já entregue (sem novos tipos de corte):
 1. **Export do mapa de corte** (`service/cutmap.go`) — desenha os padrões em **SVG**
    (visualização), **DXF** (LWPOLYLINE + TEXT, para CAM/seccionadora) e **PDF**
    (vetorial, A4), tudo dependency-free. `GET .../{id}/export?format=svg|dxf|pdf`.
+   **Contornos reais no true-shape (FASE 7):** quando a peça é irregular, o renderer
+   desenha o **polígono real** (rotacionado pelo `rotation_deg`), não a caixa
+   envolvente — `<polygon>` no SVG, `LWPOLYLINE` de N vértices no DXF, *path* fechado no
+   PDF. O `ExportMap` carrega a geometria das peças e preenche `PatternPlacement.Outline`
+   (transiente) via `service.OutlineForPlacement(geometryJSON, rotationDeg)`. Barras 1D e
+   retângulos 2D continuam desenhados como retângulos.
 2. **Programa de corte + agendamento** — `GET .../{id}/program` devolve a sequência
-   ordenada de cortes por padrão (offset/posição de cada peça). `POST .../{id}/schedule`
-   cria um `MachineSchedule` para a máquina do plano (`machine_code`), levando o corte
-   ao calendário de máquina (CRP/APS).
+   ordenada de cortes por padrão (offset/posição de cada peça) **e, para chapas 2D, a
+   árvore de cortes guilhotinados** (`cuts`): cada corte reto de ponta a ponta que a
+   seccionadora executa, em ordem (`level` 0 = corte de cabeça; níveis maiores = cortes
+   dos sub-painéis), com eixo/posição/extensão. Derivada das posições por
+   `service.GuillotineCutPlan` (reconhecimento guilhotina recursivo); peças que
+   compartilham a mesma linha viram **um único corte** (o *common-cut* natural que
+   economiza kerf). Layout não-guilhotinável → `cuts` vazio (cai na ordem dos placements).
+   `POST .../{id}/schedule` cria um `MachineSchedule` para a máquina do plano
+   (`machine_code`), levando o corte ao calendário de máquina (CRP/APS).
 3. **Nesting irregular nativo (raster, shape-aware)** (`service/nesting_raster.go`) —
    substitui o bounding-box por um nester com **grade de ocupação + bottom-left fill
    e rotações 90°**, que respeita o contorno real (peças se **intertravam** em
-   concavidades). É o provedor registrado para `TRUE_SHAPE_2D` (dispatcher: usa raster
-   quando há polígono; cai para bbox/guilhotina quando as peças são retângulos puros).
-   A grade é limitada (≤120 células/eixo) para manter performance; o engine externo
-   ainda sobrescreve para alto volume.
+   concavidades). É a base do provedor registrado para `TRUE_SHAPE_2D` (dispatcher: usa
+   o caminho irregular quando há polígono; cai para bbox/guilhotina quando as peças são
+   retângulos puros). A grade é limitada (≤120 células/eixo) para manter performance.
+   **A partir da Fase 6 (§3g), a passada raster única é envolvida por uma metaheurística
+   (simulated annealing) que busca a melhor ordem de colocação;** o engine externo ainda
+   sobrescreve para alto volume.
 4. **Fita de borda (moveleiro)** — a peça 2D guarda quais lados levam fita
    (`edge_top/bottom/left/right`), o material (`band_item_code`) e o custo/m
    (`band_cost_per_m`). `BandingLengthMM()` calcula o perímetro encapado × qtd; o
@@ -271,9 +303,120 @@ Seis complementos sobre o módulo já entregue (sem novos tipos de corte):
 5. **Rateio de custo por OP** — ao firmar, o custo total da baixa é distribuído entre
    as ordens de origem das peças, proporcional à demanda de cada uma (comprimento 1D
    / área 2D), gravado em `cutting_plan_order_costs`. `GET .../{id}/order-costs`.
-   Migration 000165.
+   Migration 000165. **O custo da fita de borda entra no rateio** como custo direto da
+   OP da peça encapada (comprimento encapado × custo/m, somado ao `allocated_cost`
+   daquela ordem) — `allocateOrderCosts` soma material rateado + fita direta.
 6. **Limpeza de nomenclatura** — `total_demand_mm`/`total_stock_mm` →
    `total_demand`/`total_stock` (guardam comprimento OU área). Migration 000163.
+
+## 3g. Otimização nível enterprise — FASE 6 (column generation + metaheurística)
+
+As heurísticas das fases 1/3/4 são rápidas e aceitáveis no chão-de-fábrica, mas gulosas
+(~80–88% de aproveitamento). A Fase 6 eleva o núcleo de otimização ao nível de
+SAP/Oracle/FoccoERP/SigmaNEST, **sem novas dependências** (Go puro) e **sem quebrar
+nada**: o mesmo contrato `CuttingOptimizer`, as mesmas rotas, o mesmo fluxo.
+
+### Princípio comum — rede de segurança "pick-best"
+Cada engine novo **calcula também a heurística antiga** e devolve a **melhor** das duas
+soluções (menos peças não-alocadas → menos estoque consumido → menos barras/chapas).
+Qualquer falha interna, orçamento de tempo estourado ou instância fora do envelope cai
+**transparentemente** para a heurística. Consequência: a otimização **nunca regride** e
+os testes antigos continuam válidos.
+
+### 1D — Gilmore-Gomory column generation (`optimizer_1d_cg.go`)
+O problema de *cutting stock* 1D é resolvido pelo método clássico de geração de colunas:
+
+1. **Master LP** (`lp/simplex.go`, simplex de duas fases com extração de **duais**):
+   decide quantas vezes rodar cada **padrão de corte**, minimizando o estoque consumido
+   (retalhos descontados → drenados primeiro) e respeitando a disponibilidade de cada
+   comprimento. Variáveis de *shortfall* tornam o LP sempre factível.
+2. **Pricing** (`knapsack.go`, knapsack limitado por demanda via decomposição binária):
+   a partir dos preços duais, gera o **padrão mais lucrativo**; adiciona-o e re-resolve o
+   master até nenhum padrão melhorar a relaxação (otimalidade da relaxação LP).
+3. **Recuperação inteira:** arredonda o LP para baixo e completa o resíduo com o núcleo
+   Best-Fit Decreasing (`nest1D`) — solução completa, factível, tipicamente a **≤ 1 barra**
+   do ótimo.
+
+*Resultado típico:* estoque heterogêneo (2×3000 + 2×2000 em barras 6000×2 + 5000×1) →
+heurística 83,3% (12000 mm), **column generation 90,9% (11000 mm)**. ~100 ms em jobs de
+centenas de peças. Síncrono.
+
+### 2D guilhotina — column generation com pricer híbrido (`optimizer_2d_cg.go`)
+Mesma estrutura de master LP, mas o **pricing é um knapsack guilhotina 2D**:
+
+- **Pricer exato** (`guillotine_knapsack.go`): DP de Gilmore-Gomory sobre a discretização
+  por *subset-sums* (normal patterns), `V(p,q) = max(peça única, corte vertical, corte
+  horizontal)`, com reconstrução do **layout e dos retalhos**. Usado quando a
+  discretização cabe no orçamento (`gk2DStateCap`); dá o **padrão ótimo** em chapas
+  pequenas/médias.
+- **Pricer heurístico** (`packSheetByValue`, ponderado pelos duais): quando a chapa é
+  grande demais para o DP exato (ex.: 2750×1830 com muita variedade), garante que a
+  geração de colunas **sempre roda** e **escala** para painéis reais.
+
+**Recuperação inteira** (`optimizer_cg_round.go`): o pricer não-limitado pode
+*superproduzir* (empacotar 4 peças numa chapa grande para uma demanda de 1), e o LP por
+área não distingue "¼ de chapa grande" de "1 chapa pequena". A solução é o padrão
+enterprise: **semear** o pool com 1 padrão *single-part* por peça na chapa mais barata
+(`seed2DColumns`) e arredondar com um **set-cover guloso por cobertura/custo**
+(`roundCover`) — assim uma peça pequena é cortada da **chapa certa**, não de uma chapa
+cara inteira.
+
+*Resultado típico:* três peças que ladrilham um 2400×1200 → a heurística fragmenta em
+**2 chapas**, o column generation empacota em **1 (100%)**. Síncrono (orçamento ~5 s; cai
+para a heurística se estourar).
+
+### True-shape (irregular) — metaheurística sobre a ordem (`nesting_meta.go`)
+Para nesting irregular, geração de colunas não se aplica; o que move o rendimento
+(DeepNest/SigmaNEST) é **buscar a ordem de colocação**. A entrega:
+
+- **Iterated Local Search** (simulated annealing + *kicks*) sobre a permutação das
+  peças: o annealing busca a ordem; ao estagnar num ótimo local, um **kick**
+  (perturbação forte a partir da melhor ordem) + reaquecimento diversifica a busca por
+  todo o orçamento de tempo. Cada ordem candidata é avaliada pela **colocação raster
+  bottom-left** (`placeRasterOrder` — grade de ocupação, point-in-polygon), que garante
+  layouts **sem sobreposição e dentro da chapa** para **qualquer** polígono (côncavo
+  inclusive).
+- A ordem gulosa (maior-área-primeiro) **semeia** a busca e é sempre candidata; o melhor
+  global é sempre mantido → ILS **nunca pior** que uma passada do raster nem que um único
+  annealing.
+- **Semente RNG fixa** → planos **reprodutíveis/auditáveis** (mesma demanda+estoque ⇒
+  mesmo layout). Custo normalizado em "unidades de chapa", orçamento ~2 s + parada por
+  estagnação.
+
+*Resultado típico:* mix de peças em L → a ordem gulosa usa **4 chapas (65%)**, a
+metaheurística intertrava em **3 chapas (86,7%)**.
+
+#### FASE 7 — rotação livre (`geometry.go` + `nesting_raster.go`)
+O nester deixou de testar **só 90°**: cada peça rotacionável é rasterizada em um
+**conjunto de ângulos** (`rasterAngles` = 0/45/90/135/180/225/270/315), girando o
+**polígono** e re-amostrando na grade (`rasterizeAngle`). Isso permite **encaixe
+diagonal** — uma peça longa demais para caber alinhada aos eixos cabe a 45° — e
+intertravamento de contornos irregulares em ângulos que um nester de 90° não alcança.
+
+- **Colisão continua sã (grid):** a rotação é geométrica, mas a verificação de
+  sobreposição segue na **grade de ocupação** — nunca há falso-negativo de colisão (a
+  alternativa contínua via aritmética de polígonos foi descartada por fragilidade de
+  ponto-flutuante em peças idênticas/abutadas).
+- **Ângulos cardeais exatos** (`sinCosDeg`): 0/90/180/270 usam seno/cosseno exatos para
+  não inflar a bbox rasterizada por um resíduo de float (que quebraria o
+  intertravamento cell-perfect).
+- A escolha da chapa ao abrir (`masksFitSheet`) considera **todas as rotações**, então
+  uma peça que só cabe na diagonal não é descartada antes de ser girada.
+
+*Resultado:* uma barra 130×10 **não cabe** numa chapa 100×100 a 0°/90° (fica `unplaced`),
+mas **cabe a ~45°** (bbox ≈ 99×99). O provedor externo (`NESTING_SERVICE_URL`, §7) e o
+**NFP geométrico contínuo / common-cut** (§8) seguem como o caminho para densidade
+máxima de produção em alto volume.
+
+### Limites e seleção de método
+| Dimensão | Engine padrão | Quando cai para a heurística |
+|---|---|---|
+| `LINEAR_1D` | column generation | erro / `cgTimeBudget` (5 s) / `cgMaxColumns` |
+| `GUILLOTINE_2D` | column generation (pricer híbrido) | discretização > cap **e** sem coluna melhor / orçamento |
+| `TRUE_SHAPE_2D` | metaheurística (SA) | `metaTimeBudget` (2 s) / estagnação; `NESTING_SERVICE_URL` sobrescreve |
+
+> **Reprodutibilidade:** 1D e 2D são determinísticos (sem RNG). O true-shape usa semente
+> fixa, então também é determinístico. Bom para auditoria de planos.
 
 ## 4. Endpoints (`/api/cutting-plans`)
 
@@ -393,15 +536,69 @@ POST /api/cutting-plans/{id}/release    → baixa de estoque + retalhos; retorna
   grande demais → unplaced) e export do mapa (SVG/DXF/PDF bem-formados + formato inválido).
 - `go test ./internal/application/usecase/cutting_plan_uc/` (rateio) — firmar rateia o
   custo 2000:4000 → 3,33 : 6,67 entre OP-1 e OP-2.
+- **Fase 6 (otimização enterprise, §3g):**
+  - `lp/simplex_test.go` — **8 testes** do solver LP: ótimos conhecidos (≥/≤/=),
+    normalização de RHS negativo, infactível, ilimitado, anti-ciclagem (Bland) e
+    **dualidade forte** (a propriedade que valida os duais usados no pricing).
+  - `knapsack_test.go` / `guillotine_knapsack_test.go` — pricers 1D e 2D: preenchimento
+    exato, respeito ao limite de demanda, melhor mix por valor, e bail por discretização
+    grande no 2D.
+  - `optimizer_1d_cg_test.go` — **column generation 1D bate a heurística**: estoque
+    heterogêneo 11000 vs 12000 mm (90,9% vs 83,3%) e "nunca pior".
+  - `optimizer_2d_cg_test.go` — **column generation 2D bate a heurística**: ladrilhamento
+    guilhotina (1 chapa vs 2), versão em tamanho real (2400×1200), escolha da chapa menor
+    para peça pequena, e "nunca pior" num job de painel realista.
+  - `nesting_meta_test.go` — **metaheurística true-shape (ILS) bate a ordem gulosa**
+    (peças em L: 3 chapas vs 4, 87% vs 65%), "nunca pior que o raster", e
+    **reprodutibilidade** (mesma entrada ⇒ mesmo plano).
+  - `optimizer_1d_cg_test.go::TestCG_UnplacedQuantityIsCorrect` — **regressão**: demanda
+    > estoque (10×2000 numa única barra 6000) reporta **7 não-alocadas** (o merge do
+    resíduo somava 1 por entrada agregada em vez da quantidade inteira, o que ainda
+    enganava o pick-best). Validado também via E2E HTTP.
+- **Fase 7 (rotação livre, §3g·FASE 7):**
+  - `geometry_test.go` — rotação de polígono normaliza à origem e preserva dimensões; a
+    barra 130×10 a 45° tem bbox ≈ 99×99 (cabe em 100×100).
+  - `nesting_freerot_test.go` — **prova de rotação livre**: a barra 130×10 fica
+    `unplaced` numa chapa 100×100 **sem** rotação, mas é **colocada a ~45° com** rotação
+    (ângulo não-cardeal no `rotation_deg`).
+  - `cutmap_test.go::TestRenderCutMap_DrawsTrueShapeContours` — o mapa desenha o
+    **contorno real** (SVG `<polygon>`, DXF `LWPOLYLINE` de N vértices, *path* fechado no
+    PDF) quando a peça tem `Outline`, e `OutlineForPlacement` rotaciona/normaliza a
+    geometria.
+- **Complementos de chão-de-fábrica (ideias futuras entregues):**
+  - `guillotine_cuts_test.go` — `GuillotineCutPlan`: árvore de cortes do ladrilhamento
+    70/30/100 (corte de cabeça horizontal + corte do sub-painel), grade 2×2 (3 cortes),
+    peça única (0 cortes) e layout pinwheel **não-guilhotinável** (→ `nil`, fallback).
+  - `release_uc_test.go::TestAllocateOrderCosts_AddsEdgeBanding` — o **custo da fita**
+    (2 m × R$4 = R$8) entra direto na OP da peça encapada, além do material rateado.
 
 **Teste end-to-end (HTTP):** `make test-cutting` (ou `bash scripts/test-cutting.sh`)
-exercita o módulo inteiro contra a API rodando + banco de teste (**36 checagens,
-36/36 verdes**): cadastros de apoio, settings (+ rejeição de modo inválido), 1D
+exercita o módulo inteiro contra a API rodando + banco de teste (**40 checagens,
+40/40 verdes**): cadastros de apoio, settings (+ rejeição de modo inválido), 1D
 (criar/otimizar/firmar/retalho/UoM em metros + cenário de peça sem encaixe), modo
 MANUAL sem lote (rejeitado), reuso de retalho (`include_remnants`), 2D + fita de
 borda, true-shape (raster), export SVG/DXF/PDF, programa, agenda na máquina, demanda
-de OP (`from-orders`, com BOM real) e rateio por OP. Requer `BASE_URL` apontando para
-o servidor.
+de OP (`from-orders`, com BOM real), rateio por OP, **árvore de cortes guilhotinados
+no `/program`** e **fita de borda entrando no custeio da OP** (peça encapada custa
+mais). Requer `BASE_URL` apontando para o servidor.
+
+**Mapas de amostra (inspeção visual):** `make cutting-samples` (ou
+`go run ./cmd/cutting-samples`) roda **6 simulações** com **lotes realistas** — 1D barras
+de aço (com retalho), 2D chapa de aço, 2D MDF moveleiro (com veio/grão), ladrilhamento
+guilhotina 100%, true-shape laser (flanges em L) e a barra que só cabe na diagonal — e
+grava o **SVG/DXF/PDF** de cada uma em `./cutting-samples/`. Roda direto pelos
+otimizadores e pelo renderer, **sem API nem banco**; serve para abrir os arquivos e
+conferir visualmente o nesting (inclusive os contornos reais e a rotação livre do
+true-shape). A tabela imprime **APROV.%** e **SUCATA%**.
+
+> **APROV. (utilização) vs SUCATA (perda real).** Aproveitamento = demanda ÷ estoque
+> consumido, então **inclui a sobra da última barra/chapa** — que num lote pequeno é
+> grande e reaproveitável (retalho), puxando o número para baixo sem ser desperdício. A
+> **sucata** exclui o retalho reaproveitável (≥ sobra mínima) e é a perda que vira custo.
+> Em lotes de produção reais o nesting fica **85–96%** de aproveitamento (1D ~96%, MDF
+> ~95%, chapa ~87%, laser ~86%, ladrilhamento perfeito 100%) com **1–14% de sucata**;
+> abrir uma chapa a mais para as últimas peças é correto (o otimizador é ótimo — forçar
+> menos chapas deixa peças sem cortar), não rendimento perdido.
 
 > **Bugs reais encontrados ao rodar o e2e e corrigidos** (pré-existentes no módulo de
 > **agenda de máquina**, quebrados para todos, não só para o corte):
@@ -428,14 +625,35 @@ O serviço externo é qualquer microsserviço que implemente o protocolo (ex.: u
 wrapper em torno do DeepNest). Nada mais no ERP muda: o `cut_type=TRUE_SHAPE_2D`
 continua selecionando o fluxo, e o provedor externo só substitui o cálculo do layout.
 
-## 8. Ideias futuras (fora do escopo entregue)
+## 8. Ideias futuras
 
-Tudo do roadmap anterior (export, programa/agenda, NFP nativo, fita de borda, rateio
-por OP, limpeza de nomenclatura) **foi entregue na fase de complementos**. Possíveis
-evoluções adicionais, não planejadas:
+O motor de nesting está **completo em nível enterprise nas três dimensões**: roadmap de
+complementos, **Fase 6** (column generation 1D/2D + metaheurística true-shape, §3g),
+**Fase 7** (rotação livre no true-shape, §3g·FASE 7) e os complementos de chão-de-fábrica
+abaixo entregues.
 
-- **NFP geométrico exato** (no-fit-polygon contínuo) no lugar do raster, para máxima
-  densidade sem depender de grade/engine externo.
-- **Árvore de cortes guilhotinados explícita** no programa 2D (hoje a sequência é a
-  ordem dos placements; a árvore de cortes retos pode ser derivada para a seccionadora).
-- **Custo da fita de borda** somado ao custeio da OP (hoje exposto no detalhe do plano).
+**Entregues (eram ideias futuras):**
+- ✅ **Árvore de cortes guilhotinados explícita** no programa 2D — `GET .../{id}/program`
+  devolve `cuts` (a sequência de cortes retos da seccionadora). Ver §3f.2.
+- ✅ **Common-cut** (para guilhotina) — peças que compartilham a linha de corte viram **um
+  único corte** na árvore acima; o ganho de kerf é inerente. (Para true-shape de alto
+  volume, *common-cut* geométrico continua sendo nicho do engine externo.)
+- ✅ **Custo da fita de borda no custeio da OP** — entra no rateio por OP como custo direto
+  da peça encapada (§3f.5).
+
+**Refinos opcionais/nicho restantes (não essenciais; decisão de engenharia consciente):**
+- **NFP geométrico contínuo:** *no-fit-polygon* exato (sub-grade) no lugar da grade raster.
+  **Mantido fora** por robustez: a aritmética de sobreposição de polígonos é frágil em
+  casos degenerados (peças idênticas/abutadas) e um falso-negativo geraria **plano
+  inválido** — a grade raster é sã por construção. Densidade máxima de produção fica no
+  **engine externo** (`NESTING_SERVICE_URL`, já suportado) até haver um clipping de
+  polígono robusto. **Recomendação: usar o engine externo, não reimplementar nativo.**
+- **Execução assíncrona** das otimizações pesadas: hoje **síncronas e rápidas** (1D ~100ms,
+  2D ~1–5s, true-shape ~1–2s), dentro de orçamentos de tempo. Async (job em background,
+  status `OTIMIZANDO`) só compensa com um **job durável** (migração + worker +
+  reset-no-startup) para buscas de minutos em instâncias gigantes — ganho de qualidade
+  marginal (a metaheurística já platô em segundos); custo/risco de infra alto. **Adiado
+  por baixo ROI**; fácil de adicionar quando houver demanda real por lotes enormes.
+- **Branch-and-price** no 2D: fecharia o *gap* de integralidade (hoje **dentro de ~1 chapa
+  do ótimo** via seeds + arredondamento guloso). Ganho ≤ 1 chapa ocasional, complexidade
+  alta → **baixo ROI, adiado**.

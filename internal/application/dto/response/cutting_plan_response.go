@@ -167,6 +167,16 @@ type CutProgramStepResponse struct {
 	RotationDeg float64 `json:"rotation_deg,omitempty"`
 }
 
+// CutProgramCutResponse is one full edge-to-edge guillotine cut (panel saw program).
+type CutProgramCutResponse struct {
+	Sequence   int     `json:"sequence"`
+	Level      int     `json:"level"` // 0 = primary head cut; deeper = sub-panel cuts
+	Axis       string  `json:"axis"`  // VERTICAL | HORIZONTAL
+	PositionMM float64 `json:"position_mm"`
+	FromMM     float64 `json:"from_mm"`
+	ToMM       float64 `json:"to_mm"`
+}
+
 type CutProgramPatternResponse struct {
 	Sequence      int                      `json:"sequence"`
 	RepeatCount   int                      `json:"repeat_count"`
@@ -174,6 +184,9 @@ type CutProgramPatternResponse struct {
 	StockWidthMM  float64                  `json:"stock_width_mm,omitempty"`
 	StockHeightMM float64                  `json:"stock_height_mm,omitempty"`
 	Steps         []CutProgramStepResponse `json:"steps"`
+	// Cuts is the derived guillotine cut sequence for 2D sheets (the seccionadora
+	// program). Empty for 1D bars and for layouts that are not guillotine-separable.
+	Cuts []CutProgramCutResponse `json:"cuts,omitempty"`
 }
 
 // CutProgramResponse is the ordered cut program for a plan.

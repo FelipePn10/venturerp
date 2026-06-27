@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/service"
 	machineentity "github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 )
@@ -23,6 +24,13 @@ func (uc *CuttingPlanUseCase) ExportMap(ctx context.Context, planID int64, forma
 	if len(patterns) == 0 {
 		return nil, "", fmt.Errorf("plan has no patterns; optimise it first")
 	}
+	// For true-shape plans, attach each placement's real contour so the map draws the
+	// actual shapes instead of their bounding boxes.
+	if plan.CutType == entity.CutTypeTrueShape2D {
+		if parts, perr := uc.repo.ListParts(ctx, planID); perr == nil {
+			attachOutlines(patterns, parts)
+		}
+	}
 	b := service.MapBranding{GeneratedAt: time.Now()}
 	if uc.branding != nil {
 		if cfg, err := uc.branding.GetFiscalConfig(ctx); err == nil && cfg != nil {
@@ -33,6 +41,30 @@ func (uc *CuttingPlanUseCase) ExportMap(ctx context.Context, planID int64, forma
 		}
 	}
 	return service.RenderCutMap(plan.Code, patterns, service.MapFormat(format), b)
+}
+
+// attachOutlines fills each true-shape placement's Outline from its part's polygon
+// geometry (rotated by the placement angle), so the cutting map renders the real
+// contours rather than bounding rectangles.
+func attachOutlines(patterns []*entity.CuttingPattern, parts []*entity.CuttingPlanPart) {
+	geo := make(map[int64]string, len(parts))
+	for _, pt := range parts {
+		if pt.Geometry != nil && *pt.Geometry != "" {
+			geo[pt.ID] = *pt.Geometry
+		}
+	}
+	for _, pat := range patterns {
+		for _, pl := range pat.Placements {
+			if pl.PartID == nil {
+				continue
+			}
+			if g, ok := geo[*pl.PartID]; ok {
+				if outline, ok := service.OutlineForPlacement(g, pl.RotationDeg); ok {
+					pl.Outline = outline
+				}
+			}
+		}
+	}
 }
 
 // GetProgram returns the ordered cut program (the shop-floor cut sequence) per
@@ -58,6 +90,19 @@ func (uc *CuttingPlanUseCase) GetProgram(ctx context.Context, planID int64) (*re
 				OffsetMM: pl.OffsetMM, LengthMM: pl.LengthMM,
 				PosXMM: pl.PosXMM, PosYMM: pl.PosYMM, WidthMM: pl.WidthMM, HeightMM: pl.HeightMM, RotationDeg: pl.RotationDeg,
 			})
+		}
+		// For 2D sheets, derive the guillotine cut sequence the panel saw executes.
+		if p.StockWidthMM > 0 && p.StockHeightMM > 0 {
+			boxes := make([]service.CutBox, 0, len(p.Placements))
+			for _, pl := range p.Placements {
+				boxes = append(boxes, service.CutBox{X: pl.PosXMM, Y: pl.PosYMM, W: pl.WidthMM, H: pl.HeightMM, Label: pl.Label})
+			}
+			for _, c := range service.GuillotineCutPlan(boxes, p.StockWidthMM, p.StockHeightMM) {
+				pat.Cuts = append(pat.Cuts, response.CutProgramCutResponse{
+					Sequence: c.Sequence, Level: c.Level, Axis: c.Axis,
+					PositionMM: c.PositionMM, FromMM: c.FromMM, ToMM: c.ToMM,
+				})
+			}
 		}
 		out.Patterns = append(out.Patterns, pat)
 	}

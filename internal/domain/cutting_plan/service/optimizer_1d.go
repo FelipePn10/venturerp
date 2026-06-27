@@ -28,9 +28,11 @@ const eps = 1e-6
 // This is a fast, shop-acceptable heuristic. The contract leaves room to swap in
 // an exact method (column generation / Gilmore-Gomory) later without touching
 // callers.
+// optimizer1D is no longer registered directly: the column-generation engine
+// (optimizer1DCG) owns the LINEAR_1D slot and uses this Best-Fit Decreasing
+// heuristic both as a guaranteed fallback and to mop up the integer residual its
+// LP relaxation leaves behind.
 type optimizer1D struct{}
-
-func init() { register(optimizer1D{}) }
 
 func (optimizer1D) Type() entity.CutType { return entity.CutTypeLinear1D }
 
@@ -55,8 +57,20 @@ type stockType struct {
 }
 
 func (optimizer1D) Optimize(demand []DemandPiece, stock []StockPiece, p CutParams) (*Solution, error) {
+	open, unplaced, err := nest1D(demand, stock, p)
+	if err != nil {
+		return nil, err
+	}
+	return buildSolution(open, unplaced, p), nil
+}
+
+// nest1D runs the Best-Fit Decreasing nesting and returns the opened bins plus the
+// pieces that fit nowhere. It is the shared core behind both optimizer1D.Optimize
+// and the column-generation engine's integer-residual pass, so the two always
+// agree on placement geometry, kerf accounting and remnant preference.
+func nest1D(demand []DemandPiece, stock []StockPiece, p CutParams) ([]*bin, []DemandPiece, error) {
 	if p.Kerf < 0 || p.Trim < 0 || p.MinRemnant < 0 {
-		return nil, errors.New("kerf, trim and min_remnant cannot be negative")
+		return nil, nil, errors.New("kerf, trim and min_remnant cannot be negative")
 	}
 
 	// Expand demand into individual units, then sort by length descending.
@@ -68,7 +82,7 @@ func (optimizer1D) Optimize(demand []DemandPiece, stock []StockPiece, p CutParam
 	var units []unit
 	for _, d := range demand {
 		if d.Length <= 0 {
-			return nil, fmt.Errorf("demand %q has non-positive length", d.Label)
+			return nil, nil, fmt.Errorf("demand %q has non-positive length", d.Label)
 		}
 		if d.Qty <= 0 {
 			continue
@@ -119,7 +133,7 @@ func (optimizer1D) Optimize(demand []DemandPiece, stock []StockPiece, p CutParam
 		unplaced = appendDemand(unplaced, u.partID, u.label, u.length)
 	}
 
-	return buildSolution(open, unplaced, p), nil
+	return open, unplaced, nil
 }
 
 // bestOpenBin returns the open bin where `length` fits leaving the smallest

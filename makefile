@@ -57,6 +57,12 @@ test-integration:
 test-cutting:
 	BASE_URL="$${BASE_URL:-http://localhost:5071}" bash scripts/test-cutting.sh
 
+# Mapas de corte de amostra — roda várias simulações (1D barras, 2D chapa/MDF,
+# true-shape laser) pelos otimizadores reais e grava SVG/DXF/PDF em ./cutting-samples
+# para inspeção visual. Não precisa de API nem banco.
+cutting-samples:
+	go run ./cmd/cutting-samples -out cutting-samples
+
 # Romaneio (expedição) — gera PDF e Excel de teste com base em dados reais do banco.
 # Requer API rodando + banco de testes com dados (execute test-e2e.sh primeiro).
 test-romaneio:
@@ -146,7 +152,7 @@ restore:
 	@test -n "$(FILE)" || (echo "usage: make restore FILE=./backups/<file>.dump"; exit 2)
 	DATABASE_URL="$(DATABASE_URL)" ./scripts/restore.sh "$(FILE)"
 
-.PHONY: create_migration migrate_up migrate_down migrate_force reset print_db sqlc \
+.PHONY: cutting-samples create_migration migrate_up migrate_down migrate_force reset print_db sqlc \
 	test test-cover test-integration test-cutting build run vet fmt-check ci \
 	docker-build up down up-backup logs backup restore \
 	demo-up demo-down demo-reset demo-migrate demo-seed demo-bootstrap demo-logs

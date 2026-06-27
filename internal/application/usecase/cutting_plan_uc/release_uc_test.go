@@ -277,6 +277,29 @@ func TestRelease_AllocatesCostPerOrder(t *testing.T) {
 	}
 }
 
+func TestAllocateOrderCosts_AddsEdgeBanding(t *testing.T) {
+	// Two equal-area parts → material 20 split 10/10. OP-1's part is banded on top and
+	// bottom: perimeter = 1000+1000 = 2000 mm = 2 m × R$4/m = R$8 added directly to OP-1.
+	parts := []*entity.CuttingPlanPart{
+		{WidthMM: 1000, HeightMM: 500, Quantity: 1, SourceRef: strPtr("OP-1"),
+			EdgeTop: true, EdgeBottom: true, BandCostPerM: 4},
+		{WidthMM: 1000, HeightMM: 500, Quantity: 1, SourceRef: strPtr("OP-2")},
+	}
+	cons := []*entity.CuttingPlanConsumption{{TotalCost: 20}}
+	costs := allocateOrderCosts(parts, cons, true)
+
+	byRef := map[string]float64{}
+	for _, c := range costs {
+		byRef[c.OrderRef] = c.AllocatedCost
+	}
+	if got := byRef["OP-1"]; got < 17.99 || got > 18.01 {
+		t.Fatalf("OP-1 = %v, want 18 (10 material + 8 banding)", got)
+	}
+	if got := byRef["OP-2"]; got < 9.99 || got > 10.01 {
+		t.Fatalf("OP-2 = %v, want 10 (material only)", got)
+	}
+}
+
 func TestRelease_RejectsNonOptimizedPlan(t *testing.T) {
 	plan := basePlan()
 	plan.Status = entity.PlanStatusDraft

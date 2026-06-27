@@ -23,3 +23,6 @@ scripts/test-e2e.sh
 scripts/test-flow.sh
 scripts/test-focusnfe.sh
 pdfs_test/
+
+# Generated sample cutting maps (make cutting-samples)
+/cutting-samples/
