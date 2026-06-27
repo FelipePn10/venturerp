@@ -347,11 +347,14 @@ func popUnit2D(units *[]stockUnit, width, height float64, isRemnant bool) *stock
 	return nil
 }
 
-// allocateOrderCosts splits the total consumed material cost across the source
-// orders of the plan's parts, proportional to each order's demand (length for 1D,
-// area for 2D/true-shape). Parts without a source order are ignored.
+// allocateOrderCosts splits the firmed plan's total cost across the source orders of
+// its parts. The MATERIAL cost is shared proportionally to each order's demand (length
+// for 1D, area for 2D/true-shape); the EDGE-BANDING cost is a direct cost added to the
+// specific order whose part carries the banding (length banded × cost per metre). Parts
+// without a source order are ignored.
 func allocateOrderCosts(parts []*entity.CuttingPlanPart, consumptions []*entity.CuttingPlanConsumption, is2D bool) []*entity.CuttingPlanOrderCost {
 	demand := map[string]float64{}
+	banding := map[string]float64{}
 	var refsOrder []string
 	for _, p := range parts {
 		if p.SourceRef == nil || *p.SourceRef == "" {
@@ -367,6 +370,9 @@ func allocateOrderCosts(parts []*entity.CuttingPlanPart, consumptions []*entity.
 			refsOrder = append(refsOrder, *p.SourceRef)
 		}
 		demand[*p.SourceRef] += m
+		if p.BandCostPerM > 0 {
+			banding[*p.SourceRef] += p.BandingLengthMM() / 1000 * p.BandCostPerM
+		}
 	}
 	var totalDemand float64
 	for _, m := range demand {
@@ -383,7 +389,7 @@ func allocateOrderCosts(parts []*entity.CuttingPlanPart, consumptions []*entity.
 	for _, ref := range refsOrder {
 		m := demand[ref]
 		out = append(out, &entity.CuttingPlanOrderCost{
-			OrderRef: ref, DemandMeasure: m, AllocatedCost: totalCost * m / totalDemand,
+			OrderRef: ref, DemandMeasure: m, AllocatedCost: totalCost*m/totalDemand + banding[ref],
 		})
 	}
 	return out

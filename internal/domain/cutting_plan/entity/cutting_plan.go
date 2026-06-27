@@ -209,6 +209,13 @@ type PatternPlacement struct {
 	HeightMM    float64 // 2D
 	Rotated     bool    // 2D
 	RotationDeg float64 // true-shape arbitrary rotation angle
+
+	// Outline is the part's real (rotated) contour relative to the placement's
+	// bounding-box origin — points in [0,WidthMM]×[0,HeightMM]. It is transient (not
+	// persisted): the cutting-map renderer draws this polygon instead of the bounding
+	// rectangle when present, so true-shape maps show the actual shapes. Empty for 1D
+	// and rectangular 2D parts.
+	Outline [][2]float64
 }
 
 // NewCuttingPlan builds a draft plan, validating the invariants a plan must

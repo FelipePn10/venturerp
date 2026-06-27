@@ -1,12 +1,34 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
 )
+
+// OutlineForPlacement parses a true-shape part's polygon geometry (JSON [{x,y},…])
+// and returns its contour rotated by rotationDeg, normalised to the bounding-box
+// origin (points in [0,W]×[0,H]) — the shape the cutting-map renderer draws for that
+// placement. Returns false for missing/degenerate geometry (the caller then keeps the
+// bounding rectangle).
+func OutlineForPlacement(geometryJSON string, rotationDeg float64) ([][2]float64, bool) {
+	if geometryJSON == "" {
+		return nil, false
+	}
+	var poly []Point
+	if err := json.Unmarshal([]byte(geometryJSON), &poly); err != nil || len(poly) < 3 {
+		return nil, false
+	}
+	r := rotatePoly(poly, rotationDeg)
+	out := make([][2]float64, len(r))
+	for i, p := range r {
+		out[i] = [2]float64{p.X, p.Y}
+	}
+	return out, true
+}
 
 // MapBranding is the optional letterhead applied to the PDF cutting map. All
 // fields are plain values so the domain stays free of infrastructure deps; the
@@ -46,15 +68,19 @@ func RenderCutMap(planCode int64, patterns []*entity.CuttingPattern, format MapF
 	}
 }
 
-// rect is one drawn rectangle with an optional label, in map coordinates.
+// rect is one drawn shape with an optional label, in map coordinates. When poly is
+// set (≥3 points, absolute map coords) the renderers draw that polygon — the real
+// true-shape contour — instead of the x/y/w/h rectangle.
 type rect struct {
 	x, y, w, h float64
+	poly       [][2]float64
 	label      string
 	outer      bool // the stock outline (vs a placed part)
 }
 
-// layout flattens the patterns into stacked stock rectangles + part rectangles,
-// returning the rects and the overall canvas size. 1D bars are drawn as a strip.
+// layout flattens the patterns into stacked stock rectangles + part shapes, returning
+// them and the overall canvas size. 1D bars are drawn as a strip; true-shape parts
+// carrying an Outline are drawn as polygons.
 func layout(patterns []*entity.CuttingPattern) (rects []rect, width, height float64) {
 	y := mapGap
 	for _, p := range patterns {
@@ -70,7 +96,14 @@ func layout(patterns []*entity.CuttingPattern) (rects []rect, width, height floa
 			label: fmt.Sprintf("Padrão %d  ×%d  (%.0f%%)", p.Sequence, p.RepeatCount, p.UtilizationPct)})
 		for _, pl := range p.Placements {
 			if is2D {
-				rects = append(rects, rect{x: mapGap + pl.PosXMM, y: y + pl.PosYMM, w: pl.WidthMM, h: pl.HeightMM, label: pl.Label})
+				r := rect{x: mapGap + pl.PosXMM, y: y + pl.PosYMM, w: pl.WidthMM, h: pl.HeightMM, label: pl.Label}
+				if len(pl.Outline) >= 3 { // draw the real contour, offset to its placement
+					r.poly = make([][2]float64, len(pl.Outline))
+					for i, pt := range pl.Outline {
+						r.poly[i] = [2]float64{mapGap + pl.PosXMM + pt[0], y + pl.PosYMM + pt[1]}
+					}
+				}
+				rects = append(rects, r)
 			} else {
 				rects = append(rects, rect{x: mapGap + pl.OffsetMM, y: y, w: pl.LengthMM, h: sh, label: pl.Label})
 			}
@@ -93,8 +126,17 @@ func renderSVG(planCode int64, patterns []*entity.CuttingPattern) string {
 		if !r.outer {
 			fill, stroke, sw = "#cfe3ff", "#2f6fb0", 2.0
 		}
-		fmt.Fprintf(&b, `<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s" stroke="%s" stroke-width="%.1f"/>`,
-			r.x, r.y, r.w, r.h, fill, stroke, sw)
+		if len(r.poly) >= 3 {
+			var pts strings.Builder
+			for _, pt := range r.poly {
+				fmt.Fprintf(&pts, "%.2f,%.2f ", pt[0], pt[1])
+			}
+			fmt.Fprintf(&b, `<polygon points="%s" fill="%s" stroke="%s" stroke-width="%.1f"/>`,
+				strings.TrimSpace(pts.String()), fill, stroke, sw)
+		} else {
+			fmt.Fprintf(&b, `<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s" stroke="%s" stroke-width="%.1f"/>`,
+				r.x, r.y, r.w, r.h, fill, stroke, sw)
+		}
 		if r.label != "" {
 			fs := 28.0
 			if r.outer {
@@ -123,14 +165,23 @@ func renderDXF(patterns []*entity.CuttingPattern) string {
 	var b strings.Builder
 	b.WriteString("0\nSECTION\n2\nENTITIES\n")
 	for _, r := range rects {
-		y0 := h - (r.y + r.h) // flip
-		x0, x1 := r.x, r.x+r.w
-		y1 := h - r.y
-		// closed LWPOLYLINE (90) with 4 vertices
-		b.WriteString("0\nLWPOLYLINE\n8\nCUT\n90\n4\n70\n1\n")
-		for _, v := range [][2]float64{{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}} {
+		// closed LWPOLYLINE: the real contour when present, else the 4-vertex rect.
+		verts := [][2]float64{}
+		if len(r.poly) >= 3 {
+			for _, pt := range r.poly {
+				verts = append(verts, [2]float64{pt[0], h - pt[1]}) // flip Y
+			}
+		} else {
+			y0 := h - (r.y + r.h)
+			x0, x1 := r.x, r.x+r.w
+			y1 := h - r.y
+			verts = [][2]float64{{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}}
+		}
+		fmt.Fprintf(&b, "0\nLWPOLYLINE\n8\nCUT\n90\n%d\n70\n1\n", len(verts))
+		for _, v := range verts {
 			fmt.Fprintf(&b, "10\n%.3f\n20\n%.3f\n", v[0], v[1])
 		}
+		x0, y1 := r.x, h-r.y
 		if r.label != "" {
 			fmt.Fprintf(&b, "0\nTEXT\n8\nLABEL\n10\n%.3f\n20\n%.3f\n40\n%.1f\n1\n%s\n", x0+10, y1-40, 30.0, dxfText(r.label))
 		}
@@ -153,8 +204,8 @@ func renderPDF(planCode int64, patterns []*entity.CuttingPattern, b MapBranding)
 	const footerH = 26.0
 
 	br, bg, bb := parseHexRGB(b.BrandColorHex)
-	bodyTop := margin + headerH + 14    // first usable y (from top) below the header
-	bodyBottom := pageH - footerH       // last usable y (PDF space, from bottom)
+	bodyTop := margin + headerH + 14 // first usable y (from top) below the header
+	bodyBottom := pageH - footerH    // last usable y (PDF space, from bottom)
 	bodyH := (pageH - bodyTop) - footerH
 	bodyW := pageW - 2*margin
 
@@ -185,7 +236,19 @@ func renderPDF(planCode int64, patterns []*entity.CuttingPattern, b MapBranding)
 		if !r.outer {
 			lw = 0.6
 		}
-		fmt.Fprintf(&c, "%.2f w\n%.2f %.2f %.2f %.2f re S\n", lw, tx(r.x), ty(r.y+r.h), r.w*scale, r.h*scale)
+		if len(r.poly) >= 3 {
+			fmt.Fprintf(&c, "%.2f w\n", lw)
+			for i, pt := range r.poly {
+				op := "l"
+				if i == 0 {
+					op = "m"
+				}
+				fmt.Fprintf(&c, "%.2f %.2f %s\n", tx(pt[0]), ty(pt[1]), op)
+			}
+			c.WriteString("h S\n")
+		} else {
+			fmt.Fprintf(&c, "%.2f w\n%.2f %.2f %.2f %.2f re S\n", lw, tx(r.x), ty(r.y+r.h), r.w*scale, r.h*scale)
+		}
 	}
 
 	// Part labels (inside each placement, near the top-left).

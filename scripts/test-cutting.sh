@@ -206,6 +206,34 @@ if [ -n "$GEN_PID" ]; then
   check "rateio de custo por OP (2 ordens)" "$(get /api/cutting-plans/$GEN_PID/order-costs)" 'order_ref|allocated_cost|OP-'
 fi
 
+# ─── 10. COMPLEMENTOS — árvore de cortes (seccionadora) + fita no custeio da OP ─
+c "10. Árvore de cortes guilhotinados + fita de borda no custeio da OP"
+# 10a — o programa do plano 2D traz a árvore de cortes guilhotinados (axis/level/pos)
+check "programa 2D traz árvore de cortes (axis)" "$(get /api/cutting-plans/$P2_ID/program)" '"cuts"|"axis"|VERTICAL|HORIZONTAL'
+# 10b — fita de borda entra no rateio por OP: 2 peças de MESMA área, só uma com fita →
+#       a OP da peça encapada deve custar MAIS (material igual + fita direta).
+PFB=$(post "/api/cutting-plans" "{\"material_item_code\":60002,\"cut_type\":\"GUILLOTINE_2D\",\"stock_uom\":\"M2\",\"warehouse_id\":$WH_ID,\"created_by\":\"$USER_UUID\",
+  \"parts\":[
+    {\"label\":\"Com fita\",\"width_mm\":600,\"height_mm\":400,\"quantity\":2,\"source_ref\":\"OP-A\",\"edge_top\":true,\"edge_bottom\":true,\"band_cost_per_m\":5},
+    {\"label\":\"Sem fita\",\"width_mm\":600,\"height_mm\":400,\"quantity\":2,\"source_ref\":\"OP-B\"}],
+  \"stock_pieces\":[{\"width_mm\":2440,\"height_mm\":1220,\"quantity\":2}]}")
+PFB_ID=$(jq_int "$PFB" "id")
+check "cria plano com fita + source_ref" "$PFB" '"id":[0-9]'
+post "/api/cutting-plans/$PFB_ID/optimize" "" >/dev/null
+check "firma plano com fita" "$(post /api/cutting-plans/$PFB_ID/release '')" 'FIRMADO'
+CMP=$(get /api/cutting-plans/$PFB_ID/order-costs | python3 -c "
+import sys,json
+raw=json.load(sys.stdin)
+items=raw if isinstance(raw,list) else raw.get('order_costs',[])
+m={c.get('order_ref'):c.get('allocated_cost',0) for c in items}
+print('OP-A=%.4f OP-B=%.4f'%(m.get('OP-A',0),m.get('OP-B',0)))" 2>/dev/null)
+A=$(echo "$CMP" | sed -n 's/.*OP-A=\([0-9.]*\).*/\1/p'); B=$(echo "$CMP" | sed -n 's/.*OP-B=\([0-9.]*\).*/\1/p')
+if [ -n "$A" ] && python3 -c "import sys;sys.exit(0 if float('$A')>float('${B:-0}') else 1)" 2>/dev/null; then
+  ok "fita de borda entra no custeio da OP ($CMP)"
+else
+  err "fita de borda NÃO entrou no custeio da OP ($CMP)"
+fi
+
 # ─── RESUMO ───────────────────────────────────────────────────────────────────
 c "RESUMO"
 printf '\033[1mTotal:\033[0m %d  \033[0;32mPASS:\033[0m %d  \033[0;31mFAIL:\033[0m %d\n' "$TOTAL" "$PASS" "$FAIL"

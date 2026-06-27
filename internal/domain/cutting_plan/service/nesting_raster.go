@@ -37,7 +37,7 @@ func (trueShapeNester) Optimize(demand []DemandPiece, stock []StockPiece, p CutP
 	if !hasPolygon {
 		return trueShapeBBox{}.Optimize(demand, stock, p)
 	}
-	return nestRaster(demand, stock, p)
+	return nestMetaheuristic(demand, stock, p)
 }
 
 // mask is a part's footprint on the grid: cells[r*w+c] true where the part covers.
@@ -71,10 +71,32 @@ type rasterUnit struct {
 	areaApx float64
 }
 
+// rasterStock is an available sheet type for the raster nester (package-level so the
+// ordered-placement core can be shared by nestRaster and the metaheuristic search).
+type rasterStock struct {
+	id        int64
+	w, h      float64
+	remaining int
+	isRemnant bool
+	priority  int
+}
+
 func nestRaster(demand []DemandPiece, stock []StockPiece, p CutParams) (*Solution, error) {
 	res := pickRes(stock, p.Trim)
+	units := expandRasterUnits(demand)
+	// Heuristic order: largest bbox-area first.
+	sort.SliceStable(units, func(i, j int) bool { return units[i].areaApx > units[j].areaApx })
+	masks := make([][]mask, len(units))
+	for i := range units {
+		masks[i] = buildMasks(units[i], res)
+	}
+	open, unplaced := placeRasterOrder(units, masks, buildRasterPool(stock), res, p.Trim)
+	return buildRasterSolution(open, unplaced), nil
+}
 
-	// Expand demand into units, largest bbox-area first.
+// expandRasterUnits flattens demand into one raster unit per required piece (bbox
+// derived from the polygon when not given), in input order.
+func expandRasterUnits(demand []DemandPiece) []rasterUnit {
 	var units []rasterUnit
 	for _, d := range demand {
 		w, h := d.Width, d.Height
@@ -88,38 +110,44 @@ func nestRaster(demand []DemandPiece, stock []StockPiece, p CutParams) (*Solutio
 			units = append(units, rasterUnit{partID: d.PartID, label: d.Label, poly: d.Polygon, w: w, h: h, canRot: d.AllowRotation, areaApx: w * h})
 		}
 	}
-	sort.SliceStable(units, func(i, j int) bool { return units[i].areaApx > units[j].areaApx })
+	return units
+}
 
-	type stockType struct {
-		id        int64
-		w, h      float64
-		remaining int
-		isRemnant bool
-		priority  int
-	}
-	var pool []stockType
+func buildRasterPool(stock []StockPiece) []rasterStock {
+	var pool []rasterStock
 	for _, s := range stock {
 		if s.Width <= 0 || s.Height <= 0 || s.Qty <= 0 {
 			continue
 		}
-		pool = append(pool, stockType{id: s.StockID, w: s.Width, h: s.Height, remaining: s.Qty, isRemnant: s.IsRemnant, priority: s.Priority})
+		pool = append(pool, rasterStock{id: s.StockID, w: s.Width, h: s.Height, remaining: s.Qty, isRemnant: s.IsRemnant, priority: s.Priority})
 	}
+	return pool
+}
+
+// placeRasterOrder places the units in the GIVEN order (units[k] uses masks[k]),
+// opening a new sheet whenever the running sheets cannot hold a piece. It copies the
+// stock pool so it is pure and can be re-run for every candidate order the
+// metaheuristic explores.
+func placeRasterOrder(units []rasterUnit, masks [][]mask, basePool []rasterStock, res, trim float64) ([]*rasterSheet, []DemandPiece) {
+	pool := make([]rasterStock, len(basePool))
+	copy(pool, basePool)
 
 	var (
 		open     []*rasterSheet
 		unplaced []DemandPiece
 	)
-
-	for _, u := range units {
-		masks := buildMasks(u, res)
-		if placeRaster(open, u, masks, res) {
+	for k, u := range units {
+		ms := masks[k]
+		if placeRaster(open, u, ms, res) {
 			continue
 		}
-		// open a new sheet that can physically hold the unit's bbox
+		// open a new sheet that can physically hold the unit in SOME rotation (the
+		// mask footprints already account for free rotation, so checking the bbox of
+		// just 0°/90° would wrongly reject a piece that only fits diagonally).
 		idx := -1
 		for i := range pool {
 			st := pool[i]
-			if st.remaining <= 0 || !bboxFits(st.w, st.h, u, p.Trim) {
+			if st.remaining <= 0 || !masksFitSheet(ms, st, res, trim) {
 				continue
 			}
 			if idx == -1 {
@@ -137,14 +165,14 @@ func nestRaster(demand []DemandPiece, stock []StockPiece, p CutParams) (*Solutio
 		}
 		pool[idx].remaining--
 		st := pool[idx]
-		sh := newRasterSheet(st.id, st.w, st.h, p.Trim, res, st.isRemnant)
+		sh := newRasterSheet(st.id, st.w, st.h, trim, res, st.isRemnant)
 		open = append(open, sh)
-		if !placeRaster([]*rasterSheet{sh}, u, masks, res) {
+		if !placeRaster([]*rasterSheet{sh}, u, ms, res) {
 			unplaced = appendDemand2D(unplaced, unit2D{partID: u.partID, label: u.label, w: u.w, h: u.h})
 		}
 	}
 
-	return buildRasterSolution(open, unplaced), nil
+	return open, unplaced
 }
 
 func pickRes(stock []StockPiece, trim float64) float64 {
@@ -158,13 +186,15 @@ func pickRes(stock []StockPiece, trim float64) float64 {
 	return math.Max(1, math.Ceil(maxDim/rasterCap))
 }
 
-func bboxFits(sw, sh float64, u rasterUnit, trim float64) bool {
-	uw, uh := sw-trim, sh-trim
-	if u.w <= uw+eps && u.h <= uh+eps {
-		return true
-	}
-	if u.canRot && u.h <= uw+eps && u.w <= uh+eps {
-		return true
+// masksFitSheet reports whether at least one of the unit's rotation masks fits on the
+// sheet's usable grid, i.e. the piece can be placed in some orientation.
+func masksFitSheet(masks []mask, st rasterStock, res, trim float64) bool {
+	gw := int(math.Floor((st.w - trim) / res))
+	gh := int(math.Floor((st.h - trim) / res))
+	for _, m := range masks {
+		if m.w <= gw && m.h <= gh {
+			return true
+		}
 	}
 	return false
 }
@@ -181,80 +211,66 @@ func newRasterSheet(id int64, w, h, trim, res float64, isRemnant bool) *rasterSh
 	return &rasterSheet{stockID: id, width: w, height: h, trim: trim, gw: gw, gh: gh, occ: make([]bool, gw*gh), isRemnant: isRemnant}
 }
 
-// buildMasks rasterises the unit's polygon (or rectangle) for each allowed 90°
-// rotation, deduping identical masks.
+// rasterAngles is the rotation set tried for a rotatable true-shape piece. Going
+// beyond 90° steps (FASE 7 — free rotation) lets pieces nest diagonally: a part too
+// long to fit axis-aligned can still fit at 45°, and irregular outlines interlock at
+// angles a 90°-only nester cannot reach. Each angle is rasterised exactly (the
+// polygon is rotated, then sampled onto the grid), so collision stays grid-sound.
+var rasterAngles = []float64{0, 45, 90, 135, 180, 225, 270, 315}
+
+// buildMasks rasterises the unit's polygon (or its bounding rectangle) at each allowed
+// rotation, deduping identical footprints.
 func buildMasks(u rasterUnit, res float64) []mask {
-	base := rasterizeUnit(u, res, 0)
-	out := []mask{base}
 	if !u.canRot {
-		return out
+		return []mask{rasterizeAngle(u, res, 0)}
 	}
-	cur := base
-	for deg := 90; deg < 360; deg += 90 {
-		cur = rotateMask(cur)
-		cur.rotDeg = float64(deg)
-		// swap bbox dims for 90/270
-		if deg == 90 || deg == 270 {
-			cur.bboxW, cur.bboxH = u.h, u.w
-		} else {
-			cur.bboxW, cur.bboxH = u.w, u.h
-		}
+	var out []mask
+	for _, deg := range rasterAngles {
+		m := rasterizeAngle(u, res, deg)
 		dup := false
-		for _, m := range out {
-			if m.w == cur.w && m.h == cur.h && equalCells(m.cells, cur.cells) {
+		for _, e := range out {
+			if e.w == m.w && e.h == m.h && equalCells(e.cells, m.cells) {
 				dup = true
 				break
 			}
 		}
 		if !dup {
-			out = append(out, cur)
+			out = append(out, m)
 		}
 	}
 	return out
 }
 
-func rasterizeUnit(u rasterUnit, res float64, rotDeg float64) mask {
-	w := int(math.Ceil(u.w / res))
-	h := int(math.Ceil(u.h / res))
+// rasterizeAngle rotates the unit's outline by angleDeg and rasterises it (the polygon
+// is normalised to the origin first), returning the occupancy mask plus the rotated
+// bounding-box dimensions used for the placement record.
+func rasterizeAngle(u rasterUnit, res, angleDeg float64) mask {
+	poly := u.poly
+	if len(poly) < 3 {
+		poly = []Point{{0, 0}, {u.w, 0}, {u.w, u.h}, {0, u.h}}
+	}
+	rp := rotatePoly(poly, angleDeg)
+	_, _, bw, bh := polyBounds(rp)
+
+	w := int(math.Ceil(bw / res))
+	h := int(math.Ceil(bh / res))
 	if w < 1 {
 		w = 1
 	}
 	if h < 1 {
 		h = 1
 	}
-	m := mask{w: w, h: h, cells: make([]bool, w*h), bboxW: u.w, bboxH: u.h, rotDeg: rotDeg}
-	if len(u.poly) >= 3 {
-		minX, minY := polyMin(u.poly)
-		for r := 0; r < h; r++ {
-			for c := 0; c < w; c++ {
-				cx := minX + (float64(c)+0.5)*res
-				cy := minY + (float64(r)+0.5)*res
-				if pointInPolygon(cx, cy, u.poly) {
-					m.cells[r*w+c] = true
-				}
+	m := mask{w: w, h: h, cells: make([]bool, w*h), bboxW: bw, bboxH: bh, rotDeg: angleDeg}
+	for r := 0; r < h; r++ {
+		for c := 0; c < w; c++ {
+			cx := (float64(c) + 0.5) * res
+			cy := (float64(r) + 0.5) * res
+			if pointInPolygon(cx, cy, rp) {
+				m.cells[r*w+c] = true
 			}
-		}
-	} else {
-		for i := range m.cells {
-			m.cells[i] = true
 		}
 	}
 	return m
-}
-
-// rotateMask returns the mask rotated 90° clockwise.
-func rotateMask(m mask) mask {
-	nw, nh := m.h, m.w
-	out := mask{w: nw, h: nh, cells: make([]bool, nw*nh)}
-	for r := 0; r < m.h; r++ {
-		for c := 0; c < m.w; c++ {
-			if m.cells[r*m.w+c] {
-				nr, nc := c, m.h-1-r
-				out.cells[nr*nw+nc] = true
-			}
-		}
-	}
-	return out
 }
 
 func equalCells(a, b []bool) bool {
@@ -342,15 +358,6 @@ func buildRasterSolution(open []*rasterSheet, unplaced []DemandPiece) *Solution 
 		sol.Utilization = totalDemand / totalStock
 	}
 	return sol
-}
-
-func polyMin(poly []Point) (minX, minY float64) {
-	minX, minY = poly[0].X, poly[0].Y
-	for _, p := range poly[1:] {
-		minX = math.Min(minX, p.X)
-		minY = math.Min(minY, p.Y)
-	}
-	return
 }
 
 // pointInPolygon is the classic ray-casting test.

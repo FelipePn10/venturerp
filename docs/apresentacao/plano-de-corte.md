@@ -117,6 +117,29 @@ espaço, inclusive **girando** quando possível.
   (externo) que encaixa formatos irregulares com altíssimo aproveitamento — é só ligar,
   sem mudar nada no seu dia a dia.
 
+## Motor de otimização de máxima economia
+
+O cálculo do plano usa as mesmas técnicas dos grandes ERPs do mundo (SAP, Oracle,
+FoccoERP, SigmaNEST) — só que **embutidas, sem custo de licença e sem instalar nada**:
+
+- **Barras (1D) e chapas (2D):** em vez de só "encaixar como der", o sistema **testa
+  combinações de padrões de corte** e escolhe a que gasta menos material — o método de
+  *geração de colunas*, padrão da indústria. Na prática, o que antes usava **2 chapas
+  pode passar a usar 1**, e barras com estoques de tamanhos variados ganham vários pontos
+  de aproveitamento (ex.: de **83% para 91%** num caso real).
+- **Formas livres (laser/plasma):** o sistema **procura a melhor ordem de encaixe** das
+  peças (busca inteligente), em vez de uma tentativa só — peças em "L" que desperdiçavam
+  uma chapa passam a **caber em menos chapas** (ex.: de **4 para 3 chapas, 65% → 87%**).
+  E agora **gira as peças em qualquer ângulo** (não só de 90 em 90 graus): uma peça
+  comprida que não cabe "de pé" na chapa pode entrar **na diagonal**, e contornos
+  irregulares se encaixam melhor uns nos outros.
+- **Nunca piora:** o motor avançado sempre compara com o método simples e **fica com o
+  melhor dos dois** — então a otimização só tem a ganhar, nunca a perder.
+- **Resultado sempre igual para a mesma entrada:** o mesmo pedido gera sempre o mesmo
+  plano, o que torna os planos **auditáveis**.
+- **Rápido:** segundos por plano. Cada ponto de aproveitamento a mais é aço/MDF que deixa
+  de virar sucata.
+
 ## O plano nasce sozinho das ordens
 
 Você não precisa digitar as peças uma a uma. A partir das **ordens de produção** (e das
@@ -135,13 +158,18 @@ sistema **avisa** em vez de adivinhar.
 ## Recursos de chão-de-fábrica
 
 - **Mapa de corte para baixar e imprimir:** o desenho de cada chapa/barra, em **SVG,
-  DXF (para a máquina/CAM) e PDF**, mostrando onde fica cada peça.
+  DXF (para a máquina/CAM) e PDF**, mostrando onde fica cada peça — inclusive o
+  **formato real** das peças irregulares (laser/plasma) e como elas ficam **giradas**,
+  não apenas retângulos.
 - **Programa de corte e agenda:** a sequência de cortes e o **agendamento na máquina**,
-  já no calendário de produção.
+  já no calendário de produção. Para chapas, o sistema entrega a **sequência de cortes
+  retos da seccionadora** (qual corte fazer primeiro, depois os sub-cortes) — peças que
+  dividem a mesma linha de corte saem em **um corte só**, economizando serra.
 - **Encaixe inteligente de formas:** peças de formato irregular se **intertravam** umas
   nas outras, aproveitando o espaço melhor do que só pelo retângulo — sem depender de
   software externo.
 - **Fita de borda:** marque os lados que levam fita e o sistema soma o **comprimento e o
   custo** de fita do plano.
 - **Custo por ordem:** quando um plano junta várias ordens, o custo do material é
-  **rateado entre elas** automaticamente.
+  **rateado entre elas** automaticamente — e o **custo da fita de borda** entra junto, na
+  ordem da peça que leva fita.

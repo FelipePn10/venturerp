@@ -23,9 +23,11 @@ import (
 //
 // This is a fast, shop-acceptable heuristic, registered behind the same
 // CuttingOptimizer contract so callers stay dimension-agnostic.
+// optimizer2DGuillotine is no longer registered directly: the 2D column-generation
+// engine (optimizer2DCG) owns the GUILLOTINE_2D slot and uses this free-rectangle
+// heuristic both as a guaranteed fallback and to finish the integer residual its LP
+// relaxation leaves behind.
 type optimizer2DGuillotine struct{}
-
-func init() { register(optimizer2DGuillotine{}) }
 
 func (optimizer2DGuillotine) Type() entity.CutType { return entity.CutTypeGuillotine2D }
 
@@ -61,14 +63,26 @@ type unit2D struct {
 }
 
 func (optimizer2DGuillotine) Optimize(demand []DemandPiece, stock []StockPiece, p CutParams) (*Solution, error) {
+	open, unplaced, err := nest2DGuillotine(demand, stock, p)
+	if err != nil {
+		return nil, err
+	}
+	return buildSolution2D(open, unplaced, p), nil
+}
+
+// nest2DGuillotine is the shared free-rectangle guillotine nesting core. It returns
+// the opened sheets plus the pieces that fit nowhere, so both the heuristic's
+// Optimize and the column-generation engine's integer-residual pass agree on
+// placement geometry, kerf accounting and remnant preference.
+func nest2DGuillotine(demand []DemandPiece, stock []StockPiece, p CutParams) ([]*sheet, []DemandPiece, error) {
 	if p.Kerf < 0 || p.Trim < 0 || p.MinRemnant < 0 {
-		return nil, errors.New("kerf, trim and min_remnant cannot be negative")
+		return nil, nil, errors.New("kerf, trim and min_remnant cannot be negative")
 	}
 
 	var units []unit2D
 	for _, d := range demand {
 		if d.Width <= 0 || d.Height <= 0 {
-			return nil, fmt.Errorf("2D demand %q needs positive width and height", d.Label)
+			return nil, nil, fmt.Errorf("2D demand %q needs positive width and height", d.Label)
 		}
 		if d.Qty <= 0 {
 			continue
@@ -120,7 +134,7 @@ func (optimizer2DGuillotine) Optimize(demand []DemandPiece, stock []StockPiece, 
 		unplaced = appendDemand2D(unplaced, u)
 	}
 
-	return buildSolution2D(open, unplaced, p), nil
+	return open, unplaced, nil
 }
 
 // placeBestFit finds the open free rectangle that fits `u` with the least wasted
