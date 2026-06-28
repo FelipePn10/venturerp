@@ -68,6 +68,13 @@ cutting-samples:
 test-romaneio:
 	BASE_URL="$${BASE_URL:-http://localhost:5071}" bash scripts/test-romaneio.sh
 
+# End-to-end HTTP do Quadro de Programação (APS Gantt): quadro mensal, dependências
+# finish-start (explícita + implícita), range livre/zoom semana, export SVG/PDF e
+# reschedule (cascata + capacidade). Precisa da API desta branch rodando + DB de
+# teste acessível por docker exec (o script semeia operações/sequências/rede via SQL).
+test-gantt:
+	BASE_URL="$${BASE_URL:-http://localhost:5071}" bash scripts/test-gantt.sh
+
 # ── Build & run ──────────────────────────────────────────────────────────────
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/erp ./api

@@ -178,10 +178,15 @@ func (q *Queries) GetRouteOpHoursForCRP(ctx context.Context, routeID int64) ([]D
 
 // GetMachineAvailableHours returns available hours per day for a work center.
 // Uses machine count × 8h as a conservative baseline; override via machine schedules.
+//
+// $1 is the work center = machine_types.id, but machines reference the type by its
+// business code (machines.machine_type_code = machine_types.code), so we join
+// through machine_types instead of comparing id against code.
 const getMachineAvailableHours = `
 SELECT COALESCE(COUNT(*) * 8.0, 8.0)
 FROM machines m
-WHERE m.machine_type_code = $1 AND m.is_active = TRUE`
+JOIN machine_types mt ON mt.code = m.machine_type_code
+WHERE mt.id = $1 AND m.is_active = TRUE`
 
 func (q *Queries) GetMachineAvailableHours(ctx context.Context, workCenterID int64) (float64, error) {
 	row := q.db.QueryRow(ctx, getMachineAvailableHours, workCenterID)

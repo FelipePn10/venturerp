@@ -364,6 +364,13 @@ carga (%)  =  horas necessárias  ÷  horas disponíveis  ×  100
 
 Se a carga ultrapassar 100%, o centro está sobrecarregado naquele dia.
 
+> **Capacidade nominal** = nº de máquinas **ativas** do centro × 8h/dia (linha de base
+> conservadora). A consulta (`getMachineAvailableHours`) recebe o `work_center_id =
+> machine_types.id`; como `machines` referencia o tipo pelo **código de negócio**
+> (`machines.machine_type_code = machine_types.code`), ela faz **join por
+> `machine_types`** (`mt.id = $1`) — e não compara `id` com `code`. A mesma função
+> alimenta a checagem de capacidade do **reschedule do APS** (§3.1).
+
 #### Exemplo prático
 
 3 ordens precisam passar pela fresadora no mesmo dia:
@@ -500,6 +507,11 @@ O sistema respeita o **limite de horas disponíveis por dia** do centro (padrão
 | POST | `/api/aps/sequence` | Gerar sequenciamento de todas as ordens abertas |
 | GET | `/api/aps/gantt/order/{orderID}` | Ver Gantt de uma ordem específica |
 | POST | `/api/aps/gantt/work-center` | Ver Gantt de um centro em um período |
+| GET | `/api/aps/gantt/month/{year}/{month}` | **Quadro de programação do mês** (ver §3.1) |
+| GET | `/api/aps/gantt/month/{year}/{month}/export` | **Exporta o quadro do mês** em SVG/PDF |
+| GET | `/api/aps/gantt/board?from&to&scale&group_by` | **Quadro em range livre** (escala `day`/`week`) (§3.1) |
+| GET | `/api/aps/gantt/board/export?...&format=svg\|pdf` | **Exporta o quadro do range** em SVG/PDF |
+| POST | `/api/aps/gantt/reschedule` | **Remaneja** uma sequência (drag-drop) com cascata + checagem de capacidade (§3.1) |
 
 **Gantt (trecho de resposta):**
 ```json
@@ -526,6 +538,92 @@ O sistema respeita o **limite de horas disponíveis por dia** do centro (padrão
   }
 ]
 ```
+
+### 3.1 Quadro de Programação Mensal (Gantt do mês)
+
+Os endpoints `/gantt/order` e `/gantt/work-center` acima devolvem listas planas de
+tarefas — úteis para um componente de Gantt no front, mas sem o **contexto do mês**.
+O **quadro mensal** (`GET /api/aps/gantt/month/{year}/{month}`) consolida tudo o que
+um planejador precisa para enxergar o cronograma de um mês de uma vez, no padrão dos
+quadros de programação dos grandes APS (SAP Planning Board, PlanetTogether):
+
+- **Linhas (`group_by`)** — `work_center` (padrão; cada linha é um centro de
+  trabalho/tipo de máquina) ou `order` (cada linha é uma OF). Resolve as duas visões
+  clássicas: ocupação por recurso × avanço por pedido.
+- **Barras** — vêm do **sequenciamento APS** (`production_sequences`). Ordens ainda
+  **não sequenciadas** entram como barras de *fallback*, plotadas pelas datas de
+  início/fim da própria OF (linha "Sem sequenciamento" na visão por recurso), para o
+  calendário nunca aparecer vazio antes de rodar `/api/aps/sequence`.
+- **% concluído** — por operação (horas reais ÷ planejadas) ou pela OF
+  (produzido ÷ planejado); barra `DONE` = 100 %.
+- **Carga de capacidade (CRP)** — `load[]` traz a carga por centro × dia agregada de
+  `capacity_requirements` (soma de horas exigidas ÷ capacidade); dias acima de 100 %
+  contam em `summary.overloaded_days` e tingem a célula no export.
+- **Calendário** — `days[]` marca dias úteis a partir do **calendário industrial**
+  (fim de semana como *fallback* quando o calendário do mês está vazio) e sinaliza
+  o dia de **hoje**.
+- **Atrasos** — barra não concluída cujo término já passou de hoje vem com
+  `is_late: true` (e contabilizada em `summary.late_bars`).
+- **Cor (`color_hex`)** — vermelho = atrasada, cinza = concluída, laranja =
+  prioritária, azul = normal, azul-claro = baixa prioridade.
+
+**Export visual** — `GET /api/aps/gantt/month/{year}/{month}/export?format=svg|pdf`
+desenha o mesmo quadro como **SVG** (vetorial, para web/impressão) ou **PDF** (A4
+paisagem via `pdfkit`, com a marca da empresa de `fiscal_configs`, faixas de fim de
+semana, linha do "hoje", legenda e paginação por linhas). Ambos aceitam `group_by`.
+
+#### Dependências finish-start
+
+O quadro traz `dependencies[]` — os vínculos **predecessor→sucessor** entre as
+barras de uma mesma OF. Os vínculos **explícitos** vêm de `route_operation_network`
+(mapeados `route_operations → production_order_operations.route_operation_id →
+production_sequences`); ordens **sem** rede de dependências recebem uma cadeia
+**linear sintetizada** pela ordem das operações (`implicit: true`), para o
+planejador sempre enxergar a precedência. Cada vínculo carrega `overlap_pct` (quanto
+o sucessor pode sobrepor o predecessor). No SVG/PDF são desenhados como **setas** (a
+linha cheia = explícita, tracejada/clara = implícita).
+
+#### Range livre e zoom semana/dia
+
+Além do mês fechado, `GET /api/aps/gantt/board?from=YYYY-MM-DD&to=YYYY-MM-DD` monta o
+quadro para **qualquer intervalo** (a `to` da URL é inclusiva; o board usa janela
+meio-aberta internamente; `to` omitido = 30 dias). O parâmetro `scale` escolhe a
+granularidade das colunas: `day` (padrão) ou `week` (uma coluna por semana ISO, para
+enxergar trimestres). Validação: `to > from` e no máximo ~372 dias. O export aceita os
+mesmos parâmetros (`/board/export?...&format=svg|pdf`). O endpoint mensal é só um
+atalho de `board` com escala diária e o mês inteiro.
+
+#### Reschedule (drag-drop) com cascata e capacidade
+
+`POST /api/aps/gantt/reschedule` aplica o **arraste manual** de uma barra pelo
+planejador:
+
+```json
+{ "sequence_id": 42, "new_start": "2026-06-05T08:00:00-03:00",
+  "new_work_center_id": 8, "cascade": true }
+```
+
+- Move a sequência para o novo início (e, opcionalmente, outro centro de trabalho),
+  **preservando a duração** (relógio de parede). `new_work_center_id` é opcional;
+  `cascade` é `true` por padrão.
+- **Cascata finish-start** — empurra as operações **a jusante** da mesma OF
+  (pela rede `route_operation_network`, ou pela cadeia linear quando não há rede),
+  respeitando o `overlap_pct`, para que nenhum sucessor comece antes do predecessor
+  terminar. Só as sequências que de fato moveram voltam em `shifted[]`.
+- **Checagem de capacidade** — agrega as horas por **centro × dia** nos dias tocados
+  e devolve `warnings[]` para cada dia que passou da capacidade disponível do centro.
+  O aviso **não bloqueia** o movimento (override do planejador), espelhando o
+  comportamento dos quadros APS interativos.
+
+> Camadas: agregado puro em `domain/aps/entity` (`GanttMonth`, `GanttDependency`);
+> montagem e reschedule em `application/usecase/aps_uc/` (`gantt_month_uc.go`,
+> `reschedule_uc.go`); render em `infrastructure/export/gantt/`; rotas no `APSHandler`.
+> As dependências reusam o schema existente (nenhuma migration nova).
+>
+> **Testes:** unitários em `aps_uc` e `export/gantt`; E2E em `scripts/test-gantt.sh`
+> (`make test-gantt`) — sobe contra a API + DB de teste, semeia operações/sequências/
+> rede via SQL e exercita quadro, dependências, range/semana, export e reschedule
+> (cascata + capacidade, conferindo o efeito no banco).
 
 ---
 
