@@ -48,6 +48,10 @@ type Doc struct {
 // New starts an A4 portrait document.
 func New() *Doc { return &Doc{width: A4Width, height: A4Height} }
 
+// NewLandscape starts an A4 landscape document — wide enough for month-spanning
+// timelines such as the production schedule board (Gantt).
+func NewLandscape() *Doc { return &Doc{width: A4Height, height: A4Width} }
+
 // Size reports the page dimensions in points.
 func (d *Doc) Size() (w, h float64) { return d.width, d.height }
 

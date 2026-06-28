@@ -270,5 +270,6 @@ type CRPHandler struct {
 
 type APSHandler struct {
 	*security.BaseHandler
-	uc *aps_uc.APSUseCase
+	uc     *aps_uc.APSUseCase
+	fiscal fiscalConfigReader // optional letterhead for the Gantt export; may be nil
 }

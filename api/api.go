@@ -472,8 +472,8 @@ func (app *application) mount() chi.Router {
 
 	// APS
 	apsRepository := apsRepo.New(queries)
-	apsUC := aps_uc.New(apsRepository)
-	apsHandler := handler.NewAPSHandler(apsUC)
+	apsUC := aps_uc.New(apsRepository).WithCalendar(industrialCalendarRepo)
+	apsHandler := handler.NewAPSHandler(apsUC, fiscalRepo.NewFiscalRepositoryPG(app.db.Pool))
 
 	// mrp_calculation
 	mrpRepo := mrpCalculation.NewMRPCalculationRepositorySQLC(queries, app.db.Pool)
@@ -1535,6 +1535,11 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence", apsHandler.SequenceOrders)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/gantt/order/{orderID}", apsHandler.GetGanttByOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/gantt/work-center", apsHandler.GetGanttByWorkCenter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/gantt/month/{year}/{month}", apsHandler.GetMonthGantt)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/gantt/month/{year}/{month}/export", apsHandler.ExportMonthGantt)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/gantt/board", apsHandler.GetGanttBoard)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/gantt/board/export", apsHandler.ExportGanttBoard)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/gantt/reschedule", apsHandler.RescheduleSequence)
 		})
 		r.Route("/api/planning", func(r chi.Router) {
 			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/run-pipeline", planningHandler.RunPipeline)

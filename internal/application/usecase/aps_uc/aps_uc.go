@@ -10,14 +10,24 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/aps/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/aps/repository"
+	calendarrepo "github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
 )
 
 type APSUseCase struct {
 	repo repository.APSRepository
+	cal  calendarrepo.IndustrialCalendarRepository
 }
 
 func New(repo repository.APSRepository) *APSUseCase {
 	return &APSUseCase{repo: repo}
+}
+
+// WithCalendar injects the industrial calendar so the monthly board can shade
+// non-working days from the company's real calendar instead of guessing
+// weekends. Optional: without it, the board falls back to Saturday/Sunday.
+func (uc *APSUseCase) WithCalendar(cal calendarrepo.IndustrialCalendarRepository) *APSUseCase {
+	uc.cal = cal
+	return uc
 }
 
 // SequenceOrders performs finite-capacity scheduling for all open production orders.

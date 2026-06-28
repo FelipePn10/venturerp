@@ -74,6 +74,40 @@ func (q *Queries) ListSequencesByWorkCenter(ctx context.Context, workCenterID in
 	return scanSequences(rows)
 }
 
+const getProductionSequence = `SELECT id, production_order_id, operation_id, work_center_id, sequence_position,
+scheduled_start, scheduled_end, status, created_at, updated_at
+FROM production_sequences WHERE id=$1`
+
+func (q *Queries) GetProductionSequence(ctx context.Context, id int64) (DBProductionSequence, error) {
+	row := q.db.QueryRow(ctx, getProductionSequence, id)
+	var i DBProductionSequence
+	err := row.Scan(&i.ID, &i.ProductionOrderID, &i.OperationID, &i.WorkCenterID,
+		&i.SequencePosition, &i.ScheduledStart, &i.ScheduledEnd, &i.Status, &i.CreatedAt, &i.UpdatedAt)
+	return i, err
+}
+
+const updateProductionSequence = `UPDATE production_sequences
+SET work_center_id=$2, scheduled_start=$3, scheduled_end=$4, updated_at=NOW()
+WHERE id=$1
+RETURNING id, production_order_id, operation_id, work_center_id, sequence_position,
+          scheduled_start, scheduled_end, status, created_at, updated_at`
+
+type UpdateProductionSequenceParams struct {
+	ID             int64
+	WorkCenterID   int64
+	ScheduledStart pgtype.Timestamptz
+	ScheduledEnd   pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateProductionSequence(ctx context.Context, arg UpdateProductionSequenceParams) (DBProductionSequence, error) {
+	row := q.db.QueryRow(ctx, updateProductionSequence,
+		arg.ID, arg.WorkCenterID, arg.ScheduledStart, arg.ScheduledEnd)
+	var i DBProductionSequence
+	err := row.Scan(&i.ID, &i.ProductionOrderID, &i.OperationID, &i.WorkCenterID,
+		&i.SequencePosition, &i.ScheduledStart, &i.ScheduledEnd, &i.Status, &i.CreatedAt, &i.UpdatedAt)
+	return i, err
+}
+
 const deleteSequencesByOrder = `DELETE FROM production_sequences WHERE production_order_id=$1`
 
 func (q *Queries) DeleteSequencesByOrder(ctx context.Context, orderID int64) error {

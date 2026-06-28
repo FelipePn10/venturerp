@@ -536,8 +536,8 @@ func NewCRPHandler(uc *crp_uc.CRPUseCase) *CRPHandler {
 	return &CRPHandler{uc: uc}
 }
 
-func NewAPSHandler(uc *aps_uc.APSUseCase) *APSHandler {
-	return &APSHandler{uc: uc}
+func NewAPSHandler(uc *aps_uc.APSUseCase, fiscal fiscalConfigReader) *APSHandler {
+	return &APSHandler{uc: uc, fiscal: fiscal}
 }
 
 func NewProductionOrderHandler(
