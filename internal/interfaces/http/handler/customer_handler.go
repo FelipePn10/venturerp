@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/export"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -372,6 +373,25 @@ func (h *CustomerHandler) GetCustomer(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.GetCustomer(r.Context(), code)
 	if err != nil {
 		jsonError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) UpdateCustomer(w http.ResponseWriter, r *http.Request) {
+	code, err := parseCustomerCode(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	var dto request.CreateCustomerDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.UpdateCustomer(r.Context(), code, dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

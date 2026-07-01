@@ -12,6 +12,10 @@ type CreatePlannedOrderDTO struct {
 	Mask           *string   `json:"mask,omitempty"`
 	Quantity       float64   `json:"quantity"`
 	OrderType      string    `json:"order_type"`
+	// DemandType is the demand_type_enum value: SALES_ORDER | FORECAST |
+	// INDEPENDENT | SAFETY_STOCK | REPLENISHMENT. Defaults to INDEPENDENT when
+	// omitted (manual planned orders are independent demand by nature).
+	DemandType     string    `json:"demand_type,omitempty"`
 	NeedDate       string    `json:"need_date"`
 	CostCenterCode *int64    `json:"cost_center_code,omitempty"`
 	EmployeeCode   *int64    `json:"employee_code,omitempty"`

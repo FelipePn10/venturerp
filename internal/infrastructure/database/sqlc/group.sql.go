@@ -48,3 +48,79 @@ func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group
 	)
 	return i, err
 }
+
+const getGroupByCode = `-- name: GetGroupByCode :one
+SELECT id, code, description, enterprise_id, created_by, created_at FROM groups WHERE code = $1
+`
+
+func (q *Queries) GetGroupByCode(ctx context.Context, code int32) (Group, error) {
+	row := q.db.QueryRow(ctx, getGroupByCode, code)
+	var i Group
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Description,
+		&i.EnterpriseID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listGroups = `-- name: ListGroups :many
+SELECT id, code, description, enterprise_id, created_by, created_at FROM groups ORDER BY code
+`
+
+func (q *Queries) ListGroups(ctx context.Context) ([]Group, error) {
+	rows, err := q.db.Query(ctx, listGroups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Group
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Description,
+			&i.EnterpriseID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateGroup = `-- name: UpdateGroup :one
+UPDATE groups
+SET description = $2, enterprise_id = $3
+WHERE code = $1
+RETURNING id, code, description, enterprise_id, created_by, created_at
+`
+
+type UpdateGroupParams struct {
+	Code         int32
+	Description  string
+	EnterpriseID int64
+}
+
+func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) (Group, error) {
+	row := q.db.QueryRow(ctx, updateGroup, arg.Code, arg.Description, arg.EnterpriseID)
+	var i Group
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Description,
+		&i.EnterpriseID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}

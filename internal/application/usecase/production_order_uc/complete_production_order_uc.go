@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type CompleteProductionOrderUseCase struct {
@@ -29,8 +30,11 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if dto.ID == 0 {
+		return nil, errorsuc.NewValidationError("id is required")
+	}
 
-	endDate, _ := time.Parse("2006-01-02", dto.EndDate)
+	endDate := datetime.ParseDateOrDefault(dto.EndDate, time.Now())
 
 	order, err := uc.Repo.Complete(ctx, dto.ID, endDate)
 	if err != nil {

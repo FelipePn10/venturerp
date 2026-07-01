@@ -40,3 +40,67 @@ func (q *Queries) CreateEnterprise(ctx context.Context, arg CreateEnterprisePara
 	)
 	return i, err
 }
+
+const getEnterpriseByCode = `-- name: GetEnterpriseByCode :one
+SELECT id, code, name, created_at, created_by FROM enterprise WHERE code = $1
+`
+
+func (q *Queries) GetEnterpriseByCode(ctx context.Context, code int32) (Enterprise, error) {
+	row := q.db.QueryRow(ctx, getEnterpriseByCode, code)
+	var i Enterprise
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getEnterpriseByID = `-- name: GetEnterpriseByID :one
+SELECT id, code, name, created_at, created_by FROM enterprise WHERE id = $1
+`
+
+func (q *Queries) GetEnterpriseByID(ctx context.Context, id int64) (Enterprise, error) {
+	row := q.db.QueryRow(ctx, getEnterpriseByID, id)
+	var i Enterprise
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const listEnterprises = `-- name: ListEnterprises :many
+SELECT id, code, name, created_at, created_by FROM enterprise ORDER BY code
+`
+
+func (q *Queries) ListEnterprises(ctx context.Context) ([]Enterprise, error) {
+	rows, err := q.db.Query(ctx, listEnterprises)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Enterprise
+	for rows.Next() {
+		var i Enterprise
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

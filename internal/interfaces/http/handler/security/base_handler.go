@@ -47,6 +47,16 @@ func (h *BaseHandler) InternalError(w http.ResponseWriter, r *http.Request, err 
 	WriteError(w, http.StatusInternalServerError, "internal_error", "Something went wrong")
 }
 
+// Conflict returns 409 for requests that clash with existing state, most
+// commonly a duplicate unique key.
+func (h *BaseHandler) Conflict(w http.ResponseWriter, message ...string) {
+	msg := "resource already exists"
+	if len(message) > 0 {
+		msg = message[0]
+	}
+	WriteError(w, http.StatusConflict, "conflict", msg)
+}
+
 func (h *BaseHandler) UnprocessableEntity(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnprocessableEntity)

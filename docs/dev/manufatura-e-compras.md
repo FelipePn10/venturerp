@@ -485,10 +485,15 @@ O APS já faz isso naturalmente: ele nunca aloca duas operações simultâneas n
 ### Ordem de prioridade
 
 As ordens são sequenciadas por:
-1. **Prioridade** (campo numérico — menor número = mais urgente)
+1. **Prioridade** (menor número = mais urgente)
 2. **Data de necessidade** (a que precisa ser entregue primeiro sai na frente)
 
 Essa lógica se chama **EDD (Earliest Due Date)** — minimiza atrasos priorizando quem está mais próximo do vencimento.
+
+> ℹ️ O campo `priority` da OF é **texto livre** (ex.: `NORMAL`, `ALTA`, `BAIXA` ou um
+> número). O sequenciamento mapeia texto → rank (`ALTA/HIGH/URGENTE` = 1, `BAIXA/LOW` =
+> 9, numéricos mantêm o valor, o resto = 5). Antes um valor como `NORMAL` estourava o
+> `POST /api/aps/sequence` com *invalid input syntax for integer: "NORMAL"*.
 
 ### Como a duração é calculada
 
@@ -770,6 +775,10 @@ O sistema calcula o MAPE de cada modelo e retorna o de menor erro. O campo `mode
   "periods_ahead": 3
 }
 ```
+
+> ℹ️ `period` é apenas um **rótulo** da observação — aceita string (`"2026-01"`,
+> conforme o contrato/telas) ou número. Os modelos operam sobre a série `quantity` na
+> ordem enviada. (Antes o backend só aceitava inteiro e rejeitava a string com 400.)
 
 **Resposta:**
 ```json

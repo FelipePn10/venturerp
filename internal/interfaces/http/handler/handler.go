@@ -103,16 +103,24 @@ type WarehouseHandler struct {
 type GroupHandler struct {
 	*security.BaseHandler
 	createGroupUC *group_uc.CreateGroupUseCase
+	getGroupUC    *group_uc.GetGroupUseCase
+	listGroupsUC  *group_uc.ListGroupsUseCase
+	updateGroupUC *group_uc.UpdateGroupUseCase
 }
 
 type EnterpriseHandler struct {
 	*security.BaseHandler
 	createEnterpriseUC *enterprise_uc.CreateEnterpriseUseCase
+	getEnterpriseUC    *enterprise_uc.GetEnterpriseUseCase
+	listEnterprisesUC  *enterprise_uc.ListEnterprisesUseCase
 }
 
 type ModifierHandler struct {
 	*security.BaseHandler
 	createModifierUC *modifier_uc.CreateModifierUseCase
+	getModifierUC    *modifier_uc.GetModifierUseCase
+	listModifiersUC  *modifier_uc.ListModifiersUseCase
+	updateModifierUC *modifier_uc.UpdateModifierUseCase
 }
 
 type EmployeeHandler struct {

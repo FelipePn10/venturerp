@@ -24,7 +24,7 @@ func (h *OverheadAllocationHandler) Create(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)

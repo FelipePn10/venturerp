@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type CreateSalesOrderItemUseCase struct {
@@ -25,7 +26,14 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	digitDate, _ := time.Parse("2006-01-02", dto.DigitDate)
+	if dto.SalesOrderCode == 0 {
+		return nil, errorsuc.NewValidationError("sales_order_code is required")
+	}
+	if dto.ItemCode == 0 {
+		return nil, errorsuc.NewValidationError("item_code is required")
+	}
+
+	digitDate := datetime.ParseDateOrDefault(dto.DigitDate, time.Now())
 
 	item := &entity.SalesOrderItem{
 		SalesOrderCode:   dto.SalesOrderCode,
@@ -56,10 +64,7 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 		Status:           entity.SalesOrderItemStatusOpen,
 	}
 
-	if dto.DeliveryDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.DeliveryDate)
-		item.DeliveryDate = &t
-	}
+	item.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
 
 	// Compute totals
 	grossUnit := dto.UnitPrice * (1 - dto.DiscountPct/100)
@@ -115,10 +120,7 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 		Notes:            dto.Notes,
 	}
 
-	if dto.DeliveryDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.DeliveryDate)
-		item.DeliveryDate = &t
-	}
+	item.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
 
 	// Determine status from quantities
 	balance := dto.RequestedQty - dto.AttendedQty - dto.CancelledQty

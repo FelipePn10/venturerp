@@ -14,8 +14,14 @@ const (
 )
 
 // DataPoint is a single historical observation.
+//
+// Period is a free-form label for the observation (the documented contract is a
+// string like "2026-01", but a plain ordinal number is also accepted). It is
+// metadata only — the models operate on the Quantity series in the order given
+// — so it is typed as any to accept both the string and numeric JSON forms
+// instead of rejecting the string with a 400.
 type DataPoint struct {
-	Period   int     `json:"period"` // e.g. 1, 2, 3 ... N
+	Period   any     `json:"period"`
 	Quantity float64 `json:"quantity"`
 }
 

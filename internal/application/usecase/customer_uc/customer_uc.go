@@ -6,6 +6,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 )
@@ -970,6 +971,43 @@ func (uc *CustomerUseCase) CreateCustomer(ctx context.Context, dto request.Creat
 		return nil, err
 	}
 	return toCustomerResponse(created), nil
+}
+
+// UpdateCustomer applies mutable fields to an existing customer identified by
+// its business code. It shares CreateCustomerDTO so the front-end uses the
+// same code-based contract for create and update; the customer code and
+// document are immutable and taken from the persisted record.
+func (uc *CustomerUseCase) UpdateCustomer(ctx context.Context, code int64, dto request.CreateCustomerDTO) (*response.CustomerResponse, error) {
+	if dto.Name == "" {
+		return nil, errorsuc.NewValidationError("name is required")
+	}
+	existing, err := uc.repo.GetCustomerByCode(ctx, code)
+	if err != nil {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("customer %d not found", code))
+	}
+
+	existing.Name = dto.Name
+	existing.TradeName = dto.TradeName
+	existing.StateRegistration = dto.StateRegistration
+	existing.MunicipalRegistration = dto.MunicipalRegistration
+	existing.SuframaCode = dto.SuframaCode
+	existing.SuframaExpiry = dto.SuframaExpiry
+	existing.CreditLimit = dto.CreditLimit
+	existing.Website = dto.Website
+	if dto.PaymentCondVisibility != "" {
+		existing.PaymentCondVisibility = entity.PaymentCondVisibility(dto.PaymentCondVisibility)
+	}
+
+	// Resolve FK codes -> IDs (only the ones provided are changed).
+	if err := uc.resolveCustomerFKs(ctx, existing, dto); err != nil {
+		return nil, err
+	}
+
+	updated, err := uc.repo.UpdateCustomer(ctx, existing)
+	if err != nil {
+		return nil, err
+	}
+	return toCustomerResponse(updated), nil
 }
 
 func (uc *CustomerUseCase) resolveCustomerFKs(ctx context.Context, c *entity.Customer, dto request.CreateCustomerDTO) error {

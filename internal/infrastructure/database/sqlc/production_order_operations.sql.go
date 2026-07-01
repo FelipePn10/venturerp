@@ -72,9 +72,14 @@ func (q *Queries) ListProductionOrderOperations(ctx context.Context, orderID int
 	return items, rows.Err()
 }
 
+// $2 is cast to ::text at every use so Postgres deduces a single, consistent
+// type for the parameter. Without the casts the assignment (status=$2) and the
+// comparisons ($2='IN_PROGRESS', $2 IN (...)) let the planner infer conflicting
+// types, raising "inconsistent types deduced for parameter $2" (SQLSTATE 42P08).
 const advanceProductionOrderOperation = `UPDATE production_order_operations
-SET status=$2, started_at=CASE WHEN $2='IN_PROGRESS' THEN NOW() ELSE started_at END,
-    completed_at=CASE WHEN $2 IN ('DONE','SKIPPED') THEN NOW() ELSE completed_at END,
+SET status=$2::text,
+    started_at=CASE WHEN $2::text='IN_PROGRESS' THEN NOW() ELSE started_at END,
+    completed_at=CASE WHEN $2::text IN ('DONE','SKIPPED') THEN NOW() ELSE completed_at END,
     updated_at=NOW()
 WHERE id=$1
 RETURNING id, production_order_id, route_operation_id, sequence, operation_name, work_center_id,

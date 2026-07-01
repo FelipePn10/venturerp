@@ -10,8 +10,8 @@ import (
 var (
 	ErrDescriptionRequired       = errors.New("description is required")
 	ErrCodeInvalid               = errors.New("code must be greater than zero")
-	ErrInvalidCommercialAnalysis = errors.New("invalid commercial analysis value")
-	ErrInvalidFinancialAnalysis  = errors.New("invalid financial analysis value")
+	ErrInvalidCommercialAnalysis = errors.New("invalid commercial_analysis value: must be FREE, BLOCK_ALWAYS or ALWAYS_ANALYZE")
+	ErrInvalidFinancialAnalysis  = errors.New("invalid financial_analysis value: must be FREE, BLOCK_ALWAYS or ALWAYS_ANALYZE")
 )
 
 func isValidAnalysis(a SalesDivisionAnalysis) bool {
@@ -39,6 +39,14 @@ func NewSalesDivision(
 	}
 	if description == "" {
 		return nil, ErrDescriptionRequired
+	}
+	// Empty analysis fields default to FREE, matching the column default, so the
+	// caller may omit them.
+	if commercialAnalysis == "" {
+		commercialAnalysis = AnalysisFree
+	}
+	if financialAnalysis == "" {
+		financialAnalysis = AnalysisFree
 	}
 	if !isValidAnalysis(commercialAnalysis) {
 		return nil, ErrInvalidCommercialAnalysis

@@ -45,10 +45,29 @@ Critério de rateio (horas de máquina, quantidade, valor de material…).
 
 | POST `/create` · GET `/list` | CRUD |
 
+> Código duplicado no `POST /create` retorna **409 Conflict** (não mais 500).
+
 ### Alocação de overhead (`/api/overhead-allocation`)
 Regra que distribui os custos indiretos usando a base escolhida.
 
 | POST `/create` · GET `/list` | CRUD |
+
+> **Campo obrigatório:** `cost_center_code` (código do centro de custo, não
+> `cost_center_id`). Cada alvo em `targets[]` também usa `cost_center_code`.
+> Ausência → **422** (`cost_center_code is required`). As colunas legadas
+> `cost_center_id`/`overhead_id` viraram nullable (migration `000172`) — antes o
+> `POST /create` estourava com *null value in column "cost_center_id"*.
+>
+> Corpo mínimo:
+> ```json
+> {
+>   "cost_center_code": 10,
+>   "period_start": "2026-01-01",
+>   "period_end": "2026-01-31",
+>   "allocation_type": "PERCENTAGE",
+>   "targets": [{ "cost_center_code": 20, "percentage": 100 }]
+> }
+> ```
 
 ---
 

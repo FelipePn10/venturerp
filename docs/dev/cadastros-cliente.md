@@ -480,6 +480,26 @@ POST /api/customers
 
 ---
 
+**Endpoints do cliente:**
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/api/customers/` | Cria cliente |
+| GET | `/api/customers/` | Lista (`?only_active=false` inclui inativos; `?format=xlsx\|pdf\|csv`) |
+| GET | `/api/customers/{code}` | Detalhe — **hidrata endereços e contatos** |
+| PUT | `/api/customers/{code}` | **Atualiza** o cliente |
+| PATCH | `/api/customers/{code}/block` · `/unblock` | Bloqueia / desbloqueia |
+
+> **Atualização (`PUT /api/customers/{code}`).** Reutiliza o mesmo corpo do
+> `POST` (contrato por *códigos*, não IDs). `code` e `document_number` são
+> imutáveis (vêm do registro). `name` é obrigatório; um cliente inexistente
+> retorna **404**. Só os FKs enviados (por `*_code`) são alterados.
+>
+> **Detalhe (`GET /api/customers/{code}`).** A resposta traz os arrays
+> `addresses` e `contacts` do cliente já preenchidos.
+
+---
+
 ### 2.1 Cliente Corporativo (Matriz / Filiais)
 
 - Crie a **matriz** com `is_corporate: true`

@@ -12,14 +12,24 @@ Prioridade de ordens. Versão de negócio em
 
 ## 1. Empresa (`/api/enterprise`)
 `POST /create` — cadastro da empresa (CNPJ, inscrições, regime tributário, dados SEFAZ).
+`GET /list` — lista todas · `GET /{code}` — busca por código.
 Suporta matriz/filiais; vínculo de fornecedores via `/api/suppliers/enterprises`.
+Código duplicado no `POST /create` retorna **409 Conflict** (não mais 500).
 
 ## 2. Funcionário (`/api/employee`)
 `POST /create` · `GET /list` · `GET /{code}` · `PUT /update` · `DELETE /{code}/deactivate`.
 
 ## 3. PDM (`/api/pdm`)
-`POST /create-group` (grupos/famílias) · `POST /create-modifier` (modificadores de
-descrição). Base da descrição técnica padronizada e da máscara do item.
+Grupos/famílias e modificadores de descrição — base da descrição técnica padronizada
+e da máscara do item.
+
+| Recurso | Rotas |
+|---|---|
+| Grupos | `POST /create-group` · `GET /groups` · `GET /groups/{code}` · `PUT /groups/{code}` |
+| Modificadores | `POST /create-modifier` · `GET /modifiers` · `GET /modifiers/{id}` · `PUT /modifiers/{id}` |
+
+Corpo do `PUT /groups/{code}`: `{ "description": "...", "enterprise_id": 1 }`.
+Corpo do `PUT /modifiers/{id}`: `{ "description": "..." }`.
 
 ## 4. Armazém (`/api/warehouse`)
 `POST /create`. Tipos em enum `WarehouseType` (linha de produção/normal). Localização

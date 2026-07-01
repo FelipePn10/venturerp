@@ -2,7 +2,6 @@ package sales_order_uc
 
 import (
 	"context"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -10,6 +9,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type UpdateSalesOrderUseCase struct {
@@ -51,14 +51,8 @@ func (uc *UpdateSalesOrderUseCase) Execute(
 		IsFirm:              dto.IsFirm,
 	}
 
-	if dto.DeliveryDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.DeliveryDate)
-		o.DeliveryDate = &t
-	}
-	if dto.SaleDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.SaleDate)
-		o.SaleDate = &t
-	}
+	o.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
+	o.SaleDate = datetime.ParseDatePtr(dto.SaleDate)
 
 	updated, err := uc.Repo.Update(ctx, o)
 	if err != nil {

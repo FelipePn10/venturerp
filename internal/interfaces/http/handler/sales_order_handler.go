@@ -37,7 +37,7 @@ func (h *SalesOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -58,7 +58,7 @@ func (h *SalesOrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	dto.Code = code
 	result, err := h.updateUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -191,7 +191,7 @@ func (h *SalesOrderHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createItemUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)

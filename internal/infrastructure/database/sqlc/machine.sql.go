@@ -29,7 +29,7 @@ DO UPDATE SET
            setup_time = EXCLUDED.setup_time,
            priority = EXCLUDED.priority,
            updated_at = NOW()
-           RETURNING id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty
+           RETURNING id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty, is_active
 `
 
 type CreateItemMachineTimeParams struct {
@@ -67,6 +67,7 @@ func (q *Queries) CreateItemMachineTime(ctx context.Context, arg CreateItemMachi
 		&i.MachineCode,
 		&i.ProductionTimeUnit,
 		&i.ProductionBaseQty,
+		&i.IsActive,
 	)
 	return i, err
 }
@@ -198,7 +199,7 @@ INSERT INTO machine_schedules (
 VALUES (
     COALESCE((SELECT MAX(code) FROM machine_schedules), 0) + 1,
     $1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
+    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active
 `
 
 type CreateScheduleParams struct {
@@ -248,6 +249,7 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		&i.MachineCode,
 		&i.OrderCode,
 		&i.Code,
+		&i.IsActive,
 	)
 	return i, err
 }
@@ -338,7 +340,7 @@ func (q *Queries) GetMachineTypeByCode(ctx context.Context, code int64) (Machine
 }
 
 const getSchedule = `-- name: GetSchedule :one
-SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
+SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active
 FROM machine_schedules
 WHERE code = $1
 `
@@ -362,12 +364,13 @@ func (q *Queries) GetSchedule(ctx context.Context, code int64) (MachineSchedule,
 		&i.MachineCode,
 		&i.OrderCode,
 		&i.Code,
+		&i.IsActive,
 	)
 	return i, err
 }
 
 const listItemMachineTimes = `-- name: ListItemMachineTimes :many
-SELECT id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty
+SELECT id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty, is_active
 FROM item_machine_times
 WHERE item_code = $1
   AND is_active = TRUE
@@ -395,6 +398,7 @@ func (q *Queries) ListItemMachineTimes(ctx context.Context, itemCode int64) ([]I
 			&i.MachineCode,
 			&i.ProductionTimeUnit,
 			&i.ProductionBaseQty,
+			&i.IsActive,
 		); err != nil {
 			return nil, err
 		}
@@ -407,7 +411,7 @@ func (q *Queries) ListItemMachineTimes(ctx context.Context, itemCode int64) ([]I
 }
 
 const listItemsByMachine = `-- name: ListItemsByMachine :many
-SELECT id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty
+SELECT id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty, is_active
 FROM item_machine_times
 WHERE machine_code = $1
   AND is_active = TRUE
@@ -435,6 +439,7 @@ func (q *Queries) ListItemsByMachine(ctx context.Context, machineCode int64) ([]
 			&i.MachineCode,
 			&i.ProductionTimeUnit,
 			&i.ProductionBaseQty,
+			&i.IsActive,
 		); err != nil {
 			return nil, err
 		}
@@ -569,7 +574,7 @@ func (q *Queries) ListMachinesByType(ctx context.Context, machineTypeCode int64)
 }
 
 const listSchedules = `-- name: ListSchedules :many
-SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
+SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active
 FROM machine_schedules
 WHERE machine_code = $1
   AND schedule_date = $2
@@ -607,6 +612,7 @@ func (q *Queries) ListSchedules(ctx context.Context, arg ListSchedulesParams) ([
 			&i.MachineCode,
 			&i.OrderCode,
 			&i.Code,
+			&i.IsActive,
 		); err != nil {
 			return nil, err
 		}
@@ -619,7 +625,7 @@ func (q *Queries) ListSchedules(ctx context.Context, arg ListSchedulesParams) ([
 }
 
 const listSchedulesByRange = `-- name: ListSchedulesByRange :many
-SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
+SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active
 FROM machine_schedules
 WHERE machine_code = $1
   AND schedule_date BETWEEN $2 AND $3
@@ -658,6 +664,7 @@ func (q *Queries) ListSchedulesByRange(ctx context.Context, arg ListSchedulesByR
 			&i.MachineCode,
 			&i.OrderCode,
 			&i.Code,
+			&i.IsActive,
 		); err != nil {
 			return nil, err
 		}
@@ -778,7 +785,7 @@ SET
     priority_override = $3,
     updated_at = NOW()
 WHERE code = $1
-    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
+    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active
 `
 
 type UpdateScheduleSequenceParams struct {
@@ -806,6 +813,7 @@ func (q *Queries) UpdateScheduleSequence(ctx context.Context, arg UpdateSchedule
 		&i.MachineCode,
 		&i.OrderCode,
 		&i.Code,
+		&i.IsActive,
 	)
 	return i, err
 }
@@ -817,7 +825,7 @@ SET
     produced_qty = $3,
     updated_at = NOW()
 WHERE code = $1
-    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
+    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active
 `
 
 type UpdateScheduleStatusParams struct {
@@ -845,6 +853,7 @@ func (q *Queries) UpdateScheduleStatus(ctx context.Context, arg UpdateScheduleSt
 		&i.MachineCode,
 		&i.OrderCode,
 		&i.Code,
+		&i.IsActive,
 	)
 	return i, err
 }
@@ -856,7 +865,7 @@ SET
     end_time = $3,
     updated_at = NOW()
 WHERE code = $1
-    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code
+    RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active
 `
 
 type UpdateScheduleTimesParams struct {
@@ -884,6 +893,7 @@ func (q *Queries) UpdateScheduleTimes(ctx context.Context, arg UpdateScheduleTim
 		&i.MachineCode,
 		&i.OrderCode,
 		&i.Code,
+		&i.IsActive,
 	)
 	return i, err
 }

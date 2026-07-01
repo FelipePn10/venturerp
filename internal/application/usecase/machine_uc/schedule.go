@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type ScheduleMachineUseCase struct {
@@ -23,8 +24,13 @@ func (uc *ScheduleMachineUseCase) CreateSchedule(
 	if !uc.Auth.CanSchedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if dto.MachineCode == 0 {
+		return nil, errorsuc.NewValidationError("machine_code is required")
+	}
 
-	date, _ := time.Parse("2006-01-02", dto.ScheduleDate)
+	// Persist the real scheduled date; fall back to today rather than the zero
+	// time (0001-01-01) when the client omits or malforms the date.
+	date := datetime.ParseDateOrDefault(dto.ScheduleDate, time.Now())
 	var start, end *time.Time
 	if dto.StartTime != nil {
 		s, _ := time.Parse("15:04:05", *dto.StartTime)
