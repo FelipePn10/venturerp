@@ -16,6 +16,7 @@ const (
 	SalesOrderStatusBudgetAnalysis SalesOrderStatus = "OA" // Orçamento em Análise
 	SalesOrderStatusBudget         SalesOrderStatus = "OF" // Orçamento
 	SalesOrderStatusInvoiced       SalesOrderStatus = "F"  // Faturado (NF-e de saída autorizada)
+	SalesOrderStatusCancelled      SalesOrderStatus = "CANCELLED"
 )
 
 // SalesOrderOrigin represents how the order was originated.

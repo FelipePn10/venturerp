@@ -35,7 +35,13 @@ Pedido de Venda também em [`visao-geral.md`](visao-geral.md) §4.
 | DELETE | `/{itemCode}/cancel` | Cancela item |
 
 **Status do pedido:** `R` (rascunho) → `P` (pedido/confirmado) → `F` (faturado);
-`CANCELLED`; estado **bloqueado** ortogonal (crédito/manual).
+`CANCELLED`; estado **bloqueado** ortogonal (crédito/manual). A coluna `status`
+comporta os 20 caracteres de `CANCELLED` (migration `000170`); antes era
+`VARCHAR(5)` e o cancelamento estourava com *value too long*.
+
+**Datas.** `emission_date`/`delivery_date` (capa) e `delivery_date` (item) aceitam
+`YYYY-MM-DD` ou ISO-8601 com hora; `emission_date` omitido assume **hoje** (não mais
+`0001-01-01`). `enterprise_code` é obrigatório no `POST /create` (422 se ausente).
 
 > ✅ **Automação:** mudar o status para `P` cria, por item, uma **demanda
 > independente** (item, qtd, data) de forma **idempotente** — código derivado da linha
@@ -66,6 +72,29 @@ resultado e regras comerciais.
 |---|---|---|
 | POST | `/create` · GET `/list` · GET `/{code}` · PUT `/{code}` · DELETE `/{code}` | CRUD completo |
 
+**Campos de análise (enum `sales_division_analysis_enum`).** Tanto `commercial_analysis`
+quanto `financial_analysis` só aceitam os valores abaixo (case-sensitive). São
+opcionais — quando omitidos ou vazios assumem `FREE` (default da coluna). Um valor
+inválido retorna **422** com a lista de valores aceitos (não mais 500):
+
+| Valor | Significado |
+|---|---|
+| `FREE` | Livre — sem análise/bloqueio |
+| `BLOCK_ALWAYS` | Bloqueia sempre |
+| `ALWAYS_ANALYZE` | Sempre passa por análise |
+
+Exemplo de corpo do `POST /create`:
+
+```json
+{
+  "code": 10,
+  "description": "Divisão Interna",
+  "commercial_analysis": "ALWAYS_ANALYZE",
+  "financial_analysis": "FREE",
+  "consider_mrp": true
+}
+```
+
 ---
 
 ## 3. Promessa de Entrega
@@ -77,6 +106,10 @@ Cálculo de data prometida com base em disponibilidade (estoque + capacidade).
 |---|---|---|
 | GET | `/` | Lê os parâmetros |
 | PUT | `/update` | Atualiza os parâmetros |
+
+> ℹ️ Se os parâmetros ainda não foram configurados, o `GET` retorna **404
+> `not configured`** — é o estado "ainda não configurado", não um erro. Configure
+> com o `PUT /update` antes de usar o cálculo de promessa.
 
 ### Calendário de promessa por item (`/api/item-calendar-promise`)
 Disponibilidade (ATP) por item/variante, dia a dia.

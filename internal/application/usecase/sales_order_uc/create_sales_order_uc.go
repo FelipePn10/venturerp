@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type CreateSalesOrderUseCase struct {
@@ -25,12 +26,18 @@ func (uc *CreateSalesOrderUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	if dto.EnterpriseCode == 0 {
+		return nil, errorsuc.NewValidationError("enterprise_code is required")
+	}
+
 	orderNum, err := uc.Repo.NextOrderNumber(ctx, dto.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
 
-	emissionDate, _ := time.Parse("2006-01-02", dto.EmissionDate)
+	// emission_date defaults to today (matching the CURRENT_DATE column default)
+	// when omitted or unparseable, instead of silently persisting 0001-01-01.
+	emissionDate := datetime.ParseDateOrDefault(dto.EmissionDate, time.Now())
 
 	status := entity.SalesOrderStatusDraft
 	if dto.Status != "" {
@@ -74,14 +81,8 @@ func (uc *CreateSalesOrderUseCase) Execute(
 		CreatedBy:           dto.CreatedBy,
 	}
 
-	if dto.DeliveryDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.DeliveryDate)
-		o.DeliveryDate = &t
-	}
-	if dto.SaleDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.SaleDate)
-		o.SaleDate = &t
-	}
+	o.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
+	o.SaleDate = datetime.ParseDatePtr(dto.SaleDate)
 
 	created, err := uc.Repo.Create(ctx, o)
 	if err != nil {

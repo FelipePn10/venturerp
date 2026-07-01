@@ -134,13 +134,22 @@ func scanSequences(rows interface {
 
 // ─── helpers for APS calculation ──────────────────────────────────────────────
 
+// priority is a free-text VARCHAR (e.g. "NORMAL", "ALTA", or a numeric string),
+// so a blind ::int cast raised "invalid input syntax for integer: NORMAL"
+// (SQLSTATE 22P02). Map it to a numeric rank: numeric strings keep their value,
+// known textual buckets get a rank, and anything else defaults to the middle.
 const getOpenProductionOrders = `
 SELECT id,
-       COALESCE(priority, '5')::int AS priority,
+       CASE
+           WHEN priority ~ '^[0-9]+$' THEN priority::int
+           WHEN upper(priority) IN ('ALTA', 'HIGH', 'URGENTE', 'URGENT') THEN 1
+           WHEN upper(priority) IN ('BAIXA', 'LOW') THEN 9
+           ELSE 5
+       END AS priority,
        COALESCE(start_date, end_date)::timestamptz AS planned_date
 FROM production_orders
 WHERE status IN ('OPEN', 'IN_PROGRESS') AND is_active = TRUE
-ORDER BY priority ASC, planned_date ASC`
+ORDER BY 2 ASC, planned_date ASC`
 
 type DBOpenProductionOrder struct {
 	ID          int64

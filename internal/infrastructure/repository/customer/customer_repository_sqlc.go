@@ -1064,7 +1064,32 @@ func (r *CustomerRepositorySQLC) CreateCustomer(ctx context.Context, c *entity.C
 }
 
 func (r *CustomerRepositorySQLC) UpdateCustomer(ctx context.Context, c *entity.Customer) (*entity.Customer, error) {
-	return c, nil
+	row, err := r.q.UpdateCustomer(ctx, sqlc.UpdateCustomerParams{
+		ID:                    c.ID,
+		Name:                  c.Name,
+		TradeName:             pgutil.ToPgTextFromPtr(c.TradeName),
+		StateRegistration:     pgutil.ToPgTextFromPtr(c.StateRegistration),
+		MunicipalRegistration: pgutil.ToPgTextFromPtr(c.MunicipalRegistration),
+		SuframaCode:           pgutil.ToPgTextFromPtr(c.SuframaCode),
+		SuframaExpiry:         pgutil.ToPgDateFromPtr(c.SuframaExpiry),
+		RegionID:              c.RegionID,
+		MarketSegmentID:       c.MarketSegmentID,
+		CustomerTypeID:        c.CustomerTypeID,
+		PaymentConditionID:    c.PaymentConditionID,
+		SalesTableID:          c.SalesTableID,
+		CarrierID:             c.CarrierID,
+		CarrierGroupID:        c.CarrierGroupID,
+		InvoiceTypeID:         c.InvoiceTypeID,
+		TaxTypeID:             c.TaxTypeID,
+		PaymentCondVisibility: sqltypes.PaymentCondVisibilityEnum(c.PaymentCondVisibility),
+		CreditLimit:           pgutil.ToPgNumericFromFloat64(c.CreditLimit),
+		Website:               pgutil.ToPgTextFromPtr(c.Website),
+		IsActive:              c.IsActive,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("updating customer %d: %w", c.ID, err)
+	}
+	return customerToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) GetCustomerByCode(ctx context.Context, code int64) (*entity.Customer, error) {

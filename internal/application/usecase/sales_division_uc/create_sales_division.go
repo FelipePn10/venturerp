@@ -16,6 +16,21 @@ type CreateSalesDivisionUseCase struct {
 	Auth ports.AuthService
 }
 
+// normalizeAnalysis validates a commercial/financial analysis enum value,
+// defaulting empty to FREE and returning a descriptive 422 for unknown values.
+func normalizeAnalysis(value, field string) (entity.SalesDivisionAnalysis, error) {
+	if value == "" {
+		return entity.AnalysisFree, nil
+	}
+	a := entity.SalesDivisionAnalysis(value)
+	switch a {
+	case entity.AnalysisFree, entity.AnalysisBlockAlways, entity.AnalysisAlwaysAnalyze:
+		return a, nil
+	default:
+		return "", errorsuc.NewValidationError("invalid " + field + " value: must be FREE, BLOCK_ALWAYS or ALWAYS_ANALYZE")
+	}
+}
+
 func (uc *CreateSalesDivisionUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateSalesDivisionDTO,
@@ -46,7 +61,9 @@ func (uc *CreateSalesDivisionUseCase) Execute(
 		userID,
 	)
 	if err != nil {
-		return nil, err
+		// Domain validation (invalid enum, missing description, ...) is a client
+		// error -> 422, not a 500.
+		return nil, errorsuc.NewValidationError(err.Error())
 	}
 
 	created, err := uc.Repo.Create(ctx, sd)

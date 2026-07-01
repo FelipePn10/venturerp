@@ -25,6 +25,26 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if dto.ItemCode == 0 {
+		return nil, errorsuc.NewValidationError("item_code is required")
+	}
+	if dto.Quantity <= 0 {
+		return nil, errorsuc.NewValidationError("quantity must be greater than zero")
+	}
+
+	// demand_type_enum is NOT NULL with no default; a manual planned order is
+	// independent demand unless the caller states otherwise. Validate the value
+	// so an unknown string returns 422 instead of the raw enum error.
+	demandType := types.DemandIndependent
+	if dto.DemandType != "" {
+		demandType = types.DemandType(dto.DemandType)
+		switch demandType {
+		case types.DemandSalesOrder, types.DemandForecast, types.DemandIndependent,
+			types.DemandSafetyStock, types.DemandReplenishment:
+		default:
+			return nil, errorsuc.NewValidationError("invalid demand_type: must be SALES_ORDER, FORECAST, INDEPENDENT, SAFETY_STOCK or REPLENISHMENT")
+		}
+	}
 
 	needDate, _ := time.Parse("2006-01-02", dto.NeedDate)
 
@@ -39,6 +59,7 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 		Mask:           dto.Mask,
 		Quantity:       dto.Quantity,
 		OrderType:      types.OrderType(dto.OrderType),
+		DemandType:     demandType,
 		Status:         types.StatusPlanned,
 		NeedDate:       needDate,
 		CostCenterCode: dto.CostCenterCode,

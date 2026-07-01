@@ -29,6 +29,15 @@ em [`visao-geral.md`](visao-geral.md) §5.1.
 
 **Status:** `OPEN` → `IN_PROGRESS` → `COMPLETED` → `CLOSED` (`CANCELLED`).
 
+> ⚠️ **Campo de consumo:** `POST /consumption` usa **`consumed_qty`** (não
+> `quantity`). Enviar `quantity` é ignorado (grava 0 e não baixa estoque). Campos:
+> `production_order_id`, `item_code`, `consumed_qty`, `warehouse_id?`, `lot?`,
+> `consumption_date?`, `notes?`.
+>
+> **Datas reais:** `start_date`/`end_date`/`consumption_date`/`appointment_date`
+> aceitam `YYYY-MM-DD` ou ISO-8601; quando omitidas assumem **agora** (não mais
+> `0001-01-01`). `POST /create` exige `item_code` e `planned_qty > 0` (422).
+
 > ✅ **Automações de estoque:** consumo → `OUT` do insumo; conclusão → `IN` do acabado;
 > ambos atualizam saldo/custo. Ver `production_order_uc/add_consumption_uc.go` e
 > `complete_production_order_uc.go`.
@@ -42,6 +51,10 @@ em [`visao-geral.md`](visao-geral.md) §5.1.
 | POST | `/operations/explode` | Explode o roteiro do item nas operações da OF |
 | GET | `/{id}/operations` | Lista operações da OF e andamento |
 | POST | `/operations/advance` | Avança a operação (conclui etapa, libera a próxima) |
+
+Corpo de `/operations/advance`: `{ "operation_id": 123, "status": "IN_PROGRESS", "actual_hours": 0 }`.
+`status` ∈ `PENDING` · `IN_PROGRESS` · `DONE` · `SKIPPED` (422 para outros valores).
+`IN_PROGRESS` carimba `started_at`; `DONE`/`SKIPPED` carimbam `completed_at`.
 
 > ✅ **Backflush:** no apontamento com `backflush_warehouse_id`, os componentes da BOM
 > são baixados automaticamente, proporcional à qtd produzida. Ver

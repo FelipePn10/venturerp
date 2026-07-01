@@ -42,14 +42,27 @@ Casos de uso (`internal/application/usecase/machine_uc/`): `CreateMachineUseCase
 | GET | `/api/machine/types/list` | Lista tipos |
 | GET | `/api/machine/types/{code}` | Busca tipo por código |
 | POST | `/api/machine/time/create` | Cria tempo por item × máquina (variante opcional) |
-| GET | `/api/machine/time/list` | Lista tempos |
+| GET | `/api/machine/time/list?item_code=123` | Lista tempos de um item |
 | POST | `/api/machine/time/{code}` | Busca tempo por código |
 | POST | `/api/machine/time/production/calculate` | **Calcula o tempo de produção** de uma quantidade |
 | POST | `/api/machine/schedule/create` | Cria agenda/disponibilidade |
-| GET | `/api/machine/schedule/list` | Lista agendas |
+| GET | `/api/machine/schedule/list?machine_code=123&date=2026-06-30` | Lista agendas |
 | POST | `/api/machine/schedule/{code}` | Busca agenda por código |
 
 > Exemplos de corpo de request em [`API_REQUEST_BODIES.txt`](API_REQUEST_BODIES.txt).
+
+> ⚠️ **Filtros das listagens (query-string, não path).** `GET /time/list` exige
+> `?item_code=<código>`; `GET /schedule/list` exige `?machine_code=<código>` e aceita
+> `?date=YYYY-MM-DD` (default = hoje). Sem o filtro → 400 com mensagem orientando o
+> parâmetro.
+>
+> ℹ️ As tabelas `item_machine_times` e `machine_schedules` ganharam a coluna
+> `is_active` (migration `000171`) — antes o cálculo de tempo e as listagens
+> estouravam com *column "is_active" does not exist*.
+>
+> **`POST /schedule/create`** grava a `schedule_date` real (`YYYY-MM-DD` ou ISO; default
+> = hoje) e exige `machine_code`. A entidade é um **slot de APS** (`planned_qty`,
+> `sequence`, `status`, `priority_override`), não "disponibilidade/paradas".
 
 ---
 

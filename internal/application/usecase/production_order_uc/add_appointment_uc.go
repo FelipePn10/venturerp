@@ -12,6 +12,7 @@ import (
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	structurerepo "github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type AddAppointmentUseCase struct {
@@ -32,7 +33,7 @@ func (uc *AddAppointmentUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	appointmentDate, _ := time.Parse("2006-01-02", dto.AppointmentDate)
+	appointmentDate := datetime.ParseDateOrDefault(dto.AppointmentDate, time.Now())
 
 	appointment := &entity.ProductionAppointment{
 		ProductionOrderID: dto.ProductionOrderID,

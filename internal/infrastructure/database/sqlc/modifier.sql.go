@@ -37,3 +37,72 @@ func (q *Queries) CreateModifier(ctx context.Context, arg CreateModifierParams) 
 	)
 	return i, err
 }
+
+const getModifierByID = `-- name: GetModifierByID :one
+SELECT id, description, created_by, created_at FROM modifier WHERE id = $1
+`
+
+func (q *Queries) GetModifierByID(ctx context.Context, id int64) (Modifier, error) {
+	row := q.db.QueryRow(ctx, getModifierByID, id)
+	var i Modifier
+	err := row.Scan(
+		&i.ID,
+		&i.Description,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listModifiers = `-- name: ListModifiers :many
+SELECT id, description, created_by, created_at FROM modifier ORDER BY id
+`
+
+func (q *Queries) ListModifiers(ctx context.Context) ([]Modifier, error) {
+	rows, err := q.db.Query(ctx, listModifiers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Modifier
+	for rows.Next() {
+		var i Modifier
+		if err := rows.Scan(
+			&i.ID,
+			&i.Description,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateModifier = `-- name: UpdateModifier :one
+UPDATE modifier
+SET description = $2
+WHERE id = $1
+RETURNING id, description, created_by, created_at
+`
+
+type UpdateModifierParams struct {
+	ID          int64
+	Description string
+}
+
+func (q *Queries) UpdateModifier(ctx context.Context, arg UpdateModifierParams) (Modifier, error) {
+	row := q.db.QueryRow(ctx, updateModifier, arg.ID, arg.Description)
+	var i Modifier
+	err := row.Scan(
+		&i.ID,
+		&i.Description,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}

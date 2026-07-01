@@ -25,11 +25,23 @@ func (uc *UpdateSalesDivisionUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	// commercial/financial analysis are constrained enums; validate here (empty
+	// defaults to FREE) so an unknown value returns 422 instead of a raw DB enum
+	// error. Valid values: FREE, BLOCK_ALWAYS, ALWAYS_ANALYZE.
+	commercial, err := normalizeAnalysis(dto.CommercialAnalysis, "commercial_analysis")
+	if err != nil {
+		return nil, err
+	}
+	financial, err := normalizeAnalysis(dto.FinancialAnalysis, "financial_analysis")
+	if err != nil {
+		return nil, err
+	}
+
 	sd := &entity.SalesDivision{
 		Code:                    code,
 		Description:             dto.Description,
-		CommercialAnalysis:      entity.SalesDivisionAnalysis(dto.CommercialAnalysis),
-		FinancialAnalysis:       entity.SalesDivisionAnalysis(dto.FinancialAnalysis),
+		CommercialAnalysis:      commercial,
+		FinancialAnalysis:       financial,
 		IsTechnicalAssistance:   dto.IsTechnicalAssistance,
 		ConsiderDeliveryPromise: dto.ConsiderDeliveryPromise,
 		ConsiderMRP:             dto.ConsiderMRP,

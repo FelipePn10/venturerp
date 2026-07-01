@@ -8,6 +8,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -103,11 +104,16 @@ func (h *MachineHandler) CreateItemTime(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *MachineHandler) ListItemTimes(w http.ResponseWriter, r *http.Request) {
-	itemCodeStr := chi.URLParam(r, "item_code")
+	// GET /time/list?item_code=123 — the filter is a query-string param, not a
+	// path segment, so it must be read from the URL query.
+	itemCodeStr := r.URL.Query().Get("item_code")
+	if itemCodeStr == "" {
+		itemCodeStr = chi.URLParam(r, "item_code")
+	}
 
 	itemCode, err := strconv.ParseInt(itemCodeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item_code")
+		security.RespondError(w, http.StatusBadRequest, "item_code query parameter is required (e.g. ?item_code=123)")
 		return
 	}
 
@@ -223,22 +229,28 @@ func (h *MachineHandler) GetSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MachineHandler) ListSchedules(w http.ResponseWriter, r *http.Request) {
-	machineCode, err := strconv.ParseInt(
-		chi.URLParam(r, "machine_code"),
-		10,
-		64,
-	)
+	// GET /schedule/list?machine_code=123&date=2026-06-30 — both filters are
+	// query-string params, not path segments.
+	machineCodeStr := r.URL.Query().Get("machine_code")
+	if machineCodeStr == "" {
+		machineCodeStr = chi.URLParam(r, "machine_code")
+	}
+	machineCode, err := strconv.ParseInt(machineCodeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid machine_code")
+		security.RespondError(w, http.StatusBadRequest, "machine_code query parameter is required (e.g. ?machine_code=123)")
 		return
 	}
 
-	dateStr := r.URL.Query().Get("date")
-
-	date, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		http.Error(w, "invalid date format", http.StatusBadRequest)
-		return
+	// date defaults to today when omitted, so the board loads without forcing a
+	// filter; a malformed date is still rejected.
+	date := time.Now()
+	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
+		parsed, perr := datetime.ParseDate(dateStr)
+		if !perr {
+			security.RespondError(w, http.StatusBadRequest, "invalid date format, expected YYYY-MM-DD")
+			return
+		}
+		date = parsed
 	}
 
 	results, err := h.scheduleUC.ListSchedules(

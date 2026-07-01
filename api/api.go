@@ -271,12 +271,21 @@ func (app *application) mount() chi.Router {
 	// group
 	groupRepo := group.NewRepositoryGroupSQLC(queries)
 	createGroupUc := group_uc.NewCreateGroupUseCase(groupRepo, authService)
-	groupHandler := handler.NewCreateGroupHandler(createGroupUc)
+	groupHandler := handler.NewCreateGroupHandler(
+		createGroupUc,
+		group_uc.NewGetGroupUseCase(groupRepo, authService),
+		group_uc.NewListGroupsUseCase(groupRepo, authService),
+		group_uc.NewUpdateGroupUseCase(groupRepo, authService),
+	)
 
 	// enterprise
 	enterpriseRepo := enterprise.NewRepositoryEnterpriseSQLC(queries)
 	createEnterpriseUc := enterprise_uc.NewCreateEnterpriseUseCase(enterpriseRepo, authService)
-	enterpriseHandler := handler.NewCreateEnterpriseHandler(createEnterpriseUc)
+	enterpriseHandler := handler.NewCreateEnterpriseHandler(
+		createEnterpriseUc,
+		&enterprise_uc.GetEnterpriseUseCase{Repo: enterpriseRepo, Auth: authService},
+		&enterprise_uc.ListEnterprisesUseCase{Repo: enterpriseRepo, Auth: authService},
+	)
 
 	// CNPJ auto-lookup (cadastro auto-fill) + generic report export
 	cnpjProvider := cnpjinfra.New(cnpjinfra.Config{
@@ -292,7 +301,12 @@ func (app *application) mount() chi.Router {
 	// modifier
 	modifierRepo := modifier.NewRepositoryModifierSQLC(queries)
 	createModifierUc := modifier_uc.NewCreateModifierUseCase(modifierRepo, authService)
-	modifierHandler := handler.NewCreateModifierHandler(createModifierUc)
+	modifierHandler := handler.NewCreateModifierHandler(
+		createModifierUc,
+		modifier_uc.NewGetModifierUseCase(modifierRepo, authService),
+		modifier_uc.NewListModifiersUseCase(modifierRepo, authService),
+		modifier_uc.NewUpdateModifierUseCase(modifierRepo, authService),
+	)
 
 	// employee
 	employeeRepo := employee.NewRepositoryEmployeeSQLC(queries)
@@ -1126,10 +1140,18 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/pdm", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create-group", groupHandler.CreateGroup)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/groups", groupHandler.ListGroups)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/groups/{code}", groupHandler.GetGroup)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/groups/{code}", groupHandler.UpdateGroup)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create-modifier", modifierHandler.CreateModifier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/modifiers", modifierHandler.ListModifiers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/modifiers/{id}", modifierHandler.GetModifier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/modifiers/{id}", modifierHandler.UpdateModifier)
 		})
 		r.Route("/api/enterprise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", enterpriseHandler.CreateEnterprise)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", enterpriseHandler.ListEnterprises)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", enterpriseHandler.GetEnterprise)
 		})
 		// CNPJ auto-fill: GET /api/cnpj/{cnpj} returns razão social, IE, endereço…
 		r.Route("/api/cnpj", func(r chi.Router) {
@@ -1748,6 +1770,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCustomers)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", customerHandler.GetCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", customerHandler.BlockCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/unblock", customerHandler.UnblockCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/establishments", customerHandler.ListEstablishments)

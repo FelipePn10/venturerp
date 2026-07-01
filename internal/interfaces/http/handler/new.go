@@ -182,25 +182,41 @@ func NewCreateWarehouseHandler(
 
 func NewCreateGroupHandler(
 	createGroupUc *group_uc.CreateGroupUseCase,
+	getGroupUc *group_uc.GetGroupUseCase,
+	listGroupsUc *group_uc.ListGroupsUseCase,
+	updateGroupUc *group_uc.UpdateGroupUseCase,
 ) *GroupHandler {
 	return &GroupHandler{
 		createGroupUC: createGroupUc,
+		getGroupUC:    getGroupUc,
+		listGroupsUC:  listGroupsUc,
+		updateGroupUC: updateGroupUc,
 	}
 }
 
 func NewCreateEnterpriseHandler(
 	createEnterprisepUc *enterprise_uc.CreateEnterpriseUseCase,
+	getEnterpriseUc *enterprise_uc.GetEnterpriseUseCase,
+	listEnterprisesUc *enterprise_uc.ListEnterprisesUseCase,
 ) *EnterpriseHandler {
 	return &EnterpriseHandler{
 		createEnterpriseUC: createEnterprisepUc,
+		getEnterpriseUC:    getEnterpriseUc,
+		listEnterprisesUC:  listEnterprisesUc,
 	}
 }
 
 func NewCreateModifierHandler(
 	createModifierUc *modifier_uc.CreateModifierUseCase,
+	getModifierUc *modifier_uc.GetModifierUseCase,
+	listModifiersUc *modifier_uc.ListModifiersUseCase,
+	updateModifierUc *modifier_uc.UpdateModifierUseCase,
 ) *ModifierHandler {
 	return &ModifierHandler{
 		createModifierUC: createModifierUc,
+		getModifierUC:    getModifierUc,
+		listModifiersUC:  listModifiersUc,
+		updateModifierUC: updateModifierUc,
 	}
 }
 

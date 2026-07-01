@@ -2,13 +2,13 @@ package production_order_uc
 
 import (
 	"context"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type CreateProductionOrderUseCase struct {
@@ -22,6 +22,12 @@ func (uc *CreateProductionOrderUseCase) Execute(
 ) (*entity.ProductionOrder, error) {
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if dto.ItemCode == 0 {
+		return nil, errorsuc.NewValidationError("item_code is required")
+	}
+	if dto.PlannedQty <= 0 {
+		return nil, errorsuc.NewValidationError("planned_qty must be greater than zero")
 	}
 
 	nextNum, err := uc.Repo.GetNextOrderNumber(ctx)
@@ -44,14 +50,8 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		CreatedBy:      dto.CreatedBy,
 	}
 
-	if dto.StartDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.StartDate)
-		order.StartDate = &t
-	}
-	if dto.EndDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.EndDate)
-		order.EndDate = &t
-	}
+	order.StartDate = datetime.ParseDatePtr(dto.StartDate)
+	order.EndDate = datetime.ParseDatePtr(dto.EndDate)
 
 	return uc.Repo.Create(ctx, order)
 }

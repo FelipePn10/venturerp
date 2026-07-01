@@ -374,6 +374,11 @@ Todos os endpoints exigem `Authorization: Bearer <JWT>` (ADMIN ou USER).
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | `POST` | `/api/mrp-calculation/run` | Executa o cálculo MRP para um plano — `{ "plan_code": 1 }` |
+
+> ⚠️ **Pré-requisito — o plano precisa existir.** `plan_code` referencia
+> `production_plans.code` (FK `mrp_calculation_logs_plan_code_fkey`). Crie o plano
+> **antes** de rodar o MRP via `POST /api/production-plan/create` (não existe
+> `planning/plans` nem `mrp/plans`). Rodar com um `plan_code` inexistente viola a FK.
 | `GET` | `/api/mrp-calculation/profile/{item_code}/{plan_code}` | Perfil do item: demanda, estoque projetado, ordens |
 | `POST` | `/api/mrp-calculation/configured-rules` | Cria regra configurada por item |
 | `GET` | `/api/mrp-calculation/configured-rules/{item_code}` | Lista regras configuradas de um item |
@@ -456,6 +461,14 @@ Ordem de Fabricação (`production_orders`) correspondente.
 | `POST` | `/api/planned-order/create` | Cria Ordem Planejada manualmente (sem passar pelo MRP) |
 | `GET` | `/api/planned-order/list` | Lista todas as Ordens Planejadas |
 | `GET` | `/api/planned-order/{code}/firm` | Firma uma Ordem Planejada já existente |
+
+> **Corpo do `POST /api/planned-order/create`.** Campos: `item_code` (obrigatório),
+> `quantity` (> 0), `order_type` (`PRODUCTION`/`PURCHASE`/`OUTSOURCING`), `need_date`,
+> `demand_type` e opcionais (`mask`, `cost_center_code`, `machine_code`, ...).
+> `demand_type` ∈ `SALES_ORDER` · `FORECAST` · `INDEPENDENT` · `SAFETY_STOCK` ·
+> `REPLENISHMENT`; **omitido assume `INDEPENDENT`** (a coluna é NOT NULL e não tinha
+> default). Valor inválido → 422. O caminho recomendado continua sendo **firmar uma
+> sugestão do MRP**, não a criação manual.
 
 ---
 

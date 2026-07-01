@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type AddConsumptionUseCase struct {
@@ -29,7 +30,7 @@ func (uc *AddConsumptionUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	consumptionDate, _ := time.Parse("2006-01-02", dto.ConsumptionDate)
+	consumptionDate := datetime.ParseDateOrDefault(dto.ConsumptionDate, time.Now())
 
 	consumption := &entity.ProductionConsumption{
 		ProductionOrderID: dto.ProductionOrderID,

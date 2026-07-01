@@ -4243,6 +4243,7 @@ type ItemMachineTime struct {
 	MachineCode        int64
 	ProductionTimeUnit CapacityPeriodEnum
 	ProductionBaseQty  int32
+	IsActive           bool
 }
 
 type ItemMask struct {
@@ -4413,6 +4414,7 @@ type MachineSchedule struct {
 	MachineCode      int64
 	OrderCode        *int64
 	Code             int64
+	IsActive         bool
 }
 
 type MachineType struct {
@@ -4694,7 +4696,7 @@ type OrderPriority struct {
 
 type OverheadAllocation struct {
 	ID              int64
-	CostCenterID    int64
+	CostCenterID    *int64
 	PlanAccountID   *int64
 	AccountCode     pgtype.Text
 	PeriodStart     pgtype.Date
@@ -4712,8 +4714,8 @@ type OverheadAllocation struct {
 
 type OverheadAllocationTarget struct {
 	ID             int64
-	OverheadID     int64
-	CostCenterID   int64
+	OverheadID     *int64
+	CostCenterID   *int64
 	Percentage     pgtype.Numeric
 	Amount         pgtype.Numeric
 	CreatedAt      pgtype.Timestamptz
