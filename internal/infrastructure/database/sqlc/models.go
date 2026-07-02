@@ -4478,6 +4478,8 @@ type ManufacturingRoute struct {
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 	CreatedBy   pgtype.UUID
+	ValidFrom   pgtype.Date
+	ValidTo     pgtype.Date
 }
 
 type MarketSegment struct {
@@ -4679,6 +4681,18 @@ type Operation struct {
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
 	CreatedBy           pgtype.UUID
+	RunTime             pgtype.Numeric
+	LaborTime           pgtype.Numeric
+	RunTimeBaseQty      pgtype.Numeric
+	QueueTime           pgtype.Numeric
+	WaitTime            pgtype.Numeric
+	MoveTime            pgtype.Numeric
+	CrewSize            pgtype.Numeric
+	TimeUnit            string
+	SupplierID          *int64
+	ServiceItemCode     *int64
+	CostPerUnit         pgtype.Numeric
+	LeadTimeDays        *int32
 }
 
 type OrderPriority struct {
@@ -5284,18 +5298,30 @@ type RestrictionReason struct {
 }
 
 type RouteOperation struct {
-	ID           int64
-	RouteID      int64
-	Sequence     int16
-	OperationID  int64
-	WorkCenterID *int64
-	StandardTime pgtype.Numeric
-	SetupTime    pgtype.Numeric
-	Situation    sqltypes.RouteOpSituationEnum
-	Notes        pgtype.Text
-	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	ID              int64
+	RouteID         int64
+	Sequence        int16
+	OperationID     int64
+	WorkCenterID    *int64
+	StandardTime    pgtype.Numeric
+	SetupTime       pgtype.Numeric
+	Situation       sqltypes.RouteOpSituationEnum
+	Notes           pgtype.Text
+	IsActive        bool
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	RunTime         pgtype.Numeric
+	LaborTime       pgtype.Numeric
+	RunTimeBaseQty  pgtype.Numeric
+	QueueTime       pgtype.Numeric
+	WaitTime        pgtype.Numeric
+	MoveTime        pgtype.Numeric
+	CrewSize        pgtype.Numeric
+	TimeUnit        pgtype.Text
+	SupplierID      *int64
+	ServiceItemCode *int64
+	CostPerUnit     pgtype.Numeric
+	LeadTimeDays    *int32
 }
 
 type RouteOperationNetwork struct {
@@ -5304,6 +5330,25 @@ type RouteOperationNetwork struct {
 	SuccessorID   int64
 	OverlapPct    pgtype.Numeric
 	CreatedAt     pgtype.Timestamptz
+}
+
+type RouteOperationResource struct {
+	ID               int64
+	RouteOperationID int64
+	WorkCenterID     int64
+	Priority         int16
+	TimeFactor       pgtype.Numeric
+	IsPrimary        bool
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
+type RouteOperationTool struct {
+	ID               int64
+	RouteOperationID int64
+	ToolID           int64
+	QtyRequired      pgtype.Numeric
+	CreatedAt        pgtype.Timestamptz
 }
 
 type SaldoConta struct {
@@ -6039,6 +6084,22 @@ type TaxType struct {
 	CreatedAt                     pgtype.Timestamptz
 }
 
+type Tool struct {
+	ID        int64
+	Code      int64
+	Name      string
+	ToolType  string
+	LifeType  string
+	LifeLimit pgtype.Numeric
+	LifeUsed  pgtype.Numeric
+	Cost      pgtype.Numeric
+	Status    string
+	IsActive  bool
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
 type Uf struct {
 	ID        int64
 	Sigla     string
@@ -6077,10 +6138,12 @@ type Warehouse struct {
 }
 
 type WorkCenterCost struct {
-	ID           int64
-	WorkCenterID int64
-	CostPerHour  pgtype.Numeric
-	Currency     string
-	UpdatedAt    pgtype.Timestamptz
-	UpdatedBy    pgtype.UUID
+	ID                 int64
+	WorkCenterID       int64
+	CostPerHour        pgtype.Numeric
+	Currency           string
+	UpdatedAt          pgtype.Timestamptz
+	UpdatedBy          pgtype.UUID
+	MachineCostPerHour pgtype.Numeric
+	LaborCostPerHour   pgtype.Numeric
 }

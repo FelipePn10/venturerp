@@ -129,10 +129,10 @@ func TestCriticalPathHours(t *testing.T) {
 	// Diamond: 1 → {2,3} → 4. Times: op1=2, op2=3, op3=5, op4=4. No overlap.
 	// Path 1-3-4 = 2+5+4 = 11 (critical); 1-2-4 = 2+3+4 = 9.
 	ops := []*routingentity.RouteOperation{
-		{ID: 1, EffectiveStdTime: 2, EffectiveSetup: 0},
-		{ID: 2, EffectiveStdTime: 3, EffectiveSetup: 0},
-		{ID: 3, EffectiveStdTime: 5, EffectiveSetup: 0},
-		{ID: 4, EffectiveStdTime: 4, EffectiveSetup: 0},
+		{ID: 1, EffTime: routingentity.OperationTime{Run: 2}},
+		{ID: 2, EffTime: routingentity.OperationTime{Run: 3}},
+		{ID: 3, EffTime: routingentity.OperationTime{Run: 5}},
+		{ID: 4, EffTime: routingentity.OperationTime{Run: 4}},
 	}
 	edges := []*routingentity.NetworkEdge{
 		{PredecessorID: 1, SuccessorID: 2},
@@ -140,8 +140,8 @@ func TestCriticalPathHours(t *testing.T) {
 		{PredecessorID: 2, SuccessorID: 4},
 		{PredecessorID: 3, SuccessorID: 4},
 	}
-	if got := criticalPathHours(ops, edges); abs(got-11) > 1e-9 {
-		t.Errorf("criticalPathHours = %v, want 11", got)
+	if got := routingentity.CriticalPath(ops, edges, 1).TotalHours; abs(got-11) > 1e-9 {
+		t.Errorf("CriticalPath = %v, want 11", got)
 	}
 }
 
@@ -149,14 +149,14 @@ func TestCriticalPathHours_Overlap(t *testing.T) {
 	// Linear 1 → 2 with 50% overlap. op1=10, op2=10.
 	// EF(2) = EF(1)*(1-0.5) + op2 = 10*0.5 + 10 = 15.
 	ops := []*routingentity.RouteOperation{
-		{ID: 1, EffectiveStdTime: 10},
-		{ID: 2, EffectiveStdTime: 10},
+		{ID: 1, EffTime: routingentity.OperationTime{Run: 10}},
+		{ID: 2, EffTime: routingentity.OperationTime{Run: 10}},
 	}
 	edges := []*routingentity.NetworkEdge{
 		{PredecessorID: 1, SuccessorID: 2, OverlapPct: 50},
 	}
-	if got := criticalPathHours(ops, edges); abs(got-15) > 1e-9 {
-		t.Errorf("criticalPathHours with overlap = %v, want 15", got)
+	if got := routingentity.CriticalPath(ops, edges, 1).TotalHours; abs(got-15) > 1e-9 {
+		t.Errorf("CriticalPath with overlap = %v, want 15", got)
 	}
 }
 

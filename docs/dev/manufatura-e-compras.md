@@ -45,7 +45,24 @@ operations                  ← biblioteca reutilizável de operações genéric
 |-------|------|-----------|
 | `name` | string | Ex: "Solda TIG", "Pintura Eletrostática" |
 | `origin` | enum | `INTERNA`, `EXTERNA`, `TERCEIROS` |
-| `standard_time` | float64 | Tempo padrão em horas |
+| `standard_time` | float64 | **Legado.** Mantido espelhado a `run_time` para consumidores antigos |
+| `setup_time` | float64 | Setup, **por lote**, na unidade `time_unit` |
+| `run_time` | float64 | Tempo de processo (máquina), **por `run_base_qty` peças** |
+| `labor_time` | float64 | Tempo de mão-de-obra por `run_base_qty` peças (`0` ⇒ igual a `run_time`) |
+| `run_base_qty` | float64 | Peças cobertas por um ciclo de `run_time` (≥ 1) |
+| `queue_time` | float64 | Fila antes da operação — fixo por lote |
+| `wait_time` | float64 | Espera/cura após a operação — fixo por lote |
+| `move_time` | float64 | Movimentação/transporte à próxima — fixo por lote |
+| `crew_size` | float64 | Operadores simultâneos (≥ 1); multiplica o custo de mão-de-obra |
+| `time_unit` | enum | `MIN`, `HORA` (padrão) ou `DIA` (1 dia = 8 h) |
+
+> **Modelo de tempo rico (migration `000173`).** O roteiro é a **fonte única** dos
+> tempos, substituindo o par "flat" `standard_time`/`setup_time` por componentes
+> medidos separadamente. `run_time`/`labor_time` escalam com a quantidade
+> (`ceil(qty / run_base_qty)` ciclos); `setup`/`queue`/`wait`/`move` são fixos por
+> lote. Cada componente pode ser sobrescrito na operação-de-roteiro (ver abaixo).
+> O value object `entity.OperationTime` resolve override∘default e **normaliza tudo
+> para horas**, expondo `MachineHours(qty)`, `LaborHours(qty)` e `LeadTimeHours(qty)`.
 
 **O campo `origin` determina o tipo de ordem que o MRP gera:**
 
@@ -66,6 +83,16 @@ Quando um item do tipo `FABRICACAO` possui operações com origin `EXTERNA` ou `
 | `alternative` | int16 | Número de alternativa do roteiro (padrão: 1) |
 | `description` | string? | Descrição livre do roteiro |
 | `is_standard` | bool | `TRUE` = roteiro usado pelo MRP/CRP; apenas um por item |
+| `valid_from` | date? | Início da vigência (NULL = desde sempre) |
+| `valid_to` | date? | Fim da vigência (NULL = em aberto) |
+
+> **Vigência / efetividade (R6, migration `000178`).** Um roteiro pode valer apenas
+> dentro de uma janela de datas. `GetRouteForItem` (usado por MRP, custo e lead time)
+> seleciona o roteiro **efetivo na data de referência** (hoje por padrão): ativo, dentro
+> da vigência, preferindo o padrão e a revisão mais recentemente vigente
+> (`ORDER BY is_standard DESC, valid_from DESC NULLS LAST, alternative`). Revisões
+> time-phased usam `alternative` distintos, cada um com sua janela — a expirada e a
+> futura são ignoradas. `CHECK (valid_to >= valid_from)`.
 
 #### `route_operations` — operação dentro do roteiro
 
@@ -74,8 +101,9 @@ Quando um item do tipo `FABRICACAO` possui operações com origin `EXTERNA` ou `
 | `sequence` | int16 | Posição (ex: 10, 20, 30) |
 | `operation_id` | int64 | FK para `operations` |
 | `work_center_id` | int64? | Centro de trabalho (sobrescreve o padrão da operação) |
-| `standard_time` | float64? | Tempo corrigido; se nulo, herda da operação |
-| `setup_time` | float64? | Tempo de setup |
+| `standard_time` | float64? | Legado; espelha `run_time` |
+| `setup_time` | float64? | Override do setup; se nulo, herda da operação |
+| `run_time`, `labor_time`, `run_base_qty`, `queue_time`, `wait_time`, `move_time`, `crew_size`, `time_unit` | float64?/string? | **Overrides por componente** — cada um nulo herda a operação. `time_unit` do override reinterpreta os valores sobrescritos |
 | `notes` | text? | Observações livres |
 
 #### `route_operation_network` — grafo de dependências
@@ -87,6 +115,80 @@ Quando um item do tipo `FABRICACAO` possui operações com origin `EXTERNA` ou `
 | `overlap_pct` | float64 | Sobreposição permitida em **porcentagem (0–100)**. Ex: `20` = 20%. O valor `0` (padrão) exige que a predecessora termine 100% antes. Ver CPM abaixo. |
 
 Operações sem sucessor simplesmente não aparecem como `predecessor_id` em nenhuma aresta. A última operação do roteiro não precisa de nenhum registro especial — ela contribui naturalmente para o cálculo de lead time.
+
+#### `route_operation_resources` — recursos alternativos por operação (R5)
+
+Uma operação de roteiro tem um centro de trabalho **primário** (o `effective_work_center_id`), mas pode ter **centros alternativos** que também a executam. Isso permite ao APS/CRP escolher outro recurso quando o primário está sobrecarregado.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `route_operation_id` | int64 | FK para `route_operations` (ON DELETE CASCADE) |
+| `work_center_id` | int64 | Centro de trabalho alternativo (FK `machine_types`) |
+| `priority` | int16 | 1 = mais preferido |
+| `time_factor` | float64 | Escala o tempo da operação nesse recurso (1.0 = base, 1.2 = 20% mais lento, 0.9 = 10% mais rápido) |
+| `is_primary` | bool | No máximo um por operação (índice único parcial). O primário **espelha** em `route_operations.work_center_id` |
+
+> **O primário dirige o custeio/CRP/lead-time.** Ao marcar um recurso como primário (`POST .../primary`), o sistema limpa os demais primários e grava o `work_center_id` na operação de roteiro — de modo que custo, CRP e lead time passam a usar esse CT. Os alternativos ficam disponíveis como opções (a otimização automática de escolha no APS é uma etapa futura). Migration `000175`.
+>
+> ⚠️ **Limitação atual:** o `time_factor` é armazenado como metadado para o APS, mas **ainda não é aplicado** ao tempo efetivo (`EffTime`) do recurso primário — custo/CRP/lead-time usam o tempo-base da operação. Aplicar o fator do recurso escolhido é uma melhoria planejada junto com a otimização do APS.
+
+#### `tools` e `route_operation_tools` — ferramentas com vida útil (R3)
+
+Cadastro de matrizes, dispositivos e ferramentas, com **controle de vida útil** consumida no chão de fábrica — um diferencial vs. Focco (a vida é debitada no apontamento da operação).
+
+| Campo (`tools`) | Tipo | Descrição |
+|-----------------|------|-----------|
+| `code` | int64 | Código único (gerado) |
+| `name`, `tool_type` | string | Nome e tipo (MATRIZ, DISPOSITIVO, FERRAMENTA…) |
+| `life_type` | enum | `GOLPES`, `HORAS` ou `PECAS` — unidade da vida útil |
+| `life_limit` | float64 | Vida total antes da troca (0 = sem controle) |
+| `life_used` | float64 | Vida consumida |
+| `cost` | float64 | Custo da ferramenta |
+| `status` | enum | `ATIVA`, `MANUTENCAO`, `INATIVA` |
+
+`route_operation_tools` liga as ferramentas necessárias a uma operação (N:N, com `qty_required`).
+
+**Consumo de vida (hook no apontamento).** Ao concluir uma operação da OF
+(`POST /api/production-order/operations/advance` com `status=DONE`), o sistema debita a
+vida das ferramentas ligadas à operação de roteiro correspondente:
+- `GOLPES`/`PECAS` → consome `produced_qty` (peças produzidas informadas no apontamento);
+- `HORAS` → consome `actual_hours`.
+
+Quando a vida consumida atinge o limite, a resposta do apontamento traz `tool_alerts`
+(lista de ferramentas que precisam de troca) e a ferramenta passa a aparecer em
+`GET /api/routing/tools/replacement`. Após a troca física, `POST /api/routing/tools/{id}/reset-life`
+zera a vida. O alerta **não bloqueia** a produção (comportamento de bloqueio é configurável/futuro). Migration `000176`.
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST/GET | `/api/routing/tools` | Criar / listar ferramentas (`?only_active=true`) |
+| GET | `/api/routing/tools/replacement` | Ferramentas que atingiram o limite de vida |
+| GET/PUT/DELETE | `/api/routing/tools/{id}` | Consultar / atualizar / desativar |
+| POST | `/api/routing/tools/{id}/reset-life` | Zerar a vida após troca |
+| POST/GET | `/api/routing/route-operations/{routeId}/{opId}/tools` | Associar / listar ferramentas da operação |
+| DELETE | `/api/routing/route-operations/{routeId}/{opId}/tools/{toolLinkId}` | Remover associação |
+
+#### Subcontratação / operações externas (R4)
+
+Operações com origem `EXTERNA` / `TERCEIROS` ganham atributos de subcontratação, na
+`operations` (default) e sobrescrevíveis na `route_operations` (migration `000177`):
+
+| Campo | Descrição |
+|-------|-----------|
+| `supplier_id` | Fornecedor sugerido do serviço |
+| `service_item_code` | Item de serviço a comprar |
+| `cost_per_unit` | Custo do serviço por unidade |
+| `lead_time_days` | Prazo do serviço em dias |
+
+**Gancho com compras.** Ao **firmar** uma ordem planejada de produção
+(`FirmPlannedOrderUseCase`, primeira firmação), além de criar a OF o sistema levanta —
+best-effort, sem bloquear a firmação — uma **requisição de compra de serviço** com uma
+linha por operação externa que tenha `service_item_code`: quantidade = qtde da ordem,
+preço sugerido = `cost_per_unit`, entrega = hoje + `lead_time_days`, aplicação = nome da
+operação. A escolha do fornecedor e a geração do pedido seguem o pipeline de
+requisição→PO já existente. O `enterprise_code` da requisição é configurado no wiring
+(default 1). Reaproveita `GetExternalOpsByItem` (efetivo = override ∘ default), o mesmo
+usado pelo MRP para gerar ordens SERVICO no planejamento.
 
 ---
 
@@ -232,6 +334,14 @@ Dobra:              [==============]        (começa em 3.2h, termina em 5.2h)
 
 O sistema percorre as operações do roteiro na ordem das dependências e calcula para cada uma: **"o mais cedo que ela pode terminar"**.
 
+A **duração de cada operação** vem do modelo de tempo rico, já resolvido em horas e
+**dependente da quantidade** do lote:
+```
+duração(qty) = setup + fila + espera + movimentação + run × ceil(qty / run_base_qty)
+             = EffTime.LeadTimeHours(qty)
+```
+Ou seja, `run` (processo) escala com o tamanho do lote; `setup`/`fila`/`espera`/`movimentação` são fixos por lote. O endpoint de lead time aceita `?qty=` (padrão 1).
+
 **Regra 1 — Operação sem predecessora** (primeira do roteiro ou que começa em paralelo):
 ```
 termina_cedo = duração da operação
@@ -293,6 +403,22 @@ Lead Time = max(2h, 5h, 5.4h) = 5.4h   ← 36 minutos a menos
 
 ---
 
+#### Quantidade-consciente, fallback linear e implementação única
+
+- **Quantidade-consciente:** como a duração usa `run × ceil(qty / run_base_qty)`, o lead
+  time cresce com o tamanho do lote. Ex.: um roteiro cujo `qty=1` dá 2,62 h pode dar
+  56,62 h em `qty=100` (o `setup`/`fila`/`movimentação` não escalam; só o `run`).
+  `GET /api/routing/routes/{id}/lead-time?qty=100`.
+- **Fallback linear:** se o roteiro tem operações mas **nenhuma aresta de rede**, as
+  operações são encadeadas em série pela `sequence` (10 → 20 → 30). Sem esse fallback,
+  o CPM retornaria apenas a maior operação — subestimando o lead time.
+- **Implementação única:** o algoritmo vive em `entity.CriticalPath(ops, edges, qty)`
+  (`internal/domain/routing/entity/critical_path.go`). Tanto o caso de uso de lead time
+  quanto o MRP chamam essa função, de modo que os dois **nunca divergem** (antes havia
+  duas implementações com fórmulas de overlap diferentes).
+
+---
+
 ### Endpoints do módulo de roteiro
 
 | Método | Rota | Descrição |
@@ -313,7 +439,18 @@ Lead Time = max(2h, 5h, 5.4h) = 5.4h   ← 36 minutos a menos
 | GET | `/api/routing/routes/{id}/edges` | Listar dependências da rede |
 | POST | `/api/routing/routes/{id}/edges` | Criar dependência predecessor→sucessor |
 | DELETE | `/api/routing/routes/{id}/edges` | Remover dependência |
-| GET | `/api/routing/routes/{id}/lead-time` | Calcular lead time via CPM |
+| GET | `/api/routing/routes/{id}/lead-time?qty=N` | Calcular lead time via CPM para um lote de `N` peças (padrão 1) |
+| POST | `/api/routing/route-operations/{routeId}/{opId}/resources` | Adicionar recurso alternativo à operação |
+| GET | `/api/routing/route-operations/{routeId}/{opId}/resources` | Listar recursos (primário primeiro) |
+| PUT | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}` | Atualizar prioridade/fator de tempo |
+| POST | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}/primary` | Tornar recurso o primário (espelha no CT da operação) |
+| DELETE | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}` | Remover recurso |
+
+> **Nota (CRP/custo).** As colunas legadas `standard_time` são mantidas espelhadas a
+> `run_time` para os consumidores que ainda as leem (roll-up de custo interino,
+> horas de operação externa). A migração do **custo por centro de trabalho real** e do
+> **CRP com `setup + run×qty`** (separando carga de máquina × mão-de-obra) está na
+> Fase 2 do roteiro enterprise — ver `project_routing_enterprise`.
 
 ---
 
@@ -350,8 +487,16 @@ PCP libera as ordens para o chão de fábrica
 Para cada ordem com roteiro, o CRP olha cada operação e acumula:
 
 ```
-horas necessárias no centro X no dia D  +=  tempo da operação  ×  quantidade da ordem
+horas necessárias no centro X no dia D  +=  MachineHours(quantidade da ordem)
+                                          =  setup + run × ceil(qty / run_base_qty)
 ```
+
+> **Carga quantidade-consciente (Fase 2).** A carga usa o modelo de tempo rico do
+> roteiro: `setup` conta uma vez por lote e o `run` escala com a quantidade — não é mais
+> `tempo_flat × quantidade` (que inflava o setup). A operação é debitada no seu **centro
+> de trabalho efetivo** (`COALESCE(override, padrão da operação)`), de modo que operações
+> que **herdam** o CT deixam de ser ignoradas (bug corrigido). Operações `FANTASMA` não
+> geram carga. Quando o roteiro não está disponível, cai no cálculo antigo (`EffHours × qty`).
 
 Depois, para cada centro de trabalho em cada dia:
 

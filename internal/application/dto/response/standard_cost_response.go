@@ -3,11 +3,13 @@ package response
 import "time"
 
 type WorkCenterCostResponse struct {
-	ID           int64     `json:"id"`
-	WorkCenterID int64     `json:"work_center_id"`
-	CostPerHour  float64   `json:"cost_per_hour"`
-	Currency     string    `json:"currency"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID                 int64     `json:"id"`
+	WorkCenterID       int64     `json:"work_center_id"`
+	CostPerHour        float64   `json:"cost_per_hour"`
+	MachineCostPerHour float64   `json:"machine_cost_per_hour"`
+	LaborCostPerHour   float64   `json:"labor_cost_per_hour"`
+	Currency           string    `json:"currency"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type ItemPurchaseCostResponse struct {

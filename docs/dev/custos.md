@@ -19,11 +19,29 @@ também em [`manufatura-e-compras.md`](manufatura-e-compras.md) §4.
 ### Custos de centro de trabalho (`/work-center-costs`)
 | POST `/` · GET `/` | Upsert e listagem do custo/hora por centro de trabalho |
 
+Campos: `cost_per_hour` (taxa combinada — usada como fallback de máquina) e o **split
+enterprise+** `machine_cost_per_hour` / `labor_cost_per_hour` (migration `000174`).
+Quando o split é omitido, a máquina usa `cost_per_hour` e a mão-de-obra fica em 0.
+
 ### Custos de compra (`/purchase-costs`)
 | POST `/` · GET `/{itemCode}` | Upsert e consulta do custo de compra por item |
 
-Fórmula (resumo): `custo = Σ material(BOM) + Σ (tempo_operação × custo/hora_centro) + overhead`.
-O rollup respeita o LLC para compor o custo dos intermediários antes do produto final.
+Fórmula (resumo): `custo = Σ material(BOM) + custo_de_conversão(roteiro) + overhead`.
+
+**Custo de conversão (Fase 2 — por centro de trabalho real, quantidade-consciente).**
+Cada operação do roteiro é debitada na taxa do **seu próprio** centro de trabalho — não
+mais a média ingênua de todos os centros (bug corrigido). Usa o modelo de tempo rico:
+```
+conversão_unitária = ( Σ_operações [ MachineHours(lot) × machine_rate(CT)
+                                    + LaborHours(lot)   × labor_rate(CT) ] ) ÷ lot
+```
+O `POST /rollup` aceita **`lot_size`** (lote de referência, padrão 1): com `lot_size > 1`
+o **setup é amortizado** sobre o lote (ex.: setup 1 h em lote de 10 → 0,1 h/peça),
+como no custo padrão de Focco/SAP. Operações `FANTASMA` não custam. Quando o roteiro não
+está disponível, cai no cálculo antigo (`horas_totais × média`). O rollup respeita o LLC
+para compor o custo dos intermediários antes do produto final.
+
+> Corpo do rollup: `{ "item_code": 50001, "mask": "", "lot_size": 100, "calculated_by": "<uuid>" }`.
 
 ---
 

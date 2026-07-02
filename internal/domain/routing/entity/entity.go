@@ -37,12 +37,44 @@ type Operation struct {
 	Origin              OperationOrigin
 	Situation           OperationSituation
 	DefaultWorkCenterID *int64  // FK → machine_types.id
-	StandardTime        float64 // hours
-	SetupTime           float64 // hours
-	IsActive            bool
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	CreatedBy           uuid.UUID
+	StandardTime        float64 // legacy flat time (kept in sync with RunTime)
+	SetupTime           float64 // setup, per lot, in TimeUnit
+
+	// Rich time model (defaults; a route operation may override each component).
+	RunTime    float64 // machine/processing time per RunBaseQty, in TimeUnit
+	LaborTime  float64 // direct-labor time per RunBaseQty (0 ⇒ equals RunTime)
+	RunBaseQty float64 // pieces covered by one run cycle (>=1)
+	QueueTime  float64 // fixed per lot, in TimeUnit
+	WaitTime   float64 // fixed per lot, in TimeUnit
+	MoveTime   float64 // fixed per lot, in TimeUnit
+	CrewSize   float64 // simultaneous operators (>=1)
+	TimeUnit   string  // MIN | HORA | DIA
+
+	// Subcontracting defaults (EXTERNA / TERCEIROS). Nil for internal operations.
+	SupplierID      *int64
+	ServiceItemCode *int64
+	CostPerUnit     *float64
+	LeadTimeDays    *int32
+
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.UUID
+}
+
+// DefaultTime returns the operation's default time components (in its own TimeUnit).
+func (o *Operation) DefaultTime() TimeComponents {
+	return TimeComponents{
+		Setup:      o.SetupTime,
+		Run:        o.RunTime,
+		Labor:      o.LaborTime,
+		RunBaseQty: o.RunBaseQty,
+		Queue:      o.QueueTime,
+		Wait:       o.WaitTime,
+		Move:       o.MoveTime,
+		CrewSize:   o.CrewSize,
+		Unit:       o.TimeUnit,
+	}
 }
 
 func NewOperation(
@@ -72,8 +104,14 @@ func NewOperation(
 		DefaultWorkCenterID: defaultWorkCenterID,
 		StandardTime:        standardTime,
 		SetupTime:           setupTime,
-		IsActive:            true,
-		CreatedBy:           createdBy,
+		// Rich-time defaults keep the entity valid-by-construction (DB CHECKs):
+		// run mirrors the legacy standard time, base/crew ≥ 1, unit = HORA.
+		RunTime:    standardTime,
+		RunBaseQty: 1,
+		CrewSize:   1,
+		TimeUnit:   TimeUnitHour,
+		IsActive:   true,
+		CreatedBy:  createdBy,
 	}, nil
 }
 
@@ -87,6 +125,8 @@ type ManufacturingRoute struct {
 	Description *string
 	Situation   RouteSituation
 	IsStandard  bool
+	ValidFrom   *time.Time // nil = valid from the beginning
+	ValidTo     *time.Time // nil = open-ended
 	IsActive    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -99,6 +139,7 @@ func NewManufacturingRoute(
 	alternative int16,
 	description *string,
 	isStandard bool,
+	validFrom, validTo *time.Time,
 	createdBy uuid.UUID,
 ) (*ManufacturingRoute, error) {
 	if code <= 0 {
@@ -110,6 +151,9 @@ func NewManufacturingRoute(
 	if alternative <= 0 {
 		alternative = 1
 	}
+	if validFrom != nil && validTo != nil && validTo.Before(*validFrom) {
+		return nil, errors.New("valid_to cannot be before valid_from")
+	}
 	return &ManufacturingRoute{
 		Code:        code,
 		ItemCode:    itemCode,
@@ -118,6 +162,8 @@ func NewManufacturingRoute(
 		Description: description,
 		Situation:   RouteSituationApproved,
 		IsStandard:  isStandard,
+		ValidFrom:   validFrom,
+		ValidTo:     validTo,
 		IsActive:    true,
 		CreatedBy:   createdBy,
 	}, nil
@@ -139,12 +185,46 @@ type RouteOperation struct {
 	UpdatedAt       time.Time
 	OperationOrigin OperationOrigin // INTERNA / EXTERNA / TERCEIROS
 
+	// Rich time-model overrides (nil ⇒ inherit from the operation default).
+	RunTime    *float64
+	LaborTime  *float64
+	RunBaseQty *float64
+	QueueTime  *float64
+	WaitTime   *float64
+	MoveTime   *float64
+	CrewSize   *float64
+	TimeUnit   *string
+
+	// Subcontracting overrides (nil ⇒ inherit from the operation).
+	SupplierID      *int64
+	ServiceItemCode *int64
+	CostPerUnit     *float64
+	LeadTimeDays    *int32
+
 	// denormalized for reads
-	OperationName    string
-	WorkCenterName   string
-	EffectiveStdTime float64
-	EffectiveSetup   float64
-	RequiresOperator bool // herdado de machine_types; quando true o CPM ignora overlap_pct
+	OperationName         string
+	WorkCenterName        string
+	EffectiveWorkCenterID *int64        // COALESCE(route-op WC, operation default WC) — the CT that actually runs it
+	EffectiveStdTime      float64       // = EffTime.Run (hours); kept for backward-compat
+	EffectiveSetup        float64       // = EffTime.Setup (hours); kept for backward-compat
+	EffTime               OperationTime // resolved, quantity-aware time model (hours)
+	RequiresOperator      bool          // herdado de machine_types; quando true o CPM ignora overlap_pct
+}
+
+// Overrides returns the route-operation's time overrides for resolution.
+// SetupTime (legacy column) doubles as the setup override.
+func (ro *RouteOperation) Overrides() TimeOverrides {
+	return TimeOverrides{
+		Setup:      ro.SetupTime,
+		Run:        ro.RunTime,
+		Labor:      ro.LaborTime,
+		RunBaseQty: ro.RunBaseQty,
+		Queue:      ro.QueueTime,
+		Wait:       ro.WaitTime,
+		Move:       ro.MoveTime,
+		CrewSize:   ro.CrewSize,
+		Unit:       ro.TimeUnit,
+	}
 }
 
 // ExternalOp is a value object representing an external/third-party operation
@@ -156,6 +236,12 @@ type ExternalOp struct {
 	WorkCenterID   *int64
 	EffectiveHours float64
 	Origin         OperationOrigin
+
+	// Subcontracting (effective: route-op override ∘ operation default).
+	SupplierID      *int64
+	ServiceItemCode *int64
+	CostPerUnit     float64
+	LeadTimeDays    int32
 }
 
 func NewRouteOperation(
@@ -186,6 +272,23 @@ func NewRouteOperation(
 		Notes:        notes,
 		IsActive:     true,
 	}, nil
+}
+
+// RouteOpResource is an alternative work center that can run a route operation.
+// The primary resource (IsPrimary) mirrors route_operations.work_center_id; the
+// others are options the APS/CRP may pick when the primary is overloaded.
+type RouteOpResource struct {
+	ID               int64
+	RouteOperationID int64
+	WorkCenterID     int64
+	Priority         int16   // 1 = most preferred
+	TimeFactor       float64 // scales op time on this resource (1.0 = base, 1.2 = 20% slower)
+	IsPrimary        bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+
+	// denormalized for reads
+	WorkCenterName string
 }
 
 // NetworkEdge represents a predecessor → successor dependency in a route.

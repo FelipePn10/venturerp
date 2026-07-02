@@ -1292,7 +1292,9 @@ func (s *MRPServiceImpl) getLeadTimeDays(rulesMap map[int64][]*entity.Configured
 			ops, err := s.RoutingRepo.GetRouteOperations(context.Background(), route.ID)
 			if err == nil && len(ops) > 0 {
 				edges, _ := s.RoutingRepo.GetNetworkEdges(context.Background(), route.ID)
-				totalHours := criticalPathHours(ops, edges)
+				// qty=1: item-level planning lead time (per unit / per base batch).
+				// Shared CPM implementation with the routing lead-time use case.
+				totalHours := routingentity.CriticalPath(ops, edges, 1.0).TotalHours
 				if totalHours > 0 {
 					days := int(math.Ceil(totalHours / 8.0)) // 8h = 1 dia útil
 					if days > 0 {
@@ -1705,58 +1707,3 @@ func mpsPeriodToDate(periodType string, periodValue, year int) time.Time {
 	}
 }
 
-// criticalPathHours computes the CPM critical-path total hours from route ops + network edges.
-// Mirrors the algorithm in routing_uc/lead_time_uc.go but works directly on domain entities.
-func criticalPathHours(ops []*routingentity.RouteOperation, edges []*routingentity.NetworkEdge) float64 {
-	successors := make(map[int64][]int64)
-	predecessors := make(map[int64][]int64)
-	overlapByEdge := make(map[[2]int64]float64)
-	for _, e := range edges {
-		successors[e.PredecessorID] = append(successors[e.PredecessorID], e.SuccessorID)
-		predecessors[e.SuccessorID] = append(predecessors[e.SuccessorID], e.PredecessorID)
-		overlapByEdge[[2]int64{e.PredecessorID, e.SuccessorID}] = e.OverlapPct
-	}
-	inDegree := make(map[int64]int, len(ops))
-	for _, op := range ops {
-		inDegree[op.ID] = len(predecessors[op.ID])
-	}
-	queue := make([]int64, 0)
-	for id, deg := range inDegree {
-		if deg == 0 {
-			queue = append(queue, id)
-		}
-	}
-	opByID := make(map[int64]*routingentity.RouteOperation, len(ops))
-	for _, op := range ops {
-		opByID[op.ID] = op
-	}
-	earlyFinish := make(map[int64]float64, len(ops))
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		op := opByID[cur]
-		opTime := op.EffectiveStdTime + op.EffectiveSetup
-		ef := opTime
-		for _, predID := range predecessors[cur] {
-			overlap := overlapByEdge[[2]int64{predID, cur}] / 100.0
-			c := earlyFinish[predID]*(1-overlap) + opTime
-			if c > ef {
-				ef = c
-			}
-		}
-		earlyFinish[cur] = ef
-		for _, sucID := range successors[cur] {
-			inDegree[sucID]--
-			if inDegree[sucID] == 0 {
-				queue = append(queue, sucID)
-			}
-		}
-	}
-	var maxEF float64
-	for _, ef := range earlyFinish {
-		if ef > maxEF {
-			maxEF = ef
-		}
-	}
-	return maxEF
-}

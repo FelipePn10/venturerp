@@ -71,6 +71,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
 	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
@@ -142,6 +143,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure_query"
 	supplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/supplier"
+	toolRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/tool"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler"
@@ -465,6 +467,11 @@ func (app *application) mount() chi.Router {
 	routingLeadTimeUC := routing_uc.NewLeadTimeUseCase(rRepo)
 	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC)
 
+	// tooling with useful-life tracking (R3)
+	toolRepository := toolRepo.New(queries)
+	toolUC := tool_uc.New(toolRepository)
+	toolHandler := handler.NewToolHandler(toolUC)
+
 	// cutting plan repo (handler wired after the stock repository is built — fase 2)
 	cuttingPlanRepo := cuttingPlanRepository.New(queries, app.db.Pool)
 
@@ -475,12 +482,12 @@ func (app *application) mount() chi.Router {
 
 	// standard cost
 	scRepo := standardCostRepo.New(queries)
-	standardCostUC := cost_uc.New(scRepo)
+	standardCostUC := cost_uc.New(scRepo).WithRouting(rRepo)
 	standardCostHandler := handler.NewStandardCostHandler(standardCostUC)
 
 	// CRP
 	crpRepository := crpRepo.New(queries)
-	crpUC := crp_uc.New(crpRepository)
+	crpUC := crp_uc.New(crpRepository).WithRouting(rRepo)
 	crpHandler := handler.NewCRPHandler(crpUC)
 	// maintenance repo wired after it is created (see below)
 
@@ -624,6 +631,11 @@ func (app *application) mount() chi.Router {
 
 	// purchase requisitions + generation of purchase orders from requisitions
 	purchaseReqRepository := purchaseReqRepo.New(queries, app.db.Pool)
+	// Wire the subcontracting hook: firming a production order raises a service
+	// requisition for its external operations (R4).
+	plannedFirmUC.ReqRepo = purchaseReqRepository
+	plannedFirmUC.ExternalOps = rRepo
+	plannedFirmUC.EnterpriseCode = 1
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
 		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository),
 		&purchase_requisition_uc.GeneratePurchaseOrdersUseCase{
@@ -1524,7 +1536,27 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{opId}", routingHandler.RemoveRouteOperation)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/network/set", routingHandler.SetNetworkEdge)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/network", routingHandler.DeleteNetworkEdge)
+					// Alternative resources per operation (R5).
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{opId}/resources", routingHandler.AddRouteOpResource)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{opId}/resources", routingHandler.ListRouteOpResources)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{opId}/resources/{resourceId}", routingHandler.UpdateRouteOpResource)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{opId}/resources/{resourceId}/primary", routingHandler.SetRouteOpResourcePrimary)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{opId}/resources/{resourceId}", routingHandler.RemoveRouteOpResource)
+					// Tools required by the operation (R3).
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{opId}/tools", toolHandler.AddRouteOpTool)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{opId}/tools", toolHandler.ListRouteOpTools)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{opId}/tools/{toolLinkId}", toolHandler.RemoveRouteOpTool)
 				})
+			})
+			// Tooling master with useful-life tracking (R3).
+			r.Route("/tools", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", toolHandler.CreateTool)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", toolHandler.ListTools)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/replacement", toolHandler.ListToolsNeedingReplacement)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", toolHandler.GetTool)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", toolHandler.UpdateTool)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", toolHandler.DeactivateTool)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/reset-life", toolHandler.ResetToolLife)
 			})
 		})
 		r.Route("/api/cutting-plans", func(r chi.Router) {

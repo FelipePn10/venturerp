@@ -34,6 +34,15 @@ type RoutingRepository interface {
 	DeleteNetworkEdge(ctx context.Context, predecessorID, successorID int64) error
 	GetNetworkEdges(ctx context.Context, routeID int64) ([]*entity.NetworkEdge, error)
 
+	// Alternative resources per route operation
+	AddRouteOpResource(ctx context.Context, res *entity.RouteOpResource) (*entity.RouteOpResource, error)
+	UpdateRouteOpResource(ctx context.Context, res *entity.RouteOpResource) (*entity.RouteOpResource, error)
+	GetRouteOpResource(ctx context.Context, id int64) (*entity.RouteOpResource, error)
+	RemoveRouteOpResource(ctx context.Context, id int64) error
+	SetRouteOpResourcePrimary(ctx context.Context, id, routeOperationID, workCenterID int64) (*entity.RouteOpResource, error)
+	ListResourcesByRouteOp(ctx context.Context, routeOperationID int64) ([]*entity.RouteOpResource, error)
+	ListResourcesByRoute(ctx context.Context, routeID int64) ([]*entity.RouteOpResource, error)
+
 	// MRP
 	GetRouteForItem(ctx context.Context, itemCode int64, mask string) (*entity.ManufacturingRoute, error)
 	ItemHasRoute(ctx context.Context, itemCode int64) (bool, error)

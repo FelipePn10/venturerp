@@ -2,6 +2,8 @@ package planned_order_uc
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -12,7 +14,16 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	productionrepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
+	reqentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
+	reqrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
+	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 )
+
+// externalOpsReader is the slice of the routing repository needed to raise service
+// requisitions for a firmed order's external/third-party operations.
+type externalOpsReader interface {
+	GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*routingentity.ExternalOp, error)
+}
 
 type FirmPlannedOrderUseCase struct {
 	Repo repository.PlannedOrderRepository
@@ -21,6 +32,13 @@ type FirmPlannedOrderUseCase struct {
 	// also creates the corresponding Production Order (OF), mirroring the
 	// approve→purchase-order flow already in place on the purchasing side.
 	ProdOrderRepo productionrepo.ProductionOrderRepository
+
+	// Subcontracting hook (R4) — all optional. When set, firming a production order
+	// whose item has external/third-party operations raises a service purchase
+	// requisition (one item per external op with a service item).
+	ReqRepo        reqrepo.PurchaseRequisitionRepository
+	ExternalOps    externalOpsReader
+	EnterpriseCode int64 // enterprise the requisition belongs to (defaults to 1)
 }
 
 func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
@@ -46,9 +64,76 @@ func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.Firm
 		if ofErr := uc.createProductionOrder(ctx, order); ofErr != nil {
 			return nil, ofErr
 		}
+		// Best-effort: raise a service requisition for external operations. A
+		// subcontracting hiccup must not block firming the order.
+		if uc.ReqRepo != nil && uc.ExternalOps != nil {
+			_, _ = uc.generateServiceRequisition(ctx, order)
+		}
 	}
 
 	return toPlannedOrderResponse(order), nil
+}
+
+// generateServiceRequisition raises one purchase requisition covering the service
+// items of the firmed order's external/third-party operations. Returns nil when the
+// item has no external operations with a service item configured.
+func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Context, order *entity.PlannedOrder) (int64, error) {
+	ext, err := uc.ExternalOps.GetExternalOpsByItem(ctx, order.ItemCode)
+	if err != nil || len(ext) == 0 {
+		return 0, err
+	}
+
+	// Only external ops with a service item to buy generate requisition lines.
+	var withService []*routingentity.ExternalOp
+	for _, op := range ext {
+		if op.ServiceItemCode != nil {
+			withService = append(withService, op)
+		}
+	}
+	if len(withService) == 0 {
+		return 0, nil
+	}
+
+	entCode := uc.EnterpriseCode
+	if entCode == 0 {
+		entCode = 1
+	}
+	code, err := uc.ReqRepo.NextCode(ctx)
+	if err != nil {
+		return 0, err
+	}
+	notes := fmt.Sprintf("Serviços da OF do item %d (firmada)", order.ItemCode)
+	req, err := reqentity.NewPurchaseRequisition(code, entCode, order.CreatedBy)
+	if err != nil {
+		return 0, err
+	}
+	req.Notes = &notes
+	created, err := uc.ReqRepo.Create(ctx, req)
+	if err != nil {
+		return 0, err
+	}
+
+	serv := "SERV"
+	for i, op := range withService {
+		app := fmt.Sprintf("Op. externa: %s (%.2fh)", op.OperationName, op.EffectiveHours)
+		item := &reqentity.PurchaseRequisitionItem{
+			RequisitionCode: created.Code,
+			Sequence:        int32(i + 1),
+			ItemCode:        *op.ServiceItemCode,
+			Quantity:        order.Quantity,
+			UOM:             &serv,
+			SuggestedPrice:  op.CostPerUnit,
+			Application:     &app,
+		}
+		if op.LeadTimeDays > 0 {
+			d := time.Now().AddDate(0, 0, int(op.LeadTimeDays))
+			item.DeliveryDate = &d
+		}
+		if _, err := uc.ReqRepo.AddItem(ctx, item); err != nil {
+			return created.Code, err
+		}
+	}
+	return created.Code, nil
 }
 
 // createProductionOrder builds the OF from the firmed planned order, mirroring
