@@ -2785,27 +2785,18 @@ type AuditLog struct {
 	LatencyMs  *int64
 }
 
-type Bom struct {
+type BomHeader struct {
 	ID        int64
-	ProductID int64
+	ItemCode  int64
+	Mask      pgtype.Text
 	BomType   string
 	Version   int32
 	Status    string
 	ValidFrom pgtype.Date
-	CreatedAt pgtype.Timestamp
-	Mask      int64
-}
-
-type BomItem struct {
-	ID            int64
-	BomID         int64
-	ComponentID   int64
-	Quantity      pgtype.Numeric
-	Uom           pgtype.Text
-	ScrapPercent  pgtype.Numeric
-	OperationID   int64
-	CreatedAt     pgtype.Timestamp
-	MaskComponent int64
+	IsActive  bool
+	CreatedBy pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type CapacityRequirement struct {

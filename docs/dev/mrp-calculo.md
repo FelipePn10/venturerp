@@ -148,6 +148,13 @@ A "receita" de cada produto: quais componentes são necessários e em que quanti
 | **Percentual de perda** | Se há perda no processo (ex: corte de tecido gera sobra), o MRP já aumenta a quantidade necessária |
 | **Máscara pai** | Se preenchida, esse componente só é usado na variação específica do produto |
 
+> **Fonte única da BOM.** As **linhas** da estrutura vivem em `item_structures`
+> (esta tabela). O **cabeçalho** — versão, status (DRAFT/APPROVED/OBSOLETE) e tipo
+> (EBOM/MBOM) por item+máscara — vive em `bom_headers` (migration `000180`),
+> exposto em `POST/GET /api/bom-headers` (versão auto-incrementada; `PUT /{id}/status`
+> aprova/obsoleta). O modelo fino paralelo `boms`/`bom_items` (rotas `/api/bom`) foi
+> **aposentado e migrado** — `item_structures` + `bom_headers` são a fonte única.
+
 ---
 
 #### Snapshot de Estoque

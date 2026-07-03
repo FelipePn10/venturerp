@@ -14,7 +14,7 @@ import (
 	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_header_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cnpj_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
@@ -86,8 +86,7 @@ import (
 	accountingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
 	apsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aps"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom"
-	bomitem "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_item"
+	bomHeaderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_header"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
 	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
@@ -251,17 +250,8 @@ func (app *application) mount() chi.Router {
 	consultStructureUc := structure_uc.NewConsultStructureUseCase(itemRepoStructureQuery)
 	whereUsedUc := structure_uc.NewWhereUsedUseCase(itemRepoStructureQuery)
 	queryStructureHandler := handler.NewQueryStructureHandler(queryStructureUc, consultStructureUc, whereUsedUc)
-	// bom
-	bomRepo := bom.NewRepostioryBomSQLC(queries)
-
-	createBomUc := bom_uc.NewCreateBomUseCase(bomRepo, authService)
-	bomHandler := handler.NewCreateBomHandler(createBomUc)
-
-	// bom item
-	bomItemRepo := bomitem.NewRepositoryBomItemSQLC(queries)
-
-	createBomItemUc := &bom_uc.CreateBomItemUseCase{Repo: bomItemRepo, Auth: authService}
-	bomItemHandler := handler.NewCreateBomItemHandler(createBomItemUc)
+	// BOM header (version/status/type) — item_structures holds the lines.
+	bomHeaderHandler := handler.NewBomHeaderHandler(bom_header_uc.New(bomHeaderRepo.New(queries)))
 
 	// warehouse
 	warehouseRepo := warehouse.NewRepositoryQuestionSQLC(queries)
@@ -1142,11 +1132,12 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", associateByQuestionItemHandler.GetQuestionsByItem)
 			})
 		})
-		r.Route("/api/bom", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", bomHandler.Create)
-			r.Route("/bom-items", func(r chi.Router) {
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", bomItemHandler.Create)
-			})
+		// BOM header (versão/status/tipo) — as linhas da estrutura ficam em /api/items/structure.
+		r.Route("/api/bom-headers", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", bomHeaderHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", bomHeaderHandler.ListByItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", bomHeaderHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}/status", bomHeaderHandler.UpdateStatus)
 		})
 		r.Route("/api/warehouse", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", warehouseHandler.CreateWarehouse)

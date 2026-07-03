@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
@@ -135,22 +134,6 @@ func NewGeneratMaskItemHandler(
 ) *GenerateMaskHandler {
 	return &GenerateMaskHandler{
 		generateMask: generateMaskProductUC,
-	}
-}
-
-func NewCreateBomHandler(
-	createBomUC *bom_uc.CreateBomUseCase,
-) *BomHandler {
-	return &BomHandler{
-		createBomUC: createBomUC,
-	}
-}
-
-func NewCreateBomItemHandler(
-	createBomItemUC *bom_uc.CreateBomItemUseCase,
-) *BomItemHandler {
-	return &BomItemHandler{
-		createBomItemUC: createBomItemUC,
 	}
 }
 
