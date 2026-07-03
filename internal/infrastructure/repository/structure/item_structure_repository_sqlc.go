@@ -34,6 +34,8 @@ func (r *ItemStructureRepositorySQLC) Create(
 		StartDate:         pgutil.ToPgDateFromPtr(s.StartDate),
 		EndDate:           pgutil.ToPgDateFromPtr(s.EndDate),
 		LossFormula:       stringPtrToPgText(s.LossFormula),
+		IsCoproduct:       s.IsCoproduct,
+		IsFixedQty:        s.IsFixedQty,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating structure: %w", err)
@@ -60,6 +62,8 @@ func (r *ItemStructureRepositorySQLC) Update(
 		StartDate:         pgutil.ToPgDateFromPtr(s.StartDate),
 		EndDate:           pgutil.ToPgDateFromPtr(s.EndDate),
 		LossFormula:       stringPtrToPgText(s.LossFormula),
+		IsCoproduct:       s.IsCoproduct,
+		IsFixedQty:        s.IsFixedQty,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating structure: %w", err)
@@ -178,6 +182,8 @@ func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
 			ChildCode:      e.ChildCode,
 			Quantity:       pgutil.FromPgNumericToFloat64(e.Quantity),
 			LossPercentage: pgutil.FromPgNumericToFloat64(e.LossPercentage),
+			IsCoproduct:    e.IsCoproduct,
+			IsFixedQty:     e.IsFixedQty,
 			IsActive:       true,
 		}
 		if e.ParentMask.Valid {
@@ -221,6 +227,8 @@ func rowToEntity(row sqlc.ItemStructure) *entity.ItemStructure {
 		UpdatedAt:         pgutil.FromPgTimestamptz(row.UpdatedAt),
 		StartDate:         pgutil.FromPgDateToPtr(row.StartDate),
 		EndDate:           pgutil.FromPgDateToPtr(row.EndDate),
+		IsCoproduct:       row.IsCoproduct,
+		IsFixedQty:        row.IsFixedQty,
 	}
 
 	if row.ParentMask.Valid {
@@ -262,6 +270,8 @@ func mapDirectChildrenRows(rows []sqlc.GetAllDirectChildrenRow) []*entity.ItemSt
 			UpdatedAt:         pgutil.FromPgTimestamptz(row.UpdatedAt),
 			StartDate:         pgutil.FromPgDateToPtr(row.StartDate),
 			EndDate:           pgutil.FromPgDateToPtr(row.EndDate),
+			IsCoproduct:       row.IsCoproduct,
+			IsFixedQty:        row.IsFixedQty,
 		}
 
 		if row.ParentMask.Valid {

@@ -4347,6 +4347,8 @@ type ItemStructure struct {
 	StartDate         pgtype.Date
 	EndDate           pgtype.Date
 	LossFormula       pgtype.Text
+	IsCoproduct       bool
+	IsFixedQty        bool
 }
 
 type ItemUnitConversion struct {

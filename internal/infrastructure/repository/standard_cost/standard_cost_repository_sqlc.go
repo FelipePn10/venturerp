@@ -146,6 +146,8 @@ func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, pare
 			ChildCode:      row.ChildCode,
 			Quantity:       row.Quantity,
 			LossPercentage: row.LossPercentage,
+			IsCoproduct:    row.IsCoproduct,
+			IsFixedQty:     row.IsFixedQty,
 		})
 	}
 	return out, nil

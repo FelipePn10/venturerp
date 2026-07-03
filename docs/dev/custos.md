@@ -37,7 +37,12 @@ conversão_unitária = ( Σ_operações [ MachineHours(lot) × machine_rate(CT)
 ```
 O `POST /rollup` aceita **`lot_size`** (lote de referência, padrão 1): com `lot_size > 1`
 o **setup é amortizado** sobre o lote (ex.: setup 1 h em lote de 10 → 0,1 h/peça),
-como no custo padrão de Focco/SAP. Operações `FANTASMA` não custam. Quando o roteiro não
+como no custo padrão de Focco/SAP.
+
+> **Co-produtos e quantidade fixa (BOM).** Componentes `is_coproduct` **creditam** o
+> custo do pai pelo seu valor (`material -= valor_coproduto × qtde`) — recuperação de
+> subproduto/sucata; o material nunca fica negativo. Componentes `is_fixed_qty` são
+> **amortizados** pelo `lot_size` (`material += valor × qtde ÷ lote`). Operações `FANTASMA` não custam. Quando o roteiro não
 está disponível, cai no cálculo antigo (`horas_totais × média`). O rollup respeita o LLC
 para compor o custo dos intermediários antes do produto final.
 

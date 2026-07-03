@@ -26,11 +26,13 @@ INSERT INTO item_structures (
     inherit,
     start_date,
     end_date,
-    loss_formula
+    loss_formula,
+    is_coproduct,
+    is_fixed_qty
 ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
          )
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty
 `
 
 type CreateStructureComponentParams struct {
@@ -48,6 +50,8 @@ type CreateStructureComponentParams struct {
 	StartDate         pgtype.Date
 	EndDate           pgtype.Date
 	LossFormula       pgtype.Text
+	IsCoproduct       bool
+	IsFixedQty        bool
 }
 
 func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStructureComponentParams) (ItemStructure, error) {
@@ -66,6 +70,8 @@ func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStruct
 		arg.StartDate,
 		arg.EndDate,
 		arg.LossFormula,
+		arg.IsCoproduct,
+		arg.IsFixedQty,
 	)
 	var i ItemStructure
 	err := row.Scan(
@@ -87,6 +93,8 @@ func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStruct
 		&i.StartDate,
 		&i.EndDate,
 		&i.LossFormula,
+		&i.IsCoproduct,
+		&i.IsFixedQty,
 	)
 	return i, err
 }
@@ -124,7 +132,9 @@ SELECT
     s.updated_at,
     s.inherit,
     s.start_date,
-    s.end_date
+    s.end_date,
+    s.is_coproduct,
+    s.is_fixed_qty
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
@@ -152,6 +162,8 @@ type GetAllDirectChildrenRow struct {
 	Inherit           bool
 	StartDate         pgtype.Date
 	EndDate           pgtype.Date
+	IsCoproduct       bool
+	IsFixedQty        bool
 }
 
 func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([]GetAllDirectChildrenRow, error) {
@@ -183,6 +195,8 @@ func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([
 			&i.Inherit,
 			&i.StartDate,
 			&i.EndDate,
+			&i.IsCoproduct,
+			&i.IsFixedQty,
 		); err != nil {
 			return nil, err
 		}
@@ -296,15 +310,36 @@ WHERE parent_code = $1
 ORDER BY sequence, id
 `
 
-func (q *Queries) GetGenericChildren(ctx context.Context, parentCode int64) ([]ItemStructure, error) {
+type GetGenericChildrenRow struct {
+	ID                int64
+	ParentMask        pgtype.Text
+	Quantity          float64
+	UnitOfMeasurement UnitOfMeasurementEnum
+	LossPercentage    float64
+	Sequence          int32
+	Notes             pgtype.Text
+	IsActive          bool
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	ParentCode        int64
+	ChildCode         int64
+	Health            HealthEnum
+	Inherit           bool
+	StartDate         pgtype.Date
+	EndDate           pgtype.Date
+	LossFormula       pgtype.Text
+}
+
+func (q *Queries) GetGenericChildren(ctx context.Context, parentCode int64) ([]GetGenericChildrenRow, error) {
 	rows, err := q.db.Query(ctx, getGenericChildren, parentCode)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ItemStructure
+	var items []GetGenericChildrenRow
 	for rows.Next() {
-		var i ItemStructure
+		var i GetGenericChildrenRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ParentMask,
@@ -434,7 +469,7 @@ func (q *Queries) GetItemQuestions(ctx context.Context, itemCode int64) ([]GetIt
 }
 
 const getStructureComponentByID = `-- name: GetStructureComponentByID :one
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty
 FROM item_structures
 WHERE id = $1
 `
@@ -461,6 +496,8 @@ func (q *Queries) GetStructureComponentByID(ctx context.Context, id int64) (Item
 		&i.StartDate,
 		&i.EndDate,
 		&i.LossFormula,
+		&i.IsCoproduct,
+		&i.IsFixedQty,
 	)
 	return i, err
 }
@@ -530,6 +567,8 @@ SET
     start_date          = $10,
     end_date            = $11,
     loss_formula        = $12,
+    is_coproduct        = $13,
+    is_fixed_qty        = $14,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -538,7 +577,7 @@ WHERE parent_code = $1
         OR (parent_mask IS NULL AND $3 IS NULL)
     )
   AND is_active = TRUE
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty
 `
 
 type UpdateStructureComponentParams struct {
@@ -554,6 +593,8 @@ type UpdateStructureComponentParams struct {
 	StartDate         pgtype.Date
 	EndDate           pgtype.Date
 	LossFormula       pgtype.Text
+	IsCoproduct       bool
+	IsFixedQty        bool
 }
 
 func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStructureComponentParams) (ItemStructure, error) {
@@ -570,6 +611,8 @@ func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStruct
 		arg.StartDate,
 		arg.EndDate,
 		arg.LossFormula,
+		arg.IsCoproduct,
+		arg.IsFixedQty,
 	)
 	var i ItemStructure
 	err := row.Scan(
@@ -591,6 +634,8 @@ func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStruct
 		&i.StartDate,
 		&i.EndDate,
 		&i.LossFormula,
+		&i.IsCoproduct,
+		&i.IsFixedQty,
 	)
 	return i, err
 }

@@ -30,6 +30,8 @@ type ItemStructure struct {
 	Notes             *string
 	StartDate         *time.Time // nil = sem restrição de início
 	EndDate           *time.Time // nil = sem restrição de fim
+	IsCoproduct       bool       // true = SAÍDA (co-produto/subproduto/sucata), não insumo
+	IsFixedQty        bool       // true = quantidade por OF (lote), não por unidade do pai
 	IsActive          bool
 	CreatedBy         uuid.UUID
 	CreatedAt         time.Time

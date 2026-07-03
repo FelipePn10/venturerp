@@ -529,7 +529,9 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
 	plannedHandler := handler.NewPlannedOrderHandler(plannedCreateUC, plannedListUC, plannedFirmUC)
 
-	mrpFirmarSugestaoUC := &mrp_uc.FirmarSugestaoMRPUseCase{MRPRepo: mrpRepo, PlannedRepo: plannedRepo, Auth: authService}
+	// Firmer=plannedFirmUC: accepting an MRP suggestion also fires the firm step,
+	// generating the OF (production) / service requisition — one-step conversion.
+	mrpFirmarSugestaoUC := &mrp_uc.FirmarSugestaoMRPUseCase{MRPRepo: mrpRepo, PlannedRepo: plannedRepo, Auth: authService, Firmer: plannedFirmUC}
 	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC, mrpFirmarSugestaoUC)
 
 	// production order
@@ -702,6 +704,7 @@ func (app *application) mount() chi.Router {
 	// Production consumption/completion post stock movements automatically.
 	prodOrderAddConsumptionUC.StockRepo = stockRepository
 	prodOrderCompleteUC.StockRepo = stockRepository
+	prodOrderCompleteUC.Structure = itemRepoStructure // recebe co-produtos/sucata no fecho da OF
 	// Scrap return posts a valued IN movement of the scrap by-product.
 	prodOrderReturnScrapUC.StockRepo = stockRepository
 	// Appointment backflush: auto-consume BOM components from stock.

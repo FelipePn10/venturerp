@@ -29,6 +29,8 @@ type CreateStructureComponentDTO struct {
 	Inherit           bool                            `json:"inherit"`
 	StartDate         *time.Time                      `json:"start_date,omitempty"`
 	EndDate           *time.Time                      `json:"end_date,omitempty"`
+	IsCoproduct       bool                            `json:"is_coproduct"` // saída (co-produto/sucata), não insumo
+	IsFixedQty        bool                            `json:"is_fixed_qty"` // quantidade por OF (lote)
 	CreatedBy         uuid.UUID                       `json:"created_by"`
 }
 

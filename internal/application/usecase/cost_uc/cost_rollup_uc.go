@@ -208,9 +208,20 @@ func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, m
 			if err2 != nil {
 				return nil, err2
 			}
+			if child.IsCoproduct {
+				// By-product / returnable scrap: CREDIT the parent by the co-product value.
+				materialCost -= childNode.total() * child.Quantity
+				continue
+			}
 			netQty := child.Quantity * (1 + child.LossPercentage/100)
+			if child.IsFixedQty && lotSize > 0 {
+				netQty /= lotSize // amortize the fixed component over the reference lot
+			}
 			materialCost += childNode.total() * netQty
 			childNodes = append(childNodes, childNode)
+		}
+		if materialCost < 0 {
+			materialCost = 0 // by-product credits never yield a negative material cost
 		}
 	}
 

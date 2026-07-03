@@ -1484,7 +1484,17 @@ func explodeFromBOMWithFormula(
 		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
 			continue
 		}
-		adjustedQty := applyLossFormula(quantity, child.Quantity, child.LossPercentage, formula)
+		// Co-products/by-products/scrap are OUTPUTS, not consumed inputs → no demand.
+		if child.IsCoproduct {
+			continue
+		}
+		// Fixed-quantity components are consumed once per order (per lot), not scaled
+		// by the parent quantity; run the loss formula against a base of 1.
+		base := quantity
+		if child.IsFixedQty {
+			base = 1
+		}
+		adjustedQty := applyLossFormula(base, child.Quantity, child.LossPercentage, formula)
 		inputs = append(inputs, &entity.MRPInput{
 			ItemCode: child.ChildCode,
 			Quantity: adjustedQty,

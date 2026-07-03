@@ -179,3 +179,33 @@ func TestCollectAllItemCodes(t *testing.T) {
 		t.Errorf("expected 3 distinct codes, got %d (%v)", len(codes), codes)
 	}
 }
+
+func TestExplodeFromBOM_CoproductAndFixedQty(t *testing.T) {
+	// Parent 1 → normal child 2 (2/un), co-product 3 (output), fixed child 4 (1 por OF).
+	bomMap := map[int64][]*structentity.ItemStructure{
+		1: {
+			{ChildCode: 2, Quantity: 2},
+			{ChildCode: 3, Quantity: 5, IsCoproduct: true},
+			{ChildCode: 4, Quantity: 1, IsFixedQty: true},
+		},
+	}
+	// Produzindo 10 unidades, sem perda, fórmula 1.
+	inputs := explodeFromBOMWithFormula(bomMap, 1, "", 10, 1, 1)
+
+	got := map[int64]float64{}
+	for _, in := range inputs {
+		got[in.ItemCode] = in.Quantity
+	}
+	if _, ok := got[3]; ok {
+		t.Error("co-produto (3) não deve gerar demanda dependente")
+	}
+	if got[2] != 20 {
+		t.Errorf("child normal 2 = %v, want 20 (2×10)", got[2])
+	}
+	if got[4] != 1 {
+		t.Errorf("child fixo 4 = %v, want 1 (por OF, não ×10)", got[4])
+	}
+	if len(inputs) != 2 {
+		t.Errorf("inputs = %d, want 2 (normal + fixo, co-produto excluído)", len(inputs))
+	}
+}

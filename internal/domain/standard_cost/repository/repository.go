@@ -34,4 +34,6 @@ type BOMChild struct {
 	ChildCode      int64
 	Quantity       float64
 	LossPercentage float64
+	IsCoproduct    bool // OUTPUT (co-produto/sucata) → credita o custo do pai
+	IsFixedQty     bool // quantidade por lote → amortizada pelo lote de referência
 }

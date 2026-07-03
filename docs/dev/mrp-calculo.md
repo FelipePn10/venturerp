@@ -217,7 +217,22 @@ O resultado central do MRP. Para cada necessidade líquida calculada, o MRP gera
 - **Item pai** que gerou essa necessidade (se for demanda dependente)
 - **LLC do item** (para ordenação do processamento)
 
+> **Co-produtos e quantidade fixa na explosão (BOM).** Componentes marcados como
+> `is_coproduct` são **saídas** (co-produto/subproduto/sucata) — a explosão **não** gera
+> demanda dependente para eles. Componentes `is_fixed_qty` são consumidos **uma vez por
+> OF** (a fórmula de perda roda sobre base 1, sem multiplicar pela quantidade da ordem).
+
 Essas sugestões ficam em análise. O planejador pode aceitar, rejeitar, ou modificar. Quando aceita, a sugestão se transforma em uma **Ordem Planejada** real no sistema.
+
+> **Conversão sugestão → OF (padrão SAP "converter ordem planejada em ordem de produção").**
+> As sugestões usam tipos internos em PT (`FABRICACAO`/`COMPRA`/`SERVICO`/`TECHNICAL_ASSISTANCE`)
+> e são mapeadas para o enum do banco em EN (`PRODUCTION`/`PURCHASE`/`OUTSOURCING`/`TECHNICAL_ASSISTANCE`)
+> por `mapMRPOrderType` ao aceitar (`FirmarSugestaoMRPUseCase`). Aceitar uma sugestão agora
+> **firma a ordem em um passo** — cria a Ordem Planejada e, via `FirmPlannedOrderUseCase`,
+> gera a **Ordem de Fabricação (OF)** para ordens de produção e a **requisição de serviço**
+> para operações externas. (Antes, a sugestão criava só a Ordem Planejada já firme e a OF
+> nunca era gerada — corrigido.) Rastro (pegging): a cadeia demanda → plano → sugestão →
+> ordem planejada → OF é preservada via `plan_code`, `parent_item` e `planned_order_id`.
 
 ---
 
