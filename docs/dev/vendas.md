@@ -97,7 +97,138 @@ Exemplo de corpo do `POST /create`:
 
 ---
 
-## 3. Promessa de Entrega
+## 3. Precificação (`/api/customers/sales-tables`)
+
+O módulo de precificação mantém tabelas comerciais de venda, preços por item,
+políticas de formação de preço, cálculo de preço sugerido e histórico de
+reprecificação. A implementação usa os cadastros comerciais abaixo:
+
+- `sales_tables`: cabeçalho da tabela de vendas, com vigência, formação de preço,
+  tolerância, composição, tipo e casas decimais.
+- `sales_table_prices`: preço por item dentro da tabela, com UME/UMC, situação,
+  bloqueio, fórmula e observação.
+- `sales_price_policies`: política persistente de formação de preço, com
+  prioridade/sequência, escopo operacional, tipos de regra, fonte de custo,
+  margem mínima/máxima/ideal, incidências em JSON, vigência e tabela padrão.
+- `sales_table_price_history`: histórico de alteração/reprecificação de preços.
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/api/customers/sales-tables` | Cria tabela de vendas |
+| GET | `/api/customers/sales-tables` | Lista tabelas |
+| GET | `/api/customers/sales-tables/{tableCode}` | Consulta tabela por código |
+| PUT | `/api/customers/sales-tables/{tableCode}` | Atualiza tabela por código |
+| POST | `/api/customers/sales-tables/{tableCode}/prices` | Inclui preço na tabela |
+| GET | `/api/customers/sales-tables/{tableCode}/prices` | Lista preços da tabela |
+| GET | `/api/customers/sales-tables/{tableCode}/prices/{itemCode}` | Consulta preço do item |
+| PUT | `/api/customers/sales-tables/prices` | Atualiza preço por ID |
+| DELETE | `/api/customers/sales-tables/prices/{id}` | Remove preço |
+| POST | `/api/customers/sales-tables/pricing` | Resolve preço de venda por tabela/item |
+| POST | `/api/customers/sales-tables/price-formation` | Calcula preço sugerido por custo/markup/margem |
+| POST | `/api/customers/sales-tables/generate-prices` | Reprecifica itens da tabela por política |
+| GET | `/api/customers/sales-tables/{tableCode}/price-history` | Histórico da tabela, filtrável por `item_code` |
+| POST | `/api/customers/sales-price-policies` | Cria política de formação de preço |
+| GET | `/api/customers/sales-price-policies` | Lista políticas |
+| GET | `/api/customers/sales-price-policies/{code}` | Consulta política |
+| PUT | `/api/customers/sales-price-policies/{code}` | Atualiza política |
+
+`POST /pricing` valida tabela ativa/vigente, preço não bloqueado e situação
+diferente de `INATIVO`; retorna preço unitário, quantidade e total bruto.
+`POST /price-formation` calcula preço sugerido por:
+
+```text
+preco = custo_independente / (1 - ((percentual_despesas_venda + percentual_lucro) / 100))
+```
+
+No ERP, `percentual_lucro` é `margin_pct` ou `ideal_margin_pct` da política, e
+`percentual_despesas_venda` é a soma de `expenses_pct`, `taxes_pct`,
+`freight_pct`, `commission_pct` e `discount_pct`. As casas decimais da tabela são
+respeitadas quando informadas.
+
+Na manutenção manual de preços, tabelas com formação `CUSTO_MEDIO`,
+`CUSTO_STANDARD_TOTAL` ou `CUSTO_STANDARD_MATERIAL` não aceitam preço digitado.
+Também é bloqueado preço menor que `0.01` quando a tabela não permite itens abaixo
+de um centavo.
+
+`POST /generate-prices` usa a política para buscar o custo do item e gravar/upsertar
+o preço na tabela, mantendo histórico. A política usa `priority`/`sequence` para
+ordenar regras comerciais: menor prioridade tem precedência e sequências da mesma
+prioridade permitem organizar incidências acumuláveis. Nesta fase, `incidences_json`
+guarda as incidências estruturadas para evolução da fase 2. Fontes de custo aceitas:
+
+| Fonte | Origem |
+|---|---|
+| `INFORMED` | custo informado no cálculo manual |
+| `STANDARD_TOTAL` | `item_standard_costs.total_cost` |
+| `STANDARD_MATERIAL` | `item_standard_costs.material_cost` |
+| `PURCHASE` | `item_purchase_costs.unit_cost` |
+| `STOCK_AVG` | `stock_balances.avg_cost` |
+| `STOCK_LAST` | `stock_balances.last_cost` |
+
+Teste automatizado: `scripts/test-comercial-pricing.sh` roda os testes unitários e,
+com `BASE_URL` definido, faz smoke HTTP de criação de tabela, preço, política,
+resolução e formação.
+
+### Política comercial (`/api/customers/support/commercial-policies`)
+
+O motor de política comercial centraliza descontos, acréscimos, fretes e comissões
+em uma única estrutura de regras. Cada política possui:
+
+- `kind`: `DISCOUNT`, `SURCHARGE`, `FREIGHT` ou `COMMISSION`;
+- `choice_type`: `INFORMATION`, `CHOICE` ou `OPTIONAL`;
+- `calc_type`: `PERCENT` ou `VALUE`;
+- valor percentual/fixo, limites máximos, faixas de valor bruto e quantidade;
+- prioridade e sequência para definir ordem de aplicação;
+- indicador de acumulação (`stackable`), possibilidade de edição manual,
+  autorização para valores maiores, uso na base de comissão, aplicação por item e
+  necessidade de aprovação;
+- `data_types_json` com até seis dimensões comerciais combináveis por política
+  (cliente, item, classificação, tabela, condição, prazo, representante, UF etc.);
+- filtros por cliente, tipo de cliente, segmento, região, tabela de vendas,
+  condição de pagamento, transportadora, item, máscara, linha de produto e
+  classificação;
+- `rule_json` para regras estruturadas adicionais usadas por configuradores e
+  automações comerciais.
+
+As linhas da política (`/{code}/lines`) representam as faixas/regras efetivas:
+número da linha, sequência, vigência própria, variáveis da combinação, tipo
+percentual/valor, valor mínimo e valor máximo. Quando uma política possui linhas,
+o motor usa a primeira linha válida; sem linhas, usa o valor do cabeçalho como
+fallback operacional.
+
+Endpoints:
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/` | Cria política comercial |
+| GET | `/` | Lista políticas; aceita `kind` e `only_active`; aceita exportação |
+| GET | `/{code}` | Consulta política |
+| PUT | `/{code}` | Atualiza política |
+| POST | `/evaluate` | Simula/apura políticas aplicáveis para um contexto de venda |
+| POST | `/{code}/lines` | Cria linha/faixa de regra da política |
+| GET | `/{code}/lines` | Lista linhas/faixas da política |
+| POST | `/{code}/specific-items` | Vincula exceção por item/linha/classificação |
+| GET | `/{code}/specific-items` | Lista vínculos específicos |
+
+A avaliação recebe valor bruto, quantidade e os atributos comerciais do contexto.
+O resultado retorna totais separados (`discount_value`, `surcharge_value`,
+`freight_value`, `commission_value`), valor líquido, flag de aprovação e a lista
+das políticas aplicadas. Políticas não acumuláveis impedem novas regras do mesmo
+tipo depois da primeira aplicação efetiva.
+
+Persistência: migration `000187_commercial_policies` cria
+`commercial_policies`, `commercial_policy_lines` e
+`commercial_policy_specific_items`. O cadastro de itens/classificações específicos
+permite bloquear política de desconto de capa, acréscimo de capa, políticas do
+nível do item e alteração manual por item ou classificação.
+
+Teste automatizado: `scripts/test-comercial-politicas.sh` cobre o motor de domínio
+e, com `BASE_URL` definido, faz smoke HTTP de cadastro, vínculo específico,
+avaliação e listagem.
+
+---
+
+## 4. Promessa de Entrega
 
 Cálculo de data prometida com base em disponibilidade (estoque + capacidade).
 
@@ -124,7 +255,7 @@ Disponibilidade (ATP) por item/variante, dia a dia.
 
 ---
 
-## 4. Reprogramação de Entrega (`/api/delivery-reschedule`)
+## 5. Reprogramação de Entrega (`/api/delivery-reschedule`)
 
 Histórico de remarcações de data vinculado ao pedido (data original × nova × motivo).
 
@@ -135,7 +266,7 @@ Histórico de remarcações de data vinculado ao pedido (data original × nova �
 
 ---
 
-## 5. Expedição / Romaneio (`/api/shipments`) — migration 000146
+## 6. Expedição / Romaneio (`/api/shipments`) — migration 000146
 
 | Método | Rota | Ação |
 |---|---|---|

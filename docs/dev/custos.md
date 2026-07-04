@@ -37,7 +37,7 @@ conversão_unitária = ( Σ_operações [ MachineHours(lot) × machine_rate(CT)
 ```
 O `POST /rollup` aceita **`lot_size`** (lote de referência, padrão 1): com `lot_size > 1`
 o **setup é amortizado** sobre o lote (ex.: setup 1 h em lote de 10 → 0,1 h/peça),
-como no custo padrão de Focco/SAP.
+como em uma rotina estruturada de custo padrão industrial.
 
 > **Co-produtos e quantidade fixa (BOM).** Componentes `is_coproduct` **creditam** o
 > custo do pai pelo seu valor (`material -= valor_coproduto × qtde`) — recuperação de

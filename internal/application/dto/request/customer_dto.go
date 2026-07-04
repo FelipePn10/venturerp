@@ -1,6 +1,7 @@
 package request
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -148,7 +149,7 @@ type CreateSalesTableDTO struct {
 }
 
 type UpdateSalesTableDTO struct {
-	ID                         int64      `json:"id"`
+	Code                       int64      `json:"code"`
 	Description                string     `json:"description"`
 	ValidityStart              *time.Time `json:"validity_start,omitempty"`
 	ValidityEnd                *time.Time `json:"validity_end,omitempty"`
@@ -322,18 +323,19 @@ type UpdateInvoiceTypeDTO struct {
 // ─── Sales Table Prices ────────────────────────────────────────────────────────
 
 type CreateSalesTablePriceDTO struct {
-	SalesTableID  int64   `json:"sales_table_id"`
-	ItemCode      string  `json:"item_code"`
-	Price         float64 `json:"price"`
-	UME           *string `json:"ume,omitempty"`
-	UMC           *string `json:"umc,omitempty"`
-	PriceConv     float64 `json:"price_conv"`
-	Formula       *string `json:"formula,omitempty"`
-	Situation     string  `json:"situation"`
-	Blocked       bool    `json:"blocked"`
-	Observation   *string `json:"observation,omitempty"`
-	ProductLineID *int64  `json:"product_line_id,omitempty"`
-	ItemMask      *string `json:"item_mask,omitempty"`
+	SalesTableID   int64   `json:"sales_table_id"`
+	SalesTableCode int64   `json:"sales_table_code"`
+	ItemCode       string  `json:"item_code"`
+	Price          float64 `json:"price"`
+	UME            *string `json:"ume,omitempty"`
+	UMC            *string `json:"umc,omitempty"`
+	PriceConv      float64 `json:"price_conv"`
+	Formula        *string `json:"formula,omitempty"`
+	Situation      string  `json:"situation"`
+	Blocked        bool    `json:"blocked"`
+	Observation    *string `json:"observation,omitempty"`
+	ProductLineID  *int64  `json:"product_line_id,omitempty"`
+	ItemMask       *string `json:"item_mask,omitempty"`
 }
 
 type UpdateSalesTablePriceDTO struct {
@@ -348,6 +350,221 @@ type UpdateSalesTablePriceDTO struct {
 	Observation   *string `json:"observation,omitempty"`
 	ProductLineID *int64  `json:"product_line_id,omitempty"`
 	ItemMask      *string `json:"item_mask,omitempty"`
+}
+
+type PriceSalesItemDTO struct {
+	SalesTableCode int64   `json:"sales_table_code"`
+	ItemCode       string  `json:"item_code"`
+	Quantity       float64 `json:"quantity"`
+}
+
+type FormSalesPriceDTO struct {
+	SalesTableCode int64   `json:"sales_table_code"`
+	PolicyCode     *int64  `json:"policy_code,omitempty"`
+	ItemCode       string  `json:"item_code,omitempty"`
+	BaseCost       float64 `json:"base_cost"`
+	MarkupPct      float64 `json:"markup_pct"`
+	MarginPct      float64 `json:"margin_pct"`
+	ExpensesPct    float64 `json:"expenses_pct"`
+	TaxesPct       float64 `json:"taxes_pct"`
+	FreightPct     float64 `json:"freight_pct"`
+	CommissionPct  float64 `json:"commission_pct"`
+	DiscountPct    float64 `json:"discount_pct"`
+}
+
+type CreateSalesPricePolicyDTO struct {
+	Description    string          `json:"description"`
+	CostSource     string          `json:"cost_source"`
+	Priority       int64           `json:"priority"`
+	Sequence       int64           `json:"sequence"`
+	PolicyScope    string          `json:"policy_scope"`
+	PolicyTypes    string          `json:"policy_types"`
+	MarkupPct      float64         `json:"markup_pct"`
+	MarginPct      float64         `json:"margin_pct"`
+	MaxMarginPct   float64         `json:"max_margin_pct"`
+	IdealMarginPct float64         `json:"ideal_margin_pct"`
+	MarginStepPct  float64         `json:"margin_step_pct"`
+	ExpensesPct    float64         `json:"expenses_pct"`
+	TaxesPct       float64         `json:"taxes_pct"`
+	FreightPct     float64         `json:"freight_pct"`
+	CommissionPct  float64         `json:"commission_pct"`
+	DiscountPct    float64         `json:"discount_pct"`
+	MinMarginPct   float64         `json:"min_margin_pct"`
+	MaxDiscountPct float64         `json:"max_discount_pct"`
+	IncidencesJSON json.RawMessage `json:"incidences_json"`
+	SalesTableCode *int64          `json:"sales_table_code,omitempty"`
+	ValidityStart  *time.Time      `json:"validity_start,omitempty"`
+	ValidityEnd    *time.Time      `json:"validity_end,omitempty"`
+	Observation    *string         `json:"observation,omitempty"`
+}
+
+type UpdateSalesPricePolicyDTO struct {
+	Code           int64           `json:"code"`
+	Description    string          `json:"description"`
+	CostSource     string          `json:"cost_source"`
+	Priority       int64           `json:"priority"`
+	Sequence       int64           `json:"sequence"`
+	PolicyScope    string          `json:"policy_scope"`
+	PolicyTypes    string          `json:"policy_types"`
+	MarkupPct      float64         `json:"markup_pct"`
+	MarginPct      float64         `json:"margin_pct"`
+	MaxMarginPct   float64         `json:"max_margin_pct"`
+	IdealMarginPct float64         `json:"ideal_margin_pct"`
+	MarginStepPct  float64         `json:"margin_step_pct"`
+	ExpensesPct    float64         `json:"expenses_pct"`
+	TaxesPct       float64         `json:"taxes_pct"`
+	FreightPct     float64         `json:"freight_pct"`
+	CommissionPct  float64         `json:"commission_pct"`
+	DiscountPct    float64         `json:"discount_pct"`
+	MinMarginPct   float64         `json:"min_margin_pct"`
+	MaxDiscountPct float64         `json:"max_discount_pct"`
+	IncidencesJSON json.RawMessage `json:"incidences_json"`
+	SalesTableCode *int64          `json:"sales_table_code,omitempty"`
+	ValidityStart  *time.Time      `json:"validity_start,omitempty"`
+	ValidityEnd    *time.Time      `json:"validity_end,omitempty"`
+	IsActive       bool            `json:"is_active"`
+	Observation    *string         `json:"observation,omitempty"`
+}
+
+type GenerateSalesTablePricesDTO struct {
+	SalesTableCode int64    `json:"sales_table_code"`
+	PolicyCode     int64    `json:"policy_code"`
+	ItemCodes      []string `json:"item_codes"`
+	WarehouseID    *int64   `json:"warehouse_id,omitempty"`
+	Reason         *string  `json:"reason,omitempty"`
+}
+
+// ─── Commercial Policies ─────────────────────────────────────────────────────
+
+type CreateCommercialPolicyDTO struct {
+	Description            string          `json:"description"`
+	Kind                   string          `json:"kind"`
+	ChoiceType             string          `json:"choice_type"`
+	CalcType               string          `json:"calc_type"`
+	PercentValue           float64         `json:"percent_value"`
+	FixedValue             float64         `json:"fixed_value"`
+	MaxPercent             float64         `json:"max_percent"`
+	MaxValue               float64         `json:"max_value"`
+	MinGrossValue          float64         `json:"min_gross_value"`
+	MaxGrossValue          float64         `json:"max_gross_value"`
+	MinQuantity            float64         `json:"min_quantity"`
+	MaxQuantity            float64         `json:"max_quantity"`
+	Priority               int64           `json:"priority"`
+	Sequence               int64           `json:"sequence"`
+	Stackable              bool            `json:"stackable"`
+	RequiresApproval       bool            `json:"requires_approval"`
+	AppliesOnNetValue      bool            `json:"applies_on_net_value"`
+	AllowManualChange      bool            `json:"allow_manual_change"`
+	AllowHigherValues      bool            `json:"allow_higher_values"`
+	UsedInCommission       bool            `json:"used_in_commission"`
+	AppliesToItems         bool            `json:"applies_to_items"`
+	SubtractCommissionBase bool            `json:"subtract_commission_base"`
+	DataTypesJSON          json.RawMessage `json:"data_types_json"`
+	CommissionDiscountMode string          `json:"commission_discount_mode"`
+	CustomerCode           *int64          `json:"customer_code,omitempty"`
+	CustomerTypeID         *int64          `json:"customer_type_id,omitempty"`
+	MarketSegmentID        *int64          `json:"market_segment_id,omitempty"`
+	RegionID               *int64          `json:"region_id,omitempty"`
+	SalesTableID           *int64          `json:"sales_table_id,omitempty"`
+	PaymentConditionID     *int64          `json:"payment_condition_id,omitempty"`
+	CarrierID              *int64          `json:"carrier_id,omitempty"`
+	ItemCode               *string         `json:"item_code,omitempty"`
+	ItemMask               *string         `json:"item_mask,omitempty"`
+	ProductLineID          *int64          `json:"product_line_id,omitempty"`
+	ItemClassification     *string         `json:"item_classification,omitempty"`
+	RuleJSON               json.RawMessage `json:"rule_json"`
+	ValidityStart          *time.Time      `json:"validity_start,omitempty"`
+	ValidityEnd            *time.Time      `json:"validity_end,omitempty"`
+	Observation            *string         `json:"observation,omitempty"`
+}
+
+type UpdateCommercialPolicyDTO struct {
+	Code                   int64           `json:"code"`
+	Description            string          `json:"description"`
+	Kind                   string          `json:"kind"`
+	ChoiceType             string          `json:"choice_type"`
+	CalcType               string          `json:"calc_type"`
+	PercentValue           float64         `json:"percent_value"`
+	FixedValue             float64         `json:"fixed_value"`
+	MaxPercent             float64         `json:"max_percent"`
+	MaxValue               float64         `json:"max_value"`
+	MinGrossValue          float64         `json:"min_gross_value"`
+	MaxGrossValue          float64         `json:"max_gross_value"`
+	MinQuantity            float64         `json:"min_quantity"`
+	MaxQuantity            float64         `json:"max_quantity"`
+	Priority               int64           `json:"priority"`
+	Sequence               int64           `json:"sequence"`
+	Stackable              bool            `json:"stackable"`
+	RequiresApproval       bool            `json:"requires_approval"`
+	AppliesOnNetValue      bool            `json:"applies_on_net_value"`
+	AllowManualChange      bool            `json:"allow_manual_change"`
+	AllowHigherValues      bool            `json:"allow_higher_values"`
+	UsedInCommission       bool            `json:"used_in_commission"`
+	AppliesToItems         bool            `json:"applies_to_items"`
+	SubtractCommissionBase bool            `json:"subtract_commission_base"`
+	DataTypesJSON          json.RawMessage `json:"data_types_json"`
+	CommissionDiscountMode string          `json:"commission_discount_mode"`
+	CustomerCode           *int64          `json:"customer_code,omitempty"`
+	CustomerTypeID         *int64          `json:"customer_type_id,omitempty"`
+	MarketSegmentID        *int64          `json:"market_segment_id,omitempty"`
+	RegionID               *int64          `json:"region_id,omitempty"`
+	SalesTableID           *int64          `json:"sales_table_id,omitempty"`
+	PaymentConditionID     *int64          `json:"payment_condition_id,omitempty"`
+	CarrierID              *int64          `json:"carrier_id,omitempty"`
+	ItemCode               *string         `json:"item_code,omitempty"`
+	ItemMask               *string         `json:"item_mask,omitempty"`
+	ProductLineID          *int64          `json:"product_line_id,omitempty"`
+	ItemClassification     *string         `json:"item_classification,omitempty"`
+	RuleJSON               json.RawMessage `json:"rule_json"`
+	ValidityStart          *time.Time      `json:"validity_start,omitempty"`
+	ValidityEnd            *time.Time      `json:"validity_end,omitempty"`
+	IsActive               bool            `json:"is_active"`
+	Observation            *string         `json:"observation,omitempty"`
+}
+
+type CommercialPolicySpecificItemDTO struct {
+	PolicyCode         int64      `json:"policy_code"`
+	ItemCode           *string    `json:"item_code,omitempty"`
+	ItemMask           *string    `json:"item_mask,omitempty"`
+	ProductLineID      *int64     `json:"product_line_id,omitempty"`
+	ItemClassification *string    `json:"item_classification,omitempty"`
+	ValidityStart      *time.Time `json:"validity_start,omitempty"`
+	ValidityEnd        *time.Time `json:"validity_end,omitempty"`
+	BlockDiscount      bool       `json:"block_discount"`
+	BlockSurcharge     bool       `json:"block_surcharge"`
+	IgnoreItemPolicies bool       `json:"ignore_item_policies"`
+	BlockManualChange  bool       `json:"block_manual_change"`
+}
+
+type CommercialPolicyLineDTO struct {
+	PolicyCode     int64           `json:"policy_code"`
+	LineNumber     int64           `json:"line_number"`
+	SequenceNumber int64           `json:"sequence_number"`
+	Description    *string         `json:"description,omitempty"`
+	CalcType       string          `json:"calc_type"`
+	PercentValue   float64         `json:"percent_value"`
+	FixedValue     float64         `json:"fixed_value"`
+	MinValue       float64         `json:"min_value"`
+	MaxValue       float64         `json:"max_value"`
+	VariablesJSON  json.RawMessage `json:"variables_json"`
+	ValidityStart  *time.Time      `json:"validity_start,omitempty"`
+	ValidityEnd    *time.Time      `json:"validity_end,omitempty"`
+}
+
+type EvaluateCommercialPoliciesDTO struct {
+	GrossValue         float64 `json:"gross_value"`
+	Quantity           float64 `json:"quantity"`
+	CustomerCode       *int64  `json:"customer_code,omitempty"`
+	CustomerTypeID     *int64  `json:"customer_type_id,omitempty"`
+	MarketSegmentID    *int64  `json:"market_segment_id,omitempty"`
+	RegionID           *int64  `json:"region_id,omitempty"`
+	SalesTableID       *int64  `json:"sales_table_id,omitempty"`
+	PaymentConditionID *int64  `json:"payment_condition_id,omitempty"`
+	CarrierID          *int64  `json:"carrier_id,omitempty"`
+	ItemCode           *string `json:"item_code,omitempty"`
+	ItemMask           *string `json:"item_mask,omitempty"`
+	ProductLineID      *int64  `json:"product_line_id,omitempty"`
+	ItemClassification *string `json:"item_classification,omitempty"`
 }
 
 // ─── Tax Types ────────────────────────────────────────────────────────────────

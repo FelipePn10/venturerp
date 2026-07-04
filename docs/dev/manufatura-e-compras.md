@@ -134,7 +134,7 @@ Uma operação de roteiro tem um centro de trabalho **primário** (o `effective_
 
 #### `tools` e `route_operation_tools` — ferramentas com vida útil (R3)
 
-Cadastro de matrizes, dispositivos e ferramentas, com **controle de vida útil** consumida no chão de fábrica — um diferencial vs. Focco (a vida é debitada no apontamento da operação).
+Cadastro de matrizes, dispositivos e ferramentas, com **controle de vida útil** consumida no chão de fábrica. A vida é debitada no apontamento da operação.
 
 | Campo (`tools`) | Tipo | Descrição |
 |-----------------|------|-----------|

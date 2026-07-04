@@ -31,7 +31,6 @@ Toda a documentação do ERP, organizada em **duas versões** de cada área:
 | **Fiscal & Financeiro** | [`fiscal-financeiro`](apresentacao/fiscal-financeiro.md) | [`fiscal-financeiro`](dev/fiscal-financeiro.md) |
 | **Contabilidade, NFS-e, Operações de entrada** | [`fiscal-financeiro`](apresentacao/fiscal-financeiro.md) (§10) | [`contabilidade-e-fiscal-complementos`](dev/contabilidade-e-fiscal-complementos.md) |
 | **Integrações & Relatórios** (busca por CNPJ, exportação Excel/PDF/CSV) | [`cadastros`](apresentacao/cadastros.md) (§Busca por CNPJ / Exportação) | [`integracao-cnpj-e-exportacao`](dev/integracao-cnpj-e-exportacao.md) |
-| **Roadmap de maturidade ERP** (comparativo FoccoERP/SAP/Oracle, lacunas e ordem de evolução) | — | [`maturidade-erp-roadmap`](dev/maturidade-erp-roadmap.md) |
 
 **Referência de apoio (dev):** [`API_REQUEST_BODIES.txt`](dev/API_REQUEST_BODIES.txt) — exemplos de corpo de request (JSON) por módulo.
 
@@ -70,5 +69,4 @@ não dependa de banco:
 - **Endpoints, entidades, regras internas?** → `dev/<área>.md`.
 - **Fluxo completo do produto (venda → MRP → produção → fiscal)?** → `*/00-fluxo-geral.md`.
 - **Fiscal ou financeiro?** → `*/fiscal-financeiro.md` (+ `dev/contabilidade-e-fiscal-complementos.md`).
-- **Roadmap de maturidade por setor (vs. FoccoERP)?** → [`dev/maturidade-erp-roadmap.md`](dev/maturidade-erp-roadmap.md) (Compras/Suprimentos) · [`dev/comercial-roadmap.md`](dev/comercial-roadmap.md) (Comercial).
 - **Oportunidades de melhoria do sistema** → [`../MELHORIAS.txt`](../MELHORIAS.txt).
