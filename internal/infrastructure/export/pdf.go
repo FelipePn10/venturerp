@@ -106,4 +106,3 @@ func isNumericCell(s string) bool {
 	}
 	return numericCell.MatchString(s)
 }
-

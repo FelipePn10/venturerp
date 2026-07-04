@@ -1292,7 +1292,9 @@ func (s *MRPServiceImpl) getLeadTimeDays(rulesMap map[int64][]*entity.Configured
 			ops, err := s.RoutingRepo.GetRouteOperations(context.Background(), route.ID)
 			if err == nil && len(ops) > 0 {
 				edges, _ := s.RoutingRepo.GetNetworkEdges(context.Background(), route.ID)
-				totalHours := criticalPathHours(ops, edges)
+				// qty=1: item-level planning lead time (per unit / per base batch).
+				// Shared CPM implementation with the routing lead-time use case.
+				totalHours := routingentity.CriticalPath(ops, edges, 1.0).TotalHours
 				if totalHours > 0 {
 					days := int(math.Ceil(totalHours / 8.0)) // 8h = 1 dia útil
 					if days > 0 {
@@ -1441,7 +1443,12 @@ func buildLLCFromBOM(bomMap map[int64][]*structentity.ItemStructure, rootItems [
 			return
 		}
 		llcMap[itemCode] = level
-		for _, child := range bomMap[itemCode] {
+		for _, child := range structentity.SelectPrimarySubstituteComponents(bomMap[itemCode]) {
+			// Co-products are outputs, not lower-level components — skip so they
+			// don't get a misleading (deeper) low-level code.
+			if child.IsCoproduct {
+				continue
+			}
 			assignLLC(child.ChildCode, level+1)
 		}
 	}
@@ -1477,12 +1484,28 @@ func explodeFromBOMWithFormula(
 		return nil
 	}
 	children := bomMap[parentCode]
-	inputs := make([]*entity.MRPInput, 0, len(children))
+	applicable := make([]*structentity.ItemStructure, 0, len(children))
 	for _, child := range children {
 		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
 			continue
 		}
-		adjustedQty := applyLossFormula(quantity, child.Quantity, child.LossPercentage, formula)
+		applicable = append(applicable, child)
+	}
+
+	selectedChildren := structentity.SelectPrimarySubstituteComponents(applicable)
+	inputs := make([]*entity.MRPInput, 0, len(selectedChildren))
+	for _, child := range selectedChildren {
+		// Co-products/by-products/scrap are OUTPUTS, not consumed inputs → no demand.
+		if child.IsCoproduct {
+			continue
+		}
+		// Fixed-quantity components are consumed once per order (per lot), not scaled
+		// by the parent quantity; run the loss formula against a base of 1.
+		base := quantity
+		if child.IsFixedQty {
+			base = 1
+		}
+		adjustedQty := applyLossFormula(base, child.Quantity, child.LossPercentage, formula)
 		inputs = append(inputs, &entity.MRPInput{
 			ItemCode: child.ChildCode,
 			Quantity: adjustedQty,
@@ -1703,60 +1726,4 @@ func mpsPeriodToDate(periodType string, periodValue, year int) time.Time {
 	default:
 		return time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
 	}
-}
-
-// criticalPathHours computes the CPM critical-path total hours from route ops + network edges.
-// Mirrors the algorithm in routing_uc/lead_time_uc.go but works directly on domain entities.
-func criticalPathHours(ops []*routingentity.RouteOperation, edges []*routingentity.NetworkEdge) float64 {
-	successors := make(map[int64][]int64)
-	predecessors := make(map[int64][]int64)
-	overlapByEdge := make(map[[2]int64]float64)
-	for _, e := range edges {
-		successors[e.PredecessorID] = append(successors[e.PredecessorID], e.SuccessorID)
-		predecessors[e.SuccessorID] = append(predecessors[e.SuccessorID], e.PredecessorID)
-		overlapByEdge[[2]int64{e.PredecessorID, e.SuccessorID}] = e.OverlapPct
-	}
-	inDegree := make(map[int64]int, len(ops))
-	for _, op := range ops {
-		inDegree[op.ID] = len(predecessors[op.ID])
-	}
-	queue := make([]int64, 0)
-	for id, deg := range inDegree {
-		if deg == 0 {
-			queue = append(queue, id)
-		}
-	}
-	opByID := make(map[int64]*routingentity.RouteOperation, len(ops))
-	for _, op := range ops {
-		opByID[op.ID] = op
-	}
-	earlyFinish := make(map[int64]float64, len(ops))
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		op := opByID[cur]
-		opTime := op.EffectiveStdTime + op.EffectiveSetup
-		ef := opTime
-		for _, predID := range predecessors[cur] {
-			overlap := overlapByEdge[[2]int64{predID, cur}] / 100.0
-			c := earlyFinish[predID]*(1-overlap) + opTime
-			if c > ef {
-				ef = c
-			}
-		}
-		earlyFinish[cur] = ef
-		for _, sucID := range successors[cur] {
-			inDegree[sucID]--
-			if inDegree[sucID] == 0 {
-				queue = append(queue, sucID)
-			}
-		}
-	}
-	var maxEF float64
-	for _, ef := range earlyFinish {
-		if ef > maxEF {
-			maxEF = ef
-		}
-	}
-	return maxEF
 }

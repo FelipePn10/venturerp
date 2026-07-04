@@ -49,10 +49,10 @@ const (
 
 // Freight modality (responsável pelo frete).
 const (
-	FreightCIF       = "CIF"       // emitente paga
-	FreightFOB       = "FOB"       // destinatário paga
+	FreightCIF        = "CIF"       // emitente paga
+	FreightFOB        = "FOB"       // destinatário paga
 	FreightThirdParty = "TERCEIROS" // terceiros
-	FreightNone      = "SEM_FRETE"
+	FreightNone       = "SEM_FRETE"
 )
 
 // Shipment is a dispatch note (romaneio de carregamento / expedição) that

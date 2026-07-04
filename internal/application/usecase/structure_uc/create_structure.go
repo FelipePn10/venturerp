@@ -88,6 +88,9 @@ func (uc *CreateStructureComponentUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
+	structure.IsCoproduct = dto.IsCoproduct
+	structure.IsFixedQty = dto.IsFixedQty
+	structure.SetSubstitute(dto.SubstituteGroup, dto.SubstitutePriority)
 
 	return uc.Repo.Create(ctx, structure)
 }

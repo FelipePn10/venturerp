@@ -75,10 +75,10 @@ func TestShipmentAllReferenceTypes(t *testing.T) {
 	userID := uuid.New()
 
 	tests := []struct {
-		name       string
-		refType    ShipmentReferenceType
-		setSales    bool
-		setPurchase  bool
+		name          string
+		refType       ShipmentReferenceType
+		setSales      bool
+		setPurchase   bool
 		setProduction bool
 	}{
 		{"sales order", ShipmentRefSalesOrder, true, false, false},
@@ -121,9 +121,9 @@ func TestShipmentAllReferenceTypes(t *testing.T) {
 
 func TestShipmentItemDefaults(t *testing.T) {
 	it := &ShipmentItem{
-		Sequence:  1,
-		ItemCode:  100,
-		Quantity:  10,
+		Sequence: 1,
+		ItemCode: 100,
+		Quantity: 10,
 	}
 	if it.IsConferred {
 		t.Error("IsConferred should be false by default")

@@ -433,7 +433,33 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 }
 
 func (r *PurchaseOrderRepositorySQLC) RegisterReceipts(ctx context.Context, purchaseOrderCode int64, receivedByItemCode map[int64]float64) (int, error) {
-	if len(receivedByItemCode) == 0 {
+	return r.registerReceipts(ctx, purchaseOrderCode, receivedByItemCode, true, func(l receiptLineState) int64 {
+		return l.itemCode
+	})
+}
+
+func (r *PurchaseOrderRepositorySQLC) RegisterItemReceipts(ctx context.Context, purchaseOrderCode int64, receivedByOrderItemCode map[int64]float64) (int, error) {
+	return r.registerReceipts(ctx, purchaseOrderCode, receivedByOrderItemCode, false, func(l receiptLineState) int64 {
+		return l.code
+	})
+}
+
+type receiptLineState struct {
+	code      int64
+	itemCode  int64
+	requested float64
+	received  float64
+	cancelled float64
+}
+
+func (r *PurchaseOrderRepositorySQLC) registerReceipts(
+	ctx context.Context,
+	purchaseOrderCode int64,
+	receivedByKey map[int64]float64,
+	distributeByRemaining bool,
+	keyForLine func(receiptLineState) int64,
+) (int, error) {
+	if len(receivedByKey) == 0 {
 		return 0, nil
 	}
 
@@ -452,16 +478,9 @@ func (r *PurchaseOrderRepositorySQLC) RegisterReceipts(ctx context.Context, purc
 		return 0, fmt.Errorf("loading purchase order items for receipt: %w", err)
 	}
 
-	type lineState struct {
-		code      int64
-		itemCode  int64
-		requested float64
-		received  float64
-		cancelled float64
-	}
-	var lines []lineState
+	var lines []receiptLineState
 	for rows.Next() {
-		var l lineState
+		var l receiptLineState
 		if err := rows.Scan(&l.code, &l.itemCode, &l.requested, &l.received, &l.cancelled); err != nil {
 			rows.Close()
 			return 0, fmt.Errorf("scanning purchase order line: %w", err)
@@ -479,7 +498,17 @@ func (r *PurchaseOrderRepositorySQLC) RegisterReceipts(ctx context.Context, purc
 	anyReceived := false
 
 	for _, l := range lines {
-		add, ok := receivedByItemCode[l.itemCode]
+		key := keyForLine(l)
+		add, ok := receivedByKey[key]
+		if distributeByRemaining && add > 0 {
+			lineRemaining := l.requested - l.cancelled - l.received
+			if lineRemaining <= 0 {
+				add = 0
+			} else if add > lineRemaining {
+				add = lineRemaining
+			}
+			receivedByKey[key] -= add
+		}
 		newReceived := l.received
 		if ok && add > 0 {
 			newReceived = l.received + add

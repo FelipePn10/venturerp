@@ -257,6 +257,89 @@ func (h *RoutingHandler) DeleteNetworkEdge(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ─── alternative resources ────────────────────────────────────────────────────
+
+func (h *RoutingHandler) AddRouteOpResource(w http.ResponseWriter, r *http.Request) {
+	opID, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid opId")
+		return
+	}
+	var dto request.AddRouteOpResourceDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	dto.RouteOperationID = opID
+	result, err := h.routeUC.AddResource(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *RoutingHandler) ListRouteOpResources(w http.ResponseWriter, r *http.Request) {
+	opID, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid opId")
+		return
+	}
+	result, err := h.routeUC.ListResources(r.Context(), opID)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *RoutingHandler) UpdateRouteOpResource(w http.ResponseWriter, r *http.Request) {
+	resID, err := strconv.ParseInt(chi.URLParam(r, "resourceId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid resourceId")
+		return
+	}
+	var dto request.UpdateRouteOpResourceDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	dto.ID = resID
+	result, err := h.routeUC.UpdateResource(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *RoutingHandler) SetRouteOpResourcePrimary(w http.ResponseWriter, r *http.Request) {
+	resID, err := strconv.ParseInt(chi.URLParam(r, "resourceId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid resourceId")
+		return
+	}
+	result, err := h.routeUC.SetPrimaryResource(r.Context(), resID)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *RoutingHandler) RemoveRouteOpResource(w http.ResponseWriter, r *http.Request) {
+	resID, err := strconv.ParseInt(chi.URLParam(r, "resourceId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid resourceId")
+		return
+	}
+	if err := h.routeUC.RemoveResource(r.Context(), resID); err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ─── lead time ───────────────────────────────────────────────────────────────
 
 func (h *RoutingHandler) GetLeadTime(w http.ResponseWriter, r *http.Request) {
@@ -265,7 +348,14 @@ func (h *RoutingHandler) GetLeadTime(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, "invalid route id")
 		return
 	}
-	result, err := h.leadTimeUC.Execute(r.Context(), id)
+	// Optional ?qty= scales the run (per-piece) portion of the lead time; defaults to 1.
+	qty := 1.0
+	if q := r.URL.Query().Get("qty"); q != "" {
+		if parsed, perr := strconv.ParseFloat(q, 64); perr == nil && parsed > 0 {
+			qty = parsed
+		}
+	}
+	result, err := h.leadTimeUC.Execute(r.Context(), id, qty)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return

@@ -31,14 +31,14 @@ type Theme struct {
 // DefaultTheme returns the corporate navy palette.
 func DefaultTheme() Theme {
 	return Theme{
-		Brand:     Color{27, 58, 91},     // #1B3A5B navy
+		Brand:     Color{27, 58, 91}, // #1B3A5B navy
 		BrandText: White,
 		Title:     Color{27, 58, 91},
-		Text:      Color{33, 37, 41},     // near-black
-		Muted:     Color{108, 117, 125},  // grey
-		Zebra:     Color{244, 246, 248},  // very light grey-blue
-		Rule:      Color{222, 226, 230},  // light grey
-		TotalBg:   Color{226, 232, 240},  // light brand tint
+		Text:      Color{33, 37, 41},    // near-black
+		Muted:     Color{108, 117, 125}, // grey
+		Zebra:     Color{244, 246, 248}, // very light grey-blue
+		Rule:      Color{222, 226, 230}, // light grey
+		TotalBg:   Color{226, 232, 240}, // light brand tint
 	}
 }
 
@@ -99,9 +99,9 @@ const (
 
 // TableReport is the full specification of a paginated, branded table report.
 type TableReport struct {
-	Theme    Theme
-	Company  Company
-	Logo     []byte // optional PNG/JPEG; ignored if it fails to decode
+	Theme       Theme
+	Company     Company
+	Logo        []byte // optional PNG/JPEG; ignored if it fails to decode
 	Title       string
 	Subtitle    string
 	Columns     []Column

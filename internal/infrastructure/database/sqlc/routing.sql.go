@@ -12,26 +12,85 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addRouteOpResource = `-- name: AddRouteOpResource :one
+
+INSERT INTO route_operation_resources (
+    route_operation_id, work_center_id, priority, time_factor, is_primary
+) VALUES ($1, $2, $3, $4, $5)
+RETURNING id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at
+`
+
+type AddRouteOpResourceParams struct {
+	RouteOperationID int64
+	WorkCenterID     int64
+	Priority         int16
+	TimeFactor       pgtype.Numeric
+	IsPrimary        bool
+}
+
+// ─── route_operation_resources (alternative work centers) ─────────────────────
+func (q *Queries) AddRouteOpResource(ctx context.Context, arg AddRouteOpResourceParams) (RouteOperationResource, error) {
+	row := q.db.QueryRow(ctx, addRouteOpResource,
+		arg.RouteOperationID,
+		arg.WorkCenterID,
+		arg.Priority,
+		arg.TimeFactor,
+		arg.IsPrimary,
+	)
+	var i RouteOperationResource
+	err := row.Scan(
+		&i.ID,
+		&i.RouteOperationID,
+		&i.WorkCenterID,
+		&i.Priority,
+		&i.TimeFactor,
+		&i.IsPrimary,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const addRouteOperation = `-- name: AddRouteOperation :one
 
 INSERT INTO route_operations (
     route_id, sequence, operation_id, work_center_id,
-    standard_time, setup_time, situation, notes, is_active
+    standard_time, setup_time,
+    run_time, labor_time, run_time_base_qty,
+    queue_time, wait_time, move_time, crew_size, time_unit,
+    supplier_id, service_item_code, cost_per_unit, lead_time_days,
+    situation, notes, is_active
 ) VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7, $8, TRUE
-) RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at
+    $5, $6,
+    $7, $8, $9,
+    $10, $11, $12, $13, $14,
+    $15, $16, $17, $18,
+    $19, $20, TRUE
+) RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days
 `
 
 type AddRouteOperationParams struct {
-	RouteID      int64
-	Sequence     int16
-	OperationID  int64
-	WorkCenterID *int64
-	StandardTime pgtype.Numeric
-	SetupTime    pgtype.Numeric
-	Situation    sqltypes.RouteOpSituationEnum
-	Notes        pgtype.Text
+	RouteID         int64
+	Sequence        int16
+	OperationID     int64
+	WorkCenterID    *int64
+	StandardTime    pgtype.Numeric
+	SetupTime       pgtype.Numeric
+	RunTime         pgtype.Numeric
+	LaborTime       pgtype.Numeric
+	RunTimeBaseQty  pgtype.Numeric
+	QueueTime       pgtype.Numeric
+	WaitTime        pgtype.Numeric
+	MoveTime        pgtype.Numeric
+	CrewSize        pgtype.Numeric
+	TimeUnit        pgtype.Text
+	SupplierID      *int64
+	ServiceItemCode *int64
+	CostPerUnit     pgtype.Numeric
+	LeadTimeDays    *int32
+	Situation       sqltypes.RouteOpSituationEnum
+	Notes           pgtype.Text
 }
 
 // ─── route_operations ────────────────────────────────────────────────────────
@@ -43,6 +102,18 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		arg.WorkCenterID,
 		arg.StandardTime,
 		arg.SetupTime,
+		arg.RunTime,
+		arg.LaborTime,
+		arg.RunTimeBaseQty,
+		arg.QueueTime,
+		arg.WaitTime,
+		arg.MoveTime,
+		arg.CrewSize,
+		arg.TimeUnit,
+		arg.SupplierID,
+		arg.ServiceItemCode,
+		arg.CostPerUnit,
+		arg.LeadTimeDays,
 		arg.Situation,
 		arg.Notes,
 	)
@@ -60,8 +131,30 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RunTime,
+		&i.LaborTime,
+		&i.RunTimeBaseQty,
+		&i.QueueTime,
+		&i.WaitTime,
+		&i.MoveTime,
+		&i.CrewSize,
+		&i.TimeUnit,
+		&i.SupplierID,
+		&i.ServiceItemCode,
+		&i.CostPerUnit,
+		&i.LeadTimeDays,
 	)
 	return i, err
+}
+
+const clearPrimaryResources = `-- name: ClearPrimaryResources :exec
+UPDATE route_operation_resources SET is_primary = FALSE, updated_at = NOW()
+WHERE route_operation_id = $1
+`
+
+func (q *Queries) ClearPrimaryResources(ctx context.Context, routeOperationID int64) error {
+	_, err := q.db.Exec(ctx, clearPrimaryResources, routeOperationID)
+	return err
 }
 
 const createOperation = `-- name: CreateOperation :one
@@ -69,12 +162,18 @@ const createOperation = `-- name: CreateOperation :one
 INSERT INTO operations (
     code, name, description, origin, situation,
     default_work_center_id, standard_time, setup_time,
+    run_time, labor_time, run_time_base_qty,
+    queue_time, wait_time, move_time, crew_size, time_unit,
+    supplier_id, service_item_code, cost_per_unit, lead_time_days,
     is_active, created_by
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8,
-    TRUE, $9
-) RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by
+    $9, $10, $11,
+    $12, $13, $14, $15, $16,
+    $17, $18, $19, $20,
+    TRUE, $21
+) RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days
 `
 
 type CreateOperationParams struct {
@@ -86,6 +185,18 @@ type CreateOperationParams struct {
 	DefaultWorkCenterID *int64
 	StandardTime        pgtype.Numeric
 	SetupTime           pgtype.Numeric
+	RunTime             pgtype.Numeric
+	LaborTime           pgtype.Numeric
+	RunTimeBaseQty      pgtype.Numeric
+	QueueTime           pgtype.Numeric
+	WaitTime            pgtype.Numeric
+	MoveTime            pgtype.Numeric
+	CrewSize            pgtype.Numeric
+	TimeUnit            string
+	SupplierID          *int64
+	ServiceItemCode     *int64
+	CostPerUnit         pgtype.Numeric
+	LeadTimeDays        *int32
 	CreatedBy           pgtype.UUID
 }
 
@@ -100,6 +211,18 @@ func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams
 		arg.DefaultWorkCenterID,
 		arg.StandardTime,
 		arg.SetupTime,
+		arg.RunTime,
+		arg.LaborTime,
+		arg.RunTimeBaseQty,
+		arg.QueueTime,
+		arg.WaitTime,
+		arg.MoveTime,
+		arg.CrewSize,
+		arg.TimeUnit,
+		arg.SupplierID,
+		arg.ServiceItemCode,
+		arg.CostPerUnit,
+		arg.LeadTimeDays,
 		arg.CreatedBy,
 	)
 	var i Operation
@@ -117,6 +240,18 @@ func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RunTime,
+		&i.LaborTime,
+		&i.RunTimeBaseQty,
+		&i.QueueTime,
+		&i.WaitTime,
+		&i.MoveTime,
+		&i.CrewSize,
+		&i.TimeUnit,
+		&i.SupplierID,
+		&i.ServiceItemCode,
+		&i.CostPerUnit,
+		&i.LeadTimeDays,
 	)
 	return i, err
 }
@@ -125,11 +260,11 @@ const createRoute = `-- name: CreateRoute :one
 
 INSERT INTO manufacturing_routes (
     code, item_code, mask, alternative, description,
-    situation, is_standard, is_active, created_by
+    situation, is_standard, valid_from, valid_to, is_active, created_by
 ) VALUES (
     $1, $2, $3, $4, $5,
-    $6, $7, TRUE, $8
-) RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by
+    $6, $7, $8, $9, TRUE, $10
+) RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to
 `
 
 type CreateRouteParams struct {
@@ -140,6 +275,8 @@ type CreateRouteParams struct {
 	Description pgtype.Text
 	Situation   sqltypes.RouteSituationEnum
 	IsStandard  bool
+	ValidFrom   pgtype.Date
+	ValidTo     pgtype.Date
 	CreatedBy   pgtype.UUID
 }
 
@@ -153,6 +290,8 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Manuf
 		arg.Description,
 		arg.Situation,
 		arg.IsStandard,
+		arg.ValidFrom,
+		arg.ValidTo,
 		arg.CreatedBy,
 	)
 	var i ManufacturingRoute
@@ -169,6 +308,8 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Manuf
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.ValidFrom,
+		&i.ValidTo,
 	)
 	return i, err
 }
@@ -213,7 +354,11 @@ SELECT
     ro.work_center_id,
     op.name AS operation_name,
     op.origin,
-    COALESCE(ro.standard_time, op.standard_time) AS effective_hours
+    COALESCE(ro.standard_time, op.standard_time) AS effective_hours,
+    COALESCE(ro.supplier_id, op.supplier_id) AS supplier_id,
+    COALESCE(ro.service_item_code, op.service_item_code) AS service_item_code,
+    COALESCE(ro.cost_per_unit, op.cost_per_unit, 0) AS cost_per_unit,
+    COALESCE(ro.lead_time_days, op.lead_time_days, 0) AS lead_time_days
 FROM manufacturing_routes mr
 JOIN route_operations ro ON ro.route_id = mr.id
 JOIN operations op ON op.id = ro.operation_id
@@ -225,12 +370,16 @@ WHERE mr.item_code = $1
 `
 
 type GetExternalRouteOpsForItemRow struct {
-	ID             int64
-	OperationID    int64
-	WorkCenterID   *int64
-	OperationName  string
-	Origin         sqltypes.OperationOriginEnum
-	EffectiveHours pgtype.Numeric
+	ID              int64
+	OperationID     int64
+	WorkCenterID    *int64
+	OperationName   string
+	Origin          sqltypes.OperationOriginEnum
+	EffectiveHours  pgtype.Numeric
+	SupplierID      *int64
+	ServiceItemCode *int64
+	CostPerUnit     pgtype.Numeric
+	LeadTimeDays    int32
 }
 
 func (q *Queries) GetExternalRouteOpsForItem(ctx context.Context, itemCode int64) ([]GetExternalRouteOpsForItemRow, error) {
@@ -249,6 +398,10 @@ func (q *Queries) GetExternalRouteOpsForItem(ctx context.Context, itemCode int64
 			&i.OperationName,
 			&i.Origin,
 			&i.EffectiveHours,
+			&i.SupplierID,
+			&i.ServiceItemCode,
+			&i.CostPerUnit,
+			&i.LeadTimeDays,
 		); err != nil {
 			return nil, err
 		}
@@ -295,7 +448,7 @@ func (q *Queries) GetNetworkEdges(ctx context.Context, routeID int64) ([]RouteOp
 }
 
 const getOperationByID = `-- name: GetOperationByID :one
-SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by FROM operations WHERE id = $1
+SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days FROM operations WHERE id = $1
 `
 
 func (q *Queries) GetOperationByID(ctx context.Context, id int64) (Operation, error) {
@@ -315,12 +468,24 @@ func (q *Queries) GetOperationByID(ctx context.Context, id int64) (Operation, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RunTime,
+		&i.LaborTime,
+		&i.RunTimeBaseQty,
+		&i.QueueTime,
+		&i.WaitTime,
+		&i.MoveTime,
+		&i.CrewSize,
+		&i.TimeUnit,
+		&i.SupplierID,
+		&i.ServiceItemCode,
+		&i.CostPerUnit,
+		&i.LeadTimeDays,
 	)
 	return i, err
 }
 
 const getRouteByID = `-- name: GetRouteByID :one
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by FROM manufacturing_routes WHERE id = $1
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to FROM manufacturing_routes WHERE id = $1
 `
 
 func (q *Queries) GetRouteByID(ctx context.Context, id int64) (ManufacturingRoute, error) {
@@ -339,12 +504,14 @@ func (q *Queries) GetRouteByID(ctx context.Context, id int64) (ManufacturingRout
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.ValidFrom,
+		&i.ValidTo,
 	)
 	return i, err
 }
 
 const getRouteByItemAndAlternative = `-- name: GetRouteByItemAndAlternative :one
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by FROM manufacturing_routes
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to FROM manufacturing_routes
 WHERE item_code = $1
   AND COALESCE(mask, '') = COALESCE($2, '')
   AND alternative = $3
@@ -373,17 +540,48 @@ func (q *Queries) GetRouteByItemAndAlternative(ctx context.Context, arg GetRoute
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.ValidFrom,
+		&i.ValidTo,
+	)
+	return i, err
+}
+
+const getRouteOpResource = `-- name: GetRouteOpResource :one
+SELECT id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at FROM route_operation_resources WHERE id = $1
+`
+
+func (q *Queries) GetRouteOpResource(ctx context.Context, id int64) (RouteOperationResource, error) {
+	row := q.db.QueryRow(ctx, getRouteOpResource, id)
+	var i RouteOperationResource
+	err := row.Scan(
+		&i.ID,
+		&i.RouteOperationID,
+		&i.WorkCenterID,
+		&i.Priority,
+		&i.TimeFactor,
+		&i.IsPrimary,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getRouteOperations = `-- name: GetRouteOperations :many
 SELECT
-    ro.id, ro.route_id, ro.sequence, ro.operation_id, ro.work_center_id, ro.standard_time, ro.setup_time, ro.situation, ro.notes, ro.is_active, ro.created_at, ro.updated_at,
+    ro.id, ro.route_id, ro.sequence, ro.operation_id, ro.work_center_id, ro.standard_time, ro.setup_time, ro.situation, ro.notes, ro.is_active, ro.created_at, ro.updated_at, ro.run_time, ro.labor_time, ro.run_time_base_qty, ro.queue_time, ro.wait_time, ro.move_time, ro.crew_size, ro.time_unit, ro.supplier_id, ro.service_item_code, ro.cost_per_unit, ro.lead_time_days,
     op.name AS operation_name,
     op.origin AS operation_origin,
     op.standard_time AS op_standard_time,
     op.setup_time AS op_setup_time,
+    op.run_time AS op_run_time,
+    op.labor_time AS op_labor_time,
+    op.run_time_base_qty AS op_run_time_base_qty,
+    op.queue_time AS op_queue_time,
+    op.wait_time AS op_wait_time,
+    op.move_time AS op_move_time,
+    op.crew_size AS op_crew_size,
+    op.time_unit AS op_time_unit,
+    COALESCE(ro.work_center_id, op.default_work_center_id) AS effective_work_center_id,
     mt.name AS work_center_name,
     COALESCE(mt.requires_operator, TRUE) AS requires_operator
 FROM route_operations ro
@@ -394,24 +592,45 @@ ORDER BY ro.sequence
 `
 
 type GetRouteOperationsRow struct {
-	ID               int64
-	RouteID          int64
-	Sequence         int16
-	OperationID      int64
-	WorkCenterID     *int64
-	StandardTime     pgtype.Numeric
-	SetupTime        pgtype.Numeric
-	Situation        sqltypes.RouteOpSituationEnum
-	Notes            pgtype.Text
-	IsActive         bool
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
-	OperationName    string
-	OperationOrigin  sqltypes.OperationOriginEnum
-	OpStandardTime   pgtype.Numeric
-	OpSetupTime      pgtype.Numeric
-	WorkCenterName   pgtype.Text
-	RequiresOperator bool
+	ID                    int64
+	RouteID               int64
+	Sequence              int16
+	OperationID           int64
+	WorkCenterID          *int64
+	StandardTime          pgtype.Numeric
+	SetupTime             pgtype.Numeric
+	Situation             sqltypes.RouteOpSituationEnum
+	Notes                 pgtype.Text
+	IsActive              bool
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+	RunTime               pgtype.Numeric
+	LaborTime             pgtype.Numeric
+	RunTimeBaseQty        pgtype.Numeric
+	QueueTime             pgtype.Numeric
+	WaitTime              pgtype.Numeric
+	MoveTime              pgtype.Numeric
+	CrewSize              pgtype.Numeric
+	TimeUnit              pgtype.Text
+	SupplierID            *int64
+	ServiceItemCode       *int64
+	CostPerUnit           pgtype.Numeric
+	LeadTimeDays          *int32
+	OperationName         string
+	OperationOrigin       sqltypes.OperationOriginEnum
+	OpStandardTime        pgtype.Numeric
+	OpSetupTime           pgtype.Numeric
+	OpRunTime             pgtype.Numeric
+	OpLaborTime           pgtype.Numeric
+	OpRunTimeBaseQty      pgtype.Numeric
+	OpQueueTime           pgtype.Numeric
+	OpWaitTime            pgtype.Numeric
+	OpMoveTime            pgtype.Numeric
+	OpCrewSize            pgtype.Numeric
+	OpTimeUnit            string
+	EffectiveWorkCenterID *int64
+	WorkCenterName        pgtype.Text
+	RequiresOperator      bool
 }
 
 func (q *Queries) GetRouteOperations(ctx context.Context, routeID int64) ([]GetRouteOperationsRow, error) {
@@ -436,10 +655,31 @@ func (q *Queries) GetRouteOperations(ctx context.Context, routeID int64) ([]GetR
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RunTime,
+			&i.LaborTime,
+			&i.RunTimeBaseQty,
+			&i.QueueTime,
+			&i.WaitTime,
+			&i.MoveTime,
+			&i.CrewSize,
+			&i.TimeUnit,
+			&i.SupplierID,
+			&i.ServiceItemCode,
+			&i.CostPerUnit,
+			&i.LeadTimeDays,
 			&i.OperationName,
 			&i.OperationOrigin,
 			&i.OpStandardTime,
 			&i.OpSetupTime,
+			&i.OpRunTime,
+			&i.OpLaborTime,
+			&i.OpRunTimeBaseQty,
+			&i.OpQueueTime,
+			&i.OpWaitTime,
+			&i.OpMoveTime,
+			&i.OpCrewSize,
+			&i.OpTimeUnit,
+			&i.EffectiveWorkCenterID,
 			&i.WorkCenterName,
 			&i.RequiresOperator,
 		); err != nil {
@@ -454,21 +694,27 @@ func (q *Queries) GetRouteOperations(ctx context.Context, routeID int64) ([]GetR
 }
 
 const getStandardRouteForItem = `-- name: GetStandardRouteForItem :one
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by FROM manufacturing_routes
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to FROM manufacturing_routes
 WHERE item_code = $1
   AND COALESCE(mask, '') = COALESCE($2, '')
   AND is_active = TRUE
-ORDER BY is_standard DESC, alternative
+  AND (valid_from IS NULL OR valid_from <= COALESCE($3::DATE, CURRENT_DATE))
+  AND (valid_to   IS NULL OR valid_to   >= COALESCE($3::DATE, CURRENT_DATE))
+ORDER BY is_standard DESC, valid_from DESC NULLS LAST, alternative
 LIMIT 1
 `
 
 type GetStandardRouteForItemParams struct {
 	ItemCode int64
 	Mask     pgtype.Text
+	Column3  pgtype.Date
 }
 
+// Picks the route effective on the reference date (defaults to today when $3 is NULL):
+// APROVADA/active, within its validity window; prefers standard, then the most
+// recently-effective revision.
 func (q *Queries) GetStandardRouteForItem(ctx context.Context, arg GetStandardRouteForItemParams) (ManufacturingRoute, error) {
-	row := q.db.QueryRow(ctx, getStandardRouteForItem, arg.ItemCode, arg.Mask)
+	row := q.db.QueryRow(ctx, getStandardRouteForItem, arg.ItemCode, arg.Mask, arg.Column3)
 	var i ManufacturingRoute
 	err := row.Scan(
 		&i.ID,
@@ -483,6 +729,8 @@ func (q *Queries) GetStandardRouteForItem(ctx context.Context, arg GetStandardRo
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.ValidFrom,
+		&i.ValidTo,
 	)
 	return i, err
 }
@@ -502,7 +750,7 @@ func (q *Queries) ItemHasRoute(ctx context.Context, itemCode int64) (bool, error
 }
 
 const listOperations = `-- name: ListOperations :many
-SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by FROM operations
+SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days FROM operations
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
@@ -530,6 +778,119 @@ func (q *Queries) ListOperations(ctx context.Context, dollar_1 bool) ([]Operatio
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.RunTime,
+			&i.LaborTime,
+			&i.RunTimeBaseQty,
+			&i.QueueTime,
+			&i.WaitTime,
+			&i.MoveTime,
+			&i.CrewSize,
+			&i.TimeUnit,
+			&i.SupplierID,
+			&i.ServiceItemCode,
+			&i.CostPerUnit,
+			&i.LeadTimeDays,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listResourcesByRoute = `-- name: ListResourcesByRoute :many
+SELECT r.id, r.route_operation_id, r.work_center_id, r.priority, r.time_factor, r.is_primary, r.created_at, r.updated_at, mt.name AS work_center_name
+FROM route_operation_resources r
+JOIN route_operations ro ON ro.id = r.route_operation_id
+LEFT JOIN machine_types mt ON mt.id = r.work_center_id
+WHERE ro.route_id = $1
+ORDER BY r.route_operation_id, r.is_primary DESC, r.priority, r.id
+`
+
+type ListResourcesByRouteRow struct {
+	ID               int64
+	RouteOperationID int64
+	WorkCenterID     int64
+	Priority         int16
+	TimeFactor       pgtype.Numeric
+	IsPrimary        bool
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	WorkCenterName   pgtype.Text
+}
+
+func (q *Queries) ListResourcesByRoute(ctx context.Context, routeID int64) ([]ListResourcesByRouteRow, error) {
+	rows, err := q.db.Query(ctx, listResourcesByRoute, routeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListResourcesByRouteRow
+	for rows.Next() {
+		var i ListResourcesByRouteRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RouteOperationID,
+			&i.WorkCenterID,
+			&i.Priority,
+			&i.TimeFactor,
+			&i.IsPrimary,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.WorkCenterName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listResourcesByRouteOp = `-- name: ListResourcesByRouteOp :many
+SELECT r.id, r.route_operation_id, r.work_center_id, r.priority, r.time_factor, r.is_primary, r.created_at, r.updated_at, mt.name AS work_center_name
+FROM route_operation_resources r
+LEFT JOIN machine_types mt ON mt.id = r.work_center_id
+WHERE r.route_operation_id = $1
+ORDER BY r.is_primary DESC, r.priority, r.id
+`
+
+type ListResourcesByRouteOpRow struct {
+	ID               int64
+	RouteOperationID int64
+	WorkCenterID     int64
+	Priority         int16
+	TimeFactor       pgtype.Numeric
+	IsPrimary        bool
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	WorkCenterName   pgtype.Text
+}
+
+func (q *Queries) ListResourcesByRouteOp(ctx context.Context, routeOperationID int64) ([]ListResourcesByRouteOpRow, error) {
+	rows, err := q.db.Query(ctx, listResourcesByRouteOp, routeOperationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListResourcesByRouteOpRow
+	for rows.Next() {
+		var i ListResourcesByRouteOpRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RouteOperationID,
+			&i.WorkCenterID,
+			&i.Priority,
+			&i.TimeFactor,
+			&i.IsPrimary,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.WorkCenterName,
 		); err != nil {
 			return nil, err
 		}
@@ -542,7 +903,7 @@ func (q *Queries) ListOperations(ctx context.Context, dollar_1 bool) ([]Operatio
 }
 
 const listRoutesByItem = `-- name: ListRoutesByItem :many
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by FROM manufacturing_routes
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to FROM manufacturing_routes
 WHERE item_code = $1 AND is_active = TRUE
 ORDER BY alternative
 `
@@ -569,6 +930,8 @@ func (q *Queries) ListRoutesByItem(ctx context.Context, itemCode int64) ([]Manuf
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.ValidFrom,
+			&i.ValidTo,
 		); err != nil {
 			return nil, err
 		}
@@ -581,25 +944,34 @@ func (q *Queries) ListRoutesByItem(ctx context.Context, itemCode int64) ([]Manuf
 }
 
 const nextOperationCode = `-- name: NextOperationCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM operations
+SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM operations
 `
 
-func (q *Queries) NextOperationCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextOperationCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextOperationCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextRouteCode = `-- name: NextRouteCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM manufacturing_routes
+SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM manufacturing_routes
 `
 
-func (q *Queries) NextRouteCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextRouteCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextRouteCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
+}
+
+const removeRouteOpResource = `-- name: RemoveRouteOpResource :exec
+DELETE FROM route_operation_resources WHERE id = $1
+`
+
+func (q *Queries) RemoveRouteOpResource(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, removeRouteOpResource, id)
+	return err
 }
 
 const removeRouteOperation = `-- name: RemoveRouteOperation :exec
@@ -608,6 +980,42 @@ UPDATE route_operations SET is_active = FALSE, updated_at = NOW() WHERE id = $1
 
 func (q *Queries) RemoveRouteOperation(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, removeRouteOperation, id)
+	return err
+}
+
+const setResourcePrimary = `-- name: SetResourcePrimary :one
+UPDATE route_operation_resources SET is_primary = TRUE, updated_at = NOW()
+WHERE id = $1
+RETURNING id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at
+`
+
+func (q *Queries) SetResourcePrimary(ctx context.Context, id int64) (RouteOperationResource, error) {
+	row := q.db.QueryRow(ctx, setResourcePrimary, id)
+	var i RouteOperationResource
+	err := row.Scan(
+		&i.ID,
+		&i.RouteOperationID,
+		&i.WorkCenterID,
+		&i.Priority,
+		&i.TimeFactor,
+		&i.IsPrimary,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setRouteOpWorkCenter = `-- name: SetRouteOpWorkCenter :exec
+UPDATE route_operations SET work_center_id = $2, updated_at = NOW() WHERE id = $1
+`
+
+type SetRouteOpWorkCenterParams struct {
+	ID           int64
+	WorkCenterID *int64
+}
+
+func (q *Queries) SetRouteOpWorkCenter(ctx context.Context, arg SetRouteOpWorkCenterParams) error {
+	_, err := q.db.Exec(ctx, setRouteOpWorkCenter, arg.ID, arg.WorkCenterID)
 	return err
 }
 
@@ -620,9 +1028,21 @@ UPDATE operations SET
     default_work_center_id = $6,
     standard_time = $7,
     setup_time = $8,
+    run_time = $9,
+    labor_time = $10,
+    run_time_base_qty = $11,
+    queue_time = $12,
+    wait_time = $13,
+    move_time = $14,
+    crew_size = $15,
+    time_unit = $16,
+    supplier_id = $17,
+    service_item_code = $18,
+    cost_per_unit = $19,
+    lead_time_days = $20,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by
+RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days
 `
 
 type UpdateOperationParams struct {
@@ -634,6 +1054,18 @@ type UpdateOperationParams struct {
 	DefaultWorkCenterID *int64
 	StandardTime        pgtype.Numeric
 	SetupTime           pgtype.Numeric
+	RunTime             pgtype.Numeric
+	LaborTime           pgtype.Numeric
+	RunTimeBaseQty      pgtype.Numeric
+	QueueTime           pgtype.Numeric
+	WaitTime            pgtype.Numeric
+	MoveTime            pgtype.Numeric
+	CrewSize            pgtype.Numeric
+	TimeUnit            string
+	SupplierID          *int64
+	ServiceItemCode     *int64
+	CostPerUnit         pgtype.Numeric
+	LeadTimeDays        *int32
 }
 
 func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams) (Operation, error) {
@@ -646,6 +1078,18 @@ func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams
 		arg.DefaultWorkCenterID,
 		arg.StandardTime,
 		arg.SetupTime,
+		arg.RunTime,
+		arg.LaborTime,
+		arg.RunTimeBaseQty,
+		arg.QueueTime,
+		arg.WaitTime,
+		arg.MoveTime,
+		arg.CrewSize,
+		arg.TimeUnit,
+		arg.SupplierID,
+		arg.ServiceItemCode,
+		arg.CostPerUnit,
+		arg.LeadTimeDays,
 	)
 	var i Operation
 	err := row.Scan(
@@ -662,6 +1106,18 @@ func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RunTime,
+		&i.LaborTime,
+		&i.RunTimeBaseQty,
+		&i.QueueTime,
+		&i.WaitTime,
+		&i.MoveTime,
+		&i.CrewSize,
+		&i.TimeUnit,
+		&i.SupplierID,
+		&i.ServiceItemCode,
+		&i.CostPerUnit,
+		&i.LeadTimeDays,
 	)
 	return i, err
 }
@@ -671,9 +1127,11 @@ UPDATE manufacturing_routes SET
     description = $2,
     situation = $3,
     is_standard = $4,
+    valid_from = $5,
+    valid_to = $6,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by
+RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to
 `
 
 type UpdateRouteParams struct {
@@ -681,6 +1139,8 @@ type UpdateRouteParams struct {
 	Description pgtype.Text
 	Situation   sqltypes.RouteSituationEnum
 	IsStandard  bool
+	ValidFrom   pgtype.Date
+	ValidTo     pgtype.Date
 }
 
 func (q *Queries) UpdateRoute(ctx context.Context, arg UpdateRouteParams) (ManufacturingRoute, error) {
@@ -689,6 +1149,8 @@ func (q *Queries) UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Manuf
 		arg.Description,
 		arg.Situation,
 		arg.IsStandard,
+		arg.ValidFrom,
+		arg.ValidTo,
 	)
 	var i ManufacturingRoute
 	err := row.Scan(
@@ -704,6 +1166,39 @@ func (q *Queries) UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Manuf
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.ValidFrom,
+		&i.ValidTo,
+	)
+	return i, err
+}
+
+const updateRouteOpResource = `-- name: UpdateRouteOpResource :one
+UPDATE route_operation_resources SET
+    priority    = $2,
+    time_factor = $3,
+    updated_at  = NOW()
+WHERE id = $1
+RETURNING id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at
+`
+
+type UpdateRouteOpResourceParams struct {
+	ID         int64
+	Priority   int16
+	TimeFactor pgtype.Numeric
+}
+
+func (q *Queries) UpdateRouteOpResource(ctx context.Context, arg UpdateRouteOpResourceParams) (RouteOperationResource, error) {
+	row := q.db.QueryRow(ctx, updateRouteOpResource, arg.ID, arg.Priority, arg.TimeFactor)
+	var i RouteOperationResource
+	err := row.Scan(
+		&i.ID,
+		&i.RouteOperationID,
+		&i.WorkCenterID,
+		&i.Priority,
+		&i.TimeFactor,
+		&i.IsPrimary,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -713,20 +1208,44 @@ UPDATE route_operations SET
     work_center_id = $2,
     standard_time = $3,
     setup_time = $4,
-    situation = $5,
-    notes = $6,
+    run_time = $5,
+    labor_time = $6,
+    run_time_base_qty = $7,
+    queue_time = $8,
+    wait_time = $9,
+    move_time = $10,
+    crew_size = $11,
+    time_unit = $12,
+    supplier_id = $13,
+    service_item_code = $14,
+    cost_per_unit = $15,
+    lead_time_days = $16,
+    situation = $17,
+    notes = $18,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at
+RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days
 `
 
 type UpdateRouteOperationParams struct {
-	ID           int64
-	WorkCenterID *int64
-	StandardTime pgtype.Numeric
-	SetupTime    pgtype.Numeric
-	Situation    sqltypes.RouteOpSituationEnum
-	Notes        pgtype.Text
+	ID              int64
+	WorkCenterID    *int64
+	StandardTime    pgtype.Numeric
+	SetupTime       pgtype.Numeric
+	RunTime         pgtype.Numeric
+	LaborTime       pgtype.Numeric
+	RunTimeBaseQty  pgtype.Numeric
+	QueueTime       pgtype.Numeric
+	WaitTime        pgtype.Numeric
+	MoveTime        pgtype.Numeric
+	CrewSize        pgtype.Numeric
+	TimeUnit        pgtype.Text
+	SupplierID      *int64
+	ServiceItemCode *int64
+	CostPerUnit     pgtype.Numeric
+	LeadTimeDays    *int32
+	Situation       sqltypes.RouteOpSituationEnum
+	Notes           pgtype.Text
 }
 
 func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOperationParams) (RouteOperation, error) {
@@ -735,6 +1254,18 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		arg.WorkCenterID,
 		arg.StandardTime,
 		arg.SetupTime,
+		arg.RunTime,
+		arg.LaborTime,
+		arg.RunTimeBaseQty,
+		arg.QueueTime,
+		arg.WaitTime,
+		arg.MoveTime,
+		arg.CrewSize,
+		arg.TimeUnit,
+		arg.SupplierID,
+		arg.ServiceItemCode,
+		arg.CostPerUnit,
+		arg.LeadTimeDays,
 		arg.Situation,
 		arg.Notes,
 	)
@@ -752,6 +1283,18 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RunTime,
+		&i.LaborTime,
+		&i.RunTimeBaseQty,
+		&i.QueueTime,
+		&i.WaitTime,
+		&i.MoveTime,
+		&i.CrewSize,
+		&i.TimeUnit,
+		&i.SupplierID,
+		&i.ServiceItemCode,
+		&i.CostPerUnit,
+		&i.LeadTimeDays,
 	)
 	return i, err
 }

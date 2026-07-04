@@ -20,20 +20,24 @@ func (r *ItemStructureRepositorySQLC) Create(
 ) (*entity.ItemStructure, error) {
 
 	row, err := r.q.CreateStructureComponent(ctx, sqlc.CreateStructureComponentParams{
-		ParentCode:        s.ParentCode,
-		ChildCode:         s.ChildCode,
-		ParentMask:        stringPtrToPgText(s.ParentMask),
-		Quantity:          s.Quantity,
-		UnitOfMeasurement: sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
-		Health:            sqlc.HealthEnum(s.Health),
-		LossPercentage:    s.LossPercentage,
-		Sequence:          int32(s.Sequence),
-		Notes:             stringPtrToPgText(s.Notes),
-		CreatedBy:         pgutil.ToPgUUID(s.CreatedBy),
-		Inherit:           s.Inherit,
-		StartDate:         pgutil.ToPgDateFromPtr(s.StartDate),
-		EndDate:           pgutil.ToPgDateFromPtr(s.EndDate),
-		LossFormula:       stringPtrToPgText(s.LossFormula),
+		ParentCode:         s.ParentCode,
+		ChildCode:          s.ChildCode,
+		ParentMask:         stringPtrToPgText(s.ParentMask),
+		Quantity:           s.Quantity,
+		UnitOfMeasurement:  sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
+		Health:             sqlc.HealthEnum(s.Health),
+		LossPercentage:     s.LossPercentage,
+		Sequence:           int32(s.Sequence),
+		Notes:              stringPtrToPgText(s.Notes),
+		CreatedBy:          pgutil.ToPgUUID(s.CreatedBy),
+		Inherit:            s.Inherit,
+		StartDate:          pgutil.ToPgDateFromPtr(s.StartDate),
+		EndDate:            pgutil.ToPgDateFromPtr(s.EndDate),
+		LossFormula:        stringPtrToPgText(s.LossFormula),
+		IsCoproduct:        s.IsCoproduct,
+		IsFixedQty:         s.IsFixedQty,
+		SubstituteGroup:    s.SubstituteGroup,
+		SubstitutePriority: s.SubstitutePriority,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating structure: %w", err)
@@ -48,18 +52,22 @@ func (r *ItemStructureRepositorySQLC) Update(
 ) (*entity.ItemStructure, error) {
 
 	row, err := r.q.UpdateStructureComponent(ctx, sqlc.UpdateStructureComponentParams{
-		ParentCode:        s.ParentCode,
-		ChildCode:         s.ChildCode,
-		ParentMask:        stringPtrToPgText(s.ParentMask),
-		Quantity:          s.Quantity,
-		UnitOfMeasurement: sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
-		Health:            sqlc.HealthEnum(s.Health),
-		LossPercentage:    s.LossPercentage,
-		Sequence:          int32(s.Sequence),
-		Notes:             stringPtrToPgText(s.Notes),
-		StartDate:         pgutil.ToPgDateFromPtr(s.StartDate),
-		EndDate:           pgutil.ToPgDateFromPtr(s.EndDate),
-		LossFormula:       stringPtrToPgText(s.LossFormula),
+		ParentCode:         s.ParentCode,
+		ChildCode:          s.ChildCode,
+		ParentMask:         stringPtrToPgText(s.ParentMask),
+		Quantity:           s.Quantity,
+		UnitOfMeasurement:  sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
+		Health:             sqlc.HealthEnum(s.Health),
+		LossPercentage:     s.LossPercentage,
+		Sequence:           int32(s.Sequence),
+		Notes:              stringPtrToPgText(s.Notes),
+		StartDate:          pgutil.ToPgDateFromPtr(s.StartDate),
+		EndDate:            pgutil.ToPgDateFromPtr(s.EndDate),
+		LossFormula:        stringPtrToPgText(s.LossFormula),
+		IsCoproduct:        s.IsCoproduct,
+		IsFixedQty:         s.IsFixedQty,
+		SubstituteGroup:    s.SubstituteGroup,
+		SubstitutePriority: s.SubstitutePriority,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating structure: %w", err)
@@ -174,11 +182,15 @@ func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
 	adjacency := make(map[int64][]*entity.ItemStructure, len(edges))
 	for _, e := range edges {
 		child := &entity.ItemStructure{
-			ParentCode:     e.ParentCode,
-			ChildCode:      e.ChildCode,
-			Quantity:       pgutil.FromPgNumericToFloat64(e.Quantity),
-			LossPercentage: pgutil.FromPgNumericToFloat64(e.LossPercentage),
-			IsActive:       true,
+			ParentCode:         e.ParentCode,
+			ChildCode:          e.ChildCode,
+			Quantity:           pgutil.FromPgNumericToFloat64(e.Quantity),
+			LossPercentage:     pgutil.FromPgNumericToFloat64(e.LossPercentage),
+			IsCoproduct:        e.IsCoproduct,
+			IsFixedQty:         e.IsFixedQty,
+			SubstituteGroup:    e.SubstituteGroup,
+			SubstitutePriority: e.SubstitutePriority,
+			IsActive:           true,
 		}
 		if e.ParentMask.Valid {
 			v := e.ParentMask.String
@@ -206,21 +218,25 @@ func (r *ItemStructureRepositorySQLC) GetItemQuestions(
 
 func rowToEntity(row sqlc.ItemStructure) *entity.ItemStructure {
 	e := &entity.ItemStructure{
-		ID:                row.ID,
-		ParentCode:        row.ParentCode,
-		ChildCode:         row.ChildCode,
-		Quantity:          row.Quantity,
-		LossPercentage:    row.LossPercentage,
-		UnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
-		Health:            types.Health(row.Health),
-		Sequence:          int(row.Sequence),
-		IsActive:          row.IsActive,
-		Inherit:           row.Inherit,
-		CreatedBy:         pgutil.FromPgUUID(row.CreatedBy),
-		CreatedAt:         pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt:         pgutil.FromPgTimestamptz(row.UpdatedAt),
-		StartDate:         pgutil.FromPgDateToPtr(row.StartDate),
-		EndDate:           pgutil.FromPgDateToPtr(row.EndDate),
+		ID:                 row.ID,
+		ParentCode:         row.ParentCode,
+		ChildCode:          row.ChildCode,
+		Quantity:           row.Quantity,
+		LossPercentage:     row.LossPercentage,
+		UnitOfMeasurement:  types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+		Health:             types.Health(row.Health),
+		Sequence:           int(row.Sequence),
+		IsActive:           row.IsActive,
+		Inherit:            row.Inherit,
+		CreatedBy:          pgutil.FromPgUUID(row.CreatedBy),
+		CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
+		StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
+		EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
+		IsCoproduct:        row.IsCoproduct,
+		IsFixedQty:         row.IsFixedQty,
+		SubstituteGroup:    row.SubstituteGroup,
+		SubstitutePriority: row.SubstitutePriority,
 	}
 
 	if row.ParentMask.Valid {
@@ -246,22 +262,26 @@ func mapDirectChildrenRows(rows []sqlc.GetAllDirectChildrenRow) []*entity.ItemSt
 
 	for _, row := range rows {
 		e := &entity.ItemStructure{
-			ID:                row.ID,
-			ParentCode:        row.ParentCode,
-			ChildCode:         row.ChildCode,
-			ChildDescription:  row.ChildDescription,
-			Quantity:          row.Quantity,
-			LossPercentage:    row.LossPercentage,
-			UnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
-			Health:            types.Health(row.Health),
-			Sequence:          int(row.Sequence),
-			IsActive:          row.IsActive,
-			Inherit:           row.Inherit,
-			CreatedBy:         pgutil.FromPgUUID(row.CreatedBy),
-			CreatedAt:         pgutil.FromPgTimestamptz(row.CreatedAt),
-			UpdatedAt:         pgutil.FromPgTimestamptz(row.UpdatedAt),
-			StartDate:         pgutil.FromPgDateToPtr(row.StartDate),
-			EndDate:           pgutil.FromPgDateToPtr(row.EndDate),
+			ID:                 row.ID,
+			ParentCode:         row.ParentCode,
+			ChildCode:          row.ChildCode,
+			ChildDescription:   row.ChildDescription,
+			Quantity:           row.Quantity,
+			LossPercentage:     row.LossPercentage,
+			UnitOfMeasurement:  types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+			Health:             types.Health(row.Health),
+			Sequence:           int(row.Sequence),
+			IsActive:           row.IsActive,
+			Inherit:            row.Inherit,
+			CreatedBy:          pgutil.FromPgUUID(row.CreatedBy),
+			CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
+			UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
+			StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
+			EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
+			IsCoproduct:        row.IsCoproduct,
+			IsFixedQty:         row.IsFixedQty,
+			SubstituteGroup:    row.SubstituteGroup,
+			SubstitutePriority: row.SubstitutePriority,
 		}
 
 		if row.ParentMask.Valid {
@@ -290,20 +310,26 @@ func mapDirectChildrenWithMask(rows []sqlc.GetDirectChildrenForMaskRow) []*entit
 
 	for _, row := range rows {
 		e := &entity.ItemStructure{
-			ID:                row.ID,
-			ParentCode:        row.ParentCode,
-			ChildCode:         row.ChildCode,
-			ChildDescription:  row.ChildDescription,
-			Quantity:          row.Quantity,
-			LossPercentage:    row.LossPercentage,
-			UnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
-			Health:            types.Health(row.Health),
-			Sequence:          int(row.Sequence),
-			IsActive:          row.IsActive,
-			Inherit:           row.Inherit,
-			CreatedBy:         pgutil.FromPgUUID(row.CreatedBy),
-			CreatedAt:         pgutil.FromPgTimestamptz(row.CreatedAt),
-			UpdatedAt:         pgutil.FromPgTimestamptz(row.UpdatedAt),
+			ID:                 row.ID,
+			ParentCode:         row.ParentCode,
+			ChildCode:          row.ChildCode,
+			ChildDescription:   row.ChildDescription,
+			Quantity:           row.Quantity,
+			LossPercentage:     row.LossPercentage,
+			UnitOfMeasurement:  types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+			Health:             types.Health(row.Health),
+			Sequence:           int(row.Sequence),
+			IsActive:           row.IsActive,
+			Inherit:            row.Inherit,
+			CreatedBy:          pgutil.FromPgUUID(row.CreatedBy),
+			CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
+			UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
+			StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
+			EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
+			IsCoproduct:        row.IsCoproduct,
+			IsFixedQty:         row.IsFixedQty,
+			SubstituteGroup:    row.SubstituteGroup,
+			SubstitutePriority: row.SubstitutePriority,
 		}
 
 		if row.ParentMask.Valid {
@@ -314,6 +340,11 @@ func mapDirectChildrenWithMask(rows []sqlc.GetDirectChildrenForMaskRow) []*entit
 		if row.Notes.Valid {
 			v := row.Notes.String
 			e.Notes = &v
+		}
+
+		if row.LossFormula.Valid {
+			v := row.LossFormula.String
+			e.LossFormula = &v
 		}
 
 		out = append(out, e)

@@ -184,6 +184,11 @@ Suporte Soldado SS-100  (1 unidade)
 
 É a partir da estrutura que o MRP descobre que, para fabricar 100 suportes, precisa de 200 peças cortadas, 160 kg de chapa (já com a perda) e 400 parafusos.
 
+Além da receita básica, a estrutura suporta recursos importantes para metalurgia e
+moveleiro: componentes alternativos/substitutos com prioridade, itens de quantidade
+fixa por ordem, co-produtos/subprodutos e sucata retornável. Isso permite planejar
+com o material preferido sem perder a alternativa operacional quando faltar estoque.
+
 O sistema oferece ferramentas para trabalhar a estrutura:
 
 | Recurso | Para que serve |

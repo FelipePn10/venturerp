@@ -16,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	plannedrepo "github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
 	prodrepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
+	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	structqueryrepo "github.com/FelipePn10/panossoerp/internal/domain/structure_query/repository"
 )
 
@@ -121,7 +122,10 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 			warnings = append(warnings, fmt.Sprintf("%s: exploding BOM failed: %v", s.ref, err))
 			continue
 		}
-		for _, st := range children {
+		for _, st := range structentity.SelectPrimarySubstituteComponents(children) {
+			if st.IsCoproduct {
+				continue
+			}
 			child, err := uc.loadItem(ctx, itemCache, st.ChildCode)
 			if err != nil || child == nil {
 				continue
@@ -244,14 +248,20 @@ func (uc *DemandUseCase) createPlan(ctx context.Context, g *matGroup, dto reques
 func (uc *DemandUseCase) resolveMaterial(ctx context.Context, cache map[int64]*itementity.Item, child *itementity.Item) (int64, bool) {
 	kids, err := uc.structures.GetDirectChildrenForMask(ctx, int64(child.Code), "")
 	if err == nil {
+		kids = structentity.SelectPrimarySubstituteComponents(kids)
+		inputs := make([]*structentity.ItemStructure, 0, len(kids))
 		for _, k := range kids {
+			if k.IsCoproduct {
+				continue
+			}
+			inputs = append(inputs, k)
 			ki, kerr := uc.loadItem(ctx, cache, k.ChildCode)
 			if kerr == nil && ki != nil && ki.Planning.LLC == rawMaterialLLC {
 				return k.ChildCode, true
 			}
 		}
-		if len(kids) == 1 {
-			return kids[0].ChildCode, true
+		if len(inputs) == 1 {
+			return inputs[0].ChildCode, true
 		}
 	}
 	if child.Engineering.ItemBaseCod != nil {

@@ -219,7 +219,10 @@ func TestGenerateRomaneioXLSX_Content(t *testing.T) {
 }
 
 func TestMoneyFormat(t *testing.T) {
-	tests := []struct{ in float64; want string }{
+	tests := []struct {
+		in   float64
+		want string
+	}{
 		{0, "0,00"},
 		{12.5, "12,50"},
 		{1250, "1.250,00"},

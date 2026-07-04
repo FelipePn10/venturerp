@@ -1,0 +1,6 @@
+BEGIN;
+
+DROP TABLE IF EXISTS route_operation_tools;
+DROP TABLE IF EXISTS tools;
+
+COMMIT;

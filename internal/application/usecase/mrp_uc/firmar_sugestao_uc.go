@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -13,6 +15,12 @@ import (
 	plannedentity "github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
 	plannedrepo "github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
 )
+
+// orderFirmer firms a freshly-created planned order, generating its Production Order
+// (OF) and/or service requisition. FirmPlannedOrderUseCase satisfies it.
+type orderFirmer interface {
+	Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error)
+}
 
 // mapMRPOrderType converts the MRP service's internal order type strings
 // (FABRICACAO, COMPRA, SERVICO, TECHNICAL_ASSISTANCE) into the planned_orders
@@ -57,6 +65,11 @@ type FirmarSugestaoMRPUseCase struct {
 	MRPRepo     mrpcalcrepo.MRPCalculationRepository
 	PlannedRepo plannedrepo.PlannedOrderRepository
 	Auth        ports.AuthService
+	// Firmer is optional. When set, accepting a suggestion not only creates the
+	// planned order but also firms it — generating the Production Order (OF) for
+	// PRODUCTION orders and the service requisition for external operations —
+	// mirroring SAP's "convert planned order → production order" in one step.
+	Firmer orderFirmer
 }
 
 type FirmarSugestaoMRPResponse struct {
@@ -100,9 +113,12 @@ func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode 
 		StartDate:   sugg.StartDate,
 		LLC:         sugg.LLC,
 		Notes:       sugg.Notes,
-		IsFirm:      true,
-		IsActive:    true,
-		CreatedBy:   userID,
+		// When a Firmer is wired, create the order NOT firm so the firm step's
+		// "first firming" guard fires and generates the OF/requisition. Without a
+		// Firmer, keep the legacy behaviour (mark firm directly).
+		IsFirm:    uc.Firmer == nil,
+		IsActive:  true,
+		CreatedBy: userID,
 	}
 
 	if sugg.PlanCode != 0 {
@@ -119,6 +135,15 @@ func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode 
 		return nil, fmt.Errorf("creating planned order from suggestion %d: %w", suggestionCode, err)
 	}
 
+	isFirm := created.IsFirm
+	// Firm the freshly-created order so its OF / service requisition is generated.
+	if uc.Firmer != nil {
+		if _, ferr := uc.Firmer.Execute(ctx, request.FirmOrderDTO{OrderCode: created.Code}); ferr != nil {
+			return nil, fmt.Errorf("firming planned order %d from suggestion %d: %w", created.Code, suggestionCode, ferr)
+		}
+		isFirm = true
+	}
+
 	return &FirmarSugestaoMRPResponse{
 		SuggestionCode: sugg.Code,
 		PlannedCode:    created.Code,
@@ -128,7 +153,7 @@ func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode 
 		OrderType:      string(created.OrderType),
 		NeedDate:       created.NeedDate,
 		Status:         string(created.Status),
-		IsFirm:         created.IsFirm,
+		IsFirm:         isFirm,
 		PlanCode:       created.PlanCode,
 	}, nil
 }

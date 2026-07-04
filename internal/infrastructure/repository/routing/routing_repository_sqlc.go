@@ -36,6 +36,18 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 		DefaultWorkCenterID: op.DefaultWorkCenterID,
 		StandardTime:        pgutil.ToPgNumericFromFloat64(op.StandardTime),
 		SetupTime:           pgutil.ToPgNumericFromFloat64(op.SetupTime),
+		RunTime:             pgutil.ToPgNumericFromFloat64(op.RunTime),
+		LaborTime:           pgutil.ToPgNumericFromFloat64(op.LaborTime),
+		RunTimeBaseQty:      pgutil.ToPgNumericFromFloat64(op.RunBaseQty),
+		QueueTime:           pgutil.ToPgNumericFromFloat64(op.QueueTime),
+		WaitTime:            pgutil.ToPgNumericFromFloat64(op.WaitTime),
+		MoveTime:            pgutil.ToPgNumericFromFloat64(op.MoveTime),
+		CrewSize:            pgutil.ToPgNumericFromFloat64(op.CrewSize),
+		TimeUnit:            op.TimeUnit,
+		SupplierID:          op.SupplierID,
+		ServiceItemCode:     op.ServiceItemCode,
+		CostPerUnit:         pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:        op.LeadTimeDays,
 		CreatedBy:           pgutil.ToPgUUID(op.CreatedBy),
 	})
 	if err != nil {
@@ -54,6 +66,18 @@ func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.
 		DefaultWorkCenterID: op.DefaultWorkCenterID,
 		StandardTime:        pgutil.ToPgNumericFromFloat64(op.StandardTime),
 		SetupTime:           pgutil.ToPgNumericFromFloat64(op.SetupTime),
+		RunTime:             pgutil.ToPgNumericFromFloat64(op.RunTime),
+		LaborTime:           pgutil.ToPgNumericFromFloat64(op.LaborTime),
+		RunTimeBaseQty:      pgutil.ToPgNumericFromFloat64(op.RunBaseQty),
+		QueueTime:           pgutil.ToPgNumericFromFloat64(op.QueueTime),
+		WaitTime:            pgutil.ToPgNumericFromFloat64(op.WaitTime),
+		MoveTime:            pgutil.ToPgNumericFromFloat64(op.MoveTime),
+		CrewSize:            pgutil.ToPgNumericFromFloat64(op.CrewSize),
+		TimeUnit:            op.TimeUnit,
+		SupplierID:          op.SupplierID,
+		ServiceItemCode:     op.ServiceItemCode,
+		CostPerUnit:         pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:        op.LeadTimeDays,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating operation: %w", err)
@@ -101,6 +125,8 @@ func (r *RoutingRepositorySQLC) CreateRoute(ctx context.Context, rt *entity.Manu
 		Description: pgutil.ToPgTextFromPtr(rt.Description),
 		Situation:   sqltypes.RouteSituationEnum(rt.Situation),
 		IsStandard:  rt.IsStandard,
+		ValidFrom:   pgutil.ToPgDateFromPtr(rt.ValidFrom),
+		ValidTo:     pgutil.ToPgDateFromPtr(rt.ValidTo),
 		CreatedBy:   pgutil.ToPgUUID(rt.CreatedBy),
 	})
 	if err != nil {
@@ -115,6 +141,8 @@ func (r *RoutingRepositorySQLC) UpdateRoute(ctx context.Context, rt *entity.Manu
 		Description: pgutil.ToPgTextFromPtr(rt.Description),
 		Situation:   sqltypes.RouteSituationEnum(rt.Situation),
 		IsStandard:  rt.IsStandard,
+		ValidFrom:   pgutil.ToPgDateFromPtr(rt.ValidFrom),
+		ValidTo:     pgutil.ToPgDateFromPtr(rt.ValidTo),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating route: %w", err)
@@ -182,14 +210,26 @@ func (r *RoutingRepositorySQLC) GetRouteForItem(ctx context.Context, itemCode in
 
 func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entity.RouteOperation) (*entity.RouteOperation, error) {
 	row, err := r.q.AddRouteOperation(ctx, sqlc.AddRouteOperationParams{
-		RouteID:      op.RouteID,
-		Sequence:     op.Sequence,
-		OperationID:  op.OperationID,
-		WorkCenterID: op.WorkCenterID,
-		StandardTime: pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
-		SetupTime:    pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
-		Situation:    sqltypes.RouteOpSituationEnum(op.Situation),
-		Notes:        pgutil.ToPgTextFromPtr(op.Notes),
+		RouteID:         op.RouteID,
+		Sequence:        op.Sequence,
+		OperationID:     op.OperationID,
+		WorkCenterID:    op.WorkCenterID,
+		StandardTime:    pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
+		SetupTime:       pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
+		RunTime:         pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
+		LaborTime:       pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
+		RunTimeBaseQty:  pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
+		QueueTime:       pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
+		WaitTime:        pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
+		MoveTime:        pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
+		CrewSize:        pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
+		TimeUnit:        pgutil.ToPgTextFromPtr(op.TimeUnit),
+		SupplierID:      op.SupplierID,
+		ServiceItemCode: op.ServiceItemCode,
+		CostPerUnit:     pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:    op.LeadTimeDays,
+		Situation:       sqltypes.RouteOpSituationEnum(op.Situation),
+		Notes:           pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adding route operation: %w", err)
@@ -199,12 +239,24 @@ func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entit
 
 func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *entity.RouteOperation) (*entity.RouteOperation, error) {
 	row, err := r.q.UpdateRouteOperation(ctx, sqlc.UpdateRouteOperationParams{
-		ID:           op.ID,
-		WorkCenterID: op.WorkCenterID,
-		StandardTime: pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
-		SetupTime:    pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
-		Situation:    sqltypes.RouteOpSituationEnum(op.Situation),
-		Notes:        pgutil.ToPgTextFromPtr(op.Notes),
+		ID:              op.ID,
+		WorkCenterID:    op.WorkCenterID,
+		StandardTime:    pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
+		SetupTime:       pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
+		RunTime:         pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
+		LaborTime:       pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
+		RunTimeBaseQty:  pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
+		QueueTime:       pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
+		WaitTime:        pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
+		MoveTime:        pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
+		CrewSize:        pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
+		TimeUnit:        pgutil.ToPgTextFromPtr(op.TimeUnit),
+		SupplierID:      op.SupplierID,
+		ServiceItemCode: op.ServiceItemCode,
+		CostPerUnit:     pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:    op.LeadTimeDays,
+		Situation:       sqltypes.RouteOpSituationEnum(op.Situation),
+		Notes:           pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating route operation: %w", err)
@@ -273,6 +325,129 @@ func (r *RoutingRepositorySQLC) GetNetworkEdges(ctx context.Context, routeID int
 	return out, nil
 }
 
+// ─── route operation resources (alternatives) ─────────────────────────────────
+
+func (r *RoutingRepositorySQLC) AddRouteOpResource(ctx context.Context, res *entity.RouteOpResource) (*entity.RouteOpResource, error) {
+	row, err := r.q.AddRouteOpResource(ctx, sqlc.AddRouteOpResourceParams{
+		RouteOperationID: res.RouteOperationID,
+		WorkCenterID:     res.WorkCenterID,
+		Priority:         res.Priority,
+		TimeFactor:       pgutil.ToPgNumericFromFloat64(res.TimeFactor),
+		IsPrimary:        res.IsPrimary,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("adding route op resource: %w", err)
+	}
+	return resourceRowToEntity(row), nil
+}
+
+func (r *RoutingRepositorySQLC) UpdateRouteOpResource(ctx context.Context, res *entity.RouteOpResource) (*entity.RouteOpResource, error) {
+	row, err := r.q.UpdateRouteOpResource(ctx, sqlc.UpdateRouteOpResourceParams{
+		ID:         res.ID,
+		Priority:   res.Priority,
+		TimeFactor: pgutil.ToPgNumericFromFloat64(res.TimeFactor),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("updating route op resource: %w", err)
+	}
+	return resourceRowToEntity(row), nil
+}
+
+func (r *RoutingRepositorySQLC) GetRouteOpResource(ctx context.Context, id int64) (*entity.RouteOpResource, error) {
+	row, err := r.q.GetRouteOpResource(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("fetching route op resource %d: %w", id, err)
+	}
+	return resourceRowToEntity(row), nil
+}
+
+func (r *RoutingRepositorySQLC) RemoveRouteOpResource(ctx context.Context, id int64) error {
+	return r.q.RemoveRouteOpResource(ctx, id)
+}
+
+// SetRouteOpResourcePrimary makes one resource the primary for its operation:
+// it clears any other primary, flags this one, and mirrors the choice onto
+// route_operations.work_center_id (so cost/CRP/lead-time use it).
+func (r *RoutingRepositorySQLC) SetRouteOpResourcePrimary(ctx context.Context, id, routeOperationID, workCenterID int64) (*entity.RouteOpResource, error) {
+	if err := r.q.ClearPrimaryResources(ctx, routeOperationID); err != nil {
+		return nil, fmt.Errorf("clearing primary resources: %w", err)
+	}
+	row, err := r.q.SetResourcePrimary(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("setting resource primary: %w", err)
+	}
+	if err := r.q.SetRouteOpWorkCenter(ctx, sqlc.SetRouteOpWorkCenterParams{
+		ID:           routeOperationID,
+		WorkCenterID: &workCenterID,
+	}); err != nil {
+		return nil, fmt.Errorf("syncing route op work center: %w", err)
+	}
+	return resourceRowToEntity(row), nil
+}
+
+func (r *RoutingRepositorySQLC) ListResourcesByRouteOp(ctx context.Context, routeOperationID int64) ([]*entity.RouteOpResource, error) {
+	rows, err := r.q.ListResourcesByRouteOp(ctx, routeOperationID)
+	if err != nil {
+		return nil, fmt.Errorf("listing resources for route op %d: %w", routeOperationID, err)
+	}
+	out := make([]*entity.RouteOpResource, 0, len(rows))
+	for _, row := range rows {
+		e := &entity.RouteOpResource{
+			ID:               row.ID,
+			RouteOperationID: row.RouteOperationID,
+			WorkCenterID:     row.WorkCenterID,
+			Priority:         row.Priority,
+			TimeFactor:       pgutil.FromPgNumericToFloat64(row.TimeFactor),
+			IsPrimary:        row.IsPrimary,
+			CreatedAt:        pgutil.FromPgTimestamptz(row.CreatedAt),
+			UpdatedAt:        pgutil.FromPgTimestamptz(row.UpdatedAt),
+		}
+		if row.WorkCenterName.Valid {
+			e.WorkCenterName = row.WorkCenterName.String
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (r *RoutingRepositorySQLC) ListResourcesByRoute(ctx context.Context, routeID int64) ([]*entity.RouteOpResource, error) {
+	rows, err := r.q.ListResourcesByRoute(ctx, routeID)
+	if err != nil {
+		return nil, fmt.Errorf("listing resources for route %d: %w", routeID, err)
+	}
+	out := make([]*entity.RouteOpResource, 0, len(rows))
+	for _, row := range rows {
+		e := &entity.RouteOpResource{
+			ID:               row.ID,
+			RouteOperationID: row.RouteOperationID,
+			WorkCenterID:     row.WorkCenterID,
+			Priority:         row.Priority,
+			TimeFactor:       pgutil.FromPgNumericToFloat64(row.TimeFactor),
+			IsPrimary:        row.IsPrimary,
+			CreatedAt:        pgutil.FromPgTimestamptz(row.CreatedAt),
+			UpdatedAt:        pgutil.FromPgTimestamptz(row.UpdatedAt),
+		}
+		if row.WorkCenterName.Valid {
+			e.WorkCenterName = row.WorkCenterName.String
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func resourceRowToEntity(row sqlc.RouteOperationResource) *entity.RouteOpResource {
+	return &entity.RouteOpResource{
+		ID:               row.ID,
+		RouteOperationID: row.RouteOperationID,
+		WorkCenterID:     row.WorkCenterID,
+		Priority:         row.Priority,
+		TimeFactor:       pgutil.FromPgNumericToFloat64(row.TimeFactor),
+		IsPrimary:        row.IsPrimary,
+		CreatedAt:        pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:        pgutil.FromPgTimestamptz(row.UpdatedAt),
+	}
+}
+
 // ─── mappers ─────────────────────────────────────────────────────────────────
 
 func operationRowToEntity(row sqlc.Operation) *entity.Operation {
@@ -284,6 +459,18 @@ func operationRowToEntity(row sqlc.Operation) *entity.Operation {
 		Situation:           entity.OperationSituation(row.Situation),
 		StandardTime:        pgutil.FromPgNumericToFloat64(row.StandardTime),
 		SetupTime:           pgutil.FromPgNumericToFloat64(row.SetupTime),
+		RunTime:             pgutil.FromPgNumericToFloat64(row.RunTime),
+		LaborTime:           pgutil.FromPgNumericToFloat64(row.LaborTime),
+		RunBaseQty:          pgutil.FromPgNumericToFloat64(row.RunTimeBaseQty),
+		QueueTime:           pgutil.FromPgNumericToFloat64(row.QueueTime),
+		WaitTime:            pgutil.FromPgNumericToFloat64(row.WaitTime),
+		MoveTime:            pgutil.FromPgNumericToFloat64(row.MoveTime),
+		CrewSize:            pgutil.FromPgNumericToFloat64(row.CrewSize),
+		TimeUnit:            row.TimeUnit,
+		SupplierID:          row.SupplierID,
+		ServiceItemCode:     row.ServiceItemCode,
+		CostPerUnit:         numToPtr(row.CostPerUnit),
+		LeadTimeDays:        row.LeadTimeDays,
 		IsActive:            row.IsActive,
 		CreatedAt:           pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:           pgutil.FromPgTimestamptz(row.UpdatedAt),
@@ -295,6 +482,24 @@ func operationRowToEntity(row sqlc.Operation) *entity.Operation {
 		e.Description = &v
 	}
 	return e
+}
+
+// numToPtr converts a nullable pg numeric to *float64 (nil when NULL).
+func numToPtr(n pgtype.Numeric) *float64 {
+	if !n.Valid {
+		return nil
+	}
+	v := pgutil.FromPgNumericToFloat64(n)
+	return &v
+}
+
+// textToPtr converts a nullable pg text to *string (nil when NULL).
+func textToPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	v := t.String
+	return &v
 }
 
 func routeRowToEntity(row sqlc.ManufacturingRoute) *entity.ManufacturingRoute {
@@ -309,6 +514,8 @@ func routeRowToEntity(row sqlc.ManufacturingRoute) *entity.ManufacturingRoute {
 		CreatedAt:   pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:   pgutil.FromPgTimestamptz(row.UpdatedAt),
 		CreatedBy:   pgutil.FromPgUUID(row.CreatedBy),
+		ValidFrom:   pgutil.FromPgDateToPtr(row.ValidFrom),
+		ValidTo:     pgutil.FromPgDateToPtr(row.ValidTo),
 	}
 	if row.Mask.Valid {
 		v := row.Mask.String
@@ -341,6 +548,18 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 		v := pgutil.FromPgNumericToFloat64(row.SetupTime)
 		e.SetupTime = &v
 	}
+	e.RunTime = numToPtr(row.RunTime)
+	e.LaborTime = numToPtr(row.LaborTime)
+	e.RunBaseQty = numToPtr(row.RunTimeBaseQty)
+	e.QueueTime = numToPtr(row.QueueTime)
+	e.WaitTime = numToPtr(row.WaitTime)
+	e.MoveTime = numToPtr(row.MoveTime)
+	e.CrewSize = numToPtr(row.CrewSize)
+	e.TimeUnit = textToPtr(row.TimeUnit)
+	e.SupplierID = row.SupplierID
+	e.ServiceItemCode = row.ServiceItemCode
+	e.CostPerUnit = numToPtr(row.CostPerUnit)
+	e.LeadTimeDays = row.LeadTimeDays
 	if row.Notes.Valid {
 		v := row.Notes.String
 		e.Notes = &v
@@ -350,27 +569,51 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 
 func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOperation {
 	e := routeOpRowToEntity(sqlc.RouteOperation{
-		ID:           row.ID,
-		RouteID:      row.RouteID,
-		Sequence:     row.Sequence,
-		OperationID:  row.OperationID,
-		WorkCenterID: row.WorkCenterID,
-		StandardTime: row.StandardTime,
-		SetupTime:    row.SetupTime,
-		Situation:    row.Situation,
-		Notes:        row.Notes,
-		IsActive:     row.IsActive,
-		CreatedAt:    row.CreatedAt,
-		UpdatedAt:    row.UpdatedAt,
+		ID:             row.ID,
+		RouteID:        row.RouteID,
+		Sequence:       row.Sequence,
+		OperationID:    row.OperationID,
+		WorkCenterID:   row.WorkCenterID,
+		StandardTime:   row.StandardTime,
+		SetupTime:      row.SetupTime,
+		RunTime:        row.RunTime,
+		LaborTime:      row.LaborTime,
+		RunTimeBaseQty: row.RunTimeBaseQty,
+		QueueTime:      row.QueueTime,
+		WaitTime:       row.WaitTime,
+		MoveTime:       row.MoveTime,
+		CrewSize:       row.CrewSize,
+		TimeUnit:       row.TimeUnit,
+		Situation:      row.Situation,
+		Notes:          row.Notes,
+		IsActive:       row.IsActive,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      row.UpdatedAt,
 	})
 	e.OperationName = row.OperationName
 	e.OperationOrigin = entity.OperationOrigin(row.OperationOrigin)
 	e.RequiresOperator = row.RequiresOperator
-	e.EffectiveStdTime = effectiveTime(row.StandardTime, row.OpStandardTime)
-	e.EffectiveSetup = effectiveTime(row.SetupTime, row.OpSetupTime)
+	e.EffectiveWorkCenterID = row.EffectiveWorkCenterID
 	if row.WorkCenterName.Valid {
 		e.WorkCenterName = row.WorkCenterName.String
 	}
+
+	// Resolve the quantity-aware time model (route-op overrides ∘ operation defaults),
+	// normalised to hours.
+	def := entity.TimeComponents{
+		Setup:      pgutil.FromPgNumericToFloat64(row.OpSetupTime),
+		Run:        pgutil.FromPgNumericToFloat64(row.OpRunTime),
+		Labor:      pgutil.FromPgNumericToFloat64(row.OpLaborTime),
+		RunBaseQty: pgutil.FromPgNumericToFloat64(row.OpRunTimeBaseQty),
+		Queue:      pgutil.FromPgNumericToFloat64(row.OpQueueTime),
+		Wait:       pgutil.FromPgNumericToFloat64(row.OpWaitTime),
+		Move:       pgutil.FromPgNumericToFloat64(row.OpMoveTime),
+		CrewSize:   pgutil.FromPgNumericToFloat64(row.OpCrewSize),
+		Unit:       row.OpTimeUnit,
+	}
+	e.EffTime = entity.ResolveOperationTime(e.Overrides(), def)
+	e.EffectiveStdTime = e.EffTime.Run
+	e.EffectiveSetup = e.EffTime.Setup
 	return e
 }
 
@@ -382,21 +625,18 @@ func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCo
 	out := make([]*entity.ExternalOp, 0, len(rows))
 	for _, row := range rows {
 		op := &entity.ExternalOp{
-			RouteOpID:      row.ID,
-			OperationID:    row.OperationID,
-			OperationName:  row.OperationName,
-			EffectiveHours: pgutil.FromPgNumericToFloat64(row.EffectiveHours),
-			Origin:         entity.OperationOrigin(row.Origin),
-			WorkCenterID:   row.WorkCenterID,
+			RouteOpID:       row.ID,
+			OperationID:     row.OperationID,
+			OperationName:   row.OperationName,
+			EffectiveHours:  pgutil.FromPgNumericToFloat64(row.EffectiveHours),
+			Origin:          entity.OperationOrigin(row.Origin),
+			WorkCenterID:    row.WorkCenterID,
+			SupplierID:      row.SupplierID,
+			ServiceItemCode: row.ServiceItemCode,
+			CostPerUnit:     pgutil.FromPgNumericToFloat64(row.CostPerUnit),
+			LeadTimeDays:    row.LeadTimeDays,
 		}
 		out = append(out, op)
 	}
 	return out, nil
-}
-
-func effectiveTime(override pgtype.Numeric, fallback pgtype.Numeric) float64 {
-	if override.Valid {
-		return pgutil.FromPgNumericToFloat64(override)
-	}
-	return pgutil.FromPgNumericToFloat64(fallback)
 }

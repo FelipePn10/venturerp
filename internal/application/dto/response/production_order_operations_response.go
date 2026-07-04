@@ -16,4 +16,7 @@ type ProductionOrderOperationResponse struct {
 	StartedAt         *time.Time `json:"started_at,omitempty"`
 	CompletedAt       *time.Time `json:"completed_at,omitempty"`
 	Notes             *string    `json:"notes,omitempty"`
+	// ToolAlerts lists tools that reached their useful-life limit while completing
+	// this operation (populated on DONE). Empty otherwise.
+	ToolAlerts []string `json:"tool_alerts,omitempty"`
 }

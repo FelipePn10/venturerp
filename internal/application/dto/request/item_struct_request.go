@@ -15,21 +15,25 @@ import (
 //   - ParentMask != nil → componente específico para aquela configuração
 //   - LossFormula substitui LossPercentage quando avaliável com os valores da máscara
 type CreateStructureComponentDTO struct {
-	ParentCode        int64                           `json:"parent_code"`
-	ChildCode         int64                           `json:"child_code"`
-	ParentMask        *string                         `json:"parent_mask,omitempty"`
-	Quantity          float64                         `json:"quantity"`
-	UnitOfMeasurement types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
-	Health            types.Health                    `json:"health"`
-	LossPercentage    float64                         `json:"loss_percentage"`
-	LossFormula       *string                         `json:"loss_formula,omitempty"`
-	Sequence          int                             `json:"sequence"`
-	Notes             *string                         `json:"notes,omitempty"`
-	IsActive          bool                            `json:"is_active"`
-	Inherit           bool                            `json:"inherit"`
-	StartDate         *time.Time                      `json:"start_date,omitempty"`
-	EndDate           *time.Time                      `json:"end_date,omitempty"`
-	CreatedBy         uuid.UUID                       `json:"created_by"`
+	ParentCode         int64                           `json:"parent_code"`
+	ChildCode          int64                           `json:"child_code"`
+	ParentMask         *string                         `json:"parent_mask,omitempty"`
+	Quantity           float64                         `json:"quantity"`
+	UnitOfMeasurement  types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
+	Health             types.Health                    `json:"health"`
+	LossPercentage     float64                         `json:"loss_percentage"`
+	LossFormula        *string                         `json:"loss_formula,omitempty"`
+	Sequence           int                             `json:"sequence"`
+	Notes              *string                         `json:"notes,omitempty"`
+	IsActive           bool                            `json:"is_active"`
+	Inherit            bool                            `json:"inherit"`
+	StartDate          *time.Time                      `json:"start_date,omitempty"`
+	EndDate            *time.Time                      `json:"end_date,omitempty"`
+	IsCoproduct        bool                            `json:"is_coproduct"`        // saída (co-produto/sucata), não insumo
+	IsFixedQty         bool                            `json:"is_fixed_qty"`        // quantidade por OF (lote)
+	SubstituteGroup    int16                           `json:"substitute_group"`    // >0 agrupa componentes alternativos
+	SubstitutePriority int16                           `json:"substitute_priority"` // menor = preferencial
+	CreatedBy          uuid.UUID                       `json:"created_by"`
 }
 
 type UpdateStructureComponentDTO struct {
@@ -37,15 +41,19 @@ type UpdateStructureComponentDTO struct {
 	ChildCode  int64   `json:"child_code"`
 	ParentMask *string `json:"parent_mask,omitempty"`
 
-	Quantity          float64                         `json:"quantity"`
-	UnitOfMeasurement types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
-	Health            types.Health                    `json:"health"`
-	LossPercentage    float64                         `json:"loss_percentage"`
-	LossFormula       *string                         `json:"loss_formula,omitempty"`
-	Position          int                             `json:"position"`
-	Notes             *string                         `json:"notes,omitempty"`
-	StartDate         *time.Time                      `json:"start_date,omitempty"`
-	EndDate           *time.Time                      `json:"end_date,omitempty"`
+	Quantity           float64                         `json:"quantity"`
+	UnitOfMeasurement  types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
+	Health             types.Health                    `json:"health"`
+	LossPercentage     float64                         `json:"loss_percentage"`
+	LossFormula        *string                         `json:"loss_formula,omitempty"`
+	Position           int                             `json:"position"`
+	Notes              *string                         `json:"notes,omitempty"`
+	StartDate          *time.Time                      `json:"start_date,omitempty"`
+	EndDate            *time.Time                      `json:"end_date,omitempty"`
+	IsCoproduct        bool                            `json:"is_coproduct"`
+	IsFixedQty         bool                            `json:"is_fixed_qty"`
+	SubstituteGroup    int16                           `json:"substitute_group"`
+	SubstitutePriority int16                           `json:"substitute_priority"`
 }
 
 // ConsultStructureDTO é a entrada para consulta da estrutura de produtos (VENG0401).

@@ -11,8 +11,15 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
+	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
+
+// coproductReader exposes the BOM's direct children so completion can receive
+// co-products / returnable scrap into stock.
+type coproductReader interface {
+	GetAllDirectChildren(ctx context.Context, parentCode int64) ([]*structentity.ItemStructure, error)
+}
 
 type CompleteProductionOrderUseCase struct {
 	Repo repository.ProductionOrderRepository
@@ -21,6 +28,9 @@ type CompleteProductionOrderUseCase struct {
 	// DTO, completing the order posts an IN stock movement of the produced
 	// quantity for the finished item.
 	StockRepo stockrepo.StockRepository
+	// Structure is optional. When set with StockRepo, completing the order also
+	// receives the item's BOM co-products / returnable scrap into stock.
+	Structure coproductReader
 }
 
 func (uc *CompleteProductionOrderUseCase) Execute(
@@ -65,6 +75,32 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 			}
 			if _, moveErr := uc.StockRepo.CreateMovement(ctx, mov); moveErr != nil {
 				return nil, moveErr
+			}
+
+			// Receive the BOM's co-products / returnable scrap into stock (an IN
+			// movement of coproduct_qty × produced, into the same warehouse).
+			if uc.Structure != nil {
+				children, cerr := uc.Structure.GetAllDirectChildren(ctx, order.ItemCode)
+				if cerr == nil {
+					for _, child := range structentity.SelectPrimarySubstituteComponents(children) {
+						if !child.IsCoproduct || child.Quantity <= 0 {
+							continue
+						}
+						coQty := child.Quantity * qty
+						coMov := &stockentity.StockMovement{
+							ItemCode:      child.ChildCode,
+							WarehouseID:   *dto.WarehouseID,
+							MovementType:  stockentity.MovementTypeIn,
+							Quantity:      coQty,
+							ReferenceType: &refType,
+							ReferenceCode: &refCode,
+							CreatedBy:     order.CreatedBy,
+						}
+						if _, moveErr := uc.StockRepo.CreateMovement(ctx, coMov); moveErr != nil {
+							return nil, moveErr
+						}
+					}
+				}
 			}
 		}
 	}

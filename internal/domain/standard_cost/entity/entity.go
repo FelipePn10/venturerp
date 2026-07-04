@@ -22,11 +22,25 @@ type ItemStandardCost struct {
 type WorkCenterCost struct {
 	ID           int64
 	WorkCenterID int64
-	CostPerHour  float64
-	Currency     string
-	UpdatedAt    time.Time
-	UpdatedBy    uuid.UUID
+	CostPerHour  float64 // legacy blended rate (kept as machine-rate fallback)
+	// Enterprise+ split: machine occupancy rate vs. direct-labor rate per hour.
+	MachineCostPerHour float64
+	LaborCostPerHour   float64
+	Currency           string
+	UpdatedAt          time.Time
+	UpdatedBy          uuid.UUID
 }
+
+// MachineRate returns the effective machine hourly rate (falls back to the blended rate).
+func (w *WorkCenterCost) MachineRate() float64 {
+	if w.MachineCostPerHour > 0 {
+		return w.MachineCostPerHour
+	}
+	return w.CostPerHour
+}
+
+// LaborRate returns the effective labor hourly rate.
+func (w *WorkCenterCost) LaborRate() float64 { return w.LaborCostPerHour }
 
 type ItemPurchaseCost struct {
 	ID        int64

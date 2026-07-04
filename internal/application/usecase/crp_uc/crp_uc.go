@@ -10,11 +10,19 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/crp/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/crp/repository"
 	maintenancerepo "github.com/FelipePn10/panossoerp/internal/domain/maintenance/repository"
+	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 )
+
+// routeOpReader is the slice of the routing repository CRP needs to load capacity
+// using the rich, quantity-aware time model (machine hours per work center).
+type routeOpReader interface {
+	GetRouteOperations(ctx context.Context, routeID int64) ([]*routingentity.RouteOperation, error)
+}
 
 type CRPUseCase struct {
 	repo      repository.CRPRepository
 	maintRepo maintenancerepo.MaintenanceRepository
+	routing   routeOpReader // optional; when nil, uses the legacy flat EffHours × qty
 }
 
 func New(repo repository.CRPRepository) *CRPUseCase {
@@ -25,6 +33,13 @@ func New(repo repository.CRPRepository) *CRPUseCase {
 // scheduled maintenance hours from available capacity per work-center/date.
 func (uc *CRPUseCase) WithMaintenance(r maintenancerepo.MaintenanceRepository) *CRPUseCase {
 	uc.maintRepo = r
+	return uc
+}
+
+// WithRouting enables quantity-aware machine-hour loading (setup + run×batches) per
+// effective work center, replacing the flat EffHours × quantity estimate.
+func (uc *CRPUseCase) WithRouting(r routeOpReader) *CRPUseCase {
+	uc.routing = r
 	return uc
 }
 
@@ -57,11 +72,30 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 		if order.RouteID == nil {
 			continue
 		}
+		day := truncateToDay(order.PlannedDate)
+
+		// Preferred path: rich, quantity-aware machine hours (setup + run×batches)
+		// charged to each operation's EFFECTIVE work center (override or op default).
+		if uc.routing != nil {
+			rops, err := uc.routing.GetRouteOperations(ctx, *order.RouteID)
+			if err == nil {
+				for _, op := range rops {
+					if op.Situation == routingentity.RouteOpGhost || op.EffectiveWorkCenterID == nil {
+						continue
+					}
+					k := wcDateKey{wcID: *op.EffectiveWorkCenterID, date: day.Format("2006-01-02")}
+					reqMap[k] += op.EffTime.MachineHours(order.Quantity)
+					dateMap[k] = day
+				}
+				continue
+			}
+		}
+
+		// Legacy fallback: flat EffHours × quantity (setup not separated).
 		ops, err := uc.repo.GetRouteOperationsByRoute(ctx, *order.RouteID)
 		if err != nil {
 			continue
 		}
-		day := truncateToDay(order.PlannedDate)
 		for _, op := range ops {
 			if op.WorkCenterID == nil {
 				continue

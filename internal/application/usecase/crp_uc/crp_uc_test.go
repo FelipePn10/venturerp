@@ -8,7 +8,17 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/domain/crp/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/crp/repository"
+	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 )
+
+// fakeRouteReader feeds the rich, quantity-aware CRP path.
+type fakeRouteReader struct {
+	ops map[int64][]*routingentity.RouteOperation
+}
+
+func (f *fakeRouteReader) GetRouteOperations(ctx context.Context, routeID int64) ([]*routingentity.RouteOperation, error) {
+	return f.ops[routeID], nil
+}
 
 // fakeCRPRepo implements repository.CRPRepository in memory.
 type fakeCRPRepo struct {
@@ -110,6 +120,35 @@ func TestCalculateCRP_AggregatesSameWorkCenterDay(t *testing.T) {
 	}
 	if repo.upserted[0].RequiredHours != 10 {
 		t.Errorf("aggregated required = %v, want 10", repo.upserted[0].RequiredHours)
+	}
+}
+
+func TestCalculateCRP_RichTimeMachineHours(t *testing.T) {
+	day := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	routeID := int64(1)
+	repo := &fakeCRPRepo{
+		orders: []repository.PlannedOrderRow{{ID: 1, Quantity: 20, PlannedDate: day, RouteID: &routeID}},
+		avail:  map[int64]float64{100: 8},
+	}
+	// Op A inherits its work center (route-op override nil, but EffectiveWorkCenterID set):
+	// the old code skipped it — the new code must include it.
+	// MachineHours(20) = setup 1 + run 0.5×ceil(20/10)=1 → 2h.
+	// Op B is a phantom (FANTASMA) → must NOT add load.
+	reader := &fakeRouteReader{ops: map[int64][]*routingentity.RouteOperation{
+		1: {
+			{EffectiveWorkCenterID: wcPtr(100), EffTime: routingentity.OperationTime{Setup: 1, Run: 0.5, RunBaseQty: 10}},
+			{EffectiveWorkCenterID: wcPtr(100), Situation: routingentity.RouteOpGhost, EffTime: routingentity.OperationTime{Setup: 5, Run: 5, RunBaseQty: 1}},
+		},
+	}}
+	uc := New(repo).WithRouting(reader)
+	if _, err := uc.CalculateCRP(context.Background(), request.CalculateCRPDTO{PlanCode: 7}); err != nil {
+		t.Fatalf("CalculateCRP error: %v", err)
+	}
+	if len(repo.upserted) != 1 {
+		t.Fatalf("entries = %d, want 1 (phantom excluded)", len(repo.upserted))
+	}
+	if repo.upserted[0].RequiredHours != 2 {
+		t.Errorf("required = %v, want 2 (setup 1 + run 0.5×2 batches)", repo.upserted[0].RequiredHours)
 	}
 }
 

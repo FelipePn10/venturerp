@@ -8,10 +8,10 @@ type RunMRPCalculationDTO struct {
 }
 
 type CreatePlannedOrderDTO struct {
-	ItemCode       int64     `json:"item_code"`
-	Mask           *string   `json:"mask,omitempty"`
-	Quantity       float64   `json:"quantity"`
-	OrderType      string    `json:"order_type"`
+	ItemCode  int64   `json:"item_code"`
+	Mask      *string `json:"mask,omitempty"`
+	Quantity  float64 `json:"quantity"`
+	OrderType string  `json:"order_type"`
 	// DemandType is the demand_type_enum value: SALES_ORDER | FORECAST |
 	// INDEPENDENT | SAFETY_STOCK | REPLENISHMENT. Defaults to INDEPENDENT when
 	// omitted (manual planned orders are independent demand by nature).

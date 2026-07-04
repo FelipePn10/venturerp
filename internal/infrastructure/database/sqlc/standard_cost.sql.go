@@ -81,48 +81,57 @@ func (q *Queries) ListItemStandardCosts(ctx context.Context, itemCode int64) ([]
 
 // ─── work_center_costs ────────────────────────────────────────────────────────
 
-const upsertWorkCenterCost = `INSERT INTO work_center_costs (work_center_id, cost_per_hour, currency, updated_by)
-VALUES ($1,$2,$3,$4)
+const wccColumns = `id, work_center_id, cost_per_hour, COALESCE(machine_cost_per_hour, cost_per_hour), COALESCE(labor_cost_per_hour, 0), currency, updated_at, updated_by`
+
+const upsertWorkCenterCost = `INSERT INTO work_center_costs (work_center_id, cost_per_hour, machine_cost_per_hour, labor_cost_per_hour, currency, updated_by)
+VALUES ($1,$2,$3,$4,$5,$6)
 ON CONFLICT (work_center_id) DO UPDATE SET
-    cost_per_hour = EXCLUDED.cost_per_hour,
-    currency      = EXCLUDED.currency,
-    updated_at    = NOW(),
-    updated_by    = EXCLUDED.updated_by
-RETURNING id, work_center_id, cost_per_hour, currency, updated_at, updated_by`
+    cost_per_hour         = EXCLUDED.cost_per_hour,
+    machine_cost_per_hour = EXCLUDED.machine_cost_per_hour,
+    labor_cost_per_hour   = EXCLUDED.labor_cost_per_hour,
+    currency              = EXCLUDED.currency,
+    updated_at            = NOW(),
+    updated_by            = EXCLUDED.updated_by
+RETURNING id, work_center_id, cost_per_hour, COALESCE(machine_cost_per_hour, cost_per_hour), COALESCE(labor_cost_per_hour, 0), currency, updated_at, updated_by`
 
 type UpsertWorkCenterCostParams struct {
-	WorkCenterID int64
-	CostPerHour  pgtype.Numeric
-	Currency     string
-	UpdatedBy    pgtype.UUID
+	WorkCenterID       int64
+	CostPerHour        pgtype.Numeric
+	MachineCostPerHour pgtype.Numeric
+	LaborCostPerHour   pgtype.Numeric
+	Currency           string
+	UpdatedBy          pgtype.UUID
 }
 
 type DBWorkCenterCost struct {
-	ID           int64
-	WorkCenterID int64
-	CostPerHour  pgtype.Numeric
-	Currency     string
-	UpdatedAt    pgtype.Timestamptz
-	UpdatedBy    pgtype.UUID
+	ID                 int64
+	WorkCenterID       int64
+	CostPerHour        pgtype.Numeric
+	MachineCostPerHour pgtype.Numeric
+	LaborCostPerHour   pgtype.Numeric
+	Currency           string
+	UpdatedAt          pgtype.Timestamptz
+	UpdatedBy          pgtype.UUID
 }
 
 func (q *Queries) UpsertWorkCenterCost(ctx context.Context, arg UpsertWorkCenterCostParams) (DBWorkCenterCost, error) {
-	row := q.db.QueryRow(ctx, upsertWorkCenterCost, arg.WorkCenterID, arg.CostPerHour, arg.Currency, arg.UpdatedBy)
+	row := q.db.QueryRow(ctx, upsertWorkCenterCost,
+		arg.WorkCenterID, arg.CostPerHour, arg.MachineCostPerHour, arg.LaborCostPerHour, arg.Currency, arg.UpdatedBy)
 	var i DBWorkCenterCost
-	err := row.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy)
+	err := row.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.MachineCostPerHour, &i.LaborCostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy)
 	return i, err
 }
 
-const getWorkCenterCost = `SELECT id, work_center_id, cost_per_hour, currency, updated_at, updated_by FROM work_center_costs WHERE work_center_id=$1`
+const getWorkCenterCost = `SELECT ` + wccColumns + ` FROM work_center_costs WHERE work_center_id=$1`
 
 func (q *Queries) GetWorkCenterCost(ctx context.Context, workCenterID int64) (DBWorkCenterCost, error) {
 	row := q.db.QueryRow(ctx, getWorkCenterCost, workCenterID)
 	var i DBWorkCenterCost
-	err := row.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy)
+	err := row.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.MachineCostPerHour, &i.LaborCostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy)
 	return i, err
 }
 
-const listWorkCenterCosts = `SELECT id, work_center_id, cost_per_hour, currency, updated_at, updated_by FROM work_center_costs ORDER BY work_center_id`
+const listWorkCenterCosts = `SELECT ` + wccColumns + ` FROM work_center_costs ORDER BY work_center_id`
 
 func (q *Queries) ListWorkCenterCosts(ctx context.Context) ([]DBWorkCenterCost, error) {
 	rows, err := q.db.Query(ctx, listWorkCenterCosts)
@@ -133,7 +142,7 @@ func (q *Queries) ListWorkCenterCosts(ctx context.Context) ([]DBWorkCenterCost, 
 	var items []DBWorkCenterCost
 	for rows.Next() {
 		var i DBWorkCenterCost
-		if err := rows.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy); err != nil {
+		if err := rows.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.MachineCostPerHour, &i.LaborCostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

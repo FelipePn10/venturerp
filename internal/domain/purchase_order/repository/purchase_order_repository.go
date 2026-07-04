@@ -27,6 +27,11 @@ type PurchaseOrderRepository interface {
 	// (OPEN/PARTIAL/RECEIVED) and the header status, all in one transaction.
 	// Returns the number of order lines that matched a receipt.
 	RegisterReceipts(ctx context.Context, purchaseOrderCode int64, receivedByItemCode map[int64]float64) (int, error)
+	// RegisterItemReceipts increments received_qty for exact purchase order
+	// lines, recomputing each line status and the header status in one
+	// transaction. Prefer this for operational receiving because item codes can
+	// appear on multiple order lines.
+	RegisterItemReceipts(ctx context.Context, purchaseOrderCode int64, receivedByOrderItemCode map[int64]float64) (int, error)
 
 	ListBySupplier(ctx context.Context, supplierCode int64) ([]*entity.PurchaseOrder, error)
 	ListByStatus(ctx context.Context, status entity.PurchaseOrderStatus) ([]*entity.PurchaseOrder, error)

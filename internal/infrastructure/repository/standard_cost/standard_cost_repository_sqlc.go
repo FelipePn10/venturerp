@@ -60,10 +60,12 @@ func (r *StandardCostRepositorySQLC) ListItemStandardCosts(ctx context.Context, 
 
 func (r *StandardCostRepositorySQLC) UpsertWorkCenterCost(ctx context.Context, wcc *entity.WorkCenterCost) (*entity.WorkCenterCost, error) {
 	row, err := r.q.UpsertWorkCenterCost(ctx, sqlc.UpsertWorkCenterCostParams{
-		WorkCenterID: wcc.WorkCenterID,
-		CostPerHour:  pgutil.ToPgNumericFromFloat64(wcc.CostPerHour),
-		Currency:     orDefault(wcc.Currency, "BRL"),
-		UpdatedBy:    pgutil.ToPgUUID(wcc.UpdatedBy),
+		WorkCenterID:       wcc.WorkCenterID,
+		CostPerHour:        pgutil.ToPgNumericFromFloat64(wcc.CostPerHour),
+		MachineCostPerHour: pgutil.ToPgNumericFromFloat64(wcc.MachineCostPerHour),
+		LaborCostPerHour:   pgutil.ToPgNumericFromFloat64(wcc.LaborCostPerHour),
+		Currency:           orDefault(wcc.Currency, "BRL"),
+		UpdatedBy:          pgutil.ToPgUUID(wcc.UpdatedBy),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("upserting work center cost: %w", err)
@@ -130,8 +132,11 @@ func (r *StandardCostRepositorySQLC) InsertRollupLog(ctx context.Context, entry 
 
 // ─── BOM helpers ──────────────────────────────────────────────────────────────
 
-func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, parentCode int64) ([]domainrepo.BOMChild, error) {
-	rows, err := r.q.GetAllDirectChildren(ctx, parentCode)
+func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, parentCode int64, mask string) ([]domainrepo.BOMChild, error) {
+	rows, err := r.q.GetDirectChildrenForMask(ctx, sqlc.GetDirectChildrenForMaskParams{
+		ParentCode: parentCode,
+		ParentMask: pgutil.ToPgTextFromString(mask),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching BOM children for item %d: %w", parentCode, err)
 	}
@@ -141,9 +146,13 @@ func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, pare
 			continue
 		}
 		out = append(out, domainrepo.BOMChild{
-			ChildCode:      row.ChildCode,
-			Quantity:       row.Quantity,
-			LossPercentage: row.LossPercentage,
+			ChildCode:          row.ChildCode,
+			Quantity:           row.Quantity,
+			LossPercentage:     row.LossPercentage,
+			IsCoproduct:        row.IsCoproduct,
+			IsFixedQty:         row.IsFixedQty,
+			SubstituteGroup:    row.SubstituteGroup,
+			SubstitutePriority: row.SubstitutePriority,
 		})
 	}
 	return out, nil
@@ -172,12 +181,14 @@ func isCostRowToEntity(row sqlc.DBItemStandardCost) *entity.ItemStandardCost {
 
 func wccRowToEntity(row sqlc.DBWorkCenterCost) *entity.WorkCenterCost {
 	return &entity.WorkCenterCost{
-		ID:           row.ID,
-		WorkCenterID: row.WorkCenterID,
-		CostPerHour:  pgutil.FromPgNumericToFloat64(row.CostPerHour),
-		Currency:     row.Currency,
-		UpdatedAt:    pgutil.FromPgTimestamptz(row.UpdatedAt),
-		UpdatedBy:    pgutil.FromPgUUID(row.UpdatedBy),
+		ID:                 row.ID,
+		WorkCenterID:       row.WorkCenterID,
+		CostPerHour:        pgutil.FromPgNumericToFloat64(row.CostPerHour),
+		MachineCostPerHour: pgutil.FromPgNumericToFloat64(row.MachineCostPerHour),
+		LaborCostPerHour:   pgutil.FromPgNumericToFloat64(row.LaborCostPerHour),
+		Currency:           row.Currency,
+		UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
+		UpdatedBy:          pgutil.FromPgUUID(row.UpdatedBy),
 	}
 }
 

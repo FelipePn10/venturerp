@@ -129,10 +129,10 @@ func TestCriticalPathHours(t *testing.T) {
 	// Diamond: 1 → {2,3} → 4. Times: op1=2, op2=3, op3=5, op4=4. No overlap.
 	// Path 1-3-4 = 2+5+4 = 11 (critical); 1-2-4 = 2+3+4 = 9.
 	ops := []*routingentity.RouteOperation{
-		{ID: 1, EffectiveStdTime: 2, EffectiveSetup: 0},
-		{ID: 2, EffectiveStdTime: 3, EffectiveSetup: 0},
-		{ID: 3, EffectiveStdTime: 5, EffectiveSetup: 0},
-		{ID: 4, EffectiveStdTime: 4, EffectiveSetup: 0},
+		{ID: 1, EffTime: routingentity.OperationTime{Run: 2}},
+		{ID: 2, EffTime: routingentity.OperationTime{Run: 3}},
+		{ID: 3, EffTime: routingentity.OperationTime{Run: 5}},
+		{ID: 4, EffTime: routingentity.OperationTime{Run: 4}},
 	}
 	edges := []*routingentity.NetworkEdge{
 		{PredecessorID: 1, SuccessorID: 2},
@@ -140,8 +140,8 @@ func TestCriticalPathHours(t *testing.T) {
 		{PredecessorID: 2, SuccessorID: 4},
 		{PredecessorID: 3, SuccessorID: 4},
 	}
-	if got := criticalPathHours(ops, edges); abs(got-11) > 1e-9 {
-		t.Errorf("criticalPathHours = %v, want 11", got)
+	if got := routingentity.CriticalPath(ops, edges, 1).TotalHours; abs(got-11) > 1e-9 {
+		t.Errorf("CriticalPath = %v, want 11", got)
 	}
 }
 
@@ -149,14 +149,14 @@ func TestCriticalPathHours_Overlap(t *testing.T) {
 	// Linear 1 → 2 with 50% overlap. op1=10, op2=10.
 	// EF(2) = EF(1)*(1-0.5) + op2 = 10*0.5 + 10 = 15.
 	ops := []*routingentity.RouteOperation{
-		{ID: 1, EffectiveStdTime: 10},
-		{ID: 2, EffectiveStdTime: 10},
+		{ID: 1, EffTime: routingentity.OperationTime{Run: 10}},
+		{ID: 2, EffTime: routingentity.OperationTime{Run: 10}},
 	}
 	edges := []*routingentity.NetworkEdge{
 		{PredecessorID: 1, SuccessorID: 2, OverlapPct: 50},
 	}
-	if got := criticalPathHours(ops, edges); abs(got-15) > 1e-9 {
-		t.Errorf("criticalPathHours with overlap = %v, want 15", got)
+	if got := routingentity.CriticalPath(ops, edges, 1).TotalHours; abs(got-15) > 1e-9 {
+		t.Errorf("CriticalPath with overlap = %v, want 15", got)
 	}
 }
 
@@ -177,5 +177,93 @@ func TestCollectAllItemCodes(t *testing.T) {
 	}
 	if len(codes) != 3 {
 		t.Errorf("expected 3 distinct codes, got %d (%v)", len(codes), codes)
+	}
+}
+
+func TestExplodeFromBOM_CoproductAndFixedQty(t *testing.T) {
+	// Parent 1 → normal child 2 (2/un), co-product 3 (output), fixed child 4 (1 por OF).
+	bomMap := map[int64][]*structentity.ItemStructure{
+		1: {
+			{ChildCode: 2, Quantity: 2},
+			{ChildCode: 3, Quantity: 5, IsCoproduct: true},
+			{ChildCode: 4, Quantity: 1, IsFixedQty: true},
+		},
+	}
+	// Produzindo 10 unidades, sem perda, fórmula 1.
+	inputs := explodeFromBOMWithFormula(bomMap, 1, "", 10, 1, 1)
+
+	got := map[int64]float64{}
+	for _, in := range inputs {
+		got[in.ItemCode] = in.Quantity
+	}
+	if _, ok := got[3]; ok {
+		t.Error("co-produto (3) não deve gerar demanda dependente")
+	}
+	if got[2] != 20 {
+		t.Errorf("child normal 2 = %v, want 20 (2×10)", got[2])
+	}
+	if got[4] != 1 {
+		t.Errorf("child fixo 4 = %v, want 1 (por OF, não ×10)", got[4])
+	}
+	if len(inputs) != 2 {
+		t.Errorf("inputs = %d, want 2 (normal + fixo, co-produto excluído)", len(inputs))
+	}
+}
+
+func TestExplodeFromBOM_SelectsPrimarySubstitute(t *testing.T) {
+	bomMap := map[int64][]*structentity.ItemStructure{
+		1: {
+			{ChildCode: 20, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 2},
+			{ChildCode: 10, Quantity: 3, SubstituteGroup: 1, SubstitutePriority: 1},
+			{ChildCode: 30, Quantity: 5},
+		},
+	}
+
+	inputs := explodeFromBOMWithFormula(bomMap, 1, "", 4, 1, 1)
+
+	got := map[int64]float64{}
+	for _, in := range inputs {
+		got[in.ItemCode] = in.Quantity
+	}
+	if _, ok := got[20]; ok {
+		t.Error("substituto secundário não deve gerar demanda dependente")
+	}
+	if got[10] != 12 {
+		t.Errorf("substituto primário = %v, want 12", got[10])
+	}
+	if got[30] != 20 {
+		t.Errorf("componente standalone = %v, want 20", got[30])
+	}
+	if len(inputs) != 2 {
+		t.Errorf("inputs = %d, want 2 (primário + standalone)", len(inputs))
+	}
+}
+
+func TestSelectPrimarySubstituteComponents_TieBreaksBySequenceThenCode(t *testing.T) {
+	children := []*structentity.ItemStructure{
+		{ChildCode: 30, SubstituteGroup: 1, SubstitutePriority: 1, Sequence: 20},
+		{ChildCode: 20, SubstituteGroup: 1, SubstitutePriority: 1, Sequence: 10},
+		{ChildCode: 10, SubstituteGroup: 1, SubstitutePriority: 1, Sequence: 10},
+	}
+
+	selected := structentity.SelectPrimarySubstituteComponents(children)
+	if len(selected) != 1 {
+		t.Fatalf("selected = %d, want 1", len(selected))
+	}
+	if selected[0].ChildCode != 10 {
+		t.Errorf("selected child = %d, want 10", selected[0].ChildCode)
+	}
+}
+
+func TestBuildLLCFromBOM_SkipsCoproduct(t *testing.T) {
+	bom := map[int64][]*structentity.ItemStructure{
+		1: {{ChildCode: 2}, {ChildCode: 5, IsCoproduct: true}},
+	}
+	llc := buildLLCFromBOM(bom, []int64{1})
+	if _, ok := llc[5]; ok {
+		t.Error("co-produto não deve receber LLC pela árvore da BOM (é saída, não componente)")
+	}
+	if llc[2] != 1 {
+		t.Errorf("LLC do filho normal = %d, want 1", llc[2])
 	}
 }

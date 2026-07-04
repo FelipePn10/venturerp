@@ -57,6 +57,9 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	); err != nil {
 		return nil, err
 	}
+	structure.IsCoproduct = dto.IsCoproduct
+	structure.IsFixedQty = dto.IsFixedQty
+	structure.SetSubstitute(dto.SubstituteGroup, dto.SubstitutePriority)
 
 	// Executa update direto via business key
 	updated, err := uc.Repo.Update(ctx, structure)

@@ -148,6 +148,13 @@ A "receita" de cada produto: quais componentes são necessários e em que quanti
 | **Percentual de perda** | Se há perda no processo (ex: corte de tecido gera sobra), o MRP já aumenta a quantidade necessária |
 | **Máscara pai** | Se preenchida, esse componente só é usado na variação específica do produto |
 
+> **Fonte única da BOM.** As **linhas** da estrutura vivem em `item_structures`
+> (esta tabela). O **cabeçalho** — versão, status (DRAFT/APPROVED/OBSOLETE) e tipo
+> (EBOM/MBOM) por item+máscara — vive em `bom_headers` (migration `000180`),
+> exposto em `POST/GET /api/bom-headers` (versão auto-incrementada; `PUT /{id}/status`
+> aprova/obsoleta). O modelo fino paralelo `boms`/`bom_items` (rotas `/api/bom`) foi
+> **aposentado e migrado** — `item_structures` + `bom_headers` são a fonte única.
+
 ---
 
 #### Snapshot de Estoque
@@ -217,7 +224,26 @@ O resultado central do MRP. Para cada necessidade líquida calculada, o MRP gera
 - **Item pai** que gerou essa necessidade (se for demanda dependente)
 - **LLC do item** (para ordenação do processamento)
 
+> **Co-produtos e quantidade fixa na explosão (BOM).** Componentes marcados como
+> `is_coproduct` são **saídas** (co-produto/subproduto/sucata) — a explosão **não** gera
+> demanda dependente para eles. Componentes `is_fixed_qty` são consumidos **uma vez por
+> OF** (a fórmula de perda roda sobre base 1, sem multiplicar pela quantidade da ordem).
+> Componentes com `substitute_group > 0` formam um grupo de alternativos/substitutos:
+> o MRP considera somente o primário do grupo (`substitute_priority` menor; empate por
+> sequência/código), evitando demanda duplicada para materiais alternativos. Os demais
+> ficam disponíveis para substituição operacional quando o primário faltar.
+
 Essas sugestões ficam em análise. O planejador pode aceitar, rejeitar, ou modificar. Quando aceita, a sugestão se transforma em uma **Ordem Planejada** real no sistema.
+
+> **Conversão sugestão → OF (padrão SAP "converter ordem planejada em ordem de produção").**
+> As sugestões usam tipos internos em PT (`FABRICACAO`/`COMPRA`/`SERVICO`/`TECHNICAL_ASSISTANCE`)
+> e são mapeadas para o enum do banco em EN (`PRODUCTION`/`PURCHASE`/`OUTSOURCING`/`TECHNICAL_ASSISTANCE`)
+> por `mapMRPOrderType` ao aceitar (`FirmarSugestaoMRPUseCase`). Aceitar uma sugestão agora
+> **firma a ordem em um passo** — cria a Ordem Planejada e, via `FirmPlannedOrderUseCase`,
+> gera a **Ordem de Fabricação (OF)** para ordens de produção e a **requisição de serviço**
+> para operações externas. (Antes, a sugestão criava só a Ordem Planejada já firme e a OF
+> nunca era gerada — corrigido.) Rastro (pegging): a cadeia demanda → plano → sugestão →
+> ordem planejada → OF é preservada via `plan_code`, `parent_item` e `planned_order_id`.
 
 ---
 

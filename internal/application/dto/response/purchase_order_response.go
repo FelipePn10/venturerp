@@ -103,3 +103,47 @@ type PurchaseOrderItemResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+type PurchaseOrderReceiptResponse struct {
+	PurchaseOrder    *PurchaseOrderResponse   `json:"purchase_order"`
+	ReceivedLines    []PurchaseReceiptLine    `json:"received_lines"`
+	Movements        []StockMovementResponse  `json:"movements"`
+	InspectionOrders []ReceiptInspectionOrder `json:"inspection_orders,omitempty"`
+}
+
+// ReceiptInspectionOrder references an inspection order automatically opened when a
+// received line matched an active receiving inspection route (FINS0212 behaviour).
+type ReceiptInspectionOrder struct {
+	InspectionOrderID     int64   `json:"inspection_order_id"`
+	OrderNumber           int64   `json:"order_number"`
+	PurchaseOrderItemCode int64   `json:"purchase_order_item_code"`
+	ItemCode              int64   `json:"item_code"`
+	WarehouseID           int64   `json:"warehouse_id"`
+	Quantity              float64 `json:"quantity"`
+}
+
+type PurchaseReceiptLine struct {
+	PurchaseOrderItemCode int64   `json:"purchase_order_item_code"`
+	ItemCode              int64   `json:"item_code"`
+	Mask                  string  `json:"mask"`
+	WarehouseID           int64   `json:"warehouse_id"`
+	Quantity              float64 `json:"quantity"`
+	StockQuantity         float64 `json:"stock_quantity"`
+	RemainingQty          float64 `json:"remaining_qty"`
+	// UnderInspection is true when the line was routed into the inspection
+	// warehouse instead of the requested one because an active route matched.
+	UnderInspection bool `json:"under_inspection,omitempty"`
+}
+
+// ApprovePurchaseOrderResponse is the outcome of an alçada (approval limit)
+// evaluation on a purchase order.
+type ApprovePurchaseOrderResponse struct {
+	PurchaseOrder         *PurchaseOrderResponse `json:"purchase_order"`
+	Approved              bool                   `json:"approved"`
+	RequiresAuthorization bool                   `json:"requires_authorization"`
+	Blocked               bool                   `json:"blocked"`
+	AlcadaStatus          string                 `json:"alcada_status"`
+	AppliedAmount         float64                `json:"applied_amount"`
+	AppliedCeiling        float64                `json:"applied_ceiling"`
+	Message               string                 `json:"message"`
+}

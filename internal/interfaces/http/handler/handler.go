@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cutting_plan_uc"
@@ -81,16 +80,6 @@ type AssociateByQuestionItemHandler struct {
 type GenerateMaskHandler struct {
 	*security.BaseHandler
 	generateMask *generate_mask_uc.GenerateMaskForItemUseCase
-}
-
-type BomHandler struct {
-	*security.BaseHandler
-	createBomUC *bom_uc.CreateBomUseCase
-}
-
-type BomItemHandler struct {
-	*security.BaseHandler
-	createBomItemUC *bom_uc.CreateBomItemUseCase
 }
 
 type WarehouseHandler struct {

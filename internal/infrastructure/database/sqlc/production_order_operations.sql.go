@@ -72,6 +72,16 @@ func (q *Queries) ListProductionOrderOperations(ctx context.Context, orderID int
 	return items, rows.Err()
 }
 
+const getProductionOrderOperation = `SELECT id, production_order_id, route_operation_id, sequence,
+operation_name, work_center_id, planned_hours, setup_hours, actual_hours, status,
+started_at, completed_at, notes, created_at, updated_at
+FROM production_order_operations WHERE id=$1`
+
+func (q *Queries) GetProductionOrderOperation(ctx context.Context, id int64) (DBProductionOrderOperation, error) {
+	row := q.db.QueryRow(ctx, getProductionOrderOperation, id)
+	return scanPOO(row)
+}
+
 // $2 is cast to ::text at every use so Postgres deduces a single, consistent
 // type for the parameter. Without the casts the assignment (status=$2) and the
 // comparisons ($2='IN_PROGRESS', $2 IN (...)) let the planner infer conflicting

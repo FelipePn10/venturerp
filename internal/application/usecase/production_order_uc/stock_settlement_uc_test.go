@@ -13,6 +13,7 @@ import (
 	porepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
+	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/google/uuid"
 )
 
@@ -58,6 +59,34 @@ func (f *fakeStockRepo) CreateMovement(_ context.Context, m *stockentity.StockMo
 }
 
 func i64p(v int64) *int64 { return &v }
+
+func TestStructureChildrenForBackflush_SelectsPrimaryAndSkipsOutputs(t *testing.T) {
+	raw := []*structentity.ItemStructure{
+		{ChildCode: 20, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 2},
+		{ChildCode: 10, Quantity: 3, SubstituteGroup: 1, SubstitutePriority: 1},
+		{ChildCode: 30, Quantity: 1, IsCoproduct: true},
+		{ChildCode: 40, Quantity: 5, IsFixedQty: true},
+	}
+
+	children := structureChildrenForBackflush(raw)
+
+	got := map[int64]structureChild{}
+	for _, child := range children {
+		got[child.code] = *child
+	}
+	if _, ok := got[20]; ok {
+		t.Error("substituto secundário não deve ser consumido no backflush")
+	}
+	if _, ok := got[30]; ok {
+		t.Error("co-produto não deve ser consumido no backflush")
+	}
+	if got[10].qty != 3 {
+		t.Errorf("primário qty = %v, want 3", got[10].qty)
+	}
+	if !got[40].fixed {
+		t.Error("quantidade fixa deve ser preservada para cálculo por OF")
+	}
+}
 
 // ─── AddConsumption → OUT movement ──────────────────────────────────────────
 

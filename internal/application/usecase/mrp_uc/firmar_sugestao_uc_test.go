@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	mrpentity "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
@@ -113,6 +115,45 @@ func TestFirmarSugestao_CreatesPlannedOrder(t *testing.T) {
 	pc := planR.created.PlanCode
 	if pc == nil || *pc != 100 {
 		t.Errorf("PlanCode = %v, want 100", pc)
+	}
+}
+
+type fakeFirmer struct {
+	gotCode int64
+	called  bool
+}
+
+func (f *fakeFirmer) Execute(_ context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
+	f.called = true
+	f.gotCode = dto.OrderCode
+	return &response.PlannedOrderResponse{Code: dto.OrderCode, IsFirm: true}, nil
+}
+
+// With a Firmer wired, accepting a suggestion creates the order NOT firm and then
+// firms it (generating the OF/requisition) — a single-step conversion.
+func TestFirmarSugestao_ComposesFirmStep(t *testing.T) {
+	planR := &fakePlannedRepo{nextNum: 7001}
+	firmer := &fakeFirmer{}
+	uc := &FirmarSugestaoMRPUseCase{
+		MRPRepo:     &fakeMRPRepo{suggestion: baseSuggestion()},
+		PlannedRepo: planR,
+		Auth:        &fakeAuth{canCreate: true},
+		Firmer:      firmer,
+	}
+	result, err := uc.Execute(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Created NOT firm (so the firm step's first-firming guard fires)...
+	if planR.created.IsFirm {
+		t.Error("planned order should be created not-firm when a Firmer is wired")
+	}
+	// ...then firmed via the Firmer on the created code.
+	if !firmer.called || firmer.gotCode != 999 {
+		t.Errorf("Firmer called=%v code=%d, want true / 999", firmer.called, firmer.gotCode)
+	}
+	if !result.IsFirm {
+		t.Error("result must report the order as firm after the firm step")
 	}
 }
 
