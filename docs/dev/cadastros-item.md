@@ -200,6 +200,15 @@ corte/estampagem de chapa). `POST /api/items/structure/create`:
 - **Fórmula de perdas** (aplicada pelo MRP na explosão):
   - Fórmula 1 (padrão): `qtd = qtdPai × qtdComponente × (1 + %perda/100)`
   - Fórmula 2: `qtd = ... / (1 − %perda/100)`
+- **Campos enterprise+ da linha da BOM:**
+  - `is_coproduct`: saída da produção (co-produto/subproduto/sucata retornável), não
+    gera demanda de consumo.
+  - `is_fixed_qty`: quantidade por OF/lote, não por unidade produzida.
+  - `substitute_group`: componentes do mesmo pai com o mesmo grupo (> 0) são
+    alternativos/substitutos.
+  - `substitute_priority`: menor valor é o componente primário. MRP, custo, backflush
+    e plano de corte usam o primário; os demais ficam disponíveis como alternativa
+    operacional quando o primário faltar.
 - Consultar a árvore: `GET /api/items/structure/resolve/{itemCode}`; onde-é-usado:
   `GET /api/items/structure/where-used/{itemCode}`.
 

@@ -25,15 +25,17 @@ type StandardCostRepository interface {
 	InsertRollupLog(ctx context.Context, entry *entity.CostRollupLogEntry) error
 
 	// Read helpers used by the rollup algorithm
-	GetDirectChildren(ctx context.Context, parentCode int64) ([]BOMChild, error)
+	GetDirectChildren(ctx context.Context, parentCode int64, mask string) ([]BOMChild, error)
 	GetRouteHoursByItem(ctx context.Context, itemCode int64, mask string) (float64, error)
 }
 
 // BOMChild is a lightweight projection of an item structure row used during rollup.
 type BOMChild struct {
-	ChildCode      int64
-	Quantity       float64
-	LossPercentage float64
-	IsCoproduct    bool // OUTPUT (co-produto/sucata) → credita o custo do pai
-	IsFixedQty     bool // quantidade por lote → amortizada pelo lote de referência
+	ChildCode          int64
+	Quantity           float64
+	LossPercentage     float64
+	IsCoproduct        bool // OUTPUT (co-produto/sucata) → credita o custo do pai
+	IsFixedQty         bool // quantidade por lote → amortizada pelo lote de referência
+	SubstituteGroup    int16
+	SubstitutePriority int16
 }

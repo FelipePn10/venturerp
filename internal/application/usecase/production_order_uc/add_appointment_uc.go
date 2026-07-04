@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
+	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	structurerepo "github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
@@ -79,15 +80,11 @@ func (uc *AddAppointmentUseCase) backflush(ctx context.Context, dto request.AddA
 	if order.Mask != "" {
 		raw, e := uc.StructureRepo.GetDirectChildrenForMask(ctx, order.ItemCode, order.Mask)
 		rawErr = e
-		for _, c := range raw {
-			children = append(children, &structureChild{code: c.ChildCode, qty: c.Quantity, loss: c.LossPercentage})
-		}
+		children = structureChildrenForBackflush(raw)
 	} else {
 		raw, e := uc.StructureRepo.GetAllDirectChildren(ctx, order.ItemCode)
 		rawErr = e
-		for _, c := range raw {
-			children = append(children, &structureChild{code: c.ChildCode, qty: c.Quantity, loss: c.LossPercentage})
-		}
+		children = structureChildrenForBackflush(raw)
 	}
 	if rawErr != nil {
 		return
@@ -97,7 +94,11 @@ func (uc *AddAppointmentUseCase) backflush(ctx context.Context, dto request.AddA
 	refCode := dto.ProductionOrderID
 	for _, c := range children {
 		// Loss formula 1 (default): qty = parentQty × componentQty × (1 + loss/100).
-		consumed := dto.ProducedQty * c.qty * (1 + c.loss/100.0)
+		base := dto.ProducedQty
+		if c.fixed {
+			base = 1
+		}
+		consumed := base * c.qty * (1 + c.loss/100.0)
 		if consumed <= 0 {
 			continue
 		}
@@ -115,8 +116,26 @@ func (uc *AddAppointmentUseCase) backflush(ctx context.Context, dto request.AddA
 	_ = ap
 }
 
+func structureChildrenForBackflush(raw []*structentity.ItemStructure) []*structureChild {
+	selected := structentity.SelectPrimarySubstituteComponents(raw)
+	children := make([]*structureChild, 0, len(selected))
+	for _, c := range selected {
+		if c.IsCoproduct {
+			continue
+		}
+		children = append(children, &structureChild{
+			code:  c.ChildCode,
+			qty:   c.Quantity,
+			loss:  c.LossPercentage,
+			fixed: c.IsFixedQty,
+		})
+	}
+	return children
+}
+
 type structureChild struct {
-	code int64
-	qty  float64
-	loss float64
+	code  int64
+	qty   float64
+	loss  float64
+	fixed bool
 }

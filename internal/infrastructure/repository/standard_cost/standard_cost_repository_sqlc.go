@@ -132,8 +132,11 @@ func (r *StandardCostRepositorySQLC) InsertRollupLog(ctx context.Context, entry 
 
 // ─── BOM helpers ──────────────────────────────────────────────────────────────
 
-func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, parentCode int64) ([]domainrepo.BOMChild, error) {
-	rows, err := r.q.GetAllDirectChildren(ctx, parentCode)
+func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, parentCode int64, mask string) ([]domainrepo.BOMChild, error) {
+	rows, err := r.q.GetDirectChildrenForMask(ctx, sqlc.GetDirectChildrenForMaskParams{
+		ParentCode: parentCode,
+		ParentMask: pgutil.ToPgTextFromString(mask),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching BOM children for item %d: %w", parentCode, err)
 	}
@@ -143,11 +146,13 @@ func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, pare
 			continue
 		}
 		out = append(out, domainrepo.BOMChild{
-			ChildCode:      row.ChildCode,
-			Quantity:       row.Quantity,
-			LossPercentage: row.LossPercentage,
-			IsCoproduct:    row.IsCoproduct,
-			IsFixedQty:     row.IsFixedQty,
+			ChildCode:          row.ChildCode,
+			Quantity:           row.Quantity,
+			LossPercentage:     row.LossPercentage,
+			IsCoproduct:        row.IsCoproduct,
+			IsFixedQty:         row.IsFixedQty,
+			SubstituteGroup:    row.SubstituteGroup,
+			SubstitutePriority: row.SubstitutePriority,
 		})
 	}
 	return out, nil

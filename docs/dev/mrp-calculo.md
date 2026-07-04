@@ -228,6 +228,10 @@ O resultado central do MRP. Para cada necessidade líquida calculada, o MRP gera
 > `is_coproduct` são **saídas** (co-produto/subproduto/sucata) — a explosão **não** gera
 > demanda dependente para eles. Componentes `is_fixed_qty` são consumidos **uma vez por
 > OF** (a fórmula de perda roda sobre base 1, sem multiplicar pela quantidade da ordem).
+> Componentes com `substitute_group > 0` formam um grupo de alternativos/substitutos:
+> o MRP considera somente o primário do grupo (`substitute_priority` menor; empate por
+> sequência/código), evitando demanda duplicada para materiais alternativos. Os demais
+> ficam disponíveis para substituição operacional quando o primário faltar.
 
 Essas sugestões ficam em análise. O planejador pode aceitar, rejeitar, ou modificar. Quando aceita, a sugestão se transforma em uma **Ordem Planejada** real no sistema.
 

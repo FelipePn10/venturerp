@@ -82,7 +82,6 @@ type GenerateMaskHandler struct {
 	generateMask *generate_mask_uc.GenerateMaskForItemUseCase
 }
 
-
 type WarehouseHandler struct {
 	*security.BaseHandler
 	createWarehouseUC *warehouse_uc.CreateWarehouseUseCase

@@ -28,9 +28,9 @@ func TestIntegration_Routing_EffectivitySelection(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM manufacturing_routes WHERE item_code = $1", itemCode)
 
 	now := time.Now()
-	expiredTo := now.AddDate(0, 0, -1)   // yesterday
-	pastFrom := now.AddDate(0, 0, -30)   // a month ago
-	futureFrom := now.AddDate(0, 0, 10)  // next week+
+	expiredTo := now.AddDate(0, 0, -1)  // yesterday
+	pastFrom := now.AddDate(0, 0, -30)  // a month ago
+	futureFrom := now.AddDate(0, 0, 10) // next week+
 
 	// Expired revision (alt 1).
 	rExpired, _ := entity.NewManufacturingRoute(testutil.UniqueCode(), itemCode, nil, 1, ptrStr("REV A (expirada)"), true, &pastFrom, &expiredTo, uid)

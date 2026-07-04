@@ -67,6 +67,17 @@ func NewItemStructure(
 	}, nil
 }
 
+func (s *ItemStructure) SetSubstitute(group, priority int16) {
+	if group < 0 {
+		group = 0
+	}
+	if priority < 1 {
+		priority = 1
+	}
+	s.SubstituteGroup = group
+	s.SubstitutePriority = priority
+}
+
 // IsGeneric retorna true quando o componente se aplica a TODAS as configurações.
 func (s *ItemStructure) IsGeneric() bool {
 	return s.ParentMask == nil

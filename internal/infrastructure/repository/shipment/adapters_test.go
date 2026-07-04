@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
-	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
-	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
-	purchaseentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
-	purchaserepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	productionrepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
+	purchaseentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
+	purchaserepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
+	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
+	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 )
 
 type fakeSalesOrderRepo struct {
@@ -44,19 +44,19 @@ func (f *fakeProductionOrderRepo) GetByCode(ctx context.Context, id int64) (*pro
 	return f.resp, f.err
 }
 
-func ptrFl64(v float64) *float64 { return &v }
-func ptrStr(v string) *string    { return &v }
+func ptrFl64(v float64) *float64     { return &v }
+func ptrStr(v string) *string        { return &v }
 func ptrTime(v time.Time) *time.Time { return &v }
 
 func TestSalesOrderAdapter(t *testing.T) {
 	delivery := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	fake := &fakeSalesOrderRepo{
 		resp: &salesentity.SalesOrder{
-			Code:           42,
-			TotalGross:     1000.00,
-			TotalNet:       850.00,
+			Code:             42,
+			TotalGross:       1000.00,
+			TotalNet:         850.00,
 			TotalWeightGross: 120.0,
-			VolumeQuantity: 3,
+			VolumeQuantity:   3,
 			Items: []*salesentity.SalesOrderItem{
 				{
 					ItemCode:        100,

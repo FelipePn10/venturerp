@@ -8,6 +8,7 @@
 .claude
 .docker
 .docs
+SESSION_SUMMARY.md
 
 # Test/build artifacts
 coverage.out
@@ -19,6 +20,7 @@ bin/
 backups/*.dump
 
 # Test scripts with sensitive data (tokens, CNPJs, credentials)
+scripts/
 scripts/test-e2e.sh
 scripts/test-flow.sh
 scripts/test-focusnfe.sh

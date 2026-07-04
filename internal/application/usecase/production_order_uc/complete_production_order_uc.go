@@ -82,7 +82,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 			if uc.Structure != nil {
 				children, cerr := uc.Structure.GetAllDirectChildren(ctx, order.ItemCode)
 				if cerr == nil {
-					for _, child := range children {
+					for _, child := range structentity.SelectPrimarySubstituteComponents(children) {
 						if !child.IsCoproduct || child.Quantity <= 0 {
 							continue
 						}

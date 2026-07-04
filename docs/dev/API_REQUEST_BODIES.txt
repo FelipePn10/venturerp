@@ -135,9 +135,17 @@ POST /api/items/structure/create
   "unit_of_measurement": "UN",
   "health": "ATIVO",
   "loss_percentage": 2.0,
+  "loss_formula": null,
   "sequence": 1,
   "notes": "Componente principal da cadeira",
   "is_active": true,
+  "inherit": false,
+  "start_date": null,
+  "end_date": null,
+  "is_coproduct": false,
+  "is_fixed_qty": false,
+  "substitute_group": 0,
+  "substitute_priority": 1,
   "created_by": "550e8400-e29b-41d4-a716-446655440000"
 }
 
@@ -150,9 +158,22 @@ PUT /api/items/structure/update
   "unit_of_measurement": "UN",
   "health": "ATIVO",
   "loss_percentage": 1.5,
+  "loss_formula": null,
   "position": 1,
-  "notes": "Quantidade ajustada após revisão de engenharia"
+  "notes": "Quantidade ajustada após revisão de engenharia",
+  "start_date": null,
+  "end_date": null,
+  "is_coproduct": false,
+  "is_fixed_qty": false,
+  "substitute_group": 1,
+  "substitute_priority": 1
 }
+
+Campos enterprise+ da linha da BOM:
+- is_coproduct=true: saída da produção (co-produto/subproduto/sucata retornável), não insumo.
+- is_fixed_qty=true: quantidade por OF/lote, não por unidade produzida.
+- substitute_group>0: grupo de componentes alternativos/substitutos do mesmo pai.
+- substitute_priority menor: componente primário usado por MRP, custo, backflush e corte.
 
 GET /api/items/structure/resolve/{itemCode}
 -- Parâmetro na URL: itemCode (int64)
@@ -1017,7 +1038,7 @@ MÓDULO: PURCHASE ORDER (PEDIDO DE COMPRA)
 POST /api/purchase-order/create
 {
   "enterprise_code": 1,
-  "status": "R",
+  "status": "DRAFT",
   "origin": "NORMAL",
   "emission_date": "2025-06-10",
   "delivery_date": "2025-06-30",
@@ -1043,7 +1064,7 @@ GET /api/purchase-order/{code}
 PUT /api/purchase-order/{code}
 {
   "code": 1,
-  "status": "A",
+  "status": "APPROVED",
   "origin": "NORMAL",
   "delivery_date": "2025-07-05",
   "supplier_code": 2001,
@@ -1066,8 +1087,386 @@ GET /api/purchase-order/supplier/{supplierCode}
 -- Exemplo: GET /api/purchase-order/supplier/2001
 
 GET /api/purchase-order/status/{status}
--- Parâmetro na URL: status (string: R, A, E, C)
--- Exemplo: GET /api/purchase-order/status/A
+-- Parâmetro na URL: status (DRAFT, REQUESTED, APPROVED, PARTIAL, RECEIVED, CANCELLED)
+-- Exemplo: GET /api/purchase-order/status/APPROVED
+
+POST /api/purchase-order/{code}/receipts
+-- Registra recebimento físico por linha do pedido e gera movimento IN no estoque
+{
+  "notes": "Recebimento conferido no almoxarifado",
+  "items": [
+    {
+      "purchase_order_item_code": 55,
+      "quantity": 120.0,
+      "warehouse_id": 1,
+      "lot": "LOTE-2026-07-001",
+      "serial_number": "SN-20260703-0001",
+      "batch": "BATCH-2026-07-A",
+      "expiration_date": "2027-07-03",
+      "notes": "Volume sem avarias"
+    }
+  ]
+}
+
+============================================================
+MÓDULO: PROCUREMENT / SUPRIMENTOS OPERACIONAL
+============================================================
+
+POST /api/procurement/records
+-- Cria registro operacional de suprimentos.
+-- record_type: RECEIVING_INSPECTION, RECEIVING_NOTICE, SUPPLIER_EVALUATION,
+-- APPROVAL_LIMIT, SUPPLIER_CONTRACT, RECEIVING_CHECKLIST, RECEIVING_LABEL,
+-- SUPPLIER_EDI, IMPORT_PROCESS.
+{
+  "record_type": "RECEIVING_INSPECTION",
+  "status": "OPEN",
+  "supplier_code": 2001,
+  "purchase_order_code": 10045,
+  "purchase_order_item_code": 55,
+  "item_code": 10002,
+  "mask": "",
+  "warehouse_id": 9,
+  "quantity": 120.0,
+  "reference": "NF 12345 / LOTE-2026-07-001",
+  "payload": {
+    "inspection_plan_id": 7,
+    "certificate_required": true,
+    "dimensions_to_check": ["espessura", "largura"],
+    "divergences": []
+  }
+}
+
+GET /api/procurement/records?type=RECEIVING_INSPECTION&status=OPEN
+-- Lista registros por tipo/status.
+
+GET /api/procurement/records/{id}
+-- Consulta um registro operacional.
+
+PATCH /api/procurement/records/{id}/status
+{
+  "status": "IN_REVIEW"
+}
+
+POST /api/procurement/receiving-inspections/{id}/disposition
+-- Aponta laudo de inspeção e transfere estoque da quarentena para destino/bloqueio.
+{
+  "approved_qty": 118.0,
+  "rejected_qty": 2.0,
+  "destination_warehouse_id": 1,
+  "quarantine_warehouse_id": 10,
+  "reason": "2 peças com avaria dimensional; restante liberado."
+}
+
+POST /api/procurement/supplier-scorecards
+-- Snapshot de IQF: qualidade 40%, entrega 30%, comercial 20%, atendimento 10%.
+{
+  "supplier_code": 2001,
+  "period_start": "2026-07-01",
+  "period_end": "2026-07-31",
+  "quality_score": 96.0,
+  "delivery_score": 92.0,
+  "commercial_score": 88.0,
+  "service_score": 90.0,
+  "total_receipts": 12,
+  "rejected_receipts": 1,
+  "late_receipts": 2,
+  "notes": "Fornecedor homologado com acompanhamento mensal."
+}
+
+GET /api/procurement/suppliers/{supplierCode}/scorecards
+-- Histórico de IQF do fornecedor.
+
+POST /api/procurement/receiving-inspection-routes
+-- Roteiro de inspeção de recebimento por item ou classificação, com vigência.
+{
+  "enterprise_code": 1,
+  "basis": "ITEM",
+  "item_code": 10002,
+  "mask": "",
+  "inspection_warehouse_id": 9,
+  "handling_type": "Manusear com luvas",
+  "storage_type": "Local seco",
+  "route_type": "Materia-prima critica",
+  "market_type": "NACIONAL",
+  "inspection_type": "RECEBIMENTO",
+  "valid_from": "2026-07-01",
+  "steps": [
+    {
+      "sequence": 10,
+      "inspection_name": "Espessura",
+      "kind": "VALUE",
+      "appointment_mode": "ALL_MEASUREMENTS",
+      "is_required": true,
+      "emits_label": true,
+      "instrument_group": "Paquimetros",
+      "sample_type": "AQL",
+      "sample_unit": "PC",
+      "sample_qty": 5,
+      "acceptance_qty": 0,
+      "rejection_qty": 1,
+      "norm": "ISO 9001",
+      "reference": "Chapa principal",
+      "nominal_value": 2.0,
+      "min_value": 1.9,
+      "max_value": 2.1
+    },
+    {
+      "sequence": 20,
+      "inspection_name": "Certificado do fornecedor",
+      "kind": "ATTRIBUTE",
+      "appointment_mode": "STATUS_ONLY",
+      "is_required": true,
+      "emits_label": false,
+      "sample_qty": 1,
+      "attributes": [
+        { "description": "Certificado valido", "is_approved": true },
+        { "description": "Certificado ausente", "is_approved": false }
+      ]
+    }
+  ]
+}
+
+GET /api/procurement/receiving-inspection-routes/{id}
+-- Consulta roteiro com etapas e atributos.
+
+POST /api/procurement/receiving-inspection-orders
+-- Gera ordem manual ou por origem operacional/fiscal. Busca roteiro por item e,
+-- se não encontrar, por classificação.
+{
+  "source": "MANUAL",
+  "supplier_code": 2001,
+  "purchase_order_code": 10045,
+  "purchase_order_item_code": 55,
+  "item_code": 10002,
+  "classification_code": "MP.CHAPA.INOX",
+  "mask": "",
+  "lot": "LOTE-2026-07-001",
+  "warehouse_id": 9,
+  "quantity": 120.0,
+  "certificate": "CERT-7788",
+  "supplier_note": "Fornecedor informou corrida 4432",
+  "notes": "Inspecao gerada pelo almoxarifado"
+}
+
+GET /api/procurement/receiving-inspection-orders?status=PENDING_INSPECTION
+-- Lista ordens abertas para inspeção/análise.
+
+POST /api/procurement/receiving-inspection-orders/{id}/results
+-- Apontamento de medição/status da inspeção.
+{
+  "step_id": 10,
+  "sequence": 10,
+  "sample_index": 1,
+  "measured_value": 2.03,
+  "min_value": 1.9,
+  "max_value": 2.1,
+  "is_approved": true,
+  "notes": "Dentro da tolerancia"
+}
+
+POST /api/procurement/receiving-inspection-orders/{id}/analysis
+-- Analisa lote com não conformidade e define tratamento para IQF/fornecedor.
+-- Com "move_stock": true a análise fecha o ciclo e movimenta o estoque para fora
+-- do almoxarifado de inspeção da ordem: conforme/restrita -> disponível,
+-- retrabalho -> almoxarifado de retrabalho, rejeitada -> bloqueado/devolução.
+-- A quantidade restrita usa restricted_warehouse_id ou, na ausência, o destino.
+{
+  "conform_qty": 118.0,
+  "rejected_qty": 2.0,
+  "rework_qty": 0.0,
+  "restricted_qty": 0.0,
+  "treatment": "RETURN_TO_SUPPLIER",
+  "affects_supplier_score": true,
+  "notes": "Duas pecas fora da espessura minima",
+  "move_stock": true,
+  "destination_warehouse_id": 1,
+  "rejection_warehouse_id": 9,
+  "rework_warehouse_id": 7,
+  "restricted_warehouse_id": null
+}
+
+--- IQF: AVALIAÇÃO DE FORNECEDOR AUTO-CALCULADA ---
+
+POST /api/procurement/supplier-scorecards/compute
+-- Calcula qualidade (a partir das inspeções) e entrega (a partir de atrasos de
+-- pedido) do fornecedor no período. commercial_score/service_score são manuais
+-- (default 100). Com "persist": true também grava o scorecard.
+{
+  "supplier_code": 1,
+  "period_start": "2026-01-01",
+  "period_end": "2026-06-30",
+  "commercial_score": 95,
+  "service_score": 100,
+  "persist": true
+}
+
+--- ALÇADA DE VALORES (APPROVAL LIMITS) ---
+
+POST /api/procurement/approval-limits            (ADMIN)
+-- Regra de alçada. scope: GLOBAL | SUPPLIER | COST_CENTER | CATEGORY.
+-- Pedido com total <= auto_approve_max é aprovado automaticamente; acima disso
+-- fica bloqueado aguardando autorização. block_above é o teto absoluto.
+{
+  "scope": "GLOBAL",
+  "auto_approve_max": 5000.00,
+  "block_above": 200000.00,
+  "currency": "BRL",
+  "valid_from": "2026-01-01"
+}
+
+GET /api/procurement/approval-limits?enterprise_code=1
+
+POST /api/purchase-order/{code}/approve          (ADMIN/USER)
+-- Avalia a alçada. Resposta: approved | requires_authorization | blocked,
+-- alcada_status (A/B/R), applied_amount e applied_ceiling.
+(sem corpo)
+
+POST /api/purchase-order/{code}/authorize        (ADMIN)
+-- Libera um pedido bloqueado (alcada_status=B) por autoridade superior.
+(sem corpo)
+
+--- CONTRATOS DE FORNECEDORES ---
+
+POST /api/procurement/supplier-contracts
+{
+  "supplier_code": 1,
+  "contract_number": "CTR-2026-001",
+  "description": "Fornecimento de aço",
+  "status": "ACTIVE",
+  "currency": "BRL",
+  "valid_from": "2026-01-01",
+  "valid_to": "2026-12-31",
+  "price_index": "IPCA",
+  "items": [
+    {"item_code": 1001, "mask": "", "unit": "KG", "contracted_qty": 10000, "unit_price": 8.75, "min_order_qty": 500}
+  ]
+}
+
+GET   /api/procurement/supplier-contracts?supplier_code=1&status=ACTIVE
+GET   /api/procurement/supplier-contracts/{id}
+PATCH /api/procurement/supplier-contracts/{id}/status   {"status":"SUSPENDED"}
+
+POST  /api/procurement/supplier-contracts/{id}/consume
+-- Consome saldo contratado do item; rejeita se exceder o saldo. Contrato ACTIVE.
+{"item_code": 1001, "mask": "", "quantity": 500}
+
+--- HISTÓRICO CONSOLIDADO DE MOVIMENTAÇÕES DE COMPRA ---
+
+GET /api/procurement/purchase-movements?supplier_code=1&item_code=1001&limit=200
+-- Linhas de pedido com solicitado/recebido/cancelado/aberto, preço e datas para
+-- análise de desempenho de comprador e fornecedor.
+
+--- AVISO DE RECEBIMENTO + DIVERGÊNCIAS (FAVR) ---
+
+POST /api/procurement/receiving-notices
+-- Agenda de doca e conferência antes da NF. Status inicial SCHEDULED.
+{
+  "supplier_code": 1,
+  "purchase_order_code": 10,
+  "carrier_code": 3,
+  "dock": "D1",
+  "scheduled_at": "2026-07-10T09:00:00Z",
+  "invoice_number": "NF-5567",
+  "items": [{"purchase_order_item_code": 100, "item_code": 1001, "expected_qty": 500, "unit": "KG"}]
+}
+
+GET   /api/procurement/receiving-notices?status=SCHEDULED
+GET   /api/procurement/receiving-notices/{id}
+PATCH /api/procurement/receiving-notices/{id}/status   {"status":"IN_CONFERENCE","blocked":false}
+-- status: SCHEDULED|ARRIVED|IN_CONFERENCE|RELEASED|BLOCKED|CANCELLED
+
+POST /api/procurement/receiving-divergences
+-- Falta/sobra/avaria/item errado/preço/documento/atraso. resolution inicia PENDING.
+{
+  "notice_id": 5,
+  "supplier_code": 1,
+  "purchase_order_item_code": 100,
+  "item_code": 1001,
+  "divergence_type": "SHORTAGE",
+  "expected_qty": 500,
+  "actual_qty": 480,
+  "affects_supplier_score": true
+}
+GET   /api/procurement/receiving-divergences?supplier_code=1&resolution=PENDING
+PATCH /api/procurement/receiving-divergences/{id}/resolution   {"resolution":"SUPPLIER_DEBIT"}
+-- resolution: PENDING|ACCEPTED|PARTIAL_RETURN|FULL_RETURN|WAIVED|SUPPLIER_DEBIT
+
+--- EDI DE FORNECEDORES (FEDS) ---
+
+POST /api/procurement/edi-messages
+-- Confirmação de pedido do fornecedor. Detecta divergência QTY/PRICE/DATE por linha
+-- comparando confirmed_* com po_* (tolerâncias opcionais). Status resultante:
+-- PROCESSED (ok) | WITH_DIVERGENCE (inbound) | SENT (outbound).
+{
+  "supplier_code": 1,
+  "direction": "INBOUND",
+  "message_type": "ORDER_CONFIRMATION",
+  "purchase_order_code": 10,
+  "qty_tolerance": 0,
+  "price_tolerance": 0.05,
+  "lines": [
+    {"purchase_order_item_code": 100, "item_code": 1001, "confirmed_qty": 500, "confirmed_price": 10.5,
+     "confirmed_date": "2026-07-15", "po_qty": 500, "po_price": 10.0, "po_date": "2026-07-12"}
+  ]
+}
+GET /api/procurement/edi-messages?supplier_code=1
+GET /api/procurement/edi-messages/{id}
+
+--- IMPORTAÇÃO / NACIONALIZAÇÃO COM CUSTO (FREC0203 / FIMP) ---
+
+POST /api/procurement/import-processes
+-- FOB em moeda estrangeira convertido por exchange_rate; despesas com in_item_cost
+-- são rateadas (apportion_basis VALUE|WEIGHT|QUANTITY) e compõem o landed_unit_cost.
+{
+  "supplier_code": 1,
+  "purchase_order_code": 10,
+  "reference": "DI-2026-0001",
+  "incoterm": "FOB",
+  "currency": "USD",
+  "exchange_rate": 5.20,
+  "apportion_basis": "VALUE",
+  "items": [
+    {"item_code": 1001, "quantity": 1000, "weight": 2000, "fob_unit_price": 2.00},
+    {"item_code": 1002, "quantity": 500,  "weight": 500,  "fob_unit_price": 6.00}
+  ],
+  "expenses": [
+    {"expense_type": "FREIGHT", "amount": 8000, "in_item_cost": true},
+    {"expense_type": "II",      "amount": 5000, "in_item_cost": true},
+    {"expense_type": "SISCOMEX","amount": 200,  "in_item_cost": false}
+  ]
+}
+GET   /api/procurement/import-processes?status=OPEN
+GET   /api/procurement/import-processes/{id}
+POST  /api/procurement/import-processes/{id}/recompute       -- recalcula landed cost
+PATCH /api/procurement/import-processes/{id}/status  {"status":"NATIONALIZED"}
+
+--- PARÂMETROS DE SUPRIMENTOS (FUTL0125) ---
+
+PUT /api/procurement/parameters                    (ADMIN)
+-- domain: PURCHASE_TABLE|PURCHASE_ORDER|QUOTATION|REQUISITION|RECEIVING_NOTICE|
+--         INSPECTION|SUPPLIER_EVALUATION|CONTRACT|SUPPLIER|NF_ENTRY
+{"domain":"PURCHASE_ORDER","param_key":"require_approval_above","param_value":"5000","value_type":"NUMBER"}
+GET /api/procurement/parameters?domain=PURCHASE_ORDER
+
+--- HOMOLOGAÇÃO DE FORNECEDOR (FAVF0203) ---
+
+POST /api/procurement/supplier-homologations
+-- Sem "status": deriva do IQF do período (homologated_min/conditional_min, default
+-- 80/60). Com "status": grava a decisão manual.
+{
+  "supplier_code": 1,
+  "period_start": "2026-01-01",
+  "period_end": "2026-06-30",
+  "homologated_min": 80,
+  "conditional_min": 60,
+  "valid_until": "2026-12-31"
+}
+GET /api/procurement/suppliers/{supplierCode}/homologations
+
+--- GERAÇÃO DE ITENS POR FORNECEDOR (FFOR0204) ---
+
+POST /api/procurement/suppliers/{supplierCode}/generate-items
+-- Cria vínculos item-fornecedor a partir do histórico de compras. Resp: {"created": N}
 
 ============================================================
 MÓDULO: STOCK (ESTOQUE)

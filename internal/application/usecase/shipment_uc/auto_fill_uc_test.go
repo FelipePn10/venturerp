@@ -250,11 +250,11 @@ func TestAutoFill_ReturnsFullShipment(t *testing.T) {
 	shipRepo := &fakeShipmentRepo{
 		nextCode: 6,
 		getByCodeResp: &entity.Shipment{
-			ID:             10,
-			Code:           6,
-			ReferenceType:  refPtr(entity.ShipmentRefSalesOrder),
-			SalesOrderCode: ptrInt64(102),
-			CarrierCode:    ptrInt64(7),
+			ID:               10,
+			Code:             6,
+			ReferenceType:    refPtr(entity.ShipmentRefSalesOrder),
+			SalesOrderCode:   ptrInt64(102),
+			CarrierCode:      ptrInt64(7),
 			Status:           entity.ShipmentStatusOpen,
 			TotalVolumes:     2,
 			TotalGrossWeight: 80,

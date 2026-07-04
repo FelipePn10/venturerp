@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS supplier_homologations;
+DROP TABLE IF EXISTS procurement_parameters;
+DROP TABLE IF EXISTS import_expenses;
+DROP TABLE IF EXISTS import_process_items;
+DROP TABLE IF EXISTS import_processes;
+DROP TABLE IF EXISTS supplier_edi_lines;
+DROP TABLE IF EXISTS supplier_edi_messages;
+DROP TABLE IF EXISTS receiving_divergences;
+DROP TABLE IF EXISTS receiving_notice_items;
+DROP TABLE IF EXISTS receiving_notices;

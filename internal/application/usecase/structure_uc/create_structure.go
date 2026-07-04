@@ -90,6 +90,7 @@ func (uc *CreateStructureComponentUseCase) Execute(
 	}
 	structure.IsCoproduct = dto.IsCoproduct
 	structure.IsFixedQty = dto.IsFixedQty
+	structure.SetSubstitute(dto.SubstituteGroup, dto.SubstitutePriority)
 
 	return uc.Repo.Create(ctx, structure)
 }

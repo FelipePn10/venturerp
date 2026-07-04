@@ -18,7 +18,8 @@ O módulo de Compras transforma uma **necessidade** (gerada pelo planejamento ou
 6. [Tabela de preço e fornecedor preferencial](#6-tabela-de-preço-e-fornecedor-preferencial)
 7. [Operações de entrada (natureza fiscal da compra)](#7-operações-de-entrada-natureza-fiscal-da-compra)
 8. [Recebimento e fechamento do ciclo](#8-recebimento-e-fechamento-do-ciclo)
-9. [Glossário rápido](#9-glossário-rápido)
+9. [Maturidade de suprimentos](#9-maturidade-de-suprimentos)
+10. [Glossário rápido](#10-glossário-rápido)
 
 ---
 
@@ -111,6 +112,12 @@ Toda compra que entra precisa de uma **natureza/operação de entrada** correta 
 
 ## 8. Recebimento e fechamento do ciclo
 
+Quando a mercadoria chega, o almoxarifado pode registrar o **recebimento físico por
+linha do pedido**. Isso é importante quando a carga chega antes da escrituração
+fiscal ou quando há entregas parciais. O usuário informa quantidade, depósito, lote,
+série, batch, validade e observações; o sistema dá entrada no estoque e atualiza o
+pedido como parcial ou recebido.
+
 Quando a mercadoria chega com a **nota fiscal do fornecedor**, a nota é importada e o sistema, automaticamente:
 
 1. **Reconhece o fornecedor** pelo CNPJ da nota;
@@ -121,9 +128,64 @@ Quando a mercadoria chega com a **nota fiscal do fornecedor**, a nota é importa
 > O ciclo de compra se fecha sozinho: do "falta material" do MRP até o material no estoque e a obrigação no financeiro, sem redigitar.
 > O detalhe fiscal do recebimento (NF de entrada, créditos, escrituração) está em `fiscal-financeiro.md`.
 
+Também existe o recebimento físico por linha do pedido, usado pelo almoxarifado
+quando o material chega antes ou separado da escrituração fiscal. Ele registra lote,
+série, validade e depósito, gera entrada no estoque e atualiza o saldo recebido do
+pedido sem perder a rastreabilidade da linha comprada.
+
+## 9. Maturidade de suprimentos
+
+O módulo agora possui uma camada operacional de suprimentos para rotinas que ficam
+entre o pedido e o uso real do material na fábrica:
+
+- **Inspeção de recebimento:** define roteiros por item ou família, com medições,
+  atributos, amostras, instrumentos, normas e laudo. O material fica em quarentena
+  até a análise final e, ao ser analisado, o próprio sistema **movimenta o estoque**:
+  o que é aprovado (ou aprovado com restrição) vai para o depósito disponível, o
+  retrabalho para o depósito de conserto e o rejeitado para bloqueado/devolução — sem
+  passo manual separado, garantindo que nada saia da quarentena sem laudo.
+- **Aviso de recebimento e divergências:** agenda de **doca e conferência** antes da
+  NF entrar (chegada, em conferência, liberado ou bloqueado) e registro formal de
+  divergência — falta, sobra, avaria, item errado, preço, documento ou atraso — com
+  tratamento (aceitar, devolver total/parcial, abonar, debitar do fornecedor), que
+  alimenta a nota do fornecedor.
+- **EDI de fornecedores:** recebe a confirmação de pedido do fornecedor e **aponta
+  sozinho as divergências** de quantidade, preço e data linha a linha, com tolerância.
+- **Importação com custo real:** processo de importação com câmbio e despesas (frete,
+  impostos, taxas); o sistema **rateia as despesas e calcula o custo nacionalizado de
+  cada item**, base para o custo correto do material importado.
+- **Parâmetros e homologação:** painel único de parâmetros de compras e **homologação
+  de fornecedor** com status derivado automaticamente do IQF.
+- **Avaliação de fornecedores / IQF:** além do lançamento manual, o sistema
+  **calcula sozinho** a nota de qualidade (a partir das inspeções) e de entrega (a
+  partir dos atrasos de pedido) do fornecedor no período, gerando um IQF objetivo
+  para ranquear compras.
+- **Inspeção automática no recebimento:** ao receber um item que tem roteiro de
+  inspeção, a mercadoria entra direto em quarentena e a ordem de inspeção é aberta
+  automaticamente — nada crítico vai para o estoque disponível sem laudo.
+- **Alçadas de compra com bloqueio real:** o pedido acima do limite de valor é
+  **bloqueado automaticamente** e só é liberado por autorização de uma alçada
+  superior; abaixo do limite, é aprovado na hora. Limites por valor, fornecedor,
+  centro de custo ou categoria.
+- **Contratos de fornecedores:** vigência, moeda, índice de reajuste e itens com
+  **saldo contratado**; cada compra consome o saldo do contrato e o sistema impede
+  passar do contratado.
+- **Histórico de compras:** consulta consolidada de solicitado/recebido/cancelado/
+  aberto por fornecedor e item, para medir desempenho de comprador e fornecedor.
+- **Checklist e etiquetas de recebimento:** controla conferência documental/física e
+  emissão de identificação para lote, volume, corrida ou posição.
+- **EDI de fornecedores:** mantém mensagens de entrada/saída, confirmações e
+  divergências entre arquivo recebido e documento fiscal.
+- **Importação e nacionalização:** acompanha processos de compra internacional,
+  despesas, DI/DUIMP e etapas até a entrada nacionalizada.
+
+Essas rotinas não copiam o fluxo de outro ERP: elas foram adaptadas para o cenário de
+fábrica, priorizando rastreabilidade de lote, quarentena, liberação controlada e
+indicadores objetivos de fornecedor.
+
 ---
 
-## 9. Glossário rápido
+## 10. Glossário rápido
 
 | Termo | Significado |
 |---|---|

@@ -15,15 +15,17 @@ INSERT INTO item_structures (
     end_date,
     loss_formula,
     is_coproduct,
-    is_fixed_qty
+    is_fixed_qty,
+    substitute_group,
+    substitute_priority
 ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
          )
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority;
 
 
 -- name: GetStructureComponentByID :one
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority
 FROM item_structures
 WHERE id = $1;
 
@@ -50,7 +52,9 @@ SELECT
     s.start_date,
     s.end_date,
     s.is_coproduct,
-    s.is_fixed_qty
+    s.is_fixed_qty,
+    s.substitute_group,
+    s.substitute_priority
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
@@ -75,6 +79,7 @@ SELECT
     s.parent_mask,
     s.quantity,
     s.loss_percentage,
+    s.loss_formula,
     s.unit_of_measurement,
     s.health,
     s.sequence,
@@ -84,6 +89,12 @@ SELECT
     s.created_at,
     s.updated_at,
     s.inherit,
+    s.start_date,
+    s.end_date,
+    s.is_coproduct,
+    s.is_fixed_qty,
+    s.substitute_group,
+    s.substitute_priority,
     i.pdm_description_technique AS child_description
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
@@ -112,6 +123,8 @@ SET
     loss_formula        = $12,
     is_coproduct        = $13,
     is_fixed_qty        = $14,
+    substitute_group    = $15,
+    substitute_priority = $16,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -120,7 +133,7 @@ WHERE parent_code = $1
         OR (parent_mask IS NULL AND $3 IS NULL)
     )
   AND is_active = TRUE
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority;
 
 -- name: DeactivateStructureComponent :exec
 UPDATE item_structures

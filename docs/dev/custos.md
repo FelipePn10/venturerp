@@ -42,9 +42,13 @@ como no custo padrão de Focco/SAP.
 > **Co-produtos e quantidade fixa (BOM).** Componentes `is_coproduct` **creditam** o
 > custo do pai pelo seu valor (`material -= valor_coproduto × qtde`) — recuperação de
 > subproduto/sucata; o material nunca fica negativo. Componentes `is_fixed_qty` são
-> **amortizados** pelo `lot_size` (`material += valor × qtde ÷ lote`). Operações `FANTASMA` não custam. Quando o roteiro não
+> **amortizados** pelo `lot_size` (`material += valor × qtde ÷ lote`). Grupos de
+> substitutos (`substitute_group > 0`) custeiam somente o componente primário
+> (`substitute_priority` menor), mantendo o rollup alinhado à explosão do MRP.
+> Operações `FANTASMA` não custam. Quando o roteiro não
 está disponível, cai no cálculo antigo (`horas_totais × média`). O rollup respeita o LLC
-para compor o custo dos intermediários antes do produto final.
+para compor o custo dos intermediários antes do produto final e resolve a BOM pela
+`mask` informada no rollup (componentes genéricos + componentes específicos da variante).
 
 > Corpo do rollup: `{ "item_code": 50001, "mask": "", "lot_size": 100, "calculated_by": "<uuid>" }`.
 

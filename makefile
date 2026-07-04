@@ -5,6 +5,8 @@ export
 PWD := $(shell pwd)
 MIGRATIONS_DIR := $(PWD)/migrations
 BIN_DIR := $(PWD)/bin
+GO_CACHE ?= /tmp/panossoerp-go-build
+GO_PATH ?= /tmp/panossoerp-go
 
 create_migration:
 	migrate create -ext=sql -dir=$(MIGRATIONS_DIR) -seq init
@@ -38,18 +40,27 @@ sqlc:
 
 # Unit tests (no database) — fast, run on every change.
 test:
-	go test ./...
+	GOCACHE="$(GO_CACHE)" GOPATH="$(GO_PATH)" go test ./...
+
+test-bom-mrp:
+	bash scripts/test-bom-mrp.sh
+
+test-purchase-receiving:
+	bash scripts/test-purchase-receiving.sh
+
+test-procurement-governance:
+	bash scripts/test-procurement-governance.sh
 
 # Coverage report for unit tests.
 test-cover:
-	go test -coverprofile=coverage.out ./...
+	GOCACHE="$(GO_CACHE)" GOPATH="$(GO_PATH)" go test -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out | tail -1
 
 # Integration tests (require a MIGRATED Postgres). Uses TEST_DATABASE_URL when set,
 # falling back to DATABASE_URL from .env. Tests create rows with high unique codes
 # and clean up after themselves.
 test-integration:
-	TEST_DATABASE_URL="$${TEST_DATABASE_URL:-$(DATABASE_URL)}" go test -tags=integration -count=1 ./...
+	TEST_DATABASE_URL="$${TEST_DATABASE_URL:-$(DATABASE_URL)}" GOCACHE="$(GO_CACHE)" GOPATH="$(GO_PATH)" go test -tags=integration -count=1 ./...
 
 # End-to-end HTTP test of the Plano de Corte module (1D/2D/true-shape, firmar,
 # demanda de OP, export, agenda, rateio). Needs the API running + the test DB.
@@ -77,18 +88,18 @@ test-gantt:
 
 # ── Build & run ──────────────────────────────────────────────────────────────
 build:
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/erp ./api
+	GOCACHE="$(GO_CACHE)" GOPATH="$(GO_PATH)" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/erp ./api
 
 run:
 	go run ./api
 
 # ── Quality gates ────────────────────────────────────────────────────────────
 vet:
-	go vet ./...
+	GOCACHE="$(GO_CACHE)" GOPATH="$(GO_PATH)" go vet ./...
 
 # Fails if any file is not gofmt-clean (prints the offenders).
 fmt-check:
-	@gofmt -l . | (! grep . ) || (echo "files need gofmt (run: gofmt -w .)"; exit 1)
+	@find . -path './vendor' -prune -o -name '*.go' -print0 | xargs -0 gofmt -l | (! grep . ) || (echo "files need gofmt (run: gofmt -w <files>)"; exit 1)
 
 # What CI should run on every push: format, vet, build, unit tests + coverage.
 ci: fmt-check vet build test-cover
@@ -160,6 +171,6 @@ restore:
 	DATABASE_URL="$(DATABASE_URL)" ./scripts/restore.sh "$(FILE)"
 
 .PHONY: cutting-samples create_migration migrate_up migrate_down migrate_force reset print_db sqlc \
-	test test-cover test-integration test-cutting build run vet fmt-check ci \
+	test test-bom-mrp test-purchase-receiving test-procurement-governance test-cover test-integration test-cutting build run vet fmt-check ci \
 	docker-build up down up-backup logs backup restore \
 	demo-up demo-down demo-reset demo-migrate demo-seed demo-bootstrap demo-logs

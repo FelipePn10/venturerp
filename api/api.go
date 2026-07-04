@@ -52,6 +52,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/procurement_uc"
 	productionOrderUc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
@@ -121,6 +122,7 @@ import (
 	over "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
 	planned "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
 	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
+	procurementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/procurement"
 	productionOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
 	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
 	purchaseOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_order"
@@ -590,6 +592,16 @@ func (app *application) mount() chi.Router {
 	}
 	itemActivationHandler := handler.NewItemActivationHandler(itemActivationUC)
 
+	// stock repository is shared by purchase receiving, production, cutting and stock APIs.
+	stockRepository := stockRepo.NewStockRepositorySQLC(app.db.Pool)
+	procurementRepository := procurementRepo.New(app.db.Pool)
+	procurementUC := &procurement_uc.UseCase{
+		Repo:      procurementRepository,
+		StockRepo: stockRepository,
+		Auth:      authService,
+	}
+	procurementHandler := handler.NewProcurementHandler(procurementUC)
+
 	// purchase order
 	poRepo := purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(app.db.Pool)
 	purchaseOrderHandler := handler.NewPurchaseOrderHandler(
@@ -600,6 +612,11 @@ func (app *application) mount() chi.Router {
 		&purchase_order_uc.ListPurchaseOrdersBySupplierUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersByStatusUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.CancelPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
+		// Inspection gate wires FINS0212: material with an active inspection route is
+		// received into the inspection warehouse and an inspection order is opened.
+		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC},
+		// Alçada de valores: procurementUC resolves the approval limit rule.
+		&purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC},
 	)
 
 	// purchase order item with cross-module resolution (price table / UOM / IPI).
@@ -674,9 +691,6 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.ListSalesOrderItemsUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.CancelSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 	)
-
-	// stock management
-	stockRepository := stockRepo.NewStockRepositorySQLC(app.db.Pool)
 
 	// cutting plan (plano de corte — fase 1: 1D; fase 2: firmar/baixa + retalhos)
 	cuttingPlanUC := cutting_plan_uc.NewCuttingPlanUseCase(cuttingPlanRepo, stockRepository, itemRepo)
@@ -1241,6 +1255,65 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/approve", purchaseSuggestionHandler.Approve)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/reject", purchaseSuggestionHandler.Reject)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items", purchaseOrderItemHandler.AddItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/receipts", purchaseOrderHandler.Receive)
+			// Alçada de valores: approve evaluates the limit; authorize releases a
+			// blocked order and is restricted to a higher authority (ADMIN).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/approve", purchaseOrderHandler.Approve)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{code}/authorize", purchaseOrderHandler.Authorize)
+		})
+		r.Route("/api/procurement", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/records", procurementHandler.CreateRecord)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/records", procurementHandler.ListRecords)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/records/{id}", procurementHandler.GetRecord)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/records/{id}/status", procurementHandler.UpdateStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspections/{id}/disposition", procurementHandler.DisposeInspection)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/supplier-scorecards", procurementHandler.CreateSupplierScorecard)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suppliers/{supplierCode}/scorecards", procurementHandler.ListSupplierScorecards)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-routes", procurementHandler.CreateReceivingInspectionRoute)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-routes/{id}", procurementHandler.GetReceivingInspectionRoute)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders", procurementHandler.GenerateReceivingInspectionOrder)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders", procurementHandler.ListReceivingInspectionOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/results", procurementHandler.RecordReceivingInspectionResult)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/analysis", procurementHandler.AnalyzeReceivingInspectionOrder)
+			// IQF auto-computation from real inspection/delivery data.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/supplier-scorecards/compute", procurementHandler.ComputeSupplierScorecard)
+			// Alçada de valores (approval limits).
+			r.With(httpmw.RequireRole("ADMIN")).Post("/approval-limits", procurementHandler.CreateApprovalLimit)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/approval-limits", procurementHandler.ListApprovalLimits)
+			// Contratos de fornecedores.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/supplier-contracts", procurementHandler.CreateSupplierContract)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier-contracts", procurementHandler.ListSupplierContracts)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier-contracts/{id}", procurementHandler.GetSupplierContract)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/supplier-contracts/{id}/status", procurementHandler.UpdateSupplierContractStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/supplier-contracts/{id}/consume", procurementHandler.ConsumeSupplierContract)
+			// Histórico consolidado de movimentações de compra.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/purchase-movements", procurementHandler.ListPurchaseMovementHistory)
+			// Aviso de recebimento + divergências (FAVR).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-notices", procurementHandler.CreateReceivingNotice)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-notices", procurementHandler.ListReceivingNotices)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-notices/{id}", procurementHandler.GetReceivingNotice)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/receiving-notices/{id}/status", procurementHandler.UpdateReceivingNoticeStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-divergences", procurementHandler.CreateReceivingDivergence)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-divergences", procurementHandler.ListReceivingDivergences)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/receiving-divergences/{id}/resolution", procurementHandler.ResolveReceivingDivergence)
+			// EDI de fornecedores (FEDS).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/edi-messages", procurementHandler.CreateEDIMessage)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/edi-messages", procurementHandler.ListEDIMessages)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/edi-messages/{id}", procurementHandler.GetEDIMessage)
+			// Importação / nacionalização com custo (FREC0203 / FIMP).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/import-processes", procurementHandler.CreateImportProcess)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/import-processes", procurementHandler.ListImportProcesses)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/import-processes/{id}", procurementHandler.GetImportProcess)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/import-processes/{id}/recompute", procurementHandler.RecomputeImportProcess)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/import-processes/{id}/status", procurementHandler.UpdateImportProcessStatus)
+			// Parâmetros de suprimentos (FUTL0125).
+			r.With(httpmw.RequireRole("ADMIN")).Put("/parameters", procurementHandler.UpsertParameter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters", procurementHandler.ListParameters)
+			// Homologação de fornecedor (FAVF0203).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/supplier-homologations", procurementHandler.CreateSupplierHomologation)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suppliers/{supplierCode}/homologations", procurementHandler.ListSupplierHomologations)
+			// Geração de itens por fornecedor a partir do histórico (FFOR0204).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suppliers/{supplierCode}/generate-items", procurementHandler.GenerateItemSuppliers)
 		})
 		r.Route("/api/sales-forecast", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesForecastHandler.CreateForecast)

@@ -1180,9 +1180,267 @@ solicitante, contrato, cotação e tipo de utilização
 
 - `POST /api/purchase-order/create` — capa (com defaults do fornecedor).
 - `POST /api/purchase-order/{code}/items` — adicionar item (com resolução automática).
+- `POST /api/purchase-order/{code}/receipts` — registrar recebimento físico por
+  linha do pedido, gerar movimento `IN` no estoque e atualizar saldos/status do
+  pedido.
 - Demais: `GET /list`, `GET /{code}`, `PUT /{code}`, `DELETE /{code}/cancel`,
   `GET /supplier/{supplierCode}`, `GET /status/{status}`, e o fluxo de sugestões
   (`/suggestions...`).
+
+### Recebimento físico de compra
+
+O recebimento operacional usa o item do pedido (`purchase_order_item_code`) como
+chave, e não apenas o código do item, para preservar diferenças de preço, entrega,
+utilização e centro de custo quando o mesmo item aparece em mais de uma linha.
+
+Exemplo:
+
+```json
+{
+  "notes": "Recebimento conferido na portaria",
+  "items": [
+    {
+      "purchase_order_item_code": 987,
+      "quantity": 120,
+      "warehouse_id": 1,
+      "lot": "L-2026-07",
+      "batch": "B-44",
+      "expiration_date": "2027-07-03"
+    }
+  ]
+}
+```
+
+Para cada linha recebida o sistema:
+
+1. valida se a linha pertence ao pedido e se ainda possui saldo;
+2. calcula a quantidade de estoque pela conversão interna do pedido, quando houver;
+3. cria movimento de estoque `IN` com referência `PURCHASE_ORDER`;
+4. soma a quantidade recebida na linha e recalcula status da linha/pedido
+   (`OPEN`, `PARTIAL`, `RECEIVED`).
+
+Quando o recebimento vier da NF-e de entrada, o fluxo fiscal continua podendo usar
+o abatimento por `item_code`; para operação de almoxarifado, o endpoint por linha é
+o fluxo recomendado.
+
+### Maturidade operacional de suprimentos
+
+Migration `000182` adiciona uma camada de rotinas operacionais em
+`procurement_records`, cobrindo os fluxos pós-pedido que faltavam para aproximar o
+módulo de ERPs industriais maduros sem carregar códigos ou nomenclatura de telas de
+terceiros no backend.
+
+Tipos de registro:
+
+| Tipo | Uso |
+|---|---|
+| `RECEIVING_INSPECTION` | Ordem/laudo de inspeção de recebimento e quarentena. |
+| `RECEIVING_NOTICE` | Aviso de recebimento, agenda, bloqueios e divergências. |
+| `SUPPLIER_EVALUATION` | Eventos que alimentam avaliação de fornecedor. |
+| `APPROVAL_LIMIT` | Política de alçada por valor, comprador, centro de custo ou categoria. |
+| `SUPPLIER_CONTRACT` | Contrato, vigência, SLA, preço/condição negociada e itens. |
+| `RECEIVING_CHECKLIST` | Checklist documental/físico de recebimento. |
+| `RECEIVING_LABEL` | Etiquetas de recebimento/inspeção por lote, volume, corrida ou posição. |
+| `SUPPLIER_EDI` | Mensagens EDI de fornecedor, confirmações e divergências. |
+| `IMPORT_PROCESS` | Processo de importação/nacionalização e custos associados. |
+
+Endpoints:
+
+- `POST /api/procurement/records` — cria registro operacional.
+- `GET /api/procurement/records?type=...&status=...` — lista por tipo/status.
+- `GET /api/procurement/records/{id}` — consulta registro.
+- `PATCH /api/procurement/records/{id}/status` — altera status.
+- `POST /api/procurement/receiving-inspections/{id}/disposition` — aponta
+  aprovação/rejeição de inspeção. Quando há quantidade aprovada, o sistema transfere
+  da quarentena para o depósito disponível; quando há rejeição e depósito informado,
+  transfere para o depósito de bloqueio/devolução.
+- `POST /api/procurement/supplier-scorecards` — grava snapshot de IQF.
+- `GET /api/procurement/suppliers/{supplierCode}/scorecards` — consulta histórico
+  de IQF do fornecedor.
+
+O IQF é calculado como ponderação inicial: qualidade 40%, entrega 30%, comercial 20%
+e atendimento 10%. Essa fórmula fica explícita para a fábrica ajustar pesos por
+criticidade de material ou família de fornecedor.
+
+#### Inspeção de recebimento estruturada
+
+Migration `000183` evolui a inspeção de recebimento de um registro operacional para
+um fluxo com roteiro, ordem, apontamento e análise:
+
+- `receiving_inspection_routes`: roteiro válido por item ou classificação de
+  suprimentos, com almoxarifado de inspeção, manuseio, armazenamento, tipo de
+  roteiro, tipo de mercado, tipo de inspeção e vigência.
+- `receiving_inspection_route_steps`: sequência de inspeções do roteiro. Cada etapa
+  define espécie (`VALUE`, `ATTRIBUTE`, `STRUCTURE`), forma de apontamento
+  (`ALL_MEASUREMENTS`, `SINGLE_INTERVAL`, `MULTIPLE_INTERVAL`, `STATUS_ONLY`),
+  obrigatoriedade, emissão de etiqueta, grupo de instrumentos, amostra, norma,
+  referência, valor nominal, mínimo e máximo.
+- `receiving_inspection_step_attributes`: atributos aprovadores/reprovadores para
+  inspeções por atributo.
+- `receiving_inspection_orders`: ordem de inspeção gerada por recebimento físico,
+  aviso, entrada fiscal ou geração manual.
+- `receiving_inspection_results`: apontamentos de medição/status por sequência e
+  amostra.
+- `receiving_inspection_analyses`: análise de não conformidade com quantidade
+  conforme, rejeitada, retrabalho/conserto, aprovada com restrição e tratamento que
+  pode alimentar avaliação de fornecedor.
+
+Endpoints:
+
+- `POST /api/procurement/receiving-inspection-routes`
+- `GET /api/procurement/receiving-inspection-routes/{id}`
+- `POST /api/procurement/receiving-inspection-orders`
+- `GET /api/procurement/receiving-inspection-orders?status=PENDING_INSPECTION`
+- `POST /api/procurement/receiving-inspection-orders/{id}/results`
+- `POST /api/procurement/receiving-inspection-orders/{id}/analysis`
+
+Ao gerar uma ordem, o sistema busca primeiro um roteiro válido por item/máscara e,
+se não houver, por classificação de suprimentos do nível mais específico para o mais
+genérico. Isso preserva o fluxo de fábrica: itens críticos podem ter medições
+próprias e famílias menos críticas podem herdar um roteiro por classificação.
+
+A análise da inspeção agora **fecha o ciclo com o estoque**. Enviando
+`"move_stock": true` no corpo de `.../analysis`, as quantidades analisadas saem do
+almoxarifado de inspeção da ordem (`warehouse_id`) por transferência
+`TRANSFER_OUT`/`TRANSFER_IN` (referência `RECEIVING_INSPECTION_ANALYSIS`):
+
+- conforme (`conform_qty`) e aprovada com restrição (`restricted_qty`) vão para o
+  almoxarifado disponível (`destination_warehouse_id`); a restrita pode ter destino
+  próprio via `restricted_warehouse_id`;
+- retrabalho/conserto (`rework_qty`) vai para `rework_warehouse_id`;
+- rejeitada (`rejected_qty`) vai para `rejection_warehouse_id` (bloqueado/devolução).
+
+Quantidades zeradas, destinos ausentes e transferências para o próprio almoxarifado
+de inspeção são ignorados; a soma analisada não pode exceder a quantidade da ordem.
+As movimentações geradas voltam em `movements` na resposta. Sem `move_stock`, a
+análise apenas registra as quantidades e o tratamento (comportamento anterior),
+mantendo compatibilidade. Isso substitui, no caminho estruturado, a antiga
+disposição genérica que só existia sobre `procurement_records`.
+
+#### Inspeção automática no recebimento (FINS0212)
+
+O recebimento físico por linha (`POST /api/purchase-order/{code}/receipts`) agora
+consulta se há **roteiro de inspeção ativo** para o item. Se houver, a mercadoria é
+recebida no **almoxarifado de inspeção do roteiro** (em vez do almoxarifado pedido) e
+uma **ordem de inspeção** é aberta automaticamente com origem `PURCHASE_RECEIPT`,
+vinculada ao fornecedor e à linha do pedido. A resposta traz `inspection_orders` e
+marca cada linha com `under_inspection`. Assim, matéria-prima crítica nunca cai
+direto no estoque disponível — segue o ciclo inspeção→análise→estoque. Quando não há
+roteiro, o recebimento segue direto para o almoxarifado pedido (comportamento
+anterior). A integração é um gancho opcional (`ReceivingInspectionGate`); o pacote de
+pedido de compra não depende do pacote de procurement.
+
+#### IQF auto-calculado (avaliação de fornecedor a partir de dados reais)
+
+`POST /api/procurement/supplier-scorecards/compute` deriva as notas objetivas do
+fornecedor no período em vez de digitação manual:
+
+- **qualidade** = (quantidade inspecionada − rejeitada) / inspecionada, das ordens de
+  inspeção do período;
+- **entrega** = (recebimentos − atrasados) / recebimentos, comparando a data de
+  recebimento da linha com a data prometida/prevista;
+- **comercial** e **atendimento** continuam manuais (default 100) por não terem fonte
+  objetiva ainda.
+
+O IQF final mantém a ponderação 40/30/20/10. Com `persist: true` o scorecard é
+gravado; sem, apenas retorna o cálculo (`computed: true`).
+
+#### Alçada de valores (FALC) com bloqueio real
+
+Migration `000184` cria `purchase_approval_limits`. Uma regra tem escopo
+(`GLOBAL`, `SUPPLIER`, `COST_CENTER`, `CATEGORY`), um teto de auto-aprovação
+(`auto_approve_max`) e um teto absoluto opcional (`block_above`). O fluxo usa o campo
+`alcada_status` já existente no pedido (A/B/R):
+
+- `POST /api/purchase-order/{code}/approve` avalia o total do pedido contra a regra
+  mais específica aplicável (fornecedor → centro de custo → categoria → global). Se
+  estiver no limite, aprova (`status=APPROVED`, `alcada_status=A`); se acima do teto,
+  bloqueia aguardando autorização (`alcada_status=B`); se acima do teto absoluto,
+  rejeita (`alcada_status=R`).
+- `POST /api/purchase-order/{code}/authorize` (restrito a ADMIN) libera um pedido
+  bloqueado. Sem regra cadastrada, não há controle de alçada (auto-aprova).
+
+A política é um gancho (`ApprovalPolicy`) implementado pelo procurement; o pedido de
+compra só conhece a interface.
+
+#### Contratos de fornecedores (FCON) normalizados
+
+Migration `000184` cria `supplier_contracts` (capa: número, status, vigência, moeda,
+índice de reajuste) e `supplier_contract_items` (linhas com quantidade contratada,
+consumida, preço e pedido mínimo). Endpoints em `/api/procurement/supplier-contracts`
+criam/consultam/mudam status e **consomem saldo** (`.../consume`) de forma atômica —
+o consumo é rejeitado se exceder o saldo contratado, e só é permitido em contrato
+`ACTIVE`. O campo `contract_code` já existente na linha do pedido de compra passa a
+ter respaldo em dados reais de saldo. `remaining_qty` é exposto por linha.
+
+#### Histórico consolidado de movimentações de compra (CPDC0403)
+
+`GET /api/procurement/purchase-movements` agrega linhas de pedido com
+solicitado/recebido/cancelado/aberto, preço e datas, filtrável por fornecedor e item,
+para análise de desempenho de comprador e fornecedor.
+
+### Fechamento de Suprimentos (migration `000185`)
+
+Esta migração normaliza as últimas rotinas que ainda eram registro genérico e fecha o
+setor no backend para o cliente metalúrgico/moveleiro.
+
+#### Aviso de recebimento + divergências (FAVR)
+
+`receiving_notices` (+ `receiving_notice_items`) modela a **agenda de doca** e a
+conferência antes da NF: fornecedor, pedido, transportadora, doca, data agendada,
+número da NF e status (`SCHEDULED`→`ARRIVED`→`IN_CONFERENCE`→`RELEASED`/`BLOCKED`/
+`CANCELLED`), com flag `blocked`. `receiving_divergences` registra formalmente
+**falta, sobra, avaria, item errado, preço, documento, atraso** com quantidades
+esperada/real, preço esperado/real, `affects_supplier_score` e uma **resolução**
+(`ACCEPTED`/`PARTIAL_RETURN`/`FULL_RETURN`/`WAIVED`/`SUPPLIER_DEBIT`). Consultável por
+fornecedor e resolução — alimenta o IQF. Endpoints em `/api/procurement/
+receiving-notices` e `/receiving-divergences`.
+
+#### EDI de fornecedores estruturado (FEDS)
+
+`supplier_edi_messages` (+ `supplier_edi_lines`) guarda mensagens `INBOUND`/`OUTBOUND`
+tipadas (`ORDER_CONFIRMATION`, `SHIP_NOTICE`, `INVOICE`, `ORDER`). Na confirmação de
+pedido, cada linha traz os valores confirmados pelo fornecedor e os valores de
+referência do pedido (`po_qty`/`po_price`/`po_date`); o domínio
+`DetectEDILineDivergence` compara com tolerância e marca **QTY/PRICE/DATE** por linha,
+contando as divergências e definindo o status da mensagem (`PROCESSED` /
+`WITH_DIVERGENCE` / `SENT`). O parser de arquivo de VAN e a emissão fiscal automática
+por EDI permanecem como integração externa; a estrutura de mensagem e a conferência
+já existem.
+
+#### Importação com custo nacionalizado (FREC0203 / FIMP)
+
+`import_processes` (+ `import_process_items`, `import_expenses`) modela o processo de
+importação com moeda, câmbio, incoterm e referência de DI/DUIMP. As despesas marcadas
+`in_item_cost` são **rateadas** entre os itens pela base escolhida (`VALUE`, `WEIGHT`
+ou `QUANTITY`) e compõem o **custo nacionalizado por item** (`landed_unit_cost`),
+calculado por `entity.ComputeLandedCosts` (FOB convertido pelo câmbio + rateio das
+despesas ÷ quantidade). `/recompute` recalcula após ajustes e `/status` nacionaliza.
+O cálculo é função pura testada (valor exato: FOB 10×2 e 10×6 @câmbio 5 com frete 400
+por valor ⇒ unitários 20 e 60).
+
+#### Parâmetros de suprimentos (FUTL0125)
+
+`procurement_parameters` é um painel único (chave/valor tipado por domínio e empresa,
+com `UPSERT`) que cobre os parâmetros de tabela de compra, pedido, cotação,
+solicitação, aviso, inspeção, avaliação, contrato, fornecedor e NF de entrada
+(`domain` = `PURCHASE_TABLE|PURCHASE_ORDER|QUOTATION|REQUISITION|RECEIVING_NOTICE|
+INSPECTION|SUPPLIER_EVALUATION|CONTRACT|SUPPLIER|NF_ENTRY`). Escrita restrita a ADMIN.
+
+#### Homologação de fornecedor (FAVF0203)
+
+`supplier_homologations` grava a decisão de homologação: sem `status`, o sistema
+calcula o IQF do período e deriva `HOMOLOGATED`/`CONDITIONAL`/`REJECTED` por faixas
+(`homologated_min`/`conditional_min`, default 80/60) via
+`entity.HomologationStatusForIQF`; com `status`, grava a decisão manual. Guarda IQF,
+categoria e validade.
+
+#### Geração de itens por fornecedor (FFOR0204)
+
+`POST /api/procurement/suppliers/{code}/generate-items` cria, em uma única instrução
+`INSERT … SELECT … ON CONFLICT DO NOTHING`, os vínculos `item_preferred_suppliers`
+para todos os itens já comprados daquele fornecedor que ainda não estavam ligados,
+retornando quantos foram criados.
 
 ---
 
@@ -1312,9 +1570,11 @@ proporção à quantidade produzida.
 No `POST /api/production-order/appointment`, informando `backflush_warehouse_id`,
 o sistema resolve a BOM do item da OF (`GetDirectChildrenForMask` quando há
 máscara, senão `GetAllDirectChildren`) e gera um movimento **`OUT`** por componente:
-`consumo = qtd_produzida × qtd_componente × (1 + perda%/100)` (fórmula 1). Os
-movimentos atualizam o saldo (ver Estoque). Omitir `backflush_warehouse_id`
-desliga o backflush para aquele apontamento. Implementado em
+`consumo = qtd_produzida × qtd_componente × (1 + perda%/100)` (fórmula 1). Componentes
+`is_fixed_qty` usam base 1 (consumo por OF/lote), `is_coproduct` não é baixado como
+insumo, e grupos de substitutos consomem somente o primário (`substitute_priority`
+menor). Os movimentos atualizam o saldo (ver Estoque). Omitir
+`backflush_warehouse_id` desliga o backflush para aquele apontamento. Implementado em
 `production_order_uc/add_appointment_uc.go`.
 
 ## 19. Expedição / Carregamento (romaneio) — migration 000146

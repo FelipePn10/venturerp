@@ -128,6 +128,46 @@ func TestGenerateFromOrders_1D_AggregatesAndResolvesMaterial(t *testing.T) {
 	}
 }
 
+func TestGenerateFromOrders_SelectsPrimarySubstituteForCutDemand(t *testing.T) {
+	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: 1}}
+	str := &fakeStruct{children: map[int64][]*strent.ItemStructure{
+		1000: {
+			{ParentCode: 1000, ChildCode: 2100, ChildDescription: "Alternativa B", Quantity: 99, SubstituteGroup: 1, SubstitutePriority: 2},
+			{ParentCode: 1000, ChildCode: 2000, ChildDescription: "Alternativa A", Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 1},
+			{ParentCode: 1000, ChildCode: 3000, ChildDescription: "Sucata", Quantity: 1, IsCoproduct: true},
+		},
+		2000: {{ParentCode: 2000, ChildCode: 5000, Quantity: 1}},
+		2100: {{ParentCode: 2100, ChildCode: 6000, Quantity: 1}},
+	}}
+	items := &fakeItems{items: map[int64]*itementity.Item{
+		1000: itemWithDims(1000, 0, 0, 0, 1, types.UN),
+		2000: itemWithDims(2000, 720, 0, 0, 3, types.UN),
+		2100: itemWithDims(2100, 800, 0, 0, 3, types.UN),
+		3000: itemWithDims(3000, 500, 0, 0, 3, types.UN),
+		5000: itemWithDims(5000, 6000, 0, 0, 9, types.M),
+		6000: itemWithDims(6000, 6000, 0, 0, 9, types.M),
+	}}
+	cut := &fakeCut{nextCode: 900}
+
+	uc := NewDemandUseCase(cut, items, str, prod, &struct {
+		plannedrepo.PlannedOrderRepository
+	}{})
+
+	res, err := uc.GenerateFromOrders(context.Background(), request.GenerateCuttingFromOrdersDTO{
+		ProductionOrderCodes: []int64{77},
+		WarehouseID:          func() *int64 { v := int64(7); return &v }(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Plans) != 1 {
+		t.Fatalf("expected 1 plan for primary substitute only, got %d (warnings: %v)", len(res.Plans), res.Warnings)
+	}
+	if len(cut.parts) != 1 || cut.parts[0].LengthMM != 720 || cut.parts[0].Quantity != 2 {
+		t.Fatalf("cut demand should use only primary substitute: %+v", cut.parts)
+	}
+}
+
 func TestGenerateFromOrders_RequiresOrders(t *testing.T) {
 	uc := NewDemandUseCase(&fakeCut{}, &fakeItems{}, &fakeStruct{}, &fakeProd{}, &struct {
 		plannedrepo.PlannedOrderRepository

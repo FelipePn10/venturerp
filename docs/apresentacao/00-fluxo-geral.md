@@ -99,7 +99,11 @@ As sugestões passam por uma decisão humana:
 - **Produção/PCP** confirma ("firma") as sugestões de fabricação → vira **Ordem de Produção**.
 
 ### Etapa 6 — Recebimento da compra
-Quando a matéria-prima chega, a **nota fiscal do fornecedor** é importada. O sistema reconhece o fornecedor, **dá entrada no estoque** e **baixa o pedido de compra** automaticamente.
+Quando a matéria-prima chega, o almoxarifado pode registrar o **recebimento físico**
+por linha do pedido, informando depósito, lote, série, validade e observações. O
+sistema já dá entrada no estoque e atualiza o pedido como parcial ou recebido.
+Depois, a **nota fiscal do fornecedor** é importada para fechar a parte fiscal e
+financeira.
 
 ### Etapa 7 — Fabricação
 A ordem de produção é executada no chão de fábrica: **inicia**, **consome** a matéria-prima (que sai do estoque), **aponta** o tempo e a quantidade produzida e **conclui** — quando o produto acabado **entra no estoque**.
@@ -124,6 +128,7 @@ Estas etapas acontecem **automaticamente**, sem digitação manual:
 | Roda o **planejamento** | Encadeia MRP → CRP → APS num clique e devolve um parecer de viabilidade |
 | **Compras aprova** uma sugestão | Gera o Pedido de Compra com o fornecedor preferencial e suas condições |
 | **Produção firma** uma sugestão | Gera a Ordem de Produção já com item, máquina e datas |
+| **Almoxarifado recebe** uma compra | Dá entrada no estoque por linha do pedido e atualiza o status da compra |
 | **Importa a NF** do fornecedor | Dá entrada no estoque e baixa o pedido de compra |
 | **Consumo** na produção | Baixa a matéria-prima do estoque |
 | **Conclusão** da produção | Dá entrada do produto acabado no estoque |

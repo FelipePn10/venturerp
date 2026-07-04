@@ -19,6 +19,8 @@ type PurchaseOrderHandler struct {
 	listBySupplierUC *purchase_order_uc.ListPurchaseOrdersBySupplierUseCase
 	listByStatusUC   *purchase_order_uc.ListPurchaseOrdersByStatusUseCase
 	cancelUC         *purchase_order_uc.CancelPurchaseOrderUseCase
+	receiveUC        *purchase_order_uc.ReceivePurchaseOrderUseCase
+	approveUC        *purchase_order_uc.ApprovePurchaseOrderUseCase
 }
 
 func NewPurchaseOrderHandler(
@@ -29,6 +31,8 @@ func NewPurchaseOrderHandler(
 	listBySupplierUC *purchase_order_uc.ListPurchaseOrdersBySupplierUseCase,
 	listByStatusUC *purchase_order_uc.ListPurchaseOrdersByStatusUseCase,
 	cancelUC *purchase_order_uc.CancelPurchaseOrderUseCase,
+	receiveUC *purchase_order_uc.ReceivePurchaseOrderUseCase,
+	approveUC *purchase_order_uc.ApprovePurchaseOrderUseCase,
 ) *PurchaseOrderHandler {
 	return &PurchaseOrderHandler{
 		createUC:         createUC,
@@ -38,7 +42,37 @@ func NewPurchaseOrderHandler(
 		listBySupplierUC: listBySupplierUC,
 		listByStatusUC:   listByStatusUC,
 		cancelUC:         cancelUC,
+		receiveUC:        receiveUC,
+		approveUC:        approveUC,
 	}
+}
+
+func (h *PurchaseOrderHandler) Approve(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	result, err := h.approveUC.Execute(r.Context(), code)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *PurchaseOrderHandler) Authorize(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	result, err := h.approveUC.Authorize(r.Context(), code)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func (h *PurchaseOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -137,4 +171,25 @@ func (h *PurchaseOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *PurchaseOrderHandler) Receive(w http.ResponseWriter, r *http.Request) {
+	codeStr := chi.URLParam(r, "code")
+	code, err := strconv.ParseInt(codeStr, 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	var dto request.ReceivePurchaseOrderDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	dto.PurchaseOrderCode = code
+	result, err := h.receiveUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }

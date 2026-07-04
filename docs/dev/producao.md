@@ -57,7 +57,8 @@ Corpo de `/operations/advance`: `{ "operation_id": 123, "status": "IN_PROGRESS",
 `IN_PROGRESS` carimba `started_at`; `DONE`/`SKIPPED` carimbam `completed_at`.
 
 > ✅ **Backflush:** no apontamento com `backflush_warehouse_id`, os componentes da BOM
-> são baixados automaticamente, proporcional à qtd produzida. Ver
+> são baixados automaticamente, proporcional à qtd produzida. Respeita quantidade fixa
+> por OF, ignora co-produtos e usa o componente primário de grupos substitutos. Ver
 > [`manufatura-e-compras.md`](manufatura-e-compras.md) §18.
 
 ---

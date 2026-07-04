@@ -27,10 +27,10 @@ func TestIntegration_CostRollup_CoproductAndFixedQty(t *testing.T) {
 	ctx := context.Background()
 	uid := uuid.New()
 
-	p := testutil.UniqueCode()  // parent (manufactured)
-	a := testutil.UniqueCode()  // normal input
-	b := testutil.UniqueCode()  // by-product (output)
-	c := testutil.UniqueCode()  // fixed-qty component
+	p := testutil.UniqueCode() // parent (manufactured)
+	a := testutil.UniqueCode() // normal input
+	b := testutil.UniqueCode() // by-product (output)
+	c := testutil.UniqueCode() // fixed-qty component
 	for _, code := range []int64{p, a, b, c} {
 		testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", code, code, uid)
 	}

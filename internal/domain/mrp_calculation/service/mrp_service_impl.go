@@ -1443,7 +1443,12 @@ func buildLLCFromBOM(bomMap map[int64][]*structentity.ItemStructure, rootItems [
 			return
 		}
 		llcMap[itemCode] = level
-		for _, child := range bomMap[itemCode] {
+		for _, child := range structentity.SelectPrimarySubstituteComponents(bomMap[itemCode]) {
+			// Co-products are outputs, not lower-level components — skip so they
+			// don't get a misleading (deeper) low-level code.
+			if child.IsCoproduct {
+				continue
+			}
 			assignLLC(child.ChildCode, level+1)
 		}
 	}
@@ -1479,11 +1484,17 @@ func explodeFromBOMWithFormula(
 		return nil
 	}
 	children := bomMap[parentCode]
-	inputs := make([]*entity.MRPInput, 0, len(children))
+	applicable := make([]*structentity.ItemStructure, 0, len(children))
 	for _, child := range children {
 		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
 			continue
 		}
+		applicable = append(applicable, child)
+	}
+
+	selectedChildren := structentity.SelectPrimarySubstituteComponents(applicable)
+	inputs := make([]*entity.MRPInput, 0, len(selectedChildren))
+	for _, child := range selectedChildren {
 		// Co-products/by-products/scrap are OUTPUTS, not consumed inputs → no demand.
 		if child.IsCoproduct {
 			continue
@@ -1716,4 +1727,3 @@ func mpsPeriodToDate(periodType string, periodValue, year int) time.Time {
 		return time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
 	}
 }
-

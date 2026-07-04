@@ -1696,6 +1696,369 @@ func (ns NullPriceSituationEnum) Value() (driver.Value, error) {
 	return string(ns.PriceSituationEnum), nil
 }
 
+type ProcurementRecordStatus string
+
+const (
+	ProcurementRecordStatusDRAFT     ProcurementRecordStatus = "DRAFT"
+	ProcurementRecordStatusOPEN      ProcurementRecordStatus = "OPEN"
+	ProcurementRecordStatusINREVIEW  ProcurementRecordStatus = "IN_REVIEW"
+	ProcurementRecordStatusAPPROVED  ProcurementRecordStatus = "APPROVED"
+	ProcurementRecordStatusREJECTED  ProcurementRecordStatus = "REJECTED"
+	ProcurementRecordStatusPARTIAL   ProcurementRecordStatus = "PARTIAL"
+	ProcurementRecordStatusCLOSED    ProcurementRecordStatus = "CLOSED"
+	ProcurementRecordStatusCANCELLED ProcurementRecordStatus = "CANCELLED"
+)
+
+func (e *ProcurementRecordStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ProcurementRecordStatus(s)
+	case string:
+		*e = ProcurementRecordStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ProcurementRecordStatus: %T", src)
+	}
+	return nil
+}
+
+type NullProcurementRecordStatus struct {
+	ProcurementRecordStatus ProcurementRecordStatus
+	Valid                   bool // Valid is true if ProcurementRecordStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullProcurementRecordStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.ProcurementRecordStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ProcurementRecordStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullProcurementRecordStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ProcurementRecordStatus), nil
+}
+
+type ProcurementRecordType string
+
+const (
+	ProcurementRecordTypeRECEIVINGINSPECTION ProcurementRecordType = "RECEIVING_INSPECTION"
+	ProcurementRecordTypeRECEIVINGNOTICE     ProcurementRecordType = "RECEIVING_NOTICE"
+	ProcurementRecordTypeSUPPLIEREVALUATION  ProcurementRecordType = "SUPPLIER_EVALUATION"
+	ProcurementRecordTypeAPPROVALLIMIT       ProcurementRecordType = "APPROVAL_LIMIT"
+	ProcurementRecordTypeSUPPLIERCONTRACT    ProcurementRecordType = "SUPPLIER_CONTRACT"
+	ProcurementRecordTypeRECEIVINGCHECKLIST  ProcurementRecordType = "RECEIVING_CHECKLIST"
+	ProcurementRecordTypeRECEIVINGLABEL      ProcurementRecordType = "RECEIVING_LABEL"
+	ProcurementRecordTypeSUPPLIEREDI         ProcurementRecordType = "SUPPLIER_EDI"
+	ProcurementRecordTypeIMPORTPROCESS       ProcurementRecordType = "IMPORT_PROCESS"
+)
+
+func (e *ProcurementRecordType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ProcurementRecordType(s)
+	case string:
+		*e = ProcurementRecordType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ProcurementRecordType: %T", src)
+	}
+	return nil
+}
+
+type NullProcurementRecordType struct {
+	ProcurementRecordType ProcurementRecordType
+	Valid                 bool // Valid is true if ProcurementRecordType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullProcurementRecordType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ProcurementRecordType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ProcurementRecordType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullProcurementRecordType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ProcurementRecordType), nil
+}
+
+type ReceivingInspectionAppointmentMode string
+
+const (
+	ReceivingInspectionAppointmentModeALLMEASUREMENTS  ReceivingInspectionAppointmentMode = "ALL_MEASUREMENTS"
+	ReceivingInspectionAppointmentModeSINGLEINTERVAL   ReceivingInspectionAppointmentMode = "SINGLE_INTERVAL"
+	ReceivingInspectionAppointmentModeMULTIPLEINTERVAL ReceivingInspectionAppointmentMode = "MULTIPLE_INTERVAL"
+	ReceivingInspectionAppointmentModeSTATUSONLY       ReceivingInspectionAppointmentMode = "STATUS_ONLY"
+)
+
+func (e *ReceivingInspectionAppointmentMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReceivingInspectionAppointmentMode(s)
+	case string:
+		*e = ReceivingInspectionAppointmentMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReceivingInspectionAppointmentMode: %T", src)
+	}
+	return nil
+}
+
+type NullReceivingInspectionAppointmentMode struct {
+	ReceivingInspectionAppointmentMode ReceivingInspectionAppointmentMode
+	Valid                              bool // Valid is true if ReceivingInspectionAppointmentMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReceivingInspectionAppointmentMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReceivingInspectionAppointmentMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReceivingInspectionAppointmentMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReceivingInspectionAppointmentMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReceivingInspectionAppointmentMode), nil
+}
+
+type ReceivingInspectionBasis string
+
+const (
+	ReceivingInspectionBasisITEM           ReceivingInspectionBasis = "ITEM"
+	ReceivingInspectionBasisCLASSIFICATION ReceivingInspectionBasis = "CLASSIFICATION"
+)
+
+func (e *ReceivingInspectionBasis) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReceivingInspectionBasis(s)
+	case string:
+		*e = ReceivingInspectionBasis(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReceivingInspectionBasis: %T", src)
+	}
+	return nil
+}
+
+type NullReceivingInspectionBasis struct {
+	ReceivingInspectionBasis ReceivingInspectionBasis
+	Valid                    bool // Valid is true if ReceivingInspectionBasis is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReceivingInspectionBasis) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReceivingInspectionBasis, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReceivingInspectionBasis.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReceivingInspectionBasis) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReceivingInspectionBasis), nil
+}
+
+type ReceivingInspectionOrderSource string
+
+const (
+	ReceivingInspectionOrderSourcePURCHASERECEIPT ReceivingInspectionOrderSource = "PURCHASE_RECEIPT"
+	ReceivingInspectionOrderSourceRECEIVINGNOTICE ReceivingInspectionOrderSource = "RECEIVING_NOTICE"
+	ReceivingInspectionOrderSourceFISCALENTRY     ReceivingInspectionOrderSource = "FISCAL_ENTRY"
+	ReceivingInspectionOrderSourceMANUAL          ReceivingInspectionOrderSource = "MANUAL"
+)
+
+func (e *ReceivingInspectionOrderSource) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReceivingInspectionOrderSource(s)
+	case string:
+		*e = ReceivingInspectionOrderSource(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReceivingInspectionOrderSource: %T", src)
+	}
+	return nil
+}
+
+type NullReceivingInspectionOrderSource struct {
+	ReceivingInspectionOrderSource ReceivingInspectionOrderSource
+	Valid                          bool // Valid is true if ReceivingInspectionOrderSource is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReceivingInspectionOrderSource) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReceivingInspectionOrderSource, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReceivingInspectionOrderSource.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReceivingInspectionOrderSource) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReceivingInspectionOrderSource), nil
+}
+
+type ReceivingInspectionOrderStatus string
+
+const (
+	ReceivingInspectionOrderStatusPENDINGINSPECTION ReceivingInspectionOrderStatus = "PENDING_INSPECTION"
+	ReceivingInspectionOrderStatusPENDINGANALYSIS   ReceivingInspectionOrderStatus = "PENDING_ANALYSIS"
+	ReceivingInspectionOrderStatusAPPROVED          ReceivingInspectionOrderStatus = "APPROVED"
+	ReceivingInspectionOrderStatusREJECTED          ReceivingInspectionOrderStatus = "REJECTED"
+	ReceivingInspectionOrderStatusPARTIAL           ReceivingInspectionOrderStatus = "PARTIAL"
+	ReceivingInspectionOrderStatusCANCELLED         ReceivingInspectionOrderStatus = "CANCELLED"
+	ReceivingInspectionOrderStatusSKIPPED           ReceivingInspectionOrderStatus = "SKIPPED"
+)
+
+func (e *ReceivingInspectionOrderStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReceivingInspectionOrderStatus(s)
+	case string:
+		*e = ReceivingInspectionOrderStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReceivingInspectionOrderStatus: %T", src)
+	}
+	return nil
+}
+
+type NullReceivingInspectionOrderStatus struct {
+	ReceivingInspectionOrderStatus ReceivingInspectionOrderStatus
+	Valid                          bool // Valid is true if ReceivingInspectionOrderStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReceivingInspectionOrderStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReceivingInspectionOrderStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReceivingInspectionOrderStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReceivingInspectionOrderStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReceivingInspectionOrderStatus), nil
+}
+
+type ReceivingInspectionStepKind string
+
+const (
+	ReceivingInspectionStepKindVALUE     ReceivingInspectionStepKind = "VALUE"
+	ReceivingInspectionStepKindATTRIBUTE ReceivingInspectionStepKind = "ATTRIBUTE"
+	ReceivingInspectionStepKindSTRUCTURE ReceivingInspectionStepKind = "STRUCTURE"
+)
+
+func (e *ReceivingInspectionStepKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReceivingInspectionStepKind(s)
+	case string:
+		*e = ReceivingInspectionStepKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReceivingInspectionStepKind: %T", src)
+	}
+	return nil
+}
+
+type NullReceivingInspectionStepKind struct {
+	ReceivingInspectionStepKind ReceivingInspectionStepKind
+	Valid                       bool // Valid is true if ReceivingInspectionStepKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReceivingInspectionStepKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReceivingInspectionStepKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReceivingInspectionStepKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReceivingInspectionStepKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReceivingInspectionStepKind), nil
+}
+
+type ReceivingInspectionTreatment string
+
+const (
+	ReceivingInspectionTreatmentACCEPTWITHRESTRICTION ReceivingInspectionTreatment = "ACCEPT_WITH_RESTRICTION"
+	ReceivingInspectionTreatmentRETURNTOSUPPLIER      ReceivingInspectionTreatment = "RETURN_TO_SUPPLIER"
+	ReceivingInspectionTreatmentSCRAP                 ReceivingInspectionTreatment = "SCRAP"
+	ReceivingInspectionTreatmentREWORK                ReceivingInspectionTreatment = "REWORK"
+	ReceivingInspectionTreatmentSORTING               ReceivingInspectionTreatment = "SORTING"
+	ReceivingInspectionTreatmentCONCESSION            ReceivingInspectionTreatment = "CONCESSION"
+)
+
+func (e *ReceivingInspectionTreatment) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReceivingInspectionTreatment(s)
+	case string:
+		*e = ReceivingInspectionTreatment(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReceivingInspectionTreatment: %T", src)
+	}
+	return nil
+}
+
+type NullReceivingInspectionTreatment struct {
+	ReceivingInspectionTreatment ReceivingInspectionTreatment
+	Valid                        bool // Valid is true if ReceivingInspectionTreatment is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReceivingInspectionTreatment) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReceivingInspectionTreatment, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReceivingInspectionTreatment.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReceivingInspectionTreatment) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReceivingInspectionTreatment), nil
+}
+
 type RestrictionConditionEnum string
 
 const (
@@ -4017,6 +4380,47 @@ type IcmsSummaryEntryNote struct {
 	ObsCodeC190     bool
 }
 
+type ImportExpense struct {
+	ID          int64
+	ProcessID   int64
+	ExpenseType string
+	Amount      pgtype.Numeric
+	InItemCost  bool
+	Notes       pgtype.Text
+}
+
+type ImportProcess struct {
+	ID                int64
+	EnterpriseCode    int64
+	ProcessNumber     *int64
+	SupplierCode      *int64
+	PurchaseOrderCode *int64
+	Reference         pgtype.Text
+	Incoterm          pgtype.Text
+	Currency          string
+	ExchangeRate      pgtype.Numeric
+	ApportionBasis    string
+	Status            string
+	Notes             pgtype.Text
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	NationalizedAt    pgtype.Timestamptz
+}
+
+type ImportProcessItem struct {
+	ID                  int64
+	ProcessID           int64
+	ItemCode            int64
+	Mask                string
+	Quantity            pgtype.Numeric
+	Weight              pgtype.Numeric
+	FobUnitPrice        pgtype.Numeric
+	ApportionedExpenses pgtype.Numeric
+	LandedUnitCost      pgtype.Numeric
+	Notes               pgtype.Text
+}
+
 type IndependentDemand struct {
 	ID             int64
 	Code           int64
@@ -4320,26 +4724,28 @@ type ItemStandardCost struct {
 }
 
 type ItemStructure struct {
-	ID                int64
-	ParentMask        pgtype.Text
-	Quantity          float64
-	UnitOfMeasurement UnitOfMeasurementEnum
-	LossPercentage    float64
-	Sequence          int32
-	Notes             pgtype.Text
-	IsActive          bool
-	CreatedBy         pgtype.UUID
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-	ParentCode        int64
-	ChildCode         int64
-	Health            HealthEnum
-	Inherit           bool
-	StartDate         pgtype.Date
-	EndDate           pgtype.Date
-	LossFormula       pgtype.Text
-	IsCoproduct       bool
-	IsFixedQty        bool
+	ID                 int64
+	ParentMask         pgtype.Text
+	Quantity           float64
+	UnitOfMeasurement  UnitOfMeasurementEnum
+	LossPercentage     float64
+	Sequence           int32
+	Notes              pgtype.Text
+	IsActive           bool
+	CreatedBy          pgtype.UUID
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	ParentCode         int64
+	ChildCode          int64
+	Health             HealthEnum
+	Inherit            bool
+	StartDate          pgtype.Date
+	EndDate            pgtype.Date
+	LossFormula        pgtype.Text
+	IsCoproduct        bool
+	IsFixedQty         bool
+	SubstituteGroup    int16
+	SubstitutePriority int16
 }
 
 type ItemUnitConversion struct {
@@ -4867,6 +5273,49 @@ type PlanoConta struct {
 	CreatedAt  pgtype.Timestamptz
 }
 
+type ProcurementInspectionDisposition struct {
+	ID                     int64
+	RecordID               int64
+	ApprovedQty            pgtype.Numeric
+	RejectedQty            pgtype.Numeric
+	QuarantineWarehouseID  *int64
+	DestinationWarehouseID *int64
+	Reason                 pgtype.Text
+	DisposedAt             pgtype.Timestamptz
+	DisposedBy             pgtype.UUID
+}
+
+type ProcurementParameter struct {
+	ID             int64
+	EnterpriseCode int64
+	Domain         string
+	ParamKey       string
+	ParamValue     string
+	ValueType      string
+	Description    pgtype.Text
+	UpdatedBy      pgtype.UUID
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type ProcurementRecord struct {
+	ID                    int64
+	RecordType            ProcurementRecordType
+	Status                ProcurementRecordStatus
+	SupplierCode          *int64
+	PurchaseOrderCode     *int64
+	PurchaseOrderItemCode *int64
+	ItemCode              *int64
+	Mask                  string
+	WarehouseID           *int64
+	Quantity              pgtype.Numeric
+	Reference             pgtype.Text
+	Payload               []byte
+	OpenedAt              pgtype.Timestamptz
+	ClosedAt              pgtype.Timestamptz
+	CreatedBy             pgtype.UUID
+	UpdatedAt             pgtype.Timestamptz
+}
+
 type Product struct {
 	ID        int64
 	Code      string
@@ -5001,6 +5450,23 @@ type ProductionSequence struct {
 	Status            string
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+}
+
+type PurchaseApprovalLimit struct {
+	ID             int64
+	EnterpriseCode int64
+	Scope          string
+	ScopeRef       pgtype.Text
+	Currency       string
+	AutoApproveMax pgtype.Numeric
+	BlockAbove     pgtype.Numeric
+	IsActive       bool
+	ValidFrom      pgtype.Date
+	ValidTo        pgtype.Date
+	Notes          pgtype.Text
+	CreatedBy      pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type PurchaseOrder struct {
@@ -5234,6 +5700,172 @@ type QuestionOption struct {
 	Value      string
 	CreatedAt  pgtype.Timestamptz
 	CreatedBy  pgtype.UUID
+}
+
+type ReceivingDivergence struct {
+	ID                    int64
+	NoticeID              *int64
+	PurchaseOrderCode     *int64
+	PurchaseOrderItemCode *int64
+	SupplierCode          *int64
+	ItemCode              *int64
+	Mask                  string
+	DivergenceType        string
+	ExpectedQty           pgtype.Numeric
+	ActualQty             pgtype.Numeric
+	ExpectedPrice         pgtype.Numeric
+	ActualPrice           pgtype.Numeric
+	Resolution            string
+	AffectsSupplierScore  bool
+	Notes                 pgtype.Text
+	CreatedBy             pgtype.UUID
+	CreatedAt             pgtype.Timestamptz
+	ResolvedAt            pgtype.Timestamptz
+}
+
+type ReceivingInspectionAnalysis struct {
+	ID                   int64
+	OrderID              int64
+	ConformQty           pgtype.Numeric
+	RejectedQty          pgtype.Numeric
+	ReworkQty            pgtype.Numeric
+	RestrictedQty        pgtype.Numeric
+	Treatment            ReceivingInspectionTreatment
+	AffectsSupplierScore bool
+	Notes                pgtype.Text
+	AnalyzedAt           pgtype.Timestamptz
+	AnalyzedBy           pgtype.UUID
+}
+
+type ReceivingInspectionOrder struct {
+	ID                    int64
+	OrderNumber           *int64
+	RouteID               *int64
+	ProcurementRecordID   *int64
+	Source                ReceivingInspectionOrderSource
+	SupplierCode          *int64
+	PurchaseOrderCode     *int64
+	PurchaseOrderItemCode *int64
+	FiscalEntryCode       *int64
+	ReceivingNoticeCode   *int64
+	ItemCode              int64
+	Mask                  string
+	Lot                   pgtype.Text
+	SerialNumber          pgtype.Text
+	WarehouseID           int64
+	Quantity              pgtype.Numeric
+	InspectedQty          pgtype.Numeric
+	ApprovedQty           pgtype.Numeric
+	RejectedQty           pgtype.Numeric
+	ReworkQty             pgtype.Numeric
+	RestrictedQty         pgtype.Numeric
+	Status                ReceivingInspectionOrderStatus
+	Certificate           pgtype.Text
+	SupplierNote          pgtype.Text
+	Model                 pgtype.Text
+	Notes                 pgtype.Text
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+	CreatedBy             pgtype.UUID
+}
+
+type ReceivingInspectionResult struct {
+	ID                   int64
+	OrderID              int64
+	StepID               *int64
+	Sequence             int32
+	SampleIndex          int32
+	MeasuredValue        pgtype.Numeric
+	MinValue             pgtype.Numeric
+	MaxValue             pgtype.Numeric
+	AttributeDescription pgtype.Text
+	IsApproved           bool
+	Notes                pgtype.Text
+	CreatedAt            pgtype.Timestamptz
+	CreatedBy            pgtype.UUID
+}
+
+type ReceivingInspectionRoute struct {
+	ID                    int64
+	EnterpriseCode        int64
+	Basis                 ReceivingInspectionBasis
+	ItemCode              *int64
+	ClassificationCode    pgtype.Text
+	Mask                  string
+	InspectionWarehouseID int64
+	HandlingType          pgtype.Text
+	StorageType           pgtype.Text
+	RouteType             pgtype.Text
+	MarketType            pgtype.Text
+	InspectionType        pgtype.Text
+	ValidFrom             pgtype.Date
+	ValidTo               pgtype.Date
+	IsActive              bool
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+	CreatedBy             pgtype.UUID
+}
+
+type ReceivingInspectionRouteStep struct {
+	ID              int64
+	RouteID         int64
+	Sequence        int32
+	InspectionName  string
+	Kind            ReceivingInspectionStepKind
+	AppointmentMode ReceivingInspectionAppointmentMode
+	IsRequired      bool
+	EmitsLabel      bool
+	InstrumentGroup pgtype.Text
+	SampleType      pgtype.Text
+	SampleUnit      pgtype.Text
+	SampleQty       pgtype.Numeric
+	AcceptanceQty   pgtype.Numeric
+	RejectionQty    pgtype.Numeric
+	Norm            pgtype.Text
+	Reference       pgtype.Text
+	ValidTo         pgtype.Date
+	NominalValue    pgtype.Numeric
+	MinValue        pgtype.Numeric
+	MaxValue        pgtype.Numeric
+	CreatedAt       pgtype.Timestamptz
+}
+
+type ReceivingInspectionStepAttribute struct {
+	ID          int64
+	StepID      int64
+	Description string
+	IsApproved  bool
+}
+
+type ReceivingNotice struct {
+	ID                int64
+	EnterpriseCode    int64
+	NoticeNumber      *int64
+	SupplierCode      *int64
+	PurchaseOrderCode *int64
+	CarrierCode       *int64
+	Status            string
+	Dock              pgtype.Text
+	ScheduledAt       pgtype.Timestamptz
+	ArrivedAt         pgtype.Timestamptz
+	InvoiceNumber     pgtype.Text
+	Blocked           bool
+	Notes             pgtype.Text
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
+type ReceivingNoticeItem struct {
+	ID                    int64
+	NoticeID              int64
+	PurchaseOrderItemCode *int64
+	ItemCode              int64
+	Mask                  string
+	ExpectedQty           pgtype.Numeric
+	ReceivedQty           pgtype.Numeric
+	Unit                  pgtype.Text
+	Notes                 pgtype.Text
 }
 
 type Region struct {
@@ -5946,6 +6578,36 @@ type SupplierContactType struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type SupplierContract struct {
+	ID             int64
+	EnterpriseCode int64
+	SupplierCode   int64
+	ContractNumber string
+	Description    pgtype.Text
+	Status         string
+	Currency       string
+	ValidFrom      pgtype.Date
+	ValidTo        pgtype.Date
+	PriceIndex     pgtype.Text
+	Notes          pgtype.Text
+	CreatedBy      pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type SupplierContractItem struct {
+	ID            int64
+	ContractID    int64
+	ItemCode      int64
+	Mask          string
+	Unit          pgtype.Text
+	ContractedQty pgtype.Numeric
+	ConsumedQty   pgtype.Numeric
+	UnitPrice     pgtype.Numeric
+	MinOrderQty   pgtype.Numeric
+	Notes         pgtype.Text
+}
+
 type SupplierDueDate struct {
 	ID                 int64
 	SupplierID         int64
@@ -5960,6 +6622,36 @@ type SupplierDueDate struct {
 	ReceiptEndTime     pgtype.Text
 	AvgUnloadMinutes   *int32
 	CreatedAt          pgtype.Timestamptz
+}
+
+type SupplierEdiLine struct {
+	ID                    int64
+	MessageID             int64
+	PurchaseOrderItemCode *int64
+	ItemCode              *int64
+	Mask                  string
+	ConfirmedQty          pgtype.Numeric
+	ConfirmedPrice        pgtype.Numeric
+	ConfirmedDate         pgtype.Date
+	Divergence            pgtype.Text
+	Notes                 pgtype.Text
+}
+
+type SupplierEdiMessage struct {
+	ID                int64
+	EnterpriseCode    int64
+	SupplierCode      *int64
+	Direction         string
+	MessageType       string
+	PurchaseOrderCode *int64
+	ExternalReference pgtype.Text
+	Status            string
+	DivergenceCount   int32
+	Payload           []byte
+	Notes             pgtype.Text
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	ProcessedAt       pgtype.Timestamptz
 }
 
 type SupplierEmail struct {
@@ -5981,6 +6673,18 @@ type SupplierEnterprise struct {
 	PurchasePriceTableID *int64
 	IsActive             bool
 	CreatedAt            pgtype.Timestamptz
+}
+
+type SupplierHomologation struct {
+	ID           int64
+	SupplierCode int64
+	Status       string
+	IqfScore     pgtype.Numeric
+	Category     pgtype.Text
+	ValidUntil   pgtype.Date
+	Notes        pgtype.Text
+	DecidedBy    pgtype.UUID
+	DecidedAt    pgtype.Timestamptz
 }
 
 type SupplierParameter struct {
@@ -6007,6 +6711,24 @@ type SupplierPhone struct {
 	Ranking    int32
 	IsActive   bool
 	CreatedAt  pgtype.Timestamptz
+}
+
+type SupplierScorecardSnapshot struct {
+	ID               int64
+	SupplierCode     int64
+	PeriodStart      pgtype.Date
+	PeriodEnd        pgtype.Date
+	QualityScore     pgtype.Numeric
+	DeliveryScore    pgtype.Numeric
+	CommercialScore  pgtype.Numeric
+	ServiceScore     pgtype.Numeric
+	OverallScore     pgtype.Numeric
+	TotalReceipts    int32
+	RejectedReceipts int32
+	LateReceipts     int32
+	Notes            pgtype.Text
+	CreatedAt        pgtype.Timestamptz
+	CreatedBy        pgtype.UUID
 }
 
 type SupplierType struct {

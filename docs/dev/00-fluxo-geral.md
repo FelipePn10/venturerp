@@ -191,13 +191,21 @@ Dois caminhos para firmar, dependendo de onde a sugestão está:
 ## Etapa 6 — Compra → Recebimento no almoxarifado
 
 1. **Pedido de Compra** enviado ao fornecedor (`/api/purchase-order`).
-2. **Recebimento via NF-e de entrada:** `POST /api/fiscal/entries/upload-nfe` (ou
+2. **Recebimento físico por linha do pedido:** `POST /api/purchase-order/{code}/receipts`
+   registra a chegada no almoxarifado por `purchase_order_item_code`, grava lote/série/
+   validade/depósito, gera movimento `IN` no estoque e atualiza o saldo recebido do
+   pedido.
+3. **Recebimento via NF-e de entrada:** `POST /api/fiscal/entries/upload-nfe` (ou
    importação por chave via FocusNFE). O sistema casa o **CNPJ do emitente** ao
    fornecedor e, na importação, **lança movimentos `IN`** no estoque para cada
    item numérico da nota (ver `fiscal-financeiro.md` §5).
-3. **Conferência/aprovação** da entrada: `POST /api/fiscal/entries/{code}/approve`
+4. **Conferência/aprovação** da entrada: `POST /api/fiscal/entries/{code}/approve`
    (gera créditos fiscais).
-4. Saldo do almoxarifado atualizado: `GET /api/stock/balances/item/{itemCode}`.
+5. **Inspeção/quarentena quando aplicável:** `POST /api/procurement/records` cria a
+   inspeção ou divergência de recebimento; `POST
+   /api/procurement/receiving-inspections/{id}/disposition` libera aprovado para o
+   depósito disponível ou move rejeitado para bloqueio/devolução.
+6. Saldo do almoxarifado atualizado: `GET /api/stock/balances/item/{itemCode}`.
 
 > ✅ **automático (saldo):** os movimentos de estoque agora **atualizam o saldo**
 > (`stock_balances`) na **mesma transação** — quantidade, custo médio ponderado e
@@ -211,9 +219,15 @@ Dois caminhos para firmar, dependendo de onde a sugestão está:
 > (`PARTIAL`/`RECEIVED`). Implementado em
 > `PurchaseOrderRepository.RegisterReceipts` consumido por `ImportNFePurchaseUseCase`.
 >
-> ⚙️ **melhoria (pendente):** etapa explícita de **conferência de recebimento**
-> (status `CONFERRED`) com tratamento de divergências/tolerância antes de somar ao
-> estoque.
+> ✅ **automático (recebimento físico):** o endpoint `/receipts` recebe por linha do
+> pedido, então dois itens iguais em linhas diferentes não se misturam. A quantidade
+> em UM de compra é convertida para UM interna quando o pedido possui conversão.
+>
+>
+> ✅ **automático (suprimentos operacional):** o módulo `/api/procurement` registra
+> inspeção, aviso/divergência, checklist, etiquetas, contratos, alçadas, EDI,
+> importação e IQF. A disposição de inspeção gera transferências de estoque da
+> quarentena para o destino aprovado ou bloqueado.
 
 ---
 

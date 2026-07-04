@@ -104,11 +104,11 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromSalesOrder(ctx context.Context, s
 
 	refType := entity.ShipmentRefSalesOrder
 	s := &entity.Shipment{
-		Code:           code,
-		ReferenceType:  &refType,
-		SalesOrderCode: &salesOrderCode,
-		CarrierCode:    so.CarrierCode,
-		Status:         entity.ShipmentStatusOpen,
+		Code:             code,
+		ReferenceType:    &refType,
+		SalesOrderCode:   &salesOrderCode,
+		CarrierCode:      so.CarrierCode,
+		Status:           entity.ShipmentStatusOpen,
 		TotalVolumes:     volumes,
 		TotalGrossWeight: so.TotalWeight,
 		CreatedBy:        createdBy,
@@ -155,9 +155,9 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromPurchaseOrder(ctx context.Context
 		PurchaseOrderCode: &purchaseOrderCode,
 		CarrierCode:       po.CarrierCode,
 		Status:            entity.ShipmentStatusOpen,
-		TotalVolumes:     1,
-		TotalGrossWeight: po.TotalWeight,
-		CreatedBy:        createdBy,
+		TotalVolumes:      1,
+		TotalGrossWeight:  po.TotalWeight,
+		CreatedBy:         createdBy,
 	}
 
 	created, err := uc.ShipmentRepo.Create(ctx, s)

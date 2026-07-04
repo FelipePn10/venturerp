@@ -3,12 +3,13 @@ package cost_uc
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
-	"github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
+	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
 	"github.com/google/uuid"
 )
 
@@ -20,11 +21,11 @@ type routingReader interface {
 }
 
 type StandardCostUseCase struct {
-	repo    repository.StandardCostRepository
+	repo    domainrepo.StandardCostRepository
 	routing routingReader // optional; when nil, falls back to the legacy average-rate estimate
 }
 
-func New(repo repository.StandardCostRepository) *StandardCostUseCase {
+func New(repo domainrepo.StandardCostRepository) *StandardCostUseCase {
 	return &StandardCostUseCase{repo: repo}
 }
 
@@ -182,7 +183,7 @@ type costNode struct {
 }
 
 func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, mask string, level int, lotSize float64, unitCache map[int64]float64) (*costNode, error) {
-	children, err := uc.repo.GetDirectChildren(ctx, itemCode)
+	children, err := uc.repo.GetDirectChildren(ctx, itemCode, mask)
 	if err != nil {
 		return nil, fmt.Errorf("fetching BOM for item %d: %w", itemCode, err)
 	}
@@ -203,7 +204,7 @@ func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, m
 		}
 	} else {
 		// Manufactured item — recurse into children
-		for _, child := range children {
+		for _, child := range selectPrimaryCostSubstitutes(children) {
 			childNode, err2 := uc.rollupItem(ctx, child.ChildCode, mask, level+1, lotSize, unitCache)
 			if err2 != nil {
 				return nil, err2
@@ -246,6 +247,50 @@ func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, m
 	}
 
 	return node, nil
+}
+
+func selectPrimaryCostSubstitutes(children []domainrepo.BOMChild) []domainrepo.BOMChild {
+	out := make([]domainrepo.BOMChild, 0, len(children))
+	groupBest := make(map[int16]domainrepo.BOMChild)
+
+	for _, child := range children {
+		if child.SubstituteGroup <= 0 {
+			out = append(out, child)
+			continue
+		}
+		if best, ok := groupBest[child.SubstituteGroup]; !ok || costSubstitutePrecedes(child, best) {
+			groupBest[child.SubstituteGroup] = child
+		}
+	}
+
+	groups := make([]int, 0, len(groupBest))
+	for group := range groupBest {
+		groups = append(groups, int(group))
+	}
+	sort.Ints(groups)
+	for _, group := range groups {
+		out = append(out, groupBest[int16(group)])
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].ChildCode < out[j].ChildCode
+	})
+	return out
+}
+
+func costSubstitutePrecedes(a, b domainrepo.BOMChild) bool {
+	ap := a.SubstitutePriority
+	if ap < 1 {
+		ap = 1
+	}
+	bp := b.SubstitutePriority
+	if bp < 1 {
+		bp = 1
+	}
+	if ap != bp {
+		return ap < bp
+	}
+	return a.ChildCode < b.ChildCode
 }
 
 func (n *costNode) total() float64 {

@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS receiving_inspection_analyses;
+DROP TABLE IF EXISTS receiving_inspection_results;
+DROP TABLE IF EXISTS receiving_inspection_orders;
+DROP TABLE IF EXISTS receiving_inspection_step_attributes;
+DROP TABLE IF EXISTS receiving_inspection_route_steps;
+DROP TABLE IF EXISTS receiving_inspection_routes;
+DROP TYPE IF EXISTS receiving_inspection_treatment;
+DROP TYPE IF EXISTS receiving_inspection_order_status;
+DROP TYPE IF EXISTS receiving_inspection_order_source;
+DROP TYPE IF EXISTS receiving_inspection_appointment_mode;
+DROP TYPE IF EXISTS receiving_inspection_step_kind;
+DROP TYPE IF EXISTS receiving_inspection_basis;

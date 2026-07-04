@@ -209,3 +209,61 @@ func TestExplodeFromBOM_CoproductAndFixedQty(t *testing.T) {
 		t.Errorf("inputs = %d, want 2 (normal + fixo, co-produto excluído)", len(inputs))
 	}
 }
+
+func TestExplodeFromBOM_SelectsPrimarySubstitute(t *testing.T) {
+	bomMap := map[int64][]*structentity.ItemStructure{
+		1: {
+			{ChildCode: 20, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 2},
+			{ChildCode: 10, Quantity: 3, SubstituteGroup: 1, SubstitutePriority: 1},
+			{ChildCode: 30, Quantity: 5},
+		},
+	}
+
+	inputs := explodeFromBOMWithFormula(bomMap, 1, "", 4, 1, 1)
+
+	got := map[int64]float64{}
+	for _, in := range inputs {
+		got[in.ItemCode] = in.Quantity
+	}
+	if _, ok := got[20]; ok {
+		t.Error("substituto secundário não deve gerar demanda dependente")
+	}
+	if got[10] != 12 {
+		t.Errorf("substituto primário = %v, want 12", got[10])
+	}
+	if got[30] != 20 {
+		t.Errorf("componente standalone = %v, want 20", got[30])
+	}
+	if len(inputs) != 2 {
+		t.Errorf("inputs = %d, want 2 (primário + standalone)", len(inputs))
+	}
+}
+
+func TestSelectPrimarySubstituteComponents_TieBreaksBySequenceThenCode(t *testing.T) {
+	children := []*structentity.ItemStructure{
+		{ChildCode: 30, SubstituteGroup: 1, SubstitutePriority: 1, Sequence: 20},
+		{ChildCode: 20, SubstituteGroup: 1, SubstitutePriority: 1, Sequence: 10},
+		{ChildCode: 10, SubstituteGroup: 1, SubstitutePriority: 1, Sequence: 10},
+	}
+
+	selected := structentity.SelectPrimarySubstituteComponents(children)
+	if len(selected) != 1 {
+		t.Fatalf("selected = %d, want 1", len(selected))
+	}
+	if selected[0].ChildCode != 10 {
+		t.Errorf("selected child = %d, want 10", selected[0].ChildCode)
+	}
+}
+
+func TestBuildLLCFromBOM_SkipsCoproduct(t *testing.T) {
+	bom := map[int64][]*structentity.ItemStructure{
+		1: {{ChildCode: 2}, {ChildCode: 5, IsCoproduct: true}},
+	}
+	llc := buildLLCFromBOM(bom, []int64{1})
+	if _, ok := llc[5]; ok {
+		t.Error("co-produto não deve receber LLC pela árvore da BOM (é saída, não componente)")
+	}
+	if llc[2] != 1 {
+		t.Errorf("LLC do filho normal = %d, want 1", llc[2])
+	}
+}

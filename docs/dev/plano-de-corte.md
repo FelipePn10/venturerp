@@ -241,7 +241,8 @@ como **chapa** (baixa por área, retalhos retangulares), igual ao 2D. O detalhe 
 digitação. Para cada **Ordem de Produção** e/ou **ordem planejada (MRP)** informada:
 
 1. **Explode o BOM** do produto da ordem (`StructureQueryRepository.GetDirectChildrenForMask`,
-   respeitando a máscara da ordem).
+   respeitando a máscara da ordem). Co-produtos são ignorados e, em grupos de
+   substitutos, apenas o componente primário entra na demanda de corte.
 2. **Identifica peças cortadas:** todo componente-filho com **dimensões** (`Engineering.
    Dimensions`) é uma peça a cortar; itens sem dimensão (ferragem, parafuso) são ignorados.
 3. **Resolve a matéria-prima** do componente: o filho do componente marcado como
