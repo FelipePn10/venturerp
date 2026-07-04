@@ -20,7 +20,9 @@ bin/
 backups/*.dump
 
 # Test scripts with sensitive data (tokens, CNPJs, credentials)
-scripts/
+scripts/*
+!scripts/test-comercial-pricing.sh
+!scripts/test-comercial-politicas.sh
 scripts/test-e2e.sh
 scripts/test-flow.sh
 scripts/test-focusnfe.sh

@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -387,6 +388,534 @@ type SalesTable struct {
 	ICMSInterestadualPorDentro bool
 	Observation                *string
 	CreatedAt                  time.Time
+}
+
+type SalesPriceFormationInput struct {
+	BaseCost      float64
+	MarkupPct     float64
+	MarginPct     float64
+	ExpensesPct   float64
+	TaxesPct      float64
+	FreightPct    float64
+	CommissionPct float64
+	DiscountPct   float64
+	DecimalPlaces int16
+}
+
+type SalesPriceFormationResult struct {
+	BaseCost                float64
+	SuggestedPrice          float64
+	MarkupPct               float64
+	MarginPct               float64
+	ExpensesPct             float64
+	TaxesPct                float64
+	FreightPct              float64
+	CommissionPct           float64
+	DiscountPct             float64
+	ContributionMarginPct   float64
+	ContributionMarginValue float64
+}
+
+type SalesCostSource string
+
+const (
+	SalesCostInformed         SalesCostSource = "INFORMED"
+	SalesCostStandardTotal    SalesCostSource = "STANDARD_TOTAL"
+	SalesCostStandardMaterial SalesCostSource = "STANDARD_MATERIAL"
+	SalesCostPurchase         SalesCostSource = "PURCHASE"
+	SalesCostStockAvg         SalesCostSource = "STOCK_AVG"
+	SalesCostStockLast        SalesCostSource = "STOCK_LAST"
+)
+
+type SalesPricePolicy struct {
+	ID             int64
+	Code           int64
+	Description    string
+	CostSource     SalesCostSource
+	Priority       int64
+	Sequence       int64
+	PolicyScope    string
+	PolicyTypes    string
+	MarkupPct      float64
+	MarginPct      float64
+	MaxMarginPct   float64
+	IdealMarginPct float64
+	MarginStepPct  float64
+	ExpensesPct    float64
+	TaxesPct       float64
+	FreightPct     float64
+	CommissionPct  float64
+	DiscountPct    float64
+	MinMarginPct   float64
+	MaxDiscountPct float64
+	IncidencesJSON string
+	SalesTableID   *int64
+	ValidityStart  *time.Time
+	ValidityEnd    *time.Time
+	IsActive       bool
+	Observation    *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type CommercialPolicyKind string
+
+const (
+	CommercialPolicyDiscount   CommercialPolicyKind = "DISCOUNT"
+	CommercialPolicySurcharge  CommercialPolicyKind = "SURCHARGE"
+	CommercialPolicyFreight    CommercialPolicyKind = "FREIGHT"
+	CommercialPolicyCommission CommercialPolicyKind = "COMMISSION"
+)
+
+type CommercialPolicyCalcType string
+
+const (
+	CommercialPolicyPercent CommercialPolicyCalcType = "PERCENT"
+	CommercialPolicyValue   CommercialPolicyCalcType = "VALUE"
+)
+
+type CommercialPolicyChoiceType string
+
+const (
+	CommercialPolicyInformation CommercialPolicyChoiceType = "INFORMATION"
+	CommercialPolicyChoice      CommercialPolicyChoiceType = "CHOICE"
+	CommercialPolicyOptional    CommercialPolicyChoiceType = "OPTIONAL"
+)
+
+type CommercialPolicy struct {
+	ID                     int64
+	Code                   int64
+	Description            string
+	Kind                   CommercialPolicyKind
+	ChoiceType             CommercialPolicyChoiceType
+	CalcType               CommercialPolicyCalcType
+	PercentValue           float64
+	FixedValue             float64
+	MaxPercent             float64
+	MaxValue               float64
+	MinGrossValue          float64
+	MaxGrossValue          float64
+	MinQuantity            float64
+	MaxQuantity            float64
+	Priority               int64
+	Sequence               int64
+	Stackable              bool
+	RequiresApproval       bool
+	AppliesOnNetValue      bool
+	AllowManualChange      bool
+	AllowHigherValues      bool
+	UsedInCommission       bool
+	AppliesToItems         bool
+	SubtractCommissionBase bool
+	DataTypesJSON          string
+	CommissionDiscountMode string
+	CustomerCode           *int64
+	CustomerTypeID         *int64
+	MarketSegmentID        *int64
+	RegionID               *int64
+	SalesTableID           *int64
+	PaymentConditionID     *int64
+	CarrierID              *int64
+	ItemCode               *string
+	ItemMask               *string
+	ProductLineID          *int64
+	ItemClassification     *string
+	RuleJSON               string
+	ValidityStart          *time.Time
+	ValidityEnd            *time.Time
+	IsActive               bool
+	Observation            *string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	Lines                  []*CommercialPolicyLine
+}
+
+type CommercialPolicyLine struct {
+	ID             int64
+	PolicyID       int64
+	LineNumber     int64
+	SequenceNumber int64
+	Description    *string
+	CalcType       CommercialPolicyCalcType
+	PercentValue   float64
+	FixedValue     float64
+	MinValue       float64
+	MaxValue       float64
+	VariablesJSON  string
+	ValidityStart  *time.Time
+	ValidityEnd    *time.Time
+	IsActive       bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type CommercialPolicySpecificItem struct {
+	ID                 int64
+	PolicyID           int64
+	ItemCode           *string
+	ItemMask           *string
+	ProductLineID      *int64
+	ItemClassification *string
+	ValidityStart      *time.Time
+	ValidityEnd        *time.Time
+	BlockDiscount      bool
+	BlockSurcharge     bool
+	IgnoreItemPolicies bool
+	BlockManualChange  bool
+	CreatedAt          time.Time
+}
+
+type CommercialPolicyContext struct {
+	GrossValue         float64
+	Quantity           float64
+	CustomerCode       *int64
+	CustomerTypeID     *int64
+	MarketSegmentID    *int64
+	RegionID           *int64
+	SalesTableID       *int64
+	PaymentConditionID *int64
+	CarrierID          *int64
+	ItemCode           *string
+	ItemMask           *string
+	ProductLineID      *int64
+	ItemClassification *string
+}
+
+type CommercialPolicyEffect struct {
+	PolicyCode       int64
+	PolicyID         int64
+	Description      string
+	Kind             CommercialPolicyKind
+	CalcType         CommercialPolicyCalcType
+	PercentValue     float64
+	FixedValue       float64
+	AppliedValue     float64
+	RequiresApproval bool
+	Stackable        bool
+}
+
+type CommercialPolicyEvaluation struct {
+	GrossValue       float64
+	DiscountValue    float64
+	SurchargeValue   float64
+	FreightValue     float64
+	CommissionValue  float64
+	NetValue         float64
+	RequiresApproval bool
+	Effects          []CommercialPolicyEffect
+}
+
+func NewCommercialPolicy(code int64, description string, kind CommercialPolicyKind) (*CommercialPolicy, error) {
+	if code == 0 {
+		return nil, fmt.Errorf("code is required")
+	}
+	if description == "" {
+		return nil, fmt.Errorf("description is required")
+	}
+	if !ValidCommercialPolicyKind(kind) {
+		return nil, fmt.Errorf("invalid commercial policy kind")
+	}
+	now := time.Now()
+	return &CommercialPolicy{
+		Code:                   code,
+		Description:            description,
+		Kind:                   kind,
+		ChoiceType:             CommercialPolicyInformation,
+		CalcType:               CommercialPolicyPercent,
+		Priority:               10,
+		Sequence:               10,
+		Stackable:              true,
+		DataTypesJSON:          "[]",
+		CommissionDiscountMode: "REAL",
+		RuleJSON:               "{}",
+		IsActive:               true,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}, nil
+}
+
+func ValidCommercialPolicyKind(kind CommercialPolicyKind) bool {
+	switch kind {
+	case CommercialPolicyDiscount, CommercialPolicySurcharge, CommercialPolicyFreight, CommercialPolicyCommission:
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidCommercialPolicyCalcType(calc CommercialPolicyCalcType) bool {
+	switch calc {
+	case CommercialPolicyPercent, CommercialPolicyValue:
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidCommercialPolicyChoiceType(choice CommercialPolicyChoiceType) bool {
+	switch choice {
+	case CommercialPolicyInformation, CommercialPolicyChoice, CommercialPolicyOptional:
+		return true
+	default:
+		return false
+	}
+}
+
+func EvaluateCommercialPolicies(policies []*CommercialPolicy, ctx CommercialPolicyContext) (*CommercialPolicyEvaluation, error) {
+	if ctx.GrossValue < 0 {
+		return nil, fmt.Errorf("gross_value must be >= 0")
+	}
+	if ctx.Quantity < 0 {
+		return nil, fmt.Errorf("quantity must be >= 0")
+	}
+	result := &CommercialPolicyEvaluation{GrossValue: ctx.GrossValue, NetValue: ctx.GrossValue}
+	appliedNonStackable := map[CommercialPolicyKind]bool{}
+	for _, p := range policies {
+		if p == nil || !p.CommercialPolicyMatches(ctx, time.Now()) {
+			continue
+		}
+		if appliedNonStackable[p.Kind] {
+			continue
+		}
+		value, calcType, pct, fixed, err := p.CommercialPolicyValue(result.NetValue, time.Now())
+		if err != nil {
+			return nil, fmt.Errorf("policy %d: %w", p.Code, err)
+		}
+		effect := CommercialPolicyEffect{
+			PolicyCode:       p.Code,
+			PolicyID:         p.ID,
+			Description:      p.Description,
+			Kind:             p.Kind,
+			CalcType:         calcType,
+			PercentValue:     pct,
+			FixedValue:       fixed,
+			AppliedValue:     value,
+			RequiresApproval: p.RequiresApproval,
+			Stackable:        p.Stackable,
+		}
+		switch p.Kind {
+		case CommercialPolicyDiscount:
+			result.DiscountValue = roundMoney(result.DiscountValue+value, 2)
+			result.NetValue = roundMoney(result.NetValue-value, 2)
+		case CommercialPolicySurcharge:
+			result.SurchargeValue = roundMoney(result.SurchargeValue+value, 2)
+			result.NetValue = roundMoney(result.NetValue+value, 2)
+		case CommercialPolicyFreight:
+			result.FreightValue = roundMoney(result.FreightValue+value, 2)
+			result.NetValue = roundMoney(result.NetValue+value, 2)
+		case CommercialPolicyCommission:
+			result.CommissionValue = roundMoney(result.CommissionValue+value, 2)
+		}
+		if result.NetValue < 0 {
+			result.NetValue = 0
+		}
+		if p.RequiresApproval {
+			result.RequiresApproval = true
+		}
+		if !p.Stackable {
+			appliedNonStackable[p.Kind] = true
+		}
+		result.Effects = append(result.Effects, effect)
+	}
+	return result, nil
+}
+
+func (p *CommercialPolicy) CommercialPolicyMatches(ctx CommercialPolicyContext, now time.Time) bool {
+	if !p.IsActive {
+		return false
+	}
+	if p.ValidityStart != nil && now.Before(*p.ValidityStart) {
+		return false
+	}
+	if p.ValidityEnd != nil && now.After(p.ValidityEnd.Add(24*time.Hour)) {
+		return false
+	}
+	if p.MinGrossValue > 0 && ctx.GrossValue < p.MinGrossValue {
+		return false
+	}
+	if p.MaxGrossValue > 0 && ctx.GrossValue > p.MaxGrossValue {
+		return false
+	}
+	if p.MinQuantity > 0 && ctx.Quantity < p.MinQuantity {
+		return false
+	}
+	if p.MaxQuantity > 0 && ctx.Quantity > p.MaxQuantity {
+		return false
+	}
+	return matchInt64Ptr(p.CustomerCode, ctx.CustomerCode) &&
+		matchInt64Ptr(p.CustomerTypeID, ctx.CustomerTypeID) &&
+		matchInt64Ptr(p.MarketSegmentID, ctx.MarketSegmentID) &&
+		matchInt64Ptr(p.RegionID, ctx.RegionID) &&
+		matchInt64Ptr(p.SalesTableID, ctx.SalesTableID) &&
+		matchInt64Ptr(p.PaymentConditionID, ctx.PaymentConditionID) &&
+		matchInt64Ptr(p.CarrierID, ctx.CarrierID) &&
+		matchStringPtr(p.ItemCode, ctx.ItemCode) &&
+		matchStringPtr(p.ItemMask, ctx.ItemMask) &&
+		matchInt64Ptr(p.ProductLineID, ctx.ProductLineID) &&
+		matchStringPtr(p.ItemClassification, ctx.ItemClassification)
+}
+
+func (p *CommercialPolicy) CommercialPolicyValue(baseValue float64, now time.Time) (float64, CommercialPolicyCalcType, float64, float64, error) {
+	calcType := p.CalcType
+	percentValue := p.PercentValue
+	fixedValue := p.FixedValue
+	maxValue := p.MaxValue
+	if line := p.firstValidLine(now); line != nil {
+		calcType = line.CalcType
+		percentValue = line.PercentValue
+		fixedValue = line.FixedValue
+		maxValue = line.MaxValue
+	}
+	if !ValidCommercialPolicyCalcType(calcType) {
+		return 0, calcType, percentValue, fixedValue, fmt.Errorf("invalid calc_type")
+	}
+	if percentValue < 0 || fixedValue < 0 || p.MaxPercent < 0 || maxValue < 0 {
+		return 0, calcType, percentValue, fixedValue, fmt.Errorf("commercial policy values must be >= 0")
+	}
+	value := fixedValue
+	if calcType == CommercialPolicyPercent {
+		pct := percentValue
+		if p.MaxPercent > 0 && pct > p.MaxPercent {
+			pct = p.MaxPercent
+		}
+		value = baseValue * pct / 100
+	}
+	if maxValue > 0 && value > maxValue {
+		value = maxValue
+	}
+	return roundMoney(value, 2), calcType, percentValue, fixedValue, nil
+}
+
+func (p *CommercialPolicy) firstValidLine(now time.Time) *CommercialPolicyLine {
+	for _, line := range p.Lines {
+		if line == nil || !line.IsActive {
+			continue
+		}
+		if line.ValidityStart != nil && now.Before(*line.ValidityStart) {
+			continue
+		}
+		if line.ValidityEnd != nil && now.After(line.ValidityEnd.Add(24*time.Hour)) {
+			continue
+		}
+		return line
+	}
+	return nil
+}
+
+func matchInt64Ptr(policyValue, ctxValue *int64) bool {
+	return policyValue == nil || (ctxValue != nil && *policyValue == *ctxValue)
+}
+
+func matchStringPtr(policyValue, ctxValue *string) bool {
+	return policyValue == nil || (ctxValue != nil && *policyValue == *ctxValue)
+}
+
+type SalesTablePriceHistory struct {
+	ID                int64
+	SalesTablePriceID *int64
+	SalesTableID      int64
+	SalesTableCode    int64
+	ItemCode          string
+	OldPrice          *float64
+	NewPrice          float64
+	BaseCost          *float64
+	Source            string
+	PolicyCode        *int64
+	Reason            *string
+	CreatedAt         time.Time
+}
+
+func NewSalesPricePolicy(code int64, description string, source SalesCostSource) (*SalesPricePolicy, error) {
+	if code == 0 {
+		return nil, fmt.Errorf("code is required")
+	}
+	if description == "" {
+		return nil, fmt.Errorf("description is required")
+	}
+	if source == "" {
+		source = SalesCostStandardTotal
+	}
+	if !ValidSalesCostSource(source) {
+		return nil, fmt.Errorf("invalid cost_source")
+	}
+	now := time.Now()
+	return &SalesPricePolicy{
+		Code:        code,
+		Description: description,
+		CostSource:  source,
+		Priority:    10,
+		Sequence:    10,
+		PolicyScope: "PREC",
+		IsActive:    true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}, nil
+}
+
+func ValidSalesCostSource(source SalesCostSource) bool {
+	switch source {
+	case SalesCostInformed, SalesCostStandardTotal, SalesCostStandardMaterial, SalesCostPurchase, SalesCostStockAvg, SalesCostStockLast:
+		return true
+	default:
+		return false
+	}
+}
+
+func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, error) {
+	if in.BaseCost < 0 {
+		return nil, fmt.Errorf("base_cost must be >= 0")
+	}
+	for name, pct := range map[string]float64{
+		"markup_pct":     in.MarkupPct,
+		"margin_pct":     in.MarginPct,
+		"expenses_pct":   in.ExpensesPct,
+		"taxes_pct":      in.TaxesPct,
+		"freight_pct":    in.FreightPct,
+		"commission_pct": in.CommissionPct,
+		"discount_pct":   in.DiscountPct,
+	} {
+		if pct < 0 {
+			return nil, fmt.Errorf("%s must be >= 0", name)
+		}
+	}
+	if in.DecimalPlaces < 0 {
+		in.DecimalPlaces = 2
+	}
+
+	var price float64
+	if in.MarginPct > 0 || in.ExpensesPct > 0 || in.TaxesPct > 0 || in.FreightPct > 0 || in.CommissionPct > 0 || in.DiscountPct > 0 {
+		loadPct := in.MarginPct + in.ExpensesPct + in.TaxesPct + in.FreightPct + in.CommissionPct + in.DiscountPct
+		if loadPct >= 100 {
+			return nil, fmt.Errorf("sum of margin and commercial load percentages must be < 100")
+		}
+		price = in.BaseCost * (1 + in.MarkupPct/100) / (1 - loadPct/100)
+	} else {
+		price = in.BaseCost * (1 + in.MarkupPct/100)
+	}
+	price = roundMoney(price, in.DecimalPlaces)
+	marginValue := price - in.BaseCost
+	marginPct := 0.0
+	if price > 0 {
+		marginPct = marginValue / price * 100
+	}
+	return &SalesPriceFormationResult{
+		BaseCost:                in.BaseCost,
+		SuggestedPrice:          price,
+		MarkupPct:               in.MarkupPct,
+		MarginPct:               in.MarginPct,
+		ExpensesPct:             in.ExpensesPct,
+		TaxesPct:                in.TaxesPct,
+		FreightPct:              in.FreightPct,
+		CommissionPct:           in.CommissionPct,
+		DiscountPct:             in.DiscountPct,
+		ContributionMarginPct:   roundMoney(marginPct, 4),
+		ContributionMarginValue: roundMoney(marginValue, in.DecimalPlaces),
+	}, nil
+}
+
+func roundMoney(v float64, places int16) float64 {
+	factor := math.Pow(10, float64(places))
+	return math.Round(v*factor) / factor
 }
 
 func NewSalesTable(code int64, description string, formation PriceFormation) (*SalesTable, error) {

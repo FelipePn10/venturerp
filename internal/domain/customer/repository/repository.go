@@ -62,16 +62,40 @@ type CustomerRepository interface {
 	// ── Sales Tables ──────────────────────────────────────────────────────────
 	CreateSalesTable(ctx context.Context, st *entity.SalesTable) (*entity.SalesTable, error)
 	UpdateSalesTable(ctx context.Context, st *entity.SalesTable) (*entity.SalesTable, error)
+	GetSalesTableByID(ctx context.Context, id int64) (*entity.SalesTable, error)
 	GetSalesTableByCode(ctx context.Context, code int64) (*entity.SalesTable, error)
 	ListSalesTables(ctx context.Context, onlyActive bool) ([]*entity.SalesTable, error)
 	NextSalesTableCode(ctx context.Context) (int64, error)
 
+	// ── Sales Price Policies ─────────────────────────────────────────────────
+	CreateSalesPricePolicy(ctx context.Context, p *entity.SalesPricePolicy) (*entity.SalesPricePolicy, error)
+	UpdateSalesPricePolicy(ctx context.Context, p *entity.SalesPricePolicy) (*entity.SalesPricePolicy, error)
+	GetSalesPricePolicyByCode(ctx context.Context, code int64) (*entity.SalesPricePolicy, error)
+	ListSalesPricePolicies(ctx context.Context, onlyActive bool) ([]*entity.SalesPricePolicy, error)
+	NextSalesPricePolicyCode(ctx context.Context) (int64, error)
+
+	// ── Commercial Policies ──────────────────────────────────────────────────
+	CreateCommercialPolicy(ctx context.Context, p *entity.CommercialPolicy) (*entity.CommercialPolicy, error)
+	UpdateCommercialPolicy(ctx context.Context, p *entity.CommercialPolicy) (*entity.CommercialPolicy, error)
+	GetCommercialPolicyByCode(ctx context.Context, code int64) (*entity.CommercialPolicy, error)
+	ListCommercialPolicies(ctx context.Context, onlyActive bool, kind *entity.CommercialPolicyKind) ([]*entity.CommercialPolicy, error)
+	NextCommercialPolicyCode(ctx context.Context) (int64, error)
+	AddCommercialPolicyLine(ctx context.Context, line *entity.CommercialPolicyLine) (*entity.CommercialPolicyLine, error)
+	ListCommercialPolicyLines(ctx context.Context, policyCode int64) ([]*entity.CommercialPolicyLine, error)
+	AddCommercialPolicySpecificItem(ctx context.Context, item *entity.CommercialPolicySpecificItem) (*entity.CommercialPolicySpecificItem, error)
+	ListCommercialPolicySpecificItems(ctx context.Context, policyCode int64) ([]*entity.CommercialPolicySpecificItem, error)
+
 	// ── Sales Table Prices ────────────────────────────────────────────────────
 	CreateSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, error)
+	UpsertSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, *float64, error)
 	UpdateSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, error)
+	GetSalesTablePriceByID(ctx context.Context, id int64) (*entity.SalesTablePrice, error)
 	GetSalesTablePrice(ctx context.Context, salesTableID int64, itemCode string) (*entity.SalesTablePrice, error)
 	ListSalesTablePrices(ctx context.Context, salesTableID int64) ([]*entity.SalesTablePrice, error)
 	DeleteSalesTablePrice(ctx context.Context, id int64) error
+	ResolveSalesCost(ctx context.Context, itemCode int64, mask string, source entity.SalesCostSource, warehouseID *int64) (float64, string, error)
+	CreateSalesTablePriceHistory(ctx context.Context, h *entity.SalesTablePriceHistory) (*entity.SalesTablePriceHistory, error)
+	ListSalesTablePriceHistory(ctx context.Context, salesTableCode int64, itemCode *string) ([]*entity.SalesTablePriceHistory, error)
 
 	// ── Invoice Types ─────────────────────────────────────────────────────────
 	CreateInvoiceType(ctx context.Context, it *entity.InvoiceType) (*entity.InvoiceType, error)

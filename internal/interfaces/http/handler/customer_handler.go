@@ -282,6 +282,256 @@ func (h *CustomerHandler) ListSalesTables(w http.ResponseWriter, r *http.Request
 	jsonResponse(w, http.StatusOK, result)
 }
 
+func (h *CustomerHandler) GetSalesTable(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid table code")
+		return
+	}
+	result, err := h.uc.GetSalesTable(r.Context(), code)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) UpdateSalesTable(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateSalesTableDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	if dto.Code == 0 {
+		code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid table code")
+			return
+		}
+		dto.Code = code
+	}
+	result, err := h.uc.UpdateSalesTable(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+// ─── Sales Price Policies ────────────────────────────────────────────────────
+
+func (h *CustomerHandler) CreateSalesPricePolicy(w http.ResponseWriter, r *http.Request) {
+	var dto request.CreateSalesPricePolicyDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.CreateSalesPricePolicy(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *CustomerHandler) UpdateSalesPricePolicy(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateSalesPricePolicyDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	if dto.Code == 0 {
+		code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid code")
+			return
+		}
+		dto.Code = code
+	}
+	result, err := h.uc.UpdateSalesPricePolicy(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) GetSalesPricePolicy(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	result, err := h.uc.GetSalesPricePolicy(r.Context(), code)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) ListSalesPricePolicies(w http.ResponseWriter, r *http.Request) {
+	onlyActive := r.URL.Query().Get("only_active") != "false"
+	result, err := h.uc.ListSalesPricePolicies(r.Context(), onlyActive)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+// ─── Commercial Policies ─────────────────────────────────────────────────────
+
+func (h *CustomerHandler) CreateCommercialPolicy(w http.ResponseWriter, r *http.Request) {
+	var dto request.CreateCommercialPolicyDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.CreateCommercialPolicy(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *CustomerHandler) UpdateCommercialPolicy(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateCommercialPolicyDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	if dto.Code == 0 {
+		code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid code")
+			return
+		}
+		dto.Code = code
+	}
+	result, err := h.uc.UpdateCommercialPolicy(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) GetCommercialPolicy(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	result, err := h.uc.GetCommercialPolicy(r.Context(), code)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) ListCommercialPolicies(w http.ResponseWriter, r *http.Request) {
+	onlyActive := r.URL.Query().Get("only_active") != "false"
+	kind := r.URL.Query().Get("kind")
+	result, err := h.uc.ListCommercialPolicies(r.Context(), onlyActive, kind)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	if done, _ := export.WriteSlice(w, r, "Politicas Comerciais", "politicas-comerciais", result); done {
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) AddCommercialPolicySpecificItem(w http.ResponseWriter, r *http.Request) {
+	var dto request.CommercialPolicySpecificItemDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	if dto.PolicyCode == 0 {
+		code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid code")
+			return
+		}
+		dto.PolicyCode = code
+	}
+	result, err := h.uc.AddCommercialPolicySpecificItem(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *CustomerHandler) AddCommercialPolicyLine(w http.ResponseWriter, r *http.Request) {
+	var dto request.CommercialPolicyLineDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	if dto.PolicyCode == 0 {
+		code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid code")
+			return
+		}
+		dto.PolicyCode = code
+	}
+	result, err := h.uc.AddCommercialPolicyLine(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *CustomerHandler) ListCommercialPolicyLines(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	result, err := h.uc.ListCommercialPolicyLines(r.Context(), code)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) ListCommercialPolicySpecificItems(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid code")
+		return
+	}
+	result, err := h.uc.ListCommercialPolicySpecificItems(r.Context(), code)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) EvaluateCommercialPolicies(w http.ResponseWriter, r *http.Request) {
+	var dto request.EvaluateCommercialPoliciesDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.EvaluateCommercialPolicies(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
 // ─── Invoice Types ────────────────────────────────────────────────────────────
 
 func (h *CustomerHandler) CreateInvoiceType(w http.ResponseWriter, r *http.Request) {
@@ -492,6 +742,14 @@ func (h *CustomerHandler) CreateSalesTablePrice(w http.ResponseWriter, r *http.R
 		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
 		return
 	}
+	if dto.SalesTableCode == 0 {
+		code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid table code")
+			return
+		}
+		dto.SalesTableCode = code
+	}
 	result, err := h.uc.CreateSalesTablePrice(r.Context(), dto)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
@@ -515,13 +773,13 @@ func (h *CustomerHandler) UpdateSalesTablePrice(w http.ResponseWriter, r *http.R
 }
 
 func (h *CustomerHandler) GetSalesTablePrice(w http.ResponseWriter, r *http.Request) {
-	salesTableID, err := strconv.ParseInt(chi.URLParam(r, "tableID"), 10, 64)
+	salesTableCode, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid table id")
+		jsonError(w, http.StatusBadRequest, "invalid table code")
 		return
 	}
 	itemCode := chi.URLParam(r, "itemCode")
-	result, err := h.uc.GetSalesTablePrice(r.Context(), salesTableID, itemCode)
+	result, err := h.uc.GetSalesTablePriceByCode(r.Context(), salesTableCode, itemCode)
 	if err != nil {
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
@@ -530,12 +788,44 @@ func (h *CustomerHandler) GetSalesTablePrice(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *CustomerHandler) ListSalesTablePrices(w http.ResponseWriter, r *http.Request) {
-	salesTableID, err := strconv.ParseInt(chi.URLParam(r, "tableID"), 10, 64)
+	salesTableCode, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid table id")
+		jsonError(w, http.StatusBadRequest, "invalid table code")
 		return
 	}
-	result, err := h.uc.ListSalesTablePrices(r.Context(), salesTableID)
+	result, err := h.uc.ListSalesTablePricesByCode(r.Context(), salesTableCode)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) GenerateSalesTablePrices(w http.ResponseWriter, r *http.Request) {
+	var dto request.GenerateSalesTablePricesDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.GenerateSalesTablePrices(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) ListSalesTablePriceHistory(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid table code")
+		return
+	}
+	var itemCode *string
+	if raw := r.URL.Query().Get("item_code"); raw != "" {
+		itemCode = &raw
+	}
+	result, err := h.uc.ListSalesTablePriceHistory(r.Context(), code, itemCode)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -554,6 +844,34 @@ func (h *CustomerHandler) DeleteSalesTablePrice(w http.ResponseWriter, r *http.R
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CustomerHandler) PriceSalesItem(w http.ResponseWriter, r *http.Request) {
+	var dto request.PriceSalesItemDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.PriceSalesItem(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) FormSalesPrice(w http.ResponseWriter, r *http.Request) {
+	var dto request.FormSalesPriceDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.FormSalesPrice(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -606,6 +606,40 @@ func (r *CustomerRepositorySQLC) GetSalesTableByCode(ctx context.Context, code i
 	return salesTableToEntity(row), nil
 }
 
+func (r *CustomerRepositorySQLC) GetSalesTableByID(ctx context.Context, id int64) (*entity.SalesTable, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT id, code, description, validity_start, validity_end, tolerance_min_pct,
+		       tolerance_max_pct, price_formation, decimal_places, is_active,
+		       created_at, composition, table_type, base_date, allow_items_below_cent,
+		       icms_interestadual_por_dentro, observation
+		FROM sales_tables
+		WHERE id=$1`, id)
+	var st entity.SalesTable
+	var validityStart, validityEnd pgtype.Date
+	var toleranceMin, toleranceMax pgtype.Numeric
+	var formation, composition, tableType, baseDate string
+	var createdAt pgtype.Timestamptz
+	var observation pgtype.Text
+	err := row.Scan(&st.ID, &st.Code, &st.Description, &validityStart, &validityEnd,
+		&toleranceMin, &toleranceMax, &formation, &st.DecimalPlaces, &st.IsActive,
+		&createdAt, &composition, &tableType, &baseDate, &st.AllowItemsBelowCent,
+		&st.ICMSInterestadualPorDentro, &observation)
+	if err != nil {
+		return nil, fmt.Errorf("fetching sales table id %d: %w", id, err)
+	}
+	st.ValidityStart = pgutil.FromPgDateToPtr(validityStart)
+	st.ValidityEnd = pgutil.FromPgDateToPtr(validityEnd)
+	st.ToleranceMinPct = pgutil.FromPgNumericToFloat64(toleranceMin)
+	st.ToleranceMaxPct = pgutil.FromPgNumericToFloat64(toleranceMax)
+	st.PriceFormation = entity.PriceFormation(formation)
+	st.Composition = entity.TableComposition(composition)
+	st.TableType = entity.TableType(tableType)
+	st.BaseDate = entity.BaseDate(baseDate)
+	st.CreatedAt = pgutil.FromPgTimestamptz(createdAt)
+	st.Observation = pgutil.FromPgTextPtr(observation)
+	return &st, nil
+}
+
 func (r *CustomerRepositorySQLC) ListSalesTables(ctx context.Context, onlyActive bool) ([]*entity.SalesTable, error) {
 	rows, err := r.q.ListSalesTables(ctx, onlyActive)
 	if err != nil {
@@ -643,6 +677,414 @@ func salesTableToEntity(row sqlc.SalesTable) *entity.SalesTable {
 		Observation:                pgutil.FromPgTextPtr(row.Observation),
 		CreatedAt:                  pgutil.FromPgTimestamptz(row.CreatedAt),
 	}
+}
+
+// ─── Sales Price Policies ────────────────────────────────────────────────────
+
+func (r *CustomerRepositorySQLC) CreateSalesPricePolicy(ctx context.Context, p *entity.SalesPricePolicy) (*entity.SalesPricePolicy, error) {
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO sales_price_policies (
+			code, description, cost_source, priority, sequence, policy_scope, policy_types,
+			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
+			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
+			min_margin_pct, max_discount_pct, incidences_json, sales_table_id,
+			validity_start, validity_end, observation
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23,$24)
+		RETURNING id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
+			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
+			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
+			min_margin_pct, max_discount_pct, incidences_json::text, sales_table_id,
+			validity_start, validity_end, is_active, observation, created_at, updated_at`,
+		p.Code, p.Description, string(p.CostSource), p.Priority, p.Sequence, p.PolicyScope, p.PolicyTypes,
+		p.MarkupPct, p.MarginPct, p.MaxMarginPct, p.IdealMarginPct, p.MarginStepPct,
+		p.ExpensesPct, p.TaxesPct, p.FreightPct, p.CommissionPct, p.DiscountPct,
+		p.MinMarginPct, p.MaxDiscountPct, p.IncidencesJSON, p.SalesTableID,
+		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd), p.Observation,
+	)
+	created, err := scanSalesPricePolicy(row)
+	if err != nil {
+		return nil, fmt.Errorf("creating sales price policy: %w", err)
+	}
+	return created, nil
+}
+
+func (r *CustomerRepositorySQLC) UpdateSalesPricePolicy(ctx context.Context, p *entity.SalesPricePolicy) (*entity.SalesPricePolicy, error) {
+	row := r.pool.QueryRow(ctx, `
+		UPDATE sales_price_policies
+		SET description=$2, cost_source=$3, priority=$4, sequence=$5, policy_scope=$6,
+		    policy_types=$7, markup_pct=$8, margin_pct=$9, max_margin_pct=$10,
+		    ideal_margin_pct=$11, margin_step_pct=$12, expenses_pct=$13, taxes_pct=$14,
+		    freight_pct=$15, commission_pct=$16, discount_pct=$17, min_margin_pct=$18,
+		    max_discount_pct=$19, incidences_json=$20::jsonb, sales_table_id=$21,
+		    validity_start=$22, validity_end=$23, is_active=$24, observation=$25, updated_at=NOW()
+		WHERE code=$1
+		RETURNING id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
+			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
+			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
+			min_margin_pct, max_discount_pct, incidences_json::text, sales_table_id,
+			validity_start, validity_end, is_active, observation, created_at, updated_at`,
+		p.Code, p.Description, string(p.CostSource), p.Priority, p.Sequence, p.PolicyScope,
+		p.PolicyTypes, p.MarkupPct, p.MarginPct, p.MaxMarginPct, p.IdealMarginPct,
+		p.MarginStepPct, p.ExpensesPct, p.TaxesPct, p.FreightPct, p.CommissionPct,
+		p.DiscountPct, p.MinMarginPct, p.MaxDiscountPct, p.IncidencesJSON, p.SalesTableID,
+		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd),
+		p.IsActive, p.Observation,
+	)
+	updated, err := scanSalesPricePolicy(row)
+	if err != nil {
+		return nil, fmt.Errorf("updating sales price policy %d: %w", p.Code, err)
+	}
+	return updated, nil
+}
+
+func (r *CustomerRepositorySQLC) GetSalesPricePolicyByCode(ctx context.Context, code int64) (*entity.SalesPricePolicy, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
+			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
+			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
+			min_margin_pct, max_discount_pct, incidences_json::text, sales_table_id,
+			validity_start, validity_end, is_active, observation, created_at, updated_at
+		FROM sales_price_policies WHERE code=$1`, code)
+	p, err := scanSalesPricePolicy(row)
+	if err != nil {
+		return nil, fmt.Errorf("fetching sales price policy %d: %w", code, err)
+	}
+	return p, nil
+}
+
+func (r *CustomerRepositorySQLC) ListSalesPricePolicies(ctx context.Context, onlyActive bool) ([]*entity.SalesPricePolicy, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
+			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
+			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
+			min_margin_pct, max_discount_pct, incidences_json::text, sales_table_id,
+			validity_start, validity_end, is_active, observation, created_at, updated_at
+		FROM sales_price_policies
+		WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+		ORDER BY code`, onlyActive)
+	if err != nil {
+		return nil, fmt.Errorf("listing sales price policies: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*entity.SalesPricePolicy, 0)
+	for rows.Next() {
+		p, err := scanSalesPricePolicy(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (r *CustomerRepositorySQLC) NextSalesPricePolicyCode(ctx context.Context) (int64, error) {
+	var code int64
+	if err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM sales_price_policies`).Scan(&code); err != nil {
+		return 0, err
+	}
+	return code, nil
+}
+
+func scanSalesPricePolicy(row scannable) (*entity.SalesPricePolicy, error) {
+	var p entity.SalesPricePolicy
+	var source string
+	var validityStart, validityEnd pgtype.Date
+	err := row.Scan(&p.ID, &p.Code, &p.Description, &source, &p.Priority, &p.Sequence,
+		&p.PolicyScope, &p.PolicyTypes, &p.MarkupPct, &p.MarginPct, &p.MaxMarginPct,
+		&p.IdealMarginPct, &p.MarginStepPct, &p.ExpensesPct, &p.TaxesPct, &p.FreightPct,
+		&p.CommissionPct, &p.DiscountPct, &p.MinMarginPct, &p.MaxDiscountPct,
+		&p.IncidencesJSON, &p.SalesTableID, &validityStart, &validityEnd, &p.IsActive,
+		&p.Observation, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	p.CostSource = entity.SalesCostSource(source)
+	p.ValidityStart = pgutil.FromPgDateToPtr(validityStart)
+	p.ValidityEnd = pgutil.FromPgDateToPtr(validityEnd)
+	return &p, nil
+}
+
+// ─── Commercial Policies ─────────────────────────────────────────────────────
+
+func (r *CustomerRepositorySQLC) CreateCommercialPolicy(ctx context.Context, p *entity.CommercialPolicy) (*entity.CommercialPolicy, error) {
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO commercial_policies (
+			code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
+			min_gross_value, max_gross_value, min_quantity, max_quantity, priority, sequence,
+			stackable, requires_approval, applies_on_net_value, allow_manual_change, allow_higher_values,
+			used_in_commission, applies_to_items, subtract_commission_base, data_types_json,
+			commission_discount_mode, customer_code, customer_type_id,
+			market_segment_id, region_id, sales_table_id, payment_condition_id, carrier_id,
+			item_code, item_mask, product_line_id, item_classification, rule_json,
+			validity_start, validity_end, observation
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36::jsonb,$37,$38,$39)
+		RETURNING id, code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
+			min_gross_value, max_gross_value, min_quantity, max_quantity, priority, sequence,
+			stackable, requires_approval, applies_on_net_value, allow_manual_change, allow_higher_values,
+			used_in_commission, applies_to_items, subtract_commission_base, data_types_json::text,
+			commission_discount_mode, customer_code, customer_type_id,
+			market_segment_id, region_id, sales_table_id, payment_condition_id, carrier_id,
+			item_code, item_mask, product_line_id, item_classification, rule_json::text,
+			validity_start, validity_end, is_active, observation, created_at, updated_at`,
+		p.Code, p.Description, string(p.Kind), string(p.ChoiceType), string(p.CalcType), p.PercentValue, p.FixedValue, p.MaxPercent, p.MaxValue,
+		p.MinGrossValue, p.MaxGrossValue, p.MinQuantity, p.MaxQuantity, p.Priority, p.Sequence,
+		p.Stackable, p.RequiresApproval, p.AppliesOnNetValue, p.AllowManualChange, p.AllowHigherValues,
+		p.UsedInCommission, p.AppliesToItems, p.SubtractCommissionBase, p.DataTypesJSON,
+		p.CommissionDiscountMode, p.CustomerCode, p.CustomerTypeID,
+		p.MarketSegmentID, p.RegionID, p.SalesTableID, p.PaymentConditionID, p.CarrierID,
+		p.ItemCode, p.ItemMask, p.ProductLineID, p.ItemClassification, p.RuleJSON,
+		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd), p.Observation)
+	created, err := scanCommercialPolicy(row)
+	if err != nil {
+		return nil, fmt.Errorf("creating commercial policy: %w", err)
+	}
+	return created, nil
+}
+
+func (r *CustomerRepositorySQLC) UpdateCommercialPolicy(ctx context.Context, p *entity.CommercialPolicy) (*entity.CommercialPolicy, error) {
+	row := r.pool.QueryRow(ctx, `
+		UPDATE commercial_policies
+		SET description=$2, kind=$3, choice_type=$4, calc_type=$5, percent_value=$6, fixed_value=$7,
+			max_percent=$8, max_value=$9, min_gross_value=$10, max_gross_value=$11,
+			min_quantity=$12, max_quantity=$13, priority=$14, sequence=$15,
+			stackable=$16, requires_approval=$17, applies_on_net_value=$18,
+			allow_manual_change=$19, allow_higher_values=$20, used_in_commission=$21,
+			applies_to_items=$22, subtract_commission_base=$23, data_types_json=$24::jsonb,
+			commission_discount_mode=$25, customer_code=$26, customer_type_id=$27,
+			market_segment_id=$28, region_id=$29, sales_table_id=$30, payment_condition_id=$31,
+			carrier_id=$32, item_code=$33, item_mask=$34, product_line_id=$35,
+			item_classification=$36, rule_json=$37::jsonb, validity_start=$38,
+			validity_end=$39, is_active=$40, observation=$41, updated_at=NOW()
+		WHERE code=$1
+		RETURNING id, code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
+			min_gross_value, max_gross_value, min_quantity, max_quantity, priority, sequence,
+			stackable, requires_approval, applies_on_net_value, allow_manual_change, allow_higher_values,
+			used_in_commission, applies_to_items, subtract_commission_base, data_types_json::text,
+			commission_discount_mode, customer_code, customer_type_id,
+			market_segment_id, region_id, sales_table_id, payment_condition_id, carrier_id,
+			item_code, item_mask, product_line_id, item_classification, rule_json::text,
+			validity_start, validity_end, is_active, observation, created_at, updated_at`,
+		p.Code, p.Description, string(p.Kind), string(p.ChoiceType), string(p.CalcType), p.PercentValue, p.FixedValue,
+		p.MaxPercent, p.MaxValue, p.MinGrossValue, p.MaxGrossValue, p.MinQuantity, p.MaxQuantity,
+		p.Priority, p.Sequence, p.Stackable, p.RequiresApproval, p.AppliesOnNetValue,
+		p.AllowManualChange, p.AllowHigherValues, p.UsedInCommission, p.AppliesToItems,
+		p.SubtractCommissionBase, p.DataTypesJSON, p.CommissionDiscountMode,
+		p.CustomerCode, p.CustomerTypeID, p.MarketSegmentID, p.RegionID, p.SalesTableID,
+		p.PaymentConditionID, p.CarrierID, p.ItemCode, p.ItemMask, p.ProductLineID,
+		p.ItemClassification, p.RuleJSON, pgutil.ToPgDateFromPtr(p.ValidityStart),
+		pgutil.ToPgDateFromPtr(p.ValidityEnd), p.IsActive, p.Observation)
+	updated, err := scanCommercialPolicy(row)
+	if err != nil {
+		return nil, fmt.Errorf("updating commercial policy %d: %w", p.Code, err)
+	}
+	return updated, nil
+}
+
+func (r *CustomerRepositorySQLC) GetCommercialPolicyByCode(ctx context.Context, code int64) (*entity.CommercialPolicy, error) {
+	row := r.pool.QueryRow(ctx, commercialPolicySelect()+` WHERE code=$1`, code)
+	p, err := scanCommercialPolicy(row)
+	if err != nil {
+		return nil, fmt.Errorf("fetching commercial policy %d: %w", code, err)
+	}
+	p.Lines, _ = r.ListCommercialPolicyLines(ctx, code)
+	return p, nil
+}
+
+func (r *CustomerRepositorySQLC) ListCommercialPolicies(ctx context.Context, onlyActive bool, kind *entity.CommercialPolicyKind) ([]*entity.CommercialPolicy, error) {
+	var kindArg *string
+	if kind != nil {
+		v := string(*kind)
+		kindArg = &v
+	}
+	rows, err := r.pool.Query(ctx, commercialPolicySelect()+`
+		WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+		  AND ($2::TEXT IS NULL OR kind = $2)
+		ORDER BY priority, sequence, code`, onlyActive, kindArg)
+	if err != nil {
+		return nil, fmt.Errorf("listing commercial policies: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*entity.CommercialPolicy, 0)
+	for rows.Next() {
+		p, err := scanCommercialPolicy(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, p := range out {
+		p.Lines, _ = r.ListCommercialPolicyLines(ctx, p.Code)
+	}
+	return out, nil
+}
+
+func (r *CustomerRepositorySQLC) NextCommercialPolicyCode(ctx context.Context) (int64, error) {
+	var code int64
+	if err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM commercial_policies`).Scan(&code); err != nil {
+		return 0, err
+	}
+	return code, nil
+}
+
+func (r *CustomerRepositorySQLC) AddCommercialPolicyLine(ctx context.Context, line *entity.CommercialPolicyLine) (*entity.CommercialPolicyLine, error) {
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO commercial_policy_lines (
+			policy_id, line_number, sequence_number, description, calc_type, percent_value,
+			fixed_value, min_value, max_value, variables_json, validity_start, validity_end
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)
+		RETURNING id, policy_id, line_number, sequence_number, description, calc_type,
+			percent_value, fixed_value, min_value, max_value, variables_json::text,
+			validity_start, validity_end, is_active, created_at, updated_at`,
+		line.PolicyID, line.LineNumber, line.SequenceNumber, line.Description,
+		string(line.CalcType), line.PercentValue, line.FixedValue, line.MinValue,
+		line.MaxValue, line.VariablesJSON, pgutil.ToPgDateFromPtr(line.ValidityStart),
+		pgutil.ToPgDateFromPtr(line.ValidityEnd))
+	created, err := scanCommercialPolicyLine(row)
+	if err != nil {
+		return nil, fmt.Errorf("adding commercial policy line: %w", err)
+	}
+	return created, nil
+}
+
+func (r *CustomerRepositorySQLC) ListCommercialPolicyLines(ctx context.Context, policyCode int64) ([]*entity.CommercialPolicyLine, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT l.id, l.policy_id, l.line_number, l.sequence_number, l.description, l.calc_type,
+			l.percent_value, l.fixed_value, l.min_value, l.max_value, l.variables_json::text,
+			l.validity_start, l.validity_end, l.is_active, l.created_at, l.updated_at
+		FROM commercial_policy_lines l
+		JOIN commercial_policies p ON p.id = l.policy_id
+		WHERE p.code=$1
+		ORDER BY l.line_number, l.sequence_number`, policyCode)
+	if err != nil {
+		return nil, fmt.Errorf("listing commercial policy lines: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*entity.CommercialPolicyLine, 0)
+	for rows.Next() {
+		line, err := scanCommercialPolicyLine(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, line)
+	}
+	return out, rows.Err()
+}
+
+func (r *CustomerRepositorySQLC) AddCommercialPolicySpecificItem(ctx context.Context, item *entity.CommercialPolicySpecificItem) (*entity.CommercialPolicySpecificItem, error) {
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO commercial_policy_specific_items (
+			policy_id, item_code, item_mask, product_line_id, item_classification,
+			validity_start, validity_end, block_discount, block_surcharge,
+			ignore_item_policies, block_manual_change
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		RETURNING id, policy_id, item_code, item_mask, product_line_id, item_classification,
+			validity_start, validity_end, block_discount, block_surcharge,
+			ignore_item_policies, block_manual_change, created_at`,
+		item.PolicyID, item.ItemCode, item.ItemMask, item.ProductLineID, item.ItemClassification,
+		pgutil.ToPgDateFromPtr(item.ValidityStart), pgutil.ToPgDateFromPtr(item.ValidityEnd),
+		item.BlockDiscount, item.BlockSurcharge, item.IgnoreItemPolicies, item.BlockManualChange)
+	created, err := scanCommercialPolicySpecificItem(row)
+	if err != nil {
+		return nil, fmt.Errorf("adding commercial policy specific item: %w", err)
+	}
+	return created, nil
+}
+
+func (r *CustomerRepositorySQLC) ListCommercialPolicySpecificItems(ctx context.Context, policyCode int64) ([]*entity.CommercialPolicySpecificItem, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT i.id, i.policy_id, i.item_code, i.item_mask, i.product_line_id, i.item_classification,
+			i.validity_start, i.validity_end, i.block_discount, i.block_surcharge,
+			i.ignore_item_policies, i.block_manual_change, i.created_at
+		FROM commercial_policy_specific_items i
+		JOIN commercial_policies p ON p.id = i.policy_id
+		WHERE p.code=$1
+		ORDER BY i.id`, policyCode)
+	if err != nil {
+		return nil, fmt.Errorf("listing commercial policy specific items: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*entity.CommercialPolicySpecificItem, 0)
+	for rows.Next() {
+		item, err := scanCommercialPolicySpecificItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func commercialPolicySelect() string {
+	return `SELECT id, code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
+		min_gross_value, max_gross_value, min_quantity, max_quantity, priority, sequence,
+		stackable, requires_approval, applies_on_net_value, allow_manual_change, allow_higher_values,
+		used_in_commission, applies_to_items, subtract_commission_base, data_types_json::text,
+		commission_discount_mode, customer_code, customer_type_id,
+		market_segment_id, region_id, sales_table_id, payment_condition_id, carrier_id,
+		item_code, item_mask, product_line_id, item_classification, rule_json::text,
+		validity_start, validity_end, is_active, observation, created_at, updated_at
+		FROM commercial_policies`
+}
+
+func scanCommercialPolicy(row scannable) (*entity.CommercialPolicy, error) {
+	var p entity.CommercialPolicy
+	var kind, choiceType, calcType string
+	var validityStart, validityEnd pgtype.Date
+	err := row.Scan(&p.ID, &p.Code, &p.Description, &kind, &choiceType, &calcType,
+		&p.PercentValue, &p.FixedValue, &p.MaxPercent, &p.MaxValue,
+		&p.MinGrossValue, &p.MaxGrossValue, &p.MinQuantity, &p.MaxQuantity,
+		&p.Priority, &p.Sequence, &p.Stackable, &p.RequiresApproval,
+		&p.AppliesOnNetValue, &p.AllowManualChange, &p.AllowHigherValues,
+		&p.UsedInCommission, &p.AppliesToItems, &p.SubtractCommissionBase,
+		&p.DataTypesJSON, &p.CommissionDiscountMode, &p.CustomerCode, &p.CustomerTypeID,
+		&p.MarketSegmentID, &p.RegionID, &p.SalesTableID, &p.PaymentConditionID,
+		&p.CarrierID, &p.ItemCode, &p.ItemMask, &p.ProductLineID,
+		&p.ItemClassification, &p.RuleJSON, &validityStart, &validityEnd,
+		&p.IsActive, &p.Observation, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	p.Kind = entity.CommercialPolicyKind(kind)
+	p.ChoiceType = entity.CommercialPolicyChoiceType(choiceType)
+	p.CalcType = entity.CommercialPolicyCalcType(calcType)
+	p.ValidityStart = pgutil.FromPgDateToPtr(validityStart)
+	p.ValidityEnd = pgutil.FromPgDateToPtr(validityEnd)
+	return &p, nil
+}
+
+func scanCommercialPolicyLine(row scannable) (*entity.CommercialPolicyLine, error) {
+	var line entity.CommercialPolicyLine
+	var calcType string
+	var validityStart, validityEnd pgtype.Date
+	err := row.Scan(&line.ID, &line.PolicyID, &line.LineNumber, &line.SequenceNumber,
+		&line.Description, &calcType, &line.PercentValue, &line.FixedValue,
+		&line.MinValue, &line.MaxValue, &line.VariablesJSON, &validityStart,
+		&validityEnd, &line.IsActive, &line.CreatedAt, &line.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	line.CalcType = entity.CommercialPolicyCalcType(calcType)
+	line.ValidityStart = pgutil.FromPgDateToPtr(validityStart)
+	line.ValidityEnd = pgutil.FromPgDateToPtr(validityEnd)
+	return &line, nil
+}
+
+func scanCommercialPolicySpecificItem(row scannable) (*entity.CommercialPolicySpecificItem, error) {
+	var item entity.CommercialPolicySpecificItem
+	var validityStart, validityEnd pgtype.Date
+	err := row.Scan(&item.ID, &item.PolicyID, &item.ItemCode, &item.ItemMask,
+		&item.ProductLineID, &item.ItemClassification, &validityStart, &validityEnd,
+		&item.BlockDiscount, &item.BlockSurcharge, &item.IgnoreItemPolicies,
+		&item.BlockManualChange, &item.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	item.ValidityStart = pgutil.FromPgDateToPtr(validityStart)
+	item.ValidityEnd = pgutil.FromPgDateToPtr(validityEnd)
+	return &item, nil
 }
 
 // ─── Invoice Types ────────────────────────────────────────────────────────────
@@ -1315,6 +1757,51 @@ func (r *CustomerRepositorySQLC) CreateSalesTablePrice(ctx context.Context, p *e
 	return p, nil
 }
 
+func (r *CustomerRepositorySQLC) UpsertSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, *float64, error) {
+	var oldPrice pgtype.Numeric
+	row := r.pool.QueryRow(ctx,
+		`WITH old AS (
+			SELECT price FROM sales_table_prices WHERE sales_table_id=$1 AND item_code=$2
+		 ),
+		 upserted AS (
+			INSERT INTO sales_table_prices
+			 (sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			 ON CONFLICT (sales_table_id, item_code) DO UPDATE
+			 SET price=EXCLUDED.price, ume=EXCLUDED.ume, umc=EXCLUDED.umc,
+			     price_conv=EXCLUDED.price_conv, formula=EXCLUDED.formula,
+			     situation=EXCLUDED.situation, blocked=EXCLUDED.blocked,
+			     observation=EXCLUDED.observation, product_line_id=EXCLUDED.product_line_id,
+			     item_mask=EXCLUDED.item_mask
+			 RETURNING id, sales_table_id, item_code, price, ume, umc, price_conv,
+			           formula, situation, blocked, observation, product_line_id, item_mask, created_at
+		 )
+		 SELECT upserted.id, upserted.sales_table_id, upserted.item_code, upserted.price,
+		        upserted.ume, upserted.umc, upserted.price_conv, upserted.formula,
+		        upserted.situation, upserted.blocked, upserted.observation,
+		        upserted.product_line_id, upserted.item_mask, upserted.created_at,
+		        (SELECT price FROM old)
+		 FROM upserted`,
+		p.SalesTableID, p.ItemCode, p.Price, p.UME, p.UMC, p.PriceConv,
+		p.Formula, string(p.Situation), p.Blocked, p.Observation, p.ProductLineID, p.ItemMask,
+	)
+	var out entity.SalesTablePrice
+	var sit string
+	err := row.Scan(&out.ID, &out.SalesTableID, &out.ItemCode, &out.Price, &out.UME, &out.UMC,
+		&out.PriceConv, &out.Formula, &sit, &out.Blocked, &out.Observation,
+		&out.ProductLineID, &out.ItemMask, &out.CreatedAt, &oldPrice)
+	if err != nil {
+		return nil, nil, fmt.Errorf("upserting sales table price: %w", err)
+	}
+	out.Situation = entity.PriceSituation(sit)
+	var oldPtr *float64
+	if oldPrice.Valid {
+		v := pgutil.FromPgNumericToFloat64(oldPrice)
+		oldPtr = &v
+	}
+	return &out, oldPtr, nil
+}
+
 func (r *CustomerRepositorySQLC) UpdateSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, error) {
 	row := r.pool.QueryRow(ctx,
 		`UPDATE sales_table_prices
@@ -1349,6 +1836,17 @@ func (r *CustomerRepositorySQLC) GetSalesTablePrice(ctx context.Context, salesTa
 	return p, nil
 }
 
+func (r *CustomerRepositorySQLC) GetSalesTablePriceByID(ctx context.Context, id int64) (*entity.SalesTablePrice, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT id, sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask, created_at
+		 FROM sales_table_prices WHERE id=$1`, id)
+	p, err := scanSalesTablePrice(row)
+	if err != nil {
+		return nil, fmt.Errorf("fetching sales table price %d: %w", id, err)
+	}
+	return p, nil
+}
+
 func (r *CustomerRepositorySQLC) ListSalesTablePrices(ctx context.Context, salesTableID int64) ([]*entity.SalesTablePrice, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask, created_at
@@ -1372,6 +1870,114 @@ func (r *CustomerRepositorySQLC) ListSalesTablePrices(ctx context.Context, sales
 func (r *CustomerRepositorySQLC) DeleteSalesTablePrice(ctx context.Context, id int64) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM sales_table_prices WHERE id=$1`, id)
 	return err
+}
+
+func (r *CustomerRepositorySQLC) ResolveSalesCost(ctx context.Context, itemCode int64, mask string, source entity.SalesCostSource, warehouseID *int64) (float64, string, error) {
+	var value float64
+	switch source {
+	case entity.SalesCostStandardTotal:
+		err := r.pool.QueryRow(ctx,
+			`SELECT total_cost FROM item_standard_costs
+			 WHERE item_code=$1 AND mask=$2 ORDER BY calculated_at DESC LIMIT 1`, itemCode, mask).Scan(&value)
+		return value, string(source), normalizeCostErr(err, itemCode, source)
+	case entity.SalesCostStandardMaterial:
+		err := r.pool.QueryRow(ctx,
+			`SELECT material_cost FROM item_standard_costs
+			 WHERE item_code=$1 AND mask=$2 ORDER BY calculated_at DESC LIMIT 1`, itemCode, mask).Scan(&value)
+		return value, string(source), normalizeCostErr(err, itemCode, source)
+	case entity.SalesCostPurchase:
+		err := r.pool.QueryRow(ctx,
+			`SELECT unit_cost FROM item_purchase_costs
+			 WHERE item_code=$1 ORDER BY updated_at DESC LIMIT 1`, itemCode).Scan(&value)
+		return value, string(source), normalizeCostErr(err, itemCode, source)
+	case entity.SalesCostStockAvg:
+		return r.resolveStockCost(ctx, itemCode, mask, warehouseID, true)
+	case entity.SalesCostStockLast:
+		return r.resolveStockCost(ctx, itemCode, mask, warehouseID, false)
+	default:
+		return 0, string(source), fmt.Errorf("cost source %s requires informed base_cost", source)
+	}
+}
+
+func (r *CustomerRepositorySQLC) resolveStockCost(ctx context.Context, itemCode int64, mask string, warehouseID *int64, avg bool) (float64, string, error) {
+	col := "last_cost"
+	source := "STOCK_LAST"
+	if avg {
+		col = "avg_cost"
+		source = "STOCK_AVG"
+	}
+	var value float64
+	var err error
+	if warehouseID != nil {
+		err = r.pool.QueryRow(ctx,
+			fmt.Sprintf(`SELECT %s FROM stock_balances WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3`, col),
+			itemCode, mask, *warehouseID).Scan(&value)
+	} else {
+		err = r.pool.QueryRow(ctx,
+			fmt.Sprintf(`SELECT %s FROM stock_balances WHERE item_code=$1 AND mask=$2 ORDER BY quantity DESC LIMIT 1`, col),
+			itemCode, mask).Scan(&value)
+	}
+	return value, source, normalizeCostErr(err, itemCode, entity.SalesCostSource(source))
+}
+
+func normalizeCostErr(err error, itemCode int64, source entity.SalesCostSource) error {
+	if err == nil {
+		return nil
+	}
+	if err == pgx.ErrNoRows {
+		return fmt.Errorf("cost not found for item %d using source %s", itemCode, source)
+	}
+	return err
+}
+
+func (r *CustomerRepositorySQLC) CreateSalesTablePriceHistory(ctx context.Context, h *entity.SalesTablePriceHistory) (*entity.SalesTablePriceHistory, error) {
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO sales_table_price_history (
+			sales_table_price_id, sales_table_id, sales_table_code, item_code,
+			old_price, new_price, base_cost, source, policy_code, reason
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		RETURNING id, sales_table_price_id, sales_table_id, sales_table_code, item_code,
+		          old_price, new_price, base_cost, source, policy_code, reason, created_at`,
+		h.SalesTablePriceID, h.SalesTableID, h.SalesTableCode, h.ItemCode,
+		h.OldPrice, h.NewPrice, h.BaseCost, h.Source, h.PolicyCode, h.Reason)
+	created, err := scanSalesTablePriceHistory(row)
+	if err != nil {
+		return nil, fmt.Errorf("creating sales table price history: %w", err)
+	}
+	return created, nil
+}
+
+func (r *CustomerRepositorySQLC) ListSalesTablePriceHistory(ctx context.Context, salesTableCode int64, itemCode *string) ([]*entity.SalesTablePriceHistory, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, sales_table_price_id, sales_table_id, sales_table_code, item_code,
+		       old_price, new_price, base_cost, source, policy_code, reason, created_at
+		FROM sales_table_price_history
+		WHERE sales_table_code=$1 AND ($2::TEXT IS NULL OR item_code=$2)
+		ORDER BY created_at DESC`, salesTableCode, itemCode)
+	if err != nil {
+		return nil, fmt.Errorf("listing sales table price history: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*entity.SalesTablePriceHistory, 0)
+	for rows.Next() {
+		h, err := scanSalesTablePriceHistory(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+func scanSalesTablePriceHistory(row scannable) (*entity.SalesTablePriceHistory, error) {
+	var h entity.SalesTablePriceHistory
+	err := row.Scan(&h.ID, &h.SalesTablePriceID, &h.SalesTableID, &h.SalesTableCode,
+		&h.ItemCode, &h.OldPrice, &h.NewPrice, &h.BaseCost, &h.Source,
+		&h.PolicyCode, &h.Reason, &h.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &h, nil
 }
 
 type scannable interface {

@@ -120,7 +120,7 @@ espaço, inclusive **girando** quando possível.
 ## Motor de otimização de máxima economia
 
 O cálculo do plano usa as mesmas técnicas dos grandes ERPs do mundo (SAP, Oracle,
-FoccoERP, SigmaNEST) — só que **embutidas, sem custo de licença e sem instalar nada**:
+sistemas avançados de otimização industrial — só que **embutidas, sem custo de licença e sem instalar nada**:
 
 - **Barras (1D) e chapas (2D):** em vez de só "encaixar como der", o sistema **testa
   combinações de padrões de corte** e escolhe a que gasta menos material — o método de

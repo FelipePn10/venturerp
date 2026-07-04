@@ -12,14 +12,15 @@ O módulo de Vendas é a **porta de entrada** do fluxo do ERP: é o pedido do cl
 
 1. [Pedido de venda](#1-pedido-de-venda)
 2. [Itens do pedido](#2-itens-do-pedido)
-3. [Crédito e bloqueio](#3-crédito-e-bloqueio)
-4. [Do pedido ao planejamento](#4-do-pedido-ao-planejamento)
-5. [Divisão de vendas](#5-divisão-de-vendas)
-6. [Promessa de entrega (prazos confiáveis)](#6-promessa-de-entrega-prazos-confiáveis)
-7. [Reprogramação de entrega](#7-reprogramação-de-entrega)
-8. [Faturamento](#8-faturamento)
-9. [Expedição / Romaneio](#9-expedição--romaneio)
-10. [Glossário rápido](#10-glossário-rápido)
+3. [Precificação](#3-precificação)
+4. [Crédito e bloqueio](#4-crédito-e-bloqueio)
+5. [Do pedido ao planejamento](#5-do-pedido-ao-planejamento)
+6. [Divisão de vendas](#6-divisão-de-vendas)
+7. [Promessa de entrega (prazos confiáveis)](#7-promessa-de-entrega-prazos-confiáveis)
+8. [Reprogramação de entrega](#8-reprogramação-de-entrega)
+9. [Faturamento](#9-faturamento)
+10. [Expedição / Romaneio](#10-expedição--romaneio)
+11. [Glossário rápido](#11-glossário-rápido)
 
 ---
 
@@ -49,13 +50,33 @@ Cada linha do pedido é um **item**: produto, quantidade e **data de entrega** p
 
 ---
 
-## 3. Crédito e bloqueio
+## 3. Precificação
+
+A área comercial mantém **tabelas de venda** com vigência, tipo, composição,
+tolerância mínima/máxima e casas decimais. Cada tabela possui preços por item, com
+situação ativa/promocional/inativa, fórmula, unidade de medida, opção de bloqueio e
+controle de preço abaixo de um centavo.
+
+Além de consultar o preço vigente de um item, o sistema calcula **preço sugerido** a
+partir de custo base, markup, margem desejada, impostos, frete, comissão, descontos
+e outras despesas.
+
+Também há **políticas de formação de preço**: elas guardam prioridade, sequência,
+vigência, fonte de custo (custo-padrão, custo de compra, custo médio/último do
+estoque ou custo informado), margem mínima/máxima/ideal, incidências comerciais e
+percentuais. Com isso o comercial consegue simular preço, reprecificar itens da
+tabela em lote e manter histórico do preço antigo, novo preço, custo usado e
+política aplicada.
+
+---
+
+## 4. Crédito e bloqueio
 
 O cliente tem um **limite de crédito**. Um pedido pode ser **bloqueado** (automaticamente ao ultrapassar o limite, ou manualmente por decisão comercial/financeira) e depois **desbloqueado**. Enquanto bloqueado, o pedido **não avança** — protegendo a empresa de vender para quem está inadimplente ou no limite.
 
 ---
 
-## 4. Do pedido ao planejamento
+## 5. Do pedido ao planejamento
 
 Quando o pedido é **confirmado**, o sistema cria automaticamente a **demanda** de cada item para o planejamento (MRP). Esse é o elo que liga a venda à fábrica: a partir daí o sistema sabe o que precisa comprar e produzir para atender aquele cliente no prazo.
 
@@ -63,13 +84,13 @@ Quando o pedido é **confirmado**, o sistema cria automaticamente a **demanda** 
 
 ---
 
-## 5. Divisão de vendas
+## 6. Divisão de vendas
 
 A **divisão de vendas** organiza a área comercial (equipes, regiões ou unidades de negócio). Cada pedido pode ser associado a uma divisão, o que permite **medir resultado por equipe/segmento** e aplicar regras comerciais específicas. As divisões podem ser criadas, listadas, consultadas, atualizadas e excluídas.
 
 ---
 
-## 6. Promessa de entrega (prazos confiáveis)
+## 7. Promessa de entrega (prazos confiáveis)
 
 O sistema ajuda a **prometer prazos realistas**, em vez de "chutar" uma data:
 
@@ -82,13 +103,79 @@ Com isso, a data de entrega informada ao cliente considera a **disponibilidade r
 
 ---
 
-## 7. Reprogramação de entrega
+## 8. Reprogramação de entrega
 
 Quando uma data precisa mudar (atraso de matéria-prima, mudança de prioridade), o sistema registra a **reprogramação de entrega** vinculada ao pedido. Assim fica o **histórico** das remarcações (data original × nova data × motivo), com transparência para o comercial e para o cliente. É possível listar as reprogramações de cada pedido.
 
 ---
 
-## 8. Faturamento
+## 9. Política comercial
+
+Política comercial é o conjunto de regras que controla a negociação depois que o
+preço de tabela já existe. Ela evita que desconto, acréscimo, frete e comissão
+sejam decididos de forma informal ou diferente a cada venda.
+
+O sistema permite configurar regras por cliente, segmento, região, tabela de
+vendas, condição de pagamento, transportadora, item, linha de produto e
+classificação. Cada regra tem validade, prioridade, sequência e faixa de valor ou
+quantidade. Assim a empresa consegue aplicar campanhas, acordos comerciais,
+condições especiais e comissões sem depender de planilhas paralelas.
+
+### Para que serve
+
+| Necessidade | Como a política resolve |
+|---|---|
+| Controlar descontos | Define percentuais/valores permitidos por cliente, item, volume ou campanha |
+| Aplicar acréscimos | Compensa prazo longo, venda especial, lote pequeno ou condição onerosa |
+| Compor frete comercial | Inclui frete negociado antes da expedição/faturamento |
+| Prever comissões | Calcula comissão futura por regra comercial |
+| Exigir aprovação | Marca negociações que precisam de liberação comercial |
+| Evitar exceções indevidas | Bloqueia desconto/acréscimo ou alteração manual por item/classificação |
+
+### Como funciona na venda
+
+1. O vendedor informa cliente, item, quantidade, tabela e condição comercial.
+2. O sistema consulta as políticas ativas e vigentes.
+3. As regras compatíveis são aplicadas por prioridade e sequência.
+4. O resultado mostra valor líquido, descontos, acréscimos, frete e comissão.
+5. Se alguma regra exigir aprovação, a venda fica sinalizada para liberação.
+
+Na simulação de uma venda, o sistema retorna:
+
+- desconto total;
+- acréscimo total;
+- frete comercial;
+- comissão futura;
+- valor líquido;
+- indicação de aprovação obrigatória quando alguma política exigir.
+
+Regras acumuláveis podem somar efeitos. Regras não acumuláveis travam novas regras
+do mesmo tipo depois da primeira aplicação, mantendo previsibilidade na negociação.
+
+### Exemplos práticos
+
+**Campanha por volume:** cliente que compra acima de 50 unidades de uma linha recebe
+8% de desconto, desde que a condição de pagamento esteja dentro do prazo padrão.
+
+**Acréscimo financeiro:** venda com prazo longo recebe 3% de acréscimo para cobrir
+custo financeiro.
+
+**Frete negociado:** entregas em uma região específica incluem valor fixo de frete
+comercial, visível antes do faturamento.
+
+**Comissão futura:** representantes têm comissão calculada automaticamente pela
+regra aplicável, permitindo previsão antes da emissão da nota.
+
+### Benefício operacional
+
+A política comercial padroniza a negociação, reduz exceções manuais, melhora a
+rastreabilidade de aprovações e entrega para gestão uma visão clara de quanto a
+empresa concedeu de desconto, quanto adicionou de acréscimo/frete e quanto será
+provisionado de comissão.
+
+---
+
+## 10. Faturamento
 
 Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de Saída (NF-e)**, o sistema executa em cadeia, automaticamente:
 
@@ -102,7 +189,7 @@ Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de
 
 ---
 
-## 9. Expedição / Romaneio
+## 11. Expedição / Romaneio
 
 A expedição organiza a **saída física** da mercadoria por meio do **romaneio** (lista de carregamento):
 
@@ -118,11 +205,13 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 
 ---
 
-## 10. Glossário rápido
+## 12. Glossário rápido
 
 | Termo | Significado |
 |---|---|
 | **Pedido de venda** | O documento da compra do cliente |
+| **Tabela de vendas** | Cadastro de preços comerciais por item |
+| **Política comercial** | Regra de desconto, acréscimo, frete ou comissão aplicada à venda |
 | **Demanda** | A necessidade que o pedido confirmado gera para o planejamento |
 | **Divisão de vendas** | Agrupamento comercial (equipe/região/unidade) |
 | **Reserva** | Estoque separado para um pedido |

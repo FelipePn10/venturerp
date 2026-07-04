@@ -2480,6 +2480,290 @@ GET  /api/cutting-plans/{id}/order-costs         -- rateio do custo da baixa por
 --     e cada peça traz "banding_length_mm".
 -- Nesting irregular (TRUE_SHAPE_2D) agora usa nester nativo shape-aware (raster) por padrão.
 
+============================================================
+MÓDULO: COMERCIAL - PRECIFICAÇÃO
+============================================================
+
+POST /api/customers/sales-tables
+{
+  "description": "Tabela Comercial 2026",
+  "validity_start": "2026-01-01T00:00:00Z",
+  "validity_end": "2026-12-31T00:00:00Z",
+  "tolerance_min_pct": 0,
+  "tolerance_max_pct": 10,
+  "price_formation": "INFORMADO",
+  "decimal_places": 2,
+  "composition": "FOB",
+  "table_type": "NORMAL",
+  "base_date": "PEDIDO",
+  "allow_items_below_cent": false,
+  "icms_interestadual_por_dentro": false,
+  "observation": "Tabela padrão de venda"
+}
+
+GET /api/customers/sales-tables
+GET /api/customers/sales-tables/{tableCode}
+
+PUT /api/customers/sales-tables/{tableCode}
+{
+  "description": "Tabela Comercial 2026 revisada",
+  "tolerance_min_pct": 0,
+  "tolerance_max_pct": 12,
+  "price_formation": "INFORMADO",
+  "decimal_places": 2,
+  "is_active": true,
+  "composition": "FOB",
+  "table_type": "NORMAL",
+  "base_date": "PEDIDO",
+  "allow_items_below_cent": false,
+  "icms_interestadual_por_dentro": false
+}
+
+POST /api/customers/sales-tables/{tableCode}/prices
+{
+  "item_code": "1001",
+  "price": 250.00,
+  "ume": "UN",
+  "umc": "UN",
+  "price_conv": 250.00,
+  "formula": "BASE_2026",
+  "situation": "ATIVO",
+  "blocked": false,
+  "observation": "Preço base"
+}
+
+GET /api/customers/sales-tables/{tableCode}/prices
+GET /api/customers/sales-tables/{tableCode}/prices/{itemCode}
+
+PUT /api/customers/sales-tables/prices
+{
+  "id": 10,
+  "price": 245.00,
+  "ume": "UN",
+  "umc": "UN",
+  "price_conv": 245.00,
+  "situation": "PROMOCIONAL",
+  "blocked": false
+}
+
+DELETE /api/customers/sales-tables/prices/{id}
+
+POST /api/customers/sales-tables/pricing
+{
+  "sales_table_code": 1,
+  "item_code": "1001",
+  "quantity": 3
+}
+-- Resolve preço unitário da tabela ativa/vigente e retorna total bruto.
+
+POST /api/customers/sales-tables/price-formation
+{
+  "sales_table_code": 1,
+  "policy_code": 1,
+  "item_code": "1001",
+  "base_cost": 100.00,
+  "markup_pct": 0,
+  "margin_pct": 20,
+  "expenses_pct": 0,
+  "taxes_pct": 10,
+  "freight_pct": 0,
+  "commission_pct": 5,
+  "discount_pct": 0
+}
+-- Exemplo esperado: suggested_price = 153.85 quando decimal_places=2.
+-- Se policy_code for informado, markup/margem/cargas vêm da política; se base_cost
+-- for zero e item_code numérico existir, o sistema tenta buscar custo conforme
+-- cost_source da política.
+
+POST /api/customers/sales-price-policies
+{
+  "description": "Política padrão industrial",
+  "cost_source": "STANDARD_TOTAL",
+  "priority": 10,
+  "sequence": 10,
+  "policy_scope": "PREC",
+  "policy_types": "ITEM-CLIENTE-UF_CLIENTE",
+  "markup_pct": 0,
+  "margin_pct": 20,
+  "max_margin_pct": 35,
+  "ideal_margin_pct": 22,
+  "margin_step_pct": 1,
+  "expenses_pct": 3,
+  "taxes_pct": 12,
+  "freight_pct": 2,
+  "commission_pct": 5,
+  "discount_pct": 0,
+  "min_margin_pct": 15,
+  "max_discount_pct": 10,
+  "incidences_json": [
+    {"calculation":"Aliq. ICMS Venda","type":"Percentual","application":"Sobre base","value":12},
+    {"calculation":"Comissão","type":"Percentual","application":"Sobre venda","value":5}
+  ],
+  "sales_table_code": 1,
+  "validity_start": "2026-01-01T00:00:00Z",
+  "validity_end": "2026-12-31T00:00:00Z",
+  "observation": "Formação padrão para produtos fabricados"
+}
+
+GET /api/customers/sales-price-policies
+GET /api/customers/sales-price-policies/{code}
+
+PUT /api/customers/sales-price-policies/{code}
+{
+  "description": "Política padrão industrial revisada",
+  "cost_source": "STANDARD_TOTAL",
+  "priority": 10,
+  "sequence": 20,
+  "policy_scope": "PREC",
+  "policy_types": "ITEM-CLIENTE-UF_CLIENTE",
+  "markup_pct": 0,
+  "margin_pct": 22,
+  "max_margin_pct": 35,
+  "ideal_margin_pct": 24,
+  "margin_step_pct": 1,
+  "expenses_pct": 3,
+  "taxes_pct": 12,
+  "freight_pct": 2,
+  "commission_pct": 5,
+  "discount_pct": 0,
+  "min_margin_pct": 15,
+  "max_discount_pct": 10,
+  "incidences_json": [
+    {"calculation":"Aliq. ICMS Venda","type":"Percentual","application":"Sobre base","value":12}
+  ],
+  "sales_table_code": 1,
+  "is_active": true
+}
+
+POST /api/customers/sales-tables/generate-prices
+{
+  "sales_table_code": 1,
+  "policy_code": 1,
+  "item_codes": ["1001", "1002"],
+  "warehouse_id": 1,
+  "reason": "Reprecificação mensal"
+}
+-- Busca custo por cost_source da política, calcula preço, faz upsert em
+-- sales_table_prices e registra sales_table_price_history. Resposta traz
+-- generated[] e warnings[] por item sem custo ou inválido.
+
+GET /api/customers/sales-tables/{tableCode}/price-history
+GET /api/customers/sales-tables/{tableCode}/price-history?item_code=1001
+
+POST /api/customers/support/commercial-policies
+{
+  "description": "Desconto por volume",
+  "kind": "DISCOUNT",
+  "choice_type": "INFORMATION",
+  "calc_type": "PERCENT",
+  "percent_value": 10,
+  "max_percent": 12,
+  "max_value": 1500,
+  "min_gross_value": 1000,
+  "min_quantity": 5,
+  "priority": 1,
+  "sequence": 10,
+  "stackable": true,
+  "requires_approval": false,
+  "applies_on_net_value": true,
+  "allow_manual_change": true,
+  "allow_higher_values": false,
+  "used_in_commission": true,
+  "applies_to_items": true,
+  "subtract_commission_base": false,
+  "data_types_json": ["CUSTOMER", "ITEM", "PAYMENT_TERM"],
+  "commission_discount_mode": "REAL",
+  "customer_code": 100,
+  "item_code": "1001",
+  "rule_json": {"origin": "commercial-table"},
+  "validity_start": "2026-01-01T00:00:00Z",
+  "validity_end": "2026-12-31T00:00:00Z",
+  "observation": "Regra por volume para cliente estratégico"
+}
+
+GET /api/customers/support/commercial-policies
+GET /api/customers/support/commercial-policies?kind=DISCOUNT
+GET /api/customers/support/commercial-policies/{code}
+
+PUT /api/customers/support/commercial-policies/{code}
+{
+  "description": "Desconto por volume revisado",
+  "kind": "DISCOUNT",
+  "choice_type": "CHOICE",
+  "calc_type": "PERCENT",
+  "percent_value": 8,
+  "max_percent": 10,
+  "max_value": 1200,
+  "min_gross_value": 1000,
+  "min_quantity": 5,
+  "priority": 1,
+  "sequence": 20,
+  "stackable": true,
+  "requires_approval": true,
+  "applies_on_net_value": true,
+  "allow_manual_change": true,
+  "allow_higher_values": false,
+  "used_in_commission": true,
+  "applies_to_items": true,
+  "subtract_commission_base": false,
+  "data_types_json": ["CUSTOMER", "ITEM", "PAYMENT_TERM"],
+  "commission_discount_mode": "REAL",
+  "item_code": "1001",
+  "rule_json": {"origin": "commercial-table"},
+  "is_active": true
+}
+
+POST /api/customers/support/commercial-policies/{code}/lines
+{
+  "line_number": 1,
+  "sequence_number": 1,
+  "description": "Faixa de desconto principal",
+  "calc_type": "PERCENT",
+  "percent_value": 8,
+  "fixed_value": 0,
+  "min_value": 0,
+  "max_value": 1200,
+  "variables_json": {
+    "customer_code": 100,
+    "item_code": "1001",
+    "payment_condition_id": 1
+  },
+  "validity_start": "2026-01-01T00:00:00Z",
+  "validity_end": "2026-12-31T00:00:00Z"
+}
+
+GET /api/customers/support/commercial-policies/{code}/lines
+
+POST /api/customers/support/commercial-policies/{code}/specific-items
+{
+  "item_code": "1001",
+  "item_mask": "AZUL",
+  "item_classification": "LINHA_PREMIUM",
+  "block_discount": true,
+  "block_surcharge": false,
+  "ignore_item_policies": false,
+  "block_manual_change": true,
+  "validity_start": "2026-01-01T00:00:00Z",
+  "validity_end": "2026-12-31T00:00:00Z"
+}
+
+GET /api/customers/support/commercial-policies/{code}/specific-items
+
+POST /api/customers/support/commercial-policies/evaluate
+{
+  "gross_value": 1000,
+  "quantity": 10,
+  "customer_code": 100,
+  "sales_table_id": 1,
+  "payment_condition_id": 1,
+  "carrier_id": 1,
+  "item_code": "1001",
+  "item_mask": "AZUL",
+  "item_classification": "LINHA_PREMIUM"
+}
+-- Retorna discount_value, surcharge_value, freight_value, commission_value,
+-- net_value, requires_approval e effects[] com as políticas aplicadas.
+
 
 ============================================================
 MÓDULO: HEALTH CHECK

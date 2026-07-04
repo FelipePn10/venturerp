@@ -94,7 +94,7 @@ heterogêneo, então cada peça de estoque carrega seu próprio comprimento.
 **Tipos de corte:** `LINEAR_1D`, `GUILLOTINE_2D`, `TRUE_SHAPE_2D` — **todos ativos**;
 `cut_type` seleciona o otimizador no registry.
 **Origem:** `MANUAL` (ativo); `ORDEM_PRODUCAO` / `ORDEM_PLANEJADA` ficam para a
-demanda automática (roadmap §8).
+demanda automática de produção.
 
 ---
 
@@ -314,7 +314,7 @@ Seis complementos sobre o módulo já entregue (sem novos tipos de corte):
 
 As heurísticas das fases 1/3/4 são rápidas e aceitáveis no chão-de-fábrica, mas gulosas
 (~80–88% de aproveitamento). A Fase 6 eleva o núcleo de otimização ao nível de
-SAP/Oracle/FoccoERP/SigmaNEST, **sem novas dependências** (Go puro) e **sem quebrar
+soluções avançadas de ERP e nesting industrial, **sem novas dependências** (Go puro) e **sem quebrar
 nada**: o mesmo contrato `CuttingOptimizer`, as mesmas rotas, o mesmo fluxo.
 
 ### Princípio comum — rede de segurança "pick-best"
@@ -628,7 +628,7 @@ continua selecionando o fluxo, e o provedor externo só substitui o cálculo do 
 
 ## 8. Ideias futuras
 
-O motor de nesting está **completo em nível enterprise nas três dimensões**: roadmap de
+O motor de nesting está **completo em nível enterprise nas três dimensões**: plano de
 complementos, **Fase 6** (column generation 1D/2D + metaheurística true-shape, §3g),
 **Fase 7** (rotação livre no true-shape, §3g·FASE 7) e os complementos de chão-de-fábrica
 abaixo entregues.
