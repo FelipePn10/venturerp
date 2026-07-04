@@ -171,30 +171,144 @@ resolução e formação.
 
 ### Política comercial (`/api/customers/support/commercial-policies`)
 
-O motor de política comercial centraliza descontos, acréscimos, fretes e comissões
-em uma única estrutura de regras. Cada política possui:
+Política comercial é o motor que transforma preço de tabela em condição comercial
+negociada. Ela responde perguntas que não pertencem ao cadastro simples de preço:
+quanto desconto pode ser concedido, quando aplicar acréscimo, qual frete comercial
+deve entrar na venda, qual comissão futura será provisionada e quando a negociação
+precisa de aprovação.
 
-- `kind`: `DISCOUNT`, `SURCHARGE`, `FREIGHT` ou `COMMISSION`;
-- `choice_type`: `INFORMATION`, `CHOICE` ou `OPTIONAL`;
-- `calc_type`: `PERCENT` ou `VALUE`;
-- valor percentual/fixo, limites máximos, faixas de valor bruto e quantidade;
-- prioridade e sequência para definir ordem de aplicação;
-- indicador de acumulação (`stackable`), possibilidade de edição manual,
-  autorização para valores maiores, uso na base de comissão, aplicação por item e
-  necessidade de aprovação;
-- `data_types_json` com até seis dimensões comerciais combináveis por política
-  (cliente, item, classificação, tabela, condição, prazo, representante, UF etc.);
-- filtros por cliente, tipo de cliente, segmento, região, tabela de vendas,
-  condição de pagamento, transportadora, item, máscara, linha de produto e
-  classificação;
-- `rule_json` para regras estruturadas adicionais usadas por configuradores e
-  automações comerciais.
+A política é usada em simulações, orçamentos, pedidos, análises comerciais,
+comissionamento e relatórios gerenciais. Nesta fase o motor está disponível como
+API independente; as próximas fases devem chamá-lo ao gravar orçamento/pedido para
+persistir os efeitos calculados na transação.
 
-As linhas da política (`/{code}/lines`) representam as faixas/regras efetivas:
-número da linha, sequência, vigência própria, variáveis da combinação, tipo
-percentual/valor, valor mínimo e valor máximo. Quando uma política possui linhas,
-o motor usa a primeira linha válida; sem linhas, usa o valor do cabeçalho como
-fallback operacional.
+#### Quando usar cada tipo
+
+| Tipo | Uso principal | Exemplo |
+|---|---|---|
+| `DISCOUNT` | Reduzir o valor vendido por volume, cliente, segmento, campanha ou item | 8% para cliente estratégico comprando linha premium acima de 10 unidades |
+| `SURCHARGE` | Acrescentar valor por condição comercial mais onerosa | 3% para venda com prazo longo ou lote especial |
+| `FREIGHT` | Compor frete comercial sem depender só do fiscal/logístico | R$ 250 fixos para entrega em região remota |
+| `COMMISSION` | Calcular comissão futura do representante/equipe | 5% sobre valor líquido da venda |
+
+#### Estrutura da política
+
+A política possui uma capa e linhas. A capa define identidade, abrangência,
+prioridade e comportamento geral. As linhas representam as faixas aplicáveis dentro
+da política.
+
+Campos de capa mais importantes:
+
+| Campo | Para que serve |
+|---|---|
+| `kind` | Define se a política é desconto, acréscimo, frete ou comissão |
+| `choice_type` | Define se a condição é informativa, escolhível ou opcional na negociação |
+| `priority` / `sequence` | Ordena a aplicação; menor prioridade vem antes e sequência desempata |
+| `stackable` | Permite ou impede acumular políticas do mesmo tipo |
+| `requires_approval` | Sinaliza que a venda precisa passar por liberação comercial |
+| `allow_manual_change` | Indica se o usuário pode alterar o valor sugerido |
+| `allow_higher_values` | Permite negociar valor maior que o calculado |
+| `used_in_commission` | Permite usar a política na base de cálculo da comissão |
+| `applies_to_items` | Indica que a regra deve ser avaliada também em nível de item |
+| `subtract_commission_base` | Indica que o valor da política reduz a base de comissão |
+| `commission_discount_mode` | Controla se o desconto de comissão é real ou nominal |
+| `data_types_json` | Lista até seis dimensões comerciais que formam a chave da regra |
+| `rule_json` | Guarda critérios estruturados complementares para automações |
+
+As dimensões de `data_types_json` tornam a política combinatória sem criar uma
+tabela nova para cada variação. Exemplos de dimensões: cliente, tipo de cliente,
+segmento, região, tabela de venda, condição de pagamento, transportadora, item,
+máscara, linha de produto e classificação.
+
+#### Linhas e faixas
+
+As linhas (`/{code}/lines`) são a parte efetiva do cálculo. Elas permitem criar
+faixas por combinação comercial, vigência própria e limites de valor. Uma política
+de desconto pode, por exemplo, ter três linhas para o mesmo cliente e item:
+
+| Linha | Condição | Resultado |
+|---|---|---|
+| 1 | até R$ 10.000 | 3% |
+| 2 | de R$ 10.000 a R$ 50.000 | 5% |
+| 3 | acima de R$ 50.000 | 8% com aprovação |
+
+No estado atual do motor, quando uma política possui linhas, a avaliação usa a
+primeira linha ativa e vigente retornada por ordem de linha/sequência. Se a
+política não possuir linhas, o cálculo usa o valor definido na capa como fallback.
+Esse fallback evita bloquear operações simples e mantém compatibilidade com
+políticas de baixa complexidade.
+
+#### Itens e classificações específicas
+
+O cadastro `/{code}/specific-items` controla exceções por item, máscara, linha de
+produto ou classificação. Ele existe para resolver casos em que a política de capa
+não deve valer integralmente para uma família de produtos.
+
+Flags disponíveis:
+
+| Flag | Efeito operacional |
+|---|---|
+| `block_discount` | Bloqueia desconto de capa para o item/classificação |
+| `block_surcharge` | Bloqueia acréscimo de capa para o item/classificação |
+| `ignore_item_policies` | Ignora políticas específicas do item |
+| `block_manual_change` | Impede alteração manual da condição calculada |
+
+Exemplo: uma campanha concede 10% para todo o segmento industrial, mas itens de
+linha premium só podem receber preço de tabela. Registre a política de desconto na
+capa e vincule a classificação premium com `block_discount=true` e
+`block_manual_change=true`.
+
+#### Ordem de aplicação
+
+1. O chamador informa contexto: valor bruto, quantidade, cliente, tabela, condição,
+   transportadora, item e demais atributos disponíveis.
+2. O repositório busca políticas ativas por prioridade/sequência.
+3. O domínio valida vigência, faixa de valor, faixa de quantidade e filtros.
+4. Para cada política compatível, o motor calcula valor percentual ou fixo.
+5. Descontos reduzem o líquido; acréscimos e fretes aumentam; comissões são
+   provisionadas sem alterar o líquido.
+6. Se a política não for acumulável, novas políticas do mesmo tipo são ignoradas
+   após a primeira aplicação.
+7. A resposta informa totais por tipo, valor líquido, necessidade de aprovação e a
+   lista de efeitos aplicados.
+
+#### Exemplos de configuração
+
+**Desconto por volume**
+
+- `kind=DISCOUNT`
+- `choice_type=INFORMATION`
+- `stackable=true`
+- `data_types_json=["CUSTOMER","ITEM","PAYMENT_TERM"]`
+- linhas por faixa de valor/quantidade
+
+Uso: simular preço final em orçamento e pedido, evidenciando desconto aplicado e
+se a negociação precisa de aprovação.
+
+**Acréscimo por prazo**
+
+- `kind=SURCHARGE`
+- filtro por condição de pagamento
+- `applies_on_net_value=true`
+- linha percentual para prazo longo
+
+Uso: compensar custo financeiro de venda parcelada ou condição especial.
+
+**Frete comercial**
+
+- `kind=FREIGHT`
+- `calc_type=VALUE`
+- filtro por região/transportadora
+
+Uso: compor preço vendido com custo de entrega negociado antes da expedição.
+
+**Comissão futura**
+
+- `kind=COMMISSION`
+- `used_in_commission=true`
+- `commission_discount_mode=REAL`
+
+Uso: prever comissão do representante e permitir relatórios de comissão futura.
 
 Endpoints:
 
@@ -215,6 +329,30 @@ O resultado retorna totais separados (`discount_value`, `surcharge_value`,
 `freight_value`, `commission_value`), valor líquido, flag de aprovação e a lista
 das políticas aplicadas. Políticas não acumuláveis impedem novas regras do mesmo
 tipo depois da primeira aplicação efetiva.
+
+#### Integração com outros fluxos
+
+- **Precificação**: preço de tabela e política de formação definem preço base; a
+  política comercial calcula a negociação sobre esse preço.
+- **Orçamento**: deve chamar `/evaluate` para mostrar preço líquido, frete,
+  descontos/acréscimos e necessidade de aprovação antes da conversão em pedido.
+- **Pedido de venda**: deve reavaliar a política na gravação e na liberação
+  comercial, evitando que uma condição expirada seja usada.
+- **Representantes/metas**: comissão calculada alimenta comissão futura e análise
+  de rentabilidade por representante.
+- **Faturamento/expedição**: frete comercial calculado pode orientar o frete
+  faturado e a composição final da nota, respeitando regras fiscais.
+
+#### Validações e cuidados
+
+- Percentuais, valores e faixas não aceitam números negativos.
+- `max_gross_value` e `max_quantity` iguais a zero significam "sem limite máximo".
+- `rule_json`, `data_types_json` e `variables_json` precisam ser JSON válido.
+- Política inativa ou fora da vigência não é aplicada.
+- Linha fora da vigência é ignorada.
+- Política não acumulável bloqueia novas políticas do mesmo `kind` após aplicada.
+- O motor retorna `requires_approval=true` quando qualquer política aplicada exigir
+  aprovação; a decisão de bloquear avanço fica no fluxo chamador.
 
 Persistência: migration `000187_commercial_policies` cria
 `commercial_policies`, `commercial_policy_lines` e

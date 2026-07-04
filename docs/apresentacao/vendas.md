@@ -111,12 +111,36 @@ Quando uma data precisa mudar (atraso de matéria-prima, mudança de prioridade)
 
 ## 9. Política comercial
 
-A área comercial pode cadastrar regras de **desconto, acréscimo, frete e comissão**
-com validade, prioridade, faixa de valor/quantidade e filtros por cliente, segmento,
-região, tabela de vendas, condição de pagamento, transportadora, item, linha e
-classificação.
+Política comercial é o conjunto de regras que controla a negociação depois que o
+preço de tabela já existe. Ela evita que desconto, acréscimo, frete e comissão
+sejam decididos de forma informal ou diferente a cada venda.
 
-Na simulação de uma venda, o sistema aplica as regras compatíveis e retorna:
+O sistema permite configurar regras por cliente, segmento, região, tabela de
+vendas, condição de pagamento, transportadora, item, linha de produto e
+classificação. Cada regra tem validade, prioridade, sequência e faixa de valor ou
+quantidade. Assim a empresa consegue aplicar campanhas, acordos comerciais,
+condições especiais e comissões sem depender de planilhas paralelas.
+
+### Para que serve
+
+| Necessidade | Como a política resolve |
+|---|---|
+| Controlar descontos | Define percentuais/valores permitidos por cliente, item, volume ou campanha |
+| Aplicar acréscimos | Compensa prazo longo, venda especial, lote pequeno ou condição onerosa |
+| Compor frete comercial | Inclui frete negociado antes da expedição/faturamento |
+| Prever comissões | Calcula comissão futura por regra comercial |
+| Exigir aprovação | Marca negociações que precisam de liberação comercial |
+| Evitar exceções indevidas | Bloqueia desconto/acréscimo ou alteração manual por item/classificação |
+
+### Como funciona na venda
+
+1. O vendedor informa cliente, item, quantidade, tabela e condição comercial.
+2. O sistema consulta as políticas ativas e vigentes.
+3. As regras compatíveis são aplicadas por prioridade e sequência.
+4. O resultado mostra valor líquido, descontos, acréscimos, frete e comissão.
+5. Se alguma regra exigir aprovação, a venda fica sinalizada para liberação.
+
+Na simulação de uma venda, o sistema retorna:
 
 - desconto total;
 - acréscimo total;
@@ -127,6 +151,27 @@ Na simulação de uma venda, o sistema aplica as regras compatíveis e retorna:
 
 Regras acumuláveis podem somar efeitos. Regras não acumuláveis travam novas regras
 do mesmo tipo depois da primeira aplicação, mantendo previsibilidade na negociação.
+
+### Exemplos práticos
+
+**Campanha por volume:** cliente que compra acima de 50 unidades de uma linha recebe
+8% de desconto, desde que a condição de pagamento esteja dentro do prazo padrão.
+
+**Acréscimo financeiro:** venda com prazo longo recebe 3% de acréscimo para cobrir
+custo financeiro.
+
+**Frete negociado:** entregas em uma região específica incluem valor fixo de frete
+comercial, visível antes do faturamento.
+
+**Comissão futura:** representantes têm comissão calculada automaticamente pela
+regra aplicável, permitindo previsão antes da emissão da nota.
+
+### Benefício operacional
+
+A política comercial padroniza a negociação, reduz exceções manuais, melhora a
+rastreabilidade de aprovações e entrega para gestão uma visão clara de quanto a
+empresa concedeu de desconto, quanto adicionou de acréscimo/frete e quanto será
+provisionado de comissão.
 
 ---
 
