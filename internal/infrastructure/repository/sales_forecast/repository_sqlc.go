@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/entity"
@@ -77,6 +78,64 @@ func (r *SalesForecastRepositorySQLC) DeleteForecast(
 		return fmt.Errorf("deleting sales forecast %d: %w", id, err)
 	}
 	return nil
+}
+
+func (r *SalesForecastRepositorySQLC) ListHistoricalDemand(
+	ctx context.Context,
+	source string,
+	from time.Time,
+	to time.Time,
+	itemCodes []int64,
+) ([]*entity.HistoricalDemand, error) {
+	source = strings.ToUpper(strings.TrimSpace(source))
+	if source == "" {
+		source = "ORDERS"
+	}
+
+	var out []*entity.HistoricalDemand
+	if source == "ORDERS" || source == "BOTH" {
+		rows, err := r.q.ListForecastSalesOrderHistory(ctx, sqlc.ListForecastSalesOrderHistoryParams{
+			EmissionDate:   pgutil.ToPgDate(from),
+			EmissionDate_2: pgutil.ToPgDate(to),
+			Column3:        itemCodes,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("listing sales order forecast history: %w", err)
+		}
+		for _, row := range rows {
+			out = append(out, &entity.HistoricalDemand{
+				ItemCode:    row.ItemCode,
+				Mask:        emptyStringAsNil(row.Mask),
+				PeriodMonth: pgutil.FromPgDate(row.PeriodMonth),
+				Quantity:    pgutil.FromPgNumericToFloat64(row.Quantity),
+			})
+		}
+	}
+	if source == "INVOICING" || source == "BOTH" {
+		rows, err := r.q.ListForecastFiscalHistory(ctx, sqlc.ListForecastFiscalHistoryParams{
+			DataEmissao:   pgutil.ToPgDate(from),
+			DataEmissao_2: pgutil.ToPgDate(to),
+			Column3:       itemCodes,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("listing invoicing forecast history: %w", err)
+		}
+		for _, row := range rows {
+			if row.ItemCode == nil {
+				continue
+			}
+			out = append(out, &entity.HistoricalDemand{
+				ItemCode:    *row.ItemCode,
+				Mask:        pgutil.FromPgTextPtr(row.Mask),
+				PeriodMonth: pgutil.FromPgDate(row.PeriodMonth),
+				Quantity:    pgutil.FromPgNumericToFloat64(row.Quantity),
+			})
+		}
+	}
+	if source != "ORDERS" && source != "INVOICING" && source != "BOTH" {
+		return nil, fmt.Errorf("invalid forecast history source %q", source)
+	}
+	return out, nil
 }
 
 // ---- Forecast Blocks ----
@@ -277,4 +336,11 @@ func appropriationRowsToEntities(rows []sqlc.AppropriationTable) []*entity.Appro
 		out = append(out, appropriationRowToEntity(row))
 	}
 	return out
+}
+
+func emptyStringAsNil(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }

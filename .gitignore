@@ -23,6 +23,9 @@ backups/*.dump
 scripts/*
 !scripts/test-comercial-pricing.sh
 !scripts/test-comercial-politicas.sh
+!scripts/test-comercial-previsao-vendas.sh
+!scripts/test-comercial-promessa-entrega.sh
+!scripts/test-comercial-assistencia-tecnica.sh
 scripts/test-e2e.sh
 scripts/test-flow.sh
 scripts/test-focusnfe.sh

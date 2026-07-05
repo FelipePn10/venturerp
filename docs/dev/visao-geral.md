@@ -136,6 +136,8 @@ O módulo MRP é o coração do planejamento de materiais. Suporta 5 modos de pl
 | Método | Path | Descrição |
 |--------|------|-----------|
 | POST | `/api/sales-forecast/create` | Cria previsão de vendas semanal |
+| POST | `/api/sales-forecast/create-monthly` | Cria previsão mensal e distribui por semanas conforme calendário industrial |
+| POST | `/api/sales-forecast/generate` | Gera previsão por média de histórico de pedidos/faturamento ou por modelo estatístico complementar |
 | GET | `/api/sales-forecast/list/{year}` | Lista previsões por ano |
 | GET | `/api/sales-forecast/item/{itemCode}` | Previsão por item |
 | POST | `/api/sales-forecast/blocks/create` | Cria bloco de congelamento |
@@ -954,4 +956,3 @@ Todos os endpoints sob `/api/*` exigem:
 `GET /health` — endpoint público (sem autenticação), retorna `{"status": "ok", "timestamp": "...", "mask": "core-api"}`.
 
 ---
-

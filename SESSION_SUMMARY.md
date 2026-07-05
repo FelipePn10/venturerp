@@ -1221,3 +1221,302 @@ como funciona na venda, exemplos práticos e benefício operacional.
 ### Próximo passo
 
 Aguardar comando do usuário para iniciar a fase 3: Orçamento.
+
+## 2026-07-05 — Comercial fase 7: Previsão de Vendas
+
+Escopo solicitado: evoluir a fase 7 de Comercial, alinhando o módulo local de
+previsão às rotinas de cadastro e geração de previsão de vendas. As fases 1 a 6
+já estavam concluídas.
+
+### Correção pós-feedback
+
+Primeira entrega da fase 7 foi rejeitada corretamente pelo usuário porque não
+havia sido validada contra as telas do help do FoccoERP. A fase foi reaberta e
+refeita usando as páginas corretas:
+
+- `FPRE0201` — Cadastro da Previsão de Vendas:
+  `https://help.foccoerp.com.br/Programas/FoccoERP/Comercial/Previs%C3%A3o%20de%20Vendas/FPRE0201/`
+- `FPRE0251` — Geração da Previsão de Vendas:
+  `https://help.foccoerp.com.br/Programas/FoccoERP/Comercial/Previs%C3%A3o%20de%20Vendas/FPRE0251/`
+- Processo Previsão de Vendas:
+  `https://help.foccoerp.com.br/Processos/Comercial/previsao-de-vendas/`
+
+Regras extraídas:
+
+- FPRE0201 cadastra/manutenções manuais e recebe previsão mensal; a previsão
+  mensal é distribuída por semanas conforme dias úteis do calendário industrial.
+- Se o item não aceita quantidade fracionada, o rateio semanal arredonda e deixa o
+  saldo na última semana no cadastro manual.
+- FPRE0251 gera previsão por período com base em histórico de pedidos e/ou
+  faturamento, usando média do período selecionado.
+- A geração permite índice de projeção para crescimento/redução.
+- Histórico por pedidos considera apenas pedidos liberados totalmente, sem
+  bloqueios comercial/financeiro/engenharia/processo/comercial de itens; no
+  VentureERP foi mapeado para pedidos não bloqueados, release liberado/manual e
+  análises não rejeitadas.
+- A geração grava o resultado no cadastro de previsão e respeita bloqueios de
+  previsão.
+- A tabela de apropriação distribui a necessidade gerada pela previsão semanal
+  para dias da semana e é consumida pelo planejamento/MRP.
+
+### Escopo entregue
+
+1. **Cadastro mensal/manual de previsão**:
+   - novo `CreateMonthlySalesForecastUseCase`;
+   - endpoint `POST /api/sales-forecast/create-monthly`;
+   - recebe previsão mensal por item/máscara;
+   - distribui por semanas ISO conforme calendário industrial;
+   - se não houver calendário cadastrado para o mês, usa fallback segunda-sexta;
+   - para item sem fração (`accepts_fraction=false`), arredonda para baixo e
+     joga saldo na última semana, conforme comportamento do cadastro manual.
+2. **Geração por histórico ERP**:
+   - `GenerateSalesForecastUseCase` passou a suportar `history_source`;
+   - endpoint `POST /api/sales-forecast/generate`;
+   - fontes `ORDERS`, `INVOICING` e `BOTH`;
+   - histórico de pedidos vem de `sales_orders`/`sales_order_items`;
+   - histórico de faturamento vem de `fiscal_exits`/`fiscal_exit_items`
+     autorizadas;
+   - calcula média mensal do período `history_from`/`history_to`;
+   - aplica `projection_pct`;
+   - distribui a média projetada nos meses/semanas alvo (`start_week/start_year`
+     até `target_end_week/target_end_year`);
+   - respeita bloqueios de período via `sales_forecast_blocks`;
+   - atualiza previsão existente apenas com `update_existing=true`;
+   - quando `update_existing=false`, períodos existentes são retornados como
+     ignorados, evitando duplicidade operacional principalmente em `mask=null`.
+3. **Melhoria complementar mantida**:
+   - sem `history_source`, `/generate` continua aceitando histórico informado no
+     payload e modelos `AUTO`, `MOVING_AVERAGE`, `EXP_SMOOTHING`, `HOLT_WINTERS`;
+   - isso fica como melhoria VentureERP além do fluxo base inspirado no Focco.
+4. **Rotas preservadas/evoluídas**:
+   - cadastro manual: `POST /api/sales-forecast/create`;
+   - cadastro mensal: `POST /api/sales-forecast/create-monthly`;
+   - geração por histórico/estatística: `POST /api/sales-forecast/generate`;
+   - listagem por ano: `GET /api/sales-forecast/list/{year}`;
+   - consulta por item: `GET /api/sales-forecast/item/{itemCode}`;
+   - bloqueios: `/api/sales-forecast/blocks`;
+   - apropriação diária: `/api/sales-forecast/appropriation`.
+5. **Testes**:
+   - novo `internal/application/usecase/sales_forecast_uc/generate_forecast_test.go`;
+   - cobre criação estatística, atualização permitida, bloqueio de período, não
+     duplicação, distribuição mensal por dias úteis com saldo na última semana e
+     geração por média histórica com projeção;
+   - novo script `scripts/test-comercial-previsao-vendas.sh`, com testes Go,
+     validação estática e smoke HTTP opcional com `BASE_URL`/`TOKEN`.
+6. **Documentação**:
+   - `docs/dev/vendas.md` ganhou seção técnica de Previsão de Vendas;
+   - `docs/apresentacao/vendas.md` ganhou visão de negócio e glossário;
+   - documentação final continua sem citar códigos/telas/sistemas externos,
+     conforme regra definida após a fase 1.
+
+### Arquivos principais
+
+- `api/api.go`
+- `internal/interfaces/http/handler/sales_forecast_handler.go`
+- `internal/application/dto/request/sales_forecast_dto_request.go`
+- `internal/application/dto/response/sales_forecast_response.go`
+- `internal/application/usecase/sales_forecast_uc/generate_forecast.go`
+- `internal/application/usecase/sales_forecast_uc/generate_forecast_test.go`
+- `internal/infrastructure/database/queries/sales_forecast.sql`
+- `internal/infrastructure/database/sqlc/sales_forecast.sql.go`
+- `internal/infrastructure/repository/sales_forecast/repository_sqlc.go`
+- `scripts/test-comercial-previsao-vendas.sh`
+- `docs/dev/vendas.md`
+- `docs/apresentacao/vendas.md`
+
+### Validação
+
+- `env GOCACHE=/tmp/panossoerp-go-build go test ./...` passou.
+- `./scripts/test-comercial-previsao-vendas.sh` passou em modo local.
+- Smoke HTTP foi pulado porque `BASE_URL`/`TOKEN` não estavam definidos.
+- Primeira tentativa de teste sem `GOCACHE` continua falhando pelo cache Go em
+  `~/.cache/go-build` somente leitura; usar `/tmp/panossoerp-go-build`.
+
+### Próximo passo
+
+Aguardar comando do usuário para iniciar a fase 8: Promessa de Entrega.
+
+## 2026-07-05 — Comercial fase 8: Promessa de Entrega
+
+Escopo solicitado: executar a fase 8 de Comercial, evoluindo a base parcial de
+ATP/parâmetros/calendário para promessa de entrega com capacidade, reprogramação
+e comprometimento de tanque.
+
+### Referência funcional usada
+
+Foram consideradas as rotinas de promessa de entrega do setor Comercial:
+
+- manutenção da promessa de entrega;
+- reprogramação das datas de entrega;
+- comprometimento de tanque/capacidade para venda futura.
+
+A implementação local manteve a documentação final sem dependência de códigos ou
+telas externas, seguindo a regra das fases anteriores.
+
+### Escopo entregue
+
+1. **Ocupação de tanque/setor produtivo**:
+   - novo endpoint `GET /api/delivery-promise/occupation`;
+   - agrupa pedidos abertos e reservas ativas por `planning_tank_code` do item;
+   - retorna capacidade diária informada, quantidade comprometida, saldo livre,
+     percentual de ocupação e valor previsto;
+   - avisa quando item não possui tanque cadastrado.
+2. **Comprometimento de tanque**:
+   - novo endpoint `POST /api/delivery-promise/tank-reservations`;
+   - suporta simulação (`commit=false`) e gravação (`commit=true`);
+   - desconta ATP antes de reservar capacidade quando `verify_stock=true`;
+   - quebra a quantidade de trás para frente a partir da data prometida;
+   - respeita calendário de promessa por item e usa fallback segunda-sexta quando
+     não há calendário cadastrado;
+   - reservas gravadas ficam em `delivery_tank_reservations` com status
+     `ACTIVE`, `CANCELLED` ou `EXPIRED`.
+3. **Cancelamento/expiração de reservas**:
+   - `DELETE /api/delivery-promise/tank-reservations/{code}`;
+   - `POST /api/delivery-promise/tank-reservations/expire?now=YYYY-MM-DD`.
+4. **Reprogramação em lote**:
+   - novo endpoint `POST /api/delivery-promise/reschedule`;
+   - filtra por período, cliente, representante, lista de pedidos e/ou itens;
+   - não altera pedidos/itens com data firme;
+   - atualiza linhas e pedido quando aplicável;
+   - registra histórico em `delivery_reschedules` com data original, nova data e
+     motivo;
+   - retorna contadores e itens ignorados.
+5. **Persistência**:
+   - migration `000192_delivery_promise.up.sql`;
+   - tabelas `delivery_tank_reservation_sequences` e
+     `delivery_tank_reservations`.
+6. **Testes/scripts**:
+   - novo `delivery_promise_uc_test.go` cobrindo quebra por capacidade diária e
+     calendário;
+   - novo `scripts/test-comercial-promessa-entrega.sh` com testes Go, validação
+     estática e smoke HTTP opcional.
+7. **Documentação**:
+   - `docs/dev/vendas.md` atualizado com endpoints e regras técnicas;
+   - `docs/apresentacao/vendas.md` atualizado com visão de negócio;
+   - `docs/dev/API_REQUEST_BODIES.txt` ganhou exemplos de payload.
+
+### Arquivos principais
+
+- `api/api.go`
+- `internal/application/usecase/delivery_promise_uc/delivery_promise_uc.go`
+- `internal/application/usecase/delivery_promise_uc/delivery_promise_uc_test.go`
+- `internal/application/dto/request/delivery_promise_dto_request.go`
+- `internal/application/dto/response/delivery_promise_response.go`
+- `internal/domain/delivery_promise/...`
+- `internal/infrastructure/repository/delivery_promise/repository.go`
+- `internal/interfaces/http/handler/delivery_promise_handler.go`
+- `migrations/000192_delivery_promise.up.sql`
+- `migrations/000192_delivery_promise.down.sql`
+- `scripts/test-comercial-promessa-entrega.sh`
+- `docs/dev/vendas.md`
+- `docs/apresentacao/vendas.md`
+- `docs/dev/API_REQUEST_BODIES.txt`
+
+### Validação
+
+- `env GOCACHE=/tmp/panossoerp-go-build go test ./internal/application/usecase/delivery_promise_uc ./internal/infrastructure/repository/delivery_promise ./internal/interfaces/http/handler ./api` passou.
+- `scripts/test-comercial-promessa-entrega.sh` passou em modo local após a
+  atualização de docs.
+- Smoke HTTP foi pulado quando `BASE_URL`/`TOKEN` não estão definidos.
+- Primeira tentativa de teste sem `GOCACHE` falhou pelo cache Go em
+  `~/.cache/go-build` somente leitura; usar `/tmp/panossoerp-go-build`.
+
+### Próximo passo
+
+Aguardar comando do usuário para iniciar a fase 9: Assistência Técnica.
+
+## 2026-07-05 — Comercial fase 9: Assistência Técnica
+
+Escopo solicitado: executar a fase 9 de Comercial, criando/evoluindo o módulo de
+Assistência Técnica com chamados, defeitos, responsáveis pela garantia, notas de
+devolução/remessa, geração de pedidos/ordens e relatórios.
+
+### Referência funcional usada
+
+Foi usada a documentação pública do processo de Assistência Técnica do FoccoERP
+em `https://help.foccoerp.com.br/Processos/Comercial/assistencia-tecnica/`.
+Pontos absorvidos para o desenho local:
+
+- chamados de assistência técnica;
+- grupos e motivos de defeitos;
+- responsáveis pela garantia;
+- notas de devolução/remessa antes do atendimento quando exigidas;
+- geração de pedido de assistência técnica;
+- geração de ordem de assistência técnica;
+- consulta e relatório de chamados;
+- integração com divisão de vendas/assistência e MRP já existente no sistema.
+
+### Escopo entregue
+
+1. **Cadastros auxiliares**:
+   - grupos de defeitos;
+   - motivos de defeitos com complemento, receita, nota obrigatória, pedido e
+     ordem de produção;
+   - responsáveis pela garantia vinculáveis a funcionário ou cliente.
+2. **Chamados de Assistência Técnica**:
+   - endpoint de abertura com itens;
+   - consulta/listagem por status, cliente e período;
+   - status `PENDING`, `IN_ANALYSIS`, `WAITING_RETURN`, `WAITING_ORDER`,
+     `ATTENDED`, `CLOSED`, `CANCELLED`;
+   - cálculo de garantia por data da nota + dias de garantia;
+   - validação de complemento para motivo que exige detalhe.
+3. **Notas de devolução/remessa/serviço**:
+   - endpoint para vincular nota ao chamado;
+   - atendimento/fechamento bloqueia quando cabeçalho ou motivo exige nota e ela
+     ainda não existe.
+4. **Geração de documentos de continuidade**:
+   - geração de pedido de venda com origem `ASSISTANCE` quando o motivo gera
+     receita/pedido;
+   - geração de ordem de produção para itens que exigem ordem de assistência;
+   - rastreabilidade em `technical_assistance_order_links`.
+5. **Relatório/consulta**:
+   - endpoint `/api/technical-assistance/calls/report` com totais, pendentes,
+     atendidos, fechados, cancelados, itens em garantia, itens com receita e lead
+     time médio.
+6. **Persistência**:
+   - migration `000193_technical_assistance.up.sql`;
+   - tabelas `technical_assistance_defect_groups`,
+     `technical_assistance_defect_reasons`,
+     `technical_assistance_warranty_responsibles`,
+     `technical_assistance_calls`,
+     `technical_assistance_call_items`,
+     `technical_assistance_return_notes`,
+     `technical_assistance_order_links`.
+7. **Testes/scripts**:
+   - `technical_assistance_uc_test.go` cobre complemento obrigatório, garantia,
+     receita e bloqueio de atendimento sem nota;
+   - `scripts/test-comercial-assistencia-tecnica.sh` com testes Go, validação
+     estática e smoke HTTP opcional.
+8. **Documentação**:
+   - `docs/dev/vendas.md` atualizado com endpoints, regras e persistência;
+   - `docs/apresentacao/vendas.md` atualizado com visão de negócio;
+   - `docs/dev/API_REQUEST_BODIES.txt` atualizado com payloads;
+   - documentação final mantém padrão sem depender de códigos/telas externas.
+
+### Arquivos principais
+
+- `api/api.go`
+- `internal/application/usecase/technical_assistance_uc/technical_assistance_uc.go`
+- `internal/application/usecase/technical_assistance_uc/technical_assistance_uc_test.go`
+- `internal/application/dto/request/technical_assistance_request.go`
+- `internal/application/dto/response/technical_assistance_response.go`
+- `internal/domain/technical_assistance/...`
+- `internal/infrastructure/repository/technical_assistance/repository.go`
+- `internal/interfaces/http/handler/technical_assistance_handler.go`
+- `migrations/000193_technical_assistance.up.sql`
+- `migrations/000193_technical_assistance.down.sql`
+- `scripts/test-comercial-assistencia-tecnica.sh`
+- `docs/dev/vendas.md`
+- `docs/apresentacao/vendas.md`
+- `docs/dev/API_REQUEST_BODIES.txt`
+
+### Validação
+
+- `env GOCACHE=/tmp/panossoerp-go-build go test ./...` passou.
+- `scripts/test-comercial-assistencia-tecnica.sh` deve ser executado após docs
+  atualizados; smoke HTTP é opcional via `BASE_URL`/`TOKEN`.
+
+### Próximo passo
+
+Aguardar comando do usuário para iniciar a fase 10: Atendimento ao Consumidor
+(SAC).

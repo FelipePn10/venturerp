@@ -22,6 +22,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cutting_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
@@ -75,6 +76,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/technical_assistance_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
@@ -95,6 +97,7 @@ import (
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
 	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
 	cuttingPlanRepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cutting_plan"
+	deliveryPromiseRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise"
 	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
 	deliveryReschedule "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_reschedule"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
@@ -150,6 +153,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure_query"
 	supplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/supplier"
+	technicalAssistanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/technical_assistance"
 	toolRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/tool"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
@@ -371,10 +375,13 @@ func (app *application) mount() chi.Router {
 
 	// sales forecast
 	sfRepo := salesForecastRepo.NewSalesForecastRepositorySQLC(queries)
+	sfCalendarRepo := industrialCalendar.NewIndustrialCalendarRepositorySQLC(queries)
 	salesForecastHandler := handler.NewSalesForecastHandler(
 		&sales_forecast_uc.CreateSalesForecastUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.CreateMonthlySalesForecastUseCase{Repo: sfRepo, Calendar: sfCalendarRepo, Auth: authService},
 		&sales_forecast_uc.ListSalesForecastsUseCase{Repo: sfRepo, Auth: authService},
 		&sales_forecast_uc.GetForecastByItemUseCase{Repo: sfRepo, Auth: authService},
+		&sales_forecast_uc.GenerateSalesForecastUseCase{Repo: sfRepo, Calendar: sfCalendarRepo, Auth: authService},
 		&sales_forecast_uc.CreateForecastBlockUseCase{Repo: sfRepo, Auth: authService},
 		&sales_forecast_uc.ListForecastBlocksUseCase{Repo: sfRepo, Auth: authService},
 		&sales_forecast_uc.CreateAppropriationTableUseCase{Repo: sfRepo, Auth: authService},
@@ -399,6 +406,19 @@ func (app *application) mount() chi.Router {
 	deliveryPromiseParamsRepo := deliveryPromiseParams.NewDeliveryPromiseParamsRepositorySQLC(queries)
 	manageDeliveryPromiseParamsUC := &delivery_promise_params_uc.ManageDeliveryPromiseParamsUseCase{Repo: deliveryPromiseParamsRepo, Auth: authService}
 	deliveryPromiseParamsHandler := handler.NewDeliveryPromiseParamsHandler(manageDeliveryPromiseParamsUC)
+
+	// delivery promise / tank commitment
+	deliveryPromiseReservationRepo := deliveryPromiseRepo.New(app.db.Pool)
+	deliveryPromiseUC := &delivery_promise_uc.DeliveryPromiseUseCase{
+		Reservations: deliveryPromiseReservationRepo,
+		Reschedules:  deliveryReschedule.NewDeliveryRescheduleRepositorySQLC(queries),
+		Orders:       salesOrderRepo.NewSalesOrderRepositorySQLC(queries),
+		Items:        itemRepo,
+		Stock:        stockRepo.NewStockRepositorySQLC(app.db.Pool),
+		Calendar:     itemCalendarPromise.NewItemCalendarPromiseRepositorySQLC(queries),
+		Auth:         authService,
+	}
+	deliveryPromiseHandler := handler.NewDeliveryPromiseHandler(deliveryPromiseUC)
 
 	// delivery reschedule
 	deliveryRescheduleRepo := deliveryReschedule.NewDeliveryRescheduleRepositorySQLC(queries)
@@ -715,6 +735,14 @@ func (app *application) mount() chi.Router {
 
 	salesGoalRepository := salesGoalRepo.New(app.db.Pool)
 	salesGoalHandler := handler.NewSalesGoalHandler(&sales_goal_uc.UseCase{Repo: salesGoalRepository, Auth: authService})
+
+	technicalAssistanceRepository := technicalAssistanceRepo.New(app.db.Pool)
+	technicalAssistanceHandler := handler.NewTechnicalAssistanceHandler(&technical_assistance_uc.UseCase{
+		Repo:             technicalAssistanceRepository,
+		SalesOrders:      soRepo,
+		ProductionOrders: prodOrderRepo,
+		Auth:             authService,
+	})
 
 	// cutting plan (plano de corte — fase 1: 1D; fase 2: firmar/baixa + retalhos)
 	cuttingPlanUC := cutting_plan_uc.NewCuttingPlanUseCase(cuttingPlanRepo, stockRepository, itemRepo)
@@ -1069,6 +1097,13 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", deliveryPromiseParamsHandler.Get)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", deliveryPromiseParamsHandler.Update)
 		})
+		r.Route("/api/delivery-promise", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/occupation", deliveryPromiseHandler.Occupation)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tank-reservations", deliveryPromiseHandler.ReserveTank)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/tank-reservations/{code}", deliveryPromiseHandler.CancelReservation)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tank-reservations/expire", deliveryPromiseHandler.ExpireReservations)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/reschedule", deliveryPromiseHandler.Reschedule)
+		})
 		r.Route("/api/delivery-reschedule", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", deliveryRescheduleHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list/{sales_order_code}", deliveryRescheduleHandler.ListByOrder)
@@ -1291,6 +1326,22 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{itemCode}/cancel", salesQuotationHandler.CancelItem)
 			})
 		})
+		r.Route("/api/technical-assistance", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/defect-groups", technicalAssistanceHandler.CreateDefectGroup)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/defect-groups", technicalAssistanceHandler.ListDefectGroups)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/defect-reasons", technicalAssistanceHandler.CreateDefectReason)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/defect-reasons", technicalAssistanceHandler.ListDefectReasons)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/warranty-responsibles", technicalAssistanceHandler.CreateWarrantyResponsible)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/warranty-responsibles", technicalAssistanceHandler.ListWarrantyResponsibles)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls", technicalAssistanceHandler.CreateCall)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calls", technicalAssistanceHandler.ListCalls)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calls/report", technicalAssistanceHandler.Report)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calls/{code}", technicalAssistanceHandler.GetCall)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls/{code}/items", technicalAssistanceHandler.AddCallItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls/{code}/return-notes", technicalAssistanceHandler.AddReturnNote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls/{code}/generate-orders", technicalAssistanceHandler.GenerateOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/calls/{code}/status", technicalAssistanceHandler.UpdateStatus)
+		})
 		r.Route("/api/representatives", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", representativeHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", representativeHandler.List)
@@ -1407,6 +1458,8 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/sales-forecast", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesForecastHandler.CreateForecast)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create-monthly", salesForecastHandler.CreateMonthlyForecast)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/generate", salesForecastHandler.GenerateForecast)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list/{year}", salesForecastHandler.ListForecasts)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", salesForecastHandler.GetForecastByItem)
 			r.Route("/blocks", func(r chi.Router) {

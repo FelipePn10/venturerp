@@ -45,3 +45,20 @@ type AppropriationTableResponse struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	CreatedBy    uuid.UUID `json:"created_by"`
 }
+
+type GenerateSalesForecastResponse struct {
+	ItemCode       int64                    `json:"item_code"`
+	Mask           *string                  `json:"mask,omitempty"`
+	Model          string                   `json:"model"`
+	MAPE           float64                  `json:"mape_pct"`
+	Created        []*SalesForecastResponse `json:"created"`
+	Updated        []*SalesForecastResponse `json:"updated"`
+	Skipped        []SkippedForecastPeriod  `json:"skipped"`
+	GeneratedCount int                      `json:"generated_count"`
+}
+
+type SkippedForecastPeriod struct {
+	Year   int    `json:"year"`
+	Week   int    `json:"week"`
+	Reason string `json:"reason"`
+}

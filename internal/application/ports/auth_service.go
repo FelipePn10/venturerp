@@ -37,6 +37,7 @@ type AuthService interface {
 	CanGetCostCenter(ctx context.Context) bool
 	CanCreateDeliveryReschedule(ctx context.Context) bool
 	CanListDeliveryReschedule(ctx context.Context) bool
+	CanManageDeliveryPromise(ctx context.Context) bool
 	CanCreateIndependentDemand(ctx context.Context) bool
 	CanListIndependentDemand(ctx context.Context) bool
 	CanViewIndependentDemand(ctx context.Context) bool
@@ -80,6 +81,7 @@ type AuthService interface {
 	CanListForecastBlocks(ctx context.Context) bool
 	CanCreateAppropriationTable(ctx context.Context) bool
 	CanListAppropriationTables(ctx context.Context) bool
+	CanManageTechnicalAssistance(ctx context.Context) bool
 	CanManagePlanningParams(ctx context.Context) bool
 	CanCreateProductionPlan(ctx context.Context) bool
 	CanListProductionPlans(ctx context.Context) bool

@@ -5961,6 +5961,161 @@ type Region struct {
 	CreatedBy   pgtype.UUID
 }
 
+type Representative struct {
+	Code           int64
+	IsCustomer     bool
+	CustomerCode   *int64
+	IsSupplier     bool
+	SupplierCode   *int64
+	Name           string
+	TradeName      pgtype.Text
+	TypeCode       *int64
+	CategoryCode   *int64
+	RegisterDate   pgtype.Date
+	CoreNumber     pgtype.Text
+	DocumentNumber string
+	PostalCode     pgtype.Text
+	City           pgtype.Text
+	State          pgtype.Text
+	FullAddress    pgtype.Text
+	Street         pgtype.Text
+	StreetNumber   pgtype.Text
+	Complement     pgtype.Text
+	District       pgtype.Text
+	MainPhone      pgtype.Text
+	MainEmail      pgtype.Text
+	DeviceQuantity int32
+	IsActive       bool
+	Blocked        bool
+	BlockReason    pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type RepresentativeAccounting struct {
+	ID                   int64
+	RepresentativeCode   int64
+	EnterpriseCode       *int64
+	EventType            string
+	DebitAccountCode     *int64
+	DebitCostCenterCode  *int64
+	CreditAccountCode    *int64
+	CreditCostCenterCode *int64
+	HistoryCode          *int64
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+}
+
+type RepresentativeContact struct {
+	ID                 int64
+	RepresentativeCode int64
+	ContactTypeCode    *int64
+	Name               string
+	Role               pgtype.Text
+	Phone              pgtype.Text
+	Email              pgtype.Text
+	Notes              pgtype.Text
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type RepresentativeCorrespondenceAddress struct {
+	ID                 int64
+	RepresentativeCode int64
+	PostalCode         pgtype.Text
+	City               pgtype.Text
+	State              pgtype.Text
+	FullAddress        pgtype.Text
+	Street             pgtype.Text
+	StreetNumber       pgtype.Text
+	Complement         pgtype.Text
+	District           pgtype.Text
+	IsDefault          bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type RepresentativeEmail struct {
+	ID                 int64
+	RepresentativeCode int64
+	Email              string
+	Ranking            int32
+	CreatedAt          pgtype.Timestamptz
+}
+
+type RepresentativeEnterprise struct {
+	ID                    int64
+	RepresentativeCode    int64
+	EnterpriseCode        int64
+	EnterpriseName        pgtype.Text
+	CommissionPatternCode *int64
+	CommissionPct         pgtype.Numeric
+	IsDefault             bool
+	IsActive              bool
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+}
+
+type RepresentativeInterest struct {
+	ID                     int64
+	RepresentativeCode     int64
+	ItemClassificationCode int64
+	IsActive               bool
+	CreatedAt              pgtype.Timestamptz
+}
+
+type RepresentativePhone struct {
+	ID                 int64
+	RepresentativeCode int64
+	Ddi                pgtype.Text
+	Ddd                pgtype.Text
+	Phone              string
+	PhoneType          string
+	Ranking            int32
+	CreatedAt          pgtype.Timestamptz
+}
+
+type RepresentativeRegion struct {
+	ID                 int64
+	RepresentativeCode int64
+	EnterpriseCode     *int64
+	RegionCode         int64
+	MicroregionCode    *int64
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+}
+
+type RepresentativeSalesPlan struct {
+	ID                 int64
+	RepresentativeCode int64
+	EnterpriseCode     *int64
+	MicroregionCode    *int64
+	SalesPlanCode      int64
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+}
+
+type RepresentativeSegment struct {
+	ID                 int64
+	RepresentativeCode int64
+	EnterpriseCode     *int64
+	MicroregionCode    *int64
+	MarketSegmentCode  int64
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+}
+
+type RepresentativeType struct {
+	Code                 int64
+	Description          string
+	IsFree               bool
+	IgnoresDirectBilling bool
+	IsActive             bool
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+}
+
 type Restriction struct {
 	ID                   int64
 	Code                 pgtype.Int8
@@ -6105,6 +6260,94 @@ type SalesForecastBlock struct {
 	Reason    pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	CreatedBy pgtype.UUID
+}
+
+type SalesGoal struct {
+	Code               int64
+	RepresentativeCode int64
+	PeriodCode         int64
+	AnalysisBase       string
+	AwardPct           pgtype.Numeric
+	Notes              pgtype.Text
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type SalesGoalBalance struct {
+	ID                  int64
+	PeriodCode          int64
+	NextPeriodCode      *int64
+	BalanceScope        string
+	RepresentativeCode  *int64
+	CommercialGroupCode *int64
+	CustomerCode        *int64
+	GoalType            string
+	RealizedValue       pgtype.Numeric
+	IdealValue          pgtype.Numeric
+	BalanceValue        pgtype.Numeric
+	Notes               pgtype.Text
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+}
+
+type SalesGoalGroupCustomer struct {
+	ID                 int64
+	GroupGoalID        int64
+	CustomerCode       int64
+	RepresentativeCode *int64
+	MinimumValue       pgtype.Numeric
+	MinimumBonusPct    pgtype.Numeric
+	ProbableValue      pgtype.Numeric
+	ProbableBonusPct   pgtype.Numeric
+	IdealValue         pgtype.Numeric
+	IdealBonusPct      pgtype.Numeric
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type SalesGoalGroupTarget struct {
+	ID                  int64
+	PeriodCode          int64
+	CommercialGroupCode int64
+	GoalType            string
+	MinimumValue        pgtype.Numeric
+	MinimumBonusPct     pgtype.Numeric
+	ProbableValue       pgtype.Numeric
+	ProbableBonusPct    pgtype.Numeric
+	IdealValue          pgtype.Numeric
+	IdealBonusPct       pgtype.Numeric
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+}
+
+type SalesGoalItem struct {
+	ID                     int64
+	GoalCode               int64
+	TargetType             string
+	ItemCode               *int64
+	ItemClassificationCode *int64
+	ItemGroupCode          *int64
+	SalesUom               pgtype.Text
+	TargetQuantity         pgtype.Numeric
+	TargetValue            pgtype.Numeric
+	BonusPct               pgtype.Numeric
+	IsActive               bool
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+}
+
+type SalesGoalPeriod struct {
+	Code        int64
+	Description string
+	PeriodType  string
+	StartDate   pgtype.Date
+	EndDate     pgtype.Date
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type SalesOrder struct {
