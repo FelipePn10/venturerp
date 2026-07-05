@@ -3237,6 +3237,88 @@ type Cfop struct {
 	CreatedAt       pgtype.Timestamptz
 }
 
+type CommercialPolicy struct {
+	ID                     int64
+	Code                   int64
+	Description            string
+	Kind                   string
+	ChoiceType             string
+	CalcType               string
+	PercentValue           pgtype.Numeric
+	FixedValue             pgtype.Numeric
+	MaxPercent             pgtype.Numeric
+	MaxValue               pgtype.Numeric
+	MinGrossValue          pgtype.Numeric
+	MaxGrossValue          pgtype.Numeric
+	MinQuantity            pgtype.Numeric
+	MaxQuantity            pgtype.Numeric
+	Priority               int64
+	Sequence               int64
+	Stackable              bool
+	RequiresApproval       bool
+	AppliesOnNetValue      bool
+	AllowManualChange      bool
+	AllowHigherValues      bool
+	UsedInCommission       bool
+	AppliesToItems         bool
+	SubtractCommissionBase bool
+	DataTypesJson          []byte
+	CommissionDiscountMode string
+	CustomerCode           *int64
+	CustomerTypeID         *int64
+	MarketSegmentID        *int64
+	RegionID               *int64
+	SalesTableID           *int64
+	PaymentConditionID     *int64
+	CarrierID              *int64
+	ItemCode               pgtype.Text
+	ItemMask               pgtype.Text
+	ProductLineID          *int64
+	ItemClassification     pgtype.Text
+	RuleJson               []byte
+	ValidityStart          pgtype.Date
+	ValidityEnd            pgtype.Date
+	IsActive               bool
+	Observation            pgtype.Text
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+}
+
+type CommercialPolicyLine struct {
+	ID             int64
+	PolicyID       int64
+	LineNumber     int64
+	SequenceNumber int64
+	Description    pgtype.Text
+	CalcType       string
+	PercentValue   pgtype.Numeric
+	FixedValue     pgtype.Numeric
+	MinValue       pgtype.Numeric
+	MaxValue       pgtype.Numeric
+	VariablesJson  []byte
+	ValidityStart  pgtype.Date
+	ValidityEnd    pgtype.Date
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type CommercialPolicySpecificItem struct {
+	ID                 int64
+	PolicyID           int64
+	ItemCode           pgtype.Text
+	ItemMask           pgtype.Text
+	ProductLineID      *int64
+	ItemClassification pgtype.Text
+	ValidityStart      pgtype.Date
+	ValidityEnd        pgtype.Date
+	BlockDiscount      bool
+	BlockSurcharge     bool
+	IgnoreItemPolicies bool
+	BlockManualChange  bool
+	CreatedAt          pgtype.Timestamptz
+}
+
 type ComplementA struct {
 	ID    int64
 	Value string
@@ -6086,6 +6168,16 @@ type SalesOrder struct {
 	SurchargeValue              pgtype.Numeric
 	ProjectCode                 pgtype.Text
 	ProjectName                 pgtype.Text
+	CommercialAnalysisStatus    string
+	FinancialAnalysisStatus     string
+	ReleaseStatus               string
+	ConferenceStatus            string
+	CancelReason                pgtype.Text
+	CancelComplement            pgtype.Text
+	AttendedReason              pgtype.Text
+	AttendedAt                  pgtype.Timestamptz
+	DelayReason                 pgtype.Text
+	DelayAction                 pgtype.Text
 }
 
 type SalesOrderDemand struct {
@@ -6102,6 +6194,18 @@ type SalesOrderDemand struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	Code           pgtype.Int8
+}
+
+type SalesOrderEvent struct {
+	ID             int64
+	SalesOrderCode int64
+	EventType      string
+	Area           pgtype.Text
+	Reason         pgtype.Text
+	Complement     pgtype.Text
+	EventDate      pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
 }
 
 type SalesOrderItem struct {
@@ -6150,6 +6254,147 @@ type SalesOrderSequence struct {
 	LastNumber     int64
 }
 
+type SalesPricePolicy struct {
+	ID             int64
+	Code           int64
+	Description    string
+	CostSource     string
+	Priority       int64
+	Sequence       int64
+	PolicyScope    string
+	PolicyTypes    string
+	MarkupPct      pgtype.Numeric
+	MarginPct      pgtype.Numeric
+	MaxMarginPct   pgtype.Numeric
+	IdealMarginPct pgtype.Numeric
+	MarginStepPct  pgtype.Numeric
+	ExpensesPct    pgtype.Numeric
+	TaxesPct       pgtype.Numeric
+	FreightPct     pgtype.Numeric
+	CommissionPct  pgtype.Numeric
+	DiscountPct    pgtype.Numeric
+	MinMarginPct   pgtype.Numeric
+	MaxDiscountPct pgtype.Numeric
+	IncidencesJson []byte
+	SalesTableID   *int64
+	ValidityStart  pgtype.Date
+	ValidityEnd    pgtype.Date
+	IsActive       bool
+	Observation    pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type SalesQuotation struct {
+	Code                    int64
+	QuotationNumber         int64
+	EnterpriseCode          int64
+	Status                  string
+	QuotationType           string
+	EmissionDate            pgtype.Date
+	DigitDate               pgtype.Date
+	ValidUntil              pgtype.Date
+	DeliveryDate            pgtype.Date
+	DeliveryDateFirm        bool
+	PurchaseOrderNumber     pgtype.Text
+	CustomerCode            *int64
+	BillingAddressCode      *int64
+	ShippingAddressCode     *int64
+	RepresentativeCode      *int64
+	SalesDivisionCode       *int64
+	PriceTableCode          *int64
+	PaymentTermCode         *int64
+	CurrencyCode            string
+	ProbabilityPct          pgtype.Numeric
+	CommissionPct           pgtype.Numeric
+	IsNfce                  bool
+	Street                  pgtype.Text
+	StreetNumber            pgtype.Text
+	ForeignDocument         pgtype.Text
+	ReleaseStatus           string
+	CommercialBlocked       bool
+	CommercialBlockReason   pgtype.Text
+	CarrierCode             *int64
+	FreightType             pgtype.Text
+	VerifyFreight           bool
+	FreightValue            pgtype.Numeric
+	RedeliveryFreightValue  pgtype.Numeric
+	InsuranceValue          pgtype.Numeric
+	DiscountValue           pgtype.Numeric
+	SurchargeValue          pgtype.Numeric
+	RetainedTaxValue        pgtype.Numeric
+	TotalGross              pgtype.Numeric
+	TotalNet                pgtype.Numeric
+	DeliveryAuthorization   pgtype.Text
+	Notes                   pgtype.Text
+	ObsCustomer             pgtype.Text
+	CancelReason            pgtype.Text
+	CancelComplement        pgtype.Text
+	AttendedReason          pgtype.Text
+	AttendedAt              pgtype.Timestamptz
+	ConvertedSalesOrderCode *int64
+	ConvertedAt             pgtype.Timestamptz
+	IsActive                bool
+	CreatedAt               pgtype.Timestamptz
+	UpdatedAt               pgtype.Timestamptz
+	CreatedBy               pgtype.UUID
+}
+
+type SalesQuotationAttachment struct {
+	ID                 int64
+	SalesQuotationCode int64
+	FileName           string
+	ContentType        pgtype.Text
+	FileSize           int64
+	StorageKey         string
+	UploadedAt         pgtype.Timestamptz
+	UploadedBy         pgtype.UUID
+}
+
+type SalesQuotationEvent struct {
+	ID                 int64
+	SalesQuotationCode int64
+	EventType          string
+	Reason             string
+	Complement         pgtype.Text
+	EventDate          pgtype.Date
+	CreatedAt          pgtype.Timestamptz
+	CreatedBy          pgtype.UUID
+}
+
+type SalesQuotationItem struct {
+	Code               int64
+	SalesQuotationCode int64
+	Sequence           int32
+	ItemCode           int64
+	Mask               string
+	SalesUom           pgtype.Text
+	WarehouseCode      *int64
+	PriceTableCode     *int64
+	RequestedQty       pgtype.Numeric
+	UnitPrice          pgtype.Numeric
+	AttendedQty        pgtype.Numeric
+	CancelledQty       pgtype.Numeric
+	DeliveryDate       pgtype.Date
+	DeliveryDateFirm   bool
+	DiscountPct        pgtype.Numeric
+	IpiPct             pgtype.Numeric
+	StPct              pgtype.Numeric
+	TotalGross         pgtype.Numeric
+	TotalNet           pgtype.Numeric
+	TotalNetWithIpi    pgtype.Numeric
+	Status             string
+	Notes              pgtype.Text
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type SalesQuotationSequence struct {
+	EnterpriseCode int64
+	LastNumber     int64
+}
+
 type SalesTable struct {
 	ID                         int64
 	Code                       int64
@@ -6185,6 +6430,21 @@ type SalesTablePrice struct {
 	ProductLineID *int64
 	ItemMask      pgtype.Text
 	CreatedAt     pgtype.Timestamptz
+}
+
+type SalesTablePriceHistory struct {
+	ID                int64
+	SalesTablePriceID *int64
+	SalesTableID      int64
+	SalesTableCode    int64
+	ItemCode          string
+	OldPrice          pgtype.Numeric
+	NewPrice          pgtype.Numeric
+	BaseCost          pgtype.Numeric
+	Source            string
+	PolicyCode        *int64
+	Reason            pgtype.Text
+	CreatedAt         pgtype.Timestamptz
 }
 
 type Shipment struct {

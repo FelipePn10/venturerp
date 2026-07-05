@@ -67,6 +67,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_division_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_forecast_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_quotation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_movement_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
@@ -137,6 +138,7 @@ import (
 	salesDivisionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_division"
 	salesForecastRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_forecast"
 	salesOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
+	salesQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_quotation"
 	shipmentRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/shipment"
 	standardCostRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/standard_cost"
 	stockRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
@@ -686,10 +688,23 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.BlockSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.UnblockSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		changeStatusSalesOrderUC,
+		&sales_order_uc.ListSalesOrdersAdvancedUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.SalesOrderReportUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.AnalyzeSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.ReleaseSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.AttendSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.ConferSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.SaveSalesOrderDelayReasonUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.UpdateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrderItemsUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.CancelSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
+	)
+	salesQuotationRepository := salesQuotationRepo.New(app.db.Pool)
+	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService}
+	salesQuotationHandler := handler.NewSalesQuotationHandler(
+		salesQuotationUC,
+		&sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, Orders: soRepo},
 	)
 
 	// cutting plan (plano de corte — fase 1: 1D; fase 2: firmar/baixa + retalhos)
@@ -1227,9 +1242,16 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/sales-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesOrderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesOrderHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search", salesOrderHandler.Search)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", salesOrderHandler.Report)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", salesOrderHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", salesOrderHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/cancel", salesOrderHandler.Cancel)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/analyze", salesOrderHandler.Analyze)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/release", salesOrderHandler.Release)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/attend", salesOrderHandler.Attend)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/conference", salesOrderHandler.Confer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/delay-reason", salesOrderHandler.SaveDelayReason)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", salesOrderHandler.Block)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/unblock", salesOrderHandler.Unblock)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/status", salesOrderHandler.ChangeStatus)
@@ -1240,6 +1262,24 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", salesOrderHandler.ListItems)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{itemCode}", salesOrderHandler.UpdateItem)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{itemCode}/cancel", salesOrderHandler.CancelItem)
+			})
+		})
+		r.Route("/api/sales-quotation", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesQuotationHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesQuotationHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", salesQuotationHandler.Report)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", salesQuotationHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", salesQuotationHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/cancel", salesQuotationHandler.Cancel)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/attend", salesQuotationHandler.Attend)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/uncancel", salesQuotationHandler.Uncancel)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/status", salesQuotationHandler.ChangeStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/convert-to-order", salesQuotationHandler.Convert)
+			r.Route("/items", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesQuotationHandler.CreateItem)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", salesQuotationHandler.ListItems)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{itemCode}", salesQuotationHandler.UpdateItem)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{itemCode}/cancel", salesQuotationHandler.CancelItem)
 			})
 		})
 		r.Route("/api/purchase-order", func(r chi.Router) {

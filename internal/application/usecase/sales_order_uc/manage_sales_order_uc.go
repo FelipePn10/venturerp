@@ -11,6 +11,7 @@ import (
 	demandrepo "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type CancelSalesOrderUseCase struct {
@@ -18,11 +19,14 @@ type CancelSalesOrderUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CancelSalesOrderUseCase) Execute(ctx context.Context, code int64) error {
+func (uc *CancelSalesOrderUseCase) Execute(ctx context.Context, dto request.CancelSalesOrderDTO) error {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.Cancel(ctx, code)
+	if dto.Reason == "" {
+		return errorsuc.NewValidationError("reason is required")
+	}
+	return uc.Repo.Cancel(ctx, dto.Code, dto.Reason, dto.Complement)
 }
 
 type BlockSalesOrderUseCase struct {
@@ -96,6 +100,95 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 		uc.Reserver.Reserve(ctx, dto.Code)
 	}
 	return nil
+}
+
+type AnalyzeSalesOrderUseCase struct {
+	Repo repository.SalesOrderRepository
+	Auth ports.AuthService
+}
+
+func (uc *AnalyzeSalesOrderUseCase) Execute(ctx context.Context, dto request.AnalyzeSalesOrderDTO) error {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	area := dto.Area
+	if area != "COMMERCIAL" && area != "FINANCIAL" {
+		return errorsuc.NewValidationError("area must be COMMERCIAL or FINANCIAL")
+	}
+	status := entity.SalesOrderAnalysisStatus(dto.Status)
+	if status != entity.SalesOrderAnalysisApproved && status != entity.SalesOrderAnalysisRejected && status != entity.SalesOrderAnalysisNotAnalyzed {
+		return errorsuc.NewValidationError("invalid analysis status")
+	}
+	if dto.Reason == "" {
+		return errorsuc.NewValidationError("reason is required")
+	}
+	return uc.Repo.Analyze(ctx, dto.Code, area, status, dto.Reason, dto.CreatedBy)
+}
+
+type ReleaseSalesOrderUseCase struct {
+	Repo repository.SalesOrderRepository
+	Auth ports.AuthService
+}
+
+func (uc *ReleaseSalesOrderUseCase) Execute(ctx context.Context, dto request.ReleaseSalesOrderDTO) error {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	status := entity.SalesOrderReleaseStatus(dto.ReleaseStatus)
+	if status != entity.SalesOrderReleaseBlocked && status != entity.SalesOrderReleaseManual && status != entity.SalesOrderReleaseOK {
+		return errorsuc.NewValidationError("invalid release_status")
+	}
+	if dto.Reason == "" {
+		return errorsuc.NewValidationError("reason is required")
+	}
+	return uc.Repo.Release(ctx, dto.Code, status, dto.Reason, dto.Area, dto.CreatedBy)
+}
+
+type AttendSalesOrderUseCase struct {
+	Repo repository.SalesOrderRepository
+	Auth ports.AuthService
+}
+
+func (uc *AttendSalesOrderUseCase) Execute(ctx context.Context, dto request.AttendSalesOrderDTO) error {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	if dto.Reason == "" {
+		return errorsuc.NewValidationError("reason is required")
+	}
+	eventDate := datetime.ParseDatePtr(&dto.EventDate)
+	return uc.Repo.Attend(ctx, dto.Code, dto.Reason, eventDate, dto.CreatedBy)
+}
+
+type ConferSalesOrderUseCase struct {
+	Repo repository.SalesOrderRepository
+	Auth ports.AuthService
+}
+
+func (uc *ConferSalesOrderUseCase) Execute(ctx context.Context, dto request.ConferSalesOrderDTO) error {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	status := entity.SalesOrderConferenceStatus(dto.Status)
+	if status != entity.SalesOrderConferencePending && status != entity.SalesOrderConferenceConferred && status != entity.SalesOrderConferenceDivergent {
+		return errorsuc.NewValidationError("invalid conference status")
+	}
+	return uc.Repo.Confer(ctx, dto.Code, status, dto.Reason, dto.CreatedBy)
+}
+
+type SaveSalesOrderDelayReasonUseCase struct {
+	Repo repository.SalesOrderRepository
+	Auth ports.AuthService
+}
+
+func (uc *SaveSalesOrderDelayReasonUseCase) Execute(ctx context.Context, dto request.SaveSalesOrderDelayReasonDTO) error {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	if dto.Reason == "" || dto.Action == "" {
+		return errorsuc.NewValidationError("reason and action are required")
+	}
+	return uc.Repo.SaveDelayReason(ctx, dto.Code, dto.Reason, dto.Action, dto.CreatedBy)
 }
 
 // generateDemands creates one independent demand per open order line. It is
