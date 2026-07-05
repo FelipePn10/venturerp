@@ -13,8 +13,10 @@ import (
 
 type SalesForecastHandler struct {
 	createForecastUC      *sales_forecast_uc.CreateSalesForecastUseCase
+	createMonthlyUC       *sales_forecast_uc.CreateMonthlySalesForecastUseCase
 	listForecastsUC       *sales_forecast_uc.ListSalesForecastsUseCase
 	getForecastByItemUC   *sales_forecast_uc.GetForecastByItemUseCase
+	generateForecastUC    *sales_forecast_uc.GenerateSalesForecastUseCase
 	createBlockUC         *sales_forecast_uc.CreateForecastBlockUseCase
 	listBlocksUC          *sales_forecast_uc.ListForecastBlocksUseCase
 	createAppropriationUC *sales_forecast_uc.CreateAppropriationTableUseCase
@@ -24,8 +26,10 @@ type SalesForecastHandler struct {
 
 func NewSalesForecastHandler(
 	createForecastUC *sales_forecast_uc.CreateSalesForecastUseCase,
+	createMonthlyUC *sales_forecast_uc.CreateMonthlySalesForecastUseCase,
 	listForecastsUC *sales_forecast_uc.ListSalesForecastsUseCase,
 	getForecastByItemUC *sales_forecast_uc.GetForecastByItemUseCase,
+	generateForecastUC *sales_forecast_uc.GenerateSalesForecastUseCase,
 	createBlockUC *sales_forecast_uc.CreateForecastBlockUseCase,
 	listBlocksUC *sales_forecast_uc.ListForecastBlocksUseCase,
 	createAppropriationUC *sales_forecast_uc.CreateAppropriationTableUseCase,
@@ -34,14 +38,44 @@ func NewSalesForecastHandler(
 ) *SalesForecastHandler {
 	return &SalesForecastHandler{
 		createForecastUC:      createForecastUC,
+		createMonthlyUC:       createMonthlyUC,
 		listForecastsUC:       listForecastsUC,
 		getForecastByItemUC:   getForecastByItemUC,
+		generateForecastUC:    generateForecastUC,
 		createBlockUC:         createBlockUC,
 		listBlocksUC:          listBlocksUC,
 		createAppropriationUC: createAppropriationUC,
 		listAppropriationsUC:  listAppropriationsUC,
 		setDefaultUC:          setDefaultUC,
 	}
+}
+
+func (h *SalesForecastHandler) CreateMonthlyForecast(w http.ResponseWriter, r *http.Request) {
+	var dto request.CreateMonthlySalesForecastDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.createMonthlyUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
+}
+
+func (h *SalesForecastHandler) GenerateForecast(w http.ResponseWriter, r *http.Request) {
+	var dto request.GenerateSalesForecastDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.generateForecastUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
 }
 
 // ---- Forecasts ----

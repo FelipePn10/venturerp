@@ -19,9 +19,13 @@ O módulo de Vendas é a **porta de entrada** do fluxo do ERP: é o pedido do cl
 7. [Divisão de vendas](#7-divisão-de-vendas)
 8. [Promessa de entrega (prazos confiáveis)](#8-promessa-de-entrega-prazos-confiáveis)
 9. [Reprogramação de entrega](#9-reprogramação-de-entrega)
-10. [Faturamento](#10-faturamento)
-11. [Expedição / Romaneio](#11-expedição--romaneio)
-12. [Glossário rápido](#12-glossário-rápido)
+10. [Representantes](#10-representantes)
+11. [Metas de vendas](#11-metas-de-vendas)
+12. [Previsão de vendas](#12-previsão-de-vendas)
+13. [Assistencia Tecnica](#13-assistencia-tecnica)
+14. [Faturamento](#14-faturamento)
+15. [Expedição / Romaneio](#15-expedição--romaneio)
+16. [Glossário rápido](#16-glossário-rápido)
 
 ---
 
@@ -150,9 +154,15 @@ O sistema ajuda a **prometer prazos realistas**, em vez de "chutar" uma data:
 | Recurso | O que faz |
 |---|---|
 | **Parâmetros de promessa de entrega** | Regras gerais de como a data prometida é calculada |
-| **Calendário de promessa por item** | Disponibilidade (capacidade de entrega) por item/variante, dia a dia — o que pode ser prometido em cada data |
+| **Calendário de promessa por item** | Define dias úteis ou bloqueados por item/variante |
+| **Ocupação por tanque/setor** | Mostra quanto da capacidade diária já está comprometida |
+| **Reserva comercial** | Guarda capacidade por alguns dias enquanto a venda é negociada |
+| **Reprogramação em lote** | Ajusta datas de pedidos/itens sem alterar datas firmes |
 
-Com isso, a data de entrega informada ao cliente considera a **disponibilidade real** (estoque + capacidade), reduzindo atrasos e promessas impossíveis.
+Com isso, a data de entrega informada ao cliente considera **estoque disponível,
+capacidade produtiva e calendário operacional**. A venda consegue reservar
+capacidade antes do pedido definitivo, e a fábrica enxerga a ocupação prevista
+por dia. Datas firmes são protegidas para evitar mudanças acidentais.
 
 ---
 
@@ -228,7 +238,143 @@ provisionado de comissão.
 
 ---
 
-## 10. Faturamento
+## 10. Representantes
+
+Representantes são a estrutura comercial que conecta clientes, territórios,
+pedidos, orçamentos e comissões. O cadastro mantém em um único lugar os dados do
+representante, seus prepostos, telefones, e-mails, regiões atendidas, segmentos
+de mercado, planos de venda, empresas de atuação e parâmetros de comissão.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Organizar carteira | Vincula representantes a clientes, regiões e segmentos |
+| Controlar atuação | Separa tipos como externo, interno, gerente ou preposto |
+| Dar suporte à venda | Leva o representante para orçamentos e pedidos |
+| Calcular comissão | Mantém comissão por empresa e acompanha valor vendido |
+| Acompanhar desempenho | Mostra orçamentos, pedidos, clientes atendidos e ticket médio |
+| Evitar cadastros incompletos | Centraliza documento, endereço, contatos e situação ativa/inativa |
+
+### Acompanhamento comercial
+
+A ficha de acompanhamento mostra a evolução do representante por cliente,
+combinando propostas e pedidos. A gestão consegue ver quanto foi orçado, quanto
+virou pedido, qual é o ticket médio, a base de comissão, a comissão futura e a
+última movimentação comercial.
+
+### Benefício operacional
+
+O módulo reduz dependência de planilhas de representantes, melhora a análise de
+carteira e cria uma base consistente para metas, comissões, políticas comerciais
+e relatórios de vendas. Como cada pedido e orçamento pode apontar para um
+representante cadastrado, a empresa ganha rastreabilidade desde a negociação até
+o faturamento.
+
+---
+
+## 11. Metas de Vendas
+
+Metas de vendas transformam objetivos comerciais em acompanhamento operacional.
+A empresa define períodos, metas por representante, metas por grupo comercial e
+metas específicas por cliente, item, classificação ou grupo de itens.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Definir objetivos | Cria períodos mensais, semanais ou customizados |
+| Medir desempenho | Compara previsto x realizado por venda ou faturamento |
+| Gerir carteira | Filtra por representante, cliente, região e microrregião |
+| Premiar resultados | Controla bônus por meta mínima, provável e ideal |
+| Aproveitar excedentes | Registra saldo quando a meta ideal é superada |
+| Reduzir planilhas | Centraliza metas, clientes, grupos e relatório no ERP |
+
+### Acompanhamento
+
+O relatório de metas mostra valor previsto, quantidade prevista, realizado,
+saldo, percentual de atingimento, bônus e situação da meta. A gestão consegue
+avaliar se a carteira está aberta, atingida ou sem alvo definido e agir durante o
+período, não apenas depois do fechamento.
+
+### Benefício operacional
+
+Com metas integradas a representantes e pedidos, o comercial ganha uma leitura
+contínua de desempenho. Isso cria base para premiações, campanhas, comissões,
+políticas comerciais e planejamento de vendas.
+
+---
+
+## 12. Previsão de Vendas
+
+Previsão de vendas antecipa a demanda futura antes de existir pedido confirmado.
+Ela permite que o comercial informe uma quantidade mensal por item e o sistema
+distribui automaticamente por semanas conforme o calendário industrial. Também é
+possível gerar a previsão usando a média do histórico de pedidos ou faturamento,
+com índice de projeção para crescimento ou redução.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Antecipar demanda | Cadastra previsão mensal por item e distribui por semanas |
+| Planejar produção e compras | Alimenta o MRP com demanda prevista |
+| Usar histórico | Gera previsões pela média de pedidos ou faturamento |
+| Projetar crescimento | Aplica percentual de projeção sobre a média histórica |
+| Evitar retrabalho | Atualiza previsões existentes quando permitido |
+| Controlar calendário | Bloqueia períodos que não devem receber nova previsão |
+| Comparar gestão | Ajuda a confrontar metas, previsões e pedidos reais |
+
+### Como funciona
+
+O usuário pode cadastrar a previsão mensalmente ou gerar períodos futuros a partir
+do histórico real do ERP. Na geração automática, o sistema considera apenas pedidos
+liberados e sem bloqueio, ou notas fiscais autorizadas, calcula a média do período,
+aplica a projeção desejada e grava a previsão por semana. Previsões bloqueadas ou
+duplicadas são informadas no resultado para auditoria.
+
+### Benefício operacional
+
+A empresa passa a planejar antes da venda formal acontecer. Isso reduz compras e
+produção reativas, melhora análise de capacidade e cria uma ponte entre objetivo
+comercial, carteira real e planejamento industrial.
+
+---
+
+## 13. Assistencia Tecnica
+
+Assistencia Tecnica centraliza chamados de garantia, defeitos e devolucoes em um
+fluxo rastreavel. O atendimento deixa de depender de controles paralelos: cada
+chamado registra cliente, consumidor, item, motivo do defeito, garantia, notas
+vinculadas, diagnostico, solucao e os documentos gerados.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Controlar garantia | Calcula se o item esta em garantia pela data da nota e prazo informado |
+| Padronizar defeitos | Usa grupos e motivos de defeito com regras comerciais |
+| Exigir evidencias | Bloqueia atendimento quando falta nota de devolucao/remessa obrigatoria |
+| Gerar continuidade operacional | Cria pedido de venda ou ordem de producao de assistencia quando necessario |
+| Medir atendimento | Relatorio mostra pendentes, atendidos, fechados, cancelados e tempo medio |
+
+### Como funciona
+
+O atendente abre o chamado, informa os itens afetados e seleciona o motivo do
+defeito. O sistema aplica as regras desse motivo: pode exigir complemento,
+determinar se gera receita, solicitar nota de retorno e indicar se precisa gerar
+pedido ou ordem de assistencia. Antes de atender ou fechar, o ERP valida se tudo
+que foi exigido foi cumprido.
+
+### Beneficio operacional
+
+A assistencia passa a conversar com vendas, producao, estoque e fiscal sem perder
+o historico do cliente. Isso reduz atendimentos encerrados sem documento, melhora
+a analise de defeitos recorrentes e cria base para custos de garantia.
+
+---
+
+## 14. Faturamento
 
 Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de Saída (NF-e)**, o sistema executa em cadeia, automaticamente:
 
@@ -242,7 +388,7 @@ Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de
 
 ---
 
-## 11. Expedição / Romaneio
+## 15. Expedição / Romaneio
 
 A expedição organiza a **saída física** da mercadoria por meio do **romaneio** (lista de carregamento):
 
@@ -258,7 +404,7 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 
 ---
 
-## 12. Glossário rápido
+## 16. Glossário rápido
 
 | Termo | Significado |
 |---|---|
@@ -266,11 +412,15 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 | **Orçamento** | Proposta comercial anterior ao pedido |
 | **Tabela de vendas** | Cadastro de preços comerciais por item |
 | **Política comercial** | Regra de desconto, acréscimo, frete ou comissão aplicada à venda |
+| **Representante** | Pessoa ou equipe comercial responsável pela carteira, orçamento, pedido e comissão |
+| **Meta de vendas** | Objetivo comercial por período, representante, grupo, cliente, item ou classificação |
+| **Previsão de vendas** | Demanda futura estimada por item, variante e semana para planejamento |
 | **Demanda** | A necessidade que o pedido confirmado gera para o planejamento |
 | **Divisão de vendas** | Agrupamento comercial (equipe/região/unidade) |
 | **Reserva** | Estoque separado para um pedido |
 | **Promessa de entrega** | Data de entrega calculada com base em estoque e capacidade |
 | **Reprogramação** | Remarcação registrada de uma data de entrega |
+| **Assistencia Tecnica** | Fluxo de chamados, garantia, defeitos e documentos de atendimento |
 | **Romaneio** | Lista de carregamento usada na expedição |
 
 ## Novidades (2026-06)

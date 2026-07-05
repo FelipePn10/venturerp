@@ -42,3 +42,10 @@ type AppropriationTable struct {
 	UpdatedAt    time.Time
 	CreatedBy    uuid.UUID
 }
+
+type HistoricalDemand struct {
+	ItemCode    int64
+	Mask        *string
+	PeriodMonth time.Time
+	Quantity    float64
+}

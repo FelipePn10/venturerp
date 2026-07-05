@@ -275,6 +275,121 @@ func (q *Queries) ListAppropriationTables(ctx context.Context) ([]AppropriationT
 	return items, nil
 }
 
+const listForecastFiscalHistory = `-- name: ListForecastFiscalHistory :many
+SELECT
+    fei.item_code,
+    NULL::text AS mask,
+    date_trunc('month', fe.data_emissao)::date AS period_month,
+    COALESCE(SUM(fei.quantity), 0)::numeric AS quantity
+FROM public.fiscal_exit_items fei
+JOIN public.fiscal_exits fe ON fe.id = fei.fiscal_exit_id
+WHERE fe.is_active = TRUE
+  AND fe.status = 'AUTHORIZED'
+  AND fe.data_emissao BETWEEN $1 AND $2
+  AND fei.item_code IS NOT NULL
+  AND (cardinality($3::bigint[]) = 0 OR fei.item_code = ANY($3::bigint[]))
+GROUP BY fei.item_code, date_trunc('month', fe.data_emissao)::date
+ORDER BY fei.item_code, period_month
+`
+
+type ListForecastFiscalHistoryParams struct {
+	DataEmissao   pgtype.Date
+	DataEmissao_2 pgtype.Date
+	Column3       []int64
+}
+
+type ListForecastFiscalHistoryRow struct {
+	ItemCode    *int64
+	Mask        pgtype.Text
+	PeriodMonth pgtype.Date
+	Quantity    pgtype.Numeric
+}
+
+func (q *Queries) ListForecastFiscalHistory(ctx context.Context, arg ListForecastFiscalHistoryParams) ([]ListForecastFiscalHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listForecastFiscalHistory, arg.DataEmissao, arg.DataEmissao_2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListForecastFiscalHistoryRow
+	for rows.Next() {
+		var i ListForecastFiscalHistoryRow
+		if err := rows.Scan(
+			&i.ItemCode,
+			&i.Mask,
+			&i.PeriodMonth,
+			&i.Quantity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listForecastSalesOrderHistory = `-- name: ListForecastSalesOrderHistory :many
+SELECT
+    soi.item_code,
+    COALESCE(NULLIF(soi.mask, ''), '')::text AS mask,
+    date_trunc('month', so.emission_date)::date AS period_month,
+    COALESCE(SUM(soi.requested_qty - soi.cancelled_qty), 0)::numeric AS quantity
+FROM public.sales_order_items soi
+JOIN public.sales_orders so ON so.code = soi.sales_order_code
+WHERE so.is_active = TRUE
+  AND soi.is_active = TRUE
+  AND so.emission_date BETWEEN $1 AND $2
+  AND so.status <> 'CANCELLED'
+  AND so.is_blocked = FALSE
+  AND so.release_status IN ('RELEASED', 'MANUAL_RELEASED')
+  AND so.commercial_analysis_status <> 'REJECTED'
+  AND so.financial_analysis_status <> 'REJECTED'
+  AND soi.status <> 'CANCELLED'
+  AND (cardinality($3::bigint[]) = 0 OR soi.item_code = ANY($3::bigint[]))
+GROUP BY soi.item_code, COALESCE(NULLIF(soi.mask, ''), ''), date_trunc('month', so.emission_date)::date
+ORDER BY soi.item_code, period_month
+`
+
+type ListForecastSalesOrderHistoryParams struct {
+	EmissionDate   pgtype.Date
+	EmissionDate_2 pgtype.Date
+	Column3        []int64
+}
+
+type ListForecastSalesOrderHistoryRow struct {
+	ItemCode    int64
+	Mask        string
+	PeriodMonth pgtype.Date
+	Quantity    pgtype.Numeric
+}
+
+func (q *Queries) ListForecastSalesOrderHistory(ctx context.Context, arg ListForecastSalesOrderHistoryParams) ([]ListForecastSalesOrderHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listForecastSalesOrderHistory, arg.EmissionDate, arg.EmissionDate_2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListForecastSalesOrderHistoryRow
+	for rows.Next() {
+		var i ListForecastSalesOrderHistoryRow
+		if err := rows.Scan(
+			&i.ItemCode,
+			&i.Mask,
+			&i.PeriodMonth,
+			&i.Quantity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSalesForecastBlocks = `-- name: ListSalesForecastBlocks :many
 SELECT id, start_date, end_date, reason, created_at, created_by FROM sales_forecast_blocks ORDER BY start_date
 `

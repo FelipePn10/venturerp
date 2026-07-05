@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS public.representative_contacts;
+DROP TABLE IF EXISTS public.representative_correspondence_addresses;
+DROP TABLE IF EXISTS public.representative_emails;
+DROP TABLE IF EXISTS public.representative_phones;
+DROP TABLE IF EXISTS public.representative_interests;
+DROP TABLE IF EXISTS public.representative_sales_plans;
+DROP TABLE IF EXISTS public.representative_segments;
+DROP TABLE IF EXISTS public.representative_regions;
+DROP TABLE IF EXISTS public.representative_accounting;
+DROP TABLE IF EXISTS public.representative_enterprises;
+DROP TABLE IF EXISTS public.representatives;
+DROP TABLE IF EXISTS public.representative_types;

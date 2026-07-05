@@ -585,9 +585,402 @@ avaliação e listagem.
 
 ---
 
-## 4. Promessa de Entrega
+## 5. Representantes
 
-Cálculo de data prometida com base em disponibilidade (estoque + capacidade).
+O módulo de representantes centraliza o cadastro de vendedores externos,
+vendedores internos, gerentes comerciais e prepostos que participam da venda. Ele
+existe para evitar que o representante seja tratado apenas como texto livre no
+pedido: cada venda passa a apontar para um cadastro com documento, território,
+empresa de atuação, comissão, dados de contato e histórico comercial.
+
+### Rotas principais (`/api/representatives`)
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/create` | Cria representante |
+| GET | `/list` | Lista representantes com filtros |
+| GET | `/{code}` | Consulta cadastro completo com pastas |
+| PUT | `/{code}` | Atualiza dados principais |
+| PATCH | `/{code}/block` | Bloqueia representante com motivo |
+| PATCH | `/{code}/unblock` | Remove bloqueio |
+| GET | `/report` | Relatório cadastral por representante, UF, região e status |
+| GET | `/follow-up` | Ficha de acompanhamento comercial |
+
+### Tipos de representantes
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/types/` | Cria tipo |
+| GET | `/types/` | Lista tipos |
+| GET | `/types/{code}` | Consulta tipo |
+| PUT | `/types/{code}` | Atualiza tipo |
+
+O tipo possui `description`, `is_free` e `ignores_direct_billing`. O campo
+`is_free` indica se o representante fica disponível para clientes sem restrição
+de carteira. `ignores_direct_billing` permite separar operações de faturamento
+direto em análises comerciais.
+
+### Pastas do cadastro
+
+| Rota | Uso |
+|---|---|
+| `/enterprises` | Empresas de atuação, comissão padrão, percentual e situação ativa/inativa |
+| `/accounting` | Contas, centros de custo e histórico para comissões geradas ou estornadas |
+| `/regions` | Regiões e microrregiões de atendimento |
+| `/segments` | Segmentos de mercado por representante ou microrregião |
+| `/sales-plans` | Planos comerciais usados pela equipe de venda |
+| `/interests` | Classificações de itens de interesse do representante |
+| `/phones` | Telefones com DDI, DDD, tipo e ranking |
+| `/emails` | E-mails com ranking |
+| `/correspondence-addresses` | Endereço de correspondência |
+| `/contacts` | Contatos/prepostos do representante |
+
+Ao cadastrar telefone ou e-mail, o sistema atualiza automaticamente o contato
+principal do representante pelo menor ranking. Ao informar logradouro e número,
+o endereço completo é montado quando não vier preenchido.
+
+### Relatório cadastral
+
+`GET /api/representatives/report` aceita:
+
+- `codes=1,2,3`
+- `description=texto`
+- `type_code=10`
+- `state=RS`
+- `region_code=5`
+- `active_status=ACTIVE|INACTIVE|ALL`
+- `sort_by=CODE|NAME|STATE|REGION`
+- `with_accounts=true`
+
+O relatório retorna identificação, tipo, UF, cidade, contatos principais,
+regiões, situação ativa/inativa, comissão da empresa e, quando solicitado,
+contas contábeis de comissão gerada.
+
+### Ficha de acompanhamento
+
+`GET /api/representatives/follow-up` consolida a evolução comercial do
+representante a partir de orçamentos e pedidos. Filtros:
+
+- `representative_codes=1,2`
+- `customer_codes=100,200`
+- `from=2026-01-01`
+- `to=2026-12-31`
+
+O retorno mostra quantidade de clientes atendidos, orçamentos, pedidos, valor
+orçado, valor vendido, ticket médio, base de comissão, comissão calculada,
+últimas datas e detalhamento por cliente. Isso permite acompanhar carteira,
+atividade comercial e geração futura de comissão sem planilhas paralelas.
+
+### Persistência e validações
+
+Migration `000190_sales_representatives` cria as tabelas
+`representative_types`, `representatives` e as tabelas das pastas do cadastro.
+O cadastro exige nome e documento, rejeita quantidade negativa de dispositivos e
+normaliza UF em maiúsculas. O representante pode ser vinculado a um cliente e/ou
+fornecedor existente sem duplicar esses cadastros.
+
+Teste automatizado: `scripts/test-comercial-representantes.sh` cobre a camada Go
+e, com `BASE_URL`/`TOKEN`, executa smoke HTTP de tipo, cadastro, pastas,
+relatório e ficha de acompanhamento.
+
+---
+
+## 6. Metas de Vendas (`/api/sales-goals`)
+
+O módulo de metas controla objetivos comerciais por período, representante,
+grupo comercial e cliente. Ele permite definir metas por valor ou quantidade,
+acompanhar realizado contra previsto e registrar saldos excedentes para o
+período seguinte.
+
+Use metas quando a gestão precisa acompanhar carteira e remuneração variável com
+base em venda ou faturamento. A base `SALES` calcula realizado por pedidos de
+venda dentro do período; a base `INVOICING` fica registrada para metas que serão
+fechadas por faturamento conforme a integração fiscal evoluir.
+
+### Onde É Usado
+
+- Comercial: definição de metas mensais, semanais ou customizadas.
+- Representantes: acompanhamento de desempenho por carteira e região.
+- Gestão de vendas: relatório previsto x realizado, percentual de atingimento e
+  bônus.
+- Políticas comerciais: base para descontos, premiações e comissões futuras.
+- Planejamento: comparação entre meta, previsão de vendas e pedidos efetivos.
+
+### Rotas
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/create` | Cria meta por representante e período |
+| GET | `/list` | Lista metas por representante, período e base |
+| GET | `/report` | Relatório previsto x realizado |
+| GET | `/{code}` | Consulta meta com itens |
+| PUT | `/{code}` | Atualiza meta |
+| POST | `/periods/` | Cria período mensal, semanal ou customizado |
+| GET | `/periods/` | Lista períodos |
+| POST | `/items` | Adiciona meta por item, classificação ou grupo |
+| POST | `/group-targets` | Cria/atualiza meta por grupo comercial |
+| POST | `/group-customers` | Vincula cliente à meta do grupo |
+| POST | `/balances` | Registra saldo excedente de meta |
+
+### Conceitos
+
+- **Período:** janela da meta, com tipo `MONTH`, `WEEK` ou `CUSTOM`, data inicial
+  e data final.
+- **Meta por representante:** cabeçalho por representante, período e base de
+  análise (`SALES` ou `INVOICING`), com percentual de premiação.
+- **Itens da meta:** cada linha deve apontar exatamente um alvo: item,
+  classificação de item ou grupo de item. A linha pode ter quantidade, valor,
+  unidade de venda e bônus.
+- **Meta por grupo comercial:** define meta mínima, provável e ideal, cada uma
+  com percentual de bônus.
+- **Clientes do grupo:** detalha metas mínima, provável e ideal por cliente,
+  opcionalmente vinculadas ao representante responsável.
+- **Saldos:** registram excedentes quando a realização supera a meta ideal e
+  podem ser considerados no período subsequente.
+
+### Relatório
+
+`GET /api/sales-goals/report` aceita:
+
+- `representative_code`
+- `customer_code`
+- `region_code`
+- `microregion_code`
+- `period_code`
+- `from=YYYY-MM-DD`
+- `to=YYYY-MM-DD`
+- `analysis_base=SALES|INVOICING`
+- `layout`
+- `break_by`
+- `include_missed_items=true`
+
+O retorno mostra escopo da meta, representante ou grupo comercial, período, base
+de análise, valor/quantidade prevista, valor/quantidade realizada, saldo,
+percentual de atingimento, bônus e situação (`OPEN`, `ACHIEVED` ou `NO_TARGET`).
+
+### Persistência e validações
+
+Migration `000191_sales_goals` cria `sales_goal_periods`, `sales_goals`,
+`sales_goal_items`, `sales_goal_group_targets`, `sales_goal_group_customers` e
+`sales_goal_balances`. As validações impedem período invertido, percentuais
+negativos e linhas de meta com mais de um alvo informado. O relatório respeita
+filtros de representante, cliente, região, microrregião e período.
+
+Teste automatizado: `scripts/test-comercial-metas.sh` cobre a camada Go,
+validação estática de migração/rotas e, com `BASE_URL`/`TOKEN`, executa smoke HTTP
+de período, meta, item, grupo, cliente, saldo e relatório.
+
+---
+
+## 7. Previsão de Vendas (`/api/sales-forecast`)
+
+O módulo de previsão de vendas registra demanda futura por item e máscara. A
+entrada operacional é mensal e o sistema distribui a quantidade em semanas ISO
+conforme os dias úteis do calendário industrial. Ele é usado quando a empresa
+precisa planejar compra, produção e capacidade antes de existir pedido confirmado.
+A previsão alimenta o MRP como demanda de planejamento, enquanto pedidos
+confirmados continuam entrando como demanda firme.
+
+### Onde É Usado
+
+- Comercial: mantém visão antecipada de volume por item e período.
+- Planejamento: antecipa necessidade de produção e compra antes da carteira
+  formal.
+- Gestão: compara meta, previsão e pedido real para ajustar carteira e campanhas.
+- MRP/MPS: previsões entram como demanda independente do tipo previsão.
+
+### Rotas
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/create` | Cadastra previsão semanal manual |
+| POST | `/create-monthly` | Cadastra previsão mensal e distribui em semanas por calendário industrial |
+| POST | `/generate` | Gera previsão por média de histórico de pedidos/faturamento; também aceita modelo estatístico como melhoria |
+| GET | `/list/{year}` | Lista previsões do ano |
+| GET | `/item/{itemCode}` | Lista previsões por item |
+| POST | `/blocks/create` | Bloqueia período de previsão |
+| GET | `/blocks/list` | Lista bloqueios de período |
+| POST | `/appropriation/create` | Cria tabela de apropriação diária |
+| GET | `/appropriation/list` | Lista tabelas de apropriação |
+| POST | `/appropriation/set-default` | Define tabela padrão |
+
+### Cadastro Manual E Mensal
+
+`POST /api/sales-forecast/create` recebe `item_code`, `mask`, `week`, `year` e
+`quantity`. A semana deve estar entre 1 e 53, o ano deve ser maior que 2000 e a
+quantidade deve ser positiva. Antes de gravar, o sistema verifica se a segunda-feira
+da semana ISO está em período bloqueado.
+
+`POST /api/sales-forecast/create-monthly` recebe `item_code`, `mask`, `year`,
+`month`, `quantity`, `accepts_fraction` e `update_existing`. O sistema busca os
+dias úteis do mês no calendário industrial; se o mês não estiver cadastrado,
+aplica fallback de segunda a sexta. A quantidade mensal é rateada entre as semanas
+proporcionalmente aos dias úteis. Quando o item não aceita quantidade fracionada,
+as semanas são arredondadas para baixo e o saldo fica na última semana do mês.
+
+### Geração Por Histórico
+
+`POST /api/sales-forecast/generate` com `history_source` usa o histórico do ERP,
+calcula a média mensal do período selecionado, aplica `projection_pct` e grava o
+resultado no cadastro de previsão. Fontes aceitas:
+
+| Fonte | Origem |
+|---|---|
+| `ORDERS` | Itens de pedidos de venda liberados, sem bloqueio comercial/financeiro |
+| `INVOICING` | Itens de notas fiscais de saída autorizadas |
+| `BOTH` | Soma pedidos e faturamento no mesmo cálculo |
+
+Campos principais:
+
+- `history_source`: `ORDERS`, `INVOICING` ou `BOTH`;
+- `history_from` e `history_to`: período usado para calcular a média;
+- `item_codes`: itens selecionados; se omitido, usa `item_code` quando informado;
+- `start_week`/`start_year` e `target_end_week`/`target_end_year`: período em que
+  a previsão será gerada;
+- `projection_pct`: índice de crescimento/redução aplicado sobre a média;
+- `accepts_fraction`: controla arredondamento semanal;
+- `update_existing`: permite atualizar previsões já existentes.
+
+Pedidos usados como histórico precisam estar liberados e sem bloqueio. Pedidos
+cancelados, itens cancelados, pedidos bloqueados ou reprovados nas análises
+comercial/financeira são ignorados. No faturamento, somente notas de saída
+autorizadas entram no cálculo.
+
+A geração respeita meses cheios no sentido operacional: cada mês tocado pelo
+período alvo recebe a média mensal projetada; se o alvo pega só parte do mês, a
+quantidade é concentrada/rateada nas semanas disponíveis daquele recorte. Quando
+há arredondamento, o saldo da geração fica na primeira semana disponível do mês,
+mantendo o comportamento usado na geração automática.
+
+Períodos bloqueados são ignorados com motivo explícito. Previsões existentes para
+o mesmo item/máscara/semana/ano só são atualizadas quando `update_existing=true`;
+caso contrário, aparecem como ignoradas para evitar duplicidade operacional.
+
+### Geração Estatística Complementar
+
+Sem `history_source`, o mesmo endpoint aceita histórico informado no payload e
+roda modelos estatísticos complementares:
+
+- `item_code` e `mask`;
+- `start_week` e `start_year`, que definem o primeiro período a gravar;
+- `history`, com períodos históricos ordenados e quantidades;
+- `periods`, número de semanas futuras;
+- `model`: `AUTO`, `MOVING_AVERAGE`, `EXP_SMOOTHING` ou `HOLT_WINTERS`;
+- parâmetros opcionais `ma_window`, `alpha`, `beta`, `gamma` e `season_len`;
+- `update_existing`, que permite atualizar previsões já existentes.
+
+Quando `model=AUTO`, o sistema calcula os modelos disponíveis e escolhe o menor
+MAPE. A resposta informa modelo escolhido, MAPE, previsões criadas, previsões
+atualizadas, períodos ignorados e total gravado.
+
+### Apropriação Diária
+
+As tabelas de apropriação distribuem a previsão semanal nos dias da semana por
+percentual. Elas aceitam percentuais de segunda a domingo e uma marcação de tabela
+padrão. A soma não pode exceder 100%. Essa base permite evoluir a previsão semanal
+para consumo diário por MRP/APS e análises de capacidade.
+
+### Integração Com Planejamento
+
+O serviço de MRP carrega previsões do ano corrente e do ano seguinte e converte
+cada semana em demanda de planejamento pelo item/máscara. Isso permite que o
+planejamento considere demanda prevista mesmo antes de pedidos confirmados,
+mantendo pedidos reais como sinal mais forte quando eles existirem.
+
+### Testes
+
+Testes automatizados focados em `internal/application/usecase/sales_forecast_uc`:
+
+- criação de previsões geradas;
+- manutenção mensal com distribuição por dias úteis e saldo na última semana;
+- geração por média histórica e índice de projeção;
+- atualização de previsão existente quando permitido;
+- bloqueio de período;
+- não duplicação quando atualização está desabilitada.
+
+Comando usado nesta fase:
+
+```bash
+env GOCACHE=/tmp/panossoerp-go-build go test ./...
+```
+
+---
+
+## 8. Promessa de Entrega (`/api/delivery-promise`)
+
+Cálculo e manutenção da data prometida com base em estoque disponível, calendário
+por item, ocupação diária de tanque/setor produtivo e reservas comerciais
+temporárias.
+
+### Ocupação de Tanques/Setores
+
+`GET /api/delivery-promise/occupation?from_date=2026-07-01&to_date=2026-07-31&daily_capacity=50`
+
+Retorna a ocupação diária agrupada por `planning_tank_code` do item:
+
+- pedidos abertos/confirmados com data de entrega no período;
+- reservas comerciais ativas de tanque;
+- quantidade alocada, capacidade informada, saldo livre e percentual de ocupação;
+- valor previsto por dia, calculado por quantidade × preço unitário;
+- avisos quando item não tem tanque de planejamento cadastrado.
+
+`daily_capacity` é usado como capacidade diária padrão enquanto não houver um
+cadastro formal de tanques/capacidades. Se não for informado, a API ainda lista a
+ocupação, mas marca o saldo/capacidade como indicativos.
+
+### Reserva Comercial de Tanque
+
+`POST /api/delivery-promise/tank-reservations`
+
+Cria ou simula uma reserva de capacidade para venda futura, sem transformar a
+reserva em pedido nem demanda de MRP. O payload aceita:
+
+- `requested_delivery_date`: data prometida desejada;
+- `firm_days`: prazo de validade da reserva;
+- `daily_capacity`: capacidade diária disponível para quebrar a necessidade;
+- `verify_stock`: desconta ATP antes de reservar capacidade produtiva;
+- `commit`: quando `false`, simula; quando `true`, grava em
+  `delivery_tank_reservations`;
+- `lines`: item, máscara, quantidade e preço.
+
+O cálculo quebra a quantidade de trás para frente a partir da data solicitada,
+respeitando o calendário de promessa do item. Se não houver calendário cadastrado
+para o dia, o fallback operacional considera segunda a sexta como úteis.
+
+Reservas gravadas podem ser canceladas por:
+
+```http
+DELETE /api/delivery-promise/tank-reservations/{code}
+```
+
+Reservas vencidas podem ser expiradas por:
+
+```http
+POST /api/delivery-promise/tank-reservations/expire?now=2026-07-20
+```
+
+### Reprogramação em Lote
+
+`POST /api/delivery-promise/reschedule`
+
+Reprograma pedidos ou itens por filtro de período, cliente, representante, lista
+de pedidos e/ou lista de itens. Regras:
+
+- pedidos com `delivery_date_firm=true` são ignorados;
+- itens com `delivery_date_firm=true` são ignorados;
+- quando reprograma itens, atualiza as linhas e ajusta a data do pedido conforme
+  a maior nova data;
+- quando reprograma sem filtro de item, fixa a nova data do pedido;
+- a resposta informa quantos pedidos/itens foram alterados e quais foram
+  ignorados por data firme.
+
+### Persistência
+
+Migration `000192_delivery_promise` cria:
+
+- `delivery_tank_reservation_sequences`: sequência simples dos códigos de reserva;
+- `delivery_tank_reservations`: reservas ativas, canceladas ou expiradas por
+  item/máscara/tanque/data.
 
 ### Parâmetros (`/api/delivery-promise-params`)
 | Método | Rota | Ação |
@@ -600,7 +993,7 @@ Cálculo de data prometida com base em disponibilidade (estoque + capacidade).
 > com o `PUT /update` antes de usar o cálculo de promessa.
 
 ### Calendário de promessa por item (`/api/item-calendar-promise`)
-Disponibilidade (ATP) por item/variante, dia a dia.
+Disponibilidade operacional por item/variante, dia a dia.
 
 | Método | Rota | Ação |
 |---|---|---|
@@ -612,7 +1005,7 @@ Disponibilidade (ATP) por item/variante, dia a dia.
 
 ---
 
-## 5. Reprogramação de Entrega (`/api/delivery-reschedule`)
+## 9. Reprogramação de Entrega (`/api/delivery-reschedule`)
 
 Histórico de remarcações de data vinculado ao pedido (data original × nova × motivo).
 
@@ -623,7 +1016,78 @@ Histórico de remarcações de data vinculado ao pedido (data original × nova �
 
 ---
 
-## 6. Expedição / Romaneio (`/api/shipments`) — migration 000146
+## 10. Assistencia Tecnica (`/api/technical-assistance`) — migration 000193
+
+Modulo comercial para registrar chamados de garantia/assistencia, controlar
+defeitos, responsaveis pela garantia, notas de devolucao/remessa e gerar
+pedidos ou ordens de producao de assistencia.
+
+### Cadastros auxiliares
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/defect-groups` | Cria grupo de defeitos |
+| GET | `/defect-groups` | Lista grupos |
+| POST | `/defect-reasons` | Cria motivo de defeito |
+| GET | `/defect-reasons?group_code=1` | Lista motivos |
+| POST | `/warranty-responsibles` | Cria responsável pela garantia |
+| GET | `/warranty-responsibles` | Lista responsáveis |
+
+O motivo controla as regras do item do chamado: complemento obrigatório,
+geração de receita, exigência de nota de devolução/remessa, geração de pedido de
+venda e geração de ordem de produção.
+
+### Chamados
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/calls` | Abre chamado com itens |
+| GET | `/calls` | Consulta chamados por status, cliente e período |
+| GET | `/calls/{code}` | Consulta detalhada |
+| POST | `/calls/{code}/items` | Inclui item no chamado |
+| POST | `/calls/{code}/return-notes` | Vincula nota de devolução/remessa/serviço |
+| POST | `/calls/{code}/generate-orders` | Gera pedido/ordem de assistência |
+| PATCH | `/calls/{code}/status` | Altera status/diagnóstico/solução |
+| GET | `/calls/report` | Indicadores de chamados |
+
+Status: `PENDING`, `IN_ANALYSIS`, `WAITING_RETURN`, `WAITING_ORDER`,
+`ATTENDED`, `CLOSED`, `CANCELLED`.
+
+### Regras principais
+
+- O chamado numera por empresa em `call_number`.
+- O item calcula `warranty_until` e `in_warranty` a partir da data da nota de
+  compra e dos dias de garantia informados.
+- Motivo com `allows_complement=true` exige `defect_complement` no item.
+- Atendimento/fechamento é bloqueado se uma nota obrigatória ainda não estiver
+  vinculada.
+- Atendimento/fechamento é bloqueado se um motivo exige pedido de venda ou ordem
+  de produção e a geração ainda não foi feita.
+- Pedido gerado usa origem `ASSISTANCE` e mantém vínculo em
+  `technical_assistance_order_links`.
+- Ordem gerada usa `production_orders` e fica rastreada como ordem de assistência
+  no vínculo do chamado.
+
+### Persistência
+
+Migration `000193_technical_assistance` cria:
+
+- `technical_assistance_defect_groups`;
+- `technical_assistance_defect_reasons`;
+- `technical_assistance_warranty_responsibles`;
+- `technical_assistance_calls`;
+- `technical_assistance_call_items`;
+- `technical_assistance_return_notes`;
+- `technical_assistance_order_links`.
+
+### Testes
+
+- `go test ./internal/application/usecase/technical_assistance_uc`
+- `scripts/test-comercial-assistencia-tecnica.sh`
+
+---
+
+## 11. Expedição / Romaneio (`/api/shipments`) — migration 000146
 
 | Método | Rota | Ação |
 |---|---|---|

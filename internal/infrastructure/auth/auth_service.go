@@ -151,6 +151,10 @@ func (a *AuthService) CanListDeliveryReschedule(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
 
+func (a *AuthService) CanManageDeliveryPromise(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
 func (a *AuthService) CanCreateIndependentDemand(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
@@ -320,6 +324,10 @@ func (a *AuthService) CanCreateAppropriationTable(ctx context.Context) bool {
 }
 
 func (a *AuthService) CanListAppropriationTables(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanManageTechnicalAssistance(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
 

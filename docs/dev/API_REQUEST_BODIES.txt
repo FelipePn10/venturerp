@@ -409,6 +409,51 @@ POST /api/sales-forecast/create
   "quantity": 1200.0
 }
 
+POST /api/sales-forecast/create-monthly
+{
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "year": 2026,
+  "month": 7,
+  "quantity": 520.0,
+  "accepts_fraction": false,
+  "update_existing": true
+}
+
+POST /api/sales-forecast/generate
+{
+  "history_source": "ORDERS",
+  "history_from": "2026-01-01",
+  "history_to": "2026-06-30",
+  "item_codes": [10001, 10002],
+  "start_week": 31,
+  "start_year": 2026,
+  "target_end_week": 39,
+  "target_end_year": 2026,
+  "projection_pct": 8.5,
+  "accepts_fraction": false,
+  "update_existing": true
+}
+
+POST /api/sales-forecast/generate
+-- Modo estatístico complementar, quando history_source não é informado
+{
+  "item_code": 10001,
+  "mask": "100#100#50",
+  "start_week": 31,
+  "start_year": 2026,
+  "periods": 3,
+  "model": "MOVING_AVERAGE",
+  "ma_window": 3,
+  "update_existing": true,
+  "history": [
+    { "period": "2026-04", "quantity": 90 },
+    { "period": "2026-05", "quantity": 100 },
+    { "period": "2026-06", "quantity": 110 },
+    { "period": "2026-07", "quantity": 120 }
+  ]
+}
+
 GET /api/sales-forecast/list/{year}
 -- Parâmetro na URL: year (int)
 -- Exemplo: GET /api/sales-forecast/list/2025
@@ -813,6 +858,56 @@ PUT /api/sales-division/{code}
 DELETE /api/sales-division/{code}
 -- Parâmetro na URL: code (int64)
 -- Exemplo: DELETE /api/sales-division/1
+
+============================================================
+MÓDULO: DELIVERY PROMISE (PROMESSA DE ENTREGA)
+============================================================
+
+GET /api/delivery-promise/occupation?from_date=2026-07-01&to_date=2026-07-31&daily_capacity=50
+-- Query params:
+-- from_date: data inicial YYYY-MM-DD
+-- to_date: data final YYYY-MM-DD
+-- daily_capacity: capacidade diária padrão
+-- tank_code: opcional, repetível. Ex: &tank_code=10&tank_code=20
+
+POST /api/delivery-promise/tank-reservations
+{
+  "customer_code": 5001,
+  "requested_delivery_date": "2026-07-15",
+  "firm_days": 3,
+  "daily_capacity": 50,
+  "verify_stock": true,
+  "commit": true,
+  "notes": "Reserva comercial para proposta em negociação",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000",
+  "lines": [
+    {
+      "item_code": 10001,
+      "mask": "",
+      "quantity": 120,
+      "unit_price": 45.50
+    }
+  ]
+}
+
+DELETE /api/delivery-promise/tank-reservations/{code}
+-- Exemplo: DELETE /api/delivery-promise/tank-reservations/1
+
+POST /api/delivery-promise/tank-reservations/expire?now=2026-07-20
+-- now é opcional; se omitido, usa a data atual do servidor
+
+POST /api/delivery-promise/reschedule
+{
+  "delivery_from": "2026-07-01",
+  "delivery_to": "2026-07-31",
+  "new_date": "2026-08-05",
+  "customer_code": 5001,
+  "representative_code": 3001,
+  "sales_order_codes": [],
+  "item_codes": [10001],
+  "reason": "Reprogramação por capacidade produtiva",
+  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+}
 
 ============================================================
 MÓDULO: RESTRICTION (RESTRIÇÕES)
@@ -2763,6 +2858,310 @@ POST /api/customers/support/commercial-policies/evaluate
 }
 -- Retorna discount_value, surcharge_value, freight_value, commission_value,
 -- net_value, requires_approval e effects[] com as políticas aplicadas.
+
+
+============================================================
+MÓDULO: REPRESENTANTES
+============================================================
+
+POST /api/representatives/types/
+{
+  "description": "Representante Externo",
+  "is_free": false,
+  "ignores_direct_billing": true
+}
+
+POST /api/representatives/create
+{
+  "is_customer": false,
+  "is_supplier": false,
+  "name": "Representante Sul",
+  "trade_name": "Rep Sul",
+  "type_code": 1,
+  "category_code": 1,
+  "register_date": "2026-07-05",
+  "core_number": "CORE-12345",
+  "document_number": "12345678901",
+  "postal_code": "95000-000",
+  "city": "Caxias do Sul",
+  "state": "RS",
+  "street": "Rua Comercial",
+  "street_number": "100",
+  "complement": "Sala 1",
+  "district": "Centro",
+  "device_quantity": 1
+}
+
+POST /api/representatives/enterprises
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "enterprise_name": "Empresa Principal",
+  "commission_pattern_code": 1,
+  "commission_pct": 5,
+  "is_default": true,
+  "is_active": true
+}
+
+POST /api/representatives/accounting
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "event_type": "GENERATED",
+  "debit_account_code": 101,
+  "debit_cost_center_code": 10,
+  "credit_account_code": 201,
+  "credit_cost_center_code": 20,
+  "history_code": 301
+}
+
+POST /api/representatives/regions
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "region_code": 10,
+  "microregion_code": 100,
+  "is_active": true
+}
+
+POST /api/representatives/segments
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "microregion_code": 100,
+  "market_segment_code": 20,
+  "is_active": true
+}
+
+POST /api/representatives/sales-plans
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "microregion_code": 100,
+  "sales_plan_code": 30,
+  "is_active": true
+}
+
+POST /api/representatives/interests
+{
+  "representative_code": 1,
+  "item_classification_code": 40,
+  "is_active": true
+}
+
+POST /api/representatives/phones
+{
+  "representative_code": 1,
+  "ddi": "55",
+  "ddd": "54",
+  "phone": "3333-3333",
+  "phone_type": "COMERCIAL",
+  "ranking": 1
+}
+
+POST /api/representatives/emails
+{
+  "representative_code": 1,
+  "email": "representante@example.com",
+  "ranking": 1
+}
+
+POST /api/representatives/correspondence-addresses
+{
+  "representative_code": 1,
+  "postal_code": "95000-000",
+  "city": "Caxias do Sul",
+  "state": "RS",
+  "street": "Rua Correspondencia",
+  "street_number": "200",
+  "district": "Centro",
+  "is_default": true
+}
+
+POST /api/representatives/contacts
+{
+  "representative_code": 1,
+  "contact_type_code": 1,
+  "name": "Contato Comercial",
+  "role": "Preposto",
+  "phone": "3333-4444",
+  "email": "contato@example.com",
+  "notes": "Contato principal",
+  "is_active": true
+}
+
+GET /api/representatives/report?active_status=ACTIVE&sort_by=REGION&with_accounts=true
+GET /api/representatives/follow-up?representative_codes=1,2&from=2026-01-01&to=2026-12-31
+
+
+============================================================
+MÓDULO: METAS DE VENDAS
+============================================================
+
+POST /api/sales-goals/periods/
+{
+  "description": "Julho 2026",
+  "period_type": "MONTH",
+  "start_date": "2026-07-01",
+  "end_date": "2026-07-31"
+}
+
+POST /api/sales-goals/create
+{
+  "representative_code": 1,
+  "period_code": 1,
+  "analysis_base": "SALES",
+  "award_pct": 2.5,
+  "notes": "Meta mensal da carteira sul"
+}
+
+POST /api/sales-goals/items
+{
+  "goal_code": 1,
+  "target_type": "ITEM",
+  "item_code": 1001,
+  "sales_uom": "UN",
+  "target_quantity": 50,
+  "target_value": 25000,
+  "bonus_pct": 1,
+  "is_active": true
+}
+
+POST /api/sales-goals/group-targets
+{
+  "period_code": 1,
+  "commercial_group_code": 10,
+  "goal_type": "SALES",
+  "minimum_value": 50000,
+  "minimum_bonus_pct": 0.5,
+  "probable_value": 80000,
+  "probable_bonus_pct": 1,
+  "ideal_value": 100000,
+  "ideal_bonus_pct": 1.5,
+  "is_active": true
+}
+
+POST /api/sales-goals/group-customers
+{
+  "group_goal_id": 1,
+  "customer_code": 100,
+  "representative_code": 1,
+  "minimum_value": 10000,
+  "minimum_bonus_pct": 0.5,
+  "probable_value": 15000,
+  "probable_bonus_pct": 1,
+  "ideal_value": 20000,
+  "ideal_bonus_pct": 1.5,
+  "is_active": true
+}
+
+POST /api/sales-goals/balances
+{
+  "period_code": 1,
+  "next_period_code": 2,
+  "balance_scope": "REPRESENTATIVE",
+  "representative_code": 1,
+  "goal_type": "SALES",
+  "realized_value": 120000,
+  "ideal_value": 100000,
+  "balance_value": 20000,
+  "notes": "Excedente transferido para o periodo seguinte"
+}
+
+GET /api/sales-goals/list?period_code=1&analysis_base=SALES
+GET /api/sales-goals/report?period_code=1&analysis_base=SALES&representative_code=1
+
+
+============================================================
+MÓDULO: ASSISTENCIA TECNICA
+============================================================
+
+POST /api/technical-assistance/defect-groups
+{
+  "description": "Garantia de produto acabado",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/technical-assistance/defect-reasons
+{
+  "group_code": 1,
+  "description": "Falha funcional em garantia",
+  "allows_complement": true,
+  "generates_revenue": false,
+  "requires_return_note": true,
+  "generates_sales_order": false,
+  "generates_production_order": true,
+  "is_replacement": false,
+  "is_service": false,
+  "available_web": false,
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/technical-assistance/warranty-responsibles
+{
+  "name": "Responsavel Garantia Sul",
+  "employee_code": 10,
+  "email": "garantia@example.com",
+  "phone": "555199999999",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/technical-assistance/calls
+{
+  "enterprise_code": 1,
+  "customer_code": 100,
+  "technical_assistant_code": 10,
+  "warranty_responsible_code": 1,
+  "priority": "NORMAL",
+  "promised_date": "2026-07-20",
+  "subject": "Produto retornou com falha funcional",
+  "description": "Cliente relata falha intermitente no acionamento.",
+  "return_note_required": true,
+  "created_by": "00000000-0000-0000-0000-000000000000",
+  "items": [
+    {
+      "sequence": 1,
+      "item_code": 1001,
+      "mask": "",
+      "serial_number": "SN-001",
+      "quantity": 1,
+      "defect_reason_code": 1,
+      "defect_complement": "Falha ocorre apos aquecimento.",
+      "purchase_invoice_number": "12345",
+      "purchase_invoice_date": "2026-06-01",
+      "warranty_days": 365,
+      "requested_action": "REPAIR"
+    }
+  ]
+}
+
+POST /api/technical-assistance/calls/1/return-notes
+{
+  "note_number": "98765",
+  "note_series": "1",
+  "emission_date": "2026-07-05",
+  "operation_type": "RETURN",
+  "total_value": 1500,
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/technical-assistance/calls/1/generate-orders
+{
+  "sales_division_code": 2,
+  "warehouse_code": 1,
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+PATCH /api/technical-assistance/calls/1/status
+{
+  "status": "ATTENDED",
+  "diagnosis": "Componente substituido em garantia.",
+  "solution": "Produto reparado e liberado para retorno.",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+GET /api/technical-assistance/calls?status=PENDING&customer_code=100
+GET /api/technical-assistance/calls/report?from=2026-07-01&to=2026-07-31
 
 
 ============================================================

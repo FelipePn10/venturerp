@@ -14,6 +14,7 @@ type SalesForecastRepository interface {
 	GetForecastByItem(ctx context.Context, itemCode int64) ([]*entity.SalesForecast, error)
 	ListForecasts(ctx context.Context, year int) ([]*entity.SalesForecast, error)
 	DeleteForecast(ctx context.Context, id int64) error
+	ListHistoricalDemand(ctx context.Context, source string, from, to time.Time, itemCodes []int64) ([]*entity.HistoricalDemand, error)
 
 	// Forecast Blocks
 	CreateBlock(ctx context.Context, b *entity.SalesForecastBlock) (*entity.SalesForecastBlock, error)

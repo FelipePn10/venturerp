@@ -939,7 +939,10 @@ O sistema calcula o MAPE de cada modelo e retorna o de menor erro. O campo `mode
 }
 ```
 
-> A previsão é calculada em tempo real e não é persistida automaticamente. Para armazenar, use `POST /api/sales-forecast/blocks`.
+> A previsão estatística isolada é calculada em tempo real. Para persistir no
+> cadastro comercial, use `POST /api/sales-forecast/create-monthly` ou
+> `POST /api/sales-forecast/generate`, que também gera previsão por média de
+> histórico de pedidos/faturamento.
 
 ---
 
