@@ -2766,6 +2766,218 @@ POST /api/customers/support/commercial-policies/evaluate
 
 
 ============================================================
+MÓDULO: REPRESENTANTES
+============================================================
+
+POST /api/representatives/types/
+{
+  "description": "Representante Externo",
+  "is_free": false,
+  "ignores_direct_billing": true
+}
+
+POST /api/representatives/create
+{
+  "is_customer": false,
+  "is_supplier": false,
+  "name": "Representante Sul",
+  "trade_name": "Rep Sul",
+  "type_code": 1,
+  "category_code": 1,
+  "register_date": "2026-07-05",
+  "core_number": "CORE-12345",
+  "document_number": "12345678901",
+  "postal_code": "95000-000",
+  "city": "Caxias do Sul",
+  "state": "RS",
+  "street": "Rua Comercial",
+  "street_number": "100",
+  "complement": "Sala 1",
+  "district": "Centro",
+  "device_quantity": 1
+}
+
+POST /api/representatives/enterprises
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "enterprise_name": "Empresa Principal",
+  "commission_pattern_code": 1,
+  "commission_pct": 5,
+  "is_default": true,
+  "is_active": true
+}
+
+POST /api/representatives/accounting
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "event_type": "GENERATED",
+  "debit_account_code": 101,
+  "debit_cost_center_code": 10,
+  "credit_account_code": 201,
+  "credit_cost_center_code": 20,
+  "history_code": 301
+}
+
+POST /api/representatives/regions
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "region_code": 10,
+  "microregion_code": 100,
+  "is_active": true
+}
+
+POST /api/representatives/segments
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "microregion_code": 100,
+  "market_segment_code": 20,
+  "is_active": true
+}
+
+POST /api/representatives/sales-plans
+{
+  "representative_code": 1,
+  "enterprise_code": 1,
+  "microregion_code": 100,
+  "sales_plan_code": 30,
+  "is_active": true
+}
+
+POST /api/representatives/interests
+{
+  "representative_code": 1,
+  "item_classification_code": 40,
+  "is_active": true
+}
+
+POST /api/representatives/phones
+{
+  "representative_code": 1,
+  "ddi": "55",
+  "ddd": "54",
+  "phone": "3333-3333",
+  "phone_type": "COMERCIAL",
+  "ranking": 1
+}
+
+POST /api/representatives/emails
+{
+  "representative_code": 1,
+  "email": "representante@example.com",
+  "ranking": 1
+}
+
+POST /api/representatives/correspondence-addresses
+{
+  "representative_code": 1,
+  "postal_code": "95000-000",
+  "city": "Caxias do Sul",
+  "state": "RS",
+  "street": "Rua Correspondencia",
+  "street_number": "200",
+  "district": "Centro",
+  "is_default": true
+}
+
+POST /api/representatives/contacts
+{
+  "representative_code": 1,
+  "contact_type_code": 1,
+  "name": "Contato Comercial",
+  "role": "Preposto",
+  "phone": "3333-4444",
+  "email": "contato@example.com",
+  "notes": "Contato principal",
+  "is_active": true
+}
+
+GET /api/representatives/report?active_status=ACTIVE&sort_by=REGION&with_accounts=true
+GET /api/representatives/follow-up?representative_codes=1,2&from=2026-01-01&to=2026-12-31
+
+
+============================================================
+MÓDULO: METAS DE VENDAS
+============================================================
+
+POST /api/sales-goals/periods/
+{
+  "description": "Julho 2026",
+  "period_type": "MONTH",
+  "start_date": "2026-07-01",
+  "end_date": "2026-07-31"
+}
+
+POST /api/sales-goals/create
+{
+  "representative_code": 1,
+  "period_code": 1,
+  "analysis_base": "SALES",
+  "award_pct": 2.5,
+  "notes": "Meta mensal da carteira sul"
+}
+
+POST /api/sales-goals/items
+{
+  "goal_code": 1,
+  "target_type": "ITEM",
+  "item_code": 1001,
+  "sales_uom": "UN",
+  "target_quantity": 50,
+  "target_value": 25000,
+  "bonus_pct": 1,
+  "is_active": true
+}
+
+POST /api/sales-goals/group-targets
+{
+  "period_code": 1,
+  "commercial_group_code": 10,
+  "goal_type": "SALES",
+  "minimum_value": 50000,
+  "minimum_bonus_pct": 0.5,
+  "probable_value": 80000,
+  "probable_bonus_pct": 1,
+  "ideal_value": 100000,
+  "ideal_bonus_pct": 1.5,
+  "is_active": true
+}
+
+POST /api/sales-goals/group-customers
+{
+  "group_goal_id": 1,
+  "customer_code": 100,
+  "representative_code": 1,
+  "minimum_value": 10000,
+  "minimum_bonus_pct": 0.5,
+  "probable_value": 15000,
+  "probable_bonus_pct": 1,
+  "ideal_value": 20000,
+  "ideal_bonus_pct": 1.5,
+  "is_active": true
+}
+
+POST /api/sales-goals/balances
+{
+  "period_code": 1,
+  "next_period_code": 2,
+  "balance_scope": "REPRESENTATIVE",
+  "representative_code": 1,
+  "goal_type": "SALES",
+  "realized_value": 120000,
+  "ideal_value": 100000,
+  "balance_value": 20000,
+  "notes": "Excedente transferido para o periodo seguinte"
+}
+
+GET /api/sales-goals/list?period_code=1&analysis_base=SALES
+GET /api/sales-goals/report?period_code=1&analysis_base=SALES&representative_code=1
+
+
+============================================================
 MÓDULO: HEALTH CHECK
 ============================================================
 

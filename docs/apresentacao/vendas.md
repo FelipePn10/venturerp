@@ -228,7 +228,74 @@ provisionado de comissão.
 
 ---
 
-## 10. Faturamento
+## 10. Representantes
+
+Representantes são a estrutura comercial que conecta clientes, territórios,
+pedidos, orçamentos e comissões. O cadastro mantém em um único lugar os dados do
+representante, seus prepostos, telefones, e-mails, regiões atendidas, segmentos
+de mercado, planos de venda, empresas de atuação e parâmetros de comissão.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Organizar carteira | Vincula representantes a clientes, regiões e segmentos |
+| Controlar atuação | Separa tipos como externo, interno, gerente ou preposto |
+| Dar suporte à venda | Leva o representante para orçamentos e pedidos |
+| Calcular comissão | Mantém comissão por empresa e acompanha valor vendido |
+| Acompanhar desempenho | Mostra orçamentos, pedidos, clientes atendidos e ticket médio |
+| Evitar cadastros incompletos | Centraliza documento, endereço, contatos e situação ativa/inativa |
+
+### Acompanhamento comercial
+
+A ficha de acompanhamento mostra a evolução do representante por cliente,
+combinando propostas e pedidos. A gestão consegue ver quanto foi orçado, quanto
+virou pedido, qual é o ticket médio, a base de comissão, a comissão futura e a
+última movimentação comercial.
+
+### Benefício operacional
+
+O módulo reduz dependência de planilhas de representantes, melhora a análise de
+carteira e cria uma base consistente para metas, comissões, políticas comerciais
+e relatórios de vendas. Como cada pedido e orçamento pode apontar para um
+representante cadastrado, a empresa ganha rastreabilidade desde a negociação até
+o faturamento.
+
+---
+
+## 11. Metas de Vendas
+
+Metas de vendas transformam objetivos comerciais em acompanhamento operacional.
+A empresa define períodos, metas por representante, metas por grupo comercial e
+metas específicas por cliente, item, classificação ou grupo de itens.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Definir objetivos | Cria períodos mensais, semanais ou customizados |
+| Medir desempenho | Compara previsto x realizado por venda ou faturamento |
+| Gerir carteira | Filtra por representante, cliente, região e microrregião |
+| Premiar resultados | Controla bônus por meta mínima, provável e ideal |
+| Aproveitar excedentes | Registra saldo quando a meta ideal é superada |
+| Reduzir planilhas | Centraliza metas, clientes, grupos e relatório no ERP |
+
+### Acompanhamento
+
+O relatório de metas mostra valor previsto, quantidade prevista, realizado,
+saldo, percentual de atingimento, bônus e situação da meta. A gestão consegue
+avaliar se a carteira está aberta, atingida ou sem alvo definido e agir durante o
+período, não apenas depois do fechamento.
+
+### Benefício operacional
+
+Com metas integradas a representantes e pedidos, o comercial ganha uma leitura
+contínua de desempenho. Isso cria base para premiações, campanhas, comissões,
+políticas comerciais e planejamento de vendas.
+
+---
+
+## 12. Faturamento
 
 Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de Saída (NF-e)**, o sistema executa em cadeia, automaticamente:
 
@@ -242,7 +309,7 @@ Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de
 
 ---
 
-## 11. Expedição / Romaneio
+## 13. Expedição / Romaneio
 
 A expedição organiza a **saída física** da mercadoria por meio do **romaneio** (lista de carregamento):
 
@@ -258,7 +325,7 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 
 ---
 
-## 12. Glossário rápido
+## 14. Glossário rápido
 
 | Termo | Significado |
 |---|---|
@@ -266,6 +333,8 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 | **Orçamento** | Proposta comercial anterior ao pedido |
 | **Tabela de vendas** | Cadastro de preços comerciais por item |
 | **Política comercial** | Regra de desconto, acréscimo, frete ou comissão aplicada à venda |
+| **Representante** | Pessoa ou equipe comercial responsável pela carteira, orçamento, pedido e comissão |
+| **Meta de vendas** | Objetivo comercial por período, representante, grupo, cliente, item ou classificação |
 | **Demanda** | A necessidade que o pedido confirmado gera para o planejamento |
 | **Divisão de vendas** | Agrupamento comercial (equipe/região/unidade) |
 | **Reserva** | Estoque separado para um pedido |

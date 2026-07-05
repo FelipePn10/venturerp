@@ -62,10 +62,12 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representative_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_division_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_forecast_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_goal_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_quotation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
@@ -133,10 +135,12 @@ import (
 	qualityRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
+	representativeRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/representative"
 	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
 	salesDivisionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_division"
 	salesForecastRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_forecast"
+	salesGoalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_goal"
 	salesOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
 	salesQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_quotation"
 	shipmentRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/shipment"
@@ -706,6 +710,11 @@ func (app *application) mount() chi.Router {
 		salesQuotationUC,
 		&sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, Orders: soRepo},
 	)
+	representativeRepository := representativeRepo.New(app.db.Pool)
+	representativeHandler := handler.NewRepresentativeHandler(&representative_uc.UseCase{Repo: representativeRepository, Auth: authService})
+
+	salesGoalRepository := salesGoalRepo.New(app.db.Pool)
+	salesGoalHandler := handler.NewSalesGoalHandler(&sales_goal_uc.UseCase{Repo: salesGoalRepository, Auth: authService})
 
 	// cutting plan (plano de corte — fase 1: 1D; fase 2: firmar/baixa + retalhos)
 	cuttingPlanUC := cutting_plan_uc.NewCuttingPlanUseCase(cuttingPlanRepo, stockRepository, itemRepo)
@@ -1281,6 +1290,47 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{itemCode}", salesQuotationHandler.UpdateItem)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{itemCode}/cancel", salesQuotationHandler.CancelItem)
 			})
+		})
+		r.Route("/api/representatives", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", representativeHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", representativeHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", representativeHandler.Report)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/follow-up", representativeHandler.FollowUp)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", representativeHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", representativeHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", representativeHandler.Block)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/unblock", representativeHandler.Unblock)
+			r.Route("/types", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", representativeHandler.CreateType)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", representativeHandler.ListTypes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", representativeHandler.GetType)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", representativeHandler.UpdateType)
+			})
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/enterprises", representativeHandler.AddEnterprise)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/accounting", representativeHandler.AddAccounting)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/regions", representativeHandler.AddRegion)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/segments", representativeHandler.AddSegment)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sales-plans", representativeHandler.AddSalesPlan)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/interests", representativeHandler.AddInterest)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/phones", representativeHandler.AddPhone)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/emails", representativeHandler.AddEmail)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/correspondence-addresses", representativeHandler.AddCorrespondenceAddress)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contacts", representativeHandler.AddContact)
+		})
+		r.Route("/api/sales-goals", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesGoalHandler.CreateGoal)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesGoalHandler.ListGoals)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", salesGoalHandler.Report)
+			r.Route("/periods", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", salesGoalHandler.CreatePeriod)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", salesGoalHandler.ListPeriods)
+			})
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/items", salesGoalHandler.AddGoalItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/group-targets", salesGoalHandler.UpsertGroupTarget)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/group-customers", salesGoalHandler.AddGroupCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/balances", salesGoalHandler.UpsertBalance)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", salesGoalHandler.GetGoal)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", salesGoalHandler.UpdateGoal)
 		})
 		r.Route("/api/purchase-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", purchaseOrderHandler.Create)

@@ -1,5 +1,158 @@
 # Session Summary
 
+## Current Session: Comercial Fase 6 — Meta de Vendas
+
+### What Was Implemented
+
+- Consulted the official FoccoERP help pages before implementation:
+  - `Processos/Comercial/metas-de-vendas/`
+  - `FMET0100` - Cadastro de Períodos
+  - `FMET0200` - Cadastro de Metas
+  - `FMET0201` - Cadastro de Metas por Grupo Comercial
+  - `FMET0202` - Cadastro de Saldos de Metas
+  - `FMET0300` - Relatório de Metas
+- Implemented Comercial phase 6 for sales goals:
+  - periods by month, week or custom interval;
+  - representative goals by period and analysis base;
+  - goal lines by exactly one target: item, item classification or item group;
+  - commercial group goals with minimum, probable and ideal values and bonus percentages;
+  - customer-level goals under commercial group goals;
+  - goal balances/excess values for carry-over;
+  - report for planned vs realized with filters by representative, customer, region,
+    microregion, period and analysis base.
+
+### Delivered In Code
+
+- Added migration `000191_sales_goals`:
+  - `sales_goal_periods`
+  - `sales_goals`
+  - `sales_goal_items`
+  - `sales_goal_group_targets`
+  - `sales_goal_group_customers`
+  - `sales_goal_balances`
+- Added domain/repository/application/HTTP stack:
+  - `internal/domain/sales_goal/...`
+  - `internal/application/usecase/sales_goal_uc/...`
+  - `internal/infrastructure/repository/sales_goal/repository.go`
+  - `internal/interfaces/http/handler/sales_goal_handler.go`
+- Added API routes under `/api/sales-goals`:
+  - create/list/get/update goals
+  - create/list periods
+  - add goal items
+  - upsert commercial group targets
+  - add group customers
+  - add balances
+  - report planned vs realized
+- Added focused validation script:
+  - `scripts/test-comercial-metas.sh`
+
+### Documentation
+
+- Updated `docs/dev/vendas.md` with the sales goals module purpose, usage,
+  concepts, routes, report, persistence and validation rules.
+- Updated `docs/apresentacao/vendas.md` with business-facing explanation of
+  sales goals and glossary entry.
+- Updated `docs/dev/API_REQUEST_BODIES.txt` with sales goals payload examples.
+- Product/dev docs intentionally do not mention external systems or screen codes.
+
+### Validation Run
+
+- `scripts/test-comercial-metas.sh`
+- `env GOCACHE=/tmp/panossoerp-go-build go test ./...`
+
+All validations passed. HTTP smoke in the script was skipped because
+`BASE_URL`/`TOKEN` were not set.
+
+### Notes / Follow-ups
+
+- `SALES` realization is calculated from sales orders by representative/customer
+  and period. `INVOICING` is modeled and available for cadastro/report filters,
+  but deeper fiscal realization should be wired when the faturamento phase
+  expands the nota fiscal by load and invoice-origin routines.
+- The report currently returns representative and commercial-group rows. Customer
+  details are stored and used for group filtering/realization; a later UI/report
+  pass can add a dedicated customer-breakdown layout if needed.
+
+## Current Session: Comercial Fase 5 — Representantes
+
+### What Was Implemented
+
+- Reworked Comercial phase 5 after user clarified the implementation must follow
+  the FoccoERP help behavior and only be considered complete after consulting the
+  source pages.
+- Consulted the exact public help pages used for the phase:
+  - `FREP0200` - Cadastro de Representantes
+  - `FREP0101` - Cadastro de Tipos de Representantes
+  - `FREP0251` - Relatório de Representantes
+  - `FREP0253` - Ficha de Acompanhamento de Representantes
+- Implemented the representative module with the same functional coverage and a
+  more API-friendly structure:
+  - representative types with `is_free` and `ignores_direct_billing`;
+  - full representative cadastro with customer/supplier links, type, category,
+    register date, CORE, document, address, active/block status and device count;
+  - cadastro tabs for enterprises/commission, accounting integration, regions,
+    segments, sales plans, item interests, phones, emails, correspondence address
+    and contacts/prepostos;
+  - report filters by representative, description, type, UF, region, active
+    status, ordering and optional accounting accounts;
+  - commercial follow-up by representative and customers using quotations and
+    sales orders.
+
+### Delivered In Code
+
+- Added migration `000190_sales_representatives`:
+  - `representative_types`
+  - `representatives`
+  - `representative_enterprises`
+  - `representative_accounting`
+  - `representative_regions`
+  - `representative_segments`
+  - `representative_sales_plans`
+  - `representative_interests`
+  - `representative_phones`
+  - `representative_emails`
+  - `representative_correspondence_addresses`
+  - `representative_contacts`
+- Added domain/repository/application/HTTP stack:
+  - `internal/domain/representative/...`
+  - `internal/application/usecase/representative_uc/...`
+  - `internal/infrastructure/repository/representative/repository.go`
+  - `internal/interfaces/http/handler/representative_handler.go`
+- Added API routes under `/api/representatives`:
+  - create/list/get/update/block/unblock representatives
+  - create/list/get/update representative types
+  - add enterprises, accounting, regions, segments, sales plans, interests,
+    phones, emails, correspondence addresses and contacts
+  - report and follow-up endpoints
+- Added focused test/smoke script:
+  - `scripts/test-comercial-representantes.sh`
+
+### Documentation
+
+- Updated `docs/dev/vendas.md` with the representatives module purpose, routes,
+  cadastro tabs, report, follow-up, persistence and validations.
+- Updated `docs/apresentacao/vendas.md` with business-facing representative
+  workflow and glossary entry.
+- Updated `docs/dev/API_REQUEST_BODIES.txt` with representative payload examples.
+- Product/dev docs intentionally do not mention external systems or screen codes.
+
+### Validation Run
+
+- `scripts/test-comercial-representantes.sh`
+- `env GOCACHE=/tmp/panossoerp-go-build go test ./...`
+- `git diff --check`
+
+All validations passed. HTTP smoke in the script was skipped because
+`BASE_URL`/`TOKEN` were not set.
+
+### Notes / Follow-ups
+
+- The follow-up endpoint reads existing `sales_quotations` and `sales_orders`.
+  It will become more valuable as frontends consistently send
+  `representative_code` on quotations and orders.
+- A future phase can wire representative commission settlement into financeiro
+  once payable commission generation is prioritized.
+
 ## Current Session: Comercial Fase 4 — Pedido de Venda
 
 ### What Was Implemented
