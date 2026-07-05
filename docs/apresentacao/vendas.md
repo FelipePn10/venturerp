@@ -12,23 +12,32 @@ O módulo de Vendas é a **porta de entrada** do fluxo do ERP: é o pedido do cl
 
 1. [Pedido de venda](#1-pedido-de-venda)
 2. [Itens do pedido](#2-itens-do-pedido)
-3. [Precificação](#3-precificação)
-4. [Crédito e bloqueio](#4-crédito-e-bloqueio)
-5. [Do pedido ao planejamento](#5-do-pedido-ao-planejamento)
-6. [Divisão de vendas](#6-divisão-de-vendas)
-7. [Promessa de entrega (prazos confiáveis)](#7-promessa-de-entrega-prazos-confiáveis)
-8. [Reprogramação de entrega](#8-reprogramação-de-entrega)
-9. [Faturamento](#9-faturamento)
-10. [Expedição / Romaneio](#10-expedição--romaneio)
-11. [Glossário rápido](#11-glossário-rápido)
+3. [Orçamentos](#3-orçamentos)
+4. [Precificação](#4-precificação)
+5. [Crédito e bloqueio](#5-crédito-e-bloqueio)
+6. [Do pedido ao planejamento](#6-do-pedido-ao-planejamento)
+7. [Divisão de vendas](#7-divisão-de-vendas)
+8. [Promessa de entrega (prazos confiáveis)](#8-promessa-de-entrega-prazos-confiáveis)
+9. [Reprogramação de entrega](#9-reprogramação-de-entrega)
+10. [Faturamento](#10-faturamento)
+11. [Expedição / Romaneio](#11-expedição--romaneio)
+12. [Glossário rápido](#12-glossário-rápido)
 
 ---
 
 ## 1. Pedido de venda
 
-O pedido de venda registra o que o cliente comprou. No **cabeçalho** ficam: cliente, condição de pagamento, vendedor/divisão, datas e o **plano de produção** ao qual o pedido pertence (o elo com o planejamento).
+O pedido de venda registra o que o cliente comprou e coloca a venda dentro do
+fluxo operacional. No **cabeçalho** ficam cliente, condição de pagamento,
+representante/divisão, datas, dados fiscais, transportadora, frete, volumes,
+projeto e o **plano de produção** ao qual o pedido pertence.
 
 Os preços vêm da **tabela de vendas** do cliente, e o tipo de nota e os impostos já ficam definidos pelo cadastro — o pedido sai consistente desde o início.
+
+Antes de seguir para produção, expedição ou faturamento, o pedido pode passar por
+análise comercial, análise financeira, liberação de bloqueios e conferência
+logística. Essas etapas registram histórico de decisão e permitem consultar a
+carteira por pendência, bloqueio, atraso, conferência e status.
 
 **Ciclo de vida:**
 
@@ -40,7 +49,10 @@ Os preços vêm da **tabela de vendas** do cliente, e o tipo de nota e os impost
 | **Faturado (F)** | Nota fiscal emitida |
 | **Cancelado** | Pedido cancelado |
 
-O sistema permite **criar, listar, consultar, atualizar, cancelar** e **mudar o status** do pedido, além de listar **por cliente** e **por status** — uma visão direta da carteira.
+O sistema permite **criar, listar, consultar, atualizar, cancelar**, **analisar**,
+**liberar**, **conferir**, registrar **motivo de atraso** e **mudar o status** do
+pedido. A gestão acompanha totais da carteira, pedidos bloqueados, pendências de
+análise, pendências de conferência e pedidos em atraso.
 
 ---
 
@@ -50,7 +62,48 @@ Cada linha do pedido é um **item**: produto, quantidade e **data de entrega** p
 
 ---
 
-## 3. Precificação
+## 3. Orçamentos
+
+O orçamento registra uma negociação antes de virar pedido de venda. Ele serve para
+formalizar propostas, controlar condições negociadas e preservar o histórico de
+oportunidades comerciais que ainda não viraram pedido.
+
+Cada orçamento guarda cliente, validade, tabela de preço, condição de pagamento,
+representante, itens, quantidades, descontos, acréscimos, frete, redespacho,
+seguro, retenções, ordem de compra, comissão, endereço do consumidor, liberação
+comercial, valor total e probabilidade de fechamento.
+
+O comercial usa a rotina para consultar a carteira de propostas, acompanhar
+status, cancelar oportunidades perdidas, descancelar quando houver reversão,
+registrar atendimento manual e gerar uma visão gerencial com total bruto, total
+líquido, retenções, propostas abertas, atendidas, canceladas, expiradas e valor
+ponderado pela chance de fechamento.
+
+Quando o cliente aprova, o orçamento é convertido para pedido de venda. A conversão
+copia apenas o saldo aberto dos itens e cria um pedido real; a partir daí entram as
+regras de crédito, reserva de estoque, MRP e faturamento do fluxo de pedido.
+
+O orçamento também possui o indicador de NFC-e. Esse campo não emite cupom fiscal
+por si só; ele apenas leva para o pedido de venda a intenção de que aquela venda
+seja tratada como cupom fiscal eletrônico no fluxo fiscal/faturamento.
+
+**Ciclo de vida do orçamento:**
+
+| Status | Significado |
+|---|---|
+| **R** | Rascunho |
+| **P** | Pedido originado em canal web/lojas |
+| **A** | Pedido em análise |
+| **OA** | Orçamento em análise |
+| **F** | Pedido confirmado no ERP |
+| **OF** | Orçamento confirmado no ERP |
+| **ATTENDED** | Orçamento atendido ou convertido em pedido |
+| **EXPIRED** | Perdeu validade |
+| **CANCELLED** | Encerrado por perda/desistência |
+
+---
+
+## 4. Precificação
 
 A área comercial mantém **tabelas de venda** com vigência, tipo, composição,
 tolerância mínima/máxima e casas decimais. Cada tabela possui preços por item, com
@@ -70,13 +123,13 @@ política aplicada.
 
 ---
 
-## 4. Crédito e bloqueio
+## 5. Crédito e bloqueio
 
 O cliente tem um **limite de crédito**. Um pedido pode ser **bloqueado** (automaticamente ao ultrapassar o limite, ou manualmente por decisão comercial/financeira) e depois **desbloqueado**. Enquanto bloqueado, o pedido **não avança** — protegendo a empresa de vender para quem está inadimplente ou no limite.
 
 ---
 
-## 5. Do pedido ao planejamento
+## 6. Do pedido ao planejamento
 
 Quando o pedido é **confirmado**, o sistema cria automaticamente a **demanda** de cada item para o planejamento (MRP). Esse é o elo que liga a venda à fábrica: a partir daí o sistema sabe o que precisa comprar e produzir para atender aquele cliente no prazo.
 
@@ -84,13 +137,13 @@ Quando o pedido é **confirmado**, o sistema cria automaticamente a **demanda** 
 
 ---
 
-## 6. Divisão de vendas
+## 7. Divisão de vendas
 
 A **divisão de vendas** organiza a área comercial (equipes, regiões ou unidades de negócio). Cada pedido pode ser associado a uma divisão, o que permite **medir resultado por equipe/segmento** e aplicar regras comerciais específicas. As divisões podem ser criadas, listadas, consultadas, atualizadas e excluídas.
 
 ---
 
-## 7. Promessa de entrega (prazos confiáveis)
+## 8. Promessa de entrega (prazos confiáveis)
 
 O sistema ajuda a **prometer prazos realistas**, em vez de "chutar" uma data:
 
@@ -103,13 +156,13 @@ Com isso, a data de entrega informada ao cliente considera a **disponibilidade r
 
 ---
 
-## 8. Reprogramação de entrega
+## 9. Reprogramação de entrega
 
 Quando uma data precisa mudar (atraso de matéria-prima, mudança de prioridade), o sistema registra a **reprogramação de entrega** vinculada ao pedido. Assim fica o **histórico** das remarcações (data original × nova data × motivo), com transparência para o comercial e para o cliente. É possível listar as reprogramações de cada pedido.
 
 ---
 
-## 9. Política comercial
+## 9.1. Política comercial
 
 Política comercial é o conjunto de regras que controla a negociação depois que o
 preço de tabela já existe. Ela evita que desconto, acréscimo, frete e comissão
@@ -210,6 +263,7 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 | Termo | Significado |
 |---|---|
 | **Pedido de venda** | O documento da compra do cliente |
+| **Orçamento** | Proposta comercial anterior ao pedido |
 | **Tabela de vendas** | Cadastro de preços comerciais por item |
 | **Política comercial** | Regra de desconto, acréscimo, frete ou comissão aplicada à venda |
 | **Demanda** | A necessidade que o pedido confirmado gera para o planejamento |

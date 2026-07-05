@@ -102,9 +102,52 @@ type BlockSalesOrderDTO struct {
 	Reason string `json:"reason"`
 }
 
+type CancelSalesOrderDTO struct {
+	Code       int64   `json:"code"`
+	Reason     string  `json:"reason"`
+	Complement *string `json:"complement,omitempty"`
+}
+
 type ChangeStatusDTO struct {
 	Code   int64  `json:"code"`
 	Status string `json:"status"`
+}
+
+type AnalyzeSalesOrderDTO struct {
+	Code      int64     `json:"code"`
+	Area      string    `json:"area"`
+	Status    string    `json:"status"`
+	Reason    string    `json:"reason"`
+	CreatedBy uuid.UUID `json:"created_by"`
+}
+
+type ReleaseSalesOrderDTO struct {
+	Code          int64     `json:"code"`
+	Area          string    `json:"area"`
+	ReleaseStatus string    `json:"release_status"`
+	Reason        string    `json:"reason"`
+	CreatedBy     uuid.UUID `json:"created_by"`
+}
+
+type AttendSalesOrderDTO struct {
+	Code      int64     `json:"code"`
+	Reason    string    `json:"reason"`
+	EventDate string    `json:"event_date"`
+	CreatedBy uuid.UUID `json:"created_by"`
+}
+
+type ConferSalesOrderDTO struct {
+	Code      int64     `json:"code"`
+	Status    string    `json:"status"`
+	Reason    string    `json:"reason"`
+	CreatedBy uuid.UUID `json:"created_by"`
+}
+
+type SaveSalesOrderDelayReasonDTO struct {
+	Code      int64     `json:"code"`
+	Reason    string    `json:"reason"`
+	Action    string    `json:"action"`
+	CreatedBy uuid.UUID `json:"created_by"`
 }
 
 type CreateSalesOrderItemDTO struct {

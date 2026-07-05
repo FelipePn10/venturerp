@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
+	repository "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -18,6 +20,52 @@ func toPgDateFromPtr(t *time.Time) pgtype.Date {
 		return pgtype.Date{Valid: false}
 	}
 	return pgtype.Date{Time: *t, Valid: true}
+}
+
+func datePtrToPg(t *time.Time) pgtype.Date {
+	return toPgDateFromPtr(t)
+}
+
+func timestamptzPtrToPg(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+func boolPtrToPg(v *bool) pgtype.Bool {
+	if v == nil {
+		return pgtype.Bool{Valid: false}
+	}
+	return pgtype.Bool{Bool: *v, Valid: true}
+}
+
+func textFromStatus(v *entity.SalesOrderStatus) pgtype.Text {
+	if v == nil {
+		return pgtype.Text{Valid: false}
+	}
+	return pgutil.ToPgText(string(*v))
+}
+
+func textFromAnalysisStatus(v *entity.SalesOrderAnalysisStatus) pgtype.Text {
+	if v == nil {
+		return pgtype.Text{Valid: false}
+	}
+	return pgutil.ToPgText(string(*v))
+}
+
+func textFromReleaseStatus(v *entity.SalesOrderReleaseStatus) pgtype.Text {
+	if v == nil {
+		return pgtype.Text{Valid: false}
+	}
+	return pgutil.ToPgText(string(*v))
+}
+
+func textFromConferenceStatus(v *entity.SalesOrderConferenceStatus) pgtype.Text {
+	if v == nil {
+		return pgtype.Text{Valid: false}
+	}
+	return pgutil.ToPgText(string(*v))
 }
 
 func (r *SalesOrderRepositorySQLC) NextOrderNumber(ctx context.Context, enterpriseCode int64) (int64, error) {
@@ -30,43 +78,62 @@ func (r *SalesOrderRepositorySQLC) NextOrderNumber(ctx context.Context, enterpri
 
 func (r *SalesOrderRepositorySQLC) Create(ctx context.Context, o *entity.SalesOrder) (*entity.SalesOrder, error) {
 	row, err := r.q.CreateSalesOrder(ctx, sqlc.CreateSalesOrderParams{
-		OrderNumber:         o.OrderNumber,
-		EnterpriseCode:      o.EnterpriseCode,
-		Status:              string(o.Status),
-		Origin:              string(o.Origin),
-		EmissionDate:        pgutil.ToPgDate(o.EmissionDate),
-		DeliveryDate:        toPgDateFromPtr(o.DeliveryDate),
-		DeliveryDateFirm:    o.DeliveryDateFirm,
-		DigitDate:           pgutil.ToPgDate(o.DigitDate),
-		CustomerCode:        o.CustomerCode,
-		BillingAddressCode:  o.BillingAddressCode,
-		ShippingAddressCode: o.ShippingAddressCode,
-		RepresentativeCode:  o.RepresentativeCode,
-		PlanCode:            o.PlanCode,
-		SalesDivisionCode:   o.SalesDivisionCode,
-		CommissionPct:       pgutil.ToPgNumericFromFloat64(o.CommissionPct),
-		TaxTypeCode:         o.TaxTypeCode,
-		PresenceIndicator:   pgutil.ToPgTextFromPtr(o.PresenceIndicator),
-		SalesChannel:        pgutil.ToPgTextFromPtr(o.SalesChannel),
-		DefaultNfType:       pgutil.ToPgTextFromPtr(o.DefaultNFType),
-		PriceTableCode:      o.PriceTableCode,
-		CurrencyCode:        o.CurrencyCode,
-		PaymentTermCode:     o.PaymentTermCode,
-		AdditionalDays:      int32(o.AdditionalDays),
-		BearerCode:          o.BearerCode,
-		SaleDate:            toPgDateFromPtr(o.SaleDate),
-		TotalWeightNet:      pgutil.ToPgNumericFromFloat64(o.TotalWeightNet),
-		TotalWeightGross:    pgutil.ToPgNumericFromFloat64(o.TotalWeightGross),
-		TotalGross:          pgutil.ToPgNumericFromFloat64(o.TotalGross),
-		TotalNet:            pgutil.ToPgNumericFromFloat64(o.TotalNet),
-		TotalNetNoSt:        pgutil.ToPgNumericFromFloat64(o.TotalNetNoST),
-		TotalWithIpiWithSt:  pgutil.ToPgNumericFromFloat64(o.TotalWithIPIWithST),
-		Notes:               pgutil.ToPgTextFromPtr(o.Notes),
-		ObsCustomer:         pgutil.ToPgTextFromPtr(o.ObsCustomer),
-		IsBlocked:           o.IsBlocked,
-		BlockReason:         pgutil.ToPgTextFromPtr(o.BlockReason),
-		IsFirm:              o.IsFirm,
-		CreatedBy:           pgutil.ToPgUUID(o.CreatedBy),
+		OrderNumber:                 o.OrderNumber,
+		EnterpriseCode:              o.EnterpriseCode,
+		Status:                      string(o.Status),
+		Origin:                      string(o.Origin),
+		EmissionDate:                pgutil.ToPgDate(o.EmissionDate),
+		DeliveryDate:                toPgDateFromPtr(o.DeliveryDate),
+		DeliveryDateFirm:            o.DeliveryDateFirm,
+		DigitDate:                   pgutil.ToPgDate(o.DigitDate),
+		CustomerCode:                o.CustomerCode,
+		BillingAddressCode:          o.BillingAddressCode,
+		ShippingAddressCode:         o.ShippingAddressCode,
+		RepresentativeCode:          o.RepresentativeCode,
+		PlanCode:                    o.PlanCode,
+		SalesDivisionCode:           o.SalesDivisionCode,
+		CommissionPct:               pgutil.ToPgNumericFromFloat64(o.CommissionPct),
+		TaxTypeCode:                 o.TaxTypeCode,
+		PresenceIndicator:           pgutil.ToPgTextFromPtr(o.PresenceIndicator),
+		SalesChannel:                pgutil.ToPgTextFromPtr(o.SalesChannel),
+		DefaultNfType:               pgutil.ToPgTextFromPtr(o.DefaultNFType),
+		PriceTableCode:              o.PriceTableCode,
+		CurrencyCode:                o.CurrencyCode,
+		PaymentTermCode:             o.PaymentTermCode,
+		AdditionalDays:              int32(o.AdditionalDays),
+		BearerCode:                  o.BearerCode,
+		SaleDate:                    toPgDateFromPtr(o.SaleDate),
+		TotalWeightNet:              pgutil.ToPgNumericFromFloat64(o.TotalWeightNet),
+		TotalWeightGross:            pgutil.ToPgNumericFromFloat64(o.TotalWeightGross),
+		TotalGross:                  pgutil.ToPgNumericFromFloat64(o.TotalGross),
+		TotalNet:                    pgutil.ToPgNumericFromFloat64(o.TotalNet),
+		TotalNetNoSt:                pgutil.ToPgNumericFromFloat64(o.TotalNetNoST),
+		TotalWithIpiWithSt:          pgutil.ToPgNumericFromFloat64(o.TotalWithIPIWithST),
+		Notes:                       pgutil.ToPgTextFromPtr(o.Notes),
+		ObsCustomer:                 pgutil.ToPgTextFromPtr(o.ObsCustomer),
+		IsBlocked:                   o.IsBlocked,
+		BlockReason:                 pgutil.ToPgTextFromPtr(o.BlockReason),
+		IsFirm:                      o.IsFirm,
+		RepresentativeOrderNumber:   o.RepresentativeOrderNumber,
+		IsNfce:                      o.IsNFCe,
+		Street:                      pgutil.ToPgTextFromPtr(o.Street),
+		StreetNumber:                pgutil.ToPgTextFromPtr(o.StreetNumber),
+		ForeignDocument:             pgutil.ToPgTextFromPtr(o.ForeignDocument),
+		CollectionEstablishmentCode: o.CollectionEstablishmentCode,
+		NfTypeDescription:           pgutil.ToPgTextFromPtr(o.NFTypeDescription),
+		CarrierCode:                 o.CarrierCode,
+		FreightType:                 pgutil.ToPgTextFromPtr(o.FreightType),
+		FreightValue:                pgutil.ToPgNumericFromFloat64(o.FreightValue),
+		InsuranceValue:              pgutil.ToPgNumericFromFloat64(o.InsuranceValue),
+		VolumeQuantity:              pgutil.ToPgNumericFromFloat64(o.VolumeQuantity),
+		VolumeType:                  pgutil.ToPgTextFromPtr(o.VolumeType),
+		NetWeight:                   pgutil.ToPgNumericFromFloat64(o.NetWeight),
+		GrossWeight:                 pgutil.ToPgNumericFromFloat64(o.GrossWeight),
+		DiscountValue:               pgutil.ToPgNumericFromFloat64(o.DiscountValue),
+		SurchargeValue:              pgutil.ToPgNumericFromFloat64(o.SurchargeValue),
+		ProjectCode:                 pgutil.ToPgTextFromPtr(o.ProjectCode),
+		ProjectName:                 pgutil.ToPgTextFromPtr(o.ProjectName),
+		CreatedBy:                   pgutil.ToPgUUID(o.CreatedBy),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating sales order: %w", err)
@@ -76,37 +143,56 @@ func (r *SalesOrderRepositorySQLC) Create(ctx context.Context, o *entity.SalesOr
 
 func (r *SalesOrderRepositorySQLC) Update(ctx context.Context, o *entity.SalesOrder) (*entity.SalesOrder, error) {
 	row, err := r.q.UpdateSalesOrder(ctx, sqlc.UpdateSalesOrderParams{
-		Code:                o.Code,
-		Status:              string(o.Status),
-		Origin:              string(o.Origin),
-		DeliveryDate:        toPgDateFromPtr(o.DeliveryDate),
-		DeliveryDateFirm:    o.DeliveryDateFirm,
-		CustomerCode:        o.CustomerCode,
-		BillingAddressCode:  o.BillingAddressCode,
-		ShippingAddressCode: o.ShippingAddressCode,
-		RepresentativeCode:  o.RepresentativeCode,
-		PlanCode:            o.PlanCode,
-		SalesDivisionCode:   o.SalesDivisionCode,
-		CommissionPct:       pgutil.ToPgNumericFromFloat64(o.CommissionPct),
-		TaxTypeCode:         o.TaxTypeCode,
-		PresenceIndicator:   pgutil.ToPgTextFromPtr(o.PresenceIndicator),
-		SalesChannel:        pgutil.ToPgTextFromPtr(o.SalesChannel),
-		DefaultNfType:       pgutil.ToPgTextFromPtr(o.DefaultNFType),
-		PriceTableCode:      o.PriceTableCode,
-		CurrencyCode:        o.CurrencyCode,
-		PaymentTermCode:     o.PaymentTermCode,
-		AdditionalDays:      int32(o.AdditionalDays),
-		BearerCode:          o.BearerCode,
-		SaleDate:            toPgDateFromPtr(o.SaleDate),
-		TotalWeightNet:      pgutil.ToPgNumericFromFloat64(o.TotalWeightNet),
-		TotalWeightGross:    pgutil.ToPgNumericFromFloat64(o.TotalWeightGross),
-		TotalGross:          pgutil.ToPgNumericFromFloat64(o.TotalGross),
-		TotalNet:            pgutil.ToPgNumericFromFloat64(o.TotalNet),
-		TotalNetNoSt:        pgutil.ToPgNumericFromFloat64(o.TotalNetNoST),
-		TotalWithIpiWithSt:  pgutil.ToPgNumericFromFloat64(o.TotalWithIPIWithST),
-		Notes:               pgutil.ToPgTextFromPtr(o.Notes),
-		ObsCustomer:         pgutil.ToPgTextFromPtr(o.ObsCustomer),
-		IsFirm:              o.IsFirm,
+		Code:                        o.Code,
+		Status:                      string(o.Status),
+		Origin:                      string(o.Origin),
+		DeliveryDate:                toPgDateFromPtr(o.DeliveryDate),
+		DeliveryDateFirm:            o.DeliveryDateFirm,
+		CustomerCode:                o.CustomerCode,
+		BillingAddressCode:          o.BillingAddressCode,
+		ShippingAddressCode:         o.ShippingAddressCode,
+		RepresentativeCode:          o.RepresentativeCode,
+		PlanCode:                    o.PlanCode,
+		SalesDivisionCode:           o.SalesDivisionCode,
+		CommissionPct:               pgutil.ToPgNumericFromFloat64(o.CommissionPct),
+		TaxTypeCode:                 o.TaxTypeCode,
+		PresenceIndicator:           pgutil.ToPgTextFromPtr(o.PresenceIndicator),
+		SalesChannel:                pgutil.ToPgTextFromPtr(o.SalesChannel),
+		DefaultNfType:               pgutil.ToPgTextFromPtr(o.DefaultNFType),
+		PriceTableCode:              o.PriceTableCode,
+		CurrencyCode:                o.CurrencyCode,
+		PaymentTermCode:             o.PaymentTermCode,
+		AdditionalDays:              int32(o.AdditionalDays),
+		BearerCode:                  o.BearerCode,
+		SaleDate:                    toPgDateFromPtr(o.SaleDate),
+		TotalWeightNet:              pgutil.ToPgNumericFromFloat64(o.TotalWeightNet),
+		TotalWeightGross:            pgutil.ToPgNumericFromFloat64(o.TotalWeightGross),
+		TotalGross:                  pgutil.ToPgNumericFromFloat64(o.TotalGross),
+		TotalNet:                    pgutil.ToPgNumericFromFloat64(o.TotalNet),
+		TotalNetNoSt:                pgutil.ToPgNumericFromFloat64(o.TotalNetNoST),
+		TotalWithIpiWithSt:          pgutil.ToPgNumericFromFloat64(o.TotalWithIPIWithST),
+		Notes:                       pgutil.ToPgTextFromPtr(o.Notes),
+		ObsCustomer:                 pgutil.ToPgTextFromPtr(o.ObsCustomer),
+		IsFirm:                      o.IsFirm,
+		RepresentativeOrderNumber:   o.RepresentativeOrderNumber,
+		IsNfce:                      o.IsNFCe,
+		Street:                      pgutil.ToPgTextFromPtr(o.Street),
+		StreetNumber:                pgutil.ToPgTextFromPtr(o.StreetNumber),
+		ForeignDocument:             pgutil.ToPgTextFromPtr(o.ForeignDocument),
+		CollectionEstablishmentCode: o.CollectionEstablishmentCode,
+		NfTypeDescription:           pgutil.ToPgTextFromPtr(o.NFTypeDescription),
+		CarrierCode:                 o.CarrierCode,
+		FreightType:                 pgutil.ToPgTextFromPtr(o.FreightType),
+		FreightValue:                pgutil.ToPgNumericFromFloat64(o.FreightValue),
+		InsuranceValue:              pgutil.ToPgNumericFromFloat64(o.InsuranceValue),
+		VolumeQuantity:              pgutil.ToPgNumericFromFloat64(o.VolumeQuantity),
+		VolumeType:                  pgutil.ToPgTextFromPtr(o.VolumeType),
+		NetWeight:                   pgutil.ToPgNumericFromFloat64(o.NetWeight),
+		GrossWeight:                 pgutil.ToPgNumericFromFloat64(o.GrossWeight),
+		DiscountValue:               pgutil.ToPgNumericFromFloat64(o.DiscountValue),
+		SurchargeValue:              pgutil.ToPgNumericFromFloat64(o.SurchargeValue),
+		ProjectCode:                 pgutil.ToPgTextFromPtr(o.ProjectCode),
+		ProjectName:                 pgutil.ToPgTextFromPtr(o.ProjectName),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating sales order: %w", err)
@@ -160,10 +246,67 @@ func (r *SalesOrderRepositorySQLC) ListByDateRange(ctx context.Context, from, to
 	return rowsToEntities(rows), nil
 }
 
-func (r *SalesOrderRepositorySQLC) Cancel(ctx context.Context, code int64) error {
-	if err := r.q.CancelSalesOrder(ctx, code); err != nil {
+func (r *SalesOrderRepositorySQLC) ListAdvanced(ctx context.Context, filter repository.SalesOrderFilter) ([]*entity.SalesOrder, error) {
+	rows, err := r.q.ListSalesOrdersAdvanced(ctx, sqlc.ListSalesOrdersAdvancedParams{
+		CustomerCode:             filter.CustomerCode,
+		RepresentativeCode:       filter.RepresentativeCode,
+		PaymentTermCode:          filter.PaymentTermCode,
+		Status:                   textFromStatus(filter.Status),
+		CommercialAnalysisStatus: textFromAnalysisStatus(filter.CommercialAnalysisStatus),
+		FinancialAnalysisStatus:  textFromAnalysisStatus(filter.FinancialAnalysisStatus),
+		ReleaseStatus:            textFromReleaseStatus(filter.ReleaseStatus),
+		ConferenceStatus:         textFromConferenceStatus(filter.ConferenceStatus),
+		IsBlocked:                boolPtrToPg(filter.IsBlocked),
+		EmissionFrom:             datePtrToPg(filter.EmissionFrom),
+		EmissionTo:               datePtrToPg(filter.EmissionTo),
+		DeliveryFrom:             datePtrToPg(filter.DeliveryFrom),
+		DeliveryTo:               datePtrToPg(filter.DeliveryTo),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing sales orders advanced: %w", err)
+	}
+	return rowsToEntities(rows), nil
+}
+
+func (r *SalesOrderRepositorySQLC) Report(ctx context.Context, filter repository.SalesOrderFilter) (*repository.SalesOrderReport, error) {
+	row, err := r.q.SalesOrderReport(ctx, sqlc.SalesOrderReportParams{
+		CustomerCode:       filter.CustomerCode,
+		RepresentativeCode: filter.RepresentativeCode,
+		PaymentTermCode:    filter.PaymentTermCode,
+		Status:             textFromStatus(filter.Status),
+		EmissionFrom:       datePtrToPg(filter.EmissionFrom),
+		EmissionTo:         datePtrToPg(filter.EmissionTo),
+		DeliveryFrom:       datePtrToPg(filter.DeliveryFrom),
+		DeliveryTo:         datePtrToPg(filter.DeliveryTo),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("sales order report: %w", err)
+	}
+	return &repository.SalesOrderReport{
+		TotalOrders:            row.TotalOrders,
+		TotalGross:             pgutil.FromPgNumericToFloat64(row.TotalGross),
+		TotalNet:               pgutil.FromPgNumericToFloat64(row.TotalNet),
+		OpenCount:              row.OpenCount,
+		ConfirmedCount:         row.ConfirmedCount,
+		InvoicedCount:          row.InvoicedCount,
+		CancelledCount:         row.CancelledCount,
+		BlockedCount:           row.BlockedCount,
+		CommercialPendingCount: row.CommercialPendingCount,
+		FinancialPendingCount:  row.FinancialPendingCount,
+		ConferencePendingCount: row.ConferencePendingCount,
+		DelayedCount:           row.DelayedCount,
+	}, nil
+}
+
+func (r *SalesOrderRepositorySQLC) Cancel(ctx context.Context, code int64, reason string, complement *string) error {
+	if err := r.q.CancelSalesOrder(ctx, sqlc.CancelSalesOrderParams{
+		Code:             code,
+		CancelReason:     pgutil.ToPgText(reason),
+		CancelComplement: pgutil.ToPgTextFromPtr(complement),
+	}); err != nil {
 		return fmt.Errorf("cancelling sales order %d: %w", code, err)
 	}
+	_ = r.insertEvent(ctx, code, "CANCEL", "", reason, complement, nil, nil)
 	return nil
 }
 
@@ -174,6 +317,7 @@ func (r *SalesOrderRepositorySQLC) Block(ctx context.Context, code int64, reason
 	}); err != nil {
 		return fmt.Errorf("blocking sales order %d: %w", code, err)
 	}
+	_ = r.insertEvent(ctx, code, "BLOCK", "", reason, nil, nil, nil)
 	return nil
 }
 
@@ -181,6 +325,7 @@ func (r *SalesOrderRepositorySQLC) Unblock(ctx context.Context, code int64) erro
 	if err := r.q.UnblockSalesOrder(ctx, code); err != nil {
 		return fmt.Errorf("unblocking sales order %d: %w", code, err)
 	}
+	_ = r.insertEvent(ctx, code, "UNBLOCK", "", "Desbloqueio manual", nil, nil, nil)
 	return nil
 }
 
@@ -192,6 +337,60 @@ func (r *SalesOrderRepositorySQLC) ChangeStatus(ctx context.Context, code int64,
 		return fmt.Errorf("changing status of sales order %d: %w", code, err)
 	}
 	return nil
+}
+
+func (r *SalesOrderRepositorySQLC) Analyze(ctx context.Context, code int64, area string, status entity.SalesOrderAnalysisStatus, reason string, createdBy uuid.UUID) error {
+	if err := r.q.AnalyzeSalesOrder(ctx, sqlc.AnalyzeSalesOrderParams{
+		Code:                     code,
+		Column2:                  area,
+		CommercialAnalysisStatus: string(status),
+	}); err != nil {
+		return fmt.Errorf("analyzing sales order %d: %w", code, err)
+	}
+	return r.insertEvent(ctx, code, "ANALYZE", area, reason, nil, nil, &createdBy)
+}
+
+func (r *SalesOrderRepositorySQLC) Release(ctx context.Context, code int64, releaseStatus entity.SalesOrderReleaseStatus, reason string, area string, createdBy uuid.UUID) error {
+	if err := r.q.ReleaseSalesOrder(ctx, sqlc.ReleaseSalesOrderParams{
+		Code:          code,
+		ReleaseStatus: string(releaseStatus),
+		BlockReason:   pgutil.ToPgText(reason),
+	}); err != nil {
+		return fmt.Errorf("releasing sales order %d: %w", code, err)
+	}
+	return r.insertEvent(ctx, code, "RELEASE", area, reason, nil, nil, &createdBy)
+}
+
+func (r *SalesOrderRepositorySQLC) Attend(ctx context.Context, code int64, reason string, eventDate *time.Time, createdBy uuid.UUID) error {
+	if err := r.q.AttendSalesOrder(ctx, sqlc.AttendSalesOrderParams{
+		Code:           code,
+		AttendedReason: pgutil.ToPgText(reason),
+		AttendedAt:     timestamptzPtrToPg(eventDate),
+	}); err != nil {
+		return fmt.Errorf("attending sales order %d: %w", code, err)
+	}
+	return r.insertEvent(ctx, code, "ATTEND", "", reason, nil, eventDate, &createdBy)
+}
+
+func (r *SalesOrderRepositorySQLC) Confer(ctx context.Context, code int64, status entity.SalesOrderConferenceStatus, reason string, createdBy uuid.UUID) error {
+	if err := r.q.ConferSalesOrder(ctx, sqlc.ConferSalesOrderParams{
+		Code:             code,
+		ConferenceStatus: string(status),
+	}); err != nil {
+		return fmt.Errorf("conferencing sales order %d: %w", code, err)
+	}
+	return r.insertEvent(ctx, code, "CONFER", "LOGISTICS", reason, nil, nil, &createdBy)
+}
+
+func (r *SalesOrderRepositorySQLC) SaveDelayReason(ctx context.Context, code int64, reason, action string, createdBy uuid.UUID) error {
+	if err := r.q.SaveSalesOrderDelayReason(ctx, sqlc.SaveSalesOrderDelayReasonParams{
+		Code:        code,
+		DelayReason: pgutil.ToPgText(reason),
+		DelayAction: pgutil.ToPgText(action),
+	}); err != nil {
+		return fmt.Errorf("saving delay reason for sales order %d: %w", code, err)
+	}
+	return r.insertEvent(ctx, code, "DELAY_REASON", "", reason, &action, nil, &createdBy)
 }
 
 func (r *SalesOrderRepositorySQLC) CreateItem(ctx context.Context, item *entity.SalesOrderItem) (*entity.SalesOrderItem, error) {
@@ -291,41 +490,76 @@ func (r *SalesOrderRepositorySQLC) CancelItem(ctx context.Context, itemCode int6
 	return nil
 }
 
+func (r *SalesOrderRepositorySQLC) insertEvent(ctx context.Context, code int64, eventType, area, reason string, complement *string, eventDate *time.Time, createdBy *uuid.UUID) error {
+	var created pgtype.UUID
+	if createdBy != nil {
+		created = pgutil.ToPgUUID(*createdBy)
+	}
+	var areaText pgtype.Text
+	if area != "" {
+		areaText = pgutil.ToPgText(area)
+	}
+	return r.q.InsertSalesOrderEvent(ctx, sqlc.InsertSalesOrderEventParams{
+		SalesOrderCode: code,
+		EventType:      eventType,
+		Area:           areaText,
+		Reason:         pgutil.ToPgText(reason),
+		Complement:     pgutil.ToPgTextFromPtr(complement),
+		Column6:        timestamptzPtrToPg(eventDate),
+		CreatedBy:      created,
+	})
+}
+
 func rowToEntity(row sqlc.SalesOrder) *entity.SalesOrder {
 	e := &entity.SalesOrder{
-		Code:                row.Code,
-		OrderNumber:         row.OrderNumber,
-		EnterpriseCode:      row.EnterpriseCode,
-		Status:              entity.SalesOrderStatus(row.Status),
-		Origin:              entity.SalesOrderOrigin(row.Origin),
-		EmissionDate:        pgutil.FromPgDate(row.EmissionDate),
-		DeliveryDateFirm:    row.DeliveryDateFirm,
-		DigitDate:           pgutil.FromPgDate(row.DigitDate),
-		CustomerCode:        row.CustomerCode,
-		BillingAddressCode:  row.BillingAddressCode,
-		ShippingAddressCode: row.ShippingAddressCode,
-		RepresentativeCode:  row.RepresentativeCode,
-		PlanCode:            row.PlanCode,
-		SalesDivisionCode:   row.SalesDivisionCode,
-		CommissionPct:       pgutil.FromPgNumericToFloat64(row.CommissionPct),
-		TaxTypeCode:         row.TaxTypeCode,
-		PriceTableCode:      row.PriceTableCode,
-		CurrencyCode:        row.CurrencyCode,
-		PaymentTermCode:     row.PaymentTermCode,
-		AdditionalDays:      int(row.AdditionalDays),
-		BearerCode:          row.BearerCode,
-		TotalWeightNet:      pgutil.FromPgNumericToFloat64(row.TotalWeightNet),
-		TotalWeightGross:    pgutil.FromPgNumericToFloat64(row.TotalWeightGross),
-		TotalGross:          pgutil.FromPgNumericToFloat64(row.TotalGross),
-		TotalNet:            pgutil.FromPgNumericToFloat64(row.TotalNet),
-		TotalNetNoST:        pgutil.FromPgNumericToFloat64(row.TotalNetNoSt),
-		TotalWithIPIWithST:  pgutil.FromPgNumericToFloat64(row.TotalWithIpiWithSt),
-		IsBlocked:           row.IsBlocked,
-		IsFirm:              row.IsFirm,
-		IsActive:            row.IsActive,
-		CreatedAt:           pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt:           pgutil.FromPgTimestamptz(row.UpdatedAt),
-		CreatedBy:           pgutil.FromPgUUID(row.CreatedBy),
+		Code:                        row.Code,
+		OrderNumber:                 row.OrderNumber,
+		EnterpriseCode:              row.EnterpriseCode,
+		Status:                      entity.SalesOrderStatus(row.Status),
+		Origin:                      entity.SalesOrderOrigin(row.Origin),
+		EmissionDate:                pgutil.FromPgDate(row.EmissionDate),
+		DeliveryDateFirm:            row.DeliveryDateFirm,
+		DigitDate:                   pgutil.FromPgDate(row.DigitDate),
+		CustomerCode:                row.CustomerCode,
+		BillingAddressCode:          row.BillingAddressCode,
+		ShippingAddressCode:         row.ShippingAddressCode,
+		RepresentativeCode:          row.RepresentativeCode,
+		PlanCode:                    row.PlanCode,
+		SalesDivisionCode:           row.SalesDivisionCode,
+		CommissionPct:               pgutil.FromPgNumericToFloat64(row.CommissionPct),
+		TaxTypeCode:                 row.TaxTypeCode,
+		PriceTableCode:              row.PriceTableCode,
+		CurrencyCode:                row.CurrencyCode,
+		PaymentTermCode:             row.PaymentTermCode,
+		AdditionalDays:              int(row.AdditionalDays),
+		BearerCode:                  row.BearerCode,
+		TotalWeightNet:              pgutil.FromPgNumericToFloat64(row.TotalWeightNet),
+		TotalWeightGross:            pgutil.FromPgNumericToFloat64(row.TotalWeightGross),
+		TotalGross:                  pgutil.FromPgNumericToFloat64(row.TotalGross),
+		TotalNet:                    pgutil.FromPgNumericToFloat64(row.TotalNet),
+		TotalNetNoST:                pgutil.FromPgNumericToFloat64(row.TotalNetNoSt),
+		TotalWithIPIWithST:          pgutil.FromPgNumericToFloat64(row.TotalWithIpiWithSt),
+		IsBlocked:                   row.IsBlocked,
+		IsFirm:                      row.IsFirm,
+		IsActive:                    row.IsActive,
+		RepresentativeOrderNumber:   row.RepresentativeOrderNumber,
+		IsNFCe:                      row.IsNfce,
+		CollectionEstablishmentCode: row.CollectionEstablishmentCode,
+		CarrierCode:                 row.CarrierCode,
+		FreightValue:                pgutil.FromPgNumericToFloat64(row.FreightValue),
+		InsuranceValue:              pgutil.FromPgNumericToFloat64(row.InsuranceValue),
+		VolumeQuantity:              pgutil.FromPgNumericToFloat64(row.VolumeQuantity),
+		NetWeight:                   pgutil.FromPgNumericToFloat64(row.NetWeight),
+		GrossWeight:                 pgutil.FromPgNumericToFloat64(row.GrossWeight),
+		DiscountValue:               pgutil.FromPgNumericToFloat64(row.DiscountValue),
+		SurchargeValue:              pgutil.FromPgNumericToFloat64(row.SurchargeValue),
+		CommercialAnalysisStatus:    entity.SalesOrderAnalysisStatus(row.CommercialAnalysisStatus),
+		FinancialAnalysisStatus:     entity.SalesOrderAnalysisStatus(row.FinancialAnalysisStatus),
+		ReleaseStatus:               entity.SalesOrderReleaseStatus(row.ReleaseStatus),
+		ConferenceStatus:            entity.SalesOrderConferenceStatus(row.ConferenceStatus),
+		CreatedAt:                   pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:                   pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy:                   pgutil.FromPgUUID(row.CreatedBy),
 	}
 
 	if row.DeliveryDate.Valid {
@@ -359,6 +593,62 @@ func rowToEntity(row sqlc.SalesOrder) *entity.SalesOrder {
 	if row.BlockReason.Valid {
 		v := row.BlockReason.String
 		e.BlockReason = &v
+	}
+	if row.Street.Valid {
+		v := row.Street.String
+		e.Street = &v
+	}
+	if row.StreetNumber.Valid {
+		v := row.StreetNumber.String
+		e.StreetNumber = &v
+	}
+	if row.ForeignDocument.Valid {
+		v := row.ForeignDocument.String
+		e.ForeignDocument = &v
+	}
+	if row.NfTypeDescription.Valid {
+		v := row.NfTypeDescription.String
+		e.NFTypeDescription = &v
+	}
+	if row.FreightType.Valid {
+		v := row.FreightType.String
+		e.FreightType = &v
+	}
+	if row.VolumeType.Valid {
+		v := row.VolumeType.String
+		e.VolumeType = &v
+	}
+	if row.ProjectCode.Valid {
+		v := row.ProjectCode.String
+		e.ProjectCode = &v
+	}
+	if row.ProjectName.Valid {
+		v := row.ProjectName.String
+		e.ProjectName = &v
+	}
+	if row.CancelReason.Valid {
+		v := row.CancelReason.String
+		e.CancelReason = &v
+	}
+	if row.CancelComplement.Valid {
+		v := row.CancelComplement.String
+		e.CancelComplement = &v
+	}
+	if row.AttendedReason.Valid {
+		v := row.AttendedReason.String
+		e.AttendedReason = &v
+	}
+	if row.AttendedAt.Valid {
+		t := pgutil.FromPgTimestamptz(row.AttendedAt)
+		e.AttendedAt = &t
+	}
+	if row.DelayReason.Valid {
+		v := row.DelayReason.String
+		e.DelayReason = &v
+	}
+	if row.DelayAction.Valid {
+		v := row.DelayAction.String
+		e.DelayAction = &v
 	}
 
 	return e

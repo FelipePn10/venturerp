@@ -78,3 +78,48 @@ func (uc *ListSalesOrdersByStatusUseCase) Execute(ctx context.Context, status st
 	}
 	return toSalesOrderResponses(orders), nil
 }
+
+type ListSalesOrdersAdvancedUseCase struct {
+	Repo repository.SalesOrderRepository
+	Auth ports.AuthService
+}
+
+func (uc *ListSalesOrdersAdvancedUseCase) Execute(ctx context.Context, filter repository.SalesOrderFilter) ([]*response.SalesOrderResponse, error) {
+	if !uc.Auth.CanListSalesOrders(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	orders, err := uc.Repo.ListAdvanced(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return toSalesOrderResponses(orders), nil
+}
+
+type SalesOrderReportUseCase struct {
+	Repo repository.SalesOrderRepository
+	Auth ports.AuthService
+}
+
+func (uc *SalesOrderReportUseCase) Execute(ctx context.Context, filter repository.SalesOrderFilter) (*response.SalesOrderReportResponse, error) {
+	if !uc.Auth.CanListSalesOrders(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	report, err := uc.Repo.Report(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return &response.SalesOrderReportResponse{
+		TotalOrders:            report.TotalOrders,
+		TotalGross:             report.TotalGross,
+		TotalNet:               report.TotalNet,
+		OpenCount:              report.OpenCount,
+		ConfirmedCount:         report.ConfirmedCount,
+		InvoicedCount:          report.InvoicedCount,
+		CancelledCount:         report.CancelledCount,
+		BlockedCount:           report.BlockedCount,
+		CommercialPendingCount: report.CommercialPendingCount,
+		FinancialPendingCount:  report.FinancialPendingCount,
+		ConferencePendingCount: report.ConferencePendingCount,
+		DelayedCount:           report.DelayedCount,
+	}, nil
+}

@@ -12,13 +12,62 @@ Pedido de Venda também em [`visao-geral.md`](visao-geral.md) §4.
 
 ## 1. Pedido de Venda (`/api/sales-order`)
 
+O módulo de Pedido de Venda controla o compromisso comercial firmado com o
+cliente. Ele recebe dados comerciais, financeiros, fiscais, logísticos e de
+planejamento, e é o ponto de partida para crédito, reserva de estoque, MRP,
+expedição e faturamento.
+
+Use o pedido quando a proposta já foi aceita ou quando uma venda precisa entrar no
+fluxo operacional. Antes da confirmação, o pedido pode ficar em rascunho, análise
+comercial/financeira, bloqueio ou conferência. Depois da confirmação, a alteração
+para status `P` alimenta demanda de planejamento e reserva ATP; depois do
+faturamento, o pedido passa para `F`.
+
+### Onde É Usado
+
+- Comercial: registro da venda, negociação final, análise de bloqueios,
+  acompanhamento da carteira e cancelamento/atendimento.
+- Financeiro: análise de crédito, liberação financeira, condição de pagamento,
+  portador e exposição do cliente.
+- Logística/expedição: conferência do pedido, datas de entrega, transportadora,
+  frete, volume, peso, lote e integração com romaneio.
+- Fiscal/faturamento: tipo de nota, NFC-e, dados do consumidor, impostos
+  informativos do item e emissão de NF-e/NFC-e no fluxo fiscal.
+- Planejamento: confirmação do pedido gera demanda independente por item e pode
+  acionar MRP/APS.
+
+### Conceitos Principais
+
+- **Capa do pedido:** empresa, número sequencial, status, origem, cliente,
+  representante, divisão comercial, datas, condição de pagamento, tabela de
+  preço, comissão, dados fiscais, transportadora, frete, volumes, projeto e
+  observações.
+- **Itens:** produto, máscara, quantidade solicitada, quantidade atendida,
+  quantidade cancelada, saldo, preço, desconto, impostos informativos, data de
+  entrega, lote, entrega com cupom, pagamento no caixa, pesos e situação.
+- **Análise comercial/financeira:** estados independentes que indicam se o pedido
+  ainda precisa passar por revisão, se foi aprovado ou rejeitado.
+- **Liberação:** controle operacional que diferencia pedido liberado, bloqueado
+  ou liberado manualmente por alçada.
+- **Conferência:** controle logístico para marcar o pedido como pendente,
+  conferido ou divergente antes do faturamento/expedição.
+- **Histórico:** análise, liberação, bloqueio, cancelamento, atendimento,
+  conferência e motivo de atraso geram eventos em `sales_order_events`.
+
 | Método | Rota | Ação |
 |---|---|---|
 | POST | `/create` | Cria a capa do pedido |
 | GET | `/list` | Lista pedidos |
+| GET | `/search` | Consulta carteira com filtros avançados |
+| GET | `/report` | Relatório gerencial da carteira |
 | GET | `/{code}` | Consulta por código |
 | PUT | `/{code}` | Atualiza a capa |
-| DELETE | `/{code}/cancel` | Cancela o pedido |
+| DELETE | `/{code}/cancel` | Cancela o pedido com motivo/complemento |
+| POST | `/{code}/analyze` | Registra análise comercial ou financeira |
+| POST | `/{code}/release` | Libera, libera manualmente ou bloqueia |
+| POST | `/{code}/attend` | Registra atendimento manual |
+| POST | `/{code}/conference` | Atualiza conferência logística |
+| POST | `/{code}/delay-reason` | Registra motivo e ação para atraso |
 | PATCH | `/{code}/block` | Bloqueia (crédito/manual) |
 | PATCH | `/{code}/unblock` | Desbloqueia |
 | PATCH | `/{code}/status` | Muda o status |
@@ -39,9 +88,37 @@ Pedido de Venda também em [`visao-geral.md`](visao-geral.md) §4.
 comporta os 20 caracteres de `CANCELLED` (migration `000170`); antes era
 `VARCHAR(5)` e o cancelamento estourava com *value too long*.
 
+**Análise comercial/financeira:** `NOT_ANALYZED`, `APPROVED`, `REJECTED`.
+
+**Liberação:** `BLOCKED`, `MANUAL_RELEASED`, `RELEASED`.
+
+**Conferência:** `PENDING`, `CONFERRED`, `DIVERGENT`.
+
 **Datas.** `emission_date`/`delivery_date` (capa) e `delivery_date` (item) aceitam
 `YYYY-MM-DD` ou ISO-8601 com hora; `emission_date` omitido assume **hoje** (não mais
 `0001-01-01`). `enterprise_code` é obrigatório no `POST /create` (422 se ausente).
+
+### Consulta E Relatório
+
+`GET /api/sales-order/search` aceita filtros por `customer_code`,
+`representative_code`, `payment_term_code`, `status`,
+`commercial_analysis_status`, `financial_analysis_status`, `release_status`,
+`conference_status`, `is_blocked`, `emission_from`, `emission_to`,
+`delivery_from` e `delivery_to`.
+
+`GET /api/sales-order/report` consolida total de pedidos, valor bruto, valor
+líquido, pedidos abertos, confirmados, faturados, cancelados, bloqueados,
+pendências de análise comercial/financeira, pendências de conferência e pedidos em
+atraso. A consulta de atraso considera pedido com `delivery_date` menor que a data
+atual e status diferente de `F`/`CANCELLED`.
+
+### Regras Operacionais
+
+O cancelamento exige motivo e mantém o pedido consultável para preservar histórico.
+O atendimento manual registra motivo e data de atendimento e marca o pedido como
+faturado/atendido no fluxo operacional. A conferência marca o resultado logístico;
+quando houver divergência, o motivo deve ser informado pelo operador. Pedidos em
+atraso podem receber motivo e ação planejada para acompanhamento da carteira.
 
 > ✅ **Automação:** mudar o status para `P` cria, por item, uma **demanda
 > independente** (item, qtd, data) de forma **idempotente** — código derivado da linha
@@ -60,6 +137,13 @@ comporta os 20 caracteres de `CANCELLED` (migration `000170`); antes era
 > ✅ **Automação (faturamento):** a autorização da NF-e de saída posta `OUT` por item,
 > consome reservas do pedido e marca o pedido como `F`. Ver
 > `fiscal_uc/authorize_fiscal_exit_uc.go` e [`fiscal-financeiro.md`](fiscal-financeiro.md).
+
+### Testes
+
+Teste automatizado focado: `scripts/test-comercial-pedido-venda.sh`. Com
+`BASE_URL` e `TOKEN`, o script também executa smoke HTTP de criação, item,
+consulta avançada, relatório, análise, liberação, conferência, motivo de atraso e
+cancelamento.
 
 ---
 
@@ -97,7 +181,142 @@ Exemplo de corpo do `POST /create`:
 
 ---
 
-## 3. Precificação (`/api/customers/sales-tables`)
+## 3. Orçamentos (`/api/sales-quotation`)
+
+O módulo de orçamentos registra a negociação comercial antes da emissão de um
+pedido de venda. Ele deve ser usado quando a empresa precisa formalizar uma
+proposta, simular condições comerciais, manter histórico de propostas perdidas ou
+atendidas e converter somente propostas aprovadas em pedidos reais.
+
+O orçamento não substitui o pedido de venda. Ele é uma etapa anterior: guarda a
+intenção comercial, valores negociados, itens, datas, frete, descontos,
+acréscimos, retenções, probabilidade de fechamento e bloqueios comerciais. Quando
+o cliente aprova a proposta, a conversão cria um pedido de venda e o fluxo passa a
+ser controlado pelo módulo de pedidos, onde entram crédito, reserva, ATP/MRP,
+expedição e faturamento.
+
+### Onde É Usado
+
+- Equipe comercial: cadastro de propostas, renegociação, consulta de carteira e
+  acompanhamento de oportunidades.
+- Gestão comercial: análise de valor em aberto, valor ponderado por
+  probabilidade, propostas canceladas, atendidas e expiradas.
+- Backoffice: validação de condições comerciais, frete, comissão, ordem de compra
+  e observações do cliente antes de virar pedido.
+- Integração com pedidos: conversão do saldo aberto dos itens para pedido de
+  venda, preservando rastreabilidade pelo campo `converted_sales_order_code`.
+
+### Conceitos Principais
+
+- **Capa do orçamento:** dados gerais da proposta, empresa, cliente, status,
+  validade, ordem de compra, datas, representante, divisão comercial, tabela de
+  preço, condição de pagamento, moeda, comissão, liberação comercial e totais.
+- **Itens:** produtos negociados, quantidade solicitada, preço unitário,
+  descontos, impostos informativos, data de entrega e saldo ainda não atendido.
+- **Transporte:** transportadora, tipo de frete, verificação de frete, valor de
+  frete, redespacho e seguro.
+- **Valores comerciais:** desconto, acréscimo, retenções, total bruto, total
+  líquido e valor ponderado pela probabilidade de fechamento.
+- **Histórico operacional:** cancelamento, descancelamento, atendimento e
+  conversão registram eventos para manter rastreabilidade da decisão comercial.
+- **Anexos:** a estrutura de banco já prevê documentos vinculados ao orçamento,
+  com limite de 10 MB por arquivo; os endpoints de upload/download ainda não
+  foram expostos nesta fase.
+
+### Rotas
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/api/sales-quotation/create` | Cria a capa do orçamento |
+| GET | `/api/sales-quotation/list` | Lista orçamentos, filtrável por `customer_code`, `status`, `from`, `to`, `purchase_order_number`, `freight_type` |
+| GET | `/api/sales-quotation/report` | Consolida totais, status, retenções e valor ponderado por probabilidade |
+| GET | `/api/sales-quotation/{code}` | Consulta orçamento com itens |
+| PUT | `/api/sales-quotation/{code}` | Atualiza capa, validade, condições, transporte e valores comerciais |
+| DELETE | `/api/sales-quotation/{code}/cancel` | Cancela o orçamento com motivo e complemento |
+| POST | `/api/sales-quotation/{code}/uncancel` | Descancela orçamento mantendo histórico |
+| POST | `/api/sales-quotation/{code}/attend` | Registra atendimento manual do orçamento com motivo/data |
+| PATCH | `/api/sales-quotation/{code}/status` | Altera status |
+| POST | `/api/sales-quotation/{code}/convert-to-order` | Converte saldo aberto para pedido de venda |
+| POST | `/api/sales-quotation/items/create` | Inclui item |
+| GET | `/api/sales-quotation/items/{code}` | Lista itens do orçamento |
+| PUT | `/api/sales-quotation/items/{itemCode}` | Atualiza item, atendimento e cancelamento parcial |
+| DELETE | `/api/sales-quotation/items/{itemCode}/cancel` | Cancela item |
+
+### Ciclo De Vida
+
+| Status | Uso |
+|---|---|
+| `R` | Rascunho em montagem, ainda sem compromisso comercial |
+| `P` | Registro originado de canal externo ou venda prévia |
+| `A` | Pedido em análise comercial/financeira |
+| `OA` | Orçamento em análise comercial/financeira |
+| `F` | Pedido confirmado no ERP |
+| `OF` | Orçamento confirmado no ERP e pronto para negociação/conversão |
+| `CANCELLED` | Proposta encerrada por perda, desistência ou erro operacional |
+| `ATTENDED` | Orçamento atendido manualmente ou convertido em pedido |
+| `EXPIRED` | Orçamento vencido por validade expirada |
+
+**Tipos de orçamento:** `API_TERCEIROS`, `CONSULTA`, `FOCCOPORTAL`, `IMPORTADO`,
+`NEGOCIACAO`, `VENDA`.
+
+**Liberação:** `BLOCKED`, `MANUAL_RELEASED`, `RELEASED`.
+
+**Status do item:** `OPEN`, `PARTIAL`, `DELIVERED`, `CANCELLED`.
+
+### Regras De Negócio
+
+O orçamento guarda validade (`valid_until`), data de digitação (`digit_date`),
+ordem de compra, tipo, liberação comercial, probabilidade de fechamento
+(`probability_pct`), comissão, NFC-e, endereço do consumidor, transportadora, tipo
+de frete, verificação de frete, redespacho, seguro, descontos, acréscimos,
+retenções, autorização de entrega, observações e vínculo com o pedido convertido
+(`converted_sales_order_code`). Itens guardam quantidade solicitada, atendida e
+cancelada, permitindo saldo aberto antes da conversão.
+
+O cancelamento exige motivo e pode receber complemento. O registro permanece
+consultável para preservar histórico comercial. O descancelamento reabre a
+proposta e registra o motivo da reversão. O atendimento manual encerra a proposta
+sem gerar pedido, útil quando a decisão comercial precisa ser registrada mesmo sem
+conversão automática.
+
+Na conversão, o sistema cria um pedido de venda com a numeração de pedido existente
+e copia somente o saldo aberto dos itens ativos. Orçamentos cancelados, expirados,
+atendidos, de tipo `CONSULTA`, bloqueados comercialmente ou já convertidos são
+bloqueados. A confirmação operacional do pedido continua no fluxo de Pedido de
+Venda, onde entram crédito, reserva/ATP e MRP.
+
+### NFC-e No Orçamento
+
+O campo `is_nfce` indica que a proposta deve ser tratada como venda destinada a
+cupom fiscal eletrônico quando for convertida para pedido. Nesta fase, ele foi
+implementado como atributo comercial/fiscal do orçamento:
+
+- existe na tabela `sales_quotations`;
+- entra nos DTOs de criação, atualização e resposta;
+- é retornado nas consultas;
+- é copiado para o pedido de venda no momento da conversão.
+
+Esta fase não emite NFC-e e não autoriza documento fiscal. A emissão continua no
+módulo fiscal/faturamento. Também não foi implementada nesta fase uma regra
+automática de cálculo fiscal específica para NFC-e dentro do orçamento; o campo
+prepara a intenção fiscal para o pedido/faturamento consumir depois.
+
+### Relatórios E Consultas
+
+A listagem permite localizar propostas por cliente, status, período de emissão,
+ordem de compra e tipo de frete. O relatório consolida quantidade de orçamentos,
+total bruto, total líquido, propostas abertas, atendidas, canceladas, expiradas,
+retenções e valor ponderado pela probabilidade de fechamento.
+
+### Testes
+
+Teste automatizado: `scripts/test-comercial-orcamentos.sh`. Com `BASE_URL` e
+`TOKEN`, o script também faz smoke HTTP de criação, inclusão de item, consulta,
+relatório, cancelamento, descancelamento e atendimento.
+
+---
+
+## 4. Precificação (`/api/customers/sales-tables`)
 
 O módulo de precificação mantém tabelas comerciais de venda, preços por item,
 políticas de formação de preço, cálculo de preço sugerido e histórico de

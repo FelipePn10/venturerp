@@ -67,10 +67,35 @@ type SalesOrderResponse struct {
 	SurchargeValue              float64                  `json:"surcharge_value"`
 	ProjectCode                 *string                  `json:"project_code,omitempty"`
 	ProjectName                 *string                  `json:"project_name,omitempty"`
+	CommercialAnalysisStatus    string                   `json:"commercial_analysis_status"`
+	FinancialAnalysisStatus     string                   `json:"financial_analysis_status"`
+	ReleaseStatus               string                   `json:"release_status"`
+	ConferenceStatus            string                   `json:"conference_status"`
+	CancelReason                *string                  `json:"cancel_reason,omitempty"`
+	CancelComplement            *string                  `json:"cancel_complement,omitempty"`
+	AttendedReason              *string                  `json:"attended_reason,omitempty"`
+	AttendedAt                  *time.Time               `json:"attended_at,omitempty"`
+	DelayReason                 *string                  `json:"delay_reason,omitempty"`
+	DelayAction                 *string                  `json:"delay_action,omitempty"`
 	Items                       []SalesOrderItemResponse `json:"items,omitempty"`
 	CreatedAt                   time.Time                `json:"created_at"`
 	UpdatedAt                   time.Time                `json:"updated_at"`
 	CreatedBy                   uuid.UUID                `json:"created_by"`
+}
+
+type SalesOrderReportResponse struct {
+	TotalOrders            int64   `json:"total_orders"`
+	TotalGross             float64 `json:"total_gross"`
+	TotalNet               float64 `json:"total_net"`
+	OpenCount              int64   `json:"open_count"`
+	ConfirmedCount         int64   `json:"confirmed_count"`
+	InvoicedCount          int64   `json:"invoiced_count"`
+	CancelledCount         int64   `json:"cancelled_count"`
+	BlockedCount           int64   `json:"blocked_count"`
+	CommercialPendingCount int64   `json:"commercial_pending_count"`
+	FinancialPendingCount  int64   `json:"financial_pending_count"`
+	ConferencePendingCount int64   `json:"conference_pending_count"`
+	DelayedCount           int64   `json:"delayed_count"`
 }
 
 // SalesOrderItemResponse is the API representation of a sales order line.

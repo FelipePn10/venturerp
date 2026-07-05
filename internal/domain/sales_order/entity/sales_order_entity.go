@@ -40,6 +40,30 @@ const (
 	SalesOrderItemStatusCancelled SalesOrderItemStatus = "CANCELLED"
 )
 
+type SalesOrderAnalysisStatus string
+
+const (
+	SalesOrderAnalysisNotAnalyzed SalesOrderAnalysisStatus = "NOT_ANALYZED"
+	SalesOrderAnalysisApproved    SalesOrderAnalysisStatus = "APPROVED"
+	SalesOrderAnalysisRejected    SalesOrderAnalysisStatus = "REJECTED"
+)
+
+type SalesOrderReleaseStatus string
+
+const (
+	SalesOrderReleaseBlocked SalesOrderReleaseStatus = "BLOCKED"
+	SalesOrderReleaseManual  SalesOrderReleaseStatus = "MANUAL_RELEASED"
+	SalesOrderReleaseOK      SalesOrderReleaseStatus = "RELEASED"
+)
+
+type SalesOrderConferenceStatus string
+
+const (
+	SalesOrderConferencePending   SalesOrderConferenceStatus = "PENDING"
+	SalesOrderConferenceConferred SalesOrderConferenceStatus = "CONFERRED"
+	SalesOrderConferenceDivergent SalesOrderConferenceStatus = "DIVERGENT"
+)
+
 type SalesOrder struct {
 	Code                        int64
 	OrderNumber                 int64
@@ -98,6 +122,16 @@ type SalesOrder struct {
 	SurchargeValue              float64
 	ProjectCode                 *string
 	ProjectName                 *string
+	CommercialAnalysisStatus    SalesOrderAnalysisStatus
+	FinancialAnalysisStatus     SalesOrderAnalysisStatus
+	ReleaseStatus               SalesOrderReleaseStatus
+	ConferenceStatus            SalesOrderConferenceStatus
+	CancelReason                *string
+	CancelComplement            *string
+	AttendedReason              *string
+	AttendedAt                  *time.Time
+	DelayReason                 *string
+	DelayAction                 *string
 	Items                       []*SalesOrderItem
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
