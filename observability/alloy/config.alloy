@@ -1,0 +1,76 @@
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "compose_service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.relabel.containers.output
+  refresh_interval = "5s"
+  forward_to    = [loki.process.docker.receiver]
+}
+
+loki.process "docker" {
+  stage.docker {}
+
+  stage.json {
+    expressions = {
+      level      = "level",
+      msg        = "msg",
+      request_id = "request_id",
+      method     = "method",
+      path       = "path",
+      status     = "status",
+      latency_ms = "latency_ms",
+    }
+  }
+
+  stage.drop {
+    source        = "path"
+    expression    = "/health.*|/metrics"
+    drop_counter_reason = "health_or_metrics"
+  }
+
+  stage.labels {
+    values = {
+      level  = "",
+      method = "",
+      status = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      request_id = "",
+      path       = "",
+      latency_ms = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

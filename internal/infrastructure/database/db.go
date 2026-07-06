@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
@@ -19,7 +20,14 @@ func NewDB(cfg *config.Config) (*DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DB config: %w", err)
+	}
+
+	poolCfg.ConnConfig.Tracer = otelpgx.NewTracer()
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pool: %w", err)
 	}
