@@ -374,7 +374,78 @@ a analise de defeitos recorrentes e cria base para custos de garantia.
 
 ---
 
-## 14. Faturamento
+## 14. Atendimento ao Consumidor / SAC
+
+O SAC centraliza consumidores finais, contatos com clientes e chamados de
+reclamacao, sugestao, garantia ou vistoria. O historico fica rastreavel desde o
+primeiro contato ate a solucao, com anexos, checklist, retornos e responsavel.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Cadastrar consumidor final | Guarda PF/PJ, endereco, telefones, emails, contatos, segmento e origem do conhecimento |
+| Registrar historico com cliente | Grava contatos com data de abertura, agendamento, usuario, tipo e descricao |
+| Controlar chamados | Usa tipo de chamado, ligacao, motivo, responsavel, posicao e situacao |
+| Gerenciar vistorias | Exige data de solicitacao e separa vistorias pendentes e realizadas |
+| Manter evidencias | Permite anexos, retornos e checklist por chamado |
+| Medir atendimento | Relatorio mostra totais, pendentes, agendados, resolvidos, vistorias e tempo medio |
+
+### Como funciona
+
+O atendente cadastra ou localiza o consumidor, registra o contato e abre o
+chamado. Se o tipo for reclamacao, o sistema exige sintomas. Se a situacao for
+vistoria, exige a data de solicitacao e permite controlar a data de retorno.
+Cada interacao posterior entra como retorno do chamado, preservando o historico.
+
+### Beneficio operacional
+
+O atendimento deixa de ser uma anotacao solta e passa a virar base de qualidade,
+relacionamento e pos-venda. Isso facilita encontrar reincidencias, acompanhar
+responsaveis e comprovar o que foi combinado com o consumidor.
+
+---
+
+## 15. Vendas Recorrentes
+
+Vendas Recorrentes controla produtos ou servicos cobrados de forma mensal, como
+contratos, assinaturas, locacoes ou pacotes continuos. O comercial consegue ver o
+historico ativo e inativo por cliente, gerar pedido vinculado, acompanhar
+reajustes, cancelar uma recorrencia e projetar receita e comissoes futuras.
+
+### Para que serve
+
+| Necessidade | Como o sistema resolve |
+|---|---|
+| Controlar contratos mensais | Registra recorrencia por cliente, estabelecimento, item, plano e valor |
+| Separar vigencias | Trata prazo indeterminado com reajuste e prazo determinado com parcelas |
+| Rastrear comissoes | Vincula representantes, principal, percentual e prazo de pagamento |
+| Reajustar carteira | Simula impacto e grava reajustes por cliente/produto/plano |
+| Projetar receita | Mostra receita recorrente mensal futura por cliente e produto |
+| Projetar comissoes | Mostra comissoes futuras por representante e recorrencia |
+
+### Como funciona
+
+O usuario cadastra a venda recorrente, informa item, valor, vigencia, data de
+reajuste e representantes. Depois que o pedido de venda e gerado, a recorrencia
+passa a compor as consultas de receita e comissao futura. No reajuste, o sistema
+calcula a media das recorrencias elegiveis, aplica o percentual informado e grava
+um movimento de reajuste com vinculo aos registros de origem.
+
+A geracao de pedido usa o proprio fluxo de Pedido de Venda: cria a capa, cria as
+linhas mensais ou parcelas e grava o vinculo na recorrencia. Assim a venda
+recorrente entra na carteira comercial sem perder regras de pedido, credito,
+reserva, MRP e faturamento.
+
+### Beneficio operacional
+
+A carteira recorrente deixa de depender de planilhas. A empresa passa a enxergar
+receita mensal contratada, impacto de reajustes, cancelamentos, upgrades,
+downgrades e comissoes futuras antes do faturamento acontecer.
+
+---
+
+## 15. Faturamento
 
 Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de Saída (NF-e)**, o sistema executa em cadeia, automaticamente:
 
@@ -388,7 +459,7 @@ Com o produto disponível, o pedido é faturado. Ao **autorizar a Nota Fiscal de
 
 ---
 
-## 15. Expedição / Romaneio
+## 16. Expedição / Romaneio
 
 A expedição organiza a **saída física** da mercadoria por meio do **romaneio** (lista de carregamento):
 
@@ -404,7 +475,7 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 
 ---
 
-## 16. Glossário rápido
+## 17. Glossário rápido
 
 | Termo | Significado |
 |---|---|
@@ -421,6 +492,8 @@ A regra de **só despachar com tudo conferido** evita envio errado ou incompleto
 | **Promessa de entrega** | Data de entrega calculada com base em estoque e capacidade |
 | **Reprogramação** | Remarcação registrada de uma data de entrega |
 | **Assistencia Tecnica** | Fluxo de chamados, garantia, defeitos e documentos de atendimento |
+| **SAC** | Atendimento ao consumidor final com contatos, chamados, retornos, anexos e checklist |
+| **Venda recorrente** | Venda mensal controlada por vigencia, reajuste, pedido gerado e comissao futura |
 | **Romaneio** | Lista de carregamento usada na expedição |
 
 ## Novidades (2026-06)

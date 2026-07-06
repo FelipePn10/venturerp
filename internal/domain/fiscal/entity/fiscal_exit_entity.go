@@ -40,6 +40,12 @@ type FiscalExit struct {
 	ValorICMSST             float64
 	ValorTotal              float64
 	SalesOrderCode          *int64
+	SourceType              *string
+	ShipmentLoadCode        *int64
+	ShipmentCode            *int64
+	FiscalCouponNumber      *string
+	FiscalCouponDate        *time.Time
+	FiscalCouponECFSerial   *string
 	Status                  FiscalExitStatus
 	Protocolo               *string
 	XmlPath                 *string

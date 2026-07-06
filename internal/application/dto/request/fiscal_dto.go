@@ -91,6 +91,12 @@ type CreateFiscalExitDTO struct {
 	ValorSeguro             float64                   `json:"valor_seguro"`
 	ValorDesconto           float64                   `json:"valor_desconto"`
 	SalesOrderCode          *int64                    `json:"sales_order_code,omitempty"`
+	SourceType              *string                   `json:"source_type,omitempty"`
+	ShipmentLoadCode        *int64                    `json:"shipment_load_code,omitempty"`
+	ShipmentCode            *int64                    `json:"shipment_code,omitempty"`
+	FiscalCouponNumber      *string                   `json:"fiscal_coupon_number,omitempty"`
+	FiscalCouponDate        *string                   `json:"fiscal_coupon_date,omitempty"`
+	FiscalCouponECFSerial   *string                   `json:"fiscal_coupon_ecf_serial,omitempty"`
 	Itens                   []CreateFiscalExitItemDTO `json:"itens"`
 }
 
@@ -111,6 +117,38 @@ type CreateFiscalExitItemDTO struct {
 	MvaPct               float64 `json:"mva_pct,omitempty"`
 	AliqInternaDestinoST float64 `json:"aliq_interna_destino_st,omitempty"`
 	RedBaseSTPct         float64 `json:"red_base_st_pct,omitempty"`
+}
+
+type CreateFiscalExitFromLoadDTO struct {
+	LoadCode                int64                        `json:"load_code"`
+	Serie                   string                       `json:"serie"`
+	DataEmissao             string                       `json:"data_emissao"`
+	DataSaida               *string                      `json:"data_saida,omitempty"`
+	CnpjDestinatario        *string                      `json:"cnpj_destinatario,omitempty"`
+	RazaoSocialDestinatario *string                      `json:"razao_social_destinatario,omitempty"`
+	IEDestinatario          *string                      `json:"ie_destinatario,omitempty"`
+	UFDestinatario          *string                      `json:"uf_destinatario,omitempty"`
+	TipoPessoa              *string                      `json:"tipo_pessoa,omitempty"`
+	Cfop                    string                       `json:"cfop"`
+	NaturezaOperacao        string                       `json:"natureza_operacao"`
+	ValorFrete              float64                      `json:"valor_frete"`
+	ValorSeguro             float64                      `json:"valor_seguro"`
+	ValorDesconto           float64                      `json:"valor_desconto"`
+	OrigemMercadoria        string                       `json:"origem_mercadoria,omitempty"`
+	ItemOverrides           []FiscalExitLoadItemOverride `json:"item_overrides,omitempty"`
+}
+
+type FiscalExitLoadItemOverride struct {
+	ShipmentCode         *int64   `json:"shipment_code,omitempty"`
+	ItemCode             int64    `json:"item_code"`
+	UnitPrice            *float64 `json:"unit_price,omitempty"`
+	Ncm                  *string  `json:"ncm,omitempty"`
+	Cfop                 *string  `json:"cfop,omitempty"`
+	OrigemMercadoria     *string  `json:"origem_mercadoria,omitempty"`
+	Description          *string  `json:"description,omitempty"`
+	MvaPct               float64  `json:"mva_pct,omitempty"`
+	AliqInternaDestinoST float64  `json:"aliq_interna_destino_st,omitempty"`
+	RedBaseSTPct         float64  `json:"red_base_st_pct,omitempty"`
 }
 
 type UpdateFiscalConfigDTO struct {

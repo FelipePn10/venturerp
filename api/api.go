@@ -16,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_header_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cnpj_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/consumer_service_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
@@ -63,6 +64,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/recurring_sales_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representative_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
@@ -93,6 +95,7 @@ import (
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
 	apsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aps"
 	bomHeaderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_header"
+	consumerServiceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/consumer_service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
 	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
@@ -138,6 +141,7 @@ import (
 	qualityRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
 	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
+	recurringSalesRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/recurring_sales"
 	representativeRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/representative"
 	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
@@ -701,8 +705,10 @@ func (app *application) mount() chi.Router {
 	// Captured so the automatic credit check and stock reservation (ATP) can be
 	// attached once the customer/financial/stock repositories are available below.
 	changeStatusSalesOrderUC := &sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService, DemandRepo: independentDemandRepo}
+	createSalesOrderUC := &sales_order_uc.CreateSalesOrderUseCase{Repo: soRepo, Auth: authService}
+	createSalesOrderItemUC := &sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService}
 	salesOrderHandler := handler.NewSalesOrderHandler(
-		&sales_order_uc.CreateSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		createSalesOrderUC,
 		&sales_order_uc.UpdateSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.GetSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrdersUseCase{Repo: soRepo, Auth: authService},
@@ -719,7 +725,7 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.AttendSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ConferSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.SaveSalesOrderDelayReasonUseCase{Repo: soRepo, Auth: authService},
-		&sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
+		createSalesOrderItemUC,
 		&sales_order_uc.UpdateSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrderItemsUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.CancelSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
@@ -742,6 +748,18 @@ func (app *application) mount() chi.Router {
 		SalesOrders:      soRepo,
 		ProductionOrders: prodOrderRepo,
 		Auth:             authService,
+	})
+	consumerServiceRepository := consumerServiceRepo.New(app.db.Pool)
+	consumerServiceHandler := handler.NewConsumerServiceHandler(&consumer_service_uc.UseCase{
+		Repo: consumerServiceRepository,
+		Auth: authService,
+	})
+	recurringSalesRepository := recurringSalesRepo.New(app.db.Pool)
+	recurringSalesHandler := handler.NewRecurringSalesHandler(&recurring_sales_uc.UseCase{
+		Repo:            recurringSalesRepository,
+		Auth:            authService,
+		SalesOrders:     createSalesOrderUC,
+		SalesOrderItems: createSalesOrderItemUC,
 	})
 
 	// cutting plan (plano de corte — fase 1: 1D; fase 2: firmar/baixa + retalhos)
@@ -888,13 +906,20 @@ func (app *application) mount() chi.Router {
 	)
 
 	// fiscal module
+	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService}
 	fiscalHandler := handler.NewFiscalHandler(
 		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
+		createFiscalExitUC,
+		&fiscalUC.CreateFiscalExitFromLoadUseCase{
+			CreateUC:       createFiscalExitUC,
+			FiscalRepo:     fiscalRepository,
+			ShipmentRepo:   shipmentRepoPG,
+			SalesOrderRepo: soRepo,
+		},
 		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo},
 		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
@@ -1342,6 +1367,51 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls/{code}/generate-orders", technicalAssistanceHandler.GenerateOrders)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/calls/{code}/status", technicalAssistanceHandler.UpdateStatus)
 		})
+		r.Route("/api/consumer-service", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/call-types", consumerServiceHandler.CreateCallType)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/call-types", consumerServiceHandler.ListCallTypes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/knowledge-sources", consumerServiceHandler.CreateKnowledgeSource)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/knowledge-sources", consumerServiceHandler.ListKnowledgeSources)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consumers", consumerServiceHandler.CreateConsumer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consumers", consumerServiceHandler.ListConsumers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consumers/labels", consumerServiceHandler.ListConsumers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consumers/{code}", consumerServiceHandler.GetConsumer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/consumers/{code}", consumerServiceHandler.UpdateConsumer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consumers/{code}/phones", consumerServiceHandler.AddConsumerPhone)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consumers/{code}/emails", consumerServiceHandler.AddConsumerEmail)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consumers/{code}/contacts", consumerServiceHandler.AddConsumerContact)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/customer-contacts", consumerServiceHandler.CreateCustomerContact)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/customer-contacts", consumerServiceHandler.ListCustomerContacts)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/customer-contacts/report", consumerServiceHandler.ListCustomerContacts)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls", consumerServiceHandler.CreateCall)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calls", consumerServiceHandler.ListCalls)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calls/report", consumerServiceHandler.ReportCalls)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calls/labels", consumerServiceHandler.ListConsumers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calls/{code}", consumerServiceHandler.GetCall)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/calls/{code}", consumerServiceHandler.UpdateCall)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls/{code}/returns", consumerServiceHandler.AddCallReturn)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls/{code}/attachments", consumerServiceHandler.AddCallAttachment)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/calls/{code}/checklist", consumerServiceHandler.AddChecklistItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/calls/checklist/{itemCode}", consumerServiceHandler.SetChecklistItemDone)
+		})
+		r.Route("/api/recurring-sales", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN")).Put("/parameters", recurringSalesHandler.UpsertParameters)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters/{enterpriseCode}", recurringSalesHandler.GetParameters)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adjustment-dates", recurringSalesHandler.CreateAdjustmentDate)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/adjustment-dates", recurringSalesHandler.ListAdjustmentDates)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", recurringSalesHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", recurringSalesHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/monthly-revenue", recurringSalesHandler.RevenueProjection)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/future-commissions", recurringSalesHandler.CommissionProjection)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adjustments/calculate", recurringSalesHandler.CalculateAdjustment)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", recurringSalesHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", recurringSalesHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/representatives", recurringSalesHandler.AddRepresentative)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/generate-order", recurringSalesHandler.MarkOrderGenerated)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/generated-order", recurringSalesHandler.ClearGeneratedOrder)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/cancel", recurringSalesHandler.Cancel)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/recalculate-adjustment", recurringSalesHandler.RecalculateAdjustment)
+		})
 		r.Route("/api/representatives", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", representativeHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", representativeHandler.List)
@@ -1521,6 +1591,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/list", fiscalHandler.ListEntries)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}", fiscalHandler.GetEntry)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/create", fiscalHandler.CreateExit)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/from-load", fiscalHandler.CreateExitFromLoad)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/authorize", fiscalHandler.AuthorizeExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/cancel", fiscalHandler.CancelExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/carta-correcao", fiscalHandler.EmitirCCe)
@@ -1809,6 +1880,26 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/run-pipeline", planningHandler.RunPipeline)
 		})
 		r.Route("/api/shipments", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads", shipmentHandler.CreateLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/loads", shipmentHandler.ListLoads)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/loads/monitor", shipmentHandler.LoadMonitor)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/loads/separation-monitor", shipmentHandler.SeparationMonitor)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/loads/logistic-panel", shipmentHandler.LogisticPanel)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/loads/{loadCode}", shipmentHandler.GetLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/shipments", shipmentHandler.AddShipmentToLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/loads/{loadCode}/shipments/{shipmentCode}", shipmentHandler.RemoveShipmentFromLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/fiscal-notes", shipmentHandler.AddFiscalNoteToLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/release", shipmentHandler.ReleaseLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/start-loading", shipmentHandler.StartLoading)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/finish-loading", shipmentHandler.FinishLoading)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/ship", shipmentHandler.ShipLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/cancel", shipmentHandler.CancelLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads/{loadCode}/box", shipmentHandler.AssignBoxToLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/delivery-instructions", shipmentHandler.CreateDeliveryInstruction)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/delivery-instructions", shipmentHandler.ListDeliveryInstructions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/dispatch-boxes", shipmentHandler.CreateDispatchBox)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/dispatch-boxes", shipmentHandler.ListDispatchBoxes)
+
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", shipmentHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", shipmentHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", shipmentHandler.Get)

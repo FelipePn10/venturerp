@@ -222,14 +222,18 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 			 cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 			 cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
 			 valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
-			 sales_order_code, status, created_by, base_icms_st, valor_icms_st)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+			 sales_order_code, status, created_by, base_icms_st, valor_icms_st,
+			 source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
+			 fiscal_coupon_date, fiscal_coupon_ecf_serial)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.DataEmissao, e.DataSaida,
 		e.CnpjDestinatario, e.RazaoSocialDestinatario, e.IEDestinatario, e.UFDestinatario,
 		e.Cfop, e.NaturezaOperacao, e.ValorProdutos, e.ValorFrete, e.ValorSeguro, e.ValorDesconto,
 		e.ValorIPI, e.ValorICMS, e.ValorPIS, e.ValorCOFINS, e.ValorTotal,
 		e.SalesOrderCode, e.Status, e.CreatedBy, e.BaseICMSST, e.ValorICMSST,
+		e.SourceType, e.ShipmentLoadCode, e.ShipmentCode, e.FiscalCouponNumber,
+		e.FiscalCouponDate, e.FiscalCouponECFSerial,
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit: %w", err)
@@ -267,14 +271,18 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		        cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
-		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st
+		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
+		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
+		        fiscal_coupon_date, fiscal_coupon_ecf_serial
 		 FROM public.fiscal_exits WHERE id = $1`, id,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
 		&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 		&e.SalesOrderCode, &e.Status, &e.Protocolo, &e.XmlPath, &e.DanfePath, &e.FocusRef,
-		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST)
+		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST,
+		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
+		&e.FiscalCouponDate, &e.FiscalCouponECFSerial)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("fiscal exit %d not found", id)
@@ -306,7 +314,9 @@ func (r *FiscalRepositoryPG) ListExits(ctx context.Context) ([]*entity.FiscalExi
 		        cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
-		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st
+		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
+		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
+		        fiscal_coupon_date, fiscal_coupon_ecf_serial
 		 FROM public.fiscal_exits ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exits: %w", err)
@@ -322,7 +332,9 @@ func (r *FiscalRepositoryPG) ListExitsByStatus(ctx context.Context, status entit
 		        cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
-		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st
+		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
+		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
+		        fiscal_coupon_date, fiscal_coupon_ecf_serial
 		 FROM public.fiscal_exits WHERE status = $1 ORDER BY created_at DESC`, status)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exits by status: %w", err)
@@ -340,14 +352,18 @@ func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, sta
 		           cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		           valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		           sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
-		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st`,
+		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
+		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
+		           fiscal_coupon_date, fiscal_coupon_ecf_serial`,
 		status, id,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
 		&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 		&e.SalesOrderCode, &e.Status, &e.Protocolo, &e.XmlPath, &e.DanfePath, &e.FocusRef,
-		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST)
+		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST,
+		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
+		&e.FiscalCouponDate, &e.FiscalCouponECFSerial)
 	if err != nil {
 		return nil, fmt.Errorf("updating fiscal exit status: %w", err)
 	}
@@ -368,14 +384,18 @@ func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int
 		           cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		           valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		           sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
-		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st`,
+		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
+		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
+		           fiscal_coupon_date, fiscal_coupon_ecf_serial`,
 		chaveAcesso, protocolo, focusRef, id, xmlPath, danfePath,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
 		&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 		&e.SalesOrderCode, &e.Status, &e.Protocolo, &e.XmlPath, &e.DanfePath, &e.FocusRef,
-		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST)
+		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST,
+		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
+		&e.FiscalCouponDate, &e.FiscalCouponECFSerial)
 	if err != nil {
 		return nil, fmt.Errorf("updating fiscal exit authorization: %w", err)
 	}
@@ -393,6 +413,8 @@ func scanExits(rows pgx.Rows) ([]*entity.FiscalExit, error) {
 			&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 			&e.SalesOrderCode, &e.Status, &e.Protocolo, &e.XmlPath, &e.DanfePath, &e.FocusRef,
 			&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST,
+			&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
+			&e.FiscalCouponDate, &e.FiscalCouponECFSerial,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit: %w", err)
 		}
@@ -699,14 +721,18 @@ func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64,
 		           cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		           valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		           sales_order_code, status, protocolo, xml_path, danfe_path, focus_ref,
-		           is_active, created_at, updated_at, created_by`,
+		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
+		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
+		           fiscal_coupon_date, fiscal_coupon_ecf_serial`,
 		motivo, userID, id,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
 		&e.ValorIPI, &e.ValorICMS, &e.ValorPIS, &e.ValorCOFINS, &e.ValorTotal,
 		&e.SalesOrderCode, &e.Status, &e.Protocolo, &e.XmlPath, &e.DanfePath, &e.FocusRef,
-		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy)
+		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.BaseICMSST, &e.ValorICMSST,
+		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
+		&e.FiscalCouponDate, &e.FiscalCouponECFSerial)
 	if err != nil {
 		return nil, fmt.Errorf("cancelling fiscal exit with motivo: %w", err)
 	}

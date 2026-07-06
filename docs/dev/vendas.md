@@ -1087,7 +1087,200 @@ Migration `000193_technical_assistance` cria:
 
 ---
 
-## 11. Expedição / Romaneio (`/api/shipments`) — migration 000146
+## 11. Atendimento ao Consumidor / SAC (`/api/consumer-service`)
+
+Modulo comercial para centralizar consumidores finais, contatos com clientes e
+chamados de SAC. A fase cobre as rotinas equivalentes a cadastro de consumidores,
+historico de contatos, cadastro/consulta/relatorio de chamados e etiquetas de
+consumidores.
+
+### Cadastros auxiliares
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/call-types` | Cria tipo de chamado |
+| GET | `/call-types` | Lista tipos de chamados |
+| POST | `/knowledge-sources` | Cria local/meio de conhecimento |
+| GET | `/knowledge-sources` | Lista locais/meios de conhecimento |
+
+`call_types.is_complaint=true` habilita o comportamento de reclamação: o chamado
+passa a exigir sintomas e permite registrar loja de venda, estabelecimento,
+tecnico e loja encaminhada.
+
+### Consumidores
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/consumers` | Cadastra consumidor final |
+| GET | `/consumers?search=&state=&city=` | Consulta consumidores |
+| GET | `/consumers/{code}` | Consulta consumidor com telefones, emails e contatos |
+| PUT | `/consumers/{code}` | Atualiza cadastro |
+| POST | `/consumers/{code}/phones` | Adiciona telefone |
+| POST | `/consumers/{code}/emails` | Adiciona email |
+| POST | `/consumers/{code}/contacts` | Adiciona contato |
+| GET | `/consumers/labels` | Base de etiquetas de consumidores por filtros |
+
+Regras: pessoa fisica (`F`) nao aceita CNPJ e pessoa juridica (`J`) nao aceita
+CPF. O cadastro guarda endereco, segmento, local de conhecimento, contatos,
+telefones e emails.
+
+### Contatos com cliente
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/customer-contacts` | Registra contato/historico imutavel |
+| GET | `/customer-contacts?customer_code=&from=&to=` | Consulta historico |
+| GET | `/customer-contacts/report` | Layout de relatorio do historico |
+
+Depois de gravado, o contato e tratado como historico: nao ha rota de alteracao
+ou exclusao.
+
+### Chamados
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/calls` | Abre chamado |
+| GET | `/calls` | Consulta chamados por filtros |
+| GET | `/calls/{code}` | Consulta chamado detalhado |
+| PUT | `/calls/{code}` | Atualiza posicao/situacao/solucao |
+| POST | `/calls/{code}/returns` | Registra retorno/contato no chamado |
+| POST | `/calls/{code}/attachments` | Vincula anexo |
+| POST | `/calls/{code}/checklist` | Inclui item de checklist |
+| PATCH | `/calls/checklist/{itemCode}` | Marca/desmarca checklist |
+| GET | `/calls/report` | Indicadores de chamados |
+
+Valores principais:
+
+- `direction`: `RECEIVED`, `MADE`, `WARRANTY`;
+- `position`: `PENDING`, `SCHEDULED`, `RESOLVED`;
+- `situation`: `OTHER`, `ORDER`, `DISCONTINUED_ORDER`, `TECHNICAL_VISIT`.
+
+Quando a situacao e `TECHNICAL_VISIT`, `visit_requested_date` e obrigatoria e o
+filtro `visit_state=PENDING|RETURNED` permite separar vistorias pendentes e
+realizadas. O relatorio retorna totais por posicao, vistorias e tempo medio de
+resolucao.
+
+### Persistência
+
+Migration `000194_consumer_service` cria:
+
+- `consumer_service_call_types`;
+- `consumer_service_knowledge_sources`;
+- `consumer_service_consumers`;
+- `consumer_service_consumer_contacts`;
+- `consumer_service_consumer_phones`;
+- `consumer_service_consumer_emails`;
+- `consumer_service_customer_contacts`;
+- `consumer_service_calls`;
+- `consumer_service_call_returns`;
+- `consumer_service_call_attachments`;
+- `consumer_service_call_checklist_items`.
+
+### Testes
+
+- `go test ./internal/application/usecase/consumer_service_uc`
+- `scripts/test-comercial-sac.sh`
+
+---
+
+## 12. Vendas Recorrentes (`/api/recurring-sales`)
+
+Modulo comercial para cadastrar e controlar produtos ou servicos vendidos com
+cobranca mensal por cliente/estabelecimento. Cobre console de recorrencias,
+datas de reajuste, geracao rastreada de pedido de venda, cancelamento,
+downgrade/reajuste por movimento, consulta de receita recorrente mensal e
+consulta de comissoes futuras.
+
+### Parametros
+
+| Método | Rota | Ação |
+|---|---|---|
+| PUT | `/parameters` | Configura parametros por empresa |
+| GET | `/parameters/{enterpriseCode}` | Consulta parametros por empresa |
+
+Parametros principais: dia limite para cobrar no mes corrente, agrupamento de
+quantidade/valor no item do pedido, dia de entrega para vigencia indeterminada,
+dia de entrega para vigencia determinada, incidencia de descontos/acrescimos nas
+projecoes e representante/plano genericos para contingencia.
+
+### Console e cadastro
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/create` | Cria recorrencia dos tipos `SALE` ou `UPGRADE` |
+| GET | `/list?customer_code=&movement_type=&active=` | Console/consulta de recorrencias |
+| GET | `/{code}` | Consulta recorrencia detalhada |
+| PUT | `/{code}` | Atualiza dados comerciais da recorrencia |
+| POST | `/{code}/representatives` | Adiciona representante/comissao |
+| POST | `/{code}/generate-order` | Gera pedido de venda real ou vincula `order_code` informado |
+| DELETE | `/{code}/generated-order` | Remove vinculo de pedido gerado |
+| POST | `/{code}/cancel` | Gera movimento de cancelamento e inativa origem |
+
+Tipos de movimento: `SALE`, `UPGRADE`, `DOWNGRADE`, `ADJUSTMENT`,
+`RECALCULATION`, `CANCELLATION`. Apenas `SALE` e `UPGRADE` entram por cadastro
+direto; os demais sao resultado de processo.
+
+Tipos de vigencia: `INDEFINITE` exige `next_adjustment_date`; `FIXED` exige
+`months_quantity`, `payments_quantity` e `payment_value`. Quando ha carencia,
+`payments_quantity` deve ser maior que `grace_months`.
+
+Cada recorrencia exige pelo menos um representante e exatamente um principal. A
+comissao pode ser vitalicia ou por quantidade determinada de parcelas, e a base
+pode ser `ORIGINAL` ou `ADJUSTED`.
+
+Na geracao do pedido, quando `order_code` nao e informado, o ERP cria a capa do
+pedido e os itens usando o modulo de Pedido de Venda existente. A capa recebe
+cliente, representante principal, plano de venda, comissao, data de venda,
+observacao de origem recorrente e status `R` por padrao (`confirm_order=true`
+gera status `P`). Para vigencia indeterminada, sao criadas linhas mensais da
+primeira cobranca ate o mes anterior ao proximo reajuste; para vigencia
+determinada, sao criadas as parcelas pagas apos a carencia. O parametro de
+agrupamento gera quantidade `1` com valor total da recorrencia quando ativo.
+
+### Reajustes
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/adjustment-dates` | Cadastra data de reajuste por cliente/estabelecimento |
+| GET | `/adjustment-dates` | Lista datas por filtros |
+| POST | `/adjustments/calculate` | Simula ou confirma reajuste |
+| POST | `/{code}/recalculate-adjustment` | Recalcula percentual de movimento de reajuste |
+
+O calculo de reajuste considera recorrencias ativas de vigencia indeterminada
+com pedido gerado, na data de reajuste informada, agrupadas por empresa, cliente,
+estabelecimento, item, mascara e plano de venda. Com `confirm=false`, retorna
+impacto sem gravar. Com `confirm=true`, grava movimento `ADJUSTMENT` e vincula as
+recorrencias de origem em `recurring_sales_adjustment_links`.
+
+### Consultas gerenciais
+
+| Método | Rota | Ação |
+|---|---|---|
+| GET | `/monthly-revenue?from=&to=&customer_code=&item_code=&adjustment_percent=` | Projecao mensal de receita recorrente |
+| GET | `/future-commissions?from=&to=&representative_code=&adjustment_percent=` | Projecao de comissoes futuras |
+
+As projecoes usam recorrencias ativas com pedido gerado. A receita retorna linhas
+mes a mes por cliente/produto/recorrencia; comissoes quebram por representante e
+respeitam a base `ORIGINAL` ou `ADJUSTED`.
+
+### Persistência
+
+Migration `000195_recurring_sales` cria:
+
+- `recurring_sales_parameters`;
+- `recurring_sales_adjustment_dates`;
+- `recurring_sales`;
+- `recurring_sales_representatives`;
+- `recurring_sales_adjustment_links`.
+
+### Testes
+
+- `go test ./internal/application/usecase/recurring_sales_uc`
+- `scripts/test-comercial-vendas-recorrentes.sh`
+
+---
+
+## 12. Expedição / Romaneio (`/api/shipments`)
 
 | Método | Rota | Ação |
 |---|---|---|

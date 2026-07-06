@@ -32,6 +32,12 @@ type FiscalExitResponse struct {
 	ValorICMSST             float64                  `json:"valor_icms_st"`
 	ValorTotal              float64                  `json:"valor_total"`
 	SalesOrderCode          *int64                   `json:"sales_order_code,omitempty"`
+	SourceType              *string                  `json:"source_type,omitempty"`
+	ShipmentLoadCode        *int64                   `json:"shipment_load_code,omitempty"`
+	ShipmentCode            *int64                   `json:"shipment_code,omitempty"`
+	FiscalCouponNumber      *string                  `json:"fiscal_coupon_number,omitempty"`
+	FiscalCouponDate        *time.Time               `json:"fiscal_coupon_date,omitempty"`
+	FiscalCouponECFSerial   *string                  `json:"fiscal_coupon_ecf_serial,omitempty"`
 	Status                  string                   `json:"status"`
 	Protocolo               *string                  `json:"protocolo,omitempty"`
 	XmlPath                 *string                  `json:"xml_path,omitempty"`

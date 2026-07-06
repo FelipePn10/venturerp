@@ -32,13 +32,13 @@ if [[ -n "${BASE_URL:-}" && -n "${TOKEN:-}" ]]; then
   curl -fsS "${BASE_URL}/api/sales-quotation/report?purchase_order_number=OC-FOCCO-SMOKE" -H "$AUTH_HEADER" >/dev/null
   curl -fsS -X DELETE "${BASE_URL}/api/sales-quotation/${QUOTE_CODE}/cancel" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d '{"reason":"Teste FPDV0205 ORC","complement":"Cancelamento com histórico"}' >/dev/null
+    -d '{"reason":"Teste de cancelamento de orçamento","complement":"Cancelamento com histórico"}' >/dev/null
   curl -fsS -X POST "${BASE_URL}/api/sales-quotation/${QUOTE_CODE}/uncancel" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d '{"reason":"Teste FPDV0205 ORC","complement":"Descancelamento autorizado"}' >/dev/null
+    -d '{"reason":"Teste de descancelamento de orçamento","complement":"Descancelamento autorizado"}' >/dev/null
   curl -fsS -X POST "${BASE_URL}/api/sales-quotation/${QUOTE_CODE}/attend" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d '{"reason":"Teste FPDV0205 ORC","complement":"Atendimento manual do orçamento"}' >/dev/null
+    -d '{"reason":"Teste de atendimento de orçamento","complement":"Atendimento manual do orçamento"}' >/dev/null
 else
   echo "BASE_URL/TOKEN nao definidos; smoke HTTP ignorado."
 fi

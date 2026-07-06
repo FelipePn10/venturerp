@@ -3374,6 +3374,157 @@ type ConfiguredItemRule struct {
 	Code      pgtype.Int8
 }
 
+type ConsumerServiceCall struct {
+	Code                  int64
+	CallNumber            int64
+	EnterpriseCode        int64
+	ConsumerCode          int64
+	CustomerCode          *int64
+	CallTypeCode          int64
+	Direction             string
+	InWarranty            bool
+	DefectGroupCode       *int64
+	DefectReasonCode      *int64
+	ResponsibleUserCode   *int64
+	Position              string
+	Situation             string
+	OpenedAt              pgtype.Timestamptz
+	ReturnDate            pgtype.Date
+	VisitRequestedDate    pgtype.Date
+	VisitReturnedDate     pgtype.Date
+	SaleStoreCode         *int64
+	EstablishmentCode     *int64
+	TechnicianDescription pgtype.Text
+	Symptoms              pgtype.Text
+	ForwardedStoreCode    *int64
+	Subject               string
+	Description           pgtype.Text
+	Solution              pgtype.Text
+	ChecklistCode         *int64
+	IsActive              bool
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+	CreatedBy             pgtype.UUID
+}
+
+type ConsumerServiceCallAttachment struct {
+	Code        int64
+	CallCode    int64
+	FileName    string
+	FilePath    string
+	ContentType pgtype.Text
+	Notes       pgtype.Text
+	CreatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type ConsumerServiceCallChecklistItem struct {
+	Code        int64
+	CallCode    int64
+	Sequence    int32
+	Description string
+	IsDone      bool
+	DoneAt      pgtype.Timestamptz
+	Notes       pgtype.Text
+	CreatedAt   pgtype.Timestamptz
+}
+
+type ConsumerServiceCallReturn struct {
+	Code         int64
+	CallCode     int64
+	ContactedAt  pgtype.Timestamptz
+	ContactType  string
+	Description  string
+	NextReturnAt pgtype.Date
+	UserCode     *int64
+	CreatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+}
+
+type ConsumerServiceCallType struct {
+	Code        int64
+	Description string
+	IsComplaint bool
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type ConsumerServiceConsumer struct {
+	Code              int64
+	Name              string
+	IsActive          bool
+	PersonType        string
+	Cpf               pgtype.Text
+	Rg                pgtype.Text
+	Cnpj              pgtype.Text
+	StateRegistration pgtype.Text
+	ZipCode           pgtype.Text
+	City              pgtype.Text
+	State             pgtype.Text
+	Address           pgtype.Text
+	AddressNumber     pgtype.Text
+	Complement        pgtype.Text
+	District          pgtype.Text
+	MarketSegmentCode *int64
+	KnowledgeCode     *int64
+	Notes             pgtype.Text
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+}
+
+type ConsumerServiceConsumerContact struct {
+	Code         int64
+	ConsumerCode int64
+	Name         string
+	Role         pgtype.Text
+	ContactType  pgtype.Text
+	Notes        pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+}
+
+type ConsumerServiceConsumerEmail struct {
+	Code         int64
+	ConsumerCode int64
+	ContactCode  *int64
+	Email        string
+	IsPrimary    bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type ConsumerServiceConsumerPhone struct {
+	Code         int64
+	ConsumerCode int64
+	ContactCode  *int64
+	PhoneType    string
+	Number       string
+	IsPrimary    bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type ConsumerServiceCustomerContact struct {
+	Code         int64
+	CustomerCode int64
+	OpenedAt     pgtype.Timestamptz
+	ScheduledAt  pgtype.Timestamptz
+	UserCode     *int64
+	ContactType  string
+	Description  string
+	CreatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+}
+
+type ConsumerServiceKnowledgeSource struct {
+	Code        int64
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
 type ContasBancaria struct {
 	ID           int64
 	Banco        string
@@ -3764,6 +3915,29 @@ type DeliveryReschedule struct {
 	Reason         pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
+}
+
+type DeliveryTankReservation struct {
+	ID             int64
+	Code           int64
+	CustomerCode   *int64
+	ItemCode       int64
+	Mask           string
+	TankCode       int64
+	RequestedQty   pgtype.Numeric
+	ReservedQty    pgtype.Numeric
+	AllocationDate pgtype.Date
+	ExpiresAt      pgtype.Date
+	Status         string
+	Notes          pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+}
+
+type DeliveryTankReservationSequence struct {
+	ID       int64
+	LastCode int64
 }
 
 type EmployeeLegacy struct {
@@ -5950,6 +6124,78 @@ type ReceivingNoticeItem struct {
 	Notes                 pgtype.Text
 }
 
+type RecurringSale struct {
+	Code                    int64
+	EnterpriseCode          int64
+	CustomerCode            int64
+	EstablishmentCode       *int64
+	ItemCode                int64
+	ItemMask                pgtype.Text
+	SalesPlanCode           *int64
+	MovementType            string
+	TermType                string
+	SaleDate                pgtype.Date
+	NextAdjustmentDate      pgtype.Date
+	MonthsQuantity          *int32
+	PaymentsQuantity        *int32
+	GraceMonths             int32
+	PaymentValue            pgtype.Numeric
+	Quantity                pgtype.Numeric
+	UnitValue               pgtype.Numeric
+	Reason                  pgtype.Text
+	GeneratedOrderCode      *int64
+	GeneratedOrderAt        pgtype.Timestamptz
+	SourceRecurringSaleCode *int64
+	OriginalAdjustmentCode  *int64
+	AdjustmentPercent       pgtype.Numeric
+	IsActive                bool
+	CreatedAt               pgtype.Timestamptz
+	UpdatedAt               pgtype.Timestamptz
+	CreatedBy               pgtype.UUID
+}
+
+type RecurringSalesAdjustmentDate struct {
+	Code              int64
+	EnterpriseCode    int64
+	CustomerCode      int64
+	EstablishmentCode *int64
+	AdjustmentDate    pgtype.Date
+	Notes             pgtype.Text
+	CreatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+}
+
+type RecurringSalesAdjustmentLink struct {
+	AdjustmentCode          int64
+	SourceRecurringSaleCode int64
+	CreatedAt               pgtype.Timestamptz
+}
+
+type RecurringSalesParameter struct {
+	EnterpriseCode              int64
+	CurrentMonthBillingLimitDay int32
+	GroupOrderItemTotal         bool
+	IndefiniteDeliveryDay       int32
+	FixedTermDeliveryDay        int32
+	ConsiderDiscountsAdditions  bool
+	GenericRepresentativeCode   *int64
+	GenericSalesPlanCode        *int64
+	UpdatedAt                   pgtype.Timestamptz
+	UpdatedBy                   pgtype.UUID
+}
+
+type RecurringSalesRepresentative struct {
+	Code                   int64
+	RecurringSaleCode      int64
+	RepresentativeCode     int64
+	IsPrimary              bool
+	CommissionPercent      pgtype.Numeric
+	CommissionBase         string
+	IsLifetime             bool
+	CommissionInstallments *int32
+	CreatedAt              pgtype.Timestamptz
+}
+
 type Region struct {
 	ID          int64
 	Code        int64
@@ -6727,6 +6973,30 @@ type Shipment struct {
 	UpdatedBy           pgtype.UUID
 }
 
+type ShipmentDeliveryInstruction struct {
+	ID          int64
+	LoadID      *int64
+	CustomerID  *int64
+	Title       string
+	Instruction string
+	Priority    int32
+	Active      bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type ShipmentDispatchBox struct {
+	ID          int64
+	Code        string
+	Description pgtype.Text
+	WarehouseID *int64
+	Zone        pgtype.Text
+	Active      bool
+	CurrentLoad *int64
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type ShipmentEvent struct {
 	ID         int64
 	ShipmentID int64
@@ -6750,6 +7020,63 @@ type ShipmentItem struct {
 	CreatedAt          pgtype.Timestamptz
 	UnitNetWeight      pgtype.Numeric
 	UnitGrossWeight    pgtype.Numeric
+}
+
+type ShipmentLoad struct {
+	ID                int64
+	Code              int64
+	Status            string
+	Description       pgtype.Text
+	CarrierCode       *int64
+	VehiclePlate      pgtype.Text
+	DriverName        pgtype.Text
+	DriverDocument    pgtype.Text
+	RouteCode         pgtype.Text
+	Origin            pgtype.Text
+	Destination       pgtype.Text
+	DispatchBoxCode   pgtype.Text
+	PlannedShipDate   pgtype.Date
+	EstimatedDelivery pgtype.Date
+	StartedLoadingAt  pgtype.Timestamptz
+	LoadedAt          pgtype.Timestamptz
+	ReleasedAt        pgtype.Timestamptz
+	ShippedAt         pgtype.Timestamptz
+	CancelledAt       pgtype.Timestamptz
+	TotalShipments    int32
+	TotalFiscalNotes  int32
+	TotalVolumes      int32
+	TotalNetWeight    pgtype.Numeric
+	TotalGrossWeight  pgtype.Numeric
+	TotalCubageM3     pgtype.Numeric
+	Notes             pgtype.Text
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+	UpdatedBy         pgtype.UUID
+}
+
+type ShipmentLoadFiscalNote struct {
+	ID           int64
+	LoadID       int64
+	ShipmentID   *int64
+	FiscalExitID int64
+	NfeNumber    *int64
+	NfeKey       pgtype.Text
+	Sequence     int32
+	CreatedAt    pgtype.Timestamptz
+}
+
+type ShipmentLoadSequence struct {
+	ID         int64
+	LastNumber int64
+}
+
+type ShipmentLoadShipment struct {
+	ID         int64
+	LoadID     int64
+	ShipmentID int64
+	Sequence   int32
+	CreatedAt  pgtype.Timestamptz
 }
 
 type ShipmentSequence struct {
@@ -7300,6 +7627,126 @@ type TaxType struct {
 	IsConsumer                    bool
 	IsActive                      bool
 	CreatedAt                     pgtype.Timestamptz
+}
+
+type TechnicalAssistanceCall struct {
+	Code                    int64
+	CallNumber              int64
+	EnterpriseCode          int64
+	CustomerCode            int64
+	ConsumerName            pgtype.Text
+	ConsumerDocument        pgtype.Text
+	TechnicalAssistantCode  *int64
+	WarrantyResponsibleCode *int64
+	Status                  string
+	Priority                string
+	OpenedAt                pgtype.Timestamptz
+	PromisedDate            pgtype.Date
+	AttendedAt              pgtype.Timestamptz
+	ClosedAt                pgtype.Timestamptz
+	Subject                 string
+	Description             pgtype.Text
+	Diagnosis               pgtype.Text
+	Solution                pgtype.Text
+	ReturnNoteRequired      bool
+	SalesOrderCode          *int64
+	ProductionOrderID       *int64
+	ServiceInvoiceNumber    pgtype.Text
+	CloseReason             pgtype.Text
+	IsActive                bool
+	CreatedAt               pgtype.Timestamptz
+	UpdatedAt               pgtype.Timestamptz
+	CreatedBy               pgtype.UUID
+}
+
+type TechnicalAssistanceCallItem struct {
+	Code                  int64
+	CallCode              int64
+	Sequence              int32
+	ItemCode              int64
+	Mask                  string
+	SerialNumber          pgtype.Text
+	Quantity              pgtype.Numeric
+	DefectReasonCode      *int64
+	DefectComplement      pgtype.Text
+	PurchaseInvoiceNumber pgtype.Text
+	PurchaseInvoiceDate   pgtype.Date
+	WarrantyDays          int32
+	WarrantyUntil         pgtype.Date
+	InWarranty            bool
+	GeneratesRevenue      bool
+	RequestedAction       string
+	Status                string
+	Notes                 pgtype.Text
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+}
+
+type TechnicalAssistanceDefectGroup struct {
+	Code        int64
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type TechnicalAssistanceDefectReason struct {
+	Code                     int64
+	GroupCode                int64
+	Description              string
+	AllowsComplement         bool
+	GeneratesRevenue         bool
+	RequiresReturnNote       bool
+	GeneratesSalesOrder      bool
+	GeneratesProductionOrder bool
+	IsReplacement            bool
+	IsService                bool
+	AvailableWeb             bool
+	IsActive                 bool
+	CreatedAt                pgtype.Timestamptz
+	UpdatedAt                pgtype.Timestamptz
+	CreatedBy                pgtype.UUID
+}
+
+type TechnicalAssistanceOrderLink struct {
+	Code              int64
+	CallCode          int64
+	CallItemCode      *int64
+	GeneratedType     string
+	SalesOrderCode    *int64
+	ProductionOrderID *int64
+	GeneratedAt       pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+	Notes             pgtype.Text
+}
+
+type TechnicalAssistanceReturnNote struct {
+	Code          int64
+	CallCode      int64
+	NoteNumber    string
+	NoteSeries    pgtype.Text
+	EmissionDate  pgtype.Date
+	CustomerCode  *int64
+	OperationType string
+	AccessKey     pgtype.Text
+	TotalValue    pgtype.Numeric
+	Notes         pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+	CreatedBy     pgtype.UUID
+}
+
+type TechnicalAssistanceWarrantyResponsible struct {
+	Code         int64
+	Name         string
+	EmployeeCode *int64
+	CustomerCode *int64
+	Email        pgtype.Text
+	Phone        pgtype.Text
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
 }
 
 type Tool struct {

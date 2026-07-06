@@ -313,6 +313,8 @@ implementados**. O quadro abaixo resume o que passou a existir:
 | **Adiantamentos a fornecedores/clientes** | Novo controle de **adiantamentos**: registra o pagamento/recebimento antecipado (com movimento de caixa), acompanha o saldo e **aplica o adiantamento** sobre as contas a pagar/receber, quitando-as total ou parcialmente. |
 | **DANFE e XML** | O sistema **disponibiliza os links** do DANFE (PDF) e do XML da nota autorizada na própria consulta de status — prontos para download, envio ao cliente e guarda. |
 | **Boletos por banco (CNAB 240)** | O arquivo de remessa usa um **perfil por banco** (Itaú, Bradesco, Santander, Banco do Brasil e Caixa), ajustando carteira, espécie do título e versões de layout, além de gravar o código do banco nos totalizadores. |
+| **Faturamento por carga** | A expedição monta a carga com romaneios e o faturamento gera a NF-e diretamente dessa carga, vinculando nota, romaneio e carga sem redigitação. |
+| **Cupom/NFC-e rastreável** | NF-e gerada a partir de cupom fiscal, NFC-e ou CF-e guarda número do cupom, data e série/equipamento de origem para consulta e auditoria. |
 
 > **Importante:** os documentos fiscais eletrônicos (NF-e, NFS-e, CT-e) e os boletos
 > **devem sempre ser homologados** com a SEFAZ, com a prefeitura e com o banco antes do

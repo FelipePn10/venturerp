@@ -3,6 +3,7 @@ package shipment_uc
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
 )
 
 func toShipmentResponse(s *entity.Shipment) *response.ShipmentResponse {
@@ -145,4 +146,243 @@ func toShipmentEventResponses(events []*entity.ShipmentEvent) []*response.Shipme
 		})
 	}
 	return out
+}
+
+func toShipmentLoadResponse(l *entity.ShipmentLoad) *response.ShipmentLoadResponse {
+	if l == nil {
+		return nil
+	}
+	return &response.ShipmentLoadResponse{
+		ID:                l.ID,
+		Code:              l.Code,
+		Status:            string(l.Status),
+		Description:       l.Description,
+		CarrierCode:       l.CarrierCode,
+		VehiclePlate:      l.VehiclePlate,
+		DriverName:        l.DriverName,
+		DriverDocument:    l.DriverDocument,
+		RouteCode:         l.RouteCode,
+		Origin:            l.Origin,
+		Destination:       l.Destination,
+		DispatchBoxCode:   l.DispatchBoxCode,
+		PlannedShipDate:   l.PlannedShipDate,
+		EstimatedDelivery: l.EstimatedDelivery,
+		StartedLoadingAt:  l.StartedLoadingAt,
+		LoadedAt:          l.LoadedAt,
+		ReleasedAt:        l.ReleasedAt,
+		ShippedAt:         l.ShippedAt,
+		CancelledAt:       l.CancelledAt,
+		TotalShipments:    l.TotalShipments,
+		TotalFiscalNotes:  l.TotalFiscalNotes,
+		TotalVolumes:      l.TotalVolumes,
+		TotalNetWeight:    l.TotalNetWeight,
+		TotalGrossWeight:  l.TotalGrossWeight,
+		TotalCubageM3:     l.TotalCubageM3,
+		Notes:             l.Notes,
+		CreatedAt:         l.CreatedAt,
+		UpdatedAt:         l.UpdatedAt,
+		CreatedBy:         l.CreatedBy,
+		Shipments:         toShipmentLoadShipmentValues(l.Shipments),
+		FiscalNotes:       toShipmentLoadFiscalNoteValues(l.FiscalNotes),
+		Instructions:      toDeliveryInstructionValues(l.Instructions),
+	}
+}
+
+func toShipmentLoadResponses(list []*entity.ShipmentLoad) []*response.ShipmentLoadResponse {
+	out := make([]*response.ShipmentLoadResponse, 0, len(list))
+	for _, l := range list {
+		out = append(out, toShipmentLoadResponse(l))
+	}
+	return out
+}
+
+func toShipmentLoadShipmentResponse(s *entity.ShipmentLoadShipment) *response.ShipmentLoadShipmentResponse {
+	if s == nil {
+		return nil
+	}
+	return &response.ShipmentLoadShipmentResponse{
+		ID:           s.ID,
+		LoadID:       s.LoadID,
+		LoadCode:     s.LoadCode,
+		ShipmentID:   s.ShipmentID,
+		ShipmentCode: s.ShipmentCode,
+		Sequence:     s.Sequence,
+		CreatedAt:    s.CreatedAt,
+	}
+}
+
+func toShipmentLoadShipmentValues(list []*entity.ShipmentLoadShipment) []response.ShipmentLoadShipmentResponse {
+	if len(list) == 0 {
+		return nil
+	}
+	out := make([]response.ShipmentLoadShipmentResponse, 0, len(list))
+	for _, item := range list {
+		out = append(out, *toShipmentLoadShipmentResponse(item))
+	}
+	return out
+}
+
+func toShipmentLoadFiscalNoteResponse(n *entity.ShipmentLoadFiscalNote) *response.ShipmentLoadFiscalNoteResponse {
+	if n == nil {
+		return nil
+	}
+	return &response.ShipmentLoadFiscalNoteResponse{
+		ID:           n.ID,
+		LoadID:       n.LoadID,
+		LoadCode:     n.LoadCode,
+		ShipmentID:   n.ShipmentID,
+		ShipmentCode: n.ShipmentCode,
+		FiscalExitID: n.FiscalExitID,
+		NFeNumber:    n.NFeNumber,
+		NFeKey:       n.NFeKey,
+		Sequence:     n.Sequence,
+		CreatedAt:    n.CreatedAt,
+	}
+}
+
+func toShipmentLoadFiscalNoteValues(list []*entity.ShipmentLoadFiscalNote) []response.ShipmentLoadFiscalNoteResponse {
+	if len(list) == 0 {
+		return nil
+	}
+	out := make([]response.ShipmentLoadFiscalNoteResponse, 0, len(list))
+	for _, item := range list {
+		out = append(out, *toShipmentLoadFiscalNoteResponse(item))
+	}
+	return out
+}
+
+func toDeliveryInstructionResponse(d *entity.DeliveryInstruction) *response.DeliveryInstructionResponse {
+	if d == nil {
+		return nil
+	}
+	return &response.DeliveryInstructionResponse{
+		ID:          d.ID,
+		LoadID:      d.LoadID,
+		LoadCode:    d.LoadCode,
+		CustomerID:  d.CustomerID,
+		Title:       d.Title,
+		Instruction: d.Instruction,
+		Priority:    d.Priority,
+		Active:      d.Active,
+		CreatedAt:   d.CreatedAt,
+		UpdatedAt:   d.UpdatedAt,
+	}
+}
+
+func toDeliveryInstructionValues(list []*entity.DeliveryInstruction) []response.DeliveryInstructionResponse {
+	if len(list) == 0 {
+		return nil
+	}
+	out := make([]response.DeliveryInstructionResponse, 0, len(list))
+	for _, item := range list {
+		out = append(out, *toDeliveryInstructionResponse(item))
+	}
+	return out
+}
+
+func toDeliveryInstructionResponses(list []*entity.DeliveryInstruction) []*response.DeliveryInstructionResponse {
+	out := make([]*response.DeliveryInstructionResponse, 0, len(list))
+	for _, item := range list {
+		out = append(out, toDeliveryInstructionResponse(item))
+	}
+	return out
+}
+
+func toDispatchBoxResponse(b *entity.DispatchBox) *response.DispatchBoxResponse {
+	if b == nil {
+		return nil
+	}
+	return &response.DispatchBoxResponse{
+		ID:          b.ID,
+		Code:        b.Code,
+		Description: b.Description,
+		WarehouseID: b.WarehouseID,
+		Zone:        b.Zone,
+		Active:      b.Active,
+		CurrentLoad: b.CurrentLoad,
+		CreatedAt:   b.CreatedAt,
+		UpdatedAt:   b.UpdatedAt,
+	}
+}
+
+func toDispatchBoxResponses(list []*entity.DispatchBox) []*response.DispatchBoxResponse {
+	out := make([]*response.DispatchBoxResponse, 0, len(list))
+	for _, item := range list {
+		out = append(out, toDispatchBoxResponse(item))
+	}
+	return out
+}
+
+func toLoadMonitorResponses(rows []*repository.LoadMonitorRow) []*response.LoadMonitorResponse {
+	out := make([]*response.LoadMonitorResponse, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, &response.LoadMonitorResponse{
+			LoadCode:           r.LoadCode,
+			Status:             string(r.Status),
+			CarrierCode:        r.CarrierCode,
+			VehiclePlate:       r.VehiclePlate,
+			DriverName:         r.DriverName,
+			DispatchBoxCode:    r.DispatchBoxCode,
+			PlannedShipDate:    r.PlannedShipDate,
+			EstimatedDelivery:  r.EstimatedDelivery,
+			TotalShipments:     r.TotalShipments,
+			TotalFiscalNotes:   r.TotalFiscalNotes,
+			TotalVolumes:       r.TotalVolumes,
+			TotalNetWeight:     r.TotalNetWeight,
+			TotalGrossWeight:   r.TotalGrossWeight,
+			TotalCubageM3:      r.TotalCubageM3,
+			OpenShipments:      r.OpenShipments,
+			SeparatedShipments: r.SeparatedShipments,
+			ConferredShipments: r.ConferredShipments,
+			ShippedShipments:   r.ShippedShipments,
+		})
+	}
+	return out
+}
+
+func toSeparationMonitorResponses(rows []*repository.SeparationMonitorRow) []*response.SeparationMonitorResponse {
+	out := make([]*response.SeparationMonitorResponse, 0, len(rows))
+	for _, r := range rows {
+		var loadStatus *string
+		if r.LoadStatus != nil {
+			s := string(*r.LoadStatus)
+			loadStatus = &s
+		}
+		out = append(out, &response.SeparationMonitorResponse{
+			ShipmentCode:     r.ShipmentCode,
+			LoadCode:         r.LoadCode,
+			ShipmentStatus:   string(r.ShipmentStatus),
+			LoadStatus:       loadStatus,
+			SalesOrderCode:   r.SalesOrderCode,
+			CarrierCode:      r.CarrierCode,
+			DispatchBoxCode:  r.DispatchBoxCode,
+			TotalItems:       r.TotalItems,
+			ConferredItems:   r.ConferredItems,
+			DivergentItems:   r.DivergentItems,
+			TotalVolumes:     r.TotalVolumes,
+			TotalGrossWeight: r.TotalGrossWeight,
+		})
+	}
+	return out
+}
+
+func toLogisticPanelResponse(s *repository.LogisticPanelSummary) *response.LogisticPanelResponse {
+	if s == nil {
+		return nil
+	}
+	return &response.LogisticPanelResponse{
+		PlannedLoads:       s.PlannedLoads,
+		ReleasedLoads:      s.ReleasedLoads,
+		LoadingLoads:       s.LoadingLoads,
+		LoadedLoads:        s.LoadedLoads,
+		ShippedLoads:       s.ShippedLoads,
+		CancelledLoads:     s.CancelledLoads,
+		OpenShipments:      s.OpenShipments,
+		SeparatedShipments: s.SeparatedShipments,
+		ConferredShipments: s.ConferredShipments,
+		BoxesOccupied:      s.BoxesOccupied,
+		BoxesAvailable:     s.BoxesAvailable,
+		TotalVolumes:       s.TotalVolumes,
+		TotalGrossWeight:   s.TotalGrossWeight,
+	}
 }

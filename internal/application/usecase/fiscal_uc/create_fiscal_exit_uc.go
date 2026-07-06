@@ -134,6 +134,11 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		t, _ := time.Parse("2006-01-02", *dto.DataSaida)
 		dataSaida = &t
 	}
+	var fiscalCouponDate *time.Time
+	if dto.FiscalCouponDate != nil {
+		t, _ := time.Parse("2006-01-02", *dto.FiscalCouponDate)
+		fiscalCouponDate = &t
+	}
 
 	exit := &entity.FiscalExit{
 		NumeroNF:                dto.NumeroNF,
@@ -158,10 +163,16 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		ValorICMSST:             taxResult.Totais.ValorICMSST,
 		// ValorTotal = produtos + IPI + ICMS-ST + frete + seguro - desconto
 		// (ICMS próprio não soma no total da NF-e; o ICMS-ST soma, pois é cobrado do destinatário)
-		ValorTotal:     dto.ValorProdutos + taxResult.Totais.ValorIPI + taxResult.Totais.ValorICMSST + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
-		SalesOrderCode: dto.SalesOrderCode,
-		Status:         entity.ExitStatusDraft,
-		CreatedBy:      userID,
+		ValorTotal:            dto.ValorProdutos + taxResult.Totais.ValorIPI + taxResult.Totais.ValorICMSST + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
+		SalesOrderCode:        dto.SalesOrderCode,
+		SourceType:            dto.SourceType,
+		ShipmentLoadCode:      dto.ShipmentLoadCode,
+		ShipmentCode:          dto.ShipmentCode,
+		FiscalCouponNumber:    dto.FiscalCouponNumber,
+		FiscalCouponDate:      fiscalCouponDate,
+		FiscalCouponECFSerial: dto.FiscalCouponECFSerial,
+		Status:                entity.ExitStatusDraft,
+		CreatedBy:             userID,
 	}
 
 	created, err := uc.Repo.CreateExit(ctx, exit)

@@ -235,7 +235,7 @@ O resultado central do MRP. Para cada necessidade líquida calculada, o MRP gera
 
 Essas sugestões ficam em análise. O planejador pode aceitar, rejeitar, ou modificar. Quando aceita, a sugestão se transforma em uma **Ordem Planejada** real no sistema.
 
-> **Conversão sugestão → OF (padrão SAP "converter ordem planejada em ordem de produção").**
+> **Conversão sugestão → OF.**
 > As sugestões usam tipos internos em PT (`FABRICACAO`/`COMPRA`/`SERVICO`/`TECHNICAL_ASSISTANCE`)
 > e são mapeadas para o enum do banco em EN (`PRODUCTION`/`PURCHASE`/`OUTSOURCING`/`TECHNICAL_ASSISTANCE`)
 > por `mapMRPOrderType` ao aceitar (`FirmarSugestaoMRPUseCase`). Aceitar uma sugestão agora

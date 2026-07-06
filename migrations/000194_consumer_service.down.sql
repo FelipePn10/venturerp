@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS consumer_service_call_checklist_items;
+DROP TABLE IF EXISTS consumer_service_call_attachments;
+DROP TABLE IF EXISTS consumer_service_call_returns;
+DROP TABLE IF EXISTS consumer_service_calls;
+DROP TABLE IF EXISTS consumer_service_customer_contacts;
+DROP TABLE IF EXISTS consumer_service_consumer_emails;
+DROP TABLE IF EXISTS consumer_service_consumer_phones;
+DROP TABLE IF EXISTS consumer_service_consumer_contacts;
+DROP TABLE IF EXISTS consumer_service_consumers;
+DROP TABLE IF EXISTS consumer_service_knowledge_sources;
+DROP TABLE IF EXISTS consumer_service_call_types;
