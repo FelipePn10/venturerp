@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/spf13/viper"
 )
@@ -78,7 +80,8 @@ func Load() (*Config, error) {
 	viper.SetDefault("CNPJ_TIMEOUT_SEC", 8)
 
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var configNotFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &configNotFound) && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("error: %w", err)
 		}
 	}

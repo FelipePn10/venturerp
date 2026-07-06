@@ -1,0 +1,143 @@
+groups:
+  - name: panossoerp_alerts
+    interval: 30s
+    rules:
+      # ── Disponibilidade ────────────────────────────────────────────────────
+      - alert: API_Down
+        expr: up{job="panossoerp-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "API panossoerp esta fora do ar"
+          description: "A API nao respondeu ao healthcheck do Prometheus por pelo menos 1 minuto."
+
+      # ── Erros 5xx ──────────────────────────────────────────────────────────
+      - alert: High5xxErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (route)
+          /
+          sum(rate(http_requests_total[5m])) by (route)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Taxa de erro 5xx acima de 5% na rota {{ $labels.route }}"
+          description: "A rota {{ $labels.route }} esta com {{ $value | humanizePercentage }} de erros 5xx nos ultimos 5 minutos."
+
+      # ── Erros 4xx anormais ─────────────────────────────────────────────────
+      - alert: High4xxRate
+        expr: |
+          sum(rate(http_requests_total{status=~"4.."}[5m])) by (route)
+          /
+          sum(rate(http_requests_total[5m])) by (route)
+          > 0.25
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Taxa de erro 4xx acima de 25% na rota {{ $labels.route }}"
+          description: "A rota {{ $labels.route }} tem {{ $value | humanizePercentage }} de respostas 4xx. Verifique autenticacao ou payload das requisicoes."
+
+      # ── Latencia ────────────────────────────────────────────────────────────
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Latencia p95 acima de 500ms na rota {{ $labels.route }}"
+          description: "A rota {{ $labels.route }} esta com p95 de {{ $value }}s. Verifique queries lentas, N+1 ou gargalos de I/O."
+
+      # ── Postgres ────────────────────────────────────────────────────────────
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Postgres esta fora do ar"
+          description: "pg_up = 0. O banco de dados nao esta respondendo."
+
+      - alert: PostgresTooManyConnections
+        expr: pg_stat_database_numbackends > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Postgres com muitas conexoes ativas ({{ $value }})"
+          description: "O banco esta com {{ $value }} conexoes ativas. Verifique connection leaks ou aumento anormal de trafego."
+
+      # ── Concorrencia ────────────────────────────────────────────────────────
+      - alert: HighConcurrency
+        expr: http_requests_in_flight > 50
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Mais de 50 requisicoes simultaneas em andamento"
+          description: "{{ $value }} requisicoes em voo. Pode indicar gargalo no processamento."
+
+      # ── SLO: Disponibilidade ────────────────────────────────────────────────
+      - alert: SLO_Availability_BurnRate_High
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{status!~"5.."}[1h]))
+              /
+              sum(rate(http_requests_total[1h]))
+            )
+          ) > 0.02 * 1  # 1% budget consumed in 1h (critical burn)
+        for: 10m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "SLO de disponibilidade queimando rapido — error budget em risco"
+          description: |
+            Burn rate: {{ $value | humanizePercentage }}
+            O error budget de 99% esta sendo consumido rapidamente.
+            Se continuar, o SLO sera violado nas proximas horas.
+
+  # ── SLO Recording Rules ──────────────────────────────────────────────────
+  - name: panossoerp_slos
+    interval: 30s
+    rules:
+      # SLI: Disponibilidade (proporcao de requisicoes sem 5xx)
+      - record: sli:availability:ratio_5m
+        expr: |
+          sum(rate(http_requests_total{status!~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m]))
+
+      # SLI: Latencia (proporcao de requisicoes abaixo de 500ms)
+      - record: sli:latency_p95:ratio_5m
+        expr: |
+          (
+            sum(rate(http_requests_total[5m]))
+            -
+            sum(rate(http_requests_total{route=~".*"}[5m]) * 0)
+            +
+            clamp_max(
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+              ),
+              0.5
+            )
+          ) / 1
+
+      # Error budget mensal partindo de 99% SLO
+      - record: slo:error_budget_remaining:ratio
+        expr: |
+          0.99 - (1 - sli:availability:ratio_5m)

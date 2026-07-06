@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
@@ -177,6 +179,8 @@ type application struct {
 
 func (app *application) mount() chi.Router {
 	r := chi.NewRouter()
+
+	r.Use(otelhttp.NewMiddleware("panossoerp-api"))
 
 	r.Use(httpmw.CorrelationMiddleware)
 	r.Use(middleware.RealIP)

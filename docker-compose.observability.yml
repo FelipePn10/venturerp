@@ -1,0 +1,130 @@
+# Local observability stack for VentureERP.
+#
+# Run together with the main application stack:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d --build
+#
+# Grafana:    http://localhost:3000  (admin/admin)
+# Prometheus: http://localhost:9090
+# Loki:       http://localhost:3100
+# Tempo:      http://localhost:3200
+# OTLP:       http://localhost:4318 / grpc://localhost:4317
+
+services:
+  api:
+    environment:
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-panossoerp-api}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=panossoerp}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-none}
+      OTEL_LOGS_EXPORTER: ${OTEL_LOGS_EXPORTER:-none}
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS_ENABLED:-true}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: light
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-7d}"
+      - "--web.enable-lifecycle"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro,z
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  loki:
+    image: grafana/loki:3.2.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yml"]
+    volumes:
+      - loki_data:/loki
+      - ./observability/loki/local-config.yml:/etc/loki/local-config.yml:ro,z
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./observability/tempo/data:/tmp/tempo:z
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro,z
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.113.0
+    restart: unless-stopped
+    depends_on:
+      tempo:
+        condition: service_started
+    command: ["--config=/etc/otelcol-contrib/config.yml"]
+    volumes:
+      - ./observability/otel-collector/config.yml:/etc/otelcol-contrib/config.yml:ro,z
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OTEL_METRICS_PORT:-8889}:8889"
+
+  alloy:
+    image: grafana/alloy:v1.17.0
+    restart: unless-stopped
+    privileged: true
+    depends_on:
+      loki:
+        condition: service_started
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "/etc/alloy/config.alloy"
+    volumes:
+      - alloy_data:/var/lib/alloy/data
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro,z
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "${ALLOY_PORT:-12345}:12345"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-panossoerp}:${POSTGRES_PASSWORD:-panossoerp_10203040}@postgres:5432/${POSTGRES_DB:-panossoerpdatabase}?sslmode=disable"
+    ports:
+      - "${POSTGRES_EXPORTER_PORT:-9187}:9187"
+
+volumes:
+  grafana_data:
+  prometheus_data:
+  loki_data:
+  tempo_data:
+  alloy_data:

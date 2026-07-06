@@ -29,3 +29,4 @@ pdfs_test/
 
 # Generated sample cutting maps (make cutting-samples)
 /cutting-samples/
+observability/tempo/data/

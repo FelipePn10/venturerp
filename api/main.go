@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"os"
+	"time"
 
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/observability"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/audit"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
@@ -14,7 +17,6 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		// Logger not yet ready — use a temporary one just for this fatal.
 		applogger.New("info").Fatal("failed to load config", "error", err)
 		os.Exit(1)
 	}
@@ -28,7 +30,18 @@ func main() {
 	defer db.Close()
 	log.Info("database connected")
 
-	// Audit trail writer (async). Flushed on shutdown so buffered events persist.
+	shutdownTracing, err := observability.InitTracing(context.Background(), "panossoerp-api", "panossoerp", cfg.Env)
+	if err != nil {
+		log.Fatal("failed to initialize tracing", "error", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(ctx); err != nil {
+			log.Error("failed to shutdown tracing", "error", err)
+		}
+	}()
+
 	auditSink := audit.NewPgSink(db.Pool, log)
 	defer auditSink.Close()
 
