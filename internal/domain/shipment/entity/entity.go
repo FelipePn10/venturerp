@@ -17,6 +17,35 @@ const (
 	ShipmentStatusCancelled ShipmentStatus = "CANCELLED"
 )
 
+type LoadStatus string
+
+const (
+	LoadStatusPlanned   LoadStatus = "PLANNED"
+	LoadStatusReleased  LoadStatus = "RELEASED"
+	LoadStatusLoading   LoadStatus = "LOADING"
+	LoadStatusLoaded    LoadStatus = "LOADED"
+	LoadStatusShipped   LoadStatus = "SHIPPED"
+	LoadStatusCancelled LoadStatus = "CANCELLED"
+)
+
+var allowedLoadTransitions = map[LoadStatus][]LoadStatus{
+	LoadStatusPlanned:   {LoadStatusReleased, LoadStatusCancelled},
+	LoadStatusReleased:  {LoadStatusLoading, LoadStatusCancelled},
+	LoadStatusLoading:   {LoadStatusLoaded, LoadStatusReleased, LoadStatusCancelled},
+	LoadStatusLoaded:    {LoadStatusShipped, LoadStatusLoading, LoadStatusCancelled},
+	LoadStatusShipped:   {},
+	LoadStatusCancelled: {},
+}
+
+func (s LoadStatus) CanTransitionTo(next LoadStatus) bool {
+	for _, allowed := range allowedLoadTransitions[s] {
+		if allowed == next {
+			return true
+		}
+	}
+	return false
+}
+
 // allowedTransitions is the romaneio state machine. A romaneio flows
 // OPEN → SEPARATED → CONFERRED → SHIPPED; it can be cancelled from any state
 // before it is shipped. SHIPPED and CANCELLED are terminal.
@@ -160,6 +189,93 @@ type ShipmentEvent struct {
 	Note       *string
 	CreatedBy  *uuid.UUID
 	CreatedAt  time.Time
+}
+
+// ShipmentLoad is the dispatch-planning "carga": it groups one or more
+// romaneios/NF-es into a vehicle/route/box lifecycle.
+type ShipmentLoad struct {
+	ID                int64
+	Code              int64
+	Status            LoadStatus
+	Description       *string
+	CarrierCode       *int64
+	VehiclePlate      *string
+	DriverName        *string
+	DriverDocument    *string
+	RouteCode         *string
+	Origin            *string
+	Destination       *string
+	DispatchBoxCode   *string
+	PlannedShipDate   *time.Time
+	EstimatedDelivery *time.Time
+	StartedLoadingAt  *time.Time
+	LoadedAt          *time.Time
+	ReleasedAt        *time.Time
+	ShippedAt         *time.Time
+	CancelledAt       *time.Time
+	TotalShipments    int
+	TotalFiscalNotes  int
+	TotalVolumes      int
+	TotalNetWeight    float64
+	TotalGrossWeight  float64
+	TotalCubageM3     float64
+	Notes             *string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	CreatedBy         uuid.UUID
+	UpdatedBy         *uuid.UUID
+
+	Shipments    []*ShipmentLoadShipment
+	FiscalNotes  []*ShipmentLoadFiscalNote
+	Instructions []*DeliveryInstruction
+}
+
+type ShipmentLoadShipment struct {
+	ID           int64
+	LoadID       int64
+	LoadCode     int64
+	ShipmentID   int64
+	ShipmentCode int64
+	Sequence     int
+	CreatedAt    time.Time
+}
+
+type ShipmentLoadFiscalNote struct {
+	ID           int64
+	LoadID       int64
+	LoadCode     int64
+	ShipmentID   *int64
+	ShipmentCode *int64
+	FiscalExitID int64
+	NFeNumber    *int64
+	NFeKey       *string
+	Sequence     int
+	CreatedAt    time.Time
+}
+
+type DeliveryInstruction struct {
+	ID          int64
+	LoadID      *int64
+	LoadCode    *int64
+	CustomerID  *int64
+	Title       string
+	Instruction string
+	Priority    int
+	Active      bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type DispatchBox struct {
+	ID          int64
+	Code        string
+	Description *string
+	WarehouseID *int64
+	Zone        *string
+	Active      bool
+	CurrentLoad *int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // ValidateForShipping checks the romaneio can be dispatched: every line conferred

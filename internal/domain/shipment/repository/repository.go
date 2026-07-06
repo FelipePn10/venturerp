@@ -19,6 +19,16 @@ type ShipmentFilter struct {
 	Offset      int
 }
 
+type LoadFilter struct {
+	Status      *entity.LoadStatus
+	CarrierCode *int64
+	BoxCode     *string
+	From        *time.Time
+	To          *time.Time
+	Limit       int
+	Offset      int
+}
+
 // TransportInput carries the trip/transport data set on a romaneio.
 type TransportInput struct {
 	CarrierCode       *int64
@@ -31,6 +41,83 @@ type TransportInput struct {
 	ANTTCode          *string
 	Seals             *string
 	EstimatedDelivery *time.Time
+}
+
+type CreateLoadInput struct {
+	Description       *string
+	CarrierCode       *int64
+	VehiclePlate      *string
+	DriverName        *string
+	DriverDocument    *string
+	RouteCode         *string
+	Origin            *string
+	Destination       *string
+	DispatchBoxCode   *string
+	PlannedShipDate   *time.Time
+	EstimatedDelivery *time.Time
+	Notes             *string
+	CreatedBy         uuid.UUID
+}
+
+type AddFiscalNoteToLoadInput struct {
+	LoadCode     int64
+	ShipmentCode *int64
+	FiscalExitID int64
+	NFeNumber    *int64
+	NFeKey       *string
+	Sequence     int
+}
+
+type LoadMonitorRow struct {
+	LoadCode           int64
+	Status             entity.LoadStatus
+	CarrierCode        *int64
+	VehiclePlate       *string
+	DriverName         *string
+	DispatchBoxCode    *string
+	PlannedShipDate    *time.Time
+	EstimatedDelivery  *time.Time
+	TotalShipments     int
+	TotalFiscalNotes   int
+	TotalVolumes       int
+	TotalNetWeight     float64
+	TotalGrossWeight   float64
+	TotalCubageM3      float64
+	OpenShipments      int
+	SeparatedShipments int
+	ConferredShipments int
+	ShippedShipments   int
+}
+
+type SeparationMonitorRow struct {
+	ShipmentCode     int64
+	LoadCode         *int64
+	ShipmentStatus   entity.ShipmentStatus
+	LoadStatus       *entity.LoadStatus
+	SalesOrderCode   *int64
+	CarrierCode      *int64
+	DispatchBoxCode  *string
+	TotalItems       int
+	ConferredItems   int
+	DivergentItems   int
+	TotalVolumes     int
+	TotalGrossWeight float64
+}
+
+type LogisticPanelSummary struct {
+	PlannedLoads       int
+	ReleasedLoads      int
+	LoadingLoads       int
+	LoadedLoads        int
+	ShippedLoads       int
+	CancelledLoads     int
+	OpenShipments      int
+	SeparatedShipments int
+	ConferredShipments int
+	BoxesOccupied      int
+	BoxesAvailable     int
+	TotalVolumes       int
+	TotalGrossWeight   float64
 }
 
 type ShipmentRepository interface {
@@ -62,4 +149,22 @@ type ShipmentRepository interface {
 
 	AddEvent(ctx context.Context, e *entity.ShipmentEvent) error
 	ListEvents(ctx context.Context, shipmentID int64) ([]*entity.ShipmentEvent, error)
+
+	NextLoadCode(ctx context.Context) (int64, error)
+	CreateLoad(ctx context.Context, in CreateLoadInput) (*entity.ShipmentLoad, error)
+	GetLoadByCode(ctx context.Context, code int64) (*entity.ShipmentLoad, error)
+	ListLoads(ctx context.Context, f LoadFilter) ([]*entity.ShipmentLoad, error)
+	AddShipmentToLoad(ctx context.Context, loadCode, shipmentCode int64, sequence int) (*entity.ShipmentLoadShipment, error)
+	RemoveShipmentFromLoad(ctx context.Context, loadCode, shipmentCode int64) error
+	AddFiscalNoteToLoad(ctx context.Context, in AddFiscalNoteToLoadInput) (*entity.ShipmentLoadFiscalNote, error)
+	UpdateLoadStatus(ctx context.Context, code int64, status entity.LoadStatus, by *uuid.UUID, note string) error
+	RecalcLoadTotals(ctx context.Context, code int64) error
+	CreateDeliveryInstruction(ctx context.Context, d *entity.DeliveryInstruction) (*entity.DeliveryInstruction, error)
+	ListDeliveryInstructions(ctx context.Context, loadCode *int64, activeOnly bool) ([]*entity.DeliveryInstruction, error)
+	CreateDispatchBox(ctx context.Context, b *entity.DispatchBox) (*entity.DispatchBox, error)
+	ListDispatchBoxes(ctx context.Context, activeOnly bool) ([]*entity.DispatchBox, error)
+	AssignBoxToLoad(ctx context.Context, loadCode int64, boxCode string, by *uuid.UUID) error
+	LoadMonitor(ctx context.Context, f LoadFilter) ([]*LoadMonitorRow, error)
+	SeparationMonitor(ctx context.Context, f LoadFilter) ([]*SeparationMonitorRow, error)
+	LogisticPanel(ctx context.Context) (*LogisticPanelSummary, error)
 }

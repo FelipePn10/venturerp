@@ -18,6 +18,7 @@ type FiscalHandler struct {
 	listEntriesUC        *fiscal_uc.ListFiscalEntriesUseCase
 	getEntryUC           *fiscal_uc.GetFiscalEntryUseCase
 	createExitUC         *fiscal_uc.CreateFiscalExitUseCase
+	createExitFromLoadUC *fiscal_uc.CreateFiscalExitFromLoadUseCase
 	authorizeExitUC      *fiscal_uc.AuthorizeFiscalExitUseCase
 	cancelExitUC         *fiscal_uc.CancelFiscalExitUseCase
 	listExitsUC          *fiscal_uc.ListFiscalExitsUseCase
@@ -47,6 +48,7 @@ func NewFiscalHandler(
 	listEntriesUC *fiscal_uc.ListFiscalEntriesUseCase,
 	getEntryUC *fiscal_uc.GetFiscalEntryUseCase,
 	createExitUC *fiscal_uc.CreateFiscalExitUseCase,
+	createExitFromLoadUC *fiscal_uc.CreateFiscalExitFromLoadUseCase,
 	authorizeExitUC *fiscal_uc.AuthorizeFiscalExitUseCase,
 	cancelExitUC *fiscal_uc.CancelFiscalExitUseCase,
 	listExitsUC *fiscal_uc.ListFiscalExitsUseCase,
@@ -75,6 +77,7 @@ func NewFiscalHandler(
 		listEntriesUC:        listEntriesUC,
 		getEntryUC:           getEntryUC,
 		createExitUC:         createExitUC,
+		createExitFromLoadUC: createExitFromLoadUC,
 		authorizeExitUC:      authorizeExitUC,
 		cancelExitUC:         cancelExitUC,
 		listExitsUC:          listExitsUC,
@@ -190,6 +193,20 @@ func (h *FiscalHandler) CreateExit(w http.ResponseWriter, r *http.Request) {
 	result, err := h.createExitUC.Execute(r.Context(), dto)
 	if err != nil {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
+}
+
+func (h *FiscalHandler) CreateExitFromLoad(w http.ResponseWriter, r *http.Request) {
+	var dto request.CreateFiscalExitFromLoadDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.createExitFromLoadUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)

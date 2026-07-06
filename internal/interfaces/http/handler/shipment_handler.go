@@ -181,6 +181,297 @@ func (h *ShipmentHandler) List(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, result)
 }
 
+type createLoadRequest struct {
+	Description       *string `json:"description,omitempty"`
+	CarrierCode       *int64  `json:"carrier_code,omitempty"`
+	VehiclePlate      *string `json:"vehicle_plate,omitempty"`
+	DriverName        *string `json:"driver_name,omitempty"`
+	DriverDocument    *string `json:"driver_document,omitempty"`
+	RouteCode         *string `json:"route_code,omitempty"`
+	Origin            *string `json:"origin,omitempty"`
+	Destination       *string `json:"destination,omitempty"`
+	DispatchBoxCode   *string `json:"dispatch_box_code,omitempty"`
+	PlannedShipDate   *string `json:"planned_ship_date,omitempty"`
+	EstimatedDelivery *string `json:"estimated_delivery,omitempty"`
+	Notes             *string `json:"notes,omitempty"`
+}
+
+func (h *ShipmentHandler) CreateLoad(w http.ResponseWriter, r *http.Request) {
+	var req createLoadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.CreateLoad(r.Context(), shipment_uc.CreateLoadInput{
+		Description:       req.Description,
+		CarrierCode:       req.CarrierCode,
+		VehiclePlate:      req.VehiclePlate,
+		DriverName:        req.DriverName,
+		DriverDocument:    req.DriverDocument,
+		RouteCode:         req.RouteCode,
+		Origin:            req.Origin,
+		Destination:       req.Destination,
+		DispatchBoxCode:   req.DispatchBoxCode,
+		PlannedShipDate:   parseDatePtr(req.PlannedShipDate),
+		EstimatedDelivery: parseDatePtr(req.EstimatedDelivery),
+		Notes:             req.Notes,
+		CreatedBy:         actingUser(r),
+	})
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *ShipmentHandler) ListLoads(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.ListLoads(r.Context(), loadFilterFromQuery(r))
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *ShipmentHandler) GetLoad(w http.ResponseWriter, r *http.Request) {
+	code, err := h.loadCodeParam(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid load code")
+		return
+	}
+	result, err := h.uc.GetLoad(r.Context(), code)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+type addShipmentToLoadRequest struct {
+	ShipmentCode int64 `json:"shipment_code"`
+	Sequence     int   `json:"sequence"`
+}
+
+func (h *ShipmentHandler) AddShipmentToLoad(w http.ResponseWriter, r *http.Request) {
+	code, err := h.loadCodeParam(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid load code")
+		return
+	}
+	var req addShipmentToLoadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.AddShipmentToLoad(r.Context(), code, req.ShipmentCode, req.Sequence)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *ShipmentHandler) RemoveShipmentFromLoad(w http.ResponseWriter, r *http.Request) {
+	code, err := h.loadCodeParam(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid load code")
+		return
+	}
+	shipmentCode, err := strconv.ParseInt(chi.URLParam(r, "shipmentCode"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		return
+	}
+	if err := h.uc.RemoveShipmentFromLoad(r.Context(), code, shipmentCode); err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "removed"})
+}
+
+type addFiscalNoteToLoadRequest struct {
+	ShipmentCode *int64  `json:"shipment_code,omitempty"`
+	FiscalExitID int64   `json:"fiscal_exit_id"`
+	NFeNumber    *int64  `json:"nfe_number,omitempty"`
+	NFeKey       *string `json:"nfe_key,omitempty"`
+	Sequence     int     `json:"sequence"`
+}
+
+func (h *ShipmentHandler) AddFiscalNoteToLoad(w http.ResponseWriter, r *http.Request) {
+	code, err := h.loadCodeParam(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid load code")
+		return
+	}
+	var req addFiscalNoteToLoadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.AddFiscalNoteToLoad(r.Context(), shiprepo.AddFiscalNoteToLoadInput{
+		LoadCode:     code,
+		ShipmentCode: req.ShipmentCode,
+		FiscalExitID: req.FiscalExitID,
+		NFeNumber:    req.NFeNumber,
+		NFeKey:       req.NFeKey,
+		Sequence:     req.Sequence,
+	})
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *ShipmentHandler) ReleaseLoad(w http.ResponseWriter, r *http.Request) {
+	h.transitionLoad(w, r, shipentity.LoadStatusReleased, "released")
+}
+
+func (h *ShipmentHandler) StartLoading(w http.ResponseWriter, r *http.Request) {
+	h.transitionLoad(w, r, shipentity.LoadStatusLoading, "loading")
+}
+
+func (h *ShipmentHandler) FinishLoading(w http.ResponseWriter, r *http.Request) {
+	h.transitionLoad(w, r, shipentity.LoadStatusLoaded, "loaded")
+}
+
+func (h *ShipmentHandler) ShipLoad(w http.ResponseWriter, r *http.Request) {
+	h.transitionLoad(w, r, shipentity.LoadStatusShipped, "shipped")
+}
+
+func (h *ShipmentHandler) CancelLoad(w http.ResponseWriter, r *http.Request) {
+	h.transitionLoad(w, r, shipentity.LoadStatusCancelled, "cancelled")
+}
+
+type createDeliveryInstructionRequest struct {
+	LoadCode    *int64 `json:"load_code,omitempty"`
+	CustomerID  *int64 `json:"customer_id,omitempty"`
+	Title       string `json:"title"`
+	Instruction string `json:"instruction"`
+	Priority    int    `json:"priority"`
+}
+
+func (h *ShipmentHandler) CreateDeliveryInstruction(w http.ResponseWriter, r *http.Request) {
+	var req createDeliveryInstructionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.CreateDeliveryInstruction(r.Context(), &shipentity.DeliveryInstruction{
+		LoadCode:    req.LoadCode,
+		CustomerID:  req.CustomerID,
+		Title:       req.Title,
+		Instruction: req.Instruction,
+		Priority:    req.Priority,
+	})
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *ShipmentHandler) ListDeliveryInstructions(w http.ResponseWriter, r *http.Request) {
+	var loadCode *int64
+	if v := r.URL.Query().Get("load_code"); v != "" {
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+			loadCode = &parsed
+		}
+	}
+	activeOnly := r.URL.Query().Get("active_only") != "false"
+	result, err := h.uc.ListDeliveryInstructions(r.Context(), loadCode, activeOnly)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+type createDispatchBoxRequest struct {
+	Code        string  `json:"code"`
+	Description *string `json:"description,omitempty"`
+	WarehouseID *int64  `json:"warehouse_id,omitempty"`
+	Zone        *string `json:"zone,omitempty"`
+}
+
+func (h *ShipmentHandler) CreateDispatchBox(w http.ResponseWriter, r *http.Request) {
+	var req createDispatchBoxRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	result, err := h.uc.CreateDispatchBox(r.Context(), &shipentity.DispatchBox{
+		Code:        req.Code,
+		Description: req.Description,
+		WarehouseID: req.WarehouseID,
+		Zone:        req.Zone,
+	})
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *ShipmentHandler) ListDispatchBoxes(w http.ResponseWriter, r *http.Request) {
+	activeOnly := r.URL.Query().Get("active_only") != "false"
+	result, err := h.uc.ListDispatchBoxes(r.Context(), activeOnly)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+type assignBoxRequest struct {
+	BoxCode string `json:"box_code"`
+}
+
+func (h *ShipmentHandler) AssignBoxToLoad(w http.ResponseWriter, r *http.Request) {
+	code, err := h.loadCodeParam(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid load code")
+		return
+	}
+	var req assignBoxRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	if err := h.uc.AssignBoxToLoad(r.Context(), code, req.BoxCode, actingUser(r)); err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "assigned"})
+}
+
+func (h *ShipmentHandler) LoadMonitor(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.LoadMonitor(r.Context(), loadFilterFromQuery(r))
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *ShipmentHandler) SeparationMonitor(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.SeparationMonitor(r.Context(), loadFilterFromQuery(r))
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *ShipmentHandler) LogisticPanel(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.LogisticPanel(r.Context())
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
 func (h *ShipmentHandler) ListBySalesOrder(w http.ResponseWriter, r *http.Request) {
 	h.listByOrder(w, r, h.uc.ListBySalesOrder, "sales order")
 }
@@ -545,6 +836,67 @@ func (h *ShipmentHandler) transition(w http.ResponseWriter, r *http.Request, fn 
 	jsonResponse(w, http.StatusOK, map[string]string{"status": ok})
 }
 
+func (h *ShipmentHandler) transitionLoad(w http.ResponseWriter, r *http.Request, next shipentity.LoadStatus, ok string) {
+	code, err := h.loadCodeParam(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid load code")
+		return
+	}
+	var req cancelRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := h.uc.TransitionLoad(r.Context(), code, next, actingUser(r), req.Reason); err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]string{"status": ok})
+}
+
 func (h *ShipmentHandler) codeParam(r *http.Request) (int64, error) {
 	return strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+}
+
+func (h *ShipmentHandler) loadCodeParam(r *http.Request) (int64, error) {
+	return strconv.ParseInt(chi.URLParam(r, "loadCode"), 10, 64)
+}
+
+func parseDatePtr(v *string) *time.Time {
+	if v == nil || *v == "" {
+		return nil
+	}
+	t, err := time.Parse("2006-01-02", *v)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+func loadFilterFromQuery(r *http.Request) shiprepo.LoadFilter {
+	q := r.URL.Query()
+	var f shiprepo.LoadFilter
+	if s := q.Get("status"); s != "" {
+		st := shipentity.LoadStatus(s)
+		f.Status = &st
+	}
+	if c := q.Get("carrier_code"); c != "" {
+		if v, err := strconv.ParseInt(c, 10, 64); err == nil {
+			f.CarrierCode = &v
+		}
+	}
+	if b := q.Get("box_code"); b != "" {
+		f.BoxCode = &b
+	}
+	if d := q.Get("from"); d != "" {
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			f.From = &t
+		}
+	}
+	if d := q.Get("to"); d != "" {
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			t = t.AddDate(0, 0, 1)
+			f.To = &t
+		}
+	}
+	f.Limit, _ = strconv.Atoi(q.Get("limit"))
+	f.Offset, _ = strconv.Atoi(q.Get("offset"))
+	return f
 }

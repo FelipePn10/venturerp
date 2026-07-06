@@ -454,6 +454,96 @@ Cria a NF-e em rascunho e **calcula os impostos automaticamente** (ICMS, IPI, PI
 
 ---
 
+### `POST /api/fiscal/exits/from-load` — emissão por carga
+
+Cria uma NF-e de saída em rascunho a partir de uma **carga de expedição**
+(`shipment_loads`). O endpoint consome os romaneios vinculados à carga, monta
+os itens da nota, busca preço no pedido de venda quando o romaneio estiver
+ligado a pedido e vincula a nota gerada de volta à carga/romaneios.
+
+**Request:**
+```json
+{
+  "load_code": 9001,
+  "serie": "001",
+  "data_emissao": "2026-07-06",
+  "data_saida": "2026-07-06",
+  "cnpj_destinatario": "98765432000188",
+  "razao_social_destinatario": "Cliente Exemplo SA",
+  "ie_destinatario": "1234567890",
+  "uf_destinatario": "SP",
+  "tipo_pessoa": "J",
+  "cfop": "5102",
+  "natureza_operacao": "Venda de mercadoria adquirida de terceiros",
+  "valor_frete": 180.00,
+  "valor_seguro": 0.00,
+  "valor_desconto": 0.00,
+  "origem_mercadoria": "0",
+  "item_overrides": [
+    {
+      "shipment_code": 1042,
+      "item_code": 1001,
+      "unit_price": 125.50,
+      "ncm": "73089010",
+      "description": "Perfil dobrado galvanizado"
+    }
+  ]
+}
+```
+
+| Campo | Obrigatório | Descrição |
+|---|---|---|
+| `load_code` | Sim | Código da carga criada em `/api/shipments/loads` |
+| `serie`, `data_emissao`, `cfop`, `natureza_operacao` | Sim | Dados fiscais principais da NF-e |
+| `item_overrides[].unit_price` | Condicional | Obrigatório quando o romaneio não tem pedido de venda com preço de item |
+| `item_overrides[].shipment_code` | Não | Restringe o override a um romaneio específico; sem ele, vale para o item em qualquer romaneio da carga |
+
+**Validações principais:**
+- Cargas `CANCELLED` ou `SHIPPED` não podem ser faturadas.
+- A carga precisa ter ao menos um romaneio e não pode já ter nota fiscal vinculada.
+- Romaneios cancelados ou despachados não entram no faturamento.
+- Se o item estiver conferido, a NF usa `conferred_qty`; caso contrário usa a quantidade planejada.
+- Se não houver preço no pedido nem override, o faturamento é bloqueado para evitar NF-e zerada.
+
+**Efeitos gravados:**
+- `fiscal_exits.source_type = "LOAD"`.
+- `fiscal_exits.shipment_load_code = load_code`.
+- `shipment_load_fiscal_notes` recebe o vínculo `load_code × fiscal_exit_id`.
+- Cada romaneio da carga recebe `fiscal_exit_id` e `nfe_number`.
+
+Depois de criada, a autorização continua pelo fluxo normal:
+`POST /api/fiscal/exits/{code}/authorize`.
+
+---
+
+### DANFE a partir de cupom fiscal, NFC-e ou CF-e
+
+O cadastro manual de NF-e (`/api/fiscal/exits/create`) agora aceita metadados de
+origem para cobrir emissão a partir de cupom fiscal/NFC-e/CF-e, mantendo a
+rastreabilidade do documento de venda original:
+
+```json
+{
+  "numero_nf": 1200,
+  "serie": "001",
+  "data_emissao": "2026-07-06",
+  "cfop": "5929",
+  "natureza_operacao": "Operacao tambem registrada em cupom fiscal",
+  "valor_produtos": 250.00,
+  "source_type": "COUPON",
+  "fiscal_coupon_number": "CF-123456",
+  "fiscal_coupon_date": "2026-07-06",
+  "fiscal_coupon_ecf_serial": "ECF000123456",
+  "itens": []
+}
+```
+
+Para NFC-e/CF-e de consumidor, use `source_type` como `NFCE` ou `CFE`. O
+cálculo/autorização segue o fluxo fiscal já existente; os campos de origem
+servem para consulta, auditoria, SPED/livros e impressão/observações.
+
+---
+
 ### `POST /api/fiscal/exits/{code}/authorize`
 
 Envia a NF-e para a SEFAZ via API Focus NF-e. Só funciona se o status for `"rascunho"`.
@@ -1639,7 +1729,7 @@ Tabela simplificada de alíquotas e CSTs por NCM/Item + UF + Tipo de Operação.
 
 ## 18. Classificação de Itens
 
-Cadastro hierárquico de classificações de itens (FITE0105). Usa **máscaras** para definir o formato dos códigos.
+Cadastro hierárquico de classificações de itens. Usa **máscaras** para definir o formato dos códigos.
 
 ### Máscaras de Classificação
 

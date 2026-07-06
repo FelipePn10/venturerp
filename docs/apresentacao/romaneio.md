@@ -11,9 +11,8 @@ da hora em que o pedido é separado no estoque até o caminhão deixar a fábric
 Ele responde, de forma rastreável, três perguntas que toda expedição precisa
 responder: **o que sai, em quantos volumes, e com quem vai**.
 
-É o mesmo papel que o "documento de expedição" (Outbound Delivery) cumpre nos
-ERPs de grande porte como **SAP e Oracle** — só que simples de operar e já
-integrado ao seu estoque e às suas notas fiscais.
+É o documento operacional de expedição do VentureERP: simples de operar e já
+integrado ao estoque, às cargas e às notas fiscais.
 
 > Importante: o romaneio **não substitui a nota fiscal**. A NF-e é o documento
 > legal (e é ela que dá baixa no estoque). O romaneio é o documento **logístico**
@@ -39,7 +38,9 @@ integrado ao seu estoque e às suas notas fiscais.
 ## Como funciona, na prática
 
 O romaneio segue um **fluxo com etapas claras** (uma "esteira"), e o sistema só
-deixa avançar quando a etapa anterior está em ordem:
+deixa avançar quando a etapa anterior está em ordem. A fase de expedição também
+tem o conceito de **carga**, que agrupa um ou mais romaneios no mesmo caminhão,
+rota, box de expedição e previsão de entrega:
 
 1. **Abrir** — o romaneio nasce a partir de um **pedido de venda** (ou de compra,
    ou de uma ordem de produção). Você não digita item por item: o sistema
@@ -50,8 +51,12 @@ deixa avançar quando a etapa anterior está em ordem:
    bateu, segue; se houve **diferença**, ela fica registrada.
 4. **Embalar (volumes)** — informa-se como a carga foi embalada: caixas, pallets,
    fardos… cada **volume** com seu peso, dimensões e identificação.
-5. **Amarrar a nota e despachar** — liga-se a **NF-e** da carga ao romaneio e
-   confirma-se o despacho. A reserva é baixada e o romaneio é impresso.
+5. **Planejar a carga** — agrupa-se os romaneios em uma **carga**, define-se
+   transportadora, motorista, veículo, rota, box/doca e orientações de entrega.
+6. **Carregar e liberar** — a carga passa por liberação, início e fim de
+   carregamento, com monitor de expedição e separação.
+7. **Amarrar a nota e despachar** — liga-se a **NF-e** da carga ao romaneio/carga
+   e confirma-se o despacho. A reserva é baixada e o romaneio é impresso.
 
 > O sistema **impede atalhos perigosos**: não dá para despachar sem conferir, nem
 > cancelar uma carga já despachada, nem mexer nos itens depois de conferida.
@@ -99,6 +104,27 @@ No mesmo romaneio ficam registrados os dados de quem leva a carga:
 - **Placa do veículo**, **motorista** e código **ANTT**.
 - **Lacres** da carga (segurança/auditoria).
 - **Previsão de entrega**.
+
+---
+
+## Cargas, boxes e painel de expedição
+
+A carga é o **cockpit do caminhão**. Ela mostra tudo que vai sair junto e em que
+etapa está:
+
+- Romaneios incluídos na carga.
+- NF-es/documentos fiscais vinculados.
+- Box ou doca onde a carga está sendo preparada.
+- Rota, origem, destino, motorista e veículo.
+- Totais de volumes, peso líquido, peso bruto e cubagem.
+- Status: planejada, liberada, em carregamento, carregada, despachada ou
+  cancelada.
+
+O monitor de expedição mostra as cargas por status e o monitor de separação
+mostra cada romaneio com itens conferidos, divergências e vínculo com a carga.
+O painel logístico consolida quantas cargas estão planejadas, liberadas, em
+carregamento, carregadas, despachadas, quantos boxes estão ocupados e o volume
+total previsto para sair.
 
 ---
 
@@ -155,6 +181,7 @@ Um clique gera o romaneio em **PDF profissional** (e também em **Excel**), com:
 | Conferência | Conferência por item com **detecção de divergência** |
 | Embalagem | **Volumes** com espécie, peso líq/bruto, dimensão e cubagem |
 | Transporte | Frete, **placa/motorista/ANTT, lacres** e previsão |
+| Planejamento de carga | Agrupamento por caminhão/rota, **box de expedição** e monitor |
 | Integração fiscal | **Vínculo com a NF-e**; baixa de estoque na nota |
 | Documento para o cliente | **PDF/Excel profissional** com a marca da empresa |
 

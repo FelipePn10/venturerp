@@ -694,8 +694,7 @@ O sistema respeita o **limite de horas disponíveis por dia** do centro (padrão
 Os endpoints `/gantt/order` e `/gantt/work-center` acima devolvem listas planas de
 tarefas — úteis para um componente de Gantt no front, mas sem o **contexto do mês**.
 O **quadro mensal** (`GET /api/aps/gantt/month/{year}/{month}`) consolida tudo o que
-um planejador precisa para enxergar o cronograma de um mês de uma vez, no padrão dos
-quadros de programação dos grandes APS (SAP Planning Board, PlanetTogether):
+um planejador precisa para enxergar o cronograma de um mês de uma vez:
 
 - **Linhas (`group_by`)** — `work_center` (padrão; cada linha é um centro de
   trabalho/tipo de máquina) ou `order` (cada linha é uma OF). Resolve as duas visões
@@ -1422,7 +1421,7 @@ despesas ÷ quantidade). `/recompute` recalcula após ajustes e `/status` nacion
 O cálculo é função pura testada (valor exato: FOB 10×2 e 10×6 @câmbio 5 com frete 400
 por valor ⇒ unitários 20 e 60).
 
-#### Parâmetros de suprimentos (FUTL0125)
+#### Parâmetros de suprimentos
 
 `procurement_parameters` é um painel único (chave/valor tipado por domínio e empresa,
 com `UPSERT`) que cobre os parâmetros de tabela de compra, pedido, cotação,

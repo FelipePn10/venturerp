@@ -1,8 +1,7 @@
 # Módulo de Romaneio (Expedição) — Documentação
 
 Cobre o módulo de **romaneio de expedição/carregamento** para pedidos de venda,
-compra e produção. Modela a logística de saída no padrão de um *outbound
-delivery* de ERP de ponta (SAP/Oracle): **separação → conferência → packing em
+compra e produção. Modela a logística de saída do VentureERP: **separação → conferência → packing em
 volumes → despacho**, com **reserva de estoque**, **dados de transporte**,
 **vínculo com a NF-e** e **exportação profissional** (PDF/Excel).
 
@@ -20,9 +19,7 @@ documento de conferência entre emitente, transportador e destinatário.
 
 É um documento **logístico/operacional** — não substitui a NF-e. No nosso
 desenho a **baixa de estoque é fiscal** (ocorre na autorização da NF-e de
-saída); o romaneio apenas **reserva** o estoque na separação. Isso espelha o
-fluxo SAP *Outbound Delivery → Post Goods Issue*: a delivery reserva/aloca e o
-PGI baixa o estoque.
+saída); o romaneio apenas **reserva** o estoque na separação.
 
 ### Tipos suportados (referência polimórfica)
 
@@ -252,16 +249,128 @@ curl -o romaneio_1042.xlsx http://localhost:5072/api/shipments/1042/export/xlsx 
 
 ---
 
-## 8. Arquitetura
+## 8. Planejamento de Cargas
+
+A carga é o agrupador operacional usado para separar, carregar, liberar e acompanhar um
+veículo/rota com um ou mais romaneios e notas fiscais. O desenho segue o fluxo
+observado nas rotinas de planejamento de expedição: manutenção de carga,
+inclusão de pedidos/itens, inclusão de notas, conferência de carregamento,
+liberação, reserva/monitoramento e painel logístico.
+
+### Modelo de dados
+
+```
+shipment_loads
+  ├─ shipment_load_shipments      ← romaneios dentro da carga
+  ├─ shipment_load_fiscal_notes   ← NF-es/documentos vinculados à carga
+  └─ shipment_delivery_instructions
+
+shipment_dispatch_boxes           ← boxes/doca de expedição
+```
+
+Status da carga:
+
+| Status | Uso |
+|--------|-----|
+| `PLANNED` | carga planejada, ainda ajustável |
+| `RELEASED` | carga liberada para separação/carregamento |
+| `LOADING` | carregamento em execução |
+| `LOADED` | carregamento concluído, aguardando saída |
+| `SHIPPED` | carga despachada |
+| `CANCELLED` | carga cancelada |
+
+Transições válidas:
+
+```
+PLANNED → RELEASED → LOADING → LOADED → SHIPPED
+   └─────────────── cancelável até antes de SHIPPED ───────────────┘
+```
+
+Regras principais:
+
+- `RELEASED` exige ao menos um romaneio vinculado.
+- Cargas `SHIPPED`/`CANCELLED` não aceitam novos romaneios ou notas.
+- Remoção de romaneio é permitida apenas em carga `PLANNED`.
+- Totais da carga são recalculados a partir dos romaneios: volumes, pesos e
+  cubagem.
+- O box de expedição (`shipment_dispatch_boxes`) aponta a carga atual do box e a
+  carga guarda `dispatch_box_code`.
+
+### APIs de carga
+
+Base: `/api/shipments`.
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `POST` | `/loads` | Cria carga planejada |
+| `GET` | `/loads` | Lista cargas por status, transportadora, box e período |
+| `GET` | `/loads/{loadCode}` | Detalhe da carga com romaneios, notas e orientações |
+| `POST` | `/loads/{loadCode}/shipments` | Inclui romaneio na carga |
+| `DELETE` | `/loads/{loadCode}/shipments/{shipmentCode}` | Remove romaneio da carga planejada |
+| `POST` | `/loads/{loadCode}/fiscal-notes` | Inclui NF-e/documento fiscal na carga |
+| `POST` | `/loads/{loadCode}/release` | Libera carga |
+| `POST` | `/loads/{loadCode}/start-loading` | Inicia carregamento |
+| `POST` | `/loads/{loadCode}/finish-loading` | Conclui carregamento |
+| `POST` | `/loads/{loadCode}/ship` | Despacha carga |
+| `POST` | `/loads/{loadCode}/cancel` | Cancela carga |
+| `POST` | `/loads/{loadCode}/box` | Vincula box/doca de expedição |
+
+Cadastros e monitores:
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `POST` | `/dispatch-boxes` | Cadastra/atualiza box de expedição |
+| `GET` | `/dispatch-boxes` | Lista boxes |
+| `POST` | `/delivery-instructions` | Cadastra orientação de entrega |
+| `GET` | `/delivery-instructions` | Lista orientações por carga/ativas |
+| `GET` | `/loads/monitor` | Monitor de expedição por carga |
+| `GET` | `/loads/separation-monitor` | Monitor de separação por romaneio/carga |
+| `GET` | `/loads/logistic-panel` | Painel gerencial logístico agregado |
+
+Exemplo:
+
+```bash
+curl -X POST http://localhost:5072/api/shipments/loads \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"description":"Carga Sul","carrier_code":10,"vehicle_plate":"ABC1D23",
+       "driver_name":"João","route_code":"SUL-01","dispatch_box_code":"BOX-01",
+       "planned_ship_date":"2026-07-10","estimated_delivery":"2026-07-12"}'
+
+curl -X POST http://localhost:5072/api/shipments/loads/9001/shipments \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"shipment_code":1042}'
+
+curl -X POST http://localhost:5072/api/shipments/loads/9001/release \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Rotinas da fase 13 cobertas:
+
+| Rotina | Cobertura no VentureERP |
+|--------|--------------------------|
+| Manutenção de Carga / Cargas | `/loads` + status da carga |
+| Inclusão de notas para manifesto | `/loads/{code}/fiscal-notes` |
+| Controle de carregamento | `start-loading` / `finish-loading` |
+| Liberação de cargas | `/release` |
+| Orientações de entrega | `/delivery-instructions` |
+| Vinculação de box de expedição | `/dispatch-boxes` + `/loads/{code}/box` |
+| Reserva/monitor de expedição | `/loads/monitor` e integração com reservas do romaneio |
+| Monitor de separação | `/loads/separation-monitor` |
+| Painel gerencial logístico | `/loads/logistic-panel` |
+
+---
+
+## 9. Arquitetura
 
 ```
 internal/
 ├── domain/shipment/
 │   ├── entity/entity.go            # Shipment, ShipmentItem, ShipmentVolume,
-│   │                               #   ShipmentEvent, máquina de estado, divergência
-│   └── repository/repository.go    # ShipmentRepository, ShipmentFilter, TransportInput
+│   │                               #   ShipmentEvent, ShipmentLoad, box e orientações
+│   └── repository/repository.go    # ShipmentRepository, filtros, cargas e monitores
 ├── application/usecase/shipment_uc/
 │   ├── shipment_uc.go              # estado + reserva de estoque + volumes + NF-e
+│   ├── load_uc.go                  # cargas, boxes, orientações e monitores
 │   ├── auto_fill_uc.go             # auto-fill de pedidos
 │   ├── export_uc.go                # montagem do RomaneioData
 │   └── response_mapper.go          # entity → DTO
@@ -280,7 +389,7 @@ autenticado.
 
 ---
 
-## 9. Testes
+## 10. Testes
 
 ```bash
 go test ./internal/domain/shipment/... \
@@ -297,20 +406,20 @@ Integração: `make test-romaneio` / `./scripts/test-romaneio.sh`.
 
 ---
 
-## 10. Paralelo com SAP / Oracle
+## 11. Conceitos Internos
 
-| Conceito | SAP | Aqui |
-|----------|-----|------|
-| Documento de saída | Outbound Delivery | `shipments` |
-| Picking/Separação | Picking | `SEPARATED` + reserva |
-| Packing | Handling Units (VERP) | `shipment_volumes` |
-| Baixa de estoque | Post Goods Issue | NF-e de saída (fiscal) |
-| Conferência/Divergência | overdelivery check | `conferred_qty` + `has_divergence` |
+| Conceito | Implementação |
+|----------|---------------|
+| Documento de saída | `shipments` |
+| Separação | `SEPARATED` + reserva |
+| Volumes | `shipment_volumes` |
+| Baixa de estoque | NF-e de saída autorizada |
+| Conferência/Divergência | `conferred_qty` + `has_divergence` |
 | Auditoria | Document flow | `shipment_events` |
 
 ---
 
-## 11. Roadmap / Melhorias Futuras
+## 12. Roadmap / Melhorias Futuras
 
 - [ ] Saldo "a expedir" por item do pedido (remessas parciais com bloqueio de sobre-expedição)
 - [ ] Código de barras / QR Code no PDF para leitura no depósito

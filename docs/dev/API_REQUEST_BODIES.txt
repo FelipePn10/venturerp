@@ -1535,7 +1535,7 @@ GET   /api/procurement/import-processes/{id}
 POST  /api/procurement/import-processes/{id}/recompute       -- recalcula landed cost
 PATCH /api/procurement/import-processes/{id}/status  {"status":"NATIONALIZED"}
 
---- PARÂMETROS DE SUPRIMENTOS (FUTL0125) ---
+--- PARÂMETROS DE SUPRIMENTOS ---
 
 PUT /api/procurement/parameters                    (ADMIN)
 -- domain: PURCHASE_TABLE|PURCHASE_ORDER|QUOTATION|REQUISITION|RECEIVING_NOTICE|
@@ -3162,6 +3162,357 @@ PATCH /api/technical-assistance/calls/1/status
 
 GET /api/technical-assistance/calls?status=PENDING&customer_code=100
 GET /api/technical-assistance/calls/report?from=2026-07-01&to=2026-07-31
+
+
+============================================================
+MÓDULO: COMERCIAL - ATENDIMENTO AO CONSUMIDOR / SAC
+============================================================
+
+POST /api/consumer-service/call-types
+{
+  "description": "Reclamacao de Produto",
+  "is_complaint": true,
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/consumer-service/knowledge-sources
+{
+  "description": "Site",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/consumer-service/consumers
+{
+  "name": "Maria Consumidora",
+  "person_type": "F",
+  "cpf": "12345678901",
+  "zip_code": "95000000",
+  "city": "Caxias do Sul",
+  "state": "RS",
+  "address": "Rua Central",
+  "address_number": "100",
+  "district": "Centro",
+  "knowledge_code": 1,
+  "created_by": "00000000-0000-0000-0000-000000000000",
+  "phones": [
+    {
+      "phone_type": "MOBILE",
+      "number": "555499999999",
+      "is_primary": true
+    }
+  ],
+  "emails": [
+    {
+      "email": "maria@example.com",
+      "is_primary": true
+    }
+  ]
+}
+
+POST /api/consumer-service/customer-contacts
+{
+  "customer_code": 100,
+  "contact_type": "EMAIL",
+  "description": "Cliente solicitou retorno sobre entrega.",
+  "scheduled_at": "2026-07-10",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/consumer-service/calls
+{
+  "enterprise_code": 1,
+  "consumer_code": 1,
+  "customer_code": 100,
+  "call_type_code": 1,
+  "direction": "RECEIVED",
+  "in_warranty": true,
+  "defect_group_code": 1,
+  "defect_reason_code": 1,
+  "responsible_user_code": 10,
+  "position": "PENDING",
+  "situation": "TECHNICAL_VISIT",
+  "visit_requested_date": "2026-07-10",
+  "subject": "Produto com ruido",
+  "description": "Consumidor relatou ruido no equipamento.",
+  "symptoms": "Ruido ao iniciar operacao.",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/consumer-service/calls/1/returns
+{
+  "contact_type": "PHONE",
+  "description": "Agendada vistoria com consumidor.",
+  "next_return_at": "2026-07-12",
+  "user_code": 10,
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/consumer-service/calls/1/attachments
+{
+  "file_name": "foto-produto.jpg",
+  "file_path": "/docs/sac/1/foto-produto.jpg",
+  "content_type": "image/jpeg",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/consumer-service/calls/1/checklist
+{
+  "sequence": 1,
+  "description": "Confirmar nota fiscal de compra"
+}
+
+PATCH /api/consumer-service/calls/checklist/1
+{
+  "done": true,
+  "notes": "Nota confirmada pelo consumidor"
+}
+
+GET /api/consumer-service/consumers?search=Maria&state=RS
+GET /api/consumer-service/customer-contacts?customer_code=100&from=2026-07-01
+GET /api/consumer-service/calls?position=PENDING&situation=TECHNICAL_VISIT&visit_state=PENDING
+GET /api/consumer-service/calls/report?from=2026-07-01&to=2026-07-31
+
+
+============================================================
+MÓDULO: COMERCIAL - VENDAS RECORRENTES
+============================================================
+
+PUT /api/recurring-sales/parameters
+{
+  "enterprise_code": 1,
+  "current_month_billing_limit_day": 10,
+  "group_order_item_total": true,
+  "indefinite_delivery_day": 10,
+  "fixed_term_delivery_day": 15,
+  "consider_discounts_additions": false,
+  "generic_representative_code": 999,
+  "generic_sales_plan_code": 1,
+  "updated_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/recurring-sales/adjustment-dates
+{
+  "enterprise_code": 1,
+  "customer_code": 100,
+  "establishment_code": 1,
+  "adjustment_date": "2027-07-01",
+  "notes": "Reajuste anual de contrato",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+POST /api/recurring-sales/create
+{
+  "enterprise_code": 1,
+  "customer_code": 100,
+  "establishment_code": 1,
+  "item_code": 1001,
+  "item_mask": "PADRAO",
+  "sales_plan_code": 1,
+  "movement_type": "SALE",
+  "term_type": "INDEFINITE",
+  "sale_date": "2026-07-01",
+  "next_adjustment_date": "2027-07-01",
+  "quantity": 1,
+  "unit_value": 199.90,
+  "reason": "Contrato mensal",
+  "created_by": "00000000-0000-0000-0000-000000000000",
+  "representatives": [
+    {
+      "representative_code": 1,
+      "is_primary": true,
+      "commission_percent": 5,
+      "commission_base": "ADJUSTED",
+      "is_lifetime": true
+    }
+  ]
+}
+
+POST /api/recurring-sales/1/generate-order
+{
+  "created_by": "00000000-0000-0000-0000-000000000000",
+  "emission_date": "2026-07-01",
+  "sales_division_code": 1,
+  "payment_term_code": 1,
+  "price_table_code": 1,
+  "warehouse_code": 1,
+  "sales_uom": "UN",
+  "confirm_order": false
+}
+
+POST /api/recurring-sales/1/generate-order
+{
+  "order_code": 12345
+}
+
+POST /api/recurring-sales/adjustments/calculate
+{
+  "enterprise_code": 1,
+  "customer_code": 100,
+  "adjustment_date": "2027-07-01",
+  "adjustment_percent": 8.5,
+  "reason": "Reajuste anual pelo indice contratual",
+  "created_by": "00000000-0000-0000-0000-000000000000",
+  "confirm": false
+}
+
+POST /api/recurring-sales/2/recalculate-adjustment
+{
+  "adjustment_percent": 7.25,
+  "reason": "Recalculo aprovado pela diretoria"
+}
+
+POST /api/recurring-sales/1/cancel
+{
+  "reason": "Cliente solicitou encerramento",
+  "created_by": "00000000-0000-0000-0000-000000000000"
+}
+
+GET /api/recurring-sales/list?customer_code=100&active=true
+GET /api/recurring-sales/monthly-revenue?from=2026-07-01&to=2026-12-01&customer_code=100&adjustment_percent=8.5
+GET /api/recurring-sales/future-commissions?from=2026-07-01&to=2026-12-01&representative_code=1
+
+
+============================================================
+MÓDULO: EXPEDIÇÃO / CARGAS
+============================================================
+
+POST /api/shipments/dispatch-boxes
+{
+  "code": "BOX-01",
+  "description": "Doca principal",
+  "warehouse_id": 1,
+  "zone": "EXPEDICAO"
+}
+
+POST /api/shipments/loads
+{
+  "description": "Carga Sul",
+  "carrier_code": 10,
+  "vehicle_plate": "ABC1D23",
+  "driver_name": "Joao da Silva",
+  "driver_document": "12345678900",
+  "route_code": "SUL-01",
+  "origin": "Fabrica Matriz",
+  "destination": "Clientes Regiao Sul",
+  "dispatch_box_code": "BOX-01",
+  "planned_ship_date": "2026-07-10",
+  "estimated_delivery": "2026-07-12",
+  "notes": "Carregar pallets primeiro"
+}
+
+POST /api/shipments/loads/9001/shipments
+{
+  "shipment_code": 1042,
+  "sequence": 1
+}
+
+POST /api/shipments/loads/9001/fiscal-notes
+{
+  "shipment_code": 1042,
+  "fiscal_exit_id": 501,
+  "nfe_number": 12345,
+  "nfe_key": "35260700000000000000550010000123451000123456",
+  "sequence": 1
+}
+
+POST /api/shipments/delivery-instructions
+{
+  "load_code": 9001,
+  "customer_id": 100,
+  "title": "Entrega agendada",
+  "instruction": "Confirmar doca com 2 horas de antecedencia",
+  "priority": 1
+}
+
+POST /api/shipments/loads/9001/box
+{
+  "box_code": "BOX-01"
+}
+
+POST /api/shipments/loads/9001/release
+-- Sem corpo de requisição
+
+POST /api/shipments/loads/9001/start-loading
+-- Sem corpo de requisição
+
+POST /api/shipments/loads/9001/finish-loading
+-- Sem corpo de requisição
+
+POST /api/shipments/loads/9001/ship
+-- Sem corpo de requisição
+
+POST /api/shipments/loads/9001/cancel
+{
+  "reason": "Replanejamento logistico"
+}
+
+GET /api/shipments/loads?status=PLANNED&from=2026-07-01&to=2026-07-31
+GET /api/shipments/loads/monitor?status=RELEASED
+GET /api/shipments/loads/separation-monitor
+GET /api/shipments/loads/logistic-panel
+
+
+============================================================
+MÓDULO: FISCAL — FATURAMENTO POR CARGA / CUPOM
+============================================================
+
+POST /api/fiscal/exits/from-load
+{
+  "load_code": 9001,
+  "serie": "001",
+  "data_emissao": "2026-07-06",
+  "data_saida": "2026-07-06",
+  "cnpj_destinatario": "98765432000188",
+  "razao_social_destinatario": "Cliente Exemplo SA",
+  "ie_destinatario": "1234567890",
+  "uf_destinatario": "SP",
+  "tipo_pessoa": "J",
+  "cfop": "5102",
+  "natureza_operacao": "Venda de mercadoria adquirida de terceiros",
+  "valor_frete": 180.00,
+  "valor_seguro": 0.00,
+  "valor_desconto": 0.00,
+  "origem_mercadoria": "0",
+  "item_overrides": [
+    {
+      "shipment_code": 1042,
+      "item_code": 1001,
+      "unit_price": 125.50,
+      "ncm": "73089010",
+      "description": "Perfil dobrado galvanizado"
+    }
+  ]
+}
+
+POST /api/fiscal/exits/create
+{
+  "numero_nf": 1200,
+  "serie": "001",
+  "data_emissao": "2026-07-06",
+  "cfop": "5929",
+  "natureza_operacao": "Operacao tambem registrada em cupom fiscal",
+  "valor_produtos": 250.00,
+  "valor_frete": 0.00,
+  "valor_seguro": 0.00,
+  "valor_desconto": 0.00,
+  "source_type": "COUPON",
+  "fiscal_coupon_number": "CF-123456",
+  "fiscal_coupon_date": "2026-07-06",
+  "fiscal_coupon_ecf_serial": "ECF000123456",
+  "itens": [
+    {
+      "sequence": 1,
+      "item_code": 1001,
+      "ncm": "73089010",
+      "cfop": "5929",
+      "quantity": 2,
+      "unit_price": 125.00,
+      "total_price": 250.00,
+      "origem_mercadoria": "0",
+      "description": "Item vendido em cupom fiscal"
+    }
+  ]
+}
 
 
 ============================================================
