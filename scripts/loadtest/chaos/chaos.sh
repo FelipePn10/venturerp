@@ -14,7 +14,8 @@ set -euo pipefail
 
 API_URL="${API_URL:-https://api.venturerp.com}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5070/health}"
-RESULTS_DIR="scripts/loadtest/results"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESULTS_DIR="$SCRIPT_DIR/../results"
 INTERFACE="${INTERFACE:-eth0}"
 CHAOS_DURATION=30
 BASELINE_REQUESTS=30
@@ -270,26 +271,28 @@ test_packet_loss() {
 generate_report() {
   header "RELATORIO FINAL DE CHAOS ENGINEERING"
   {
+    echo ""
     echo "Chaos Engineering Report"
-    echo "========================="
+    echo "========================"
     echo "Data: $(date)"
     echo "Alvo: $API_URL"
     echo "Duracao de cada teste: ${CHAOS_DURATION}s"
     echo ""
-    echo "Resultados: ver acima"
-    echo ""
-    echo "Observacoes:"
+    echo "Diagnostico:"
     echo "- Se a API manteve 200 durante o stress: RESILIENTE"
     echo "- Se houve degradacao mas recuperou: TOLERANTE A FALHAS"
     echo "- Se caiu e nao voltou: FRAGIL — implementar circuit breaker / retry"
     echo ""
+    echo "=============================================="
     echo "Recomendacoes:"
-    echo "1. Adicionar rate limiting se ainda nao tem"
-    echo "2. Configurar health checks no systemd (RestartSec)"
-    echo "3. Usar connection pooling no banco de dados"
-    echo "4. Considerar cache (Redis) para queries repetitivas"
-    echo "5. Monitorar memoria com Prometheus (ja configurado)"
-  } | tee "$REPORT_FILE"
+    echo "1. Rate limiting ja implementado (RATE_LIMIT_RPS no .env)"
+    echo "2. Health checks no systemd (Restart=always, RestartSec=5)"
+    echo "3. Connection pooling gerenciado pelo sqlc/database/sql"
+    echo "4. Cache (Redis) para queries repetitivas de relatorios"
+    echo "5. Monitoramento via Prometheus + Grafana (ja configurado)"
+    echo "6. Se latencia aumentar sob CPU stress, considerar escalar VPS"
+    echo "=============================================="
+  } >> "$REPORT_FILE"
 
   echo ""
   ok "Relatorio salvo em: $REPORT_FILE"
@@ -304,6 +307,12 @@ main() {
   echo "╚══════════════════════════════════════════════════════════╝"
   echo ""
 
+  REPORT_FILE="$RESULTS_DIR/chaos-report-$(date +%Y%m%d-%H%M%S).txt"
+  mkdir -p "$RESULTS_DIR"
+
+  # Tee toda saida para o relatorio e stdout
+  exec > >(tee -a "$REPORT_FILE") 2>&1
+
   check_prereqs
 
   log "Verificando se a API esta online..."
@@ -311,6 +320,12 @@ main() {
     fail "API offline — abortando"
     exit 1
   fi
+
+  log "Alvo: $API_URL"
+  log "Health direto: $HEALTH_URL"
+  log "Interface de rede: $INTERFACE"
+  log "Relatorio: $REPORT_FILE"
+  echo ""
 
   test_cpu_stress
   test_memory_stress
@@ -320,6 +335,7 @@ main() {
 
   echo ""
   ok "Todos os testes de chaos concluidos!"
+  ok "Relatorio completo: $REPORT_FILE"
 }
 
 main "$@"
