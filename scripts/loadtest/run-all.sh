@@ -62,7 +62,8 @@ ensure_k6() {
   if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
     ok "Usando k6 via Docker"
     K6_CMD="docker run --rm -i \
-      -v $SCRIPT_DIR:/scripts \
+      --user $(id -u):$(id -g) \
+      -v $SCRIPT_DIR:/scripts:ro \
       -e TARGET_URL=$TARGET_URL \
       --network host \
       grafana/k6"

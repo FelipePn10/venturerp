@@ -68,15 +68,18 @@ run_baseline() {
   local n=${2:-$BASELINE_REQUESTS}
   local total_time=0
   local errors=0
-  local min=9999
+  local min=99999
   local max=0
 
   for i in $(seq 1 "$n"); do
-    local start=$(date +%s%3N 2>/dev/null || echo 0)
+    local start end elapsed
+    start=$(date +%s%3N 2>/dev/null || date +%s000)
     local code
-    code=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null)
-    local end=$(date +%s%3N 2>/dev/null || echo 0)
-    local elapsed=$((end - start))
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$HEALTH_URL" 2>/dev/null || echo "000")
+    end=$(date +%s%3N 2>/dev/null || date +%s000)
+    elapsed=$((end - start))
+    [ "$elapsed" -lt 0 ] && elapsed=0
+    [ "$elapsed" -gt 5000 ] && elapsed=5000
 
     total_time=$((total_time + elapsed))
     [ "$code" != "200" ] && errors=$((errors + 1))
@@ -85,7 +88,8 @@ run_baseline() {
   done
 
   local avg=$((total_time / n))
-  local err_rate=$(echo "scale=2; $errors * 100 / $n" | bc)
+  local err_rate
+  err_rate=$(echo "scale=2; $errors * 100 / $n" | bc 2>/dev/null || echo "0")
 
   echo "$label|$avg|$min|$max|$errors|$err_rate"
   return 0
