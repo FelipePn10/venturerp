@@ -1,37 +1,14 @@
-discovery.docker "containers" {
-  host = "unix:///var/run/docker.sock"
+loki.source.journal "api_logs" {
+  format_as_json = true
+  max_age         = "24h"
+  matches         = "_SYSTEMD_UNIT=panossoerp.service"
+  labels          = {
+    service = "panossoerp-api",
+  }
+  forward_to      = [loki.process.api.receiver]
 }
 
-discovery.relabel "containers" {
-  targets = discovery.docker.containers.targets
-
-  rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
-    target_label  = "compose_project"
-  }
-
-  rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    target_label  = "compose_service"
-  }
-
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "container"
-  }
-}
-
-loki.source.docker "containers" {
-  host          = "unix:///var/run/docker.sock"
-  targets       = discovery.relabel.containers.output
-  refresh_interval = "5s"
-  forward_to    = [loki.process.docker.receiver]
-}
-
-loki.process "docker" {
-  stage.docker {}
-
+loki.process "api" {
   stage.json {
     expressions = {
       level      = "level",
@@ -45,8 +22,8 @@ loki.process "docker" {
   }
 
   stage.drop {
-    source        = "path"
-    expression    = "/health.*|/metrics"
+    source             = "path"
+    expression         = "/health.*|/metrics"
     drop_counter_reason = "health_or_metrics"
   }
 
