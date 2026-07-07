@@ -5,15 +5,13 @@ distributor:
   receivers:
     otlp:
       protocols:
-        grpc:
-          endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
 
 ingester:
   trace_idle_period: 10s
   max_block_bytes: 1000000
-  max_block_duration: 5m
+  max_block_duration: 10m
 
 compactor:
   compaction:

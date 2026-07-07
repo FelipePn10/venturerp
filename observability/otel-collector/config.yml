@@ -1,8 +1,6 @@
 receivers:
   otlp:
     protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
 
@@ -13,13 +11,11 @@ processors:
 
 exporters:
   otlp/tempo:
-    endpoint: tempo:4317
+    endpoint: tempo:4318
     tls:
       insecure: true
   prometheus:
     endpoint: 0.0.0.0:8889
-  debug:
-    verbosity: basic
 
 service:
   pipelines:
@@ -31,7 +27,3 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [prometheus]
-    logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [debug]
