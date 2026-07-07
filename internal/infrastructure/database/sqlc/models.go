@@ -4239,6 +4239,12 @@ type FiscalExit struct {
 	TipoPagamento           pgtype.Text
 	BaseIcmsSt              pgtype.Numeric
 	ValorIcmsSt             pgtype.Numeric
+	SourceType              pgtype.Text
+	ShipmentLoadCode        *int64
+	ShipmentCode            *int64
+	FiscalCouponNumber      pgtype.Text
+	FiscalCouponDate        pgtype.Date
+	FiscalCouponEcfSerial   pgtype.Text
 }
 
 type FiscalExitItem struct {

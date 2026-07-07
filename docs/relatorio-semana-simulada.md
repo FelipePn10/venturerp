@@ -1,5 +1,4 @@
 # Relatório — Semana Simulada de Produção Metalúrgica
-## PanossoERP · Branch `wip/create_mrp` · 2026-06-16
 
 ---
 
