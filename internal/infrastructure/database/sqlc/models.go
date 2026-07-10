@@ -3221,6 +3221,187 @@ type CentrosCusto struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type CfgCharacteristic struct {
+	ID                int64
+	Code              string
+	Description       string
+	CharType          string
+	IsActive          bool
+	SetID             *int64
+	DefaultVariableID *int64
+	Mask              pgtype.Text
+	IsSpecial         bool
+	AffectsPrice      bool
+	ControlsGoals     bool
+	ReceivingType     string
+	FieldSource       pgtype.Text
+	Formula           pgtype.Text
+	IsRequired        bool
+	NumMin            pgtype.Numeric
+	NumMax            pgtype.Numeric
+	NumMultiple       pgtype.Numeric
+	OptionTrue        pgtype.Text
+	OptionFalse       pgtype.Text
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+}
+
+type CfgCharacteristicLanguage struct {
+	ID               int64
+	CharacteristicID int64
+	Language         string
+	Description      string
+	Mask             pgtype.Text
+}
+
+type CfgCharacteristicReceivingItem struct {
+	ID                 int64
+	CharacteristicID   int64
+	VariableID         *int64
+	ReceivingType      string
+	ItemCode           *int64
+	ClassificationCode *int64
+	CreatedAt          pgtype.Timestamptz
+}
+
+type CfgDescriptionType struct {
+	ID          int64
+	Code        string
+	Description string
+	Kind        string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type CfgEquivalentRule struct {
+	ID                     int64
+	ParentItemCode         int64
+	ParentUom              pgtype.Text
+	ChildItemCode          int64
+	ChildSeq               *int32
+	ParentCharacteristicID int64
+	ParentOperator         string
+	ParentVariableID       *int64
+	ChildCharacteristicID  int64
+	ChildOperator          string
+	ChildVariableID        *int64
+	Formula                pgtype.Text
+	IsActive               bool
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	CreatedBy              pgtype.UUID
+}
+
+type CfgItemCharDefaultAnswer struct {
+	ID                   int64
+	ItemCharacteristicID int64
+	VariableID           int64
+}
+
+type CfgItemCharacteristic struct {
+	ID                int64
+	ItemCode          int64
+	CharacteristicID  int64
+	Sequence          int32
+	DefaultVariableID *int64
+	ParentID          *int64
+	IsSpecial         bool
+	IsDrawing         bool
+	IsLoad            bool
+	Formula           pgtype.Text
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
+type CfgItemDescription struct {
+	ID                int64
+	ItemCode          int64
+	DescriptionTypeID int64
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+}
+
+type CfgItemDescriptionLine struct {
+	ID                   int64
+	ItemDescriptionID    int64
+	ItemCharacteristicID int64
+	OrderIndex           int32
+	ShowCharacteristic   bool
+	ShowMask             bool
+	DescType             string
+	Text                 string
+	LineBreak            bool
+}
+
+type CfgItemMaskAnswer struct {
+	ID               int64
+	MaskID           int64
+	CharacteristicID int64
+	VariableID       *int64
+	AnswerValue      string
+	Position         int32
+}
+
+type CfgItemRule struct {
+	ID          int64
+	ItemCode    int64
+	TargetTable string
+	TargetField string
+	Content     pgtype.Text
+	Formula     pgtype.Text
+	Description pgtype.Text
+	Situation   string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type CfgItemRuleCondition struct {
+	ID               int64
+	RuleID           int64
+	CharacteristicID int64
+	Operator         string
+	VariableID       *int64
+	Sequence         int32
+}
+
+type CfgSet struct {
+	ID          int64
+	Description string
+	IsActive    bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type CfgVariable struct {
+	ID                 int64
+	SetID              int64
+	Code               string
+	Description        string
+	MaskComposition    string
+	IsActive           bool
+	IsSpecial          bool
+	IncludeDescription bool
+	SpecialData        pgtype.Text
+	Marketing          bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	CreatedBy          pgtype.UUID
+}
+
+type CfgVariableLanguage struct {
+	ID          int64
+	VariableID  int64
+	Language    string
+	Country     pgtype.Text
+	Translation string
+}
+
 type Cfop struct {
 	ID              int64
 	Code            int32
@@ -3938,6 +4119,55 @@ type DeliveryTankReservation struct {
 type DeliveryTankReservationSequence struct {
 	ID       int64
 	LastCode int64
+}
+
+type Drawing struct {
+	ID           int64
+	Code         string
+	Digit        string
+	Format       string
+	Model        pgtype.Text
+	ItemCode     *int64
+	Description  pgtype.Text
+	Uom          pgtype.Text
+	Weight       pgtype.Numeric
+	MaterialSpec pgtype.Text
+	CreationDate pgtype.Date
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+}
+
+type DrawingCharacteristic struct {
+	ID               int64
+	DrawingID        int64
+	CharacteristicID int64
+	Operator         string
+	VariableID       *int64
+	CreatedAt        pgtype.Timestamptz
+}
+
+type DrawingRevision struct {
+	ID           int64
+	DrawingID    int64
+	Revision     string
+	StartDate    pgtype.Date
+	EndDate      pgtype.Date
+	MaterialSpec pgtype.Text
+	Reason       pgtype.Text
+	ApprovedBy   pgtype.Text
+	ApprovalDate pgtype.Date
+	IsCurrent    bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type DrawingRevisionDistribution struct {
+	ID            int64
+	RevisionID    int64
+	Recipient     string
+	DistributedAt pgtype.Date
+	Notes         pgtype.Text
 }
 
 type EmployeeLegacy struct {
@@ -4912,14 +5142,6 @@ type ItemMask struct {
 	CreatedAt pgtype.Timestamptz
 }
 
-type ItemMaskAnswer struct {
-	ID         int64
-	QuestionID int64
-	OptionID   int64
-	Position   int32
-	MaskID     int64
-}
-
 type ItemPlanningExtra struct {
 	ID           int64
 	ItemCode     int64
@@ -4954,22 +5176,6 @@ type ItemPurchaseCost struct {
 	Currency  string
 	UpdatedAt pgtype.Timestamptz
 	UpdatedBy pgtype.UUID
-}
-
-type ItemQuestion struct {
-	ItemCode   int64
-	QuestionID int64
-	Position   int32
-	CreatedAt  pgtype.Timestamptz
-}
-
-type ItemQuestionAnswer struct {
-	ID         int64
-	ItemID     int64
-	QuestionID int64
-	Answer     string
-	CreatedBy  pgtype.UUID
-	CreatedAt  pgtype.Timestamptz
 }
 
 type ItemStandardCost struct {
@@ -5041,6 +5247,34 @@ type LegalDevice struct {
 	Description string
 	IsActive    bool
 	CreatedAt   pgtype.Timestamptz
+}
+
+type LotMask struct {
+	ID                 int64
+	Application        string
+	CustomerCode       *int64
+	ItemCode           *int64
+	ClassificationType pgtype.Text
+	ClassificationCode *int64
+	ZeroOnYearChange   bool
+	IsActive           bool
+	Description        pgtype.Text
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	CreatedBy          pgtype.UUID
+}
+
+type LotMaskPart struct {
+	ID               int64
+	LotMaskID        int64
+	Sequence         int32
+	PartType         string
+	Value            string
+	Size             int32
+	DateFormat       pgtype.Text
+	ZeroOnYearChange bool
+	CurrentValue     string
+	LastYear         *int32
 }
 
 type Machine struct {
@@ -5683,6 +5917,16 @@ type ProductionOrderOperation struct {
 	UpdatedAt         pgtype.Timestamptz
 }
 
+type ProductionOrderOperationToolSerial struct {
+	ID                         int64
+	ProductionOrderOperationID int64
+	ToolID                     int64
+	ToolSerialID               int64
+	AssignedAt                 pgtype.Timestamptz
+	AssignedBy                 pgtype.UUID
+	UpdatedAt                  pgtype.Timestamptz
+}
+
 type ProductionPlan struct {
 	ID                  int64
 	Code                int64
@@ -5947,21 +6191,6 @@ type QualityRecord struct {
 	Notes             pgtype.Text
 	CreatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
-}
-
-type Question struct {
-	ID        int64
-	Name      string
-	Createdby pgtype.UUID
-	CreatedAt pgtype.Timestamptz
-}
-
-type QuestionOption struct {
-	ID         int64
-	QuestionID int64
-	Value      string
-	CreatedAt  pgtype.Timestamptz
-	CreatedBy  pgtype.UUID
 }
 
 type ReceivingDivergence struct {
@@ -7769,6 +7998,31 @@ type Tool struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 	CreatedBy pgtype.UUID
+}
+
+type ToolSerial struct {
+	ID           int64
+	ToolID       int64
+	SerialNumber string
+	Status       string
+	LifeUsed     pgtype.Numeric
+	Location     pgtype.Text
+	Notes        pgtype.Text
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+}
+
+type ToolSerialSubstitution struct {
+	ID                         int64
+	ProductionOrderOperationID int64
+	ToolID                     int64
+	OldSerialID                *int64
+	NewSerialID                int64
+	Reason                     pgtype.Text
+	SubstitutedAt              pgtype.Timestamptz
+	SubstitutedBy              pgtype.UUID
 }
 
 type Uf struct {

@@ -25,6 +25,30 @@ func TestNewTool_ValidationAndDefaults(t *testing.T) {
 	}
 }
 
+func TestNewToolSerial_ValidationAndDefaults(t *testing.T) {
+	if _, err := NewToolSerial(0, "SN-1", "", "", "", uuid.New()); err == nil {
+		t.Error("expected error for non-positive tool_id")
+	}
+	if _, err := NewToolSerial(1, "", "", "", "", uuid.New()); err == nil {
+		t.Error("expected error for empty serial_number")
+	}
+	if _, err := NewToolSerial(1, "SN-1", "XPTO", "", "", uuid.New()); err == nil {
+		t.Error("expected error for invalid status")
+	}
+	s, err := NewToolSerial(1, "SN-1", "", "Almox A", "nova", uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Status != SerialActive || !s.IsActive || !s.Available() {
+		t.Errorf("defaults not applied: %+v", s)
+	}
+	// A serial under maintenance is not available to run an operation.
+	s.Status = SerialMaintenance
+	if s.Available() {
+		t.Error("maintenance serial must not be available")
+	}
+}
+
 func TestTool_LifeHelpers(t *testing.T) {
 	// Untracked (limit 0) → remaining -1, never needs replacement.
 	untracked := &Tool{LifeLimit: 0, LifeUsed: 999}

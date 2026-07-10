@@ -161,26 +161,6 @@ SELECT EXISTS (
 -- name: HasCyclicReference :one
 SELECT has_cycle($1::BIGINT, $2::BIGINT) AS has_cycle;
 
--- name: GetItemMaskAnswersByValue :many
-SELECT
-    ima.question_id,
-    ima.position,
-    ima.option_id
-FROM item_masks im
-         JOIN item_mask_answers ima ON ima.mask_id = im.id
-WHERE im.item_code = $1
-  AND im.mask = $2
-ORDER BY ima.position;
-
-
--- name: GetItemQuestions :many
-SELECT
-    iq.question_id,
-    iq.position
-FROM item_questions iq
-WHERE iq.item_code = $1
-ORDER BY iq.position;
-
 -- name: SequenceExists :one
 SELECT EXISTS (
     SELECT 1

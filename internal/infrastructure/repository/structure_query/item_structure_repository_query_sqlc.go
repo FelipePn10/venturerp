@@ -42,28 +42,22 @@ func (r *StructureQueryRepositorySQLC) CreateMaskForItem(
 	createdBy uuid.UUID,
 ) error {
 
-	m, err := r.q.InsertItemtMask(ctx, sqlc.InsertItemtMaskParams{
-		ItemCode:  itemCode,
-		Mask:      mask,
-		MaskHash:  maskHash(mask),
-		CreatedBy: pgutil.ToPgUUID(createdBy),
-	})
+	// Persiste a máscara propagada em item_masks + cfg_item_mask_answers
+	// (QuestionID → characteristic_id, OptionID → variable_id).
+	maskID, err := r.q.PersistCfgItemMask(ctx, itemCode, mask, maskHash(mask), pgutil.ToPgUUID(createdBy))
 	if err != nil {
 		return err
 	}
-
 	for _, a := range answers {
-		err := r.q.InsertItemMaskAnswer(ctx, sqlc.InsertItemMaskAnswerParams{
-			MaskID:     m.ID,
-			QuestionID: a.QuestionID,
-			OptionID:   a.OptionID,
-			Position:   a.Position,
-		})
-		if err != nil {
+		value, verr := r.q.GetCfgVariableMaskComposition(ctx, a.OptionID)
+		if verr != nil {
+			value = ""
+		}
+		vid := a.OptionID
+		if err := r.q.InsertCfgItemMaskAnswer(ctx, maskID, a.QuestionID, pgutil.ToPgInt8Ptr(&vid), value, a.Position); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -110,52 +104,36 @@ func (r *StructureQueryRepositorySQLC) GetMaskAnswersByItemAndValue(
 	mask string,
 ) ([]maskvo.MaskAnswer, error) {
 
-	rows, err := r.q.GetMaskAnswersByItemAndValue(ctx, sqlc.GetMaskAnswersByItemAndValueParams{
-		ItemCode: itemCode,
-		Mask:     mask,
-	})
+	// characteristic_id → QuestionID, variable_id → OptionID.
+	rows, err := r.q.CfgStructMaskAnswers(ctx, itemCode, mask)
 	if err != nil {
-		return nil, fmt.Errorf("fetching mask answers for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("fetching cfg mask answers for item %d: %w", itemCode, err)
 	}
-
 	out := make([]maskvo.MaskAnswer, 0, len(rows))
-
 	for _, row := range rows {
-
-		answer, err := maskvo.NewMaskAnswer(
-			row.QuestionID,
-			row.OptionID,
-			int(row.Position),
-			row.OptionValue,
-		)
+		answer, err := maskvo.NewMaskAnswer(row.CharacteristicID, row.VariableID, int(row.Position), row.AnswerValue)
 		if err != nil {
-			return nil, fmt.Errorf("invalid mask answer from DB: %w", err)
+			return nil, fmt.Errorf("invalid cfg mask answer from DB: %w", err)
 		}
-
 		out = append(out, answer)
 	}
-
 	return out, nil
 }
+
 func (r *StructureQueryRepositorySQLC) GetItemQuestions(
 	ctx context.Context,
 	itemCode int64,
 ) ([]maskservice.ItemQuestion, error) {
 
-	rows, err := r.q.GetItemQuestions(ctx, itemCode)
+	// characteristic_id → QuestionID, sequence → Position.
+	rows, err := r.q.CfgStructItemQuestions(ctx, itemCode)
 	if err != nil {
-		return nil, fmt.Errorf("fetching item questions for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("fetching cfg item questions for item %d: %w", itemCode, err)
 	}
-
 	out := make([]maskservice.ItemQuestion, 0, len(rows))
-
 	for _, row := range rows {
-		out = append(out, maskservice.ItemQuestion{
-			QuestionID: row.QuestionID,
-			Position:   row.Position,
-		})
+		out = append(out, maskservice.ItemQuestion{QuestionID: row.CharacteristicID, Position: row.Position})
 	}
-
 	return out, nil
 }
 
@@ -227,18 +205,14 @@ func (r *StructureQueryRepositorySQLC) GetMaskAnswersWithNames(
 	mask string,
 ) (map[string]float64, error) {
 
-	rows, err := r.q.GetMaskAnswersWithNames(ctx, sqlc.GetMaskAnswersWithNamesParams{
-		ItemCode: itemCode,
-		Mask:     mask,
-	})
+	rows, err := r.q.CfgStructMaskAnswersWithNames(ctx, itemCode, mask)
 	if err != nil {
-		return nil, fmt.Errorf("fetching mask answers with names for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("fetching cfg mask answers with names for item %d: %w", itemCode, err)
 	}
-
 	vars := make(map[string]float64, len(rows))
 	for _, row := range rows {
-		if v, ok := formula.ParseOptionValue(row.OptionValue); ok {
-			vars[row.QuestionName] = v
+		if v, ok := formula.ParseOptionValue(row.AnswerValue); ok {
+			vars[row.Code] = v
 		}
 	}
 	return vars, nil

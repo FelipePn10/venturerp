@@ -176,7 +176,81 @@ func (r *ToolRepositorySQLC) ListToolsByRoute(ctx context.Context, routeID int64
 	return out, nil
 }
 
+// ─── serials (physical instances) ────────────────────────────────────────────
+
+func (r *ToolRepositorySQLC) CreateToolSerial(ctx context.Context, s *entity.ToolSerial) (*entity.ToolSerial, error) {
+	row, err := r.q.CreateToolSerial(ctx, sqlc.CreateToolSerialParams{
+		ToolID:       s.ToolID,
+		SerialNumber: s.SerialNumber,
+		Status:       s.Status,
+		Location:     pgutil.ToPgTextFromString(s.Location),
+		Notes:        pgutil.ToPgTextFromString(s.Notes),
+		CreatedBy:    pgutil.ToPgUUID(s.CreatedBy),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating tool serial: %w", err)
+	}
+	return toolSerialRowToEntity(row), nil
+}
+
+func (r *ToolRepositorySQLC) UpdateToolSerial(ctx context.Context, s *entity.ToolSerial) (*entity.ToolSerial, error) {
+	row, err := r.q.UpdateToolSerial(ctx, sqlc.UpdateToolSerialParams{
+		ID:           s.ID,
+		SerialNumber: s.SerialNumber,
+		Status:       s.Status,
+		Location:     pgutil.ToPgTextFromString(s.Location),
+		Notes:        pgutil.ToPgTextFromString(s.Notes),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("updating tool serial %d: %w", s.ID, err)
+	}
+	return toolSerialRowToEntity(row), nil
+}
+
+func (r *ToolRepositorySQLC) GetToolSerial(ctx context.Context, id int64) (*entity.ToolSerial, error) {
+	row, err := r.q.GetToolSerial(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("tool serial %d not found: %w", id, err)
+	}
+	return toolSerialRowToEntity(row), nil
+}
+
+func (r *ToolRepositorySQLC) ListToolSerials(ctx context.Context, toolID int64, onlyActive bool) ([]*entity.ToolSerial, error) {
+	rows, err := r.q.ListToolSerials(ctx, sqlc.ListToolSerialsParams{ToolID: toolID, OnlyActive: onlyActive})
+	if err != nil {
+		return nil, fmt.Errorf("listing serials for tool %d: %w", toolID, err)
+	}
+	out := make([]*entity.ToolSerial, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toolSerialRowToEntity(row))
+	}
+	return out, nil
+}
+
+func (r *ToolRepositorySQLC) DeactivateToolSerial(ctx context.Context, id int64) error {
+	if err := r.q.DeactivateToolSerial(ctx, id); err != nil {
+		return fmt.Errorf("deactivating tool serial %d: %w", id, err)
+	}
+	return nil
+}
+
 // ─── mappers ─────────────────────────────────────────────────────────────────
+
+func toolSerialRowToEntity(row sqlc.DBToolSerial) *entity.ToolSerial {
+	return &entity.ToolSerial{
+		ID:           row.ID,
+		ToolID:       row.ToolID,
+		SerialNumber: row.SerialNumber,
+		Status:       row.Status,
+		LifeUsed:     pgutil.FromPgNumericToFloat64(row.LifeUsed),
+		Location:     pgutil.FromPgText(row.Location),
+		Notes:        pgutil.FromPgText(row.Notes),
+		IsActive:     row.IsActive,
+		CreatedAt:    pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:    pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy:    pgutil.FromPgUUID(row.CreatedBy),
+	}
+}
 
 func toolRowToEntity(row sqlc.Tool) *entity.Tool {
 	return &entity.Tool{

@@ -3516,6 +3516,241 @@ POST /api/fiscal/exits/create
 
 
 ============================================================
+MÓDULO: CONFIGURADOR DE PRODUTO (FASE 1)
+============================================================
+
+POST /api/configurator/sets
+{ "description": "COR" }
+
+POST /api/configurator/sets/{id}/variables
+{
+  "code": "AZ",
+  "description": "Azul",
+  "mask_composition": "AZUL",
+  "is_special": false,
+  "include_description": false,
+  "special_data": "",
+  "marketing": false
+}
+
+POST /api/configurator/variables/{varId}/languages
+{ "language": "en-US", "country": "USA", "translation": "Blue" }
+
+POST /api/configurator/characteristics
+{
+  "code": "COR_TAMPA",
+  "description": "Cor da tampa",
+  "type": "ESCOLHA",
+  "set_id": 1,
+  "default_variable_id": 7,
+  "mask": "#COR#",
+  "affects_price": true,
+  "controls_goals": false,
+  "receiving_type": "NENHUM"
+}
+-- type ∈ ESCOLHA | ESCOLHA_MULT | FORMULA | DESENHO | INF_CARACTER |
+--        INF_NUMERICA | OPCAO | CAMPO | SEQUENCIAL
+
+POST /api/configurator/items/{itemCode}/characteristics
+{
+  "characteristic_id": 3,
+  "sequence": 10,
+  "default_variable_id": 7,
+  "parent_id": null,
+  "is_special": false,
+  "is_drawing": false,
+  "is_load": false,
+  "default_answers": []
+}
+
+POST /api/configurator/generate-mask
+{
+  "item_code": 4444,
+  "persist": true,
+  "answers": [
+    { "characteristic_id": 3, "variable_id": 8 },
+    { "characteristic_id": 4, "value": "50" }
+  ]
+}
+
+POST /api/configurator/generate-masks
+-- produto cartesiano das características ESCOLHA + restrições/dependências
+{
+  "item_code": 4444,
+  "restrict": [ { "characteristic_id": 3, "variable_ids": [7, 8] } ],
+  "customer_code": null,
+  "division_id": null,
+  "persist": true
+}
+
+============================================================
+MÓDULO: CONFIGURADOR — REGRAS (FASE 5)
+============================================================
+
+POST /api/configurator/equivalent-rules
+{
+  "parent_item_code": 1001, "child_item_code": 2002, "child_seq": 10,
+  "parent_characteristic_id": 3, "parent_operator": "EQUAL", "parent_variable_id": 7,
+  "child_characteristic_id": 9, "child_operator": "EQUAL", "child_variable_id": 12
+}
+
+POST /api/configurator/equivalent-rules/apply
+{ "parent_item_code": 1001, "answers": [ { "characteristic_id": 3, "variable_id": 7 } ] }
+-- retorna as respostas equivalentes do item filho
+
+POST /api/configurator/item-rules
+{
+  "item_code": 4444, "target_table": "ENGENHARIA", "target_field": "loss_percentage",
+  "content": "66", "description": "Perda 66% quando opção sim", "situation": "ACTIVE",
+  "conditions": [ { "characteristic_id": 3, "operator": "EQUAL", "variable_id": 8 } ]
+}
+-- operator ∈ EQUAL | DIFFERENT | GREATER | LESS | BELONGS | NOT_BELONGS
+
+POST /api/configurator/item-rules/evaluate
+{ "item_code": 4444, "answers": [ { "characteristic_id": 3, "variable_id": 8 } ] }
+-- retorna [{ target_table, target_field, content }] das regras que dispararam
+-- Botão F: se a regra tem "formula", o content é o resultado calculado (ex.: QTD*10)
+
+POST /api/configurator/characteristics/{id}/receiving-items
+-- Botão Itens do Tipo Recebimento (encarroçadora)
+{ "variable_id": 8, "receiving_type": "RECEBIMENTO", "item_code": 4444, "classification_code": null }
+-- receiving_type ∈ RECEBIMENTO | VINCULO
+
+GET  /api/configurator/characteristics/{id}/items
+-- Botão Itens Vinculados: itens que usam a característica (sem corpo)
+
+-- NOTA: o configurador legado (/api/questions, /api/items/mask/generate) foi REMOVIDO;
+-- use /api/configurator. Ver dev/configurador-migracao-legado.md.
+
+============================================================
+MÓDULO: CONFIGURADOR — TIPOS/DESCRIÇÃO DE ITENS (FASE 4)
+============================================================
+
+POST /api/configurator/description-types
+{ "code": "NF", "description": "Rótulo da Nota Fiscal", "kind": "RELATORIO" }
+
+POST /api/configurator/item-descriptions
+{ "item_code": 4444, "description_type_id": 1 }
+-- carrega uma linha por característica do item na grade
+
+PUT /api/configurator/item-descriptions/{id}/lines
+{
+  "lines": [
+    { "id": 10, "order_index": 1, "show_characteristic": true, "show_mask": true,
+      "desc_type": "DESCRICAO", "text": ": ", "line_break": false }
+  ]
+}
+-- desc_type ∈ DESCRICAO | COMP_MASCARA
+
+POST /api/configurator/item-descriptions/{id}/render   (Botão V)
+{ "answers": [ { "characteristic_id": 3, "variable_id": 8 } ] }
+-- resposta: { "text": "Cor da tampa: AZUL", "segments": ["Cor da tampa: AZUL"] }
+
+POST /api/configurator/item-descriptions/{id}/reload
+-- recarrega a grade das características atuais do item
+
+============================================================
+MÓDULO: CONFIGURADOR — DESENHOS E MÁSCARA DE LOTES (FASE 3)
+============================================================
+
+POST /api/drawings
+{
+  "code": "DES-1001",
+  "digit": "1",
+  "format": "A4",
+  "model": "M10",
+  "item_code": 4444,
+  "description": "Chapa lateral",
+  "uom": "UN",
+  "weight": 12.5,
+  "material_spec": "ACO 1020",
+  "creation_date": "2026-07-09"
+}
+
+POST /api/drawings/{id}/revisions
+{
+  "revision": "R1",
+  "start_date": "2026-01-01",
+  "end_date": "2026-12-31",
+  "material_spec": "ACO 1020",
+  "reason": "Ajuste de furação",
+  "approved_by": "Engenharia",
+  "approval_date": "2026-01-02",
+  "is_current": true
+}
+
+POST /api/lot-masks
+{ "application": "SUPRIMENTOS", "item_code": 4444, "zero_on_year_change": true }
+
+POST /api/lot-masks/{id}/parts
+{ "sequence": 1, "part_type": "CARACTER", "value": "LT", "size": 2 }
+{ "sequence": 2, "part_type": "DATA", "date_format": "YYMM" }
+{ "sequence": 3, "part_type": "SEQ_NUMERICA", "value": "1", "size": 4, "zero_on_year_change": true }
+-- part_type ∈ CARACTER | DATA | SEQ_NUMERICA | SEQ_CARACTER
+
+POST /api/lot-masks/generate
+{ "lot_mask_id": 5 }
+-- ou por contexto: { "application": "SUPRIMENTOS", "item_code": 4444 }
+
+============================================================
+MÓDULO: FERRAMENTAS — CADASTRO, SÉRIES E FICHA DE PRODUÇÃO
+============================================================
+
+POST /api/routing/tools
+-- Cadastro de Ferramentas (mestre). `code` é gerado automaticamente.
+{
+  "name": "Matriz Corte 200",
+  "tool_type": "MATRIZ",
+  "life_type": "GOLPES",
+  "life_limit": 100000,
+  "cost": 5000
+}
+-- life_type ∈ GOLPES | HORAS | PECAS ; status ∈ ATIVA | MANUTENCAO | INATIVA
+
+POST /api/routing/tools/{id}/reset-life
+-- zera a vida útil após a troca física (sem corpo)
+
+POST /api/routing/tools/{id}/serials
+{
+  "serial_number": "SN-A",
+  "status": "ATIVA",
+  "location": "Almox A",
+  "notes": ""
+}
+
+PUT /api/routing/tools/serials/{serialId}
+{
+  "serial_number": "SN-A",
+  "status": "MANUTENCAO",
+  "location": "Bancada 3",
+  "notes": "afiação"
+}
+
+GET /api/tool-production-sheet/orders?q=
+-- LOV de ordens elegíveis (exclui tipo OFC). `q` filtra por nº/item.
+
+GET /api/tool-production-sheet/{orderId}
+-- Ficha completa (cabeçalho + operações + séries). Também é o botão "Atualiza".
+
+POST /api/tool-production-sheet/assign
+{
+  "operation_id": 123,
+  "tool_id": 45,
+  "serial_id": 9
+}
+
+POST /api/tool-production-sheet/substitute
+{
+  "operation_id": 123,
+  "tool_id": 45,
+  "new_serial_id": 10,
+  "reason": "desgaste"
+}
+
+GET /api/tool-production-sheet/substitutions?operation_id=123&tool_id=45
+-- Histórico de substituições de série da operação/ferramenta.
+
+============================================================
 MÓDULO: HEALTH CHECK
 ============================================================
 

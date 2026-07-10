@@ -6,9 +6,13 @@
 .vscode
 .junie
 .claude
+.ai
+.ai/
+tasks/
 .docker
 .docs
 SESSION_SUMMARY.md
+AGENTS.md
 
 # Test/build artifacts
 coverage.out

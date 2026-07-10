@@ -18,10 +18,10 @@ Toda a documentação do ERP, organizada em **duas versões** de cada área:
 | Área | 📘 Apresentação (empresa) | 🛠️ Dev (técnico) |
 |---|---|---|
 | **Fluxo geral (ponta a ponta)** | [`00-fluxo-geral`](apresentacao/00-fluxo-geral.md) | [`00-fluxo-geral`](dev/00-fluxo-geral.md) · [`visao-geral`](dev/visao-geral.md) |
-| **Cadastros** (cliente, fornecedor, item, empresa, estrutura, configurador) | [`cadastros`](apresentacao/cadastros.md) | [`cadastros-cliente`](dev/cadastros-cliente.md) · [`cadastros-fornecedor`](dev/cadastros-fornecedor.md) · [`cadastros-item`](dev/cadastros-item.md) · [`cadastros-apoio`](dev/cadastros-apoio.md) |
+| **Cadastros** (cliente, fornecedor, item, empresa, estrutura, configurador) | [`cadastros`](apresentacao/cadastros.md) · [`configurador`](apresentacao/configurador.md) | [`cadastros-cliente`](dev/cadastros-cliente.md) · [`cadastros-fornecedor`](dev/cadastros-fornecedor.md) · [`cadastros-item`](dev/cadastros-item.md) · [`cadastros-apoio`](dev/cadastros-apoio.md) · [`configurador-produto`](dev/configurador-produto.md) · [`configurador-migracao-legado`](dev/configurador-migracao-legado.md) · [`desenhos-e-lotes`](dev/desenhos-e-lotes.md) |
 | **Máquinas e Roteiro** | [`maquinas`](apresentacao/maquinas.md) | [`maquinas-e-roteiro`](dev/maquinas-e-roteiro.md) |
 | **MRP e Planejamento** (MRP, CRP, APS, previsão, calendário, prioridade) | [`mrp-planejamento`](apresentacao/mrp-planejamento.md) | [`mrp-calculo`](dev/mrp-calculo.md) · [`manufatura-e-compras`](dev/manufatura-e-compras.md) |
-| **Produção** (OF, operações, qualidade, manutenção) | [`producao`](apresentacao/producao.md) | [`producao`](dev/producao.md) · [`manufatura-e-compras`](dev/manufatura-e-compras.md) |
+| **Produção** (OF, operações, qualidade, manutenção) | [`producao`](apresentacao/producao.md) | [`producao`](dev/producao.md) · [`manufatura-e-compras`](dev/manufatura-e-compras.md) · [`ficha-producao-ferramenta`](dev/ficha-producao-ferramenta.md) |
 | **Compras** (solicitação, cotação, pedido, recebimento, inspeção, contratos, EDI e IQF) | [`compras`](apresentacao/compras.md) | [`manufatura-e-compras`](dev/manufatura-e-compras.md) (§10–§16) |
 | **Vendas e Expedição** | [`vendas`](apresentacao/vendas.md) | [`vendas`](dev/vendas.md) |
 | **Romaneio / Expedição** (separação, conferência, volumes, transporte, NF-e) | [`romaneio`](apresentacao/romaneio.md) | [`romaneio`](dev/romaneio.md) |

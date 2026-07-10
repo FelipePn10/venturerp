@@ -25,4 +25,11 @@ type ToolRepository interface {
 	RemoveRouteOpTool(ctx context.Context, id int64) error
 	ListToolsByRouteOp(ctx context.Context, routeOperationID int64) ([]*entity.RouteOpTool, error)
 	ListToolsByRoute(ctx context.Context, routeID int64) ([]*entity.RouteOpTool, error)
+
+	// Serials (physical instances of a tool master)
+	CreateToolSerial(ctx context.Context, s *entity.ToolSerial) (*entity.ToolSerial, error)
+	UpdateToolSerial(ctx context.Context, s *entity.ToolSerial) (*entity.ToolSerial, error)
+	GetToolSerial(ctx context.Context, id int64) (*entity.ToolSerial, error)
+	ListToolSerials(ctx context.Context, toolID int64, onlyActive bool) ([]*entity.ToolSerial, error)
+	DeactivateToolSerial(ctx context.Context, id int64) error
 }

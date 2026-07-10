@@ -18,6 +18,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_header_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cnpj_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/configurator_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/consumer_service_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
@@ -27,6 +28,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/drawing_uc"
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/entry_operation_uc"
@@ -34,7 +36,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_classification_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
 	fiscalUC "github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/generate_mask_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/ibpt_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
@@ -45,6 +46,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_supplier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/location_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/lot_mask_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/maintenance_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
@@ -64,8 +66,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_quotation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_requisition_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/recurring_sales_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representative_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
@@ -81,6 +81,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/technical_assistance_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_sheet_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
@@ -112,7 +113,6 @@ import (
 	fiscalParamsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
 	fiscalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
 	fiscalClassRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal_classification"
-	generatemask "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/generate_mask"
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
 	ibptRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/ibpt"
 	independentDemand "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
@@ -121,7 +121,6 @@ import (
 	itemCalendarPromise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_calendar_promise"
 	itemClassificationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_classification"
 	itemConversionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_conversion"
-	itemquestion "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_question"
 	itemSupplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_supplier"
 	locationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/location"
 	machine "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine"
@@ -141,8 +140,6 @@ import (
 	purchaseQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_quotation"
 	purchaseReqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
 	qualityRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions"
-	questionsoptions "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/questions_options"
 	recurringSalesRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/recurring_sales"
 	representativeRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/representative"
 	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
@@ -220,36 +217,9 @@ func (app *application) mount() chi.Router {
 		r.Post("/login", userHandler.LoginHandler)
 	})
 
-	// question
-	questionRepo := questions.NewRepositoryQuestionSQLC(queries)
-	createQuestionUC := question_uc.NewCreateQuestion(questionRepo, authService)
-	findQuestionByNameUC := question_uc.NewFindQuestionByName(questionRepo)
-
-	questionCreateHandler := handler.NewQuestionHandler(createQuestionUC)
-	findQuestionByNameHandler := handler.NewFindQuestionByName(findQuestionByNameUC)
-
-	// question option
-	questionOptionRepo := questionsoptions.NewRepositoryQuestionOptionSQLC(queries)
-
-	createQuestionOptionUC := question_option_uc.NewCreateQuestionOptionUseCase(questionOptionRepo, authService)
-	listOptionsByQuestionUC := question_option_uc.NewListOptionsByQuestionUseCase(questionOptionRepo, authService)
-	questionOptionCreateHandler := handler.NewCreateQuestionOptionHandler(createQuestionOptionUC, listOptionsByQuestionUC)
-
 	// Item
 	itemRepo := item.NewRepositoryItemSQLC(queries)
 
-	// associate question in item
-	itemByQuestionItemRepo := itemquestion.NewAssociateQuestionItemRepositorySQLC(queries)
-	associateByQuestionItemUC := question_uc.NewAssociateByQuestionItemUseCase(itemByQuestionItemRepo, itemRepo, authService)
-	getQuestionsByItemUC := question_uc.NewGetQuestionsByItemUseCase(itemByQuestionItemRepo, authService)
-	listAllItemQuestionsUC := question_uc.NewListAllItemQuestionsUseCase(itemByQuestionItemRepo, authService)
-	associateByQuestionItemHandler := handler.NewAssociateByQuestionItemHandler(associateByQuestionItemUC, getQuestionsByItemUC, listAllItemQuestionsUC)
-
-	// generate mask item
-	generateMaskItem := generatemask.NewRepositoryGenerateMaskSQLC(queries)
-	generateMaskItemUC := generate_mask_uc.NewGenerateMaskItemUseCase(generateMaskItem, authService)
-	// Evaluator is set after evaluateRestrictionsUC is declared (see restriction block below).
-	generateMaskItemHandler := handler.NewGeneratMaskItemHandler(generateMaskItemUC)
 	createItemUc := item_uc.NewCreateItemUseCase(itemRepo, authService)
 	findItemByCodeUc := item_uc.NewFindItemByCode(itemRepo, authService)
 	listItemsUC := item_uc.NewListItemsUseCase(itemRepo, authService)
@@ -356,8 +326,6 @@ func (app *application) mount() chi.Router {
 	updateRestrictionUC := &restriction_uc.UpdateRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	deactivateRestrictionUC := &restriction_uc.DeactivateRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	evaluateRestrictionsUC := &restriction_uc.EvaluateRestrictionsUseCase{Repo: restrictionR}
-	// Wire restriction evaluator into generate mask so restrictions are enforced on mask creation.
-	generateMaskItemUC.Evaluator = evaluateRestrictionsUC
 	restrictionHandler := handler.NewRestrictionHandler(
 		createRestrictionUC, getRestrictionUC, listRestrictionsUC,
 		getRestrictionsByItemUC, getRestrictionsByCustomerUC,
@@ -497,6 +465,17 @@ func (app *application) mount() chi.Router {
 	toolRepository := toolRepo.New(queries)
 	toolUC := tool_uc.New(toolRepository)
 	toolHandler := handler.NewToolHandler(toolUC)
+
+	// Ficha de Produção da Ferramenta (tool production sheet)
+	toolSheetHandler := handler.NewToolSheetHandler(tool_sheet_uc.New(queries))
+
+	// Configurador de Produto (Fase 1)
+	configuratorHandler := handler.NewConfiguratorHandler(
+		configurator_uc.New(queries).WithRestrictions(evaluateRestrictionsUC))
+
+	// Cadastro de Desenhos + Máscara de Lotes/Séries (Configurador Fase 3)
+	drawingHandler := handler.NewDrawingHandler(drawing_uc.New(queries))
+	lotMaskHandler := handler.NewLotMaskHandler(lot_mask_uc.New(queries))
 
 	// cutting plan repo (handler wired after the stock repository is built — fase 2)
 	cuttingPlanRepo := cuttingPlanRepository.New(queries, app.db.Pool)
@@ -1101,9 +1080,6 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search/{code}", itemHandler.FindItemByCodeHandler)
 			r.With(httpmw.RequirePermission(httpmw.PermItemActivate)).Get("/{code}/activation-readiness", itemActivationHandler.ValidateActivation)
 
-			r.Route("/mask", func(r chi.Router) {
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/generate", generateMaskItemHandler.GenerateMask)
-			})
 			r.Route("/structure", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", structureHandler.Create)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", structureHandler.Update)
@@ -1221,19 +1197,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/operations", prodOrderHandler.ListOrderOperations)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/advance", prodOrderHandler.AdvanceOperation)
 		})
-		r.Route("/api/questions", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", questionCreateHandler.CreateQuestion)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", findQuestionByNameHandler.FindQuestionByName)
-			r.Route("/options", func(r chi.Router) {
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", questionOptionCreateHandler.CreateQuestionOptionHandler)
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{questionID}", questionOptionCreateHandler.ListByQuestion)
-			})
-			r.Route("/associate", func(r chi.Router) {
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", associateByQuestionItemHandler.AssociateQuestions)
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", associateByQuestionItemHandler.ListAll)
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", associateByQuestionItemHandler.GetQuestionsByItem)
-			})
-		})
+		// Configurador antigo (`questions`) REMOVIDO — substituído por /api/configurator.
 		// BOM header (versão/status/tipo) — as linhas da estrutura ficam em /api/items/structure.
 		r.Route("/api/bom-headers", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", bomHeaderHandler.Create)
@@ -1838,11 +1802,125 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", toolHandler.CreateTool)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", toolHandler.ListTools)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/replacement", toolHandler.ListToolsNeedingReplacement)
+				// Serials (physical instances) addressed by their own id.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/serials/{serialId}", toolHandler.GetSerial)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/serials/{serialId}", toolHandler.UpdateSerial)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/serials/{serialId}", toolHandler.DeactivateSerial)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", toolHandler.GetTool)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", toolHandler.UpdateTool)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", toolHandler.DeactivateTool)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/reset-life", toolHandler.ResetToolLife)
+				// Serials of a tool master.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/serials", toolHandler.CreateSerial)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/serials", toolHandler.ListSerials)
 			})
+		})
+		// Configurador de Produto (Fase 1): Conjuntos/Variáveis, Características,
+		// Características do Item e geração de máscara.
+		r.Route("/api/configurator", func(r chi.Router) {
+			adminUser := httpmw.RequireRole("ADMIN", "USER")
+			// Conjuntos + Variáveis
+			r.With(adminUser).Post("/sets", configuratorHandler.CreateSet)
+			r.With(adminUser).Get("/sets", configuratorHandler.ListSets)
+			r.With(adminUser).Get("/sets/{id}", configuratorHandler.GetSet)
+			r.With(adminUser).Put("/sets/{id}", configuratorHandler.UpdateSet)
+			r.With(adminUser).Delete("/sets/{id}", configuratorHandler.DeactivateSet)
+			r.With(adminUser).Post("/sets/{id}/variables", configuratorHandler.CreateVariable)
+			r.With(adminUser).Get("/sets/{id}/variables", configuratorHandler.ListVariables)
+			r.With(adminUser).Get("/variables/{varId}", configuratorHandler.GetVariable)
+			r.With(adminUser).Put("/variables/{varId}", configuratorHandler.UpdateVariable)
+			r.With(adminUser).Delete("/variables/{varId}", configuratorHandler.DeactivateVariable)
+			r.With(adminUser).Post("/variables/{varId}/languages", configuratorHandler.SetVariableLanguage)
+			r.With(adminUser).Delete("/variables/languages/{langId}", configuratorHandler.DeleteVariableLanguage)
+			// Características
+			r.With(adminUser).Post("/characteristics", configuratorHandler.CreateCharacteristic)
+			r.With(adminUser).Get("/characteristics", configuratorHandler.ListCharacteristics)
+			r.With(adminUser).Get("/characteristics/{id}", configuratorHandler.GetCharacteristic)
+			r.With(adminUser).Put("/characteristics/{id}", configuratorHandler.UpdateCharacteristic)
+			r.With(adminUser).Delete("/characteristics/{id}", configuratorHandler.DeactivateCharacteristic)
+			r.With(adminUser).Post("/characteristics/{id}/languages", configuratorHandler.SetCharacteristicLanguage)
+			r.With(adminUser).Delete("/characteristics/languages/{langId}", configuratorHandler.DeleteCharacteristicLanguage)
+			r.With(adminUser).Get("/characteristics/{id}/items", configuratorHandler.ListCharacteristicItems)
+			r.With(adminUser).Post("/characteristics/{id}/receiving-items", configuratorHandler.AddReceivingItem)
+			r.With(adminUser).Get("/characteristics/{id}/receiving-items", configuratorHandler.ListReceivingItems)
+			r.With(adminUser).Delete("/characteristics/receiving-items/{recvId}", configuratorHandler.DeleteReceivingItem)
+			// Migração do configurador legado (questions → cfg_*), idempotente.
+			// Características do Item
+			r.With(adminUser).Post("/items/{itemCode}/characteristics", configuratorHandler.AddItemCharacteristic)
+			r.With(adminUser).Get("/items/{itemCode}/characteristics", configuratorHandler.ListItemCharacteristics)
+			r.With(adminUser).Put("/item-characteristics/{id}", configuratorHandler.UpdateItemCharacteristic)
+			r.With(adminUser).Delete("/item-characteristics/{id}", configuratorHandler.RemoveItemCharacteristic)
+			// Geração de máscara
+			r.With(adminUser).Post("/generate-mask", configuratorHandler.GenerateMask)
+			r.With(adminUser).Post("/generate-masks", configuratorHandler.GenerateMasks)
+			// Tipos de Descrição
+			r.With(adminUser).Post("/description-types", configuratorHandler.CreateDescriptionType)
+			r.With(adminUser).Get("/description-types", configuratorHandler.ListDescriptionTypes)
+			r.With(adminUser).Get("/description-types/{id}", configuratorHandler.GetDescriptionType)
+			r.With(adminUser).Put("/description-types/{id}", configuratorHandler.UpdateDescriptionType)
+			r.With(adminUser).Delete("/description-types/{id}", configuratorHandler.DeactivateDescriptionType)
+			// Descrição de Itens Configurados
+			r.With(adminUser).Post("/item-descriptions", configuratorHandler.CreateItemDescription)
+			r.With(adminUser).Get("/items/{itemCode}/descriptions", configuratorHandler.ListItemDescriptions)
+			r.With(adminUser).Get("/item-descriptions/{id}", configuratorHandler.GetItemDescription)
+			r.With(adminUser).Put("/item-descriptions/{id}/lines", configuratorHandler.UpdateItemDescriptionLines)
+			r.With(adminUser).Post("/item-descriptions/{id}/reload", configuratorHandler.ReloadItemDescription)
+			r.With(adminUser).Post("/item-descriptions/{id}/render", configuratorHandler.RenderItemDescription)
+			r.With(adminUser).Delete("/item-descriptions/{id}", configuratorHandler.DeleteItemDescription)
+			// Regras de Variáveis Equivalentes (pai → filho)
+			r.With(adminUser).Post("/equivalent-rules", configuratorHandler.CreateEquivalentRule)
+			r.With(adminUser).Post("/equivalent-rules/apply", configuratorHandler.ApplyEquivalent)
+			r.With(adminUser).Get("/parents/{parentItemCode}/equivalent-rules", configuratorHandler.ListEquivalentRules)
+			r.With(adminUser).Get("/equivalent-rules/{id}", configuratorHandler.GetEquivalentRule)
+			r.With(adminUser).Put("/equivalent-rules/{id}", configuratorHandler.UpdateEquivalentRule)
+			r.With(adminUser).Delete("/equivalent-rules/{id}", configuratorHandler.DeactivateEquivalentRule)
+			// Regras de Itens Configurados
+			r.With(adminUser).Post("/item-rules", configuratorHandler.CreateItemRule)
+			r.With(adminUser).Post("/item-rules/evaluate", configuratorHandler.EvaluateItemRules)
+			r.With(adminUser).Get("/items/{itemCode}/rules", configuratorHandler.ListItemRules)
+			r.With(adminUser).Get("/item-rules/{id}", configuratorHandler.GetItemRule)
+			r.With(adminUser).Put("/item-rules/{id}", configuratorHandler.UpdateItemRule)
+			r.With(adminUser).Delete("/item-rules/{id}", configuratorHandler.DeleteItemRule)
+		})
+		// Cadastro de Desenhos (com revisões, distribuições e vínculo de características).
+		r.Route("/api/drawings", func(r chi.Router) {
+			adminUser := httpmw.RequireRole("ADMIN", "USER")
+			r.With(adminUser).Post("/", drawingHandler.Create)
+			r.With(adminUser).Get("/", drawingHandler.List)
+			r.With(adminUser).Get("/{id}", drawingHandler.Get)
+			r.With(adminUser).Put("/{id}", drawingHandler.Update)
+			r.With(adminUser).Delete("/{id}", drawingHandler.Deactivate)
+			r.With(adminUser).Post("/{id}/revisions", drawingHandler.AddRevision)
+			r.With(adminUser).Get("/{id}/revisions", drawingHandler.ListRevisions)
+			r.With(adminUser).Put("/revisions/{revId}", drawingHandler.UpdateRevision)
+			r.With(adminUser).Delete("/revisions/{revId}", drawingHandler.DeleteRevision)
+			r.With(adminUser).Post("/revisions/{revId}/distributions", drawingHandler.AddDistribution)
+			r.With(adminUser).Delete("/distributions/{distId}", drawingHandler.DeleteDistribution)
+			r.With(adminUser).Post("/{id}/characteristics", drawingHandler.AddCharacteristic)
+			r.With(adminUser).Get("/{id}/characteristics", drawingHandler.ListCharacteristics)
+			r.With(adminUser).Delete("/characteristics/{charLinkId}", drawingHandler.DeleteCharacteristic)
+		})
+		// Cadastro de Máscara de Lotes/Séries + geração automática de código de lote.
+		r.Route("/api/lot-masks", func(r chi.Router) {
+			adminUser := httpmw.RequireRole("ADMIN", "USER")
+			r.With(adminUser).Post("/", lotMaskHandler.Create)
+			r.With(adminUser).Get("/", lotMaskHandler.List)
+			r.With(adminUser).Post("/generate", lotMaskHandler.Generate)
+			r.With(adminUser).Get("/{id}", lotMaskHandler.Get)
+			r.With(adminUser).Put("/{id}", lotMaskHandler.Update)
+			r.With(adminUser).Delete("/{id}", lotMaskHandler.Deactivate)
+			r.With(adminUser).Post("/{id}/parts", lotMaskHandler.AddPart)
+			r.With(adminUser).Put("/parts/{partId}", lotMaskHandler.UpdatePart)
+			r.With(adminUser).Delete("/parts/{partId}", lotMaskHandler.DeletePart)
+		})
+		// Ficha de Produção da Ferramenta (tool production sheet): binds physical
+		// tool serials to the operations of a production order (OFC excluded).
+		r.Route("/api/tool-production-sheet", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders", toolSheetHandler.ListOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/substitutions", toolSheetHandler.ListSubstitutions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/assign", toolSheetHandler.Assign)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/substitute", toolSheetHandler.Substitute)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{orderId}", toolSheetHandler.GetSheet)
 		})
 		r.Route("/api/cutting-plans", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", cuttingPlanHandler.CreatePlan)
