@@ -1,4 +1,4 @@
-# Ambiente de Apresentação (Demo) — PanossoERP
+# Ambiente de Apresentação (Demo) — VENTUREERP
 
 Guia para o time de **front-end**: como subir, conectar e consumir o banco de
 demonstração já populado com **~1 ano de operação fictícia** de uma metalúrgica

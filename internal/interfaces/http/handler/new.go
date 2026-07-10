@@ -11,7 +11,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/generate_mask_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
@@ -29,8 +28,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
@@ -63,14 +60,6 @@ func NewFindItemCodeHandler(
 	}
 }
 
-func NewFindQuestionByName(
-	findQuestionByNameUC *question_uc.FindQuestionByName,
-) *QuestionHandler {
-	return &QuestionHandler{
-		findQuestionByNameUC: findQuestionByNameUC,
-	}
-}
-
 func NewUserHandler(
 	registerUC *user_uc.RegisterUserUseCase,
 	loginUC *user_uc.LoginUserUseCase,
@@ -80,60 +69,6 @@ func NewUserHandler(
 		registerUC: registerUC,
 		loginUC:    loginUC,
 		jwtSecret:  jwtSecret,
-	}
-}
-
-func NewQuestionHandler(
-	createQuestionUC *question_uc.CreateQuestion,
-) *QuestionHandler {
-	return &QuestionHandler{
-		createQuestionUC: createQuestionUC,
-	}
-}
-
-func NewDeleteQuestionHandler(
-	deleteQuestionUC *question_uc.DeleteQuestionUseCase,
-) *QuestionHandler {
-	return &QuestionHandler{
-		deleteQuestionUC: deleteQuestionUC,
-	}
-}
-
-func NewCreateQuestionOptionHandler(
-	createQuestionOptionUC *question_option_uc.CreateQuestionOptionUseCase,
-	listOptionsByQuestionUC *question_option_uc.ListOptionsByQuestionUseCase,
-) *QuestionOptionHandler {
-	return &QuestionOptionHandler{
-		createQuestionOptionUC:  createQuestionOptionUC,
-		listOptionsByQuestionUC: listOptionsByQuestionUC,
-	}
-}
-
-func NewDeleteQuestionOptionHandler(
-	deleteQuestionOptionUC *question_option_uc.DeleteQuestionOptionUseCase,
-) *QuestionOptionHandler {
-	return &QuestionOptionHandler{
-		deleteQuestionOptionUC: deleteQuestionOptionUC,
-	}
-}
-
-func NewAssociateByQuestionItemHandler(
-	associateByQuestionProductUC *question_uc.AssociateByQuestionItemUseCase,
-	getQuestionsByItemUC *question_uc.GetQuestionsByItemUseCase,
-	listAllItemQuestionsUC *question_uc.ListAllItemQuestionsUseCase,
-) *AssociateByQuestionItemHandler {
-	return &AssociateByQuestionItemHandler{
-		associateByQuestionProductUC: associateByQuestionProductUC,
-		getQuestionsByItemUC:         getQuestionsByItemUC,
-		listAllItemQuestionsUC:       listAllItemQuestionsUC,
-	}
-}
-
-func NewGeneratMaskItemHandler(
-	generateMaskProductUC *generate_mask_uc.GenerateMaskForItemUseCase,
-) *GenerateMaskHandler {
-	return &GenerateMaskHandler{
-		generateMask: generateMaskProductUC,
 	}
 }
 

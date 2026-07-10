@@ -87,6 +87,26 @@ Isso dá visibilidade de **onde cada ordem está** no chão de fábrica (ex.: "j
 
 ---
 
+## 4.1. Ficha de Produção da Ferramenta
+
+Muitas fábricas têm **várias cópias físicas da mesma ferramenta** (o mesmo molde ou matriz,
+cada um com seu **número de série**). A Ficha de Produção da Ferramenta define **qual série**
+será usada em cada operação da ordem:
+
+- Escolha a **ordem** (a lista não mostra ordens do tipo **OFC**) e o sistema traz o
+  cabeçalho pronto: tipo, datas, quantidade, item e configuração.
+- Para cada operação aparecem o **recurso** (máquina), a **ferramenta** e um seletor de
+  **número de série**.
+- Se uma série já estava vinculada e precisa trocar (quebrou, foi para manutenção), o botão
+  **Substituir** troca a série e **guarda o histórico** (série antiga, nova e o motivo).
+- Ao **concluir a operação**, o desgaste (golpes/peças/horas) é debitado **na série exata**
+  que rodou — e não só na ferramenta genérica. Assim a fábrica sabe *qual peça física* está
+  chegando ao fim da vida útil e precisa de troca ou recuperação.
+
+O botão **Atualiza** recarrega os vínculos das séries a qualquer momento.
+
+---
+
 ## 5. Consumo, apontamento e backflush
 
 Durante a fabricação, dois registros mantêm o estoque e os custos corretos:

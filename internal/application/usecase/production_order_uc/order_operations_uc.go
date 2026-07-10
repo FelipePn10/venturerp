@@ -82,15 +82,17 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 	// On the first completion, consume the useful life of the tools used by this
 	// operation and surface any that reached their replacement limit.
 	if dto.Status == "DONE" && !wasDone && poo.RouteOperationID.Valid {
-		resp.ToolAlerts = uc.consumeToolLife(ctx, poo.RouteOperationID.Int64, dto.ProducedQty, dto.ActualHours)
+		resp.ToolAlerts = uc.consumeToolLife(ctx, poo.ID, poo.RouteOperationID.Int64, dto.ProducedQty, dto.ActualHours)
 	}
 	return resp, nil
 }
 
 // consumeToolLife charges each tool linked to the route operation for the work just
 // completed (produced pieces for GOLPES/PECAS, actual hours for HORAS) and returns
-// alerts for tools that reached their useful-life limit.
-func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, routeOpID int64, produced, hours float64) []string {
+// alerts for tools that reached their useful-life limit. When the tool production
+// sheet has bound a physical serial to this operation/tool, the same amount is
+// charged to that serial too, so per-instance wear stays in sync with the master.
+func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, operationID, routeOpID int64, produced, hours float64) []string {
 	tools, err := uc.Q.ListToolsByRouteOp(ctx, routeOpID)
 	if err != nil {
 		return nil
@@ -110,6 +112,15 @@ func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, routeOpID
 		})
 		if err != nil {
 			continue
+		}
+		// Charge the physical serial bound to this operation/tool, if any.
+		if binding, err := uc.Q.GetOperationToolSerial(ctx, sqlc.GetOperationToolSerialParams{
+			OperationID: operationID, ToolID: t.ToolID,
+		}); err == nil {
+			_, _ = uc.Q.ConsumeToolSerialLife(ctx, sqlc.ConsumeToolSerialLifeParams{
+				ID:       binding.ToolSerialID,
+				LifeUsed: pgutil.ToPgNumericFromFloat64(amount),
+			})
 		}
 		limit := pgutil.FromPgNumericToFloat64(updated.LifeLimit)
 		used := pgutil.FromPgNumericToFloat64(updated.LifeUsed)

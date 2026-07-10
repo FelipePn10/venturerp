@@ -9,7 +9,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/generate_mask_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
@@ -25,8 +24,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/product_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_option_uc"
-	"github.com/FelipePn10/panossoerp/internal/application/usecase/question_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
@@ -54,32 +51,6 @@ type UserHandler struct {
 	registerUC *user_uc.RegisterUserUseCase
 	loginUC    *user_uc.LoginUserUseCase
 	jwtSecret  string
-}
-
-type QuestionHandler struct {
-	*security.BaseHandler
-	createQuestionUC     *question_uc.CreateQuestion
-	deleteQuestionUC     *question_uc.DeleteQuestionUseCase
-	findQuestionByNameUC *question_uc.FindQuestionByName
-}
-
-type QuestionOptionHandler struct {
-	*security.BaseHandler
-	createQuestionOptionUC  *question_option_uc.CreateQuestionOptionUseCase
-	deleteQuestionOptionUC  *question_option_uc.DeleteQuestionOptionUseCase
-	listOptionsByQuestionUC *question_option_uc.ListOptionsByQuestionUseCase
-}
-
-type AssociateByQuestionItemHandler struct {
-	*security.BaseHandler
-	associateByQuestionProductUC *question_uc.AssociateByQuestionItemUseCase
-	getQuestionsByItemUC         *question_uc.GetQuestionsByItemUseCase
-	listAllItemQuestionsUC       *question_uc.ListAllItemQuestionsUseCase
-}
-
-type GenerateMaskHandler struct {
-	*security.BaseHandler
-	generateMask *generate_mask_uc.GenerateMaskForItemUseCase
 }
 
 type WarehouseHandler struct {

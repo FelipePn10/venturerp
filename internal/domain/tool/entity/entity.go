@@ -96,6 +96,74 @@ func NewTool(code int64, name, toolType, lifeType string, lifeLimit, cost float6
 	}, nil
 }
 
+// Tool-serial status codes. A serial is one physical copy of a tool master.
+const (
+	SerialActive      = "ATIVA"
+	SerialMaintenance = "MANUTENCAO"
+	SerialInactive    = "INATIVA"
+	SerialRetired     = "BAIXADA" // permanently written off
+)
+
+// ToolSerial is a physical instance (serial number) of a tool master. A tool
+// may have several serials, each worn independently; the tool production sheet
+// binds one serial per production-order operation.
+type ToolSerial struct {
+	ID           int64
+	ToolID       int64
+	SerialNumber string
+	Status       string // ATIVA | MANUTENCAO | INATIVA | BAIXADA
+	LifeUsed     float64
+	Location     string
+	Notes        string
+	IsActive     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	CreatedBy    uuid.UUID
+
+	// denormalized for reads
+	ToolCode int64
+	ToolName string
+}
+
+func validSerialStatus(s string) bool {
+	switch s {
+	case SerialActive, SerialMaintenance, SerialInactive, SerialRetired:
+		return true
+	default:
+		return false
+	}
+}
+
+// NewToolSerial builds a validated tool serial for a given tool master.
+func NewToolSerial(toolID int64, serialNumber, status, location, notes string, createdBy uuid.UUID) (*ToolSerial, error) {
+	if toolID <= 0 {
+		return nil, errors.New("tool_id must be positive")
+	}
+	if serialNumber == "" {
+		return nil, errors.New("serial_number is required")
+	}
+	if status == "" {
+		status = SerialActive
+	}
+	if !validSerialStatus(status) {
+		return nil, errors.New("status must be ATIVA, MANUTENCAO, INATIVA or BAIXADA")
+	}
+	return &ToolSerial{
+		ToolID:       toolID,
+		SerialNumber: serialNumber,
+		Status:       status,
+		Location:     location,
+		Notes:        notes,
+		IsActive:     true,
+		CreatedBy:    createdBy,
+	}, nil
+}
+
+// Available reports whether the serial can be assigned to run an operation.
+func (s *ToolSerial) Available() bool {
+	return s.IsActive && s.Status == SerialActive
+}
+
 // RouteOpTool links a tool required to run a route operation.
 type RouteOpTool struct {
 	ID               int64

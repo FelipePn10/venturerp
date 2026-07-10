@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_uc"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type ToolHandler struct {
@@ -112,6 +113,93 @@ func (h *ToolHandler) ListToolsNeedingReplacement(w http.ResponseWriter, r *http
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
+}
+
+// ─── serials (physical instances of a tool master) ────────────────────────────
+
+func (h *ToolHandler) CreateSerial(w http.ResponseWriter, r *http.Request) {
+	toolID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid tool id")
+		return
+	}
+	var dto request.CreateToolSerialDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	dto.ToolID = toolID
+	if dto.CreatedBy == uuid.Nil {
+		dto.CreatedBy = actingUser(r)
+	}
+	result, err := h.uc.CreateSerial(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *ToolHandler) ListSerials(w http.ResponseWriter, r *http.Request) {
+	toolID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid tool id")
+		return
+	}
+	onlyActive := r.URL.Query().Get("only_active") == "true"
+	result, err := h.uc.ListSerials(r.Context(), toolID, onlyActive)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *ToolHandler) GetSerial(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "serialId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid serial id")
+		return
+	}
+	result, err := h.uc.GetSerial(r.Context(), id)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *ToolHandler) UpdateSerial(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "serialId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid serial id")
+		return
+	}
+	var dto request.UpdateToolSerialDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	dto.ID = id
+	result, err := h.uc.UpdateSerial(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *ToolHandler) DeactivateSerial(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "serialId"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid serial id")
+		return
+	}
+	if err := h.uc.DeactivateSerial(r.Context(), id); err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ─── association with route operations ─────────────────────────────────────────

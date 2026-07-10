@@ -61,6 +61,10 @@ Corpo de `/operations/advance`: `{ "operation_id": 123, "status": "IN_PROGRESS",
 > por OF, ignora co-produtos e usa o componente primário de grupos substitutos. Ver
 > [`manufatura-e-compras.md`](manufatura-e-compras.md) §18.
 
+> 🔧 **Ficha de Produção da Ferramenta:** define qual **série** de cada ferramenta roda
+> cada operação da OF, com substituição rastreada e débito de vida útil por série no
+> apontamento. Ver [`ficha-producao-ferramenta.md`](ficha-producao-ferramenta.md).
+
 ---
 
 ## Origem da OF

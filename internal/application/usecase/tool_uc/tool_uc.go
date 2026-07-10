@@ -139,7 +139,85 @@ func (uc *ToolUseCase) ListByOperation(ctx context.Context, routeOperationID int
 	return out, nil
 }
 
+// ─── serials (physical instances of a tool master) ───────────────────────────
+
+func (uc *ToolUseCase) CreateSerial(ctx context.Context, dto request.CreateToolSerialDTO) (*response.ToolSerialResponse, error) {
+	if _, err := uc.repo.GetTool(ctx, dto.ToolID); err != nil {
+		return nil, fmt.Errorf("tool not found: %w", err)
+	}
+	s, err := entity.NewToolSerial(dto.ToolID, dto.SerialNumber, dto.Status, dto.Location, dto.Notes, dto.CreatedBy)
+	if err != nil {
+		return nil, err
+	}
+	created, err := uc.repo.CreateToolSerial(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toToolSerialResponse(created), nil
+}
+
+func (uc *ToolUseCase) UpdateSerial(ctx context.Context, dto request.UpdateToolSerialDTO) (*response.ToolSerialResponse, error) {
+	s, err := uc.repo.GetToolSerial(ctx, dto.ID)
+	if err != nil {
+		return nil, fmt.Errorf("tool serial not found: %w", err)
+	}
+	if dto.SerialNumber != "" {
+		s.SerialNumber = dto.SerialNumber
+	}
+	if dto.Status != "" {
+		s.Status = dto.Status
+	}
+	s.Location = dto.Location
+	s.Notes = dto.Notes
+	updated, err := uc.repo.UpdateToolSerial(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return toToolSerialResponse(updated), nil
+}
+
+func (uc *ToolUseCase) GetSerial(ctx context.Context, id int64) (*response.ToolSerialResponse, error) {
+	s, err := uc.repo.GetToolSerial(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("tool serial not found: %w", err)
+	}
+	return toToolSerialResponse(s), nil
+}
+
+func (uc *ToolUseCase) ListSerials(ctx context.Context, toolID int64, onlyActive bool) ([]*response.ToolSerialResponse, error) {
+	serials, err := uc.repo.ListToolSerials(ctx, toolID, onlyActive)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*response.ToolSerialResponse, 0, len(serials))
+	for _, s := range serials {
+		out = append(out, toToolSerialResponse(s))
+	}
+	return out, nil
+}
+
+func (uc *ToolUseCase) DeactivateSerial(ctx context.Context, id int64) error {
+	return uc.repo.DeactivateToolSerial(ctx, id)
+}
+
 // ─── mappers ─────────────────────────────────────────────────────────────────
+
+func toToolSerialResponse(s *entity.ToolSerial) *response.ToolSerialResponse {
+	return &response.ToolSerialResponse{
+		ID:           s.ID,
+		ToolID:       s.ToolID,
+		SerialNumber: s.SerialNumber,
+		Status:       s.Status,
+		LifeUsed:     s.LifeUsed,
+		Location:     s.Location,
+		Notes:        s.Notes,
+		IsActive:     s.IsActive,
+		Available:    s.Available(),
+		CreatedAt:    s.CreatedAt,
+		ToolCode:     s.ToolCode,
+		ToolName:     s.ToolName,
+	}
+}
 
 func toToolResponse(t *entity.Tool) *response.ToolResponse {
 	return &response.ToolResponse{
