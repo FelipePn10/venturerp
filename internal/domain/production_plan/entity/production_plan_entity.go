@@ -29,3 +29,9 @@ type ProductionPlan struct {
 	UpdatedAt           time.Time
 	CreatedBy           uuid.UUID
 }
+
+type InterFactoryEnterprise struct {
+	EnterpriseCode int64
+	EnterpriseName string
+	AutoRelease    bool
+}

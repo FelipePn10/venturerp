@@ -1189,6 +1189,31 @@ solicitante, contrato, cotação e tipo de utilização
   `GET /supplier/{supplierCode}`, `GET /status/{status}`, e o fluxo de sugestões
   (`/suggestions...`).
 
+### Consulta operacional de pedidos
+
+`GET /api/purchase-order/consultation` consulta pedidos de compra e serviço com
+isolamento pela empresa autenticada e paginação (`limit`, máximo 500, e `offset`).
+Aceita intervalos `order_from/order_to`, `supplier_from/supplier_to`,
+`item_from/item_to`, `import_from/import_to`, datas de emissão e entrega,
+`request_type`, `buyer`, `type` (`OCL`, `OSL`, `ORM`, `ORD`), `only_kanban` e
+`position` (`ATTENDED`, `PENDING`, `CANCELLED`).
+
+A posição é calculada por linha. A linha é cancelada somente quando toda a
+quantidade foi cancelada; caso contrário, recebida + cancelada determina Atendido
+ou Pendente. O filtro Cancelados seleciona pedidos com qualquer movimentação de
+cancelamento. `all_items=true` devolve todas as linhas dos pedidos encontrados;
+se falso, devolve somente as linhas que satisfazem item/posição.
+
+Os totais usam precisão decimal e `products_with_freight` inclui o frete. Para
+conversão, informe `convert=true`, `target_currency` e `base_date`; as cotações
+tenant-aware ficam em `purchase_order_currency_rates` e representam o valor da
+moeda na moeda-base. Pedidos `ORM`/`ORD` expõem `customer_code`. Bases, alíquotas
+e valores de IPI, ICMS e ICMS-ST são expostos somente para `OCL`.
+
+A resposta traz metadados de anexos de até 10 MiB. O conteúdo é obtido por
+`GET /api/purchase-order/{code}/attachments/{attachmentID}/download`; pedido e
+anexo são validados contra a empresa autenticada antes do download.
+
 ### Recebimento físico de compra
 
 O recebimento operacional usa o item do pedido (`purchase_order_item_code`) como
@@ -1601,6 +1626,52 @@ exige **todos os itens conferidos**.
 | Despachar | `POST /api/shipments/{code}/ship` |
 | Cancelar | `POST /api/shipments/{code}/cancel` |
 
+## 19.1 Manutenção de OF, refugos e seleção de lotes — fase 4
+
+A migration `000229` completa os controles operacionais da manutenção de ordens.
+`GET /api/production-order/maintenance` omite OFs Kanban e comerciais; com `?id=`,
+uma OF Kanban retorna a orientação para usar a consulta de ordens. A resposta
+identifica OFA/OFM/OFF/OFE, retrabalho e lote temporário. Alteração e cancelamento
+continuam bloqueados após movimento, para Kanban e OFC. Parâmetros 10 e 14 são
+resolvidos por empresa; quantidade nunca pode ficar abaixo do produzido, ser
+fracionária para item incompatível, possuir OCS de terceiros ou separação WMS.
+
+A migration `000230` fecha a criação manual: `order_number` pode ser informado
+ou numerado automaticamente, o planejador vem do cadastro do item quando omitido
+e o modo de baixa `TRANSFER` move, na mesma transação, os componentes marcados
+para baixa automática do almoxarifado padrão ao almoxarifado de linha. Falta de
+saldo ou de almoxarifado de linha desfaz integralmente a criação da OF.
+
+O lote temporário é mantido por `PUT /temporary-lot`; validade não pode anteceder
+fabricação nem a data atual. Ele só se torna lote definitivo no fluxo de entrega.
+
+### Lotes, endereços e WMS
+
+`manufacturing_stock_parameters` representa o parâmetro 44 (`A`, `I`, `E`), o
+parâmetro 53 e o intervalo contábil. Em requisições, parâmetro 53 ativo seleciona
+FIFO automaticamente; inativo exige seleção explícita. Em devoluções: `A` gera
+lote `OF-<número>`, `I` permite novo/existente e `E` aceita somente lote usado na
+requisição. Itens com endereço controlado exigem endereço ativo. WMS sempre usa
+o almoxarifado intermediário de saída, inclusive em seleção envolvendo várias OFs.
+Alocação parcial requer `confirm_partial=true`; a distribuição ocorre pela ordem
+das OFs e nunca excede necessidade ou saldo.
+
+### Destinação de refugos
+
+`POST /scrap-destinations` distingue `ORDER_ITEM` e `DEMAND`, com
+`return_quantity` e `scrap_quantity`. A operação transacional valida quantidade
+apontada/requisitada, período de estoque, intervalo contábil, valorização anterior,
+grupo `SECONDARY_MATERIAL`, UM/conversão, lote e endereço. Sucata e devolução geram
+movimentos de entrada separados. `DELETE /scrap-destinations/{id}` gera movimentos
+compensatórios e só conclui se não produzir estoque negativo.
+`PUT /scrap-destinations/{id}` preserva o identificador, reverte os movimentos
+anteriores e revalida/reaplica o novo estado na mesma transação. Qualquer erro
+restaura integralmente a destinação e os saldos anteriores.
+
+Configurações administrativas: `PUT /manufacturing-stock-settings`,
+`PUT /manufacturing-item-stock-settings`, `PUT /warehouse-addresses` e
+`PUT /wms-settings`. Todas as leituras e escritas usam a empresa autenticada.
+
 ## 20. Plataforma: Idempotência e Escopos de permissão
 
 ### Idempotência
@@ -1618,6 +1689,11 @@ rotas sensíveis novas (pipeline, fiscal manifestação/inutilização/IBPT, CNA
 prontidão de item).
 
 ## Relação entre módulos
+
+O aceite transversal das cinco fases pode ser reproduzido com
+`TEST_DATABASE_URL=... scripts/audit-mrp-manufacturing.sh`. O comando valida as
+migrations finais, invariantes de tenant, testes focados/integrados, race detector,
+regressão global, build, cobertura e consistência do diff.
 
 ```
 Pedido de Venda  (confirmar → demanda independente automática)

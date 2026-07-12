@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS uq_planned_order_number_tenant_active;

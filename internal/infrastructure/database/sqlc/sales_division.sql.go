@@ -19,7 +19,7 @@ INSERT INTO sales_divisions (
     pis_percentage, cofins_percentage, parent_division_id, created_by
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by
+RETURNING id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateSalesDivisionParams struct {
@@ -76,6 +76,7 @@ func (q *Queries) CreateSalesDivision(ctx context.Context, arg CreateSalesDivisi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -90,7 +91,7 @@ func (q *Queries) DeleteSalesDivision(ctx context.Context, code int64) error {
 }
 
 const getSalesDivisionByCode = `-- name: GetSalesDivisionByCode :one
-SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by FROM sales_divisions WHERE code = $1
+SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id FROM sales_divisions WHERE code = $1
 `
 
 func (q *Queries) GetSalesDivisionByCode(ctx context.Context, code int64) (SalesDivision, error) {
@@ -115,12 +116,13 @@ func (q *Queries) GetSalesDivisionByCode(ctx context.Context, code int64) (Sales
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listActiveSalesDivisions = `-- name: ListActiveSalesDivisions :many
-SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by FROM sales_divisions WHERE is_active = TRUE ORDER BY code
+SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id FROM sales_divisions WHERE is_active = TRUE ORDER BY code
 `
 
 func (q *Queries) ListActiveSalesDivisions(ctx context.Context) ([]SalesDivision, error) {
@@ -151,6 +153,7 @@ func (q *Queries) ListActiveSalesDivisions(ctx context.Context) ([]SalesDivision
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -163,7 +166,7 @@ func (q *Queries) ListActiveSalesDivisions(ctx context.Context) ([]SalesDivision
 }
 
 const listSalesDivisions = `-- name: ListSalesDivisions :many
-SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by FROM sales_divisions ORDER BY code
+SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id FROM sales_divisions ORDER BY code
 `
 
 func (q *Queries) ListSalesDivisions(ctx context.Context) ([]SalesDivision, error) {
@@ -194,6 +197,7 @@ func (q *Queries) ListSalesDivisions(ctx context.Context) ([]SalesDivision, erro
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -221,7 +225,7 @@ SET description              = $2,
     parent_division_id       = $13,
     updated_at               = NOW()
 WHERE code = $1
-RETURNING id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by
+RETURNING id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type UpdateSalesDivisionParams struct {
@@ -276,6 +280,7 @@ func (q *Queries) UpdateSalesDivision(ctx context.Context, arg UpdateSalesDivisi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

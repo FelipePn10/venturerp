@@ -1,6 +1,7 @@
 package response
 
 import (
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,4 +62,32 @@ type ProductionConsumptionResponse struct {
 	Notes             *string   `json:"notes,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 	CreatedBy         uuid.UUID `json:"created_by"`
+}
+
+type ProductionDeliveryResponse struct {
+	ID            int64           `json:"id"`
+	Quantity      decimal.Decimal `json:"quantity"`
+	MovementClass string          `json:"movement_class"`
+	WarehouseID   int64           `json:"warehouse_id"`
+	Lot           *string         `json:"lot,omitempty"`
+	Final         bool            `json:"final"`
+	DeliveredAt   time.Time       `json:"delivered_at"`
+}
+
+type ProductionMovementResponse struct {
+	ID           int64   `json:"id"`
+	ItemCode     int64   `json:"item_code"`
+	WarehouseID  int64   `json:"warehouse_id"`
+	MovementType string  `json:"movement_type"`
+	Quantity     float64 `json:"quantity"`
+	Lot          *string `json:"lot,omitempty"`
+}
+
+type ProductionOrderOperationalResponse struct {
+	Order        *ProductionOrderResponse         `json:"order"`
+	Deliveries   []*ProductionDeliveryResponse    `json:"deliveries"`
+	Appointments []*ProductionAppointmentResponse `json:"appointments"`
+	Consumptions []*ProductionConsumptionResponse `json:"consumptions"`
+	Movements    []*ProductionMovementResponse    `json:"movements"`
+	Totals       map[string]decimal.Decimal       `json:"totals"`
 }

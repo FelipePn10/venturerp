@@ -48,3 +48,13 @@ type DrawingCharacteristicResponse struct {
 	Operator         string `json:"operator"`
 	VariableID       *int64 `json:"variable_id,omitempty"`
 }
+
+type ItemEngineeringDrawingResponse struct {
+	ItemCode    int64  `json:"item_code"`
+	Mask        string `json:"mask,omitempty"`
+	DrawingCode string `json:"drawing_code"`
+}
+
+type DrawingManufacturingParametersResponse struct {
+	Parameter8ReplicateDrawingRevision bool `json:"parameter_8_replicate_drawing_revision"`
+}

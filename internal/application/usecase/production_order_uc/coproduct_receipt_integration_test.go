@@ -10,11 +10,13 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	prodrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	structrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 type fakeCompleteAuth struct{ ports.AuthService }
@@ -26,6 +28,11 @@ func (fakeCompleteAuth) CanUpdateSalesOrder(context.Context) bool { return true 
 func TestIntegration_CompleteReceivesCoproductScrap(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	ctx := context.Background()
+	var enterpriseID int64
+	if err := pool.QueryRow(ctx, "SELECT MIN(id) FROM enterprise").Scan(&enterpriseID); err != nil {
+		t.Fatal(err)
+	}
+	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 	uid := uuid.New()
 
 	finished := testutil.UniqueCode()
@@ -42,8 +49,8 @@ func TestIntegration_CompleteReceivesCoproductScrap(t *testing.T) {
 	// Production order that produced 100 units.
 	var poID int64
 	if err := pool.QueryRow(ctx,
-		"INSERT INTO production_orders (order_number,item_code,planned_qty,produced_qty,status,created_by) VALUES ($1,$2,$3,$4,'IN_PROGRESS',$5) RETURNING id",
-		testutil.UniqueCode(), finished, 100, 100, uid).Scan(&poID); err != nil {
+		"INSERT INTO production_orders (order_number,item_code,planned_qty,produced_qty,status,created_by,enterprise_id) VALUES ($1,$2,$3,$4,'IN_PROGRESS',$5,$6) RETURNING id",
+		testutil.UniqueCode(), finished, 100, 100, uid, enterpriseID).Scan(&poID); err != nil {
 		t.Fatalf("seed production_order: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM production_orders WHERE id = $1", poID)

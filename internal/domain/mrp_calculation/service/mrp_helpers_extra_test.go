@@ -1,13 +1,58 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
+	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
+	structrepo "github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
 )
+
+type publicMethodStructRepo struct {
+	structrepo.ItemStructureRepository
+	children []*structentity.ItemStructure
+	bom      map[int64][]*structentity.ItemStructure
+}
+
+func (r *publicMethodStructRepo) GetAllDirectChildren(context.Context, int64) ([]*structentity.ItemStructure, error) {
+	return r.children, nil
+}
+func (r *publicMethodStructRepo) LoadBOMForRoots(context.Context, []int64) (map[int64][]*structentity.ItemStructure, error) {
+	return r.bom, nil
+}
+
+type publicMethodMRPRepo struct {
+	mrprepo.MRPCalculationRepository
+	params *entity.TypedPlanningParams
+}
+
+func (r *publicMethodMRPRepo) LoadTypedPlanningParams(context.Context) (*entity.TypedPlanningParams, error) {
+	return r.params, nil
+}
+
+func TestPublicStructureAndLLCMethods(t *testing.T) {
+	mask := "A"
+	structure := &publicMethodStructRepo{children: []*structentity.ItemStructure{{ChildCode: 2, Quantity: 2, LossPercentage: 10, IsActive: true}, {ChildCode: 3, Quantity: 1, IsActive: false}, {ChildCode: 4, Quantity: 1, IsActive: true, ParentMask: &mask}}, bom: map[int64][]*structentity.ItemStructure{1: {{ChildCode: 2, IsActive: true}}, 2: {{ChildCode: 5, IsActive: true}}}}
+	service := &MRPServiceImpl{StructRepo: structure, MRPRepo: &publicMethodMRPRepo{params: &entity.TypedPlanningParams{FormulaPerdasEstrutura: 1}}}
+	inputs, err := service.ExplodeStructure(context.Background(), 1, "", 3, 1)
+	if err != nil || len(inputs) != 1 || abs(inputs[0].Quantity-6.6) > 1e-6 {
+		t.Fatalf("inputs=%+v err=%v", inputs, err)
+	}
+	if deep, err := service.ExplodeStructure(context.Background(), 1, "", 1, 21); err != nil || len(deep) != 0 {
+		t.Fatalf("depth guard=%v err=%v", deep, err)
+	}
+	llc, err := service.CalculateItemLLC(context.Background(), 1)
+	if err != nil || llc != 0 {
+		t.Fatalf("llc=%d err=%v", llc, err)
+	}
+	if err := service.GenerateLLC(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestFindPriorityForQuantity(t *testing.T) {
 	priorities := []*orderpriority.OrderPriority{

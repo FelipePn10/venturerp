@@ -10,13 +10,15 @@ POST /users/register
 {
   "name": "João Silva",
   "email": "joao.silva@empresa.com.br",
-  "password": "senha@123"
+  "password": "senha@123",
+  "enterprise_code": 1
 }
 
 POST /users/login
 {
   "email": "joao.silva@empresa.com.br",
-  "password": "senha@123"
+  "password": "senha@123",
+  "enterprise_code": 1
 }
 
 ============================================================
@@ -310,17 +312,11 @@ POST /api/production-plan/create
   "name": "Plano Principal 2025",
   "independent_demands": "ALL",
   "group_same_date_orders": true,
-  "planning_types": ["NORMAL", "URGENTE"],
+  "planning_types": ["MRP", "MIN_MAX"],
   "classification": "TODOS",
   "class_item_codes": "1,2,3,4,5",
   "order_item_code": null,
-  "parameters": {
-    "lead_time_days": 15,
-    "safety_stock_percent": 10,
-    "lot_size_min": 50,
-    "lot_size_multiple": 1
-  },
-  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+  "parameters": {}
 }
 
 GET /api/production-plan/list
@@ -336,21 +332,30 @@ PUT /api/production-plan/update
   "name": "Plano Principal 2025 - Revisado",
   "independent_demands": "FROM_DATE",
   "group_same_date_orders": true,
-  "planning_types": ["NORMAL", "URGENTE", "PRIORITARIO"],
+  "planning_types": ["MRP", "MPS", "KANBAN"],
   "classification": "TODOS",
   "class_item_codes": "1,2,3,4,5,6",
   "order_item_code": null,
   "parameters": {
-    "lead_time_days": 10,
-    "safety_stock_percent": 15,
-    "lot_size_min": 100,
-    "lot_size_multiple": 5
+    "from_date": "2026-07-10"
   }
 }
 
 DELETE /api/production-plan/{code}
 -- Parâmetro na URL: code (int64)
 -- Exemplo: DELETE /api/production-plan/1
+
+GET /api/production-plan/{code}/inter-factories
+-- Lista as empresas cujas ordens inter-fábrica são consideradas pelo plano.
+
+PUT /api/production-plan/{code}/inter-factories
+{
+  "enterprises": [
+    {"enterprise_code": 2, "auto_release": true},
+    {"enterprise_code": 3, "auto_release": false}
+  ]
+}
+-- Substitui atomicamente a configuração atual. Envie [] para remover todas.
 
 ============================================================
 MÓDULO: INDEPENDENT DEMAND (DEMANDA INDEPENDENTE)
@@ -609,6 +614,7 @@ MÓDULO: MRP CALCULATION (CÁLCULO MRP)
 POST /api/mrp-calculation/run
 {
   "plan_code": 1,
+  "initial_order_number": 10000,
   "generate_llc": true
 }
 
@@ -719,6 +725,15 @@ POST /api/planned-order/create
   "created_by": "550e8400-e29b-41d4-a716-446655440000"
 }
 
+POST /api/planned-order/transition
+{
+  "order_codes": [101, 102],
+  "target": "RELEASED",
+  "start_date": "2026-07-15",
+  "end_date": "2026-07-18"
+}
+-- target: PLANNED | RELEASED | FIRM. FIRM não aceita alteração de datas.
+
 GET /api/planned-order/list
 -- Sem corpo de requisição
 
@@ -788,6 +803,21 @@ POST /api/production-order/consumption
 }
 
 POST /api/production-order/{id}/complete
+{
+  "quantity": 25.5,
+  "final": true,
+  "end_date": "2026-07-20",
+  "warehouse_id": 7,
+  "lot": "OF-2026-001",
+  "idempotency_key": "delivery-of-123-1"
+}
+-- quantity omitida usa a quantidade produzida/pending; warehouse_id omitido usa o destino da OF.
+
+GET /api/production-order/{id}/operational
+-- Sem body. Consolida OF, entregas, apontamentos, consumos, movimentos e totais.
+
+GET /api/mrp-calculation/profile/{item_code}/{plan_code}/operational?position=CURRENT&from=2026-07-01&to=2026-07-31
+-- position: CALCULATION | CURRENT
 {
   "id": 1,
   "end_date": "2025-06-25"
@@ -971,6 +1001,7 @@ MÓDULO: SALES ORDER (PEDIDO DE VENDA)
 ============================================================
 
 POST /api/sales-order/create
+-- origin aceita NORMAL, DEPENDENT, ASSISTANCE, RESERVE, COPY ou INTER_FACTORY.
 {
   "enterprise_code": 1,
   "status": "R",
@@ -1151,6 +1182,15 @@ POST /api/purchase-order/create
 
 GET /api/purchase-order/list
 -- Sem corpo de requisição
+
+GET /api/purchase-order/consultation?order_from=100&order_to=200&supplier_from=1&supplier_to=999&request_type=9&item_from=500&item_to=500&position=PENDING&all_items=true&convert=true&target_currency=USD&base_date=2026-07-12&only_kanban=false&emission_from=2026-01-01&emission_to=2026-12-31&delivery_from=2026-01-01&delivery_to=2026-12-31&buyer=77&type=OCL&import_from=1&import_to=20&limit=100&offset=0
+-- position: ATTENDED | PENDING | CANCELLED
+-- type: OCL | OSL | ORM | ORD
+-- Conversão exige target_currency e base_date. all_items inclui todas as linhas
+-- dos pedidos que satisfizerem o filtro; falso devolve apenas as linhas filtradas.
+
+GET /api/purchase-order/{code}/attachments/{attachmentID}/download
+-- Download tenant-aware do anexo; retorna Content-Disposition: attachment.
 
 GET /api/purchase-order/{code}
 -- Parâmetro na URL: code (int64)
@@ -2215,6 +2255,7 @@ POST /api/planning/run-pipeline
 -- Escopo: planning:run. Roda MRP, CRP e APS e devolve parecer de viabilidade.
 {
   "plan_code": 1,
+  "initial_order_number": 10000,
   "generate_llc": true,
   "start_from": "2026-06-10T00:00:00Z"
 }
@@ -3679,6 +3720,18 @@ POST /api/drawings/{id}/revisions
   "is_current": true
 }
 
+PUT /api/drawings/item-code
+{"item_code":100,"drawing_code":"DESENHO-A4-R1"}
+-- Item configurado exige uma máscara existente:
+{"item_code":100,"mask":"CFG-AZUL-220V","drawing_code":"DESENHO-A4-R1"}
+
+GET /api/drawings/item-code/100?mask=CFG-AZUL-220V
+
+PUT /api/drawings/manufacturing-parameters
+{"replicate_drawing_revision":true}
+
+GET /api/drawings/manufacturing-parameters
+
 POST /api/lot-masks
 { "application": "SUPRIMENTOS", "item_code": 4444, "zero_on_year_change": true }
 
@@ -3758,6 +3811,73 @@ GET /health
 -- Sem corpo de requisição
 -- Resposta esperada: {"status":"ok","timestamp":"...","mask":"core-api"}
 
+============================================================
+MÓDULO: MRP / CONTROLE DE MATERIAIS DA OF
+============================================================
+
+POST /api/production-order/materials
+{"production_order_id":1,"kind":"DEMAND","item_code":200,"quantity":"10.500000","warehouse_id":3,"automatic_issue":true,"created_by":"UUID"}
+
+POST /api/production-order/materials/replace
+{"material_id":10,"replacements":[{"item_code":201,"quantity":"4.000000","warehouse_id":3}],"created_by":"UUID"}
+
+POST /api/production-order/materials/lots
+{"material_id":10,"movement_kind":"REQUISITION","allocations":[{"warehouse_id":3,"lot":"L-001","quantity":"4.000000"}],"created_by":"UUID"}
+-- allocations=[] seleciona automaticamente por data/código do lote.
+
+POST /api/production-order/materials/lots/batch
+{"material_ids":[10,11],"movement_kind":"REQUISITION","lots":[{"warehouse_id":3,"lot":"L-001","quantity":"30.000000"}],"created_by":"UUID"}
+-- A quantidade é distribuída pela ordem crescente do número das OFs.
+
+PUT /api/production-order/wms-settings
+{"warehouse_id":3,"is_wms":true,"intermediate_out_warehouse_id":4}
+
+POST /api/production-order/scrap-destinations
+{"production_order_id":1,"scrap_item_code":900,"warehouse_id":8,"quantity":"1.250000","destination_date":"2026-07-11","created_by":"UUID"}
+
+GET /api/mrp-reports/profile?plan_code=1&item_code=100&layout=ANALITICO&position=CURRENT&classification_mask_code=1&classification_code=10%25&order_by_1=PLANEJADOR&order_by_2=ITEM&break_by=PLANEJADOR&include_sales_orders=true
+GET /api/mrp-reports/availability?sales_orders=1001,1002&layout=AMBOS&warehouse_id=3
+GET /api/mrp-reports/availability?item_code=100&quantity=10.000000&layout=NECESSIDADES
+GET /api/mrp-reports/grouped-needs?plan_code=1&periods=2026-01-01%7C2026-01-31,2026-02-01%7C2026-02-28,2026-03-01%7C2026-03-31,2026-04-01%7C2026-04-30,2026-05-01%7C2026-05-31,2026-06-01%7C2026-06-30
+GET /api/mrp-reports/explosion/100?quantity=10.000000&explosion_option=SALDO_DEM&list_mode=TODOS&description_type=TECNICA&warehouse_id=3
+GET /api/mrp-reports/explosion/0?production_orders=10001,10002&explosion_option=CUSTO
+GET /api/mrp-reports/explosion/0?loads=5001&explosion_option=SIMPLES
+GET /api/mrp-reports/reorder-point?warehouse_id=3&planning_type=KANBAN&only_available=true&from=2026-07-01&to=2026-07-31
+
+GET /api/production-order/delivery-candidates?order_from=100&order_to=200&item_from=10&item_to=99&planner_from=1&planner_to=5&from=2026-07-01&to=2026-07-31&order_type=MRP
+
+PUT /api/production-order/1
+{"planned_qty":"12.500000","start_date":"2026-07-12","end_date":"2026-07-20","priority":"ALTA","notes":"Ajuste aprovado"}
+
 ================================================================================
                         FIM DO DOCUMENTO
 ================================================================================
+============================================================
+MÓDULO: MANUTENÇÃO DE OF — FASE 4
+============================================================
+
+GET /api/production-order/maintenance
+GET /api/production-order/maintenance?id=123
+
+PUT /api/production-order/temporary-lot
+{"production_order_id":123,"lot":"OF-123-A","manufactured_on":"2026-07-12","expires_on":"2027-07-12"}
+
+PUT /api/production-order/manufacturing-stock-settings   (ADMIN)
+{"lot_return_mode":"E","auto_issue_lots":true,"movement_from":"2026-01-01","movement_to":"2026-12-31"}
+
+PUT /api/production-order/manufacturing-item-stock-settings   (ADMIN)
+{"item_code":900,"stock_uom":"KG","controls_lot":true,"controls_address":true,"inventory_group_type":"SECONDARY_MATERIAL","automatic_issue_type":"TRANSFER","line_warehouse_id":2}
+
+PUT /api/production-order/warehouse-addresses   (ADMIN)
+{"warehouse_id":8,"address":"A-01","is_active":true}
+
+POST /api/production-order/materials/lots
+{"material_id":55,"movement_kind":"REQUISITION","confirm_partial":false,"allocations":[{"warehouse_id":1,"lot":"LOTE-A","address":"R-01","quantity":"4.000000"}],"created_by":"550e8400-e29b-41d4-a716-446655440000"}
+
+POST /api/production-order/scrap-destinations
+{"production_order_id":123,"destination_kind":"DEMAND","production_order_material_id":55,"scrap_item_code":990,"warehouse_id":8,"lot":"SUC-01","address":"A-01","return_quantity":"1.000000","scrap_quantity":"0.500000","source_uom":"UN","scrap_uom":"KG","destination_date":"2026-07-12","created_by":"550e8400-e29b-41d4-a716-446655440000"}
+
+DELETE /api/production-order/scrap-destinations/{destinationID}
+
+PUT /api/production-order/scrap-destinations/{destinationID}
+-- Mesmo contrato do POST. Preserva o ID e atualiza estoque atomicamente.

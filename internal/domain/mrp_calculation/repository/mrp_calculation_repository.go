@@ -2,16 +2,21 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	salesdivision "github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
 )
 
+var ErrCalculationInProgress = errors.New("material planning calculation already in progress")
+
 type MRPCalculationRepository interface {
 	CreateProfile(ctx context.Context, p *entity.MRPItemProfile) (*entity.MRPItemProfile, error)
 	GetProfiles(ctx context.Context, itemCode, planCode int64) ([]*entity.MRPItemProfile, error)
 	DeleteProfilesByPlan(ctx context.Context, planCode int64) error
+	CreateProfileDetail(ctx context.Context, detail *entity.MRPProfileDetail) error
+	DeleteProfileDetailsByPlan(ctx context.Context, planCode int64) error
 
 	StartCalculation(ctx context.Context, planCode int64) (*entity.MRPCalculationLog, error)
 	FinishCalculation(ctx context.Context, logCode int64, status string, errors map[string]interface{}, totalItems, totalOrders int) (*entity.MRPCalculationLog, error)
@@ -34,6 +39,7 @@ type MRPCalculationRepository interface {
 	GetSuggestionByCode(ctx context.Context, code int64) (*entity.PlannedOrderSuggestion, error)
 	ListSuggestionsByPlan(ctx context.Context, planCode int64) ([]*entity.PlannedOrderSuggestion, error)
 	DeleteSuggestionsByPlan(ctx context.Context, planCode int64) error
+	UpdateItemLLCs(ctx context.Context, llcs map[int64]int) error
 
 	// Bulk pre-load methods for MRP run optimization (Problem 3).
 	// Returns maps keyed by item_code, built in a single query each.
@@ -79,4 +85,6 @@ type MRPCalculationRepository interface {
 
 	// UpdatePlannedOrderMachine sets machine_id and production_time on a planned order.
 	UpdatePlannedOrderMachine(ctx context.Context, suggestionCode int64, machineID int64, productionTime float64) error
+	ListOpenSalesOrderDemands(ctx context.Context, planCode int64, salesOrderItemCode *int64) ([]*entity.MRPInput, error)
+	ResolveClassificationItemCodes(ctx context.Context, classification string, classCodes []string) ([]int64, error)
 }

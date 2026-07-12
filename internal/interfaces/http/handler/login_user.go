@@ -16,7 +16,7 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, role, err := h.loginUC.Execute(
+	userID, role, enterpriseID, err := h.loginUC.Execute(
 		r.Context(),
 		login,
 	)
@@ -25,7 +25,7 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateToken(userID, role, h.jwtSecret)
+	token, err := auth.GenerateToken(userID, role, enterpriseID, h.jwtSecret)
 	if err != nil {
 		h.InternalError(w, r, err)
 		return

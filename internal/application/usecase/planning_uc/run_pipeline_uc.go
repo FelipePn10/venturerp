@@ -26,8 +26,9 @@ func (uc *RunPlanningPipelineUseCase) Execute(ctx context.Context, dto request.R
 
 	// 1) MRP — auth is enforced inside the MRP use case.
 	mrpLog, err := uc.MRP.Execute(ctx, request.RunMRPCalculationDTO{
-		PlanCode:    dto.PlanCode,
-		GenerateLLC: dto.GenerateLLC,
+		PlanCode:           dto.PlanCode,
+		InitialOrderNumber: dto.InitialOrderNumber,
+		GenerateLLC:        dto.GenerateLLC,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("MRP step: %w", err)

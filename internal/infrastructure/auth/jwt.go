@@ -12,15 +12,17 @@ const (
 )
 
 type UserClaims struct {
-	UserID string `json:"sub"`
-	Role   string `json:"role"`
+	UserID       string `json:"sub"`
+	Role         string `json:"role"`
+	EnterpriseID int64  `json:"enterprise_id"`
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID, role, secret string) (string, error) {
+func GenerateToken(userID, role string, enterpriseID int64, secret string) (string, error) {
 	claims := UserClaims{
-		UserID: userID,
-		Role:   role,
+		UserID:       userID,
+		Role:         role,
+		EnterpriseID: enterpriseID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "panosso-erp",
 			Subject:   userID,

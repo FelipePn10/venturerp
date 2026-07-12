@@ -12,23 +12,22 @@ import (
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (
-    id,
-    name,
-    email,
-    password,
-    created_at,
-    updated_at
-) VALUES (
-    $1, $2, $3, $4, now(), now()
+WITH created_user AS (
+    INSERT INTO users (id, name, email, password, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, now(), now())
+    RETURNING id
 )
+INSERT INTO user_enterprises (user_id, enterprise_id)
+SELECT created_user.id, (SELECT id FROM enterprise WHERE code = $5)
+FROM created_user
 `
 
 type CreateUserParams struct {
-	ID       pgtype.UUID
-	Name     string
-	Email    string
-	Password string
+	ID             pgtype.UUID
+	Name           string
+	Email          string
+	Password       string
+	EnterpriseCode int32
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
@@ -37,8 +36,23 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 		arg.Name,
 		arg.Email,
 		arg.Password,
+		arg.EnterpriseCode,
 	)
 	return err
+}
+
+const getOnlyUserEnterprise = `-- name: GetOnlyUserEnterprise :one
+SELECT MIN(enterprise_id)::bigint AS enterprise_id
+FROM user_enterprises
+WHERE user_id = $1
+HAVING COUNT(*) = 1
+`
+
+func (q *Queries) GetOnlyUserEnterprise(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getOnlyUserEnterprise, userID)
+	var enterprise_id int64
+	err := row.Scan(&enterprise_id)
+	return enterprise_id, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -112,4 +126,23 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserEnterpriseByCode = `-- name: GetUserEnterpriseByCode :one
+SELECT e.id
+FROM user_enterprises ue
+JOIN enterprise e ON e.id = ue.enterprise_id
+WHERE ue.user_id = $1 AND e.code = $2
+`
+
+type GetUserEnterpriseByCodeParams struct {
+	UserID pgtype.UUID
+	Code   int32
+}
+
+func (q *Queries) GetUserEnterpriseByCode(ctx context.Context, arg GetUserEnterpriseByCodeParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserEnterpriseByCode, arg.UserID, arg.Code)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }

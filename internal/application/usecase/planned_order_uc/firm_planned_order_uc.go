@@ -2,7 +2,9 @@ package planned_order_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -12,11 +14,20 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
+	paramsrepo "github.com/FelipePn10/panossoerp/internal/domain/planning_params/repository"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	productionrepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	reqentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	reqrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+)
+
+var (
+	ErrInvalidPlanningTransition = errors.New("invalid planned order transition")
+	ErrFirmDateChange            = errors.New("firm planned order dates cannot be changed")
+	ErrKanbanReleaseDisabled     = errors.New("planning parameter 25 does not allow releasing Kanban items")
+	ErrOrderHasMovements         = errors.New("released order with production movements cannot return to planned")
 )
 
 // externalOpsReader is the slice of the routing repository needed to raise service
@@ -26,8 +37,9 @@ type externalOpsReader interface {
 }
 
 type FirmPlannedOrderUseCase struct {
-	Repo repository.PlannedOrderRepository
-	Auth ports.AuthService
+	Repo   repository.PlannedOrderRepository
+	Auth   ports.AuthService
+	Params paramsrepo.PlanningParamRepository
 	// ProdOrderRepo is optional. When set, firming a PRODUCTION planned order
 	// also creates the corresponding Production Order (OF), mirroring the
 	// approve→purchase-order flow already in place on the purchasing side.
@@ -36,42 +48,136 @@ type FirmPlannedOrderUseCase struct {
 	// Subcontracting hook (R4) — all optional. When set, firming a production order
 	// whose item has external/third-party operations raises a service purchase
 	// requisition (one item per external op with a service item).
-	ReqRepo        reqrepo.PurchaseRequisitionRepository
-	ExternalOps    externalOpsReader
-	EnterpriseCode int64 // enterprise the requisition belongs to (defaults to 1)
+	ReqRepo          reqrepo.PurchaseRequisitionRepository
+	ExternalOps      externalOpsReader
+	EnterpriseCode   int64 // enterprise the requisition belongs to (defaults to 1)
+	ServiceLinker    ports.ProductionServiceLinker
+	ReleaseValidator ports.ManufacturingReleaseValidator
 }
 
 func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
-	if !uc.Auth.CanReleaseOrder(ctx) {
-		return nil, errorsuc.ErrUnauthorized
-	}
-
-	// Check the prior state so the OF is generated only on the first firming,
-	// avoiding duplicate production orders if the endpoint is called again.
-	wasFirm := false
-	if uc.ProdOrderRepo != nil {
-		if prev, err := uc.Repo.GetByCode(ctx, dto.OrderCode); err == nil {
-			wasFirm = prev.IsFirm
-		}
-	}
-
-	order, err := uc.Repo.FirmOrder(ctx, dto.OrderCode)
+	result, err := uc.ExecuteTransition(ctx, request.TransitionPlannedOrderDTO{OrderCodes: []int64{dto.OrderCode}, Target: "FIRM"})
 	if err != nil {
 		return nil, err
 	}
+	return result[0], nil
+}
 
-	if uc.ProdOrderRepo != nil && !wasFirm && order.OrderType == types.OrderProduction {
-		if ofErr := uc.createProductionOrder(ctx, order); ofErr != nil {
-			return nil, ofErr
-		}
-		// Best-effort: raise a service requisition for external operations. A
-		// subcontracting hiccup must not block firming the order.
-		if uc.ReqRepo != nil && uc.ExternalOps != nil {
-			_, _ = uc.generateServiceRequisition(ctx, order)
-		}
+func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto request.TransitionPlannedOrderDTO) ([]*response.PlannedOrderResponse, error) {
+	if !uc.Auth.CanReleaseOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if len(dto.OrderCodes) == 0 {
+		return nil, fmt.Errorf("%w: order_codes is required", ErrInvalidPlanningTransition)
+	}
+	target := strings.ToUpper(strings.TrimSpace(dto.Target))
+	if target != "PLANNED" && target != "RELEASED" && target != "FIRM" {
+		return nil, fmt.Errorf("%w: target must be PLANNED, RELEASED or FIRM", ErrInvalidPlanningTransition)
+	}
+	if target == "FIRM" && (dto.StartDate != nil || dto.EndDate != nil) {
+		return nil, ErrFirmDateChange
 	}
 
-	return toPlannedOrderResponse(order), nil
+	orders := make([]*entity.PlannedOrder, 0, len(dto.OrderCodes))
+	for _, code := range dto.OrderCodes {
+		order, err := uc.Repo.GetByCode(ctx, code)
+		if err != nil {
+			return nil, err
+		}
+		if err := uc.validateTransition(ctx, order, target); err != nil {
+			return nil, fmt.Errorf("order %d: %w", code, err)
+		}
+		orders = append(orders, order)
+	}
+
+	start, end := datetime.ParseDatePtr(dto.StartDate), datetime.ParseDatePtr(dto.EndDate)
+	if dto.StartDate != nil && start == nil || dto.EndDate != nil && end == nil {
+		return nil, fmt.Errorf("%w: invalid start_date or end_date", ErrInvalidPlanningTransition)
+	}
+	result := make([]*response.PlannedOrderResponse, 0, len(orders))
+	for _, previous := range orders {
+		wasPlanned := previous.Status == types.StatusPlanned
+		if target != "FIRM" && (dto.StartDate != nil || dto.EndDate != nil) {
+			if _, err := uc.Repo.UpdateDates(ctx, previous.Code, start, end); err != nil {
+				return nil, err
+			}
+		}
+		status, firm := string(types.StatusReleased), target == "FIRM"
+		if target == "PLANNED" {
+			status = string(types.StatusPlanned)
+		}
+		order, err := uc.Repo.SetPlanningState(ctx, previous.Code, status, firm)
+		if err != nil {
+			return nil, err
+		}
+		if target != "PLANNED" && wasPlanned && uc.ProdOrderRepo != nil && order.OrderType == types.OrderProduction {
+			productionOrder, err := uc.createProductionOrder(ctx, order)
+			if err != nil {
+				return nil, err
+			}
+			if uc.ReqRepo != nil && uc.ExternalOps != nil {
+				requisitionCode, reqErr := uc.generateServiceRequisition(ctx, order)
+				if reqErr != nil {
+					return nil, reqErr
+				}
+				if requisitionCode != 0 && uc.ServiceLinker != nil {
+					if linkErr := uc.ServiceLinker.LinkServiceRequisition(ctx, productionOrder.ID, requisitionCode); linkErr != nil {
+						return nil, linkErr
+					}
+				}
+			}
+		}
+		result = append(result, toPlannedOrderResponse(order))
+	}
+	return result, nil
+}
+
+func (uc *FirmPlannedOrderUseCase) validateTransition(ctx context.Context, order *entity.PlannedOrder, target string) error {
+	if order.IsFirm {
+		if target == "FIRM" {
+			return nil
+		}
+		return ErrInvalidPlanningTransition
+	}
+	if target != "PLANNED" && uc.ReleaseValidator != nil {
+		if err := uc.ReleaseValidator.ValidateProductionRelease(ctx, order.ItemCode); err != nil {
+			return err
+		}
+	}
+	if target == "PLANNED" {
+		if order.Status != types.StatusReleased {
+			return ErrInvalidPlanningTransition
+		}
+		moved, err := uc.Repo.HasProductionMovements(ctx, order.Code)
+		if err != nil {
+			return err
+		}
+		if moved {
+			return ErrOrderHasMovements
+		}
+		return nil
+	}
+	if order.Status != types.StatusPlanned && order.Status != types.StatusReleased {
+		return ErrInvalidPlanningTransition
+	}
+	kanban, err := uc.Repo.IsKanbanItem(ctx, order.ItemCode)
+	if err != nil {
+		return err
+	}
+	if !kanban {
+		return nil
+	}
+	allowed := false
+	if uc.Params != nil {
+		if param, err := uc.Params.GetByNumber(ctx, 25); err == nil {
+			v := strings.ToUpper(strings.TrimSpace(param.Value))
+			allowed = v == "S" || v == "SIM" || v == "1" || v == "TRUE" || v == "YES"
+		}
+	}
+	if !allowed {
+		return ErrKanbanReleaseDisabled
+	}
+	return nil
 }
 
 // generateServiceRequisition raises one purchase requisition covering the service
@@ -95,7 +201,12 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 	}
 
 	entCode := uc.EnterpriseCode
-	if entCode == 0 {
+	if uc.ServiceLinker != nil {
+		entCode, err = uc.ServiceLinker.CurrentEnterpriseCode(ctx)
+		if err != nil {
+			return 0, err
+		}
+	} else if entCode == 0 {
 		entCode = 1
 	}
 	code, err := uc.ReqRepo.NextCode(ctx)
@@ -139,12 +250,7 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 // createProductionOrder builds the OF from the firmed planned order, mirroring
 // the manual CreateProductionOrderUseCase. It links back to the planned order
 // via its code so the production side stays traceable to the plan.
-func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, order *entity.PlannedOrder) error {
-	nextNum, err := uc.ProdOrderRepo.GetNextOrderNumber(ctx)
-	if err != nil {
-		nextNum = 1
-	}
-
+func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, order *entity.PlannedOrder) (*productionentity.ProductionOrder, error) {
 	mask := ""
 	if order.Mask != nil {
 		mask = *order.Mask
@@ -152,7 +258,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 	plannedCode := order.Code
 
 	of := &productionentity.ProductionOrder{
-		OrderNumber:    nextNum,
+		OrderNumber:    order.OrderNumber,
 		PlannedOrderID: &plannedCode,
 		ItemCode:       order.ItemCode,
 		Mask:           mask,
@@ -160,6 +266,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		Status:         productionentity.StatusOpen,
 		CostCenterID:   order.CostCenterCode,
 		EmployeeID:     order.EmployeeCode,
+		WarehouseID:    order.WarehouseCode,
 		MachineID:      order.MachineCode,
 		Priority:       order.Priority,
 		Notes:          order.Notes,
@@ -167,6 +274,5 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		EndDate:        order.EndDate,
 		CreatedBy:      order.CreatedBy,
 	}
-	_, err = uc.ProdOrderRepo.Create(ctx, of)
-	return err
+	return uc.ProdOrderRepo.Create(ctx, of)
 }

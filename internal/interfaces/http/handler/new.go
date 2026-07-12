@@ -360,13 +360,15 @@ func NewProductionPlanHandler(
 	listUC *production_plan_uc.ListProductionPlansUseCase,
 	updateUC *production_plan_uc.UpdateProductionPlanUseCase,
 	deleteUC *production_plan_uc.DeleteProductionPlanUseCase,
+	interFactoryUC *production_plan_uc.ManageProductionPlanInterFactoriesUseCase,
 ) *ProductionPlanHandler {
 	return &ProductionPlanHandler{
-		createUC: createUC,
-		getUC:    getUC,
-		listUC:   listUC,
-		updateUC: updateUC,
-		deleteUC: deleteUC,
+		createUC:       createUC,
+		getUC:          getUC,
+		listUC:         listUC,
+		updateUC:       updateUC,
+		deleteUC:       deleteUC,
+		interFactoryUC: interFactoryUC,
 	}
 }
 
@@ -520,6 +522,26 @@ func NewProductionOrderHandler(
 // WithOrderOps attaches the order operations use case to the handler.
 func (h *ProductionOrderHandler) WithOrderOps(uc *production_order_uc.OrderOperationsUseCase) *ProductionOrderHandler {
 	h.orderOpsUC = uc
+	return h
+}
+
+func (h *ProductionOrderHandler) WithOperational(uc *production_order_uc.OperationalConsultationUseCase) *ProductionOrderHandler {
+	h.operationalUC = uc
+	return h
+}
+
+func (h *ProductionOrderHandler) WithMaterialControl(uc *production_order_uc.ProductionMaterialControlUseCase) *ProductionOrderHandler {
+	h.materialControlUC = uc
+	return h
+}
+
+func (h *ProductionOrderHandler) WithMaintenance(uc *production_order_uc.MaintainProductionOrderUseCase) *ProductionOrderHandler {
+	h.maintainUC = uc
+	return h
+}
+
+func (h *ProductionOrderHandler) WithDeliveryCandidates(uc *production_order_uc.ListDeliveryCandidatesUseCase) *ProductionOrderHandler {
+	h.deliveryCandidatesUC = uc
 	return h
 }
 

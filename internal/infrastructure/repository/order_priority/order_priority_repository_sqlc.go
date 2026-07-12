@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -15,6 +16,10 @@ func (r *OrderPriorityRepositorySQLC) Create(
 	ctx context.Context,
 	op *entity.OrderPriority,
 ) (*entity.OrderPriority, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	row, err := r.q.CreateOrderPriority(
 		ctx,
@@ -24,6 +29,7 @@ func (r *OrderPriorityRepositorySQLC) Create(
 			Priority:      op.Priority,
 			Description:   pgutil.ToPgTextFromPtr(op.Description),
 			CreatedBy:     pgutil.ToPgUUID(op.CreatedBy),
+			EnterpriseID:  enterpriseID,
 		},
 	)
 
@@ -38,6 +44,10 @@ func (r *OrderPriorityRepositorySQLC) Update(
 	ctx context.Context,
 	op *entity.OrderPriority,
 ) (*entity.OrderPriority, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	row, err := r.q.UpdateOrderPriority(
 		ctx,
@@ -47,6 +57,7 @@ func (r *OrderPriorityRepositorySQLC) Update(
 			Priority:      op.Priority,
 			Description:   pgutil.ToPgTextFromPtr(op.Description),
 			Code:          op.Code,
+			EnterpriseID:  enterpriseID,
 		},
 	)
 
@@ -61,8 +72,11 @@ func (r *OrderPriorityRepositorySQLC) GetByCode(
 	ctx context.Context,
 	code int64,
 ) (*entity.OrderPriority, error) {
-
-	row, err := r.q.GetOrderPriorityByCode(ctx, code)
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetOrderPriorityByCode(ctx, sqlc.GetOrderPriorityByCodeParams{Code: code, EnterpriseID: enterpriseID})
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -79,10 +93,14 @@ func (r *OrderPriorityRepositorySQLC) FindByValue(
 	ctx context.Context,
 	value float64,
 ) (*entity.OrderPriority, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	row, err := r.q.FindPriorityByValue(
 		ctx,
-		pgutil.ToPgNumericFromFloat64(value),
+		sqlc.FindPriorityByValueParams{IntervalStart: pgutil.ToPgNumericFromFloat64(value), EnterpriseID: enterpriseID},
 	)
 
 	if err != nil {
@@ -99,8 +117,11 @@ func (r *OrderPriorityRepositorySQLC) FindByValue(
 func (r *OrderPriorityRepositorySQLC) List(
 	ctx context.Context,
 ) ([]*entity.OrderPriority, error) {
-
-	rows, err := r.q.ListOrderPriorities(ctx)
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListOrderPriorities(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing order priorities: %w", err)
 	}
@@ -112,8 +133,11 @@ func (r *OrderPriorityRepositorySQLC) Delete(
 	ctx context.Context,
 	code int64,
 ) error {
-
-	return r.q.DeleteOrderPriority(ctx, code)
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeleteOrderPriority(ctx, sqlc.DeleteOrderPriorityParams{Code: code, EnterpriseID: enterpriseID})
 }
 
 func rowToEntity(

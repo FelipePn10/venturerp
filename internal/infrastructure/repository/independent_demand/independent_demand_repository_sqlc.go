@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,6 +17,10 @@ func (r *IndependentDemandRepositorySQLC) Create(
 	ctx context.Context,
 	d *entity.IndependentDemand,
 ) (*entity.IndependentDemand, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	row, err := r.q.CreateIndependentDemand(ctx, sqlc.CreateIndependentDemandParams{
 		Code:           d.CodeDemand,
@@ -25,6 +30,7 @@ func (r *IndependentDemandRepositorySQLC) Create(
 		Quantity:       pgutil.ToPgNumericFromFloat64(d.Quantity),
 		DemandDate:     pgutil.ToPgDate(d.DemandDate),
 		CreatedBy:      pgutil.ToPgUUID(d.CreatedBy),
+		EnterpriseID:   enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating independent demand: %w", err)
@@ -37,6 +43,10 @@ func (r *IndependentDemandRepositorySQLC) Update(
 	ctx context.Context,
 	d *entity.IndependentDemand,
 ) (*entity.IndependentDemand, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	row, err := r.q.UpdateIndependentDemand(ctx, sqlc.UpdateIndependentDemandParams{
 		ItemCode:       d.ItemCode,
@@ -45,6 +55,7 @@ func (r *IndependentDemandRepositorySQLC) Update(
 		Quantity:       pgutil.ToPgNumericFromFloat64(d.Quantity),
 		DemandDate:     pgutil.ToPgDate(d.DemandDate),
 		Code:           d.CodeDemand,
+		EnterpriseID:   enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating independent demand: %w", err)
@@ -57,8 +68,12 @@ func (r *IndependentDemandRepositorySQLC) GetByCode(
 	ctx context.Context,
 	code int64,
 ) (*entity.IndependentDemand, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	row, err := r.q.GetIndependentDemandByCode(ctx, code)
+	row, err := r.q.GetIndependentDemandByCode(ctx, sqlc.GetIndependentDemandByCodeParams{Code: code, EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("independent demand code %d not found", code)
@@ -74,8 +89,12 @@ func (r *IndependentDemandRepositorySQLC) ListFromDate(
 	ctx context.Context,
 	date time.Time,
 ) ([]*entity.IndependentDemand, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	rows, err := r.q.ListDemandsFromDate(ctx, pgutil.ToPgDate(date))
+	rows, err := r.q.ListDemandsFromDate(ctx, sqlc.ListDemandsFromDateParams{DemandDate: pgutil.ToPgDate(date), EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("listing demands from date: %w", err)
 	}
@@ -86,8 +105,12 @@ func (r *IndependentDemandRepositorySQLC) ListFromDate(
 func (r *IndependentDemandRepositorySQLC) List(
 	ctx context.Context,
 ) ([]*entity.IndependentDemand, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	rows, err := r.q.ListIndependentDemands(ctx)
+	rows, err := r.q.ListIndependentDemands(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing independent demands: %w", err)
 	}
@@ -99,8 +122,12 @@ func (r *IndependentDemandRepositorySQLC) ListByItem(
 	ctx context.Context,
 	itemCode int64,
 ) ([]*entity.IndependentDemand, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	rows, err := r.q.ListDemandsByItem(ctx, itemCode)
+	rows, err := r.q.ListDemandsByItem(ctx, sqlc.ListDemandsByItemParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("listing independent demands by item: %w", err)
 	}
@@ -112,8 +139,12 @@ func (r *IndependentDemandRepositorySQLC) Delete(
 	ctx context.Context,
 	code int64,
 ) error {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return err
+	}
 
-	err := r.q.DeleteIndependentDemand(ctx, code)
+	err = r.q.DeleteIndependentDemand(ctx, sqlc.DeleteIndependentDemandParams{Code: code, EnterpriseID: enterpriseID})
 	if err != nil {
 		return fmt.Errorf("deleting independent demand %d: %w", code, err)
 	}

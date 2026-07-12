@@ -4,7 +4,8 @@ Dois cadastros do Configurador de Produto: **Desenhos** (com revisões) e **Más
 Lotes/Séries** (geração automática de código de lote). Ambos destravam tipos de
 característica do configurador — `DESENHO` e `SEQUENCIAL`.
 
-Migration: `000200_drawings_lot_masks`. Versão de negócio em
+Migrations: `000200_drawings_lot_masks`, `000226_drawings_tenant_scope` e
+`000227_drawing_maintenance_and_replication`. Versão de negócio em
 [`../apresentacao/configurador.md`](../apresentacao/configurador.md).
 
 > Convenções: `Authorization: Bearer <JWT>`, papel `ADMIN`/`USER`. `created_by` vem do JWT.
@@ -27,6 +28,9 @@ replicação é `Desenho(20 primeiras posições) + Dígito + Formato + Revisão
 | DELETE | `/api/drawings/distributions/{distId}` | Remover distribuição |
 | POST/GET | `/api/drawings/{id}/characteristics` | Vincular / listar características do configurador |
 | DELETE | `/api/drawings/characteristics/{charLinkId}` | Remover vínculo |
+| PUT | `/api/drawings/item-code` | Manter código do item/configuração |
+| GET | `/api/drawings/item-code/{itemCode}?mask=...` | Consultar código de engenharia |
+| GET/PUT | `/api/drawings/manufacturing-parameters` | Consultar/alterar parâmetro 8 |
 
 Campos do desenho: `code`, `digit`, `format`, `model`, `item_code`, `description`, `uom`,
 `weight`, `material_spec` (E.M.), `creation_date`. Da revisão: `revision`, `start_date`,
@@ -35,6 +39,23 @@ Campos do desenho: `code`, `digit`, `format`, `model`, `item_code`, `description
 
 Tabelas: `drawings`, `drawing_revisions`, `drawing_revision_distributions`,
 `drawing_characteristics` (liga a `cfg_characteristics`/`cfg_variables` com operador).
+
+Todas as operações validam `drawings.enterprise_id` contra a empresa do JWT,
+inclusive revisões, distribuições e características. Desenhos legados sem
+empresa inferível permanecem em quarentena.
+
+### Código de engenharia e parâmetro 8
+
+`PUT /api/drawings/item-code` recebe `item_code`, `drawing_code` e `mask`
+opcional. Item simples exige máscara vazia. Se o item possuir configurações em
+`item_masks`, uma máscara existente é obrigatória e o código é gravado somente
+para aquela configuração em `item_engineering_drawings`.
+
+O parâmetro 8 desta rotina fica em `manufacturing_item_parameters`, sem colisão
+com o parâmetro 8 do planejamento. Quando habilitado, cadastrar ou alterar uma
+revisão corrente replica o código composto somente onde o código ainda é
+exatamente o da revisão anterior. A primeira revisão nunca replica e deve ser
+informada manualmente. A troca da revisão corrente e a replicação são atômicas.
 
 ---
 
@@ -79,7 +100,7 @@ Tabelas: `lot_masks`, `lot_mask_parts` (com `current_value`/`last_year`).
 
 | Camada | Arquivo |
 |---|---|
-| Migration | `migrations/000200_drawings_lot_masks.{up,down}.sql` |
+| Migration | `migrations/000200`, `000226` e `000227` |
 | Domínio | `internal/domain/drawing/entity/` · `internal/domain/lot_mask/entity/` (gerador puro `Generate`) |
 | SQL (hand-written) | `internal/infrastructure/database/sqlc/drawings.sql.go` · `lot_masks.sql.go` |
 | Use cases | `internal/application/usecase/drawing_uc/` · `lot_mask_uc/` |

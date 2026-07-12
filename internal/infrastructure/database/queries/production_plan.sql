@@ -2,9 +2,9 @@
 INSERT INTO production_plans (
     code, name, independent_demands, group_same_date_orders,
     planning_types, classification, class_item_codes, order_item_code,
-    parameters, created_by
+    parameters, created_by, enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, @enterprise_id)
 RETURNING *;
 
 -- name: UpdateProductionPlan :one
@@ -18,17 +18,17 @@ SET name                  = $2,
     order_item_code       = $8,
     parameters            = $9,
     updated_at            = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = @enterprise_id
 RETURNING *;
 
 -- name: GetProductionPlanByCode :one
-SELECT * FROM production_plans WHERE code = $1 AND is_active = TRUE;
+SELECT * FROM production_plans WHERE code = $1 AND enterprise_id = @enterprise_id AND is_active = TRUE;
 
 -- name: ListProductionPlans :many
-SELECT * FROM production_plans WHERE is_active = TRUE ORDER BY code;
+SELECT * FROM production_plans WHERE enterprise_id = @enterprise_id AND is_active = TRUE ORDER BY code;
 
 -- name: DeleteProductionPlan :exec
-UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1;
+UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = @enterprise_id;
 
 -- name: UpdateProductionPlanLastCalculated :exec
-UPDATE production_plans SET last_calculated_at = NOW(), updated_at = NOW() WHERE code = $1;
+UPDATE production_plans SET last_calculated_at = NOW(), updated_at = NOW() WHERE code = $1 AND enterprise_id = @enterprise_id;

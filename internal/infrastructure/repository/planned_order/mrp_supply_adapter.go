@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 // PlannedOrderSupplyAdapter implements ports.PlannedOrderSupplyPort.
@@ -26,7 +27,11 @@ func (a *PlannedOrderSupplyAdapter) ListFirmSupplyForItems(
 		return make(map[int64][]ports.SupplyEntry), nil
 	}
 
-	rows, err := a.q.ListFirmPlannedOrdersByItems(ctx, itemCodes)
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := a.q.ListFirmPlannedOrdersByItems(ctx, sqlc.ListFirmPlannedOrdersByItemsParams{ItemCodes: itemCodes, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, err
 	}

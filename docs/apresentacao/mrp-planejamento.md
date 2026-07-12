@@ -67,7 +67,35 @@ O MRP sempre roda sobre um **plano de produção**. O plano define:
 - a **origem da demanda** (considerar pedidos, previsões, a partir de qual data);
 - os **parâmetros** daquela rodada.
 
+O plano pode combinar os métodos MRP, mínimos/máximos, ponto de reposição, MPS e
+Kanban. Também pode considerar todas as demandas independentes, ignorá-las ou
+considerá-las somente a partir de uma data. Quando um item de pedido específico
+é informado, ele substitui os filtros por classificação, evitando uma seleção
+ambígua.
+
 É possível **criar, listar, consultar, atualizar e excluir** planos. Trabalhar com planos permite simular cenários ("e se eu antecipar este lote?") sem afetar a operação real.
+
+Cada plano e cada resultado do cálculo pertencem à empresa selecionada no
+acesso. Usuários autorizados em mais de uma empresa escolhem a empresa ao entrar,
+e dados de planejamento de uma empresa não aparecem em outra.
+
+O plano também pode relacionar outras empresas do grupo para o processo
+inter-fábrica. Para cada empresa relacionada, o PCP decide se as ordens poderão
+ter liberação automática ou se precisarão de análise manual.
+
+Somente pedidos marcados como inter-fábrica e originados dessas empresas entram
+no cálculo. As necessidades permanecem identificadas como DIF e as ordens OIF
+ou OCI guardam a empresa de origem e a indicação de liberação automática.
+
+Ao executar o plano, o PCP informa o número inicial das ordens sugeridas. Essa
+numeração acompanha a sugestão até sua conversão em ordem planejada e ordem de
+fabricação. Também pode solicitar a gravação do LLC calculado no cadastro dos
+itens para consultas e cálculos posteriores.
+
+Pedidos originados da assistência técnica podem gerar ordens OAT quando os
+controles de planejamento e estoque de terceiros estiverem habilitados. O MRP
+mantém o almoxarifado de assistência informado no item do pedido e não mistura
+em uma única ordem demandas destinadas a almoxarifados diferentes.
 
 ---
 
@@ -88,6 +116,10 @@ Cada item pode ter **regras próprias** que o MRP respeita ao gerar as ordens, p
 ---
 
 ## 5. Como o MRP pensa, passo a passo
+
+Para manter estoque, demandas e sugestões consistentes, o VentureERP executa
+**um cálculo de planejamento por vez**. Se já houver uma rodada em andamento,
+uma nova solicitação é recusada até a conclusão da atual.
 
 Quando o planejamento roda, o sistema executa esta sequência:
 
@@ -141,6 +173,31 @@ Sugestão MRP (proposta) ──firmar──▶ Ordem Planejada ─────�
 - **Compra:** a sugestão firmada vira uma Ordem Planejada de compra, que o comprador converte em Pedido de Compra (ver `compras.md`).
 - **Produção:** firmar uma sugestão de fabricação cria automaticamente a Ordem de Fabricação (ver `producao.md`).
 - **Rejeitar:** basta não firmar — a sugestão será substituída na próxima execução do MRP.
+
+### Liberar, firmar e replanejar
+
+Ordens planejadas podem ser liberadas para execução ou firmadas quando a data não
+pode mais mudar. Uma ordem apenas liberada pode voltar ao planejamento enquanto
+não houver apontamentos ou consumos. A tela/API permite aplicar a ação a várias
+ordens; itens Kanban respeitam o parâmetro 25 para evitar ordens duplicadas. Nas
+relações entre fábricas marcadas para liberação automática, o cálculo já converte
+e libera somente as sugestões elegíveis, sem duplicá-las em reexecuções.
+
+### Entregar a produção
+
+A OF liberada pode receber entregas parciais ou uma entrega final. O produto
+acabado entra no almoxarifado da ordem, com lote rastreável; componentes marcados
+para baixa automática geram a requisição planejada REP. Excedentes são
+identificados como EPE quando a empresa habilita esse tratamento. Uma ordem de
+serviço não pode ser finalizada com quantidade zero enquanto houver compra de
+serviço pendente.
+
+### Consultar e explicar o planejamento
+
+O planejador pode comparar a fotografia do último cálculo com a posição atual,
+filtrar um período e consultar totais de demanda, ordens e estoque. Na ordem de
+fabricação, uma visão consolidada reúne entregas, apontamentos, consumos, lotes e
+movimentos, permitindo rastrear da necessidade calculada até a execução.
 
 ---
 
@@ -212,3 +269,19 @@ Em vez de rodar MRP, CRP e APS separadamente, o sistema oferece o **pipeline**: 
 | **Firmar** | Confirmar uma sugestão, transformando-a em ordem real |
 
 > A versão técnica detalhada está em `../dev/mrp-calculo.md`, `../dev/visao-geral.md` (§3) e `../dev/manufatura-e-compras.md` (CRP/APS/pipeline).
+
+## 14. Da sugestão à entrega na fábrica
+
+O fluxo cobre a criação e manutenção do plano, cálculo exclusivo, firmação e
+liberação de ordens, criação manual de OF com demandas, substituição de
+componentes, seleção de lotes, baixa automática, entrega parcial/final e
+destinação de refugos. Entregas e estoque são atualizados juntos: uma falha não
+deixa a OF parcialmente concluída.
+
+Para operações terceirizadas, a OF permanece ligada à solicitação e ao pedido
+de compra do serviço. Assim, o sistema impede encerrar uma produção enquanto o
+serviço necessário ainda estiver pendente.
+
+Os relatórios de perfil, disponibilidade, necessidades agrupadas, explosão e
+ponto de reposição ajudam o planejador a responder o que falta, quando faltará e
+qual quantidade comprar ou fabricar.

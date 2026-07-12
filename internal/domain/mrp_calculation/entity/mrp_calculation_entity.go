@@ -19,6 +19,16 @@ type MRPItemProfile struct {
 	CreatedAt       time.Time
 }
 
+type MRPProfileDetail struct {
+	PlanCode       int64
+	ItemCode       int64
+	NeedDate       time.Time
+	DetailType     string
+	SourceCode     *int64
+	ParentItemCode *int64
+	Quantity       float64
+}
+
 type MRPCalculationLog struct {
 	Code        int64
 	PlanCode    int64
@@ -72,14 +82,21 @@ type ConfiguredItemRule struct {
 
 // MRPInput holds all inputs for MRP calculation
 type MRPInput struct {
-	PlanCode       int64
-	ItemCode       int64
-	Mask           string
-	Quantity       float64
-	NeedDate       time.Time
-	SalesOrderCode *int64
-	ParentItemCode *int64
-	LLC            int
+	PlanCode             int64
+	ItemCode             int64
+	Mask                 string
+	Quantity             float64
+	NeedDate             time.Time
+	SalesOrderCode       *int64
+	ParentItemCode       *int64
+	LLC                  int
+	DemandType           string
+	SourceCode           *int64
+	WarehouseCode        *int64
+	TechnicalAssistance  bool
+	InterFactory         bool
+	SourceEnterpriseCode *int64
+	AutoRelease          bool
 }
 
 // MRPOutput holds the result of MRP calculation for one item
@@ -93,20 +110,25 @@ type MRPOutput struct {
 }
 
 type PlannedOrderSuggestion struct {
-	Code           int64
-	PlanCode       int64
-	ItemCode       int64
-	Quantity       float64
-	NeedDate       time.Time
-	StartDate      *time.Time
-	OrderType      string
-	DemandType     string
-	ParentItemCode *int64
-	LLC            int
-	MachineID      *int64
-	ProductionTime *float64
-	Priority       *string
-	Notes          *string
+	Code                 int64
+	OrderNumber          *int64
+	WarehouseCode        *int64
+	InterFactory         bool
+	SourceEnterpriseCode *int64
+	AutoRelease          bool
+	PlanCode             int64
+	ItemCode             int64
+	Quantity             float64
+	NeedDate             time.Time
+	StartDate            *time.Time
+	OrderType            string
+	DemandType           string
+	ParentItemCode       *int64
+	LLC                  int
+	MachineID            *int64
+	ProductionTime       *float64
+	Priority             *string
+	Notes                *string
 }
 
 // ExceptionMessageType classifies an MRP exception so planners can act

@@ -267,7 +267,7 @@ func (r *RepositoryItemSQLC) ListAll(ctx context.Context) ([]*entity.Item, error
 
 	result := make([]*entity.Item, 0, len(dbItems))
 	for _, dbItem := range dbItems {
-		item, err := mapDBItemToEntity(dbItem)
+		item, err := mapDBItemToEntity(sqlc.Item(dbItem))
 		if err != nil {
 			return nil, err
 		}
@@ -304,7 +304,7 @@ func (r *RepositoryItemSQLC) ListAllWithMasks(ctx context.Context) ([]entity.Ite
 
 	result := make([]entity.ItemWithMasks, 0, len(dbItems))
 	for _, dbItem := range dbItems {
-		item, err := mapDBItemToEntity(dbItem)
+		item, err := mapDBItemToEntity(sqlc.Item(dbItem))
 		if err != nil {
 			return nil, err
 		}

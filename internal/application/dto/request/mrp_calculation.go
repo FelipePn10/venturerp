@@ -3,8 +3,9 @@ package request
 import "github.com/google/uuid"
 
 type RunMRPCalculationDTO struct {
-	PlanCode    int64 `json:"plan_code"`
-	GenerateLLC bool  `json:"generate_llc"`
+	PlanCode           int64 `json:"plan_code"`
+	InitialOrderNumber int64 `json:"initial_order_number"`
+	GenerateLLC        bool  `json:"generate_llc"`
 }
 
 type CreatePlannedOrderDTO struct {
@@ -27,6 +28,13 @@ type CreatePlannedOrderDTO struct {
 
 type FirmOrderDTO struct {
 	OrderCode int64 `json:"order_code"`
+}
+
+type TransitionPlannedOrderDTO struct {
+	OrderCodes []int64 `json:"order_codes"`
+	Target     string  `json:"target"`
+	StartDate  *string `json:"start_date,omitempty"`
+	EndDate    *string `json:"end_date,omitempty"`
 }
 
 type CreateConfiguredItemRuleDTO struct {

@@ -1,8 +1,12 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 type CreateProductionOrderDTO struct {
+	OrderNumber    *int64    `json:"order_number,omitempty"`
 	PlannedOrderID *int64    `json:"planned_order_id,omitempty"`
 	ItemCode       int64     `json:"item_code"`
 	Mask           string    `json:"mask"`
@@ -12,6 +16,7 @@ type CreateProductionOrderDTO struct {
 	MachineID      *int64    `json:"machine_id,omitempty"`
 	CostCenterID   *int64    `json:"cost_center_id,omitempty"`
 	EmployeeID     *int64    `json:"employee_id,omitempty"`
+	WarehouseID    *int64    `json:"warehouse_id,omitempty"`
 	Priority       *string   `json:"priority,omitempty"`
 	Notes          *string   `json:"notes,omitempty"`
 	CreatedBy      uuid.UUID `json:"created_by"`
@@ -20,6 +25,16 @@ type CreateProductionOrderDTO struct {
 type StartProductionOrderDTO struct {
 	ID        int64  `json:"id"`
 	StartDate string `json:"start_date"`
+}
+
+type MaintainProductionOrderDTO struct {
+	ID         int64            `json:"id"`
+	PlannedQty *decimal.Decimal `json:"planned_qty,omitempty"`
+	StartDate  *string          `json:"start_date,omitempty"`
+	EndDate    *string          `json:"end_date,omitempty"`
+	MachineID  *int64           `json:"machine_id,omitempty"`
+	Priority   *string          `json:"priority,omitempty"`
+	Notes      *string          `json:"notes,omitempty"`
 }
 
 type AddAppointmentDTO struct {
@@ -61,7 +76,10 @@ type CompleteProductionOrderDTO struct {
 	// Lot is the finished-goods lot produced by this order. When set, it is
 	// stamped on the IN movement so the produced lot is traceable back to the
 	// consumed (raw-material) lots through the order genealogy.
-	Lot *string `json:"lot,omitempty"`
+	Lot            *string          `json:"lot,omitempty"`
+	Quantity       *decimal.Decimal `json:"quantity,omitempty"`
+	Final          bool             `json:"final"`
+	IdempotencyKey string           `json:"idempotency_key"`
 }
 
 // ReturnScrapDTO returns the scrap/offcut of a production order to stock as a

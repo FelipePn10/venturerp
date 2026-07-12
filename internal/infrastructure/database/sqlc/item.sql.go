@@ -56,7 +56,7 @@ INSERT INTO items (
              $20, $21, $22, $23, $24,
              $25, $26, $27, $28, NOW()
          )
-    RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use
+    RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
 `
 
 type CreateItemParams struct {
@@ -154,12 +154,15 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		&i.PlanningGhost,
 		&i.PlannerEmployeeCode,
 		&i.SuppliesTypeOfUse,
+		&i.ProductionReportingType,
+		&i.MaterialIssueTiming,
+		&i.AcceptsFractionalQuantity,
 	)
 	return i, err
 }
 
 const findItemByCode = `-- name: FindItemByCode :one
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
 FROM items
 WHERE code = $1
 `
@@ -199,12 +202,15 @@ func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) 
 		&i.PlanningGhost,
 		&i.PlannerEmployeeCode,
 		&i.SuppliesTypeOfUse,
+		&i.ProductionReportingType,
+		&i.MaterialIssueTiming,
+		&i.AcceptsFractionalQuantity,
 	)
 	return i, err
 }
 
 const getItemByID = `-- name: GetItemByID :one
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
 FROM items
 WHERE id = $1
 `
@@ -244,12 +250,15 @@ func (q *Queries) GetItemByID(ctx context.Context, id int64) (Item, error) {
 		&i.PlanningGhost,
 		&i.PlannerEmployeeCode,
 		&i.SuppliesTypeOfUse,
+		&i.ProductionReportingType,
+		&i.MaterialIssueTiming,
+		&i.AcceptsFractionalQuantity,
 	)
 	return i, err
 }
 
 const listItems = `-- name: ListItems :many
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
 FROM items
 ORDER BY code
 `
@@ -295,6 +304,9 @@ func (q *Queries) ListItems(ctx context.Context) ([]Item, error) {
 			&i.PlanningGhost,
 			&i.PlannerEmployeeCode,
 			&i.SuppliesTypeOfUse,
+			&i.ProductionReportingType,
+			&i.MaterialIssueTiming,
+			&i.AcceptsFractionalQuantity,
 		); err != nil {
 			return nil, err
 		}

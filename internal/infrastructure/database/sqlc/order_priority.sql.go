@@ -12,9 +12,9 @@ import (
 )
 
 const createOrderPriority = `-- name: CreateOrderPriority :one
-INSERT INTO order_priorities (code, interval_start, interval_end, priority, description, created_by)
-VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code
+INSERT INTO order_priorities (code, interval_start, interval_end, priority, description, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code, enterprise_id
 `
 
 type CreateOrderPriorityParams struct {
@@ -24,6 +24,7 @@ type CreateOrderPriorityParams struct {
 	Priority      string
 	Description   pgtype.Text
 	CreatedBy     pgtype.UUID
+	EnterpriseID  *int64
 }
 
 func (q *Queries) CreateOrderPriority(ctx context.Context, arg CreateOrderPriorityParams) (OrderPriority, error) {
@@ -34,6 +35,7 @@ func (q *Queries) CreateOrderPriority(ctx context.Context, arg CreateOrderPriori
 		arg.Priority,
 		arg.Description,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i OrderPriority
 	err := row.Scan(
@@ -47,28 +49,39 @@ func (q *Queries) CreateOrderPriority(ctx context.Context, arg CreateOrderPriori
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteOrderPriority = `-- name: DeleteOrderPriority :exec
-UPDATE order_priorities SET is_active = FALSE, updated_at = NOW() WHERE code = $1
+UPDATE order_priorities SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteOrderPriority(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteOrderPriority, code)
+type DeleteOrderPriorityParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteOrderPriority(ctx context.Context, arg DeleteOrderPriorityParams) error {
+	_, err := q.db.Exec(ctx, deleteOrderPriority, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const findPriorityByValue = `-- name: FindPriorityByValue :one
-SELECT id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code FROM order_priorities
-WHERE $1 >= interval_start AND $1 < interval_end AND is_active = TRUE
+SELECT id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code, enterprise_id FROM order_priorities
+WHERE $1 >= interval_start AND $1 < interval_end AND enterprise_id = $2 AND is_active = TRUE
 ORDER BY interval_start
     LIMIT 1
 `
 
-func (q *Queries) FindPriorityByValue(ctx context.Context, intervalStart pgtype.Numeric) (OrderPriority, error) {
-	row := q.db.QueryRow(ctx, findPriorityByValue, intervalStart)
+type FindPriorityByValueParams struct {
+	IntervalStart pgtype.Numeric
+	EnterpriseID  *int64
+}
+
+func (q *Queries) FindPriorityByValue(ctx context.Context, arg FindPriorityByValueParams) (OrderPriority, error) {
+	row := q.db.QueryRow(ctx, findPriorityByValue, arg.IntervalStart, arg.EnterpriseID)
 	var i OrderPriority
 	err := row.Scan(
 		&i.ID,
@@ -81,16 +94,22 @@ func (q *Queries) FindPriorityByValue(ctx context.Context, intervalStart pgtype.
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getOrderPriorityByCode = `-- name: GetOrderPriorityByCode :one
-SELECT id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code FROM order_priorities WHERE code = $1
+SELECT id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code, enterprise_id FROM order_priorities WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetOrderPriorityByCode(ctx context.Context, code int64) (OrderPriority, error) {
-	row := q.db.QueryRow(ctx, getOrderPriorityByCode, code)
+type GetOrderPriorityByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetOrderPriorityByCode(ctx context.Context, arg GetOrderPriorityByCodeParams) (OrderPriority, error) {
+	row := q.db.QueryRow(ctx, getOrderPriorityByCode, arg.Code, arg.EnterpriseID)
 	var i OrderPriority
 	err := row.Scan(
 		&i.ID,
@@ -103,16 +122,17 @@ func (q *Queries) GetOrderPriorityByCode(ctx context.Context, code int64) (Order
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listOrderPriorities = `-- name: ListOrderPriorities :many
-SELECT id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code FROM order_priorities WHERE is_active = TRUE ORDER BY interval_start
+SELECT id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code, enterprise_id FROM order_priorities WHERE enterprise_id = $1 AND is_active = TRUE ORDER BY interval_start
 `
 
-func (q *Queries) ListOrderPriorities(ctx context.Context) ([]OrderPriority, error) {
-	rows, err := q.db.Query(ctx, listOrderPriorities)
+func (q *Queries) ListOrderPriorities(ctx context.Context, enterpriseID *int64) ([]OrderPriority, error) {
+	rows, err := q.db.Query(ctx, listOrderPriorities, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +151,7 @@ func (q *Queries) ListOrderPriorities(ctx context.Context) ([]OrderPriority, err
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.Code,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -149,8 +170,8 @@ SET interval_start = $1,
     priority = $3,
     description = $4,
     updated_at = NOW()
-WHERE code = $5
-    RETURNING id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code
+WHERE code = $5 AND enterprise_id = $6
+    RETURNING id, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by, code, enterprise_id
 `
 
 type UpdateOrderPriorityParams struct {
@@ -159,6 +180,7 @@ type UpdateOrderPriorityParams struct {
 	Priority      string
 	Description   pgtype.Text
 	Code          int64
+	EnterpriseID  *int64
 }
 
 func (q *Queries) UpdateOrderPriority(ctx context.Context, arg UpdateOrderPriorityParams) (OrderPriority, error) {
@@ -168,6 +190,7 @@ func (q *Queries) UpdateOrderPriority(ctx context.Context, arg UpdateOrderPriori
 		arg.Priority,
 		arg.Description,
 		arg.Code,
+		arg.EnterpriseID,
 	)
 	var i OrderPriority
 	err := row.Scan(
@@ -181,6 +204,7 @@ func (q *Queries) UpdateOrderPriority(ctx context.Context, arg UpdateOrderPriori
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

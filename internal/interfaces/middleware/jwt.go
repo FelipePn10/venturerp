@@ -56,8 +56,9 @@ func JWT(secret string, log *applogger.Logger) func(http.Handler) http.Handler {
 			}
 
 			user := &security.AuthUser{
-				ID:   claims.UserID,
-				Role: claims.Role,
+				ID:           claims.UserID,
+				Role:         claims.Role,
+				EnterpriseID: claims.EnterpriseID,
 			}
 
 			// Store user in context and propagate user_id to the logger.

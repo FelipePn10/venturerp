@@ -102,7 +102,7 @@ type cachedItemMRP struct {
 //  6. After the main loop: exception messages are generated comparing firm supply
 //     against the computed net requirements.
 //  7. Post-processing: machine integration, priority generation.
-func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generateLLC bool) (*entity.MRPCalculationLog, error) {
+func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNumber int64, generateLLC bool) (*entity.MRPCalculationLog, error) {
 	log, err := s.MRPRepo.StartCalculation(ctx, planCode)
 	if err != nil {
 		return nil, fmt.Errorf("starting calculation log: %w", err)
@@ -112,6 +112,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 
 	_ = s.MRPRepo.DeleteSuggestionsByPlan(ctx, planCode)
 	_ = s.MRPRepo.DeleteProfilesByPlan(ctx, planCode)
+	_ = s.MRPRepo.DeleteProfileDetailsByPlan(ctx, planCode)
 	_ = s.MRPRepo.DeleteExceptionsByPlan(ctx, planCode)
 
 	// Carrega parâmetros de planejamento tipados.
@@ -128,9 +129,21 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 		return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
 	}
 
-	// Load independent demands unless the plan disables them.
+	// A specific sales-order item is an exclusive demand source. Otherwise the
+	// plan combines open sales orders, independent demands and forecasts.
 	var demands []*inddemandentity.IndependentDemand
-	if plan.IndependentDemands != planentity.IndependentDemandsNo {
+	var demandInputs []*entity.MRPInput
+	if plan.OrderItemCode != nil {
+		demandInputs, err = s.MRPRepo.ListOpenSalesOrderDemands(ctx, planCode, plan.OrderItemCode)
+		if err != nil || len(demandInputs) == 0 {
+			if err != nil {
+				errs["load_sales_order_item"] = err.Error()
+			} else {
+				errs["load_sales_order_item"] = "sales order item is not an open demand for this enterprise"
+			}
+			return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+		}
+	} else if plan.IndependentDemands != planentity.IndependentDemandsNo {
 		demands, err = s.DemandRepo.List(ctx)
 		if err != nil {
 			errs["load_demands"] = err.Error()
@@ -141,11 +154,21 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 		}
 	}
 
-	// Load sales forecasts and merge as MRP inputs.
-	forecastInputs := s.loadForecastDemands(ctx, planCode)
+	if plan.OrderItemCode == nil {
+		salesInputs, loadErr := s.MRPRepo.ListOpenSalesOrderDemands(ctx, planCode, nil)
+		if loadErr != nil {
+			errs["load_sales_orders"] = loadErr.Error()
+			return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+		}
+		demandInputs = append(demandInputs, salesInputs...)
+		demandInputs = append(demandInputs, s.loadForecastDemands(ctx, planCode)...)
+	}
 
-	// Build allowed item set from plan classification / class item codes.
-	allowedItems := s.buildAllowedItemSet(plan)
+	allowedItems, err := s.resolveAllowedItemSet(ctx, plan)
+	if err != nil {
+		errs["resolve_classification"] = err.Error()
+		return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+	}
 
 	// Collect root items from demands + forecasts (respecting plan scope).
 	seen := make(map[int64]bool)
@@ -159,7 +182,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 			rootItems = append(rootItems, d.ItemCode)
 		}
 	}
-	for _, fi := range forecastInputs {
+	for _, fi := range demandInputs {
 		if !s.itemAllowed(allowedItems, fi.ItemCode) {
 			continue
 		}
@@ -170,7 +193,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	}
 
 	// Se nenhum item tem demanda, termina cedo.
-	noMRPDemand := len(demands) == 0 && len(forecastInputs) == 0
+	noMRPDemand := len(demands) == 0 && len(demandInputs) == 0
 
 	// Bulk load 1: entire BOM tree.
 	bomMap, err := s.StructRepo.LoadBOMForRoots(ctx, rootItems)
@@ -198,7 +221,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	for _, d := range demands {
 		allCodes[d.ItemCode] = true
 	}
-	for _, fi := range forecastInputs {
+	for _, fi := range demandInputs {
 		allCodes[fi.ItemCode] = true
 	}
 	var allCodeSlice []int64
@@ -229,6 +252,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	needDateByItem := make(map[int64]time.Time)
 	totalItems := 0
 	totalOrders := 0
+	nextOrderNumber := initialOrderNumber
 
 	// Dispara modos conforme PlanningTypes do plano.
 	if len(plan.PlanningTypes) == 0 {
@@ -238,26 +262,26 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	for _, pt := range plan.PlanningTypes {
 		switch strings.ToUpper(strings.TrimSpace(pt)) {
 		case "MIN_MAX":
-			tItems, tOrders := s.calculateMinMax(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, errs)
+			tItems, tOrders := s.calculateMinMax(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, &nextOrderNumber, errs)
 			totalItems += tItems
 			totalOrders += tOrders
 		case "REORDER_POINT":
-			tItems, tOrders := s.calculateReorderPoint(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, errs)
+			tItems, tOrders := s.calculateReorderPoint(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, &nextOrderNumber, errs)
 			totalItems += tItems
 			totalOrders += tOrders
 		case "KANBAN":
-			tItems, tOrders := s.calculateKanban(ctx, planCode, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems, errs)
+			tItems, tOrders := s.calculateKanban(ctx, planCode, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems, &nextOrderNumber, errs)
 			totalItems += tItems
 			totalOrders += tOrders
 		case "MPS":
 			if !noMRPDemand {
-				tItems, tOrders := s.calculateMPS(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, forecastInputs, &netReqByItem, &needDateByItem, errs)
+				tItems, tOrders := s.calculateMPS(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, demandInputs, &nextOrderNumber, &netReqByItem, &needDateByItem, errs)
 				totalItems += tItems
 				totalOrders += tOrders
 			}
 		default: // MRP
 			if !noMRPDemand {
-				tItems, tOrders := s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, forecastInputs, &netReqByItem, &needDateByItem, errs)
+				tItems, tOrders := s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, demandInputs, &nextOrderNumber, &netReqByItem, &needDateByItem, errs)
 				totalItems += tItems
 				totalOrders += tOrders
 			}
@@ -276,9 +300,18 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode int64, generate
 	if s.SupplyPort != nil {
 		s.generateExceptionMessages(ctx, planCode, supplyMap, netReqByItem, needDateByItem)
 	}
+	if generateLLC {
+		if err := s.MRPRepo.UpdateItemLLCs(ctx, llcMap); err != nil {
+			errs["update_item_llc"] = err.Error()
+		}
+	}
 
 	status := "COMPLETED"
 	if len(errs) > 0 {
+		status = "COMPLETED_WITH_ERRORS"
+	}
+	if err := s.PlanRepo.UpdateLastCalculated(ctx, planCode); err != nil {
+		errs["update_last_calculated"] = err.Error()
 		status = "COMPLETED_WITH_ERRORS"
 	}
 
@@ -387,6 +420,7 @@ func (s *MRPServiceImpl) calculateMRP(
 	restrictedItems map[int64]struct{},
 	demands []*inddemandentity.IndependentDemand,
 	forecastInputs []*entity.MRPInput,
+	nextOrderNumber *int64,
 	netReqByItem *map[int64]float64,
 	needDateByItem *map[int64]time.Time,
 	errs map[string]interface{},
@@ -394,14 +428,17 @@ func (s *MRPServiceImpl) calculateMRP(
 	totalItems := 0
 	totalOrders := 0
 
-	// Gera demandas de estoque de segurança.
-	safetyInputs := s.generateSafetyStockDemands(ctx, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems)
+	// An order-item calculation must not introduce any additional independent source.
+	var safetyInputs []*entity.MRPInput
+	if plan.OrderItemCode == nil {
+		safetyInputs = s.generateSafetyStockDemands(ctx, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems)
+	}
 	for _, si := range safetyInputs {
 		if params.AgrupaDemandaEstoque {
 			// Agrega à primeira demanda existente do item.
 			merged := false
 			for _, fi := range forecastInputs {
-				if fi.ItemCode == si.ItemCode && fi.Mask == si.Mask {
+				if fi.ItemCode == si.ItemCode && fi.Mask == si.Mask && !fi.TechnicalAssistance {
 					fi.Quantity += si.Quantity
 					if si.NeedDate.Before(fi.NeedDate) {
 						fi.NeedDate = si.NeedDate
@@ -451,13 +488,16 @@ func (s *MRPServiceImpl) calculateMRP(
 			mask = *d.Mask
 		}
 		llc := llcMap[d.ItemCode]
+		sourceCode := d.CodeDemand
 		levelQueues[llc] = append(levelQueues[llc], &entity.MRPInput{
-			PlanCode: planCode,
-			ItemCode: d.ItemCode,
-			Mask:     mask,
-			Quantity: d.Quantity,
-			NeedDate: d.DemandDate,
-			LLC:      llc,
+			PlanCode:   planCode,
+			ItemCode:   d.ItemCode,
+			Mask:       mask,
+			Quantity:   d.Quantity,
+			NeedDate:   d.DemandDate,
+			LLC:        llc,
+			DemandType: "INDEPENDENT_DEMAND",
+			SourceCode: &sourceCode,
 		})
 	}
 	for _, fi := range forecastInputs {
@@ -471,19 +511,26 @@ func (s *MRPServiceImpl) calculateMRP(
 
 	maxLevel := maxLLC(llcMap)
 
-	// Carrega divisões de vendas para assistência técnica.
-	var divisionMap map[int64]*salesDivisionRef
-	if params.TrataAssistenciaTecnica {
-		allCodes := collectAllItemCodes(bomMap, rootItems)
-		divisionMap = s.loadDivisionMap(ctx, allCodes)
-	}
-
 	for level := 0; level <= maxLevel; level++ {
 		inputs, ok := levelQueues[level]
 		if !ok {
 			continue
 		}
-		for _, input := range aggregateInputs(inputs) {
+		for _, detailInput := range inputs {
+			detailType := detailInput.DemandType
+			if detailType == "" && detailInput.ParentItemCode != nil {
+				detailType = "DEPENDENT_DEMAND"
+			}
+			if detailType == "" {
+				detailType = "DEMAND"
+			}
+			if err := s.MRPRepo.CreateProfileDetail(ctx, &entity.MRPProfileDetail{PlanCode: planCode, ItemCode: detailInput.ItemCode,
+				NeedDate: detailInput.NeedDate, DetailType: detailType, SourceCode: detailInput.SourceCode,
+				ParentItemCode: detailInput.ParentItemCode, Quantity: detailInput.Quantity}); err != nil {
+				errs[fmt.Sprintf("profile_detail_%d_%s", detailInput.ItemCode, detailInput.NeedDate.Format("2006-01-02"))] = err.Error()
+			}
+		}
+		for _, input := range aggregateInputs(inputs, plan.GroupSameDateOrders) {
 			input.PlanCode = planCode
 			input.LLC = level
 
@@ -497,6 +544,8 @@ func (s *MRPServiceImpl) calculateMRP(
 				errs[fmt.Sprintf("item_%d", input.ItemCode)] = err.Error()
 				continue
 			}
+			firmSupplyUsed := firmSupplyForItem(supplyMap, input.ItemCode, input.NeedDate)
+			advanceNettingState(input, output, snapshotMap, supplyMap)
 
 			(*netReqByItem)[input.ItemCode] += output.NetRequirement
 			if existing, ok := (*needDateByItem)[input.ItemCode]; !ok || input.NeedDate.Before(existing) {
@@ -509,7 +558,7 @@ func (s *MRPServiceImpl) calculateMRP(
 				CalculationDate: today(),
 				Demand:          output.Demand,
 				OrdersPlanned:   output.NetRequirement,
-				OrdersFirm:      firmSupplyForItem(supplyMap, input.ItemCode, input.NeedDate),
+				OrdersFirm:      firmSupplyUsed,
 				StockProjected:  output.StockProjected,
 				LLC:             level,
 				NeedDate:        input.NeedDate,
@@ -517,18 +566,16 @@ func (s *MRPServiceImpl) calculateMRP(
 			totalItems++
 
 			for _, suggestion := range output.PlannedOrders {
-				// Assistência técnica: verifica divisão de vendas.
-				if params.TrataAssistenciaTecnica && divisionMap != nil {
-					if sd, ok := divisionMap[input.ItemCode]; ok && sd.isTechnicalAssistance {
-						suggestion.OrderType = "TECHNICAL_ASSISTANCE"
-					}
-				}
 				suggestion.PlanCode = planCode
 
 				cached := s.ensureItemCache(ctx, itemCache, input.ItemCode)
 
 				if !cached.ghost || params.ItensFantasmasGravar {
-					created, _ := s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
+					created, createErr := s.createNumberedSuggestion(ctx, suggestion, nextOrderNumber)
+					if createErr != nil {
+						errs[fmt.Sprintf("suggestion_%d_%s", suggestion.ItemCode, suggestion.NeedDate.Format("2006-01-02"))] = createErr.Error()
+						continue
+					}
 					totalOrders++
 					if created != nil {
 						suggestion.Code = created.Code
@@ -576,6 +623,7 @@ func (s *MRPServiceImpl) calculateMinMax(
 	itemCache map[int64]*cachedItemMRP,
 	allowedItems map[int64]struct{},
 	restrictedItems map[int64]struct{},
+	nextOrderNumber *int64,
 	errs map[string]interface{},
 ) (int, int) {
 	totalItems := 0
@@ -646,8 +694,11 @@ func (s *MRPServiceImpl) calculateMinMax(
 				DemandType: "MIN_MAX",
 				LLC:        llc,
 			}
-			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
-			totalOrders++
+			if _, err := s.createNumberedSuggestion(ctx, suggestion, nextOrderNumber); err != nil {
+				errs[fmt.Sprintf("min_max_suggestion_%d", itemCode)] = err.Error()
+			} else {
+				totalOrders++
+			}
 
 			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        itemCode,
@@ -679,6 +730,7 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 	itemCache map[int64]*cachedItemMRP,
 	allowedItems map[int64]struct{},
 	restrictedItems map[int64]struct{},
+	nextOrderNumber *int64,
 	errs map[string]interface{},
 ) (int, int) {
 	totalItems := 0
@@ -730,8 +782,11 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 				DemandType: "REORDER_POINT",
 				LLC:        llc,
 			}
-			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
-			totalOrders++
+			if _, err := s.createNumberedSuggestion(ctx, suggestion, nextOrderNumber); err != nil {
+				errs[fmt.Sprintf("reorder_suggestion_%d", itemCode)] = err.Error()
+			} else {
+				totalOrders++
+			}
 
 			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        itemCode,
@@ -762,6 +817,7 @@ func (s *MRPServiceImpl) calculateKanban(
 	itemCache map[int64]*cachedItemMRP,
 	allowedItems map[int64]struct{},
 	restrictedItems map[int64]struct{},
+	nextOrderNumber *int64,
 	errs map[string]interface{},
 ) (int, int) {
 	totalItems := 0
@@ -830,8 +886,11 @@ func (s *MRPServiceImpl) calculateKanban(
 				DemandType: "KANBAN",
 				LLC:        llc,
 			}
-			_, _ = s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
-			totalOrders++
+			if _, err := s.createNumberedSuggestion(ctx, suggestion, nextOrderNumber); err != nil {
+				errs[fmt.Sprintf("kanban_suggestion_%d", itemCode)] = err.Error()
+			} else {
+				totalOrders++
+			}
 
 			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        itemCode,
@@ -868,6 +927,7 @@ func (s *MRPServiceImpl) calculateMPS(
 	restrictedItems map[int64]struct{},
 	demands []*inddemandentity.IndependentDemand,
 	forecastInputs []*entity.MRPInput,
+	nextOrderNumber *int64,
 	netReqByItem *map[int64]float64,
 	needDateByItem *map[int64]time.Time,
 	errs map[string]interface{},
@@ -894,7 +954,7 @@ func (s *MRPServiceImpl) calculateMPS(
 
 	return s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap,
 		llcMap, bomMap, itemCache, allowedItems, restrictedItems,
-		demands, forecastInputs, netReqByItem, needDateByItem, errs)
+		demands, forecastInputs, nextOrderNumber, netReqByItem, needDateByItem, errs)
 }
 
 // =============================================================================
@@ -974,9 +1034,14 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	}
 
 	orderType := "FABRICACAO"
-	demandType := "INDEPENDENTE"
+	demandType := input.DemandType
+	if demandType == "" {
+		demandType = "INDEPENDENTE"
+	}
 	if input.ParentItemCode != nil {
 		demandType = "DEPENDENTE"
+	} else if input.InterFactory {
+		demandType = "INTER_FACTORY"
 	}
 
 	// 5. Item-type lookup — cached.
@@ -1003,15 +1068,22 @@ func (s *MRPServiceImpl) calcNetReqFast(
 
 	output.NetRequirement = netReq
 	mainOrder := &entity.PlannedOrderSuggestion{
-		PlanCode:       input.PlanCode,
-		ItemCode:       input.ItemCode,
-		Quantity:       netReq,
-		NeedDate:       input.NeedDate,
-		StartDate:      &startDate,
-		OrderType:      orderType,
-		DemandType:     demandType,
-		ParentItemCode: input.ParentItemCode,
-		LLC:            input.LLC,
+		PlanCode:             input.PlanCode,
+		ItemCode:             input.ItemCode,
+		Quantity:             netReq,
+		NeedDate:             input.NeedDate,
+		StartDate:            &startDate,
+		OrderType:            orderType,
+		DemandType:           demandType,
+		ParentItemCode:       input.ParentItemCode,
+		LLC:                  input.LLC,
+		WarehouseCode:        input.WarehouseCode,
+		InterFactory:         input.InterFactory,
+		SourceEnterpriseCode: input.SourceEnterpriseCode,
+		AutoRelease:          input.AutoRelease,
+	}
+	if shouldPlanTechnicalAssistance(input, params) {
+		mainOrder.OrderType = "TECHNICAL_ASSISTANCE"
 	}
 	output.PlannedOrders = []*entity.PlannedOrderSuggestion{mainOrder}
 
@@ -1568,6 +1640,46 @@ func firmSupplyForItem(supplyMap map[int64][]ports.SupplyEntry, itemCode int64, 
 	return total
 }
 
+func shouldPlanTechnicalAssistance(input *entity.MRPInput, params *entity.TypedPlanningParams) bool {
+	return input != nil && params != nil && input.TechnicalAssistance &&
+		input.DemandType == "SALES_ORDER" && input.ParentItemCode == nil &&
+		input.WarehouseCode != nil && params.TrataAssistenciaTecnica &&
+		params.ObrigarControleEstoqueTerceiros
+}
+
+func (s *MRPServiceImpl) createNumberedSuggestion(ctx context.Context, suggestion *entity.PlannedOrderSuggestion, nextOrderNumber *int64) (*entity.PlannedOrderSuggestion, error) {
+	if nextOrderNumber == nil || *nextOrderNumber <= 0 {
+		return nil, fmt.Errorf("invalid next order number")
+	}
+	number := *nextOrderNumber
+	suggestion.OrderNumber = &number
+	*nextOrderNumber++
+	created, err := s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+// advanceNettingState prevents stock and firm receipts already consumed by an
+// earlier demand from being reused by the next demand of the same item.
+func advanceNettingState(input *entity.MRPInput, output *entity.MRPOutput, snapshotMap map[int64]*entity.StockSnapshot, supplyMap map[int64][]ports.SupplyEntry) {
+	planned := 0.0
+	for _, order := range output.PlannedOrders {
+		planned += order.Quantity
+	}
+	snapshotMap[input.ItemCode] = &entity.StockSnapshot{
+		ItemCode: input.ItemCode, Quantity: math.Max(0, output.StockProjected+planned), SnapshotDate: input.NeedDate,
+	}
+	remaining := supplyMap[input.ItemCode][:0]
+	for _, supply := range supplyMap[input.ItemCode] {
+		if supply.ArrivalDate.After(input.NeedDate) {
+			remaining = append(remaining, supply)
+		}
+	}
+	supplyMap[input.ItemCode] = remaining
+}
+
 func maxTime() time.Time {
 	return time.Date(2099, 12, 31, 0, 0, 0, 0, time.UTC)
 }
@@ -1582,21 +1694,39 @@ func maxLLC(llcMap map[int64]int) int {
 	return max
 }
 
-// aggregateInputs merges MRPInput entries for the same item+mask, summing
-// quantities and keeping the earliest need date.
-func aggregateInputs(inputs []*entity.MRPInput) []*entity.MRPInput {
+// aggregateInputs only merges entries sharing item, mask and need date when
+// the production plan explicitly requests same-date grouping.
+func aggregateInputs(inputs []*entity.MRPInput, groupSameDate bool) []*entity.MRPInput {
+	if !groupSameDate {
+		result := make([]*entity.MRPInput, 0, len(inputs))
+		for _, input := range inputs {
+			cp := *input
+			result = append(result, &cp)
+		}
+		sort.SliceStable(result, func(i, j int) bool { return result[i].NeedDate.Before(result[j].NeedDate) })
+		return result
+	}
 	type key struct {
-		itemCode int64
-		mask     string
+		itemCode             int64
+		mask                 string
+		needDate             string
+		warehouseCode        int64
+		technicalAssistance  bool
+		sourceEnterpriseCode int64
 	}
 	agg := make(map[key]*entity.MRPInput, len(inputs))
 	for _, inp := range inputs {
-		k := key{inp.ItemCode, inp.Mask}
+		warehouseCode := int64(0)
+		if inp.TechnicalAssistance && inp.WarehouseCode != nil {
+			warehouseCode = *inp.WarehouseCode
+		}
+		sourceEnterpriseCode := int64(0)
+		if inp.InterFactory && inp.SourceEnterpriseCode != nil {
+			sourceEnterpriseCode = *inp.SourceEnterpriseCode
+		}
+		k := key{inp.ItemCode, inp.Mask, inp.NeedDate.Format("2006-01-02"), warehouseCode, inp.TechnicalAssistance, sourceEnterpriseCode}
 		if existing, ok := agg[k]; ok {
 			existing.Quantity += inp.Quantity
-			if inp.NeedDate.Before(existing.NeedDate) {
-				existing.NeedDate = inp.NeedDate
-			}
 		} else {
 			cp := *inp
 			agg[k] = &cp
@@ -1636,19 +1766,26 @@ func (s *MRPServiceImpl) filterDemandsFromDate(
 	return filtered
 }
 
-func (s *MRPServiceImpl) buildAllowedItemSet(plan *planentity.ProductionPlan) map[int64]struct{} {
-	if plan.ClassItemCodes == nil || *plan.ClassItemCodes == "" {
-		return nil
+func (s *MRPServiceImpl) resolveAllowedItemSet(ctx context.Context, plan *planentity.ProductionPlan) (map[int64]struct{}, error) {
+	if plan.Classification == nil || plan.ClassItemCodes == nil || strings.TrimSpace(*plan.ClassItemCodes) == "" {
+		return nil, nil
 	}
 	parts := strings.Split(*plan.ClassItemCodes, ",")
-	set := make(map[int64]struct{}, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if code, err := strconv.ParseInt(p, 10, 64); err == nil {
-			set[code] = struct{}{}
+	classCodes := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if code := strings.TrimSpace(part); code != "" {
+			classCodes = append(classCodes, code)
 		}
 	}
-	return set
+	itemCodes, err := s.MRPRepo.ResolveClassificationItemCodes(ctx, strings.TrimSpace(*plan.Classification), classCodes)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[int64]struct{}, len(itemCodes))
+	for _, code := range itemCodes {
+		set[code] = struct{}{}
+	}
+	return set, nil
 }
 
 func (s *MRPServiceImpl) itemAllowed(allowed map[int64]struct{}, itemCode int64) bool {
@@ -1673,36 +1810,21 @@ func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64
 	nextYear, _ := s.ForecastRepo.ListForecasts(ctx, year+1)
 	forecasts = append(forecasts, nextYear...)
 
-	type key struct {
-		itemCode int64
-		mask     string
-	}
-	agg := make(map[key]*entity.MRPInput)
+	result := make([]*entity.MRPInput, 0, len(forecasts))
 	for _, f := range forecasts {
 		needDate := mrpWeekToDate(f.Year, f.Week)
 		mask := ""
 		if f.Mask != nil {
 			mask = *f.Mask
 		}
-		k := key{f.ItemCode, mask}
-		if existing, ok := agg[k]; ok {
-			existing.Quantity += f.Quantity
-			if needDate.Before(existing.NeedDate) {
-				existing.NeedDate = needDate
-			}
-		} else {
-			agg[k] = &entity.MRPInput{
-				PlanCode: planCode,
-				ItemCode: f.ItemCode,
-				Mask:     mask,
-				Quantity: f.Quantity,
-				NeedDate: needDate,
-			}
-		}
-	}
-	result := make([]*entity.MRPInput, 0, len(agg))
-	for _, v := range agg {
-		result = append(result, v)
+		result = append(result, &entity.MRPInput{
+			PlanCode:   planCode,
+			ItemCode:   f.ItemCode,
+			Mask:       mask,
+			Quantity:   f.Quantity,
+			NeedDate:   needDate,
+			DemandType: "FORECAST",
+		})
 	}
 	return result
 }

@@ -180,11 +180,12 @@ type PlanningParamsHandler struct {
 
 type ProductionPlanHandler struct {
 	*security.BaseHandler
-	createUC *production_plan_uc.CreateProductionPlanUseCase
-	getUC    *production_plan_uc.GetProductionPlanUseCase
-	listUC   *production_plan_uc.ListProductionPlansUseCase
-	updateUC *production_plan_uc.UpdateProductionPlanUseCase
-	deleteUC *production_plan_uc.DeleteProductionPlanUseCase
+	createUC       *production_plan_uc.CreateProductionPlanUseCase
+	getUC          *production_plan_uc.GetProductionPlanUseCase
+	listUC         *production_plan_uc.ListProductionPlansUseCase
+	updateUC       *production_plan_uc.UpdateProductionPlanUseCase
+	deleteUC       *production_plan_uc.DeleteProductionPlanUseCase
+	interFactoryUC *production_plan_uc.ManageProductionPlanInterFactoriesUseCase
 }
 
 type RestrictionHandler struct {

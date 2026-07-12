@@ -24,6 +24,7 @@ type GeneratePurchaseOrdersUseCase struct {
 	Preferred        ports.PreferredSupplierProvider
 	SupplierDefaults ports.SupplierPurchasingDefaultsProvider
 	PriceProvider    ports.PurchasePriceProvider
+	ServiceLinker    ports.ProductionServiceLinker
 }
 
 type GeneratePurchaseOrdersResult struct {
@@ -167,6 +168,13 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 			return nil, fmt.Errorf("creating purchase order for supplier %d: %w", supplierCode, err)
 		}
 		result.Orders = append(result.Orders, created)
+		if uc.ServiceLinker != nil {
+			for _, ln := range lines {
+				if err := uc.ServiceLinker.LinkServicePurchaseOrder(ctx, ln.reqItemID, created.Code); err != nil {
+					return nil, fmt.Errorf("linking service purchase order %d: %w", created.Code, err)
+				}
+			}
+		}
 
 		// Register attendance back on the requisition items (capped at balance).
 		for _, ln := range lines {

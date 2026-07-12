@@ -100,3 +100,83 @@ revenda ou reaproveitamento de retalho de chapa/barra.
 Ao concluir a OF (`/{id}/complete`) informando `lot`, o lote do acabado é gravado no
 movimento `IN`, habilitando a **genealogia** em
 `GET /api/stock/lots/genealogy/{itemCode}/{lot}` (ver [`estoque.md`](estoque.md)).
+
+### Entrega parcial ou final da OF
+
+`POST /api/production-order/{id}/complete` também funciona como entrega de
+produção. O corpo aceita `quantity`, `final`, `warehouse_id`, `lot` e
+`idempotency_key`. Sem `warehouse_id`, utiliza o almoxarifado gravado na OF —
+inclusive o destino de assistência técnica propagado pelo MRP.
+
+- `EP`: entrada normal quando o tratamento de excedentes não está habilitado.
+- `EPP`: entrega até a quantidade planejada quando `production_excess_treatment`
+  está habilitado nos parâmetros de planejamento.
+- `EPE`: entrega que ultrapassa a quantidade planejada.
+- `REP`: saída automática dos componentes da estrutura cujo item possui
+  `warehouse_automatic_low=true`, considerando quantidade fixa e perda.
+
+A chave de idempotência é única por empresa e evita entrega duplicada. Uma
+entrega parcial mantém a OF em `IN_PROGRESS`; `final=true` muda para
+`COMPLETED`. Finalização com quantidade zero é bloqueada quando a OF possui uma
+OCS vinculada ainda não recebida/cancelada. Esses vínculos são persistidos em
+`production_order_service_links`.
+
+### Consulta operacional consolidada
+
+`GET /api/production-order/{id}/operational` retorna em uma única resposta:
+
+- dados e prioridade da OF;
+- entregas parciais/finais e classes EP/EPP/EPE;
+- apontamentos e refugos;
+- consumos com lotes;
+- movimentos de estoque vinculados, incluindo REP;
+- totais planejado, produzido, entregue, refugado e pendente.
+
+A consulta exige acesso à empresa autenticada. Desenhos/revisões e roteiro
+continuam disponíveis nos endpoints especializados de `drawings` e
+`production-order/{id}/operations`, evitando duplicação desses cadastros.
+
+## 6. Materiais, substituições, lotes e WMS
+
+O cadastro manual da OF gera, na mesma transação, as demandas do primeiro nível
+da estrutura. Co-produtos e substitutos secundários não viram demandas; perdas,
+quantidade fixa e baixa automática são preservadas. Se um componente for o
+próprio item fabricado, a OF recebe a observação `ORDEM DE RETRABALHO`.
+
+| Método | Rota | Uso |
+|---|---|---|
+| GET | `/{id}/materials?kind=DEMAND|RETURN` | Demandas/devoluções da OF |
+| POST | `/materials` | Inclui demanda ou devolução |
+| POST | `/materials/replace` | Substituição parcial/total rastreável |
+| DELETE | `/materials/{materialID}` | Exclui somente sem atendimento/movimento/WMS |
+| POST | `/materials/lots` | Seleciona lotes; lista vazia aplica FIFO automático |
+| POST | `/materials/lots/batch` | Distribui lotes entre várias OFs por ordem crescente |
+| POST | `/scrap-destinations` | Destina refugo da OF ou de uma demanda |
+| GET | `/delivery-candidates` | OFs liberadas/em produção filtradas para entrega |
+| PUT | `/{id}` | Mantém quantidade, datas, máquina, prioridade e observação |
+| PUT | `/wms-settings` | Configura almoxarifado WMS e intermediário de saída |
+
+As quantidades novas usam decimal e o estoque persiste seis casas. Em uma
+substituição, o componente original permanece com a quantidade restante e os
+substitutos guardam `substituted_item_code`, inclusive para rastreio fiscal.
+Solicitação WMS não cancelada bloqueia alteração/exclusão. Um almoxarifado WMS
+exige intermediário de saída e os lotes são consumidos desse intermediário.
+
+OF movimentada, apontada, consumida ou com separação WMS não pode ser alterada.
+A quantidade não pode ficar abaixo do produzido nem ser fracionária quando o
+item não aceitar frações. OF Kanban ou comercial não pode ser mantida/cancelada
+por esse fluxo. Os controles equivalentes aos parâmetros 10 e 14 ficam
+registrados na OF para autorizar mudanças de quantidade e datas.
+
+O parâmetro 66 bloqueia demanda de retrabalho divergente da quantidade da OF. O
+parâmetro 45 bloqueia liberação com apontamento por ordem + baixa no
+cadastro/liberação, roteiro misto com terceiros ou remessa de terceiros que não
+utilize itens da demanda.
+
+## 7. Atomicidade e serviços de terceiros
+
+Entrega, linhas EPP/EPE, REP, co-produtos, movimentos e saldos são gravados em
+uma única transação. Uma entrega que cruza o planejado é dividida (por exemplo,
+`1 EPP + 2 EPE`) sem perder a chave idempotente. O encadeamento
+OF → requisição de serviço → OCS é persistido e usado pelo bloqueio de
+encerramento com OCS pendente.

@@ -5,12 +5,14 @@ package drawing_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/drawing/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -39,11 +41,17 @@ func numPtr(n pgtype.Numeric) *float64 {
 // ─── drawings ─────────────────────────────────────────────────────────────────
 
 func (uc *DrawingUseCase) Create(ctx context.Context, dto request.DrawingDTO) (*response.DrawingResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	d, err := entity.NewDrawing(dto.Code, dto.Digit, dto.Format, dto.CreatedBy)
 	if err != nil {
 		return nil, err
 	}
-	row, err := uc.Q.CreateDrawing(ctx, drawingParams(dto, 0))
+	params := drawingParams(dto, 0)
+	params.EnterpriseID = enterpriseID
+	row, err := uc.Q.CreateDrawingForEnterprise(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("criando desenho: %w", err)
 	}
@@ -52,10 +60,16 @@ func (uc *DrawingUseCase) Create(ctx context.Context, dto request.DrawingDTO) (*
 }
 
 func (uc *DrawingUseCase) Update(ctx context.Context, dto request.DrawingDTO) (*response.DrawingResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if dto.Code == "" {
 		return nil, fmt.Errorf("código do desenho é obrigatório")
 	}
-	row, err := uc.Q.UpdateDrawing(ctx, drawingParams(dto, dto.ID))
+	params := drawingParams(dto, dto.ID)
+	params.EnterpriseID = enterpriseID
+	row, err := uc.Q.UpdateDrawingForEnterprise(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("atualizando desenho: %w", err)
 	}
@@ -64,7 +78,11 @@ func (uc *DrawingUseCase) Update(ctx context.Context, dto request.DrawingDTO) (*
 }
 
 func (uc *DrawingUseCase) Get(ctx context.Context, id int64) (*response.DrawingResponse, error) {
-	row, err := uc.Q.GetDrawing(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := uc.Q.GetDrawingForEnterprise(ctx, id, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("desenho não encontrado: %w", err)
 	}
@@ -73,7 +91,11 @@ func (uc *DrawingUseCase) Get(ctx context.Context, id int64) (*response.DrawingR
 }
 
 func (uc *DrawingUseCase) List(ctx context.Context, onlyActive bool, search string) ([]*response.DrawingResponse, error) {
-	rows, err := uc.Q.ListDrawings(ctx, onlyActive, search)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := uc.Q.ListDrawingsForEnterprise(ctx, enterpriseID, onlyActive, search)
 	if err != nil {
 		return nil, err
 	}
@@ -85,13 +107,21 @@ func (uc *DrawingUseCase) List(ctx context.Context, onlyActive bool, search stri
 }
 
 func (uc *DrawingUseCase) Deactivate(ctx context.Context, id int64) error {
-	return uc.Q.DeactivateDrawing(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return uc.Q.DeactivateDrawingForEnterprise(ctx, id, enterpriseID)
 }
 
 // ─── revisions ────────────────────────────────────────────────────────────────
 
 func (uc *DrawingUseCase) AddRevision(ctx context.Context, drawingID int64, dto request.DrawingRevisionDTO) (*response.DrawingRevisionResponse, error) {
-	drawing, err := uc.Q.GetDrawing(ctx, drawingID)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	drawing, err := uc.Q.GetDrawingForEnterprise(ctx, drawingID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("desenho não encontrado: %w", err)
 	}
@@ -103,33 +133,38 @@ func (uc *DrawingUseCase) AddRevision(ctx context.Context, drawingID int64, dto 
 	if err := rev.Validate(); err != nil {
 		return nil, err
 	}
-	row, err := uc.Q.AddDrawingRevision(ctx, revisionParams(drawingID, dto, 0))
+	row, err := uc.Q.AddDrawingRevisionForEnterprise(ctx, enterpriseID, revisionParams(drawingID, dto, 0), pgutil.ToPgUUID(dto.UpdatedBy))
 	if err != nil {
 		return nil, fmt.Errorf("adicionando revisão: %w", err)
-	}
-	if dto.IsCurrent {
-		_ = uc.Q.SetCurrentDrawingRevision(ctx, drawingID, row.ID)
-		row.IsCurrent = true
 	}
 	return revisionToResponse(drawing, row, nil), nil
 }
 
 func (uc *DrawingUseCase) UpdateRevision(ctx context.Context, id int64, dto request.DrawingRevisionDTO) (*response.DrawingRevisionResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	belongs, err := uc.Q.DrawingRevisionBelongsToEnterprise(ctx, id, enterpriseID)
+	if err != nil || !belongs {
+		return nil, fmt.Errorf("revisão não encontrada para a empresa")
+	}
 	dto.ID = id
-	row, err := uc.Q.UpdateDrawingRevision(ctx, revisionParams(0, dto, id))
+	row, err := uc.Q.UpdateDrawingRevisionForEnterprise(ctx, enterpriseID, revisionParams(0, dto, id), pgutil.ToPgUUID(dto.UpdatedBy))
 	if err != nil {
 		return nil, fmt.Errorf("atualizando revisão: %w", err)
 	}
-	if dto.IsCurrent {
-		_ = uc.Q.SetCurrentDrawingRevision(ctx, row.DrawingID, row.ID)
-	}
-	drawing, _ := uc.Q.GetDrawing(ctx, row.DrawingID)
+	drawing, _ := uc.Q.GetDrawingForEnterprise(ctx, row.DrawingID, enterpriseID)
 	dists, _ := uc.Q.ListDrawingDistributions(ctx, row.ID)
 	return revisionToResponse(drawing, row, dists), nil
 }
 
 func (uc *DrawingUseCase) ListRevisions(ctx context.Context, drawingID int64) ([]*response.DrawingRevisionResponse, error) {
-	drawing, err := uc.Q.GetDrawing(ctx, drawingID)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	drawing, err := uc.Q.GetDrawingForEnterprise(ctx, drawingID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("desenho não encontrado: %w", err)
 	}
@@ -146,12 +181,28 @@ func (uc *DrawingUseCase) ListRevisions(ctx context.Context, drawingID int64) ([
 }
 
 func (uc *DrawingUseCase) DeleteRevision(ctx context.Context, id int64) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	belongs, err := uc.Q.DrawingRevisionBelongsToEnterprise(ctx, id, enterpriseID)
+	if err != nil || !belongs {
+		return fmt.Errorf("revisão não encontrada para a empresa")
+	}
 	return uc.Q.DeleteDrawingRevision(ctx, id)
 }
 
 // ─── distributions ────────────────────────────────────────────────────────────
 
 func (uc *DrawingUseCase) AddDistribution(ctx context.Context, revisionID int64, dto request.DrawingDistributionDTO) (*response.DrawingDistributionResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	belongs, err := uc.Q.DrawingRevisionBelongsToEnterprise(ctx, revisionID, enterpriseID)
+	if err != nil || !belongs {
+		return nil, fmt.Errorf("revisão não encontrada para a empresa")
+	}
 	if dto.Recipient == "" {
 		return nil, fmt.Errorf("destinatário é obrigatório")
 	}
@@ -167,12 +218,28 @@ func (uc *DrawingUseCase) AddDistribution(ctx context.Context, revisionID int64,
 }
 
 func (uc *DrawingUseCase) DeleteDistribution(ctx context.Context, id int64) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	belongs, err := uc.Q.DrawingDistributionBelongsToEnterprise(ctx, id, enterpriseID)
+	if err != nil || !belongs {
+		return fmt.Errorf("distribuição não encontrada para a empresa")
+	}
 	return uc.Q.DeleteDrawingDistribution(ctx, id)
 }
 
 // ─── characteristics link ─────────────────────────────────────────────────────
 
 func (uc *DrawingUseCase) AddCharacteristic(ctx context.Context, drawingID int64, dto request.DrawingCharacteristicDTO) (*response.DrawingCharacteristicResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	belongs, err := uc.Q.DrawingBelongsToEnterprise(ctx, drawingID, enterpriseID)
+	if err != nil || !belongs {
+		return nil, fmt.Errorf("desenho não encontrado para a empresa")
+	}
 	op := dto.Operator
 	if op == "" {
 		op = "EQUAL"
@@ -188,6 +255,14 @@ func (uc *DrawingUseCase) AddCharacteristic(ctx context.Context, drawingID int64
 }
 
 func (uc *DrawingUseCase) ListCharacteristics(ctx context.Context, drawingID int64) ([]*response.DrawingCharacteristicResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	belongs, err := uc.Q.DrawingBelongsToEnterprise(ctx, drawingID, enterpriseID)
+	if err != nil || !belongs {
+		return nil, fmt.Errorf("desenho não encontrado para a empresa")
+	}
 	rows, err := uc.Q.ListDrawingCharacteristics(ctx, drawingID)
 	if err != nil {
 		return nil, err
@@ -203,7 +278,62 @@ func (uc *DrawingUseCase) ListCharacteristics(ctx context.Context, drawingID int
 }
 
 func (uc *DrawingUseCase) DeleteCharacteristic(ctx context.Context, id int64) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	belongs, err := uc.Q.DrawingCharacteristicBelongsToEnterprise(ctx, id, enterpriseID)
+	if err != nil || !belongs {
+		return fmt.Errorf("característica não encontrada para a empresa")
+	}
 	return uc.Q.DeleteDrawingCharacteristic(ctx, id)
+}
+
+func (uc *DrawingUseCase) MaintainItemDrawingCode(ctx context.Context, dto request.MaintainItemDrawingCodeDTO) (*response.ItemEngineeringDrawingResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if dto.ItemCode == 0 || strings.TrimSpace(dto.DrawingCode) == "" {
+		return nil, fmt.Errorf("item_code e drawing_code são obrigatórios")
+	}
+	row, err := uc.Q.UpsertItemEngineeringDrawing(ctx, enterpriseID, dto.ItemCode, strings.TrimSpace(dto.Mask), strings.TrimSpace(dto.DrawingCode), pgutil.ToPgUUID(dto.UpdatedBy))
+	if err != nil {
+		return nil, fmt.Errorf("item ou configuração não encontrado: %w", err)
+	}
+	return &response.ItemEngineeringDrawingResponse{ItemCode: row.ItemCode, Mask: row.Mask, DrawingCode: row.DrawingCode}, nil
+}
+
+func (uc *DrawingUseCase) GetItemDrawingCode(ctx context.Context, itemCode int64, mask string) (*response.ItemEngineeringDrawingResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := uc.Q.GetItemEngineeringDrawing(ctx, enterpriseID, itemCode, mask)
+	if err != nil {
+		return nil, fmt.Errorf("código de desenho não encontrado: %w", err)
+	}
+	return &response.ItemEngineeringDrawingResponse{ItemCode: row.ItemCode, Mask: row.Mask, DrawingCode: row.DrawingCode}, nil
+}
+
+func (uc *DrawingUseCase) UpdateManufacturingParameters(ctx context.Context, dto request.DrawingManufacturingParametersDTO) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return uc.Q.UpsertDrawingManufacturingParameters(ctx, enterpriseID, dto.ReplicateDrawingRevision, pgutil.ToPgUUID(dto.UpdatedBy))
+}
+
+func (uc *DrawingUseCase) GetManufacturingParameters(ctx context.Context) (*response.DrawingManufacturingParametersResponse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	replicate, err := uc.Q.GetDrawingManufacturingParameters(ctx, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	return &response.DrawingManufacturingParametersResponse{Parameter8ReplicateDrawingRevision: replicate}, nil
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

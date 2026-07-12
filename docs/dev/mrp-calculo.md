@@ -10,6 +10,28 @@ Na prática, é o "cérebro" da fábrica. Ele responde a uma pergunta simples, p
 
 Sem o MRP, o planejador faz isso manualmente — planilhas, estimativas, achismos. Com o MRP, o sistema analisa tudo automaticamente: os pedidos dos clientes, o que já tem em estoque, o que já está sendo produzido, e o que vai precisar comprar ou fabricar. O resultado são **sugestões de ordens de produção e compra** com datas e quantidades calculadas.
 
+## Fontes e filtros do plano
+
+O cálculo-base combina saldos abertos de itens de pedidos de venda, previsões, demandas independentes habilitadas e estoque de segurança. As demandas dependentes surgem da explosão da estrutura.
+
+Quando `order_item_code` é informado, somente o saldo aberto desse item de pedido é usado como demanda raiz; todas as demais fontes independentes são ignoradas. Item inexistente, fechado ou de outra empresa encerra o cálculo com erro.
+
+`classification` identifica a máscara e `class_item_codes` os nós da classificação. O filtro inclui itens associados aos nós e descendentes selecionados sem remover os componentes da estrutura. As associações ficam em `item_classification_assignments`, isoladas por empresa.
+
+Com `group_same_date_orders=true`, demandas de mesmo item, máscara e data são somadas. Desabilitado, cada demanda passa separadamente pelo cálculo, sem reutilizar estoque ou suprimento firme já consumido.
+
+### Assistência técnica
+
+Um item de pedido gera sugestão `TECHNICAL_ASSISTANCE` somente quando a divisão
+do próprio pedido está marcada como assistência técnica, o item possui
+`warehouse_code` e os parâmetros 17 (tratar assistência técnica) e 45 (controle
+de estoque de terceiros) estão habilitados. Previsões, demandas independentes,
+estoque de segurança e componentes explodidos não são convertidos em OAT.
+
+Demandas OAT do mesmo item e data permanecem separadas quando os almoxarifados
+divergem. O almoxarifado do item do pedido é preservado na sugestão, na ordem
+planejada e na OF para ser utilizado posteriormente pela entrega de produção.
+
 ---
 
 ## O Problema que o MRP Resolve
@@ -29,6 +51,40 @@ O MRP faz esse trabalho em segundos, para todos os itens ao mesmo tempo.
 ---
 
 ## Como o Cálculo Funciona — Passo a Passo
+
+### Isolamento por empresa
+
+Toda requisição autenticada carrega a empresa ativa no claim `enterprise_id` do
+JWT. O login aceita `enterprise_code`; a seleção somente é válida quando existe
+uma associação em `user_enterprises`. Se o código for omitido, o login só é
+aceito quando o usuário estiver associado a exatamente uma empresa.
+
+Planos, demandas, ordens, perfis, logs, snapshots, sugestões, exceções e fontes
+auxiliares do MRP são gravados e consultados com `enterprise_id`. Registros
+legados cuja empresa não possa ser inferida de forma unívoca permanecem sem
+atribuição e, por isso, não são retornados por nenhum tenant.
+
+Exemplo de login:
+
+```json
+{
+  "email": "pcp@empresa.com.br",
+  "password": "senha",
+  "enterprise_code": 10
+}
+```
+
+### Execução exclusiva
+
+Somente um cálculo de planejamento pode permanecer com status `RUNNING` em todo
+o sistema, mesmo quando há mais de uma instância da API. A garantia é feita no
+PostgreSQL pelo índice único parcial `uq_mrp_single_running_calculation`. Uma
+segunda chamada a `POST /api/mrp-calculation/run` recebe HTTP `409 Conflict`.
+O `plan_code` deve ser maior que zero; caso contrário, a API responde HTTP 400.
+
+Um log `RUNNING` não é expirado automaticamente. Se uma execução for interrompida
+sem finalizar o log, a equipe deve investigar e corrigir seu status antes de uma
+nova rodada, preservando a regra de não concorrência.
 
 ### Passo 1 — Coleta das Demandas
 
@@ -395,17 +451,63 @@ Uma sugestão do MRP é apenas uma proposta. Quando o planejador "firma" (aprova
 
 Todos os endpoints exigem `Authorization: Bearer <JWT>` (ADMIN ou USER).
 
+### Manutenção dos planos
+
+`POST /api/production-plan/create` e `PUT /api/production-plan/update` aceitam
+somente os tipos `MRP`, `MIN_MAX`, `REORDER_POINT`, `MPS` e `KANBAN`. Valores são
+normalizados para maiúsculas e duplicidades são removidas.
+
+Quando `independent_demands` for `FROM_DATE`, `parameters.from_date` é obrigatório
+no formato `YYYY-MM-DD`. `class_item_codes` aceita códigos de classificação,
+inclusive hierárquicos, separados por vírgula e exige `classification`. O filtro `order_item_code` é
+exclusivo e não pode ser combinado com classificação. O autor é obtido do JWT;
+`created_by` não faz parte do corpo de criação.
+
+Código duplicado retorna HTTP 409 e configurações inválidas retornam HTTP 400.
+O código permanece globalmente único porque integrações legadas o referenciam
+diretamente; o acesso ao plano e aos resultados continua isolado por empresa.
+
+### Empresas inter-fábrica
+
+Cada plano mantém uma lista das empresas de origem cujas ordens inter-fábrica
+serão consideradas. A mesma associação informa `auto_release`, indicando se as
+ordens originadas daquela empresa poderão seguir para liberação automática.
+
+- `GET /api/production-plan/{code}/inter-factories`: consulta a configuração;
+- `PUT /api/production-plan/{code}/inter-factories`: substitui toda a lista;
+- lista vazia remove todas as associações;
+- empresa inexistente, repetida ou igual à empresa do plano é rejeitada;
+- a substituição é atômica e isolada pelo tenant do JWT.
+
+Pedidos com origem `INTER_FACTORY` pertencentes às empresas relacionadas são
+carregados como demandas DIF. Pedidos normais de outras empresas continuam
+invisíveis. A sugestão e a ordem planejada preservam a empresa de origem e a
+flag `auto_release`. Ao final do cálculo, somente sugestões OIF/OCI elegíveis são
+convertidas e liberadas automaticamente; `mrp_suggestion_code` impede conversão
+duplicada em uma reexecução.
+
+O acesso cruzado é estritamente limitado às empresas configuradas no plano; a
+remoção da associação faz com que seus pedidos deixem de participar do cálculo.
+
 ### Execução do MRP
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `POST` | `/api/mrp-calculation/run` | Executa o cálculo MRP para um plano — `{ "plan_code": 1 }` |
+| `POST` | `/api/mrp-calculation/run` | Executa o cálculo MRP — `{ "plan_code": 1, "initial_order_number": 10000, "generate_llc": true }` |
 
 > ⚠️ **Pré-requisito — o plano precisa existir.** `plan_code` referencia
 > `production_plans.code` (FK `mrp_calculation_logs_plan_code_fkey`). Crie o plano
 > **antes** de rodar o MRP via `POST /api/production-plan/create` (não existe
 > `planning/plans` nem `mrp/plans`). Rodar com um `plan_code` inexistente viola a FK.
+
+`initial_order_number` é obrigatório, positivo e define o primeiro número da
+sequência de sugestões. A numeração é preservada ao converter a sugestão em
+ordem planejada e em OF. Números já usados por ordens ativas do mesmo tenant são
+rejeitados. Quando `generate_llc=true`, o nível mais baixo encontrado para cada
+item da estrutura é persistido em `items.planning_llc`; com `false`, o LLC é
+calculado somente em memória para ordenar a execução.
 | `GET` | `/api/mrp-calculation/profile/{item_code}/{plan_code}` | Perfil do item: demanda, estoque projetado, ordens |
+| `GET` | `/api/mrp-calculation/profile/{item_code}/{plan_code}/operational` | Perfil filtrável por posição/período, com totais |
 | `POST` | `/api/mrp-calculation/configured-rules` | Cria regra configurada por item |
 | `GET` | `/api/mrp-calculation/configured-rules/{item_code}` | Lista regras configuradas de um item |
 | `GET` | `/api/mrp-calculation/exceptions/{plan_code}` | Lista exceções e alertas do cálculo |
@@ -427,6 +529,11 @@ uma proposta pendente de análise — ainda não é uma Ordem Planejada.
 [
   {
     "code": 42,
+    "order_number": 10000,
+    "warehouse_code": 12,
+    "inter_factory": true,
+    "source_enterprise_code": 20,
+    "auto_release": true,
     "plan_code": 1,
     "item_code": 2001,
     "quantity": 150.0,
@@ -475,8 +582,8 @@ Ordem de Fabricação (`production_orders`) correspondente.
 | `suggestion_code` | Código da sugestão que deu origem à ordem |
 | `planned_code` | ID da Ordem Planejada criada (chave primária) |
 | `order_number` | Número sequencial único da ordem (visível no chão de fábrica) |
-| `is_firm` | Sempre `true` — firmar é uma ação irreversível |
-| `status` | `PLANNED` (ordem criada, aguardando liberação para produção/compra) |
+| `is_firm` | `true` após a firmação explícita |
+| `status` | `RELEASED` após a firmação |
 
 ---
 
@@ -487,6 +594,18 @@ Ordem de Fabricação (`production_orders`) correspondente.
 | `POST` | `/api/planned-order/create` | Cria Ordem Planejada manualmente (sem passar pelo MRP) |
 | `GET` | `/api/planned-order/list` | Lista todas as Ordens Planejadas |
 | `GET` | `/api/planned-order/{code}/firm` | Firma uma Ordem Planejada já existente |
+| `POST` | `/api/planned-order/transition` | Libera, firma ou replaneja uma ou várias ordens |
+
+#### Transições de ordens planejadas
+
+`POST /api/planned-order/transition` recebe `order_codes`, `target`
+(`PLANNED`, `RELEASED` ou `FIRM`) e, opcionalmente, novas `start_date` e
+`end_date`. `RELEASED` mantém `is_firm=false`; `FIRM` grava
+`status=RELEASED,is_firm=true` e não aceita alteração de datas. Uma ordem
+liberada só retorna a planejada quando não possui apontamentos nem consumos.
+Itens com cartão Kanban ativo só podem ser liberados ou firmados quando o
+parâmetro de planejamento 25 estiver habilitado. O lote inteiro é validado antes
+da primeira alteração.
 
 > **Corpo do `POST /api/planned-order/create`.** Campos: `item_code` (obrigatório),
 > `quantity` (> 0), `order_type` (`PRODUCTION`/`PURCHASE`/`OUTSOURCING`), `need_date`,
@@ -509,7 +628,7 @@ Pedido de Venda confirmado
         │
         ▼
 PLANEJADOR ACIONA O MRP
-POST /api/mrp-calculation/run { "plan_code": 1 }
+POST /api/mrp-calculation/run { "plan_code": 1, "initial_order_number": 10000, "generate_llc": true }
         │
         ├─ 1. Snapshot de estoque
         ├─ 2. Calcula LLC
@@ -553,3 +672,54 @@ GET /api/mrp-calculation/suggestions/{plan_code}
 | Ordens Planejadas (`planned_orders`) | ✅ Completo |
 | Firmação automática de OF para tipo PRODUCTION | ✅ Completo |
 | Agendamento automático de máquinas por APS | 🚧 Parcial (agenda criada manualmente via `POST /api/machine/schedule/create`; o APS sequencia, mas não cria agendas automaticamente ainda) |
+#### Consulta operacional do perfil
+
+O endpoint operacional aceita `position=CALCULATION|CURRENT`, `from=YYYY-MM-DD`
+e `to=YYYY-MM-DD`. `CALCULATION` conserva a fotografia do último MRP;
+`CURRENT` acrescenta o saldo atual dos almoxarifados do item. A resposta contém
+as linhas filtradas e totais de demanda, ordens planejadas, ordens firmes,
+estoque projetado e, quando aplicável, estoque atual.
+
+### Relatórios operacionais
+
+Os relatórios abaixo retornam JSON tenant-aware e aceitam filtros por item,
+plano, período e, quando aplicável, almoxarifado:
+
+- `GET /api/mrp-reports/profile`
+- `GET /api/mrp-reports/availability`
+- `GET /api/mrp-reports/grouped-needs`
+- `GET /api/mrp-reports/explosion/{itemCode}?quantity=1&at=YYYY-MM-DD`
+- `GET /api/mrp-reports/reorder-point`
+
+A explosão é multinível, aplica perdas e validade da estrutura e interrompe
+ciclos. Disponibilidade consolida estoque, ordens planejadas/firmes e demanda;
+ponto de reposição usa saldo disponível, segurança, máximo e consumo médio.
+
+Filtros comuns adicionais: `classification_mask_code` com
+`classification_code` (aceita `%` hierárquico), `order_by_1`, `order_by_2`,
+`break_by`, `item_type` e `only_available`. Valores inválidos retornam `400`.
+
+- Perfil: `layout=ANALITICO|SINTETICO`, `position=CALCULATION|CURRENT`,
+  `include_sales_orders`, `only_with_message` e `only_stock_without_reason`.
+  O analítico acrescenta linhas `row_type=DETALHE` com origem e quantidade.
+- Disponibilidade: informe `sales_orders=1001,1002` ou `item_code` com
+  `quantity`; `layout=AMBOS|NECESSIDADES|ITENS_PEDIDO` seleciona as linhas.
+- Necessidades agrupadas: `periods` recebe exatamente seis intervalos
+  `início|fim`, separados por vírgula, refletidos em `period_values`.
+- Explosão: aceita `explosion_option=SIMPLES|CUSTO|SALDO|SALDO_DEM`,
+  `list_mode=TODOS|FILHOS_IMEDIATOS`, `description_type=TECNICA|RESUMIDA`,
+  `consider_item_warehouses`, `production_orders` e `loads`.
+- Ponto de reposição: aceita `planning_type=REORDER_POINT|KANBAN`, período e
+  `only_available` e `order_position=LIBERADOS|LIBERADOS_E_BLOQUEADOS`;
+  considera demandas de OF, compras pendentes e percorre as estruturas dos
+  pedidos selecionados.
+
+O layout analítico usa `mrp_profile_details`, preenchida antes do agrupamento do
+cálculo, preservando tipo, referência, item pai, data e quantidade de cada
+origem. Desenhos são lidos somente quando `drawings.enterprise_id` corresponde à
+empresa autenticada; revisões fora da vigência ou de outro tenant não aparecem.
+
+O aceite automatizado do módulo é executado por
+`TEST_DATABASE_URL=... scripts/test-mrp-manufacturing.sh`.
+Os comandos, cenários e números da última execução ficam registrados em
+[`mrp-aceite-enterprise.md`](mrp-aceite-enterprise.md).

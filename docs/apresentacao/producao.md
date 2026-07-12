@@ -175,3 +175,20 @@ As paradas de manutenção são **respeitadas automaticamente** pelo CRP (capaci
   a **genealogia** (quais lotes de matéria-prima compõem o produto).
 
 > A versão técnica (operações, endpoints, regras) está em `../dev/producao.md` (§3 Custo real, §4 Sucata, §5 Lote), `../dev/manufatura-e-compras.md` (Roteiro, Qualidade, Manutenção) e `../dev/visao-geral.md` (§5 Produção).
+## Manutenção operacional de ordens
+
+Ordens manuais podem gerar automaticamente as demandas do primeiro nível da
+estrutura e ser mantidas enquanto não houver movimentação. Ordens originadas por
+Kanban e ordens comerciais ficam protegidas contra alterações e cancelamentos.
+Quando configurado, os componentes de baixa automática são transferidos do
+almoxarifado padrão para o almoxarifado de linha junto com a criação da ordem.
+
+A fábrica pode configurar regras de alteração de quantidade e datas, itens
+fracionários, lotes, endereços e almoxarifados WMS. A seleção de lotes atende
+várias ordens em sequência, respeita saldo/FIFO e exige confirmação quando a
+quantidade selecionada for parcial.
+
+Refugos podem ser destinados como sucata ou devolução de componentes. O sistema
+valida períodos de estoque, conversões de unidade, grupo do item de sucata,
+quantidades apontadas, lotes e endereços, mantendo os movimentos rastreáveis e
+reversíveis.

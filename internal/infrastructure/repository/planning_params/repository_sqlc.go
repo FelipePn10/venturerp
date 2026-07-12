@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/planning_params/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -16,7 +17,11 @@ func (r *PlanningParamRepositorySQLC) GetByNumber(
 	ctx context.Context,
 	paramNumber int,
 ) (*entity.PlanningParam, error) {
-	row, err := r.q.GetPlanningParamByNumber(ctx, int32(paramNumber))
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPlanningParamByNumber(ctx, sqlc.GetPlanningParamByNumberParams{ParamNumber: int32(paramNumber), EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("planning param %d not found", paramNumber)
@@ -30,7 +35,11 @@ func (r *PlanningParamRepositorySQLC) GetByKey(
 	ctx context.Context,
 	key string,
 ) (*entity.PlanningParam, error) {
-	row, err := r.q.GetPlanningParamByKey(ctx, key)
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPlanningParamByKey(ctx, sqlc.GetPlanningParamByKeyParams{ParamKey: key, EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("planning param %q not found", key)
@@ -41,7 +50,11 @@ func (r *PlanningParamRepositorySQLC) GetByKey(
 }
 
 func (r *PlanningParamRepositorySQLC) List(ctx context.Context) ([]*entity.PlanningParam, error) {
-	rows, err := r.q.ListPlanningParams(ctx)
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPlanningParams(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing planning params: %w", err)
 	}
@@ -58,10 +71,15 @@ func (r *PlanningParamRepositorySQLC) Update(
 	value string,
 	updatedBy uuid.UUID,
 ) (*entity.PlanningParam, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdatePlanningParam(ctx, sqlc.UpdatePlanningParamParams{
-		ParamNumber: int32(paramNumber),
-		Value:       value,
-		UpdatedBy:   pgutil.ToPgUUID(updatedBy),
+		ParamNumber:  int32(paramNumber),
+		Value:        value,
+		UpdatedBy:    pgutil.ToPgUUID(updatedBy),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -2,10 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	mrprepository "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
@@ -18,10 +22,50 @@ func (h *MRPCalculationHandler) Run(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.runUC.Execute(r.Context(), dto)
 	if err != nil {
+		if errors.Is(err, mrp_calculation_uc.ErrInvalidPlanCode) || errors.Is(err, mrp_calculation_uc.ErrInvalidInitialOrderNumber) {
+			security.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if errors.Is(err, mrprepository.ErrCalculationInProgress) {
+			security.RespondError(w, http.StatusConflict, err.Error())
+			return
+		}
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	security.RespondJSON(w, http.StatusAccepted, result)
+}
+
+func (h *MRPCalculationHandler) ConsultProfile(w http.ResponseWriter, r *http.Request) {
+	itemCode, itemErr := strconv.ParseInt(chi.URLParam(r, "item_code"), 10, 64)
+	planCode, planErr := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
+	if itemErr != nil || planErr != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid item_code or plan_code")
+		return
+	}
+	parseDate := func(value string) (*time.Time, error) {
+		if value == "" {
+			return nil, nil
+		}
+		date, err := time.Parse("2006-01-02", value)
+		return &date, err
+	}
+	from, err := parseDate(r.URL.Query().Get("from"))
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid from")
+		return
+	}
+	to, err := parseDate(r.URL.Query().Get("to"))
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "invalid to")
+		return
+	}
+	result, err := h.getProfileUC.Consult(r.Context(), itemCode, planCode, r.URL.Query().Get("position"), from, to)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func (h *MRPCalculationHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
