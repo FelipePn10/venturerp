@@ -39,6 +39,14 @@ type fakePlannedRepo struct {
 	created   *plannedentity.PlannedOrder
 	nextNum   int64
 	errCreate error
+	existing  *plannedentity.PlannedOrder
+}
+
+func (r *fakePlannedRepo) GetByMRPSuggestionCode(_ context.Context, _ int64) (*plannedentity.PlannedOrder, error) {
+	if r.existing != nil {
+		return r.existing, nil
+	}
+	return nil, errors.New("not found")
 }
 
 func (r *fakePlannedRepo) GetNextOrderNumber(_ context.Context) (int64, error) {
@@ -78,6 +86,14 @@ func baseSuggestion() *mrpentity.PlannedOrderSuggestion {
 
 func TestFirmarSugestao_CreatesPlannedOrder(t *testing.T) {
 	sugg := baseSuggestion()
+	reservedNumber := int64(6500)
+	warehouseCode := int64(77)
+	sugg.OrderNumber = &reservedNumber
+	sugg.WarehouseCode = &warehouseCode
+	sourceEnterpriseCode := int64(99)
+	sugg.InterFactory = true
+	sugg.SourceEnterpriseCode = &sourceEnterpriseCode
+	sugg.AutoRelease = true
 	mrpR := &fakeMRPRepo{suggestion: sugg}
 	planR := &fakePlannedRepo{nextNum: 7001}
 
@@ -94,8 +110,8 @@ func TestFirmarSugestao_CreatesPlannedOrder(t *testing.T) {
 	if result.SuggestionCode != 42 {
 		t.Errorf("SuggestionCode = %d, want 42", result.SuggestionCode)
 	}
-	if result.OrderNumber != 7001 {
-		t.Errorf("OrderNumber = %d, want 7001", result.OrderNumber)
+	if result.OrderNumber != reservedNumber {
+		t.Errorf("OrderNumber = %d, want %d", result.OrderNumber, reservedNumber)
 	}
 	if result.ItemCode != 2001 {
 		t.Errorf("ItemCode = %d, want 2001", result.ItemCode)
@@ -116,6 +132,12 @@ func TestFirmarSugestao_CreatesPlannedOrder(t *testing.T) {
 	if pc == nil || *pc != 100 {
 		t.Errorf("PlanCode = %v, want 100", pc)
 	}
+	if planR.created.WarehouseCode == nil || *planR.created.WarehouseCode != warehouseCode {
+		t.Fatalf("WarehouseCode = %v, want %d", planR.created.WarehouseCode, warehouseCode)
+	}
+	if !planR.created.InterFactory || planR.created.SourceEnterpriseCode == nil || *planR.created.SourceEnterpriseCode != sourceEnterpriseCode || !planR.created.AutoRelease {
+		t.Fatalf("inter-factory metadata not propagated: %#v", planR.created)
+	}
 }
 
 type fakeFirmer struct {
@@ -127,6 +149,11 @@ func (f *fakeFirmer) Execute(_ context.Context, dto request.FirmOrderDTO) (*resp
 	f.called = true
 	f.gotCode = dto.OrderCode
 	return &response.PlannedOrderResponse{Code: dto.OrderCode, IsFirm: true}, nil
+}
+func (f *fakeFirmer) ExecuteTransition(_ context.Context, dto request.TransitionPlannedOrderDTO) ([]*response.PlannedOrderResponse, error) {
+	f.called = true
+	f.gotCode = dto.OrderCodes[0]
+	return []*response.PlannedOrderResponse{{Code: dto.OrderCodes[0], Status: "RELEASED", IsFirm: false}}, nil
 }
 
 // With a Firmer wired, accepting a suggestion creates the order NOT firm and then
@@ -154,6 +181,34 @@ func TestFirmarSugestao_ComposesFirmStep(t *testing.T) {
 	}
 	if !result.IsFirm {
 		t.Error("result must report the order as firm after the firm step")
+	}
+}
+
+func TestFirmarSugestao_IsIdempotentBySuggestion(t *testing.T) {
+	existing := &plannedentity.PlannedOrder{Code: 77, OrderNumber: 88, ItemCode: 2001, IsFirm: true}
+	planR := &fakePlannedRepo{existing: existing}
+	uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: baseSuggestion()}, PlannedRepo: planR, Auth: &fakeAuth{canCreate: true}}
+	result, err := uc.Execute(context.Background(), 42)
+	if err != nil || result.PlannedCode != 77 {
+		t.Fatalf("idempotent conversion failed: result=%+v err=%v", result, err)
+	}
+	if planR.created != nil {
+		t.Fatal("existing suggestion origin must not create a duplicate planned order")
+	}
+}
+
+func TestAutoRelease_OnlyEligibleInterFactorySuggestion(t *testing.T) {
+	suggestion := baseSuggestion()
+	suggestion.InterFactory = true
+	suggestion.AutoRelease = true
+	planR := &fakePlannedRepo{nextNum: 9000}
+	firmer := &fakeFirmer{}
+	uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: suggestion}, PlannedRepo: planR, Auth: &fakeAuth{canCreate: true}, Firmer: firmer}
+	if err := uc.ExecuteAutoRelease(context.Background(), suggestion.PlanCode); err != nil {
+		t.Fatalf("auto release failed: %v", err)
+	}
+	if planR.created == nil || !firmer.called {
+		t.Fatal("eligible inter-factory suggestion was not converted and firmed")
 	}
 }
 

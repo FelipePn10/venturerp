@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS idx_physical_inventories_tenant;
+DROP INDEX IF EXISTS idx_stock_reservations_tenant;
+DROP INDEX IF EXISTS uq_stock_lots_tenant;
+DROP INDEX IF EXISTS uq_consumption_average_tenant;
+ALTER TABLE stock_lots ADD CONSTRAINT stock_lots_item_code_lot_key UNIQUE(item_code,lot);
+ALTER TABLE item_consumption_averages ADD CONSTRAINT item_consumption_averages_item_code_key UNIQUE(item_code);
+ALTER TABLE physical_inventories DROP COLUMN IF EXISTS enterprise_id;
+ALTER TABLE stock_lots DROP COLUMN IF EXISTS enterprise_id;
+ALTER TABLE item_consumption_averages DROP COLUMN IF EXISTS enterprise_id;
+ALTER TABLE stock_reservations DROP COLUMN IF EXISTS enterprise_id;

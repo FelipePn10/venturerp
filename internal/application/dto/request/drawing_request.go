@@ -18,15 +18,16 @@ type DrawingDTO struct {
 }
 
 type DrawingRevisionDTO struct {
-	ID           int64  `json:"id"`
-	Revision     string `json:"revision"`
-	StartDate    string `json:"start_date"`
-	EndDate      string `json:"end_date"`
-	MaterialSpec string `json:"material_spec"`
-	Reason       string `json:"reason"`
-	ApprovedBy   string `json:"approved_by"`
-	ApprovalDate string `json:"approval_date"`
-	IsCurrent    bool   `json:"is_current"`
+	ID           int64     `json:"id"`
+	Revision     string    `json:"revision"`
+	StartDate    string    `json:"start_date"`
+	EndDate      string    `json:"end_date"`
+	MaterialSpec string    `json:"material_spec"`
+	Reason       string    `json:"reason"`
+	ApprovedBy   string    `json:"approved_by"`
+	ApprovalDate string    `json:"approval_date"`
+	IsCurrent    bool      `json:"is_current"`
+	UpdatedBy    uuid.UUID `json:"-"`
 }
 
 type DrawingDistributionDTO struct {
@@ -39,4 +40,16 @@ type DrawingCharacteristicDTO struct {
 	CharacteristicID int64  `json:"characteristic_id"`
 	Operator         string `json:"operator"`
 	VariableID       *int64 `json:"variable_id"`
+}
+
+type MaintainItemDrawingCodeDTO struct {
+	ItemCode    int64     `json:"item_code"`
+	Mask        string    `json:"mask,omitempty"`
+	DrawingCode string    `json:"drawing_code"`
+	UpdatedBy   uuid.UUID `json:"-"`
+}
+
+type DrawingManufacturingParametersDTO struct {
+	ReplicateDrawingRevision bool      `json:"replicate_drawing_revision"`
+	UpdatedBy                uuid.UUID `json:"-"`
 }

@@ -65,6 +65,11 @@ vigência, aprovação, motivo e distribuição). O código de replicação é
 `Desenho + Dígito + Formato + Revisão`. Um desenho pode ser a resposta de uma
 característica do tipo *Desenho* no configurador.
 
+Cada fábrica acessa somente seus desenhos. O código de engenharia pode ser
+mantido no item simples ou em cada configuração. Com o parâmetro 8 habilitado,
+uma revisão corrente atualiza somente configurações que ainda utilizavam
+exatamente a revisão anterior; a primeira revisão é informada manualmente.
+
 ## 6. Máscara de Lotes/Séries
 
 Define **como o código de lote é gerado automaticamente**. A máscara (até 20 caracteres)

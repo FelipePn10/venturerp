@@ -12,11 +12,16 @@ import (
 )
 
 const getPlanningParamByKey = `-- name: GetPlanningParamByKey :one
-SELECT id, param_number, param_key, value, description, created_at, updated_at, updated_by FROM planning_params WHERE param_key = $1
+SELECT id, param_number, param_key, value, description, created_at, updated_at, updated_by, enterprise_id FROM planning_params WHERE param_key = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetPlanningParamByKey(ctx context.Context, paramKey string) (PlanningParam, error) {
-	row := q.db.QueryRow(ctx, getPlanningParamByKey, paramKey)
+type GetPlanningParamByKeyParams struct {
+	ParamKey     string
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetPlanningParamByKey(ctx context.Context, arg GetPlanningParamByKeyParams) (PlanningParam, error) {
+	row := q.db.QueryRow(ctx, getPlanningParamByKey, arg.ParamKey, arg.EnterpriseID)
 	var i PlanningParam
 	err := row.Scan(
 		&i.ID,
@@ -27,16 +32,22 @@ func (q *Queries) GetPlanningParamByKey(ctx context.Context, paramKey string) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getPlanningParamByNumber = `-- name: GetPlanningParamByNumber :one
-SELECT id, param_number, param_key, value, description, created_at, updated_at, updated_by FROM planning_params WHERE param_number = $1
+SELECT id, param_number, param_key, value, description, created_at, updated_at, updated_by, enterprise_id FROM planning_params WHERE param_number = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetPlanningParamByNumber(ctx context.Context, paramNumber int32) (PlanningParam, error) {
-	row := q.db.QueryRow(ctx, getPlanningParamByNumber, paramNumber)
+type GetPlanningParamByNumberParams struct {
+	ParamNumber  int32
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetPlanningParamByNumber(ctx context.Context, arg GetPlanningParamByNumberParams) (PlanningParam, error) {
+	row := q.db.QueryRow(ctx, getPlanningParamByNumber, arg.ParamNumber, arg.EnterpriseID)
 	var i PlanningParam
 	err := row.Scan(
 		&i.ID,
@@ -47,16 +58,17 @@ func (q *Queries) GetPlanningParamByNumber(ctx context.Context, paramNumber int3
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listPlanningParams = `-- name: ListPlanningParams :many
-SELECT id, param_number, param_key, value, description, created_at, updated_at, updated_by FROM planning_params ORDER BY param_number
+SELECT id, param_number, param_key, value, description, created_at, updated_at, updated_by, enterprise_id FROM planning_params WHERE enterprise_id = $1 ORDER BY param_number
 `
 
-func (q *Queries) ListPlanningParams(ctx context.Context) ([]PlanningParam, error) {
-	rows, err := q.db.Query(ctx, listPlanningParams)
+func (q *Queries) ListPlanningParams(ctx context.Context, enterpriseID *int64) ([]PlanningParam, error) {
+	rows, err := q.db.Query(ctx, listPlanningParams, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +85,7 @@ func (q *Queries) ListPlanningParams(ctx context.Context) ([]PlanningParam, erro
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -89,18 +102,24 @@ UPDATE planning_params
 SET value      = $2,
     updated_by = $3,
     updated_at = NOW()
-WHERE param_number = $1
-RETURNING id, param_number, param_key, value, description, created_at, updated_at, updated_by
+WHERE param_number = $1 AND enterprise_id = $4
+RETURNING id, param_number, param_key, value, description, created_at, updated_at, updated_by, enterprise_id
 `
 
 type UpdatePlanningParamParams struct {
-	ParamNumber int32
-	Value       string
-	UpdatedBy   pgtype.UUID
+	ParamNumber  int32
+	Value        string
+	UpdatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 func (q *Queries) UpdatePlanningParam(ctx context.Context, arg UpdatePlanningParamParams) (PlanningParam, error) {
-	row := q.db.QueryRow(ctx, updatePlanningParam, arg.ParamNumber, arg.Value, arg.UpdatedBy)
+	row := q.db.QueryRow(ctx, updatePlanningParam,
+		arg.ParamNumber,
+		arg.Value,
+		arg.UpdatedBy,
+		arg.EnterpriseID,
+	)
 	var i PlanningParam
 	err := row.Scan(
 		&i.ID,
@@ -111,6 +130,7 @@ func (q *Queries) UpdatePlanningParam(ctx context.Context, arg UpdatePlanningPar
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

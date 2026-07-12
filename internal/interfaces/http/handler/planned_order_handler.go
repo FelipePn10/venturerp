@@ -42,3 +42,17 @@ func (h *PlannedOrderHandler) Firm(w http.ResponseWriter, r *http.Request) {
 	}
 	security.RespondJSON(w, http.StatusOK, result)
 }
+
+func (h *PlannedOrderHandler) Transition(w http.ResponseWriter, r *http.Request) {
+	var dto request.TransitionPlannedOrderDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.firmUC.ExecuteTransition(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}

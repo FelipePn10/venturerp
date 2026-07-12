@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS production_order_service_requisition_links;

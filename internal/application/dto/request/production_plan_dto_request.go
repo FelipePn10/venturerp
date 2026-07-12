@@ -1,7 +1,5 @@
 package request
 
-import "github.com/google/uuid"
-
 type CreateProductionPlanDTO struct {
 	Code                int64                  `json:"code"`
 	Name                string                 `json:"name"`
@@ -12,7 +10,6 @@ type CreateProductionPlanDTO struct {
 	ClassItemCodes      *string                `json:"class_item_codes"`
 	OrderItemCode       *int64                 `json:"order_item_code"`
 	Parameters          map[string]interface{} `json:"parameters"`
-	CreatedBy           uuid.UUID              `json:"created_by"`
 }
 
 type UpdateProductionPlanDTO struct {

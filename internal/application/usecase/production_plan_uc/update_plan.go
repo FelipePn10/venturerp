@@ -7,7 +7,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/repository"
 )
 
@@ -23,17 +22,16 @@ func (uc *UpdateProductionPlanUseCase) Execute(
 	if !uc.Auth.CanUpdateProductionPlan(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-
-	plan := &entity.ProductionPlan{
-		Code:                dto.Code,
-		Name:                dto.Name,
-		IndependentDemands:  dto.IndependentDemands,
-		GroupSameDateOrders: dto.GroupSameDateOrders,
-		PlanningTypes:       dto.PlanningTypes,
-		Classification:      dto.Classification,
-		ClassItemCodes:      dto.ClassItemCodes,
-		OrderItemCode:       dto.OrderItemCode,
-		Parameters:          dto.Parameters,
+	plan, err := uc.Repo.GetByCode(ctx, dto.Code)
+	if err != nil {
+		return nil, err
+	}
+	plan.Name = dto.Name
+	plan.IndependentDemands = dto.IndependentDemands
+	plan.GroupSameDateOrders = dto.GroupSameDateOrders
+	plan.PlanningTypes = dto.PlanningTypes
+	if err := plan.Configure(dto.Classification, dto.ClassItemCodes, dto.OrderItemCode, dto.Parameters); err != nil {
+		return nil, err
 	}
 	updated, err := uc.Repo.Update(ctx, plan)
 	if err != nil {

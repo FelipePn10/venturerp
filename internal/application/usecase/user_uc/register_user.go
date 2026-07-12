@@ -39,5 +39,8 @@ func (uc *RegisterUserUseCase) Execute(
 		return err
 	}
 
-	return uc.Repo.Create(ctx, user)
+	if dto.EnterpriseCode <= 0 {
+		return userentity.ErrInvalidEnterprise
+	}
+	return uc.Repo.Create(ctx, user, dto.EnterpriseCode)
 }

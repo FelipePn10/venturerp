@@ -101,6 +101,7 @@ func (h *DrawingHandler) AddRevision(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
 		return
 	}
+	dto.UpdatedBy = actingUser(r)
 	res, err := h.uc.AddRevision(r.Context(), id, dto)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
@@ -134,12 +135,65 @@ func (h *DrawingHandler) UpdateRevision(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
 		return
 	}
+	dto.UpdatedBy = actingUser(r)
 	res, err := h.uc.UpdateRevision(r.Context(), id, dto)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *DrawingHandler) MaintainItemDrawingCode(w http.ResponseWriter, r *http.Request) {
+	var dto request.MaintainItemDrawingCodeDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	dto.UpdatedBy = actingUser(r)
+	result, err := h.uc.MaintainItemDrawingCode(r.Context(), dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *DrawingHandler) GetItemDrawingCode(w http.ResponseWriter, r *http.Request) {
+	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid item code")
+		return
+	}
+	result, err := h.uc.GetItemDrawingCode(r.Context(), itemCode, r.URL.Query().Get("mask"))
+	if err != nil {
+		jsonError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *DrawingHandler) UpdateManufacturingParameters(w http.ResponseWriter, r *http.Request) {
+	var dto request.DrawingManufacturingParametersDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	dto.UpdatedBy = actingUser(r)
+	if err := h.uc.UpdateManufacturingParameters(r.Context(), dto); err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *DrawingHandler) GetManufacturingParameters(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.GetManufacturingParameters(r.Context())
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 func (h *DrawingHandler) DeleteRevision(w http.ResponseWriter, r *http.Request) {

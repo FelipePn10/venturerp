@@ -45,6 +45,12 @@ type MRPItemProfileResponse struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+type MRPItemProfileConsultationResponse struct {
+	Position string                    `json:"position"`
+	Rows     []*MRPItemProfileResponse `json:"rows"`
+	Totals   map[string]float64        `json:"totals"`
+}
+
 // ConfiguredItemRuleResponse is the API representation of a configured item rule.
 type ConfiguredItemRuleResponse struct {
 	Code      int64     `json:"code"`

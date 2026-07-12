@@ -2,6 +2,8 @@ package order_priority_uc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -26,6 +28,18 @@ func (uc *CreateOrderPriorityUseCase) Execute(
 	userID, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if dto.IntervalStart >= dto.IntervalEnd || strings.TrimSpace(dto.Priority) == "" {
+		return nil, fmt.Errorf("interval_start must be lower than interval_end and priority is required")
+	}
+	existing, err := uc.Repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, interval := range existing {
+		if dto.IntervalStart <= interval.IntervalEnd && dto.IntervalEnd >= interval.IntervalStart {
+			return nil, fmt.Errorf("priority interval overlaps or touches interval %d", interval.Code)
+		}
 	}
 	op := &entity.OrderPriority{
 		IntervalStart: dto.IntervalStart,

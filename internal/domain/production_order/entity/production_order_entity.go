@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type ProductionOrderStatus string
@@ -31,6 +32,7 @@ type ProductionOrder struct {
 	MachineID      *int64
 	CostCenterID   *int64
 	EmployeeID     *int64
+	WarehouseID    *int64
 	Priority       *string
 	Notes          *string
 	IsActive       bool
@@ -68,4 +70,23 @@ type ProductionConsumption struct {
 	Notes             *string
 	CreatedAt         time.Time
 	CreatedBy         uuid.UUID
+}
+
+type ProductionDelivery struct {
+	ID                int64
+	ProductionOrderID int64
+	Quantity          decimal.Decimal
+	IdempotencyKey    string
+	MovementClass     string
+	WarehouseID       int64
+	Lot               *string
+	IsFinal           bool
+	DeliveredAt       time.Time
+	CreatedBy         uuid.UUID
+	Lines             []ProductionDeliveryLine
+}
+
+type ProductionDeliveryLine struct {
+	MovementClass string
+	Quantity      decimal.Decimal
 }

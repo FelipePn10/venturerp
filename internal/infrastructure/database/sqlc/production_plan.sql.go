@@ -15,10 +15,10 @@ const createProductionPlan = `-- name: CreateProductionPlan :one
 INSERT INTO production_plans (
     code, name, independent_demands, group_same_date_orders,
     planning_types, classification, class_item_codes, order_item_code,
-    parameters, created_by
+    parameters, created_by, enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateProductionPlanParams struct {
@@ -32,6 +32,7 @@ type CreateProductionPlanParams struct {
 	OrderItemCode       *int64
 	Parameters          []byte
 	CreatedBy           pgtype.UUID
+	EnterpriseID        *int64
 }
 
 func (q *Queries) CreateProductionPlan(ctx context.Context, arg CreateProductionPlanParams) (ProductionPlan, error) {
@@ -46,6 +47,7 @@ func (q *Queries) CreateProductionPlan(ctx context.Context, arg CreateProduction
 		arg.OrderItemCode,
 		arg.Parameters,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i ProductionPlan
 	err := row.Scan(
@@ -64,25 +66,36 @@ func (q *Queries) CreateProductionPlan(ctx context.Context, arg CreateProduction
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteProductionPlan = `-- name: DeleteProductionPlan :exec
-UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1
+UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteProductionPlan(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteProductionPlan, code)
+type DeleteProductionPlanParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteProductionPlan(ctx context.Context, arg DeleteProductionPlanParams) error {
+	_, err := q.db.Exec(ctx, deleteProductionPlan, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const getProductionPlanByCode = `-- name: GetProductionPlanByCode :one
-SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by FROM production_plans WHERE code = $1 AND is_active = TRUE
+SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id FROM production_plans WHERE code = $1 AND enterprise_id = $2 AND is_active = TRUE
 `
 
-func (q *Queries) GetProductionPlanByCode(ctx context.Context, code int64) (ProductionPlan, error) {
-	row := q.db.QueryRow(ctx, getProductionPlanByCode, code)
+type GetProductionPlanByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetProductionPlanByCode(ctx context.Context, arg GetProductionPlanByCodeParams) (ProductionPlan, error) {
+	row := q.db.QueryRow(ctx, getProductionPlanByCode, arg.Code, arg.EnterpriseID)
 	var i ProductionPlan
 	err := row.Scan(
 		&i.ID,
@@ -100,16 +113,17 @@ func (q *Queries) GetProductionPlanByCode(ctx context.Context, code int64) (Prod
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listProductionPlans = `-- name: ListProductionPlans :many
-SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by FROM production_plans WHERE is_active = TRUE ORDER BY code
+SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id FROM production_plans WHERE enterprise_id = $1 AND is_active = TRUE ORDER BY code
 `
 
-func (q *Queries) ListProductionPlans(ctx context.Context) ([]ProductionPlan, error) {
-	rows, err := q.db.Query(ctx, listProductionPlans)
+func (q *Queries) ListProductionPlans(ctx context.Context, enterpriseID *int64) ([]ProductionPlan, error) {
+	rows, err := q.db.Query(ctx, listProductionPlans, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +147,7 @@ func (q *Queries) ListProductionPlans(ctx context.Context) ([]ProductionPlan, er
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -155,8 +170,8 @@ SET name                  = $2,
     order_item_code       = $8,
     parameters            = $9,
     updated_at            = NOW()
-WHERE code = $1
-RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by
+WHERE code = $1 AND enterprise_id = $10
+RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type UpdateProductionPlanParams struct {
@@ -169,6 +184,7 @@ type UpdateProductionPlanParams struct {
 	ClassItemCodes      pgtype.Text
 	OrderItemCode       *int64
 	Parameters          []byte
+	EnterpriseID        *int64
 }
 
 func (q *Queries) UpdateProductionPlan(ctx context.Context, arg UpdateProductionPlanParams) (ProductionPlan, error) {
@@ -182,6 +198,7 @@ func (q *Queries) UpdateProductionPlan(ctx context.Context, arg UpdateProduction
 		arg.ClassItemCodes,
 		arg.OrderItemCode,
 		arg.Parameters,
+		arg.EnterpriseID,
 	)
 	var i ProductionPlan
 	err := row.Scan(
@@ -200,15 +217,21 @@ func (q *Queries) UpdateProductionPlan(ctx context.Context, arg UpdateProduction
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const updateProductionPlanLastCalculated = `-- name: UpdateProductionPlanLastCalculated :exec
-UPDATE production_plans SET last_calculated_at = NOW(), updated_at = NOW() WHERE code = $1
+UPDATE production_plans SET last_calculated_at = NOW(), updated_at = NOW() WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) UpdateProductionPlanLastCalculated(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, updateProductionPlanLastCalculated, code)
+type UpdateProductionPlanLastCalculatedParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) UpdateProductionPlanLastCalculated(ctx context.Context, arg UpdateProductionPlanLastCalculatedParams) error {
+	_, err := q.db.Exec(ctx, updateProductionPlanLastCalculated, arg.Code, arg.EnterpriseID)
 	return err
 }

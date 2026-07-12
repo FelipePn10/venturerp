@@ -12,19 +12,20 @@ import (
 )
 
 const createConfiguredItemRule = `-- name: CreateConfiguredItemRule :one
-INSERT INTO configured_item_rules (item_code, table_type, field_name, rule_type, rule_value, sequence, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code
+INSERT INTO configured_item_rules (item_code, table_type, field_name, rule_type, rule_value, sequence, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id
 `
 
 type CreateConfiguredItemRuleParams struct {
-	ItemCode  int64
-	TableType string
-	FieldName string
-	RuleType  string
-	RuleValue string
-	Sequence  int32
-	CreatedBy pgtype.UUID
+	ItemCode     int64
+	TableType    string
+	FieldName    string
+	RuleType     string
+	RuleValue    string
+	Sequence     int32
+	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 func (q *Queries) CreateConfiguredItemRule(ctx context.Context, arg CreateConfiguredItemRuleParams) (ConfiguredItemRule, error) {
@@ -36,6 +37,7 @@ func (q *Queries) CreateConfiguredItemRule(ctx context.Context, arg CreateConfig
 		arg.RuleValue,
 		arg.Sequence,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i ConfiguredItemRule
 	err := row.Scan(
@@ -51,14 +53,57 @@ func (q *Queries) CreateConfiguredItemRule(ctx context.Context, arg CreateConfig
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.Code,
+		&i.EnterpriseID,
+	)
+	return i, err
+}
+
+const createMRPExceptionMessage = `-- name: CreateMRPExceptionMessage :one
+INSERT INTO mrp_exception_messages
+    (plan_code, item_code, message_type, source_code, source_type, description, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING code, plan_code, item_code, message_type, source_code, source_type, description, created_at, enterprise_id
+`
+
+type CreateMRPExceptionMessageParams struct {
+	PlanCode     int64
+	ItemCode     int64
+	MessageType  string
+	SourceCode   *int64
+	SourceType   pgtype.Text
+	Description  string
+	EnterpriseID *int64
+}
+
+func (q *Queries) CreateMRPExceptionMessage(ctx context.Context, arg CreateMRPExceptionMessageParams) (MrpExceptionMessage, error) {
+	row := q.db.QueryRow(ctx, createMRPExceptionMessage,
+		arg.PlanCode,
+		arg.ItemCode,
+		arg.MessageType,
+		arg.SourceCode,
+		arg.SourceType,
+		arg.Description,
+		arg.EnterpriseID,
+	)
+	var i MrpExceptionMessage
+	err := row.Scan(
+		&i.Code,
+		&i.PlanCode,
+		&i.ItemCode,
+		&i.MessageType,
+		&i.SourceCode,
+		&i.SourceType,
+		&i.Description,
+		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createMRPItemProfile = `-- name: CreateMRPItemProfile :one
-INSERT INTO mrp_item_profiles (item_code, plan_code, calculation_date, demand, orders_planned, orders_firm, stock_projected, llc, need_date)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING id, item_code, plan_code, calculation_date, demand, orders_planned, orders_firm, stock_projected, llc, need_date, created_at, code
+INSERT INTO mrp_item_profiles (item_code, plan_code, calculation_date, demand, orders_planned, orders_firm, stock_projected, llc, need_date, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    RETURNING id, item_code, plan_code, calculation_date, demand, orders_planned, orders_firm, stock_projected, llc, need_date, created_at, code, enterprise_id
 `
 
 type CreateMRPItemProfileParams struct {
@@ -71,6 +116,7 @@ type CreateMRPItemProfileParams struct {
 	StockProjected  pgtype.Numeric
 	Llc             int32
 	NeedDate        pgtype.Date
+	EnterpriseID    *int64
 }
 
 func (q *Queries) CreateMRPItemProfile(ctx context.Context, arg CreateMRPItemProfileParams) (MrpItemProfile, error) {
@@ -84,6 +130,7 @@ func (q *Queries) CreateMRPItemProfile(ctx context.Context, arg CreateMRPItemPro
 		arg.StockProjected,
 		arg.Llc,
 		arg.NeedDate,
+		arg.EnterpriseID,
 	)
 	var i MrpItemProfile
 	err := row.Scan(
@@ -99,30 +146,42 @@ func (q *Queries) CreateMRPItemProfile(ctx context.Context, arg CreateMRPItemPro
 		&i.NeedDate,
 		&i.CreatedAt,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createMRPPlannedSuggestion = `-- name: CreateMRPPlannedSuggestion :one
-INSERT INTO mrp_planned_suggestions (plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes
+INSERT INTO mrp_planned_suggestions (order_number, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, warehouse_code, inter_factory, source_enterprise_code, auto_release, enterprise_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+WHERE NOT EXISTS (
+    SELECT 1 FROM planned_orders po
+    WHERE po.enterprise_id = $15 AND po.order_number = $1 AND po.is_active = TRUE
+)
+    RETURNING code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes, enterprise_id, order_number, warehouse_code, inter_factory, source_enterprise_code, auto_release
 `
 
 type CreateMRPPlannedSuggestionParams struct {
-	PlanCode       int64
-	ItemCode       int64
-	Quantity       pgtype.Numeric
-	NeedDate       pgtype.Date
-	StartDate      pgtype.Date
-	OrderType      string
-	DemandType     string
-	ParentItemCode *int64
-	Llc            int32
+	OrderNumber          *int64
+	PlanCode             int64
+	ItemCode             int64
+	Quantity             pgtype.Numeric
+	NeedDate             pgtype.Date
+	StartDate            pgtype.Date
+	OrderType            string
+	DemandType           string
+	ParentItemCode       *int64
+	Llc                  int32
+	WarehouseCode        *int64
+	InterFactory         bool
+	SourceEnterpriseCode *int64
+	AutoRelease          bool
+	EnterpriseID         *int64
 }
 
 func (q *Queries) CreateMRPPlannedSuggestion(ctx context.Context, arg CreateMRPPlannedSuggestionParams) (MrpPlannedSuggestion, error) {
 	row := q.db.QueryRow(ctx, createMRPPlannedSuggestion,
+		arg.OrderNumber,
 		arg.PlanCode,
 		arg.ItemCode,
 		arg.Quantity,
@@ -132,6 +191,11 @@ func (q *Queries) CreateMRPPlannedSuggestion(ctx context.Context, arg CreateMRPP
 		arg.DemandType,
 		arg.ParentItemCode,
 		arg.Llc,
+		arg.WarehouseCode,
+		arg.InterFactory,
+		arg.SourceEnterpriseCode,
+		arg.AutoRelease,
+		arg.EnterpriseID,
 	)
 	var i MrpPlannedSuggestion
 	err := row.Scan(
@@ -147,14 +211,51 @@ func (q *Queries) CreateMRPPlannedSuggestion(ctx context.Context, arg CreateMRPP
 		&i.Llc,
 		&i.CreatedAt,
 		&i.Notes,
+		&i.EnterpriseID,
+		&i.OrderNumber,
+		&i.WarehouseCode,
+		&i.InterFactory,
+		&i.SourceEnterpriseCode,
+		&i.AutoRelease,
 	)
 	return i, err
 }
 
+const createMRPProfileDetail = `-- name: CreateMRPProfileDetail :exec
+INSERT INTO mrp_profile_details
+    (enterprise_id, plan_code, item_code, need_date, detail_type, source_code, parent_item_code, quantity)
+VALUES ($8, $1, $2, $3, $4, $5, $6, $7)
+`
+
+type CreateMRPProfileDetailParams struct {
+	PlanCode       int64
+	ItemCode       int64
+	NeedDate       pgtype.Date
+	DetailType     string
+	SourceCode     *int64
+	ParentItemCode *int64
+	Quantity       pgtype.Numeric
+	EnterpriseID   int64
+}
+
+func (q *Queries) CreateMRPProfileDetail(ctx context.Context, arg CreateMRPProfileDetailParams) error {
+	_, err := q.db.Exec(ctx, createMRPProfileDetail,
+		arg.PlanCode,
+		arg.ItemCode,
+		arg.NeedDate,
+		arg.DetailType,
+		arg.SourceCode,
+		arg.ParentItemCode,
+		arg.Quantity,
+		arg.EnterpriseID,
+	)
+	return err
+}
+
 const createSalesOrderDemand = `-- name: CreateSalesOrderDemand :one
-INSERT INTO sales_order_demands (sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code
+INSERT INTO sales_order_demands (sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code, enterprise_id
 `
 
 type CreateSalesOrderDemandParams struct {
@@ -166,6 +267,7 @@ type CreateSalesOrderDemandParams struct {
 	DeliveryDate   pgtype.Date
 	DivisionCode   *int64
 	Status         string
+	EnterpriseID   *int64
 }
 
 func (q *Queries) CreateSalesOrderDemand(ctx context.Context, arg CreateSalesOrderDemandParams) (SalesOrderDemand, error) {
@@ -178,6 +280,7 @@ func (q *Queries) CreateSalesOrderDemand(ctx context.Context, arg CreateSalesOrd
 		arg.DeliveryDate,
 		arg.DivisionCode,
 		arg.Status,
+		arg.EnterpriseID,
 	)
 	var i SalesOrderDemand
 	err := row.Scan(
@@ -194,14 +297,15 @@ func (q *Queries) CreateSalesOrderDemand(ctx context.Context, arg CreateSalesOrd
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createStockSnapshot = `-- name: CreateStockSnapshot :one
-INSERT INTO stock_snapshots (item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date)
-VALUES ($1, $2, $3, $4, $5, NOW())
-    RETURNING id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at, maximum_stock, min_max_active
+INSERT INTO stock_snapshots (item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+    RETURNING id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at, maximum_stock, min_max_active, enterprise_id
 `
 
 type CreateStockSnapshotParams struct {
@@ -210,6 +314,7 @@ type CreateStockSnapshotParams struct {
 	Quantity      pgtype.Numeric
 	ReservedQty   pgtype.Numeric
 	SafetyStock   pgtype.Numeric
+	EnterpriseID  *int64
 }
 
 func (q *Queries) CreateStockSnapshot(ctx context.Context, arg CreateStockSnapshotParams) (StockSnapshot, error) {
@@ -219,6 +324,7 @@ func (q *Queries) CreateStockSnapshot(ctx context.Context, arg CreateStockSnapsh
 		arg.Quantity,
 		arg.ReservedQty,
 		arg.SafetyStock,
+		arg.EnterpriseID,
 	)
 	var i StockSnapshot
 	err := row.Scan(
@@ -232,34 +338,78 @@ func (q *Queries) CreateStockSnapshot(ctx context.Context, arg CreateStockSnapsh
 		&i.CreatedAt,
 		&i.MaximumStock,
 		&i.MinMaxActive,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteConfiguredItemRule = `-- name: DeleteConfiguredItemRule :exec
-UPDATE configured_item_rules SET is_active = FALSE, updated_at = NOW() WHERE code = $1
+UPDATE configured_item_rules SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteConfiguredItemRule(ctx context.Context, code pgtype.Int8) error {
-	_, err := q.db.Exec(ctx, deleteConfiguredItemRule, code)
+type DeleteConfiguredItemRuleParams struct {
+	Code         pgtype.Int8
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteConfiguredItemRule(ctx context.Context, arg DeleteConfiguredItemRuleParams) error {
+	_, err := q.db.Exec(ctx, deleteConfiguredItemRule, arg.Code, arg.EnterpriseID)
+	return err
+}
+
+const deleteMRPExceptionMessages = `-- name: DeleteMRPExceptionMessages :exec
+DELETE FROM mrp_exception_messages WHERE plan_code = $1 AND enterprise_id = $2
+`
+
+type DeleteMRPExceptionMessagesParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteMRPExceptionMessages(ctx context.Context, arg DeleteMRPExceptionMessagesParams) error {
+	_, err := q.db.Exec(ctx, deleteMRPExceptionMessages, arg.PlanCode, arg.EnterpriseID)
 	return err
 }
 
 const deleteMRPPlannedSuggestions = `-- name: DeleteMRPPlannedSuggestions :exec
-DELETE FROM mrp_planned_suggestions WHERE plan_code = $1
+DELETE FROM mrp_planned_suggestions WHERE plan_code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteMRPPlannedSuggestions(ctx context.Context, planCode int64) error {
-	_, err := q.db.Exec(ctx, deleteMRPPlannedSuggestions, planCode)
+type DeleteMRPPlannedSuggestionsParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteMRPPlannedSuggestions(ctx context.Context, arg DeleteMRPPlannedSuggestionsParams) error {
+	_, err := q.db.Exec(ctx, deleteMRPPlannedSuggestions, arg.PlanCode, arg.EnterpriseID)
+	return err
+}
+
+const deleteMRPProfileDetailsByPlan = `-- name: DeleteMRPProfileDetailsByPlan :exec
+DELETE FROM mrp_profile_details WHERE plan_code = $1 AND enterprise_id = $2
+`
+
+type DeleteMRPProfileDetailsByPlanParams struct {
+	PlanCode     int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteMRPProfileDetailsByPlan(ctx context.Context, arg DeleteMRPProfileDetailsByPlanParams) error {
+	_, err := q.db.Exec(ctx, deleteMRPProfileDetailsByPlan, arg.PlanCode, arg.EnterpriseID)
 	return err
 }
 
 const deleteProfilesByPlan = `-- name: DeleteProfilesByPlan :exec
-DELETE FROM mrp_item_profiles WHERE plan_code = $1
+DELETE FROM mrp_item_profiles WHERE plan_code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteProfilesByPlan(ctx context.Context, planCode int64) error {
-	_, err := q.db.Exec(ctx, deleteProfilesByPlan, planCode)
+type DeleteProfilesByPlanParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteProfilesByPlan(ctx context.Context, arg DeleteProfilesByPlanParams) error {
+	_, err := q.db.Exec(ctx, deleteProfilesByPlan, arg.PlanCode, arg.EnterpriseID)
 	return err
 }
 
@@ -270,16 +420,17 @@ SET finished_at = NOW(),
     errors = $2,
     total_items = $3,
     total_orders = $4
-WHERE code = $5
-    RETURNING id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code
+WHERE code = $5 AND enterprise_id = $6
+    RETURNING id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code, enterprise_id
 `
 
 type FinishMRPCalculationParams struct {
-	Status      string
-	Errors      []byte
-	TotalItems  int32
-	TotalOrders int32
-	Code        pgtype.Int8
+	Status       string
+	Errors       []byte
+	TotalItems   int32
+	TotalOrders  int32
+	Code         pgtype.Int8
+	EnterpriseID *int64
 }
 
 func (q *Queries) FinishMRPCalculation(ctx context.Context, arg FinishMRPCalculationParams) (MrpCalculationLog, error) {
@@ -289,6 +440,7 @@ func (q *Queries) FinishMRPCalculation(ctx context.Context, arg FinishMRPCalcula
 		arg.TotalItems,
 		arg.TotalOrders,
 		arg.Code,
+		arg.EnterpriseID,
 	)
 	var i MrpCalculationLog
 	err := row.Scan(
@@ -302,16 +454,22 @@ func (q *Queries) FinishMRPCalculation(ctx context.Context, arg FinishMRPCalcula
 		&i.TotalOrders,
 		&i.CreatedAt,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getConfiguredItemRules = `-- name: GetConfiguredItemRules :many
-SELECT id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code FROM configured_item_rules WHERE item_code = $1 AND is_active = TRUE ORDER BY sequence
+SELECT id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id FROM configured_item_rules WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY sequence
 `
 
-func (q *Queries) GetConfiguredItemRules(ctx context.Context, itemCode int64) ([]ConfiguredItemRule, error) {
-	rows, err := q.db.Query(ctx, getConfiguredItemRules, itemCode)
+type GetConfiguredItemRulesParams struct {
+	ItemCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetConfiguredItemRules(ctx context.Context, arg GetConfiguredItemRulesParams) ([]ConfiguredItemRule, error) {
+	rows, err := q.db.Query(ctx, getConfiguredItemRules, arg.ItemCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +490,7 @@ func (q *Queries) GetConfiguredItemRules(ctx context.Context, itemCode int64) ([
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.Code,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -344,11 +503,16 @@ func (q *Queries) GetConfiguredItemRules(ctx context.Context, itemCode int64) ([
 }
 
 const getMRPCalculationLog = `-- name: GetMRPCalculationLog :one
-SELECT id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code FROM mrp_calculation_logs WHERE code = $1
+SELECT id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code, enterprise_id FROM mrp_calculation_logs WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetMRPCalculationLog(ctx context.Context, code pgtype.Int8) (MrpCalculationLog, error) {
-	row := q.db.QueryRow(ctx, getMRPCalculationLog, code)
+type GetMRPCalculationLogParams struct {
+	Code         pgtype.Int8
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetMRPCalculationLog(ctx context.Context, arg GetMRPCalculationLogParams) (MrpCalculationLog, error) {
+	row := q.db.QueryRow(ctx, getMRPCalculationLog, arg.Code, arg.EnterpriseID)
 	var i MrpCalculationLog
 	err := row.Scan(
 		&i.ID,
@@ -361,21 +525,23 @@ func (q *Queries) GetMRPCalculationLog(ctx context.Context, code pgtype.Int8) (M
 		&i.TotalOrders,
 		&i.CreatedAt,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getMRPItemProfiles = `-- name: GetMRPItemProfiles :many
-SELECT id, item_code, plan_code, calculation_date, demand, orders_planned, orders_firm, stock_projected, llc, need_date, created_at, code FROM mrp_item_profiles WHERE item_code = $1 AND plan_code = $2 ORDER BY need_date
+SELECT id, item_code, plan_code, calculation_date, demand, orders_planned, orders_firm, stock_projected, llc, need_date, created_at, code, enterprise_id FROM mrp_item_profiles WHERE item_code = $1 AND plan_code = $2 AND enterprise_id = $3 ORDER BY need_date
 `
 
 type GetMRPItemProfilesParams struct {
-	ItemCode int64
-	PlanCode int64
+	ItemCode     int64
+	PlanCode     int64
+	EnterpriseID *int64
 }
 
 func (q *Queries) GetMRPItemProfiles(ctx context.Context, arg GetMRPItemProfilesParams) ([]MrpItemProfile, error) {
-	rows, err := q.db.Query(ctx, getMRPItemProfiles, arg.ItemCode, arg.PlanCode)
+	rows, err := q.db.Query(ctx, getMRPItemProfiles, arg.ItemCode, arg.PlanCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -396,6 +562,7 @@ func (q *Queries) GetMRPItemProfiles(ctx context.Context, arg GetMRPItemProfiles
 			&i.NeedDate,
 			&i.CreatedAt,
 			&i.Code,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -408,11 +575,16 @@ func (q *Queries) GetMRPItemProfiles(ctx context.Context, arg GetMRPItemProfiles
 }
 
 const getSalesOrderDemandByCode = `-- name: GetSalesOrderDemandByCode :one
-SELECT id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code FROM sales_order_demands WHERE code = $1
+SELECT id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code, enterprise_id FROM sales_order_demands WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetSalesOrderDemandByCode(ctx context.Context, code pgtype.Int8) (SalesOrderDemand, error) {
-	row := q.db.QueryRow(ctx, getSalesOrderDemandByCode, code)
+type GetSalesOrderDemandByCodeParams struct {
+	Code         pgtype.Int8
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetSalesOrderDemandByCode(ctx context.Context, arg GetSalesOrderDemandByCodeParams) (SalesOrderDemand, error) {
+	row := q.db.QueryRow(ctx, getSalesOrderDemandByCode, arg.Code, arg.EnterpriseID)
 	var i SalesOrderDemand
 	err := row.Scan(
 		&i.ID,
@@ -428,16 +600,22 @@ func (q *Queries) GetSalesOrderDemandByCode(ctx context.Context, code pgtype.Int
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getStockSnapshot = `-- name: GetStockSnapshot :one
-SELECT id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at, maximum_stock, min_max_active FROM stock_snapshots WHERE item_code = $1 ORDER BY snapshot_date DESC LIMIT 1
+SELECT id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at, maximum_stock, min_max_active, enterprise_id FROM stock_snapshots WHERE item_code = $1 AND enterprise_id = $2 ORDER BY snapshot_date DESC LIMIT 1
 `
 
-func (q *Queries) GetStockSnapshot(ctx context.Context, itemCode int64) (StockSnapshot, error) {
-	row := q.db.QueryRow(ctx, getStockSnapshot, itemCode)
+type GetStockSnapshotParams struct {
+	ItemCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetStockSnapshot(ctx context.Context, arg GetStockSnapshotParams) (StockSnapshot, error) {
+	row := q.db.QueryRow(ctx, getStockSnapshot, arg.ItemCode, arg.EnterpriseID)
 	var i StockSnapshot
 	err := row.Scan(
 		&i.ID,
@@ -450,16 +628,101 @@ func (q *Queries) GetStockSnapshot(ctx context.Context, itemCode int64) (StockSn
 		&i.CreatedAt,
 		&i.MaximumStock,
 		&i.MinMaxActive,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
-const listMRPCalculationLogsByPlan = `-- name: ListMRPCalculationLogsByPlan :many
-SELECT id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code FROM mrp_calculation_logs WHERE plan_code = $1 ORDER BY started_at DESC
+const listAllActiveConfiguredRules = `-- name: ListAllActiveConfiguredRules :many
+SELECT id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id FROM configured_item_rules
+WHERE enterprise_id = $1 AND is_active = TRUE
+ORDER BY item_code, sequence
 `
 
-func (q *Queries) ListMRPCalculationLogsByPlan(ctx context.Context, planCode int64) ([]MrpCalculationLog, error) {
-	rows, err := q.db.Query(ctx, listMRPCalculationLogsByPlan, planCode)
+func (q *Queries) ListAllActiveConfiguredRules(ctx context.Context, enterpriseID *int64) ([]ConfiguredItemRule, error) {
+	rows, err := q.db.Query(ctx, listAllActiveConfiguredRules, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ConfiguredItemRule
+	for rows.Next() {
+		var i ConfiguredItemRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemCode,
+			&i.TableType,
+			&i.FieldName,
+			&i.RuleType,
+			&i.RuleValue,
+			&i.Sequence,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.Code,
+			&i.EnterpriseID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestStockSnapshots = `-- name: ListLatestStockSnapshots :many
+SELECT DISTINCT ON (item_code) id, item_code, warehouse_code, quantity, reserved_qty, safety_stock, snapshot_date, created_at, maximum_stock, min_max_active, enterprise_id
+FROM stock_snapshots
+WHERE enterprise_id = $1
+ORDER BY item_code, snapshot_date DESC
+`
+
+func (q *Queries) ListLatestStockSnapshots(ctx context.Context, enterpriseID *int64) ([]StockSnapshot, error) {
+	rows, err := q.db.Query(ctx, listLatestStockSnapshots, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StockSnapshot
+	for rows.Next() {
+		var i StockSnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemCode,
+			&i.WarehouseCode,
+			&i.Quantity,
+			&i.ReservedQty,
+			&i.SafetyStock,
+			&i.SnapshotDate,
+			&i.CreatedAt,
+			&i.MaximumStock,
+			&i.MinMaxActive,
+			&i.EnterpriseID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMRPCalculationLogsByPlan = `-- name: ListMRPCalculationLogsByPlan :many
+SELECT id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code, enterprise_id FROM mrp_calculation_logs WHERE plan_code = $1 AND enterprise_id = $2 ORDER BY started_at DESC
+`
+
+type ListMRPCalculationLogsByPlanParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListMRPCalculationLogsByPlan(ctx context.Context, arg ListMRPCalculationLogsByPlanParams) ([]MrpCalculationLog, error) {
+	rows, err := q.db.Query(ctx, listMRPCalculationLogsByPlan, arg.PlanCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -478,6 +741,48 @@ func (q *Queries) ListMRPCalculationLogsByPlan(ctx context.Context, planCode int
 			&i.TotalOrders,
 			&i.CreatedAt,
 			&i.Code,
+			&i.EnterpriseID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMRPExceptionMessages = `-- name: ListMRPExceptionMessages :many
+SELECT code, plan_code, item_code, message_type, source_code, source_type, description, created_at, enterprise_id FROM mrp_exception_messages
+WHERE plan_code = $1 AND enterprise_id = $2
+ORDER BY item_code, code
+`
+
+type ListMRPExceptionMessagesParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListMRPExceptionMessages(ctx context.Context, arg ListMRPExceptionMessagesParams) ([]MrpExceptionMessage, error) {
+	rows, err := q.db.Query(ctx, listMRPExceptionMessages, arg.PlanCode, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MrpExceptionMessage
+	for rows.Next() {
+		var i MrpExceptionMessage
+		if err := rows.Scan(
+			&i.Code,
+			&i.PlanCode,
+			&i.ItemCode,
+			&i.MessageType,
+			&i.SourceCode,
+			&i.SourceType,
+			&i.Description,
+			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -490,11 +795,16 @@ func (q *Queries) ListMRPCalculationLogsByPlan(ctx context.Context, planCode int
 }
 
 const listMRPPlannedSuggestions = `-- name: ListMRPPlannedSuggestions :many
-SELECT code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes FROM mrp_planned_suggestions WHERE plan_code = $1 ORDER BY llc, need_date
+SELECT code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes, enterprise_id, order_number, warehouse_code, inter_factory, source_enterprise_code, auto_release FROM mrp_planned_suggestions WHERE plan_code = $1 AND enterprise_id = $2 ORDER BY llc, need_date
 `
 
-func (q *Queries) ListMRPPlannedSuggestions(ctx context.Context, planCode int64) ([]MrpPlannedSuggestion, error) {
-	rows, err := q.db.Query(ctx, listMRPPlannedSuggestions, planCode)
+type ListMRPPlannedSuggestionsParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListMRPPlannedSuggestions(ctx context.Context, arg ListMRPPlannedSuggestionsParams) ([]MrpPlannedSuggestion, error) {
+	rows, err := q.db.Query(ctx, listMRPPlannedSuggestions, arg.PlanCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -515,6 +825,12 @@ func (q *Queries) ListMRPPlannedSuggestions(ctx context.Context, planCode int64)
 			&i.Llc,
 			&i.CreatedAt,
 			&i.Notes,
+			&i.EnterpriseID,
+			&i.OrderNumber,
+			&i.WarehouseCode,
+			&i.InterFactory,
+			&i.SourceEnterpriseCode,
+			&i.AutoRelease,
 		); err != nil {
 			return nil, err
 		}
@@ -527,11 +843,16 @@ func (q *Queries) ListMRPPlannedSuggestions(ctx context.Context, planCode int64)
 }
 
 const listSalesOrderDemandsByItem = `-- name: ListSalesOrderDemandsByItem :many
-SELECT id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code FROM sales_order_demands WHERE item_code = $1 AND is_active = TRUE ORDER BY delivery_date
+SELECT id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code, enterprise_id FROM sales_order_demands WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY delivery_date
 `
 
-func (q *Queries) ListSalesOrderDemandsByItem(ctx context.Context, itemCode int64) ([]SalesOrderDemand, error) {
-	rows, err := q.db.Query(ctx, listSalesOrderDemandsByItem, itemCode)
+type ListSalesOrderDemandsByItemParams struct {
+	ItemCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListSalesOrderDemandsByItem(ctx context.Context, arg ListSalesOrderDemandsByItemParams) ([]SalesOrderDemand, error) {
+	rows, err := q.db.Query(ctx, listSalesOrderDemandsByItem, arg.ItemCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -553,6 +874,7 @@ func (q *Queries) ListSalesOrderDemandsByItem(ctx context.Context, itemCode int6
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Code,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -565,13 +887,18 @@ func (q *Queries) ListSalesOrderDemandsByItem(ctx context.Context, itemCode int6
 }
 
 const startMRPCalculation = `-- name: StartMRPCalculation :one
-INSERT INTO mrp_calculation_logs (plan_code, status, started_at)
-VALUES ($1, 'RUNNING', NOW())
-    RETURNING id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code
+INSERT INTO mrp_calculation_logs (plan_code, status, started_at, enterprise_id)
+VALUES ($1, 'RUNNING', NOW(), $2)
+    RETURNING id, plan_code, started_at, finished_at, status, errors, total_items, total_orders, created_at, code, enterprise_id
 `
 
-func (q *Queries) StartMRPCalculation(ctx context.Context, planCode int64) (MrpCalculationLog, error) {
-	row := q.db.QueryRow(ctx, startMRPCalculation, planCode)
+type StartMRPCalculationParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) StartMRPCalculation(ctx context.Context, arg StartMRPCalculationParams) (MrpCalculationLog, error) {
+	row := q.db.QueryRow(ctx, startMRPCalculation, arg.PlanCode, arg.EnterpriseID)
 	var i MrpCalculationLog
 	err := row.Scan(
 		&i.ID,
@@ -584,22 +911,48 @@ func (q *Queries) StartMRPCalculation(ctx context.Context, planCode int64) (MrpC
 		&i.TotalOrders,
 		&i.CreatedAt,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
+const updateItemPlanningLLCs = `-- name: UpdateItemPlanningLLCs :exec
+UPDATE items i
+SET planning_llc = levels.llc
+FROM unnest($1::bigint[]) WITH ORDINALITY AS codes(item_code, position)
+JOIN unnest($2::integer[]) WITH ORDINALITY AS levels(llc, position)
+  USING (position)
+WHERE i.id = codes.item_code
+`
+
+type UpdateItemPlanningLLCsParams struct {
+	ItemCodes []int64
+	Llcs      []int32
+}
+
+func (q *Queries) UpdateItemPlanningLLCs(ctx context.Context, arg UpdateItemPlanningLLCsParams) error {
+	_, err := q.db.Exec(ctx, updateItemPlanningLLCs, arg.ItemCodes, arg.Llcs)
+	return err
+}
+
 const updateSalesOrderDemandStatus = `-- name: UpdateSalesOrderDemandStatus :one
-UPDATE sales_order_demands SET status = $1, delivered_qty = $2, updated_at = NOW() WHERE code = $3 RETURNING id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code
+UPDATE sales_order_demands SET status = $1, delivered_qty = $2, updated_at = NOW() WHERE code = $3 AND enterprise_id = $4 RETURNING id, sales_order_code, item_code, mask, quantity, delivered_qty, delivery_date, division_code, status, is_active, created_at, updated_at, code, enterprise_id
 `
 
 type UpdateSalesOrderDemandStatusParams struct {
 	Status       string
 	DeliveredQty pgtype.Numeric
 	Code         pgtype.Int8
+	EnterpriseID *int64
 }
 
 func (q *Queries) UpdateSalesOrderDemandStatus(ctx context.Context, arg UpdateSalesOrderDemandStatusParams) (SalesOrderDemand, error) {
-	row := q.db.QueryRow(ctx, updateSalesOrderDemandStatus, arg.Status, arg.DeliveredQty, arg.Code)
+	row := q.db.QueryRow(ctx, updateSalesOrderDemandStatus,
+		arg.Status,
+		arg.DeliveredQty,
+		arg.Code,
+		arg.EnterpriseID,
+	)
 	var i SalesOrderDemand
 	err := row.Scan(
 		&i.ID,
@@ -615,6 +968,7 @@ func (q *Queries) UpdateSalesOrderDemandStatus(ctx context.Context, arg UpdateSa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Code,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

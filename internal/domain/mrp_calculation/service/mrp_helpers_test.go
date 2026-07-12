@@ -1,14 +1,59 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
+	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 )
+
+type numberedSuggestionRepo struct {
+	mrprepo.MRPCalculationRepository
+	created *entity.PlannedOrderSuggestion
+}
+
+func (r *numberedSuggestionRepo) CreatePlannedOrderSuggestion(_ context.Context, suggestion *entity.PlannedOrderSuggestion) (*entity.PlannedOrderSuggestion, error) {
+	r.created = suggestion
+	return suggestion, nil
+}
+
+func TestCreateNumberedSuggestionAdvancesSequence(t *testing.T) {
+	repo := &numberedSuggestionRepo{}
+	service := &MRPServiceImpl{MRPRepo: repo}
+	next := int64(500)
+	created, err := service.createNumberedSuggestion(context.Background(), &entity.PlannedOrderSuggestion{}, &next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.OrderNumber == nil || *created.OrderNumber != 500 || next != 501 {
+		t.Fatalf("unexpected numbering: suggestion=%v next=%d", created.OrderNumber, next)
+	}
+}
+
+func TestTechnicalAssistanceRequiresBothParamsAndWarehouse(t *testing.T) {
+	warehouse := int64(8)
+	input := &entity.MRPInput{DemandType: "SALES_ORDER", TechnicalAssistance: true, WarehouseCode: &warehouse}
+	params := &entity.TypedPlanningParams{TrataAssistenciaTecnica: true, ObrigarControleEstoqueTerceiros: true}
+	if !shouldPlanTechnicalAssistance(input, params) {
+		t.Fatal("expected eligible sales-order demand to generate technical assistance")
+	}
+	params.ObrigarControleEstoqueTerceiros = false
+	if shouldPlanTechnicalAssistance(input, params) {
+		t.Fatal("parameter 45 must be required")
+	}
+	params.ObrigarControleEstoqueTerceiros = true
+	input.ParentItemCode = ptrInt64(1)
+	if shouldPlanTechnicalAssistance(input, params) {
+		t.Fatal("dependent BOM demand must not generate technical assistance")
+	}
+}
+
+func ptrInt64(value int64) *int64 { return &value }
 
 func TestApplyLossFormula(t *testing.T) {
 	cases := []struct {
@@ -91,20 +136,49 @@ func TestAggregateInputs(t *testing.T) {
 	early := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)
 	inputs := []*entity.MRPInput{
-		{ItemCode: 1, Mask: "", Quantity: 5, NeedDate: late},
-		{ItemCode: 1, Mask: "", Quantity: 3, NeedDate: early}, // same item+mask → merge, keep earliest
+		{ItemCode: 1, Mask: "", Quantity: 5, NeedDate: early},
+		{ItemCode: 1, Mask: "", Quantity: 3, NeedDate: early},
+		{ItemCode: 1, Mask: "", Quantity: 4, NeedDate: late},
 		{ItemCode: 2, Mask: "X", Quantity: 7, NeedDate: late},
 	}
-	out := aggregateInputs(inputs)
-	if len(out) != 2 {
-		t.Fatalf("expected 2 aggregated rows, got %d", len(out))
+	out := aggregateInputs(inputs, true)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 rows grouped by date, got %d", len(out))
 	}
-	// sorted by need date → item 1 (early) first.
 	if out[0].ItemCode != 1 || out[0].Quantity != 8 {
 		t.Errorf("item1 aggregate = %+v, want qty 8", out[0])
 	}
-	if !out[0].NeedDate.Equal(early) {
-		t.Errorf("item1 need date = %v, want earliest %v", out[0].NeedDate, early)
+
+	ungrouped := aggregateInputs(inputs, false)
+	if len(ungrouped) != len(inputs) {
+		t.Fatalf("disabled grouping must preserve %d demands, got %d", len(inputs), len(ungrouped))
+	}
+	if ungrouped[0] == inputs[0] {
+		t.Fatal("aggregation helper must not mutate caller inputs")
+	}
+}
+
+func TestAggregateInputsSeparatesTechnicalAssistanceWarehouses(t *testing.T) {
+	date := time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)
+	warehouseA, warehouseB := int64(10), int64(20)
+	inputs := []*entity.MRPInput{
+		{ItemCode: 1, Quantity: 2, NeedDate: date, TechnicalAssistance: true, WarehouseCode: &warehouseA},
+		{ItemCode: 1, Quantity: 3, NeedDate: date, TechnicalAssistance: true, WarehouseCode: &warehouseB},
+	}
+	if grouped := aggregateInputs(inputs, true); len(grouped) != 2 {
+		t.Fatalf("technical-assistance warehouses must remain separate, got %#v", grouped)
+	}
+}
+
+func TestAggregateInputsSeparatesInterFactorySources(t *testing.T) {
+	date := time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)
+	sourceA, sourceB := int64(10), int64(20)
+	inputs := []*entity.MRPInput{
+		{ItemCode: 1, Quantity: 2, NeedDate: date, InterFactory: true, SourceEnterpriseCode: &sourceA},
+		{ItemCode: 1, Quantity: 3, NeedDate: date, InterFactory: true, SourceEnterpriseCode: &sourceB},
+	}
+	if grouped := aggregateInputs(inputs, true); len(grouped) != 2 {
+		t.Fatalf("inter-factory sources must remain separate, got %#v", grouped)
 	}
 }
 
@@ -122,6 +196,26 @@ func TestFirmSupplyForItem(t *testing.T) {
 	}
 	if got := firmSupplyForItem(supply, 999, need); got != 0 {
 		t.Errorf("missing item should yield 0, got %v", got)
+	}
+}
+
+func TestAdvanceNettingStateDoesNotReuseConsumedStockOrSupply(t *testing.T) {
+	need := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	snapshots := map[int64]*entity.StockSnapshot{1: {ItemCode: 1, Quantity: 10}}
+	supplies := map[int64][]ports.SupplyEntry{1: {
+		{ItemCode: 1, Quantity: 4, ArrivalDate: need},
+		{ItemCode: 1, Quantity: 9, ArrivalDate: need.AddDate(0, 0, 1)},
+	}}
+	advanceNettingState(
+		&entity.MRPInput{ItemCode: 1, NeedDate: need},
+		&entity.MRPOutput{StockProjected: -6, PlannedOrders: []*entity.PlannedOrderSuggestion{{Quantity: 6}}},
+		snapshots, supplies,
+	)
+	if snapshots[1].Quantity != 0 {
+		t.Fatalf("expected consumed projected stock, got %v", snapshots[1].Quantity)
+	}
+	if len(supplies[1]) != 1 || supplies[1][0].Quantity != 9 {
+		t.Fatalf("expected only future supply to remain, got %+v", supplies[1])
 	}
 }
 

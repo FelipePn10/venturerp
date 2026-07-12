@@ -12,9 +12,9 @@ import (
 )
 
 const createIndependentDemand = `-- name: CreateIndependentDemand :one
-INSERT INTO independent_demands (code, item_code, mask, cost_center_code, quantity, demand_date, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by
+INSERT INTO independent_demands (code, item_code, mask, cost_center_code, quantity, demand_date, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateIndependentDemandParams struct {
@@ -25,6 +25,7 @@ type CreateIndependentDemandParams struct {
 	Quantity       pgtype.Numeric
 	DemandDate     pgtype.Date
 	CreatedBy      pgtype.UUID
+	EnterpriseID   *int64
 }
 
 func (q *Queries) CreateIndependentDemand(ctx context.Context, arg CreateIndependentDemandParams) (IndependentDemand, error) {
@@ -36,6 +37,7 @@ func (q *Queries) CreateIndependentDemand(ctx context.Context, arg CreateIndepen
 		arg.Quantity,
 		arg.DemandDate,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i IndependentDemand
 	err := row.Scan(
@@ -50,25 +52,36 @@ func (q *Queries) CreateIndependentDemand(ctx context.Context, arg CreateIndepen
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteIndependentDemand = `-- name: DeleteIndependentDemand :exec
-UPDATE independent_demands SET is_active = FALSE, updated_at = NOW() WHERE code = $1
+UPDATE independent_demands SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteIndependentDemand(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteIndependentDemand, code)
+type DeleteIndependentDemandParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteIndependentDemand(ctx context.Context, arg DeleteIndependentDemandParams) error {
+	_, err := q.db.Exec(ctx, deleteIndependentDemand, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const getIndependentDemandByCode = `-- name: GetIndependentDemandByCode :one
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by FROM independent_demands WHERE code = $1
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetIndependentDemandByCode(ctx context.Context, code int64) (IndependentDemand, error) {
-	row := q.db.QueryRow(ctx, getIndependentDemandByCode, code)
+type GetIndependentDemandByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetIndependentDemandByCode(ctx context.Context, arg GetIndependentDemandByCodeParams) (IndependentDemand, error) {
+	row := q.db.QueryRow(ctx, getIndependentDemandByCode, arg.Code, arg.EnterpriseID)
 	var i IndependentDemand
 	err := row.Scan(
 		&i.ID,
@@ -82,16 +95,22 @@ func (q *Queries) GetIndependentDemandByCode(ctx context.Context, code int64) (I
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listDemandsByItem = `-- name: ListDemandsByItem :many
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by FROM independent_demands WHERE item_code = $1 AND is_active = TRUE ORDER BY demand_date
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY demand_date
 `
 
-func (q *Queries) ListDemandsByItem(ctx context.Context, itemCode int64) ([]IndependentDemand, error) {
-	rows, err := q.db.Query(ctx, listDemandsByItem, itemCode)
+type ListDemandsByItemParams struct {
+	ItemCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListDemandsByItem(ctx context.Context, arg ListDemandsByItemParams) ([]IndependentDemand, error) {
+	rows, err := q.db.Query(ctx, listDemandsByItem, arg.ItemCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +130,7 @@ func (q *Queries) ListDemandsByItem(ctx context.Context, itemCode int64) ([]Inde
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -123,11 +143,16 @@ func (q *Queries) ListDemandsByItem(ctx context.Context, itemCode int64) ([]Inde
 }
 
 const listDemandsFromDate = `-- name: ListDemandsFromDate :many
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by FROM independent_demands WHERE demand_date >= $1 AND is_active = TRUE ORDER BY demand_date
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE demand_date >= $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY demand_date
 `
 
-func (q *Queries) ListDemandsFromDate(ctx context.Context, demandDate pgtype.Date) ([]IndependentDemand, error) {
-	rows, err := q.db.Query(ctx, listDemandsFromDate, demandDate)
+type ListDemandsFromDateParams struct {
+	DemandDate   pgtype.Date
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListDemandsFromDate(ctx context.Context, arg ListDemandsFromDateParams) ([]IndependentDemand, error) {
+	rows, err := q.db.Query(ctx, listDemandsFromDate, arg.DemandDate, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +172,7 @@ func (q *Queries) ListDemandsFromDate(ctx context.Context, demandDate pgtype.Dat
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -159,11 +185,11 @@ func (q *Queries) ListDemandsFromDate(ctx context.Context, demandDate pgtype.Dat
 }
 
 const listIndependentDemands = `-- name: ListIndependentDemands :many
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by FROM independent_demands WHERE is_active = TRUE ORDER BY demand_date
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE enterprise_id = $1 AND is_active = TRUE ORDER BY demand_date
 `
 
-func (q *Queries) ListIndependentDemands(ctx context.Context) ([]IndependentDemand, error) {
-	rows, err := q.db.Query(ctx, listIndependentDemands)
+func (q *Queries) ListIndependentDemands(ctx context.Context, enterpriseID *int64) ([]IndependentDemand, error) {
+	rows, err := q.db.Query(ctx, listIndependentDemands, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +209,7 @@ func (q *Queries) ListIndependentDemands(ctx context.Context) ([]IndependentDema
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -202,8 +229,8 @@ SET item_code = $1,
     quantity = $4,
     demand_date = $5,
     updated_at = NOW()
-WHERE code = $6
-    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by
+WHERE code = $6 AND enterprise_id = $7
+    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type UpdateIndependentDemandParams struct {
@@ -213,6 +240,7 @@ type UpdateIndependentDemandParams struct {
 	Quantity       pgtype.Numeric
 	DemandDate     pgtype.Date
 	Code           int64
+	EnterpriseID   *int64
 }
 
 func (q *Queries) UpdateIndependentDemand(ctx context.Context, arg UpdateIndependentDemandParams) (IndependentDemand, error) {
@@ -223,6 +251,7 @@ func (q *Queries) UpdateIndependentDemand(ctx context.Context, arg UpdateIndepen
 		arg.Quantity,
 		arg.DemandDate,
 		arg.Code,
+		arg.EnterpriseID,
 	)
 	var i IndependentDemand
 	err := row.Scan(
@@ -237,6 +266,7 @@ func (q *Queries) UpdateIndependentDemand(ctx context.Context, arg UpdateIndepen
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

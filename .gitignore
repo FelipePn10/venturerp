@@ -25,6 +25,9 @@ backups/*.dump
 
 # Test scripts with sensitive data (tokens, CNPJs, credentials)
 scripts/*
+!scripts/test-mrp-manufacturing.sh
+!scripts/audit-mrp-manufacturing.sh
+!scripts/test-mrp-manufacturing-security.sh
 !scripts/test-comercial-*.sh
 !scripts/loadtest/
 scripts/test-e2e.sh

@@ -51,6 +51,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/maintenance_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_report_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/nfse_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
@@ -127,6 +128,7 @@ import (
 	maintenanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/maintenance"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
 	mrpCalculation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
+	mrpReportRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_report"
 	nfseRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/nfse"
 	op "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/order_priority"
 	over "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
@@ -313,7 +315,8 @@ func (app *application) mount() chi.Router {
 	listProductionPlansUC := &production_plan_uc.ListProductionPlansUseCase{Repo: productionPlanRepo, Auth: authService}
 	updateProductionPlanUC := &production_plan_uc.UpdateProductionPlanUseCase{Repo: productionPlanRepo, Auth: authService}
 	deleteProductionPlanUC := &production_plan_uc.DeleteProductionPlanUseCase{Repo: productionPlanRepo, Auth: authService}
-	productionPlanHandler := handler.NewProductionPlanHandler(createProductionPlanUC, getProductionPlanUC, listProductionPlansUC, updateProductionPlanUC, deleteProductionPlanUC)
+	interFactoryPlanUC := &production_plan_uc.ManageProductionPlanInterFactoriesUseCase{Repo: productionPlanRepo, Auth: authService}
+	productionPlanHandler := handler.NewProductionPlanHandler(createProductionPlanUC, getProductionPlanUC, listProductionPlansUC, updateProductionPlanUC, deleteProductionPlanUC, interFactoryPlanUC)
 
 	// restriction
 	restrictionR := restrictionRepo.NewRestrictionRepositorySQLC(queries)
@@ -531,19 +534,24 @@ func (app *application) mount() chi.Router {
 	plannedRepo := planned.NewPlannedOrderRepositorySQLC(queries)
 	plannedCreateUC := &planned_order_uc.CreatePlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
 	plannedListUC := &planned_order_uc.ListPlannedOrdersUseCase{Repo: plannedRepo, Auth: authService}
-	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
+	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService, Params: planningParamsRepo}
 	plannedHandler := handler.NewPlannedOrderHandler(plannedCreateUC, plannedListUC, plannedFirmUC)
 
 	// Firmer=plannedFirmUC: accepting an MRP suggestion also fires the firm step,
 	// generating the OF (production) / service requisition — one-step conversion.
 	mrpFirmarSugestaoUC := &mrp_uc.FirmarSugestaoMRPUseCase{MRPRepo: mrpRepo, PlannedRepo: plannedRepo, Auth: authService, Firmer: plannedFirmUC}
+	mrpRunUC.AutoReleaser = mrpFirmarSugestaoUC
 	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC, mrpFirmarSugestaoUC)
+	mrpReportHandler := handler.NewMRPReportHandler(&mrp_report_uc.UseCase{Reader: mrpReportRepo.New(app.db.Pool), Auth: authService})
 
 	// production order
 	prodOrderRepo := productionOrderRepo.NewProductionOrderRepositoryPGX(app.db.Pool)
 	// Firming a PRODUCTION planned order auto-creates its OF.
 	plannedFirmUC.ProdOrderRepo = prodOrderRepo
+	plannedFirmUC.ServiceLinker = prodOrderRepo
+	plannedFirmUC.ReleaseValidator = prodOrderRepo
 	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderCreateUC.Structure = itemRepoStructure
 	prodOrderGetByCodeUC := &productionOrderUc.GetProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderListUC := &productionOrderUc.ListProductionOrdersUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderStartUC := &productionOrderUc.StartProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
@@ -562,12 +570,16 @@ func (app *application) mount() chi.Router {
 	// Scrap return (sucata valorizada). StockRepo is wired below once available.
 	prodOrderReturnScrapUC := &productionOrderUc.ReturnScrapUseCase{Repo: prodOrderRepo, Auth: authService}
 	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries}
+	prodOrderOperationalUC := &productionOrderUc.OperationalConsultationUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderMaterialControlUC := &productionOrderUc.ProductionMaterialControlUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderMaintainUC := &productionOrderUc.MaintainProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderDeliveryCandidatesUC := &productionOrderUc.ListDeliveryCandidatesUseCase{Reader: prodOrderRepo, Auth: authService}
 	prodOrderHandler := handler.NewProductionOrderHandler(
 		prodOrderCreateUC, prodOrderGetByCodeUC, prodOrderListUC,
 		prodOrderStartUC, prodOrderAddAppointmentUC, prodOrderAddConsumptionUC,
 		prodOrderCompleteUC, prodOrderCloseUC, prodOrderCancelUC,
 		prodOrderGetAppointmentsUC, prodOrderGetConsumptionsUC,
-	).WithOrderOps(orderOpsUC).WithCost(prodOrderSettleCostUC, prodOrderGetCostUC).WithScrap(prodOrderReturnScrapUC)
+	).WithOrderOps(orderOpsUC).WithOperational(prodOrderOperationalUC).WithMaterialControl(prodOrderMaterialControlUC).WithMaintenance(prodOrderMaintainUC).WithDeliveryCandidates(prodOrderDeliveryCandidatesUC).WithCost(prodOrderSettleCostUC, prodOrderGetCostUC).WithScrap(prodOrderReturnScrapUC)
 
 	// supplier (created before purchase order so it can provide purchasing defaults)
 	suppRepo := supplierRepo.New(queries, app.db.Pool)
@@ -630,6 +642,7 @@ func (app *application) mount() chi.Router {
 		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC},
 		// Alçada de valores: procurementUC resolves the approval limit rule.
 		&purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC},
+		&purchase_order_uc.ConsultPurchaseOrdersUseCase{Reader: poRepo, Auth: authService},
 	)
 
 	// purchase order item with cross-module resolution (price table / UOM / IPI).
@@ -667,6 +680,7 @@ func (app *application) mount() chi.Router {
 			Preferred:        itemSupplierUC,
 			SupplierDefaults: supplierUC,
 			PriceProvider:    purchasePriceUC,
+			ServiceLinker:    prodOrderRepo,
 		},
 	)
 
@@ -761,6 +775,8 @@ func (app *application) mount() chi.Router {
 	// Production consumption/completion post stock movements automatically.
 	prodOrderAddConsumptionUC.StockRepo = stockRepository
 	prodOrderCompleteUC.StockRepo = stockRepository
+	prodOrderOperationalUC.Stock = stockRepository
+	mrpGetProfileUC.Stock = stockRepository
 	prodOrderCompleteUC.Structure = itemRepoStructure // recebe co-produtos/sucata no fecho da OF
 	// Scrap return posts a valued IN movement of the scrap by-product.
 	prodOrderReturnScrapUC.StockRepo = stockRepository
@@ -1151,6 +1167,7 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/mrp-calculation", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/run", mrpHandler.Run)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/profile/{item_code}/{plan_code}", mrpHandler.GetProfile)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/profile/{item_code}/{plan_code}/operational", mrpHandler.ConsultProfile)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/configured-rules", mrpHandler.CreateConfiguredRule)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/configured-rules/{item_code}", mrpHandler.ListConfiguredRules)
 			// MRP suggestion bridge: list suggestions for a plan, firm one into planned_orders
@@ -1177,11 +1194,16 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", plannedHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", plannedHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/firm", plannedHandler.Firm)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transition", plannedHandler.Transition)
 		})
 		r.Route("/api/production-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", prodOrderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", prodOrderHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/maintenance", prodOrderHandler.Maintenance)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/delivery-candidates", prodOrderHandler.DeliveryCandidates)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", prodOrderHandler.GetByCode)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", prodOrderHandler.Maintain)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/operational", prodOrderHandler.Operational)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/start", prodOrderHandler.Start)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/appointment", prodOrderHandler.AddAppointment)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consumption", prodOrderHandler.AddConsumption)
@@ -1196,6 +1218,27 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/explode", prodOrderHandler.ExplodeRoute)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/operations", prodOrderHandler.ListOrderOperations)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/advance", prodOrderHandler.AdvanceOperation)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/materials", prodOrderHandler.ListMaterials)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials", prodOrderHandler.AddMaterial)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials/replace", prodOrderHandler.ReplaceMaterial)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/materials/{materialID}", prodOrderHandler.DeleteMaterial)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials/lots", prodOrderHandler.AllocateLots)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials/lots/batch", prodOrderHandler.AllocateLotsBatch)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/scrap-destinations", prodOrderHandler.AddScrapDestination)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/scrap-destinations/{destinationID}", prodOrderHandler.UpdateScrapDestination)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/scrap-destinations/{destinationID}", prodOrderHandler.DeleteScrapDestination)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/wms-settings", prodOrderHandler.ConfigureWMS)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/manufacturing-stock-settings", prodOrderHandler.ConfigureManufacturingStock)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/manufacturing-item-stock-settings", prodOrderHandler.ConfigureManufacturingItemStock)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/warehouse-addresses", prodOrderHandler.ConfigureWarehouseAddress)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/temporary-lot", prodOrderHandler.ConfigureTemporaryLot)
+		})
+		r.Route("/api/mrp-reports", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/profile", mrpReportHandler.Profile)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/availability", mrpReportHandler.Availability)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/grouped-needs", mrpReportHandler.GroupedNeeds)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/explosion/{itemCode}", mrpReportHandler.Explosion)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/reorder-point", mrpReportHandler.ReorderPoint)
 		})
 		// Configurador antigo (`questions`) REMOVIDO — substituído por /api/configurator.
 		// BOM header (versão/status/tipo) — as linhas da estrutura ficam em /api/items/structure.
@@ -1251,6 +1294,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", productionPlanHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", productionPlanHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", productionPlanHandler.Delete)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/inter-factories", productionPlanHandler.ListInterFactories)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/inter-factories", productionPlanHandler.ReplaceInterFactories)
 		})
 		r.Route("/api/restriction", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", restrictionHandler.Create)
@@ -1424,6 +1469,8 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/purchase-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", purchaseOrderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", purchaseOrderHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consultation", purchaseOrderHandler.Consult)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/attachments/{attachmentID}/download", purchaseOrderHandler.DownloadAttachment)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", purchaseOrderHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", purchaseOrderHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/cancel", purchaseOrderHandler.Cancel)
@@ -1899,6 +1946,10 @@ func (app *application) mount() chi.Router {
 			r.With(adminUser).Post("/{id}/characteristics", drawingHandler.AddCharacteristic)
 			r.With(adminUser).Get("/{id}/characteristics", drawingHandler.ListCharacteristics)
 			r.With(adminUser).Delete("/characteristics/{charLinkId}", drawingHandler.DeleteCharacteristic)
+			r.With(adminUser).Put("/item-code", drawingHandler.MaintainItemDrawingCode)
+			r.With(adminUser).Get("/item-code/{itemCode}", drawingHandler.GetItemDrawingCode)
+			r.With(adminUser).Get("/manufacturing-parameters", drawingHandler.GetManufacturingParameters)
+			r.With(adminUser).Put("/manufacturing-parameters", drawingHandler.UpdateManufacturingParameters)
 		})
 		// Cadastro de Máscara de Lotes/Séries + geração automática de código de lote.
 		r.Route("/api/lot-masks", func(r chi.Router) {

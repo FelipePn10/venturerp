@@ -2,6 +2,7 @@ package mrp_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,6 +21,9 @@ import (
 // (OF) and/or service requisition. FirmPlannedOrderUseCase satisfies it.
 type orderFirmer interface {
 	Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error)
+}
+type orderTransitioner interface {
+	ExecuteTransition(context.Context, request.TransitionPlannedOrderDTO) ([]*response.PlannedOrderResponse, error)
 }
 
 // mapMRPOrderType converts the MRP service's internal order type strings
@@ -52,6 +56,8 @@ func mapMRPDemandType(mrpDemand string) types.DemandType {
 		return types.DemandSalesOrder
 	case "SAFETY_STOCK":
 		return types.DemandSafetyStock
+	case "INTER_FACTORY":
+		return types.DemandSalesOrder
 	default:
 		return types.DemandIndependent
 	}
@@ -86,6 +92,10 @@ type FirmarSugestaoMRPResponse struct {
 }
 
 func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode int64) (*FirmarSugestaoMRPResponse, error) {
+	return uc.execute(ctx, suggestionCode, true)
+}
+
+func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode int64, firm bool) (*FirmarSugestaoMRPResponse, error) {
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -94,25 +104,38 @@ func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode 
 	if err != nil {
 		return nil, fmt.Errorf("suggestion %d not found: %w", suggestionCode, err)
 	}
+	if existing, existingErr := uc.PlannedRepo.GetByMRPSuggestionCode(ctx, suggestionCode); existingErr == nil {
+		return suggestionResponse(sugg.Code, existing), nil
+	}
 
-	nextNum, err := uc.PlannedRepo.GetNextOrderNumber(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting next order number: %w", err)
+	var nextNum int64
+	if sugg.OrderNumber != nil {
+		nextNum = *sugg.OrderNumber
+	} else {
+		nextNum, err = uc.PlannedRepo.GetNextOrderNumber(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("getting next order number: %w", err)
+		}
 	}
 
 	userID, _ := uc.Auth.UserID(ctx)
 
 	order := &plannedentity.PlannedOrder{
-		OrderNumber: nextNum,
-		ItemCode:    sugg.ItemCode,
-		Quantity:    sugg.Quantity,
-		OrderType:   mapMRPOrderType(sugg.OrderType),
-		Status:      types.StatusPlanned,
-		DemandType:  mapMRPDemandType(sugg.DemandType),
-		NeedDate:    sugg.NeedDate,
-		StartDate:   sugg.StartDate,
-		LLC:         sugg.LLC,
-		Notes:       sugg.Notes,
+		OrderNumber:          nextNum,
+		ItemCode:             sugg.ItemCode,
+		Quantity:             sugg.Quantity,
+		OrderType:            mapMRPOrderType(sugg.OrderType),
+		Status:               types.StatusPlanned,
+		DemandType:           mapMRPDemandType(sugg.DemandType),
+		NeedDate:             sugg.NeedDate,
+		StartDate:            sugg.StartDate,
+		LLC:                  sugg.LLC,
+		WarehouseCode:        sugg.WarehouseCode,
+		InterFactory:         sugg.InterFactory,
+		SourceEnterpriseCode: sugg.SourceEnterpriseCode,
+		AutoRelease:          sugg.AutoRelease,
+		MRPSuggestionCode:    &sugg.Code,
+		Notes:                sugg.Notes,
 		// When a Firmer is wired, create the order NOT firm so the firm step's
 		// "first firming" guard fires and generates the OF/requisition. Without a
 		// Firmer, keep the legacy behaviour (mark firm directly).
@@ -135,17 +158,55 @@ func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode 
 		return nil, fmt.Errorf("creating planned order from suggestion %d: %w", suggestionCode, err)
 	}
 
-	isFirm := created.IsFirm
+	var firmedResponse *response.PlannedOrderResponse
 	// Firm the freshly-created order so its OF / service requisition is generated.
-	if uc.Firmer != nil {
-		if _, ferr := uc.Firmer.Execute(ctx, request.FirmOrderDTO{OrderCode: created.Code}); ferr != nil {
+	if uc.Firmer != nil && firm {
+		firmed, ferr := uc.Firmer.Execute(ctx, request.FirmOrderDTO{OrderCode: created.Code})
+		if ferr != nil {
 			return nil, fmt.Errorf("firming planned order %d from suggestion %d: %w", created.Code, suggestionCode, ferr)
 		}
-		isFirm = true
+		firmedResponse = firmed
+	} else if uc.Firmer != nil {
+		transitioner, ok := uc.Firmer.(orderTransitioner)
+		if !ok {
+			return nil, errors.New("configured order releaser does not support RELEASED transition")
+		}
+		released, releaseErr := transitioner.ExecuteTransition(ctx, request.TransitionPlannedOrderDTO{OrderCodes: []int64{created.Code}, Target: "RELEASED"})
+		if releaseErr != nil {
+			return nil, fmt.Errorf("releasing planned order %d from suggestion %d: %w", created.Code, suggestionCode, releaseErr)
+		}
+		firmedResponse = released[0]
 	}
 
+	result := suggestionResponse(sugg.Code, created)
+	if firmedResponse != nil {
+		result.Status = firmedResponse.Status
+		result.IsFirm = firmedResponse.IsFirm
+	}
+	return result, nil
+}
+
+// ExecuteAutoRelease converts only inter-factory suggestions explicitly marked
+// for automatic release. The suggestion origin unique key makes reruns idempotent.
+func (uc *FirmarSugestaoMRPUseCase) ExecuteAutoRelease(ctx context.Context, planCode int64) error {
+	suggestions, err := uc.MRPRepo.ListSuggestionsByPlan(ctx, planCode)
+	if err != nil {
+		return err
+	}
+	for _, suggestion := range suggestions {
+		if !suggestion.InterFactory || !suggestion.AutoRelease {
+			continue
+		}
+		if _, err := uc.execute(ctx, suggestion.Code, false); err != nil {
+			return fmt.Errorf("auto-releasing suggestion %d: %w", suggestion.Code, err)
+		}
+	}
+	return nil
+}
+
+func suggestionResponse(suggestionCode int64, created *plannedentity.PlannedOrder) *FirmarSugestaoMRPResponse {
 	return &FirmarSugestaoMRPResponse{
-		SuggestionCode: sugg.Code,
+		SuggestionCode: suggestionCode,
 		PlannedCode:    created.Code,
 		OrderNumber:    created.OrderNumber,
 		ItemCode:       created.ItemCode,
@@ -153,9 +214,9 @@ func (uc *FirmarSugestaoMRPUseCase) Execute(ctx context.Context, suggestionCode 
 		OrderType:      string(created.OrderType),
 		NeedDate:       created.NeedDate,
 		Status:         string(created.Status),
-		IsFirm:         isFirm,
+		IsFirm:         created.IsFirm,
 		PlanCode:       created.PlanCode,
-	}, nil
+	}
 }
 
 func mergeNote(existing *string, extra string) *string {

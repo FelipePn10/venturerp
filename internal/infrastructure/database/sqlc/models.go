@@ -3541,18 +3541,19 @@ type CondicoesPagamento struct {
 }
 
 type ConfiguredItemRule struct {
-	ID        int64
-	ItemCode  int64
-	TableType string
-	FieldName string
-	RuleType  string
-	RuleValue string
-	Sequence  int32
-	IsActive  bool
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-	CreatedBy pgtype.UUID
-	Code      pgtype.Int8
+	ID           int64
+	ItemCode     int64
+	TableType    string
+	FieldName    string
+	RuleType     string
+	RuleValue    string
+	Sequence     int32
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	Code         pgtype.Int8
+	EnterpriseID *int64
 }
 
 type ConsumerServiceCall struct {
@@ -4137,6 +4138,7 @@ type Drawing struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 type DrawingCharacteristic struct {
@@ -4925,6 +4927,7 @@ type IndependentDemand struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
+	EnterpriseID   *int64
 }
 
 type IndustrialCalendar struct {
@@ -5074,6 +5077,9 @@ type Item struct {
 	PlanningGhost                        bool
 	PlannerEmployeeCode                  *int64
 	SuppliesTypeOfUse                    int16
+	ProductionReportingType              string
+	MaterialIssueTiming                  string
+	AcceptsFractionalQuantity            bool
 }
 
 type ItemCalendarPromise struct {
@@ -5100,6 +5106,13 @@ type ItemClassification struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type ItemClassificationAssignment struct {
+	EnterpriseID     int64
+	ItemCode         int64
+	ClassificationID int64
+	CreatedAt        pgtype.Timestamptz
+}
+
 type ItemClassificationMask struct {
 	ID          int64
 	Code        int64
@@ -5116,6 +5129,7 @@ type ItemConsumptionAverage struct {
 	TotalConsumed         pgtype.Numeric
 	WindowMonths          int32
 	CalculatedAt          pgtype.Timestamptz
+	EnterpriseID          int64
 }
 
 type ItemMachineTime struct {
@@ -5131,6 +5145,7 @@ type ItemMachineTime struct {
 	ProductionTimeUnit CapacityPeriodEnum
 	ProductionBaseQty  int32
 	IsActive           bool
+	EnterpriseID       *int64
 }
 
 type ItemMask struct {
@@ -5153,6 +5168,7 @@ type ItemPlanningExtra struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	UseTankDate  bool
+	EnterpriseID *int64
 }
 
 type ItemPreferredSupplier struct {
@@ -5238,6 +5254,7 @@ type KanbanCard struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	CreatedBy       pgtype.UUID
+	EnterpriseID    *int64
 }
 
 type LegalDevice struct {
@@ -5310,6 +5327,7 @@ type MachineSchedule struct {
 	OrderCode        *int64
 	Code             int64
 	IsActive         bool
+	EnterpriseID     *int64
 }
 
 type MachineType struct {
@@ -5409,42 +5427,45 @@ type Modifier struct {
 }
 
 type MpsSchedule struct {
-	ID          int64
-	ItemCode    int64
-	Mask        string
-	PeriodType  string
-	PeriodValue int32
-	Year        int32
-	Quantity    pgtype.Numeric
-	IsFirm      bool
-	Notes       pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	ItemCode     int64
+	Mask         string
+	PeriodType   string
+	PeriodValue  int32
+	Year         int32
+	Quantity     pgtype.Numeric
+	IsFirm       bool
+	Notes        pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 type MrpCalculationLog struct {
-	ID          int64
-	PlanCode    int64
-	StartedAt   pgtype.Timestamptz
-	FinishedAt  pgtype.Timestamptz
-	Status      string
-	Errors      []byte
-	TotalItems  int32
-	TotalOrders int32
-	CreatedAt   pgtype.Timestamptz
-	Code        pgtype.Int8
+	ID           int64
+	PlanCode     int64
+	StartedAt    pgtype.Timestamptz
+	FinishedAt   pgtype.Timestamptz
+	Status       string
+	Errors       []byte
+	TotalItems   int32
+	TotalOrders  int32
+	CreatedAt    pgtype.Timestamptz
+	Code         pgtype.Int8
+	EnterpriseID *int64
 }
 
 type MrpExceptionMessage struct {
-	Code        int64
-	PlanCode    int64
-	ItemCode    int64
-	MessageType string
-	SourceCode  *int64
-	SourceType  pgtype.Text
-	Description string
-	CreatedAt   pgtype.Timestamptz
+	Code         int64
+	PlanCode     int64
+	ItemCode     int64
+	MessageType  string
+	SourceCode   *int64
+	SourceType   pgtype.Text
+	Description  string
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID *int64
 }
 
 type MrpItemProfile struct {
@@ -5460,6 +5481,7 @@ type MrpItemProfile struct {
 	NeedDate        pgtype.Date
 	CreatedAt       pgtype.Timestamptz
 	Code            pgtype.Int8
+	EnterpriseID    *int64
 }
 
 type MrpParameter struct {
@@ -5470,18 +5492,37 @@ type MrpParameter struct {
 }
 
 type MrpPlannedSuggestion struct {
-	Code           int64
+	Code                 int64
+	PlanCode             int64
+	ItemCode             int64
+	Quantity             pgtype.Numeric
+	NeedDate             pgtype.Date
+	StartDate            pgtype.Date
+	OrderType            string
+	DemandType           string
+	ParentItemCode       *int64
+	Llc                  int32
+	CreatedAt            pgtype.Timestamptz
+	Notes                pgtype.Text
+	EnterpriseID         *int64
+	OrderNumber          *int64
+	WarehouseCode        *int64
+	InterFactory         bool
+	SourceEnterpriseCode *int64
+	AutoRelease          bool
+}
+
+type MrpProfileDetail struct {
+	ID             int64
+	EnterpriseID   int64
 	PlanCode       int64
 	ItemCode       int64
-	Quantity       pgtype.Numeric
 	NeedDate       pgtype.Date
-	StartDate      pgtype.Date
-	OrderType      string
-	DemandType     string
+	DetailType     string
+	SourceCode     *int64
 	ParentItemCode *int64
-	Llc            int32
+	Quantity       pgtype.Numeric
 	CreatedAt      pgtype.Timestamptz
-	Notes          pgtype.Text
 }
 
 type NcmTaxTable struct {
@@ -5563,31 +5604,32 @@ type NonConformance struct {
 }
 
 type Operation struct {
-	ID                  int64
-	Code                int64
-	Name                string
-	Description         pgtype.Text
-	Origin              sqltypes.OperationOriginEnum
-	Situation           sqltypes.OperationSituationEnum
-	DefaultWorkCenterID *int64
-	StandardTime        pgtype.Numeric
-	SetupTime           pgtype.Numeric
-	IsActive            bool
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	CreatedBy           pgtype.UUID
-	RunTime             pgtype.Numeric
-	LaborTime           pgtype.Numeric
-	RunTimeBaseQty      pgtype.Numeric
-	QueueTime           pgtype.Numeric
-	WaitTime            pgtype.Numeric
-	MoveTime            pgtype.Numeric
-	CrewSize            pgtype.Numeric
-	TimeUnit            string
-	SupplierID          *int64
-	ServiceItemCode     *int64
-	CostPerUnit         pgtype.Numeric
-	LeadTimeDays        *int32
+	ID                   int64
+	Code                 int64
+	Name                 string
+	Description          pgtype.Text
+	Origin               sqltypes.OperationOriginEnum
+	Situation            sqltypes.OperationSituationEnum
+	DefaultWorkCenterID  *int64
+	StandardTime         pgtype.Numeric
+	SetupTime            pgtype.Numeric
+	IsActive             bool
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+	CreatedBy            pgtype.UUID
+	RunTime              pgtype.Numeric
+	LaborTime            pgtype.Numeric
+	RunTimeBaseQty       pgtype.Numeric
+	QueueTime            pgtype.Numeric
+	WaitTime             pgtype.Numeric
+	MoveTime             pgtype.Numeric
+	CrewSize             pgtype.Numeric
+	TimeUnit             string
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          pgtype.Numeric
+	LeadTimeDays         *int32
+	ThirdPartyRemittance string
 }
 
 type OrderPriority struct {
@@ -5601,6 +5643,7 @@ type OrderPriority struct {
 	UpdatedAt     pgtype.Timestamptz
 	CreatedBy     pgtype.UUID
 	Code          int64
+	EnterpriseID  *int64
 }
 
 type OverheadAllocation struct {
@@ -5690,6 +5733,7 @@ type PhysicalInventory struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type PhysicalInventoryItem struct {
@@ -5711,50 +5755,57 @@ type PhysicalInventoryItem struct {
 }
 
 type PlannedOrder struct {
-	ID                int64
-	OrderNumber       int64
-	ItemCode          int64
-	Mask              string
-	Quantity          pgtype.Numeric
-	QuantityLoss      pgtype.Numeric
-	QuantityCorrected pgtype.Numeric
-	OrderType         OrderTypeEnum
-	Status            OrderStatusEnum
-	DemandType        DemandTypeEnum
-	DemandID          *int64
-	NeedDate          pgtype.Date
-	StartDate         pgtype.Date
-	EndDate           pgtype.Date
-	ProductionTime    pgtype.Numeric
-	Priority          pgtype.Text
-	Llc               int32
-	Notes             pgtype.Text
-	IsFirm            bool
-	IsActive          bool
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-	CreatedBy         pgtype.UUID
-	Code              int64
-	MachineCode       *int64
-	CostCenterCode    *int64
-	EmployeeCode      *int64
-	ParentOrderCode   *int64
-	PlanCode          *int64
-	DemandCode        int32
-	SalesOrderCode    *int64
-	SafetyTimeDays    int32
-	CoverageDays      int32
+	ID                   int64
+	OrderNumber          int64
+	ItemCode             int64
+	Mask                 string
+	Quantity             pgtype.Numeric
+	QuantityLoss         pgtype.Numeric
+	QuantityCorrected    pgtype.Numeric
+	OrderType            OrderTypeEnum
+	Status               OrderStatusEnum
+	DemandType           DemandTypeEnum
+	DemandID             *int64
+	NeedDate             pgtype.Date
+	StartDate            pgtype.Date
+	EndDate              pgtype.Date
+	ProductionTime       pgtype.Numeric
+	Priority             pgtype.Text
+	Llc                  int32
+	Notes                pgtype.Text
+	IsFirm               bool
+	IsActive             bool
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+	CreatedBy            pgtype.UUID
+	Code                 int64
+	MachineCode          *int64
+	CostCenterCode       *int64
+	EmployeeCode         *int64
+	ParentOrderCode      *int64
+	PlanCode             *int64
+	DemandCode           int32
+	SalesOrderCode       *int64
+	SafetyTimeDays       int32
+	CoverageDays         int32
+	EnterpriseID         *int64
+	WarehouseCode        *int64
+	InterFactory         bool
+	SourceEnterpriseCode *int64
+	AutoRelease          bool
+	MrpSuggestionCode    *int64
 }
 
 type PlanningParam struct {
-	ID          int64
-	ParamNumber int32
-	ParamKey    string
-	Value       string
-	Description pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	UpdatedBy   pgtype.UUID
+	ID           int64
+	ParamNumber  int32
+	ParamKey     string
+	Value        string
+	Description  pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	UpdatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 type PlanoConta struct {
@@ -5853,28 +5904,54 @@ type ProductionConsumption struct {
 	CreatedBy         pgtype.UUID
 }
 
+type ProductionDelivery struct {
+	ID                int64
+	ProductionOrderID int64
+	EnterpriseID      int64
+	IdempotencyKey    string
+	Quantity          pgtype.Numeric
+	MovementClass     string
+	WarehouseID       int64
+	Lot               pgtype.Text
+	IsFinal           bool
+	DeliveredAt       pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+}
+
+type ProductionDeliveryLine struct {
+	ID                   int64
+	ProductionDeliveryID int64
+	MovementClass        string
+	Quantity             pgtype.Numeric
+}
+
 type ProductionOrder struct {
-	ID             int64
-	OrderNumber    int64
-	PlannedOrderID *int64
-	ItemCode       int64
-	Mask           string
-	PlannedQty     pgtype.Numeric
-	ProducedQty    pgtype.Numeric
-	ScrappedQty    pgtype.Numeric
-	Status         string
-	StartDate      pgtype.Date
-	EndDate        pgtype.Date
-	MachineID      *int64
-	CostCenterID   *int64
-	EmployeeID     *int64
-	Priority       pgtype.Text
-	Notes          pgtype.Text
-	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	CreatedBy      pgtype.UUID
-	RouteID        *int64
+	ID                  int64
+	OrderNumber         int64
+	PlannedOrderID      *int64
+	ItemCode            int64
+	Mask                string
+	PlannedQty          pgtype.Numeric
+	ProducedQty         pgtype.Numeric
+	ScrappedQty         pgtype.Numeric
+	Status              string
+	StartDate           pgtype.Date
+	EndDate             pgtype.Date
+	MachineID           *int64
+	CostCenterID        *int64
+	EmployeeID          *int64
+	Priority            pgtype.Text
+	Notes               pgtype.Text
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+	RouteID             *int64
+	WarehouseID         *int64
+	EnterpriseID        *int64
+	OriginType          string
+	AllowQuantityChange bool
+	AllowDateChange     bool
 }
 
 type ProductionOrderCost struct {
@@ -5897,6 +5974,37 @@ type ProductionOrderCost struct {
 	Currency          string
 	SettledAt         pgtype.Timestamptz
 	SettledBy         pgtype.UUID
+}
+
+type ProductionOrderLotAllocation struct {
+	ID                        int64
+	ProductionOrderMaterialID int64
+	EnterpriseID              int64
+	MovementKind              string
+	WarehouseID               int64
+	Lot                       string
+	Address                   pgtype.Text
+	Quantity                  pgtype.Numeric
+	CreatedAt                 pgtype.Timestamptz
+	CreatedBy                 pgtype.UUID
+}
+
+type ProductionOrderMaterial struct {
+	ID                  int64
+	ProductionOrderID   int64
+	EnterpriseID        int64
+	MaterialKind        string
+	ItemCode            int64
+	Mask                string
+	SubstitutedItemCode *int64
+	Quantity            pgtype.Numeric
+	AttendedQuantity    pgtype.Numeric
+	WarehouseID         int64
+	AutomaticIssue      bool
+	Notes               pgtype.Text
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
 }
 
 type ProductionOrderOperation struct {
@@ -5927,6 +6035,43 @@ type ProductionOrderOperationToolSerial struct {
 	UpdatedAt                  pgtype.Timestamptz
 }
 
+type ProductionOrderScrapDestination struct {
+	ID                        int64
+	ProductionOrderID         int64
+	ProductionOrderMaterialID *int64
+	EnterpriseID              int64
+	ScrapItemCode             int64
+	WarehouseID               int64
+	Lot                       pgtype.Text
+	Address                   pgtype.Text
+	Quantity                  pgtype.Numeric
+	DestinationDate           pgtype.Date
+	CreatedAt                 pgtype.Timestamptz
+	CreatedBy                 pgtype.UUID
+}
+
+type ProductionOrderServiceLink struct {
+	ProductionOrderID int64
+	PurchaseOrderCode int64
+	EnterpriseID      int64
+}
+
+type ProductionOrderServiceRequisitionLink struct {
+	ProductionOrderID       int64
+	PurchaseRequisitionCode int64
+	EnterpriseID            int64
+}
+
+type ProductionOrderWmsRequest struct {
+	ID                        int64
+	ProductionOrderMaterialID int64
+	EnterpriseID              int64
+	Status                    string
+	ExternalReference         pgtype.Text
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
+}
+
 type ProductionPlan struct {
 	ID                  int64
 	Code                int64
@@ -5943,6 +6088,17 @@ type ProductionPlan struct {
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
 	CreatedBy           pgtype.UUID
+	EnterpriseID        *int64
+}
+
+type ProductionPlanInterFactory struct {
+	ID                 int64
+	PlanCode           int64
+	EnterpriseID       int64
+	SourceEnterpriseID int64
+	AutoRelease        bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
 }
 
 type ProductionSequence struct {
@@ -6641,30 +6797,31 @@ type RestrictionReason struct {
 }
 
 type RouteOperation struct {
-	ID              int64
-	RouteID         int64
-	Sequence        int16
-	OperationID     int64
-	WorkCenterID    *int64
-	StandardTime    pgtype.Numeric
-	SetupTime       pgtype.Numeric
-	Situation       sqltypes.RouteOpSituationEnum
-	Notes           pgtype.Text
-	IsActive        bool
-	CreatedAt       pgtype.Timestamptz
-	UpdatedAt       pgtype.Timestamptz
-	RunTime         pgtype.Numeric
-	LaborTime       pgtype.Numeric
-	RunTimeBaseQty  pgtype.Numeric
-	QueueTime       pgtype.Numeric
-	WaitTime        pgtype.Numeric
-	MoveTime        pgtype.Numeric
-	CrewSize        pgtype.Numeric
-	TimeUnit        pgtype.Text
-	SupplierID      *int64
-	ServiceItemCode *int64
-	CostPerUnit     pgtype.Numeric
-	LeadTimeDays    *int32
+	ID                   int64
+	RouteID              int64
+	Sequence             int16
+	OperationID          int64
+	WorkCenterID         *int64
+	StandardTime         pgtype.Numeric
+	SetupTime            pgtype.Numeric
+	Situation            sqltypes.RouteOpSituationEnum
+	Notes                pgtype.Text
+	IsActive             bool
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+	RunTime              pgtype.Numeric
+	LaborTime            pgtype.Numeric
+	RunTimeBaseQty       pgtype.Numeric
+	QueueTime            pgtype.Numeric
+	WaitTime             pgtype.Numeric
+	MoveTime             pgtype.Numeric
+	CrewSize             pgtype.Numeric
+	TimeUnit             pgtype.Text
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          pgtype.Numeric
+	LeadTimeDays         *int32
+	ThirdPartyRemittance pgtype.Text
 }
 
 type RouteOperationNetwork struct {
@@ -6720,6 +6877,7 @@ type SalesDivision struct {
 	CreatedAt               pgtype.Timestamptz
 	UpdatedAt               pgtype.Timestamptz
 	CreatedBy               pgtype.UUID
+	EnterpriseID            *int64
 }
 
 type SalesForecast struct {
@@ -6918,6 +7076,7 @@ type SalesOrderDemand struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	Code           pgtype.Int8
+	EnterpriseID   *int64
 }
 
 type SalesOrderEvent struct {
@@ -7429,7 +7588,6 @@ type StockBalance struct {
 	WarehouseID    int64
 	Quantity       pgtype.Numeric
 	ReservedQty    pgtype.Numeric
-	AvailableQty   pgtype.Numeric
 	MinimumStock   pgtype.Numeric
 	MaximumStock   pgtype.Numeric
 	SafetyStock    pgtype.Numeric
@@ -7438,6 +7596,8 @@ type StockBalance struct {
 	TotalCost      pgtype.Numeric
 	LastMovementAt pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	EnterpriseID   *int64
+	AvailableQty   pgtype.Numeric
 }
 
 type StockLot struct {
@@ -7451,6 +7611,7 @@ type StockLot struct {
 	Notes        pgtype.Text
 	CreatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type StockLotBalance struct {
@@ -7463,6 +7624,7 @@ type StockLotBalance struct {
 	LastCost       pgtype.Numeric
 	LastMovementAt pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	EnterpriseID   *int64
 }
 
 type StockMovement struct {
@@ -7483,6 +7645,7 @@ type StockMovement struct {
 	Notes          pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
+	EnterpriseID   *int64
 }
 
 type StockMovementType struct {
@@ -7538,6 +7701,7 @@ type StockReservation struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
+	EnterpriseID      int64
 }
 
 type StockSnapshot struct {
@@ -7551,6 +7715,7 @@ type StockSnapshot struct {
 	CreatedAt     pgtype.Timestamptz
 	MaximumStock  pgtype.Numeric
 	MinMaxActive  bool
+	EnterpriseID  *int64
 }
 
 type Supplier struct {
@@ -8045,6 +8210,12 @@ type User struct {
 	Role      string
 }
 
+type UserEnterprise struct {
+	UserID       pgtype.UUID
+	EnterpriseID int64
+	CreatedAt    pgtype.Timestamptz
+}
+
 type UsuariosPerfi struct {
 	UsuarioID pgtype.UUID
 	PerfilID  int64
@@ -8060,6 +8231,13 @@ type Warehouse struct {
 	Type                interface{}
 	Disposition         bool
 	ReservationsAllowed bool
+}
+
+type WarehouseWmsSetting struct {
+	EnterpriseID               int64
+	WarehouseID                int64
+	IsWms                      bool
+	IntermediateOutWarehouseID *int64
 }
 
 type WorkCenterCost struct {

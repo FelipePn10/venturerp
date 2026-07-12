@@ -23,11 +23,12 @@ const (
 type SalesOrderOrigin string
 
 const (
-	SalesOrderOriginNormal     SalesOrderOrigin = "NORMAL"
-	SalesOrderOriginDependent  SalesOrderOrigin = "DEPENDENT"
-	SalesOrderOriginAssistance SalesOrderOrigin = "ASSISTANCE"
-	SalesOrderOriginReserve    SalesOrderOrigin = "RESERVE"
-	SalesOrderOriginCopy       SalesOrderOrigin = "COPY"
+	SalesOrderOriginNormal       SalesOrderOrigin = "NORMAL"
+	SalesOrderOriginDependent    SalesOrderOrigin = "DEPENDENT"
+	SalesOrderOriginAssistance   SalesOrderOrigin = "ASSISTANCE"
+	SalesOrderOriginReserve      SalesOrderOrigin = "RESERVE"
+	SalesOrderOriginCopy         SalesOrderOrigin = "COPY"
+	SalesOrderOriginInterFactory SalesOrderOrigin = "INTER_FACTORY"
 )
 
 // SalesOrderItemStatus represents the fulfillment status of an order line.

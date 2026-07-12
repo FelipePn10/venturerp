@@ -4,17 +4,22 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // Movement type values stored in stock_movements.movement_type.
 // These are the canonical strings expected by the stock_balances update logic
 // and by the financial reports that filter on movement_type.
 const (
-	MovementTypeIn          = "IN"
-	MovementTypeOut         = "OUT"
-	MovementTypeTransferIn  = "TRANSFER_IN"
-	MovementTypeTransferOut = "TRANSFER_OUT"
-	MovementTypeAdjustment  = "ADJUSTMENT"
+	MovementTypeIn                     = "IN"
+	MovementTypeOut                    = "OUT"
+	MovementTypeTransferIn             = "TRANSFER_IN"
+	MovementTypeTransferOut            = "TRANSFER_OUT"
+	MovementTypeAdjustment             = "ADJUSTMENT"
+	MovementTypeProductionEntry        = "EP"
+	MovementTypePlannedProductionEntry = "EPP"
+	MovementTypeProductionExcess       = "EPE"
+	MovementTypePlannedRequisition     = "REP"
 )
 
 // Reference type values stored in stock_movements.reference_type, identifying the
@@ -35,9 +40,9 @@ const (
 // on-hand quantity (e.g. reservations) return 0.
 func SignedQuantity(movementType string, quantity float64) float64 {
 	switch movementType {
-	case MovementTypeIn, MovementTypeTransferIn, "ENTRADA":
+	case MovementTypeIn, MovementTypeTransferIn, MovementTypeProductionEntry, MovementTypePlannedProductionEntry, MovementTypeProductionExcess, "ENTRADA":
 		return quantity
-	case MovementTypeOut, MovementTypeTransferOut, "SAIDA":
+	case MovementTypeOut, MovementTypeTransferOut, MovementTypePlannedRequisition, "SAIDA":
 		return -quantity
 	case MovementTypeAdjustment:
 		return quantity
@@ -53,6 +58,7 @@ type StockMovement struct {
 	WarehouseID    int64
 	MovementType   string
 	Quantity       float64
+	ExactQuantity  decimal.Decimal
 	UnitPrice      float64
 	TotalPrice     float64
 	ReferenceType  *string

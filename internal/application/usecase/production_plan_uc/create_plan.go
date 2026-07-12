@@ -24,19 +24,20 @@ func (uc *CreateProductionPlanUseCase) Execute(
 	if !uc.Auth.CanCreateProductionPlan(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	createdBy, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	plan, err := entity.NewProductionPlan(
 		dto.Code, dto.Name, dto.IndependentDemands,
-		dto.GroupSameDateOrders, dto.PlanningTypes, dto.CreatedBy,
+		dto.GroupSameDateOrders, dto.PlanningTypes, createdBy,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("building production plan: %w", err)
 	}
-	plan.Classification = dto.Classification
-	plan.ClassItemCodes = dto.ClassItemCodes
-	plan.OrderItemCode = dto.OrderItemCode
-	if dto.Parameters != nil {
-		plan.Parameters = dto.Parameters
+	if err := plan.Configure(dto.Classification, dto.ClassItemCodes, dto.OrderItemCode, dto.Parameters); err != nil {
+		return nil, err
 	}
 
 	created, err := uc.Repo.Create(ctx, plan)

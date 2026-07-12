@@ -111,13 +111,13 @@ Fluxo:
 # 1) Login → retorna { "token": "<JWT>" }
 curl -s -X POST http://localhost:5072/users/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@panossoerp.demo","password":"Demo@12345"}'
+  -d '{"email":"admin@panossoerp.demo","password":"Demo@12345","enterprise_code":1}'
 
 # 2) Use o token em TODAS as rotas /api/*:
 curl http://localhost:5072/api/items/ -H "Authorization: Bearer <JWT>"
 ```
 
-Para criar mais usuários: `POST /users/register` (`{name,email,password}`) — novos
+Para criar mais usuários: `POST /users/register` (`{name,email,password,enterprise_code}`) — novos
 usuários nascem com role `USER`. As rotas `/api/*` aceitam `ADMIN` e `USER`; as de
 financeiro exigem login válido (o admin do seed já cobre tudo).
 

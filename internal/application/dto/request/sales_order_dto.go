@@ -5,7 +5,7 @@ import "github.com/google/uuid"
 type CreateSalesOrderDTO struct {
 	EnterpriseCode              int64     `json:"enterprise_code"`
 	Status                      string    `json:"status"`        // R, P, A, OA, OF
-	Origin                      string    `json:"origin"`        // NORMAL, DEPENDENT, ASSISTANCE, RESERVE, COPY
+	Origin                      string    `json:"origin"`        // NORMAL, DEPENDENT, ASSISTANCE, RESERVE, COPY, INTER_FACTORY
 	EmissionDate                string    `json:"emission_date"` // YYYY-MM-DD
 	DeliveryDate                *string   `json:"delivery_date,omitempty"`
 	DeliveryDateFirm            bool      `json:"delivery_date_firm"`

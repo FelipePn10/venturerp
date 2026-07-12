@@ -8,13 +8,64 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	salesdivision "github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
+
+func (r *MRPCalculationRepositorySQLC) ListOpenSalesOrderDemands(ctx context.Context, planCode int64, salesOrderItemCode *int64) ([]*entity.MRPInput, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListOpenSalesOrderDemands(ctx, sqlc.ListOpenSalesOrderDemandsParams{
+		EnterpriseID: enterpriseID, PlanCode: planCode, SalesOrderItemCode: salesOrderItemCode,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing open sales-order demands: %w", err)
+	}
+	result := make([]*entity.MRPInput, 0, len(rows))
+	for _, row := range rows {
+		sourceCode := row.SourceCode
+		var sourceEnterpriseCode *int64
+		if row.InterFactory {
+			code := row.SourceEnterpriseCode
+			sourceEnterpriseCode = &code
+		}
+		result = append(result, &entity.MRPInput{
+			ItemCode: row.ItemCode, Mask: row.Mask,
+			Quantity: pgutil.FromPgNumericToFloat64(row.Quantity),
+			NeedDate: row.NeedDate.Time, DemandType: "SALES_ORDER", SourceCode: &sourceCode,
+			WarehouseCode: row.WarehouseCode, TechnicalAssistance: row.TechnicalAssistance,
+			InterFactory: row.InterFactory, SourceEnterpriseCode: sourceEnterpriseCode, AutoRelease: row.AutoRelease,
+		})
+	}
+	return result, nil
+}
+
+func (r *MRPCalculationRepositorySQLC) ResolveClassificationItemCodes(ctx context.Context, classification string, classCodes []string) ([]int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items, err := r.q.ResolveClassificationItemCodes(ctx, sqlc.ResolveClassificationItemCodesParams{
+		EnterpriseID: enterpriseID, Classification: classification, ClassCodes: classCodes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolving classification items: %w", err)
+	}
+	return items, nil
+}
 
 // ---------- Planning Params ----------
 
 func (r *MRPCalculationRepositorySQLC) LoadTypedPlanningParams(ctx context.Context) (*entity.TypedPlanningParams, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
-		`SELECT param_number, value FROM planning_params ORDER BY param_number`)
+		`SELECT param_number, value FROM planning_params WHERE enterprise_id = $1 ORDER BY param_number`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("loading typed planning params: %w", err)
 	}
@@ -41,9 +92,13 @@ func (r *MRPCalculationRepositorySQLC) LoadTypedPlanningParams(ctx context.Conte
 // ---------- Order Priorities ----------
 
 func (r *MRPCalculationRepositorySQLC) ListAllOrderPriorities(ctx context.Context) ([]*orderpriority.OrderPriority, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT code, interval_start, interval_end, priority, description, is_active, created_at, updated_at, created_by
-		 FROM order_priorities WHERE is_active = true ORDER BY interval_start`)
+		 FROM order_priorities WHERE enterprise_id = $1 AND is_active = true ORDER BY interval_start`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing order priorities: %w", err)
 	}
@@ -70,12 +125,16 @@ func (r *MRPCalculationRepositorySQLC) ListItemMachineTimes(ctx context.Context,
 		return make(map[int64][]*entity.MachineTimeInfo), nil
 	}
 
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT item_code, machine_id, priority, production_time
 		 FROM item_machine_times
-		 WHERE item_code = ANY($1) AND is_active = true
+		 WHERE item_code = ANY($1) AND enterprise_id = $2 AND is_active = true
 		 ORDER BY priority`,
-		itemCodes,
+		itemCodes, enterpriseID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing item machine times: %w", err)
@@ -96,9 +155,13 @@ func (r *MRPCalculationRepositorySQLC) ListItemMachineTimes(ctx context.Context,
 // ---------- Kanban Cards ----------
 
 func (r *MRPCalculationRepositorySQLC) ListKanbanCards(ctx context.Context) ([]*entity.KanbanCardInfo, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT code, item_code, reorder_point, quantity_per_card, card_count, is_active
-		 FROM kanban_cards WHERE is_active = true ORDER BY item_code`)
+		 FROM kanban_cards WHERE enterprise_id = $1 AND is_active = true ORDER BY item_code`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing kanban cards: %w", err)
 	}
@@ -119,10 +182,14 @@ func (r *MRPCalculationRepositorySQLC) ListKanbanCards(ctx context.Context) ([]*
 // ---------- MPS Items ----------
 
 func (r *MRPCalculationRepositorySQLC) ListMPSItems(ctx context.Context, planCode int64) ([]*entity.MPSItemInfo, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT item_code, mask, period_type, period_value, year, quantity, is_firm
-		 FROM mps_schedule WHERE is_firm = false
-		 ORDER BY year, period_type, period_value`,
+		 FROM mps_schedule WHERE enterprise_id = $1 AND is_firm = false
+		 ORDER BY year, period_type, period_value`, enterpriseID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing MPS items: %w", err)
@@ -143,9 +210,13 @@ func (r *MRPCalculationRepositorySQLC) ListMPSItems(ctx context.Context, planCod
 // ---------- Item Planning Extras ----------
 
 func (r *MRPCalculationRepositorySQLC) ListItemPlanningExtras(ctx context.Context) (map[int64]*entity.ItemPlanningExtra, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT item_code, maximum_stock, safety_time, coverage, grouping_key, is_critical, use_tank_date
-		 FROM item_planning_extras WHERE is_active = true`)
+		 FROM item_planning_extras WHERE enterprise_id = $1 AND is_active = true`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing item planning extras: %w", err)
 	}
@@ -166,11 +237,15 @@ func (r *MRPCalculationRepositorySQLC) ListItemPlanningExtras(ctx context.Contex
 // ---------- Machine Schedule ----------
 
 func (r *MRPCalculationRepositorySQLC) CreateMachineSchedule(ctx context.Context, schedule *entity.MachineScheduleInfo) error {
-	_, err := r.db.Exec(ctx,
-		`INSERT INTO machine_schedules (plan_code, planned_order_code, machine_id, schedule_date, production_time)
-		 VALUES ($1, $2, $3, $4, $5)`,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(ctx,
+		`INSERT INTO machine_schedules (plan_code, planned_order_code, machine_id, schedule_date, production_time, enterprise_id)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		schedule.PlanCode, schedule.PlannedOrderCode, schedule.MachineID,
-		schedule.ScheduleDate, schedule.ProductionTime,
+		schedule.ScheduleDate, schedule.ProductionTime, enterpriseID,
 	)
 	return err
 }
@@ -182,6 +257,10 @@ func (r *MRPCalculationRepositorySQLC) ListItemSalesDivisions(ctx context.Contex
 		return make(map[int64]*salesdivision.SalesDivision), nil
 	}
 
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT DISTINCT ON (sd.code)
 		        sd.code, sd.description, sd.commercial_analysis, sd.financial_analysis,
@@ -191,8 +270,8 @@ func (r *MRPCalculationRepositorySQLC) ListItemSalesDivisions(ctx context.Contex
 		        sd.created_at, sd.updated_at, sd.created_by
 		 FROM sales_divisions sd
 		 INNER JOIN item_sales_divisions isd ON isd.sales_division_code = sd.code
-		 WHERE isd.item_code = ANY($1) AND sd.is_active = true`,
-		itemCodes,
+		 WHERE isd.item_code = ANY($1) AND sd.enterprise_id = $2 AND sd.is_active = true`,
+		itemCodes, enterpriseID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing item sales divisions: %w", err)
@@ -222,9 +301,13 @@ func (r *MRPCalculationRepositorySQLC) ListItemSalesDivisions(ctx context.Contex
 // ---------- Update Planned Order Priority ----------
 
 func (r *MRPCalculationRepositorySQLC) UpdatePlannedOrderPriority(ctx context.Context, suggestionCode int64, priority string) error {
-	_, err := r.db.Exec(ctx,
-		`UPDATE mrp_planned_suggestions SET priority = $2 WHERE code = $1`,
-		suggestionCode, priority,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(ctx,
+		`UPDATE mrp_planned_suggestions SET priority = $2 WHERE code = $1 AND enterprise_id = $3`,
+		suggestionCode, priority, enterpriseID,
 	)
 	return err
 }
@@ -232,9 +315,13 @@ func (r *MRPCalculationRepositorySQLC) UpdatePlannedOrderPriority(ctx context.Co
 // ---------- Update Planned Order Machine ----------
 
 func (r *MRPCalculationRepositorySQLC) UpdatePlannedOrderMachine(ctx context.Context, suggestionCode int64, machineID int64, productionTime float64) error {
-	_, err := r.db.Exec(ctx,
-		`UPDATE mrp_planned_suggestions SET machine_id = $2, production_time = $3 WHERE code = $1`,
-		suggestionCode, machineID, productionTime,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(ctx,
+		`UPDATE mrp_planned_suggestions SET machine_id = $2, production_time = $3 WHERE code = $1 AND enterprise_id = $4`,
+		suggestionCode, machineID, productionTime, enterpriseID,
 	)
 	return err
 }
