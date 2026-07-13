@@ -14,7 +14,7 @@ import (
 const createNewEmployee = `-- name: CreateNewEmployee :one
 INSERT INTO employees (code, name, situation, participates_budget, technical_assistant, role, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by
+RETURNING id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateNewEmployeeParams struct {
@@ -49,6 +49,7 @@ func (q *Queries) CreateNewEmployee(ctx context.Context, arg CreateNewEmployeePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -63,7 +64,7 @@ func (q *Queries) DeactivateEmployee(ctx context.Context, code int64) error {
 }
 
 const getEmployeeByCode = `-- name: GetEmployeeByCode :one
-SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by FROM employees WHERE code = $1
+SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees WHERE code = $1
 `
 
 func (q *Queries) GetEmployeeByCode(ctx context.Context, code int64) (EmployeeLegacy, error) {
@@ -80,12 +81,13 @@ func (q *Queries) GetEmployeeByCode(ctx context.Context, code int64) (EmployeeLe
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listEmployees = `-- name: ListEmployees :many
-SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by FROM employees ORDER BY code
+SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees ORDER BY code
 `
 
 func (q *Queries) ListEmployees(ctx context.Context) ([]EmployeeLegacy, error) {
@@ -108,6 +110,7 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]EmployeeLegacy, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -120,7 +123,7 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]EmployeeLegacy, error) {
 }
 
 const listEmployeesByRole = `-- name: ListEmployeesByRole :many
-SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by FROM employees WHERE role = $1 ORDER BY code
+SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees WHERE role = $1 ORDER BY code
 `
 
 func (q *Queries) ListEmployeesByRole(ctx context.Context, role string) ([]EmployeeLegacy, error) {
@@ -143,6 +146,7 @@ func (q *Queries) ListEmployeesByRole(ctx context.Context, role string) ([]Emplo
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -163,7 +167,7 @@ SET name               = $2,
     role               = $6,
     updated_at         = NOW()
 WHERE code = $1
-RETURNING id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by
+RETURNING id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id
 `
 
 type UpdateEmployeeParams struct {
@@ -196,6 +200,7 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

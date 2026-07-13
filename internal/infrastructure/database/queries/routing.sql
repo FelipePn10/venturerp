@@ -6,15 +6,15 @@ INSERT INTO operations (
     default_work_center_id, standard_time, setup_time,
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
-    supplier_id, service_item_code, cost_per_unit, lead_time_days,
+    supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
     is_active, created_by
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8,
     $9, $10, $11,
     $12, $13, $14, $15, $16,
-    $17, $18, $19, $20,
-    TRUE, $21
+    $17, $18, $19, $20, $21,
+    TRUE, $22
 ) RETURNING *;
 
 -- name: UpdateOperation :one
@@ -38,6 +38,7 @@ UPDATE operations SET
     service_item_code = $18,
     cost_per_unit = $19,
     lead_time_days = $20,
+    third_party_remittance = $21,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
@@ -52,6 +53,9 @@ ORDER BY code;
 
 -- name: DeactivateOperation :exec
 UPDATE operations SET is_active = FALSE, updated_at = NOW() WHERE id = $1;
+
+-- name: OperationUsedInRoutes :one
+SELECT EXISTS(SELECT 1 FROM route_operations WHERE operation_id = $1 AND is_active);
 
 -- name: NextOperationCode :one
 SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM operations;
@@ -126,15 +130,15 @@ INSERT INTO route_operations (
     standard_time, setup_time,
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
-    supplier_id, service_item_code, cost_per_unit, lead_time_days,
+    supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
     situation, notes, is_active
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6,
     $7, $8, $9,
     $10, $11, $12, $13, $14,
-    $15, $16, $17, $18,
-    $19, $20, TRUE
+    $15, $16, $17, $18, $19,
+    $20, $21, TRUE
 ) RETURNING *;
 
 -- name: UpdateRouteOperation :one
@@ -154,8 +158,9 @@ UPDATE route_operations SET
     service_item_code = $14,
     cost_per_unit = $15,
     lead_time_days = $16,
-    situation = $17,
-    notes = $18,
+    third_party_remittance = $17,
+    situation = $18,
+    notes = $19,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
@@ -215,10 +220,15 @@ SELECT
     op.name AS operation_name,
     op.origin,
     COALESCE(ro.standard_time, op.standard_time) AS effective_hours,
-    COALESCE(ro.supplier_id, op.supplier_id) AS supplier_id,
+    COALESCE((SELECT supplier.code FROM suppliers supplier
+              WHERE supplier.id = COALESCE(ro.supplier_id, op.supplier_id)
+                 OR supplier.code = COALESCE(ro.supplier_id, op.supplier_id)
+              ORDER BY (supplier.id = COALESCE(ro.supplier_id, op.supplier_id)) DESC
+              LIMIT 1), COALESCE(ro.supplier_id, op.supplier_id), 0)::bigint AS supplier_id,
     COALESCE(ro.service_item_code, op.service_item_code) AS service_item_code,
     COALESCE(ro.cost_per_unit, op.cost_per_unit, 0) AS cost_per_unit,
-    COALESCE(ro.lead_time_days, op.lead_time_days, 0) AS lead_time_days
+    COALESCE(ro.lead_time_days, op.lead_time_days, 0) AS lead_time_days,
+    COALESCE(ro.third_party_remittance, op.third_party_remittance, 'DEMAND_ITEMS') AS remittance_type
 FROM manufacturing_routes mr
 JOIN route_operations ro ON ro.route_id = mr.id
 JOIN operations op ON op.id = ro.operation_id

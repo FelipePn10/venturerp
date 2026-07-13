@@ -22,10 +22,12 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.ItemConversionRepositor
 
 func (r *ItemConversionRepositorySQLC) Create(ctx context.Context, c *entity.ItemUnitConversion) (*entity.ItemUnitConversion, error) {
 	row, err := r.q.CreateItemUnitConversion(ctx, sqlc.CreateItemUnitConversionParams{
-		ItemCode:  c.ItemCode,
-		FromUom:   c.FromUOM,
-		ToUom:     c.ToUOM,
-		Factor:    pgutil.ToPgNumericFromFloat64(c.Factor),
+		ItemCode:        c.ItemCode,
+		Mask:            c.Mask,
+		FromUom:         c.FromUOM,
+		ToUom:           c.ToUOM,
+		Factor:          pgutil.ToPgNumericFromFloat64(c.Factor),
+		RoundingPercent: pgutil.ToPgNumericFromFloat64(c.RoundingPercent), ToleranceValue: pgutil.ToPgNumericFromFloat64(c.ToleranceValue), ToleranceType: c.ToleranceType,
 		CreatedBy: pgutil.ToPgUUID(c.CreatedBy),
 	})
 	if err != nil {
@@ -47,8 +49,13 @@ func (r *ItemConversionRepositorySQLC) ListByItem(ctx context.Context, itemCode 
 }
 
 func (r *ItemConversionRepositorySQLC) Get(ctx context.Context, itemCode int64, fromUOM, toUOM string) (*entity.ItemUnitConversion, error) {
+	return r.GetConfigured(ctx, itemCode, "", fromUOM, toUOM)
+}
+
+func (r *ItemConversionRepositorySQLC) GetConfigured(ctx context.Context, itemCode int64, mask, fromUOM, toUOM string) (*entity.ItemUnitConversion, error) {
 	row, err := r.q.GetItemUnitConversion(ctx, sqlc.GetItemUnitConversionParams{
 		ItemCode: itemCode,
+		Mask:     mask,
 		FromUom:  fromUOM,
 		ToUom:    toUOM,
 	})
@@ -58,17 +65,25 @@ func (r *ItemConversionRepositorySQLC) Get(ctx context.Context, itemCode int64, 
 	return conversionToEntity(row), nil
 }
 
+func (r *ItemConversionRepositorySQLC) AcceptsFractional(ctx context.Context, itemCode int64) (bool, error) {
+	var value bool
+	err := r.pool.QueryRow(ctx, `SELECT accepts_fractional_quantity FROM items WHERE code=$1`, itemCode).Scan(&value)
+	return value, err
+}
+
 func (r *ItemConversionRepositorySQLC) Delete(ctx context.Context, id int64) error {
 	return r.q.DeleteItemUnitConversion(ctx, id)
 }
 
 func conversionToEntity(row sqlc.ItemUnitConversion) *entity.ItemUnitConversion {
 	return &entity.ItemUnitConversion{
-		ID:        row.ID,
-		ItemCode:  row.ItemCode,
-		FromUOM:   row.FromUom,
-		ToUOM:     row.ToUom,
-		Factor:    pgutil.FromPgNumericToFloat64(row.Factor),
+		ID:              row.ID,
+		ItemCode:        row.ItemCode,
+		Mask:            row.Mask,
+		FromUOM:         row.FromUom,
+		ToUOM:           row.ToUom,
+		Factor:          pgutil.FromPgNumericToFloat64(row.Factor),
+		RoundingPercent: pgutil.FromPgNumericToFloat64(row.RoundingPercent), ToleranceValue: pgutil.FromPgNumericToFloat64(row.ToleranceValue), ToleranceType: row.ToleranceType,
 		IsActive:  row.IsActive,
 		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),
 		CreatedBy: pgutil.FromPgUUID(row.CreatedBy),

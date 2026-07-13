@@ -90,6 +90,9 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterials(ctx context.Context, 
 			return nil, err
 		}
 	}
+	if err = createThirdPartyOrdersTx(ctx, tx, enterpriseID, created); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}

@@ -118,6 +118,7 @@ type PlannedOrderSuggestion struct {
 	AutoRelease          bool
 	PlanCode             int64
 	ItemCode             int64
+	Mask                 string
 	Quantity             float64
 	NeedDate             time.Time
 	StartDate            *time.Time
@@ -129,6 +130,11 @@ type PlannedOrderSuggestion struct {
 	ProductionTime       *float64
 	Priority             *string
 	Notes                *string
+	RouteOperationID     *int64
+	OperationID          *int64
+	SupplierCode         *int64
+	ServiceItemCode      *int64
+	RemittanceType       *string
 }
 
 // ExceptionMessageType classifies an MRP exception so planners can act

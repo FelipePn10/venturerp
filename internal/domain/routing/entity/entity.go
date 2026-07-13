@@ -51,10 +51,11 @@ type Operation struct {
 	TimeUnit   string  // MIN | HORA | DIA
 
 	// Subcontracting defaults (EXTERNA / TERCEIROS). Nil for internal operations.
-	SupplierID      *int64
-	ServiceItemCode *int64
-	CostPerUnit     *float64
-	LeadTimeDays    *int32
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          *float64
+	LeadTimeDays         *int32
+	ThirdPartyRemittance string
 
 	IsActive  bool
 	CreatedAt time.Time
@@ -196,10 +197,11 @@ type RouteOperation struct {
 	TimeUnit   *string
 
 	// Subcontracting overrides (nil ⇒ inherit from the operation).
-	SupplierID      *int64
-	ServiceItemCode *int64
-	CostPerUnit     *float64
-	LeadTimeDays    *int32
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          *float64
+	LeadTimeDays         *int32
+	ThirdPartyRemittance *string
 
 	// denormalized for reads
 	OperationName         string
@@ -242,6 +244,7 @@ type ExternalOp struct {
 	ServiceItemCode *int64
 	CostPerUnit     float64
 	LeadTimeDays    int32
+	RemittanceType  string
 }
 
 func NewRouteOperation(

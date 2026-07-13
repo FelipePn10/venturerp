@@ -1070,6 +1070,7 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	mainOrder := &entity.PlannedOrderSuggestion{
 		PlanCode:             input.PlanCode,
 		ItemCode:             input.ItemCode,
+		Mask:                 input.Mask,
 		Quantity:             netReq,
 		NeedDate:             input.NeedDate,
 		StartDate:            &startDate,
@@ -1094,17 +1095,27 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		extOps, _ := s.RoutingRepo.GetExternalOpsByItem(ctx, input.ItemCode)
 		for _, op := range extOps {
 			note := fmt.Sprintf("Op. externa: %s (%.2fh)", op.OperationName, op.EffectiveHours)
+			remittance := op.RemittanceType
+			if remittance == "" {
+				remittance = "DEMAND_ITEMS"
+			}
 			serviceOrder := &entity.PlannedOrderSuggestion{
-				PlanCode:       input.PlanCode,
-				ItemCode:       input.ItemCode,
-				Quantity:       netReq,
-				NeedDate:       input.NeedDate,
-				StartDate:      &startDate,
-				OrderType:      "SERVICO",
-				DemandType:     "EXTERNA",
-				ParentItemCode: input.ParentItemCode,
-				LLC:            input.LLC,
-				Notes:          &note,
+				PlanCode:         input.PlanCode,
+				ItemCode:         input.ItemCode,
+				Mask:             input.Mask,
+				Quantity:         netReq,
+				NeedDate:         input.NeedDate,
+				StartDate:        &startDate,
+				OrderType:        "SERVICO",
+				DemandType:       "EXTERNA",
+				ParentItemCode:   input.ParentItemCode,
+				LLC:              input.LLC,
+				Notes:            &note,
+				RouteOperationID: &op.RouteOpID,
+				OperationID:      &op.OperationID,
+				SupplierCode:     op.SupplierID,
+				ServiceItemCode:  op.ServiceItemCode,
+				RemittanceType:   &remittance,
 			}
 			output.PlannedOrders = append(output.PlannedOrders, serviceOrder)
 		}

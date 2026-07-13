@@ -13,28 +13,36 @@ import (
 
 const createItemUnitConversion = `-- name: CreateItemUnitConversion :one
 
-INSERT INTO item_unit_conversions (item_code, from_uom, to_uom, factor, created_by)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (item_code, from_uom, to_uom)
-DO UPDATE SET factor = EXCLUDED.factor, is_active = TRUE
-RETURNING id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by
+INSERT INTO item_unit_conversions (item_code, mask, from_uom, to_uom, factor, rounding_percent, tolerance_value, tolerance_type, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (item_code, mask, from_uom, to_uom)
+DO UPDATE SET factor = EXCLUDED.factor, rounding_percent=EXCLUDED.rounding_percent, tolerance_value=EXCLUDED.tolerance_value, tolerance_type=EXCLUDED.tolerance_type, is_active = TRUE
+RETURNING id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by, mask, rounding_percent, tolerance_value, tolerance_type
 `
 
 type CreateItemUnitConversionParams struct {
-	ItemCode  int64
-	FromUom   string
-	ToUom     string
-	Factor    pgtype.Numeric
-	CreatedBy pgtype.UUID
+	ItemCode        int64
+	Mask            string
+	FromUom         string
+	ToUom           string
+	Factor          pgtype.Numeric
+	RoundingPercent pgtype.Numeric
+	ToleranceValue  pgtype.Numeric
+	ToleranceType   string
+	CreatedBy       pgtype.UUID
 }
 
 // ─── Item Unit Conversions ────────────────────────────────────────────────────
 func (q *Queries) CreateItemUnitConversion(ctx context.Context, arg CreateItemUnitConversionParams) (ItemUnitConversion, error) {
 	row := q.db.QueryRow(ctx, createItemUnitConversion,
 		arg.ItemCode,
+		arg.Mask,
 		arg.FromUom,
 		arg.ToUom,
 		arg.Factor,
+		arg.RoundingPercent,
+		arg.ToleranceValue,
+		arg.ToleranceType,
 		arg.CreatedBy,
 	)
 	var i ItemUnitConversion
@@ -47,6 +55,10 @@ func (q *Queries) CreateItemUnitConversion(ctx context.Context, arg CreateItemUn
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.Mask,
+		&i.RoundingPercent,
+		&i.ToleranceValue,
+		&i.ToleranceType,
 	)
 	return i, err
 }
@@ -61,18 +73,24 @@ func (q *Queries) DeleteItemUnitConversion(ctx context.Context, id int64) error 
 }
 
 const getItemUnitConversion = `-- name: GetItemUnitConversion :one
-SELECT id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by FROM item_unit_conversions
-WHERE item_code = $1 AND from_uom = $2 AND to_uom = $3 AND is_active = TRUE
+SELECT id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by, mask, rounding_percent, tolerance_value, tolerance_type FROM item_unit_conversions
+WHERE item_code = $1 AND mask = $2 AND from_uom = $3 AND to_uom = $4 AND is_active = TRUE
 `
 
 type GetItemUnitConversionParams struct {
 	ItemCode int64
+	Mask     string
 	FromUom  string
 	ToUom    string
 }
 
 func (q *Queries) GetItemUnitConversion(ctx context.Context, arg GetItemUnitConversionParams) (ItemUnitConversion, error) {
-	row := q.db.QueryRow(ctx, getItemUnitConversion, arg.ItemCode, arg.FromUom, arg.ToUom)
+	row := q.db.QueryRow(ctx, getItemUnitConversion,
+		arg.ItemCode,
+		arg.Mask,
+		arg.FromUom,
+		arg.ToUom,
+	)
 	var i ItemUnitConversion
 	err := row.Scan(
 		&i.ID,
@@ -83,14 +101,18 @@ func (q *Queries) GetItemUnitConversion(ctx context.Context, arg GetItemUnitConv
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.Mask,
+		&i.RoundingPercent,
+		&i.ToleranceValue,
+		&i.ToleranceType,
 	)
 	return i, err
 }
 
 const listItemUnitConversions = `-- name: ListItemUnitConversions :many
-SELECT id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by FROM item_unit_conversions
+SELECT id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by, mask, rounding_percent, tolerance_value, tolerance_type FROM item_unit_conversions
 WHERE item_code = $1 AND is_active = TRUE
-ORDER BY from_uom, to_uom
+ORDER BY mask, from_uom, to_uom
 `
 
 func (q *Queries) ListItemUnitConversions(ctx context.Context, itemCode int64) ([]ItemUnitConversion, error) {
@@ -111,6 +133,10 @@ func (q *Queries) ListItemUnitConversions(ctx context.Context, itemCode int64) (
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.Mask,
+			&i.RoundingPercent,
+			&i.ToleranceValue,
+			&i.ToleranceType,
 		); err != nil {
 			return nil, err
 		}

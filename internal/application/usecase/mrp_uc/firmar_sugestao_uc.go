@@ -123,6 +123,7 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 	order := &plannedentity.PlannedOrder{
 		OrderNumber:          nextNum,
 		ItemCode:             sugg.ItemCode,
+		Mask:                 stringPtrIfNotEmpty(sugg.Mask),
 		Quantity:             sugg.Quantity,
 		OrderType:            mapMRPOrderType(sugg.OrderType),
 		Status:               types.StatusPlanned,
@@ -184,6 +185,14 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 		result.IsFirm = firmedResponse.IsFirm
 	}
 	return result, nil
+}
+
+func stringPtrIfNotEmpty(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 // ExecuteAutoRelease converts only inter-factory suggestions explicitly marked

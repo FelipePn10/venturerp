@@ -14,6 +14,7 @@ type RoutingRepository interface {
 	GetOperationByID(ctx context.Context, id int64) (*entity.Operation, error)
 	ListOperations(ctx context.Context, onlyActive bool) ([]*entity.Operation, error)
 	DeactivateOperation(ctx context.Context, id int64) error
+	OperationUsedInRoutes(ctx context.Context, id int64) (bool, error)
 
 	// Routes
 	CreateRoute(ctx context.Context, r *entity.ManufacturingRoute) (*entity.ManufacturingRoute, error)

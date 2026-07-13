@@ -29,7 +29,12 @@ func (r *ProductionOrderRepositoryPGX) Create(ctx context.Context, o *entity.Pro
 	if err != nil {
 		return nil, err
 	}
-	row := r.pool.QueryRow(ctx,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	row := tx.QueryRow(ctx,
 		`INSERT INTO public.production_orders
 			(order_number, planned_order_id, item_code, mask, planned_qty, produced_qty, scrapped_qty,
 			 status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
@@ -48,7 +53,17 @@ func (r *ProductionOrderRepositoryPGX) Create(ctx context.Context, o *entity.Pro
 		o.MachineID, o.CostCenterID, o.EmployeeID,
 		o.Priority, o.Notes, o.IsActive, pgutil.ToPgUUID(o.CreatedBy), o.WarehouseID, enterpriseID,
 	)
-	return scanProductionOrder(row)
+	created, err := scanProductionOrder(row)
+	if err != nil {
+		return nil, err
+	}
+	if err = createThirdPartyOrdersTx(ctx, tx, enterpriseID, created); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return created, nil
 }
 
 func (r *ProductionOrderRepositoryPGX) Update(ctx context.Context, o *entity.ProductionOrder) (*entity.ProductionOrder, error) {
@@ -276,7 +291,12 @@ func (r *ProductionOrderRepositoryPGX) LinkServicePurchaseOrder(ctx context.Cont
 	if err != nil {
 		return err
 	}
-	command, err := r.pool.Exec(ctx, `INSERT INTO production_order_service_links
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	command, err := tx.Exec(ctx, `INSERT INTO production_order_service_links
 		(production_order_id,purchase_order_code,enterprise_id)
 		SELECT link.production_order_id,$2,$3
 		FROM purchase_requisition_items item
@@ -291,7 +311,7 @@ func (r *ProductionOrderRepositoryPGX) LinkServicePurchaseOrder(ctx context.Cont
 	}
 	if command.RowsAffected() == 0 {
 		var exists bool
-		err = r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM purchase_requisition_items item
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM purchase_requisition_items item
 			JOIN production_order_service_requisition_links req_link ON req_link.purchase_requisition_code=item.requisition_code AND req_link.enterprise_id=$1
 			JOIN production_order_service_links po_link ON po_link.production_order_id=req_link.production_order_id AND po_link.enterprise_id=$1 AND po_link.purchase_order_code=$3
 			WHERE item.id=$2)`, enterpriseID, requisitionItemID, purchaseOrderCode).Scan(&exists)
@@ -302,7 +322,20 @@ func (r *ProductionOrderRepositoryPGX) LinkServicePurchaseOrder(ctx context.Cont
 			return pgx.ErrNoRows
 		}
 	}
-	return nil
+	_, err = tx.Exec(ctx, `UPDATE third_party_service_orders service_order
+		SET purchase_order_code=$3,status='RELEASED_WITH_PO',updated_at=NOW()
+		FROM purchase_requisition_items item
+		JOIN production_order_service_requisition_links req_link
+		  ON req_link.purchase_requisition_code=item.requisition_code AND req_link.enterprise_id=$1
+		WHERE item.id=$2 AND service_order.enterprise_id=$1
+		  AND service_order.production_order_id=req_link.production_order_id`, enterpriseID, requisitionItemID, purchaseOrderCode)
+	if err != nil {
+		return err
+	}
+	// Legacy service requisition links may predate the dedicated external-service
+	// order. The purchase-order link is still valid; update the service order only
+	// when one exists.
+	return tx.Commit(ctx)
 }
 
 func (r *ProductionOrderRepositoryPGX) TreatProductionExcess(ctx context.Context) (bool, error) {

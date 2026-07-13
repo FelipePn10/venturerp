@@ -222,6 +222,10 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 	if dto.TimeUnit != nil && !validTimeUnit(*dto.TimeUnit) {
 		return nil, fmt.Errorf("invalid time_unit %q (expected MIN, HORA or DIA)", *dto.TimeUnit)
 	}
+	remittance, err := normalizeThirdPartyRemittancePtr(dto.ThirdPartyRemittance)
+	if err != nil {
+		return nil, err
+	}
 	sit := entity.RouteOpSituation(dto.Situation)
 	if sit == "" {
 		sit = entity.RouteOpApproved
@@ -244,6 +248,7 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 	op.ServiceItemCode = dto.ServiceItemCode
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
+	op.ThirdPartyRemittance = remittance
 
 	created, err := uc.repo.AddRouteOperation(ctx, op)
 	if err != nil {
@@ -257,25 +262,30 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 	if dto.TimeUnit != nil && !validTimeUnit(*dto.TimeUnit) {
 		return nil, fmt.Errorf("invalid time_unit %q (expected MIN, HORA or DIA)", *dto.TimeUnit)
 	}
+	remittance, err := normalizeThirdPartyRemittancePtr(dto.ThirdPartyRemittance)
+	if err != nil {
+		return nil, err
+	}
 	op := &entity.RouteOperation{
-		ID:              dto.ID,
-		WorkCenterID:    dto.WorkCenterID,
-		StandardTime:    dto.StandardTime,
-		SetupTime:       dto.SetupTime,
-		RunTime:         dto.RunTime,
-		LaborTime:       dto.LaborTime,
-		RunBaseQty:      dto.RunBaseQty,
-		QueueTime:       dto.QueueTime,
-		WaitTime:        dto.WaitTime,
-		MoveTime:        dto.MoveTime,
-		CrewSize:        dto.CrewSize,
-		TimeUnit:        dto.TimeUnit,
-		SupplierID:      dto.SupplierID,
-		ServiceItemCode: dto.ServiceItemCode,
-		CostPerUnit:     dto.CostPerUnit,
-		LeadTimeDays:    dto.LeadTimeDays,
-		Situation:       entity.RouteOpSituation(dto.Situation),
-		Notes:           dto.Notes,
+		ID:                   dto.ID,
+		WorkCenterID:         dto.WorkCenterID,
+		StandardTime:         dto.StandardTime,
+		SetupTime:            dto.SetupTime,
+		RunTime:              dto.RunTime,
+		LaborTime:            dto.LaborTime,
+		RunBaseQty:           dto.RunBaseQty,
+		QueueTime:            dto.QueueTime,
+		WaitTime:             dto.WaitTime,
+		MoveTime:             dto.MoveTime,
+		CrewSize:             dto.CrewSize,
+		TimeUnit:             dto.TimeUnit,
+		SupplierID:           dto.SupplierID,
+		ServiceItemCode:      dto.ServiceItemCode,
+		CostPerUnit:          dto.CostPerUnit,
+		LeadTimeDays:         dto.LeadTimeDays,
+		ThirdPartyRemittance: remittance,
+		Situation:            entity.RouteOpSituation(dto.Situation),
+		Notes:                dto.Notes,
 	}
 	updated, err := uc.repo.UpdateRouteOperation(ctx, op)
 	if err != nil {
@@ -283,6 +293,17 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 	}
 	r := toRouteOpResponse(updated)
 	return &r, nil
+}
+
+func normalizeThirdPartyRemittancePtr(value *string) (*string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	normalized, err := normalizeThirdPartyRemittance(*value)
+	if err != nil {
+		return nil, err
+	}
+	return &normalized, nil
 }
 
 func (uc *RouteUseCase) RemoveOperation(ctx context.Context, id int64) error {
@@ -371,11 +392,12 @@ func toRouteOpResponse(op *entity.RouteOperation) response.RouteOperationRespons
 			Move:       op.EffTime.Move,
 			CrewSize:   op.EffTime.CrewSize,
 		},
-		SupplierID:      op.SupplierID,
-		ServiceItemCode: op.ServiceItemCode,
-		CostPerUnit:     op.CostPerUnit,
-		LeadTimeDays:    op.LeadTimeDays,
-		Situation:       string(op.Situation),
-		Notes:           op.Notes,
+		SupplierID:           op.SupplierID,
+		ServiceItemCode:      op.ServiceItemCode,
+		CostPerUnit:          op.CostPerUnit,
+		LeadTimeDays:         op.LeadTimeDays,
+		ThirdPartyRemittance: op.ThirdPartyRemittance,
+		Situation:            string(op.Situation),
+		Notes:                op.Notes,
 	}
 }
