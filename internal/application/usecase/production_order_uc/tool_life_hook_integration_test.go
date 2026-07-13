@@ -27,6 +27,10 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	uc := &production_order_uc.OrderOperationsUseCase{Q: q}
 	ctx := context.Background()
 	uid := uuid.New()
+	var enterpriseID int64
+	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise WHERE code=1").Scan(&enterpriseID); err != nil {
+		t.Fatalf("load enterprise: %v", err)
+	}
 
 	// Work center + operation + item + route + route op.
 	var wcID int64
@@ -68,15 +72,16 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	if _, err := tRepo.AddRouteOpTool(ctx, &toolentity.RouteOpTool{RouteOperationID: routeOp.ID, ToolID: createdTool.ID, QtyRequired: 1}); err != nil {
 		t.Fatalf("AddRouteOpTool: %v", err)
 	}
+	defer testutil.Exec(t, pool, "DELETE FROM route_operation_tools WHERE route_operation_id = $1 AND tool_id = $2", routeOp.ID, createdTool.ID)
 
 	// Production order + operation linked to the route operation.
 	var poID int64
-	if err := pool.QueryRow(ctx, "INSERT INTO production_orders (order_number,item_code,planned_qty,created_by) VALUES ($1,$2,$3,$4) RETURNING id", testutil.UniqueCode(), itemCode, 10, uid).Scan(&poID); err != nil {
+	if err := pool.QueryRow(ctx, "INSERT INTO production_orders (order_number,item_code,planned_qty,created_by,enterprise_id) VALUES ($1,$2,$3,$4,$5) RETURNING id", testutil.UniqueCode(), itemCode, 10, uid, enterpriseID).Scan(&poID); err != nil {
 		t.Fatalf("seed production_order: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM production_orders WHERE id = $1", poID)
 	var pooID int64
-	if err := pool.QueryRow(ctx, "INSERT INTO production_order_operations (production_order_id,sequence,operation_name,route_operation_id) VALUES ($1,$2,$3,$4) RETURNING id", poID, 10, "Estampar", routeOp.ID).Scan(&pooID); err != nil {
+	if err := pool.QueryRow(ctx, "INSERT INTO production_order_operations (production_order_id,sequence,operation_name,route_operation_id,enterprise_id) VALUES ($1,$2,$3,$4,$5) RETURNING id", poID, 10, "Estampar", routeOp.ID, enterpriseID).Scan(&pooID); err != nil {
 		t.Fatalf("seed production_order_operation: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM production_order_operations WHERE id = $1", pooID)

@@ -28,27 +28,28 @@ func (r *RoutingRepositorySQLC) CreatedByFromUUID(v uuid.UUID) uuid.UUID { retur
 
 func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.Operation) (*entity.Operation, error) {
 	row, err := r.q.CreateOperation(ctx, sqlc.CreateOperationParams{
-		Code:                op.Code,
-		Name:                op.Name,
-		Description:         pgutil.ToPgTextFromPtr(op.Description),
-		Origin:              sqltypes.OperationOriginEnum(op.Origin),
-		Situation:           sqltypes.OperationSituationEnum(op.Situation),
-		DefaultWorkCenterID: op.DefaultWorkCenterID,
-		StandardTime:        pgutil.ToPgNumericFromFloat64(op.StandardTime),
-		SetupTime:           pgutil.ToPgNumericFromFloat64(op.SetupTime),
-		RunTime:             pgutil.ToPgNumericFromFloat64(op.RunTime),
-		LaborTime:           pgutil.ToPgNumericFromFloat64(op.LaborTime),
-		RunTimeBaseQty:      pgutil.ToPgNumericFromFloat64(op.RunBaseQty),
-		QueueTime:           pgutil.ToPgNumericFromFloat64(op.QueueTime),
-		WaitTime:            pgutil.ToPgNumericFromFloat64(op.WaitTime),
-		MoveTime:            pgutil.ToPgNumericFromFloat64(op.MoveTime),
-		CrewSize:            pgutil.ToPgNumericFromFloat64(op.CrewSize),
-		TimeUnit:            op.TimeUnit,
-		SupplierID:          op.SupplierID,
-		ServiceItemCode:     op.ServiceItemCode,
-		CostPerUnit:         pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
-		LeadTimeDays:        op.LeadTimeDays,
-		CreatedBy:           pgutil.ToPgUUID(op.CreatedBy),
+		Code:                 op.Code,
+		Name:                 op.Name,
+		Description:          pgutil.ToPgTextFromPtr(op.Description),
+		Origin:               sqltypes.OperationOriginEnum(op.Origin),
+		Situation:            sqltypes.OperationSituationEnum(op.Situation),
+		DefaultWorkCenterID:  op.DefaultWorkCenterID,
+		StandardTime:         pgutil.ToPgNumericFromFloat64(op.StandardTime),
+		SetupTime:            pgutil.ToPgNumericFromFloat64(op.SetupTime),
+		RunTime:              pgutil.ToPgNumericFromFloat64(op.RunTime),
+		LaborTime:            pgutil.ToPgNumericFromFloat64(op.LaborTime),
+		RunTimeBaseQty:       pgutil.ToPgNumericFromFloat64(op.RunBaseQty),
+		QueueTime:            pgutil.ToPgNumericFromFloat64(op.QueueTime),
+		WaitTime:             pgutil.ToPgNumericFromFloat64(op.WaitTime),
+		MoveTime:             pgutil.ToPgNumericFromFloat64(op.MoveTime),
+		CrewSize:             pgutil.ToPgNumericFromFloat64(op.CrewSize),
+		TimeUnit:             op.TimeUnit,
+		SupplierID:           op.SupplierID,
+		ServiceItemCode:      op.ServiceItemCode,
+		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:         op.LeadTimeDays,
+		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
+		CreatedBy:            pgutil.ToPgUUID(op.CreatedBy),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating operation: %w", err)
@@ -58,31 +59,39 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 
 func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.Operation) (*entity.Operation, error) {
 	row, err := r.q.UpdateOperation(ctx, sqlc.UpdateOperationParams{
-		ID:                  op.ID,
-		Name:                op.Name,
-		Description:         pgutil.ToPgTextFromPtr(op.Description),
-		Origin:              sqltypes.OperationOriginEnum(op.Origin),
-		Situation:           sqltypes.OperationSituationEnum(op.Situation),
-		DefaultWorkCenterID: op.DefaultWorkCenterID,
-		StandardTime:        pgutil.ToPgNumericFromFloat64(op.StandardTime),
-		SetupTime:           pgutil.ToPgNumericFromFloat64(op.SetupTime),
-		RunTime:             pgutil.ToPgNumericFromFloat64(op.RunTime),
-		LaborTime:           pgutil.ToPgNumericFromFloat64(op.LaborTime),
-		RunTimeBaseQty:      pgutil.ToPgNumericFromFloat64(op.RunBaseQty),
-		QueueTime:           pgutil.ToPgNumericFromFloat64(op.QueueTime),
-		WaitTime:            pgutil.ToPgNumericFromFloat64(op.WaitTime),
-		MoveTime:            pgutil.ToPgNumericFromFloat64(op.MoveTime),
-		CrewSize:            pgutil.ToPgNumericFromFloat64(op.CrewSize),
-		TimeUnit:            op.TimeUnit,
-		SupplierID:          op.SupplierID,
-		ServiceItemCode:     op.ServiceItemCode,
-		CostPerUnit:         pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
-		LeadTimeDays:        op.LeadTimeDays,
+		ID:                   op.ID,
+		Name:                 op.Name,
+		Description:          pgutil.ToPgTextFromPtr(op.Description),
+		Origin:               sqltypes.OperationOriginEnum(op.Origin),
+		Situation:            sqltypes.OperationSituationEnum(op.Situation),
+		DefaultWorkCenterID:  op.DefaultWorkCenterID,
+		StandardTime:         pgutil.ToPgNumericFromFloat64(op.StandardTime),
+		SetupTime:            pgutil.ToPgNumericFromFloat64(op.SetupTime),
+		RunTime:              pgutil.ToPgNumericFromFloat64(op.RunTime),
+		LaborTime:            pgutil.ToPgNumericFromFloat64(op.LaborTime),
+		RunTimeBaseQty:       pgutil.ToPgNumericFromFloat64(op.RunBaseQty),
+		QueueTime:            pgutil.ToPgNumericFromFloat64(op.QueueTime),
+		WaitTime:             pgutil.ToPgNumericFromFloat64(op.WaitTime),
+		MoveTime:             pgutil.ToPgNumericFromFloat64(op.MoveTime),
+		CrewSize:             pgutil.ToPgNumericFromFloat64(op.CrewSize),
+		TimeUnit:             op.TimeUnit,
+		SupplierID:           op.SupplierID,
+		ServiceItemCode:      op.ServiceItemCode,
+		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:         op.LeadTimeDays,
+		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating operation: %w", err)
 	}
 	return operationRowToEntity(row), nil
+}
+
+func operationRemittance(value string) string {
+	if value == "" {
+		return "DEMAND_ITEMS"
+	}
+	return value
 }
 
 func (r *RoutingRepositorySQLC) GetOperationByID(ctx context.Context, id int64) (*entity.Operation, error) {
@@ -107,6 +116,10 @@ func (r *RoutingRepositorySQLC) ListOperations(ctx context.Context, onlyActive b
 
 func (r *RoutingRepositorySQLC) DeactivateOperation(ctx context.Context, id int64) error {
 	return r.q.DeactivateOperation(ctx, id)
+}
+
+func (r *RoutingRepositorySQLC) OperationUsedInRoutes(ctx context.Context, id int64) (bool, error) {
+	return r.q.OperationUsedInRoutes(ctx, id)
 }
 
 func (r *RoutingRepositorySQLC) NextOperationCode(ctx context.Context) (int64, error) {
@@ -210,26 +223,27 @@ func (r *RoutingRepositorySQLC) GetRouteForItem(ctx context.Context, itemCode in
 
 func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entity.RouteOperation) (*entity.RouteOperation, error) {
 	row, err := r.q.AddRouteOperation(ctx, sqlc.AddRouteOperationParams{
-		RouteID:         op.RouteID,
-		Sequence:        op.Sequence,
-		OperationID:     op.OperationID,
-		WorkCenterID:    op.WorkCenterID,
-		StandardTime:    pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
-		SetupTime:       pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
-		RunTime:         pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
-		LaborTime:       pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
-		RunTimeBaseQty:  pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
-		QueueTime:       pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
-		WaitTime:        pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
-		MoveTime:        pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
-		CrewSize:        pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
-		TimeUnit:        pgutil.ToPgTextFromPtr(op.TimeUnit),
-		SupplierID:      op.SupplierID,
-		ServiceItemCode: op.ServiceItemCode,
-		CostPerUnit:     pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
-		LeadTimeDays:    op.LeadTimeDays,
-		Situation:       sqltypes.RouteOpSituationEnum(op.Situation),
-		Notes:           pgutil.ToPgTextFromPtr(op.Notes),
+		RouteID:              op.RouteID,
+		Sequence:             op.Sequence,
+		OperationID:          op.OperationID,
+		WorkCenterID:         op.WorkCenterID,
+		StandardTime:         pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
+		SetupTime:            pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
+		RunTime:              pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
+		LaborTime:            pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
+		RunTimeBaseQty:       pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
+		QueueTime:            pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
+		WaitTime:             pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
+		MoveTime:             pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
+		CrewSize:             pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
+		TimeUnit:             pgutil.ToPgTextFromPtr(op.TimeUnit),
+		SupplierID:           op.SupplierID,
+		ServiceItemCode:      op.ServiceItemCode,
+		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:         op.LeadTimeDays,
+		ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
+		Situation:            sqltypes.RouteOpSituationEnum(op.Situation),
+		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adding route operation: %w", err)
@@ -239,24 +253,25 @@ func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entit
 
 func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *entity.RouteOperation) (*entity.RouteOperation, error) {
 	row, err := r.q.UpdateRouteOperation(ctx, sqlc.UpdateRouteOperationParams{
-		ID:              op.ID,
-		WorkCenterID:    op.WorkCenterID,
-		StandardTime:    pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
-		SetupTime:       pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
-		RunTime:         pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
-		LaborTime:       pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
-		RunTimeBaseQty:  pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
-		QueueTime:       pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
-		WaitTime:        pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
-		MoveTime:        pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
-		CrewSize:        pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
-		TimeUnit:        pgutil.ToPgTextFromPtr(op.TimeUnit),
-		SupplierID:      op.SupplierID,
-		ServiceItemCode: op.ServiceItemCode,
-		CostPerUnit:     pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
-		LeadTimeDays:    op.LeadTimeDays,
-		Situation:       sqltypes.RouteOpSituationEnum(op.Situation),
-		Notes:           pgutil.ToPgTextFromPtr(op.Notes),
+		ID:                   op.ID,
+		WorkCenterID:         op.WorkCenterID,
+		StandardTime:         pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
+		SetupTime:            pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
+		RunTime:              pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
+		LaborTime:            pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
+		RunTimeBaseQty:       pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
+		QueueTime:            pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
+		WaitTime:             pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
+		MoveTime:             pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
+		CrewSize:             pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
+		TimeUnit:             pgutil.ToPgTextFromPtr(op.TimeUnit),
+		SupplierID:           op.SupplierID,
+		ServiceItemCode:      op.ServiceItemCode,
+		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		LeadTimeDays:         op.LeadTimeDays,
+		ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
+		Situation:            sqltypes.RouteOpSituationEnum(op.Situation),
+		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating route operation: %w", err)
@@ -452,30 +467,31 @@ func resourceRowToEntity(row sqlc.RouteOperationResource) *entity.RouteOpResourc
 
 func operationRowToEntity(row sqlc.Operation) *entity.Operation {
 	e := &entity.Operation{
-		ID:                  row.ID,
-		Code:                row.Code,
-		Name:                row.Name,
-		Origin:              entity.OperationOrigin(row.Origin),
-		Situation:           entity.OperationSituation(row.Situation),
-		StandardTime:        pgutil.FromPgNumericToFloat64(row.StandardTime),
-		SetupTime:           pgutil.FromPgNumericToFloat64(row.SetupTime),
-		RunTime:             pgutil.FromPgNumericToFloat64(row.RunTime),
-		LaborTime:           pgutil.FromPgNumericToFloat64(row.LaborTime),
-		RunBaseQty:          pgutil.FromPgNumericToFloat64(row.RunTimeBaseQty),
-		QueueTime:           pgutil.FromPgNumericToFloat64(row.QueueTime),
-		WaitTime:            pgutil.FromPgNumericToFloat64(row.WaitTime),
-		MoveTime:            pgutil.FromPgNumericToFloat64(row.MoveTime),
-		CrewSize:            pgutil.FromPgNumericToFloat64(row.CrewSize),
-		TimeUnit:            row.TimeUnit,
-		SupplierID:          row.SupplierID,
-		ServiceItemCode:     row.ServiceItemCode,
-		CostPerUnit:         numToPtr(row.CostPerUnit),
-		LeadTimeDays:        row.LeadTimeDays,
-		IsActive:            row.IsActive,
-		CreatedAt:           pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt:           pgutil.FromPgTimestamptz(row.UpdatedAt),
-		CreatedBy:           pgutil.FromPgUUID(row.CreatedBy),
-		DefaultWorkCenterID: row.DefaultWorkCenterID,
+		ID:                   row.ID,
+		Code:                 row.Code,
+		Name:                 row.Name,
+		Origin:               entity.OperationOrigin(row.Origin),
+		Situation:            entity.OperationSituation(row.Situation),
+		StandardTime:         pgutil.FromPgNumericToFloat64(row.StandardTime),
+		SetupTime:            pgutil.FromPgNumericToFloat64(row.SetupTime),
+		RunTime:              pgutil.FromPgNumericToFloat64(row.RunTime),
+		LaborTime:            pgutil.FromPgNumericToFloat64(row.LaborTime),
+		RunBaseQty:           pgutil.FromPgNumericToFloat64(row.RunTimeBaseQty),
+		QueueTime:            pgutil.FromPgNumericToFloat64(row.QueueTime),
+		WaitTime:             pgutil.FromPgNumericToFloat64(row.WaitTime),
+		MoveTime:             pgutil.FromPgNumericToFloat64(row.MoveTime),
+		CrewSize:             pgutil.FromPgNumericToFloat64(row.CrewSize),
+		TimeUnit:             row.TimeUnit,
+		SupplierID:           row.SupplierID,
+		ServiceItemCode:      row.ServiceItemCode,
+		CostPerUnit:          numToPtr(row.CostPerUnit),
+		LeadTimeDays:         row.LeadTimeDays,
+		ThirdPartyRemittance: row.ThirdPartyRemittance,
+		IsActive:             row.IsActive,
+		CreatedAt:            pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:            pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy:            pgutil.FromPgUUID(row.CreatedBy),
+		DefaultWorkCenterID:  row.DefaultWorkCenterID,
 	}
 	if row.Description.Valid {
 		v := row.Description.String
@@ -560,6 +576,7 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 	e.ServiceItemCode = row.ServiceItemCode
 	e.CostPerUnit = numToPtr(row.CostPerUnit)
 	e.LeadTimeDays = row.LeadTimeDays
+	e.ThirdPartyRemittance = textToPtr(row.ThirdPartyRemittance)
 	if row.Notes.Valid {
 		v := row.Notes.String
 		e.Notes = &v
@@ -569,26 +586,31 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 
 func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOperation {
 	e := routeOpRowToEntity(sqlc.RouteOperation{
-		ID:             row.ID,
-		RouteID:        row.RouteID,
-		Sequence:       row.Sequence,
-		OperationID:    row.OperationID,
-		WorkCenterID:   row.WorkCenterID,
-		StandardTime:   row.StandardTime,
-		SetupTime:      row.SetupTime,
-		RunTime:        row.RunTime,
-		LaborTime:      row.LaborTime,
-		RunTimeBaseQty: row.RunTimeBaseQty,
-		QueueTime:      row.QueueTime,
-		WaitTime:       row.WaitTime,
-		MoveTime:       row.MoveTime,
-		CrewSize:       row.CrewSize,
-		TimeUnit:       row.TimeUnit,
-		Situation:      row.Situation,
-		Notes:          row.Notes,
-		IsActive:       row.IsActive,
-		CreatedAt:      row.CreatedAt,
-		UpdatedAt:      row.UpdatedAt,
+		ID:                   row.ID,
+		RouteID:              row.RouteID,
+		Sequence:             row.Sequence,
+		OperationID:          row.OperationID,
+		WorkCenterID:         row.WorkCenterID,
+		StandardTime:         row.StandardTime,
+		SetupTime:            row.SetupTime,
+		RunTime:              row.RunTime,
+		LaborTime:            row.LaborTime,
+		RunTimeBaseQty:       row.RunTimeBaseQty,
+		QueueTime:            row.QueueTime,
+		WaitTime:             row.WaitTime,
+		MoveTime:             row.MoveTime,
+		CrewSize:             row.CrewSize,
+		TimeUnit:             row.TimeUnit,
+		Situation:            row.Situation,
+		Notes:                row.Notes,
+		IsActive:             row.IsActive,
+		CreatedAt:            row.CreatedAt,
+		UpdatedAt:            row.UpdatedAt,
+		SupplierID:           row.SupplierID,
+		ServiceItemCode:      row.ServiceItemCode,
+		CostPerUnit:          row.CostPerUnit,
+		LeadTimeDays:         row.LeadTimeDays,
+		ThirdPartyRemittance: row.ThirdPartyRemittance,
 	})
 	e.OperationName = row.OperationName
 	e.OperationOrigin = entity.OperationOrigin(row.OperationOrigin)
@@ -624,6 +646,11 @@ func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCo
 	}
 	out := make([]*entity.ExternalOp, 0, len(rows))
 	for _, row := range rows {
+		var supplierID *int64
+		if row.SupplierID > 0 {
+			value := row.SupplierID
+			supplierID = &value
+		}
 		op := &entity.ExternalOp{
 			RouteOpID:       row.ID,
 			OperationID:     row.OperationID,
@@ -631,10 +658,11 @@ func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCo
 			EffectiveHours:  pgutil.FromPgNumericToFloat64(row.EffectiveHours),
 			Origin:          entity.OperationOrigin(row.Origin),
 			WorkCenterID:    row.WorkCenterID,
-			SupplierID:      row.SupplierID,
+			SupplierID:      supplierID,
 			ServiceItemCode: row.ServiceItemCode,
 			CostPerUnit:     pgutil.FromPgNumericToFloat64(row.CostPerUnit),
 			LeadTimeDays:    row.LeadTimeDays,
+			RemittanceType:  row.RemittanceType,
 		}
 		out = append(out, op)
 	}

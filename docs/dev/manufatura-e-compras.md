@@ -190,6 +190,18 @@ requisição→PO já existente. O `enterprise_code` da requisição é configur
 (default 1). Reaproveita `GetExternalOpsByItem` (efetivo = override ∘ default), o mesmo
 usado pelo MRP para gerar ordens SERVICO no planejamento.
 
+O fluxo completo deixou de ser apenas uma requisição auxiliar: a migration
+`000233` cria uma ordem de serviço por operação externa, liga automaticamente
+OF → requisição → OC e acompanha remessa/retorno/recebimento. Preços vigentes,
+custo, APIs e testes estão documentados em
+[`servicos-de-terceiros.md`](servicos-de-terceiros.md).
+
+Operações e operações de roteiro externas expõem `supplier_id`,
+`service_item_code`, `cost_per_unit`, `lead_time_days` e
+`third_party_remittance` (`DEMAND_ITEMS`, `ORDER_ITEM`, `GENERIC` ou `NONE`). O
+override do roteiro prevalece sobre o padrão da operação. Uma operação externa
+já usada por roteiro não pode ter sua origem alterada para interna.
+
 ---
 
 ### Como cadastrar um roteiro (passo a passo)

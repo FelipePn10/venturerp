@@ -10,7 +10,8 @@ import (
 
 // fakeRepo is an in-memory ItemConversionRepository for tests.
 type fakeRepo struct {
-	rows []*entity.ItemUnitConversion
+	rows              []*entity.ItemUnitConversion
+	acceptsFractional bool
 }
 
 func (r *fakeRepo) Create(ctx context.Context, c *entity.ItemUnitConversion) (*entity.ItemUnitConversion, error) {
@@ -35,6 +36,17 @@ func (r *fakeRepo) Get(ctx context.Context, itemCode int64, from, to string) (*e
 	return nil, errors.New("not found")
 }
 func (r *fakeRepo) Delete(ctx context.Context, id int64) error { return nil }
+func (r *fakeRepo) GetConfigured(ctx context.Context, itemCode int64, mask, from, to string) (*entity.ItemUnitConversion, error) {
+	for _, c := range r.rows {
+		if c.ItemCode == itemCode && c.Mask == mask && c.FromUOM == from && c.ToUOM == to {
+			return c, nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+func (r *fakeRepo) AcceptsFractional(context.Context, int64) (bool, error) {
+	return r.acceptsFractional, nil
+}
 
 func newUC(t *testing.T) *ItemConversionUseCase {
 	t.Helper()
@@ -101,5 +113,28 @@ func TestConvertQuantityAndPrice(t *testing.T) {
 	p, found, _ := uc.ConvertUnitPrice(context.Background(), 1, 120, "CX", "UN")
 	if !found || p != 10 {
 		t.Errorf("ConvertUnitPrice = %v (found=%v), want 10", p, found)
+	}
+}
+
+func TestConvertQuantityAppliesRoundingAndTolerancePolicy(t *testing.T) {
+	repo := &fakeRepo{rows: []*entity.ItemUnitConversion{{ItemCode: 1, FromUOM: "UN", ToUOM: "CX", Factor: 0.167, RoundingPercent: 50, ToleranceType: "VALUE"}}}
+	got, found, err := NewItemConversionUseCase(repo).ConvertQuantityConfigured(context.Background(), 1, "", 6, "UN", "CX")
+	if err != nil || !found || got != 1 {
+		t.Fatalf("converted=%v found=%v err=%v", got, found, err)
+	}
+	repo.rows[0].RoundingPercent = 0
+	if _, _, err = NewItemConversionUseCase(repo).ConvertQuantityConfigured(context.Background(), 1, "", 6, "UN", "CX"); err == nil {
+		t.Fatal("fractional quantity outside policy must be rejected")
+	}
+}
+
+func TestFactorConfiguredUsesMaskBeforeGenericConversion(t *testing.T) {
+	repo := &fakeRepo{rows: []*entity.ItemUnitConversion{
+		{ItemCode: 1, Mask: "", FromUOM: "CX", ToUOM: "UN", Factor: 10},
+		{ItemCode: 1, Mask: "BLUE", FromUOM: "CX", ToUOM: "UN", Factor: 12},
+	}}
+	factor, found, err := NewItemConversionUseCase(repo).FactorConfigured(context.Background(), 1, "BLUE", "CX", "UN")
+	if err != nil || !found || factor != 12 {
+		t.Fatalf("factor=%v found=%v err=%v", factor, found, err)
 	}
 }

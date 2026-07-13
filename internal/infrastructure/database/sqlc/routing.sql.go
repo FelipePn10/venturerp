@@ -58,39 +58,40 @@ INSERT INTO route_operations (
     standard_time, setup_time,
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
-    supplier_id, service_item_code, cost_per_unit, lead_time_days,
+    supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
     situation, notes, is_active
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6,
     $7, $8, $9,
     $10, $11, $12, $13, $14,
-    $15, $16, $17, $18,
-    $19, $20, TRUE
+    $15, $16, $17, $18, $19,
+    $20, $21, TRUE
 ) RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance
 `
 
 type AddRouteOperationParams struct {
-	RouteID         int64
-	Sequence        int16
-	OperationID     int64
-	WorkCenterID    *int64
-	StandardTime    pgtype.Numeric
-	SetupTime       pgtype.Numeric
-	RunTime         pgtype.Numeric
-	LaborTime       pgtype.Numeric
-	RunTimeBaseQty  pgtype.Numeric
-	QueueTime       pgtype.Numeric
-	WaitTime        pgtype.Numeric
-	MoveTime        pgtype.Numeric
-	CrewSize        pgtype.Numeric
-	TimeUnit        pgtype.Text
-	SupplierID      *int64
-	ServiceItemCode *int64
-	CostPerUnit     pgtype.Numeric
-	LeadTimeDays    *int32
-	Situation       sqltypes.RouteOpSituationEnum
-	Notes           pgtype.Text
+	RouteID              int64
+	Sequence             int16
+	OperationID          int64
+	WorkCenterID         *int64
+	StandardTime         pgtype.Numeric
+	SetupTime            pgtype.Numeric
+	RunTime              pgtype.Numeric
+	LaborTime            pgtype.Numeric
+	RunTimeBaseQty       pgtype.Numeric
+	QueueTime            pgtype.Numeric
+	WaitTime             pgtype.Numeric
+	MoveTime             pgtype.Numeric
+	CrewSize             pgtype.Numeric
+	TimeUnit             pgtype.Text
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          pgtype.Numeric
+	LeadTimeDays         *int32
+	ThirdPartyRemittance pgtype.Text
+	Situation            sqltypes.RouteOpSituationEnum
+	Notes                pgtype.Text
 }
 
 // ─── route_operations ────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		arg.ServiceItemCode,
 		arg.CostPerUnit,
 		arg.LeadTimeDays,
+		arg.ThirdPartyRemittance,
 		arg.Situation,
 		arg.Notes,
 	)
@@ -165,40 +167,41 @@ INSERT INTO operations (
     default_work_center_id, standard_time, setup_time,
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
-    supplier_id, service_item_code, cost_per_unit, lead_time_days,
+    supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
     is_active, created_by
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8,
     $9, $10, $11,
     $12, $13, $14, $15, $16,
-    $17, $18, $19, $20,
-    TRUE, $21
+    $17, $18, $19, $20, $21,
+    TRUE, $22
 ) RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance
 `
 
 type CreateOperationParams struct {
-	Code                int64
-	Name                string
-	Description         pgtype.Text
-	Origin              sqltypes.OperationOriginEnum
-	Situation           sqltypes.OperationSituationEnum
-	DefaultWorkCenterID *int64
-	StandardTime        pgtype.Numeric
-	SetupTime           pgtype.Numeric
-	RunTime             pgtype.Numeric
-	LaborTime           pgtype.Numeric
-	RunTimeBaseQty      pgtype.Numeric
-	QueueTime           pgtype.Numeric
-	WaitTime            pgtype.Numeric
-	MoveTime            pgtype.Numeric
-	CrewSize            pgtype.Numeric
-	TimeUnit            string
-	SupplierID          *int64
-	ServiceItemCode     *int64
-	CostPerUnit         pgtype.Numeric
-	LeadTimeDays        *int32
-	CreatedBy           pgtype.UUID
+	Code                 int64
+	Name                 string
+	Description          pgtype.Text
+	Origin               sqltypes.OperationOriginEnum
+	Situation            sqltypes.OperationSituationEnum
+	DefaultWorkCenterID  *int64
+	StandardTime         pgtype.Numeric
+	SetupTime            pgtype.Numeric
+	RunTime              pgtype.Numeric
+	LaborTime            pgtype.Numeric
+	RunTimeBaseQty       pgtype.Numeric
+	QueueTime            pgtype.Numeric
+	WaitTime             pgtype.Numeric
+	MoveTime             pgtype.Numeric
+	CrewSize             pgtype.Numeric
+	TimeUnit             string
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          pgtype.Numeric
+	LeadTimeDays         *int32
+	ThirdPartyRemittance string
+	CreatedBy            pgtype.UUID
 }
 
 // ─── operations ──────────────────────────────────────────────────────────────
@@ -224,6 +227,7 @@ func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams
 		arg.ServiceItemCode,
 		arg.CostPerUnit,
 		arg.LeadTimeDays,
+		arg.ThirdPartyRemittance,
 		arg.CreatedBy,
 	)
 	var i Operation
@@ -357,10 +361,15 @@ SELECT
     op.name AS operation_name,
     op.origin,
     COALESCE(ro.standard_time, op.standard_time) AS effective_hours,
-    COALESCE(ro.supplier_id, op.supplier_id) AS supplier_id,
+    COALESCE((SELECT supplier.code FROM suppliers supplier
+              WHERE supplier.id = COALESCE(ro.supplier_id, op.supplier_id)
+                 OR supplier.code = COALESCE(ro.supplier_id, op.supplier_id)
+              ORDER BY (supplier.id = COALESCE(ro.supplier_id, op.supplier_id)) DESC
+              LIMIT 1), COALESCE(ro.supplier_id, op.supplier_id), 0)::bigint AS supplier_id,
     COALESCE(ro.service_item_code, op.service_item_code) AS service_item_code,
     COALESCE(ro.cost_per_unit, op.cost_per_unit, 0) AS cost_per_unit,
-    COALESCE(ro.lead_time_days, op.lead_time_days, 0) AS lead_time_days
+    COALESCE(ro.lead_time_days, op.lead_time_days, 0) AS lead_time_days,
+    COALESCE(ro.third_party_remittance, op.third_party_remittance, 'DEMAND_ITEMS') AS remittance_type
 FROM manufacturing_routes mr
 JOIN route_operations ro ON ro.route_id = mr.id
 JOIN operations op ON op.id = ro.operation_id
@@ -378,10 +387,11 @@ type GetExternalRouteOpsForItemRow struct {
 	OperationName   string
 	Origin          sqltypes.OperationOriginEnum
 	EffectiveHours  pgtype.Numeric
-	SupplierID      *int64
+	SupplierID      int64
 	ServiceItemCode *int64
 	CostPerUnit     pgtype.Numeric
 	LeadTimeDays    int32
+	RemittanceType  string
 }
 
 func (q *Queries) GetExternalRouteOpsForItem(ctx context.Context, itemCode int64) ([]GetExternalRouteOpsForItemRow, error) {
@@ -404,6 +414,7 @@ func (q *Queries) GetExternalRouteOpsForItem(ctx context.Context, itemCode int64
 			&i.ServiceItemCode,
 			&i.CostPerUnit,
 			&i.LeadTimeDays,
+			&i.RemittanceType,
 		); err != nil {
 			return nil, err
 		}
@@ -971,6 +982,17 @@ func (q *Queries) NextRouteCode(ctx context.Context) (int64, error) {
 	return next_code, err
 }
 
+const operationUsedInRoutes = `-- name: OperationUsedInRoutes :one
+SELECT EXISTS(SELECT 1 FROM route_operations WHERE operation_id = $1 AND is_active)
+`
+
+func (q *Queries) OperationUsedInRoutes(ctx context.Context, operationID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, operationUsedInRoutes, operationID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const removeRouteOpResource = `-- name: RemoveRouteOpResource :exec
 DELETE FROM route_operation_resources WHERE id = $1
 `
@@ -1046,32 +1068,34 @@ UPDATE operations SET
     service_item_code = $18,
     cost_per_unit = $19,
     lead_time_days = $20,
+    third_party_remittance = $21,
     updated_at = NOW()
 WHERE id = $1
 RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance
 `
 
 type UpdateOperationParams struct {
-	ID                  int64
-	Name                string
-	Description         pgtype.Text
-	Origin              sqltypes.OperationOriginEnum
-	Situation           sqltypes.OperationSituationEnum
-	DefaultWorkCenterID *int64
-	StandardTime        pgtype.Numeric
-	SetupTime           pgtype.Numeric
-	RunTime             pgtype.Numeric
-	LaborTime           pgtype.Numeric
-	RunTimeBaseQty      pgtype.Numeric
-	QueueTime           pgtype.Numeric
-	WaitTime            pgtype.Numeric
-	MoveTime            pgtype.Numeric
-	CrewSize            pgtype.Numeric
-	TimeUnit            string
-	SupplierID          *int64
-	ServiceItemCode     *int64
-	CostPerUnit         pgtype.Numeric
-	LeadTimeDays        *int32
+	ID                   int64
+	Name                 string
+	Description          pgtype.Text
+	Origin               sqltypes.OperationOriginEnum
+	Situation            sqltypes.OperationSituationEnum
+	DefaultWorkCenterID  *int64
+	StandardTime         pgtype.Numeric
+	SetupTime            pgtype.Numeric
+	RunTime              pgtype.Numeric
+	LaborTime            pgtype.Numeric
+	RunTimeBaseQty       pgtype.Numeric
+	QueueTime            pgtype.Numeric
+	WaitTime             pgtype.Numeric
+	MoveTime             pgtype.Numeric
+	CrewSize             pgtype.Numeric
+	TimeUnit             string
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          pgtype.Numeric
+	LeadTimeDays         *int32
+	ThirdPartyRemittance string
 }
 
 func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams) (Operation, error) {
@@ -1096,6 +1120,7 @@ func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams
 		arg.ServiceItemCode,
 		arg.CostPerUnit,
 		arg.LeadTimeDays,
+		arg.ThirdPartyRemittance,
 	)
 	var i Operation
 	err := row.Scan(
@@ -1227,32 +1252,34 @@ UPDATE route_operations SET
     service_item_code = $14,
     cost_per_unit = $15,
     lead_time_days = $16,
-    situation = $17,
-    notes = $18,
+    third_party_remittance = $17,
+    situation = $18,
+    notes = $19,
     updated_at = NOW()
 WHERE id = $1
 RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance
 `
 
 type UpdateRouteOperationParams struct {
-	ID              int64
-	WorkCenterID    *int64
-	StandardTime    pgtype.Numeric
-	SetupTime       pgtype.Numeric
-	RunTime         pgtype.Numeric
-	LaborTime       pgtype.Numeric
-	RunTimeBaseQty  pgtype.Numeric
-	QueueTime       pgtype.Numeric
-	WaitTime        pgtype.Numeric
-	MoveTime        pgtype.Numeric
-	CrewSize        pgtype.Numeric
-	TimeUnit        pgtype.Text
-	SupplierID      *int64
-	ServiceItemCode *int64
-	CostPerUnit     pgtype.Numeric
-	LeadTimeDays    *int32
-	Situation       sqltypes.RouteOpSituationEnum
-	Notes           pgtype.Text
+	ID                   int64
+	WorkCenterID         *int64
+	StandardTime         pgtype.Numeric
+	SetupTime            pgtype.Numeric
+	RunTime              pgtype.Numeric
+	LaborTime            pgtype.Numeric
+	RunTimeBaseQty       pgtype.Numeric
+	QueueTime            pgtype.Numeric
+	WaitTime             pgtype.Numeric
+	MoveTime             pgtype.Numeric
+	CrewSize             pgtype.Numeric
+	TimeUnit             pgtype.Text
+	SupplierID           *int64
+	ServiceItemCode      *int64
+	CostPerUnit          pgtype.Numeric
+	LeadTimeDays         *int32
+	ThirdPartyRemittance pgtype.Text
+	Situation            sqltypes.RouteOpSituationEnum
+	Notes                pgtype.Text
 }
 
 func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOperationParams) (RouteOperation, error) {
@@ -1273,6 +1300,7 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		arg.ServiceItemCode,
 		arg.CostPerUnit,
 		arg.LeadTimeDays,
+		arg.ThirdPartyRemittance,
 		arg.Situation,
 		arg.Notes,
 	)

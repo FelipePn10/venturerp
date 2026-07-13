@@ -72,8 +72,8 @@ SELECT * FROM configured_item_rules WHERE item_code = $1 AND enterprise_id = @en
 UPDATE configured_item_rules SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = @enterprise_id;
 
 -- name: CreateMRPPlannedSuggestion :one
-INSERT INTO mrp_planned_suggestions (order_number, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, warehouse_code, inter_factory, source_enterprise_code, auto_release, enterprise_id)
-SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, @enterprise_id
+INSERT INTO mrp_planned_suggestions (order_number, plan_code, item_code, mask, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, warehouse_code, inter_factory, source_enterprise_code, auto_release, route_operation_id, operation_id, supplier_code, service_item_code, remittance_type, enterprise_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, @enterprise_id
 WHERE NOT EXISTS (
     SELECT 1 FROM planned_orders po
     WHERE po.enterprise_id = @enterprise_id AND po.order_number = $1 AND po.is_active = TRUE

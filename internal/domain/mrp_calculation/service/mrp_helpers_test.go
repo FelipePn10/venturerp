@@ -9,12 +9,22 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 )
 
 type numberedSuggestionRepo struct {
 	mrprepo.MRPCalculationRepository
 	created *entity.PlannedOrderSuggestion
+}
+
+type externalRoutingStub struct {
+	routingrepo.RoutingRepository
+	operations []*routingentity.ExternalOp
+}
+
+func (s *externalRoutingStub) GetExternalOpsByItem(context.Context, int64) ([]*routingentity.ExternalOp, error) {
+	return s.operations, nil
 }
 
 func (r *numberedSuggestionRepo) CreatePlannedOrderSuggestion(_ context.Context, suggestion *entity.PlannedOrderSuggestion) (*entity.PlannedOrderSuggestion, error) {
@@ -32,6 +42,27 @@ func TestCreateNumberedSuggestionAdvancesSequence(t *testing.T) {
 	}
 	if created.OrderNumber == nil || *created.OrderNumber != 500 || next != 501 {
 		t.Fatalf("unexpected numbering: suggestion=%v next=%d", created.OrderNumber, next)
+	}
+}
+
+func TestNetRequirementEnrichesPlannedExternalServiceOrders(t *testing.T) {
+	supplier, serviceItem := int64(77), int64(900)
+	routing := &externalRoutingStub{operations: []*routingentity.ExternalOp{{
+		RouteOpID: 31, OperationID: 44, OperationName: "Zincagem", SupplierID: &supplier,
+		ServiceItemCode: &serviceItem, RemittanceType: "ORDER_ITEM",
+	}}}
+	service := &MRPServiceImpl{RoutingRepo: routing}
+	input := &entity.MRPInput{PlanCode: 8, ItemCode: 100, Mask: "AZUL", Quantity: 5, NeedDate: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)}
+	output, err := service.calcNetReqFast(context.Background(), input, map[int64]*entity.StockSnapshot{}, map[int64][]*entity.ConfiguredItemRule{}, nil, map[int64]*cachedItemMRP{100: {}}, entity.DefaultTypedPlanningParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(output.PlannedOrders) != 2 {
+		t.Fatalf("planned orders=%+v", output.PlannedOrders)
+	}
+	plannedService := output.PlannedOrders[1]
+	if plannedService.OrderType != "SERVICO" || plannedService.Mask != "AZUL" || plannedService.RouteOperationID == nil || *plannedService.RouteOperationID != 31 || plannedService.OperationID == nil || *plannedService.OperationID != 44 || plannedService.SupplierCode == nil || *plannedService.SupplierCode != supplier || plannedService.RemittanceType == nil || *plannedService.RemittanceType != "ORDER_ITEM" {
+		t.Fatalf("planned service details=%+v", plannedService)
 	}
 }
 

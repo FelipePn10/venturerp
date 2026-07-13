@@ -82,6 +82,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/technical_assistance_uc"
+	thirdPartyServiceUC "github.com/FelipePn10/panossoerp/internal/application/usecase/third_party_service_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_sheet_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
@@ -159,6 +160,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure_query"
 	supplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/supplier"
 	technicalAssistanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/technical_assistance"
+	thirdPartyServiceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/third_party_service"
 	toolRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/tool"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
@@ -463,6 +465,8 @@ func (app *application) mount() chi.Router {
 	routingRouteUC := routing_uc.NewRouteUseCase(rRepo)
 	routingLeadTimeUC := routing_uc.NewLeadTimeUseCase(rRepo)
 	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC)
+	thirdPartyServiceRepository := thirdPartyServiceRepo.New(app.db.Pool)
+	thirdPartyServiceHandler := handler.NewThirdPartyServiceHandler(thirdPartyServiceUC.New(thirdPartyServiceRepository))
 
 	// tooling with useful-life tracking (R3)
 	toolRepository := toolRepo.New(queries)
@@ -490,7 +494,7 @@ func (app *application) mount() chi.Router {
 
 	// standard cost
 	scRepo := standardCostRepo.New(queries)
-	standardCostUC := cost_uc.New(scRepo).WithRouting(rRepo)
+	standardCostUC := cost_uc.New(scRepo).WithRouting(rRepo).WithThirdPartyPrices(thirdPartyServiceUC.New(thirdPartyServiceRepository))
 	standardCostHandler := handler.NewStandardCostHandler(standardCostUC)
 
 	// CRP
@@ -670,6 +674,7 @@ func (app *application) mount() chi.Router {
 	// requisition for its external operations (R4).
 	plannedFirmUC.ReqRepo = purchaseReqRepository
 	plannedFirmUC.ExternalOps = rRepo
+	plannedFirmUC.ServiceOrders = thirdPartyServiceRepository
 	plannedFirmUC.EnterpriseCode = 1
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
 		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository),
@@ -1862,6 +1867,29 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/serials", toolHandler.ListSerials)
 			})
 		})
+		r.Route("/api/third-party-services", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/prices", thirdPartyServiceHandler.ListPrices)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/prices/resolve", thirdPartyServiceHandler.ResolvePrice)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cost", thirdPartyServiceHandler.ResolveCost)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/prices", thirdPartyServiceHandler.CreatePrice)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/prices/readjust", thirdPartyServiceHandler.Readjust)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/prices/copy-move", thirdPartyServiceHandler.CopyMove)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/prices/{id}", thirdPartyServiceHandler.GetPrice)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/prices/{id}", thirdPartyServiceHandler.UpdatePrice)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/prices/{id}", thirdPartyServiceHandler.DeletePrice)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/prices/{id}/history", thirdPartyServiceHandler.History)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/production-orders/{productionOrderID}/orders", thirdPartyServiceHandler.CreateOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders", thirdPartyServiceHandler.ListOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/report", thirdPartyServiceHandler.ListOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}", thirdPartyServiceHandler.GetOrder)
+			r.With(httpmw.RequireRole("ADMIN")).Patch("/orders/{id}/status", thirdPartyServiceHandler.UpdateOrderStatus)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/orders/{id}/movements", thirdPartyServiceHandler.AddMovement)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}/movements", thirdPartyServiceHandler.ListMovements)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}/history", thirdPartyServiceHandler.OrderHistory)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/global-conversions", thirdPartyServiceHandler.ListGlobalConversions)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/global-conversions", thirdPartyServiceHandler.UpsertGlobalConversion)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/global-conversions/{id}", thirdPartyServiceHandler.DeleteGlobalConversion)
+		})
 		// Configurador de Produto (Fase 1): Conjuntos/Variáveis, Características,
 		// Características do Item e geração de máscara.
 		r.Route("/api/configurator", func(r chi.Router) {
@@ -2346,10 +2374,10 @@ func (app *application) mount() chi.Router {
 		})
 
 		r.Route("/api/item-conversions", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemConversionHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/", itemConversionHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/convert", itemConversionHandler.Convert)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemConversionHandler.ListByItem)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemConversionHandler.Delete)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{id}", itemConversionHandler.Delete)
 		})
 
 		r.Route("/api/purchase-requisitions", func(r chi.Router) {

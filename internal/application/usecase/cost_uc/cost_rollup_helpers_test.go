@@ -2,13 +2,18 @@ package cost_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	scentity "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 func TestSelectPrimaryCostSubstitutes(t *testing.T) {
@@ -35,6 +40,29 @@ func TestSelectPrimaryCostSubstitutes(t *testing.T) {
 	}
 	if len(selected) != 2 {
 		t.Errorf("selected = %d, want 2", len(selected))
+	}
+}
+
+type costRoutingStub struct{ routingrepo.RoutingRepository }
+
+func (costRoutingStub) GetRouteForItem(context.Context, int64, string) (*routingentity.ManufacturingRoute, error) {
+	return &routingentity.ManufacturingRoute{ID: 1}, nil
+}
+func (costRoutingStub) GetRouteOperations(context.Context, int64) ([]*routingentity.RouteOperation, error) {
+	return []*routingentity.RouteOperation{{OperationID: 7, OperationOrigin: routingentity.OriginThirdPart, Situation: routingentity.RouteOpApproved}}, nil
+}
+
+type failingThirdPartyCost struct{}
+
+func (failingThirdPartyCost) StandardCostPerUnit(context.Context, int64, string, int64, time.Time) (decimal.Decimal, error) {
+	return decimal.Zero, errors.New("contract price not found")
+}
+
+func TestRollUpRejectsExternalOperationWithoutResolvedContractPrice(t *testing.T) {
+	repo := &fakeCostRepo{childrenByMask: map[string][]domainrepo.BOMChild{"1|": {}}, purchaseCosts: map[int64]float64{1: 10}}
+	_, err := New(repo).WithRouting(costRoutingStub{}).WithThirdPartyPrices(failingThirdPartyCost{}).RollUp(context.Background(), request.CostRollupDTO{ItemCode: 1, LotSize: 1, CalculatedBy: uuid.NewString()})
+	if err == nil {
+		t.Fatal("standard cost must not silently ignore a missing external-service price")
 	}
 }
 

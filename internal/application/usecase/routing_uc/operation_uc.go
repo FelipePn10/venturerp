@@ -3,6 +3,7 @@ package routing_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -29,6 +30,10 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 	if origin == "" {
 		origin = entity.OriginInternal
 	}
+	remittance, err := normalizeThirdPartyRemittance(dto.ThirdPartyRemittance)
+	if err != nil {
+		return nil, err
+	}
 
 	code, err := uc.repo.NextOperationCode(ctx)
 	if err != nil {
@@ -46,6 +51,7 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 	op.ServiceItemCode = dto.ServiceItemCode
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
+	op.ThirdPartyRemittance = remittance
 
 	created, err := uc.repo.CreateOperation(ctx, op)
 	if err != nil {
@@ -62,9 +68,23 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 	if err != nil {
 		return nil, fmt.Errorf("operation not found: %w", err)
 	}
+	remittance, err := normalizeThirdPartyRemittance(dto.ThirdPartyRemittance)
+	if err != nil {
+		return nil, err
+	}
+	nextOrigin := entity.OperationOrigin(dto.Origin)
+	if (op.Origin == entity.OriginExternal || op.Origin == entity.OriginThirdPart) && nextOrigin == entity.OriginInternal {
+		used, usedErr := uc.repo.OperationUsedInRoutes(ctx, dto.ID)
+		if usedErr != nil {
+			return nil, usedErr
+		}
+		if used {
+			return nil, fmt.Errorf("external operation used by a manufacturing route cannot become internal")
+		}
+	}
 	op.Name = dto.Name
 	op.Description = dto.Description
-	op.Origin = entity.OperationOrigin(dto.Origin)
+	op.Origin = nextOrigin
 	op.Situation = entity.OperationSituation(dto.Situation)
 	op.DefaultWorkCenterID = dto.DefaultWorkCenterID
 	op.StandardTime = dto.StandardTime
@@ -75,12 +95,24 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 	op.ServiceItemCode = dto.ServiceItemCode
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
+	op.ThirdPartyRemittance = remittance
 
 	updated, err := uc.repo.UpdateOperation(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 	return toOperationResponse(updated), nil
+}
+
+func normalizeThirdPartyRemittance(value string) (string, error) {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if value == "" {
+		value = "DEMAND_ITEMS"
+	}
+	if !map[string]bool{"DEMAND_ITEMS": true, "ORDER_ITEM": true, "GENERIC": true, "NONE": true}[value] {
+		return "", fmt.Errorf("invalid third_party_remittance")
+	}
+	return value, nil
 }
 
 func (uc *OperationUseCase) GetByID(ctx context.Context, id int64) (*response.OperationResponse, error) {
@@ -148,28 +180,29 @@ func applyOperationTime(op *entity.Operation, run, labor, baseQty, queue, wait, 
 
 func toOperationResponse(op *entity.Operation) *response.OperationResponse {
 	return &response.OperationResponse{
-		ID:                  op.ID,
-		Code:                op.Code,
-		Name:                op.Name,
-		Description:         op.Description,
-		Origin:              string(op.Origin),
-		Situation:           string(op.Situation),
-		DefaultWorkCenterID: op.DefaultWorkCenterID,
-		StandardTime:        op.StandardTime,
-		SetupTime:           op.SetupTime,
-		RunTime:             op.RunTime,
-		LaborTime:           op.LaborTime,
-		RunBaseQty:          op.RunBaseQty,
-		QueueTime:           op.QueueTime,
-		WaitTime:            op.WaitTime,
-		MoveTime:            op.MoveTime,
-		CrewSize:            op.CrewSize,
-		TimeUnit:            op.TimeUnit,
-		SupplierID:          op.SupplierID,
-		ServiceItemCode:     op.ServiceItemCode,
-		CostPerUnit:         op.CostPerUnit,
-		LeadTimeDays:        op.LeadTimeDays,
-		IsActive:            op.IsActive,
-		CreatedAt:           op.CreatedAt,
+		ID:                   op.ID,
+		Code:                 op.Code,
+		Name:                 op.Name,
+		Description:          op.Description,
+		Origin:               string(op.Origin),
+		Situation:            string(op.Situation),
+		DefaultWorkCenterID:  op.DefaultWorkCenterID,
+		StandardTime:         op.StandardTime,
+		SetupTime:            op.SetupTime,
+		RunTime:              op.RunTime,
+		LaborTime:            op.LaborTime,
+		RunBaseQty:           op.RunBaseQty,
+		QueueTime:            op.QueueTime,
+		WaitTime:             op.WaitTime,
+		MoveTime:             op.MoveTime,
+		CrewSize:             op.CrewSize,
+		TimeUnit:             op.TimeUnit,
+		SupplierID:           op.SupplierID,
+		ServiceItemCode:      op.ServiceItemCode,
+		CostPerUnit:          op.CostPerUnit,
+		LeadTimeDays:         op.LeadTimeDays,
+		ThirdPartyRemittance: op.ThirdPartyRemittance,
+		IsActive:             op.IsActive,
+		CreatedAt:            op.CreatedAt,
 	}
 }

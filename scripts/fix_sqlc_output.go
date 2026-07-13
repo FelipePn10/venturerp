@@ -61,8 +61,11 @@ func removeOldEmployeeLegacy(text string) (string, bool) {
 		blockEnd := idx + closeRel + len("\n}\n")
 		block := text[idx:blockEnd]
 
-		// Only remove the OLD struct (the one with EnterpriseID).
-		if !strings.Contains(block, "EnterpriseID") {
+		// Only remove the OLD struct when sqlc gives both physical employee tables
+		// the same Go name. Newer sqlc versions already call it EmployeeLegacyOld.
+		// EnterpriseID is no longer a discriminator because the industrial
+		// employee profile also became tenant-aware in migration 232.
+		if !strings.Contains(block, "Description") || strings.Contains(block, "Situation") {
 			searchFrom = blockEnd
 			continue
 		}

@@ -20,7 +20,9 @@ import (
 	reqentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	reqrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+	thirdparty "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/google/uuid"
 )
 
 var (
@@ -34,6 +36,10 @@ var (
 // requisitions for a firmed order's external/third-party operations.
 type externalOpsReader interface {
 	GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*routingentity.ExternalOp, error)
+}
+type serviceOrderGenerator interface {
+	CreateOrdersForProduction(context.Context, int64, uuid.UUID) ([]thirdparty.ServiceOrder, error)
+	LinkRequisitionToProduction(context.Context, int64, int64) error
 }
 
 type FirmPlannedOrderUseCase struct {
@@ -53,6 +59,7 @@ type FirmPlannedOrderUseCase struct {
 	EnterpriseCode   int64 // enterprise the requisition belongs to (defaults to 1)
 	ServiceLinker    ports.ProductionServiceLinker
 	ReleaseValidator ports.ManufacturingReleaseValidator
+	ServiceOrders    serviceOrderGenerator
 }
 
 func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
@@ -115,13 +122,25 @@ func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto re
 			if err != nil {
 				return nil, err
 			}
+			var requisitionCode int64
 			if uc.ReqRepo != nil && uc.ExternalOps != nil {
-				requisitionCode, reqErr := uc.generateServiceRequisition(ctx, order)
+				var reqErr error
+				requisitionCode, reqErr = uc.generateServiceRequisition(ctx, order)
 				if reqErr != nil {
 					return nil, reqErr
 				}
 				if requisitionCode != 0 && uc.ServiceLinker != nil {
 					if linkErr := uc.ServiceLinker.LinkServiceRequisition(ctx, productionOrder.ID, requisitionCode); linkErr != nil {
+						return nil, linkErr
+					}
+				}
+			}
+			if uc.ServiceOrders != nil {
+				if _, serviceErr := uc.ServiceOrders.CreateOrdersForProduction(ctx, productionOrder.ID, order.CreatedBy); serviceErr != nil {
+					return nil, serviceErr
+				}
+				if requisitionCode != 0 {
+					if linkErr := uc.ServiceOrders.LinkRequisitionToProduction(ctx, productionOrder.ID, requisitionCode); linkErr != nil {
 						return nil, linkErr
 					}
 				}

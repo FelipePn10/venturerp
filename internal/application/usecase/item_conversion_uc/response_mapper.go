@@ -10,11 +10,13 @@ func toItemConversionResponse(c *entity.ItemUnitConversion) *response.ItemUnitCo
 		return nil
 	}
 	return &response.ItemUnitConversionResponse{
-		ID:        c.ID,
-		ItemCode:  c.ItemCode,
-		FromUOM:   c.FromUOM,
-		ToUOM:     c.ToUOM,
-		Factor:    c.Factor,
+		ID:              c.ID,
+		ItemCode:        c.ItemCode,
+		Mask:            c.Mask,
+		FromUOM:         c.FromUOM,
+		ToUOM:           c.ToUOM,
+		Factor:          c.Factor,
+		RoundingPercent: c.RoundingPercent, ToleranceValue: c.ToleranceValue, ToleranceType: c.ToleranceType,
 		IsActive:  c.IsActive,
 		CreatedAt: c.CreatedAt,
 		CreatedBy: c.CreatedBy,

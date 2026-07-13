@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -11,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // routingReader is the slice of the routing repository the cost roll-up needs to
@@ -21,8 +23,12 @@ type routingReader interface {
 }
 
 type StandardCostUseCase struct {
-	repo    domainrepo.StandardCostRepository
-	routing routingReader // optional; when nil, falls back to the legacy average-rate estimate
+	repo       domainrepo.StandardCostRepository
+	routing    routingReader // optional; when nil, falls back to the legacy average-rate estimate
+	thirdParty thirdPartyCostReader
+}
+type thirdPartyCostReader interface {
+	StandardCostPerUnit(context.Context, int64, string, int64, time.Time) (decimal.Decimal, error)
 }
 
 func New(repo domainrepo.StandardCostRepository) *StandardCostUseCase {
@@ -32,6 +38,10 @@ func New(repo domainrepo.StandardCostRepository) *StandardCostUseCase {
 // WithRouting enables per-operation, per-work-center, quantity-aware labor costing.
 func (uc *StandardCostUseCase) WithRouting(r routingReader) *StandardCostUseCase {
 	uc.routing = r
+	return uc
+}
+func (uc *StandardCostUseCase) WithThirdPartyPrices(v thirdPartyCostReader) *StandardCostUseCase {
+	uc.thirdParty = v
 	return uc
 }
 
@@ -227,7 +237,10 @@ func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, m
 	}
 
 	// Conversion (labor + machine) cost per unit, setup amortized over the reference lot.
-	laborCost := uc.conversionCost(ctx, itemCode, mask, lotSize)
+	laborCost, err := uc.conversionCost(ctx, itemCode, mask, lotSize)
+	if err != nil {
+		return nil, err
+	}
 
 	node := &costNode{
 		MaterialCost: materialCost,
@@ -305,22 +318,22 @@ func (n *costNode) total() float64 {
 //
 // A lot of 1 charges the full setup per unit (conservative). When the routing
 // repository is not wired, it falls back to the legacy average-rate estimate.
-func (uc *StandardCostUseCase) conversionCost(ctx context.Context, itemCode int64, mask string, lot float64) float64 {
+func (uc *StandardCostUseCase) conversionCost(ctx context.Context, itemCode int64, mask string, lot float64) (float64, error) {
 	if lot <= 0 {
 		lot = 1
 	}
 	if uc.routing == nil {
 		routeHours, _ := uc.repo.GetRouteHoursByItem(ctx, itemCode, mask)
-		return routeHours * uc.averageRate(ctx)
+		return routeHours * uc.averageRate(ctx), nil
 	}
 
 	route, err := uc.routing.GetRouteForItem(ctx, itemCode, mask)
 	if err != nil || route == nil {
-		return 0 // no route → no conversion cost
+		return 0, nil // no route → no conversion cost
 	}
 	ops, err := uc.routing.GetRouteOperations(ctx, route.ID)
 	if err != nil || len(ops) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	rates := uc.workCenterRates(ctx) // wcID → cost
@@ -329,6 +342,14 @@ func (uc *StandardCostUseCase) conversionCost(ctx context.Context, itemCode int6
 	for _, op := range ops {
 		if op.Situation == routingentity.RouteOpGhost {
 			continue // phantom operation: no cost
+		}
+		if (op.OperationOrigin == routingentity.OriginExternal || op.OperationOrigin == routingentity.OriginThirdPart) && uc.thirdParty != nil {
+			serviceCost, priceErr := uc.thirdParty.StandardCostPerUnit(ctx, itemCode, mask, op.OperationID, time.Now())
+			if priceErr != nil {
+				return 0, fmt.Errorf("resolving third-party cost for item %d operation %d: %w", itemCode, op.OperationID, priceErr)
+			}
+			total += serviceCost.InexactFloat64() * lot
+			continue
 		}
 		machineRate, laborRate := 0.0, 0.0
 		if op.EffectiveWorkCenterID != nil {
@@ -339,7 +360,7 @@ func (uc *StandardCostUseCase) conversionCost(ctx context.Context, itemCode int6
 		}
 		total += op.EffTime.MachineHours(lot)*machineRate + op.EffTime.LaborHours(lot)*laborRate
 	}
-	return total / lot
+	return total / lot, nil
 }
 
 // workCenterRates indexes the configured work-center costs by work-center id.

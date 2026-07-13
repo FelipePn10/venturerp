@@ -29,6 +29,7 @@ scripts/*
 !scripts/audit-mrp-manufacturing.sh
 !scripts/test-mrp-manufacturing-security.sh
 !scripts/test-product-sequencing.sh
+!scripts/test-third-party-services.sh
 !scripts/test-comercial-*.sh
 !scripts/loadtest/
 scripts/test-e2e.sh

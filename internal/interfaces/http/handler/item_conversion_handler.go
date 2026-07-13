@@ -66,16 +66,26 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 	from := q.Get("from")
 	to := q.Get("to")
 	qty, _ := strconv.ParseFloat(q.Get("qty"), 64)
+	mask := q.Get("mask")
 	if itemCode == 0 || from == "" || to == "" {
 		jsonError(w, http.StatusBadRequest, "item, from and to are required")
 		return
 	}
-	factor, found, err := h.uc.Factor(r.Context(), itemCode, from, to)
+	factor, found, err := h.uc.FactorConfigured(r.Context(), itemCode, mask, from, to)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if !found {
+		jsonError(w, http.StatusNotFound, item_conversion_uc.ErrNoConversion.Error())
+		return
+	}
+	converted, convertedFound, convertErr := h.uc.ConvertQuantityConfigured(r.Context(), itemCode, mask, qty, from, to)
+	if convertErr != nil {
+		jsonError(w, http.StatusUnprocessableEntity, convertErr.Error())
+		return
+	}
+	if !convertedFound {
 		jsonError(w, http.StatusNotFound, item_conversion_uc.ErrNoConversion.Error())
 		return
 	}
@@ -85,6 +95,6 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 		"to_uom":        to,
 		"factor":        factor,
 		"quantity":      qty,
-		"converted_qty": qty * factor,
+		"converted_qty": converted,
 	})
 }

@@ -3936,3 +3936,46 @@ DELETE /api/aps/resources/{machineID}/special-values/{fieldID} (ADMIN)
 
 -- PATCH/DELETE retornam 204. Obtenha os IDs pelos GETs de perfil.
 -- O PUT substitui o perfil inteiro; PATCH altera somente o subregistro informado.
+================================================================================
+SERVIÇOS DE TERCEIROS — /api/third-party-services
+================================================================================
+
+POST /prices (ADMIN)
+{
+  "item_code": 10001,
+  "mask": "AZUL-220V",
+  "supplier_code": 200,
+  "operation_id": 37,
+  "uom": "PC",
+  "reference_date": "2026-07-13T00:00:00Z",
+  "preferred": true,
+  "unit_price": "125.500000",
+  "conversion_factor": "2.00000000",
+  "freight_type": "PERCENT",
+  "freight_value": "4.500000",
+  "tax_percent": "5.000000",
+  "formula": "BASE + ESPESSURA * 2.5",
+  "reason": "Contrato anual 2026",
+  "rules": [{"characteristic": "COR", "answer": "AZUL"}]
+}
+
+POST /prices/readjust (ADMIN)
+{"ids":[1,2],"percent":"5.25","reference_date":"2027-01-01T00:00:00Z","reason":"Aditivo anual"}
+
+POST /prices/copy-move (ADMIN)
+{"ids":[1,2],"supplier_code":201,"operation_id":37,"move":false,"reference_date":"2027-01-01T00:00:00Z","reason":"Nova negociação"}
+
+PATCH /orders/{id}/status (ADMIN)
+{"status":"RELEASED_WITH_PO","purchase_order_code":9001}
+
+POST /orders/{id}/movements (ADMIN)
+{"movement_type":"RECEIPT","quantity":"10.500000","occurred_at":"2026-07-20T14:00:00Z","reference_type":"NF","reference_code":"12345","idempotency_key":"nf-12345-item-1","warehouse_id":8,"lot":"LOTE-01"}
+
+POST /global-conversions (ADMIN)
+{"from_uom":"CX","to_uom":"UN","factor":"12.00000000"}
+
+POST/PUT de operação externa — campos adicionais
+{"supplier_id":77,"service_item_code":90001,"cost_per_unit":25.75,"lead_time_days":3,"third_party_remittance":"ORDER_ITEM"}
+
+POST/PUT de operação do roteiro — overrides adicionais
+{"supplier_id":88,"service_item_code":90002,"cost_per_unit":24.50,"lead_time_days":2,"third_party_remittance":"GENERIC"}

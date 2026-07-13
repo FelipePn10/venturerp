@@ -434,6 +434,7 @@ func (r *MRPCalculationRepositorySQLC) CreatePlannedOrderSuggestion(
 		OrderNumber:          s.OrderNumber,
 		PlanCode:             s.PlanCode,
 		ItemCode:             s.ItemCode,
+		Mask:                 s.Mask,
 		Quantity:             pgutil.ToPgNumericFromFloat64(s.Quantity),
 		NeedDate:             pgutil.ToPgDate(s.NeedDate),
 		StartDate:            startDate,
@@ -445,6 +446,11 @@ func (r *MRPCalculationRepositorySQLC) CreatePlannedOrderSuggestion(
 		InterFactory:         s.InterFactory,
 		SourceEnterpriseCode: s.SourceEnterpriseCode,
 		AutoRelease:          s.AutoRelease,
+		RouteOperationID:     s.RouteOperationID,
+		OperationID:          s.OperationID,
+		SupplierCode:         s.SupplierCode,
+		ServiceItemCode:      s.ServiceItemCode,
+		RemittanceType:       pgutil.ToPgTextFromPtr(s.RemittanceType),
 		EnterpriseID:         enterpriseID,
 	})
 	if err != nil {
@@ -464,13 +470,15 @@ func (r *MRPCalculationRepositorySQLC) GetSuggestionByCode(
 	}
 	var row sqlc.MrpPlannedSuggestion
 	err = r.db.QueryRow(ctx,
-		`SELECT code, order_number, plan_code, item_code, quantity, need_date, start_date,
+		`SELECT code, order_number, plan_code, item_code, mask, quantity, need_date, start_date,
 		        order_type, demand_type, parent_item_code, llc, notes, warehouse_code,
-		        inter_factory, source_enterprise_code, auto_release
+		        inter_factory, source_enterprise_code, auto_release, route_operation_id,
+		        operation_id, supplier_code, service_item_code, remittance_type
 		   FROM public.mrp_planned_suggestions WHERE code = $1 AND enterprise_id = $2`, code, enterpriseID,
-	).Scan(&row.Code, &row.OrderNumber, &row.PlanCode, &row.ItemCode, &row.Quantity, &row.NeedDate, &row.StartDate,
+	).Scan(&row.Code, &row.OrderNumber, &row.PlanCode, &row.ItemCode, &row.Mask, &row.Quantity, &row.NeedDate, &row.StartDate,
 		&row.OrderType, &row.DemandType, &row.ParentItemCode, &row.Llc, &row.Notes, &row.WarehouseCode,
-		&row.InterFactory, &row.SourceEnterpriseCode, &row.AutoRelease)
+		&row.InterFactory, &row.SourceEnterpriseCode, &row.AutoRelease, &row.RouteOperationID,
+		&row.OperationID, &row.SupplierCode, &row.ServiceItemCode, &row.RemittanceType)
 	if err != nil {
 		return nil, fmt.Errorf("getting suggestion %d: %w", code, err)
 	}
@@ -808,12 +816,18 @@ func suggestionToEntity(row sqlc.MrpPlannedSuggestion) *entity.PlannedOrderSugge
 		AutoRelease:          row.AutoRelease,
 		PlanCode:             row.PlanCode,
 		ItemCode:             row.ItemCode,
+		Mask:                 row.Mask,
 		Quantity:             pgutil.FromPgNumericToFloat64(row.Quantity),
 		NeedDate:             pgutil.FromPgDate(row.NeedDate),
 		OrderType:            row.OrderType,
 		DemandType:           row.DemandType,
 		LLC:                  int(row.Llc),
 		Notes:                pgutil.FromPgTextPtr(row.Notes),
+		RouteOperationID:     row.RouteOperationID,
+		OperationID:          row.OperationID,
+		SupplierCode:         row.SupplierCode,
+		ServiceItemCode:      row.ServiceItemCode,
+		RemittanceType:       pgutil.FromPgTextPtr(row.RemittanceType),
 	}
 
 	if sd := pgutil.FromPgDate(row.StartDate); !sd.IsZero() {

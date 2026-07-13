@@ -86,7 +86,7 @@ INSERT INTO machines (
     created_by
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period
+    RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 `
 
 type CreateMachineParams struct {
@@ -128,6 +128,19 @@ func (q *Queries) CreateMachine(ctx context.Context, arg CreateMachineParams) (M
 		&i.CostCenterCode,
 		&i.CapacityUnit,
 		&i.CapacityPeriod,
+		&i.EnterpriseID,
+		&i.ResourceGroupID,
+		&i.CalendarID,
+		&i.Location,
+		&i.IsCritical,
+		&i.UsageDescription,
+		&i.AcquiredOn,
+		&i.PreparationTime,
+		&i.PreparationTimeUnit,
+		&i.SupplierCode,
+		&i.Brand,
+		&i.IsPreferred,
+		&i.MaintenanceResponsibleEmployeeID,
 	)
 	return i, err
 }
@@ -143,7 +156,7 @@ INSERT INTO machine_types (
     created_by
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
+    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 `
 
 type CreateMachineTypeParams struct {
@@ -179,6 +192,10 @@ func (q *Queries) CreateMachineType(ctx context.Context, arg CreateMachineTypePa
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.RequiresOperator,
+		&i.EnterpriseID,
+		&i.MachineCostCenterID,
+		&i.LaborCostCenterID,
+		&i.CapacityHours,
 	)
 	return i, err
 }
@@ -290,7 +307,7 @@ func (q *Queries) DeleteSchedule(ctx context.Context, code int64) error {
 }
 
 const getMachineByCode = `-- name: GetMachineByCode :one
-SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period
+SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 FROM machines
 WHERE code = $1
 `
@@ -312,12 +329,25 @@ func (q *Queries) GetMachineByCode(ctx context.Context, code int64) (Machine, er
 		&i.CostCenterCode,
 		&i.CapacityUnit,
 		&i.CapacityPeriod,
+		&i.EnterpriseID,
+		&i.ResourceGroupID,
+		&i.CalendarID,
+		&i.Location,
+		&i.IsCritical,
+		&i.UsageDescription,
+		&i.AcquiredOn,
+		&i.PreparationTime,
+		&i.PreparationTimeUnit,
+		&i.SupplierCode,
+		&i.Brand,
+		&i.IsPreferred,
+		&i.MaintenanceResponsibleEmployeeID,
 	)
 	return i, err
 }
 
 const getMachineTypeByCode = `-- name: GetMachineTypeByCode :one
-SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
+SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 FROM machine_types
 WHERE code = $1
 `
@@ -337,6 +367,10 @@ func (q *Queries) GetMachineTypeByCode(ctx context.Context, code int64) (Machine
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.RequiresOperator,
+		&i.EnterpriseID,
+		&i.MachineCostCenterID,
+		&i.LaborCostCenterID,
+		&i.CapacityHours,
 	)
 	return i, err
 }
@@ -457,7 +491,7 @@ func (q *Queries) ListItemsByMachine(ctx context.Context, machineCode int64) ([]
 }
 
 const listMachineTypes = `-- name: ListMachineTypes :many
-SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
+SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 FROM machine_types
 WHERE is_active = TRUE
 ORDER BY code
@@ -484,6 +518,10 @@ func (q *Queries) ListMachineTypes(ctx context.Context) ([]MachineType, error) {
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.RequiresOperator,
+			&i.EnterpriseID,
+			&i.MachineCostCenterID,
+			&i.LaborCostCenterID,
+			&i.CapacityHours,
 		); err != nil {
 			return nil, err
 		}
@@ -496,7 +534,7 @@ func (q *Queries) ListMachineTypes(ctx context.Context) ([]MachineType, error) {
 }
 
 const listMachines = `-- name: ListMachines :many
-SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period
+SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 FROM machines
 WHERE is_active = TRUE
 ORDER BY code
@@ -525,6 +563,19 @@ func (q *Queries) ListMachines(ctx context.Context) ([]Machine, error) {
 			&i.CostCenterCode,
 			&i.CapacityUnit,
 			&i.CapacityPeriod,
+			&i.EnterpriseID,
+			&i.ResourceGroupID,
+			&i.CalendarID,
+			&i.Location,
+			&i.IsCritical,
+			&i.UsageDescription,
+			&i.AcquiredOn,
+			&i.PreparationTime,
+			&i.PreparationTimeUnit,
+			&i.SupplierCode,
+			&i.Brand,
+			&i.IsPreferred,
+			&i.MaintenanceResponsibleEmployeeID,
 		); err != nil {
 			return nil, err
 		}
@@ -537,7 +588,7 @@ func (q *Queries) ListMachines(ctx context.Context) ([]Machine, error) {
 }
 
 const listMachinesByType = `-- name: ListMachinesByType :many
-SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period
+SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 FROM machines
 WHERE machine_type_code = $1
   AND is_active = TRUE
@@ -567,6 +618,19 @@ func (q *Queries) ListMachinesByType(ctx context.Context, machineTypeCode int64)
 			&i.CostCenterCode,
 			&i.CapacityUnit,
 			&i.CapacityPeriod,
+			&i.EnterpriseID,
+			&i.ResourceGroupID,
+			&i.CalendarID,
+			&i.Location,
+			&i.IsCritical,
+			&i.UsageDescription,
+			&i.AcquiredOn,
+			&i.PreparationTime,
+			&i.PreparationTimeUnit,
+			&i.SupplierCode,
+			&i.Brand,
+			&i.IsPreferred,
+			&i.MaintenanceResponsibleEmployeeID,
 		); err != nil {
 			return nil, err
 		}
@@ -695,7 +759,7 @@ SET
     efficiency_rate = $7,
     updated_at = NOW()
 WHERE code = $6
-    RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period
+    RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 `
 
 type UpdateMachineParams struct {
@@ -733,6 +797,19 @@ func (q *Queries) UpdateMachine(ctx context.Context, arg UpdateMachineParams) (M
 		&i.CostCenterCode,
 		&i.CapacityUnit,
 		&i.CapacityPeriod,
+		&i.EnterpriseID,
+		&i.ResourceGroupID,
+		&i.CalendarID,
+		&i.Location,
+		&i.IsCritical,
+		&i.UsageDescription,
+		&i.AcquiredOn,
+		&i.PreparationTime,
+		&i.PreparationTimeUnit,
+		&i.SupplierCode,
+		&i.Brand,
+		&i.IsPreferred,
+		&i.MaintenanceResponsibleEmployeeID,
 	)
 	return i, err
 }
@@ -747,7 +824,7 @@ SET
     is_active = $5,
     updated_at = NOW()
 WHERE code = $6
-    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator
+    RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 `
 
 type UpdateMachineTypeParams struct {
@@ -781,6 +858,10 @@ func (q *Queries) UpdateMachineType(ctx context.Context, arg UpdateMachineTypePa
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.RequiresOperator,
+		&i.EnterpriseID,
+		&i.MachineCostCenterID,
+		&i.LaborCostCenterID,
+		&i.CapacityHours,
 	)
 	return i, err
 }

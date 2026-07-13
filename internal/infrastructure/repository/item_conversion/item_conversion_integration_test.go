@@ -21,7 +21,7 @@ func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
 	itemCode := testutil.UniqueCode()
 	defer testutil.Exec(t, pool, "DELETE FROM item_unit_conversions WHERE item_code = $1", itemCode)
 
-	c, err := entity.NewItemUnitConversion(itemCode, "CX", "UN", 12, uuid.New())
+	c, err := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", 12, 0, 0, "VALUE", uuid.New())
 	if err != nil {
 		t.Fatalf("NewItemUnitConversion: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
 	}
 
 	// Upsert: same (item, from, to) updates the factor in place.
-	c2, _ := entity.NewItemUnitConversion(itemCode, "CX", "UN", 6, uuid.New())
+	c2, _ := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", 6, 0, 0, "VALUE", uuid.New())
 	if _, err := repo.Create(ctx, c2); err != nil {
 		t.Fatalf("Create upsert: %v", err)
 	}
