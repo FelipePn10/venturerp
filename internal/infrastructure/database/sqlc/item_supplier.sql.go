@@ -21,7 +21,7 @@ func (q *Queries) DeleteItemPreferredSupplier(ctx context.Context, id int64) err
 }
 
 const getPreferredSupplierForItem = `-- name: GetPreferredSupplierForItem :one
-SELECT id, item_code, supplier_code, ranking, supplier_item_code, supplier_description, uom, lead_time_days, is_active, created_at, created_by FROM item_preferred_suppliers
+SELECT id, item_code, supplier_code, ranking, supplier_item_code, supplier_description, uom, lead_time_days, is_active, created_at, created_by, enterprise_id, mask, xml_uom, conversion_factor, package_quantity, is_preferred, supplier_uf, classification_id, classification_date, classification_grade, direct_billing, third_party_order, ignore_avg_cost_addition, ecommerce, barcode, notes, valid_until, updated_at FROM item_preferred_suppliers
 WHERE item_code = $1 AND is_active = TRUE
 ORDER BY ranking, supplier_code
 LIMIT 1
@@ -42,12 +42,30 @@ func (q *Queries) GetPreferredSupplierForItem(ctx context.Context, itemCode int6
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
+		&i.Mask,
+		&i.XmlUom,
+		&i.ConversionFactor,
+		&i.PackageQuantity,
+		&i.IsPreferred,
+		&i.SupplierUf,
+		&i.ClassificationID,
+		&i.ClassificationDate,
+		&i.ClassificationGrade,
+		&i.DirectBilling,
+		&i.ThirdPartyOrder,
+		&i.IgnoreAvgCostAddition,
+		&i.Ecommerce,
+		&i.Barcode,
+		&i.Notes,
+		&i.ValidUntil,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const listItemPreferredSuppliers = `-- name: ListItemPreferredSuppliers :many
-SELECT id, item_code, supplier_code, ranking, supplier_item_code, supplier_description, uom, lead_time_days, is_active, created_at, created_by FROM item_preferred_suppliers
+SELECT id, item_code, supplier_code, ranking, supplier_item_code, supplier_description, uom, lead_time_days, is_active, created_at, created_by, enterprise_id, mask, xml_uom, conversion_factor, package_quantity, is_preferred, supplier_uf, classification_id, classification_date, classification_grade, direct_billing, third_party_order, ignore_avg_cost_addition, ecommerce, barcode, notes, valid_until, updated_at FROM item_preferred_suppliers
 WHERE item_code = $1 AND is_active = TRUE
 ORDER BY ranking, supplier_code
 `
@@ -73,6 +91,24 @@ func (q *Queries) ListItemPreferredSuppliers(ctx context.Context, itemCode int64
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
+			&i.Mask,
+			&i.XmlUom,
+			&i.ConversionFactor,
+			&i.PackageQuantity,
+			&i.IsPreferred,
+			&i.SupplierUf,
+			&i.ClassificationID,
+			&i.ClassificationDate,
+			&i.ClassificationGrade,
+			&i.DirectBilling,
+			&i.ThirdPartyOrder,
+			&i.IgnoreAvgCostAddition,
+			&i.Ecommerce,
+			&i.Barcode,
+			&i.Notes,
+			&i.ValidUntil,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -97,7 +133,7 @@ ON CONFLICT (item_code, supplier_code) DO UPDATE SET
     uom = EXCLUDED.uom,
     lead_time_days = EXCLUDED.lead_time_days,
     is_active = TRUE
-RETURNING id, item_code, supplier_code, ranking, supplier_item_code, supplier_description, uom, lead_time_days, is_active, created_at, created_by
+RETURNING id, item_code, supplier_code, ranking, supplier_item_code, supplier_description, uom, lead_time_days, is_active, created_at, created_by, enterprise_id, mask, xml_uom, conversion_factor, package_quantity, is_preferred, supplier_uf, classification_id, classification_date, classification_grade, direct_billing, third_party_order, ignore_avg_cost_addition, ecommerce, barcode, notes, valid_until, updated_at
 `
 
 type UpsertItemPreferredSupplierParams struct {
@@ -136,6 +172,24 @@ func (q *Queries) UpsertItemPreferredSupplier(ctx context.Context, arg UpsertIte
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
+		&i.Mask,
+		&i.XmlUom,
+		&i.ConversionFactor,
+		&i.PackageQuantity,
+		&i.IsPreferred,
+		&i.SupplierUf,
+		&i.ClassificationID,
+		&i.ClassificationDate,
+		&i.ClassificationGrade,
+		&i.DirectBilling,
+		&i.ThirdPartyOrder,
+		&i.IgnoreAvgCostAddition,
+		&i.Ecommerce,
+		&i.Barcode,
+		&i.Notes,
+		&i.ValidUntil,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

@@ -30,6 +30,10 @@ import (
 type allowAuth struct{ ports.AuthService }
 
 func (allowAuth) CanCreatePurchaseOrder(context.Context) bool { return true }
+func (allowAuth) EnterpriseID(ctx context.Context) (int64, error) {
+	return ctx.Value(contextkey.UserKey).(*security.AuthUser).EnterpriseID, nil
+}
+func (allowAuth) UserID(context.Context) (uuid.UUID, error) { return uuid.New(), nil }
 
 func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	q, pool := testutil.Queries(t)
@@ -43,7 +47,7 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	suppRepo := supplierrepo.New(q, pool)
 	reqRepository := reqrepo.New(q, pool)
 	poRepository := porepo.NewPurchaseOrderRepositorySQLC(pool)
-	itemSupplierUC := item_supplier_uc.NewItemSupplierUseCase(itemsupplierrepo.New(q, pool))
+	itemSupplierUC := item_supplier_uc.NewItemSupplierUseCase(itemsupplierrepo.New(q, pool), allowAuth{})
 	supplierUC := supplier_uc.NewSupplierUseCase(suppRepo)
 
 	// 1) A registered supplier (PO.supplier_code FK requires it to exist).

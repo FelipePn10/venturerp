@@ -4428,6 +4428,7 @@ type FiscalEntry struct {
 	UpdatedAt           pgtype.Timestamptz
 	CreatedBy           pgtype.UUID
 	SupplierCode        *int64
+	EnterpriseID        *int64
 }
 
 type FiscalEntryItem struct {
@@ -4459,6 +4460,7 @@ type FiscalEntryItem struct {
 	Description       pgtype.Text
 	Notes             pgtype.Text
 	CreatedAt         pgtype.Timestamptz
+	Uom               pgtype.Text
 }
 
 type FiscalExit struct {
@@ -5223,17 +5225,35 @@ type ItemPlanningExtra struct {
 }
 
 type ItemPreferredSupplier struct {
-	ID                  int64
-	ItemCode            int64
-	SupplierCode        int64
-	Ranking             int32
-	SupplierItemCode    pgtype.Text
-	SupplierDescription pgtype.Text
-	Uom                 pgtype.Text
-	LeadTimeDays        int32
-	IsActive            bool
-	CreatedAt           pgtype.Timestamptz
-	CreatedBy           pgtype.UUID
+	ID                    int64
+	ItemCode              int64
+	SupplierCode          int64
+	Ranking               int32
+	SupplierItemCode      pgtype.Text
+	SupplierDescription   pgtype.Text
+	Uom                   pgtype.Text
+	LeadTimeDays          int32
+	IsActive              bool
+	CreatedAt             pgtype.Timestamptz
+	CreatedBy             pgtype.UUID
+	EnterpriseID          *int64
+	Mask                  string
+	XmlUom                pgtype.Text
+	ConversionFactor      pgtype.Numeric
+	PackageQuantity       pgtype.Numeric
+	IsPreferred           bool
+	SupplierUf            pgtype.Text
+	ClassificationID      *int64
+	ClassificationDate    pgtype.Date
+	ClassificationGrade   pgtype.Numeric
+	DirectBilling         bool
+	ThirdPartyOrder       bool
+	IgnoreAvgCostAddition bool
+	Ecommerce             bool
+	Barcode               pgtype.Text
+	Notes                 pgtype.Text
+	ValidUntil            pgtype.Date
+	UpdatedAt             pgtype.Timestamptz
 }
 
 type ItemPurchaseCost struct {
@@ -5281,6 +5301,20 @@ type ItemStructure struct {
 	IsFixedQty         bool
 	SubstituteGroup    int16
 	SubstitutePriority int16
+}
+
+type ItemSupplierQualityReport struct {
+	ID                int64
+	EnterpriseID      int64
+	ItemSupplierID    int64
+	RegisteredOn      pgtype.Date
+	Status            string
+	ReportFileName    pgtype.Text
+	ReportContentType pgtype.Text
+	ReportContent     []byte
+	Notes             pgtype.Text
+	CreatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
 }
 
 type ItemUnitConversion struct {
@@ -6482,6 +6516,33 @@ type PurchaseOrderSequence struct {
 	LastNumber     int64
 }
 
+type PurchaseOrderTolerance struct {
+	ID             int64
+	EnterpriseID   int64
+	ToleranceType  string
+	AppliesTo      string
+	IntervalMin    pgtype.Numeric
+	IntervalMax    pgtype.Numeric
+	ToleranceValue pgtype.Numeric
+	ValueType      string
+	SupplierCode   *int64
+	Action         string
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+}
+
+type PurchasePriceItemAdjustment struct {
+	ID              int64
+	PriceItemID     int64
+	Sequence        int32
+	AdjustmentKind  string
+	CalculationType string
+	Value           pgtype.Numeric
+	CreatedAt       pgtype.Timestamptz
+}
+
 type PurchasePriceTable struct {
 	ID            int64
 	Code          int64
@@ -6493,18 +6554,22 @@ type PurchasePriceTable struct {
 	CreatedAt     pgtype.Timestamptz
 	CreatedBy     pgtype.UUID
 	UpdatedAt     pgtype.Timestamptz
+	EnterpriseID  *int64
+	SupplierCode  *int64
 }
 
 type PurchasePriceTableItem struct {
-	ID           int64
-	TableID      int64
-	ItemCode     int64
-	SupplierCode *int64
-	Uom          pgtype.Text
-	Price        pgtype.Numeric
-	MinQty       pgtype.Numeric
-	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
+	ID                     int64
+	TableID                int64
+	ItemCode               int64
+	SupplierCode           *int64
+	Uom                    pgtype.Text
+	Price                  pgtype.Numeric
+	MinQty                 pgtype.Numeric
+	IsActive               bool
+	CreatedAt              pgtype.Timestamptz
+	UpdateReplacementValue bool
+	UpdatedAt              pgtype.Timestamptz
 }
 
 type PurchaseQuotation struct {

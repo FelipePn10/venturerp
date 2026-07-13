@@ -1135,11 +1135,17 @@ Cadastro de Conversões por Item".
 
 ### O que é
 
-Cadastro de **Tabelas de Preço de Compra** (migration `000139`): tabelas
-`purchase_price_tables` (cabeçalho: código, descrição, moeda, vigência) e
-`purchase_price_table_items` (preço por item, com UM e quantidade mínima). O preço
-pode ser **genérico** (qualquer fornecedor) ou **específico por fornecedor**
-(`supplier_code`).
+Cadastro de **Tabelas de Preço de Compra** (migrations `000139` e `000237`),
+sempre isolado pela empresa selecionada. O cabeçalho identifica o fornecedor,
+moeda e vigência; cada item mantém preço com seis casas, UM, quantidade mínima e o
+indicador de atualização do valor de reposição. Esse indicador só é aceito quando
+o fornecedor está preferencial no cadastro do item.
+
+Os itens podem ser pesquisados pelo código/descrição interna ou do fornecedor,
+ordenados por código ou descrição e filtrados por classificação. A descrição do
+fornecedor tem precedência e cai para a descrição interna. O endpoint de candidatos
+não retorna itens já precificados. Regras sequenciais de desconto/acréscimo aceitam
+valor fixo ou percentual e podem ser copiadas com `REPLACE` ou `ADD`.
 
 ### Integração
 
@@ -1156,6 +1162,26 @@ pode ser **genérico** (qualquer fornecedor) ou **específico por fornecedor**
 - `POST /` · `PUT /` · `GET /` · `GET /{code}` (com itens).
 - `POST /items` (upsert por tabela+item+fornecedor) · `GET /{code}/items` ·
   `DELETE /items/{id}`.
+- `GET /{code}/candidates?mode=INTERNAL|SUPPLIER&order=NUMERIC|ALPHANUMERIC`
+  (aceita `classification_id`).
+- `POST /items/copy-adjustments` — copiar regras com sobreposição ou adição.
+- `GET /sources?start=&end=&source=PURCHASE_ORDER|ENTRY_INVOICE|BOTH` — preços de
+  pedidos e notas; pedidos de serviço e linhas fiscais sem item são excluídos.
+- `POST /sources/apply` — aplica as linhas selecionadas de forma transacional,
+  atualizando também a UM; `overwrite=false` preserva preços existentes.
+
+### Tolerâncias de pedido
+
+`purchase_order_tolerances` cadastra tolerância de `QUANTITY`, `ITEM_PRICE` ou
+`PRODUCTS_TOTAL`, aplicável a `ENTRY_INVOICE`, `RECEIVING_NOTICE` ou `ALL`. O
+intervalo seleciona a regra e o limite pode ser `PERCENT` ou `FIXED`, com ação
+`BLOCK` ou `WARN`. Havendo regra específica do fornecedor, as genéricas não são
+avaliadas para ele. O recebimento físico e a entrada fiscal (inclusive XML
+vinculado a pedido) usam o mesmo avaliador; bloqueios ocorrem antes da movimentação
+ou persistência e avisos são devolvidos no campo `warnings`.
+
+Endpoints: `POST|PUT|GET /api/purchase-order-tolerances`,
+`DELETE /api/purchase-order-tolerances/{id}` e `POST .../evaluate`.
 
 ---
 
@@ -1491,10 +1517,20 @@ retornando quantos foram criados.
 
 ### O que é
 
-Cadastro que liga um **item** a **fornecedores** com ranking de preferência (migration
-`000141`, tabela `item_preferred_suppliers`). Também serve como **Descrição de Itens
-por Fornecedor**: guarda o código, a descrição e a UM do item no fornecedor (2º nível
-da hierarquia de UM/descrição do Pedido de Compra).
+Cadastro que liga um **item** a **fornecedores** com ocorrências por máscara
+(migrations `000141` e `000237`). Além de código, descrição, UM e ranking, mantém UM
+do XML (relação 1:1), embalagem, validade, código de barras, classificação/nota,
+faturamento direto, pedido de terceiros, custo médio, e-commerce e observação. A UF
+é derivada do endereço do fornecedor; código de barras é único por empresa e
+fornecedor. Classificação, data e nota são sincronizadas entre ocorrências do mesmo
+item/fornecedor. Faturamento direto exige fornecedor preferencial e pedido de
+terceiros exige faturamento direto. Fator de conversão legado só é aceito para item
+genérico de importação XML.
+
+Laudos de qualidade ficam em `item_supplier_quality_reports`, com data, situação,
+observação e anexo opcional. Configuração de produto e PDM continuam nos módulos de
+Configurador/Grupos/Modificadores já existentes; o cadastro de compras apenas guarda
+a ocorrência configurada (`mask`) e não duplica essas regras.
 
 ### Integração
 
@@ -1507,6 +1543,8 @@ da hierarquia de UM/descrição do Pedido de Compra).
 - `POST /` — vincular/atualizar (upsert por item+fornecedor): ranking, código/descrição/UM
   no fornecedor, lead time.
 - `GET /item/{itemCode}` — listar fornecedores do item (por ranking).
+- `GET /supplier/{supplierCode}` — listar itens válidos do fornecedor.
+- `POST|GET /{id}/quality-reports` — incluir/listar dados de qualidade.
 - `DELETE /{id}` — desvincular.
 
 ---

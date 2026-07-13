@@ -15,7 +15,7 @@ const createPurchasePriceTable = `-- name: CreatePurchasePriceTable :one
 
 INSERT INTO purchase_price_tables (code, description, currency_code, validity_start, validity_end, created_by)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at
+RETURNING id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at, enterprise_id, supplier_code
 `
 
 type CreatePurchasePriceTableParams struct {
@@ -49,6 +49,8 @@ func (q *Queries) CreatePurchasePriceTable(ctx context.Context, arg CreatePurcha
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
+		&i.SupplierCode,
 	)
 	return i, err
 }
@@ -59,7 +61,7 @@ INSERT INTO purchase_price_table_items (table_id, item_code, supplier_code, uom,
 VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (table_id, item_code, COALESCE(supplier_code, 0))
 DO UPDATE SET uom = EXCLUDED.uom, price = EXCLUDED.price, min_qty = EXCLUDED.min_qty, is_active = TRUE
-RETURNING id, table_id, item_code, supplier_code, uom, price, min_qty, is_active, created_at
+RETURNING id, table_id, item_code, supplier_code, uom, price, min_qty, is_active, created_at, update_replacement_value, updated_at
 `
 
 type CreatePurchasePriceTableItemParams struct {
@@ -92,6 +94,8 @@ func (q *Queries) CreatePurchasePriceTableItem(ctx context.Context, arg CreatePu
 		&i.MinQty,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.UpdateReplacementValue,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -106,7 +110,7 @@ func (q *Queries) DeletePurchasePriceTableItem(ctx context.Context, id int64) er
 }
 
 const getPurchasePrice = `-- name: GetPurchasePrice :one
-SELECT i.id, i.table_id, i.item_code, i.supplier_code, i.uom, i.price, i.min_qty, i.is_active, i.created_at FROM purchase_price_table_items i
+SELECT i.id, i.table_id, i.item_code, i.supplier_code, i.uom, i.price, i.min_qty, i.is_active, i.created_at, i.update_replacement_value, i.updated_at FROM purchase_price_table_items i
 JOIN purchase_price_tables t ON t.id = i.table_id
 WHERE t.code = $1 AND i.item_code = $2 AND i.is_active = TRUE
   AND (i.supplier_code = $3 OR i.supplier_code IS NULL)
@@ -133,12 +137,14 @@ func (q *Queries) GetPurchasePrice(ctx context.Context, arg GetPurchasePricePara
 		&i.MinQty,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.UpdateReplacementValue,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getPurchasePriceTableByCode = `-- name: GetPurchasePriceTableByCode :one
-SELECT id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at FROM purchase_price_tables WHERE code = $1
+SELECT id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at, enterprise_id, supplier_code FROM purchase_price_tables WHERE code = $1
 `
 
 func (q *Queries) GetPurchasePriceTableByCode(ctx context.Context, code int64) (PurchasePriceTable, error) {
@@ -155,12 +161,14 @@ func (q *Queries) GetPurchasePriceTableByCode(ctx context.Context, code int64) (
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
+		&i.SupplierCode,
 	)
 	return i, err
 }
 
 const listPurchasePriceTableItems = `-- name: ListPurchasePriceTableItems :many
-SELECT id, table_id, item_code, supplier_code, uom, price, min_qty, is_active, created_at FROM purchase_price_table_items
+SELECT id, table_id, item_code, supplier_code, uom, price, min_qty, is_active, created_at, update_replacement_value, updated_at FROM purchase_price_table_items
 WHERE table_id = $1 AND is_active = TRUE
 ORDER BY item_code
 `
@@ -184,6 +192,8 @@ func (q *Queries) ListPurchasePriceTableItems(ctx context.Context, tableID int64
 			&i.MinQty,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.UpdateReplacementValue,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -196,7 +206,7 @@ func (q *Queries) ListPurchasePriceTableItems(ctx context.Context, tableID int64
 }
 
 const listPurchasePriceTables = `-- name: ListPurchasePriceTables :many
-SELECT id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at FROM purchase_price_tables
+SELECT id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at, enterprise_id, supplier_code FROM purchase_price_tables
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
@@ -221,6 +231,8 @@ func (q *Queries) ListPurchasePriceTables(ctx context.Context, dollar_1 bool) ([
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
+			&i.SupplierCode,
 		); err != nil {
 			return nil, err
 		}
@@ -248,7 +260,7 @@ UPDATE purchase_price_tables
 SET description = $2, currency_code = $3, validity_start = $4, validity_end = $5,
     is_active = $6, updated_at = NOW()
 WHERE code = $1
-RETURNING id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at
+RETURNING id, code, description, currency_code, validity_start, validity_end, is_active, created_at, created_by, updated_at, enterprise_id, supplier_code
 `
 
 type UpdatePurchasePriceTableParams struct {
@@ -281,6 +293,8 @@ func (q *Queries) UpdatePurchasePriceTable(ctx context.Context, arg UpdatePurcha
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
+		&i.SupplierCode,
 	)
 	return i, err
 }

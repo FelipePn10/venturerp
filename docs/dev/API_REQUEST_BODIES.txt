@@ -1158,6 +1158,52 @@ DELETE /api/sales-order/items/{itemCode}/cancel
 -- Exemplo: DELETE /api/sales-order/items/1/cancel
 
 ============================================================
+MÓDULO: CADASTROS DE COMPRAS
+============================================================
+
+POST /api/purchase-price-tables
+{"supplier_code":2001,"description":"Fornecedor 2001","currency_code":"BRL","validity_start":"2026-01-01"}
+
+POST /api/purchase-price-tables/items
+{
+  "table_code": 1,
+  "item_code": 10002,
+  "uom": "CX",
+  "price": "12.345678",
+  "min_qty": "10",
+  "update_replacement_value": true,
+  "adjustments": [
+    {"sequence":1,"kind":"DISCOUNT","calculation_type":"PERCENT","value":"2.5"}
+  ]
+}
+
+GET /api/purchase-price-tables/{code}/candidates?mode=SUPPLIER&order=ALPHANUMERIC&classification_id=10
+GET /api/purchase-price-tables/sources?table_code=1&start=2026-01-01&end=2026-07-31&source=BOTH
+POST /api/purchase-price-tables/sources/apply
+{"table_code":1,"overwrite":false,"selections":[{"source_type":"PURCHASE_ORDER","source_id":55},{"source_type":"ENTRY_INVOICE","source_id":91}]}
+
+POST /api/purchase-price-tables/items/copy-adjustments
+{"source_item_id":10,"target_item_id":11,"mode":"REPLACE"}
+
+POST /api/item-suppliers
+{
+  "item_code":10002,"supplier_code":2001,"mask":"",
+  "supplier_item_code":"MP-2001-A","supplier_description":"MAT PRIMA A",
+  "uom":"CX","xml_uom":"CX","package_quantity":"20","is_preferred":true,
+  "classification_id":10,"classification_date":"2026-07-13","classification_grade":"9.5",
+  "direct_billing":true,"third_party_order":false,"ignore_avg_cost_addition":false,
+  "ecommerce":false,"barcode":"7890000000011","valid_until":"2027-07-13"
+}
+GET /api/item-suppliers/supplier/{supplierCode}
+POST /api/item-suppliers/{id}/quality-reports
+{"registered_on":"2026-07-13","status":"APPROVED","file_name":"ria.pdf","content_type":"application/pdf","content":"<base64>"}
+
+POST /api/purchase-order-tolerances
+{"tolerance_type":"QUANTITY","applies_to":"ALL","interval_min":"0","interval_max":"1000","tolerance_value":"5","value_type":"PERCENT","supplier_code":2001,"action":"BLOCK"}
+POST /api/purchase-order-tolerances/evaluate
+{"tolerance_type":"ITEM_PRICE","applies_to":"ENTRY_INVOICE","supplier_code":2001,"expected":"10.00","actual":"10.40"}
+
+============================================================
 MÓDULO: PURCHASE ORDER (PEDIDO DE COMPRA)
 ============================================================
 

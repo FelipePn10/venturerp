@@ -119,6 +119,7 @@ type FiscalEntryResponse struct {
 	UpdatedAt           time.Time                 `json:"updated_at"`
 	CreatedBy           uuid.UUID                 `json:"created_by"`
 	Itens               []FiscalEntryItemResponse `json:"itens,omitempty"`
+	Warnings            []string                  `json:"warnings,omitempty"`
 }
 
 // FiscalEntryItemResponse is the API representation of an inbound fiscal document line.

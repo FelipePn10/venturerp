@@ -99,8 +99,15 @@ Ao montar o pedido, o sistema **resolve automaticamente** dados do item (preço 
 
 Dois cadastros fazem as compras quase se preencherem sozinhas:
 
-- **Tabela de preço de compra:** o preço de referência de cada matéria-prima (por fornecedor/tabela) — usado para valorizar o pedido e para o MRP. As tabelas e seus itens podem ser mantidos livremente.
-- **Fornecedor preferencial por item:** cada matéria-prima indica seu fornecedor preferido (e alternativos). As sugestões de compra do MRP já saem com esse fornecedor.
+- **Tabela de preço de compra:** o preço de referência de cada matéria-prima por
+  fornecedor, com vigência, unidade, quantidade mínima e regras de desconto ou
+  acréscimo. É possível copiar regras entre itens e atualizar a tabela a partir de
+  preços já praticados em pedidos ou notas, sem substituir valores existentes por
+  engano.
+- **Fornecedor preferencial por item:** cada matéria-prima indica seu fornecedor
+  preferido (e alternativos), incluindo código/descrição/UM próprios, embalagem,
+  validade, classificação, código de barras e laudos de qualidade. As sugestões de
+  compra do MRP já saem com esse fornecedor.
 
 ---
 
@@ -124,6 +131,11 @@ Quando a mercadoria chega com a **nota fiscal do fornecedor**, a nota é importa
 2. **Dá entrada no estoque** de cada item (atualizando saldo e custo médio);
 3. **Baixa o pedido de compra**, atualizando o status para *parcial* ou *recebido*;
 4. Gera os **créditos fiscais** e a base da **conta a pagar** no financeiro.
+
+As tolerâncias de quantidade, preço e total podem ser gerais ou específicas por
+fornecedor. Uma divergência pode bloquear o recebimento/nota ou apenas avisar e
+permitir a continuidade. A mesma regra é considerada na importação do XML quando a
+nota está vinculada ao pedido de compra.
 
 > O ciclo de compra se fecha sozinho: do "falta material" do MRP até o material no estoque e a obrigação no financeiro, sem redigitar.
 > O detalhe fiscal do recebimento (NF de entrada, créditos, escrituração) está em `fiscal-financeiro.md`.

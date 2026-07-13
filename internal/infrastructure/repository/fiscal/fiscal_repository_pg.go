@@ -34,14 +34,14 @@ func (r *FiscalRepositoryPG) CreateEntry(ctx context.Context, e *entity.FiscalEn
 			 cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 			 valor_produtos, valor_frete, valor_seguro, valor_desconto,
 			 valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
-			 tipo_documento, purchase_order_code, cte_code, status, xml_path, notes, created_by, supplier_code)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+			 tipo_documento, purchase_order_code, cte_code, status, xml_path, notes, created_by, supplier_code, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.Modelo, e.DataEmissao, e.DataEntrada,
 		e.CnpjEmitente, e.RazaoSocialEmitente, e.IEEmitente, e.UFEmitente,
 		e.ValorProdutos, e.ValorFrete, e.ValorSeguro, e.ValorDesconto,
 		e.ValorIPI, e.ValorICMS, e.ValorPIS, e.ValorCOFINS, e.ValorTotal,
-		e.TipoDocumento, e.PurchaseOrderCode, e.CteCode, e.Status, e.XmlPath, e.Notes, e.CreatedBy, e.SupplierCode,
+		e.TipoDocumento, e.PurchaseOrderCode, e.CteCode, e.Status, e.XmlPath, e.Notes, e.CreatedBy, e.SupplierCode, e.EnterpriseID,
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal entry: %w", err)
@@ -56,14 +56,14 @@ func (r *FiscalRepositoryPG) CreateEntryItem(ctx context.Context, item *entity.F
 			 base_icms, aliq_icms, valor_icms, base_ipi, aliq_ipi, valor_ipi, valor_pis, valor_cofins,
 			 cst_icms, cst_ipi, cst_pis, cst_cofins,
 			 gera_credito_icms, gera_credito_ipi, gera_credito_pis, gera_credito_cofins,
-			 description, notes)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+			 description, notes, uom)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 		 RETURNING id, created_at`,
 		item.FiscalEntryID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.BaseIPI, item.AliqIPI, item.ValorIPI, item.ValorPIS, item.ValorCOFINS,
 		item.CstICMS, item.CstIPI, item.CstPIS, item.CstCOFINS,
 		item.GeraCreditoICMS, item.GeraCreditoIPI, item.GeraCreditoPIS, item.GeraCreditoCOFINS,
-		item.Description, item.Notes,
+		item.Description, item.Notes, item.UOM,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal entry item: %w", err)

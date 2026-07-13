@@ -14,6 +14,7 @@ import (
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type receiveAuth struct {
@@ -51,6 +52,15 @@ type receiveStockRepo struct {
 	stockrepo.StockRepository
 	movements []*stockentity.StockMovement
 	err       error
+}
+
+type receiveTolerance struct {
+	action   string
+	exceeded bool
+}
+
+func (f receiveTolerance) EvaluatePurchaseTolerance(context.Context, *int64, string, string, decimal.Decimal, decimal.Decimal) (string, string, bool, error) {
+	return f.action, "configured tolerance", f.exceeded, nil
 }
 
 func (r *receiveStockRepo) CreateMovement(_ context.Context, m *stockentity.StockMovement) (*stockentity.StockMovement, error) {
@@ -163,5 +173,30 @@ func TestReceivePurchaseOrderRejectsExcessQuantity(t *testing.T) {
 	}
 	if len(stock.movements) != 0 {
 		t.Fatal("stock movement must not be created when validation fails")
+	}
+}
+
+func TestReceivePurchaseOrderConfiguredToleranceWarnsOrBlocks(t *testing.T) {
+	for _, tc := range []struct {
+		name, action string
+		wantErr      bool
+	}{{"warn", "WARN", false}, {"block", "BLOCK", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := receiveRepo()
+			stock := &receiveStockRepo{}
+			dto := receiveDTO()
+			dto.Items[0].Quantity = 9
+			uc := ReceivePurchaseOrderUseCase{Repo: repo, StockRepo: stock, Auth: receiveAuth{canPO: true, canStock: true, uid: uuid.New()}, Tolerances: receiveTolerance{action: tc.action, exceeded: true}}
+			out, err := uc.Execute(context.Background(), dto)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
+			}
+			if tc.wantErr && len(stock.movements) != 0 {
+				t.Fatal("blocked receipt created stock")
+			}
+			if !tc.wantErr && (out == nil || len(out.Warnings) != 1) {
+				t.Fatalf("warning missing: %+v", out)
+			}
+		})
 	}
 }

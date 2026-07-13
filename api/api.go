@@ -66,6 +66,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_price_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_quotation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_requisition_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_tolerance_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/recurring_sales_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representative_uc"
@@ -142,6 +143,7 @@ import (
 	purchasePriceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_price"
 	purchaseQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_quotation"
 	purchaseReqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
+	purchaseToleranceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_tolerance"
 	qualityRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
 	recurringSalesRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/recurring_sales"
 	representativeRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/representative"
@@ -603,12 +605,15 @@ func (app *application) mount() chi.Router {
 	itemConversionHandler := handler.NewItemConversionHandler(itemConversionUC)
 
 	// purchase price tables (Tabela de Preço de Compra)
-	purchasePriceUC := purchase_price_uc.NewPurchasePriceUseCase(purchasePriceRepo.New(queries, app.db.Pool))
+	purchasePriceUC := purchase_price_uc.NewPurchasePriceUseCase(purchasePriceRepo.New(queries, app.db.Pool), authService)
 	purchasePriceHandler := handler.NewPurchasePriceHandler(purchasePriceUC)
 
 	// preferred supplier per item (Fornecedor preferencial / Descrição por fornecedor)
-	itemSupplierUC := item_supplier_uc.NewItemSupplierUseCase(itemSupplierRepo.New(queries, app.db.Pool))
+	itemSupplierUC := item_supplier_uc.NewItemSupplierUseCase(itemSupplierRepo.New(queries, app.db.Pool), authService)
 	itemSupplierHandler := handler.NewItemSupplierHandler(itemSupplierUC)
+
+	purchaseToleranceUC := &purchase_tolerance_uc.UseCase{Repo: purchaseToleranceRepo.New(app.db.Pool), Auth: authService}
+	purchaseToleranceHandler := handler.NewPurchaseToleranceHandler(purchaseToleranceUC)
 
 	// item activation readiness (cross-validation BOM/routing/supplier/UOM)
 	itemActivationUC := &item_uc.ValidateItemActivationUseCase{
@@ -643,7 +648,7 @@ func (app *application) mount() chi.Router {
 		&purchase_order_uc.CancelPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		// Inspection gate wires FINS0212: material with an active inspection route is
 		// received into the inspection warehouse and an inspection order is opened.
-		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC},
+		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC, Tolerances: purchaseToleranceUC},
 		// Alçada de valores: procurementUC resolves the approval limit rule.
 		&purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC},
 		&purchase_order_uc.ConsultPurchaseOrdersUseCase{Reader: poRepo, Auth: authService},
@@ -912,8 +917,8 @@ func (app *application) mount() chi.Router {
 	// fiscal module
 	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService}
 	fiscalHandler := handler.NewFiscalHandler(
-		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC},
+		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC},
 		&fiscalUC.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
@@ -2415,16 +2420,31 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/item-suppliers", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemSupplierHandler.Upsert)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemSupplierHandler.ListByItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier/{supplierCode}", itemSupplierHandler.ListBySupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/quality-reports", itemSupplierHandler.CreateQualityReport)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/quality-reports", itemSupplierHandler.ListQualityReports)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemSupplierHandler.Delete)
+		})
+
+		r.Route("/api/purchase-order-tolerances", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", purchaseToleranceHandler.Save)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", purchaseToleranceHandler.Save)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", purchaseToleranceHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/evaluate", purchaseToleranceHandler.Evaluate)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", purchaseToleranceHandler.Delete)
 		})
 
 		r.Route("/api/purchase-price-tables", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", purchasePriceHandler.CreateTable)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", purchasePriceHandler.UpdateTable)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", purchasePriceHandler.ListTables)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/items", purchasePriceHandler.AddItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/items/copy-adjustments", purchasePriceHandler.CopyAdjustments)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sources", purchasePriceHandler.ListSourcePrices)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sources/apply", purchasePriceHandler.ApplySourcePrices)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", purchasePriceHandler.GetTable)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/items", purchasePriceHandler.ListItems)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/items", purchasePriceHandler.AddItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/candidates", purchasePriceHandler.ListCandidates)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/items/{id}", purchasePriceHandler.DeleteItem)
 		})
 	})
