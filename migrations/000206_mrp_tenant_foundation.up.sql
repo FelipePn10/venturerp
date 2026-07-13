@@ -5,6 +5,28 @@ CREATE TABLE IF NOT EXISTS user_enterprises (
     PRIMARY KEY (user_id, enterprise_id)
 );
 
+-- Some legacy installations recorded migration 093 although stock_balances was
+-- removed manually/partially. Recreate the canonical snapshot table before the
+-- tenant retrofit so upgrades remain forward-compatible instead of failing at 206.
+CREATE TABLE IF NOT EXISTS public.stock_balances (
+    id BIGSERIAL PRIMARY KEY,
+    item_code BIGINT NOT NULL,
+    mask VARCHAR(200) NOT NULL DEFAULT '',
+    warehouse_id BIGINT NOT NULL,
+    quantity NUMERIC(15,4) NOT NULL DEFAULT 0,
+    reserved_qty NUMERIC(15,4) NOT NULL DEFAULT 0,
+    available_qty NUMERIC(15,4) GENERATED ALWAYS AS (quantity - reserved_qty) STORED,
+    minimum_stock NUMERIC(15,4) NOT NULL DEFAULT 0,
+    maximum_stock NUMERIC(15,4) NOT NULL DEFAULT 0,
+    safety_stock NUMERIC(15,4) NOT NULL DEFAULT 0,
+    avg_cost NUMERIC(15,4) NOT NULL DEFAULT 0,
+    last_cost NUMERIC(15,4) NOT NULL DEFAULT 0,
+    total_cost NUMERIC(15,4) NOT NULL DEFAULT 0,
+    last_movement_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(item_code, mask, warehouse_id)
+);
+
 -- Existing installations with a single enterprise can be associated safely.
 INSERT INTO user_enterprises (user_id, enterprise_id)
 SELECT u.id, e.id

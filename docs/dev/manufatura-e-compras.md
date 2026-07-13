@@ -601,6 +601,10 @@ Enquanto o CRP diz "o centro X está sobrecarregado na sexta-feira", o APS diz "
 
 ### Como o APS pensa
 
+> Seleção por OF/máquina/centro/operação, grupos de recursos, calendários de
+> máquina, parâmetro 48 e exportação de refugo/paradas: consulte
+> [Sequenciamento da produção](sequenciamento-producao.md).
+
 O APS funciona como um **agendador de consultas médicas**: cada centro de trabalho tem uma agenda, e cada operação ocupa um slot nessa agenda. Nenhum centro pode ter dois trabalhos ao mesmo tempo.
 
 O algoritmo percorre as ordens em ordem de prioridade (mais urgente primeiro) e, para cada operação, encontra o **primeiro slot livre** no centro de trabalho, respeitando duas restrições:

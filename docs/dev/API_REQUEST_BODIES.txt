@@ -3881,3 +3881,58 @@ DELETE /api/production-order/scrap-destinations/{destinationID}
 
 PUT /api/production-order/scrap-destinations/{destinationID}
 -- Mesmo contrato do POST. Preserva o ID e atualiza estoque atomicamente.
+
+POST /api/aps/sequence
+{"start_from":"2026-07-13T07:00:00-03:00","order_ids":[101],"machine_ids":[5],"work_center_ids":[7],"operation_ids":[22]}
+
+POST /api/aps/sequence/view
+{"from":"2026-07-13T07:00:00-03:00","to":"2026-07-13T23:59:00-03:00","resource_group_id":3,"from_order":100,"to_order":200,"time_unit":"MINUTE","refresh_value":12}
+
+POST /api/aps/sequence/events/export?format=csv
+{"order_ids":[101],"machine_ids":[5],"work_center_ids":[7],"operation_ids":[22]}
+
+PUT /api/aps/sequence/settings   (ADMIN)
+{"list_only_active_resources":true}
+
+POST /api/aps/resource-groups   (ADMIN)
+{"code":"LASER","description":"Célula de corte laser"}
+
+POST /api/aps/machine-calendars   (ADMIN)
+{"code":9001,"description":"Turno normal","intervals":[{"weekday":1,"start":"07:00","end":"17:00"}]}
+
+PUT /api/aps/work-centers/{id}/sequencing   (ADMIN)
+{"machine_cost_center_id":10,"labor_cost_center_id":11,"capacity_hours":"8.0000"}
+
+PUT /api/aps/resources/{id}/sequencing   (ADMIN)
+{"resource_group_id":3,"calendar_id":4,"location":"Linha A","is_critical":true,"is_active":true}
+
+POST /api/aps/machine-downtimes   (ADMIN)
+{"machine_id":5,"starts_at":"2026-07-13T10:00:00-03:00","ends_at":"2026-07-13T11:30:00-03:00","downtime_type":"UNPLANNED","reason":"Falha no sensor"}
+
+PUT /api/aps/employees/{id}/sequencing-profile   (ADMIN)
+{"contacts":[{"contact_type":"EMAIL","value":"planner@factory.local","is_primary":true}],"functions":[{"function_name":"PLANNER","cost_center_id":10,"is_supervisor":true}],"credit_limit":"1000.00"}
+
+GET /api/aps/employees/{id}/sequencing-profile   (ADMIN, USER)
+PATCH /api/aps/employees/{employeeID}/contacts/{contactID}   (ADMIN)
+{"contact_type":"PHONE","value":"+55 11 99999-9999","is_primary":true}
+DELETE /api/aps/employees/{employeeID}/contacts/{contactID}  (ADMIN)
+PATCH /api/aps/employees/{employeeID}/functions/{functionID} (ADMIN)
+{"function_name":"MASTER PLANNER","cost_center_id":10,"is_supervisor":true,"is_manager":false}
+DELETE /api/aps/employees/{employeeID}/functions/{functionID} (ADMIN)
+
+PUT /api/aps/resources/{id}/industrial-profile   (ADMIN)
+{"usage_description":"Corte laser","preparation_time":"15","preparation_time_unit":"MINUTE","brand":"Factory","is_preferred":true,"services":[{"service_code":"MEC-30","description":"Revisão mecânica","service_type":"MECHANICAL","frequency_value":30,"frequency_unit":"DAY","max_tolerance":2,"implemented_on":"2026-07-13T00:00:00Z","items":[],"responsible_employee_ids":[12]}],"special_values":[{"name":"RPM","value_type":"NUMBER","numeric_value":"1800"}]}
+
+GET /api/aps/resources/{id}/industrial-profile   (ADMIN, USER)
+PATCH /api/aps/resources/{machineID}/services/{serviceID}   (ADMIN)
+{"service_code":"MEC-30","description":"Revisão mecânica","service_type":"MECHANICAL","frequency_value":15,"frequency_unit":"DAY","max_tolerance":2,"implemented_on":"2026-07-13T00:00:00Z","responsible_employee_ids":[12]}
+DELETE /api/aps/resources/{machineID}/services/{serviceID}  (ADMIN)
+PATCH /api/aps/resources/{machineID}/services/{serviceID}/items/{itemID} (ADMIN)
+{"item_code":100,"quantity":"2.500000","notes":"Kit preventivo"}
+DELETE /api/aps/resources/{machineID}/services/{serviceID}/items/{itemID} (ADMIN)
+PATCH /api/aps/resources/{machineID}/special-values/{fieldID} (ADMIN)
+{"name":"RPM nominal","value_type":"NUMBER","numeric_value":"1750"}
+DELETE /api/aps/resources/{machineID}/special-values/{fieldID} (ADMIN)
+
+-- PATCH/DELETE retornam 204. Obtenha os IDs pelos GETs de perfil.
+-- O PUT substitui o perfil inteiro; PATCH altera somente o subregistro informado.

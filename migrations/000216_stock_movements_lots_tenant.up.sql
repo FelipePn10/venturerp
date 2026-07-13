@@ -1,4 +1,11 @@
-ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS enterprise_id BIGINT REFERENCES enterprise(id);
+-- Repair legacy installations that recorded migration 093 with an older
+-- stock_movements projection. These columns are part of the canonical table and
+-- are required by tenant attribution and reference indexes below.
+ALTER TABLE stock_movements
+    ADD COLUMN IF NOT EXISTS created_by UUID,
+    ADD COLUMN IF NOT EXISTS reference_type VARCHAR(30),
+    ADD COLUMN IF NOT EXISTS reference_code BIGINT,
+    ADD COLUMN IF NOT EXISTS enterprise_id BIGINT REFERENCES enterprise(id);
 ALTER TABLE stock_lot_balances ADD COLUMN IF NOT EXISTS enterprise_id BIGINT REFERENCES enterprise(id);
 
 UPDATE stock_movements movement SET enterprise_id = ue.enterprise_id

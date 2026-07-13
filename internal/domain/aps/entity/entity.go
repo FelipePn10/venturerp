@@ -15,6 +15,7 @@ type ProductionSequence struct {
 	ProductionOrderID int64
 	OperationID       *int64
 	WorkCenterID      int64
+	MachineID         *int64
 	SequencePosition  int
 	ScheduledStart    time.Time
 	ScheduledEnd      time.Time
@@ -28,6 +29,7 @@ type GanttTask struct {
 	SequenceID        int64
 	ProductionOrderID int64
 	WorkCenterID      int64
+	MachineID         *int64
 	SequencePosition  int
 	ScheduledStart    time.Time
 	ScheduledEnd      time.Time

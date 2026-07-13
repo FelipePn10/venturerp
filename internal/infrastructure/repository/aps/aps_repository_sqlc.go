@@ -9,17 +9,35 @@ import (
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/aps/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type APSRepositorySQLC struct {
-	q *sqlc.Queries
+	q    *sqlc.Queries
+	pool *pgxpool.Pool
 }
 
-func New(q *sqlc.Queries) domainrepo.APSRepository {
-	return &APSRepositorySQLC{q: q}
+func New(q *sqlc.Queries, pool ...*pgxpool.Pool) domainrepo.APSRepository {
+	r := &APSRepositorySQLC{q: q}
+	if len(pool) > 0 {
+		r.pool = pool[0]
+	}
+	return r
 }
 
 func (r *APSRepositorySQLC) UpsertSequence(ctx context.Context, seq *entity.ProductionSequence) (*entity.ProductionSequence, error) {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		row := r.pool.QueryRow(ctx, `INSERT INTO production_sequences(production_order_id,operation_id,work_center_id,machine_id,sequence_position,scheduled_start,scheduled_end,status,enterprise_id)
+			SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9 WHERE EXISTS(SELECT 1 FROM production_orders WHERE id=$1 AND enterprise_id=$9)
+			RETURNING id,production_order_id,operation_id,work_center_id,machine_id,sequence_position,scheduled_start,scheduled_end,status,created_at,updated_at`, seq.ProductionOrderID, seq.OperationID, seq.WorkCenterID, seq.MachineID, seq.SequencePosition, seq.ScheduledStart, seq.ScheduledEnd, string(seq.Status), enterpriseID)
+		return scanTenantSequence(row)
+	}
 	row, err := r.q.InsertProductionSequence(ctx, sqlc.InsertProductionSequenceParams{
 		ProductionOrderID: seq.ProductionOrderID,
 		OperationID:       pgutil.ToPgInt8Ptr(seq.OperationID),
@@ -36,6 +54,13 @@ func (r *APSRepositorySQLC) UpsertSequence(ctx context.Context, seq *entity.Prod
 }
 
 func (r *APSRepositorySQLC) GetSequence(ctx context.Context, id int64) (*entity.ProductionSequence, error) {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return scanTenantSequence(r.pool.QueryRow(ctx, `SELECT id,production_order_id,operation_id,work_center_id,machine_id,sequence_position,scheduled_start,scheduled_end,status,created_at,updated_at FROM production_sequences WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID))
+	}
 	row, err := r.q.GetProductionSequence(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("getting sequence %d: %w", id, err)
@@ -44,6 +69,13 @@ func (r *APSRepositorySQLC) GetSequence(ctx context.Context, id int64) (*entity.
 }
 
 func (r *APSRepositorySQLC) UpdateSequence(ctx context.Context, seq *entity.ProductionSequence) (*entity.ProductionSequence, error) {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return scanTenantSequence(r.pool.QueryRow(ctx, `UPDATE production_sequences SET work_center_id=$2,machine_id=$3,scheduled_start=$4,scheduled_end=$5,updated_at=NOW() WHERE id=$1 AND enterprise_id=$6 RETURNING id,production_order_id,operation_id,work_center_id,machine_id,sequence_position,scheduled_start,scheduled_end,status,created_at,updated_at`, seq.ID, seq.WorkCenterID, seq.MachineID, seq.ScheduledStart, seq.ScheduledEnd, enterpriseID))
+	}
 	row, err := r.q.UpdateProductionSequence(ctx, sqlc.UpdateProductionSequenceParams{
 		ID:             seq.ID,
 		WorkCenterID:   seq.WorkCenterID,
@@ -57,6 +89,17 @@ func (r *APSRepositorySQLC) UpdateSequence(ctx context.Context, seq *entity.Prod
 }
 
 func (r *APSRepositorySQLC) ListByOrder(ctx context.Context, orderID int64) ([]*entity.ProductionSequence, error) {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := r.pool.Query(ctx, `SELECT id,production_order_id,operation_id,work_center_id,machine_id,sequence_position,scheduled_start,scheduled_end,status,created_at,updated_at FROM production_sequences WHERE production_order_id=$1 AND enterprise_id=$2 ORDER BY sequence_position`, orderID, enterpriseID)
+		if err != nil {
+			return nil, err
+		}
+		return scanTenantSequences(rows)
+	}
 	rows, err := r.q.ListSequencesByOrder(ctx, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("listing sequences for order %d: %w", orderID, err)
@@ -65,6 +108,17 @@ func (r *APSRepositorySQLC) ListByOrder(ctx context.Context, orderID int64) ([]*
 }
 
 func (r *APSRepositorySQLC) ListByWorkCenter(ctx context.Context, workCenterID int64, from, to time.Time) ([]*entity.ProductionSequence, error) {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := r.pool.Query(ctx, `SELECT id,production_order_id,operation_id,work_center_id,machine_id,sequence_position,scheduled_start,scheduled_end,status,created_at,updated_at FROM production_sequences WHERE enterprise_id=$1 AND work_center_id=$2 AND scheduled_start<$4 AND scheduled_end>$3 ORDER BY scheduled_start`, enterpriseID, workCenterID, from, to)
+		if err != nil {
+			return nil, err
+		}
+		return scanTenantSequences(rows)
+	}
 	rows, err := r.q.ListSequencesByWorkCenter(ctx, workCenterID,
 		pgutil.ToPgTimestamptz(from), pgutil.ToPgTimestamptz(to))
 	if err != nil {
@@ -74,7 +128,37 @@ func (r *APSRepositorySQLC) ListByWorkCenter(ctx context.Context, workCenterID i
 }
 
 func (r *APSRepositorySQLC) DeleteByOrder(ctx context.Context, orderID int64) error {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return err
+		}
+		_, err = r.pool.Exec(ctx, `DELETE FROM production_sequences WHERE production_order_id=$1 AND enterprise_id=$2`, orderID, enterpriseID)
+		return err
+	}
 	return r.q.DeleteSequencesByOrder(ctx, orderID)
+}
+
+func scanTenantSequence(row pgx.Row) (*entity.ProductionSequence, error) {
+	v := &entity.ProductionSequence{}
+	var status string
+	if err := row.Scan(&v.ID, &v.ProductionOrderID, &v.OperationID, &v.WorkCenterID, &v.MachineID, &v.SequencePosition, &v.ScheduledStart, &v.ScheduledEnd, &status, &v.CreatedAt, &v.UpdatedAt); err != nil {
+		return nil, fmt.Errorf("scanning tenant sequence: %w", err)
+	}
+	v.Status = entity.SequenceStatus(status)
+	return v, nil
+}
+func scanTenantSequences(rows pgx.Rows) ([]*entity.ProductionSequence, error) {
+	defer rows.Close()
+	out := []*entity.ProductionSequence{}
+	for rows.Next() {
+		v, err := scanTenantSequence(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
 }
 
 func (r *APSRepositorySQLC) GetOpenProductionOrders(ctx context.Context) ([]domainrepo.OrderRow, error) {
