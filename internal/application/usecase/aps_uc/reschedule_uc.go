@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/aps/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/aps/repository"
 )
 
 // RescheduleSequence applies a planner's manual board move ("drag-drop"): it moves
@@ -40,6 +41,22 @@ func (uc *APSUseCase) RescheduleSequence(ctx context.Context, dto request.Resche
 	target.ScheduledEnd = newStart.Add(duration)
 	if dto.NewWorkCenterID != nil && *dto.NewWorkCenterID > 0 {
 		target.WorkCenterID = *dto.NewWorkCenterID
+	}
+	if dto.NewMachineID != nil {
+		selection, ok := uc.repo.(repository.SelectionRepository)
+		if !ok {
+			return nil, fmt.Errorf("machine rescheduling is not supported")
+		}
+		candidates, loadErr := selection.ListCandidateMachines(ctx, target.WorkCenterID, []int64{*dto.NewMachineID})
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if len(candidates) != 1 {
+			return nil, fmt.Errorf("machine does not belong to the selected work center or tenant")
+		}
+		target.MachineID = dto.NewMachineID
+	} else if dto.NewWorkCenterID != nil {
+		target.MachineID = nil
 	}
 
 	moved, err := uc.repo.UpdateSequence(ctx, target)
@@ -260,6 +277,7 @@ func rescheduledBar(s *entity.ProductionSequence) response.RescheduledBarRespons
 		SequenceID:        s.ID,
 		ProductionOrderID: s.ProductionOrderID,
 		WorkCenterID:      s.WorkCenterID,
+		MachineID:         s.MachineID,
 		ScheduledStart:    s.ScheduledStart,
 		ScheduledEnd:      s.ScheduledEnd,
 		DurationHours:     round2(s.ScheduledEnd.Sub(s.ScheduledStart).Hours()),

@@ -3,6 +3,8 @@ package aps_uc
 import (
 	"testing"
 	"time"
+
+	apsrepo "github.com/FelipePn10/panossoerp/internal/domain/aps/repository"
 )
 
 // 2024-01-01 is a Monday — used as a deterministic anchor.
@@ -22,6 +24,30 @@ func TestSkipToWorkday(t *testing.T) {
 	}
 	if got := skipToWorkday(mon); !got.Equal(mon) {
 		t.Errorf("Monday should stay, got %v", got)
+	}
+}
+
+func TestAllocateInWindowsSplitsAcrossCalendarIntervals(t *testing.T) {
+	windows := []apsrepo.AvailabilityWindow{{Start: mon.Add(7 * time.Hour), End: mon.Add(11 * time.Hour)}, {Start: mon.Add(13 * time.Hour), End: mon.Add(17 * time.Hour)}}
+	start, end := allocateInWindows(mon, 6, windows)
+	if !start.Equal(mon.Add(7*time.Hour)) || !end.Equal(mon.Add(15*time.Hour)) {
+		t.Fatalf("start=%v end=%v", start, end)
+	}
+}
+
+func TestAllocateInWindowsMergesParallelResourceCalendars(t *testing.T) {
+	windows := []apsrepo.AvailabilityWindow{{Start: mon.Add(7 * time.Hour), End: mon.Add(12 * time.Hour)}, {Start: mon.Add(8 * time.Hour), End: mon.Add(17 * time.Hour)}}
+	start, end := allocateInWindows(mon, 8, windows)
+	if !start.Equal(mon.Add(7*time.Hour)) || !end.Equal(mon.Add(15*time.Hour)) {
+		t.Fatalf("start=%v end=%v", start, end)
+	}
+}
+func TestSubtractDowntimesSplitsAvailability(t *testing.T) {
+	windows := []apsrepo.AvailabilityWindow{{Start: mon.Add(7 * time.Hour), End: mon.Add(17 * time.Hour)}}
+	downs := []apsrepo.AvailabilityWindow{{Start: mon.Add(10 * time.Hour), End: mon.Add(12 * time.Hour)}}
+	got := subtractDowntimes(windows, downs)
+	if len(got) != 2 || !got[0].End.Equal(mon.Add(10*time.Hour)) || !got[1].Start.Equal(mon.Add(12*time.Hour)) {
+		t.Fatalf("windows=%+v", got)
 	}
 }
 

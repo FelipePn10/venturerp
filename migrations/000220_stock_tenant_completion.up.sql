@@ -1,3 +1,25 @@
+-- Repair legacy installations whose migration history contains the stock
+-- migrations but whose operational tables were removed outside migrate.
+CREATE TABLE IF NOT EXISTS stock_reservations (
+ id BIGSERIAL PRIMARY KEY,item_code BIGINT NOT NULL,mask VARCHAR(200) NOT NULL DEFAULT '',warehouse_id BIGINT NOT NULL,
+ quantity NUMERIC(15,4) NOT NULL,reference_type VARCHAR(30) NOT NULL,reference_code BIGINT NOT NULL,reference_item_code BIGINT,
+ reservation_date DATE NOT NULL DEFAULT CURRENT_DATE,expiration_date DATE,status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',notes TEXT,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),created_by UUID NOT NULL
+);
+CREATE TABLE IF NOT EXISTS item_consumption_averages (
+ id BIGSERIAL PRIMARY KEY,item_code BIGINT NOT NULL UNIQUE,avg_monthly_consumption NUMERIC(15,4) NOT NULL DEFAULT 0,
+ total_consumed NUMERIC(15,4) NOT NULL DEFAULT 0,window_months INT NOT NULL DEFAULT 6,calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS stock_lots (
+ id BIGSERIAL PRIMARY KEY,item_code BIGINT NOT NULL,lot VARCHAR(50) NOT NULL,heat_number VARCHAR(50),certificate VARCHAR(120),
+ supplier_code BIGINT,received_at DATE,notes TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),created_by UUID NOT NULL,UNIQUE(item_code,lot)
+);
+CREATE TABLE IF NOT EXISTS physical_inventories (
+ id BIGSERIAL PRIMARY KEY,code BIGINT NOT NULL,description VARCHAR(200) NOT NULL,warehouse_id BIGINT NOT NULL,start_date DATE NOT NULL,
+ end_date DATE,status VARCHAR(20) NOT NULL DEFAULT 'OPEN',total_items INT NOT NULL DEFAULT 0,counted_items INT NOT NULL DEFAULT 0,
+ notes TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),created_by UUID NOT NULL
+);
+
 ALTER TABLE stock_reservations ADD COLUMN IF NOT EXISTS enterprise_id BIGINT REFERENCES enterprise(id);
 ALTER TABLE item_consumption_averages ADD COLUMN IF NOT EXISTS enterprise_id BIGINT REFERENCES enterprise(id);
 ALTER TABLE stock_lots ADD COLUMN IF NOT EXISTS enterprise_id BIGINT REFERENCES enterprise(id);

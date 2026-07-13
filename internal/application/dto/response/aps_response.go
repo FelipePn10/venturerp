@@ -7,10 +7,118 @@ type APSSummaryResponse struct {
 	OrdersProcessed     int `json:"orders_processed"`
 }
 
+type SequencingExportRowResponse struct {
+	EventType         string    `json:"event_type"`
+	ProductionOrderID int64     `json:"production_order_id"`
+	OrderNumber       int64     `json:"order_number"`
+	MachineID         *int64    `json:"machine_id,omitempty"`
+	WorkCenterID      *int64    `json:"work_center_id,omitempty"`
+	OperationID       *int64    `json:"operation_id,omitempty"`
+	EventAt           time.Time `json:"event_at"`
+	Quantity          string    `json:"quantity,omitempty"`
+	Reason            string    `json:"reason,omitempty"`
+}
+
+type SequencingResourceResponse struct {
+	ID              int64  `json:"id"`
+	Code            int64  `json:"code"`
+	Name            string `json:"name"`
+	WorkCenterID    int64  `json:"work_center_id"`
+	ResourceGroupID *int64 `json:"resource_group_id,omitempty"`
+	IsActive        bool   `json:"is_active"`
+}
+type ResourceGroupResponse struct {
+	ID          int64  `json:"id"`
+	Code        string `json:"code"`
+	Description string `json:"description"`
+}
+type MachineCalendarIntervalResponse struct {
+	Weekday int    `json:"weekday"`
+	Start   string `json:"start"`
+	End     string `json:"end"`
+}
+type MachineCalendarResponse struct {
+	ID          int64                             `json:"id"`
+	Code        int64                             `json:"code"`
+	Description string                            `json:"description"`
+	Intervals   []MachineCalendarIntervalResponse `json:"intervals"`
+}
+type MachineDowntimeResponse struct {
+	ID                 int64     `json:"id"`
+	MachineID          int64     `json:"machine_id"`
+	StartsAt           time.Time `json:"starts_at"`
+	EndsAt             time.Time `json:"ends_at"`
+	DowntimeType       string    `json:"downtime_type"`
+	Reason             string    `json:"reason"`
+	MaintenanceOrderID *int64    `json:"maintenance_order_id,omitempty"`
+}
+
+type EmployeeContactResponse struct {
+	ID          int64  `json:"id"`
+	ContactType string `json:"contact_type"`
+	Value       string `json:"value"`
+	IsPrimary   bool   `json:"is_primary"`
+}
+type EmployeeFunctionResponse struct {
+	ID           int64  `json:"id"`
+	FunctionName string `json:"function_name"`
+	CostCenterID *int64 `json:"cost_center_id,omitempty"`
+	IsSupervisor bool   `json:"is_supervisor"`
+	IsManager    bool   `json:"is_manager"`
+}
+type EmployeeSequencingProfileResponse struct {
+	Contacts    []EmployeeContactResponse  `json:"contacts"`
+	Functions   []EmployeeFunctionResponse `json:"functions"`
+	CreditLimit string                     `json:"credit_limit"`
+	ValidUntil  *time.Time                 `json:"valid_until,omitempty"`
+}
+type ServiceItemResponse struct {
+	ID       int64  `json:"id"`
+	ItemCode int64  `json:"item_code"`
+	Quantity string `json:"quantity"`
+	Notes    string `json:"notes,omitempty"`
+}
+type MachineServiceResponse struct {
+	ID                     int64                 `json:"id"`
+	ServiceCode            string                `json:"service_code"`
+	Description            string                `json:"description"`
+	ServiceType            string                `json:"service_type"`
+	FrequencyValue         int                   `json:"frequency_value"`
+	FrequencyUnit          string                `json:"frequency_unit"`
+	MaxTolerance           int                   `json:"max_tolerance"`
+	SupplierCode           *int64                `json:"supplier_code,omitempty"`
+	ImplementedOn          time.Time             `json:"implemented_on"`
+	LastExecutedOn         *time.Time            `json:"last_executed_on,omitempty"`
+	Notes                  string                `json:"notes,omitempty"`
+	Items                  []ServiceItemResponse `json:"items"`
+	ResponsibleEmployeeIDs []int64               `json:"responsible_employee_ids"`
+}
+type SpecialValueResponse struct {
+	FieldID      int64  `json:"field_id"`
+	Name         string `json:"name"`
+	ValueType    string `json:"value_type"`
+	TextValue    string `json:"text_value,omitempty"`
+	NumericValue string `json:"numeric_value,omitempty"`
+	MaxLength    *int   `json:"max_length,omitempty"`
+}
+type MachineIndustrialProfileResponse struct {
+	UsageDescription                 string                   `json:"usage_description"`
+	AcquiredOn                       *time.Time               `json:"acquired_on,omitempty"`
+	PreparationTime                  string                   `json:"preparation_time"`
+	PreparationTimeUnit              string                   `json:"preparation_time_unit"`
+	SupplierCode                     *int64                   `json:"supplier_code,omitempty"`
+	Brand                            string                   `json:"brand"`
+	IsPreferred                      bool                     `json:"is_preferred"`
+	MaintenanceResponsibleEmployeeID *int64                   `json:"maintenance_responsible_employee_id,omitempty"`
+	Services                         []MachineServiceResponse `json:"services"`
+	SpecialValues                    []SpecialValueResponse   `json:"special_values"`
+}
+
 type GanttTaskResponse struct {
 	SequenceID        int64     `json:"sequence_id"`
 	ProductionOrderID int64     `json:"production_order_id"`
 	WorkCenterID      int64     `json:"work_center_id"`
+	MachineID         *int64    `json:"machine_id,omitempty"`
 	SequencePosition  int       `json:"sequence_position"`
 	ScheduledStart    time.Time `json:"scheduled_start"`
 	ScheduledEnd      time.Time `json:"scheduled_end"`
@@ -107,6 +215,7 @@ type RescheduledBarResponse struct {
 	SequenceID        int64     `json:"sequence_id"`
 	ProductionOrderID int64     `json:"production_order_id"`
 	WorkCenterID      int64     `json:"work_center_id"`
+	MachineID         *int64    `json:"machine_id,omitempty"`
 	ScheduledStart    time.Time `json:"scheduled_start"`
 	ScheduledEnd      time.Time `json:"scheduled_end"`
 	DurationHours     float64   `json:"duration_hours"`

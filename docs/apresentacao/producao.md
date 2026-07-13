@@ -151,6 +151,11 @@ As paradas de manutenção são **respeitadas automaticamente** pelo CRP (capaci
 
 ## 8. Glossário rápido
 
+O sequenciamento pode ser calculado para uma seleção de ordens, máquinas, centros
+e operações. O quadro é consultado por grupo de recursos e filtrado por período,
+planejador e faixas operacionais. Refugos e paradas podem ser exportados para
+análise da fábrica, respeitando os calendários semanais dos recursos.
+
 | Termo | Significado |
 |---|---|
 | **Roteiro / rota** | A sequência de operações para fabricar um item |
