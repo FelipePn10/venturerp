@@ -141,6 +141,7 @@ func toFiscalEntryResponse(e *entity.FiscalEntry) *response.FiscalEntryResponse 
 		UpdatedAt:           e.UpdatedAt,
 		CreatedBy:           e.CreatedBy,
 		Itens:               toFiscalEntryItemValues(e.Itens),
+		Warnings:            e.Warnings,
 	}
 }
 

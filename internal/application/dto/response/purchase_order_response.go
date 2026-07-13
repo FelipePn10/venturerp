@@ -109,6 +109,7 @@ type PurchaseOrderReceiptResponse struct {
 	ReceivedLines    []PurchaseReceiptLine    `json:"received_lines"`
 	Movements        []StockMovementResponse  `json:"movements"`
 	InspectionOrders []ReceiptInspectionOrder `json:"inspection_orders,omitempty"`
+	Warnings         []string                 `json:"warnings,omitempty"`
 }
 
 // ReceiptInspectionOrder references an inspection order automatically opened when a

@@ -11,7 +11,9 @@ func toPriceTableResponse(t *entity.PurchasePriceTable) *response.PurchasePriceT
 	}
 	return &response.PurchasePriceTableResponse{
 		ID:            t.ID,
+		EnterpriseID:  t.EnterpriseID,
 		Code:          t.Code,
+		SupplierCode:  t.SupplierCode,
 		Description:   t.Description,
 		CurrencyCode:  t.CurrencyCode,
 		ValidityStart: t.ValidityStart,
@@ -37,16 +39,27 @@ func toPriceTableItemResponse(it *entity.PurchasePriceTableItem) *response.Purch
 		return nil
 	}
 	return &response.PurchasePriceTableItemResponse{
-		ID:           it.ID,
-		TableID:      it.TableID,
-		ItemCode:     it.ItemCode,
-		SupplierCode: it.SupplierCode,
-		UOM:          it.UOM,
-		Price:        it.Price,
-		MinQty:       it.MinQty,
-		IsActive:     it.IsActive,
-		CreatedAt:    it.CreatedAt,
+		ID:                     it.ID,
+		TableID:                it.TableID,
+		ItemCode:               it.ItemCode,
+		SupplierCode:           it.SupplierCode,
+		UOM:                    it.UOM,
+		Price:                  it.Price,
+		MinQty:                 it.MinQty,
+		UpdateReplacementValue: it.UpdateReplacementValue,
+		IsActive:               it.IsActive,
+		CreatedAt:              it.CreatedAt,
+		UpdatedAt:              it.UpdatedAt,
+		Adjustments:            toAdjustmentResponses(it.Adjustments),
 	}
+}
+
+func toAdjustmentResponses(items []*entity.PriceAdjustment) []response.PriceAdjustmentResponse {
+	out := make([]response.PriceAdjustmentResponse, 0, len(items))
+	for _, it := range items {
+		out = append(out, response.PriceAdjustmentResponse{ID: it.ID, Sequence: it.Sequence, Kind: it.Kind, CalculationType: it.CalculationType, Value: it.Value})
+	}
+	return out
 }
 
 func toPriceTableItemValues(items []*entity.PurchasePriceTableItem) []response.PurchasePriceTableItemResponse {

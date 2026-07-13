@@ -46,6 +46,53 @@ func (h *ItemSupplierHandler) ListByItem(w http.ResponseWriter, r *http.Request)
 	jsonResponse(w, http.StatusOK, res)
 }
 
+func (h *ItemSupplierHandler) ListBySupplier(w http.ResponseWriter, r *http.Request) {
+	supplierCode, err := strconv.ParseInt(chi.URLParam(r, "supplierCode"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid supplier code")
+		return
+	}
+	res, err := h.uc.ListBySupplier(r.Context(), supplierCode)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemSupplierHandler) CreateQualityReport(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var dto request.CreateItemSupplierQualityReportDTO
+	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	res, err := h.uc.CreateQualityReport(r.Context(), id, dto)
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, res)
+}
+
+func (h *ItemSupplierHandler) ListQualityReports(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	res, err := h.uc.ListQualityReports(r.Context(), id)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
 func (h *ItemSupplierHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

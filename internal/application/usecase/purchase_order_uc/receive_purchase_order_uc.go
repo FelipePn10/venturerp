@@ -13,6 +13,7 @@ import (
 	porepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
+	"github.com/shopspring/decimal"
 )
 
 // ReceivingInspectionGate hooks receiving inspection into physical receipt
@@ -34,6 +35,7 @@ type ReceivePurchaseOrderUseCase struct {
 	Auth      ports.AuthService
 	// Inspection is optional; nil disables auto-inspection on receipt.
 	Inspection ReceivingInspectionGate
+	Tolerances ports.PurchaseToleranceEvaluator
 }
 
 func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.ReceivePurchaseOrderDTO) (*response.PurchaseOrderReceiptResponse, error) {
@@ -71,6 +73,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 	receiptLines := make([]response.PurchaseReceiptLine, 0, len(dto.Items))
 	movements := make([]response.StockMovementResponse, 0, len(dto.Items))
 	inspectionOrders := make([]response.ReceiptInspectionOrder, 0)
+	warnings := make([]string, 0)
 	refType := stockentity.ReferenceTypePurchaseOrder
 	refCode := dto.PurchaseOrderCode
 
@@ -89,9 +92,27 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			return nil, fmt.Errorf("purchase order item %d is cancelled", item.PurchaseOrderItemCode)
 		}
 		remaining := line.RequestedQty - line.ReceivedQty - line.CancelledQty
-		toleranceRemaining := line.TolerancePct/100*line.RequestedQty + line.CancelledToleranceQty
-		if item.Quantity > remaining+toleranceRemaining+0.0001 {
-			return nil, fmt.Errorf("receipt quantity %.4f exceeds remaining %.4f for purchase order item %d", item.Quantity, remaining, item.PurchaseOrderItemCode)
+		toleranceHandled := false
+		if uc.Tolerances != nil && line.ReceivedQty+item.Quantity > line.RequestedQty+0.0001 {
+			action, message, exceeded, toleranceErr := uc.Tolerances.EvaluatePurchaseTolerance(ctx, order.SupplierCode, "QUANTITY", "RECEIVING_NOTICE", decimal.NewFromFloat(line.RequestedQty), decimal.NewFromFloat(line.ReceivedQty+item.Quantity))
+			if toleranceErr != nil {
+				return nil, toleranceErr
+			}
+			if action != "" {
+				toleranceHandled = true
+			}
+			if exceeded && action == "BLOCK" {
+				return nil, fmt.Errorf("purchase tolerance blocked item %d: %s", item.PurchaseOrderItemCode, message)
+			}
+			if exceeded && action == "WARN" {
+				warnings = append(warnings, fmt.Sprintf("item %d: %s", item.PurchaseOrderItemCode, message))
+			}
+		}
+		if !toleranceHandled {
+			toleranceRemaining := line.TolerancePct/100*line.RequestedQty + line.CancelledToleranceQty
+			if item.Quantity > remaining+toleranceRemaining+0.0001 {
+				return nil, fmt.Errorf("receipt quantity %.4f exceeds remaining %.4f for purchase order item %d", item.Quantity, remaining, item.PurchaseOrderItemCode)
+			}
 		}
 
 		stockQty := item.Quantity
@@ -194,6 +215,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		ReceivedLines:    receiptLines,
 		Movements:        movements,
 		InspectionOrders: inspectionOrders,
+		Warnings:         warnings,
 	}, nil
 }
 

@@ -14,11 +14,14 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	porepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
 )
 
 type UploadNFEEntryUseCase struct {
-	Repo repository.FiscalRepository
-	Auth ports.AuthService
+	Repo           repository.FiscalRepository
+	Auth           ports.AuthService
+	PurchaseOrders porepo.PurchaseOrderRepository
+	Tolerances     ports.PurchaseToleranceEvaluator
 }
 
 type nfeXML struct {
@@ -58,6 +61,7 @@ type nfeXML struct {
 				CFOP   string `xml:"CFOP"`
 				QCom   string `xml:"qCom"`
 				VUnCom string `xml:"vUnCom"`
+				UCom   string `xml:"uCom"`
 				VProd  string `xml:"vProd"`
 			} `xml:"prod"`
 			Imposto struct {
@@ -100,6 +104,10 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 	if err != nil {
 		return nil, err
 	}
+	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var nfe nfeXML
 	if err := xml.Unmarshal([]byte(dto.XmlContent), &nfe); err != nil {
@@ -112,6 +120,7 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 	dataEmissao := parseNFEDate(inf.Ide.DhEmi)
 
 	entry := &entity.FiscalEntry{
+		EnterpriseID:        enterpriseID,
 		NumeroNF:            nfNum,
 		Serie:               inf.Ide.Serie,
 		Modelo:              inf.Ide.Mod,
@@ -131,21 +140,18 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 		ValorCOFINS:         parseFloat(inf.Total.ICMSTot.VCOFINS),
 		ValorTotal:          parseFloat(inf.Total.ICMSTot.VNF),
 		TipoDocumento:       "NFE",
+		PurchaseOrderCode:   dto.PurchaseOrderCode,
 		Status:              entity.EntryStatusPending,
 		CreatedBy:           userID,
 	}
 
-	created, err := uc.Repo.CreateEntry(ctx, entry)
-	if err != nil {
-		return nil, err
-	}
-
+	pendingItems := make([]*entity.FiscalEntryItem, 0, len(inf.Det))
 	for i, det := range inf.Det {
 		itemCode := int64PtrFromStr(det.Prod.CProd)
 		item := &entity.FiscalEntryItem{
-			FiscalEntryID:     created.ID,
 			Sequence:          i + 1,
 			ItemCode:          itemCode,
+			UOM:               strPtr(det.Prod.UCom),
 			Ncm:               strPtr(det.Prod.NCM),
 			Cfop:              det.Prod.CFOP,
 			Quantity:          parseFloat(det.Prod.QCom),
@@ -168,7 +174,19 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 			GeraCreditoPIS:    true,
 			GeraCreditoCOFINS: true,
 		}
-		if _, err := uc.Repo.CreateEntryItem(ctx, item); err != nil {
+		pendingItems = append(pendingItems, item)
+	}
+	entry.SupplierCode, entry.Warnings, err = validatePurchaseEntryTolerances(ctx, uc.PurchaseOrders, uc.Tolerances, dto.PurchaseOrderCode, pendingItems, entry.ValorProdutos)
+	if err != nil {
+		return nil, err
+	}
+	created, err := uc.Repo.CreateEntry(ctx, entry)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range pendingItems {
+		item.FiscalEntryID = created.ID
+		if _, err = uc.Repo.CreateEntryItem(ctx, item); err != nil {
 			return nil, err
 		}
 	}

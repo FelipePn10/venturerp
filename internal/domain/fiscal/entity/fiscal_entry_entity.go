@@ -18,6 +18,7 @@ const (
 
 type FiscalEntry struct {
 	ID                  int64
+	EnterpriseID        int64
 	ChaveAcesso         *string
 	NumeroNF            int64
 	Serie               string
@@ -49,6 +50,7 @@ type FiscalEntry struct {
 	UpdatedAt           time.Time
 	CreatedBy           uuid.UUID
 	Itens               []*FiscalEntryItem
+	Warnings            []string
 }
 
 type FiscalEntryItem struct {
@@ -56,6 +58,7 @@ type FiscalEntryItem struct {
 	FiscalEntryID     int64
 	Sequence          int
 	ItemCode          *int64
+	UOM               *string
 	Ncm               *string
 	Cfop              string
 	Quantity          float64

@@ -35,6 +35,7 @@ type CreateFiscalEntryDTO struct {
 type CreateFiscalEntryItemDTO struct {
 	Sequence          int     `json:"sequence"`
 	ItemCode          *int64  `json:"item_code,omitempty"`
+	UOM               *string `json:"uom,omitempty"`
 	Ncm               *string `json:"ncm,omitempty"`
 	Cfop              string  `json:"cfop"`
 	Quantity          float64 `json:"quantity"`
@@ -71,7 +72,8 @@ type ApproveFiscalEntryDTO struct {
 }
 
 type UploadNFEDTO struct {
-	XmlContent string `json:"xml_content"`
+	XmlContent        string `json:"xml_content"`
+	PurchaseOrderCode *int64 `json:"purchase_order_code,omitempty"`
 }
 
 type CreateFiscalExitDTO struct {
