@@ -17,6 +17,11 @@ migrations, healthchecks, métricas, segurança e backup/restore.
   - `POSTGRES_PASSWORD` — senha do banco.
   - `CORS_ALLOWED_ORIGINS` — origens do app desktop em produção (ver §6).
 
+Em produção, use [`.env.production.example`](../../.env.production.example)
+como base. O `.env.example` permanece deliberadamente voltado ao ambiente de
+desenvolvimento. Os dois ambientes nunca devem compartilhar banco, senhas ou
+`JWT_SECRET`.
+
 ---
 
 ## 2. Deploy com Docker (recomendado)
@@ -56,6 +61,11 @@ make migrate_up           # aplica migrations (precisa do CLI golang-migrate)
 - Em container: serviço `migrate` (imagem `migrate/migrate`).
 - No host: `make migrate_up`, `make migrate_down`, `make migrate_force`.
 
+O binário e as migrations implantadas devem vir do mesmo commit. O fluxo de
+produção é `develop` → pull request → `main`; o servidor executa somente
+`main`. Faça backup antes de migrar, aplique as migrations e só então reinicie
+a API. Branches de tarefa nascem de `develop` e são removidas após o merge.
+
 ---
 
 ## 5. Saúde e observabilidade
@@ -89,6 +99,8 @@ Para desligar o endpoint: `METRICS_ENABLED=false`.
 - [ ] `CORS_ALLOWED_ORIGINS` explícito (ex.: `app://.,https://erp.suaempresa.com.br`).
       Vazio só é permissivo em `ENV=development`; em produção, **liste as origens**.
 - [ ] `ENV=production`.
+- [ ] PostgreSQL ligado somente a `127.0.0.1` quando banco e API compartilham
+      o host; clientes desktop acessam apenas `https://api.venturerp.com`.
 - [ ] Banco com senha forte e, idealmente, `sslmode=require`.
 - [ ] Rate limit ativo: `RATE_LIMIT_RPS`/`RATE_LIMIT_BURST` (global) e
       `AUTH_RATE_LIMIT_RPM`/`AUTH_RATE_LIMIT_BURST` (anti brute-force no login).
