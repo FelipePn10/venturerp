@@ -95,9 +95,25 @@ services:
     ports:
       - "127.0.0.1:12345:12345"
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_READONLY_USER:?POSTGRES_READONLY_USER is required}:${POSTGRES_READONLY_PASSWORD:?POSTGRES_READONLY_PASSWORD is required}@venturerp-postgres:5432/venturerp?sslmode=disable"
+    networks:
+      - default
+      - database
+    ports:
+      - "127.0.0.1:9187:9187"
+
 volumes:
   grafana_data:
   prometheus_data:
   loki_data:
   tempo_data:
   alloy_data:
+
+networks:
+  database:
+    external: true
+    name: database_default

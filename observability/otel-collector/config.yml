@@ -10,10 +10,8 @@ processors:
     send_batch_size: 1024
 
 exporters:
-  otlp/tempo:
-    endpoint: tempo:4318
-    tls:
-      insecure: true
+  otlphttp/tempo:
+    endpoint: http://tempo:4318
   prometheus:
     endpoint: 0.0.0.0:8889
 
@@ -22,7 +20,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/tempo]
+      exporters: [otlphttp/tempo]
     metrics:
       receivers: [otlp]
       processors: [batch]

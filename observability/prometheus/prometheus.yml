@@ -31,3 +31,10 @@ scrape_configs:
         labels:
           service: alloy
           env: production
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels:
+          service: venturerp-postgres
+          env: production

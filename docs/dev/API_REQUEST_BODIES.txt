@@ -2459,40 +2459,6 @@ NOTA: IDEMPOTÊNCIA
    com a mesma chave reproduzam a resposta original (TTL 24h).
 
 ============================================================
-MÓDULO: CNPJ — BUSCA AUTOMÁTICA (AUTO-FILL DE CADASTRO)
-============================================================
-
-GET /api/cnpj/{cnpj}
--- Papéis: ADMIN, USER. Sem corpo. {cnpj} pode vir com ou sem máscara.
--- Consulta a Receita Federal (via provedor configurado) e devolve os dados
-   para pré-preencher cadastro de cliente/fornecedor/empresa.
--- Resposta (200):
-{
-  "cnpj": "19131243000197",
-  "legal_name": "OPEN KNOWLEDGE BRASIL",
-  "trade_name": "REDE PELO CONHECIMENTO LIVRE",
-  "registration_status": "ATIVA",
-  "legal_nature": "Associação Privada",
-  "size": "EPP",
-  "opening_date": "2013-06-26",
-  "email": "contato@empresa.com.br",
-  "phone": "1133334444",
-  "simples_optant": false,
-  "mei": false,
-  "state_registration": "111222333444",
-  "state_registrations": [{"uf":"SP","number":"111222333444","enabled":true}],
-  "address": {
-    "zip_code":"01310100","street":"AV PAULISTA","number":"37",
-    "complement":"","neighborhood":"BELA VISTA","city":"SAO PAULO","uf":"SP"
-  },
-  "main_activity": {"code":"9430800","description":"Atividades associativas"},
-  "secondary_activities": [],
-  "source": "cnpja"
-}
--- Erros: 400 (CNPJ inválido), 404 (não encontrado), 502 (provedor indisponível).
--- "source"="brasilapi" indica que a Inscrição Estadual NÃO veio (digite manual).
-
-============================================================
 MÓDULO: RELATÓRIOS — EXPORTAÇÃO (EXCEL / PDF / CSV)
 ============================================================
 
