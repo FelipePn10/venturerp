@@ -16,7 +16,8 @@ banco, JWT, credenciais ou configuração fiscal com produção.
 ## Desenvolvimento local
 
 Copie `.env.development.example` para `.env.development`, gere segredos próprios
-e suba somente o banco:
+e suba somente o banco. Caso `5433` já esteja ocupada pelo banco de testes,
+defina `POSTGRES_HOST_PORT=5435` e use a mesma porta em `DATABASE_URL`:
 
 ```bash
 docker compose --env-file .env.development -f docker-compose.development.yml up -d postgres-development
