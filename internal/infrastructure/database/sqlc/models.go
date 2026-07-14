@@ -5911,6 +5911,23 @@ type OverheadAllocationTarget struct {
 	CostCenterCode *int32
 }
 
+type PasswordChangeRequest struct {
+	ID              pgtype.UUID
+	EnterpriseID    int64
+	UserID          pgtype.UUID
+	RequestedBy     pgtype.UUID
+	ApprovedBy      pgtype.UUID
+	RejectedBy      pgtype.UUID
+	Status          string
+	ExpiresAt       pgtype.Timestamptz
+	ApprovedAt      pgtype.Timestamptz
+	RejectedAt      pgtype.Timestamptz
+	UsedAt          pgtype.Timestamptz
+	RejectionReason pgtype.Text
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
 type PaymentCondition struct {
 	ID           int64
 	Code         int64
@@ -8631,13 +8648,14 @@ type Uf struct {
 }
 
 type User struct {
-	ID        pgtype.UUID
-	Name      string
-	Email     string
-	Password  string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-	Role      string
+	ID          pgtype.UUID
+	Name        string
+	Email       string
+	Password    string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	Role        string
+	AuthVersion int64
 }
 
 type UserEnterprise struct {

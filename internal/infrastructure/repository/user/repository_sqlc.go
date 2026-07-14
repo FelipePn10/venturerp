@@ -49,10 +49,11 @@ func (r *repositoryUserSQLC) FindByEmail(
 	}
 
 	return &entity.User{
-		ID:       pgutil.FromPgUUID(u.ID),
-		Name:     u.Name,
-		Email:    u.Email,
-		Password: u.Password,
-		Role:     u.Role,
+		ID:          pgutil.FromPgUUID(u.ID),
+		Name:        u.Name,
+		Email:       u.Email,
+		Password:    u.Password,
+		Role:        u.Role,
+		AuthVersion: u.AuthVersion,
 	}, nil
 }

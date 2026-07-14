@@ -15,6 +15,7 @@ SELECT
     email,
     password,
     role,
+    auth_version,
     created_at,
     updated_at
 FROM users
@@ -42,3 +43,6 @@ SELECT
     updated_at
 FROM users
 WHERE id = $1;
+
+-- name: GetUserAuthVersion :one
+SELECT auth_version FROM users WHERE id = $1;

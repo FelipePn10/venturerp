@@ -12,7 +12,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func JWT(secret string, log *applogger.Logger) func(http.Handler) http.Handler {
+type AuthVersionValidator interface {
+	AuthVersion(context.Context, string) (int64, error)
+}
+
+func JWT(secret string, log *applogger.Logger, validators ...AuthVersionValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions {
@@ -53,6 +57,15 @@ func JWT(secret string, log *applogger.Logger) func(http.Handler) http.Handler {
 				)
 				http.Error(w, `{"error": "Invalid token"}`, http.StatusUnauthorized)
 				return
+			}
+
+			if len(validators) > 0 {
+				version, versionErr := validators[0].AuthVersion(r.Context(), claims.UserID)
+				if versionErr != nil || version != claims.AuthVersion {
+					applogger.FromContext(r.Context()).Warn("revoked token attempt", "user_id", claims.UserID, "ip", realIP(r))
+					http.Error(w, `{"error": "Invalid token"}`, http.StatusUnauthorized)
+					return
+				}
 			}
 
 			user := &security.AuthUser{

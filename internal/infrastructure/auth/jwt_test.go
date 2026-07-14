@@ -8,7 +8,7 @@ import (
 
 func TestGenerateTokenCarriesSelectedEnterprise(t *testing.T) {
 	const secret = "test-secret"
-	tokenString, err := GenerateToken("user-id", "USER", 73, secret)
+	tokenString, err := GenerateToken("user-id", "USER", 73, 1, secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,5 +19,8 @@ func TestGenerateTokenCarriesSelectedEnterprise(t *testing.T) {
 	}
 	if claims.EnterpriseID != 73 {
 		t.Fatalf("expected enterprise 73, got %d", claims.EnterpriseID)
+	}
+	if claims.AuthVersion != 1 {
+		t.Fatalf("expected auth version 1, got %d", claims.AuthVersion)
 	}
 }
