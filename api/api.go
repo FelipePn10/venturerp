@@ -219,7 +219,10 @@ func (app *application) mount() chi.Router {
 
 	r.Route("/users", func(r chi.Router) {
 		r.Use(authLimiter.Middleware)
-		r.Post("/register", userHandler.RegisterUserHandler)
+		r.With(
+			httpmw.JWT(app.config.JWTSecret, app.logger),
+			httpmw.RequireRole("ADMIN"),
+		).Post("/register", userHandler.RegisterUserHandler)
 		r.Post("/login", userHandler.LoginHandler)
 	})
 

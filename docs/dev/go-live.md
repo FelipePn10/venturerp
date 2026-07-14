@@ -112,6 +112,10 @@ Já aplicado pela API em todas as requisições: headers de segurança
 corpo, CORS, rate limiting e **graceful shutdown** (drena requisições em voo ao
 receber `SIGTERM`/`SIGINT`, dentro de `SHUTDOWN_TIMEOUT_SEC`).
 
+O primeiro administrador deve ser provisionado por uma rotina operacional
+controlada. Depois do bootstrap, `POST /users/register` exige JWT com papel
+`ADMIN`; o endpoint não pode ser exposto como cadastro público em produção.
+
 ---
 
 ## 7. Backup e restore
