@@ -55,6 +55,17 @@ func (q *Queries) GetOnlyUserEnterprise(ctx context.Context, userID pgtype.UUID)
 	return enterprise_id, err
 }
 
+const getUserAuthVersion = `-- name: GetUserAuthVersion :one
+SELECT auth_version FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserAuthVersion(ctx context.Context, id pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserAuthVersion, id)
+	var auth_version int64
+	err := row.Scan(&auth_version)
+	return auth_version, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
     id,
@@ -62,6 +73,7 @@ SELECT
     email,
     password,
     role,
+    auth_version,
     created_at,
     updated_at
 FROM users
@@ -69,13 +81,14 @@ WHERE email = $1
 `
 
 type GetUserByEmailRow struct {
-	ID        pgtype.UUID
-	Name      string
-	Email     string
-	Password  string
-	Role      string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID          pgtype.UUID
+	Name        string
+	Email       string
+	Password    string
+	Role        string
+	AuthVersion int64
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -87,6 +100,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Email,
 		&i.Password,
 		&i.Role,
+		&i.AuthVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

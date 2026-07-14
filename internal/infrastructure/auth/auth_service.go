@@ -13,6 +13,11 @@ import (
 
 type AuthService struct{}
 
+func (a *AuthService) IsAdmin(ctx context.Context) bool {
+	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
+	return ok && strings.EqualFold(strings.TrimSpace(user.Role), "ADMIN")
+}
+
 func (a *AuthService) hasWriteRole(ctx context.Context) bool {
 	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
 	if !ok {

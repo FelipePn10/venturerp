@@ -9,4 +9,5 @@ type User struct {
 	Password     string // hashed password
 	Role         string // "USER" or "ADMIN"
 	EnterpriseID int64
+	AuthVersion  int64
 }

@@ -206,7 +206,7 @@ func (app *application) mount() chi.Router {
 	queries := app.db.Queries()
 	authService := &infraauth.AuthService{}
 
-	userRepo := user.NewRepositoryUserSQLC(queries)
+	userRepo := user.NewRepositoryUserSQLC(queries, app.db.Pool)
 
 	registerUserUC := user_uc.NewRegisterUserUseCase(userRepo)
 	loginUserUC := user_uc.NewLoginUserUseCase(userRepo)
@@ -216,11 +216,13 @@ func (app *application) mount() chi.Router {
 		loginUserUC,
 		app.config.JWTSecret,
 	)
+	passwordChangeUC := user_uc.NewPasswordChangeUseCase(userRepo, authService)
+	passwordChangeHandler := handler.NewPasswordChangeHandler(passwordChangeUC)
 
 	r.Route("/users", func(r chi.Router) {
 		r.Use(authLimiter.Middleware)
 		r.With(
-			httpmw.JWT(app.config.JWTSecret, app.logger),
+			httpmw.JWT(app.config.JWTSecret, app.logger, userRepo),
 			httpmw.RequireRole("ADMIN"),
 		).Post("/register", userHandler.RegisterUserHandler)
 		r.Post("/login", userHandler.LoginHandler)
@@ -1087,7 +1089,7 @@ func (app *application) mount() chi.Router {
 	// routes
 	idempotencyStore := httpmw.NewIdempotencyStore(24 * time.Hour)
 	r.Group(func(r chi.Router) {
-		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger))
+		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger, userRepo))
 		// Audit trail for authenticated mutations (after JWT so the actor is known).
 		r.Use(httpmw.Audit(app.auditSink))
 		// Idempotency-Key support for mutating requests (safe retries).
@@ -1095,6 +1097,13 @@ func (app *application) mount() chi.Router {
 
 		// Audit trail (read): who changed what, when. Restricted to ADMIN.
 		r.With(httpmw.RequireRole("ADMIN")).Get("/api/audit-log", auditHandler.List)
+		r.Route("/api/password-change-requests", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", passwordChangeHandler.Request)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/", passwordChangeHandler.List)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{requestID}/approve", passwordChangeHandler.Approve)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{requestID}/reject", passwordChangeHandler.Reject)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{requestID}/complete", passwordChangeHandler.Complete)
+		})
 		r.Route("/api/items", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemHandler.CreateItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", itemHandler.ListItems)
