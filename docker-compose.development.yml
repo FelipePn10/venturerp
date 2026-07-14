@@ -7,14 +7,19 @@ services:
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:?POSTGRES_ADMIN_USER is required}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-venturerp_development}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:?POSTGRES_APP_USER is required}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}
+      POSTGRES_READONLY_USER: ${POSTGRES_READONLY_USER:?POSTGRES_READONLY_USER is required}
+      POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:?POSTGRES_READONLY_PASSWORD is required}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8 --data-checksums --auth-host=scram-sha-256"
       TZ: UTC
       PGTZ: UTC
     command: ["postgres", "-c", "max_connections=40", "-c", "shared_buffers=128MB", "-c", "effective_cache_size=384MB", "-c", "work_mem=4MB", "-c", "maintenance_work_mem=64MB", "-c", "password_encryption=scram-sha-256"]
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - development_postgres_data:/var/lib/postgresql/data
+      - ./deploy/development/init-roles.sh:/docker-entrypoint-initdb.d/010-development-roles.sh:ro,Z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
