@@ -18,6 +18,14 @@ scrape_configs:
           service: venturerp-api
           env: production
 
+  - job_name: venturerp-api-development
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:5071"]
+        labels:
+          service: venturerp-api-development
+          env: development
+
   - job_name: otel-collector
     static_configs:
       - targets: ["otel-collector:8889"]
@@ -38,3 +46,10 @@ scrape_configs:
         labels:
           service: venturerp-postgres
           env: production
+
+  - job_name: postgres-development
+    static_configs:
+      - targets: ["postgres-exporter-development:9187"]
+        labels:
+          service: venturerp-postgres-development
+          env: development

@@ -106,6 +106,17 @@ services:
     ports:
       - "127.0.0.1:9187:9187"
 
+  postgres-exporter-development:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${DEVELOPMENT_POSTGRES_READONLY_USER:?DEVELOPMENT_POSTGRES_READONLY_USER is required}:${DEVELOPMENT_POSTGRES_READONLY_PASSWORD:?DEVELOPMENT_POSTGRES_READONLY_PASSWORD is required}@venturerp-postgres-development:5432/venturerp_development?sslmode=disable"
+    networks:
+      - default
+      - development
+    ports:
+      - "127.0.0.1:9188:9187"
+
 volumes:
   grafana_data:
   prometheus_data:
@@ -117,3 +128,6 @@ networks:
   database:
     external: true
     name: database_default
+  development:
+    external: true
+    name: development_default
