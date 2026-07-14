@@ -1,72 +1,16 @@
-# Integração CNPJ (auto-fill) & Exportação de Relatórios
+# Integração fiscal & Exportação de Relatórios
 
-> 🛠️ Referência técnica. Duas capacidades transversais adicionadas para reduzir
-> digitação no cadastro e atender à exigência de relatórios em formatos de
-> escritório (Excel/PDF). Ambas são **dependency-free** (sem libs externas) e se
-> apoiam apenas na stdlib + vendoring já existente.
+> Referência técnica para integrações fiscais e relatórios em formatos de
+> escritório (Excel/PDF).
 
 ---
 
-## 1. Busca automática por CNPJ
+## 1. Integração fiscal
 
-Ao informar um CNPJ no cadastro de **cliente**, **fornecedor** ou **empresa**, a
-tela chama um endpoint que devolve razão social, nome fantasia, **inscrição
-estadual**, endereço completo, CNAE, natureza jurídica, porte e flags de Simples
-Nacional / MEI — direto da base da Receita Federal.
-
-### Endpoint
-
-```
-GET /api/cnpj/{cnpj}        (papéis: ADMIN, USER)
-```
-
-`{cnpj}` aceita com ou sem máscara. O dígito verificador é validado **antes** de
-qualquer chamada externa (`validation.ValidateCNPJ`), então CNPJ inválido retorna
-`400` sem custo de rede.
-
-Resposta: `response.CNPJLookupResponse` (ver `API_REQUEST_BODIES.txt`).
-
-| Status | Quando |
-|---|---|
-| `200` | Encontrado. |
-| `400` | CNPJ com dígito inválido. |
-| `404` | Não existe na base. |
-| `502` | Provedor indisponível / rate-limit / timeout. |
-
-### Provedores
-
-| Provedor | Traz IE? | Observação |
-|---|---|---|
-| **CNPJá Open** (`open.cnpja.com`) | ✅ Sim (`registrations[]`) | Free tier com rate-limit baixo (~5/min). |
-| **BrasilAPI** (`brasilapi.com.br`) | ❌ Não | Confiável, completo em endereço/CNAE/Simples. |
-
-`CNPJ_PROVIDER=auto` (default) consulta a **CNPJá primeiro** (para trazer a IE) e,
-se ela falhar por indisponibilidade/limite, **cai para a BrasilAPI** — assim o
-operador sempre recebe ao menos endereço e razão social. Um `404` genuíno da
-primária **não** dispara fallback. O campo `source` na resposta diz quem
-respondeu; quando for `"brasilapi"`, a IE não veio e deve ser digitada.
-
-### Configuração (`.env`)
-
-```
-CNPJ_PROVIDER=auto                                  # auto | brasilapi | cnpja
-CNPJ_BRASILAPI_URL=https://brasilapi.com.br/api/cnpj/v1
-CNPJ_CNPJA_URL=https://open.cnpja.com
-CNPJ_TIMEOUT_SEC=8
-```
-
-### Arquitetura (Clean Architecture)
-
-```
-domain/cnpj/entity/company.go      Company, Address, Activity, StateRegistration (modelo neutro)
-domain/cnpj/service/provider.go    porta Provider + ErrNotFound / ErrUnavailable
-infrastructure/cnpj/               adapters BrasilAPI, CNPJá, chain "auto" + factory New(Config)
-application/usecase/cnpj_uc/       LookupCNPJUseCase: valida + delega + mapeia p/ DTO
-interfaces/http/handler/cnpj_handler.go   GET /api/cnpj/{cnpj}, mapeia erros → HTTP
-```
-
-O domínio não sabe qual API respondeu: cada adapter mapeia sua resposta para a
-mesma `entity.Company`. Trocar/empilhar provedores = implementar `Provider`.
+O backend não expõe consulta cadastral pública por CNPJ. Emissão, consulta e
+cancelamento de documentos fiscais usam exclusivamente a integração Focus NFe e
+as credenciais fiscais armazenadas por empresa. O token nunca deve ser
+versionado em arquivos `.env` ou documentação.
 
 ---
 

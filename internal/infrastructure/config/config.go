@@ -33,12 +33,6 @@ type Config struct {
 	MetricsToken       string `mapstructure:"METRICS_TOKEN"`         // optional bearer token guarding /metrics
 	ShutdownTimeoutSec int    `mapstructure:"SHUTDOWN_TIMEOUT_SEC"`  // graceful drain budget in seconds
 
-	// CNPJ auto-lookup — pre-fills cadastro forms (razão social, IE, endereço)
-	// from public registries. Disabled gracefully when the provider is offline.
-	CNPJProvider     string `mapstructure:"CNPJ_PROVIDER"`      // "auto" (default), "brasilapi" or "cnpja"
-	CNPJBrasilAPIURL string `mapstructure:"CNPJ_BRASILAPI_URL"` // base URL (no trailing slash)
-	CNPJaURL         string `mapstructure:"CNPJ_CNPJA_URL"`     // base URL (no trailing slash)
-	CNPJTimeoutSec   int    `mapstructure:"CNPJ_TIMEOUT_SEC"`   // per-request timeout in seconds
 }
 
 // IsDevelopment reports whether the process is NOT running in production. Used
@@ -51,6 +45,17 @@ func Load() (*Config, error) {
 	viper.SetConfigFile(".env")
 	viper.SetConfigType("env")
 	viper.AutomaticEnv()
+	for _, key := range []string{
+		"SERVER_ADDR", "DATABASE_URL", "JWT_SECRET", "ENV", "LOG_LEVEL",
+		"SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM",
+		"CORS_ALLOWED_ORIGINS", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
+		"AUTH_RATE_LIMIT_RPM", "AUTH_RATE_LIMIT_BURST", "MAX_BODY_BYTES",
+		"METRICS_ENABLED", "METRICS_TOKEN", "SHUTDOWN_TIMEOUT_SEC",
+	} {
+		if err := viper.BindEnv(key); err != nil {
+			return nil, fmt.Errorf("bind environment variable %s: %w", key, err)
+		}
+	}
 
 	// Defaults (fallback)
 	viper.SetDefault("SERVER_ADDR", "5070")
@@ -74,11 +79,6 @@ func Load() (*Config, error) {
 	viper.SetDefault("METRICS_ENABLED", true)
 	viper.SetDefault("METRICS_TOKEN", "")
 	viper.SetDefault("SHUTDOWN_TIMEOUT_SEC", 15)
-	viper.SetDefault("CNPJ_PROVIDER", "auto")
-	viper.SetDefault("CNPJ_BRASILAPI_URL", "https://brasilapi.com.br/api/cnpj/v1")
-	viper.SetDefault("CNPJ_CNPJA_URL", "https://open.cnpja.com")
-	viper.SetDefault("CNPJ_TIMEOUT_SEC", 8)
-
 	if err := viper.ReadInConfig(); err != nil {
 		var configNotFound viper.ConfigFileNotFoundError
 		if !errors.As(err, &configNotFound) && !os.IsNotExist(err) {
@@ -88,6 +88,9 @@ func Load() (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("erro parse config: %w", err)
+	}
+	if !cfg.IsDevelopment() && cfg.JWTSecret == "" {
+		return nil, errors.New("JWT_SECRET is required in production")
 	}
 	return &cfg, nil
 }
