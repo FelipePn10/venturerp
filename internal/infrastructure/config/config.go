@@ -32,7 +32,8 @@ type Config struct {
 	MetricsEnabled     bool   `mapstructure:"METRICS_ENABLED"`       // expose /metrics
 	MetricsToken       string `mapstructure:"METRICS_TOKEN"`         // optional bearer token guarding /metrics
 	ShutdownTimeoutSec int    `mapstructure:"SHUTDOWN_TIMEOUT_SEC"`  // graceful drain budget in seconds
-
+	OTELServiceName    string `mapstructure:"OTEL_SERVICE_NAME"`
+	OTELNamespace      string `mapstructure:"OTEL_SERVICE_NAMESPACE"`
 }
 
 // IsDevelopment reports whether the process is NOT running in production. Used
@@ -51,6 +52,7 @@ func Load() (*Config, error) {
 		"CORS_ALLOWED_ORIGINS", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 		"AUTH_RATE_LIMIT_RPM", "AUTH_RATE_LIMIT_BURST", "MAX_BODY_BYTES",
 		"METRICS_ENABLED", "METRICS_TOKEN", "SHUTDOWN_TIMEOUT_SEC",
+		"OTEL_SERVICE_NAME", "OTEL_SERVICE_NAMESPACE",
 	} {
 		if err := viper.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("bind environment variable %s: %w", key, err)
@@ -79,6 +81,8 @@ func Load() (*Config, error) {
 	viper.SetDefault("METRICS_ENABLED", true)
 	viper.SetDefault("METRICS_TOKEN", "")
 	viper.SetDefault("SHUTDOWN_TIMEOUT_SEC", 15)
+	viper.SetDefault("OTEL_SERVICE_NAME", "venturerp-api")
+	viper.SetDefault("OTEL_SERVICE_NAMESPACE", "venturerp")
 	if err := viper.ReadInConfig(); err != nil {
 		var configNotFound viper.ConfigFileNotFoundError
 		if !errors.As(err, &configNotFound) && !os.IsNotExist(err) {
