@@ -116,9 +116,9 @@ O primeiro administrador deve ser provisionado por uma rotina operacional
 controlada. Depois do bootstrap, `POST /users/register` exige JWT com papel
 `ADMIN`; o endpoint não pode ser exposto como cadastro público em produção.
 
-O backend não consulta provedores cadastrais públicos. Operações fiscais usam a
-integração Focus NFe configurada para a empresa. Em produção, `JWT_SECRET` é
-obrigatório e a API recusa iniciar se estiver vazio.
+A consulta cadastral por CNPJ é um fluxo independente. Emissão, consulta e
+cancelamento fiscais usam a integração Focus NFe configurada para a empresa. Em
+produção, `JWT_SECRET` é obrigatório e a API recusa iniciar se estiver vazio.
 
 ---
 

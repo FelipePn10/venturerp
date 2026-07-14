@@ -17,6 +17,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_header_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/cnpj_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/configurator_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/consumer_service_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
@@ -90,6 +91,7 @@ import (
 	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/audit"
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
+	cnpjinfra "github.com/FelipePn10/panossoerp/internal/infrastructure/cnpj"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
@@ -275,6 +277,7 @@ func (app *application) mount() chi.Router {
 		&enterprise_uc.GetEnterpriseUseCase{Repo: enterpriseRepo, Auth: authService},
 		&enterprise_uc.ListEnterprisesUseCase{Repo: enterpriseRepo, Auth: authService},
 	)
+	cnpjHandler := handler.NewCNPJHandler(cnpj_uc.NewLookupCNPJUseCase(cnpjinfra.New(cnpjinfra.Config{})))
 
 	// The generic report export brands its output with the company's fiscal data.
 	reportExportHandler := handler.NewReportExportHandler(fiscalRepo.NewFiscalRepositoryPG(app.db.Pool))
@@ -1270,6 +1273,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", enterpriseHandler.CreateEnterprise)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", enterpriseHandler.ListEnterprises)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", enterpriseHandler.GetEnterprise)
+		})
+		r.Route("/api/cnpj", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{cnpj}", cnpjHandler.Lookup)
 		})
 		// Generic report export: POST /api/reports/export?format=xlsx|pdf|csv
 		r.Route("/api/reports", func(r chi.Router) {
