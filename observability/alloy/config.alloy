@@ -8,6 +8,17 @@ loki.source.journal "api_logs" {
   forward_to      = [loki.process.api.receiver]
 }
 
+loki.source.journal "api_logs_development" {
+  format_as_json = true
+  max_age         = "24h"
+  matches         = "_SYSTEMD_UNIT=venturerp-development.service"
+  labels          = {
+    service = "venturerp-api-development",
+    env     = "development",
+  }
+  forward_to = [loki.process.api.receiver]
+}
+
 loki.process "api" {
   stage.json {
     expressions = {

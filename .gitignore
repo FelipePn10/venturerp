@@ -3,6 +3,8 @@
 !.env.example
 !.env.demo
 !.env.production.example
+!.env.development.example
+!.env.development.example
 .idea
 .vscode
 .junie
