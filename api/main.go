@@ -30,7 +30,7 @@ func main() {
 	defer db.Close()
 	log.Info("database connected")
 
-	shutdownTracing, err := observability.InitTracing(context.Background(), "panossoerp-api", "panossoerp", cfg.Env)
+	shutdownTracing, err := observability.InitTracing(context.Background(), cfg.OTELServiceName, cfg.OTELNamespace, cfg.Env)
 	if err != nil {
 		log.Fatal("failed to initialize tracing", "error", err)
 	}
