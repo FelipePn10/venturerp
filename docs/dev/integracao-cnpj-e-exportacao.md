@@ -7,10 +7,11 @@
 
 ## 1. Integração fiscal
 
-O backend não expõe consulta cadastral pública por CNPJ. Emissão, consulta e
-cancelamento de documentos fiscais usam exclusivamente a integração Focus NFe e
-as credenciais fiscais armazenadas por empresa. O token nunca deve ser
-versionado em arquivos `.env` ou documentação.
+O endpoint autenticado `GET /api/cnpj/{cnpj}` consulta o cadastro empresarial
+para preencher razão social, inscrição estadual e endereço. A seleção do
+provedor não é configurável no `.env`. Emissão, consulta e cancelamento de
+documentos fiscais usam exclusivamente a integração Focus NFe e as credenciais
+fiscais armazenadas por empresa. O token nunca deve ser versionado.
 
 ---
 
