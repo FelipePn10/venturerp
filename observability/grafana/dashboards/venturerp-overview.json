@@ -624,7 +624,7 @@
   "refresh": "10s",
   "schemaVersion": 40,
   "tags": [
-    "panossoerp",
+    "venturerp",
     "observability"
   ],
   "templating": {
@@ -637,7 +637,7 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "PanossoERP - Overview",
-  "uid": "panossoerp-overview",
+  "uid": "venturerp-overview",
   "version": 1,
   "weekStart": ""
 }
