@@ -138,7 +138,7 @@ Cada backup é **verificado** (`pg_restore --list`) logo após ser gerado.
 
 ### Restore
 ```bash
-make restore FILE=./backups/panossoerpdatabase-20260608-020000.dump
+make restore FILE=./backups/venturerp-20260608-020000.dump
 ```
 
 > ⚠️ **Restore é destrutivo** (`--clean --if-exists`): recria objetos. Teste o

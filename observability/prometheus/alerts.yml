@@ -1,16 +1,16 @@
 groups:
-  - name: panossoerp_alerts
+  - name: venturerp_alerts
     interval: 30s
     rules:
       # ── Disponibilidade ────────────────────────────────────────────────────
       - alert: API_Down
-        expr: up{job="panossoerp-api"} == 0
+        expr: up{job="venturerp-api"} == 0
         for: 1m
         labels:
           severity: critical
           team: backend
         annotations:
-          summary: "API panossoerp esta fora do ar"
+          summary: "API VentureERP está fora do ar"
           description: "A API nao respondeu ao healthcheck do Prometheus por pelo menos 1 minuto."
 
       # ── Erros 5xx ──────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ groups:
             Se continuar, o SLO sera violado nas proximas horas.
 
   # ── SLO Recording Rules ──────────────────────────────────────────────────
-  - name: panossoerp_slos
+  - name: venturerp_slos
     interval: 30s
     rules:
       # SLI: Disponibilidade (proporcao de requisicoes sem 5xx)

@@ -1,9 +1,9 @@
 loki.source.journal "api_logs" {
   format_as_json = true
   max_age         = "24h"
-  matches         = "_SYSTEMD_UNIT=panossoerp.service"
+  matches         = "_SYSTEMD_UNIT=venturerp.service"
   labels          = {
-    service = "panossoerp-api",
+    service = "venturerp-api",
   }
   forward_to      = [loki.process.api.receiver]
 }
