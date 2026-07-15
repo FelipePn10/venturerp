@@ -310,6 +310,19 @@ func (r *ProductionOrderRepositoryPGX) LinkServicePurchaseOrder(ctx context.Cont
 		return err
 	}
 	if command.RowsAffected() == 0 {
+		var serviceRequisition bool
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM purchase_requisition_items item
+			JOIN production_order_service_requisition_links req_link ON req_link.purchase_requisition_code=item.requisition_code AND req_link.enterprise_id=$1
+			WHERE item.id=$2)`, enterpriseID, requisitionItemID).Scan(&serviceRequisition)
+		if err != nil {
+			return err
+		}
+		// Ordinary purchase requisitions have no manufacturing-service origin.
+		// Linking is intentionally a no-op for them; only service requisitions
+		// participate in the OF -> requisition -> purchase-order traceability.
+		if !serviceRequisition {
+			return tx.Commit(ctx)
+		}
 		var exists bool
 		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM purchase_requisition_items item
 			JOIN production_order_service_requisition_links req_link ON req_link.purchase_requisition_code=item.requisition_code AND req_link.enterprise_id=$1

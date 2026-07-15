@@ -2,6 +2,7 @@ package item_uc
 
 import (
 	"context"
+	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -41,6 +42,9 @@ func (uc *FindItemByCode) Execute(
 
 	item, err := uc.Repo.FindItemByCode(ctx, code)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, errorsuc.ErrProductNotFound
+		}
 		return nil, err
 	}
 

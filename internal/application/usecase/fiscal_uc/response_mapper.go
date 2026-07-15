@@ -221,6 +221,7 @@ func toFiscalConfigResponse(c *entity.FiscalConfig) *response.FiscalConfigRespon
 		CodigoMunicipio:           c.CodigoMunicipio,
 		CEP:                       c.CEP,
 		Telefone:                  c.Telefone,
+		BrandColor:                c.BrandColor,
 		CreatedAt:                 c.CreatedAt,
 		UpdatedAt:                 c.UpdatedAt,
 		UpdatedBy:                 c.UpdatedBy,

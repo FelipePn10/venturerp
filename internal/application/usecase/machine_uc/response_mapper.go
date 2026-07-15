@@ -36,6 +36,7 @@ func toMachineResponse(m *entity.Machine) *response.MachineResponse {
 		return nil
 	}
 	return &response.MachineResponse{
+		ID:              m.ID,
 		Code:            m.Code,
 		Name:            m.Name,
 		MachineTypeCode: m.MachineTypeCode,

@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
+
+var ErrNotFound = errors.New("item not found")
 
 type ItemRepository interface {
 	Create(ctx context.Context, item *entity.Item) (*entity.Item, error)

@@ -22,6 +22,7 @@ type MachineTypeResponse struct {
 
 // MachineResponse is the API representation of a machine.
 type MachineResponse struct {
+	ID              int64     `json:"id"`
 	Code            int64     `json:"code"`
 	Name            string    `json:"name"`
 	MachineTypeCode int64     `json:"machine_type_code"`

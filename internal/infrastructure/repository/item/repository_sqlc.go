@@ -3,14 +3,17 @@ package item
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
+	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/jackc/pgx/v5"
 )
 
 func (r *RepositoryItemSQLC) Create(
@@ -99,6 +102,9 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 
 	dbItem, err := r.q.FindItemByCode(ctx, int64(code))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, itemrepo.ErrNotFound
+		}
 		return nil, fmt.Errorf("find item by code: %w", err)
 	}
 

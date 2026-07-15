@@ -24,6 +24,13 @@ func (f *fakeSalesOrderRepo) GetByCode(ctx context.Context, code int64) (*salese
 	return f.resp, f.err
 }
 
+func (f *fakeSalesOrderRepo) ListItems(ctx context.Context, code int64) ([]*salesentity.SalesOrderItem, error) {
+	if f.resp == nil {
+		return nil, f.err
+	}
+	return f.resp.Items, f.err
+}
+
 type fakePurchaseOrderRepo struct {
 	purchaserepo.PurchaseOrderRepository
 	resp *purchaseentity.PurchaseOrder

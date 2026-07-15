@@ -78,7 +78,7 @@ RETURNING *;
 -- name: IsPlannedOrderItemKanban :one
 SELECT EXISTS (
     SELECT 1 FROM kanban_cards
-    WHERE item_code = $1 AND enterprise_id = @enterprise_id AND is_active = TRUE
+    WHERE item_code = $1 AND enterprise_id = @enterprise_id AND status = 'ACTIVE'
 ) AS is_kanban;
 
 -- name: HasPlannedOrderProductionMovements :one

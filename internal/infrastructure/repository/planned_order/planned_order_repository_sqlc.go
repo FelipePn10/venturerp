@@ -386,6 +386,7 @@ func rowToEntity(
 ) *entity.PlannedOrder {
 
 	e := &entity.PlannedOrder{
+		ID:                   row.ID,
 		Code:                 row.Code,
 		OrderNumber:          row.OrderNumber,
 		ItemCode:             row.ItemCode,

@@ -21,6 +21,10 @@ func (a *SalesOrderAdapter) GetByCode(ctx context.Context, code int64) (*shipmen
 	if err != nil {
 		return nil, err
 	}
+	items, err := a.Repo.ListItems(ctx, code)
+	if err != nil {
+		return nil, err
+	}
 	h := &shipment_uc.SalesOrderHeader{
 		Code:         so.Code,
 		CarrierCode:  so.CarrierCode,
@@ -30,7 +34,7 @@ func (a *SalesOrderAdapter) GetByCode(ctx context.Context, code int64) (*shipmen
 		TotalGross:   so.TotalGross,
 		TotalNet:     so.TotalNet,
 	}
-	for _, it := range so.Items {
+	for _, it := range items {
 		h.Items = append(h.Items, shipment_uc.SalesOrderItemHeader{
 			ItemCode:        it.ItemCode,
 			RequestedQty:    it.RequestedQty,
