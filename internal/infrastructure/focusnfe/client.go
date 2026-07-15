@@ -78,6 +78,21 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}) 
 		c.onRequest(path, method, string(reqBody), string(respBytes), resp.StatusCode, durationMs)
 	}
 
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		var apiErr struct {
+			Codigo   string `json:"codigo"`
+			Mensagem string `json:"mensagem"`
+		}
+		if json.Unmarshal(respBytes, &apiErr) == nil && apiErr.Mensagem != "" {
+			if apiErr.Codigo != "" {
+				return respBytes, resp.StatusCode, fmt.Errorf("Focus NF-e HTTP %d (%s): %s", resp.StatusCode, apiErr.Codigo, apiErr.Mensagem)
+			}
+			return respBytes, resp.StatusCode, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, apiErr.Mensagem)
+		}
+
+		return respBytes, resp.StatusCode, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBytes)))
+	}
+
 	return respBytes, resp.StatusCode, nil
 }
 
