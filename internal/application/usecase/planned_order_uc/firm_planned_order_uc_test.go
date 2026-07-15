@@ -148,6 +148,7 @@ func TestFirmOrder_RepoError(t *testing.T) {
 func TestFirmOrder_ProductionOrderCreatedOnFirstFirm(t *testing.T) {
 	warehouseCode := int64(44)
 	order := &entity.PlannedOrder{
+		ID:            77,
 		Code:          99,
 		ItemCode:      3001,
 		Quantity:      5,
@@ -175,8 +176,11 @@ func TestFirmOrder_ProductionOrderCreatedOnFirstFirm(t *testing.T) {
 	if prodRepo.created.ItemCode != 3001 {
 		t.Errorf("OF ItemCode = %d, want 3001", prodRepo.created.ItemCode)
 	}
-	if prodRepo.created.PlannedOrderID == nil || *prodRepo.created.PlannedOrderID != 99 {
-		t.Errorf("OF PlannedOrderID = %v, want 99", prodRepo.created.PlannedOrderID)
+	if prodRepo.created.PlannedOrderID == nil || *prodRepo.created.PlannedOrderID != 77 {
+		t.Errorf("OF PlannedOrderID = %v, want 77", prodRepo.created.PlannedOrderID)
+	}
+	if prodRepo.created.OrderNumber != 201 {
+		t.Errorf("OF OrderNumber = %d, want production sequence number 201", prodRepo.created.OrderNumber)
 	}
 	if prodRepo.created.WarehouseID == nil || *prodRepo.created.WarehouseID != warehouseCode {
 		t.Fatalf("OF WarehouseID = %v, want %d", prodRepo.created.WarehouseID, warehouseCode)

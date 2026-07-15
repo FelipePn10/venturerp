@@ -21,6 +21,7 @@ type MachineType struct {
 }
 
 type Machine struct {
+	ID              int64
 	Code            int64
 	Name            string
 	MachineTypeCode int64

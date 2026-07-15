@@ -58,9 +58,9 @@ func (d Dimensions) Volume() int {
 //
 
 type Weight struct {
-	Gross float64
-	Net   float64
-	Unit  string
+	Gross float64 `json:"gross"`
+	Net   float64 `json:"net"`
+	Unit  string  `json:"unit"`
 }
 
 func NewWeight(gross, net float64, unit string) (Weight, error) {

@@ -8,6 +8,7 @@ import (
 )
 
 type PlannedOrder struct {
+	ID                   int64
 	Code                 int64
 	OrderNumber          int64
 	ItemCode             int64

@@ -179,6 +179,7 @@ type FiscalConfigResponse struct {
 	CodigoMunicipio           string    `json:"codigo_municipio"`
 	CEP                       string    `json:"cep"`
 	Telefone                  *string   `json:"telefone,omitempty"`
+	BrandColor                *string   `json:"brand_color,omitempty"`
 	CreatedAt                 time.Time `json:"created_at"`
 	UpdatedAt                 time.Time `json:"updated_at"`
 	UpdatedBy                 uuid.UUID `json:"updated_by"`

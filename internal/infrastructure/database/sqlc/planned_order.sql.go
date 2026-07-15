@@ -460,7 +460,7 @@ func (q *Queries) HasPlannedOrderProductionMovements(ctx context.Context, arg Ha
 const isPlannedOrderItemKanban = `-- name: IsPlannedOrderItemKanban :one
 SELECT EXISTS (
     SELECT 1 FROM kanban_cards
-    WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE
+    WHERE item_code = $1 AND enterprise_id = $2 AND status = 'ACTIVE'
 ) AS is_kanban
 `
 

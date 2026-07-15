@@ -817,7 +817,7 @@ func (r *CustomerRepositorySQLC) CreateCommercialPolicy(ctx context.Context, p *
 			market_segment_id, region_id, sales_table_id, payment_condition_id, carrier_id,
 			item_code, item_mask, product_line_id, item_classification, rule_json,
 			validity_start, validity_end, observation
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36::jsonb,$37,$38,$39)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37::jsonb,$38,$39,$40)
 		RETURNING id, code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
 			min_gross_value, max_gross_value, min_quantity, max_quantity, priority, sequence,
 			stackable, requires_approval, applies_on_net_value, allow_manual_change, allow_higher_values,

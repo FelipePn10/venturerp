@@ -267,18 +267,23 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 }
 
 // createProductionOrder builds the OF from the firmed planned order, mirroring
-// the manual CreateProductionOrderUseCase. It links back to the planned order
-// via its code so the production side stays traceable to the plan.
+// the manual CreateProductionOrderUseCase. The production numbering sequence
+// is independent from planned-order numbering; traceability uses the internal
+// planned-order ID stored by the foreign key.
 func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, order *entity.PlannedOrder) (*productionentity.ProductionOrder, error) {
 	mask := ""
 	if order.Mask != nil {
 		mask = *order.Mask
 	}
-	plannedCode := order.Code
+	plannedID := order.ID
+	orderNumber, err := uc.ProdOrderRepo.GetNextOrderNumber(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	of := &productionentity.ProductionOrder{
-		OrderNumber:    order.OrderNumber,
-		PlannedOrderID: &plannedCode,
+		OrderNumber:    orderNumber,
+		PlannedOrderID: &plannedID,
 		ItemCode:       order.ItemCode,
 		Mask:           mask,
 		PlannedQty:     order.Quantity,

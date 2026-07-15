@@ -360,6 +360,7 @@ func machineTypeToEntity(row sqlc.MachineType) *entity.MachineType {
 
 func machineToEntity(row sqlc.Machine) *entity.Machine {
 	return &entity.Machine{
+		ID:              row.ID,
 		Code:            row.Code,
 		Name:            row.Name,
 		MachineTypeCode: row.MachineTypeCode,
