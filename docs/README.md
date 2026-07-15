@@ -32,6 +32,8 @@ Toda a documentação do ERP, organizada em **duas versões** de cada área:
 | **Contabilidade, NFS-e, Operações de entrada** | [`fiscal-financeiro`](apresentacao/fiscal-financeiro.md) (§10) | [`contabilidade-e-fiscal-complementos`](dev/contabilidade-e-fiscal-complementos.md) |
 | **Integrações & Relatórios** (busca por CNPJ, exportação Excel/PDF/CSV) | [`cadastros`](apresentacao/cadastros.md) (§Busca por CNPJ / Exportação) | [`integracao-cnpj-e-exportacao`](dev/integracao-cnpj-e-exportacao.md) |
 | **Segurança de acesso** | — | [`troca de senha com aprovação administrativa`](dev/troca-de-senha.md) |
+| **Releases e atualizações** | — | [`versionamento, updater e rollback`](dev/releases-e-atualizacoes.md) |
+| **Instalação Windows** | [`passo a passo do aplicativo desktop`](apresentacao/instalacao-windows.md) | [`versionamento, updater e rollback`](dev/releases-e-atualizacoes.md) |
 
 **Referência de apoio (dev):** [`API_REQUEST_BODIES.txt`](dev/API_REQUEST_BODIES.txt) — exemplos de corpo de request (JSON) por módulo.
 

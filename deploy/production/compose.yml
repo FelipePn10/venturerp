@@ -1,0 +1,21 @@
+services:
+  api:
+    image: ${VENTURERP_IMAGE:?VENTURERP_IMAGE is required}
+    container_name: venturerp-api
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ${VENTURERP_API_ENV:-/opt/venturerp/panossoerp/.env}
+    environment:
+      SERVER_ADDR: "5070"
+      ENV: production
+      SYSTEM_UPDATE_DIR: /var/lib/venturerp-update
+    volumes:
+      - /var/lib/venturerp-update:/var/lib/venturerp-update
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777

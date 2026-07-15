@@ -5,13 +5,18 @@
 # The module is vendored, so the build is hermetic and needs no network.
 FROM golang:1.25-alpine AS build
 
+ARG VERSION=dev
+ARG MIN_CLIENT_VERSION=dev
+
 WORKDIR /src
 
 # Copy the whole context (vendored deps included) and build statically.
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=vendor \
-    go build -trimpath -ldflags="-s -w" -o /out/erp ./api
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/FelipePn10/panossoerp/internal/version.Version=${VERSION} -X github.com/FelipePn10/panossoerp/internal/version.MinClient=${MIN_CLIENT_VERSION}" \
+      -o /out/erp ./api
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
 # Alpine gives us a shell + wget (for the container HEALTHCHECK), ca-certificates

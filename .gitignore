@@ -16,6 +16,10 @@ tasks/
 .docs
 SESSION_SUMMARY.md
 AGENTS.md
+!/AGENTS.md
+!api/AGENTS.md
+!scripts/AGENTS.md
+!deploy/production/AGENTS.md
 
 # Test/build artifacts
 coverage.out
@@ -28,6 +32,11 @@ backups/*.dump
 
 # Test scripts with sensitive data (tokens, CNPJs, credentials)
 scripts/*
+!scripts/AGENTS.md
+!scripts/release.sh
+!scripts/self-update.sh
+!scripts/test-self-update.sh
+!scripts/self_update_test.go
 !scripts/test-mrp-manufacturing.sh
 !scripts/audit-mrp-manufacturing.sh
 !scripts/test-mrp-manufacturing-security.sh

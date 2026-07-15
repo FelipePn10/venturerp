@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch VentureERP update requests
+
+[Path]
+PathExists=/var/lib/venturerp-update/request.json
+Unit=venturerp-update.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=VentureERP transactional self-update
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/opt/venturerp/updater/self-update.sh
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/venturerp-update /var/backups/venturerp /opt/venturerp/updater /run/lock
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

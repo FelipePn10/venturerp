@@ -13,6 +13,8 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	appversion "github.com/FelipePn10/panossoerp/internal/version"
+
 	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
@@ -82,6 +84,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/system_update_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/technical_assistance_uc"
 	thirdPartyServiceUC "github.com/FelipePn10/panossoerp/internal/application/usecase/third_party_service_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_sheet_uc"
@@ -1085,6 +1088,8 @@ func (app *application) mount() chi.Router {
 
 	// Audit trail reader (ADMIN-only query side; writes happen in middleware).
 	auditHandler := handler.NewAuditHandler(audit.NewReader(app.db.Pool))
+	systemUpdateManager := system_update_uc.NewManager(app.config.SystemUpdateDir, app.config.BackendReleaseURL, nil)
+	systemUpdateHandler := handler.NewSystemUpdateHandler(systemUpdateManager)
 
 	// routes
 	idempotencyStore := httpmw.NewIdempotencyStore(24 * time.Hour)
@@ -1097,6 +1102,8 @@ func (app *application) mount() chi.Router {
 
 		// Audit trail (read): who changed what, when. Restricted to ADMIN.
 		r.With(httpmw.RequireRole("ADMIN")).Get("/api/audit-log", auditHandler.List)
+		r.With(httpmw.RequireRole("ADMIN")).Post("/api/system/update", systemUpdateHandler.Request)
+		r.With(httpmw.RequireRole("ADMIN")).Get("/api/system/update/status", systemUpdateHandler.Status)
 		r.Route("/api/password-change-requests", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", passwordChangeHandler.Request)
 			r.With(httpmw.RequireRole("ADMIN")).Get("/", passwordChangeHandler.List)
@@ -2460,6 +2467,8 @@ func (app *application) mount() chi.Router {
 	// Readiness: the process can serve traffic — i.e. the database answers.
 	// Load balancers / orchestrators should route only when this is 200.
 	r.Get("/health/ready", app.readinessHandler)
+	// Public compatibility contract used before desktop authentication.
+	r.Get("/api/version", versionHandler)
 
 	// Prometheus metrics, optionally guarded by a bearer token.
 	if app.metrics != nil && app.config.MetricsEnabled {
@@ -2467,6 +2476,10 @@ func (app *application) mount() chi.Router {
 	}
 
 	return r
+}
+
+func versionHandler(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, appversion.Current())
 }
 
 // corsOrigins splits the comma-separated CORS_ALLOWED_ORIGINS config value.
