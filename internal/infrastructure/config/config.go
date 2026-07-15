@@ -34,6 +34,8 @@ type Config struct {
 	ShutdownTimeoutSec int    `mapstructure:"SHUTDOWN_TIMEOUT_SEC"`  // graceful drain budget in seconds
 	OTELServiceName    string `mapstructure:"OTEL_SERVICE_NAME"`
 	OTELNamespace      string `mapstructure:"OTEL_SERVICE_NAMESPACE"`
+	SystemUpdateDir    string `mapstructure:"SYSTEM_UPDATE_DIR"`
+	BackendReleaseURL  string `mapstructure:"BACKEND_RELEASE_URL"`
 }
 
 // IsDevelopment reports whether the process is NOT running in production. Used
@@ -53,6 +55,7 @@ func Load() (*Config, error) {
 		"AUTH_RATE_LIMIT_RPM", "AUTH_RATE_LIMIT_BURST", "MAX_BODY_BYTES",
 		"METRICS_ENABLED", "METRICS_TOKEN", "SHUTDOWN_TIMEOUT_SEC",
 		"OTEL_SERVICE_NAME", "OTEL_SERVICE_NAMESPACE",
+		"SYSTEM_UPDATE_DIR", "BACKEND_RELEASE_URL",
 	} {
 		if err := viper.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("bind environment variable %s: %w", key, err)
@@ -83,6 +86,8 @@ func Load() (*Config, error) {
 	viper.SetDefault("SHUTDOWN_TIMEOUT_SEC", 15)
 	viper.SetDefault("OTEL_SERVICE_NAME", "venturerp-api")
 	viper.SetDefault("OTEL_SERVICE_NAMESPACE", "venturerp")
+	viper.SetDefault("SYSTEM_UPDATE_DIR", "/tmp/venturerp-update")
+	viper.SetDefault("BACKEND_RELEASE_URL", "https://api.github.com/repos/FelipePn10/venturerp/releases/latest")
 	if err := viper.ReadInConfig(); err != nil {
 		var configNotFound viper.ConfigFileNotFoundError
 		if !errors.As(err, &configNotFound) && !os.IsNotExist(err) {
