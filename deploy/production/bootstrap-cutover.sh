@@ -40,4 +40,9 @@ UPDATER="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/self-update.sh"
 
 echo "cutover: verificando /api/version"
 curl -fsS "http://127.0.0.1:5070/api/version" && echo
+
+# Cutover bem-sucedido: o container (restart: unless-stopped) assume o boot.
+# Desabilita o serviço nativo legado para não disputar a porta 5070 no reboot.
+echo "cutover: desabilitando o serviço nativo legado"
+systemctl disable "${LEGACY_SERVICE:-venturerp.service}" 2>/dev/null || true
 echo "cutover: concluído. A partir de agora as atualizações saem pelo botão do painel admin."
