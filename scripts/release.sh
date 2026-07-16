@@ -16,6 +16,11 @@ git diff --quiet --exit-code
 git diff --cached --quiet --exit-code
 git rev-parse --verify "refs/tags/${TAG}" >/dev/null 2>&1 && fail "tag ${TAG} já existe localmente"
 
+# main é uma branch protegida: o commit de release entra por um PR auto-mesclado
+# (admin) e a tag é publicada em seguida. Portanto o gh é obrigatório.
+command -v gh >/dev/null 2>&1 || fail "gh (GitHub CLI) é necessário para publicar na branch protegida"
+gh auth status >/dev/null 2>&1 || fail "gh não está autenticado (rode: gh auth login)"
+
 git fetch --tags origin
 git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1 &&
   fail "tag ${TAG} já existe no origin"
@@ -54,6 +59,18 @@ trap - EXIT
 
 git add CHANGELOG.md
 git commit -m "chore(release): ${TAG}"
-git tag -a "${TAG}" -m "VentureERP ${TAG}"
-git push --atomic origin main "${TAG}"
+
+# main é protegida (alterações entram via PR). Empurramos o commit de release em
+# uma branch efêmera, mesclamos com privilégio de admin e publicamos a tag no
+# commit resultante de main — a tag (não o commit) dispara o pipeline.
+RELEASE_BRANCH="release/${TAG}"
+git push -f origin "HEAD:refs/heads/${RELEASE_BRANCH}"
+gh pr create --base main --head "${RELEASE_BRANCH}" \
+  --title "chore(release): ${TAG}" \
+  --body "Release automatizado ${TAG}. Consulte o CHANGELOG." >/dev/null
+gh pr merge "${RELEASE_BRANCH}" --merge --admin --delete-branch
+git fetch origin main
+git tag -a "${TAG}" -m "VentureERP ${TAG}" FETCH_HEAD
+git push origin "refs/tags/${TAG}"
+git reset --hard FETCH_HEAD
 printf 'release: %s publicado; pipelines acionados pela tag\n' "${TAG}"

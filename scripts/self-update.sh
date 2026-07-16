@@ -17,6 +17,11 @@ source "${CONFIG_FILE}"
 : "${DATABASE_NAME:?}"
 : "${DATABASE_URL:?}"
 
+# O container postgres exige senha até em conexões locais, então todo
+# pg_dump/pg_restore/psql via docker exec precisa carregar PGPASSWORD. Deriva do
+# DATABASE_URL (fonte única) quando não informado explicitamente.
+DATABASE_PASSWORD="${DATABASE_PASSWORD:-$(printf '%s' "${DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^:]+:([^@]+)@.*#\1#p')}"
+
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5070/health/ready}"
 LEGACY_SERVICE="${LEGACY_SERVICE:-venturerp.service}"
 HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-30}"
@@ -64,9 +69,9 @@ status() {
 
 restore_database() {
   [[ -s "${BACKUP_FILE}" ]] || return 1
-  docker exec "${DATABASE_CONTAINER}" psql -U "${DATABASE_USER}" -d postgres -v ON_ERROR_STOP=1 \
+  docker exec -e PGPASSWORD="${DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" psql -U "${DATABASE_USER}" -d postgres -v ON_ERROR_STOP=1 \
     -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DATABASE_NAME}' AND pid <> pg_backend_pid();" >/dev/null
-  docker exec -i "${DATABASE_CONTAINER}" pg_restore -U "${DATABASE_USER}" -d "${DATABASE_NAME}" \
+  docker exec -i -e PGPASSWORD="${DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_restore -U "${DATABASE_USER}" -d "${DATABASE_NAME}" \
     --clean --if-exists --no-owner --no-acl <"${BACKUP_FILE}"
 }
 
@@ -95,7 +100,7 @@ for command in docker jq curl flock; do command -v "${command}" >/dev/null; done
 docker inspect "${DATABASE_CONTAINER}" >/dev/null
 
 status running 15 "Criando e verificando backup transacional"
-docker exec "${DATABASE_CONTAINER}" pg_dump -U "${DATABASE_USER}" -d "${DATABASE_NAME}" \
+docker exec -e PGPASSWORD="${DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_dump -U "${DATABASE_USER}" -d "${DATABASE_NAME}" \
   --format=custom --no-owner --no-acl >"${BACKUP_FILE}"
 [[ -s "${BACKUP_FILE}" ]]
 docker exec -i "${DATABASE_CONTAINER}" pg_restore --list <"${BACKUP_FILE}" >/dev/null
