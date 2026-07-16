@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.0.1] — 2026-07-16
+
+- fix(cutover): pause update watcher during the direct bootstrap run (`248c8ca`)
+- docs(release): document PR-based release flow, VPS provisioning and cutover (`36688b3`)
+
 ## [v1.0.0] — 2026-07-16
 
 - fix(release): land releases via auto-merged PR and harden VPS updater (`c774024`)
