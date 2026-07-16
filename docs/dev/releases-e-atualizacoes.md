@@ -28,6 +28,15 @@ Nunca mova uma tag publicada. Corrija com nova versão, como `1.4.1`.
 
 `GET /api/version` é público e retorna `{"version":"1.4.0","min_client":"1.4.0"}`. Os valores são injetados no binário; builds locais retornam `dev`. O desktop bloqueia uma versão inferior a `min_client` antes do login.
 
+**CORS do app desktop:** o front roda no WebView Chromium do Tauri, então toda
+chamada (inclusive `/api/version`) passa por CORS. Se o app instalado mostrar
+"Não foi possível validar a versão do servidor" com o backend no ar, quase
+sempre é CORS: `CORS_ALLOWED_ORIGINS` (no `.env` de produção) precisa listar as
+origens reais do Tauri v2 — `tauri://localhost` (macOS/Linux) e
+`http://tauri.localhost`/`https://tauri.localhost` (Windows). O middleware faz
+match exato de origem. Após editar o `.env`, recrie o container
+(`docker compose ... up -d --force-recreate`) para aplicar.
+
 ## Preparar o agente na VPS (provisionamento roteirizado)
 
 Pré-requisitos no host: Docker Engine/Compose, `jq`, `curl`, `flock` e o
