@@ -27,6 +27,13 @@ echo "cutover: confirmando que a imagem ${IMAGE_REPOSITORY}:v${VERSION} é acess
 docker manifest inspect "${IMAGE_REPOSITORY}:v${VERSION}" >/dev/null 2>&1 ||
   docker pull "${IMAGE_REPOSITORY}:v${VERSION}" >/dev/null
 
+# O path unit observa request.json e dispararia o serviço em paralelo ao run
+# direto abaixo. Como o flock só deixa uma instância trabalhar, a concorrente
+# sairia sem remover o arquivo e o path re-dispararia em loop até o start-limit.
+# Pausar o watcher durante o cutover elimina a corrida; reativamos ao final.
+PATH_UNIT="venturerp-update.path"
+systemctl stop "${PATH_UNIT}" 2>/dev/null || true
+
 install -d -m 0750 "${UPDATE_DIR}"
 now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 umask 077
@@ -37,6 +44,10 @@ echo "cutover: executando o updater (backup -> pull -> migrate -> up -> health-c
 UPDATER="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/self-update.sh"
 [[ -x "${UPDATER}" ]] || UPDATER="/opt/venturerp/updater/self-update.sh"
 "${UPDATER}"
+
+echo "cutover: reativando o watcher de atualizações"
+systemctl reset-failed "${PATH_UNIT}" venturerp-update.service 2>/dev/null || true
+systemctl start "${PATH_UNIT}" 2>/dev/null || true
 
 echo "cutover: verificando /api/version"
 curl -fsS "http://127.0.0.1:5070/api/version" && echo
