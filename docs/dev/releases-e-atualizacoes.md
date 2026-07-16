@@ -6,15 +6,21 @@ Commits não são releases. `develop` recebe trabalho em andamento, `main` repre
 
 ## Criar uma versão do backend
 
-Pré-requisitos: `main`, worktree limpo, Docker ativo e acesso ao `origin`.
+Pré-requisitos: estar em `main`, worktree limpo, Docker ativo, `gh` autenticado
+(`gh auth status`) e acesso ao `origin`. Os alvos de release moram no `makefile`
+minúsculo (canônico); não crie um `Makefile` maiúsculo — em hosts case-sensitive
+o GNU make carrega o minúsculo e o maiúsculo seria ignorado.
 
-1. Integre e valide as mudanças em `develop`.
-2. Revise a integração para `main` e rode a regressão.
-3. Execute `make release-check VERSION=1.4.0`; ele testa Go e a imagem sem criar commit/tag.
-4. Revise migrations, compatibilidade mínima do desktop e rollback.
-5. Execute `make release VERSION=1.4.0`.
-6. O comando atualiza `CHANGELOG.md`, cria commit e tag anotada e envia `main`/tag atomicamente.
-7. Acompanhe **Release backend**: testes, imagem `ghcr.io/felipepn10/panossoerp:v1.4.0`, `latest`, SBOM/proveniência e GitHub Release.
+1. Integre e valide as mudanças em `develop` e leve para `main` (via PR).
+2. Rode a regressão e revise migrations, compatibilidade mínima do desktop e rollback.
+3. Execute `make release-check VERSION=1.4.0`; ele testa Go e constrói a imagem sem criar commit/tag.
+4. Execute `make release VERSION=1.4.0`.
+5. O comando atualiza `CHANGELOG.md` e cria o commit de release. Como `main` é
+   **branch protegida**, ele não faz push direto: empurra o commit numa branch
+   efêmera `release/vX.Y.Z`, abre e **auto-mescla o PR com privilégio de admin**
+   e então publica a tag anotada no commit resultante de `main`. A tag — não o
+   commit — dispara o pipeline.
+6. Acompanhe **Release backend**: testes, imagem `ghcr.io/felipepn10/panossoerp:v1.4.0`, `latest`, SBOM/proveniência e GitHub Release.
 
 Nunca mova uma tag publicada. Corrija com nova versão, como `1.4.1`.
 
@@ -22,18 +28,40 @@ Nunca mova uma tag publicada. Corrija com nova versão, como `1.4.1`.
 
 `GET /api/version` é público e retorna `{"version":"1.4.0","min_client":"1.4.0"}`. Os valores são injetados no binário; builds locais retornam `dev`. O desktop bloqueia uma versão inferior a `min_client` antes do login.
 
-## Preparar o agente na VPS
+## Preparar o agente na VPS (provisionamento roteirizado)
 
-Faça uma única vez em janela de manutenção:
+Pré-requisitos no host: Docker Engine/Compose, `jq`, `curl`, `flock` e o
+container do Postgres de produção em execução. Envie `deploy/production/*` e
+`scripts/self-update.sh` preservando a estrutura de diretórios e rode, como root:
 
-1. Instale Docker Engine/Compose, `jq`, `curl` e `flock`.
-2. Crie `/opt/venturerp/updater`, `/var/lib/venturerp-update` e `/var/backups/venturerp/releases`.
-3. Instale `scripts/self-update.sh` como `/opt/venturerp/updater/self-update.sh`, root, modo `0750`.
-4. Instale `deploy/production/compose.yml` no mesmo diretório, modo `0644`.
-5. Crie `/etc/venturerp/update.env` a partir do exemplo, modo `0600`, com container/usuário/nome/URL reais do banco.
-6. Dê ao UID `10001` escrita na fila; ela é a única ponte API-host.
-7. Instale as unidades em `/etc/systemd/system`, rode `systemctl daemon-reload` e `systemctl enable --now venturerp-update.path`.
-8. Confirme o `.path` ativo e que a API não monta `/var/run/docker.sock`.
+```bash
+sudo ./deploy/production/provision-updater.sh
+```
+
+O script é idempotente e:
+
+- instala `self-update.sh` e `bootstrap-cutover.sh` em `/opt/venturerp/updater`;
+- instala `compose.yml` no mesmo diretório;
+- gera `/etc/venturerp/update.env` (modo `0600`) derivando usuário/base/URL do
+  `.env` de produção — a senha do Postgres é derivada do `DATABASE_URL` em tempo
+  de execução, então `pg_dump`/`pg_restore`/`psql` via `docker exec` recebem
+  `PGPASSWORD` corretamente;
+- instala as unidades systemd e roda `systemctl enable --now venturerp-update.path`.
+
+### Primeiro cutover: binário nativo → container
+
+Se a produção ainda roda como binário nativo (`venturerp.service`), o primeiro
+cutover para a imagem versionada usa o mesmo `self-update.sh`. Depois que a
+imagem `ghcr.io/felipepn10/panossoerp:vX.Y.Z` existir:
+
+```bash
+sudo /opt/venturerp/updater/bootstrap-cutover.sh 1.0.0
+```
+
+Ele faz backup do banco, baixa a imagem, para o serviço nativo, aplica migrations,
+sobe o container, valida `/health/ready` e `/api/version` e **desabilita** o
+serviço nativo legado (para não disputar a porta 5070 no reboot). A partir daí,
+toda atualização sai pelo botão do painel admin.
 
 ## Atualizar pelo painel
 

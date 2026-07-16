@@ -76,7 +76,19 @@ scripts/
 
 ## Versionamento e atualização
 
-- `release.sh` só roda na `main` limpa, valida SemVer, testes e imagem, atualiza o CHANGELOG e faz push atômico do commit/tag.
-- `self-update.sh` é instalado no host e executado como root pelo systemd; nunca o chame de dentro do contêiner da API.
+- Os alvos `release`/`release-check` moram no `makefile` **minúsculo** (canônico).
+  Não crie um `Makefile` maiúsculo: em hosts case-sensitive o GNU make carrega o
+  minúsculo e o maiúsculo é ignorado (e os dois colidem em FS case-insensitive).
+- `release.sh` só roda na `main` limpa, valida SemVer, testes e imagem, atualiza o
+  CHANGELOG e — como `main` é protegida — publica via **PR auto-mesclado com admin**
+  (branch `release/vX.Y.Z`), taggeando o commit resultante de `main`. Requer `gh`
+  autenticado. Não faz mais push direto/atômico para `main`.
+- `self-update.sh` é instalado no host e executado como root pelo systemd; nunca o
+  chame de dentro do contêiner da API. Ele deriva `PGPASSWORD` do `DATABASE_URL`
+  para os `docker exec` de `pg_dump`/`pg_restore`/`psql` (o Postgres exige senha
+  mesmo em conexões locais).
+- `deploy/production/provision-updater.sh` instala o updater no host de forma
+  idempotente; `deploy/production/bootstrap-cutover.sh` faz o primeiro cutover
+  binário-nativo → container reusando o `self-update.sh`.
 - A configuração privilegiada fica em `/etc/venturerp/update.env` com modo `0600`, nunca no Git.
 - Preserve `flock`, tag de imagem exata, backup verificado, readiness e rollback ao alterar o updater.
