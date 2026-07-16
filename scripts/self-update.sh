@@ -23,6 +23,11 @@ source "${CONFIG_FILE}"
 DATABASE_PASSWORD="${DATABASE_PASSWORD:-$(printf '%s' "${DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^:]+:([^@]+)@.*#\1#p')}"
 
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5070/health/ready}"
+# UID/GID do appuser dentro do contêiner da API. A fila é a única ponte
+# API↔host: a API (não-root) precisa ler/escrever aqui, então root normaliza a
+# posse dos arquivos que produz para esse UID.
+UPDATE_UID="${UPDATE_UID:-10001}"
+UPDATE_GID="${UPDATE_GID:-10001}"
 LEGACY_SERVICE="${LEGACY_SERVICE:-venturerp.service}"
 HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-30}"
 HEALTH_INTERVAL_SECONDS="${HEALTH_INTERVAL_SECONDS:-2}"
@@ -34,6 +39,8 @@ LOCK_FILE="${LOCK_FILE:-/run/lock/venturerp-update.lock}"
 MIGRATIONS_DIR="${UPDATE_DIR}/migrations"
 
 mkdir -p "${UPDATE_DIR}" "${BACKUP_DIR}" "$(dirname "${LOCK_FILE}")"
+# A API (UID do appuser) escreve request.json/status.json aqui; garanta a posse.
+chown "${UPDATE_UID}:${UPDATE_GID}" "${UPDATE_DIR}" 2>/dev/null || true
 exec 9>"${LOCK_FILE}"
 flock -n 9 || exit 0
 [[ -f "${REQUEST_FILE}" ]] || exit 0
@@ -65,6 +72,8 @@ status() {
      + (if $finished == "" then {} else {finished_at:$finished} end)' >"${tmp}"
   chmod 600 "${tmp}"
   mv "${tmp}" "${STATUS_FILE}"
+  # A API (não-root) lê o status pelo endpoint; deixe-a como dona do arquivo.
+  chown "${UPDATE_UID}:${UPDATE_GID}" "${STATUS_FILE}" 2>/dev/null || true
 }
 
 restore_database() {

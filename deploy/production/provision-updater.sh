@@ -43,8 +43,10 @@ DB_NAME="$(printf '%s' "${DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^/]+/([^?]+
 [[ -n "${DB_USER}" && -n "${DB_NAME}" ]] || { echo "não consegui derivar usuário/base do DATABASE_URL"; exit 1; }
 
 echo "provision: criando diretórios"
+APPUSER_UID="${APPUSER_UID:-10001}"
 install -d -m 0755 "${UPDATER_DIR}"
-install -d -m 0750 "${UPDATE_DIR}"
+# A fila é a ponte API↔host: o appuser (não-root) do contêiner escreve nela.
+install -d -o "${APPUSER_UID}" -g "${APPUSER_UID}" -m 0770 "${UPDATE_DIR}"
 install -d -m 0750 "${BACKUP_DIR}"
 install -d -m 0750 "${CONFIG_DIR}"
 
