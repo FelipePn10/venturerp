@@ -170,7 +170,20 @@ restore:
 	@test -n "$(FILE)" || (echo "usage: make restore FILE=./backups/<file>.dump"; exit 2)
 	DATABASE_URL="$(DATABASE_URL)" ./scripts/restore.sh "$(FILE)"
 
+# ── Release (distribuição versionada) ────────────────────────────────────────
+# Um commit comum NÃO gera atualização. Somente a tag SemVer criada por
+# `make release VERSION=x.y.z` dispara o pipeline (imagem GHCR + GitHub Release).
+# `release-check` roda a mesma validação (go test + docker build) sem criar tag.
+# Ver docs/dev/releases-e-atualizacoes.md.
+release-check:
+	@test -n "$(VERSION)" || (echo "uso: make release VERSION=1.0.0" >&2; exit 2)
+	RELEASE_DRY_RUN=1 ./scripts/release.sh "$(VERSION)"
+
+release:
+	@test -n "$(VERSION)" || (echo "uso: make release VERSION=1.0.0" >&2; exit 2)
+	./scripts/release.sh "$(VERSION)"
+
 .PHONY: cutting-samples create_migration migrate_up migrate_down migrate_force reset print_db sqlc \
 	test test-bom-mrp test-purchase-receiving test-procurement-governance test-cover test-integration test-cutting build run vet fmt-check ci \
-	docker-build up down up-backup logs backup restore \
+	docker-build up down up-backup logs backup restore release release-check \
 	demo-up demo-down demo-reset demo-migrate demo-seed demo-bootstrap demo-logs
