@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.0.2] — 2026-07-19
+
+- security: harden tenant authorization and production defaults (`50121d9`)
+- fix(cors): use real Tauri v2 origins for the desktop client (`b8fcab4`)
+- fix(update): make the update queue readable/writable by the API user (`ce532d7`)
+
 ## [v1.0.1] — 2026-07-16
 
 - fix(cutover): pause update watcher during the direct bootstrap run (`248c8ca`)
