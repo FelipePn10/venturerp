@@ -118,13 +118,3 @@ func (r *repositoryUserSQLC) CompletePasswordChange(ctx context.Context, request
 	}
 	return tx.Commit(ctx)
 }
-
-func (r *repositoryUserSQLC) AuthVersion(ctx context.Context, userID string) (int64, error) {
-	id, err := uuid.Parse(userID)
-	if err != nil {
-		return 0, err
-	}
-	var version int64
-	err = r.pool.QueryRow(ctx, `SELECT auth_version FROM users WHERE id=$1`, id).Scan(&version)
-	return version, err
-}

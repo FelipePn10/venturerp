@@ -132,7 +132,7 @@ Atualiza a configuração fiscal da empresa.
   "telefone": "",
   "icms_interno_aliquota": 0.12,
   "icms_diferimento_percentual": 0.3846,
-  "focus_nfe_token": "YvCRephh2ZiwEmpawutMj83uPJxAYMD9",
+  "focus_nfe_token": "<TOKEN_FOCUS_NFE>",
   "focus_nfe_ambiente": "homologacao",
   "juros_mes": 0.01,
   "multa_atraso": 0.02,
@@ -144,7 +144,7 @@ Atualiza a configuração fiscal da empresa.
 
 > **Empresa cadastrada no FocusNFE:** CNPJ `52.454.668/0001-02`, IE `9103144679`,
 > nome fantasia **Tecnofer**, CEP `86975-000` (PR). Token de homologação
-> `YvCRephh2ZiwEmpawutMj83uPJxAYMD9` — ambiente **sempre** `"homologacao"` para testes.
+> Use um token de homologação fornecido por variável segura — ambiente **sempre** `"homologacao"` para testes.
 
 | Campo | Obrigatório | Descrição |
 |---|---|---|

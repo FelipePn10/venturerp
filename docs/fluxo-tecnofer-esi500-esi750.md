@@ -2,7 +2,7 @@
 
 > Cenário real executado pelo `scripts/test-flow.sh` (153/153 checks — 0 falhas — 0 avisos).  
 > Empresa: **TECNOFER** · CNPJ `52454668000102` · IE `9103144679` · Mandaguari–PR  
-> Ambiente: **homologação** SEFAZ (FocusNFE token `YvCRephh2ZiwEmpawutMj83uPJxAYMD9`)
+> Ambiente: **homologação** SEFAZ (configure `FOCUS_TOKEN` fora do repositório)
 
 ---
 

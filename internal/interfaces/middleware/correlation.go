@@ -2,12 +2,15 @@ package middleware
 
 import (
 	"net/http"
+	"regexp"
 
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/google/uuid"
 )
 
 const correlationIDHeader = "X-Request-ID"
+
+var validCorrelationID = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
 // CorrelationMiddleware ensures every request carries a unique ID throughout
 // its entire lifecycle — from the moment it enters the API to the response
@@ -22,7 +25,7 @@ const correlationIDHeader = "X-Request-ID"
 func CorrelationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get(correlationIDHeader)
-		if id == "" {
+		if !validCorrelationID.MatchString(id) {
 			id = uuid.NewString()
 		}
 

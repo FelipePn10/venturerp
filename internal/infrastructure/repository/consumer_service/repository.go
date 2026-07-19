@@ -27,9 +27,10 @@ func (r *RepositoryPGX) NextConsumerCode(ctx context.Context) (int64, error) {
 	return code, err
 }
 
-func (r *RepositoryPGX) NextCallNumber(ctx context.Context, enterpriseCode int64) (int64, error) {
+func (r *RepositoryPGX) NextCallNumber(ctx context.Context, enterpriseID int64) (int64, error) {
 	var n int64
-	err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(call_number), 0) + 1 FROM consumer_service_calls WHERE enterprise_code=$1`, enterpriseCode).Scan(&n)
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(call_number), 0) + 1 FROM consumer_service_calls
+		WHERE enterprise_code=(SELECT code FROM enterprise WHERE id=$1)`, enterpriseID).Scan(&n)
 	return n, err
 }
 
@@ -98,22 +99,36 @@ func (r *RepositoryPGX) ListKnowledgeSources(ctx context.Context, onlyActive boo
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) CreateConsumer(ctx context.Context, v *entity.Consumer) (*entity.Consumer, error) {
-	row := r.pool.QueryRow(ctx, consumerInsertSQL(), consumerArgs(v)...)
-	return scanConsumer(row)
+func (r *RepositoryPGX) CreateConsumer(ctx context.Context, enterpriseID int64, v *entity.Consumer) (*entity.Consumer, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	consumer, err := scanConsumer(tx.QueryRow(ctx, consumerInsertSQL(), consumerArgs(v)...))
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO consumer_service_consumer_enterprises (consumer_code, enterprise_id) VALUES ($1,$2)`, consumer.Code, enterpriseID); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return consumer, nil
 }
 
-func (r *RepositoryPGX) UpdateConsumer(ctx context.Context, v *entity.Consumer) (*entity.Consumer, error) {
+func (r *RepositoryPGX) UpdateConsumer(ctx context.Context, enterpriseID int64, v *entity.Consumer) (*entity.Consumer, error) {
 	row := r.pool.QueryRow(ctx, `UPDATE consumer_service_consumers SET
 		name=$2, is_active=$3, person_type=$4, cpf=$5, rg=$6, cnpj=$7, state_registration=$8,
 		zip_code=$9, city=$10, state=$11, address=$12, address_number=$13, complement=$14, district=$15,
 		market_segment_code=$16, knowledge_code=$17, notes=$18, updated_at=NOW()
-		WHERE code=$1
+		WHERE code=$1 AND EXISTS (SELECT 1 FROM consumer_service_consumer_enterprises ce WHERE ce.consumer_code=$1 AND ce.enterprise_id=$19)
 		RETURNING code, name, is_active, person_type, cpf, rg, cnpj, state_registration, zip_code, city, state,
 		          address, address_number, complement, district, market_segment_code, knowledge_code, notes,
 		          created_at, updated_at, created_by`,
 		v.Code, v.Name, v.IsActive, v.PersonType, v.CPF, v.RG, v.CNPJ, v.StateRegistration, v.ZipCode, v.City,
-		v.State, v.Address, v.AddressNumber, v.Complement, v.District, v.MarketSegmentCode, v.KnowledgeCode, v.Notes)
+		v.State, v.Address, v.AddressNumber, v.Complement, v.District, v.MarketSegmentCode, v.KnowledgeCode, v.Notes, enterpriseID)
 	consumer, err := scanConsumer(row)
 	if err != nil {
 		return nil, err
@@ -121,8 +136,9 @@ func (r *RepositoryPGX) UpdateConsumer(ctx context.Context, v *entity.Consumer) 
 	return r.hydrateConsumer(ctx, consumer)
 }
 
-func (r *RepositoryPGX) GetConsumer(ctx context.Context, code int64) (*entity.Consumer, error) {
-	row := r.pool.QueryRow(ctx, consumerSelectSQL()+` WHERE code=$1`, code)
+func (r *RepositoryPGX) GetConsumer(ctx context.Context, enterpriseID, code int64) (*entity.Consumer, error) {
+	row := r.pool.QueryRow(ctx, consumerSelectSQL()+` WHERE code=$1 AND EXISTS
+		(SELECT 1 FROM consumer_service_consumer_enterprises ce WHERE ce.consumer_code=$1 AND ce.enterprise_id=$2)`, code, enterpriseID)
 	consumer, err := scanConsumer(row)
 	if err != nil {
 		return nil, err
@@ -130,9 +146,9 @@ func (r *RepositoryPGX) GetConsumer(ctx context.Context, code int64) (*entity.Co
 	return r.hydrateConsumer(ctx, consumer)
 }
 
-func (r *RepositoryPGX) ListConsumers(ctx context.Context, filter repository.ConsumerFilter) ([]*entity.Consumer, error) {
-	conds := []string{}
-	args := []any{}
+func (r *RepositoryPGX) ListConsumers(ctx context.Context, enterpriseID int64, filter repository.ConsumerFilter) ([]*entity.Consumer, error) {
+	conds := []string{"EXISTS (SELECT 1 FROM consumer_service_consumer_enterprises ce WHERE ce.consumer_code=consumer_service_consumers.code AND ce.enterprise_id=$1)"}
+	args := []any{enterpriseID}
 	if filter.Search != nil && strings.TrimSpace(*filter.Search) != "" {
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(*filter.Search))+"%")
 		conds = append(conds, fmt.Sprintf("(LOWER(name) LIKE $%d OR CAST(code AS TEXT) LIKE $%d)", len(args), len(args)))
@@ -169,42 +185,45 @@ func (r *RepositoryPGX) ListConsumers(ctx context.Context, filter repository.Con
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) AddConsumerPhone(ctx context.Context, v *entity.ConsumerPhone) (*entity.ConsumerPhone, error) {
+func (r *RepositoryPGX) AddConsumerPhone(ctx context.Context, enterpriseID int64, v *entity.ConsumerPhone) (*entity.ConsumerPhone, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_consumer_phones (consumer_code, contact_code, phone_type, number, is_primary)
-		VALUES ($1,$2,$3,$4,$5)
+		SELECT $1,$2,$3,$4,$5 WHERE EXISTS
+		(SELECT 1 FROM consumer_service_consumer_enterprises ce WHERE ce.consumer_code=$1 AND ce.enterprise_id=$6)
 		RETURNING code, consumer_code, contact_code, phone_type, number, is_primary, created_at`,
-		v.ConsumerCode, v.ContactCode, v.PhoneType, v.Number, v.IsPrimary)
+		v.ConsumerCode, v.ContactCode, v.PhoneType, v.Number, v.IsPrimary, enterpriseID)
 	return scanConsumerPhone(row)
 }
 
-func (r *RepositoryPGX) AddConsumerEmail(ctx context.Context, v *entity.ConsumerEmail) (*entity.ConsumerEmail, error) {
+func (r *RepositoryPGX) AddConsumerEmail(ctx context.Context, enterpriseID int64, v *entity.ConsumerEmail) (*entity.ConsumerEmail, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_consumer_emails (consumer_code, contact_code, email, is_primary)
-		VALUES ($1,$2,$3,$4)
+		SELECT $1,$2,$3,$4 WHERE EXISTS
+		(SELECT 1 FROM consumer_service_consumer_enterprises ce WHERE ce.consumer_code=$1 AND ce.enterprise_id=$5)
 		RETURNING code, consumer_code, contact_code, email, is_primary, created_at`,
-		v.ConsumerCode, v.ContactCode, v.Email, v.IsPrimary)
+		v.ConsumerCode, v.ContactCode, v.Email, v.IsPrimary, enterpriseID)
 	return scanConsumerEmail(row)
 }
 
-func (r *RepositoryPGX) AddConsumerContact(ctx context.Context, v *entity.ConsumerContact) (*entity.ConsumerContact, error) {
+func (r *RepositoryPGX) AddConsumerContact(ctx context.Context, enterpriseID int64, v *entity.ConsumerContact) (*entity.ConsumerContact, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_consumer_contacts (consumer_code, name, role, contact_type, notes)
-		VALUES ($1,$2,$3,$4,$5)
+		SELECT $1,$2,$3,$4,$5 WHERE EXISTS
+		(SELECT 1 FROM consumer_service_consumer_enterprises ce WHERE ce.consumer_code=$1 AND ce.enterprise_id=$6)
 		RETURNING code, consumer_code, name, role, contact_type, notes, created_at`,
-		v.ConsumerCode, v.Name, v.Role, v.ContactType, v.Notes)
+		v.ConsumerCode, v.Name, v.Role, v.ContactType, v.Notes, enterpriseID)
 	return scanConsumerContact(row)
 }
 
-func (r *RepositoryPGX) CreateCustomerContact(ctx context.Context, v *entity.CustomerContactHistory) (*entity.CustomerContactHistory, error) {
+func (r *RepositoryPGX) CreateCustomerContact(ctx context.Context, enterpriseID int64, v *entity.CustomerContactHistory) (*entity.CustomerContactHistory, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_customer_contacts
-		(customer_code, opened_at, scheduled_at, user_code, contact_type, description, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		(customer_code, opened_at, scheduled_at, user_code, contact_type, description, created_by, enterprise_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		RETURNING code, customer_code, opened_at, scheduled_at, user_code, contact_type, description, created_at, created_by`,
-		v.CustomerCode, v.OpenedAt, v.ScheduledAt, v.UserCode, v.ContactType, v.Description, pgutil.ToPgUUID(v.CreatedBy))
+		v.CustomerCode, v.OpenedAt, v.ScheduledAt, v.UserCode, v.ContactType, v.Description, pgutil.ToPgUUID(v.CreatedBy), enterpriseID)
 	return scanCustomerContact(row)
 }
 
-func (r *RepositoryPGX) ListCustomerContacts(ctx context.Context, filter repository.CustomerContactFilter) ([]*entity.CustomerContactHistory, error) {
-	conds := []string{}
-	args := []any{}
+func (r *RepositoryPGX) ListCustomerContacts(ctx context.Context, enterpriseID int64, filter repository.CustomerContactFilter) ([]*entity.CustomerContactHistory, error) {
+	conds := []string{"enterprise_id=$1"}
+	args := []any{enterpriseID}
 	if filter.CustomerCode != nil {
 		args = append(args, *filter.CustomerCode)
 		conds = append(conds, fmt.Sprintf("customer_code=$%d", len(args)))
@@ -242,42 +261,45 @@ func (r *RepositoryPGX) ListCustomerContacts(ctx context.Context, filter reposit
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) CreateCall(ctx context.Context, v *entity.Call) (*entity.Call, error) {
+func (r *RepositoryPGX) CreateCall(ctx context.Context, enterpriseID int64, v *entity.Call) (*entity.Call, error) {
+	if err := r.pool.QueryRow(ctx, `SELECT code FROM enterprise WHERE id=$1`, enterpriseID).Scan(&v.EnterpriseCode); err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, callInsertSQL(), callArgs(v)...)
 	return scanCall(row)
 }
 
-func (r *RepositoryPGX) UpdateCall(ctx context.Context, v *entity.Call) (*entity.Call, error) {
+func (r *RepositoryPGX) UpdateCall(ctx context.Context, enterpriseID int64, v *entity.Call) (*entity.Call, error) {
 	row := r.pool.QueryRow(ctx, `UPDATE consumer_service_calls SET
 		call_type_code=$2, direction=$3, in_warranty=$4, defect_group_code=$5, defect_reason_code=$6,
 		responsible_user_code=$7, position=$8, situation=$9, return_date=$10, visit_requested_date=$11,
 		visit_returned_date=$12, sale_store_code=$13, establishment_code=$14, technician_description=$15,
 		symptoms=$16, forwarded_store_code=$17, subject=$18, description=$19, solution=$20, checklist_code=$21,
 		updated_at=NOW()
-		WHERE code=$1
+		WHERE code=$1 AND enterprise_code=(SELECT code FROM enterprise WHERE id=$22)
 		RETURNING `+callReturnColumns(),
 		v.Code, v.CallTypeCode, string(v.Direction), v.InWarranty, v.DefectGroupCode, v.DefectReasonCode,
 		v.ResponsibleUserCode, string(v.Position), string(v.Situation), datePtr(v.ReturnDate), datePtr(v.VisitRequestedDate),
 		datePtr(v.VisitReturnedDate), v.SaleStoreCode, v.EstablishmentCode, v.TechnicianDescription, v.Symptoms,
-		v.ForwardedStoreCode, v.Subject, v.Description, v.Solution, v.ChecklistCode)
+		v.ForwardedStoreCode, v.Subject, v.Description, v.Solution, v.ChecklistCode, enterpriseID)
 	call, err := scanCall(row)
 	if err != nil {
 		return nil, err
 	}
-	return r.hydrateCall(ctx, call)
+	return r.hydrateCall(ctx, enterpriseID, call)
 }
 
-func (r *RepositoryPGX) GetCall(ctx context.Context, code int64) (*entity.Call, error) {
-	row := r.pool.QueryRow(ctx, callSelectSQL()+` WHERE code=$1`, code)
+func (r *RepositoryPGX) GetCall(ctx context.Context, enterpriseID, code int64) (*entity.Call, error) {
+	row := r.pool.QueryRow(ctx, callSelectSQL()+` WHERE code=$1 AND enterprise_code=(SELECT code FROM enterprise WHERE id=$2)`, code, enterpriseID)
 	call, err := scanCall(row)
 	if err != nil {
 		return nil, err
 	}
-	return r.hydrateCall(ctx, call)
+	return r.hydrateCall(ctx, enterpriseID, call)
 }
 
-func (r *RepositoryPGX) ListCalls(ctx context.Context, filter repository.CallFilter) ([]*entity.Call, error) {
-	q, args := buildCallFilterSQL(filter, false)
+func (r *RepositoryPGX) ListCalls(ctx context.Context, enterpriseID int64, filter repository.CallFilter) ([]*entity.Call, error) {
+	q, args := buildCallFilterSQL(enterpriseID, filter, false)
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -294,42 +316,46 @@ func (r *RepositoryPGX) ListCalls(ctx context.Context, filter repository.CallFil
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) AddCallReturn(ctx context.Context, v *entity.CallReturn) (*entity.CallReturn, error) {
+func (r *RepositoryPGX) AddCallReturn(ctx context.Context, enterpriseID int64, v *entity.CallReturn) (*entity.CallReturn, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_call_returns
 		(call_code, contacted_at, contact_type, description, next_return_at, user_code, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		SELECT $1,$2,$3,$4,$5,$6,$7 WHERE EXISTS
+		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$8)
 		RETURNING code, call_code, contacted_at, contact_type, description, next_return_at, user_code, created_at, created_by`,
-		v.CallCode, v.ContactedAt, v.ContactType, v.Description, datePtr(v.NextReturnAt), v.UserCode, pgutil.ToPgUUID(v.CreatedBy))
+		v.CallCode, v.ContactedAt, v.ContactType, v.Description, datePtr(v.NextReturnAt), v.UserCode, pgutil.ToPgUUID(v.CreatedBy), enterpriseID)
 	return scanCallReturn(row)
 }
 
-func (r *RepositoryPGX) AddCallAttachment(ctx context.Context, v *entity.CallAttachment) (*entity.CallAttachment, error) {
+func (r *RepositoryPGX) AddCallAttachment(ctx context.Context, enterpriseID int64, v *entity.CallAttachment) (*entity.CallAttachment, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_call_attachments
 		(call_code, file_name, file_path, content_type, notes, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6)
+		SELECT $1,$2,$3,$4,$5,$6 WHERE EXISTS
+		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$7)
 		RETURNING code, call_code, file_name, file_path, content_type, notes, created_at, created_by`,
-		v.CallCode, v.FileName, v.FilePath, v.ContentType, v.Notes, pgutil.ToPgUUID(v.CreatedBy))
+		v.CallCode, v.FileName, v.FilePath, v.ContentType, v.Notes, pgutil.ToPgUUID(v.CreatedBy), enterpriseID)
 	return scanCallAttachment(row)
 }
 
-func (r *RepositoryPGX) AddChecklistItem(ctx context.Context, v *entity.CallChecklistItem) (*entity.CallChecklistItem, error) {
+func (r *RepositoryPGX) AddChecklistItem(ctx context.Context, enterpriseID int64, v *entity.CallChecklistItem) (*entity.CallChecklistItem, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_call_checklist_items (call_code, sequence, description, notes)
-		VALUES ($1, COALESCE(NULLIF($2,0), (SELECT COALESCE(MAX(sequence),0)+1 FROM consumer_service_call_checklist_items WHERE call_code=$1)), $3, $4)
+		SELECT $1, COALESCE(NULLIF($2,0), (SELECT COALESCE(MAX(sequence),0)+1 FROM consumer_service_call_checklist_items WHERE call_code=$1)), $3, $4
+		WHERE EXISTS (SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$5)
 		RETURNING code, call_code, sequence, description, is_done, done_at, notes, created_at`,
-		v.CallCode, v.Sequence, v.Description, v.Notes)
+		v.CallCode, v.Sequence, v.Description, v.Notes, enterpriseID)
 	return scanChecklistItem(row)
 }
 
-func (r *RepositoryPGX) SetChecklistItemDone(ctx context.Context, code int64, done bool, notes *string) (*entity.CallChecklistItem, error) {
+func (r *RepositoryPGX) SetChecklistItemDone(ctx context.Context, enterpriseID, code int64, done bool, notes *string) (*entity.CallChecklistItem, error) {
 	row := r.pool.QueryRow(ctx, `UPDATE consumer_service_call_checklist_items
 		SET is_done=$2, done_at=CASE WHEN $2 THEN COALESCE(done_at, NOW()) ELSE NULL END, notes=COALESCE($3, notes)
-		WHERE code=$1
-		RETURNING code, call_code, sequence, description, is_done, done_at, notes, created_at`, code, done, notes)
+		WHERE code=$1 AND EXISTS (SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code
+			WHERE c.code=consumer_service_call_checklist_items.call_code AND e.id=$4)
+		RETURNING code, call_code, sequence, description, is_done, done_at, notes, created_at`, code, done, notes, enterpriseID)
 	return scanChecklistItem(row)
 }
 
-func (r *RepositoryPGX) ReportCalls(ctx context.Context, filter repository.CallFilter) (*repository.CallReport, error) {
-	q, args := buildCallFilterSQL(filter, true)
+func (r *RepositoryPGX) ReportCalls(ctx context.Context, enterpriseID int64, filter repository.CallFilter) (*repository.CallReport, error) {
+	q, args := buildCallFilterSQL(enterpriseID, filter, true)
 	row := r.pool.QueryRow(ctx, q, args...)
 	var report repository.CallReport
 	err := row.Scan(
@@ -356,16 +382,16 @@ func (r *RepositoryPGX) hydrateConsumer(ctx context.Context, c *entity.Consumer)
 	return c, nil
 }
 
-func (r *RepositoryPGX) hydrateCall(ctx context.Context, c *entity.Call) (*entity.Call, error) {
-	returns, err := r.listCallReturns(ctx, c.Code)
+func (r *RepositoryPGX) hydrateCall(ctx context.Context, enterpriseID int64, c *entity.Call) (*entity.Call, error) {
+	returns, err := r.listCallReturns(ctx, enterpriseID, c.Code)
 	if err != nil {
 		return nil, err
 	}
-	attachments, err := r.listCallAttachments(ctx, c.Code)
+	attachments, err := r.listCallAttachments(ctx, enterpriseID, c.Code)
 	if err != nil {
 		return nil, err
 	}
-	items, err := r.listChecklistItems(ctx, c.Code)
+	items, err := r.listChecklistItems(ctx, enterpriseID, c.Code)
 	if err != nil {
 		return nil, err
 	}
@@ -424,8 +450,11 @@ func (r *RepositoryPGX) listConsumerContacts(ctx context.Context, consumerCode i
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) listCallReturns(ctx context.Context, callCode int64) ([]*entity.CallReturn, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code, call_code, contacted_at, contact_type, description, next_return_at, user_code, created_at, created_by FROM consumer_service_call_returns WHERE call_code=$1 ORDER BY contacted_at DESC`, callCode)
+func (r *RepositoryPGX) listCallReturns(ctx context.Context, enterpriseID, callCode int64) ([]*entity.CallReturn, error) {
+	rows, err := r.pool.Query(ctx, `SELECT code, call_code, contacted_at, contact_type, description, next_return_at, user_code, created_at, created_by
+		FROM consumer_service_call_returns WHERE call_code=$1 AND EXISTS
+		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$2)
+		ORDER BY contacted_at DESC`, callCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -441,8 +470,11 @@ func (r *RepositoryPGX) listCallReturns(ctx context.Context, callCode int64) ([]
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) listCallAttachments(ctx context.Context, callCode int64) ([]*entity.CallAttachment, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code, call_code, file_name, file_path, content_type, notes, created_at, created_by FROM consumer_service_call_attachments WHERE call_code=$1 ORDER BY code`, callCode)
+func (r *RepositoryPGX) listCallAttachments(ctx context.Context, enterpriseID, callCode int64) ([]*entity.CallAttachment, error) {
+	rows, err := r.pool.Query(ctx, `SELECT code, call_code, file_name, file_path, content_type, notes, created_at, created_by
+		FROM consumer_service_call_attachments WHERE call_code=$1 AND EXISTS
+		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$2)
+		ORDER BY code`, callCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -458,8 +490,11 @@ func (r *RepositoryPGX) listCallAttachments(ctx context.Context, callCode int64)
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) listChecklistItems(ctx context.Context, callCode int64) ([]*entity.CallChecklistItem, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code, call_code, sequence, description, is_done, done_at, notes, created_at FROM consumer_service_call_checklist_items WHERE call_code=$1 ORDER BY sequence`, callCode)
+func (r *RepositoryPGX) listChecklistItems(ctx context.Context, enterpriseID, callCode int64) ([]*entity.CallChecklistItem, error) {
+	rows, err := r.pool.Query(ctx, `SELECT code, call_code, sequence, description, is_done, done_at, notes, created_at
+		FROM consumer_service_call_checklist_items WHERE call_code=$1 AND EXISTS
+		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$2)
+		ORDER BY sequence`, callCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -475,9 +510,9 @@ func (r *RepositoryPGX) listChecklistItems(ctx context.Context, callCode int64) 
 	return out, rows.Err()
 }
 
-func buildCallFilterSQL(filter repository.CallFilter, aggregate bool) (string, []any) {
-	conds := []string{}
-	args := []any{}
+func buildCallFilterSQL(enterpriseID int64, filter repository.CallFilter, aggregate bool) (string, []any) {
+	conds := []string{"enterprise_code=(SELECT code FROM enterprise WHERE id=$1)"}
+	args := []any{enterpriseID}
 	add := func(value any, condition string) {
 		args = append(args, value)
 		conds = append(conds, fmt.Sprintf(condition, len(args)))

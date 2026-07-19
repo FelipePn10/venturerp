@@ -3,7 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -28,6 +30,7 @@ type Config struct {
 	RateLimitBurst     int    `mapstructure:"RATE_LIMIT_BURST"`      // burst capacity per IP
 	AuthRateLimitRPM   int    `mapstructure:"AUTH_RATE_LIMIT_RPM"`   // login/register attempts per minute per IP
 	AuthRateLimitBurst int    `mapstructure:"AUTH_RATE_LIMIT_BURST"` // burst capacity for auth endpoints
+	TrustedProxyCIDRs  string `mapstructure:"TRUSTED_PROXY_CIDRS"`   // comma-separated proxy networks allowed to supply client IP headers
 	MaxBodyBytes       int64  `mapstructure:"MAX_BODY_BYTES"`        // request body cap in bytes (0 disables)
 	MetricsEnabled     bool   `mapstructure:"METRICS_ENABLED"`       // expose /metrics
 	MetricsToken       string `mapstructure:"METRICS_TOKEN"`         // optional bearer token guarding /metrics
@@ -53,6 +56,7 @@ func Load() (*Config, error) {
 		"SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM",
 		"CORS_ALLOWED_ORIGINS", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 		"AUTH_RATE_LIMIT_RPM", "AUTH_RATE_LIMIT_BURST", "MAX_BODY_BYTES",
+		"TRUSTED_PROXY_CIDRS",
 		"METRICS_ENABLED", "METRICS_TOKEN", "SHUTDOWN_TIMEOUT_SEC",
 		"OTEL_SERVICE_NAME", "OTEL_SERVICE_NAMESPACE",
 		"SYSTEM_UPDATE_DIR", "BACKEND_RELEASE_URL",
@@ -80,6 +84,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("RATE_LIMIT_BURST", 100)
 	viper.SetDefault("AUTH_RATE_LIMIT_RPM", 20)
 	viper.SetDefault("AUTH_RATE_LIMIT_BURST", 10)
+	viper.SetDefault("TRUSTED_PROXY_CIDRS", "")
 	viper.SetDefault("MAX_BODY_BYTES", 10485760) // 10 MiB (large enough for NF-e XML import)
 	viper.SetDefault("METRICS_ENABLED", true)
 	viper.SetDefault("METRICS_TOKEN", "")
@@ -98,8 +103,28 @@ func Load() (*Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("erro parse config: %w", err)
 	}
-	if !cfg.IsDevelopment() && cfg.JWTSecret == "" {
-		return nil, errors.New("JWT_SECRET is required in production")
+	if !cfg.IsDevelopment() && len(strings.TrimSpace(cfg.JWTSecret)) < 32 {
+		return nil, errors.New("JWT_SECRET must contain at least 32 characters in production")
+	}
+	if _, err := cfg.TrustedProxyPrefixes(); err != nil {
+		return nil, err
 	}
 	return &cfg, nil
+}
+
+func (c *Config) TrustedProxyPrefixes() ([]netip.Prefix, error) {
+	parts := strings.Split(c.TrustedProxyCIDRs, ",")
+	prefixes := make([]netip.Prefix, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TRUSTED_PROXY_CIDRS entry %q: %w", part, err)
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
 }

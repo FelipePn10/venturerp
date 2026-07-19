@@ -1,6 +1,8 @@
 package fiscal_uc
 
 import (
+	"strings"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 )
@@ -206,7 +208,7 @@ func toFiscalConfigResponse(c *entity.FiscalConfig) *response.FiscalConfigRespon
 		UFEmpresa:                 c.UFEmpresa,
 		IcmsInternoAliquota:       c.IcmsInternoAliquota,
 		IcmsDiferimentoPercentual: c.IcmsDiferimentoPercentual,
-		FocusNfeToken:             c.FocusNfeToken,
+		FocusNfeConfigured:        c.FocusNfeToken != nil && strings.TrimSpace(*c.FocusNfeToken) != "",
 		FocusNfeAmbiente:          c.FocusNfeAmbiente,
 		JurosMes:                  c.JurosMes,
 		MultaAtraso:               c.MultaAtraso,

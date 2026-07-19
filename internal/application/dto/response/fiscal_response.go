@@ -164,7 +164,7 @@ type FiscalConfigResponse struct {
 	UFEmpresa                 string    `json:"uf_empresa"`
 	IcmsInternoAliquota       float64   `json:"icms_interno_aliquota"`
 	IcmsDiferimentoPercentual float64   `json:"icms_diferimento_percentual"`
-	FocusNfeToken             *string   `json:"focus_nfe_token,omitempty"`
+	FocusNfeConfigured        bool      `json:"focus_nfe_configured"`
 	FocusNfeAmbiente          string    `json:"focus_nfe_ambiente"`
 	JurosMes                  float64   `json:"juros_mes"`
 	MultaAtraso               float64   `json:"multa_atraso"`

@@ -5,7 +5,7 @@ WITH created_user AS (
     RETURNING id
 )
 INSERT INTO user_enterprises (user_id, enterprise_id)
-SELECT created_user.id, (SELECT id FROM enterprise WHERE code = @enterprise_code)
+SELECT created_user.id, @enterprise_id
 FROM created_user;
 
 -- name: GetUserByEmail :one
@@ -21,17 +21,30 @@ SELECT
 FROM users
 WHERE email = $1;
 
--- name: GetUserEnterpriseByCode :one
-SELECT e.id
+-- name: GetUserAuthorizationByEnterpriseCode :one
+SELECT e.id AS enterprise_id, e.code::bigint AS enterprise_code, ue.role, u.auth_version
 FROM user_enterprises ue
 JOIN enterprise e ON e.id = ue.enterprise_id
+JOIN users u ON u.id = ue.user_id
 WHERE ue.user_id = $1 AND e.code = $2;
 
--- name: GetOnlyUserEnterprise :one
-SELECT MIN(enterprise_id)::bigint AS enterprise_id
-FROM user_enterprises
-WHERE user_id = $1
+-- name: GetOnlyUserAuthorization :one
+SELECT MIN(ue.enterprise_id)::bigint AS enterprise_id,
+	   MIN(e.code)::bigint AS enterprise_code,
+       MIN(ue.role)::text AS role,
+       MIN(u.auth_version)::bigint AS auth_version
+FROM user_enterprises ue
+JOIN users u ON u.id = ue.user_id
+JOIN enterprise e ON e.id = ue.enterprise_id
+WHERE ue.user_id = $1
 HAVING COUNT(*) = 1;
+
+-- name: GetCurrentUserAuthorization :one
+SELECT ue.enterprise_id, e.code::bigint AS enterprise_code, ue.role, u.auth_version
+FROM user_enterprises ue
+JOIN users u ON u.id = ue.user_id
+JOIN enterprise e ON e.id = ue.enterprise_id
+WHERE ue.user_id = $1 AND ue.enterprise_id = $2;
 
 -- name: GetUserByID :one
 SELECT

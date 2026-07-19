@@ -6,8 +6,8 @@ demonstração já populado com **~1 ano de operação fictícia** de uma metal�
 financeiro). Serve tanto para **demonstrações a clientes** quanto como
 **ambiente de teste manual** do front.
 
-> TL;DR: `make demo-bootstrap` → API em `http://localhost:5072` →
-> login `admin@panossoerp.demo` / `Demo@12345`.
+> TL;DR: defina `DEMO_DB_PASSWORD`, `DEMO_JWT_SECRET` e `DEMO_ADMIN_PASSWORD`,
+> execute `make demo-bootstrap` e acesse a API em `http://localhost:5072`.
 
 ---
 
@@ -85,11 +85,11 @@ make demo-reset && make demo-bootstrap
 ### Banco (acesso direto, se precisar)
 
 ```
-postgres://panossoerp_demo:panossoerp_demo_pass@localhost:5434/panossoerpdatabase_demo?sslmode=disable
+postgres://panossoerp_demo:${DEMO_DB_PASSWORD}@localhost:5434/panossoerpdatabase_demo?sslmode=disable
 ```
 
 ```bash
-docker exec -it -e PGPASSWORD=panossoerp_demo_pass panossoerp-postgres-demo \
+docker exec -it -e PGPASSWORD="$DEMO_DB_PASSWORD" panossoerp-postgres-demo \
   psql -U panossoerp_demo -d panossoerpdatabase_demo
 ```
 
@@ -102,7 +102,7 @@ Usuário admin já criado pelo seed:
 | Campo  | Valor                    |
 |--------|--------------------------|
 | e-mail | `admin@panossoerp.demo`  |
-| senha  | `Demo@12345`             |
+| senha  | valor de `DEMO_ADMIN_PASSWORD` |
 | role   | `ADMIN`                  |
 
 Fluxo:
@@ -111,7 +111,7 @@ Fluxo:
 # 1) Login → retorna { "token": "<JWT>" }
 curl -s -X POST http://localhost:5072/users/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@panossoerp.demo","password":"Demo@12345","enterprise_code":1}'
+  -d "{\"email\":\"admin@panossoerp.demo\",\"password\":\"${DEMO_ADMIN_PASSWORD}\",\"enterprise_code\":1}"
 
 # 2) Use o token em TODAS as rotas /api/*:
 curl http://localhost:5072/api/items/ -H "Authorization: Bearer <JWT>"

@@ -21,9 +21,10 @@ func New(pool *pgxpool.Pool) *RepositoryPGX {
 	return &RepositoryPGX{pool: pool}
 }
 
-func (r *RepositoryPGX) NextCallNumber(ctx context.Context, enterpriseCode int64) (int64, error) {
+func (r *RepositoryPGX) NextCallNumber(ctx context.Context, enterpriseID int64) (int64, error) {
 	var n int64
-	err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(call_number), 0) + 1 FROM technical_assistance_calls WHERE enterprise_code=$1`, enterpriseCode).Scan(&n)
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(call_number), 0) + 1 FROM technical_assistance_calls
+		WHERE enterprise_code=(SELECT code FROM enterprise WHERE id=$1)`, enterpriseID).Scan(&n)
 	return n, err
 }
 
@@ -144,7 +145,10 @@ func (r *RepositoryPGX) ListWarrantyResponsibles(ctx context.Context, onlyActive
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) CreateCall(ctx context.Context, c *entity.Call) (*entity.Call, error) {
+func (r *RepositoryPGX) CreateCall(ctx context.Context, enterpriseID int64, c *entity.Call) (*entity.Call, error) {
+	if err := r.pool.QueryRow(ctx, `SELECT code FROM enterprise WHERE id=$1`, enterpriseID).Scan(&c.EnterpriseCode); err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_calls
 		(call_number, enterprise_code, customer_code, consumer_name, consumer_document, technical_assistant_code,
 		 warranty_responsible_code, status, priority, opened_at, promised_date, subject, description,
@@ -161,12 +165,12 @@ func (r *RepositoryPGX) CreateCall(ctx context.Context, c *entity.Call) (*entity
 	return scanCall(row)
 }
 
-func (r *RepositoryPGX) UpdateCall(ctx context.Context, c *entity.Call) (*entity.Call, error) {
+func (r *RepositoryPGX) UpdateCall(ctx context.Context, enterpriseID int64, c *entity.Call) (*entity.Call, error) {
 	row := r.pool.QueryRow(ctx, `UPDATE technical_assistance_calls SET
 		status=$2, priority=$3, promised_date=$4, attended_at=$5, closed_at=$6, subject=$7, description=$8,
 		diagnosis=$9, solution=$10, return_note_required=$11, sales_order_code=$12, production_order_id=$13,
 		service_invoice_number=$14, close_reason=$15, updated_at=NOW()
-		WHERE code=$1
+		WHERE code=$1 AND enterprise_code=(SELECT code FROM enterprise WHERE id=$16)
 		RETURNING code, call_number, enterprise_code, customer_code, consumer_name, consumer_document,
 		          technical_assistant_code, warranty_responsible_code, status, priority, opened_at, promised_date,
 		          attended_at, closed_at, subject, description, diagnosis, solution, return_note_required,
@@ -174,24 +178,24 @@ func (r *RepositoryPGX) UpdateCall(ctx context.Context, c *entity.Call) (*entity
 		          is_active, created_at, updated_at, created_by`,
 		c.Code, string(c.Status), c.Priority, datePtr(c.PromisedDate), timePtr(c.AttendedAt), timePtr(c.ClosedAt),
 		c.Subject, c.Description, c.Diagnosis, c.Solution, c.ReturnNoteRequired, c.SalesOrderCode,
-		c.ProductionOrderID, c.ServiceInvoiceNumber, c.CloseReason)
+		c.ProductionOrderID, c.ServiceInvoiceNumber, c.CloseReason, enterpriseID)
 	return scanCall(row)
 }
 
-func (r *RepositoryPGX) GetCall(ctx context.Context, code int64) (*entity.Call, error) {
-	row := r.pool.QueryRow(ctx, callSelect()+` WHERE code=$1`, code)
+func (r *RepositoryPGX) GetCall(ctx context.Context, enterpriseID, code int64) (*entity.Call, error) {
+	row := r.pool.QueryRow(ctx, callSelect()+` WHERE code=$1 AND enterprise_code=(SELECT code FROM enterprise WHERE id=$2)`, code, enterpriseID)
 	call, err := scanCall(row)
 	if err != nil {
 		return nil, err
 	}
-	call.Items, _ = r.ListCallItems(ctx, code)
-	call.ReturnNotes, _ = r.ListReturnNotes(ctx, code)
+	call.Items, _ = r.ListCallItems(ctx, enterpriseID, code)
+	call.ReturnNotes, _ = r.ListReturnNotes(ctx, enterpriseID, code)
 	return call, nil
 }
 
-func (r *RepositoryPGX) ListCalls(ctx context.Context, filter repository.CallFilter) ([]*entity.Call, error) {
-	conds := []string{}
-	args := []any{}
+func (r *RepositoryPGX) ListCalls(ctx context.Context, enterpriseID int64, filter repository.CallFilter) ([]*entity.Call, error) {
+	conds := []string{"enterprise_code=(SELECT code FROM enterprise WHERE id=$1)"}
+	args := []any{enterpriseID}
 	if filter.Status != nil {
 		args = append(args, string(*filter.Status))
 		conds = append(conds, fmt.Sprintf("status=$%d", len(args)))
@@ -232,23 +236,26 @@ func (r *RepositoryPGX) ListCalls(ctx context.Context, filter repository.CallFil
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) AddCallItem(ctx context.Context, it *entity.CallItem) (*entity.CallItem, error) {
+func (r *RepositoryPGX) AddCallItem(ctx context.Context, enterpriseID int64, it *entity.CallItem) (*entity.CallItem, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_call_items
 		(call_code, sequence, item_code, mask, serial_number, quantity, defect_reason_code, defect_complement,
 		 purchase_invoice_number, purchase_invoice_date, warranty_days, warranty_until, in_warranty,
 		 generates_revenue, requested_action, status, notes)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
+		WHERE EXISTS (SELECT 1 FROM technical_assistance_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$18)
 		RETURNING code, call_code, sequence, item_code, mask, serial_number, quantity, defect_reason_code,
 		          defect_complement, purchase_invoice_number, purchase_invoice_date, warranty_days, warranty_until,
 		          in_warranty, generates_revenue, requested_action, status, notes, created_at, updated_at`,
 		it.CallCode, it.Sequence, it.ItemCode, it.Mask, it.SerialNumber, it.Quantity, it.DefectReasonCode,
 		it.DefectComplement, it.PurchaseInvoiceNumber, datePtr(it.PurchaseInvoiceDate), it.WarrantyDays,
-		datePtr(it.WarrantyUntil), it.InWarranty, it.GeneratesRevenue, it.RequestedAction, it.Status, it.Notes)
+		datePtr(it.WarrantyUntil), it.InWarranty, it.GeneratesRevenue, it.RequestedAction, it.Status, it.Notes, enterpriseID)
 	return scanCallItem(row)
 }
 
-func (r *RepositoryPGX) ListCallItems(ctx context.Context, callCode int64) ([]*entity.CallItem, error) {
-	rows, err := r.pool.Query(ctx, itemSelect()+` WHERE call_code=$1 ORDER BY sequence`, callCode)
+func (r *RepositoryPGX) ListCallItems(ctx context.Context, enterpriseID, callCode int64) ([]*entity.CallItem, error) {
+	rows, err := r.pool.Query(ctx, itemSelect()+` WHERE call_code=$1 AND EXISTS
+		(SELECT 1 FROM technical_assistance_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$2)
+		ORDER BY sequence`, callCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -264,19 +271,22 @@ func (r *RepositoryPGX) ListCallItems(ctx context.Context, callCode int64) ([]*e
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) AddReturnNote(ctx context.Context, n *entity.ReturnNote) (*entity.ReturnNote, error) {
+func (r *RepositoryPGX) AddReturnNote(ctx context.Context, enterpriseID int64, n *entity.ReturnNote) (*entity.ReturnNote, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_return_notes
 		(call_code, note_number, note_series, emission_date, customer_code, operation_type, access_key, total_value, notes, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+		WHERE EXISTS (SELECT 1 FROM technical_assistance_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$11)
 		RETURNING code, call_code, note_number, note_series, emission_date, customer_code, operation_type,
 		          access_key, total_value, notes, created_at, created_by`,
 		n.CallCode, n.NoteNumber, n.NoteSeries, n.EmissionDate, n.CustomerCode, n.OperationType, n.AccessKey,
-		n.TotalValue, n.Notes, pgutil.ToPgUUID(n.CreatedBy))
+		n.TotalValue, n.Notes, pgutil.ToPgUUID(n.CreatedBy), enterpriseID)
 	return scanReturnNote(row)
 }
 
-func (r *RepositoryPGX) ListReturnNotes(ctx context.Context, callCode int64) ([]*entity.ReturnNote, error) {
-	rows, err := r.pool.Query(ctx, returnNoteSelect()+` WHERE call_code=$1 ORDER BY emission_date DESC, code DESC`, callCode)
+func (r *RepositoryPGX) ListReturnNotes(ctx context.Context, enterpriseID, callCode int64) ([]*entity.ReturnNote, error) {
+	rows, err := r.pool.Query(ctx, returnNoteSelect()+` WHERE call_code=$1 AND EXISTS
+		(SELECT 1 FROM technical_assistance_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$2)
+		ORDER BY emission_date DESC, code DESC`, callCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -292,19 +302,22 @@ func (r *RepositoryPGX) ListReturnNotes(ctx context.Context, callCode int64) ([]
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) AddOrderLink(ctx context.Context, l *entity.OrderLink) (*entity.OrderLink, error) {
+func (r *RepositoryPGX) AddOrderLink(ctx context.Context, enterpriseID int64, l *entity.OrderLink) (*entity.OrderLink, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_order_links
 		(call_code, call_item_code, generated_type, sales_order_code, production_order_id, created_by, notes)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		SELECT $1,$2,$3,$4,$5,$6,$7
+		WHERE EXISTS (SELECT 1 FROM technical_assistance_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$8)
 		RETURNING code, call_code, call_item_code, generated_type, sales_order_code, production_order_id,
 		          generated_at, created_by, notes`,
-		l.CallCode, l.CallItemCode, l.GeneratedType, l.SalesOrderCode, l.ProductionOrderID, pgutil.ToPgUUID(l.CreatedBy), l.Notes)
+		l.CallCode, l.CallItemCode, l.GeneratedType, l.SalesOrderCode, l.ProductionOrderID, pgutil.ToPgUUID(l.CreatedBy), l.Notes, enterpriseID)
 	return scanOrderLink(row)
 }
 
-func (r *RepositoryPGX) ListOrderLinks(ctx context.Context, callCode int64) ([]*entity.OrderLink, error) {
+func (r *RepositoryPGX) ListOrderLinks(ctx context.Context, enterpriseID, callCode int64) ([]*entity.OrderLink, error) {
 	rows, err := r.pool.Query(ctx, `SELECT code, call_code, call_item_code, generated_type, sales_order_code, production_order_id,
-		generated_at, created_by, notes FROM technical_assistance_order_links WHERE call_code=$1 ORDER BY generated_at DESC`, callCode)
+		generated_at, created_by, notes FROM technical_assistance_order_links WHERE call_code=$1 AND EXISTS
+		(SELECT 1 FROM technical_assistance_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$2)
+		ORDER BY generated_at DESC`, callCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -320,9 +333,9 @@ func (r *RepositoryPGX) ListOrderLinks(ctx context.Context, callCode int64) ([]*
 	return out, rows.Err()
 }
 
-func (r *RepositoryPGX) Report(ctx context.Context, f repository.ReportFilter) (*repository.Report, error) {
-	conds := []string{"c.is_active"}
-	args := []any{}
+func (r *RepositoryPGX) Report(ctx context.Context, enterpriseID int64, f repository.ReportFilter) (*repository.Report, error) {
+	conds := []string{"c.is_active", "c.enterprise_code=(SELECT code FROM enterprise WHERE id=$1)"}
+	args := []any{enterpriseID}
 	if f.From != nil {
 		args = append(args, *f.From)
 		conds = append(conds, fmt.Sprintf("c.opened_at >= $%d", len(args)))

@@ -26,6 +26,17 @@ func (uc *UseCase) ensureAllowed(ctx context.Context) error {
 	return nil
 }
 
+func (uc *UseCase) tenantID(ctx context.Context) (int64, error) {
+	if err := uc.ensureAllowed(ctx); err != nil {
+		return 0, err
+	}
+	tenantID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil || tenantID <= 0 {
+		return 0, errorsuc.ErrUnauthorized
+	}
+	return tenantID, nil
+}
+
 func (uc *UseCase) CreateCallType(ctx context.Context, dto request.CreateConsumerServiceCallTypeDTO) (*response.ConsumerServiceCallTypeResponse, error) {
 	if err := uc.ensureAllowed(ctx); err != nil {
 		return nil, err
@@ -85,7 +96,8 @@ func (uc *UseCase) ListKnowledgeSources(ctx context.Context, onlyActive bool) ([
 }
 
 func (uc *UseCase) CreateConsumer(ctx context.Context, dto request.CreateConsumerDTO) (*response.ConsumerResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(dto.Name) == "" {
@@ -111,7 +123,7 @@ func (uc *UseCase) CreateConsumer(ctx context.Context, dto request.CreateConsume
 		Address: dto.Address, AddressNumber: dto.AddressNumber, Complement: dto.Complement, District: dto.District,
 		MarketSegmentCode: dto.MarketSegmentCode, KnowledgeCode: dto.KnowledgeCode, Notes: dto.Notes, CreatedBy: dto.CreatedBy,
 	}
-	created, err := uc.Repo.CreateConsumer(ctx, consumer)
+	created, err := uc.Repo.CreateConsumer(ctx, tenantID, consumer)
 	if err != nil {
 		return nil, err
 	}
@@ -137,10 +149,11 @@ func (uc *UseCase) CreateConsumer(ctx context.Context, dto request.CreateConsume
 }
 
 func (uc *UseCase) UpdateConsumer(ctx context.Context, code int64, dto request.UpdateConsumerDTO) (*response.ConsumerResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	current, err := uc.Repo.GetConsumer(ctx, code)
+	current, err := uc.Repo.GetConsumer(ctx, tenantID, code)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +176,7 @@ func (uc *UseCase) UpdateConsumer(ctx context.Context, code int64, dto request.U
 	if err := validateConsumerDocument(current.PersonType, current.CPF, current.CNPJ); err != nil {
 		return nil, err
 	}
-	updated, err := uc.Repo.UpdateConsumer(ctx, current)
+	updated, err := uc.Repo.UpdateConsumer(ctx, tenantID, current)
 	if err != nil {
 		return nil, err
 	}
@@ -171,10 +184,11 @@ func (uc *UseCase) UpdateConsumer(ctx context.Context, code int64, dto request.U
 }
 
 func (uc *UseCase) GetConsumer(ctx context.Context, code int64) (*response.ConsumerResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	row, err := uc.Repo.GetConsumer(ctx, code)
+	row, err := uc.Repo.GetConsumer(ctx, tenantID, code)
 	if err != nil {
 		return nil, err
 	}
@@ -182,10 +196,11 @@ func (uc *UseCase) GetConsumer(ctx context.Context, code int64) (*response.Consu
 }
 
 func (uc *UseCase) ListConsumers(ctx context.Context, filter csrepo.ConsumerFilter) ([]*response.ConsumerResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := uc.Repo.ListConsumers(ctx, filter)
+	rows, err := uc.Repo.ListConsumers(ctx, tenantID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +212,8 @@ func (uc *UseCase) ListConsumers(ctx context.Context, filter csrepo.ConsumerFilt
 }
 
 func (uc *UseCase) AddConsumerPhone(ctx context.Context, dto request.CreateConsumerPhoneDTO) (*response.ConsumerPhoneResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if dto.ConsumerCode == 0 || strings.TrimSpace(dto.Number) == "" {
@@ -207,7 +223,7 @@ func (uc *UseCase) AddConsumerPhone(ctx context.Context, dto request.CreateConsu
 	if phoneType == "" {
 		phoneType = "PHONE"
 	}
-	created, err := uc.Repo.AddConsumerPhone(ctx, &entity.ConsumerPhone{ConsumerCode: dto.ConsumerCode, ContactCode: dto.ContactCode, PhoneType: phoneType, Number: strings.TrimSpace(dto.Number), IsPrimary: dto.IsPrimary})
+	created, err := uc.Repo.AddConsumerPhone(ctx, tenantID, &entity.ConsumerPhone{ConsumerCode: dto.ConsumerCode, ContactCode: dto.ContactCode, PhoneType: phoneType, Number: strings.TrimSpace(dto.Number), IsPrimary: dto.IsPrimary})
 	if err != nil {
 		return nil, err
 	}
@@ -215,13 +231,14 @@ func (uc *UseCase) AddConsumerPhone(ctx context.Context, dto request.CreateConsu
 }
 
 func (uc *UseCase) AddConsumerEmail(ctx context.Context, dto request.CreateConsumerEmailDTO) (*response.ConsumerEmailResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if dto.ConsumerCode == 0 || !strings.Contains(dto.Email, "@") {
 		return nil, errorsuc.NewValidationError("consumer_code and valid email are required")
 	}
-	created, err := uc.Repo.AddConsumerEmail(ctx, &entity.ConsumerEmail{ConsumerCode: dto.ConsumerCode, ContactCode: dto.ContactCode, Email: strings.TrimSpace(dto.Email), IsPrimary: dto.IsPrimary})
+	created, err := uc.Repo.AddConsumerEmail(ctx, tenantID, &entity.ConsumerEmail{ConsumerCode: dto.ConsumerCode, ContactCode: dto.ContactCode, Email: strings.TrimSpace(dto.Email), IsPrimary: dto.IsPrimary})
 	if err != nil {
 		return nil, err
 	}
@@ -229,13 +246,14 @@ func (uc *UseCase) AddConsumerEmail(ctx context.Context, dto request.CreateConsu
 }
 
 func (uc *UseCase) AddConsumerContact(ctx context.Context, dto request.CreateConsumerContactDTO) (*response.ConsumerContactResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if dto.ConsumerCode == 0 || strings.TrimSpace(dto.Name) == "" {
 		return nil, errorsuc.NewValidationError("consumer_code and name are required")
 	}
-	created, err := uc.Repo.AddConsumerContact(ctx, &entity.ConsumerContact{ConsumerCode: dto.ConsumerCode, Name: strings.TrimSpace(dto.Name), Role: dto.Role, ContactType: dto.ContactType, Notes: dto.Notes})
+	created, err := uc.Repo.AddConsumerContact(ctx, tenantID, &entity.ConsumerContact{ConsumerCode: dto.ConsumerCode, Name: strings.TrimSpace(dto.Name), Role: dto.Role, ContactType: dto.ContactType, Notes: dto.Notes})
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +261,8 @@ func (uc *UseCase) AddConsumerContact(ctx context.Context, dto request.CreateCon
 }
 
 func (uc *UseCase) CreateCustomerContact(ctx context.Context, dto request.CreateCustomerContactHistoryDTO) (*response.CustomerContactHistoryResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if dto.CustomerCode == 0 || strings.TrimSpace(dto.ContactType) == "" || strings.TrimSpace(dto.Description) == "" {
@@ -251,7 +270,7 @@ func (uc *UseCase) CreateCustomerContact(ctx context.Context, dto request.Create
 	}
 	openedAt := parseDateTimeOrNow(dto.OpenedAt)
 	scheduledAt := parseDateTimeOrNow(dto.ScheduledAt)
-	created, err := uc.Repo.CreateCustomerContact(ctx, &entity.CustomerContactHistory{
+	created, err := uc.Repo.CreateCustomerContact(ctx, tenantID, &entity.CustomerContactHistory{
 		CustomerCode: dto.CustomerCode, OpenedAt: openedAt, ScheduledAt: scheduledAt, UserCode: dto.UserCode,
 		ContactType: strings.ToUpper(strings.TrimSpace(dto.ContactType)), Description: strings.TrimSpace(dto.Description), CreatedBy: dto.CreatedBy,
 	})
@@ -262,10 +281,11 @@ func (uc *UseCase) CreateCustomerContact(ctx context.Context, dto request.Create
 }
 
 func (uc *UseCase) ListCustomerContacts(ctx context.Context, filter csrepo.CustomerContactFilter) ([]*response.CustomerContactHistoryResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := uc.Repo.ListCustomerContacts(ctx, filter)
+	rows, err := uc.Repo.ListCustomerContacts(ctx, tenantID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -277,11 +297,12 @@ func (uc *UseCase) ListCustomerContacts(ctx context.Context, filter csrepo.Custo
 }
 
 func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerServiceCallDTO) (*response.ConsumerServiceCallResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	if dto.EnterpriseCode == 0 || dto.ConsumerCode == 0 || dto.CallTypeCode == 0 || strings.TrimSpace(dto.Subject) == "" {
-		return nil, errorsuc.NewValidationError("enterprise_code, consumer_code, call_type_code and subject are required")
+	if dto.ConsumerCode == 0 || dto.CallTypeCode == 0 || strings.TrimSpace(dto.Subject) == "" {
+		return nil, errorsuc.NewValidationError("consumer_code, call_type_code and subject are required")
 	}
 	callType, err := uc.Repo.GetCallType(ctx, dto.CallTypeCode)
 	if err != nil {
@@ -295,12 +316,12 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 	if callType.IsComplaint && (dto.Symptoms == nil || strings.TrimSpace(*dto.Symptoms) == "") {
 		return nil, errorsuc.NewValidationError("symptoms is required for complaint call types")
 	}
-	callNumber, err := uc.Repo.NextCallNumber(ctx, dto.EnterpriseCode)
+	callNumber, err := uc.Repo.NextCallNumber(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	call := &entity.Call{
-		CallNumber: callNumber, EnterpriseCode: dto.EnterpriseCode, ConsumerCode: dto.ConsumerCode, CustomerCode: dto.CustomerCode,
+		CallNumber: callNumber, ConsumerCode: dto.ConsumerCode, CustomerCode: dto.CustomerCode,
 		CallTypeCode: dto.CallTypeCode, Direction: normalizeDirection(dto.Direction), InWarranty: dto.InWarranty,
 		DefectGroupCode: dto.DefectGroupCode, DefectReasonCode: dto.DefectReasonCode, ResponsibleUserCode: dto.ResponsibleUserCode,
 		Position: position, Situation: situation, OpenedAt: parseDateTimeOrNow(dto.OpenedAt), ReturnDate: parseDatePtr(dto.ReturnDate),
@@ -309,7 +330,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 		Symptoms: dto.Symptoms, ForwardedStoreCode: dto.ForwardedStoreCode, Subject: strings.TrimSpace(dto.Subject),
 		Description: dto.Description, ChecklistCode: dto.ChecklistCode, IsActive: true, CreatedBy: dto.CreatedBy,
 	}
-	created, err := uc.Repo.CreateCall(ctx, call)
+	created, err := uc.Repo.CreateCall(ctx, tenantID, call)
 	if err != nil {
 		return nil, err
 	}
@@ -317,10 +338,11 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 }
 
 func (uc *UseCase) UpdateCall(ctx context.Context, code int64, dto request.UpdateConsumerServiceCallDTO) (*response.ConsumerServiceCallResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	current, err := uc.Repo.GetCall(ctx, code)
+	current, err := uc.Repo.GetCall(ctx, tenantID, code)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +373,7 @@ func (uc *UseCase) UpdateCall(ctx context.Context, code int64, dto request.Updat
 	if callType.IsComplaint && (current.Symptoms == nil || strings.TrimSpace(*current.Symptoms) == "") {
 		return nil, errorsuc.NewValidationError("symptoms is required for complaint call types")
 	}
-	updated, err := uc.Repo.UpdateCall(ctx, current)
+	updated, err := uc.Repo.UpdateCall(ctx, tenantID, current)
 	if err != nil {
 		return nil, err
 	}
@@ -359,10 +381,11 @@ func (uc *UseCase) UpdateCall(ctx context.Context, code int64, dto request.Updat
 }
 
 func (uc *UseCase) GetCall(ctx context.Context, code int64) (*response.ConsumerServiceCallResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	row, err := uc.Repo.GetCall(ctx, code)
+	row, err := uc.Repo.GetCall(ctx, tenantID, code)
 	if err != nil {
 		return nil, err
 	}
@@ -370,10 +393,11 @@ func (uc *UseCase) GetCall(ctx context.Context, code int64) (*response.ConsumerS
 }
 
 func (uc *UseCase) ListCalls(ctx context.Context, filter csrepo.CallFilter) ([]*response.ConsumerServiceCallResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := uc.Repo.ListCalls(ctx, filter)
+	rows, err := uc.Repo.ListCalls(ctx, tenantID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -385,13 +409,14 @@ func (uc *UseCase) ListCalls(ctx context.Context, filter csrepo.CallFilter) ([]*
 }
 
 func (uc *UseCase) AddCallReturn(ctx context.Context, dto request.AddConsumerServiceCallReturnDTO) (*response.ConsumerServiceCallReturnResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if dto.CallCode == 0 || strings.TrimSpace(dto.ContactType) == "" || strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("call_code, contact_type and description are required")
 	}
-	created, err := uc.Repo.AddCallReturn(ctx, &entity.CallReturn{
+	created, err := uc.Repo.AddCallReturn(ctx, tenantID, &entity.CallReturn{
 		CallCode: dto.CallCode, ContactedAt: parseDateTimeOrNow(dto.ContactedAt),
 		ContactType: strings.ToUpper(strings.TrimSpace(dto.ContactType)), Description: strings.TrimSpace(dto.Description),
 		NextReturnAt: parseDatePtr(dto.NextReturnAt), UserCode: dto.UserCode, CreatedBy: dto.CreatedBy,
@@ -403,13 +428,14 @@ func (uc *UseCase) AddCallReturn(ctx context.Context, dto request.AddConsumerSer
 }
 
 func (uc *UseCase) AddCallAttachment(ctx context.Context, dto request.AddConsumerServiceCallAttachmentDTO) (*response.ConsumerServiceCallAttachmentResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if dto.CallCode == 0 || strings.TrimSpace(dto.FileName) == "" || strings.TrimSpace(dto.FilePath) == "" {
 		return nil, errorsuc.NewValidationError("call_code, file_name and file_path are required")
 	}
-	created, err := uc.Repo.AddCallAttachment(ctx, &entity.CallAttachment{
+	created, err := uc.Repo.AddCallAttachment(ctx, tenantID, &entity.CallAttachment{
 		CallCode: dto.CallCode, FileName: strings.TrimSpace(dto.FileName), FilePath: strings.TrimSpace(dto.FilePath),
 		ContentType: dto.ContentType, Notes: dto.Notes, CreatedBy: dto.CreatedBy,
 	})
@@ -420,13 +446,14 @@ func (uc *UseCase) AddCallAttachment(ctx context.Context, dto request.AddConsume
 }
 
 func (uc *UseCase) AddChecklistItem(ctx context.Context, dto request.AddConsumerServiceChecklistItemDTO) (*response.ConsumerServiceChecklistItemResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if dto.CallCode == 0 || strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("call_code and description are required")
 	}
-	created, err := uc.Repo.AddChecklistItem(ctx, &entity.CallChecklistItem{CallCode: dto.CallCode, Sequence: dto.Sequence, Description: strings.TrimSpace(dto.Description), Notes: dto.Notes})
+	created, err := uc.Repo.AddChecklistItem(ctx, tenantID, &entity.CallChecklistItem{CallCode: dto.CallCode, Sequence: dto.Sequence, Description: strings.TrimSpace(dto.Description), Notes: dto.Notes})
 	if err != nil {
 		return nil, err
 	}
@@ -434,10 +461,11 @@ func (uc *UseCase) AddChecklistItem(ctx context.Context, dto request.AddConsumer
 }
 
 func (uc *UseCase) SetChecklistItemDone(ctx context.Context, code int64, dto request.SetConsumerServiceChecklistItemDoneDTO) (*response.ConsumerServiceChecklistItemResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	updated, err := uc.Repo.SetChecklistItemDone(ctx, code, dto.Done, dto.Notes)
+	updated, err := uc.Repo.SetChecklistItemDone(ctx, tenantID, code, dto.Done, dto.Notes)
 	if err != nil {
 		return nil, err
 	}
@@ -445,10 +473,11 @@ func (uc *UseCase) SetChecklistItemDone(ctx context.Context, code int64, dto req
 }
 
 func (uc *UseCase) ReportCalls(ctx context.Context, filter csrepo.CallFilter) (*response.ConsumerServiceCallReportResponse, error) {
-	if err := uc.ensureAllowed(ctx); err != nil {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return uc.Repo.ReportCalls(ctx, filter)
+	return uc.Repo.ReportCalls(ctx, tenantID, filter)
 }
 
 func normalizePersonType(value string) (string, error) {

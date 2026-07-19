@@ -16,12 +16,12 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, role, enterpriseID, authVersion, err := h.loginUC.Execute(
+	userID, role, name, email, enterpriseID, authVersion, err := h.loginUC.Execute(
 		r.Context(),
 		login,
 	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
@@ -31,7 +31,10 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
+	json.NewEncoder(w).Encode(map[string]any{
 		"token": token,
+		"name":  name,
+		"email": email,
+		"role":  role,
 	})
 }

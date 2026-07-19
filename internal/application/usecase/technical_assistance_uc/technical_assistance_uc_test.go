@@ -15,12 +15,14 @@ import (
 type taAllowAuth struct{ ports.AuthService }
 
 func (taAllowAuth) CanManageTechnicalAssistance(context.Context) bool { return true }
+func (taAllowAuth) EnterpriseID(context.Context) (int64, error)       { return 1, nil }
 
 type fakeTARepo struct {
-	reasons map[int64]*entity.DefectReason
-	call    *entity.Call
-	items   []*entity.CallItem
-	notes   []*entity.ReturnNote
+	reasons  map[int64]*entity.DefectReason
+	call     *entity.Call
+	items    []*entity.CallItem
+	notes    []*entity.ReturnNote
+	tenantID int64
 }
 
 func (f *fakeTARepo) NextCallNumber(context.Context, int64) (int64, error) { return 1, nil }
@@ -45,45 +47,61 @@ func (f *fakeTARepo) CreateWarrantyResponsible(context.Context, *entity.Warranty
 func (f *fakeTARepo) ListWarrantyResponsibles(context.Context, bool) ([]*entity.WarrantyResponsible, error) {
 	return nil, nil
 }
-func (f *fakeTARepo) CreateCall(_ context.Context, call *entity.Call) (*entity.Call, error) {
+func (f *fakeTARepo) CreateCall(_ context.Context, tenantID int64, call *entity.Call) (*entity.Call, error) {
+	f.tenantID = tenantID
 	call.Code = 1
+	call.EnterpriseCode = tenantID
 	f.call = call
 	return call, nil
 }
-func (f *fakeTARepo) UpdateCall(_ context.Context, call *entity.Call) (*entity.Call, error) {
+
+func TestCreateCallIgnoresForeignEnterpriseCode(t *testing.T) {
+	repo := &fakeTARepo{}
+	uc := &UseCase{Repo: repo, Auth: taAllowAuth{}}
+	_, err := uc.CreateCall(context.Background(), request.CreateTechnicalAssistanceCallDTO{
+		EnterpriseCode: 999, CustomerCode: 10, Subject: "tenant test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.tenantID != 1 {
+		t.Fatalf("repository tenant = %d, want authenticated tenant 1", repo.tenantID)
+	}
+}
+func (f *fakeTARepo) UpdateCall(_ context.Context, _ int64, call *entity.Call) (*entity.Call, error) {
 	f.call = call
 	return call, nil
 }
-func (f *fakeTARepo) GetCall(context.Context, int64) (*entity.Call, error) {
+func (f *fakeTARepo) GetCall(context.Context, int64, int64) (*entity.Call, error) {
 	f.call.Items = f.items
 	f.call.ReturnNotes = f.notes
 	return f.call, nil
 }
-func (f *fakeTARepo) ListCalls(context.Context, tarepo.CallFilter) ([]*entity.Call, error) {
+func (f *fakeTARepo) ListCalls(context.Context, int64, tarepo.CallFilter) ([]*entity.Call, error) {
 	return nil, nil
 }
-func (f *fakeTARepo) AddCallItem(_ context.Context, item *entity.CallItem) (*entity.CallItem, error) {
+func (f *fakeTARepo) AddCallItem(_ context.Context, _ int64, item *entity.CallItem) (*entity.CallItem, error) {
 	item.Code = int64(len(f.items) + 1)
 	f.items = append(f.items, item)
 	return item, nil
 }
-func (f *fakeTARepo) ListCallItems(context.Context, int64) ([]*entity.CallItem, error) {
+func (f *fakeTARepo) ListCallItems(context.Context, int64, int64) ([]*entity.CallItem, error) {
 	return f.items, nil
 }
-func (f *fakeTARepo) AddReturnNote(_ context.Context, note *entity.ReturnNote) (*entity.ReturnNote, error) {
+func (f *fakeTARepo) AddReturnNote(_ context.Context, _ int64, note *entity.ReturnNote) (*entity.ReturnNote, error) {
 	f.notes = append(f.notes, note)
 	return note, nil
 }
-func (f *fakeTARepo) ListReturnNotes(context.Context, int64) ([]*entity.ReturnNote, error) {
+func (f *fakeTARepo) ListReturnNotes(context.Context, int64, int64) ([]*entity.ReturnNote, error) {
 	return f.notes, nil
 }
-func (f *fakeTARepo) AddOrderLink(context.Context, *entity.OrderLink) (*entity.OrderLink, error) {
+func (f *fakeTARepo) AddOrderLink(context.Context, int64, *entity.OrderLink) (*entity.OrderLink, error) {
 	return nil, nil
 }
-func (f *fakeTARepo) ListOrderLinks(context.Context, int64) ([]*entity.OrderLink, error) {
+func (f *fakeTARepo) ListOrderLinks(context.Context, int64, int64) ([]*entity.OrderLink, error) {
 	return nil, nil
 }
-func (f *fakeTARepo) Report(context.Context, tarepo.ReportFilter) (*tarepo.Report, error) {
+func (f *fakeTARepo) Report(context.Context, int64, tarepo.ReportFilter) (*tarepo.Report, error) {
 	return nil, nil
 }
 

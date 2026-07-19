@@ -8662,6 +8662,7 @@ type UserEnterprise struct {
 	UserID       pgtype.UUID
 	EnterpriseID int64
 	CreatedAt    pgtype.Timestamptz
+	Role         string
 }
 
 type UsuariosPerfi struct {

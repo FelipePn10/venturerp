@@ -6,17 +6,19 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
+	userrepo "github.com/FelipePn10/panossoerp/internal/domain/user/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
-type AuthVersionValidator interface {
-	AuthVersion(context.Context, string) (int64, error)
+type AuthorizationValidator interface {
+	CurrentAuthorization(context.Context, string, int64) (userrepo.Authorization, error)
 }
 
-func JWT(secret string, log *applogger.Logger, validators ...AuthVersionValidator) func(http.Handler) http.Handler {
+func JWT(secret string, log *applogger.Logger, validators ...AuthorizationValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions {
@@ -41,14 +43,23 @@ func JWT(secret string, log *applogger.Logger, validators ...AuthVersionValidato
 				parts[1],
 				claims,
 				func(t *jwt.Token) (interface{}, error) {
-					if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-						return nil, jwt.ErrSignatureInvalid
-					}
 					return []byte(secret), nil
 				},
+				jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+				jwt.WithIssuer("panosso-erp"),
+				jwt.WithExpirationRequired(),
+				jwt.WithIssuedAt(),
 			)
 
-			if err != nil || !token.Valid {
+			// Subject is the canonical user identifier. Older tokens encoded the
+			// same value through the embedded registered claim only.
+			if claims.UserID == "" {
+				claims.UserID = claims.Subject
+			}
+			role := strings.ToUpper(strings.TrimSpace(claims.Role))
+			_, userIDErr := uuid.Parse(claims.UserID)
+			if err != nil || !token.Valid || userIDErr != nil || claims.Subject != claims.UserID ||
+				claims.EnterpriseID <= 0 || (role != "ADMIN" && role != "USER") {
 				// Use the per-request logger so the warning carries request_id.
 				applogger.FromContext(r.Context()).Warn(
 					"invalid token attempt",
@@ -59,19 +70,25 @@ func JWT(secret string, log *applogger.Logger, validators ...AuthVersionValidato
 				return
 			}
 
+			enterpriseCode := int64(0)
 			if len(validators) > 0 {
-				version, versionErr := validators[0].AuthVersion(r.Context(), claims.UserID)
-				if versionErr != nil || version != claims.AuthVersion {
+				current, validationErr := validators[0].CurrentAuthorization(r.Context(), claims.UserID, claims.EnterpriseID)
+				currentRole := strings.ToUpper(strings.TrimSpace(current.Role))
+				if validationErr != nil || current.EnterpriseID != claims.EnterpriseID ||
+					current.AuthVersion != claims.AuthVersion || currentRole != role {
 					applogger.FromContext(r.Context()).Warn("revoked token attempt", "user_id", claims.UserID, "ip", realIP(r))
 					http.Error(w, `{"error": "Invalid token"}`, http.StatusUnauthorized)
 					return
 				}
+				role = currentRole
+				enterpriseCode = current.EnterpriseCode
 			}
 
 			user := &security.AuthUser{
-				ID:           claims.UserID,
-				Role:         claims.Role,
-				EnterpriseID: claims.EnterpriseID,
+				ID:             claims.UserID,
+				Role:           role,
+				EnterpriseID:   claims.EnterpriseID,
+				EnterpriseCode: enterpriseCode,
 			}
 
 			// Store user in context and propagate user_id to the logger.

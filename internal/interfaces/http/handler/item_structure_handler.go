@@ -151,5 +151,8 @@ func jsonResponse(w http.ResponseWriter, status int, body any) {
 }
 
 func jsonError(w http.ResponseWriter, status int, msg string) {
+	if status >= http.StatusInternalServerError {
+		msg = "internal server error"
+	}
 	jsonResponse(w, status, map[string]string{"error": msg})
 }
