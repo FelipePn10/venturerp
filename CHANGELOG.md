@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.0.3] — 2026-07-19
+
+- fix: preserve backend desktop compatibility (`de11d48`)
+
 ## [v1.0.2] — 2026-07-19
 
 - security: harden tenant authorization and production defaults (`50121d9`)
