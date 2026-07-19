@@ -18,16 +18,16 @@ WITH created_user AS (
     RETURNING id
 )
 INSERT INTO user_enterprises (user_id, enterprise_id)
-SELECT created_user.id, (SELECT id FROM enterprise WHERE code = $5)
+SELECT created_user.id, $5
 FROM created_user
 `
 
 type CreateUserParams struct {
-	ID             pgtype.UUID
-	Name           string
-	Email          string
-	Password       string
-	EnterpriseCode int32
+	ID           pgtype.UUID
+	Name         string
+	Email        string
+	Password     string
+	EnterpriseID int64
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
@@ -36,23 +36,72 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 		arg.Name,
 		arg.Email,
 		arg.Password,
-		arg.EnterpriseCode,
+		arg.EnterpriseID,
 	)
 	return err
 }
 
-const getOnlyUserEnterprise = `-- name: GetOnlyUserEnterprise :one
-SELECT MIN(enterprise_id)::bigint AS enterprise_id
-FROM user_enterprises
-WHERE user_id = $1
+const getCurrentUserAuthorization = `-- name: GetCurrentUserAuthorization :one
+SELECT ue.enterprise_id, e.code::bigint AS enterprise_code, ue.role, u.auth_version
+FROM user_enterprises ue
+JOIN users u ON u.id = ue.user_id
+JOIN enterprise e ON e.id = ue.enterprise_id
+WHERE ue.user_id = $1 AND ue.enterprise_id = $2
+`
+
+type GetCurrentUserAuthorizationParams struct {
+	UserID       pgtype.UUID
+	EnterpriseID int64
+}
+
+type GetCurrentUserAuthorizationRow struct {
+	EnterpriseID   int64
+	EnterpriseCode int64
+	Role           string
+	AuthVersion    int64
+}
+
+func (q *Queries) GetCurrentUserAuthorization(ctx context.Context, arg GetCurrentUserAuthorizationParams) (GetCurrentUserAuthorizationRow, error) {
+	row := q.db.QueryRow(ctx, getCurrentUserAuthorization, arg.UserID, arg.EnterpriseID)
+	var i GetCurrentUserAuthorizationRow
+	err := row.Scan(
+		&i.EnterpriseID,
+		&i.EnterpriseCode,
+		&i.Role,
+		&i.AuthVersion,
+	)
+	return i, err
+}
+
+const getOnlyUserAuthorization = `-- name: GetOnlyUserAuthorization :one
+SELECT MIN(ue.enterprise_id)::bigint AS enterprise_id,
+	   MIN(e.code)::bigint AS enterprise_code,
+       MIN(ue.role)::text AS role,
+       MIN(u.auth_version)::bigint AS auth_version
+FROM user_enterprises ue
+JOIN users u ON u.id = ue.user_id
+JOIN enterprise e ON e.id = ue.enterprise_id
+WHERE ue.user_id = $1
 HAVING COUNT(*) = 1
 `
 
-func (q *Queries) GetOnlyUserEnterprise(ctx context.Context, userID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, getOnlyUserEnterprise, userID)
-	var enterprise_id int64
-	err := row.Scan(&enterprise_id)
-	return enterprise_id, err
+type GetOnlyUserAuthorizationRow struct {
+	EnterpriseID   int64
+	EnterpriseCode int64
+	Role           string
+	AuthVersion    int64
+}
+
+func (q *Queries) GetOnlyUserAuthorization(ctx context.Context, userID pgtype.UUID) (GetOnlyUserAuthorizationRow, error) {
+	row := q.db.QueryRow(ctx, getOnlyUserAuthorization, userID)
+	var i GetOnlyUserAuthorizationRow
+	err := row.Scan(
+		&i.EnterpriseID,
+		&i.EnterpriseCode,
+		&i.Role,
+		&i.AuthVersion,
+	)
+	return i, err
 }
 
 const getUserAuthVersion = `-- name: GetUserAuthVersion :one
@@ -64,6 +113,38 @@ func (q *Queries) GetUserAuthVersion(ctx context.Context, id pgtype.UUID) (int64
 	var auth_version int64
 	err := row.Scan(&auth_version)
 	return auth_version, err
+}
+
+const getUserAuthorizationByEnterpriseCode = `-- name: GetUserAuthorizationByEnterpriseCode :one
+SELECT e.id AS enterprise_id, e.code::bigint AS enterprise_code, ue.role, u.auth_version
+FROM user_enterprises ue
+JOIN enterprise e ON e.id = ue.enterprise_id
+JOIN users u ON u.id = ue.user_id
+WHERE ue.user_id = $1 AND e.code = $2
+`
+
+type GetUserAuthorizationByEnterpriseCodeParams struct {
+	UserID pgtype.UUID
+	Code   int32
+}
+
+type GetUserAuthorizationByEnterpriseCodeRow struct {
+	EnterpriseID   int64
+	EnterpriseCode int64
+	Role           string
+	AuthVersion    int64
+}
+
+func (q *Queries) GetUserAuthorizationByEnterpriseCode(ctx context.Context, arg GetUserAuthorizationByEnterpriseCodeParams) (GetUserAuthorizationByEnterpriseCodeRow, error) {
+	row := q.db.QueryRow(ctx, getUserAuthorizationByEnterpriseCode, arg.UserID, arg.Code)
+	var i GetUserAuthorizationByEnterpriseCodeRow
+	err := row.Scan(
+		&i.EnterpriseID,
+		&i.EnterpriseCode,
+		&i.Role,
+		&i.AuthVersion,
+	)
+	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -140,23 +221,4 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getUserEnterpriseByCode = `-- name: GetUserEnterpriseByCode :one
-SELECT e.id
-FROM user_enterprises ue
-JOIN enterprise e ON e.id = ue.enterprise_id
-WHERE ue.user_id = $1 AND e.code = $2
-`
-
-type GetUserEnterpriseByCodeParams struct {
-	UserID pgtype.UUID
-	Code   int32
-}
-
-func (q *Queries) GetUserEnterpriseByCode(ctx context.Context, arg GetUserEnterpriseByCodeParams) (int64, error) {
-	row := q.db.QueryRow(ctx, getUserEnterpriseByCode, arg.UserID, arg.Code)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
 }

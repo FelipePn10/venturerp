@@ -2,6 +2,7 @@ package user_uc
 
 import (
 	"context"
+	"errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	userentity "github.com/FelipePn10/panossoerp/internal/domain/user/entity"
@@ -10,20 +11,33 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var ErrRegisterUserForbidden = errors.New("user registration is restricted to the authenticated enterprise")
+
+type RegisterUserAuth interface {
+	EnterpriseID(context.Context) (int64, error)
+}
+
 type RegisterUserUseCase struct {
 	Repo repository.UserRepository
+	Auth RegisterUserAuth
 }
 
 func NewRegisterUserUseCase(
 	repo repository.UserRepository,
+	auth RegisterUserAuth,
 ) *RegisterUserUseCase {
-	return &RegisterUserUseCase{Repo: repo}
+	return &RegisterUserUseCase{Repo: repo, Auth: auth}
 }
 
 func (uc *RegisterUserUseCase) Execute(
 	ctx context.Context,
 	dto request.RegisterUserDTO,
 ) error {
+	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil || enterpriseID <= 0 {
+		return ErrRegisterUserForbidden
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -39,8 +53,5 @@ func (uc *RegisterUserUseCase) Execute(
 		return err
 	}
 
-	if dto.EnterpriseCode <= 0 {
-		return userentity.ErrInvalidEnterprise
-	}
-	return uc.Repo.Create(ctx, user, dto.EnterpriseCode)
+	return uc.Repo.Create(ctx, user, enterpriseID)
 }

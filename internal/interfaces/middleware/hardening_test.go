@@ -9,6 +9,18 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func TestCorrelationMiddlewareRejectsUnsafeCallerValue(t *testing.T) {
+	h := CorrelationMiddleware(okHandler())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Request-ID", "attacker\nforged-log-field")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	got := rec.Header().Get("X-Request-ID")
+	if got == "attacker\nforged-log-field" || got == "" {
+		t.Fatalf("unsafe correlation ID was reflected: %q", got)
+	}
+}
+
 func okHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

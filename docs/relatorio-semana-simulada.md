@@ -169,7 +169,7 @@ A empresa **Tecnofer** já está cadastrada no FocusNFE com os seguintes dados:
 | CNPJ | 52.454.668/0001-02 |
 | Inscrição Estadual | 9103144679 |
 | CEP | 86975-000 (PR) |
-| Token de Homologação | `YvCRephh2ZiwEmpawutMj83uPJxAYMD9` |
+| Token de Homologação | `<TOKEN_FOCUS_NFE>` |
 
 > **Atenção:** usar **sempre** `focus_nfe_ambiente: "homologacao"` — nunca `producao`.
 
@@ -178,7 +178,7 @@ Configure o sistema com `PUT /api/fiscal/config` usando esses dados antes de emi
 ### Verificar integração FocusNFE
 
 ```bash
-FOCUS_TOKEN="YvCRephh2ZiwEmpawutMj83uPJxAYMD9" bash scripts/test-focusnfe.sh
+FOCUS_TOKEN="<TOKEN_FOCUS_NFE>" bash scripts/test-focusnfe.sh
 ```
 
 O script executa automaticamente:
@@ -208,10 +208,10 @@ O script `scripts/test-focusnfe.sh` pode ser executado **independentemente** do 
 
 ```bash
 # Executar (após cadastrar o CNPJ no FocusNFE):
-FOCUS_TOKEN="YvCRephh2ZiwEmpawutMj83uPJxAYMD9" bash scripts/test-focusnfe.sh
+FOCUS_TOKEN="<TOKEN_FOCUS_NFE>" bash scripts/test-focusnfe.sh
 
 # Alterar CNPJ emitente (se necessário):
-FOCUS_TOKEN="YvCRephh2ZiwEmpawutMj83uPJxAYMD9" \
+FOCUS_TOKEN="<TOKEN_FOCUS_NFE>" \
 CNPJ_EMITENTE="SEU_CNPJ_AQUI" \
 bash scripts/test-focusnfe.sh
 ```
@@ -254,5 +254,5 @@ bash scripts/test-focusnfe.sh
 
 > Para validar a integração fiscal completa com a Tecnofer:
 > ```bash
-> FOCUS_TOKEN="YvCRephh2ZiwEmpawutMj83uPJxAYMD9" bash scripts/test-focusnfe.sh
+> FOCUS_TOKEN="<TOKEN_FOCUS_NFE>" bash scripts/test-focusnfe.sh
 > ```

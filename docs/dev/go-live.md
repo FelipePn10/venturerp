@@ -78,7 +78,7 @@ a API. Branches de tarefa nascem de `develop` e são removidas após o merge.
 
 O container já tem `HEALTHCHECK` apontando para `/health/live`.
 
-**Proteger `/metrics`:** defina `METRICS_TOKEN`; o scraper deve enviar
+**Proteger `/metrics`:** defina `METRICS_TOKEN`; sem token o endpoint não é montado. O scraper deve enviar
 `Authorization: Bearer <token>`. Exemplo de scrape do Prometheus:
 
 ```yaml
@@ -89,7 +89,7 @@ scrape_configs:
       - targets: ["erp-host:5070"]
 ```
 
-Para desligar o endpoint: `METRICS_ENABLED=false`.
+Para desligar explicitamente a coleta e o endpoint: `METRICS_ENABLED=false`.
 
 ---
 

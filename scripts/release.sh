@@ -25,11 +25,17 @@ git fetch --tags origin
 git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1 &&
   fail "tag ${TAG} já existe no origin"
 
+# Preserve compatibility with the previous desktop by default. Raising the
+# minimum client is an explicit release decision, never an incidental effect of
+# publishing a backend patch/minor version.
+PREVIOUS_VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
+MIN_CLIENT_VERSION="${MIN_CLIENT_VERSION:-${PREVIOUS_VERSION:-${VERSION}}}"
+
 printf 'release: validando %s\n' "${TAG}"
 GOCACHE="${GOCACHE:-/tmp/venturerp-release-go-cache}" go test ./...
 docker build \
   --build-arg "VERSION=${VERSION}" \
-  --build-arg "MIN_CLIENT_VERSION=${MIN_CLIENT_VERSION:-${VERSION}}" \
+  --build-arg "MIN_CLIENT_VERSION=${MIN_CLIENT_VERSION}" \
   --tag "venturerp-release-check:${VERSION}" .
 
 if [[ "${DRY_RUN}" == "1" ]]; then

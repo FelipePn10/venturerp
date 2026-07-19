@@ -12,7 +12,7 @@
 --   make demo-seed
 --   (ou) psql "<DATABASE_URL_DEMO>" -v ON_ERROR_STOP=1 -f scripts/seed-demo.sql
 --
--- Login gerado:  admin@panossoerp.demo  /  Demo@12345   (role ADMIN)
+-- Login gerado: admin@panossoerp.demo / senha fornecida por DEMO_ADMIN_PASSWORD.
 -- ============================================================================
 
 \set ON_ERROR_STOP on
@@ -40,11 +40,14 @@ TRUNCATE TABLE
 -- ─── 1. Usuário admin ────────────────────────────────────────────────────────
 INSERT INTO users (id, name, email, password, role, created_at, updated_at)
 VALUES (:'ADMIN'::uuid, 'Administrador Demo', 'admin@panossoerp.demo',
-        crypt('Demo@12345', gen_salt('bf', 10)), 'ADMIN', :'START_TS', :'START_TS');
+        crypt(:'admin_password', gen_salt('bf', 12)), 'ADMIN', :'START_TS', :'START_TS');
 
 -- ─── 2. Empresa ──────────────────────────────────────────────────────────────
 INSERT INTO enterprise (id, code, name, created_at, created_by)
 VALUES (1, 1, 'Panosso Metalurgia Ltda', :'START_TS', :'ADMIN'::uuid);
+
+INSERT INTO user_enterprises (user_id, enterprise_id, role)
+VALUES (:'ADMIN'::uuid, 1, 'ADMIN');
 
 -- ─── 3. Depósitos (warehouse) ────────────────────────────────────────────────
 INSERT INTO warehouse (id, code, description, created_at, created_by, location, type, disposition, reservations_allowed) VALUES

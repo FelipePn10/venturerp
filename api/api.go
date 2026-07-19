@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -189,7 +190,8 @@ func (app *application) mount() chi.Router {
 	r.Use(otelhttp.NewMiddleware("panossoerp-api"))
 
 	r.Use(httpmw.CorrelationMiddleware)
-	r.Use(middleware.RealIP)
+	trustedProxies, _ := app.config.TrustedProxyPrefixes() // validated during config load
+	r.Use(httpmw.TrustedProxy(trustedProxies))
 	r.Use(middleware.Recoverer)
 	r.Use(httpmw.SecurityHeaders)
 	r.Use(httpmw.CORS(app.corsOrigins(), app.config.IsDevelopment() && app.config.CORSAllowedOrigins == ""))
@@ -211,7 +213,7 @@ func (app *application) mount() chi.Router {
 
 	userRepo := user.NewRepositoryUserSQLC(queries, app.db.Pool)
 
-	registerUserUC := user_uc.NewRegisterUserUseCase(userRepo)
+	registerUserUC := user_uc.NewRegisterUserUseCase(userRepo, authService)
 	loginUserUC := user_uc.NewLoginUserUseCase(userRepo)
 
 	userHandler := handler.NewUserHandler(
@@ -1095,6 +1097,7 @@ func (app *application) mount() chi.Router {
 	idempotencyStore := httpmw.NewIdempotencyStore(24 * time.Hour)
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger, userRepo))
+		r.Use(httpmw.TenantBodyGuard)
 		// Audit trail for authenticated mutations (after JWT so the actor is known).
 		r.Use(httpmw.Audit(app.auditSink))
 		// Idempotency-Key support for mutating requests (safe retries).
@@ -1634,7 +1637,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/list", fiscalHandler.ListExits)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{code}", fiscalHandler.GetExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/config", fiscalHandler.GetConfig)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/config", fiscalHandler.UpdateConfig)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/config", fiscalHandler.UpdateConfig)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/config/branding", fiscalBrandingHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/config/logo", fiscalBrandingHandler.Logo)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/cte/create", fiscalHandler.CreateCTe)
@@ -2471,7 +2474,7 @@ func (app *application) mount() chi.Router {
 	r.Get("/api/version", versionHandler)
 
 	// Prometheus metrics, optionally guarded by a bearer token.
-	if app.metrics != nil && app.config.MetricsEnabled {
+	if app.metrics != nil && app.config.MetricsEnabled && app.config.MetricsToken != "" {
 		r.Get("/metrics", app.metricsHandler())
 	}
 
@@ -2531,7 +2534,9 @@ func (app *application) metricsHandler() http.HandlerFunc {
 	h := app.metrics.Handler()
 	token := app.config.MetricsToken
 	return func(w http.ResponseWriter, r *http.Request) {
-		if token != "" && r.Header.Get("Authorization") != "Bearer "+token {
+		received := r.Header.Get("Authorization")
+		expected := "Bearer " + token
+		if token == "" || subtle.ConstantTimeCompare([]byte(received), []byte(expected)) != 1 {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -2555,11 +2560,13 @@ func (app *application) run(r chi.Router) error {
 	}
 
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      r,
-		WriteTimeout: 120 * time.Second,
-		ReadTimeout:  30 * time.Second,
-		IdleTimeout:  time.Minute,
+		Addr:              addr,
+		Handler:           r,
+		WriteTimeout:      120 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       time.Minute,
+		MaxHeaderBytes:    64 << 10,
 	}
 
 	// Listen for SIGINT/SIGTERM so the orchestrator (or Ctrl-C) can drain

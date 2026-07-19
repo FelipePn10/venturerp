@@ -2096,7 +2096,7 @@ PUT /api/fiscal/config
   "telefone": "",
   "icms_interno_aliquota": 0.12,
   "icms_diferimento_percentual": 0.3846,
-  "focus_nfe_token": "YvCRephh2ZiwEmpawutMj83uPJxAYMD9",
+  "focus_nfe_token": "<TOKEN_FOCUS_NFE>",
   "focus_nfe_ambiente": "homologacao",
   "juros_mes": 0.01,
   "multa_atraso": 0.02,

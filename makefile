@@ -16,6 +16,12 @@ migrate_up:
 		-database "$(DATABASE_URL)" \
 		-verbose up
 
+# Migra o PostgreSQL local isolado usando as credenciais de .env.development.
+# Evita que o .env genérico aponte acidentalmente para outro banco/porta.
+migrate_development:
+	docker compose --env-file .env.development -f docker-compose.development.yml \
+		--profile tools run --rm migrate-development
+
 migrate_down:
 	migrate -path=$(MIGRATIONS_DIR) \
 		-database "$(DATABASE_URL)" \
@@ -128,7 +134,8 @@ DEMO_COMPOSE      := docker-compose.demo.yml
 DEMO_DB_CONTAINER := panossoerp-postgres-demo
 DEMO_DB_USER      := panossoerp_demo
 DEMO_DB_NAME      := panossoerpdatabase_demo
-DEMO_DB_PASS      := panossoerp_demo_pass
+DEMO_DB_PASS      ?= $(DEMO_DB_PASSWORD)
+DEMO_ADMIN_PASS   ?= $(DEMO_ADMIN_PASSWORD)
 
 # Sobe postgres + migra + api do ambiente demo (constrói a imagem se preciso).
 demo-up:
@@ -148,8 +155,11 @@ demo-migrate:
 
 # Popula o banco demo com dados de apresentação (idempotente; recria tudo).
 demo-seed:
-	docker exec -i -e PGPASSWORD=$(DEMO_DB_PASS) $(DEMO_DB_CONTAINER) \
-		psql -U $(DEMO_DB_USER) -d $(DEMO_DB_NAME) -v ON_ERROR_STOP=1 < scripts/seed-demo.sql
+	@test -n "$(DEMO_DB_PASS)" || (echo "DEMO_DB_PASSWORD é obrigatório" && exit 1)
+	@test -n "$(DEMO_ADMIN_PASS)" || (echo "DEMO_ADMIN_PASSWORD é obrigatório" && exit 1)
+	@docker exec -i -e PGPASSWORD="$(DEMO_DB_PASS)" $(DEMO_DB_CONTAINER) \
+		psql -U $(DEMO_DB_USER) -d $(DEMO_DB_NAME) -v ON_ERROR_STOP=1 \
+		-v admin_password="$(DEMO_ADMIN_PASS)" < scripts/seed-demo.sql
 
 # Atalho: sobe a stack e popula em seguida.
 demo-bootstrap: demo-up
@@ -183,7 +193,7 @@ release:
 	@test -n "$(VERSION)" || (echo "uso: make release VERSION=1.0.0" >&2; exit 2)
 	./scripts/release.sh "$(VERSION)"
 
-.PHONY: cutting-samples create_migration migrate_up migrate_down migrate_force reset print_db sqlc \
+.PHONY: cutting-samples create_migration migrate_up migrate_development migrate_down migrate_force reset print_db sqlc \
 	test test-bom-mrp test-purchase-receiving test-procurement-governance test-cover test-integration test-cutting build run vet fmt-check ci \
 	docker-build up down up-backup logs backup restore release release-check \
 	demo-up demo-down demo-reset demo-migrate demo-seed demo-bootstrap demo-logs

@@ -484,14 +484,15 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		      vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
 		      logradouro, numero, complemento, bairro, municipio, codigo_municipio, cep, telefone,
 		      updated_at, updated_by)
-		 VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW(),$23)
+		 VALUES (1,$1,$2,$3,$4,$5,$6,$7,NULLIF(BTRIM($8),''),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW(),$23)
 		 ON CONFLICT (id) DO UPDATE SET
 		     cnpj_empresa = EXCLUDED.cnpj_empresa, razao_social = EXCLUDED.razao_social,
 		     ie_empresa = EXCLUDED.ie_empresa, regime_tributario = EXCLUDED.regime_tributario,
 		     uf_empresa = EXCLUDED.uf_empresa,
 		     icms_interno_aliquota = EXCLUDED.icms_interno_aliquota,
 		     icms_diferimento_percentual = EXCLUDED.icms_diferimento_percentual,
-		     focus_nfe_token = EXCLUDED.focus_nfe_token, focus_nfe_ambiente = EXCLUDED.focus_nfe_ambiente,
+		     focus_nfe_token = COALESCE(NULLIF(BTRIM(EXCLUDED.focus_nfe_token),''), fiscal_configs.focus_nfe_token),
+		     focus_nfe_ambiente = EXCLUDED.focus_nfe_ambiente,
 		     juros_mes = EXCLUDED.juros_mes, multa_atraso = EXCLUDED.multa_atraso,
 		     vencimento_icms_dia = EXCLUDED.vencimento_icms_dia,
 		     vencimento_ipi_dia = EXCLUDED.vencimento_ipi_dia,

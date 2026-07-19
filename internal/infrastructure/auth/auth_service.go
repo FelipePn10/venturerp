@@ -136,6 +136,14 @@ func (a *AuthService) EnterpriseID(ctx context.Context) (int64, error) {
 	return user.EnterpriseID, nil
 }
 
+func (a *AuthService) EnterpriseCode(ctx context.Context) (int64, error) {
+	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
+	if !ok || user.EnterpriseCode <= 0 {
+		return 0, errors.New("enterprise not selected")
+	}
+	return user.EnterpriseCode, nil
+}
+
 func (a *AuthService) CreateAllocation(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }

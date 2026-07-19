@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS idx_consumer_service_customer_contacts_tenant;
+ALTER TABLE consumer_service_customer_contacts DROP COLUMN IF EXISTS enterprise_id;
+DROP TABLE IF EXISTS consumer_service_consumer_enterprises;

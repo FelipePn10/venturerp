@@ -73,5 +73,8 @@ func RespondJSON(w http.ResponseWriter, status int, data interface{}) {
 }
 
 func RespondError(w http.ResponseWriter, status int, message string) {
+	if status >= http.StatusInternalServerError {
+		message = "internal server error"
+	}
 	RespondJSON(w, status, map[string]string{"error": message})
 }

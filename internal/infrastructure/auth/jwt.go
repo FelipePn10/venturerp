@@ -12,7 +12,7 @@ const (
 )
 
 type UserClaims struct {
-	UserID       string `json:"sub"`
+	UserID       string `json:"user_id"`
 	Role         string `json:"role"`
 	EnterpriseID int64  `json:"enterprise_id"`
 	AuthVersion  int64  `json:"auth_version"`

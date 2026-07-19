@@ -25,6 +25,17 @@ type UseCase struct {
 	Auth             ports.AuthService
 }
 
+func (uc *UseCase) tenantID(ctx context.Context) (int64, error) {
+	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
+		return 0, errorsuc.ErrUnauthorized
+	}
+	tenantID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil || tenantID <= 0 {
+		return 0, errorsuc.ErrUnauthorized
+	}
+	return tenantID, nil
+}
+
 func (uc *UseCase) CreateDefectGroup(ctx context.Context, dto request.CreateTADefectGroupDTO) (*response.TADefectGroupResponse, error) {
 	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -129,11 +140,12 @@ func (uc *UseCase) ListWarrantyResponsibles(ctx context.Context, onlyActive bool
 }
 
 func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAssistanceCallDTO) (*response.TechnicalAssistanceCallResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if dto.EnterpriseCode == 0 || dto.CustomerCode == 0 || dto.Subject == "" {
-		return nil, errorsuc.NewValidationError("enterprise_code, customer_code and subject are required")
+	if dto.CustomerCode == 0 || dto.Subject == "" {
+		return nil, errorsuc.NewValidationError("customer_code and subject are required")
 	}
 	openedAt := time.Now()
 	if dto.OpenedAt != "" {
@@ -141,7 +153,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 			openedAt = parsed
 		}
 	}
-	callNumber, err := uc.Repo.NextCallNumber(ctx, dto.EnterpriseCode)
+	callNumber, err := uc.Repo.NextCallNumber(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +163,6 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 	}
 	call := &entity.Call{
 		CallNumber:              callNumber,
-		EnterpriseCode:          dto.EnterpriseCode,
 		CustomerCode:            dto.CustomerCode,
 		ConsumerName:            dto.ConsumerName,
 		ConsumerDocument:        dto.ConsumerDocument,
@@ -166,7 +177,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 		ReturnNoteRequired:      dto.ReturnNoteRequired,
 		CreatedBy:               dto.CreatedBy,
 	}
-	created, err := uc.Repo.CreateCall(ctx, call)
+	created, err := uc.Repo.CreateCall(ctx, tenantID, call)
 	if err != nil {
 		return nil, err
 	}
@@ -183,8 +194,9 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 }
 
 func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalAssistanceCallItemDTO) (*response.TechnicalAssistanceCallItemResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, tenantErr := uc.tenantID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
 	}
 	if dto.CallCode == 0 || dto.ItemCode == 0 {
 		return nil, errorsuc.NewValidationError("call_code and item_code are required")
@@ -221,7 +233,7 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 	if reason != nil {
 		generatesRevenue = reason.GeneratesRevenue
 	}
-	created, err := uc.Repo.AddCallItem(ctx, &entity.CallItem{
+	created, err := uc.Repo.AddCallItem(ctx, tenantID, &entity.CallItem{
 		CallCode:              dto.CallCode,
 		Sequence:              dto.Sequence,
 		ItemCode:              dto.ItemCode,
@@ -247,10 +259,11 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 }
 
 func (uc *UseCase) GetCall(ctx context.Context, code int64) (*response.TechnicalAssistanceCallResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
 	}
-	call, err := uc.Repo.GetCall(ctx, code)
+	call, err := uc.Repo.GetCall(ctx, tenantID, code)
 	if err != nil {
 		return nil, err
 	}
@@ -258,10 +271,11 @@ func (uc *UseCase) GetCall(ctx context.Context, code int64) (*response.Technical
 }
 
 func (uc *UseCase) ListCalls(ctx context.Context, filter tarepo.CallFilter) ([]*response.TechnicalAssistanceCallResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
 	}
-	rows, err := uc.Repo.ListCalls(ctx, filter)
+	rows, err := uc.Repo.ListCalls(ctx, tenantID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -273,8 +287,9 @@ func (uc *UseCase) ListCalls(ctx context.Context, filter tarepo.CallFilter) ([]*
 }
 
 func (uc *UseCase) AddReturnNote(ctx context.Context, dto request.AddTechnicalAssistanceReturnNoteDTO) (*response.TechnicalAssistanceReturnNoteResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
 	}
 	if dto.CallCode == 0 || dto.NoteNumber == "" || dto.EmissionDate == "" {
 		return nil, errorsuc.NewValidationError("call_code, note_number and emission_date are required")
@@ -283,7 +298,7 @@ func (uc *UseCase) AddReturnNote(ctx context.Context, dto request.AddTechnicalAs
 	if op == "" {
 		op = "RETURN"
 	}
-	created, err := uc.Repo.AddReturnNote(ctx, &entity.ReturnNote{
+	created, err := uc.Repo.AddReturnNote(ctx, tenantID, &entity.ReturnNote{
 		CallCode: dto.CallCode, NoteNumber: dto.NoteNumber, NoteSeries: dto.NoteSeries,
 		EmissionDate: *parseDatePtr(dto.EmissionDate), CustomerCode: dto.CustomerCode,
 		OperationType: op, AccessKey: dto.AccessKey, TotalValue: dto.TotalValue, Notes: dto.Notes, CreatedBy: dto.CreatedBy,
@@ -295,10 +310,11 @@ func (uc *UseCase) AddReturnNote(ctx context.Context, dto request.AddTechnicalAs
 }
 
 func (uc *UseCase) GenerateOrders(ctx context.Context, dto request.GenerateTechnicalAssistanceOrdersDTO) (*response.TechnicalAssistanceOrderGenerationResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
 	}
-	call, err := uc.Repo.GetCall(ctx, dto.CallCode)
+	call, err := uc.Repo.GetCall(ctx, tenantID, dto.CallCode)
 	if err != nil {
 		return nil, err
 	}
@@ -328,15 +344,16 @@ func (uc *UseCase) GenerateOrders(ctx context.Context, dto request.GenerateTechn
 		out.GeneratedLinks++
 	}
 	call.Status = entity.CallStatusWaitingOrder
-	_, _ = uc.Repo.UpdateCall(ctx, call)
+	_, _ = uc.Repo.UpdateCall(ctx, tenantID, call)
 	return out, nil
 }
 
 func (uc *UseCase) UpdateStatus(ctx context.Context, dto request.UpdateTechnicalAssistanceCallStatusDTO) (*response.TechnicalAssistanceCallResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
 	}
-	call, err := uc.Repo.GetCall(ctx, dto.Code)
+	call, err := uc.Repo.GetCall(ctx, tenantID, dto.Code)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +373,7 @@ func (uc *UseCase) UpdateStatus(ctx context.Context, dto request.UpdateTechnical
 	call.Solution = dto.Solution
 	call.ServiceInvoiceNumber = dto.ServiceInvoiceNumber
 	call.CloseReason = dto.CloseReason
-	updated, err := uc.Repo.UpdateCall(ctx, call)
+	updated, err := uc.Repo.UpdateCall(ctx, tenantID, call)
 	if err != nil {
 		return nil, err
 	}
@@ -364,13 +381,18 @@ func (uc *UseCase) UpdateStatus(ctx context.Context, dto request.UpdateTechnical
 }
 
 func (uc *UseCase) Report(ctx context.Context, filter tarepo.ReportFilter) (*response.TechnicalAssistanceReportResponse, error) {
-	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return uc.Repo.Report(ctx, filter)
+	return uc.Repo.Report(ctx, tenantID, filter)
 }
 
 func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dto request.GenerateTechnicalAssistanceOrdersDTO) (int64, error) {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return 0, err
+	}
 	orderNumber, err := uc.SalesOrders.NextOrderNumber(ctx, call.EnterpriseCode)
 	if err != nil {
 		return 0, err
@@ -411,11 +433,15 @@ func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dt
 			Notes:          strPtr("Item gerado por assistência técnica"),
 		})
 	}
-	_, _ = uc.Repo.AddOrderLink(ctx, &entity.OrderLink{CallCode: call.Code, GeneratedType: "SALES_ORDER", SalesOrderCode: &created.Code, CreatedBy: dto.CreatedBy})
+	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, GeneratedType: "SALES_ORDER", SalesOrderCode: &created.Code, CreatedBy: dto.CreatedBy})
 	return created.Code, nil
 }
 
 func (uc *UseCase) generateProductionOrder(ctx context.Context, call *entity.Call, item *entity.CallItem, dto request.GenerateTechnicalAssistanceOrdersDTO) (int64, error) {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return 0, err
+	}
 	orderNumber, err := uc.ProductionOrders.GetNextOrderNumber(ctx)
 	if err != nil {
 		orderNumber = 1
@@ -433,13 +459,17 @@ func (uc *UseCase) generateProductionOrder(ctx context.Context, call *entity.Cal
 	if err != nil {
 		return 0, err
 	}
-	_, _ = uc.Repo.AddOrderLink(ctx, &entity.OrderLink{CallCode: call.Code, CallItemCode: &item.Code, GeneratedType: "PRODUCTION_ORDER", ProductionOrderID: &prod.ID, CreatedBy: dto.CreatedBy})
+	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, CallItemCode: &item.Code, GeneratedType: "PRODUCTION_ORDER", ProductionOrderID: &prod.ID, CreatedBy: dto.CreatedBy})
 	return prod.ID, nil
 }
 
 func (uc *UseCase) validateCanAttend(ctx context.Context, call *entity.Call) error {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return err
+	}
 	if uc.needsReturnNote(ctx, call) {
-		notes, err := uc.Repo.ListReturnNotes(ctx, call.Code)
+		notes, err := uc.Repo.ListReturnNotes(ctx, tenantID, call.Code)
 		if err != nil {
 			return err
 		}

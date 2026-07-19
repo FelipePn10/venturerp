@@ -31,6 +31,7 @@ type AuthService interface {
 	CanResolveStructure(ctx context.Context) bool
 	UserID(ctx context.Context) (uuid.UUID, error)
 	EnterpriseID(ctx context.Context) (int64, error)
+	EnterpriseCode(ctx context.Context) (int64, error)
 	CreateAllocation(ctx context.Context) bool
 	ListAllocation(ctx context.Context) bool
 	CanCreateCostCenter(ctx context.Context) bool

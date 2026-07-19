@@ -15,11 +15,13 @@ import (
 type csAllowAuth struct{ ports.AuthService }
 
 func (csAllowAuth) CanManageTechnicalAssistance(context.Context) bool { return true }
+func (csAllowAuth) EnterpriseID(context.Context) (int64, error)       { return 1, nil }
 
 type fakeCSRepo struct {
 	callTypes map[int64]*entity.CallType
 	consumer  *entity.Consumer
 	call      *entity.Call
+	tenantID  int64
 }
 
 func (f *fakeCSRepo) NextConsumerCode(context.Context) (int64, error)      { return 1, nil }
@@ -40,61 +42,77 @@ func (f *fakeCSRepo) CreateKnowledgeSource(context.Context, *entity.KnowledgeSou
 func (f *fakeCSRepo) ListKnowledgeSources(context.Context, bool) ([]*entity.KnowledgeSource, error) {
 	return nil, nil
 }
-func (f *fakeCSRepo) CreateConsumer(_ context.Context, v *entity.Consumer) (*entity.Consumer, error) {
+func (f *fakeCSRepo) CreateConsumer(_ context.Context, _ int64, v *entity.Consumer) (*entity.Consumer, error) {
 	f.consumer = v
 	return v, nil
 }
-func (f *fakeCSRepo) UpdateConsumer(_ context.Context, v *entity.Consumer) (*entity.Consumer, error) {
+func (f *fakeCSRepo) UpdateConsumer(_ context.Context, _ int64, v *entity.Consumer) (*entity.Consumer, error) {
 	f.consumer = v
 	return v, nil
 }
-func (f *fakeCSRepo) GetConsumer(context.Context, int64) (*entity.Consumer, error) {
+func (f *fakeCSRepo) GetConsumer(context.Context, int64, int64) (*entity.Consumer, error) {
 	return f.consumer, nil
 }
-func (f *fakeCSRepo) ListConsumers(context.Context, csrepo.ConsumerFilter) ([]*entity.Consumer, error) {
+func (f *fakeCSRepo) ListConsumers(context.Context, int64, csrepo.ConsumerFilter) ([]*entity.Consumer, error) {
 	return nil, nil
 }
-func (f *fakeCSRepo) AddConsumerPhone(_ context.Context, v *entity.ConsumerPhone) (*entity.ConsumerPhone, error) {
+func (f *fakeCSRepo) AddConsumerPhone(_ context.Context, _ int64, v *entity.ConsumerPhone) (*entity.ConsumerPhone, error) {
 	return v, nil
 }
-func (f *fakeCSRepo) AddConsumerEmail(_ context.Context, v *entity.ConsumerEmail) (*entity.ConsumerEmail, error) {
+func (f *fakeCSRepo) AddConsumerEmail(_ context.Context, _ int64, v *entity.ConsumerEmail) (*entity.ConsumerEmail, error) {
 	return v, nil
 }
-func (f *fakeCSRepo) AddConsumerContact(_ context.Context, v *entity.ConsumerContact) (*entity.ConsumerContact, error) {
+func (f *fakeCSRepo) AddConsumerContact(_ context.Context, _ int64, v *entity.ConsumerContact) (*entity.ConsumerContact, error) {
 	return v, nil
 }
-func (f *fakeCSRepo) CreateCustomerContact(_ context.Context, v *entity.CustomerContactHistory) (*entity.CustomerContactHistory, error) {
+func (f *fakeCSRepo) CreateCustomerContact(_ context.Context, _ int64, v *entity.CustomerContactHistory) (*entity.CustomerContactHistory, error) {
 	return v, nil
 }
-func (f *fakeCSRepo) ListCustomerContacts(context.Context, csrepo.CustomerContactFilter) ([]*entity.CustomerContactHistory, error) {
+func (f *fakeCSRepo) ListCustomerContacts(context.Context, int64, csrepo.CustomerContactFilter) ([]*entity.CustomerContactHistory, error) {
 	return nil, nil
 }
-func (f *fakeCSRepo) CreateCall(_ context.Context, v *entity.Call) (*entity.Call, error) {
+func (f *fakeCSRepo) CreateCall(_ context.Context, tenantID int64, v *entity.Call) (*entity.Call, error) {
+	f.tenantID = tenantID
 	v.Code = 1
+	v.EnterpriseCode = tenantID
 	f.call = v
 	return v, nil
 }
-func (f *fakeCSRepo) UpdateCall(_ context.Context, v *entity.Call) (*entity.Call, error) {
+
+func TestCreateCallUsesAuthenticatedTenant(t *testing.T) {
+	repo := &fakeCSRepo{callTypes: map[int64]*entity.CallType{7: {Code: 7}}}
+	uc := &UseCase{Repo: repo, Auth: csAllowAuth{}}
+	_, err := uc.CreateCall(context.Background(), request.CreateConsumerServiceCallDTO{
+		EnterpriseCode: 999, ConsumerCode: 1, CallTypeCode: 7, Subject: "tenant test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.tenantID != 1 {
+		t.Fatalf("repository tenant = %d, want authenticated tenant 1", repo.tenantID)
+	}
+}
+func (f *fakeCSRepo) UpdateCall(_ context.Context, _ int64, v *entity.Call) (*entity.Call, error) {
 	f.call = v
 	return v, nil
 }
-func (f *fakeCSRepo) GetCall(context.Context, int64) (*entity.Call, error) { return f.call, nil }
-func (f *fakeCSRepo) ListCalls(context.Context, csrepo.CallFilter) ([]*entity.Call, error) {
+func (f *fakeCSRepo) GetCall(context.Context, int64, int64) (*entity.Call, error) { return f.call, nil }
+func (f *fakeCSRepo) ListCalls(context.Context, int64, csrepo.CallFilter) ([]*entity.Call, error) {
 	return nil, nil
 }
-func (f *fakeCSRepo) AddCallReturn(_ context.Context, v *entity.CallReturn) (*entity.CallReturn, error) {
+func (f *fakeCSRepo) AddCallReturn(_ context.Context, _ int64, v *entity.CallReturn) (*entity.CallReturn, error) {
 	return v, nil
 }
-func (f *fakeCSRepo) AddCallAttachment(_ context.Context, v *entity.CallAttachment) (*entity.CallAttachment, error) {
+func (f *fakeCSRepo) AddCallAttachment(_ context.Context, _ int64, v *entity.CallAttachment) (*entity.CallAttachment, error) {
 	return v, nil
 }
-func (f *fakeCSRepo) AddChecklistItem(_ context.Context, v *entity.CallChecklistItem) (*entity.CallChecklistItem, error) {
+func (f *fakeCSRepo) AddChecklistItem(_ context.Context, _ int64, v *entity.CallChecklistItem) (*entity.CallChecklistItem, error) {
 	return v, nil
 }
-func (f *fakeCSRepo) SetChecklistItemDone(context.Context, int64, bool, *string) (*entity.CallChecklistItem, error) {
+func (f *fakeCSRepo) SetChecklistItemDone(context.Context, int64, int64, bool, *string) (*entity.CallChecklistItem, error) {
 	return nil, nil
 }
-func (f *fakeCSRepo) ReportCalls(context.Context, csrepo.CallFilter) (*csrepo.CallReport, error) {
+func (f *fakeCSRepo) ReportCalls(context.Context, int64, csrepo.CallFilter) (*csrepo.CallReport, error) {
 	return nil, nil
 }
 
