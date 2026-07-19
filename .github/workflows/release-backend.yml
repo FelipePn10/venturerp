@@ -19,6 +19,10 @@ jobs:
   release:
     if: github.repository == 'FelipePn10/venturerp'
     runs-on: ubuntu-latest
+    env:
+      # Raise only in an intentional compatibility-breaking PR. Backend patch
+      # releases must not lock out already-installed desktop 1.0.1 clients.
+      MIN_CLIENT_VERSION: "1.0.1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,7 +61,7 @@ jobs:
           sbom: true
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-            MIN_CLIENT_VERSION=${{ steps.version.outputs.version }}
+            MIN_CLIENT_VERSION=${{ env.MIN_CLIENT_VERSION }}
           tags: |
             ghcr.io/felipepn10/panossoerp:${{ github.ref_name }}
             ghcr.io/felipepn10/panossoerp:latest
