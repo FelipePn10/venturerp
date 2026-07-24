@@ -38,6 +38,7 @@ type CustomerRepository interface {
 	CreateCarrier(ctx context.Context, c *entity.Carrier) (*entity.Carrier, error)
 	UpdateCarrier(ctx context.Context, c *entity.Carrier) (*entity.Carrier, error)
 	GetCarrierByCode(ctx context.Context, code int64) (*entity.Carrier, error)
+	GetCarrierByID(ctx context.Context, id int64) (*entity.Carrier, error)
 	ListCarriers(ctx context.Context, onlyActive bool) ([]*entity.Carrier, error)
 	NextCarrierCode(ctx context.Context) (int64, error)
 
@@ -53,6 +54,7 @@ type CustomerRepository interface {
 	CreatePaymentCondition(ctx context.Context, pc *entity.PaymentCondition) (*entity.PaymentCondition, error)
 	UpdatePaymentCondition(ctx context.Context, pc *entity.PaymentCondition) (*entity.PaymentCondition, error)
 	GetPaymentConditionByCode(ctx context.Context, code int64) (*entity.PaymentCondition, error)
+	GetPaymentConditionByID(ctx context.Context, id int64) (*entity.PaymentCondition, error)
 	ListPaymentConditions(ctx context.Context, onlyActive bool) ([]*entity.PaymentCondition, error)
 	AddInstallment(ctx context.Context, inst *entity.PaymentInstallment) (*entity.PaymentInstallment, error)
 	ListInstallments(ctx context.Context, paymentConditionID int64) ([]*entity.PaymentInstallment, error)

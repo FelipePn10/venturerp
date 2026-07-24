@@ -17,6 +17,7 @@ type SalesDivisionResponse struct {
 	ConsiderDeliveryPromise bool      `json:"consider_delivery_promise"`
 	ConsiderMRP             bool      `json:"consider_mrp"`
 	AllowOutsideLimits      bool      `json:"allow_outside_limits"`
+	AllowFreePaymentTerms   bool      `json:"allow_free_payment_terms"`
 	MinimumDeliveryDays     int       `json:"minimum_delivery_days"`
 	FinancialDelayDays      int       `json:"financial_delay_days"`
 	PISPercentage           float64   `json:"pis_percentage"`

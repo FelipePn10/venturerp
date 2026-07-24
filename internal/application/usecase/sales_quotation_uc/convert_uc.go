@@ -6,6 +6,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	orderrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -14,7 +15,7 @@ import (
 
 type ConvertUseCase struct {
 	Quotes *UseCase
-	Orders orderrepo.SalesOrderRepository
+	UOW    ports.SalesQuotationConversionUnitOfWork
 }
 
 func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQuotationDTO) (*response.SalesOrderResponse, error) {
@@ -47,9 +48,8 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	if len(items) == 0 {
 		return nil, errorsuc.NewValidationError("quotation has no items")
 	}
-	orderNumber, err := uc.Orders.NextOrderNumber(ctx, q.EnterpriseCode)
-	if err != nil {
-		return nil, err
+	if uc.UOW == nil {
+		return nil, errorsuc.NewValidationError("sales quotation conversion unit of work is not configured")
 	}
 	status := orderentity.SalesOrderStatusOrder
 	if dto.Status != "" {
@@ -63,77 +63,86 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	if createdBy == [16]byte{} {
 		createdBy = q.CreatedBy
 	}
-	order := &orderentity.SalesOrder{
-		OrderNumber:         orderNumber,
-		EnterpriseCode:      q.EnterpriseCode,
-		Status:              status,
-		Origin:              origin,
-		EmissionDate:        time.Now(),
-		DeliveryDate:        q.DeliveryDate,
-		DeliveryDateFirm:    q.DeliveryDateFirm,
-		DigitDate:           time.Now(),
-		CustomerCode:        q.CustomerCode,
-		BillingAddressCode:  q.BillingAddressCode,
-		ShippingAddressCode: q.ShippingAddressCode,
-		RepresentativeCode:  q.RepresentativeCode,
-		SalesDivisionCode:   q.SalesDivisionCode,
-		CommissionPct:       q.CommissionPct,
-		PriceTableCode:      q.PriceTableCode,
-		CurrencyCode:        q.CurrencyCode,
-		PaymentTermCode:     q.PaymentTermCode,
-		IsNFCe:              q.IsNFCe,
-		Street:              q.Street,
-		StreetNumber:        q.StreetNumber,
-		ForeignDocument:     q.ForeignDocument,
-		CarrierCode:         q.CarrierCode,
-		FreightType:         q.FreightType,
-		FreightValue:        q.FreightValue,
-		InsuranceValue:      q.InsuranceValue,
-		DiscountValue:       q.DiscountValue,
-		SurchargeValue:      q.SurchargeValue,
-		TotalGross:          q.TotalGross,
-		TotalNet:            q.TotalNet,
-		Notes:               q.Notes,
-		ObsCustomer:         q.ObsCustomer,
-		CreatedBy:           createdBy,
-	}
-	created, err := uc.Orders.Create(ctx, order)
+	created, err := uc.UOW.Execute(ctx, q.Code, func(orders orderrepo.SalesOrderRepository) (*orderentity.SalesOrder, error) {
+		orderNumber, err := orders.NextOrderNumber(ctx, q.EnterpriseCode)
+		if err != nil {
+			return nil, err
+		}
+		order := &orderentity.SalesOrder{
+			OrderNumber:         orderNumber,
+			EnterpriseCode:      q.EnterpriseCode,
+			Status:              status,
+			Origin:              origin,
+			EmissionDate:        time.Now(),
+			DeliveryDate:        q.DeliveryDate,
+			DeliveryDateFirm:    q.DeliveryDateFirm,
+			DigitDate:           time.Now(),
+			CustomerCode:        q.CustomerCode,
+			BillingAddressCode:  q.BillingAddressCode,
+			ShippingAddressCode: q.ShippingAddressCode,
+			RepresentativeCode:  q.RepresentativeCode,
+			SalesDivisionCode:   q.SalesDivisionCode,
+			CommissionPct:       q.CommissionPct.InexactFloat64(),
+			PriceTableCode:      q.PriceTableCode,
+			CurrencyCode:        q.CurrencyCode,
+			PaymentTermCode:     q.PaymentTermCode,
+			IsNFCe:              q.IsNFCe,
+			Street:              q.Street,
+			StreetNumber:        q.StreetNumber,
+			ForeignDocument:     q.ForeignDocument,
+			CarrierCode:         q.CarrierCode,
+			FreightType:         q.FreightType,
+			FreightValue:        q.FreightValue.InexactFloat64(),
+			InsuranceValue:      q.InsuranceValue.InexactFloat64(),
+			DiscountValue:       q.DiscountValue.InexactFloat64(),
+			SurchargeValue:      q.SurchargeValue.InexactFloat64(),
+			TotalGross:          q.TotalGross.InexactFloat64(),
+			TotalNet:            q.TotalNet.InexactFloat64(),
+			Notes:               q.Notes,
+			ObsCustomer:         q.ObsCustomer,
+			CreatedBy:           createdBy,
+		}
+		created, err := orders.Create(ctx, order)
+		if err != nil {
+			return nil, err
+		}
+		for _, quoteItem := range items {
+			if !quoteItem.IsActive || quoteItem.Status == quoteentity.SalesQuotationItemStatusCancelled {
+				continue
+			}
+			balance := quoteItem.RequestedQty.Sub(quoteItem.AttendedQty).Sub(quoteItem.CancelledQty)
+			if !balance.IsPositive() {
+				continue
+			}
+			orderItem := &orderentity.SalesOrderItem{
+				SalesOrderCode:   created.Code,
+				Sequence:         quoteItem.Sequence,
+				ItemCode:         quoteItem.ItemCode,
+				Mask:             quoteItem.Mask,
+				DigitDate:        time.Now(),
+				SalesUOM:         quoteItem.SalesUOM,
+				WarehouseCode:    quoteItem.WarehouseCode,
+				PriceTableCode:   quoteItem.PriceTableCode,
+				RequestedQty:     balance.InexactFloat64(),
+				UnitPrice:        quoteItem.UnitPrice.InexactFloat64(),
+				DeliveryDate:     quoteItem.DeliveryDate,
+				DeliveryDateFirm: quoteItem.DeliveryDateFirm,
+				IPIPct:           quoteItem.IPIPct.InexactFloat64(),
+				STPct:            quoteItem.STPct.InexactFloat64(),
+				DiscountPct:      quoteItem.DiscountPct.InexactFloat64(),
+				TotalGross:       quoteItem.TotalGross.InexactFloat64(),
+				TotalNet:         quoteItem.TotalNet.InexactFloat64(),
+				TotalNetWithIPI:  quoteItem.TotalNetWithIPI.InexactFloat64(),
+				Status:           orderentity.SalesOrderItemStatusOpen,
+				Notes:            quoteItem.Notes,
+			}
+			if _, err := orders.CreateItem(ctx, orderItem); err != nil {
+				return nil, err
+			}
+		}
+		return created, nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	for _, quoteItem := range items {
-		if !quoteItem.IsActive || quoteItem.Status == quoteentity.SalesQuotationItemStatusCancelled {
-			continue
-		}
-		balance := quoteItem.RequestedQty - quoteItem.AttendedQty - quoteItem.CancelledQty
-		if balance <= 0 {
-			continue
-		}
-		orderItem := &orderentity.SalesOrderItem{
-			SalesOrderCode:   created.Code,
-			Sequence:         quoteItem.Sequence,
-			ItemCode:         quoteItem.ItemCode,
-			Mask:             quoteItem.Mask,
-			DigitDate:        time.Now(),
-			SalesUOM:         quoteItem.SalesUOM,
-			WarehouseCode:    quoteItem.WarehouseCode,
-			PriceTableCode:   quoteItem.PriceTableCode,
-			RequestedQty:     balance,
-			UnitPrice:        quoteItem.UnitPrice,
-			DeliveryDate:     quoteItem.DeliveryDate,
-			DeliveryDateFirm: quoteItem.DeliveryDateFirm,
-			IPIPct:           quoteItem.IPIPct,
-			STPct:            quoteItem.STPct,
-			DiscountPct:      quoteItem.DiscountPct,
-			TotalGross:       quoteItem.TotalGross,
-			TotalNet:         quoteItem.TotalNet,
-			TotalNetWithIPI:  quoteItem.TotalNetWithIPI,
-			Status:           orderentity.SalesOrderItemStatusOpen,
-			Notes:            quoteItem.Notes,
-		}
-		_, _ = uc.Orders.CreateItem(ctx, orderItem)
-	}
-	if err := uc.Quotes.Repo.MarkConverted(ctx, q.Code, created.Code); err != nil {
 		return nil, err
 	}
 	return &response.SalesOrderResponse{Code: created.Code, OrderNumber: created.OrderNumber, EnterpriseCode: created.EnterpriseCode, Status: string(created.Status)}, nil

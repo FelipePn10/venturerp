@@ -1079,6 +1079,29 @@ func (q *Queries) GetCarrierByCode(ctx context.Context, code int64) (Carrier, er
 	return i, err
 }
 
+const getCarrierByID = `-- name: GetCarrierByID :one
+SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at FROM carriers WHERE id = $1
+`
+
+func (q *Queries) GetCarrierByID(ctx context.Context, id int64) (Carrier, error) {
+	row := q.db.QueryRow(ctx, getCarrierByID, id)
+	var i Carrier
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Description,
+		&i.BillingType,
+		&i.UsesCreditLimit,
+		&i.ConsiderAvailable,
+		&i.PostponeDueDate,
+		&i.ReceiptDays,
+		&i.PaymentDays,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getCarrierGroupByCode = `-- name: GetCarrierGroupByCode :one
 SELECT id, code, description, created_at FROM carrier_groups WHERE code = $1
 `
@@ -1328,6 +1351,31 @@ SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses,
 
 func (q *Queries) GetPaymentConditionByCode(ctx context.Context, code int64) (PaymentCondition, error) {
 	row := q.db.QueryRow(ctx, getPaymentConditionByCode, code)
+	var i PaymentCondition
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Description,
+		&i.CarrierID,
+		&i.AnalysisType,
+		&i.ParcelStart,
+		&i.Expenses,
+		&i.AverageTerm,
+		&i.IsSpecial,
+		&i.IsRevenue,
+		&i.IsAtSight,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getPaymentConditionByID = `-- name: GetPaymentConditionByID :one
+SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at FROM payment_conditions WHERE id = $1
+`
+
+func (q *Queries) GetPaymentConditionByID(ctx context.Context, id int64) (PaymentCondition, error) {
+	row := q.db.QueryRow(ctx, getPaymentConditionByID, id)
 	var i PaymentCondition
 	err := row.Scan(
 		&i.ID,

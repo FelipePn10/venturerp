@@ -3676,6 +3676,12 @@ type ConsumerServiceConsumerEmail struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type ConsumerServiceConsumerEnterprise struct {
+	ConsumerCode int64
+	EnterpriseID int64
+	CreatedAt    pgtype.Timestamptz
+}
+
 type ConsumerServiceConsumerPhone struct {
 	Code         int64
 	ConsumerCode int64
@@ -3696,6 +3702,7 @@ type ConsumerServiceCustomerContact struct {
 	Description  string
 	CreatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 type ConsumerServiceKnowledgeSource struct {
@@ -7225,6 +7232,7 @@ type SalesDivision struct {
 	UpdatedAt               pgtype.Timestamptz
 	CreatedBy               pgtype.UUID
 	EnterpriseID            *int64
+	AllowFreePaymentTerms   bool
 }
 
 type SalesForecast struct {
@@ -7568,6 +7576,11 @@ type SalesQuotation struct {
 	CreatedAt               pgtype.Timestamptz
 	UpdatedAt               pgtype.Timestamptz
 	CreatedBy               pgtype.UUID
+	DeliveryWithReceipt     bool
+	CancellationReasonCode  *int64
+	DavGeneratedAt          pgtype.Timestamptz
+	DavReportKey            pgtype.UUID
+	ConsumerAddress         pgtype.Text
 }
 
 type SalesQuotationAttachment struct {
@@ -7579,17 +7592,49 @@ type SalesQuotationAttachment struct {
 	StorageKey         string
 	UploadedAt         pgtype.Timestamptz
 	UploadedBy         pgtype.UUID
+	Content            []byte
+}
+
+type SalesQuotationCancellationReason struct {
+	ID                int64
+	EnterpriseCode    int64
+	Code              int64
+	Description       string
+	AllowUncancel     bool
+	RequireComplement bool
+	IsActive          bool
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
+type SalesQuotationCommissionPattern struct {
+	ID             int64
+	EnterpriseCode int64
+	Code           int64
+	Description    string
+	CommissionPct  pgtype.Numeric
+	InvoicePct     pgtype.Numeric
+	PaymentPct     pgtype.Numeric
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type SalesQuotationCommissionPatternSequence struct {
+	EnterpriseCode int64
+	LastCode       int64
 }
 
 type SalesQuotationEvent struct {
-	ID                 int64
-	SalesQuotationCode int64
-	EventType          string
-	Reason             string
-	Complement         pgtype.Text
-	EventDate          pgtype.Date
-	CreatedAt          pgtype.Timestamptz
-	CreatedBy          pgtype.UUID
+	ID                     int64
+	SalesQuotationCode     int64
+	EventType              string
+	Reason                 string
+	Complement             pgtype.Text
+	EventDate              pgtype.Date
+	CreatedAt              pgtype.Timestamptz
+	CreatedBy              pgtype.UUID
+	SalesQuotationItemCode *int64
 }
 
 type SalesQuotationItem struct {
@@ -7618,6 +7663,19 @@ type SalesQuotationItem struct {
 	IsActive           bool
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
+}
+
+type SalesQuotationParameter struct {
+	EnterpriseCode              int64
+	PurchaseOrderPrompt         string
+	DeliveryAuthorizationPrompt string
+	FinalConsumerCustomerCode   *int64
+	AllowServiceItemsNfce       bool
+	DefaultNfce                 bool
+	MinimumCifFreight           pgtype.Numeric
+	AddRedeliveryToFreight      bool
+	CreatedAt                   pgtype.Timestamptz
+	UpdatedAt                   pgtype.Timestamptz
 }
 
 type SalesQuotationSequence struct {

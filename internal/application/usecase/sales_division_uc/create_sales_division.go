@@ -43,7 +43,6 @@ func (uc *CreateSalesDivisionUseCase) Execute(
 	if err != nil {
 		return nil, errorsuc.ErrUnauthorized
 	}
-
 	sd, err := entity.NewSalesDivision(
 		dto.Code,
 		dto.Description,
@@ -65,6 +64,7 @@ func (uc *CreateSalesDivisionUseCase) Execute(
 		// error -> 422, not a 500.
 		return nil, errorsuc.NewValidationError(err.Error())
 	}
+	sd.AllowFreePaymentTerms = dto.AllowFreePaymentTerms
 
 	created, err := uc.Repo.Create(ctx, sd)
 	if err != nil {

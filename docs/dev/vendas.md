@@ -219,16 +219,20 @@ expedição e faturamento.
   líquido e valor ponderado pela probabilidade de fechamento.
 - **Histórico operacional:** cancelamento, descancelamento, atendimento e
   conversão registram eventos para manter rastreabilidade da decisão comercial.
-- **Anexos:** a estrutura de banco já prevê documentos vinculados ao orçamento,
-  com limite de 10 MB por arquivo; os endpoints de upload/download ainda não
-  foram expostos nesta fase.
+- **Anexos:** documentos binários vinculados ao orçamento, com inclusão multipart,
+  listagem, download, exclusão e limite de 10 MB por arquivo.
+- **Parâmetros:** prompts de ordem de compra/autorização de entrega, cliente
+  consumidor final, defaults NFC-e e regras de frete são configurados por empresa.
+- **DAV/Pré-Venda:** a geração é idempotente e, depois dela, a API bloqueia as
+  permissões de cupom fiscal, impressão de pedido e e-mail, mantendo apenas o
+  relatório DAV permitido.
 
 ### Rotas
 
 | Método | Rota | Ação |
 |---|---|---|
 | POST | `/api/sales-quotation/create` | Cria a capa do orçamento |
-| GET | `/api/sales-quotation/list` | Lista orçamentos, filtrável por `customer_code`, `status`, `from`, `to`, `purchase_order_number`, `freight_type` |
+| GET | `/api/sales-quotation/list` | Lista orçamentos com filtros e paginação (`limit`/`offset`) |
 | GET | `/api/sales-quotation/report` | Consolida totais, status, retenções e valor ponderado por probabilidade |
 | GET | `/api/sales-quotation/{code}` | Consulta orçamento com itens |
 | PUT | `/api/sales-quotation/{code}` | Atualiza capa, validade, condições, transporte e valores comerciais |
@@ -236,11 +240,28 @@ expedição e faturamento.
 | POST | `/api/sales-quotation/{code}/uncancel` | Descancela orçamento mantendo histórico |
 | POST | `/api/sales-quotation/{code}/attend` | Registra atendimento manual do orçamento com motivo/data |
 | PATCH | `/api/sales-quotation/{code}/status` | Altera status |
+| PATCH | `/api/sales-quotation/{code}/release` | Bloqueia/libera com motivo |
+| GET | `/api/sales-quotation/{code}/events` | Lista histórico do mais recente ao mais antigo |
 | POST | `/api/sales-quotation/{code}/convert-to-order` | Converte saldo aberto para pedido de venda |
+| GET/PUT | `/api/sales-quotation/parameters` | Consulta/atualiza parâmetros do orçamento por empresa |
+| GET/POST | `/api/sales-quotation/commission-patterns` | Lista/grava padrões de comissão |
+| GET/POST | `/api/sales-quotation/cancellation-reasons` | Lista/grava motivos com regras D/C |
+| POST | `/api/sales-quotation/{code}/dav` | Registra a geração do DAV/Pré-Venda |
+| GET/POST | `/api/sales-quotation/{code}/attachments` | Lista/inclui anexo multipart (`file`) |
+| GET/DELETE | `/api/sales-quotation/{code}/attachments/{attachmentID}` | Baixa/exclui anexo |
 | POST | `/api/sales-quotation/items/create` | Inclui item |
 | GET | `/api/sales-quotation/items/{code}` | Lista itens do orçamento |
 | PUT | `/api/sales-quotation/items/{itemCode}` | Atualiza item, atendimento e cancelamento parcial |
-| DELETE | `/api/sales-quotation/items/{itemCode}/cancel` | Cancela item |
+| DELETE | `/api/sales-quotation/items/{itemCode}/cancel` | Cancela item com `reason_code` e complemento exigido pelo motivo |
+
+`list` e `report` aceitam `quotation_number`, `customer_code`, `status`,
+`sales_division_code`, `quotation_type`, `from`, `to`,
+`purchase_order_number` e `freight_type`. A listagem também aceita `limit` (máximo
+500; padrão 100) e `offset`.
+
+A conversão para pedido é atômica: pedido, itens, vínculo do pedido no orçamento e
+evento de conversão são confirmados na mesma transação. Uma falha em qualquer
+etapa desfaz todo o conjunto.
 
 ### Ciclo De Vida
 
@@ -252,6 +273,8 @@ expedição e faturamento.
 | `OA` | Orçamento em análise comercial/financeira |
 | `F` | Pedido confirmado no ERP |
 | `OF` | Orçamento confirmado no ERP e pronto para negociação/conversão |
+| `V` | Pedido VentureERP |
+| `OV` | Orçamento VentureERP (padrão para novos orçamentos) |
 | `CANCELLED` | Proposta encerrada por perda, desistência ou erro operacional |
 | `ATTENDED` | Orçamento atendido manualmente ou convertido em pedido |
 | `EXPIRED` | Orçamento vencido por validade expirada |
@@ -273,7 +296,8 @@ retenções, autorização de entrega, observações e vínculo com o pedido con
 (`converted_sales_order_code`). Itens guardam quantidade solicitada, atendida e
 cancelada, permitindo saldo aberto antes da conversão.
 
-O cancelamento exige motivo e pode receber complemento. O registro permanece
+O cancelamento exige um motivo cadastrado. Motivos com indicador C exigem
+complemento; somente motivos com indicador D permitem descancelamento. O registro permanece
 consultável para preservar histórico comercial. O descancelamento reabre a
 proposta e registra o motivo da reversão. O atendimento manual encerra a proposta
 sem gerar pedido, útil quando a decisão comercial precisa ser registrada mesmo sem
@@ -298,8 +322,9 @@ implementado como atributo comercial/fiscal do orçamento:
 
 Esta fase não emite NFC-e e não autoriza documento fiscal. A emissão continua no
 módulo fiscal/faturamento. Também não foi implementada nesta fase uma regra
-automática de cálculo fiscal específica para NFC-e dentro do orçamento; o campo
-prepara a intenção fiscal para o pedido/faturamento consumir depois.
+automática de emissão fiscal dentro do orçamento; o campo prepara a intenção
+fiscal para o pedido/faturamento consumir depois. `delivery_with_receipt` força
+NFC-e e zera o IPI de novos itens, conforme a configuração comercial.
 
 ### Relatórios E Consultas
 
@@ -310,9 +335,17 @@ retenções e valor ponderado pela probabilidade de fechamento.
 
 ### Testes
 
-Teste automatizado: `scripts/test-comercial-orcamentos.sh`. Com `BASE_URL` e
-`TOKEN`, o script também faz smoke HTTP de criação, inclusão de item, consulta,
-relatório, cancelamento, descancelamento e atendimento.
+Teste automatizado: `scripts/test-comercial-orcamentos.sh`. Sem `BASE_URL`, o
+script executa os testes Go focados. Com `BASE_URL`, executa também o smoke HTTP;
+aceita `TOKEN` pronto ou autentica com `USER_EMAIL`/`USER_PASS`. O smoke cobre
+parâmetros, orçamento/item, consultas, relatório, anexos, liberação, cancelamento,
+descancelamento, atendimento, eventos e DAV. Os testes PostgreSQL de isolamento e
+conversão atômica são executados com:
+
+```bash
+TEST_DATABASE_URL=<postgres-de-testes> \
+  go test -tags=integration ./internal/infrastructure/repository/sales_quotation
+```
 
 ---
 
