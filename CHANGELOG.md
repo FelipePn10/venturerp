@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.0] — 2026-07-24
+
+- feat: complete sales quotations (`6caf6c4`)
+
 ## [v1.0.3] — 2026-07-19
 
 - fix: preserve backend desktop compatibility (`de11d48`)
