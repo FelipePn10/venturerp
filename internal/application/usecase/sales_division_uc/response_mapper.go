@@ -20,6 +20,7 @@ func toSalesDivisionResponse(sd *entity.SalesDivision) *response.SalesDivisionRe
 		ConsiderDeliveryPromise: sd.ConsiderDeliveryPromise,
 		ConsiderMRP:             sd.ConsiderMRP,
 		AllowOutsideLimits:      sd.AllowOutsideLimits,
+		AllowFreePaymentTerms:   sd.AllowFreePaymentTerms,
 		MinimumDeliveryDays:     sd.MinimumDeliveryDays,
 		FinancialDelayDays:      sd.FinancialDelayDays,
 		PISPercentage:           sd.PISPercentage,

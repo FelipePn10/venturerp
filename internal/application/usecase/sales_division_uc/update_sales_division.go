@@ -46,6 +46,7 @@ func (uc *UpdateSalesDivisionUseCase) Execute(
 		ConsiderDeliveryPromise: dto.ConsiderDeliveryPromise,
 		ConsiderMRP:             dto.ConsiderMRP,
 		AllowOutsideLimits:      dto.AllowOutsideLimits,
+		AllowFreePaymentTerms:   dto.AllowFreePaymentTerms,
 		MinimumDeliveryDays:     dto.MinimumDeliveryDays,
 		FinancialDelayDays:      dto.FinancialDelayDays,
 		PISPercentage:           dto.PISPercentage,

@@ -91,6 +91,16 @@ O orçamento também possui o indicador de NFC-e. Esse campo não emite cupom fi
 por si só; ele apenas leva para o pedido de venda a intenção de que aquela venda
 seja tratada como cupom fiscal eletrônico no fluxo fiscal/faturamento.
 
+É possível configurar os nomes dos campos comerciais, valor mínimo de frete CIF,
+tratamento do redespacho, padrão NFC-e, padrões de comissão e motivos de
+cancelamento. Os motivos controlam quando o complemento é obrigatório e quando o
+descancelamento é permitido. Cada divisão de venda também pode liberar condições
+de pagamento livres.
+
+Anexos de até 10 MB podem ser incluídos, baixados e excluídos. Quando o
+DAV/Pré-Venda é gerado, o orçamento passa a permitir somente o relatório DAV;
+cupom fiscal, impressão de pedido e envio por e-mail ficam indisponíveis.
+
 **Ciclo de vida do orçamento:**
 
 | Status | Significado |
@@ -101,6 +111,8 @@ seja tratada como cupom fiscal eletrônico no fluxo fiscal/faturamento.
 | **OA** | Orçamento em análise |
 | **F** | Pedido confirmado no ERP |
 | **OF** | Orçamento confirmado no ERP |
+| **V** | Pedido VentureERP |
+| **OV** | Orçamento VentureERP |
 | **ATTENDED** | Orçamento atendido ou convertido em pedido |
 | **EXPIRED** | Perdeu validade |
 | **CANCELLED** | Encerrado por perda/desistência |

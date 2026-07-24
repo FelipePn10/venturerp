@@ -741,10 +741,11 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.CancelSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 	)
 	salesQuotationRepository := salesQuotationRepo.New(app.db.Pool)
-	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService}
+	custRepo := customerRepo.New(queries, app.db.Pool)
+	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService, Customers: custRepo, Divisions: sdRepo, Items: itemRepo}
 	salesQuotationHandler := handler.NewSalesQuotationHandler(
 		salesQuotationUC,
-		&sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, Orders: soRepo},
+		&sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, UOW: salesQuotationRepo.NewConversionUnitOfWork(app.db.Pool)},
 	)
 	representativeRepository := representativeRepo.New(app.db.Pool)
 	representativeHandler := handler.NewRepresentativeHandler(&representative_uc.UseCase{Repo: representativeRepository, Auth: authService})
@@ -1009,7 +1010,6 @@ func (app *application) mount() chi.Router {
 	)
 
 	// customer
-	custRepo := customerRepo.New(queries, app.db.Pool)
 	customerUC := customer_uc.NewCustomerUseCase(custRepo)
 	customerHandler := handler.NewCustomerHandler(customerUC)
 
@@ -1371,6 +1371,12 @@ func (app *application) mount() chi.Router {
 			})
 		})
 		r.Route("/api/sales-quotation", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters", salesQuotationHandler.GetParameters)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/parameters", salesQuotationHandler.SaveParameters)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/commission-patterns", salesQuotationHandler.ListCommissionPatterns)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/commission-patterns", salesQuotationHandler.SaveCommissionPattern)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cancellation-reasons", salesQuotationHandler.ListCancellationReasons)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/cancellation-reasons", salesQuotationHandler.SaveCancellationReason)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesQuotationHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesQuotationHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", salesQuotationHandler.Report)
@@ -1380,7 +1386,14 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/attend", salesQuotationHandler.Attend)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/uncancel", salesQuotationHandler.Uncancel)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/status", salesQuotationHandler.ChangeStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/release", salesQuotationHandler.ChangeRelease)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/events", salesQuotationHandler.ListEvents)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/convert-to-order", salesQuotationHandler.Convert)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/dav", salesQuotationHandler.GenerateDAV)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/attachments", salesQuotationHandler.ListAttachments)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/attachments", salesQuotationHandler.CreateAttachment)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/attachments/{attachmentID}", salesQuotationHandler.DownloadAttachment)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/attachments/{attachmentID}", salesQuotationHandler.DeleteAttachment)
 			r.Route("/items", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesQuotationHandler.CreateItem)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", salesQuotationHandler.ListItems)

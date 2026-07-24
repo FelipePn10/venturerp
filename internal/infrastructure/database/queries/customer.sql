@@ -110,6 +110,9 @@ RETURNING *;
 -- name: GetCarrierByCode :one
 SELECT * FROM carriers WHERE code = $1;
 
+-- name: GetCarrierByID :one
+SELECT * FROM carriers WHERE id = $1;
+
 -- name: ListCarriers :many
 SELECT * FROM carriers
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
@@ -162,6 +165,9 @@ RETURNING *;
 
 -- name: GetPaymentConditionByCode :one
 SELECT * FROM payment_conditions WHERE code = $1;
+
+-- name: GetPaymentConditionByID :one
+SELECT * FROM payment_conditions WHERE id = $1;
 
 -- name: ListPaymentConditions :many
 SELECT * FROM payment_conditions

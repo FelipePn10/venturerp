@@ -33,6 +33,7 @@ func toResponse(q *entity.SalesQuotation) *response.SalesQuotationResponse {
 		ProbabilityPct:          q.ProbabilityPct,
 		CommissionPct:           q.CommissionPct,
 		IsNFCe:                  q.IsNFCe,
+		DeliveryWithReceipt:     q.DeliveryWithReceipt,
 		Street:                  q.Street,
 		StreetNumber:            q.StreetNumber,
 		ForeignDocument:         q.ForeignDocument,
@@ -59,10 +60,17 @@ func toResponse(q *entity.SalesQuotation) *response.SalesQuotationResponse {
 		AttendedAt:              q.AttendedAt,
 		ConvertedSalesOrderCode: q.ConvertedSalesOrderCode,
 		ConvertedAt:             q.ConvertedAt,
+		DAVGeneratedAt:          q.DAVGeneratedAt,
+		DAVReportKey:            q.DAVReportKey,
+		ConsumerAddress:         q.ConsumerAddress,
 		IsActive:                q.IsActive,
 		CreatedAt:               q.CreatedAt,
 		UpdatedAt:               q.UpdatedAt,
 		CreatedBy:               q.CreatedBy,
+		CanPrintFiscalReceipt:   q.DocumentActionAllowed("FISCAL_RECEIPT"),
+		CanPrintSalesOrder:      q.DocumentActionAllowed("SALES_ORDER"),
+		CanSendEmail:            q.DocumentActionAllowed("EMAIL"),
+		CanPrintDAVReport:       q.DAVGeneratedAt != nil,
 	}
 	if len(q.Items) > 0 {
 		out.Items = make([]response.SalesQuotationItemResponse, 0, len(q.Items))

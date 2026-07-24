@@ -24,6 +24,7 @@ type SalesDivision struct {
 	ConsiderDeliveryPromise bool
 	ConsiderMRP             bool
 	AllowOutsideLimits      bool
+	AllowFreePaymentTerms   bool
 	MinimumDeliveryDays     int
 	FinancialDelayDays      int
 	PISPercentage           float64

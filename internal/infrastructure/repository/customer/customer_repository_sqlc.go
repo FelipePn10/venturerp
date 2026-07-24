@@ -340,6 +340,14 @@ func (r *CustomerRepositorySQLC) GetCarrierByCode(ctx context.Context, code int6
 	return carrierToEntity(row), nil
 }
 
+func (r *CustomerRepositorySQLC) GetCarrierByID(ctx context.Context, id int64) (*entity.Carrier, error) {
+	row, err := r.q.GetCarrierByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("fetching carrier id %d: %w", id, err)
+	}
+	return carrierToEntity(row), nil
+}
+
 func (r *CustomerRepositorySQLC) ListCarriers(ctx context.Context, onlyActive bool) ([]*entity.Carrier, error) {
 	rows, err := r.q.ListCarriers(ctx, onlyActive)
 	if err != nil {
@@ -464,6 +472,14 @@ func (r *CustomerRepositorySQLC) GetPaymentConditionByCode(ctx context.Context, 
 	row, err := r.q.GetPaymentConditionByCode(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("fetching payment condition %d: %w", code, err)
+	}
+	return paymentCondToEntity(row), nil
+}
+
+func (r *CustomerRepositorySQLC) GetPaymentConditionByID(ctx context.Context, id int64) (*entity.PaymentCondition, error) {
+	row, err := r.q.GetPaymentConditionByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("fetching payment condition id %d: %w", id, err)
 	}
 	return paymentCondToEntity(row), nil
 }

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type SalesQuotationStatus string
@@ -15,6 +16,8 @@ const (
 	SalesQuotationStatusBudgetAnalysis SalesQuotationStatus = "OA"
 	SalesQuotationStatusERPOrder       SalesQuotationStatus = "F"
 	SalesQuotationStatusERPBudget      SalesQuotationStatus = "OF"
+	SalesQuotationStatusVentureOrder   SalesQuotationStatus = "V"
+	SalesQuotationStatusVentureBudget  SalesQuotationStatus = "OV"
 	SalesQuotationStatusCancelled      SalesQuotationStatus = "CANCELLED"
 	SalesQuotationStatusAttended       SalesQuotationStatus = "ATTENDED"
 	SalesQuotationStatusExpired        SalesQuotationStatus = "EXPIRED"
@@ -68,9 +71,10 @@ type SalesQuotation struct {
 	PriceTableCode          *int64
 	PaymentTermCode         *int64
 	CurrencyCode            string
-	ProbabilityPct          float64
-	CommissionPct           float64
+	ProbabilityPct          decimal.Decimal
+	CommissionPct           decimal.Decimal
 	IsNFCe                  bool
+	DeliveryWithReceipt     bool
 	Street                  *string
 	StreetNumber            *string
 	ForeignDocument         *string
@@ -80,14 +84,14 @@ type SalesQuotation struct {
 	CarrierCode             *int64
 	FreightType             *string
 	VerifyFreight           bool
-	FreightValue            float64
-	RedeliveryFreightValue  float64
-	InsuranceValue          float64
-	DiscountValue           float64
-	SurchargeValue          float64
-	RetainedTaxValue        float64
-	TotalGross              float64
-	TotalNet                float64
+	FreightValue            decimal.Decimal
+	RedeliveryFreightValue  decimal.Decimal
+	InsuranceValue          decimal.Decimal
+	DiscountValue           decimal.Decimal
+	SurchargeValue          decimal.Decimal
+	RetainedTaxValue        decimal.Decimal
+	TotalGross              decimal.Decimal
+	TotalNet                decimal.Decimal
 	DeliveryAuthorization   *string
 	Notes                   *string
 	ObsCustomer             *string
@@ -97,6 +101,9 @@ type SalesQuotation struct {
 	AttendedAt              *time.Time
 	ConvertedSalesOrderCode *int64
 	ConvertedAt             *time.Time
+	DAVGeneratedAt          *time.Time
+	DAVReportKey            *uuid.UUID
+	ConsumerAddress         *string
 	IsActive                bool
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
@@ -113,19 +120,19 @@ type SalesQuotationItem struct {
 	SalesUOM           *string
 	WarehouseCode      *int64
 	PriceTableCode     *int64
-	RequestedQty       float64
-	UnitPrice          float64
-	AttendedQty        float64
-	CancelledQty       float64
-	Balance            float64
+	RequestedQty       decimal.Decimal
+	UnitPrice          decimal.Decimal
+	AttendedQty        decimal.Decimal
+	CancelledQty       decimal.Decimal
+	Balance            decimal.Decimal
 	DeliveryDate       *time.Time
 	DeliveryDateFirm   bool
-	DiscountPct        float64
-	IPIPct             float64
-	STPct              float64
-	TotalGross         float64
-	TotalNet           float64
-	TotalNetWithIPI    float64
+	DiscountPct        decimal.Decimal
+	IPIPct             decimal.Decimal
+	STPct              decimal.Decimal
+	TotalGross         decimal.Decimal
+	TotalNet           decimal.Decimal
+	TotalNetWithIPI    decimal.Decimal
 	Status             SalesQuotationItemStatus
 	Notes              *string
 	IsActive           bool
