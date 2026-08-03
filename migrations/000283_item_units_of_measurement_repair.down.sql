@@ -1,0 +1,2 @@
+-- Intentionally irreversible. These enum values may be in use and are also
+-- introduced by migration 000242 on databases that applied it normally.

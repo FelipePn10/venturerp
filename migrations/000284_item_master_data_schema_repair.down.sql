@@ -1,0 +1,2 @@
+-- Intentionally a no-op. This migration repairs schema that may be owned by
+-- 000242 or may already have been applied manually on advanced databases.
