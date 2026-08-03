@@ -15,6 +15,7 @@ const createItem = `-- name: CreateItem :one
 INSERT INTO items (
     warehouse_code,
     code,
+    name,
     complement,
     nature,
     situation,
@@ -43,8 +44,23 @@ INSERT INTO items (
     planning_reorder_point,
     planning_tank_code,
     planning_ghost,
+	planning_abc_class,
+	planning_minimum_lot,
+	planning_multiple_lot,
+	planning_safety_stock,
+	planning_critical,
+	planning_exclusive,
+	planning_active,
 
     supplies_type_of_use,
+	supplies_purchase_uom,
+	supplies_warehouse_code,
+	supplies_receiving_checklist,
+	supplies_harvest,
+
+	commercial_warranty_days,
+	accounting_active,
+	accounting_calculate_pis_cofins,
 
     created_by,
     created_at
@@ -54,14 +70,18 @@ INSERT INTO items (
              $10, $11, $12, $13, $14,
              $15, $16, $17, $18, $19,
              $20, $21, $22, $23, $24,
-             $25, $26, $27, $28, NOW()
+             $25, $26, $27, $28, $29,
+			 $30, $31, $32, $33, $34,
+			 $35, $36, $37, $38, $39,
+			 $40, $41, $42, $43, NOW()
          )
-    RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
+    RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins
 `
 
 type CreateItemParams struct {
 	WarehouseCode                        int64
 	Code                                 int64
+	Name                                 string
 	Complement                           pgtype.Text
 	Nature                               int16
 	Situation                            int16
@@ -86,7 +106,21 @@ type CreateItemParams struct {
 	PlanningReorderPoint                 []byte
 	PlanningTankCode                     *int64
 	PlanningGhost                        bool
+	PlanningAbcClass                     pgtype.Text
+	PlanningMinimumLot                   int64
+	PlanningMultipleLot                  int64
+	PlanningSafetyStock                  int64
+	PlanningCritical                     bool
+	PlanningExclusive                    bool
+	PlanningActive                       bool
 	SuppliesTypeOfUse                    int16
+	SuppliesPurchaseUom                  pgtype.Text
+	SuppliesWarehouseCode                *int64
+	SuppliesReceivingChecklist           bool
+	SuppliesHarvest                      bool
+	CommercialWarrantyDays               int32
+	AccountingActive                     bool
+	AccountingCalculatePisCofins         bool
 	CreatedBy                            pgtype.UUID
 }
 
@@ -94,6 +128,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 	row := q.db.QueryRow(ctx, createItem,
 		arg.WarehouseCode,
 		arg.Code,
+		arg.Name,
 		arg.Complement,
 		arg.Nature,
 		arg.Situation,
@@ -118,7 +153,21 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		arg.PlanningReorderPoint,
 		arg.PlanningTankCode,
 		arg.PlanningGhost,
+		arg.PlanningAbcClass,
+		arg.PlanningMinimumLot,
+		arg.PlanningMultipleLot,
+		arg.PlanningSafetyStock,
+		arg.PlanningCritical,
+		arg.PlanningExclusive,
+		arg.PlanningActive,
 		arg.SuppliesTypeOfUse,
+		arg.SuppliesPurchaseUom,
+		arg.SuppliesWarehouseCode,
+		arg.SuppliesReceivingChecklist,
+		arg.SuppliesHarvest,
+		arg.CommercialWarrantyDays,
+		arg.AccountingActive,
+		arg.AccountingCalculatePisCofins,
 		arg.CreatedBy,
 	)
 	var i Item
@@ -157,12 +206,27 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		&i.ProductionReportingType,
 		&i.MaterialIssueTiming,
 		&i.AcceptsFractionalQuantity,
+		&i.Name,
+		&i.PlanningAbcClass,
+		&i.PlanningMinimumLot,
+		&i.PlanningMultipleLot,
+		&i.PlanningSafetyStock,
+		&i.PlanningCritical,
+		&i.PlanningExclusive,
+		&i.PlanningActive,
+		&i.SuppliesPurchaseUom,
+		&i.SuppliesWarehouseCode,
+		&i.SuppliesReceivingChecklist,
+		&i.SuppliesHarvest,
+		&i.CommercialWarrantyDays,
+		&i.AccountingActive,
+		&i.AccountingCalculatePisCofins,
 	)
 	return i, err
 }
 
 const findItemByCode = `-- name: FindItemByCode :one
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins
 FROM items
 WHERE code = $1
 `
@@ -205,12 +269,27 @@ func (q *Queries) FindItemByCode(ctx context.Context, code int64) (Item, error) 
 		&i.ProductionReportingType,
 		&i.MaterialIssueTiming,
 		&i.AcceptsFractionalQuantity,
+		&i.Name,
+		&i.PlanningAbcClass,
+		&i.PlanningMinimumLot,
+		&i.PlanningMultipleLot,
+		&i.PlanningSafetyStock,
+		&i.PlanningCritical,
+		&i.PlanningExclusive,
+		&i.PlanningActive,
+		&i.SuppliesPurchaseUom,
+		&i.SuppliesWarehouseCode,
+		&i.SuppliesReceivingChecklist,
+		&i.SuppliesHarvest,
+		&i.CommercialWarrantyDays,
+		&i.AccountingActive,
+		&i.AccountingCalculatePisCofins,
 	)
 	return i, err
 }
 
 const getItemByID = `-- name: GetItemByID :one
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins
 FROM items
 WHERE id = $1
 `
@@ -253,12 +332,27 @@ func (q *Queries) GetItemByID(ctx context.Context, id int64) (Item, error) {
 		&i.ProductionReportingType,
 		&i.MaterialIssueTiming,
 		&i.AcceptsFractionalQuantity,
+		&i.Name,
+		&i.PlanningAbcClass,
+		&i.PlanningMinimumLot,
+		&i.PlanningMultipleLot,
+		&i.PlanningSafetyStock,
+		&i.PlanningCritical,
+		&i.PlanningExclusive,
+		&i.PlanningActive,
+		&i.SuppliesPurchaseUom,
+		&i.SuppliesWarehouseCode,
+		&i.SuppliesReceivingChecklist,
+		&i.SuppliesHarvest,
+		&i.CommercialWarrantyDays,
+		&i.AccountingActive,
+		&i.AccountingCalculatePisCofins,
 	)
 	return i, err
 }
 
 const listItems = `-- name: ListItems :many
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins
 FROM items
 ORDER BY code
 `
@@ -307,6 +401,21 @@ func (q *Queries) ListItems(ctx context.Context) ([]Item, error) {
 			&i.ProductionReportingType,
 			&i.MaterialIssueTiming,
 			&i.AcceptsFractionalQuantity,
+			&i.Name,
+			&i.PlanningAbcClass,
+			&i.PlanningMinimumLot,
+			&i.PlanningMultipleLot,
+			&i.PlanningSafetyStock,
+			&i.PlanningCritical,
+			&i.PlanningExclusive,
+			&i.PlanningActive,
+			&i.SuppliesPurchaseUom,
+			&i.SuppliesWarehouseCode,
+			&i.SuppliesReceivingChecklist,
+			&i.SuppliesHarvest,
+			&i.CommercialWarrantyDays,
+			&i.AccountingActive,
+			&i.AccountingCalculatePisCofins,
 		); err != nil {
 			return nil, err
 		}

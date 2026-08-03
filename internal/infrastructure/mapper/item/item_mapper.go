@@ -8,6 +8,7 @@ import (
 func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
 	return itementity.NewItem(
 		d.Code,
+		d.Name,
 		d.Complement,
 		d.Nature,
 		toPDM(d.PDM),
@@ -17,6 +18,8 @@ func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
 		toEngineering(d.Engineering),
 		toPlanning(d.Planning),
 		toSupplies(d.Supplies),
+		itementity.Commercial{WarrantyDays: d.Commercial.WarrantyDays},
+		itementity.AccountingFiscal{Active: d.AccountingFiscal.Active, CalculatePISCOFINS: d.AccountingFiscal.CalculatePISCOFINS},
 		d.CreatedBy,
 	)
 }
@@ -59,11 +62,22 @@ func toPlanning(d request.PlanningDTO) itementity.Planning {
 		ReorderPoint: d.ReorderPoint,
 		TankCode:     d.TankCode,
 		Ghost:        d.Ghost,
+		ABCClass:     d.ABCClass,
+		MinimumLot:   d.MinimumLot,
+		MultipleLot:  d.MultipleLot,
+		SafetyStock:  d.SafetyStock,
+		Critical:     d.Critical,
+		Exclusive:    d.Exclusive,
+		Active:       d.Active,
 	}
 }
 
 func toSupplies(d request.SuppliesDTO) itementity.Supplies {
 	return itementity.Supplies{
-		TypeOfUse: d.TypeOfUse,
+		TypeOfUse:          d.TypeOfUse,
+		PurchaseUOM:        d.PurchaseUOM,
+		WarehouseCode:      d.WarehouseCode,
+		ReceivingChecklist: d.ReceivingChecklist,
+		Harvest:            d.Harvest,
 	}
 }

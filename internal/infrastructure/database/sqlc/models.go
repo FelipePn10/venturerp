@@ -2945,6 +2945,11 @@ const (
 	UnitOfMeasurementEnumUN         UnitOfMeasurementEnum = "UN"
 	UnitOfMeasurementEnumMICROMETRO UnitOfMeasurementEnum = "MICROMETRO"
 	UnitOfMeasurementEnumTONELADA   UnitOfMeasurementEnum = "TONELADA"
+	UnitOfMeasurementEnumL          UnitOfMeasurementEnum = "L"
+	UnitOfMeasurementEnumCX         UnitOfMeasurementEnum = "CX"
+	UnitOfMeasurementEnumPC         UnitOfMeasurementEnum = "PC"
+	UnitOfMeasurementEnumGL         UnitOfMeasurementEnum = "GL"
+	UnitOfMeasurementEnumPAR        UnitOfMeasurementEnum = "PAR"
 )
 
 func (e *UnitOfMeasurementEnum) Scan(src interface{}) error {
@@ -4318,6 +4323,7 @@ type FiscalClassification struct {
 	CreatedAt               pgtype.Timestamptz
 	CreatedBy               pgtype.UUID
 	UpdatedAt               pgtype.Timestamptz
+	ItemCode                *int64
 }
 
 type FiscalClassificationExportAttribute struct {
@@ -5131,6 +5137,21 @@ type Item struct {
 	ProductionReportingType              string
 	MaterialIssueTiming                  string
 	AcceptsFractionalQuantity            bool
+	Name                                 string
+	PlanningAbcClass                     pgtype.Text
+	PlanningMinimumLot                   int64
+	PlanningMultipleLot                  int64
+	PlanningSafetyStock                  int64
+	PlanningCritical                     bool
+	PlanningExclusive                    bool
+	PlanningActive                       bool
+	SuppliesPurchaseUom                  pgtype.Text
+	SuppliesWarehouseCode                *int64
+	SuppliesReceivingChecklist           bool
+	SuppliesHarvest                      bool
+	CommercialWarrantyDays               int32
+	AccountingActive                     bool
+	AccountingCalculatePisCofins         bool
 }
 
 type ItemCalendarPromise struct {

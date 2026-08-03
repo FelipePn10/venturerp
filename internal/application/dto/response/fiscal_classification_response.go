@@ -11,6 +11,7 @@ type FiscalClassificationResponse struct {
 	ID          int64   `json:"id"`
 	Code        int64   `json:"code"`
 	Description string  `json:"description"`
+	ItemCode    *int64  `json:"item_code,omitempty"`
 	NCM         *string `json:"ncm,omitempty"`
 	CEST        *string `json:"cest,omitempty"`
 

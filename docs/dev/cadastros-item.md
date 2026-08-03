@@ -73,6 +73,7 @@ Campos por **pasta** (refletem `internal/domain/items/entity/item_entity.go`):
 ```jsonc
 {
   "code": 1020,                       // se omitido, o sistema sugere o próximo
+  "name": "Chapa de aço carbono 6,35 mm",
   "nature": 2,                        // ItemBase (chapa-mãe) — ou 0/genérico
   "pdm": {
     "group_code": 10,                 // Grupo CHAPAS
@@ -98,12 +99,27 @@ Campos por **pasta** (refletem `internal/domain/items/entity/item_entity.go`):
     "oem": false
   },
   "planning": {                       // Pasta Planejamento
-    "type_mrp": "REORDER_POINT",      // ou MIN_MAX/KANBAN conforme política
+    "type_mrp": "NORMAL_MRP",
     "llc": 9,                         // matéria-prima
     "reorder_point": {"tr": 7, "cm": 200, "cr": 2, "es": 50},
-    "ghost": false
+    "ghost": false,
+    "abc_class": "A",
+    "minimum_lot": 10,
+    "multiple_lot": 5,
+    "safety_stock": 2,
+    "critical": false,
+    "exclusive": false,
+    "active": true
   },
-  "supplies": {"type_of_use": "CONSUMPTION"},
+  "supplies": {
+    "type_of_use": "CONSUMO",
+    "purchase_uom": "KG",
+    "warehouse_code": 1,
+    "receiving_checklist": true,
+    "harvest": false
+  },
+  "commercial": {"warranty_days": 365},
+  "accounting_fiscal": {"active": true, "calculate_pis_cofins": true},
   "created_by": "<uuid-do-usuario>"
 }
 ```
@@ -115,14 +131,15 @@ Pontos importantes para a metalúrgica:
   quantidade interna):
   `POST /api/item-conversions` → `{ "item_code": 1020, "from_uom": "KG", "to_uom": "UN", "factor": 0.005571, "created_by": "<uuid>" }`
   (1 KG = 1/179,5 chapa). Ver `manufatura-e-compras.md` §11.
-- **Ponto de pedido (ROP):** `(TR × CM / CR) + ES` — o MRP usa isso quando `type_mrp = REORDER_POINT`.
+- **Ponto de pedido (ROP):** `(TR × CM / CR) + ES`. O cadastro já guarda os parâmetros;
+  uma política selecionável específica ainda depende do despacho correspondente no motor MRP.
 
 ### 3.1 Classificação fiscal da matéria-prima
 
 `POST /api/fiscal-classifications` (NCM, CEST, IPI/PIS/COFINS, CST). Ex. chapa de aço:
 
 ```jsonc
-{ "description": "Chapas de aço carbono", "ncm": "72085400", "ipi_rate": 0, "pis_rate": 0.0165, "cofins_rate": 0.076, "created_by": "<uuid>" }
+{ "item_code": 1020, "description": "Chapas de aço carbono", "ncm": "72085400", "ipi_rate": 0, "pis_rate": 0.0165, "cofins_rate": 0.076, "created_by": "<uuid>" }
 ```
 
 Ver `fiscal-financeiro.md` §34. O **%IPI** daqui é puxado automaticamente para o item do

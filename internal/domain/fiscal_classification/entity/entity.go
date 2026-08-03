@@ -21,6 +21,7 @@ type FiscalClassification struct {
 	ID          int64
 	Code        int64
 	Description string
+	ItemCode    *int64
 	NCM         *string
 	CEST        *string
 	// IPI

@@ -4,6 +4,7 @@ import "github.com/google/uuid"
 
 // FiscalClassificationFields holds the editable fields shared by create/update.
 type FiscalClassificationFields struct {
+	ItemCode                *int64  `json:"item_code,omitempty"`
 	Description             string  `json:"description"`
 	NCM                     *string `json:"ncm,omitempty"`
 	CEST                    *string `json:"cest,omitempty"`

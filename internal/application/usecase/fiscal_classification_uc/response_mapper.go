@@ -13,6 +13,7 @@ func toFiscalClassificationResponse(c *entity.FiscalClassification) *response.Fi
 		ID:                      c.ID,
 		Code:                    c.Code,
 		Description:             c.Description,
+		ItemCode:                c.ItemCode,
 		NCM:                     c.NCM,
 		CEST:                    c.CEST,
 		IPIRate:                 c.IPIRate,

@@ -21,6 +21,7 @@ func NewFiscalClassificationUseCase(repo repository.FiscalClassificationReposito
 
 func applyFields(c *entity.FiscalClassification, f request.FiscalClassificationFields) {
 	c.Description = f.Description
+	c.ItemCode = f.ItemCode
 	c.NCM = f.NCM
 	c.CEST = f.CEST
 	c.IPIRate = f.IPIRate

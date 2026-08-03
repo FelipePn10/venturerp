@@ -8,19 +8,22 @@ import (
 
 // ItemResponse is the API representation of an item with all its folders.
 type ItemResponse struct {
-	ID          int64                   `json:"id"`
-	Code        int64                   `json:"code"`
-	Complement  *string                 `json:"complement,omitempty"`
-	Nature      int                     `json:"nature"`
-	PDM         ItemPDMResponse         `json:"pdm"`
-	Situation   string                  `json:"situation"`
-	Health      string                  `json:"health"`
-	Warehouse   ItemWarehouseResponse   `json:"warehouse"`
-	Engineering ItemEngineeringResponse `json:"engineering"`
-	Planning    ItemPlanningResponse    `json:"planning"`
-	Supplies    ItemSuppliesResponse    `json:"supplies"`
-	CreatedBy   uuid.UUID               `json:"created_by"`
-	CreatedAt   time.Time               `json:"created_at"`
+	ID               int64                        `json:"id"`
+	Code             int64                        `json:"code"`
+	Name             string                       `json:"name"`
+	Complement       *string                      `json:"complement,omitempty"`
+	Nature           int                          `json:"nature"`
+	PDM              ItemPDMResponse              `json:"pdm"`
+	Situation        string                       `json:"situation"`
+	Health           string                       `json:"health"`
+	Warehouse        ItemWarehouseResponse        `json:"warehouse"`
+	Engineering      ItemEngineeringResponse      `json:"engineering"`
+	Planning         ItemPlanningResponse         `json:"planning"`
+	Supplies         ItemSuppliesResponse         `json:"supplies"`
+	Commercial       ItemCommercialResponse       `json:"commercial"`
+	AccountingFiscal ItemAccountingFiscalResponse `json:"accounting_fiscal"`
+	CreatedBy        uuid.UUID                    `json:"created_by"`
+	CreatedAt        time.Time                    `json:"created_at"`
 }
 
 // ItemPDMResponse is the PDM (descriptive) folder of an item.
@@ -78,6 +81,13 @@ type ItemPlanningResponse struct {
 	ReorderPoint *ItemReorderPointResponse `json:"reorder_point,omitempty"`
 	TankCode     *int                      `json:"tank_code,omitempty"`
 	Ghost        bool                      `json:"ghost"`
+	ABCClass     *string                   `json:"abc_class,omitempty"`
+	MinimumLot   int64                     `json:"minimum_lot"`
+	MultipleLot  int64                     `json:"multiple_lot"`
+	SafetyStock  int64                     `json:"safety_stock"`
+	Critical     bool                      `json:"critical"`
+	Exclusive    bool                      `json:"exclusive"`
+	Active       bool                      `json:"active"`
 }
 
 // ItemReorderPointResponse is an item reorder point value.
@@ -90,7 +100,20 @@ type ItemReorderPointResponse struct {
 
 // ItemSuppliesResponse is the supplies folder of an item.
 type ItemSuppliesResponse struct {
-	TypeOfUse string `json:"type_of_use"`
+	TypeOfUse          string  `json:"type_of_use"`
+	PurchaseUOM        *string `json:"purchase_uom,omitempty"`
+	WarehouseCode      *int64  `json:"warehouse_code,omitempty"`
+	ReceivingChecklist bool    `json:"receiving_checklist"`
+	Harvest            bool    `json:"harvest"`
+}
+
+type ItemCommercialResponse struct {
+	WarrantyDays int `json:"warranty_days"`
+}
+
+type ItemAccountingFiscalResponse struct {
+	Active             bool `json:"active"`
+	CalculatePISCOFINS bool `json:"calculate_pis_cofins"`
 }
 
 // MaskSummaryResponse is a compact representation of an item mask.

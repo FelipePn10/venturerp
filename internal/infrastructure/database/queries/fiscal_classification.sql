@@ -13,7 +13,7 @@ INSERT INTO fiscal_classifications (
     pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao,
     desc_pis_zf_pct, desc_cofins_zf_pct,
     ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st,
-    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, created_by
+    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, item_code, created_by
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9,
@@ -26,7 +26,7 @@ INSERT INTO fiscal_classifications (
     $31, $32, $33, $34,
     $35, $36,
     $37, $38, $39, $40, $41,
-    $42, $43, $44, $45
+    $42, $43, $44, $45, $46
 ) RETURNING *;
 
 -- name: UpdateFiscalClassification :one
@@ -42,7 +42,7 @@ UPDATE fiscal_classifications SET
     pis_reducao_pct = $31, cst_pis_reducao = $32, cofins_reducao_pct = $33, cst_cofins_reducao = $34,
     desc_pis_zf_pct = $35, desc_cofins_zf_pct = $36,
     ex_tarifario = $37, un_ipi = $38, un_tributacao = $39, mod_bc_icms = $40, mod_bc_icms_st = $41,
-    cod_clas_trib = $42, cod_clas_trib_trib_reg = $43, obs_fiscal = $44, is_active = $45,
+    cod_clas_trib = $42, cod_clas_trib_trib_reg = $43, obs_fiscal = $44, item_code = $45, is_active = $46,
     updated_at = NOW()
 WHERE code = $1
 RETURNING *;

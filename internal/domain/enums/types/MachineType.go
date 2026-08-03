@@ -1,18 +1,45 @@
 package types
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 type MachineTypeEnum string
 
 const (
-	MachineCut      MachineTypeEnum = "CORTE"
-	MachineBend     MachineTypeEnum = "DOBRAR"
-	MachineWeld     MachineTypeEnum = "SOLDAR"
-	MachineAssemble MachineTypeEnum = "MONTAR"
-	MachinePaint    MachineTypeEnum = "PINTAR"
-	MachineLathe    MachineTypeEnum = "TORNO"
-	MachineMill     MachineTypeEnum = "MOINHO"
-	MachineInject   MachineTypeEnum = "INJEÇÃO"
-	MachinePress    MachineTypeEnum = "IMPRENSA"
+	MachineCut      MachineTypeEnum = "CUT"
+	MachineBend     MachineTypeEnum = "BEND"
+	MachineWeld     MachineTypeEnum = "WELD"
+	MachineAssemble MachineTypeEnum = "ASSEMBLE"
+	MachinePaint    MachineTypeEnum = "PAINT"
+	MachineLathe    MachineTypeEnum = "LATHE"
+	MachineMill     MachineTypeEnum = "MILL"
+	MachineInject   MachineTypeEnum = "INJECTION"
+	MachinePress    MachineTypeEnum = "PRESS"
 )
+
+func (t MachineTypeEnum) IsValid() bool {
+	switch t {
+	case MachineCut, MachineBend, MachineWeld, MachineAssemble, MachinePaint, MachineLathe, MachineMill, MachineInject, MachinePress:
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *MachineTypeEnum) UnmarshalJSON(data []byte) error {
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	parsed := MachineTypeEnum(value)
+	if !parsed.IsValid() {
+		return fmt.Errorf("invalid MachineTypeEnum: %s", value)
+	}
+	*t = parsed
+	return nil
+}
 
 type MachineCapacityUnit string
 

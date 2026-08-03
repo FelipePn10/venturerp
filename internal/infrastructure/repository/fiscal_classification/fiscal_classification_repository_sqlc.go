@@ -66,6 +66,7 @@ func (r *FiscalClassificationRepositorySQLC) Create(ctx context.Context, c *enti
 		CodClasTrib:             pgutil.ToPgTextFromPtr(c.CodClasTrib),
 		CodClasTribTribReg:      pgutil.ToPgTextFromPtr(c.CodClasTribTribReg),
 		ObsFiscal:               pgutil.ToPgTextFromPtr(c.ObsFiscal),
+		ItemCode:                c.ItemCode,
 		CreatedBy:               pgutil.ToPgUUID(c.CreatedBy),
 	})
 	if err != nil {
@@ -120,6 +121,7 @@ func (r *FiscalClassificationRepositorySQLC) Update(ctx context.Context, c *enti
 		CodClasTrib:             pgutil.ToPgTextFromPtr(c.CodClasTrib),
 		CodClasTribTribReg:      pgutil.ToPgTextFromPtr(c.CodClasTribTribReg),
 		ObsFiscal:               pgutil.ToPgTextFromPtr(c.ObsFiscal),
+		ItemCode:                c.ItemCode,
 		IsActive:                c.IsActive,
 	})
 	if err != nil {
@@ -219,6 +221,7 @@ func classificationToEntity(row sqlc.FiscalClassification) *entity.FiscalClassif
 		ID:                      row.ID,
 		Code:                    row.Code,
 		Description:             row.Description,
+		ItemCode:                row.ItemCode,
 		NCM:                     pgutil.FromPgTextPtr(row.Ncm),
 		CEST:                    pgutil.FromPgTextPtr(row.Cest),
 		IPIRate:                 pgutil.FromPgNumericToFloat64(row.IpiRate),

@@ -25,7 +25,7 @@ INSERT INTO fiscal_classifications (
     pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao,
     desc_pis_zf_pct, desc_cofins_zf_pct,
     ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st,
-    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, created_by
+    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, item_code, created_by
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9,
@@ -38,8 +38,8 @@ INSERT INTO fiscal_classifications (
     $31, $32, $33, $34,
     $35, $36,
     $37, $38, $39, $40, $41,
-    $42, $43, $44, $45
-) RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at
+    $42, $43, $44, $45, $46
+) RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code
 `
 
 type CreateFiscalClassificationParams struct {
@@ -87,6 +87,7 @@ type CreateFiscalClassificationParams struct {
 	CodClasTrib             pgtype.Text
 	CodClasTribTribReg      pgtype.Text
 	ObsFiscal               pgtype.Text
+	ItemCode                *int64
 	CreatedBy               pgtype.UUID
 }
 
@@ -137,6 +138,7 @@ func (q *Queries) CreateFiscalClassification(ctx context.Context, arg CreateFisc
 		arg.CodClasTrib,
 		arg.CodClasTribTribReg,
 		arg.ObsFiscal,
+		arg.ItemCode,
 		arg.CreatedBy,
 	)
 	var i FiscalClassification
@@ -190,6 +192,7 @@ func (q *Queries) CreateFiscalClassification(ctx context.Context, arg CreateFisc
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.ItemCode,
 	)
 	return i, err
 }
@@ -279,7 +282,7 @@ func (q *Queries) DeleteFiscalClassificationLanguage(ctx context.Context, id int
 }
 
 const getFiscalClassificationByCode = `-- name: GetFiscalClassificationByCode :one
-SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at FROM fiscal_classifications WHERE code = $1
+SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code FROM fiscal_classifications WHERE code = $1
 `
 
 func (q *Queries) GetFiscalClassificationByCode(ctx context.Context, code int64) (FiscalClassification, error) {
@@ -335,6 +338,7 @@ func (q *Queries) GetFiscalClassificationByCode(ctx context.Context, code int64)
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.ItemCode,
 	)
 	return i, err
 }
@@ -401,7 +405,7 @@ func (q *Queries) ListFiscalClassificationLanguages(ctx context.Context, classif
 }
 
 const listFiscalClassifications = `-- name: ListFiscalClassifications :many
-SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at FROM fiscal_classifications
+SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code FROM fiscal_classifications
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
@@ -465,6 +469,7 @@ func (q *Queries) ListFiscalClassifications(ctx context.Context, dollar_1 bool) 
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.UpdatedAt,
+			&i.ItemCode,
 		); err != nil {
 			return nil, err
 		}
@@ -500,10 +505,10 @@ UPDATE fiscal_classifications SET
     pis_reducao_pct = $31, cst_pis_reducao = $32, cofins_reducao_pct = $33, cst_cofins_reducao = $34,
     desc_pis_zf_pct = $35, desc_cofins_zf_pct = $36,
     ex_tarifario = $37, un_ipi = $38, un_tributacao = $39, mod_bc_icms = $40, mod_bc_icms_st = $41,
-    cod_clas_trib = $42, cod_clas_trib_trib_reg = $43, obs_fiscal = $44, is_active = $45,
+    cod_clas_trib = $42, cod_clas_trib_trib_reg = $43, obs_fiscal = $44, item_code = $45, is_active = $46,
     updated_at = NOW()
 WHERE code = $1
-RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at
+RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code
 `
 
 type UpdateFiscalClassificationParams struct {
@@ -551,6 +556,7 @@ type UpdateFiscalClassificationParams struct {
 	CodClasTrib             pgtype.Text
 	CodClasTribTribReg      pgtype.Text
 	ObsFiscal               pgtype.Text
+	ItemCode                *int64
 	IsActive                bool
 }
 
@@ -600,6 +606,7 @@ func (q *Queries) UpdateFiscalClassification(ctx context.Context, arg UpdateFisc
 		arg.CodClasTrib,
 		arg.CodClasTribTribReg,
 		arg.ObsFiscal,
+		arg.ItemCode,
 		arg.IsActive,
 	)
 	var i FiscalClassification
@@ -653,6 +660,7 @@ func (q *Queries) UpdateFiscalClassification(ctx context.Context, arg UpdateFisc
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.ItemCode,
 	)
 	return i, err
 }

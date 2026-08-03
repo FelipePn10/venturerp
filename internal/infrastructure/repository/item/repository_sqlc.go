@@ -14,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (r *RepositoryItemSQLC) Create(
@@ -50,6 +51,7 @@ func (r *RepositoryItemSQLC) Create(
 		WarehouseCode: int64(item.Warehouse.WarehouseCode),
 
 		Code: int64(item.Code),
+		Name: item.Name,
 
 		Complement: pgutil.ToPgTextFromPtr(item.Complement),
 
@@ -81,8 +83,23 @@ func (r *RepositoryItemSQLC) Create(
 		PlanningReorderPoint: reorderPoint,
 		PlanningTankCode:     intPtrToInt64Ptr(item.Planning.TankCode),
 		PlanningGhost:        item.Planning.Ghost,
+		PlanningAbcClass:     pgutil.ToPgTextFromPtr(item.Planning.ABCClass),
+		PlanningMinimumLot:   item.Planning.MinimumLot,
+		PlanningMultipleLot:  item.Planning.MultipleLot,
+		PlanningSafetyStock:  item.Planning.SafetyStock,
+		PlanningCritical:     item.Planning.Critical,
+		PlanningExclusive:    item.Planning.Exclusive,
+		PlanningActive:       item.Planning.Active,
 
-		SuppliesTypeOfUse: int16(item.Supplies.TypeOfUse),
+		SuppliesTypeOfUse:          int16(item.Supplies.TypeOfUse),
+		SuppliesPurchaseUom:        unitOfMeasurementToPgText(item.Supplies.PurchaseUOM),
+		SuppliesWarehouseCode:      item.Supplies.WarehouseCode,
+		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist,
+		SuppliesHarvest:            item.Supplies.Harvest,
+
+		CommercialWarrantyDays:       int32(item.Commercial.WarrantyDays),
+		AccountingActive:             item.AccountingFiscal.Active,
+		AccountingCalculatePisCofins: item.AccountingFiscal.CalculatePISCOFINS,
 
 		CreatedBy: pgutil.ToPgUUID(item.CreatedBy),
 	}
@@ -176,6 +193,7 @@ func mapDBItemToEntity(
 	return &entity.Item{
 		ID:         dbItem.ID,
 		Code:       valueobject.ItemCode(dbItem.Code),
+		Name:       dbItem.Name,
 		Complement: complement,
 
 		Nature: entity.ItemNature(dbItem.Nature),
@@ -214,15 +232,51 @@ func mapDBItemToEntity(
 			ReorderPoint: planningReorderPoint,
 			TankCode:     int64PtrToIntPtr(dbItem.PlanningTankCode),
 			Ghost:        dbItem.PlanningGhost,
+			ABCClass:     pgTextToStringPtr(dbItem.PlanningAbcClass),
+			MinimumLot:   dbItem.PlanningMinimumLot,
+			MultipleLot:  dbItem.PlanningMultipleLot,
+			SafetyStock:  dbItem.PlanningSafetyStock,
+			Critical:     dbItem.PlanningCritical,
+			Exclusive:    dbItem.PlanningExclusive,
+			Active:       dbItem.PlanningActive,
 		},
 
 		Supplies: entity.Supplies{
-			TypeOfUse: types.TypeOfUseItem(dbItem.SuppliesTypeOfUse),
+			TypeOfUse:          types.TypeOfUseItem(dbItem.SuppliesTypeOfUse),
+			PurchaseUOM:        pgTextToUnitOfMeasurementPtr(dbItem.SuppliesPurchaseUom),
+			WarehouseCode:      dbItem.SuppliesWarehouseCode,
+			ReceivingChecklist: dbItem.SuppliesReceivingChecklist,
+			Harvest:            dbItem.SuppliesHarvest,
 		},
+		Commercial: entity.Commercial{WarrantyDays: int(dbItem.CommercialWarrantyDays)},
+		AccountingFiscal: entity.AccountingFiscal{Active: dbItem.AccountingActive,
+			CalculatePISCOFINS: dbItem.AccountingCalculatePisCofins},
 
 		CreatedBy: pgutil.FromPgUUID(dbItem.CreatedBy),
 		CreatedAt: pgutil.FromPgTimestamp(dbItem.CreatedAt),
 	}, nil
+}
+
+func unitOfMeasurementToPgText(value *types.TypeUnitOfMeasurementItem) pgtype.Text {
+	if value == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: value.String(), Valid: true}
+}
+
+func pgTextToUnitOfMeasurementPtr(value pgtype.Text) *types.TypeUnitOfMeasurementItem {
+	if !value.Valid {
+		return nil
+	}
+	unit := types.TypeUnitOfMeasurementItem(value.String)
+	return &unit
+}
+
+func pgTextToStringPtr(value pgtype.Text) *string {
+	if !value.Valid {
+		return nil
+	}
+	return &value.String
 }
 
 func intPtrToInt32Ptr(v *int) *int32 {
