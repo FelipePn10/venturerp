@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.1] — 2026-08-03
+
+- fix: complete item master data contracts (`6dc7dd7`)
+
 ## [v1.1.0] — 2026-07-24
 
 - feat: complete sales quotations (`6caf6c4`)
