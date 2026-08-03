@@ -16,12 +16,12 @@ type CreateMachineTypeDTO struct {
 }
 
 type UpdateMachineTypeDTO struct {
-	Code             int64   `json:"code"`
-	Name             string  `json:"name"`
-	Description      *string `json:"description,omitempty"`
-	Type             string  `json:"type"`
-	RequiresOperator bool    `json:"requires_operator"`
-	IsActive         bool    `json:"is_active"`
+	Code             int64                 `json:"code"`
+	Name             string                `json:"name"`
+	Description      *string               `json:"description,omitempty"`
+	Type             types.MachineTypeEnum `json:"type"`
+	RequiresOperator bool                  `json:"requires_operator"`
+	IsActive         bool                  `json:"is_active"`
 }
 
 type CreateMachineDTO struct {

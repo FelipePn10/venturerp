@@ -8,17 +8,20 @@ import (
 )
 
 type CreateItemDTO struct {
-	Code        valueobject.ItemCode    `json:"code"`
-	Complement  *string                 `json:"complement,omitempty"`
-	Nature      itementity.ItemNature   `json:"nature"`
-	PDM         PDMDTO                  `json:"pdm"`
-	Situation   types.TypeSituationItem `json:"situation"`
-	Health      types.Health            `json:"health"`
-	Warehouse   WarehouseDTO            `json:"warehouse"`
-	Engineering EngineeringDTO          `json:"engineering"`
-	Planning    PlanningDTO             `json:"planning"`
-	Supplies    SuppliesDTO             `json:"supplies"`
-	CreatedBy   uuid.UUID               `json:"created_by"`
+	Code             valueobject.ItemCode    `json:"code"`
+	Name             string                  `json:"name"`
+	Complement       *string                 `json:"complement,omitempty"`
+	Nature           itementity.ItemNature   `json:"nature"`
+	PDM              PDMDTO                  `json:"pdm"`
+	Situation        types.TypeSituationItem `json:"situation"`
+	Health           types.Health            `json:"health"`
+	Warehouse        WarehouseDTO            `json:"warehouse"`
+	Engineering      EngineeringDTO          `json:"engineering"`
+	Planning         PlanningDTO             `json:"planning"`
+	Supplies         SuppliesDTO             `json:"supplies"`
+	Commercial       CommercialDTO           `json:"commercial"`
+	AccountingFiscal AccountingFiscalDTO     `json:"accounting_fiscal"`
+	CreatedBy        uuid.UUID               `json:"created_by"`
 }
 
 type PDMDTO struct {
@@ -52,8 +55,28 @@ type PlanningDTO struct {
 	ReorderPoint *valueobject.ReorderPoint `json:"reorder_point,omitempty"`
 	TankCode     *int                      `json:"tank_code,omitempty"`
 	Ghost        bool                      `json:"ghost"`
+	ABCClass     *string                   `json:"abc_class,omitempty"`
+	MinimumLot   int64                     `json:"minimum_lot"`
+	MultipleLot  int64                     `json:"multiple_lot"`
+	SafetyStock  int64                     `json:"safety_stock"`
+	Critical     bool                      `json:"critical"`
+	Exclusive    bool                      `json:"exclusive"`
+	Active       bool                      `json:"active"`
 }
 
 type SuppliesDTO struct {
-	TypeOfUse types.TypeOfUseItem `json:"type_of_use"`
+	TypeOfUse          types.TypeOfUseItem              `json:"type_of_use"`
+	PurchaseUOM        *types.TypeUnitOfMeasurementItem `json:"purchase_uom,omitempty"`
+	WarehouseCode      *int64                           `json:"warehouse_code,omitempty"`
+	ReceivingChecklist bool                             `json:"receiving_checklist"`
+	Harvest            bool                             `json:"harvest"`
+}
+
+type CommercialDTO struct {
+	WarrantyDays int `json:"warranty_days"`
+}
+
+type AccountingFiscalDTO struct {
+	Active             bool `json:"active"`
+	CalculatePISCOFINS bool `json:"calculate_pis_cofins"`
 }

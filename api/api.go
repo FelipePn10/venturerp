@@ -758,6 +758,7 @@ func (app *application) mount() chi.Router {
 		Repo:             technicalAssistanceRepository,
 		SalesOrders:      soRepo,
 		ProductionOrders: prodOrderRepo,
+		Items:            itemRepo,
 		Auth:             authService,
 	})
 	consumerServiceRepository := consumerServiceRepo.New(app.db.Pool)

@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -12,6 +13,7 @@ import (
 type Item struct {
 	ID         int64
 	Code       valueobject.ItemCode
+	Name       string
 	Complement *string
 
 	// Checkbox
@@ -31,6 +33,10 @@ type Item struct {
 	Planning Planning
 	// Suprimentos
 	Supplies Supplies
+	// Comercial
+	Commercial Commercial
+	// Contábil/Fiscal
+	AccountingFiscal AccountingFiscal
 	//Status    types.Status
 
 	CreatedBy uuid.UUID
@@ -74,10 +80,30 @@ type Planning struct {
 	ReorderPoint *valueobject.ReorderPoint
 	TankCode     *int // Setor onde é feito
 	Ghost        bool
+	ABCClass     *string
+	MinimumLot   int64
+	MultipleLot  int64
+	SafetyStock  int64
+	Critical     bool
+	Exclusive    bool
+	Active       bool
 }
 
 type Supplies struct {
-	TypeOfUse types.TypeOfUseItem
+	TypeOfUse          types.TypeOfUseItem
+	PurchaseUOM        *types.TypeUnitOfMeasurementItem
+	WarehouseCode      *int64
+	ReceivingChecklist bool
+	Harvest            bool
+}
+
+type Commercial struct {
+	WarrantyDays int
+}
+
+type AccountingFiscal struct {
+	Active             bool
+	CalculatePISCOFINS bool
 }
 
 type ItemNature int
@@ -103,6 +129,23 @@ type ItemWithMasks struct {
 func (i *Item) Validate() error {
 	if !i.Code.IsValid() {
 		return errors.New("invalid code")
+	}
+	if strings.TrimSpace(i.Name) == "" {
+		return errors.New("item name is required")
+	}
+	if !i.Situation.IsValid() || !i.Health.IsValid() || !i.Warehouse.UnitOfMeasurement.IsValid() ||
+		!i.Engineering.Type.IsValid() || !i.Engineering.TypeStruct.IsValid() ||
+		!i.Planning.TypeMRP.IsValid() || !i.Supplies.TypeOfUse.IsValid() {
+		return errors.New("invalid item enum value")
+	}
+	if i.Supplies.PurchaseUOM != nil && !i.Supplies.PurchaseUOM.IsValid() {
+		return errors.New("invalid purchase unit of measurement")
+	}
+	if i.Planning.MinimumLot < 0 || i.Planning.MultipleLot < 0 || i.Planning.SafetyStock < 0 || i.Commercial.WarrantyDays < 0 {
+		return errors.New("planning quantities and warranty days cannot be negative")
+	}
+	if i.Planning.ABCClass != nil && *i.Planning.ABCClass != "A" && *i.Planning.ABCClass != "B" && *i.Planning.ABCClass != "C" {
+		return errors.New("invalid ABC class")
 	}
 
 	if i.Engineering.Dimensions != nil && !i.Engineering.Dimensions.IsValid() {

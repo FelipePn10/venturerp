@@ -2,6 +2,7 @@ package machine_uc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -19,6 +20,9 @@ type CreateMachineTypeUseCase struct {
 func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.CreateMachineTypeDTO, userID string) (*response.MachineTypeResponse, error) {
 	if !uc.Auth.CanCreateType(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if !dto.Type.IsValid() {
+		return nil, fmt.Errorf("invalid machine type: %s", dto.Type)
 	}
 	mt := &entity.MachineType{
 		Code:             dto.Code,

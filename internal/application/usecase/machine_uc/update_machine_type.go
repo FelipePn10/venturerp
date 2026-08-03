@@ -2,12 +2,12 @@ package machine_uc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 )
@@ -24,12 +24,15 @@ func (uc *UpdateMachineTypeUseCase) Execute(
 	if !uc.Auth.CanUpdateMachineType(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if !dto.Type.IsValid() {
+		return nil, fmt.Errorf("invalid machine type: %s", dto.Type)
+	}
 
 	mt := &entity.MachineType{
 		Code:             dto.Code,
 		Name:             dto.Name,
 		Description:      dto.Description,
-		Type:             types.MachineTypeEnum(dto.Type),
+		Type:             dto.Type,
 		RequiresOperator: dto.RequiresOperator,
 		IsActive:         dto.IsActive,
 	}

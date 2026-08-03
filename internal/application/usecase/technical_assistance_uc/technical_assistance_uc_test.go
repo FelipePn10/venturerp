@@ -7,6 +7,8 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/domain/technical_assistance/entity"
 	tarepo "github.com/FelipePn10/panossoerp/internal/domain/technical_assistance/repository"
 	"github.com/google/uuid"
@@ -16,6 +18,14 @@ type taAllowAuth struct{ ports.AuthService }
 
 func (taAllowAuth) CanManageTechnicalAssistance(context.Context) bool { return true }
 func (taAllowAuth) EnterpriseID(context.Context) (int64, error)       { return 1, nil }
+
+type fakeItemFinder struct {
+	item *itementity.Item
+}
+
+func (f fakeItemFinder) FindItemByCode(context.Context, valueobject.ItemCode) (*itementity.Item, error) {
+	return f.item, nil
+}
 
 type fakeTARepo struct {
 	reasons  map[int64]*entity.DefectReason
@@ -139,6 +149,25 @@ func TestAddCallItemCalculatesWarrantyAndRevenueFromReason(t *testing.T) {
 	}
 	if !item.InWarranty || !item.GeneratesRevenue {
 		t.Fatalf("item warranty/revenue = %+v, want both true", item)
+	}
+}
+
+func TestAddCallItemUsesWarrantyDaysFromItem(t *testing.T) {
+	repo := &fakeTARepo{}
+	registeredItem := &itementity.Item{}
+	registeredItem.Commercial.WarrantyDays = 90
+	uc := &UseCase{Repo: repo, Auth: taAllowAuth{}, Items: fakeItemFinder{item: registeredItem}}
+
+	item, err := uc.AddCallItem(context.Background(), request.CreateTechnicalAssistanceCallItemDTO{
+		CallCode:            1,
+		ItemCode:            100,
+		PurchaseInvoiceDate: time.Now().AddDate(0, 0, -10).Format(time.DateOnly),
+	})
+	if err != nil {
+		t.Fatalf("AddCallItem() error = %v", err)
+	}
+	if len(repo.items) != 1 || repo.items[0].WarrantyDays != 90 || !item.InWarranty {
+		t.Fatalf("item warranty = %+v, want 90 days and in warranty", item)
 	}
 }
 

@@ -19,6 +19,11 @@ const (
 	UN         TypeUnitOfMeasurementItem = "UN"
 	MICROMETRO TypeUnitOfMeasurementItem = "MICROMETRO"
 	TONELADA   TypeUnitOfMeasurementItem = "TONELADA"
+	L          TypeUnitOfMeasurementItem = "L"
+	CX         TypeUnitOfMeasurementItem = "CX"
+	PC         TypeUnitOfMeasurementItem = "PC"
+	GL         TypeUnitOfMeasurementItem = "GL"
+	PAR        TypeUnitOfMeasurementItem = "PAR"
 )
 
 func (t TypeUnitOfMeasurementItem) String() string {
@@ -80,7 +85,7 @@ func (t *TypeUnitOfMeasurementItem) Scan(value interface{}) error {
 
 func (t TypeUnitOfMeasurementItem) IsValid() bool {
 	switch t {
-	case MM, CM, M, IN, KG, M2, M3, UN, MICROMETRO, TONELADA:
+	case MM, CM, M, IN, KG, M2, M3, UN, MICROMETRO, TONELADA, L, CX, PC, GL, PAR:
 		return true
 	default:
 		return false

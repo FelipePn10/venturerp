@@ -9,6 +9,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	prodentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	prodrepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -23,6 +25,9 @@ type UseCase struct {
 	SalesOrders      orderrepo.SalesOrderRepository
 	ProductionOrders prodrepo.ProductionOrderRepository
 	Auth             ports.AuthService
+	Items            interface {
+		FindItemByCode(context.Context, valueobject.ItemCode) (*itementity.Item, error)
+	}
 }
 
 func (uc *UseCase) tenantID(ctx context.Context) (int64, error) {
@@ -203,6 +208,17 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 	}
 	if dto.Quantity <= 0 {
 		dto.Quantity = 1
+	}
+	if dto.WarrantyDays == 0 && uc.Items != nil {
+		itemCode, codeErr := valueobject.NewItemCode(dto.ItemCode)
+		if codeErr != nil {
+			return nil, errorsuc.NewValidationError("invalid item_code")
+		}
+		item, itemErr := uc.Items.FindItemByCode(ctx, itemCode)
+		if itemErr != nil {
+			return nil, fmt.Errorf("loading item warranty: %w", itemErr)
+		}
+		dto.WarrantyDays = item.Commercial.WarrantyDays
 	}
 	action := dto.RequestedAction
 	if action == "" {

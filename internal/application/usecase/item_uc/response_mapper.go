@@ -10,19 +10,22 @@ func toItemResponse(it *entity.Item) *response.ItemResponse {
 		return nil
 	}
 	return &response.ItemResponse{
-		ID:          it.ID,
-		Code:        int64(it.Code),
-		Complement:  it.Complement,
-		Nature:      int(it.Nature),
-		PDM:         toItemPDMResponse(it.PDM),
-		Situation:   it.Situation.String(),
-		Health:      it.Health.String(),
-		Warehouse:   toItemWarehouseResponse(it.Warehouse),
-		Engineering: toItemEngineeringResponse(it.Engineering),
-		Planning:    toItemPlanningResponse(it.Planning),
-		Supplies:    response.ItemSuppliesResponse{TypeOfUse: it.Supplies.TypeOfUse.String()},
-		CreatedBy:   it.CreatedBy,
-		CreatedAt:   it.CreatedAt,
+		ID:               it.ID,
+		Code:             int64(it.Code),
+		Name:             it.Name,
+		Complement:       it.Complement,
+		Nature:           int(it.Nature),
+		PDM:              toItemPDMResponse(it.PDM),
+		Situation:        it.Situation.String(),
+		Health:           it.Health.String(),
+		Warehouse:        toItemWarehouseResponse(it.Warehouse),
+		Engineering:      toItemEngineeringResponse(it.Engineering),
+		Planning:         toItemPlanningResponse(it.Planning),
+		Supplies:         toItemSuppliesResponse(it.Supplies),
+		Commercial:       response.ItemCommercialResponse{WarrantyDays: it.Commercial.WarrantyDays},
+		AccountingFiscal: response.ItemAccountingFiscalResponse{Active: it.AccountingFiscal.Active, CalculatePISCOFINS: it.AccountingFiscal.CalculatePISCOFINS},
+		CreatedBy:        it.CreatedBy,
+		CreatedAt:        it.CreatedAt,
 	}
 }
 
@@ -102,6 +105,25 @@ func toItemPlanningResponse(p entity.Planning) response.ItemPlanningResponse {
 		ReorderPoint: rop,
 		TankCode:     p.TankCode,
 		Ghost:        p.Ghost,
+		ABCClass:     p.ABCClass,
+		MinimumLot:   p.MinimumLot,
+		MultipleLot:  p.MultipleLot,
+		SafetyStock:  p.SafetyStock,
+		Critical:     p.Critical,
+		Exclusive:    p.Exclusive,
+		Active:       p.Active,
+	}
+}
+
+func toItemSuppliesResponse(s entity.Supplies) response.ItemSuppliesResponse {
+	var purchaseUOM *string
+	if s.PurchaseUOM != nil {
+		value := s.PurchaseUOM.String()
+		purchaseUOM = &value
+	}
+	return response.ItemSuppliesResponse{
+		TypeOfUse: s.TypeOfUse.String(), PurchaseUOM: purchaseUOM, WarehouseCode: s.WarehouseCode,
+		ReceivingChecklist: s.ReceivingChecklist, Harvest: s.Harvest,
 	}
 }
 

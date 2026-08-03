@@ -29,6 +29,10 @@ Casos de uso (`internal/application/usecase/machine_uc/`): `CreateMachineUseCase
 `ListItemMachineTimesUseCase`, `CalculateProductionTimeUseCase`,
 `ScheduleMachineUseCase`.
 
+O campo `type` usa o mesmo vocabulário canônico do PostgreSQL e da API:
+`CUT`, `BEND`, `WELD`, `ASSEMBLE`, `PAINT`, `LATHE`, `MILL`, `INJECTION` ou
+`PRESS`. Outros valores são rejeitados na desserialização e no caso de uso.
+
 ---
 
 ## 2. Endpoints (`/api/machine`)
