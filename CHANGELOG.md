@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.2] — 2026-08-03
+
+- fix: repair item schema on advanced databases (`9cf37b2`)
+
 ## [v1.1.1] — 2026-08-03
 
 - fix: complete item master data contracts (`6dc7dd7`)
