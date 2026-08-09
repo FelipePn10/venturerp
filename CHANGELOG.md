@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.3] — 2026-08-09
+
+- feat: expand item commercial and accounting data (`92d2cbe`)
+
 ## [v1.1.2] — 2026-08-03
 
 - fix: repair item schema on advanced databases (`9cf37b2`)
