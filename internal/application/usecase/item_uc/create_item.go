@@ -2,13 +2,18 @@ package item_uc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
+
+var ErrItemBaseNotFound = errors.New("O item-base informado não existe.")
 
 type CreateItemUseCase struct {
 	Repo repository.ItemRepository
@@ -31,6 +36,18 @@ func (uc *CreateItemUseCase) Execute(
 ) (*response.ItemResponse, error) {
 	if !uc.Auth.CanCreateItem(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if item.Engineering.ItemBaseCod != nil {
+		code, err := valueobject.NewItemCode(int64(*item.Engineering.ItemBaseCod))
+		if err != nil {
+			return nil, ErrItemBaseNotFound
+		}
+		if _, err = uc.Repo.FindItemByCode(ctx, code); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return nil, ErrItemBaseNotFound
+			}
+			return nil, fmt.Errorf("validar item-base: %w", err)
+		}
 	}
 
 	created, err := uc.Repo.Create(ctx, item)
