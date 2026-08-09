@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type Item struct {
@@ -36,7 +37,7 @@ type Item struct {
 	// Comercial
 	Commercial Commercial
 	// Contábil/Fiscal
-	AccountingFiscal AccountingFiscal
+	Accounting Accounting
 	//Status    types.Status
 
 	CreatedBy uuid.UUID
@@ -98,12 +99,45 @@ type Supplies struct {
 }
 
 type Commercial struct {
-	WarrantyDays int
+	Description                      *string
+	SaleType                         *string
+	VolumeConversionFactor           *decimal.Decimal
+	SaleMultiple                     *decimal.Decimal
+	MinimumSaleQuantity              *decimal.Decimal
+	EstimatedDeliveryDays            *int
+	WarrantyDays                     int
+	TransferWarehouseCode            *int64
+	TechnicalAssistanceWarehouseCode *int64
+	PackagingItemCode                *int64
+	AllowBillingDescriptionChange    bool
+	IssueLoadingLabels               bool
+	AssembleShippingVolumes          bool
+	RequiresSpecialPackaging         bool
+	WithholdPISCOFINS                bool
+	IsPackaging                      bool
+	MobileEnabled                    bool
+	ExportPackaging                  bool
+	ClassificationCode               *string
+	Notes                            *string
 }
 
-type AccountingFiscal struct {
-	Active             bool
-	CalculatePISCOFINS bool
+type Accounting struct {
+	SaleFiscalClassificationCode     *string
+	PurchaseFiscalClassificationCode *string
+	Origin                           *int
+	SaleIPIType                      *string
+	SaleIPIRate                      *decimal.Decimal
+	PurchaseIPIType                  *string
+	PurchaseIPIRate                  *decimal.Decimal
+	ICMSRate                         *decimal.Decimal
+	SaleUnitOfMeasurement            *types.TypeUnitOfMeasurementItem
+	PurchaseUnitOfMeasurement        *types.TypeUnitOfMeasurementItem
+	InventoryGroupCode               *int64
+	AccountingClassificationCode     *string
+	CEST                             *string
+	InputCode                        *string
+	CalculatePISCOFINS               bool
+	Notes                            *string
 }
 
 type ItemNature int
@@ -143,6 +177,67 @@ func (i *Item) Validate() error {
 	}
 	if i.Planning.MinimumLot < 0 || i.Planning.MultipleLot < 0 || i.Planning.SafetyStock < 0 || i.Commercial.WarrantyDays < 0 {
 		return errors.New("planning quantities and warranty days cannot be negative")
+	}
+	if i.Commercial.SaleType != nil && *i.Commercial.SaleType != "VENDA" && *i.Commercial.SaleType != "REVENDA" {
+		return errors.New("commercial.sale_type must be VENDA or REVENDA")
+	}
+	for name, value := range map[string]*decimal.Decimal{
+		"commercial.volume_conversion_factor": i.Commercial.VolumeConversionFactor,
+		"commercial.sale_multiple":            i.Commercial.SaleMultiple,
+	} {
+		if value != nil && !value.IsPositive() {
+			return errors.New(name + " must be greater than zero")
+		}
+	}
+	if i.Commercial.MinimumSaleQuantity != nil && i.Commercial.MinimumSaleQuantity.IsNegative() {
+		return errors.New("commercial.minimum_sale_quantity cannot be negative")
+	}
+	if i.Commercial.EstimatedDeliveryDays != nil && *i.Commercial.EstimatedDeliveryDays < 0 {
+		return errors.New("commercial.estimated_delivery_days cannot be negative")
+	}
+	if i.Commercial.PackagingItemCode != nil && *i.Commercial.PackagingItemCode == int64(i.Code) {
+		return errors.New("commercial.packaging_item_code cannot reference the item itself")
+	}
+	if i.Accounting.Origin != nil && (*i.Accounting.Origin < 0 || *i.Accounting.Origin > 8) {
+		return errors.New("accounting.origin must be between 0 and 8")
+	}
+	for _, value := range []*string{i.Accounting.SaleIPIType, i.Accounting.PurchaseIPIType} {
+		if value != nil && *value != "PERCENTUAL" && *value != "VALOR" {
+			return errors.New("accounting IPI type must be PERCENTUAL or VALOR")
+		}
+	}
+	for name, value := range map[string]*decimal.Decimal{"accounting.sale_ipi_rate": i.Accounting.SaleIPIRate, "accounting.purchase_ipi_rate": i.Accounting.PurchaseIPIRate, "accounting.icms_rate": i.Accounting.ICMSRate} {
+		if value != nil && value.IsNegative() {
+			return errors.New(name + " cannot be negative")
+		}
+	}
+	if i.Accounting.SaleUnitOfMeasurement != nil && !i.Accounting.SaleUnitOfMeasurement.IsValid() {
+		return errors.New("invalid accounting.sale_unit_of_measurement")
+	}
+	if i.Accounting.PurchaseUnitOfMeasurement != nil && !i.Accounting.PurchaseUnitOfMeasurement.IsValid() {
+		return errors.New("invalid accounting.purchase_unit_of_measurement")
+	}
+	if i.Accounting.CEST != nil {
+		if len(*i.Accounting.CEST) != 7 {
+			return errors.New("accounting.cest must contain exactly 7 digits")
+		}
+		for _, c := range *i.Accounting.CEST {
+			if c < '0' || c > '9' {
+				return errors.New("accounting.cest must contain exactly 7 digits")
+			}
+		}
+	}
+	for name, field := range map[string]struct {
+		value *string
+		max   int
+	}{
+		"commercial.description": {i.Commercial.Description, 255}, "commercial.classification_code": {i.Commercial.ClassificationCode, 40}, "commercial.notes": {i.Commercial.Notes, 1000},
+		"accounting.sale_fiscal_classification_code": {i.Accounting.SaleFiscalClassificationCode, 40}, "accounting.purchase_fiscal_classification_code": {i.Accounting.PurchaseFiscalClassificationCode, 40},
+		"accounting.accounting_classification_code": {i.Accounting.AccountingClassificationCode, 80}, "accounting.input_code": {i.Accounting.InputCode, 20}, "accounting.notes": {i.Accounting.Notes, 1000},
+	} {
+		if field.value != nil && len(*field.value) > field.max {
+			return errors.New(name + " exceeds maximum length")
+		}
 	}
 	if i.Planning.ABCClass != nil && *i.Planning.ABCClass != "A" && *i.Planning.ABCClass != "B" && *i.Planning.ABCClass != "C" {
 		return errors.New("invalid ABC class")

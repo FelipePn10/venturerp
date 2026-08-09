@@ -41,6 +41,7 @@ type ProductHandler struct {
 type ItemHandler struct {
 	*security.BaseHandler
 	createItemUC         *item_uc.CreateItemUseCase
+	updateItemUC         *item_uc.UpdateItemUseCase
 	findItemByCodeUC     *item_uc.FindItemByCode
 	listItemsUC          *item_uc.ListItemsUseCase
 	listItemsWithMasksUC *item_uc.ListItemsWithMasksUseCase

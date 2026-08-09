@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 func validItemForValidation() *Item {
@@ -23,6 +24,38 @@ func validItemForValidation() *Item {
 		Planning:  Planning{TypeMRP: types.NORMAL_MRP},
 		Supplies:  Supplies{TypeOfUse: types.INDUSTRIALIZACAO},
 		CreatedBy: uuid.New(),
+	}
+}
+
+func TestItemValidateCommercialAccounting(t *testing.T) {
+	item := validItemForValidation()
+	saleType := "VENDA"
+	cest := "0100100"
+	origin := 0
+	factor := decimal.NewFromInt(1)
+	item.Commercial.SaleType = &saleType
+	item.Commercial.VolumeConversionFactor = &factor
+	item.Accounting.CEST = &cest
+	item.Accounting.Origin = &origin
+	if err := item.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	badCEST := "ABC"
+	item.Accounting.CEST = &badCEST
+	if err := item.Validate(); err == nil {
+		t.Fatal("expected malformed CEST error")
+	}
+	item.Accounting.CEST = &cest
+	badType := "BONIFICACAO"
+	item.Commercial.SaleType = &badType
+	if err := item.Validate(); err == nil {
+		t.Fatal("expected invalid sale type error")
+	}
+	item.Commercial.SaleType = &saleType
+	self := int64(item.Code)
+	item.Commercial.PackagingItemCode = &self
+	if err := item.Validate(); err == nil {
+		t.Fatal("expected packaging self-reference error")
 	}
 }
 

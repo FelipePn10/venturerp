@@ -48,6 +48,16 @@ INSERT INTO items (
 	commercial_warranty_days,
 	accounting_active,
 	accounting_calculate_pis_cofins,
+	commercial_description, commercial_sale_type, commercial_volume_conversion_factor,
+	commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days,
+	commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code,
+	commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes,
+	commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging,
+	commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes,
+	accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin,
+	accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate,
+	accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement,
+	accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes,
 
     created_by,
     created_at
@@ -60,9 +70,39 @@ INSERT INTO items (
              $25, $26, $27, $28, $29,
 			 $30, $31, $32, $33, $34,
 			 $35, $36, $37, $38, $39,
-			 $40, $41, $42, $43, NOW()
+			 $40, $41, $42,
+			 sqlc.arg(commercial_description), sqlc.arg(commercial_sale_type), sqlc.arg(commercial_volume_conversion_factor),
+			 sqlc.arg(commercial_sale_multiple), sqlc.arg(commercial_minimum_sale_quantity), sqlc.arg(commercial_estimated_delivery_days),
+			 sqlc.arg(commercial_transfer_warehouse_code), sqlc.arg(commercial_technical_assistance_warehouse_code), sqlc.arg(commercial_packaging_item_code),
+			 sqlc.arg(commercial_allow_billing_description_change), sqlc.arg(commercial_issue_loading_labels), sqlc.arg(commercial_assemble_shipping_volumes),
+			 sqlc.arg(commercial_requires_special_packaging), sqlc.arg(commercial_withhold_pis_cofins), sqlc.arg(commercial_is_packaging),
+			 sqlc.arg(commercial_mobile_enabled), sqlc.arg(commercial_export_packaging), sqlc.arg(commercial_classification_code), sqlc.arg(commercial_notes),
+			 sqlc.arg(accounting_sale_fiscal_classification_code), sqlc.arg(accounting_purchase_fiscal_classification_code), sqlc.arg(accounting_origin),
+			 sqlc.arg(accounting_sale_ipi_type), sqlc.arg(accounting_sale_ipi_rate), sqlc.arg(accounting_purchase_ipi_type), sqlc.arg(accounting_purchase_ipi_rate),
+			 sqlc.arg(accounting_icms_rate), sqlc.arg(accounting_sale_unit_of_measurement), sqlc.arg(accounting_purchase_unit_of_measurement),
+			 sqlc.arg(accounting_inventory_group_code), sqlc.arg(accounting_classification_code), sqlc.arg(accounting_cest), sqlc.arg(accounting_input_code), sqlc.arg(accounting_notes),
+			 $43, NOW()
          )
     RETURNING *;
+
+-- name: UpdateItemCommercialAccounting :one
+UPDATE items SET
+ commercial_description=$2, commercial_sale_type=$3, commercial_volume_conversion_factor=$4,
+ commercial_sale_multiple=$5, commercial_minimum_sale_quantity=$6, commercial_estimated_delivery_days=$7,
+ commercial_warranty_days=$8, commercial_transfer_warehouse_code=$9, commercial_technical_assistance_warehouse_code=$10,
+ commercial_packaging_item_code=$11, commercial_allow_billing_description_change=$12,
+ commercial_issue_loading_labels=$13, commercial_assemble_shipping_volumes=$14,
+ commercial_requires_special_packaging=$15, commercial_withhold_pis_cofins=$16,
+ commercial_is_packaging=$17, commercial_mobile_enabled=$18, commercial_export_packaging=$19,
+ commercial_classification_code=$20, commercial_notes=$21,
+ accounting_sale_fiscal_classification_code=$22, accounting_purchase_fiscal_classification_code=$23,
+ accounting_origin=$24, accounting_sale_ipi_type=$25, accounting_sale_ipi_rate=$26,
+ accounting_purchase_ipi_type=$27, accounting_purchase_ipi_rate=$28, accounting_icms_rate=$29,
+ accounting_sale_unit_of_measurement=$30, accounting_purchase_unit_of_measurement=$31,
+ accounting_inventory_group_code=$32, accounting_classification_code=$33, accounting_cest=$34,
+ accounting_input_code=$35, accounting_calculate_pis_cofins=$36, accounting_notes=$37
+WHERE code=$1
+RETURNING *;
 
 
 -- name: FindItemByCode :one
@@ -80,3 +120,6 @@ WHERE id = $1;
 SELECT *
 FROM items
 ORDER BY code;
+
+-- name: ItemFiscalClassificationExists :one
+SELECT EXISTS (SELECT 1 FROM fiscal_classifications WHERE code::text = sqlc.arg(classification_code)::text OR ncm = sqlc.arg(classification_code)::text);

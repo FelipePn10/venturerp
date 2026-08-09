@@ -27,7 +27,7 @@ func NewItem(
 	planning Planning,
 	supplies Supplies,
 	commercial Commercial,
-	accountingFiscal AccountingFiscal,
+	accounting Accounting,
 	createdBy uuid.UUID,
 ) (*Item, error) {
 
@@ -40,21 +40,21 @@ func NewItem(
 	}
 
 	item := &Item{
-		Code:             code,
-		Name:             name,
-		Complement:       complement,
-		Nature:           nature,
-		PDM:              pdm,
-		Warehouse:        warehouse,
-		Engineering:      engineering,
-		Planning:         planning,
-		Supplies:         supplies,
-		Commercial:       commercial,
-		AccountingFiscal: accountingFiscal,
-		Situation:        situation,
-		Health:           health,
-		CreatedBy:        createdBy,
-		CreatedAt:        time.Now(),
+		Code:        code,
+		Name:        name,
+		Complement:  complement,
+		Nature:      nature,
+		PDM:         pdm,
+		Warehouse:   warehouse,
+		Engineering: engineering,
+		Planning:    planning,
+		Supplies:    supplies,
+		Commercial:  commercial,
+		Accounting:  accounting,
+		Situation:   situation,
+		Health:      health,
+		CreatedBy:   createdBy,
+		CreatedAt:   time.Now(),
 	}
 
 	if err := item.Validate(); err != nil {
