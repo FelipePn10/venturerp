@@ -164,8 +164,12 @@ func (i *Item) Validate() error {
 	if !i.Code.IsValid() {
 		return errors.New("invalid code")
 	}
-	if strings.TrimSpace(i.Name) == "" {
-		return errors.New("item name is required")
+	i.Name = strings.TrimSpace(i.Name)
+	if i.Name == "" {
+		return errors.New("Informe o nome do item.")
+	}
+	if i.Engineering.ItemBaseCod != nil && *i.Engineering.ItemBaseCod == 0 {
+		i.Engineering.ItemBaseCod = nil
 	}
 	if !i.Situation.IsValid() || !i.Health.IsValid() || !i.Warehouse.UnitOfMeasurement.IsValid() ||
 		!i.Engineering.Type.IsValid() || !i.Engineering.TypeStruct.IsValid() ||
@@ -253,14 +257,6 @@ func (i *Item) Validate() error {
 
 	if i.Planning.ReorderPoint != nil && !i.Planning.ReorderPoint.IsValid() {
 		return errors.New("invalid reorder point")
-	}
-
-	if i.Nature != ItemBase && i.Engineering.ItemBaseCod == nil {
-		return errors.New("item base code required")
-	}
-
-	if i.Nature == ItemBase && i.Engineering.ItemBaseCod != nil {
-		return errors.New("item base cannot have base code")
 	}
 
 	return nil

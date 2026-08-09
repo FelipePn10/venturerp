@@ -93,3 +93,51 @@ func TestItemValidateRejectsInvalidEnumsAndMasterData(t *testing.T) {
 		}
 	}
 }
+
+func TestItemValidateAcceptsOptionalItemBaseForEveryNature(t *testing.T) {
+	tests := []struct {
+		name   string
+		nature ItemNature
+		base   *int
+	}{
+		{name: "generic without base", nature: ItemGeneric},
+		{name: "configured without base", nature: ItemConfigured},
+		{name: "item base without base", nature: ItemBase},
+		{name: "generic with base", nature: ItemGeneric, base: intPointer(99)},
+		{name: "configured with base", nature: ItemConfigured, base: intPointer(99)},
+		{name: "item base with base", nature: ItemBase, base: intPointer(99)},
+		{name: "zero is treated as absent", nature: ItemConfigured, base: intPointer(0)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item := validItemForValidation()
+			item.Nature = tt.nature
+			item.Engineering.ItemBaseCod = tt.base
+			if err := item.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			if tt.base != nil && *tt.base == 0 && item.Engineering.ItemBaseCod != nil {
+				t.Fatal("expected zero item-base code to be normalized as absent")
+			}
+		})
+	}
+}
+
+func TestItemValidateTrimsAndRequiresNameInPortuguese(t *testing.T) {
+	item := validItemForValidation()
+	item.Name = "  Transformador 30 kVA  "
+	if err := item.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if item.Name != "Transformador 30 kVA" {
+		t.Fatalf("expected trimmed name, got %q", item.Name)
+	}
+
+	item.Name = "   "
+	if err := item.Validate(); err == nil || err.Error() != "Informe o nome do item." {
+		t.Fatalf("expected Portuguese name validation error, got %v", err)
+	}
+}
+
+func intPointer(value int) *int { return &value }
