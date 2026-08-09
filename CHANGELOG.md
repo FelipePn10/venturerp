@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.4] — 2026-08-09
+
+- fix: make item base reference optional (`d417171`)
+
 ## [v1.1.3] — 2026-08-09
 
 - feat: expand item commercial and accounting data (`92d2cbe`)
