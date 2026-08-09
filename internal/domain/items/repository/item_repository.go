@@ -9,9 +9,11 @@ import (
 )
 
 var ErrNotFound = errors.New("item not found")
+var ErrInvalidReference = errors.New("item folder contains an unknown reference")
 
 type ItemRepository interface {
 	Create(ctx context.Context, item *entity.Item) (*entity.Item, error)
+	UpdateCommercialAccounting(ctx context.Context, item *entity.Item) (*entity.Item, error)
 	FindItemByCode(ctx context.Context, code valueobject.ItemCode) (*entity.Item, error)
 	ListAll(ctx context.Context) ([]*entity.Item, error)
 	ListAllWithMasks(ctx context.Context) ([]entity.ItemWithMasks, error)

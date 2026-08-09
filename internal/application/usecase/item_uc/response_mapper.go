@@ -10,23 +10,48 @@ func toItemResponse(it *entity.Item) *response.ItemResponse {
 		return nil
 	}
 	return &response.ItemResponse{
-		ID:               it.ID,
-		Code:             int64(it.Code),
-		Name:             it.Name,
-		Complement:       it.Complement,
-		Nature:           int(it.Nature),
-		PDM:              toItemPDMResponse(it.PDM),
-		Situation:        it.Situation.String(),
-		Health:           it.Health.String(),
-		Warehouse:        toItemWarehouseResponse(it.Warehouse),
-		Engineering:      toItemEngineeringResponse(it.Engineering),
-		Planning:         toItemPlanningResponse(it.Planning),
-		Supplies:         toItemSuppliesResponse(it.Supplies),
-		Commercial:       response.ItemCommercialResponse{WarrantyDays: it.Commercial.WarrantyDays},
-		AccountingFiscal: response.ItemAccountingFiscalResponse{Active: it.AccountingFiscal.Active, CalculatePISCOFINS: it.AccountingFiscal.CalculatePISCOFINS},
-		CreatedBy:        it.CreatedBy,
-		CreatedAt:        it.CreatedAt,
+		ID:          it.ID,
+		Code:        int64(it.Code),
+		Name:        it.Name,
+		Complement:  it.Complement,
+		Nature:      int(it.Nature),
+		PDM:         toItemPDMResponse(it.PDM),
+		Situation:   it.Situation.String(),
+		Health:      it.Health.String(),
+		Warehouse:   toItemWarehouseResponse(it.Warehouse),
+		Engineering: toItemEngineeringResponse(it.Engineering),
+		Planning:    toItemPlanningResponse(it.Planning),
+		Supplies:    toItemSuppliesResponse(it.Supplies),
+		Commercial:  toCommercialResponse(it.Commercial),
+		Accounting:  toAccountingResponse(it.Accounting),
+		CreatedBy:   it.CreatedBy,
+		CreatedAt:   it.CreatedAt,
 	}
+}
+
+func toCommercialResponse(v entity.Commercial) response.ItemCommercialResponse {
+	return response.ItemCommercialResponse{
+		Description: v.Description, SaleType: v.SaleType, VolumeConversionFactor: v.VolumeConversionFactor, SaleMultiple: v.SaleMultiple, MinimumSaleQuantity: v.MinimumSaleQuantity,
+		EstimatedDeliveryDays: v.EstimatedDeliveryDays, WarrantyDays: v.WarrantyDays, TransferWarehouseCode: v.TransferWarehouseCode, TechnicalAssistanceWarehouseCode: v.TechnicalAssistanceWarehouseCode,
+		PackagingItemCode: v.PackagingItemCode, AllowBillingDescriptionChange: v.AllowBillingDescriptionChange, IssueLoadingLabels: v.IssueLoadingLabels, AssembleShippingVolumes: v.AssembleShippingVolumes,
+		RequiresSpecialPackaging: v.RequiresSpecialPackaging, WithholdPISCOFINS: v.WithholdPISCOFINS, IsPackaging: v.IsPackaging, MobileEnabled: v.MobileEnabled, ExportPackaging: v.ExportPackaging, ClassificationCode: v.ClassificationCode, Notes: v.Notes,
+	}
+}
+
+func toAccountingResponse(v entity.Accounting) response.ItemAccountingResponse {
+	var sale, purchase *string
+	if v.SaleUnitOfMeasurement != nil {
+		s := v.SaleUnitOfMeasurement.String()
+		sale = &s
+	}
+	if v.PurchaseUnitOfMeasurement != nil {
+		s := v.PurchaseUnitOfMeasurement.String()
+		purchase = &s
+	}
+	return response.ItemAccountingResponse{SaleFiscalClassificationCode: v.SaleFiscalClassificationCode, PurchaseFiscalClassificationCode: v.PurchaseFiscalClassificationCode, Origin: v.Origin,
+		SaleIPIType: v.SaleIPIType, SaleIPIRate: v.SaleIPIRate, PurchaseIPIType: v.PurchaseIPIType, PurchaseIPIRate: v.PurchaseIPIRate, ICMSRate: v.ICMSRate,
+		SaleUnitOfMeasurement: sale, PurchaseUnitOfMeasurement: purchase, InventoryGroupCode: v.InventoryGroupCode, AccountingClassificationCode: v.AccountingClassificationCode,
+		CEST: v.CEST, InputCode: v.InputCode, CalculatePISCOFINS: v.CalculatePISCOFINS, Notes: v.Notes}
 }
 
 func toItemResponses(list []*entity.Item) []*response.ItemResponse {

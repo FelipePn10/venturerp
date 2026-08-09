@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -14,13 +15,18 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 func (r *RepositoryItemSQLC) Create(
 	ctx context.Context,
 	item *entity.Item,
 ) (*entity.Item, error) {
+	if err := r.validateFiscalReferences(ctx, item); err != nil {
+		return nil, err
+	}
 
 	attributes, err := json.Marshal(item.PDM.Attributes)
 	if err != nil {
@@ -97,19 +103,73 @@ func (r *RepositoryItemSQLC) Create(
 		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist,
 		SuppliesHarvest:            item.Supplies.Harvest,
 
-		CommercialWarrantyDays:       int32(item.Commercial.WarrantyDays),
-		AccountingActive:             item.AccountingFiscal.Active,
-		AccountingCalculatePisCofins: item.AccountingFiscal.CalculatePISCOFINS,
+		CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
+		AccountingActive:       true, AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS,
+		CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
+		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple),
+		CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays),
+		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode),
+		CommercialPackagingItemCode: item.Commercial.PackagingItemCode, CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange,
+		CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes,
+		CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS,
+		CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging,
+		CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
+		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode),
+		AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate),
+		AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate),
+		AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement),
+		AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode),
+		AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes),
 
 		CreatedBy: pgutil.ToPgUUID(item.CreatedBy),
 	}
 
 	dbItem, err := r.q.CreateItem(ctx, params)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
+			return nil, fmt.Errorf("%w: %s", itemrepo.ErrInvalidReference, pgErr.ConstraintName)
+		}
 		return nil, fmt.Errorf("create item: %w", err)
 	}
 
 	return mapDBItemToEntity(dbItem)
+}
+
+func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, item *entity.Item) (*entity.Item, error) {
+	if err := r.validateFiscalReferences(ctx, item); err != nil {
+		return nil, err
+	}
+	p := sqlc.UpdateItemCommercialAccountingParams{Code: int64(item.Code), CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
+		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
+		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
+		CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange, CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes, CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS, CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging, CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
+		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS, AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes)}
+	dbItem, err := r.q.UpdateItemCommercialAccounting(ctx, p)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
+			return nil, fmt.Errorf("%w: %s", itemrepo.ErrInvalidReference, pgErr.ConstraintName)
+		}
+		return nil, fmt.Errorf("update item folders: %w", err)
+	}
+	return mapDBItemToEntity(dbItem)
+}
+
+func (r *RepositoryItemSQLC) validateFiscalReferences(ctx context.Context, item *entity.Item) error {
+	for _, code := range []*string{item.Accounting.SaleFiscalClassificationCode, item.Accounting.PurchaseFiscalClassificationCode} {
+		if code == nil {
+			continue
+		}
+		exists, err := r.q.ItemFiscalClassificationExists(ctx, *code)
+		if err != nil {
+			return fmt.Errorf("validate fiscal classification: %w", err)
+		}
+		if !exists {
+			return fmt.Errorf("%w: fiscal classification %q", itemrepo.ErrInvalidReference, *code)
+		}
+	}
+	return nil
 }
 
 func (r *RepositoryItemSQLC) FindItemByCode(
@@ -248,9 +308,26 @@ func mapDBItemToEntity(
 			ReceivingChecklist: dbItem.SuppliesReceivingChecklist,
 			Harvest:            dbItem.SuppliesHarvest,
 		},
-		Commercial: entity.Commercial{WarrantyDays: int(dbItem.CommercialWarrantyDays)},
-		AccountingFiscal: entity.AccountingFiscal{Active: dbItem.AccountingActive,
-			CalculatePISCOFINS: dbItem.AccountingCalculatePisCofins},
+		Commercial: entity.Commercial{
+			Description: pgTextToStringPtr(dbItem.CommercialDescription), SaleType: pgTextToStringPtr(dbItem.CommercialSaleType),
+			VolumeConversionFactor: numericToDecimalPtr(dbItem.CommercialVolumeConversionFactor), SaleMultiple: numericToDecimalPtr(dbItem.CommercialSaleMultiple),
+			MinimumSaleQuantity: numericToDecimalPtr(dbItem.CommercialMinimumSaleQuantity), EstimatedDeliveryDays: int32PtrToIntPtr(dbItem.CommercialEstimatedDeliveryDays),
+			WarrantyDays: int(dbItem.CommercialWarrantyDays), TransferWarehouseCode: pgTextToInt64Ptr(dbItem.CommercialTransferWarehouseCode),
+			TechnicalAssistanceWarehouseCode: pgTextToInt64Ptr(dbItem.CommercialTechnicalAssistanceWarehouseCode), PackagingItemCode: dbItem.CommercialPackagingItemCode,
+			AllowBillingDescriptionChange: dbItem.CommercialAllowBillingDescriptionChange, IssueLoadingLabels: dbItem.CommercialIssueLoadingLabels,
+			AssembleShippingVolumes: dbItem.CommercialAssembleShippingVolumes, RequiresSpecialPackaging: dbItem.CommercialRequiresSpecialPackaging,
+			WithholdPISCOFINS: dbItem.CommercialWithholdPisCofins, IsPackaging: dbItem.CommercialIsPackaging,
+			MobileEnabled: dbItem.CommercialMobileEnabled, ExportPackaging: dbItem.CommercialExportPackaging,
+			ClassificationCode: pgTextToStringPtr(dbItem.CommercialClassificationCode), Notes: pgTextToStringPtr(dbItem.CommercialNotes),
+		},
+		Accounting: entity.Accounting{
+			SaleFiscalClassificationCode: pgTextToStringPtr(dbItem.AccountingSaleFiscalClassificationCode), PurchaseFiscalClassificationCode: pgTextToStringPtr(dbItem.AccountingPurchaseFiscalClassificationCode),
+			Origin: int2ToIntPtr(dbItem.AccountingOrigin), SaleIPIType: pgTextToStringPtr(dbItem.AccountingSaleIpiType), SaleIPIRate: numericToDecimalPtr(dbItem.AccountingSaleIpiRate),
+			PurchaseIPIType: pgTextToStringPtr(dbItem.AccountingPurchaseIpiType), PurchaseIPIRate: numericToDecimalPtr(dbItem.AccountingPurchaseIpiRate), ICMSRate: numericToDecimalPtr(dbItem.AccountingIcmsRate),
+			SaleUnitOfMeasurement: pgTextToUnitOfMeasurementPtr(dbItem.AccountingSaleUnitOfMeasurement), PurchaseUnitOfMeasurement: pgTextToUnitOfMeasurementPtr(dbItem.AccountingPurchaseUnitOfMeasurement),
+			InventoryGroupCode: dbItem.AccountingInventoryGroupCode, AccountingClassificationCode: pgTextToStringPtr(dbItem.AccountingClassificationCode),
+			CEST: pgTextToStringPtr(dbItem.AccountingCest), InputCode: pgTextToStringPtr(dbItem.AccountingInputCode), CalculatePISCOFINS: dbItem.AccountingCalculatePisCofins, Notes: pgTextToStringPtr(dbItem.AccountingNotes),
+		},
 
 		CreatedBy: pgutil.FromPgUUID(dbItem.CreatedBy),
 		CreatedAt: pgutil.FromPgTimestamp(dbItem.CreatedAt),
@@ -277,6 +354,53 @@ func pgTextToStringPtr(value pgtype.Text) *string {
 		return nil
 	}
 	return &value.String
+}
+
+func int64PtrToPgText(v *int64) pgtype.Text {
+	if v == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: strconv.FormatInt(*v, 10), Valid: true}
+}
+func pgTextToInt64Ptr(v pgtype.Text) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	n, err := strconv.ParseInt(v.String, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &n
+}
+
+func decimalPtrToNumeric(v *decimal.Decimal) pgtype.Numeric {
+	if v == nil {
+		return pgtype.Numeric{}
+	}
+	return pgutil.ToPgNumericFromString(v.String())
+}
+func numericToDecimalPtr(v pgtype.Numeric) *decimal.Decimal {
+	if !v.Valid {
+		return nil
+	}
+	d, err := decimal.NewFromString(pgutil.FromPgNumericToString(v))
+	if err != nil {
+		return nil
+	}
+	return &d
+}
+func intPtrToInt2(v *int) pgtype.Int2 {
+	if v == nil {
+		return pgtype.Int2{}
+	}
+	return pgtype.Int2{Int16: int16(*v), Valid: true}
+}
+func int2ToIntPtr(v pgtype.Int2) *int {
+	if !v.Valid {
+		return nil
+	}
+	n := int(v.Int16)
+	return &n
 }
 
 func intPtrToInt32Ptr(v *int) *int32 {

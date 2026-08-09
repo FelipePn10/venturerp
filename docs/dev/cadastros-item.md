@@ -118,11 +118,32 @@ Campos por **pasta** (refletem `internal/domain/items/entity/item_entity.go`):
     "receiving_checklist": true,
     "harvest": false
   },
-  "commercial": {"warranty_days": 365},
-  "accounting_fiscal": {"active": true, "calculate_pis_cofins": true},
+  "commercial": {
+    "description": "CHAPA DE AÇO CARBONO",
+    "sale_type": "VENDA",
+    "sale_multiple": 5,
+    "warranty_days": 365,
+    "issue_loading_labels": true
+  },
+  "accounting": {
+    "sale_fiscal_classification_code": "72085400",
+    "purchase_fiscal_classification_code": "72085400",
+    "origin": 0,
+    "sale_ipi_type": "PERCENTUAL",
+    "sale_ipi_rate": 5,
+    "sale_unit_of_measurement": "UN",
+    "purchase_unit_of_measurement": "KG",
+    "cest": "0100100",
+    "calculate_pis_cofins": true
+  },
   "created_by": "<uuid-do-usuario>"
 }
 ```
+
+As pastas `commercial` e `accounting` são opcionais. `PUT /api/items/{code}` aceita
+as mesmas pastas de forma parcial: somente propriedades enviadas são alteradas;
+valores `false` e `0` enviados explicitamente são preservados. `sale_type` aceita
+`VENDA|REVENDA` e os tipos de IPI aceitam `PERCENTUAL|VALOR`.
 
 Pontos importantes para a metalúrgica:
 

@@ -237,10 +237,11 @@ func (app *application) mount() chi.Router {
 	itemRepo := item.NewRepositoryItemSQLC(queries)
 
 	createItemUc := item_uc.NewCreateItemUseCase(itemRepo, authService)
+	updateItemUc := item_uc.NewUpdateItemUseCase(itemRepo, authService)
 	findItemByCodeUc := item_uc.NewFindItemByCode(itemRepo, authService)
 	listItemsUC := item_uc.NewListItemsUseCase(itemRepo, authService)
 	listItemsWithMasksUC := item_uc.NewListItemsWithMasksUseCase(itemRepo, authService)
-	itemHandler := handler.NewCreateItemHandler(createItemUc, findItemByCodeUc, listItemsUC, listItemsWithMasksUC)
+	itemHandler := handler.NewCreateItemHandler(createItemUc, updateItemUc, findItemByCodeUc, listItemsUC, listItemsWithMasksUC)
 
 	// Item Structure
 	itemRepoStructure := structure.NewItemStructureRepository(queries)
@@ -1117,6 +1118,7 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/items", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemHandler.CreateItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", itemHandler.UpdateItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", itemHandler.ListItems)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/with-masks", itemHandler.ListItemsWithMasks)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search/{code}", itemHandler.FindItemByCodeHandler)

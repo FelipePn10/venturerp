@@ -74,12 +74,14 @@ func NewUserHandler(
 
 func NewCreateItemHandler(
 	createItemUc *item_uc.CreateItemUseCase,
+	updateItemUc *item_uc.UpdateItemUseCase,
 	findItemByCodeUc *item_uc.FindItemByCode,
 	listItemsUC *item_uc.ListItemsUseCase,
 	listItemsWithMasksUC *item_uc.ListItemsWithMasksUseCase,
 ) *ItemHandler {
 	return &ItemHandler{
 		createItemUC:         createItemUc,
+		updateItemUC:         updateItemUc,
 		findItemByCodeUC:     findItemByCodeUc,
 		listItemsUC:          listItemsUC,
 		listItemsWithMasksUC: listItemsWithMasksUC,
