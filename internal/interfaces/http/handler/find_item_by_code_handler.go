@@ -3,11 +3,9 @@ package handler
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -21,14 +19,8 @@ func (h *ItemHandler) FindItemByCodeHandler(
 		return
 	}
 
-	codeInt, err := strconv.ParseInt(codeStr, 10, 64)
-	if err != nil {
-		h.BadRequest(w, "invalid 'code'")
-		return
-	}
-
 	req := request.FindItemByCodeDTO{
-		Code: valueobject.ItemCode(codeInt),
+		Code: codeStr,
 	}
 
 	item, err := h.findItemByCodeUC.Execute(r.Context(), req)

@@ -6,8 +6,10 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/item_supplier/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"strings"
 )
 
 type ItemSupplierRepositorySQLC struct{ pool *pgxpool.Pool }
@@ -78,6 +80,10 @@ func (r *ItemSupplierRepositorySQLC) ListByItem(ctx context.Context, e, item int
 func (r *ItemSupplierRepositorySQLC) ListBySupplier(ctx context.Context, e, supplier int64) ([]*entity.ItemPreferredSupplier, error) {
 	return r.list(ctx, `SELECT `+cols+` FROM item_preferred_suppliers s WHERE s.enterprise_id=$1 AND s.supplier_code=$2 AND s.is_active AND (s.valid_until IS NULL OR s.valid_until>=CURRENT_DATE) ORDER BY s.item_code,s.mask`, e, supplier)
 }
+func (r *ItemSupplierRepositorySQLC) SearchExternal(ctx context.Context, e, supplier int64, term string) ([]*entity.ItemPreferredSupplier, error) {
+	term = strings.TrimSpace(term)
+	return r.list(ctx, `SELECT `+cols+` FROM item_preferred_suppliers s WHERE s.enterprise_id=$1 AND s.supplier_code=$2 AND s.is_active AND (s.valid_until IS NULL OR s.valid_until>=CURRENT_DATE) AND (upper(btrim(COALESCE(s.supplier_item_code,'')))=upper(btrim($3)) OR s.supplier_description ILIKE '%'||$3||'%') ORDER BY CASE WHEN upper(btrim(COALESCE(s.supplier_item_code,'')))=upper(btrim($3)) THEN 0 ELSE 1 END,s.is_preferred DESC,s.ranking,s.id LIMIT 20`, e, supplier, term)
+}
 func (r *ItemSupplierRepositorySQLC) GetPreferred(ctx context.Context, e, item int64) (*entity.ItemPreferredSupplier, error) {
 	return scan(r.pool.QueryRow(ctx, `SELECT `+cols+` FROM item_preferred_suppliers s WHERE s.enterprise_id=$1 AND s.item_code=$2 AND s.is_active AND s.is_preferred AND (s.valid_until IS NULL OR s.valid_until>=CURRENT_DATE) ORDER BY s.ranking,s.supplier_code LIMIT 1`, e, item))
 }
@@ -89,8 +95,12 @@ func (r *ItemSupplierRepositorySQLC) Delete(ctx context.Context, e, id int64) er
 	return err
 }
 func (r *ItemSupplierRepositorySQLC) ItemAllowsConversionFactor(ctx context.Context, item int64) (bool, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
 	var ok bool
-	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM items WHERE code=$1 AND nature=0)`, item).Scan(&ok)
+	err = r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM items WHERE enterprise_id=$1 AND code=$2 AND nature=0)`, e, item).Scan(&ok)
 	return ok, err
 }
 func (r *ItemSupplierRepositorySQLC) CreateQualityReport(ctx context.Context, q *entity.QualityReport) (*entity.QualityReport, error) {

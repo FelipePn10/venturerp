@@ -8,17 +8,22 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
 
+type itemByBusinessCodeRepository interface {
+	FindItemByBusinessCode(context.Context, valueobject.BusinessCode) (*entity.Item, error)
+}
+
 type FindItemByCode struct {
-	Repo repository.ItemRepository
+	Repo itemByBusinessCodeRepository
 	Auth ports.AuthService
 }
 
 func NewFindItemByCode(
-	repo repository.ItemRepository,
+	repo itemByBusinessCodeRepository,
 	auth ports.AuthService,
 ) *FindItemByCode {
 	return &FindItemByCode{
@@ -35,12 +40,12 @@ func (uc *FindItemByCode) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	code, err := valueobject.NewItemCode(int64(dto.Code))
+	code, err := valueobject.NewBusinessCode(dto.Code)
 	if err != nil {
 		return nil, err
 	}
 
-	item, err := uc.Repo.FindItemByCode(ctx, code)
+	item, err := uc.Repo.FindItemByBusinessCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, errorsuc.ErrProductNotFound

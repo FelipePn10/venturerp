@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,10 +13,12 @@ import (
 )
 
 type Item struct {
-	ID         int64
-	Code       valueobject.ItemCode
-	Name       string
-	Complement *string
+	ID           int64
+	Code         valueobject.ItemCode // identificador numerico legado; nao expor como codigo de negocio
+	BusinessCode valueobject.BusinessCode
+	EnterpriseID int64
+	Name         string
+	Complement   *string
 
 	// Checkbox
 	Nature ItemNature
@@ -161,7 +164,12 @@ type ItemWithMasks struct {
 }
 
 func (i *Item) Validate() error {
-	if !i.Code.IsValid() {
+	// Compatibilidade para entidades internas legadas enquanto as referencias
+	// numericas migram para item_id.
+	if i.BusinessCode == "" && i.Code.IsValid() {
+		i.BusinessCode = valueobject.BusinessCode(fmt.Sprintf("%d", i.Code))
+	}
+	if !i.BusinessCode.IsValid() {
 		return errors.New("invalid code")
 	}
 	i.Name = strings.TrimSpace(i.Name)
@@ -199,7 +207,7 @@ func (i *Item) Validate() error {
 	if i.Commercial.EstimatedDeliveryDays != nil && *i.Commercial.EstimatedDeliveryDays < 0 {
 		return errors.New("commercial.estimated_delivery_days cannot be negative")
 	}
-	if i.Commercial.PackagingItemCode != nil && *i.Commercial.PackagingItemCode == int64(i.Code) {
+	if i.Code.IsValid() && i.Commercial.PackagingItemCode != nil && *i.Commercial.PackagingItemCode == int64(i.Code) {
 		return errors.New("commercial.packaging_item_code cannot reference the item itself")
 	}
 	if i.Accounting.Origin != nil && (*i.Accounting.Origin < 0 || *i.Accounting.Origin > 8) {

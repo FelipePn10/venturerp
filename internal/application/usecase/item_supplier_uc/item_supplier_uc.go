@@ -107,6 +107,20 @@ func (uc *ItemSupplierUseCase) ListBySupplier(ctx context.Context, supplier int6
 	}
 	return toItemPreferredSupplierResponses(x), nil
 }
+func (uc *ItemSupplierUseCase) SearchExternal(ctx context.Context, supplier int64, term string) ([]*response.ItemPreferredSupplierResponse, error) {
+	if supplier <= 0 || strings.TrimSpace(term) == "" {
+		return nil, fmt.Errorf("supplier_code e termo sao obrigatorios")
+	}
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	x, err := uc.repo.SearchExternal(ctx, e, supplier, term)
+	if err != nil {
+		return nil, err
+	}
+	return toItemPreferredSupplierResponses(x), nil
+}
 func (uc *ItemSupplierUseCase) Delete(ctx context.Context, id int64) error {
 	e, err := uc.auth.EnterpriseID(ctx)
 	if err != nil {

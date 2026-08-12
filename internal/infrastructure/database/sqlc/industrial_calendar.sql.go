@@ -12,30 +12,34 @@ import (
 )
 
 type BatchInsertCalendarDaysParams struct {
-	Year        int32
-	Month       int32
-	Day         int32
-	IsWorkday   bool
-	Description pgtype.Text
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+	Day          int32
+	IsWorkday    bool
+	Description  pgtype.Text
+	Source       string
 }
 
 const createCalendarDay = `-- name: CreateCalendarDay :one
-INSERT INTO industrial_calendar (year, month, day, is_workday, description)
-VALUES ($1, $2, $3, $4, $5)
-    ON CONFLICT (year, month, day) DO UPDATE SET is_workday = EXCLUDED.is_workday, description = EXCLUDED.description
-                                          RETURNING id, year, month, day, is_workday, description, created_at, updated_at
+INSERT INTO industrial_calendar (enterprise_id, year, month, day, is_workday, description, source)
+VALUES ($1, $2, $3, $4, $5, $6, 'MANUAL')
+    ON CONFLICT (enterprise_id, year, month, day) DO UPDATE SET is_workday = EXCLUDED.is_workday, description = EXCLUDED.description, source = 'MANUAL', updated_at = NOW()
+                                          RETURNING id, year, month, day, is_workday, description, created_at, updated_at, enterprise_id, source
 `
 
 type CreateCalendarDayParams struct {
-	Year        int32
-	Month       int32
-	Day         int32
-	IsWorkday   bool
-	Description pgtype.Text
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+	Day          int32
+	IsWorkday    bool
+	Description  pgtype.Text
 }
 
 func (q *Queries) CreateCalendarDay(ctx context.Context, arg CreateCalendarDayParams) (IndustrialCalendar, error) {
 	row := q.db.QueryRow(ctx, createCalendarDay,
+		arg.EnterpriseID,
 		arg.Year,
 		arg.Month,
 		arg.Day,
@@ -52,37 +56,79 @@ func (q *Queries) CreateCalendarDay(ctx context.Context, arg CreateCalendarDayPa
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
+		&i.Source,
 	)
 	return i, err
 }
 
 const deleteCalendarDay = `-- name: DeleteCalendarDay :exec
-DELETE FROM industrial_calendar WHERE year = $1 AND month = $2 AND day = $3
+DELETE FROM industrial_calendar WHERE enterprise_id=$1 AND year=$2 AND month=$3 AND day=$4
 `
 
 type DeleteCalendarDayParams struct {
-	Year  int32
-	Month int32
-	Day   int32
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+	Day          int32
 }
 
 func (q *Queries) DeleteCalendarDay(ctx context.Context, arg DeleteCalendarDayParams) error {
-	_, err := q.db.Exec(ctx, deleteCalendarDay, arg.Year, arg.Month, arg.Day)
+	_, err := q.db.Exec(ctx, deleteCalendarDay,
+		arg.EnterpriseID,
+		arg.Year,
+		arg.Month,
+		arg.Day,
+	)
 	return err
 }
 
+const generateCalendarMonth = `-- name: GenerateCalendarMonth :execrows
+INSERT INTO industrial_calendar (enterprise_id, year, month, day, is_workday, description, source)
+SELECT $1, EXTRACT(YEAR FROM d)::int, EXTRACT(MONTH FROM d)::int, EXTRACT(DAY FROM d)::int,
+       EXTRACT(ISODOW FROM d) BETWEEN 1 AND 5,
+       CASE WHEN EXTRACT(ISODOW FROM d) BETWEEN 1 AND 5 THEN NULL ELSE 'Fim de semana' END,
+       CASE WHEN EXTRACT(ISODOW FROM d) BETWEEN 1 AND 5 THEN 'AUTOMATICO' ELSE 'FIM_DE_SEMANA' END
+FROM generate_series(
+    make_date($2::int, $3::int, 1),
+    (make_date($2::int, $3::int, 1) + interval '1 month - 1 day')::date,
+    interval '1 day'
+) d
+ON CONFLICT (enterprise_id, year, month, day) DO NOTHING
+`
+
+type GenerateCalendarMonthParams struct {
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+}
+
+func (q *Queries) GenerateCalendarMonth(ctx context.Context, arg GenerateCalendarMonthParams) (int64, error) {
+	result, err := q.db.Exec(ctx, generateCalendarMonth, arg.EnterpriseID, arg.Year, arg.Month)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getCalendarDay = `-- name: GetCalendarDay :one
-SELECT id, year, month, day, is_workday, description, created_at, updated_at FROM industrial_calendar WHERE year = $1 AND month = $2 AND day = $3
+SELECT id, year, month, day, is_workday, description, created_at, updated_at, enterprise_id, source FROM industrial_calendar WHERE enterprise_id=$1 AND year=$2 AND month=$3 AND day=$4
 `
 
 type GetCalendarDayParams struct {
-	Year  int32
-	Month int32
-	Day   int32
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+	Day          int32
 }
 
 func (q *Queries) GetCalendarDay(ctx context.Context, arg GetCalendarDayParams) (IndustrialCalendar, error) {
-	row := q.db.QueryRow(ctx, getCalendarDay, arg.Year, arg.Month, arg.Day)
+	row := q.db.QueryRow(ctx, getCalendarDay,
+		arg.EnterpriseID,
+		arg.Year,
+		arg.Month,
+		arg.Day,
+	)
 	var i IndustrialCalendar
 	err := row.Scan(
 		&i.ID,
@@ -93,20 +139,23 @@ func (q *Queries) GetCalendarDay(ctx context.Context, arg GetCalendarDayParams) 
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
+		&i.Source,
 	)
 	return i, err
 }
 
 const getNextWorkday = `-- name: GetNextWorkday :one
 SELECT year, month, day FROM industrial_calendar
-WHERE is_workday = TRUE AND (year > $1 OR (year = $1 AND month > $2) OR (year = $1 AND month = $2 AND day > $3))
+WHERE enterprise_id=$1 AND is_workday = TRUE AND (year > $2 OR (year = $2 AND month > $3) OR (year = $2 AND month = $3 AND day > $4))
 ORDER BY year, month, day LIMIT 1
 `
 
 type GetNextWorkdayParams struct {
-	Year  int32
-	Month int32
-	Day   int32
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+	Day          int32
 }
 
 type GetNextWorkdayRow struct {
@@ -116,23 +165,29 @@ type GetNextWorkdayRow struct {
 }
 
 func (q *Queries) GetNextWorkday(ctx context.Context, arg GetNextWorkdayParams) (GetNextWorkdayRow, error) {
-	row := q.db.QueryRow(ctx, getNextWorkday, arg.Year, arg.Month, arg.Day)
+	row := q.db.QueryRow(ctx, getNextWorkday,
+		arg.EnterpriseID,
+		arg.Year,
+		arg.Month,
+		arg.Day,
+	)
 	var i GetNextWorkdayRow
 	err := row.Scan(&i.Year, &i.Month, &i.Day)
 	return i, err
 }
 
 const getWorkdaysInMonth = `-- name: GetWorkdaysInMonth :many
-SELECT id, year, month, day, is_workday, description, created_at, updated_at FROM industrial_calendar WHERE year = $1 AND month = $2 AND is_workday = TRUE ORDER BY day
+SELECT id, year, month, day, is_workday, description, created_at, updated_at, enterprise_id, source FROM industrial_calendar WHERE enterprise_id=$1 AND year=$2 AND month=$3 AND is_workday = TRUE ORDER BY day
 `
 
 type GetWorkdaysInMonthParams struct {
-	Year  int32
-	Month int32
+	EnterpriseID int64
+	Year         int32
+	Month        int32
 }
 
 func (q *Queries) GetWorkdaysInMonth(ctx context.Context, arg GetWorkdaysInMonthParams) ([]IndustrialCalendar, error) {
-	rows, err := q.db.Query(ctx, getWorkdaysInMonth, arg.Year, arg.Month)
+	rows, err := q.db.Query(ctx, getWorkdaysInMonth, arg.EnterpriseID, arg.Year, arg.Month)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +204,8 @@ func (q *Queries) GetWorkdaysInMonth(ctx context.Context, arg GetWorkdaysInMonth
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -161,33 +218,40 @@ func (q *Queries) GetWorkdaysInMonth(ctx context.Context, arg GetWorkdaysInMonth
 }
 
 const isWorkday = `-- name: IsWorkday :one
-SELECT is_workday FROM industrial_calendar WHERE year = $1 AND month = $2 AND day = $3
+SELECT is_workday FROM industrial_calendar WHERE enterprise_id=$1 AND year=$2 AND month=$3 AND day=$4
 `
 
 type IsWorkdayParams struct {
-	Year  int32
-	Month int32
-	Day   int32
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+	Day          int32
 }
 
 func (q *Queries) IsWorkday(ctx context.Context, arg IsWorkdayParams) (bool, error) {
-	row := q.db.QueryRow(ctx, isWorkday, arg.Year, arg.Month, arg.Day)
+	row := q.db.QueryRow(ctx, isWorkday,
+		arg.EnterpriseID,
+		arg.Year,
+		arg.Month,
+		arg.Day,
+	)
 	var is_workday bool
 	err := row.Scan(&is_workday)
 	return is_workday, err
 }
 
 const listCalendarMonth = `-- name: ListCalendarMonth :many
-SELECT id, year, month, day, is_workday, description, created_at, updated_at FROM industrial_calendar WHERE year = $1 AND month = $2 ORDER BY day
+SELECT id, year, month, day, is_workday, description, created_at, updated_at, enterprise_id, source FROM industrial_calendar WHERE enterprise_id=$1 AND year=$2 AND month=$3 ORDER BY day
 `
 
 type ListCalendarMonthParams struct {
-	Year  int32
-	Month int32
+	EnterpriseID int64
+	Year         int32
+	Month        int32
 }
 
 func (q *Queries) ListCalendarMonth(ctx context.Context, arg ListCalendarMonthParams) ([]IndustrialCalendar, error) {
-	rows, err := q.db.Query(ctx, listCalendarMonth, arg.Year, arg.Month)
+	rows, err := q.db.Query(ctx, listCalendarMonth, arg.EnterpriseID, arg.Year, arg.Month)
 	if err != nil {
 		return nil, err
 	}
@@ -204,6 +268,8 @@ func (q *Queries) ListCalendarMonth(ctx context.Context, arg ListCalendarMonthPa
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}

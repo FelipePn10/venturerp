@@ -10,6 +10,7 @@ import (
 
 var ErrNotFound = errors.New("item not found")
 var ErrInvalidReference = errors.New("item folder contains an unknown reference")
+var ErrConflict = errors.New("item code already exists for this enterprise")
 
 type ItemRepository interface {
 	Create(ctx context.Context, item *entity.Item) (*entity.Item, error)

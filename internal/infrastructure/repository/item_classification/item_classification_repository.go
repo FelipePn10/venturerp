@@ -2,11 +2,13 @@ package item_classification
 
 import (
 	"context"
+	"fmt"
 
 	itemEntity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 type ItemClassificationRepositorySQLC struct {
@@ -22,14 +24,14 @@ func New(q *sqlc.Queries) *ItemClassificationRepositorySQLC {
 // ─── Masks ────────────────────────────────────────────────────────────────────
 
 func (r *ItemClassificationRepositorySQLC) CreateClassificationMask(ctx context.Context, m *itemEntity.ItemClassificationMask) (*itemEntity.ItemClassificationMask, error) {
-	code, err := r.q.NextClassificationMaskCode(ctx)
+	e, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	row, err := r.q.CreateClassificationMask(ctx, sqlc.CreateClassificationMaskParams{
-		Code:        int64(code),
-		Mask:        m.Mask,
-		Description: m.Description,
+		EnterpriseID: e,
+		Mask:         m.Mask,
+		Description:  m.Description,
 	})
 	if err != nil {
 		return nil, err
@@ -38,10 +40,15 @@ func (r *ItemClassificationRepositorySQLC) CreateClassificationMask(ctx context.
 }
 
 func (r *ItemClassificationRepositorySQLC) UpdateClassificationMask(ctx context.Context, m *itemEntity.ItemClassificationMask) (*itemEntity.ItemClassificationMask, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateClassificationMask(ctx, sqlc.UpdateClassificationMaskParams{
-		ID:          m.ID,
-		Description: m.Description,
-		IsActive:    m.IsActive,
+		ID:           m.ID,
+		Description:  m.Description,
+		IsActive:     m.IsActive,
+		EnterpriseID: e,
 	})
 	if err != nil {
 		return nil, err
@@ -50,7 +57,11 @@ func (r *ItemClassificationRepositorySQLC) UpdateClassificationMask(ctx context.
 }
 
 func (r *ItemClassificationRepositorySQLC) GetClassificationMaskByCode(ctx context.Context, code int64) (*itemEntity.ItemClassificationMask, error) {
-	row, err := r.q.GetClassificationMaskByCode(ctx, code)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetClassificationMaskByCode(ctx, sqlc.GetClassificationMaskByCodeParams{Code: code, EnterpriseID: e})
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +69,11 @@ func (r *ItemClassificationRepositorySQLC) GetClassificationMaskByCode(ctx conte
 }
 
 func (r *ItemClassificationRepositorySQLC) ListClassificationMasks(ctx context.Context, onlyActive bool) ([]*itemEntity.ItemClassificationMask, error) {
-	rows, err := r.q.ListClassificationMasks(ctx, onlyActive)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListClassificationMasks(ctx, sqlc.ListClassificationMasksParams{EnterpriseID: e, Column2: onlyActive})
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +106,14 @@ func maskToEntity(row sqlc.ItemClassificationMask) *itemEntity.ItemClassificatio
 // ─── Classifications ──────────────────────────────────────────────────────────
 
 func (r *ItemClassificationRepositorySQLC) CreateItemClassification(ctx context.Context, c *itemEntity.ItemClassification) (*itemEntity.ItemClassification, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ok, err := r.q.ClassificationMaskBelongsToEnterprise(ctx, sqlc.ClassificationMaskBelongsToEnterpriseParams{ID: c.MaskID, EnterpriseID: e})
+	if err != nil || !ok {
+		return nil, fmt.Errorf("mascara nao pertence a empresa")
+	}
 	row, err := r.q.CreateItemClassification(ctx, sqlc.CreateItemClassificationParams{
 		Code:        c.Code,
 		MaskID:      c.MaskID,
@@ -105,6 +128,14 @@ func (r *ItemClassificationRepositorySQLC) CreateItemClassification(ctx context.
 }
 
 func (r *ItemClassificationRepositorySQLC) UpdateItemClassification(ctx context.Context, c *itemEntity.ItemClassification) (*itemEntity.ItemClassification, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ok, err := r.q.ItemClassificationBelongsToEnterprise(ctx, sqlc.ItemClassificationBelongsToEnterpriseParams{ID: c.ID, EnterpriseID: e})
+	if err != nil || !ok {
+		return nil, fmt.Errorf("classificacao nao pertence a empresa")
+	}
 	row, err := r.q.UpdateItemClassification(ctx, sqlc.UpdateItemClassificationParams{
 		ID:          c.ID,
 		Description: c.Description,
@@ -117,9 +148,14 @@ func (r *ItemClassificationRepositorySQLC) UpdateItemClassification(ctx context.
 }
 
 func (r *ItemClassificationRepositorySQLC) GetItemClassificationByCode(ctx context.Context, code string, maskCode int64) (*itemEntity.ItemClassification, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.GetItemClassificationByCode(ctx, sqlc.GetItemClassificationByCodeParams{
-		Code:   code,
-		Code_2: maskCode,
+		Code:         code,
+		Code_2:       maskCode,
+		EnterpriseID: e,
 	})
 	if err != nil {
 		return nil, err
@@ -128,6 +164,14 @@ func (r *ItemClassificationRepositorySQLC) GetItemClassificationByCode(ctx conte
 }
 
 func (r *ItemClassificationRepositorySQLC) ListItemClassificationsByMask(ctx context.Context, maskID int64, onlyActive bool) ([]*itemEntity.ItemClassification, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ok, err := r.q.ClassificationMaskBelongsToEnterprise(ctx, sqlc.ClassificationMaskBelongsToEnterpriseParams{ID: maskID, EnterpriseID: e})
+	if err != nil || !ok {
+		return nil, fmt.Errorf("mascara nao pertence a empresa")
+	}
 	rows, err := r.q.ListItemClassificationsByMask(ctx, sqlc.ListItemClassificationsByMaskParams{
 		MaskID:  maskID,
 		Column2: onlyActive,
@@ -143,6 +187,14 @@ func (r *ItemClassificationRepositorySQLC) ListItemClassificationsByMask(ctx con
 }
 
 func (r *ItemClassificationRepositorySQLC) ListItemClassificationChildren(ctx context.Context, parentID int64, onlyActive bool) ([]*itemEntity.ItemClassification, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ok, err := r.q.ItemClassificationBelongsToEnterprise(ctx, sqlc.ItemClassificationBelongsToEnterpriseParams{ID: parentID, EnterpriseID: e})
+	if err != nil || !ok {
+		return nil, fmt.Errorf("classificacao pai nao pertence a empresa")
+	}
 	rows, err := r.q.ListItemClassificationChildren(ctx, sqlc.ListItemClassificationChildrenParams{
 		ParentID: &parentID,
 		Column2:  onlyActive,

@@ -9,7 +9,7 @@ import (
 )
 
 type CreateItemDTO struct {
-	Code             valueobject.ItemCode    `json:"code"`
+	Code             string                  `json:"code"`
 	Name             string                  `json:"name"`
 	Complement       *string                 `json:"complement,omitempty"`
 	Nature           itementity.ItemNature   `json:"nature"`

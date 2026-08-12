@@ -99,6 +99,7 @@ const (
 
 // TableReport is the full specification of a paginated, branded table report.
 type TableReport struct {
+	Orientation string // retrato (padrao) ou paisagem
 	Theme       Theme
 	Company     Company
 	Logo        []byte // optional PNG/JPEG; ignored if it fails to decode
@@ -114,6 +115,9 @@ type TableReport struct {
 // PDF bytes. It never errors: a bad logo is simply dropped.
 func (tr *TableReport) Render() []byte {
 	d := New()
+	if tr.Orientation == "paisagem" {
+		d = NewLandscape()
+	}
 	var logo *Image
 	if len(tr.Logo) > 0 {
 		logo, _ = d.AddImage(tr.Logo)
@@ -194,37 +198,48 @@ func drawLetterhead(p *Page, th Theme, co Company, logo *Image, x, top, w float6
 	p.FillRect(x, top, w, h, th.Brand)
 
 	if compact {
-		p.Text(x+10, top+15, FontBold, 10, th.BrandText, co.Name)
+		nameW := w - 20
+		if logo != nil {
+			const boxW, boxH = 50.0, 14.0
+			lw, lh := logoContain(logo, boxW, boxH)
+			boxX := x + w - boxW - 8
+			p.DrawImage(logo, boxX+(boxW-lw)/2, top+4+(boxH-lh)/2, lw, lh)
+			nameW = boxX - (x + 10) - 8
+		}
+		p.Text(x+10, top+15, FontBold, 10, th.BrandText, ellipsize(FontBold, 10, co.Name, nameW))
 		return top + h
 	}
 
-	// Logo on the right, vertically centred in the band.
+	textW := w - 24
+	// Caixa reservada da logo: a imagem sempre usa contain, sem invadir o texto.
 	if logo != nil {
-		lh := h - 16
-		lw := logoWidth(logo, lh)
-		p.DrawImage(logo, x+w-lw-10, top+8, lw, lh)
+		const boxW, boxH = 130.0, 50.0
+		lw, lh := logoContain(logo, boxW, boxH)
+		boxX := x + w - boxW - 10
+		p.DrawImage(logo, boxX+(boxW-lw)/2, top+8+(boxH-lh)/2, lw, lh)
+		textW = boxX - (x + 12) - 10
 	}
 
 	ty := top + 20
-	p.Text(x+12, ty, FontBold, 13, th.BrandText, co.Name)
+	p.Text(x+12, ty, FontBold, 13, th.BrandText, ellipsize(FontBold, 13, co.Name, textW))
 	ty += 14
 	for _, ln := range co.infoLines() {
-		p.Text(x+12, ty, FontRegular, 8, th.BrandText, ln)
+		p.Text(x+12, ty, FontRegular, 8, th.BrandText, ellipsize(FontRegular, 8, ln, textW))
 		ty += 10
 	}
 	return top + h
 }
 
 // logoWidth keeps the logo aspect ratio for a target height.
-func logoWidth(img *Image, targetH float64) float64 {
-	if img.h == 0 {
-		return targetH
+func logoContain(img *Image, maxW, maxH float64) (float64, float64) {
+	if img == nil || img.w <= 0 || img.h <= 0 {
+		return maxH, maxH
 	}
-	w := targetH * float64(img.w) / float64(img.h)
-	if max := 130.0; w > max { // cap so a wide logo never crowds the band
-		w = max
+	scale := maxW / float64(img.w)
+	if hScale := maxH / float64(img.h); hScale < scale {
+		scale = hScale
 	}
-	return w
+	return float64(img.w) * scale, float64(img.h) * scale
 }
 
 func drawTableHeader(p *Page, th Theme, cols []Column, widths []float64, x, top, w float64) float64 {

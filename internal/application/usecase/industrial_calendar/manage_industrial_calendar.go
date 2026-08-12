@@ -2,6 +2,7 @@ package industrial_calendar_uc
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -11,6 +12,31 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
 )
+
+var ErrInvalidCalendarDate = errors.New("data do calendario invalida")
+var ErrCalendarGenerationUnavailable = errors.New("geracao do calendario indisponivel")
+
+type calendarMonthGenerator interface {
+	GenerateMonth(context.Context, int, int) (int, error)
+}
+
+func validateMonth(year, month int) error {
+	if year < 2000 || year > 2200 || month < 1 || month > 12 {
+		return ErrInvalidCalendarDate
+	}
+	return nil
+}
+
+func validateDay(year, month, day int) error {
+	if validateMonth(year, month) != nil || day < 1 || day > 31 {
+		return ErrInvalidCalendarDate
+	}
+	d := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	if d.Year() != year || int(d.Month()) != month || d.Day() != day {
+		return ErrInvalidCalendarDate
+	}
+	return nil
+}
 
 type ManageCalendarUseCase struct {
 	Repo repository.IndustrialCalendarRepository
@@ -23,6 +49,9 @@ func (uc *ManageCalendarUseCase) CreateDay(
 ) (*response.IndustrialCalendarResponse, error) {
 	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := validateDay(dto.Year, dto.Month, dto.Day); err != nil {
+		return nil, err
 	}
 	cal := &entity.IndustrialCalendar{
 		Year:        dto.Year,
@@ -38,9 +67,34 @@ func (uc *ManageCalendarUseCase) CreateDay(
 	return toIndustrialCalendarResponse(created), nil
 }
 
+func (uc *ManageCalendarUseCase) GenerateMonth(ctx context.Context, year, month int) (*response.GenerateIndustrialCalendarResponse, error) {
+	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := validateMonth(year, month); err != nil {
+		return nil, err
+	}
+	existing, err := uc.Repo.ListMonth(ctx, year, month)
+	if err != nil {
+		return nil, err
+	}
+	generator, ok := uc.Repo.(calendarMonthGenerator)
+	if !ok {
+		return nil, ErrCalendarGenerationUnavailable
+	}
+	created, err := generator.GenerateMonth(ctx, year, month)
+	if err != nil {
+		return nil, err
+	}
+	return &response.GenerateIndustrialCalendarResponse{Year: year, Month: month, Created: created, Preserved: len(existing)}, nil
+}
+
 func (uc *ManageCalendarUseCase) GetMonth(ctx context.Context, year, month int) ([]*response.IndustrialCalendarResponse, error) {
 	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := validateMonth(year, month); err != nil {
+		return nil, err
 	}
 	list, err := uc.Repo.ListMonth(ctx, year, month)
 	if err != nil {

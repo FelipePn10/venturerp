@@ -2,6 +2,8 @@ package valueobject
 
 import (
 	"errors"
+	"regexp"
+	"strings"
 )
 
 //
@@ -9,6 +11,22 @@ import (
 //
 
 type ItemCode int64
+
+var businessCodePattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9._/-]{0,59}$`)
+
+type BusinessCode string
+
+func NewBusinessCode(code string) (BusinessCode, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(code))
+	if !businessCodePattern.MatchString(normalized) {
+		return "", errors.New("codigo do item deve ter de 1 a 60 caracteres alfanumericos e pode conter ponto, hifen, barra ou sublinhado")
+	}
+	return BusinessCode(normalized), nil
+}
+
+func (c BusinessCode) IsValid() bool {
+	return businessCodePattern.MatchString(string(c))
+}
 
 func NewItemCode(code int64) (ItemCode, error) {
 	if code <= 0 {

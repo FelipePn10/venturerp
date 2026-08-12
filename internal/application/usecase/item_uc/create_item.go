@@ -37,6 +37,16 @@ func (uc *CreateItemUseCase) Execute(
 	if !uc.Auth.CanCreateItem(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	item.EnterpriseID = enterpriseID
+	userID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	item.CreatedBy = userID
 	if item.Engineering.ItemBaseCod != nil {
 		code, err := valueobject.NewItemCode(int64(*item.Engineering.ItemBaseCod))
 		if err != nil {

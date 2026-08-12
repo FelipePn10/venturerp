@@ -3,6 +3,7 @@ package item_uc
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -14,7 +15,11 @@ import (
 
 type createItemAuth struct{ ports.AuthService }
 
-func (createItemAuth) CanCreateItem(context.Context) bool { return true }
+func (createItemAuth) CanCreateItem(context.Context) bool          { return true }
+func (createItemAuth) EnterpriseID(context.Context) (int64, error) { return 7, nil }
+func (createItemAuth) UserID(context.Context) (uuid.UUID, error) {
+	return uuid.MustParse("00000000-0000-0000-0000-000000000007"), nil
+}
 
 type createItemRepository struct {
 	missingItemRepository
@@ -85,11 +90,12 @@ func TestCreateItemRejectsUnknownBaseInPortuguese(t *testing.T) {
 
 func itemForCreateTest() *entity.Item {
 	return &entity.Item{
-		Code:        valueobject.ItemCode(12345),
-		Name:        "Transformador 30 kVA",
-		Nature:      entity.ItemConfigured,
-		Situation:   types.LINHA,
-		Health:      types.ACTIVE,
-		Engineering: entity.Engineering{},
+		Code:         valueobject.ItemCode(12345),
+		BusinessCode: valueobject.BusinessCode("TEA452-0"),
+		Name:         "Transformador 30 kVA",
+		Nature:       entity.ItemConfigured,
+		Situation:    types.LINHA,
+		Health:       types.ACTIVE,
+		Engineering:  entity.Engineering{},
 	}
 }

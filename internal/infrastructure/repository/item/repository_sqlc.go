@@ -14,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -54,10 +55,10 @@ func (r *RepositoryItemSQLC) Create(
 	}
 
 	params := sqlc.CreateItemParams{
+		EnterpriseID:  item.EnterpriseID,
+		BusinessCode:  string(item.BusinessCode),
 		WarehouseCode: int64(item.Warehouse.WarehouseCode),
-
-		Code: int64(item.Code),
-		Name: item.Name,
+		Name:          item.Name,
 
 		Complement: pgutil.ToPgTextFromPtr(item.Complement),
 
@@ -103,9 +104,9 @@ func (r *RepositoryItemSQLC) Create(
 		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist,
 		SuppliesHarvest:            item.Supplies.Harvest,
 
-		CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
-		AccountingActive:       true, AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS,
-		CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
+		CommercialWarrantyDays:       int32(item.Commercial.WarrantyDays),
+		AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS,
+		CommercialDescription:        pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple),
 		CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays),
 		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode),
@@ -127,6 +128,9 @@ func (r *RepositoryItemSQLC) Create(
 	dbItem, err := r.q.CreateItem(ctx, params)
 	if err != nil {
 		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, itemrepo.ErrConflict
+		}
 		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
 			return nil, fmt.Errorf("%w: %s", itemrepo.ErrInvalidReference, pgErr.ConstraintName)
 		}
@@ -140,7 +144,7 @@ func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, ite
 	if err := r.validateFiscalReferences(ctx, item); err != nil {
 		return nil, err
 	}
-	p := sqlc.UpdateItemCommercialAccountingParams{Code: int64(item.Code), CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
+	p := sqlc.UpdateItemCommercialAccountingParams{BusinessCode: string(item.BusinessCode), EnterpriseID: item.EnterpriseID, CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
 		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
 		CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange, CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes, CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS, CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging, CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
@@ -177,7 +181,11 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 	code valueobject.ItemCode,
 ) (*entity.Item, error) {
 
-	dbItem, err := r.q.FindItemByCode(ctx, int64(code))
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItem, err := r.q.FindItemByCode(ctx, sqlc.FindItemByCodeParams{Code: int64(code), EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, itemrepo.ErrNotFound
@@ -185,6 +193,21 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 		return nil, fmt.Errorf("find item by code: %w", err)
 	}
 
+	return mapDBItemToEntity(dbItem)
+}
+
+func (r *RepositoryItemSQLC) FindItemByBusinessCode(ctx context.Context, code valueobject.BusinessCode) (*entity.Item, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItem, err := r.q.FindItemByBusinessCode(ctx, sqlc.FindItemByBusinessCodeParams{BusinessCode: string(code), EnterpriseID: enterpriseID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, itemrepo.ErrNotFound
+		}
+		return nil, fmt.Errorf("find item by business code: %w", err)
+	}
 	return mapDBItemToEntity(dbItem)
 }
 
@@ -251,10 +274,12 @@ func mapDBItemToEntity(
 	}
 
 	return &entity.Item{
-		ID:         dbItem.ID,
-		Code:       valueobject.ItemCode(dbItem.Code),
-		Name:       dbItem.Name,
-		Complement: complement,
+		ID:           dbItem.ID,
+		Code:         valueobject.ItemCode(dbItem.Code),
+		BusinessCode: valueobject.BusinessCode(dbItem.BusinessCode),
+		EnterpriseID: dbItem.EnterpriseID,
+		Name:         dbItem.Name,
+		Complement:   complement,
 
 		Nature: entity.ItemNature(dbItem.Nature),
 
@@ -444,7 +469,11 @@ func int64PtrToIntPtr(v *int64) *int {
 }
 
 func (r *RepositoryItemSQLC) ListAll(ctx context.Context) ([]*entity.Item, error) {
-	dbItems, err := r.q.ListItems(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItems, err := r.q.ListItems(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}
@@ -461,7 +490,11 @@ func (r *RepositoryItemSQLC) ListAll(ctx context.Context) ([]*entity.Item, error
 }
 
 func (r *RepositoryItemSQLC) ListAllWithMasks(ctx context.Context) ([]entity.ItemWithMasks, error) {
-	dbItems, err := r.q.ListItems(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItems, err := r.q.ListItems(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}

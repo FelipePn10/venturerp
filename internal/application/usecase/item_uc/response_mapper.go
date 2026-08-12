@@ -11,7 +11,8 @@ func toItemResponse(it *entity.Item) *response.ItemResponse {
 	}
 	return &response.ItemResponse{
 		ID:          it.ID,
-		Code:        int64(it.Code),
+		Code:        string(it.BusinessCode),
+		LegacyCode:  int64(it.Code),
 		Name:        it.Name,
 		Complement:  it.Complement,
 		Nature:      int(it.Nature),

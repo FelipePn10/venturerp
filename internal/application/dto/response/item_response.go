@@ -10,7 +10,8 @@ import (
 // ItemResponse is the API representation of an item with all its folders.
 type ItemResponse struct {
 	ID          int64                   `json:"id"`
-	Code        int64                   `json:"code"`
+	Code        string                  `json:"code"`
+	LegacyCode  int64                   `json:"legacy_code"`
 	Name        string                  `json:"name"`
 	Complement  *string                 `json:"complement,omitempty"`
 	Nature      int                     `json:"nature"`

@@ -89,7 +89,7 @@ type QualityReport struct {
 
 func NewQualityReport(e, link int64, on time.Time, status string, by uuid.UUID) (*QualityReport, error) {
 	status = strings.ToUpper(strings.TrimSpace(status))
-	if e <= 0 || link <= 0 || on.IsZero() || (status != "PENDING" && status != "APPROVED" && status != "REJECTED" && status != "EXPIRED") {
+	if e <= 0 || link <= 0 || on.IsZero() || (status != "PENDENTE" && status != "APROVADO" && status != "REJEITADO" && status != "EXPIRADO") {
 		return nil, fmt.Errorf("invalid quality report")
 	}
 	return &QualityReport{EnterpriseID: e, ItemSupplierID: link, RegisteredOn: on, Status: status, CreatedBy: by}, nil

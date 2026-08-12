@@ -3,11 +3,13 @@ package entity
 import "time"
 
 type IndustrialCalendar struct {
-	Year        int
-	Month       int
-	Day         int
-	IsWorkday   bool
-	Description *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	EnterpriseID int64
+	Year         int
+	Month        int
+	Day          int
+	IsWorkday    bool
+	Description  *string
+	Source       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

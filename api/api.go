@@ -2448,6 +2448,7 @@ func (app *application) mount() chi.Router {
 		})
 
 		r.Route("/api/item-suppliers", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search", itemSupplierHandler.SearchExternal)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemSupplierHandler.Upsert)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemSupplierHandler.ListByItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier/{supplierCode}", itemSupplierHandler.ListBySupplier)

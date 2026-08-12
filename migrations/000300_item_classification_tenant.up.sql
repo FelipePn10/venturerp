@@ -1,0 +1,13 @@
+BEGIN;
+CREATE SEQUENCE IF NOT EXISTS item_classification_mask_code_seq;
+SELECT setval('item_classification_mask_code_seq',GREATEST(COALESCE((SELECT MAX(code) FROM item_classification_masks),0),1),COALESCE((SELECT MAX(code) FROM item_classification_masks),0)>0);
+ALTER TABLE item_classification_masks ADD COLUMN IF NOT EXISTS enterprise_id BIGINT;
+UPDATE item_classification_masks SET enterprise_id=(SELECT id FROM enterprise ORDER BY id LIMIT 1) WHERE enterprise_id IS NULL AND (SELECT COUNT(*) FROM enterprise)=1;
+DO $$ BEGIN IF EXISTS(SELECT 1 FROM item_classification_masks WHERE enterprise_id IS NULL) THEN RAISE EXCEPTION 'Classificacoes legadas ambiguas entre empresas'; END IF; END $$;
+ALTER TABLE item_classification_masks ALTER COLUMN enterprise_id SET NOT NULL, ALTER COLUMN code SET DEFAULT nextval('item_classification_mask_code_seq');
+ALTER TABLE item_classification_masks DROP CONSTRAINT IF EXISTS item_classification_masks_code_key;
+ALTER TABLE item_classification_masks DROP CONSTRAINT IF EXISTS item_classification_masks_mask_key;
+ALTER TABLE item_classification_masks ADD CONSTRAINT fk_item_classification_masks_enterprise FOREIGN KEY(enterprise_id) REFERENCES enterprise(id);
+ALTER TABLE item_classification_masks ADD CONSTRAINT uq_item_classification_mask_code_tenant UNIQUE(enterprise_id,code);
+ALTER TABLE item_classification_masks ADD CONSTRAINT uq_item_classification_mask_tenant UNIQUE(enterprise_id,mask);
+COMMIT;

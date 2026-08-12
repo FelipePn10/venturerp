@@ -9,8 +9,16 @@ type IndustrialCalendarResponse struct {
 	Day         int       `json:"day"`
 	IsWorkday   bool      `json:"is_workday"`
 	Description *string   `json:"description,omitempty"`
+	Source      string    `json:"source"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type GenerateIndustrialCalendarResponse struct {
+	Year      int `json:"year"`
+	Month     int `json:"month"`
+	Created   int `json:"created"`
+	Preserved int `json:"preserved"`
 }
 
 // ItemCalendarPromiseResponse is the API representation of an item promise calendar day.

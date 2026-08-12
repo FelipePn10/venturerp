@@ -60,6 +60,20 @@ func (h *ItemSupplierHandler) ListBySupplier(w http.ResponseWriter, r *http.Requ
 	jsonResponse(w, http.StatusOK, res)
 }
 
+func (h *ItemSupplierHandler) SearchExternal(w http.ResponseWriter, r *http.Request) {
+	supplier, err := strconv.ParseInt(r.URL.Query().Get("supplier_code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "supplier_code invalido")
+		return
+	}
+	res, err := h.uc.SearchExternal(r.Context(), supplier, r.URL.Query().Get("term"))
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
 func (h *ItemSupplierHandler) CreateQualityReport(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

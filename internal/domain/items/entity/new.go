@@ -15,7 +15,7 @@ var (
 )
 
 func NewItem(
-	code valueobject.ItemCode,
+	code string,
 	name string,
 	complement *string,
 	nature ItemNature,
@@ -31,30 +31,27 @@ func NewItem(
 	createdBy uuid.UUID,
 ) (*Item, error) {
 
-	if !code.IsValid() {
+	businessCode, err := valueobject.NewBusinessCode(code)
+	if err != nil {
 		return nil, ErrInvalidCode
 	}
 
-	if createdBy == uuid.Nil {
-		return nil, ErrInvalidCreatedBy
-	}
-
 	item := &Item{
-		Code:        code,
-		Name:        name,
-		Complement:  complement,
-		Nature:      nature,
-		PDM:         pdm,
-		Warehouse:   warehouse,
-		Engineering: engineering,
-		Planning:    planning,
-		Supplies:    supplies,
-		Commercial:  commercial,
-		Accounting:  accounting,
-		Situation:   situation,
-		Health:      health,
-		CreatedBy:   createdBy,
-		CreatedAt:   time.Now(),
+		BusinessCode: businessCode,
+		Name:         name,
+		Complement:   complement,
+		Nature:       nature,
+		PDM:          pdm,
+		Warehouse:    warehouse,
+		Engineering:  engineering,
+		Planning:     planning,
+		Supplies:     supplies,
+		Commercial:   commercial,
+		Accounting:   accounting,
+		Situation:    situation,
+		Health:       health,
+		CreatedBy:    createdBy,
+		CreatedAt:    time.Now(),
 	}
 
 	if err := item.Validate(); err != nil {

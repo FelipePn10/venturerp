@@ -29,11 +29,13 @@ func (r *iteratorForBatchInsertCalendarDays) Next() bool {
 
 func (r iteratorForBatchInsertCalendarDays) Values() ([]interface{}, error) {
 	return []interface{}{
+		r.rows[0].EnterpriseID,
 		r.rows[0].Year,
 		r.rows[0].Month,
 		r.rows[0].Day,
 		r.rows[0].IsWorkday,
 		r.rows[0].Description,
+		r.rows[0].Source,
 	}, nil
 }
 
@@ -42,5 +44,5 @@ func (r iteratorForBatchInsertCalendarDays) Err() error {
 }
 
 func (q *Queries) BatchInsertCalendarDays(ctx context.Context, arg []BatchInsertCalendarDaysParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"industrial_calendar"}, []string{"year", "month", "day", "is_workday", "description"}, &iteratorForBatchInsertCalendarDays{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"industrial_calendar"}, []string{"enterprise_id", "year", "month", "day", "is_workday", "description", "source"}, &iteratorForBatchInsertCalendarDays{rows: arg})
 }

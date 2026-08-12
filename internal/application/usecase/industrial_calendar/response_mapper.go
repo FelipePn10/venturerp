@@ -15,6 +15,7 @@ func toIndustrialCalendarResponse(c *entity.IndustrialCalendar) *response.Indust
 		Day:         c.Day,
 		IsWorkday:   c.IsWorkday,
 		Description: c.Description,
+		Source:      c.Source,
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.UpdatedAt,
 	}

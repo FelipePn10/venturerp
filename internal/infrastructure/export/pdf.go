@@ -20,6 +20,7 @@ func EncodePDF(w io.Writer, t *Table) error {
 	t.normalize()
 
 	report := &pdfkit.TableReport{
+		Orientation: t.Orientation,
 		Theme:       theme(t.Branding),
 		Company:     company(t.Branding),
 		Logo:        logoBytes(t.Branding),
