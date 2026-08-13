@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.6] — 2026-08-13
+
+- feat: finaliza documentos industriais e heranca fiscal (`9bce3f7`)
+
 ## [v1.1.5] — 2026-08-13
 
 - feat: conclui ajustes operacionais enterprise (`ab522df`)
