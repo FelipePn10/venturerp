@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.5] — 2026-08-13
+
+- feat: conclui ajustes operacionais enterprise (`ab522df`)
+- feat: ajusta cadastros operacionais por empresa (`d7d7a53`)
+
 ## [v1.1.4] — 2026-08-09
 
 - fix: make item base reference optional (`d417171`)
