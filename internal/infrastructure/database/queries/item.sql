@@ -108,6 +108,9 @@ UPDATE items SET
 WHERE business_code=$1 AND enterprise_id=$38
 RETURNING *;
 
+-- name: NextAutomaticItemBusinessCode :one
+SELECT next_item_business_code(sqlc.arg(enterprise_id));
+
 
 -- name: FindItemByBusinessCode :one
 SELECT *
@@ -134,4 +137,15 @@ WHERE enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY code;
 
 -- name: ItemFiscalClassificationExists :one
-SELECT EXISTS (SELECT 1 FROM fiscal_classifications WHERE code::text = sqlc.arg(classification_code)::text OR ncm = sqlc.arg(classification_code)::text);
+SELECT EXISTS (SELECT 1 FROM fiscal_classifications WHERE enterprise_id=sqlc.arg(enterprise_id) AND is_active
+ AND valid_from<=CURRENT_DATE AND (valid_until IS NULL OR valid_until>=CURRENT_DATE)
+ AND (code::text = sqlc.arg(classification_code)::text OR ncm = sqlc.arg(classification_code)::text));
+
+-- name: GetEffectiveItemFiscalDefaults :one
+SELECT f.id,f.code,f.ncm,f.cest,f.default_origin,f.un_tributacao,f.un_ipi,f.ipi_rate,
+ f.default_icms_rate,f.pis_rate,f.cofins_rate,f.default_calculate_pis_cofins
+FROM fiscal_classifications f
+WHERE f.enterprise_id=sqlc.arg(enterprise_id) AND f.is_active
+ AND f.valid_from<=CURRENT_DATE AND (f.valid_until IS NULL OR f.valid_until>=CURRENT_DATE)
+ AND (f.code::text=sqlc.arg(classification_code)::text OR f.ncm=sqlc.arg(classification_code)::text)
+ORDER BY CASE WHEN f.code::text=sqlc.arg(classification_code)::text THEN 0 ELSE 1 END,f.valid_from DESC,f.id DESC LIMIT 1;

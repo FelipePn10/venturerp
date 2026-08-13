@@ -21,6 +21,25 @@ type BatchInsertCalendarDaysParams struct {
 	Source       string
 }
 
+const countCalendarRange = `-- name: CountCalendarRange :one
+SELECT COUNT(*) FROM industrial_calendar
+WHERE enterprise_id=$1 AND year=$2
+  AND ($3::int IS NULL OR month=$3::int)
+`
+
+type CountCalendarRangeParams struct {
+	EnterpriseID int64
+	Year         int32
+	Month        *int32
+}
+
+func (q *Queries) CountCalendarRange(ctx context.Context, arg CountCalendarRangeParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCalendarRange, arg.EnterpriseID, arg.Year, arg.Month)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCalendarDay = `-- name: CreateCalendarDay :one
 INSERT INTO industrial_calendar (enterprise_id, year, month, day, is_workday, description, source)
 VALUES ($1, $2, $3, $4, $5, $6, 'MANUAL')
@@ -105,6 +124,41 @@ type GenerateCalendarMonthParams struct {
 
 func (q *Queries) GenerateCalendarMonth(ctx context.Context, arg GenerateCalendarMonthParams) (int64, error) {
 	result, err := q.db.Exec(ctx, generateCalendarMonth, arg.EnterpriseID, arg.Year, arg.Month)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const generateCalendarRange = `-- name: GenerateCalendarRange :execrows
+INSERT INTO industrial_calendar (enterprise_id, year, month, day, is_workday, description, source)
+SELECT $1, EXTRACT(YEAR FROM d)::int, EXTRACT(MONTH FROM d)::int, EXTRACT(DAY FROM d)::int,
+       EXTRACT(DOW FROM d)::int = ANY($2::int[]),
+       CASE WHEN EXTRACT(DOW FROM d)::int = ANY($2::int[]) THEN NULL ELSE 'Dia nao trabalhado automatico' END,
+       CASE WHEN EXTRACT(DOW FROM d)::int = ANY($2::int[]) THEN 'AUTOMATICO' ELSE 'FIM_DE_SEMANA' END
+FROM generate_series(
+    make_date($3::int, COALESCE($4::int,1), 1),
+    CASE WHEN $4::int IS NULL THEN make_date($3::int,12,31)
+         ELSE (make_date($3::int,$4::int,1)+interval '1 month - 1 day')::date END,
+    interval '1 day'
+) d
+ON CONFLICT (enterprise_id, year, month, day) DO NOTHING
+`
+
+type GenerateCalendarRangeParams struct {
+	EnterpriseID int64
+	Weekdays     []int32
+	Year         int32
+	Month        *int32
+}
+
+func (q *Queries) GenerateCalendarRange(ctx context.Context, arg GenerateCalendarRangeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, generateCalendarRange,
+		arg.EnterpriseID,
+		arg.Weekdays,
+		arg.Year,
+		arg.Month,
+	)
 	if err != nil {
 		return 0, err
 	}

@@ -22,6 +22,7 @@ type UploadNFEEntryUseCase struct {
 	Auth           ports.AuthService
 	PurchaseOrders porepo.PurchaseOrderRepository
 	Tolerances     ports.PurchaseToleranceEvaluator
+	SupplierItems  ports.ItemSupplierResolver
 }
 
 type nfeXML struct {
@@ -57,6 +58,7 @@ type nfeXML struct {
 			NItem string `xml:"nItem,attr"`
 			Prod  struct {
 				CProd  string `xml:"cProd"`
+				XProd  string `xml:"xProd"`
 				NCM    string `xml:"NCM"`
 				CFOP   string `xml:"CFOP"`
 				QCom   string `xml:"qCom"`
@@ -151,6 +153,8 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 		item := &entity.FiscalEntryItem{
 			Sequence:          i + 1,
 			ItemCode:          itemCode,
+			SupplierItemCode:  strPtr(det.Prod.CProd),
+			Description:       strPtr(det.Prod.XProd),
 			UOM:               strPtr(det.Prod.UCom),
 			Ncm:               strPtr(det.Prod.NCM),
 			Cfop:              det.Prod.CFOP,
@@ -178,6 +182,9 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 	}
 	entry.SupplierCode, entry.Warnings, err = validatePurchaseEntryTolerances(ctx, uc.PurchaseOrders, uc.Tolerances, dto.PurchaseOrderCode, pendingItems, entry.ValorProdutos)
 	if err != nil {
+		return nil, err
+	}
+	if err = resolveSupplierItems(ctx, uc.SupplierItems, entry.SupplierCode, pendingItems); err != nil {
 		return nil, err
 	}
 	created, err := uc.Repo.CreateEntry(ctx, entry)

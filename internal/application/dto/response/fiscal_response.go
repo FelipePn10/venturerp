@@ -124,34 +124,38 @@ type FiscalEntryResponse struct {
 
 // FiscalEntryItemResponse is the API representation of an inbound fiscal document line.
 type FiscalEntryItemResponse struct {
-	ID                int64     `json:"id"`
-	FiscalEntryID     int64     `json:"fiscal_entry_id"`
-	Sequence          int       `json:"sequence"`
-	ItemCode          *int64    `json:"item_code,omitempty"`
-	Ncm               *string   `json:"ncm,omitempty"`
-	Cfop              string    `json:"cfop"`
-	Quantity          float64   `json:"quantity"`
-	UnitPrice         float64   `json:"unit_price"`
-	TotalPrice        float64   `json:"total_price"`
-	BaseICMS          float64   `json:"base_icms"`
-	AliqICMS          float64   `json:"aliq_icms"`
-	ValorICMS         float64   `json:"valor_icms"`
-	BaseIPI           float64   `json:"base_ipi"`
-	AliqIPI           float64   `json:"aliq_ipi"`
-	ValorIPI          float64   `json:"valor_ipi"`
-	ValorPIS          float64   `json:"valor_pis"`
-	ValorCOFINS       float64   `json:"valor_cofins"`
-	CstICMS           *string   `json:"cst_icms,omitempty"`
-	CstIPI            *string   `json:"cst_ipi,omitempty"`
-	CstPIS            *string   `json:"cst_pis,omitempty"`
-	CstCOFINS         *string   `json:"cst_cofins,omitempty"`
-	GeraCreditoICMS   bool      `json:"gera_credito_icms"`
-	GeraCreditoIPI    bool      `json:"gera_credito_ipi"`
-	GeraCreditoPIS    bool      `json:"gera_credito_pis"`
-	GeraCreditoCOFINS bool      `json:"gera_credito_cofins"`
-	Description       *string   `json:"description,omitempty"`
-	Notes             *string   `json:"notes,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID                 int64      `json:"id"`
+	FiscalEntryID      int64      `json:"fiscal_entry_id"`
+	Sequence           int        `json:"sequence"`
+	ItemCode           *int64     `json:"item_code,omitempty"`
+	ItemSupplierID     *int64     `json:"item_supplier_id,omitempty"`
+	SupplierItemCode   *string    `json:"supplier_item_code,omitempty"`
+	ResolutionStrategy *string    `json:"resolution_strategy,omitempty"`
+	ResolvedAt         *time.Time `json:"resolved_at,omitempty"`
+	Ncm                *string    `json:"ncm,omitempty"`
+	Cfop               string     `json:"cfop"`
+	Quantity           float64    `json:"quantity"`
+	UnitPrice          float64    `json:"unit_price"`
+	TotalPrice         float64    `json:"total_price"`
+	BaseICMS           float64    `json:"base_icms"`
+	AliqICMS           float64    `json:"aliq_icms"`
+	ValorICMS          float64    `json:"valor_icms"`
+	BaseIPI            float64    `json:"base_ipi"`
+	AliqIPI            float64    `json:"aliq_ipi"`
+	ValorIPI           float64    `json:"valor_ipi"`
+	ValorPIS           float64    `json:"valor_pis"`
+	ValorCOFINS        float64    `json:"valor_cofins"`
+	CstICMS            *string    `json:"cst_icms,omitempty"`
+	CstIPI             *string    `json:"cst_ipi,omitempty"`
+	CstPIS             *string    `json:"cst_pis,omitempty"`
+	CstCOFINS          *string    `json:"cst_cofins,omitempty"`
+	GeraCreditoICMS    bool       `json:"gera_credito_icms"`
+	GeraCreditoIPI     bool       `json:"gera_credito_ipi"`
+	GeraCreditoPIS     bool       `json:"gera_credito_pis"`
+	GeraCreditoCOFINS  bool       `json:"gera_credito_cofins"`
+	Description        *string    `json:"description,omitempty"`
+	Notes              *string    `json:"notes,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
 }
 
 // FiscalConfigResponse is the API representation of the fiscal configuration.

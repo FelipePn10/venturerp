@@ -15,6 +15,10 @@ import (
 
 var ErrItemBaseNotFound = errors.New("O item-base informado não existe.")
 
+type automaticBusinessCodeRepository interface {
+	NextAutomaticBusinessCode(context.Context, int64) (valueobject.BusinessCode, error)
+}
+
 type CreateItemUseCase struct {
 	Repo repository.ItemRepository
 	Auth ports.AuthService
@@ -47,6 +51,19 @@ func (uc *CreateItemUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	item.CreatedBy = userID
+	if item.BusinessCode == "" {
+		generator, ok := uc.Repo.(automaticBusinessCodeRepository)
+		if !ok {
+			return nil, fmt.Errorf("geracao automatica de codigo indisponivel")
+		}
+		item.BusinessCode, err = generator.NextAutomaticBusinessCode(ctx, enterpriseID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !item.BusinessCode.IsValid() {
+		return nil, entity.ErrInvalidCode
+	}
 	if item.Engineering.ItemBaseCod != nil {
 		code, err := valueobject.NewItemCode(int64(*item.Engineering.ItemBaseCod))
 		if err != nil {

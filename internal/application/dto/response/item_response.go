@@ -9,23 +9,43 @@ import (
 
 // ItemResponse is the API representation of an item with all its folders.
 type ItemResponse struct {
-	ID          int64                   `json:"id"`
-	Code        string                  `json:"code"`
-	LegacyCode  int64                   `json:"legacy_code"`
-	Name        string                  `json:"name"`
-	Complement  *string                 `json:"complement,omitempty"`
-	Nature      int                     `json:"nature"`
-	PDM         ItemPDMResponse         `json:"pdm"`
-	Situation   string                  `json:"situation"`
-	Health      string                  `json:"health"`
-	Warehouse   ItemWarehouseResponse   `json:"warehouse"`
-	Engineering ItemEngineeringResponse `json:"engineering"`
-	Planning    ItemPlanningResponse    `json:"planning"`
-	Supplies    ItemSuppliesResponse    `json:"supplies"`
-	Commercial  ItemCommercialResponse  `json:"commercial"`
-	Accounting  ItemAccountingResponse  `json:"accounting"`
-	CreatedBy   uuid.UUID               `json:"created_by"`
-	CreatedAt   time.Time               `json:"created_at"`
+	ID              int64                       `json:"id"`
+	Code            string                      `json:"code"`
+	LegacyCode      int64                       `json:"legacy_code"`
+	Name            string                      `json:"name"`
+	Complement      *string                     `json:"complement,omitempty"`
+	Nature          int                         `json:"nature"`
+	PDM             ItemPDMResponse             `json:"pdm"`
+	Situation       string                      `json:"situation"`
+	Health          string                      `json:"health"`
+	Warehouse       ItemWarehouseResponse       `json:"warehouse"`
+	Engineering     ItemEngineeringResponse     `json:"engineering"`
+	Planning        ItemPlanningResponse        `json:"planning"`
+	Supplies        ItemSuppliesResponse        `json:"supplies"`
+	Commercial      ItemCommercialResponse      `json:"commercial"`
+	Accounting      ItemAccountingResponse      `json:"accounting"`
+	FiscalEffective ItemFiscalEffectiveResponse `json:"fiscal_effective"`
+	CreatedBy       uuid.UUID                   `json:"created_by"`
+	CreatedAt       time.Time                   `json:"created_at"`
+}
+
+type EffectiveFiscalContextResponse struct {
+	ClassificationID   int64             `json:"classification_id"`
+	ClassificationCode int64             `json:"classification_code"`
+	NCM                *string           `json:"ncm,omitempty"`
+	CEST               *string           `json:"cest,omitempty"`
+	Unit               *string           `json:"unit,omitempty"`
+	Origin             *int              `json:"origin,omitempty"`
+	IPIRate            *decimal.Decimal  `json:"ipi_rate,omitempty"`
+	ICMSRate           *decimal.Decimal  `json:"icms_rate,omitempty"`
+	PISRate            *decimal.Decimal  `json:"pis_rate,omitempty"`
+	COFINSRate         *decimal.Decimal  `json:"cofins_rate,omitempty"`
+	CalculatePISCOFINS *bool             `json:"calculate_pis_cofins,omitempty"`
+	Sources            map[string]string `json:"sources"`
+}
+type ItemFiscalEffectiveResponse struct {
+	Purchase *EffectiveFiscalContextResponse `json:"purchase,omitempty"`
+	Sale     *EffectiveFiscalContextResponse `json:"sale,omitempty"`
 }
 
 // ItemPDMResponse is the PDM (descriptive) folder of an item.

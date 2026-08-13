@@ -1,53 +1,62 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // FiscalClassificationFields holds the editable fields shared by create/update.
 type FiscalClassificationFields struct {
-	ItemCode                *int64  `json:"item_code,omitempty"`
-	Description             string  `json:"description"`
-	NCM                     *string `json:"ncm,omitempty"`
-	CEST                    *string `json:"cest,omitempty"`
-	IPIRate                 float64 `json:"ipi_rate"`
-	IPIIndicator            string  `json:"ipi_indicator,omitempty"`
-	Apuracao                *string `json:"apuracao,omitempty"`
-	CSTIPIEntrada           *string `json:"cst_ipi_entrada,omitempty"`
-	CSTIPISaida             *string `json:"cst_ipi_saida,omitempty"`
-	PISRate                 float64 `json:"pis_rate"`
-	PISIndicator            string  `json:"pis_indicator,omitempty"`
-	CSTPISEntrada           *string `json:"cst_pis_entrada,omitempty"`
-	CSTPISSaida             *string `json:"cst_pis_saida,omitempty"`
-	COFINSRate              float64 `json:"cofins_rate"`
-	COFINSIndicator         string  `json:"cofins_indicator,omitempty"`
-	CSTCOFINSEntrada        *string `json:"cst_cofins_entrada,omitempty"`
-	CSTCOFINSSaida          *string `json:"cst_cofins_saida,omitempty"`
-	COFINSMajoradoPct       float64 `json:"cofins_majorado_pct"`
-	PISSTPct                float64 `json:"pis_st_pct"`
-	COFINSSTPct             float64 `json:"cofins_st_pct"`
-	PISConsumoPct           float64 `json:"pis_consumo_pct"`
-	CSTPISConsumoEntrada    *string `json:"cst_pis_consumo_entrada,omitempty"`
-	CSTPISConsumoSaida      *string `json:"cst_pis_consumo_saida,omitempty"`
-	COFINSConsumoPct        float64 `json:"cofins_consumo_pct"`
-	CSTCOFINSConsumoEntrada *string `json:"cst_cofins_consumo_entrada,omitempty"`
-	CSTCOFINSConsumoSaida   *string `json:"cst_cofins_consumo_saida,omitempty"`
-	PISRetencaoPct          float64 `json:"pis_retencao_pct"`
-	CSTPISRetencao          *string `json:"cst_pis_retencao,omitempty"`
-	COFINSRetencaoPct       float64 `json:"cofins_retencao_pct"`
-	CSTCOFINSRetencao       *string `json:"cst_cofins_retencao,omitempty"`
-	PISReducaoPct           float64 `json:"pis_reducao_pct"`
-	CSTPISReducao           *string `json:"cst_pis_reducao,omitempty"`
-	COFINSReducaoPct        float64 `json:"cofins_reducao_pct"`
-	CSTCOFINSReducao        *string `json:"cst_cofins_reducao,omitempty"`
-	DescPISZFPct            float64 `json:"desc_pis_zf_pct"`
-	DescCOFINSZFPct         float64 `json:"desc_cofins_zf_pct"`
-	ExTarifario             *string `json:"ex_tarifario,omitempty"`
-	UNIPI                   *string `json:"un_ipi,omitempty"`
-	UNTributacao            *string `json:"un_tributacao,omitempty"`
-	ModBCICMS               *string `json:"mod_bc_icms,omitempty"`
-	ModBCICMSST             *string `json:"mod_bc_icms_st,omitempty"`
-	CodClasTrib             *string `json:"cod_clas_trib,omitempty"`
-	CodClasTribTribReg      *string `json:"cod_clas_trib_trib_reg,omitempty"`
-	ObsFiscal               *string `json:"obs_fiscal,omitempty"`
+	ItemCode                  *int64     `json:"item_code,omitempty"`
+	Description               string     `json:"description"`
+	NCM                       *string    `json:"ncm,omitempty"`
+	CEST                      *string    `json:"cest,omitempty"`
+	IPIRate                   float64    `json:"ipi_rate"`
+	IPIIndicator              string     `json:"ipi_indicator,omitempty"`
+	Apuracao                  *string    `json:"apuracao,omitempty"`
+	CSTIPIEntrada             *string    `json:"cst_ipi_entrada,omitempty"`
+	CSTIPISaida               *string    `json:"cst_ipi_saida,omitempty"`
+	PISRate                   float64    `json:"pis_rate"`
+	PISIndicator              string     `json:"pis_indicator,omitempty"`
+	CSTPISEntrada             *string    `json:"cst_pis_entrada,omitempty"`
+	CSTPISSaida               *string    `json:"cst_pis_saida,omitempty"`
+	COFINSRate                float64    `json:"cofins_rate"`
+	COFINSIndicator           string     `json:"cofins_indicator,omitempty"`
+	CSTCOFINSEntrada          *string    `json:"cst_cofins_entrada,omitempty"`
+	CSTCOFINSSaida            *string    `json:"cst_cofins_saida,omitempty"`
+	COFINSMajoradoPct         float64    `json:"cofins_majorado_pct"`
+	PISSTPct                  float64    `json:"pis_st_pct"`
+	COFINSSTPct               float64    `json:"cofins_st_pct"`
+	PISConsumoPct             float64    `json:"pis_consumo_pct"`
+	CSTPISConsumoEntrada      *string    `json:"cst_pis_consumo_entrada,omitempty"`
+	CSTPISConsumoSaida        *string    `json:"cst_pis_consumo_saida,omitempty"`
+	COFINSConsumoPct          float64    `json:"cofins_consumo_pct"`
+	CSTCOFINSConsumoEntrada   *string    `json:"cst_cofins_consumo_entrada,omitempty"`
+	CSTCOFINSConsumoSaida     *string    `json:"cst_cofins_consumo_saida,omitempty"`
+	PISRetencaoPct            float64    `json:"pis_retencao_pct"`
+	CSTPISRetencao            *string    `json:"cst_pis_retencao,omitempty"`
+	COFINSRetencaoPct         float64    `json:"cofins_retencao_pct"`
+	CSTCOFINSRetencao         *string    `json:"cst_cofins_retencao,omitempty"`
+	PISReducaoPct             float64    `json:"pis_reducao_pct"`
+	CSTPISReducao             *string    `json:"cst_pis_reducao,omitempty"`
+	COFINSReducaoPct          float64    `json:"cofins_reducao_pct"`
+	CSTCOFINSReducao          *string    `json:"cst_cofins_reducao,omitempty"`
+	DescPISZFPct              float64    `json:"desc_pis_zf_pct"`
+	DescCOFINSZFPct           float64    `json:"desc_cofins_zf_pct"`
+	ExTarifario               *string    `json:"ex_tarifario,omitempty"`
+	UNIPI                     *string    `json:"un_ipi,omitempty"`
+	UNTributacao              *string    `json:"un_tributacao,omitempty"`
+	ModBCICMS                 *string    `json:"mod_bc_icms,omitempty"`
+	ModBCICMSST               *string    `json:"mod_bc_icms_st,omitempty"`
+	CodClasTrib               *string    `json:"cod_clas_trib,omitempty"`
+	CodClasTribTribReg        *string    `json:"cod_clas_trib_trib_reg,omitempty"`
+	ObsFiscal                 *string    `json:"obs_fiscal,omitempty"`
+	ValidFrom                 *time.Time `json:"valid_from,omitempty"`
+	ValidUntil                *time.Time `json:"valid_until,omitempty"`
+	DefaultOrigin             *string    `json:"default_origin,omitempty"`
+	DefaultICMSRate           float64    `json:"default_icms_rate"`
+	DefaultCalculatePISCOFINS bool       `json:"default_calculate_pis_cofins"`
 }
 
 type CreateFiscalClassificationDTO struct {

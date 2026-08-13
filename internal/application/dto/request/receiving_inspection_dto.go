@@ -64,6 +64,10 @@ type GenerateReceivingInspectionOrderDTO struct {
 	Notes                 *string `json:"notes"`
 }
 
+type LinkReceivingInspectionQualityReportDTO struct {
+	QualityReportID int64 `json:"quality_report_id"`
+}
+
 type RecordReceivingInspectionResultDTO struct {
 	StepID               *int64   `json:"step_id"`
 	Sequence             int      `json:"sequence"`

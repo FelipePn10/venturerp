@@ -10,24 +10,39 @@ func toItemResponse(it *entity.Item) *response.ItemResponse {
 		return nil
 	}
 	return &response.ItemResponse{
-		ID:          it.ID,
-		Code:        string(it.BusinessCode),
-		LegacyCode:  int64(it.Code),
-		Name:        it.Name,
-		Complement:  it.Complement,
-		Nature:      int(it.Nature),
-		PDM:         toItemPDMResponse(it.PDM),
-		Situation:   it.Situation.String(),
-		Health:      it.Health.String(),
-		Warehouse:   toItemWarehouseResponse(it.Warehouse),
-		Engineering: toItemEngineeringResponse(it.Engineering),
-		Planning:    toItemPlanningResponse(it.Planning),
-		Supplies:    toItemSuppliesResponse(it.Supplies),
-		Commercial:  toCommercialResponse(it.Commercial),
-		Accounting:  toAccountingResponse(it.Accounting),
-		CreatedBy:   it.CreatedBy,
-		CreatedAt:   it.CreatedAt,
+		ID:              it.ID,
+		Code:            string(it.BusinessCode),
+		LegacyCode:      int64(it.Code),
+		Name:            it.Name,
+		Complement:      it.Complement,
+		Nature:          int(it.Nature),
+		PDM:             toItemPDMResponse(it.PDM),
+		Situation:       it.Situation.String(),
+		Health:          it.Health.String(),
+		Warehouse:       toItemWarehouseResponse(it.Warehouse),
+		Engineering:     toItemEngineeringResponse(it.Engineering),
+		Planning:        toItemPlanningResponse(it.Planning),
+		Supplies:        toItemSuppliesResponse(it.Supplies),
+		Commercial:      toCommercialResponse(it.Commercial),
+		Accounting:      toAccountingResponse(it.Accounting),
+		FiscalEffective: toFiscalEffectiveResponse(it.FiscalEffective),
+		CreatedBy:       it.CreatedBy,
+		CreatedAt:       it.CreatedAt,
 	}
+}
+
+func toFiscalEffectiveResponse(v entity.FiscalEffective) response.ItemFiscalEffectiveResponse {
+	mapContext := func(c *entity.EffectiveFiscalContext) *response.EffectiveFiscalContextResponse {
+		if c == nil {
+			return nil
+		}
+		sources := map[string]string{}
+		for k, v := range c.Sources {
+			sources[k] = string(v)
+		}
+		return &response.EffectiveFiscalContextResponse{ClassificationID: c.ClassificationID, ClassificationCode: c.ClassificationCode, NCM: c.NCM, CEST: c.CEST, Unit: c.Unit, Origin: c.Origin, IPIRate: c.IPIRate, ICMSRate: c.ICMSRate, PISRate: c.PISRate, COFINSRate: c.COFINSRate, CalculatePISCOFINS: c.CalculatePISCOFINS, Sources: sources}
+	}
+	return response.ItemFiscalEffectiveResponse{Purchase: mapContext(v.Purchase), Sale: mapContext(v.Sale)}
 }
 
 func toCommercialResponse(v entity.Commercial) response.ItemCommercialResponse {

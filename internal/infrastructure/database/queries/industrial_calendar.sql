@@ -40,3 +40,22 @@ FROM generate_series(
     interval '1 day'
 ) d
 ON CONFLICT (enterprise_id, year, month, day) DO NOTHING;
+
+-- name: CountCalendarRange :one
+SELECT COUNT(*) FROM industrial_calendar
+WHERE enterprise_id=sqlc.arg(enterprise_id) AND year=sqlc.arg(year)
+  AND (sqlc.narg(month)::int IS NULL OR month=sqlc.narg(month)::int);
+
+-- name: GenerateCalendarRange :execrows
+INSERT INTO industrial_calendar (enterprise_id, year, month, day, is_workday, description, source)
+SELECT sqlc.arg(enterprise_id), EXTRACT(YEAR FROM d)::int, EXTRACT(MONTH FROM d)::int, EXTRACT(DAY FROM d)::int,
+       EXTRACT(DOW FROM d)::int = ANY(sqlc.arg(weekdays)::int[]),
+       CASE WHEN EXTRACT(DOW FROM d)::int = ANY(sqlc.arg(weekdays)::int[]) THEN NULL ELSE 'Dia nao trabalhado automatico' END,
+       CASE WHEN EXTRACT(DOW FROM d)::int = ANY(sqlc.arg(weekdays)::int[]) THEN 'AUTOMATICO' ELSE 'FIM_DE_SEMANA' END
+FROM generate_series(
+    make_date(sqlc.arg(year)::int, COALESCE(sqlc.narg(month)::int,1), 1),
+    CASE WHEN sqlc.narg(month)::int IS NULL THEN make_date(sqlc.arg(year)::int,12,31)
+         ELSE (make_date(sqlc.arg(year)::int,sqlc.narg(month)::int,1)+interval '1 month - 1 day')::date END,
+    interval '1 day'
+) d
+ON CONFLICT (enterprise_id, year, month, day) DO NOTHING;

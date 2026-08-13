@@ -127,3 +127,12 @@ func (r *ItemSupplierRepositorySQLC) ListQualityReports(ctx context.Context, e, 
 	}
 	return out, rows.Err()
 }
+
+func (r *ItemSupplierRepositorySQLC) GetQualityReport(ctx context.Context, e, id int64) (*entity.QualityReport, error) {
+	x := &entity.QualityReport{}
+	err := r.pool.QueryRow(ctx, `SELECT q.id,q.enterprise_id,q.item_supplier_id,q.registered_on,q.status,q.report_file_name,q.report_content_type,q.report_content,q.notes,q.created_at,q.created_by FROM item_supplier_quality_reports q JOIN item_preferred_suppliers s ON s.id=q.item_supplier_id AND s.enterprise_id=q.enterprise_id WHERE q.enterprise_id=$1 AND q.id=$2`, e, id).Scan(&x.ID, &x.EnterpriseID, &x.ItemSupplierID, &x.RegisteredOn, &x.Status, &x.FileName, &x.ContentType, &x.Content, &x.Notes, &x.CreatedAt, &x.CreatedBy)
+	if err != nil {
+		return nil, err
+	}
+	return x, nil
+}

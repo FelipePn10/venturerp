@@ -40,12 +40,31 @@ type Item struct {
 	// Comercial
 	Commercial Commercial
 	// Contábil/Fiscal
-	Accounting Accounting
+	Accounting      Accounting
+	FiscalEffective FiscalEffective
 	//Status    types.Status
 
 	CreatedBy uuid.UUID
 	CreatedAt time.Time
 }
+
+type FiscalValueSource string
+
+const (
+	FiscalSourceInherited FiscalValueSource = "HERDADO"
+	FiscalSourceOverride  FiscalValueSource = "SOBRESCRITO"
+)
+
+type EffectiveFiscalContext struct {
+	ClassificationID                       int64
+	ClassificationCode                     int64
+	NCM, CEST, Unit                        *string
+	Origin                                 *int
+	IPIRate, ICMSRate, PISRate, COFINSRate *decimal.Decimal
+	CalculatePISCOFINS                     *bool
+	Sources                                map[string]FiscalValueSource
+}
+type FiscalEffective struct{ Purchase, Sale *EffectiveFiscalContext }
 
 // PDM
 type PDM struct {
@@ -268,4 +287,12 @@ func (i *Item) Validate() error {
 	}
 
 	return nil
+}
+
+func (i *Item) ValidateForCreation() error {
+	code := i.BusinessCode
+	i.BusinessCode = "TEMPORARIO"
+	err := i.Validate()
+	i.BusinessCode = code
+	return err
 }

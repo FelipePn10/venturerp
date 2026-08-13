@@ -32,6 +32,35 @@ type ProductionOrderHandler struct {
 	materialControlUC    *production_order_uc.ProductionMaterialControlUseCase
 	maintainUC           *production_order_uc.MaintainProductionOrderUseCase
 	deliveryCandidatesUC *production_order_uc.ListDeliveryCandidatesUseCase
+	scannerUC            *production_order_uc.ProductionScannerUseCase
+}
+
+func (h *ProductionOrderHandler) CreateScanToken(w http.ResponseWriter, r *http.Request) {
+	var dto request.CreateProductionScanTokenDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.scannerUC.CreateToken(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
+}
+
+func (h *ProductionOrderHandler) Scan(w http.ResponseWriter, r *http.Request) {
+	var dto request.ProductionScanDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.scannerUC.Scan(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func (h *ProductionOrderHandler) DeliveryCandidates(w http.ResponseWriter, r *http.Request) {

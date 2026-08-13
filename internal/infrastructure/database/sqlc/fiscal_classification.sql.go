@@ -25,7 +25,8 @@ INSERT INTO fiscal_classifications (
     pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao,
     desc_pis_zf_pct, desc_cofins_zf_pct,
     ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st,
-    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, item_code, created_by
+    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, item_code, created_by,
+    enterprise_id, valid_from, valid_until, default_origin, default_icms_rate, default_calculate_pis_cofins
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9,
@@ -38,57 +39,66 @@ INSERT INTO fiscal_classifications (
     $31, $32, $33, $34,
     $35, $36,
     $37, $38, $39, $40, $41,
-    $42, $43, $44, $45, $46
-) RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code
+    $42, $43, $44, $45, $46,
+    $47, COALESCE($48::date, CURRENT_DATE),
+    $49::date, $50::smallint,
+    $51::numeric, $52::boolean
+) RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code, enterprise_id, valid_from, valid_until, default_origin, default_icms_rate, default_calculate_pis_cofins
 `
 
 type CreateFiscalClassificationParams struct {
-	Code                    int64
-	Description             string
-	Ncm                     pgtype.Text
-	Cest                    pgtype.Text
-	IpiRate                 pgtype.Numeric
-	IpiIndicator            string
-	Apuracao                pgtype.Text
-	CstIpiEntrada           pgtype.Text
-	CstIpiSaida             pgtype.Text
-	PisRate                 pgtype.Numeric
-	PisIndicator            string
-	CstPisEntrada           pgtype.Text
-	CstPisSaida             pgtype.Text
-	CofinsRate              pgtype.Numeric
-	CofinsIndicator         string
-	CstCofinsEntrada        pgtype.Text
-	CstCofinsSaida          pgtype.Text
-	CofinsMajoradoPct       pgtype.Numeric
-	PisStPct                pgtype.Numeric
-	CofinsStPct             pgtype.Numeric
-	PisConsumoPct           pgtype.Numeric
-	CstPisConsumoEntrada    pgtype.Text
-	CstPisConsumoSaida      pgtype.Text
-	CofinsConsumoPct        pgtype.Numeric
-	CstCofinsConsumoEntrada pgtype.Text
-	CstCofinsConsumoSaida   pgtype.Text
-	PisRetencaoPct          pgtype.Numeric
-	CstPisRetencao          pgtype.Text
-	CofinsRetencaoPct       pgtype.Numeric
-	CstCofinsRetencao       pgtype.Text
-	PisReducaoPct           pgtype.Numeric
-	CstPisReducao           pgtype.Text
-	CofinsReducaoPct        pgtype.Numeric
-	CstCofinsReducao        pgtype.Text
-	DescPisZfPct            pgtype.Numeric
-	DescCofinsZfPct         pgtype.Numeric
-	ExTarifario             pgtype.Text
-	UnIpi                   pgtype.Text
-	UnTributacao            pgtype.Text
-	ModBcIcms               pgtype.Text
-	ModBcIcmsSt             pgtype.Text
-	CodClasTrib             pgtype.Text
-	CodClasTribTribReg      pgtype.Text
-	ObsFiscal               pgtype.Text
-	ItemCode                *int64
-	CreatedBy               pgtype.UUID
+	Code                      int64
+	Description               string
+	Ncm                       pgtype.Text
+	Cest                      pgtype.Text
+	IpiRate                   pgtype.Numeric
+	IpiIndicator              string
+	Apuracao                  pgtype.Text
+	CstIpiEntrada             pgtype.Text
+	CstIpiSaida               pgtype.Text
+	PisRate                   pgtype.Numeric
+	PisIndicator              string
+	CstPisEntrada             pgtype.Text
+	CstPisSaida               pgtype.Text
+	CofinsRate                pgtype.Numeric
+	CofinsIndicator           string
+	CstCofinsEntrada          pgtype.Text
+	CstCofinsSaida            pgtype.Text
+	CofinsMajoradoPct         pgtype.Numeric
+	PisStPct                  pgtype.Numeric
+	CofinsStPct               pgtype.Numeric
+	PisConsumoPct             pgtype.Numeric
+	CstPisConsumoEntrada      pgtype.Text
+	CstPisConsumoSaida        pgtype.Text
+	CofinsConsumoPct          pgtype.Numeric
+	CstCofinsConsumoEntrada   pgtype.Text
+	CstCofinsConsumoSaida     pgtype.Text
+	PisRetencaoPct            pgtype.Numeric
+	CstPisRetencao            pgtype.Text
+	CofinsRetencaoPct         pgtype.Numeric
+	CstCofinsRetencao         pgtype.Text
+	PisReducaoPct             pgtype.Numeric
+	CstPisReducao             pgtype.Text
+	CofinsReducaoPct          pgtype.Numeric
+	CstCofinsReducao          pgtype.Text
+	DescPisZfPct              pgtype.Numeric
+	DescCofinsZfPct           pgtype.Numeric
+	ExTarifario               pgtype.Text
+	UnIpi                     pgtype.Text
+	UnTributacao              pgtype.Text
+	ModBcIcms                 pgtype.Text
+	ModBcIcmsSt               pgtype.Text
+	CodClasTrib               pgtype.Text
+	CodClasTribTribReg        pgtype.Text
+	ObsFiscal                 pgtype.Text
+	ItemCode                  *int64
+	CreatedBy                 pgtype.UUID
+	EnterpriseID              int64
+	ValidFrom                 pgtype.Date
+	ValidUntil                pgtype.Date
+	DefaultOrigin             pgtype.Int2
+	DefaultIcmsRate           pgtype.Numeric
+	DefaultCalculatePisCofins pgtype.Bool
 }
 
 // ─── Fiscal Classifications ───────────────────────────────────────────────────
@@ -140,6 +150,12 @@ func (q *Queries) CreateFiscalClassification(ctx context.Context, arg CreateFisc
 		arg.ObsFiscal,
 		arg.ItemCode,
 		arg.CreatedBy,
+		arg.EnterpriseID,
+		arg.ValidFrom,
+		arg.ValidUntil,
+		arg.DefaultOrigin,
+		arg.DefaultIcmsRate,
+		arg.DefaultCalculatePisCofins,
 	)
 	var i FiscalClassification
 	err := row.Scan(
@@ -193,6 +209,12 @@ func (q *Queries) CreateFiscalClassification(ctx context.Context, arg CreateFisc
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.ItemCode,
+		&i.EnterpriseID,
+		&i.ValidFrom,
+		&i.ValidUntil,
+		&i.DefaultOrigin,
+		&i.DefaultIcmsRate,
+		&i.DefaultCalculatePisCofins,
 	)
 	return i, err
 }
@@ -282,11 +304,16 @@ func (q *Queries) DeleteFiscalClassificationLanguage(ctx context.Context, id int
 }
 
 const getFiscalClassificationByCode = `-- name: GetFiscalClassificationByCode :one
-SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code FROM fiscal_classifications WHERE code = $1
+SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code, enterprise_id, valid_from, valid_until, default_origin, default_icms_rate, default_calculate_pis_cofins FROM fiscal_classifications WHERE enterprise_id = $1 AND code = $2
 `
 
-func (q *Queries) GetFiscalClassificationByCode(ctx context.Context, code int64) (FiscalClassification, error) {
-	row := q.db.QueryRow(ctx, getFiscalClassificationByCode, code)
+type GetFiscalClassificationByCodeParams struct {
+	EnterpriseID int64
+	Code         int64
+}
+
+func (q *Queries) GetFiscalClassificationByCode(ctx context.Context, arg GetFiscalClassificationByCodeParams) (FiscalClassification, error) {
+	row := q.db.QueryRow(ctx, getFiscalClassificationByCode, arg.EnterpriseID, arg.Code)
 	var i FiscalClassification
 	err := row.Scan(
 		&i.ID,
@@ -339,6 +366,12 @@ func (q *Queries) GetFiscalClassificationByCode(ctx context.Context, code int64)
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.ItemCode,
+		&i.EnterpriseID,
+		&i.ValidFrom,
+		&i.ValidUntil,
+		&i.DefaultOrigin,
+		&i.DefaultIcmsRate,
+		&i.DefaultCalculatePisCofins,
 	)
 	return i, err
 }
@@ -405,13 +438,18 @@ func (q *Queries) ListFiscalClassificationLanguages(ctx context.Context, classif
 }
 
 const listFiscalClassifications = `-- name: ListFiscalClassifications :many
-SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code FROM fiscal_classifications
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code, enterprise_id, valid_from, valid_until, default_origin, default_icms_rate, default_calculate_pis_cofins FROM fiscal_classifications
+WHERE enterprise_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
 
-func (q *Queries) ListFiscalClassifications(ctx context.Context, dollar_1 bool) ([]FiscalClassification, error) {
-	rows, err := q.db.Query(ctx, listFiscalClassifications, dollar_1)
+type ListFiscalClassificationsParams struct {
+	EnterpriseID int64
+	Column2      bool
+}
+
+func (q *Queries) ListFiscalClassifications(ctx context.Context, arg ListFiscalClassificationsParams) ([]FiscalClassification, error) {
+	rows, err := q.db.Query(ctx, listFiscalClassifications, arg.EnterpriseID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -470,6 +508,12 @@ func (q *Queries) ListFiscalClassifications(ctx context.Context, dollar_1 bool) 
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.ItemCode,
+			&i.EnterpriseID,
+			&i.ValidFrom,
+			&i.ValidUntil,
+			&i.DefaultOrigin,
+			&i.DefaultIcmsRate,
+			&i.DefaultCalculatePisCofins,
 		); err != nil {
 			return nil, err
 		}
@@ -482,11 +526,11 @@ func (q *Queries) ListFiscalClassifications(ctx context.Context, dollar_1 bool) 
 }
 
 const nextFiscalClassificationCode = `-- name: NextFiscalClassificationCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM fiscal_classifications
+SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM fiscal_classifications WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextFiscalClassificationCode(ctx context.Context) (int32, error) {
-	row := q.db.QueryRow(ctx, nextFiscalClassificationCode)
+func (q *Queries) NextFiscalClassificationCode(ctx context.Context, enterpriseID int64) (int32, error) {
+	row := q.db.QueryRow(ctx, nextFiscalClassificationCode, enterpriseID)
 	var next_code int32
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -506,58 +550,68 @@ UPDATE fiscal_classifications SET
     desc_pis_zf_pct = $35, desc_cofins_zf_pct = $36,
     ex_tarifario = $37, un_ipi = $38, un_tributacao = $39, mod_bc_icms = $40, mod_bc_icms_st = $41,
     cod_clas_trib = $42, cod_clas_trib_trib_reg = $43, obs_fiscal = $44, item_code = $45, is_active = $46,
+    valid_from = COALESCE($47::date, valid_from),
+    valid_until = $48::date, default_origin = $49::smallint,
+    default_icms_rate = $50::numeric,
+    default_calculate_pis_cofins = $51::boolean,
     updated_at = NOW()
-WHERE code = $1
-RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code
+WHERE code = $1 AND enterprise_id = $52
+RETURNING id, code, description, ncm, cest, ipi_rate, ipi_indicator, apuracao, cst_ipi_entrada, cst_ipi_saida, pis_rate, pis_indicator, cst_pis_entrada, cst_pis_saida, cofins_rate, cofins_indicator, cst_cofins_entrada, cst_cofins_saida, cofins_majorado_pct, pis_st_pct, cofins_st_pct, pis_consumo_pct, cst_pis_consumo_entrada, cst_pis_consumo_saida, cofins_consumo_pct, cst_cofins_consumo_entrada, cst_cofins_consumo_saida, pis_retencao_pct, cst_pis_retencao, cofins_retencao_pct, cst_cofins_retencao, pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao, desc_pis_zf_pct, desc_cofins_zf_pct, ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st, cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, is_active, created_at, created_by, updated_at, item_code, enterprise_id, valid_from, valid_until, default_origin, default_icms_rate, default_calculate_pis_cofins
 `
 
 type UpdateFiscalClassificationParams struct {
-	Code                    int64
-	Description             string
-	Ncm                     pgtype.Text
-	Cest                    pgtype.Text
-	IpiRate                 pgtype.Numeric
-	IpiIndicator            string
-	Apuracao                pgtype.Text
-	CstIpiEntrada           pgtype.Text
-	CstIpiSaida             pgtype.Text
-	PisRate                 pgtype.Numeric
-	PisIndicator            string
-	CstPisEntrada           pgtype.Text
-	CstPisSaida             pgtype.Text
-	CofinsRate              pgtype.Numeric
-	CofinsIndicator         string
-	CstCofinsEntrada        pgtype.Text
-	CstCofinsSaida          pgtype.Text
-	CofinsMajoradoPct       pgtype.Numeric
-	PisStPct                pgtype.Numeric
-	CofinsStPct             pgtype.Numeric
-	PisConsumoPct           pgtype.Numeric
-	CstPisConsumoEntrada    pgtype.Text
-	CstPisConsumoSaida      pgtype.Text
-	CofinsConsumoPct        pgtype.Numeric
-	CstCofinsConsumoEntrada pgtype.Text
-	CstCofinsConsumoSaida   pgtype.Text
-	PisRetencaoPct          pgtype.Numeric
-	CstPisRetencao          pgtype.Text
-	CofinsRetencaoPct       pgtype.Numeric
-	CstCofinsRetencao       pgtype.Text
-	PisReducaoPct           pgtype.Numeric
-	CstPisReducao           pgtype.Text
-	CofinsReducaoPct        pgtype.Numeric
-	CstCofinsReducao        pgtype.Text
-	DescPisZfPct            pgtype.Numeric
-	DescCofinsZfPct         pgtype.Numeric
-	ExTarifario             pgtype.Text
-	UnIpi                   pgtype.Text
-	UnTributacao            pgtype.Text
-	ModBcIcms               pgtype.Text
-	ModBcIcmsSt             pgtype.Text
-	CodClasTrib             pgtype.Text
-	CodClasTribTribReg      pgtype.Text
-	ObsFiscal               pgtype.Text
-	ItemCode                *int64
-	IsActive                bool
+	Code                      int64
+	Description               string
+	Ncm                       pgtype.Text
+	Cest                      pgtype.Text
+	IpiRate                   pgtype.Numeric
+	IpiIndicator              string
+	Apuracao                  pgtype.Text
+	CstIpiEntrada             pgtype.Text
+	CstIpiSaida               pgtype.Text
+	PisRate                   pgtype.Numeric
+	PisIndicator              string
+	CstPisEntrada             pgtype.Text
+	CstPisSaida               pgtype.Text
+	CofinsRate                pgtype.Numeric
+	CofinsIndicator           string
+	CstCofinsEntrada          pgtype.Text
+	CstCofinsSaida            pgtype.Text
+	CofinsMajoradoPct         pgtype.Numeric
+	PisStPct                  pgtype.Numeric
+	CofinsStPct               pgtype.Numeric
+	PisConsumoPct             pgtype.Numeric
+	CstPisConsumoEntrada      pgtype.Text
+	CstPisConsumoSaida        pgtype.Text
+	CofinsConsumoPct          pgtype.Numeric
+	CstCofinsConsumoEntrada   pgtype.Text
+	CstCofinsConsumoSaida     pgtype.Text
+	PisRetencaoPct            pgtype.Numeric
+	CstPisRetencao            pgtype.Text
+	CofinsRetencaoPct         pgtype.Numeric
+	CstCofinsRetencao         pgtype.Text
+	PisReducaoPct             pgtype.Numeric
+	CstPisReducao             pgtype.Text
+	CofinsReducaoPct          pgtype.Numeric
+	CstCofinsReducao          pgtype.Text
+	DescPisZfPct              pgtype.Numeric
+	DescCofinsZfPct           pgtype.Numeric
+	ExTarifario               pgtype.Text
+	UnIpi                     pgtype.Text
+	UnTributacao              pgtype.Text
+	ModBcIcms                 pgtype.Text
+	ModBcIcmsSt               pgtype.Text
+	CodClasTrib               pgtype.Text
+	CodClasTribTribReg        pgtype.Text
+	ObsFiscal                 pgtype.Text
+	ItemCode                  *int64
+	IsActive                  bool
+	ValidFrom                 pgtype.Date
+	ValidUntil                pgtype.Date
+	DefaultOrigin             pgtype.Int2
+	DefaultIcmsRate           pgtype.Numeric
+	DefaultCalculatePisCofins pgtype.Bool
+	EnterpriseID              int64
 }
 
 func (q *Queries) UpdateFiscalClassification(ctx context.Context, arg UpdateFiscalClassificationParams) (FiscalClassification, error) {
@@ -608,6 +662,12 @@ func (q *Queries) UpdateFiscalClassification(ctx context.Context, arg UpdateFisc
 		arg.ObsFiscal,
 		arg.ItemCode,
 		arg.IsActive,
+		arg.ValidFrom,
+		arg.ValidUntil,
+		arg.DefaultOrigin,
+		arg.DefaultIcmsRate,
+		arg.DefaultCalculatePisCofins,
+		arg.EnterpriseID,
 	)
 	var i FiscalClassification
 	err := row.Scan(
@@ -661,6 +721,12 @@ func (q *Queries) UpdateFiscalClassification(ctx context.Context, arg UpdateFisc
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.ItemCode,
+		&i.EnterpriseID,
+		&i.ValidFrom,
+		&i.ValidUntil,
+		&i.DefaultOrigin,
+		&i.DefaultIcmsRate,
+		&i.DefaultCalculatePisCofins,
 	)
 	return i, err
 }

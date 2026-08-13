@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"mime"
 	"net/http"
 	"strconv"
 
@@ -105,6 +106,33 @@ func (h *ItemSupplierHandler) ListQualityReports(w http.ResponseWriter, r *http.
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemSupplierHandler) DownloadQualityReport(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "reportID"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "id do laudo invalido")
+		return
+	}
+	report, err := h.uc.GetQualityReport(r.Context(), id)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, "laudo nao encontrado")
+		return
+	}
+	if len(report.Content) == 0 {
+		jsonError(w, http.StatusNotFound, "laudo sem anexo")
+		return
+	}
+	contentType := "application/octet-stream"
+	if report.ContentType != nil && *report.ContentType != "" {
+		contentType = *report.ContentType
+	}
+	w.Header().Set("Content-Type", contentType)
+	if report.FileName != nil {
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": *report.FileName}))
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(report.Content)
 }
 
 func (h *ItemSupplierHandler) Delete(w http.ResponseWriter, r *http.Request) {

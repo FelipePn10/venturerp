@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -31,9 +32,13 @@ func NewItem(
 	createdBy uuid.UUID,
 ) (*Item, error) {
 
-	businessCode, err := valueobject.NewBusinessCode(code)
-	if err != nil {
-		return nil, ErrInvalidCode
+	var businessCode valueobject.BusinessCode
+	if strings.TrimSpace(code) != "" {
+		var err error
+		businessCode, err = valueobject.NewBusinessCode(code)
+		if err != nil {
+			return nil, ErrInvalidCode
+		}
 	}
 
 	item := &Item{
@@ -54,7 +59,7 @@ func NewItem(
 		CreatedAt:    time.Now(),
 	}
 
-	if err := item.Validate(); err != nil {
+	if err := item.ValidateForCreation(); err != nil {
 		return nil, err
 	}
 

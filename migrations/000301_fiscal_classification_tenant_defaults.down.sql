@@ -1,0 +1,10 @@
+BEGIN;
+DROP INDEX IF EXISTS idx_fiscal_classification_tenant_active;
+DO $$ BEGIN IF EXISTS(SELECT code FROM fiscal_classifications GROUP BY code HAVING COUNT(*)>1) THEN RAISE EXCEPTION 'Rollback inseguro: existem codigos fiscais repetidos entre empresas'; END IF; END $$;
+ALTER TABLE fiscal_classifications DROP CONSTRAINT IF EXISTS uq_fiscal_classifications_enterprise_code;
+ALTER TABLE fiscal_classifications ADD CONSTRAINT fiscal_classifications_code_key UNIQUE(code);
+ALTER TABLE fiscal_classifications DROP CONSTRAINT IF EXISTS fk_fiscal_classifications_enterprise;
+ALTER TABLE fiscal_classifications DROP CONSTRAINT IF EXISTS chk_fiscal_classification_validity;
+ALTER TABLE fiscal_classifications DROP CONSTRAINT IF EXISTS chk_fiscal_classification_origin;
+ALTER TABLE fiscal_classifications DROP COLUMN IF EXISTS default_calculate_pis_cofins,DROP COLUMN IF EXISTS default_icms_rate,DROP COLUMN IF EXISTS default_origin,DROP COLUMN IF EXISTS valid_until,DROP COLUMN IF EXISTS valid_from,DROP COLUMN IF EXISTS enterprise_id;
+COMMIT;

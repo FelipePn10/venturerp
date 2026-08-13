@@ -19,6 +19,9 @@ var ErrCalendarGenerationUnavailable = errors.New("geracao do calendario indispo
 type calendarMonthGenerator interface {
 	GenerateMonth(context.Context, int, int) (int, error)
 }
+type calendarRangeGenerator interface {
+	GenerateRange(context.Context, int, *int, []int) (int, int, error)
+}
 
 func validateMonth(year, month int) error {
 	if year < 2000 || year > 2200 || month < 1 || month > 12 {
@@ -86,7 +89,47 @@ func (uc *ManageCalendarUseCase) GenerateMonth(ctx context.Context, year, month 
 	if err != nil {
 		return nil, err
 	}
-	return &response.GenerateIndustrialCalendarResponse{Year: year, Month: month, Created: created, Preserved: len(existing)}, nil
+	return &response.GenerateIndustrialCalendarResponse{Year: year, Month: &month, Created: created, Preserved: len(existing)}, nil
+}
+
+func (uc *ManageCalendarUseCase) Generate(ctx context.Context, dto request.GenerateIndustrialCalendarDTO) (*response.GenerateIndustrialCalendarResponse, error) {
+	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if dto.Year < 2000 || dto.Year > 2200 {
+		return nil, ErrInvalidCalendarDate
+	}
+	if dto.Month != nil {
+		if err := validateMonth(dto.Year, *dto.Month); err != nil {
+			return nil, err
+		}
+	}
+	if len(dto.Weekdays) == 0 {
+		dto.Weekdays = []int{1, 2, 3, 4, 5}
+	}
+	seen := map[int]bool{}
+	for _, d := range dto.Weekdays {
+		if d < 0 || d > 6 || seen[d] {
+			return nil, ErrInvalidCalendarDate
+		}
+		seen[d] = true
+	}
+	g, ok := uc.Repo.(calendarRangeGenerator)
+	if !ok {
+		return nil, ErrCalendarGenerationUnavailable
+	}
+	created, preserved, err := g.GenerateRange(ctx, dto.Year, dto.Month, dto.Weekdays)
+	if err != nil {
+		return nil, err
+	}
+	total := 365
+	if time.Date(dto.Year+1, 1, 1, 0, 0, 0, 0, time.UTC).Sub(time.Date(dto.Year, 1, 1, 0, 0, 0, 0, time.UTC)).Hours()/24 == 366 {
+		total = 366
+	}
+	if dto.Month != nil {
+		total = time.Date(dto.Year, time.Month(*dto.Month)+1, 0, 0, 0, 0, 0, time.UTC).Day()
+	}
+	return &response.GenerateIndustrialCalendarResponse{Year: dto.Year, Month: dto.Month, Created: created, Preserved: preserved, Ignored: total - created - preserved}, nil
 }
 
 func (uc *ManageCalendarUseCase) GetMonth(ctx context.Context, year, month int) ([]*response.IndustrialCalendarResponse, error) {

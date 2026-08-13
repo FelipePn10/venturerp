@@ -18,12 +18,13 @@ const (
 // CSTs and rates for IPI/PIS/COFINS (including consumo/retenção/redução/ZF),
 // ICMS BC modalities and CBS/IBS classification codes.
 type FiscalClassification struct {
-	ID          int64
-	Code        int64
-	Description string
-	ItemCode    *int64
-	NCM         *string
-	CEST        *string
+	ID           int64
+	EnterpriseID int64
+	Code         int64
+	Description  string
+	ItemCode     *int64
+	NCM          *string
+	CEST         *string
 	// IPI
 	IPIRate       float64
 	IPIIndicator  RateIndicator
@@ -65,18 +66,23 @@ type FiscalClassification struct {
 	DescPISZFPct    float64
 	DescCOFINSZFPct float64
 	// Outros
-	ExTarifario        *string
-	UNIPI              *string
-	UNTributacao       *string
-	ModBCICMS          *string
-	ModBCICMSST        *string
-	CodClasTrib        *string
-	CodClasTribTribReg *string
-	ObsFiscal          *string
-	IsActive           bool
-	CreatedAt          time.Time
-	CreatedBy          uuid.UUID
-	UpdatedAt          time.Time
+	ExTarifario               *string
+	UNIPI                     *string
+	UNTributacao              *string
+	ModBCICMS                 *string
+	ModBCICMSST               *string
+	CodClasTrib               *string
+	CodClasTribTribReg        *string
+	ObsFiscal                 *string
+	ValidFrom                 *time.Time
+	ValidUntil                *time.Time
+	DefaultOrigin             *string
+	DefaultICMSRate           float64
+	DefaultCalculatePISCOFINS bool
+	IsActive                  bool
+	CreatedAt                 time.Time
+	CreatedBy                 uuid.UUID
+	UpdatedAt                 time.Time
 
 	Languages        []*FiscalClassificationLanguage
 	ExportAttributes []*FiscalClassificationExportAttribute

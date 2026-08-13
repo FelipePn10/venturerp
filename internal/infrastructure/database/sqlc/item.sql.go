@@ -564,6 +564,56 @@ func (q *Queries) FindItemByCode(ctx context.Context, arg FindItemByCodeParams) 
 	return i, err
 }
 
+const getEffectiveItemFiscalDefaults = `-- name: GetEffectiveItemFiscalDefaults :one
+SELECT f.id,f.code,f.ncm,f.cest,f.default_origin,f.un_tributacao,f.un_ipi,f.ipi_rate,
+ f.default_icms_rate,f.pis_rate,f.cofins_rate,f.default_calculate_pis_cofins
+FROM fiscal_classifications f
+WHERE f.enterprise_id=$1 AND f.is_active
+ AND f.valid_from<=CURRENT_DATE AND (f.valid_until IS NULL OR f.valid_until>=CURRENT_DATE)
+ AND (f.code::text=$2::text OR f.ncm=$2::text)
+ORDER BY CASE WHEN f.code::text=$2::text THEN 0 ELSE 1 END,f.valid_from DESC,f.id DESC LIMIT 1
+`
+
+type GetEffectiveItemFiscalDefaultsParams struct {
+	EnterpriseID       int64
+	ClassificationCode string
+}
+
+type GetEffectiveItemFiscalDefaultsRow struct {
+	ID                        int64
+	Code                      int64
+	Ncm                       pgtype.Text
+	Cest                      pgtype.Text
+	DefaultOrigin             pgtype.Int2
+	UnTributacao              pgtype.Text
+	UnIpi                     pgtype.Text
+	IpiRate                   pgtype.Numeric
+	DefaultIcmsRate           pgtype.Numeric
+	PisRate                   pgtype.Numeric
+	CofinsRate                pgtype.Numeric
+	DefaultCalculatePisCofins pgtype.Bool
+}
+
+func (q *Queries) GetEffectiveItemFiscalDefaults(ctx context.Context, arg GetEffectiveItemFiscalDefaultsParams) (GetEffectiveItemFiscalDefaultsRow, error) {
+	row := q.db.QueryRow(ctx, getEffectiveItemFiscalDefaults, arg.EnterpriseID, arg.ClassificationCode)
+	var i GetEffectiveItemFiscalDefaultsRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Ncm,
+		&i.Cest,
+		&i.DefaultOrigin,
+		&i.UnTributacao,
+		&i.UnIpi,
+		&i.IpiRate,
+		&i.DefaultIcmsRate,
+		&i.PisRate,
+		&i.CofinsRate,
+		&i.DefaultCalculatePisCofins,
+	)
+	return i, err
+}
+
 const getItemByID = `-- name: GetItemByID :one
 SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code
 FROM items
@@ -669,11 +719,18 @@ func (q *Queries) GetItemByID(ctx context.Context, arg GetItemByIDParams) (Item,
 }
 
 const itemFiscalClassificationExists = `-- name: ItemFiscalClassificationExists :one
-SELECT EXISTS (SELECT 1 FROM fiscal_classifications WHERE code::text = $1::text OR ncm = $1::text)
+SELECT EXISTS (SELECT 1 FROM fiscal_classifications WHERE enterprise_id=$1 AND is_active
+ AND valid_from<=CURRENT_DATE AND (valid_until IS NULL OR valid_until>=CURRENT_DATE)
+ AND (code::text = $2::text OR ncm = $2::text))
 `
 
-func (q *Queries) ItemFiscalClassificationExists(ctx context.Context, classificationCode string) (bool, error) {
-	row := q.db.QueryRow(ctx, itemFiscalClassificationExists, classificationCode)
+type ItemFiscalClassificationExistsParams struct {
+	EnterpriseID       int64
+	ClassificationCode string
+}
+
+func (q *Queries) ItemFiscalClassificationExists(ctx context.Context, arg ItemFiscalClassificationExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, itemFiscalClassificationExists, arg.EnterpriseID, arg.ClassificationCode)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -790,6 +847,17 @@ func (q *Queries) ListItems(ctx context.Context, enterpriseID int64) ([]Item, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const nextAutomaticItemBusinessCode = `-- name: NextAutomaticItemBusinessCode :one
+SELECT next_item_business_code($1)
+`
+
+func (q *Queries) NextAutomaticItemBusinessCode(ctx context.Context, enterpriseID int64) (string, error) {
+	row := q.db.QueryRow(ctx, nextAutomaticItemBusinessCode, enterpriseID)
+	var next_item_business_code string
+	err := row.Scan(&next_item_business_code)
+	return next_item_business_code, err
 }
 
 const updateItemCommercialAccounting = `-- name: UpdateItemCommercialAccounting :one

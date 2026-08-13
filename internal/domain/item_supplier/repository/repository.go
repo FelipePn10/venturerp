@@ -15,4 +15,5 @@ type ItemSupplierRepository interface {
 	ItemAllowsConversionFactor(context.Context, int64) (bool, error)
 	CreateQualityReport(context.Context, *entity.QualityReport) (*entity.QualityReport, error)
 	ListQualityReports(context.Context, int64, int64) ([]*entity.QualityReport, error)
+	GetQualityReport(context.Context, int64, int64) (*entity.QualityReport, error)
 }

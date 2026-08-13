@@ -186,6 +186,28 @@ func (r *IndustrialCalendarRepositorySQLC) GenerateMonth(ctx context.Context, ye
 	return int(created), err
 }
 
+func (r *IndustrialCalendarRepositorySQLC) GenerateRange(ctx context.Context, year int, month *int, weekdays []int) (int, int, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	var dbMonth *int32
+	if month != nil {
+		v := int32(*month)
+		dbMonth = &v
+	}
+	existing, err := r.q.CountCalendarRange(ctx, sqlc.CountCalendarRangeParams{EnterpriseID: enterpriseID, Year: int32(year), Month: dbMonth})
+	if err != nil {
+		return 0, 0, err
+	}
+	days := make([]int32, len(weekdays))
+	for i, v := range weekdays {
+		days[i] = int32(v)
+	}
+	created, err := r.q.GenerateCalendarRange(ctx, sqlc.GenerateCalendarRangeParams{EnterpriseID: enterpriseID, Year: int32(year), Month: dbMonth, Weekdays: days})
+	return int(created), int(existing), err
+}
+
 func (r *IndustrialCalendarRepositorySQLC) SubtractWorkdays(
 	ctx context.Context,
 	from time.Time,

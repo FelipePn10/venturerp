@@ -2,6 +2,7 @@ package production_order_uc
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -32,6 +33,18 @@ func (uc *AddAppointmentUseCase) Execute(
 ) (*entity.ProductionAppointment, error) {
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if dto.ProductionOrderID <= 0 {
+		return nil, errorsuc.NewValidationError("ordem de fabricacao obrigatoria")
+	}
+	if dto.EmployeeID == nil || *dto.EmployeeID <= 0 {
+		return nil, errorsuc.NewValidationError("operador obrigatorio")
+	}
+	if dto.ProducedQty < 0 || dto.ScrappedQty < 0 || dto.ProducedQty+dto.ScrappedQty <= 0 {
+		return nil, errorsuc.NewValidationError("quantidades boas/refugadas devem ser nao negativas e possuir total maior que zero")
+	}
+	if dto.ScrappedQty > 0 && (dto.ScrapReason == nil || strings.TrimSpace(*dto.ScrapReason) == "") {
+		return nil, errorsuc.NewValidationError("motivo do refugo obrigatorio")
 	}
 
 	appointmentDate := datetime.ParseDateOrDefault(dto.AppointmentDate, time.Now())

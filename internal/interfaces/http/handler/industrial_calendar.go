@@ -14,11 +14,30 @@ import (
 
 func (h *IndustrialCalendarHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Post("/", h.CreateDay)
+	r.Post("/create", h.CreateDay)
+	r.Post("/generate", h.Generate)
 	r.Post("/generate/{year}/{month}", h.GenerateMonth)
-	r.Get("/{year}/{month}", h.GetMonth)
+	r.Get("/month/{year}/{month}", h.GetMonth)
 	r.Get("/workdays/{year}/{month}", h.GetWorkdays)
 	return r
+}
+
+func (h *IndustrialCalendarHandler) Generate(w http.ResponseWriter, r *http.Request) {
+	var dto request.GenerateIndustrialCalendarDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "corpo invalido")
+		return
+	}
+	result, err := h.uc.Generate(r.Context(), dto)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, industrial_calendar_uc.ErrInvalidCalendarDate) {
+			status = http.StatusUnprocessableEntity
+		}
+		security.RespondError(w, status, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func calendarYearMonth(r *http.Request) (int, int, error) {

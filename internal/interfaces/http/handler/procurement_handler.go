@@ -173,6 +173,57 @@ func (h *ProcurementHandler) ListReceivingInspectionOrders(w http.ResponseWriter
 	security.RespondJSON(w, http.StatusOK, result)
 }
 
+func (h *ProcurementHandler) LinkReceivingInspectionQualityReport(w http.ResponseWriter, r *http.Request) {
+	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "id da inspeção inválido")
+		return
+	}
+	var dto request.LinkReceivingInspectionQualityReportDTO
+	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.uc.LinkReceivingInspectionQualityReport(r.Context(), orderID, dto)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, result)
+}
+
+func (h *ProcurementHandler) ListReceivingInspectionQualityReports(w http.ResponseWriter, r *http.Request) {
+	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "id da inspeção inválido")
+		return
+	}
+	result, err := h.uc.ListReceivingInspectionQualityReports(r.Context(), orderID)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *ProcurementHandler) UnlinkReceivingInspectionQualityReport(w http.ResponseWriter, r *http.Request) {
+	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "id da inspeção inválido")
+		return
+	}
+	reportID, err := strconv.ParseInt(chi.URLParam(r, "reportID"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "id do laudo inválido")
+		return
+	}
+	if err = h.uc.UnlinkReceivingInspectionQualityReport(r.Context(), orderID, reportID); err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *ProcurementHandler) RecordReceivingInspectionResult(w http.ResponseWriter, r *http.Request) {
 	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

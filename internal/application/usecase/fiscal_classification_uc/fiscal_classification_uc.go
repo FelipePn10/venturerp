@@ -7,16 +7,18 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal_classification/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal_classification/repository"
 )
 
 type FiscalClassificationUseCase struct {
 	repo repository.FiscalClassificationRepository
+	auth ports.AuthService
 }
 
-func NewFiscalClassificationUseCase(repo repository.FiscalClassificationRepository) *FiscalClassificationUseCase {
-	return &FiscalClassificationUseCase{repo: repo}
+func NewFiscalClassificationUseCase(repo repository.FiscalClassificationRepository, auth ports.AuthService) *FiscalClassificationUseCase {
+	return &FiscalClassificationUseCase{repo: repo, auth: auth}
 }
 
 func applyFields(c *entity.FiscalClassification, f request.FiscalClassificationFields) {
@@ -61,6 +63,11 @@ func applyFields(c *entity.FiscalClassification, f request.FiscalClassificationF
 	c.CodClasTrib = f.CodClasTrib
 	c.CodClasTribTribReg = f.CodClasTribTribReg
 	c.ObsFiscal = f.ObsFiscal
+	c.ValidFrom = f.ValidFrom
+	c.ValidUntil = f.ValidUntil
+	c.DefaultOrigin = f.DefaultOrigin
+	c.DefaultICMSRate = f.DefaultICMSRate
+	c.DefaultCalculatePISCOFINS = f.DefaultCalculatePISCOFINS
 	c.IPIIndicator = indicatorOrDefault(f.IPIIndicator)
 	c.PISIndicator = indicatorOrDefault(f.PISIndicator)
 	c.COFINSIndicator = indicatorOrDefault(f.COFINSIndicator)
@@ -74,7 +81,11 @@ func indicatorOrDefault(v string) entity.RateIndicator {
 }
 
 func (uc *FiscalClassificationUseCase) Create(ctx context.Context, dto request.CreateFiscalClassificationDTO) (*response.FiscalClassificationResponse, error) {
-	code, err := uc.repo.NextCode(ctx)
+	enterpriseID, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("empresa autenticada obrigatoria: %w", err)
+	}
+	code, err := uc.repo.NextCode(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
 	}
@@ -83,6 +94,7 @@ func (uc *FiscalClassificationUseCase) Create(ctx context.Context, dto request.C
 		return nil, err
 	}
 	applyFields(c, dto.FiscalClassificationFields)
+	c.EnterpriseID = enterpriseID
 	created, err := uc.repo.Create(ctx, c)
 	if err != nil {
 		return nil, err
@@ -91,7 +103,11 @@ func (uc *FiscalClassificationUseCase) Create(ctx context.Context, dto request.C
 }
 
 func (uc *FiscalClassificationUseCase) Update(ctx context.Context, dto request.UpdateFiscalClassificationDTO) (*response.FiscalClassificationResponse, error) {
-	c, err := uc.repo.GetByCode(ctx, dto.Code)
+	enterpriseID, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("empresa autenticada obrigatoria: %w", err)
+	}
+	c, err := uc.repo.GetByCode(ctx, enterpriseID, dto.Code)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +121,11 @@ func (uc *FiscalClassificationUseCase) Update(ctx context.Context, dto request.U
 }
 
 func (uc *FiscalClassificationUseCase) Get(ctx context.Context, code int64) (*response.FiscalClassificationResponse, error) {
-	c, err := uc.repo.GetByCode(ctx, code)
+	enterpriseID, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("empresa autenticada obrigatoria: %w", err)
+	}
+	c, err := uc.repo.GetByCode(ctx, enterpriseID, code)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +139,11 @@ func (uc *FiscalClassificationUseCase) Get(ctx context.Context, code int64) (*re
 }
 
 func (uc *FiscalClassificationUseCase) List(ctx context.Context, onlyActive bool) ([]*response.FiscalClassificationResponse, error) {
-	list, err := uc.repo.List(ctx, onlyActive)
+	enterpriseID, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("empresa autenticada obrigatoria: %w", err)
+	}
+	list, err := uc.repo.List(ctx, enterpriseID, onlyActive)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +152,11 @@ func (uc *FiscalClassificationUseCase) List(ctx context.Context, onlyActive bool
 
 // GetIPIRate implements ports.FiscalClassificationProvider.
 func (uc *FiscalClassificationUseCase) GetIPIRate(ctx context.Context, classificationCode int64) (float64, bool, error) {
-	c, err := uc.repo.GetByCode(ctx, classificationCode)
+	enterpriseID, authErr := uc.auth.EnterpriseID(ctx)
+	if authErr != nil {
+		return 0, false, authErr
+	}
+	c, err := uc.repo.GetByCode(ctx, enterpriseID, classificationCode)
 	if err != nil || c == nil {
 		return 0, false, nil
 	}
@@ -136,7 +164,11 @@ func (uc *FiscalClassificationUseCase) GetIPIRate(ctx context.Context, classific
 }
 
 func (uc *FiscalClassificationUseCase) AddLanguage(ctx context.Context, dto request.AddFiscalClassificationLanguageDTO) (*response.FiscalClassificationLanguageResponse, error) {
-	c, err := uc.repo.GetByCode(ctx, dto.ClassificationCode)
+	enterpriseID, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c, err := uc.repo.GetByCode(ctx, enterpriseID, dto.ClassificationCode)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +184,11 @@ func (uc *FiscalClassificationUseCase) AddLanguage(ctx context.Context, dto requ
 }
 
 func (uc *FiscalClassificationUseCase) AddExportAttribute(ctx context.Context, dto request.AddFiscalClassificationExportAttributeDTO) (*response.FiscalClassificationExportAttributeResponse, error) {
-	c, err := uc.repo.GetByCode(ctx, dto.ClassificationCode)
+	enterpriseID, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c, err := uc.repo.GetByCode(ctx, enterpriseID, dto.ClassificationCode)
 	if err != nil {
 		return nil, err
 	}

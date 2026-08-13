@@ -27,6 +27,10 @@ type createItemRepository struct {
 	created *entity.Item
 }
 
+func (r *createItemRepository) NextAutomaticBusinessCode(context.Context, int64) (valueobject.BusinessCode, error) {
+	return "1", nil
+}
+
 func (r *createItemRepository) FindItemByCode(_ context.Context, code valueobject.ItemCode) (*entity.Item, error) {
 	if r.base == nil || r.base.Code != code {
 		return nil, repository.ErrNotFound
@@ -49,6 +53,20 @@ func TestCreateItemAcceptsNoItemBase(t *testing.T) {
 	}
 	if repo.created != item {
 		t.Fatal("expected item to be persisted")
+	}
+}
+
+func TestCreateItemGeneratesCodeWhenOmitted(t *testing.T) {
+	repo := &createItemRepository{}
+	uc := NewCreateItemUseCase(repo, createItemAuth{})
+	item := itemForCreateTest()
+	item.BusinessCode = ""
+	created, err := uc.Execute(context.Background(), item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Code != "1" {
+		t.Fatalf("codigo automatico inesperado: %q", created.Code)
 	}
 }
 

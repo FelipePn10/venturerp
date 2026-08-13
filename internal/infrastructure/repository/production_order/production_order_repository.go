@@ -464,7 +464,7 @@ func (r *ProductionOrderRepositoryPGX) Start(ctx context.Context, id int64, star
 	row := r.pool.QueryRow(ctx,
 		`UPDATE public.production_orders
 		 SET status='IN_PROGRESS', start_date=$2, updated_at=NOW()
-		 WHERE id=$1 AND enterprise_id=$3
+		 WHERE id=$1 AND enterprise_id=$3 AND status='OPEN'
 		 RETURNING id, order_number, planned_order_id, item_code, mask, planned_qty, produced_qty, scrapped_qty,
 		           status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		           is_active, created_at, updated_at, created_by, warehouse_id`,
@@ -474,8 +474,12 @@ func (r *ProductionOrderRepositoryPGX) Start(ctx context.Context, id int64, star
 }
 
 func (r *ProductionOrderRepositoryPGX) AddAppointment(ctx context.Context, a *entity.ProductionAppointment) (*entity.ProductionAppointment, error) {
-	if _, err := r.GetByCode(ctx, a.ProductionOrderID); err != nil {
+	order, err := r.GetByCode(ctx, a.ProductionOrderID)
+	if err != nil {
 		return nil, err
+	}
+	if order.Status != entity.StatusInProgress {
+		return nil, fmt.Errorf("apontamento permitido somente para OF EM_ANDAMENTO")
 	}
 	row := r.pool.QueryRow(ctx,
 		`INSERT INTO public.production_appointments
@@ -500,7 +504,7 @@ func (r *ProductionOrderRepositoryPGX) AddAppointment(ctx context.Context, a *en
 	var createdAt, updatedAt time.Time
 	var createdBy uuid.UUID
 
-	err := row.Scan(&id, &prodOrderID, &machineID, &employeeID, &appointmentDate,
+	err = row.Scan(&id, &prodOrderID, &machineID, &employeeID, &appointmentDate,
 		&startTime, &endTime, &producedQty, &scrappedQty, &scrapReason, &notes,
 		&createdAt, &updatedAt, &createdBy)
 	if err != nil {
@@ -578,7 +582,7 @@ func (r *ProductionOrderRepositoryPGX) Complete(ctx context.Context, id int64, e
 	row := r.pool.QueryRow(ctx,
 		`UPDATE public.production_orders
 		 SET status='COMPLETED', end_date=$2, updated_at=NOW()
-		 WHERE id=$1 AND enterprise_id=$3
+		 WHERE id=$1 AND enterprise_id=$3 AND status='IN_PROGRESS'
 		 RETURNING id, order_number, planned_order_id, item_code, mask, planned_qty, produced_qty, scrapped_qty,
 		           status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		           is_active, created_at, updated_at, created_by, warehouse_id`,
@@ -595,7 +599,7 @@ func (r *ProductionOrderRepositoryPGX) Close(ctx context.Context, id int64) (*en
 	row := r.pool.QueryRow(ctx,
 		`UPDATE public.production_orders
 		 SET status='CLOSED', updated_at=NOW()
-		 WHERE id=$1 AND enterprise_id=$2
+		 WHERE id=$1 AND enterprise_id=$2 AND status='COMPLETED'
 		 RETURNING id, order_number, planned_order_id, item_code, mask, planned_qty, produced_qty, scrapped_qty,
 		           status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		           is_active, created_at, updated_at, created_by, warehouse_id`,

@@ -24,6 +24,9 @@ type Repository interface {
 	ListReceivingInspectionOrders(ctx context.Context, status string) ([]*entity.ReceivingInspectionOrder, error)
 	CreateReceivingInspectionResult(ctx context.Context, result *entity.ReceivingInspectionResult) (*entity.ReceivingInspectionResult, error)
 	CreateReceivingInspectionAnalysis(ctx context.Context, analysis *entity.ReceivingInspectionAnalysis) (*entity.ReceivingInspectionAnalysis, error)
+	LinkReceivingInspectionQualityReport(ctx context.Context, enterpriseID, orderID, reportID int64, linkedBy uuid.UUID) (*entity.ReceivingInspectionQualityReport, error)
+	ListReceivingInspectionQualityReports(ctx context.Context, enterpriseID, orderID int64) ([]*entity.ReceivingInspectionQualityReport, error)
+	UnlinkReceivingInspectionQualityReport(ctx context.Context, enterpriseID, orderID, reportID int64) error
 
 	// Approval limits (alçada de valores).
 	CreateApprovalLimit(ctx context.Context, limit *entity.ApprovalLimit) (*entity.ApprovalLimit, error)

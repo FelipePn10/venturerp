@@ -18,6 +18,7 @@ type CreateFiscalEntryUseCase struct {
 	Auth           ports.AuthService
 	PurchaseOrders porepo.PurchaseOrderRepository
 	Tolerances     ports.PurchaseToleranceEvaluator
+	SupplierItems  ports.ItemSupplierResolver
 }
 
 func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.CreateFiscalEntryDTO) (*response.FiscalEntryResponse, error) {
@@ -73,6 +74,9 @@ func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.Cre
 	if err != nil {
 		return nil, err
 	}
+	if err = resolveSupplierItems(ctx, uc.SupplierItems, entry.SupplierCode, pendingItems); err != nil {
+		return nil, err
+	}
 
 	created, err := uc.Repo.CreateEntry(ctx, entry)
 	if err != nil {
@@ -96,6 +100,7 @@ func entryItemFromDTO(itemDTO request.CreateFiscalEntryItemDTO) *entity.FiscalEn
 	return &entity.FiscalEntryItem{
 		Sequence:          itemDTO.Sequence,
 		ItemCode:          itemDTO.ItemCode,
+		SupplierItemCode:  itemDTO.SupplierItemCode,
 		UOM:               itemDTO.UOM,
 		Ncm:               itemDTO.Ncm,
 		Cfop:              itemDTO.Cfop,
@@ -121,4 +126,42 @@ func entryItemFromDTO(itemDTO request.CreateFiscalEntryItemDTO) *entity.FiscalEn
 		Description:       itemDTO.Description,
 		Notes:             itemDTO.Notes,
 	}
+}
+
+func resolveSupplierItems(ctx context.Context, resolver ports.ItemSupplierResolver, supplier *int64, items []*entity.FiscalEntryItem) error {
+	if resolver == nil || supplier == nil {
+		return nil
+	}
+	for _, item := range items {
+		if item.ItemCode != nil {
+			strategy := "MANUAL"
+			item.ResolutionStrategy = &strategy
+			now := time.Now()
+			item.ResolvedAt = &now
+			continue
+		}
+		code := ""
+		if item.SupplierItemCode != nil {
+			code = *item.SupplierItemCode
+		}
+		description := ""
+		if item.Description != nil {
+			description = *item.Description
+		}
+		resolved, err := resolver.ResolveExternal(ctx, *supplier, code, description)
+		if err != nil {
+			return err
+		}
+		if resolved == nil {
+			strategy := "NAO_RESOLVIDO"
+			item.ResolutionStrategy = &strategy
+			continue
+		}
+		item.ItemCode = &resolved.ItemCode
+		item.ItemSupplierID = &resolved.LinkID
+		item.ResolutionStrategy = &resolved.Strategy
+		now := time.Now()
+		item.ResolvedAt = &now
+	}
+	return nil
 }

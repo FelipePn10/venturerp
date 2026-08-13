@@ -165,6 +165,23 @@ type ReceivingInspectionOrder struct {
 	CreatedBy             *uuid.UUID
 }
 
+// ReceivingInspectionQualityReport is the auditable association between an
+// inspection order and a supplier quality report. The repository only creates
+// it when tenant, item and (when informed) supplier all match the order.
+type ReceivingInspectionQualityReport struct {
+	EnterpriseID      int64
+	InspectionOrderID int64
+	QualityReportID   int64
+	ItemSupplierID    int64
+	RegisteredOn      time.Time
+	Status            string
+	FileName          *string
+	ContentType       *string
+	Notes             *string
+	LinkedAt          time.Time
+	LinkedBy          uuid.UUID
+}
+
 type ReceivingInspectionResult struct {
 	ID                   int64
 	OrderID              int64

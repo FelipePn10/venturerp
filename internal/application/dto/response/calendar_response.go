@@ -15,10 +15,11 @@ type IndustrialCalendarResponse struct {
 }
 
 type GenerateIndustrialCalendarResponse struct {
-	Year      int `json:"year"`
-	Month     int `json:"month"`
-	Created   int `json:"created"`
-	Preserved int `json:"preserved"`
+	Year      int  `json:"year"`
+	Month     *int `json:"month,omitempty"`
+	Created   int  `json:"created"`
+	Preserved int  `json:"preserved"`
+	Ignored   int  `json:"ignored"`
 }
 
 // ItemCalendarPromiseResponse is the API representation of an item promise calendar day.
