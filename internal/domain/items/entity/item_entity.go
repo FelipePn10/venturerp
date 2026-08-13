@@ -158,7 +158,7 @@ type Accounting struct {
 	AccountingClassificationCode     *string
 	CEST                             *string
 	InputCode                        *string
-	CalculatePISCOFINS               bool
+	CalculatePISCOFINS               *bool
 	Notes                            *string
 }
 

@@ -1665,6 +1665,28 @@ menor). Os movimentos atualizam o saldo (ver Estoque). Omitir
 `backflush_warehouse_id` desliga o backflush para aquele apontamento. Implementado em
 `production_order_uc/add_appointment_uc.go`.
 
+### Documentos industriais em PDF
+
+Os documentos de manufatura usam o motor compartilhado `pdfkit`, mas possuem
+layouts próprios conforme a finalidade:
+
+- relatórios tabulares continuam usando `export.Table`/`TableReport`;
+- ordens de fabricação usam `manufacturing.ManufacturingOrder`, com resumo
+  executivo, situação, roteiro, materiais, compras, qualidade, custos e
+  aprovações em seções distintas;
+- quando a OP possui `barcode_value`, o layout imprime Code 128 vetorial com zona
+  de silêncio e largura mínima para leitura. O conteúdo integral permanece apenas
+  nas barras; a legenda humana é mascarada. Gere o token opaco em
+  `POST /api/production-order/scanner/tokens`, nunca codifique ID ou comando;
+- estruturas usam `manufacturing.ItemStructure`, com níveis numéricos, recuo e
+  indicadores visuais. A hierarquia nunca deve ser serializada com caracteres
+  decorativos como `|`, `+--`, `├` ou `└`, inclusive em outros formatos.
+
+A cor e a logo vêm do branding fiscal da empresa. Os exemplos de demonstração
+usam o verde `#1B5E36`; nenhuma cor específica deve ser fixada pelos handlers.
+O comando `go run ./cmd/demo-manufacturing-documents` regenera os exemplos com o
+mesmo motor do ERP; os tokens contidos nos exemplos são fictícios.
+
 ## 19. Expedição / Carregamento (romaneio) — migration 000146
 
 ### O que é

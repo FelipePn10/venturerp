@@ -128,9 +128,12 @@ POST /api/items/create
   },
   "created_by": "550e8400-e29b-41d4-a716-446655440000"
 }
+-- Em accounting.calculate_pis_cofins: omitir = HERDADO; true/false = SOBRESCRITO.
+-- Não enviar false automaticamente quando o usuário não escolheu sobrescrever.
 
 GET /api/items/search/{code}
--- Parâmetro na URL: code (int64)
+-- Parâmetro na URL: code comercial alfanumérico (ex.: TEA452-0 ou 0007-A).
+-- legacy_item_code existe apenas durante a compatibilidade da migração.
 -- Exemplo: GET /api/items/search/10001
 
 PUT /api/items/{code}

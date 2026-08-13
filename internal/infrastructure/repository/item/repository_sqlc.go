@@ -105,7 +105,7 @@ func (r *RepositoryItemSQLC) Create(
 		SuppliesHarvest:            item.Supplies.Harvest,
 
 		CommercialWarrantyDays:       int32(item.Commercial.WarrantyDays),
-		AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS,
+		AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS),
 		CommercialDescription:        pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple),
 		CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays),
@@ -163,7 +163,7 @@ func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, ite
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
 		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
 		CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange, CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes, CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS, CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging, CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
-		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS, AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes)}
+		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes)}
 	dbItem, err := r.q.UpdateItemCommercialAccounting(ctx, p)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -276,9 +276,11 @@ func (r *RepositoryItemSQLC) loadEffectiveFiscal(ctx context.Context, item *enti
 			c.ICMSRate = item.Accounting.ICMSRate
 			c.Sources["icms_rate"] = entity.FiscalSourceOverride
 		}
-		v := item.Accounting.CalculatePISCOFINS
-		c.CalculatePISCOFINS = &v
-		c.Sources["calculate_pis_cofins"] = entity.FiscalSourceOverride
+		if item.Accounting.CalculatePISCOFINS != nil {
+			v := *item.Accounting.CalculatePISCOFINS
+			c.CalculatePISCOFINS = &v
+			c.Sources["calculate_pis_cofins"] = entity.FiscalSourceOverride
+		}
 		if purchase {
 			if item.Accounting.PurchaseUnitOfMeasurement != nil {
 				s := item.Accounting.PurchaseUnitOfMeasurement.String()
@@ -451,7 +453,7 @@ func mapDBItemToEntity(
 			PurchaseIPIType: pgTextToStringPtr(dbItem.AccountingPurchaseIpiType), PurchaseIPIRate: numericToDecimalPtr(dbItem.AccountingPurchaseIpiRate), ICMSRate: numericToDecimalPtr(dbItem.AccountingIcmsRate),
 			SaleUnitOfMeasurement: pgTextToUnitOfMeasurementPtr(dbItem.AccountingSaleUnitOfMeasurement), PurchaseUnitOfMeasurement: pgTextToUnitOfMeasurementPtr(dbItem.AccountingPurchaseUnitOfMeasurement),
 			InventoryGroupCode: dbItem.AccountingInventoryGroupCode, AccountingClassificationCode: pgTextToStringPtr(dbItem.AccountingClassificationCode),
-			CEST: pgTextToStringPtr(dbItem.AccountingCest), InputCode: pgTextToStringPtr(dbItem.AccountingInputCode), CalculatePISCOFINS: dbItem.AccountingCalculatePisCofins, Notes: pgTextToStringPtr(dbItem.AccountingNotes),
+			CEST: pgTextToStringPtr(dbItem.AccountingCest), InputCode: pgTextToStringPtr(dbItem.AccountingInputCode), CalculatePISCOFINS: pgBoolToBoolPtr(dbItem.AccountingCalculatePisCofins), Notes: pgTextToStringPtr(dbItem.AccountingNotes),
 		},
 
 		CreatedBy: pgutil.FromPgUUID(dbItem.CreatedBy),
@@ -464,6 +466,21 @@ func unitOfMeasurementToPgText(value *types.TypeUnitOfMeasurementItem) pgtype.Te
 		return pgtype.Text{}
 	}
 	return pgtype.Text{String: value.String(), Valid: true}
+}
+
+func boolPtrToPgBool(value *bool) pgtype.Bool {
+	if value == nil {
+		return pgtype.Bool{}
+	}
+	return pgtype.Bool{Bool: *value, Valid: true}
+}
+
+func pgBoolToBoolPtr(value pgtype.Bool) *bool {
+	if !value.Valid {
+		return nil
+	}
+	v := value.Bool
+	return &v
 }
 
 func pgTextToUnitOfMeasurementPtr(value pgtype.Text) *types.TypeUnitOfMeasurementItem {

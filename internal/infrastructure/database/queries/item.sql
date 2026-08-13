@@ -74,7 +74,7 @@ INSERT INTO items (
              sqlc.arg(planning_safety_stock), sqlc.arg(planning_critical), sqlc.arg(planning_exclusive), sqlc.arg(planning_active),
              sqlc.arg(supplies_type_of_use), sqlc.arg(supplies_purchase_uom), sqlc.arg(supplies_warehouse_code),
              sqlc.arg(supplies_receiving_checklist), sqlc.arg(supplies_harvest), sqlc.arg(commercial_warranty_days),
-             TRUE, sqlc.arg(accounting_calculate_pis_cofins),
+             TRUE, sqlc.narg(accounting_calculate_pis_cofins),
 			 sqlc.arg(commercial_description), sqlc.arg(commercial_sale_type), sqlc.arg(commercial_volume_conversion_factor),
 			 sqlc.arg(commercial_sale_multiple), sqlc.arg(commercial_minimum_sale_quantity), sqlc.arg(commercial_estimated_delivery_days),
 			 sqlc.arg(commercial_transfer_warehouse_code), sqlc.arg(commercial_technical_assistance_warehouse_code), sqlc.arg(commercial_packaging_item_code),
@@ -104,8 +104,9 @@ UPDATE items SET
  accounting_purchase_ipi_type=$27, accounting_purchase_ipi_rate=$28, accounting_icms_rate=$29,
  accounting_sale_unit_of_measurement=$30, accounting_purchase_unit_of_measurement=$31,
  accounting_inventory_group_code=$32, accounting_classification_code=$33, accounting_cest=$34,
- accounting_input_code=$35, accounting_calculate_pis_cofins=$36, accounting_notes=$37
-WHERE business_code=$1 AND enterprise_id=$38
+ accounting_input_code=$35, accounting_notes=$36,
+ accounting_calculate_pis_cofins=sqlc.narg(accounting_calculate_pis_cofins)::boolean
+WHERE business_code=$1 AND enterprise_id=$37
 RETURNING *;
 
 -- name: NextAutomaticItemBusinessCode :one
