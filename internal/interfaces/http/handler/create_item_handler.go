@@ -34,6 +34,10 @@ func (h *ItemHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
+		if errors.Is(err, repository.ErrConflict) {
+			jsonError(w, http.StatusConflict, err.Error())
+			return
+		}
 		h.InternalError(w, r, err)
 		return
 	}

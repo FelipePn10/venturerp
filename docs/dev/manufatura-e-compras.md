@@ -1362,11 +1362,18 @@ Endpoints:
 - `GET /api/procurement/receiving-inspection-orders?status=PENDING_INSPECTION`
 - `POST /api/procurement/receiving-inspection-orders/{id}/results`
 - `POST /api/procurement/receiving-inspection-orders/{id}/analysis`
+- `POST|GET /api/procurement/receiving-inspection-orders/{id}/quality-reports`
+- `DELETE /api/procurement/receiving-inspection-orders/{id}/quality-reports/{reportID}`
 
 Ao gerar uma ordem, o sistema busca primeiro um roteiro válido por item/máscara e,
 se não houver, por classificação de suprimentos do nível mais específico para o mais
 genérico. Isso preserva o fluxo de fábrica: itens críticos podem ter medições
 próprias e famílias menos críticas podem herdar um roteiro por classificação.
+
+Laudos do vínculo item-fornecedor podem ser associados explicitamente à ordem. O
+backend valida empresa, item e fornecedor, rejeita associações cruzadas e registra
+quem vinculou e quando. Uma ordem aceita vários laudos e um laudo pode respaldar
+mais de uma inspeção, preservando rastreabilidade sem duplicar o arquivo.
 
 A análise da inspeção agora **fecha o ciclo com o estoque**. Enviando
 `"move_stock": true` no corpo de `.../analysis`, as quantidades analisadas saem do

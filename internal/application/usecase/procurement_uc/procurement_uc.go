@@ -398,6 +398,61 @@ func (uc *UseCase) ListReceivingInspectionOrders(ctx context.Context, status str
 	return out, nil
 }
 
+func (uc *UseCase) LinkReceivingInspectionQualityReport(ctx context.Context, orderID int64, dto request.LinkReceivingInspectionQualityReportDTO) (*response.ReceivingInspectionQualityReportResponse, error) {
+	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if orderID <= 0 || dto.QualityReportID <= 0 {
+		return nil, fmt.Errorf("inspection_order_id e quality_report_id são obrigatórios")
+	}
+	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	link, err := uc.Repo.LinkReceivingInspectionQualityReport(ctx, enterpriseID, orderID, dto.QualityReportID, actor)
+	if err != nil {
+		return nil, err
+	}
+	return toReceivingInspectionQualityReportResponse(link), nil
+}
+
+func (uc *UseCase) ListReceivingInspectionQualityReports(ctx context.Context, orderID int64) ([]*response.ReceivingInspectionQualityReportResponse, error) {
+	if orderID <= 0 {
+		return nil, fmt.Errorf("inspection_order_id é obrigatório")
+	}
+	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	links, err := uc.Repo.ListReceivingInspectionQualityReports(ctx, enterpriseID, orderID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*response.ReceivingInspectionQualityReportResponse, 0, len(links))
+	for _, link := range links {
+		out = append(out, toReceivingInspectionQualityReportResponse(link))
+	}
+	return out, nil
+}
+
+func (uc *UseCase) UnlinkReceivingInspectionQualityReport(ctx context.Context, orderID, reportID int64) error {
+	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	if orderID <= 0 || reportID <= 0 {
+		return fmt.Errorf("inspection_order_id e quality_report_id são obrigatórios")
+	}
+	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil {
+		return err
+	}
+	return uc.Repo.UnlinkReceivingInspectionQualityReport(ctx, enterpriseID, orderID, reportID)
+}
+
 func (uc *UseCase) RecordReceivingInspectionResult(ctx context.Context, orderID int64, dto request.RecordReceivingInspectionResultDTO) (*response.ReceivingInspectionResultResponse, error) {
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -805,6 +860,15 @@ func toReceivingInspectionOrderResponse(order *entity.ReceivingInspectionOrder) 
 		Notes:                 order.Notes,
 		CreatedAt:             order.CreatedAt,
 		CreatedBy:             order.CreatedBy,
+	}
+}
+
+func toReceivingInspectionQualityReportResponse(link *entity.ReceivingInspectionQualityReport) *response.ReceivingInspectionQualityReportResponse {
+	return &response.ReceivingInspectionQualityReportResponse{
+		QualityReportID: link.QualityReportID, InspectionOrderID: link.InspectionOrderID,
+		ItemSupplierID: link.ItemSupplierID, RegisteredOn: link.RegisteredOn, Status: link.Status,
+		FileName: link.FileName, ContentType: link.ContentType, Notes: link.Notes,
+		LinkedAt: link.LinkedAt, LinkedBy: link.LinkedBy,
 	}
 }
 

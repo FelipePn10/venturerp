@@ -1,0 +1,10 @@
+BEGIN;
+ALTER TABLE item_classification_masks DROP CONSTRAINT IF EXISTS fk_item_classification_masks_enterprise;
+ALTER TABLE item_classification_masks DROP CONSTRAINT IF EXISTS uq_item_classification_mask_code_tenant;
+ALTER TABLE item_classification_masks DROP CONSTRAINT IF EXISTS uq_item_classification_mask_tenant;
+ALTER TABLE item_classification_masks ALTER COLUMN code DROP DEFAULT;
+ALTER TABLE item_classification_masks DROP COLUMN IF EXISTS enterprise_id;
+ALTER TABLE item_classification_masks ADD CONSTRAINT item_classification_masks_code_key UNIQUE(code);
+ALTER TABLE item_classification_masks ADD CONSTRAINT item_classification_masks_mask_key UNIQUE(mask);
+DROP SEQUENCE IF EXISTS item_classification_mask_code_seq;
+COMMIT;

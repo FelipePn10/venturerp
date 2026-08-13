@@ -182,26 +182,26 @@ SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM icms_ipi_tax_params;
 -- ─── Item Classification Masks ────────────────────────────────────────────────
 
 -- name: CreateClassificationMask :one
-INSERT INTO item_classification_masks (code, mask, description)
+INSERT INTO item_classification_masks (enterprise_id, mask, description)
 VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: UpdateClassificationMask :one
 UPDATE item_classification_masks
 SET description = $2, is_active = $3
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $4
 RETURNING *;
 
 -- name: GetClassificationMaskByCode :one
-SELECT * FROM item_classification_masks WHERE code = $1;
+SELECT * FROM item_classification_masks WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListClassificationMasks :many
 SELECT * FROM item_classification_masks
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextClassificationMaskCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM item_classification_masks;
+SELECT nextval('item_classification_mask_code_seq') AS next_code;
 
 -- ─── Item Classifications ─────────────────────────────────────────────────────
 
@@ -219,19 +219,23 @@ RETURNING *;
 -- name: GetItemClassificationByCode :one
 SELECT c.* FROM item_classifications c
 JOIN item_classification_masks m ON m.id = c.mask_id
-WHERE c.code = $1 AND m.code = $2;
+WHERE c.code = $1 AND m.code = $2 AND m.enterprise_id=$3;
 
 -- name: ListItemClassificationsByMask :many
 SELECT * FROM item_classifications
-WHERE mask_id = $1
-  AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE mask_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY level, code;
 
 -- name: ListItemClassificationChildren :many
 SELECT * FROM item_classifications
-WHERE parent_id = $1
-  AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE parent_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
+
+-- name: ClassificationMaskBelongsToEnterprise :one
+SELECT EXISTS(SELECT 1 FROM item_classification_masks WHERE id=$1 AND enterprise_id=$2);
+
+-- name: ItemClassificationBelongsToEnterprise :one
+SELECT EXISTS(SELECT 1 FROM item_classifications c JOIN item_classification_masks m ON m.id=c.mask_id WHERE c.id=$1 AND m.enterprise_id=$2);
 
 -- ─── Countries ────────────────────────────────────────────────────────────────
 

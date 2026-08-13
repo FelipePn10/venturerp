@@ -8,12 +8,13 @@ import (
 
 // FiscalClassificationResponse is the API representation of a fiscal classification.
 type FiscalClassificationResponse struct {
-	ID          int64   `json:"id"`
-	Code        int64   `json:"code"`
-	Description string  `json:"description"`
-	ItemCode    *int64  `json:"item_code,omitempty"`
-	NCM         *string `json:"ncm,omitempty"`
-	CEST        *string `json:"cest,omitempty"`
+	ID           int64   `json:"id"`
+	EnterpriseID int64   `json:"enterprise_id"`
+	Code         int64   `json:"code"`
+	Description  string  `json:"description"`
+	ItemCode     *int64  `json:"item_code,omitempty"`
+	NCM          *string `json:"ncm,omitempty"`
+	CEST         *string `json:"cest,omitempty"`
 
 	IPIRate       float64 `json:"ipi_rate"`
 	IPIIndicator  string  `json:"ipi_indicator"`
@@ -55,14 +56,19 @@ type FiscalClassificationResponse struct {
 	DescPISZFPct    float64 `json:"desc_pis_zf_pct"`
 	DescCOFINSZFPct float64 `json:"desc_cofins_zf_pct"`
 
-	ExTarifario        *string `json:"ex_tarifario,omitempty"`
-	UNIPI              *string `json:"un_ipi,omitempty"`
-	UNTributacao       *string `json:"un_tributacao,omitempty"`
-	ModBCICMS          *string `json:"mod_bc_icms,omitempty"`
-	ModBCICMSST        *string `json:"mod_bc_icms_st,omitempty"`
-	CodClasTrib        *string `json:"cod_clas_trib,omitempty"`
-	CodClasTribTribReg *string `json:"cod_clas_trib_trib_reg,omitempty"`
-	ObsFiscal          *string `json:"obs_fiscal,omitempty"`
+	ExTarifario               *string    `json:"ex_tarifario,omitempty"`
+	UNIPI                     *string    `json:"un_ipi,omitempty"`
+	UNTributacao              *string    `json:"un_tributacao,omitempty"`
+	ModBCICMS                 *string    `json:"mod_bc_icms,omitempty"`
+	ModBCICMSST               *string    `json:"mod_bc_icms_st,omitempty"`
+	CodClasTrib               *string    `json:"cod_clas_trib,omitempty"`
+	CodClasTribTribReg        *string    `json:"cod_clas_trib_trib_reg,omitempty"`
+	ObsFiscal                 *string    `json:"obs_fiscal,omitempty"`
+	ValidFrom                 *time.Time `json:"valid_from,omitempty"`
+	ValidUntil                *time.Time `json:"valid_until,omitempty"`
+	DefaultOrigin             *string    `json:"default_origin,omitempty"`
+	DefaultICMSRate           float64    `json:"default_icms_rate"`
+	DefaultCalculatePISCOFINS bool       `json:"default_calculate_pis_cofins"`
 
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`

@@ -4274,56 +4274,62 @@ type ExtratoBancario struct {
 }
 
 type FiscalClassification struct {
-	ID                      int64
-	Code                    int64
-	Description             string
-	Ncm                     pgtype.Text
-	Cest                    pgtype.Text
-	IpiRate                 pgtype.Numeric
-	IpiIndicator            string
-	Apuracao                pgtype.Text
-	CstIpiEntrada           pgtype.Text
-	CstIpiSaida             pgtype.Text
-	PisRate                 pgtype.Numeric
-	PisIndicator            string
-	CstPisEntrada           pgtype.Text
-	CstPisSaida             pgtype.Text
-	CofinsRate              pgtype.Numeric
-	CofinsIndicator         string
-	CstCofinsEntrada        pgtype.Text
-	CstCofinsSaida          pgtype.Text
-	CofinsMajoradoPct       pgtype.Numeric
-	PisStPct                pgtype.Numeric
-	CofinsStPct             pgtype.Numeric
-	PisConsumoPct           pgtype.Numeric
-	CstPisConsumoEntrada    pgtype.Text
-	CstPisConsumoSaida      pgtype.Text
-	CofinsConsumoPct        pgtype.Numeric
-	CstCofinsConsumoEntrada pgtype.Text
-	CstCofinsConsumoSaida   pgtype.Text
-	PisRetencaoPct          pgtype.Numeric
-	CstPisRetencao          pgtype.Text
-	CofinsRetencaoPct       pgtype.Numeric
-	CstCofinsRetencao       pgtype.Text
-	PisReducaoPct           pgtype.Numeric
-	CstPisReducao           pgtype.Text
-	CofinsReducaoPct        pgtype.Numeric
-	CstCofinsReducao        pgtype.Text
-	DescPisZfPct            pgtype.Numeric
-	DescCofinsZfPct         pgtype.Numeric
-	ExTarifario             pgtype.Text
-	UnIpi                   pgtype.Text
-	UnTributacao            pgtype.Text
-	ModBcIcms               pgtype.Text
-	ModBcIcmsSt             pgtype.Text
-	CodClasTrib             pgtype.Text
-	CodClasTribTribReg      pgtype.Text
-	ObsFiscal               pgtype.Text
-	IsActive                bool
-	CreatedAt               pgtype.Timestamptz
-	CreatedBy               pgtype.UUID
-	UpdatedAt               pgtype.Timestamptz
-	ItemCode                *int64
+	ID                        int64
+	Code                      int64
+	Description               string
+	Ncm                       pgtype.Text
+	Cest                      pgtype.Text
+	IpiRate                   pgtype.Numeric
+	IpiIndicator              string
+	Apuracao                  pgtype.Text
+	CstIpiEntrada             pgtype.Text
+	CstIpiSaida               pgtype.Text
+	PisRate                   pgtype.Numeric
+	PisIndicator              string
+	CstPisEntrada             pgtype.Text
+	CstPisSaida               pgtype.Text
+	CofinsRate                pgtype.Numeric
+	CofinsIndicator           string
+	CstCofinsEntrada          pgtype.Text
+	CstCofinsSaida            pgtype.Text
+	CofinsMajoradoPct         pgtype.Numeric
+	PisStPct                  pgtype.Numeric
+	CofinsStPct               pgtype.Numeric
+	PisConsumoPct             pgtype.Numeric
+	CstPisConsumoEntrada      pgtype.Text
+	CstPisConsumoSaida        pgtype.Text
+	CofinsConsumoPct          pgtype.Numeric
+	CstCofinsConsumoEntrada   pgtype.Text
+	CstCofinsConsumoSaida     pgtype.Text
+	PisRetencaoPct            pgtype.Numeric
+	CstPisRetencao            pgtype.Text
+	CofinsRetencaoPct         pgtype.Numeric
+	CstCofinsRetencao         pgtype.Text
+	PisReducaoPct             pgtype.Numeric
+	CstPisReducao             pgtype.Text
+	CofinsReducaoPct          pgtype.Numeric
+	CstCofinsReducao          pgtype.Text
+	DescPisZfPct              pgtype.Numeric
+	DescCofinsZfPct           pgtype.Numeric
+	ExTarifario               pgtype.Text
+	UnIpi                     pgtype.Text
+	UnTributacao              pgtype.Text
+	ModBcIcms                 pgtype.Text
+	ModBcIcmsSt               pgtype.Text
+	CodClasTrib               pgtype.Text
+	CodClasTribTribReg        pgtype.Text
+	ObsFiscal                 pgtype.Text
+	IsActive                  bool
+	CreatedAt                 pgtype.Timestamptz
+	CreatedBy                 pgtype.UUID
+	UpdatedAt                 pgtype.Timestamptz
+	ItemCode                  *int64
+	EnterpriseID              int64
+	ValidFrom                 pgtype.Date
+	ValidUntil                pgtype.Date
+	DefaultOrigin             pgtype.Int2
+	DefaultIcmsRate           pgtype.Numeric
+	DefaultCalculatePisCofins pgtype.Bool
 }
 
 type FiscalClassificationExportAttribute struct {
@@ -4445,35 +4451,39 @@ type FiscalEntry struct {
 }
 
 type FiscalEntryItem struct {
-	ID                int64
-	FiscalEntryID     int64
-	Sequence          int32
-	ItemCode          *int64
-	Ncm               pgtype.Text
-	Cfop              string
-	Quantity          pgtype.Numeric
-	UnitPrice         pgtype.Numeric
-	TotalPrice        pgtype.Numeric
-	BaseIcms          pgtype.Numeric
-	AliqIcms          pgtype.Numeric
-	ValorIcms         pgtype.Numeric
-	BaseIpi           pgtype.Numeric
-	AliqIpi           pgtype.Numeric
-	ValorIpi          pgtype.Numeric
-	ValorPis          pgtype.Numeric
-	ValorCofins       pgtype.Numeric
-	CstIcms           pgtype.Text
-	CstIpi            pgtype.Text
-	CstPis            pgtype.Text
-	CstCofins         pgtype.Text
-	GeraCreditoIcms   bool
-	GeraCreditoIpi    bool
-	GeraCreditoPis    bool
-	GeraCreditoCofins bool
-	Description       pgtype.Text
-	Notes             pgtype.Text
-	CreatedAt         pgtype.Timestamptz
-	Uom               pgtype.Text
+	ID                     int64
+	FiscalEntryID          int64
+	Sequence               int32
+	ItemCode               *int64
+	Ncm                    pgtype.Text
+	Cfop                   string
+	Quantity               pgtype.Numeric
+	UnitPrice              pgtype.Numeric
+	TotalPrice             pgtype.Numeric
+	BaseIcms               pgtype.Numeric
+	AliqIcms               pgtype.Numeric
+	ValorIcms              pgtype.Numeric
+	BaseIpi                pgtype.Numeric
+	AliqIpi                pgtype.Numeric
+	ValorIpi               pgtype.Numeric
+	ValorPis               pgtype.Numeric
+	ValorCofins            pgtype.Numeric
+	CstIcms                pgtype.Text
+	CstIpi                 pgtype.Text
+	CstPis                 pgtype.Text
+	CstCofins              pgtype.Text
+	GeraCreditoIcms        bool
+	GeraCreditoIpi         bool
+	GeraCreditoPis         bool
+	GeraCreditoCofins      bool
+	Description            pgtype.Text
+	Notes                  pgtype.Text
+	CreatedAt              pgtype.Timestamptz
+	Uom                    pgtype.Text
+	ItemSupplierID         *int64
+	SupplierItemIdentifier pgtype.Text
+	ResolutionStrategy     pgtype.Text
+	ResolvedAt             pgtype.Timestamptz
 }
 
 type FiscalExit struct {
@@ -4988,14 +4998,16 @@ type IndependentDemand struct {
 }
 
 type IndustrialCalendar struct {
-	ID          int64
-	Year        int32
-	Month       int32
-	Day         int32
-	IsWorkday   bool
-	Description pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID           int64
+	Year         int32
+	Month        int32
+	Day          int32
+	IsWorkday    bool
+	Description  pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	EnterpriseID int64
+	Source       string
 }
 
 type InspectionPlan struct {
@@ -5186,6 +5198,14 @@ type Item struct {
 	AccountingCest                             pgtype.Text
 	AccountingInputCode                        pgtype.Text
 	AccountingNotes                            pgtype.Text
+	EnterpriseID                               int64
+	BusinessCode                               string
+}
+
+type ItemBusinessCodeSequence struct {
+	EnterpriseID int64
+	LastValue    int64
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type ItemCalendarPromise struct {
@@ -5220,12 +5240,13 @@ type ItemClassificationAssignment struct {
 }
 
 type ItemClassificationMask struct {
-	ID          int64
-	Code        int64
-	Mask        string
-	Description string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         int64
+	Mask         string
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type ItemConsumptionAverage struct {
@@ -5316,6 +5337,7 @@ type ItemPreferredSupplier struct {
 	Notes                 pgtype.Text
 	ValidUntil            pgtype.Date
 	UpdatedAt             pgtype.Timestamptz
+	ValidFrom             pgtype.Date
 }
 
 type ItemPurchaseCost struct {
@@ -6446,6 +6468,37 @@ type ProductionResourceGroup struct {
 	UpdatedAt    pgtype.Timestamptz
 }
 
+type ProductionScanEvent struct {
+	ID                 int64
+	EnterpriseID       int64
+	TokenID            *int64
+	ProductionOrderID  *int64
+	OperationID        *int64
+	UserID             pgtype.UUID
+	DeviceID           string
+	Action             string
+	Result             string
+	IdempotencyKey     string
+	RequestFingerprint []byte
+	Response           []byte
+	Message            pgtype.Text
+	CreatedAt          pgtype.Timestamptz
+}
+
+type ProductionScanToken struct {
+	ID                int64
+	EnterpriseID      int64
+	ProductionOrderID int64
+	OperationID       *int64
+	TokenHash         []byte
+	Active            bool
+	ValidFrom         pgtype.Timestamptz
+	ValidUntil        pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	RevokedAt         pgtype.Timestamptz
+}
+
 type ProductionSequence struct {
 	ID                int64
 	ProductionOrderID int64
@@ -6823,6 +6876,14 @@ type ReceivingInspectionOrder struct {
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
 	CreatedBy             pgtype.UUID
+}
+
+type ReceivingInspectionQualityReport struct {
+	EnterpriseID      int64
+	InspectionOrderID int64
+	QualityReportID   int64
+	LinkedAt          pgtype.Timestamptz
+	LinkedBy          pgtype.UUID
 }
 
 type ReceivingInspectionResult struct {

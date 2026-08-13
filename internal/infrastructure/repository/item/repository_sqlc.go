@@ -14,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -54,10 +55,10 @@ func (r *RepositoryItemSQLC) Create(
 	}
 
 	params := sqlc.CreateItemParams{
+		EnterpriseID:  item.EnterpriseID,
+		BusinessCode:  string(item.BusinessCode),
 		WarehouseCode: int64(item.Warehouse.WarehouseCode),
-
-		Code: int64(item.Code),
-		Name: item.Name,
+		Name:          item.Name,
 
 		Complement: pgutil.ToPgTextFromPtr(item.Complement),
 
@@ -103,9 +104,9 @@ func (r *RepositoryItemSQLC) Create(
 		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist,
 		SuppliesHarvest:            item.Supplies.Harvest,
 
-		CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
-		AccountingActive:       true, AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS,
-		CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
+		CommercialWarrantyDays:       int32(item.Commercial.WarrantyDays),
+		AccountingCalculatePisCofins: item.Accounting.CalculatePISCOFINS,
+		CommercialDescription:        pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple),
 		CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays),
 		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode),
@@ -127,20 +128,38 @@ func (r *RepositoryItemSQLC) Create(
 	dbItem, err := r.q.CreateItem(ctx, params)
 	if err != nil {
 		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, itemrepo.ErrConflict
+		}
 		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
 			return nil, fmt.Errorf("%w: %s", itemrepo.ErrInvalidReference, pgErr.ConstraintName)
 		}
 		return nil, fmt.Errorf("create item: %w", err)
 	}
 
-	return mapDBItemToEntity(dbItem)
+	created, err := mapDBItemToEntity(dbItem)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.loadEffectiveFiscal(ctx, created); err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+func (r *RepositoryItemSQLC) NextAutomaticBusinessCode(ctx context.Context, enterpriseID int64) (valueobject.BusinessCode, error) {
+	code, err := r.q.NextAutomaticItemBusinessCode(ctx, enterpriseID)
+	if err != nil {
+		return "", fmt.Errorf("gerar codigo automatico do item: %w", err)
+	}
+	return valueobject.NewBusinessCode(code)
 }
 
 func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, item *entity.Item) (*entity.Item, error) {
 	if err := r.validateFiscalReferences(ctx, item); err != nil {
 		return nil, err
 	}
-	p := sqlc.UpdateItemCommercialAccountingParams{Code: int64(item.Code), CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
+	p := sqlc.UpdateItemCommercialAccountingParams{BusinessCode: string(item.BusinessCode), EnterpriseID: item.EnterpriseID, CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
 		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
 		CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange, CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes, CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS, CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging, CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
@@ -153,7 +172,14 @@ func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, ite
 		}
 		return nil, fmt.Errorf("update item folders: %w", err)
 	}
-	return mapDBItemToEntity(dbItem)
+	updated, err := mapDBItemToEntity(dbItem)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.loadEffectiveFiscal(ctx, updated); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 func (r *RepositoryItemSQLC) validateFiscalReferences(ctx context.Context, item *entity.Item) error {
@@ -161,7 +187,7 @@ func (r *RepositoryItemSQLC) validateFiscalReferences(ctx context.Context, item 
 		if code == nil {
 			continue
 		}
-		exists, err := r.q.ItemFiscalClassificationExists(ctx, *code)
+		exists, err := r.q.ItemFiscalClassificationExists(ctx, sqlc.ItemFiscalClassificationExistsParams{EnterpriseID: item.EnterpriseID, ClassificationCode: *code})
 		if err != nil {
 			return fmt.Errorf("validate fiscal classification: %w", err)
 		}
@@ -177,7 +203,11 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 	code valueobject.ItemCode,
 ) (*entity.Item, error) {
 
-	dbItem, err := r.q.FindItemByCode(ctx, int64(code))
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItem, err := r.q.FindItemByCode(ctx, sqlc.FindItemByCodeParams{Code: int64(code), EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, itemrepo.ErrNotFound
@@ -185,7 +215,100 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 		return nil, fmt.Errorf("find item by code: %w", err)
 	}
 
-	return mapDBItemToEntity(dbItem)
+	item, err := mapDBItemToEntity(dbItem)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.loadEffectiveFiscal(ctx, item); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func (r *RepositoryItemSQLC) FindItemByBusinessCode(ctx context.Context, code valueobject.BusinessCode) (*entity.Item, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItem, err := r.q.FindItemByBusinessCode(ctx, sqlc.FindItemByBusinessCodeParams{BusinessCode: string(code), EnterpriseID: enterpriseID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, itemrepo.ErrNotFound
+		}
+		return nil, fmt.Errorf("find item by business code: %w", err)
+	}
+	item, err := mapDBItemToEntity(dbItem)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.loadEffectiveFiscal(ctx, item); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func (r *RepositoryItemSQLC) loadEffectiveFiscal(ctx context.Context, item *entity.Item) error {
+	load := func(code *string, purchase bool) (*entity.EffectiveFiscalContext, error) {
+		if code == nil {
+			return nil, nil
+		}
+		row, err := r.q.GetEffectiveItemFiscalDefaults(ctx, sqlc.GetEffectiveItemFiscalDefaultsParams{EnterpriseID: item.EnterpriseID, ClassificationCode: *code})
+		if err != nil {
+			return nil, fmt.Errorf("carregar padroes fiscais efetivos: %w", err)
+		}
+		c := &entity.EffectiveFiscalContext{ClassificationID: row.ID, ClassificationCode: row.Code, NCM: pgTextToStringPtr(row.Ncm), CEST: pgTextToStringPtr(row.Cest), Origin: int2ToIntPtr(row.DefaultOrigin), Unit: pgTextToStringPtr(row.UnTributacao), IPIRate: numericToDecimalPtr(row.IpiRate), ICMSRate: numericToDecimalPtr(row.DefaultIcmsRate), PISRate: numericToDecimalPtr(row.PisRate), COFINSRate: numericToDecimalPtr(row.CofinsRate), Sources: map[string]entity.FiscalValueSource{}}
+		for _, field := range []string{"ncm", "cest", "origin", "unit", "ipi_rate", "icms_rate", "pis_rate", "cofins_rate", "calculate_pis_cofins"} {
+			c.Sources[field] = entity.FiscalSourceInherited
+		}
+		if row.DefaultCalculatePisCofins.Valid {
+			v := row.DefaultCalculatePisCofins.Bool
+			c.CalculatePISCOFINS = &v
+		}
+		if item.Accounting.CEST != nil {
+			c.CEST = item.Accounting.CEST
+			c.Sources["cest"] = entity.FiscalSourceOverride
+		}
+		if item.Accounting.Origin != nil {
+			c.Origin = item.Accounting.Origin
+			c.Sources["origin"] = entity.FiscalSourceOverride
+		}
+		if item.Accounting.ICMSRate != nil {
+			c.ICMSRate = item.Accounting.ICMSRate
+			c.Sources["icms_rate"] = entity.FiscalSourceOverride
+		}
+		v := item.Accounting.CalculatePISCOFINS
+		c.CalculatePISCOFINS = &v
+		c.Sources["calculate_pis_cofins"] = entity.FiscalSourceOverride
+		if purchase {
+			if item.Accounting.PurchaseUnitOfMeasurement != nil {
+				s := item.Accounting.PurchaseUnitOfMeasurement.String()
+				c.Unit = &s
+				c.Sources["unit"] = entity.FiscalSourceOverride
+			}
+			if item.Accounting.PurchaseIPIRate != nil {
+				c.IPIRate = item.Accounting.PurchaseIPIRate
+				c.Sources["ipi_rate"] = entity.FiscalSourceOverride
+			}
+		} else {
+			if item.Accounting.SaleUnitOfMeasurement != nil {
+				s := item.Accounting.SaleUnitOfMeasurement.String()
+				c.Unit = &s
+				c.Sources["unit"] = entity.FiscalSourceOverride
+			}
+			if item.Accounting.SaleIPIRate != nil {
+				c.IPIRate = item.Accounting.SaleIPIRate
+				c.Sources["ipi_rate"] = entity.FiscalSourceOverride
+			}
+		}
+		return c, nil
+	}
+	var err error
+	item.FiscalEffective.Purchase, err = load(item.Accounting.PurchaseFiscalClassificationCode, true)
+	if err != nil {
+		return err
+	}
+	item.FiscalEffective.Sale, err = load(item.Accounting.SaleFiscalClassificationCode, false)
+	return err
 }
 
 func mapDBItemToEntity(
@@ -251,10 +374,12 @@ func mapDBItemToEntity(
 	}
 
 	return &entity.Item{
-		ID:         dbItem.ID,
-		Code:       valueobject.ItemCode(dbItem.Code),
-		Name:       dbItem.Name,
-		Complement: complement,
+		ID:           dbItem.ID,
+		Code:         valueobject.ItemCode(dbItem.Code),
+		BusinessCode: valueobject.BusinessCode(dbItem.BusinessCode),
+		EnterpriseID: dbItem.EnterpriseID,
+		Name:         dbItem.Name,
+		Complement:   complement,
 
 		Nature: entity.ItemNature(dbItem.Nature),
 
@@ -444,7 +569,11 @@ func int64PtrToIntPtr(v *int64) *int {
 }
 
 func (r *RepositoryItemSQLC) ListAll(ctx context.Context) ([]*entity.Item, error) {
-	dbItems, err := r.q.ListItems(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItems, err := r.q.ListItems(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}
@@ -455,13 +584,20 @@ func (r *RepositoryItemSQLC) ListAll(ctx context.Context) ([]*entity.Item, error
 		if err != nil {
 			return nil, err
 		}
+		if err := r.loadEffectiveFiscal(ctx, item); err != nil {
+			return nil, err
+		}
 		result = append(result, item)
 	}
 	return result, nil
 }
 
 func (r *RepositoryItemSQLC) ListAllWithMasks(ctx context.Context) ([]entity.ItemWithMasks, error) {
-	dbItems, err := r.q.ListItems(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dbItems, err := r.q.ListItems(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}

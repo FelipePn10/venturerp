@@ -8,6 +8,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/procurement/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/procurement/repository"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -374,6 +375,78 @@ func (r *Repository) CreateReceivingInspectionAnalysis(ctx context.Context, anal
 	}
 	analysis.Order = order
 	return analysis, nil
+}
+
+func (r *Repository) LinkReceivingInspectionQualityReport(ctx context.Context, enterpriseID, orderID, reportID int64, linkedBy uuid.UUID) (*entity.ReceivingInspectionQualityReport, error) {
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO receiving_inspection_quality_reports
+			(enterprise_id, inspection_order_id, quality_report_id, linked_by)
+		SELECT $1, o.id, q.id, $4
+		FROM receiving_inspection_orders o
+		JOIN items i ON i.code=o.item_code AND i.enterprise_id=$1
+		JOIN item_supplier_quality_reports q ON q.id=$3 AND q.enterprise_id=$1
+		JOIN item_preferred_suppliers s ON s.id=q.item_supplier_id
+			AND s.enterprise_id=$1 AND s.item_code=o.item_code
+			AND (o.supplier_code IS NULL OR s.supplier_code=o.supplier_code)
+		WHERE o.id=$2
+		ON CONFLICT (inspection_order_id, quality_report_id)
+		DO UPDATE SET quality_report_id=EXCLUDED.quality_report_id
+		RETURNING inspection_order_id, quality_report_id, linked_at, linked_by`, enterpriseID, orderID, reportID, linkedBy)
+	link := &entity.ReceivingInspectionQualityReport{EnterpriseID: enterpriseID}
+	if err := row.Scan(&link.InspectionOrderID, &link.QualityReportID, &link.LinkedAt, &link.LinkedBy); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("laudo incompatível com a empresa, o item ou o fornecedor da inspeção")
+		}
+		return nil, fmt.Errorf("vinculando laudo à inspeção: %w", err)
+	}
+	links, err := r.ListReceivingInspectionQualityReports(ctx, enterpriseID, orderID)
+	if err != nil {
+		return nil, err
+	}
+	for _, candidate := range links {
+		if candidate.QualityReportID == reportID {
+			return candidate, nil
+		}
+	}
+	return nil, fmt.Errorf("laudo vinculado não pôde ser recuperado")
+}
+
+func (r *Repository) ListReceivingInspectionQualityReports(ctx context.Context, enterpriseID, orderID int64) ([]*entity.ReceivingInspectionQualityReport, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT l.enterprise_id,l.inspection_order_id,l.quality_report_id,q.item_supplier_id,
+			q.registered_on,q.status,q.report_file_name,q.report_content_type,q.notes,l.linked_at,l.linked_by
+		FROM receiving_inspection_quality_reports l
+		JOIN item_supplier_quality_reports q ON q.id=l.quality_report_id AND q.enterprise_id=l.enterprise_id
+		JOIN receiving_inspection_orders o ON o.id=l.inspection_order_id
+		JOIN items i ON i.code=o.item_code AND i.enterprise_id=l.enterprise_id
+		WHERE l.enterprise_id=$1 AND l.inspection_order_id=$2
+		ORDER BY q.registered_on DESC,q.id DESC`, enterpriseID, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("listando laudos da inspeção: %w", err)
+	}
+	defer rows.Close()
+	var out []*entity.ReceivingInspectionQualityReport
+	for rows.Next() {
+		link := &entity.ReceivingInspectionQualityReport{}
+		if err := rows.Scan(&link.EnterpriseID, &link.InspectionOrderID, &link.QualityReportID, &link.ItemSupplierID,
+			&link.RegisteredOn, &link.Status, &link.FileName, &link.ContentType, &link.Notes, &link.LinkedAt, &link.LinkedBy); err != nil {
+			return nil, fmt.Errorf("lendo laudo da inspeção: %w", err)
+		}
+		out = append(out, link)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repository) UnlinkReceivingInspectionQualityReport(ctx context.Context, enterpriseID, orderID, reportID int64) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM receiving_inspection_quality_reports
+		WHERE enterprise_id=$1 AND inspection_order_id=$2 AND quality_report_id=$3`, enterpriseID, orderID, reportID)
+	if err != nil {
+		return fmt.Errorf("desvinculando laudo da inspeção: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 func baseRecordSelect() string {

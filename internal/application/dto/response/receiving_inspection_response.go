@@ -89,6 +89,19 @@ type ReceivingInspectionOrderResponse struct {
 	CreatedBy             *uuid.UUID `json:"created_by,omitempty"`
 }
 
+type ReceivingInspectionQualityReportResponse struct {
+	QualityReportID   int64     `json:"quality_report_id"`
+	InspectionOrderID int64     `json:"inspection_order_id"`
+	ItemSupplierID    int64     `json:"item_supplier_id"`
+	RegisteredOn      time.Time `json:"registered_on"`
+	Status            string    `json:"status"`
+	FileName          *string   `json:"file_name,omitempty"`
+	ContentType       *string   `json:"content_type,omitempty"`
+	Notes             *string   `json:"notes,omitempty"`
+	LinkedAt          time.Time `json:"linked_at"`
+	LinkedBy          uuid.UUID `json:"linked_by"`
+}
+
 type ReceivingInspectionResultResponse struct {
 	ID                   int64      `json:"id"`
 	OrderID              int64      `json:"order_id"`

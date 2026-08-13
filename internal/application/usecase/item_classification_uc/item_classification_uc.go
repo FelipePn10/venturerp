@@ -3,12 +3,49 @@ package item_classification_uc
 import (
 	"context"
 	"errors"
+	"regexp"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 )
+
+var maskPattern = regexp.MustCompile(`^9+(\.9+)*$`)
+
+func validateMask(mask string) error {
+	if !maskPattern.MatchString(mask) {
+		return errors.New("mascara invalida: use grupos de 9 separados por ponto, por exemplo 99.99.99")
+	}
+	return nil
+}
+
+func validateClassificationCode(code, mask string, parent *entity.ItemClassification) (int, error) {
+	parts, maskParts := strings.Split(code, "."), strings.Split(mask, ".")
+	if len(parts) > len(maskParts) {
+		return 0, errors.New("codigo excede os niveis da mascara")
+	}
+	for i, part := range parts {
+		if len(part) != len(maskParts[i]) {
+			return 0, errors.New("codigo nao corresponde a mascara")
+		}
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				return 0, errors.New("codigo da classificacao deve ser numerico")
+			}
+		}
+	}
+	if parent == nil && len(parts) != 1 {
+		return 0, errors.New("classificacao raiz deve conter somente o primeiro nivel")
+	}
+	if parent != nil {
+		if len(parts) != parent.Level+1 || !strings.HasPrefix(code, parent.Code+".") {
+			return 0, errors.New("codigo filho deve iniciar com o codigo completo do pai")
+		}
+	}
+	return len(parts), nil
+}
 
 type ItemClassificationUseCase struct {
 	Repo repository.ItemClassificationRepository
@@ -23,6 +60,10 @@ func New(repo repository.ItemClassificationRepository) *ItemClassificationUseCas
 func (uc *ItemClassificationUseCase) CreateMask(ctx context.Context, dto request.CreateClassificationMaskDTO) (*response.ItemClassificationMaskResponse, error) {
 	if dto.Mask == "" || dto.Description == "" {
 		return nil, errors.New("mask and description are required")
+	}
+	dto.Mask = strings.TrimSpace(dto.Mask)
+	if err := validateMask(dto.Mask); err != nil {
+		return nil, err
 	}
 	m := &entity.ItemClassificationMask{
 		Mask:        dto.Mask,
@@ -76,13 +117,17 @@ func (uc *ItemClassificationUseCase) CreateClassification(ctx context.Context, d
 		return nil, errors.New("mask not found")
 	}
 
-	level := 1
+	var parent *entity.ItemClassification
 	if dto.ParentCode != nil {
-		parent, err := uc.Repo.GetItemClassificationByCode(ctx, *dto.ParentCode, dto.MaskCode)
+		parent, err = uc.Repo.GetItemClassificationByCode(ctx, *dto.ParentCode, dto.MaskCode)
 		if err != nil {
 			return nil, errors.New("parent classification not found")
 		}
-		level = parent.Level + 1
+	}
+	dto.Code = strings.TrimSpace(dto.Code)
+	level, err := validateClassificationCode(dto.Code, mask.Mask, parent)
+	if err != nil {
+		return nil, err
 	}
 
 	c := &entity.ItemClassification{
@@ -94,10 +139,7 @@ func (uc *ItemClassificationUseCase) CreateClassification(ctx context.Context, d
 	}
 
 	if dto.ParentCode != nil {
-		parent, err := uc.Repo.GetItemClassificationByCode(ctx, *dto.ParentCode, dto.MaskCode)
-		if err == nil {
-			c.ParentID = &parent.ID
-		}
+		c.ParentID = &parent.ID
 	}
 
 	created, err := uc.Repo.CreateItemClassification(ctx, c)

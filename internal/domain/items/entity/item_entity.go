@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,10 +13,12 @@ import (
 )
 
 type Item struct {
-	ID         int64
-	Code       valueobject.ItemCode
-	Name       string
-	Complement *string
+	ID           int64
+	Code         valueobject.ItemCode // identificador numerico legado; nao expor como codigo de negocio
+	BusinessCode valueobject.BusinessCode
+	EnterpriseID int64
+	Name         string
+	Complement   *string
 
 	// Checkbox
 	Nature ItemNature
@@ -37,12 +40,31 @@ type Item struct {
 	// Comercial
 	Commercial Commercial
 	// Contábil/Fiscal
-	Accounting Accounting
+	Accounting      Accounting
+	FiscalEffective FiscalEffective
 	//Status    types.Status
 
 	CreatedBy uuid.UUID
 	CreatedAt time.Time
 }
+
+type FiscalValueSource string
+
+const (
+	FiscalSourceInherited FiscalValueSource = "HERDADO"
+	FiscalSourceOverride  FiscalValueSource = "SOBRESCRITO"
+)
+
+type EffectiveFiscalContext struct {
+	ClassificationID                       int64
+	ClassificationCode                     int64
+	NCM, CEST, Unit                        *string
+	Origin                                 *int
+	IPIRate, ICMSRate, PISRate, COFINSRate *decimal.Decimal
+	CalculatePISCOFINS                     *bool
+	Sources                                map[string]FiscalValueSource
+}
+type FiscalEffective struct{ Purchase, Sale *EffectiveFiscalContext }
 
 // PDM
 type PDM struct {
@@ -161,7 +183,12 @@ type ItemWithMasks struct {
 }
 
 func (i *Item) Validate() error {
-	if !i.Code.IsValid() {
+	// Compatibilidade para entidades internas legadas enquanto as referencias
+	// numericas migram para item_id.
+	if i.BusinessCode == "" && i.Code.IsValid() {
+		i.BusinessCode = valueobject.BusinessCode(fmt.Sprintf("%d", i.Code))
+	}
+	if !i.BusinessCode.IsValid() {
 		return errors.New("invalid code")
 	}
 	i.Name = strings.TrimSpace(i.Name)
@@ -199,7 +226,7 @@ func (i *Item) Validate() error {
 	if i.Commercial.EstimatedDeliveryDays != nil && *i.Commercial.EstimatedDeliveryDays < 0 {
 		return errors.New("commercial.estimated_delivery_days cannot be negative")
 	}
-	if i.Commercial.PackagingItemCode != nil && *i.Commercial.PackagingItemCode == int64(i.Code) {
+	if i.Code.IsValid() && i.Commercial.PackagingItemCode != nil && *i.Commercial.PackagingItemCode == int64(i.Code) {
 		return errors.New("commercial.packaging_item_code cannot reference the item itself")
 	}
 	if i.Accounting.Origin != nil && (*i.Accounting.Origin < 0 || *i.Accounting.Origin > 8) {
@@ -260,4 +287,12 @@ func (i *Item) Validate() error {
 	}
 
 	return nil
+}
+
+func (i *Item) ValidateForCreation() error {
+	code := i.BusinessCode
+	i.BusinessCode = "TEMPORARIO"
+	err := i.Validate()
+	i.BusinessCode = code
+	return err
 }

@@ -584,12 +584,13 @@ func (app *application) mount() chi.Router {
 	prodOrderMaterialControlUC := &productionOrderUc.ProductionMaterialControlUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderMaintainUC := &productionOrderUc.MaintainProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderDeliveryCandidatesUC := &productionOrderUc.ListDeliveryCandidatesUseCase{Reader: prodOrderRepo, Auth: authService}
+	prodOrderScannerUC := &productionOrderUc.ProductionScannerUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderHandler := handler.NewProductionOrderHandler(
 		prodOrderCreateUC, prodOrderGetByCodeUC, prodOrderListUC,
 		prodOrderStartUC, prodOrderAddAppointmentUC, prodOrderAddConsumptionUC,
 		prodOrderCompleteUC, prodOrderCloseUC, prodOrderCancelUC,
 		prodOrderGetAppointmentsUC, prodOrderGetConsumptionsUC,
-	).WithOrderOps(orderOpsUC).WithOperational(prodOrderOperationalUC).WithMaterialControl(prodOrderMaterialControlUC).WithMaintenance(prodOrderMaintainUC).WithDeliveryCandidates(prodOrderDeliveryCandidatesUC).WithCost(prodOrderSettleCostUC, prodOrderGetCostUC).WithScrap(prodOrderReturnScrapUC)
+	).WithOrderOps(orderOpsUC).WithScanner(prodOrderScannerUC).WithOperational(prodOrderOperationalUC).WithMaterialControl(prodOrderMaterialControlUC).WithMaintenance(prodOrderMaintainUC).WithDeliveryCandidates(prodOrderDeliveryCandidatesUC).WithCost(prodOrderSettleCostUC, prodOrderGetCostUC).WithScrap(prodOrderReturnScrapUC)
 
 	// supplier (created before purchase order so it can provide purchasing defaults)
 	suppRepo := supplierRepo.New(queries, app.db.Pool)
@@ -597,7 +598,7 @@ func (app *application) mount() chi.Router {
 	supplierHandler := handler.NewSupplierHandler(supplierUC)
 
 	// fiscal classifications (Cadastro de Classificações Fiscais)
-	fiscalClassUC := fiscal_classification_uc.NewFiscalClassificationUseCase(fiscalClassRepo.New(queries, app.db.Pool))
+	fiscalClassUC := fiscal_classification_uc.NewFiscalClassificationUseCase(fiscalClassRepo.New(queries, app.db.Pool), authService)
 	fiscalClassHandler := handler.NewFiscalClassificationHandler(fiscalClassUC)
 
 	// entry operation types + state groups (Cadastro de Tipos de Operação de Entrada)
@@ -923,8 +924,8 @@ func (app *application) mount() chi.Router {
 	// fiscal module
 	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService}
 	fiscalHandler := handler.NewFiscalHandler(
-		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC},
-		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC},
+		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
+		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
 		&fiscalUC.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
@@ -1100,6 +1101,7 @@ func (app *application) mount() chi.Router {
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWT(app.config.JWTSecret, app.logger, userRepo))
 		r.Use(httpmw.TenantBodyGuard)
+		r.Use(httpmw.ItemBusinessCodeCompatibility(app.db.Pool))
 		// Audit trail for authenticated mutations (after JWT so the actor is known).
 		r.Use(httpmw.Audit(app.auditSink))
 		// Idempotency-Key support for mutating requests (safe retries).
@@ -1167,9 +1169,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/get-by-code/{code}", independentDemandHandler.GetByCode)
 		})
 		r.Route("/api/industrial-calendar", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", industrialCalendarHandler.CreateDay)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/month/{year}/{month}", industrialCalendarHandler.GetMonth)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/workdays/{year}/{month}", industrialCalendarHandler.GetWorkdays)
+			r.Use(httpmw.RequireRole("ADMIN", "USER"))
+			r.Mount("/", industrialCalendarHandler.Routes())
 		})
 		r.Route("/api/machine", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateMachine)
@@ -1225,6 +1226,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transition", plannedHandler.Transition)
 		})
 		r.Route("/api/production-order", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN")).Post("/scanner/tokens", prodOrderHandler.CreateScanToken)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/scanner/scan", prodOrderHandler.Scan)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", prodOrderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", prodOrderHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/maintenance", prodOrderHandler.Maintenance)
@@ -1541,6 +1544,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders", procurementHandler.ListReceivingInspectionOrders)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/results", procurementHandler.RecordReceivingInspectionResult)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/analysis", procurementHandler.AnalyzeReceivingInspectionOrder)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/quality-reports", procurementHandler.LinkReceivingInspectionQualityReport)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders/{id}/quality-reports", procurementHandler.ListReceivingInspectionQualityReports)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/receiving-inspection-orders/{id}/quality-reports/{reportID}", procurementHandler.UnlinkReceivingInspectionQualityReport)
 			// IQF auto-computation from real inspection/delivery data.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/supplier-scorecards/compute", procurementHandler.ComputeSupplierScorecard)
 			// Alçada de valores (approval limits).
@@ -2448,11 +2454,13 @@ func (app *application) mount() chi.Router {
 		})
 
 		r.Route("/api/item-suppliers", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search", itemSupplierHandler.SearchExternal)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemSupplierHandler.Upsert)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemSupplierHandler.ListByItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier/{supplierCode}", itemSupplierHandler.ListBySupplier)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/quality-reports", itemSupplierHandler.CreateQualityReport)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/quality-reports", itemSupplierHandler.ListQualityReports)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/quality-reports/{reportID}/download", itemSupplierHandler.DownloadQualityReport)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemSupplierHandler.Delete)
 		})
 

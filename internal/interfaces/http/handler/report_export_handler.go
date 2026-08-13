@@ -36,11 +36,12 @@ func NewReportExportHandler(fiscal fiscalConfigReader) *ReportExportHandler {
 // exportRequest is the generic payload: a title plus the columns and rows to
 // render. Rows whose length differs from the header are rejected by the encoder.
 type exportRequest struct {
-	Title    string     `json:"title"`
-	Subtitle string     `json:"subtitle"`
-	Filename string     `json:"filename"`
-	Columns  []string   `json:"columns"`
-	Rows     [][]string `json:"rows"`
+	Orientation string     `json:"orientation"`
+	Title       string     `json:"title"`
+	Subtitle    string     `json:"subtitle"`
+	Filename    string     `json:"filename"`
+	Columns     []string   `json:"columns"`
+	Rows        [][]string `json:"rows"`
 }
 
 // Export handles POST /api/reports/export?format=xlsx|pdf|csv|docx.
@@ -56,11 +57,12 @@ func (h *ReportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 
 	table := &export.Table{
-		Title:    req.Title,
-		Subtitle: req.Subtitle,
-		Columns:  req.Columns,
-		Rows:     req.Rows,
-		Branding: h.branding(r.Context()),
+		Orientation: req.Orientation,
+		Title:       req.Title,
+		Subtitle:    req.Subtitle,
+		Columns:     req.Columns,
+		Rows:        req.Rows,
+		Branding:    h.branding(r.Context()),
 	}
 
 	base := req.Filename

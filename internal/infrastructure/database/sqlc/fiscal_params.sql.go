@@ -12,6 +12,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const classificationMaskBelongsToEnterprise = `-- name: ClassificationMaskBelongsToEnterprise :one
+SELECT EXISTS(SELECT 1 FROM item_classification_masks WHERE id=$1 AND enterprise_id=$2)
+`
+
+type ClassificationMaskBelongsToEnterpriseParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ClassificationMaskBelongsToEnterprise(ctx context.Context, arg ClassificationMaskBelongsToEnterpriseParams) (bool, error) {
+	row := q.db.QueryRow(ctx, classificationMaskBelongsToEnterprise, arg.ID, arg.EnterpriseID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createCFOP = `-- name: CreateCFOP :one
 
 INSERT INTO cfops (
@@ -70,20 +86,20 @@ func (q *Queries) CreateCFOP(ctx context.Context, arg CreateCFOPParams) (Cfop, e
 
 const createClassificationMask = `-- name: CreateClassificationMask :one
 
-INSERT INTO item_classification_masks (code, mask, description)
+INSERT INTO item_classification_masks (enterprise_id, mask, description)
 VALUES ($1, $2, $3)
-RETURNING id, code, mask, description, is_active, created_at
+RETURNING id, code, mask, description, is_active, created_at, enterprise_id
 `
 
 type CreateClassificationMaskParams struct {
-	Code        int64
-	Mask        string
-	Description string
+	EnterpriseID int64
+	Mask         string
+	Description  string
 }
 
 // ─── Item Classification Masks ────────────────────────────────────────────────
 func (q *Queries) CreateClassificationMask(ctx context.Context, arg CreateClassificationMaskParams) (ItemClassificationMask, error) {
-	row := q.db.QueryRow(ctx, createClassificationMask, arg.Code, arg.Mask, arg.Description)
+	row := q.db.QueryRow(ctx, createClassificationMask, arg.EnterpriseID, arg.Mask, arg.Description)
 	var i ItemClassificationMask
 	err := row.Scan(
 		&i.ID,
@@ -92,6 +108,7 @@ func (q *Queries) CreateClassificationMask(ctx context.Context, arg CreateClassi
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -562,11 +579,16 @@ func (q *Queries) GetCFOPByCode(ctx context.Context, code int32) (Cfop, error) {
 }
 
 const getClassificationMaskByCode = `-- name: GetClassificationMaskByCode :one
-SELECT id, code, mask, description, is_active, created_at FROM item_classification_masks WHERE code = $1
+SELECT id, code, mask, description, is_active, created_at, enterprise_id FROM item_classification_masks WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetClassificationMaskByCode(ctx context.Context, code int64) (ItemClassificationMask, error) {
-	row := q.db.QueryRow(ctx, getClassificationMaskByCode, code)
+type GetClassificationMaskByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetClassificationMaskByCode(ctx context.Context, arg GetClassificationMaskByCodeParams) (ItemClassificationMask, error) {
+	row := q.db.QueryRow(ctx, getClassificationMaskByCode, arg.Code, arg.EnterpriseID)
 	var i ItemClassificationMask
 	err := row.Scan(
 		&i.ID,
@@ -575,6 +597,7 @@ func (q *Queries) GetClassificationMaskByCode(ctx context.Context, code int64) (
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -602,16 +625,17 @@ func (q *Queries) GetCountryBySigla(ctx context.Context, sigla string) (Country,
 const getItemClassificationByCode = `-- name: GetItemClassificationByCode :one
 SELECT c.id, c.code, c.mask_id, c.parent_id, c.level, c.description, c.is_active, c.created_at FROM item_classifications c
 JOIN item_classification_masks m ON m.id = c.mask_id
-WHERE c.code = $1 AND m.code = $2
+WHERE c.code = $1 AND m.code = $2 AND m.enterprise_id=$3
 `
 
 type GetItemClassificationByCodeParams struct {
-	Code   string
-	Code_2 int64
+	Code         string
+	Code_2       int64
+	EnterpriseID int64
 }
 
 func (q *Queries) GetItemClassificationByCode(ctx context.Context, arg GetItemClassificationByCodeParams) (ItemClassification, error) {
-	row := q.db.QueryRow(ctx, getItemClassificationByCode, arg.Code, arg.Code_2)
+	row := q.db.QueryRow(ctx, getItemClassificationByCode, arg.Code, arg.Code_2, arg.EnterpriseID)
 	var i ItemClassification
 	err := row.Scan(
 		&i.ID,
@@ -757,6 +781,22 @@ func (q *Queries) GetUFBySigla(ctx context.Context, sigla string) (Uf, error) {
 	return i, err
 }
 
+const itemClassificationBelongsToEnterprise = `-- name: ItemClassificationBelongsToEnterprise :one
+SELECT EXISTS(SELECT 1 FROM item_classifications c JOIN item_classification_masks m ON m.id=c.mask_id WHERE c.id=$1 AND m.enterprise_id=$2)
+`
+
+type ItemClassificationBelongsToEnterpriseParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ItemClassificationBelongsToEnterprise(ctx context.Context, arg ItemClassificationBelongsToEnterpriseParams) (bool, error) {
+	row := q.db.QueryRow(ctx, itemClassificationBelongsToEnterprise, arg.ID, arg.EnterpriseID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listCFOPs = `-- name: ListCFOPs :many
 SELECT id, code, description, description_full, utilization, origem_clas_ipi, ind_operacao, tipo_utilizacao, codigo_anexo_sn, difal, doacao, is_active, created_at FROM cfops
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
@@ -850,13 +890,18 @@ func (q *Queries) ListCFOPsByDirection(ctx context.Context, arg ListCFOPsByDirec
 }
 
 const listClassificationMasks = `-- name: ListClassificationMasks :many
-SELECT id, code, mask, description, is_active, created_at FROM item_classification_masks
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, mask, description, is_active, created_at, enterprise_id FROM item_classification_masks
+WHERE enterprise_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
 
-func (q *Queries) ListClassificationMasks(ctx context.Context, dollar_1 bool) ([]ItemClassificationMask, error) {
-	rows, err := q.db.Query(ctx, listClassificationMasks, dollar_1)
+type ListClassificationMasksParams struct {
+	EnterpriseID int64
+	Column2      bool
+}
+
+func (q *Queries) ListClassificationMasks(ctx context.Context, arg ListClassificationMasksParams) ([]ItemClassificationMask, error) {
+	rows, err := q.db.Query(ctx, listClassificationMasks, arg.EnterpriseID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -871,6 +916,7 @@ func (q *Queries) ListClassificationMasks(ctx context.Context, dollar_1 bool) ([
 			&i.Description,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -919,8 +965,7 @@ func (q *Queries) ListCountries(ctx context.Context, dollar_1 bool) ([]Country, 
 
 const listItemClassificationChildren = `-- name: ListItemClassificationChildren :many
 SELECT id, code, mask_id, parent_id, level, description, is_active, created_at FROM item_classifications
-WHERE parent_id = $1
-  AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE parent_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
 
@@ -960,8 +1005,7 @@ func (q *Queries) ListItemClassificationChildren(ctx context.Context, arg ListIt
 
 const listItemClassificationsByMask = `-- name: ListItemClassificationsByMask :many
 SELECT id, code, mask_id, parent_id, level, description, is_active, created_at FROM item_classifications
-WHERE mask_id = $1
-  AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE mask_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY level, code
 `
 
@@ -1601,12 +1645,12 @@ func (q *Queries) ListUFsByCountry(ctx context.Context, arg ListUFsByCountryPara
 }
 
 const nextClassificationMaskCode = `-- name: NextClassificationMaskCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM item_classification_masks
+SELECT nextval('item_classification_mask_code_seq') AS next_code
 `
 
-func (q *Queries) NextClassificationMaskCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextClassificationMaskCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextClassificationMaskCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
@@ -1692,18 +1736,24 @@ func (q *Queries) UpdateCFOP(ctx context.Context, arg UpdateCFOPParams) (Cfop, e
 const updateClassificationMask = `-- name: UpdateClassificationMask :one
 UPDATE item_classification_masks
 SET description = $2, is_active = $3
-WHERE id = $1
-RETURNING id, code, mask, description, is_active, created_at
+WHERE id = $1 AND enterprise_id = $4
+RETURNING id, code, mask, description, is_active, created_at, enterprise_id
 `
 
 type UpdateClassificationMaskParams struct {
-	ID          int64
-	Description string
-	IsActive    bool
+	ID           int64
+	Description  string
+	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateClassificationMask(ctx context.Context, arg UpdateClassificationMaskParams) (ItemClassificationMask, error) {
-	row := q.db.QueryRow(ctx, updateClassificationMask, arg.ID, arg.Description, arg.IsActive)
+	row := q.db.QueryRow(ctx, updateClassificationMask,
+		arg.ID,
+		arg.Description,
+		arg.IsActive,
+		arg.EnterpriseID,
+	)
 	var i ItemClassificationMask
 	err := row.Scan(
 		&i.ID,
@@ -1712,6 +1762,7 @@ func (q *Queries) UpdateClassificationMask(ctx context.Context, arg UpdateClassi
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

@@ -107,6 +107,47 @@ func (uc *ItemSupplierUseCase) ListBySupplier(ctx context.Context, supplier int6
 	}
 	return toItemPreferredSupplierResponses(x), nil
 }
+func (uc *ItemSupplierUseCase) SearchExternal(ctx context.Context, supplier int64, term string) ([]*response.ItemPreferredSupplierResponse, error) {
+	if supplier <= 0 || strings.TrimSpace(term) == "" {
+		return nil, fmt.Errorf("supplier_code e termo sao obrigatorios")
+	}
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	x, err := uc.repo.SearchExternal(ctx, e, supplier, term)
+	if err != nil {
+		return nil, err
+	}
+	return toItemPreferredSupplierResponses(x), nil
+}
+
+func (uc *ItemSupplierUseCase) ResolveExternal(ctx context.Context, supplier int64, externalCode, description string) (*ports.SupplierItemResolution, error) {
+	term := strings.TrimSpace(externalCode)
+	strategy := "CODIGO_EXATO"
+	if term == "" {
+		term = strings.TrimSpace(description)
+		strategy = "DESCRICAO"
+	}
+	if supplier <= 0 || term == "" {
+		return nil, fmt.Errorf("fornecedor e codigo/descricao externa sao obrigatorios")
+	}
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	matches, err := uc.repo.SearchExternal(ctx, e, supplier, term)
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("identificacao externa ambigua para o fornecedor")
+	}
+	return &ports.SupplierItemResolution{LinkID: matches[0].ID, ItemCode: matches[0].ItemCode, Strategy: strategy}, nil
+}
 func (uc *ItemSupplierUseCase) Delete(ctx context.Context, id int64) error {
 	e, err := uc.auth.EnterpriseID(ctx)
 	if err != nil {
@@ -169,4 +210,12 @@ func (uc *ItemSupplierUseCase) ListQualityReports(ctx context.Context, link int6
 		out = append(out, *toQualityResponse(q))
 	}
 	return out, nil
+}
+
+func (uc *ItemSupplierUseCase) GetQualityReport(ctx context.Context, id int64) (*entity.QualityReport, error) {
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return uc.repo.GetQualityReport(ctx, e, id)
 }

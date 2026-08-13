@@ -527,6 +527,11 @@ func (h *ProductionOrderHandler) WithOrderOps(uc *production_order_uc.OrderOpera
 	return h
 }
 
+func (h *ProductionOrderHandler) WithScanner(uc *production_order_uc.ProductionScannerUseCase) *ProductionOrderHandler {
+	h.scannerUC = uc
+	return h
+}
+
 func (h *ProductionOrderHandler) WithOperational(uc *production_order_uc.OperationalConsultationUseCase) *ProductionOrderHandler {
 	h.operationalUC = uc
 	return h

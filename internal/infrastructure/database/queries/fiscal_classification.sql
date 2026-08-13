@@ -13,7 +13,8 @@ INSERT INTO fiscal_classifications (
     pis_reducao_pct, cst_pis_reducao, cofins_reducao_pct, cst_cofins_reducao,
     desc_pis_zf_pct, desc_cofins_zf_pct,
     ex_tarifario, un_ipi, un_tributacao, mod_bc_icms, mod_bc_icms_st,
-    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, item_code, created_by
+    cod_clas_trib, cod_clas_trib_trib_reg, obs_fiscal, item_code, created_by,
+    enterprise_id, valid_from, valid_until, default_origin, default_icms_rate, default_calculate_pis_cofins
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9,
@@ -26,7 +27,10 @@ INSERT INTO fiscal_classifications (
     $31, $32, $33, $34,
     $35, $36,
     $37, $38, $39, $40, $41,
-    $42, $43, $44, $45, $46
+    $42, $43, $44, $45, $46,
+    sqlc.arg(enterprise_id), COALESCE(sqlc.narg(valid_from)::date, CURRENT_DATE),
+    sqlc.narg(valid_until)::date, sqlc.narg(default_origin)::smallint,
+    sqlc.narg(default_icms_rate)::numeric, sqlc.narg(default_calculate_pis_cofins)::boolean
 ) RETURNING *;
 
 -- name: UpdateFiscalClassification :one
@@ -43,20 +47,24 @@ UPDATE fiscal_classifications SET
     desc_pis_zf_pct = $35, desc_cofins_zf_pct = $36,
     ex_tarifario = $37, un_ipi = $38, un_tributacao = $39, mod_bc_icms = $40, mod_bc_icms_st = $41,
     cod_clas_trib = $42, cod_clas_trib_trib_reg = $43, obs_fiscal = $44, item_code = $45, is_active = $46,
+    valid_from = COALESCE(sqlc.narg(valid_from)::date, valid_from),
+    valid_until = sqlc.narg(valid_until)::date, default_origin = sqlc.narg(default_origin)::smallint,
+    default_icms_rate = sqlc.narg(default_icms_rate)::numeric,
+    default_calculate_pis_cofins = sqlc.narg(default_calculate_pis_cofins)::boolean,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetFiscalClassificationByCode :one
-SELECT * FROM fiscal_classifications WHERE code = $1;
+SELECT * FROM fiscal_classifications WHERE enterprise_id = $1 AND code = $2;
 
 -- name: ListFiscalClassifications :many
 SELECT * FROM fiscal_classifications
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextFiscalClassificationCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM fiscal_classifications;
+SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM fiscal_classifications WHERE enterprise_id = $1;
 
 -- ─── Languages ────────────────────────────────────────────────────────────────
 

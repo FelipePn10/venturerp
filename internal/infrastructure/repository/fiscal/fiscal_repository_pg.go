@@ -7,6 +7,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,14 +57,14 @@ func (r *FiscalRepositoryPG) CreateEntryItem(ctx context.Context, item *entity.F
 			 base_icms, aliq_icms, valor_icms, base_ipi, aliq_ipi, valor_ipi, valor_pis, valor_cofins,
 			 cst_icms, cst_ipi, cst_pis, cst_cofins,
 			 gera_credito_icms, gera_credito_ipi, gera_credito_pis, gera_credito_cofins,
-			 description, notes, uom)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+			 description, notes, uom,item_supplier_id,supplier_item_identifier,resolution_strategy,resolved_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
 		 RETURNING id, created_at`,
 		item.FiscalEntryID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.BaseIPI, item.AliqIPI, item.ValorIPI, item.ValorPIS, item.ValorCOFINS,
 		item.CstICMS, item.CstIPI, item.CstPIS, item.CstCOFINS,
 		item.GeraCreditoICMS, item.GeraCreditoIPI, item.GeraCreditoPIS, item.GeraCreditoCOFINS,
-		item.Description, item.Notes, item.UOM,
+		item.Description, item.Notes, item.UOM, item.ItemSupplierID, item.SupplierItemCode, item.ResolutionStrategy, item.ResolvedAt,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal entry item: %w", err)
@@ -72,15 +73,19 @@ func (r *FiscalRepositoryPG) CreateEntryItem(ctx context.Context, item *entity.F
 }
 
 func (r *FiscalRepositoryPG) GetEntryByID(ctx context.Context, id int64) (*entity.FiscalEntry, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var e entity.FiscalEntry
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		        valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
 		        is_active, created_at, updated_at, created_by, supplier_code
-		 FROM public.fiscal_entries WHERE id = $1`, id,
+		 FROM public.fiscal_entries WHERE id = $1 AND enterprise_id=$2`, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.Modelo, &e.DataEmissao, &e.DataEntrada,
 		&e.CnpjEmitente, &e.RazaoSocialEmitente, &e.IEEmitente, &e.UFEmitente,
 		&e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
@@ -97,13 +102,19 @@ func (r *FiscalRepositoryPG) GetEntryByID(ctx context.Context, id int64) (*entit
 }
 
 func (r *FiscalRepositoryPG) GetEntryItems(ctx context.Context, fiscalEntryID int64) ([]*entity.FiscalEntryItem, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, fiscal_entry_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 		        base_icms, aliq_icms, valor_icms, base_ipi, aliq_ipi, valor_ipi, valor_pis, valor_cofins,
 		        cst_icms, cst_ipi, cst_pis, cst_cofins,
 		        gera_credito_icms, gera_credito_ipi, gera_credito_pis, gera_credito_cofins,
-		        description, notes, created_at
-		 FROM public.fiscal_entry_items WHERE fiscal_entry_id = $1 ORDER BY sequence`, fiscalEntryID)
+		        description, notes, created_at,uom,item_supplier_id,supplier_item_identifier,resolution_strategy,resolved_at
+		 FROM public.fiscal_entry_items i WHERE i.fiscal_entry_id = $1
+		 AND EXISTS(SELECT 1 FROM fiscal_entries e WHERE e.id=i.fiscal_entry_id AND e.enterprise_id=$2)
+		 ORDER BY i.sequence`, fiscalEntryID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal entry items: %w", err)
 	}
@@ -112,6 +123,10 @@ func (r *FiscalRepositoryPG) GetEntryItems(ctx context.Context, fiscalEntryID in
 }
 
 func (r *FiscalRepositoryPG) ListEntries(ctx context.Context) ([]*entity.FiscalEntry, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
@@ -119,7 +134,7 @@ func (r *FiscalRepositoryPG) ListEntries(ctx context.Context) ([]*entity.FiscalE
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
 		        is_active, created_at, updated_at, created_by, supplier_code
-		 FROM public.fiscal_entries ORDER BY created_at DESC`)
+		 FROM public.fiscal_entries WHERE enterprise_id=$1 ORDER BY created_at DESC`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal entries: %w", err)
 	}
@@ -204,7 +219,7 @@ func scanEntryItems(rows pgx.Rows) ([]*entity.FiscalEntryItem, error) {
 			&it.BaseICMS, &it.AliqICMS, &it.ValorICMS, &it.BaseIPI, &it.AliqIPI, &it.ValorIPI, &it.ValorPIS, &it.ValorCOFINS,
 			&it.CstICMS, &it.CstIPI, &it.CstPIS, &it.CstCOFINS,
 			&it.GeraCreditoICMS, &it.GeraCreditoIPI, &it.GeraCreditoPIS, &it.GeraCreditoCOFINS,
-			&it.Description, &it.Notes, &it.CreatedAt,
+			&it.Description, &it.Notes, &it.CreatedAt, &it.UOM, &it.ItemSupplierID, &it.SupplierItemCode, &it.ResolutionStrategy, &it.ResolvedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal entry item: %w", err)
 		}

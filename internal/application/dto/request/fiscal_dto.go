@@ -35,6 +35,7 @@ type CreateFiscalEntryDTO struct {
 type CreateFiscalEntryItemDTO struct {
 	Sequence          int     `json:"sequence"`
 	ItemCode          *int64  `json:"item_code,omitempty"`
+	SupplierItemCode  *string `json:"supplier_item_code,omitempty"`
 	UOM               *string `json:"uom,omitempty"`
 	Ncm               *string `json:"ncm,omitempty"`
 	Cfop              string  `json:"cfop"`

@@ -2,6 +2,7 @@ package pdfkit
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +54,31 @@ func TestParseHexColorViaImageless(t *testing.T) {
 	p.Text(50, 50, FontBold, 12, Black, "Olá Mundo")
 	if out := d.Render(); !bytes.Contains(out, []byte("Olá") /* winansi */) && !bytes.Contains(out, []byte("Ol")) {
 		t.Error("text not encoded")
+	}
+}
+
+func TestLogoContainPreservesHorizontalSquareAndVerticalRatios(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		w, h int
+	}{
+		{"horizontal", 400, 100}, {"quadrada", 200, 200}, {"vertical", 100, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, h := logoContain(&Image{w: tc.w, h: tc.h}, 130, 50)
+			if w > 130 || h > 50 {
+				t.Fatalf("logo escapou da caixa: %.2fx%.2f", w, h)
+			}
+			if got, want := w/h, float64(tc.w)/float64(tc.h); got < want-0.001 || got > want+0.001 {
+				t.Fatalf("proporcao alterada: %.3f, esperada %.3f", got, want)
+			}
+		})
+	}
+}
+
+func TestTableReportLandscapeRendersValidPDF(t *testing.T) {
+	out := (&TableReport{Theme: DefaultTheme(), Orientation: "paisagem", Company: Company{Name: strings.Repeat("Empresa Brasileira ", 20)}, Title: "VITM0100", Columns: []Column{{Title: "Item"}}, Rows: [][]string{{"TEA452-0"}}}).Render()
+	if !bytes.HasPrefix(out, []byte("%PDF-1.4")) {
+		t.Fatal("PDF paisagem invalido")
 	}
 }

@@ -9,9 +9,9 @@ import (
 type FiscalClassificationRepository interface {
 	Create(ctx context.Context, c *entity.FiscalClassification) (*entity.FiscalClassification, error)
 	Update(ctx context.Context, c *entity.FiscalClassification) (*entity.FiscalClassification, error)
-	GetByCode(ctx context.Context, code int64) (*entity.FiscalClassification, error)
-	List(ctx context.Context, onlyActive bool) ([]*entity.FiscalClassification, error)
-	NextCode(ctx context.Context) (int64, error)
+	GetByCode(ctx context.Context, enterpriseID, code int64) (*entity.FiscalClassification, error)
+	List(ctx context.Context, enterpriseID int64, onlyActive bool) ([]*entity.FiscalClassification, error)
+	NextCode(ctx context.Context, enterpriseID int64) (int64, error)
 
 	// Languages
 	AddLanguage(ctx context.Context, l *entity.FiscalClassificationLanguage) (*entity.FiscalClassificationLanguage, error)

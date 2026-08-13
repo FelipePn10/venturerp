@@ -1,7 +1,8 @@
 -- name: CreateItem :one
 INSERT INTO items (
+    enterprise_id,
+    business_code,
     warehouse_code,
-    code,
     name,
     complement,
     nature,
@@ -62,15 +63,18 @@ INSERT INTO items (
     created_by,
     created_at
 ) VALUES (
-             $1,  $2,  $3,  $4,
-             $5,  $6,  $7,  $8,  $9,
-             $10, $11, $12, $13, $14,
-             $15, $16, $17, $18, $19,
-             $20, $21, $22, $23, $24,
-             $25, $26, $27, $28, $29,
-			 $30, $31, $32, $33, $34,
-			 $35, $36, $37, $38, $39,
-			 $40, $41, $42,
+             sqlc.arg(enterprise_id), sqlc.arg(business_code), sqlc.arg(warehouse_code), sqlc.arg(name), sqlc.arg(complement),
+             sqlc.arg(nature), sqlc.arg(situation), sqlc.arg(health), sqlc.arg(pdm_group_code), sqlc.arg(pdm_modifier_code),
+             sqlc.arg(pdm_attributes), sqlc.arg(pdm_description_technique), sqlc.arg(warehouse_unit_of_measurement),
+             sqlc.arg(warehouse_automatic_low), sqlc.arg(warehouse_cyclical_count_config), sqlc.arg(warehouse_minimum_stock),
+             sqlc.arg(warehouse_avg_monthly_consumption_manual), sqlc.arg(engineering_item_base_code), sqlc.arg(engineering_weight),
+             sqlc.arg(engineering_dimensions), sqlc.arg(engineering_type), sqlc.arg(engineering_type_struct), sqlc.arg(engineering_oem),
+             sqlc.arg(planning_type_mrp), sqlc.arg(planning_llc), sqlc.arg(planning_reorder_point), sqlc.arg(planning_tank_code),
+             sqlc.arg(planning_ghost), sqlc.arg(planning_abc_class), sqlc.arg(planning_minimum_lot), sqlc.arg(planning_multiple_lot),
+             sqlc.arg(planning_safety_stock), sqlc.arg(planning_critical), sqlc.arg(planning_exclusive), sqlc.arg(planning_active),
+             sqlc.arg(supplies_type_of_use), sqlc.arg(supplies_purchase_uom), sqlc.arg(supplies_warehouse_code),
+             sqlc.arg(supplies_receiving_checklist), sqlc.arg(supplies_harvest), sqlc.arg(commercial_warranty_days),
+             TRUE, sqlc.arg(accounting_calculate_pis_cofins),
 			 sqlc.arg(commercial_description), sqlc.arg(commercial_sale_type), sqlc.arg(commercial_volume_conversion_factor),
 			 sqlc.arg(commercial_sale_multiple), sqlc.arg(commercial_minimum_sale_quantity), sqlc.arg(commercial_estimated_delivery_days),
 			 sqlc.arg(commercial_transfer_warehouse_code), sqlc.arg(commercial_technical_assistance_warehouse_code), sqlc.arg(commercial_packaging_item_code),
@@ -81,7 +85,7 @@ INSERT INTO items (
 			 sqlc.arg(accounting_sale_ipi_type), sqlc.arg(accounting_sale_ipi_rate), sqlc.arg(accounting_purchase_ipi_type), sqlc.arg(accounting_purchase_ipi_rate),
 			 sqlc.arg(accounting_icms_rate), sqlc.arg(accounting_sale_unit_of_measurement), sqlc.arg(accounting_purchase_unit_of_measurement),
 			 sqlc.arg(accounting_inventory_group_code), sqlc.arg(accounting_classification_code), sqlc.arg(accounting_cest), sqlc.arg(accounting_input_code), sqlc.arg(accounting_notes),
-			 $43, NOW()
+			 sqlc.arg(created_by), NOW()
          )
     RETURNING *;
 
@@ -101,25 +105,47 @@ UPDATE items SET
  accounting_sale_unit_of_measurement=$30, accounting_purchase_unit_of_measurement=$31,
  accounting_inventory_group_code=$32, accounting_classification_code=$33, accounting_cest=$34,
  accounting_input_code=$35, accounting_calculate_pis_cofins=$36, accounting_notes=$37
-WHERE code=$1
+WHERE business_code=$1 AND enterprise_id=$38
 RETURNING *;
 
+-- name: NextAutomaticItemBusinessCode :one
+SELECT next_item_business_code(sqlc.arg(enterprise_id));
+
+
+-- name: FindItemByBusinessCode :one
+SELECT *
+FROM items
+WHERE business_code = sqlc.arg(business_code)
+  AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: FindItemByCode :one
 SELECT *
 FROM items
-WHERE code = $1;
+WHERE code = sqlc.arg(code)
+  AND enterprise_id = sqlc.arg(enterprise_id);
 
 
 -- name: GetItemByID :one
 SELECT *
 FROM items
-WHERE id = $1;
+WHERE id = sqlc.arg(id) AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: ListItems :many
 SELECT *
 FROM items
+WHERE enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY code;
 
 -- name: ItemFiscalClassificationExists :one
-SELECT EXISTS (SELECT 1 FROM fiscal_classifications WHERE code::text = sqlc.arg(classification_code)::text OR ncm = sqlc.arg(classification_code)::text);
+SELECT EXISTS (SELECT 1 FROM fiscal_classifications WHERE enterprise_id=sqlc.arg(enterprise_id) AND is_active
+ AND valid_from<=CURRENT_DATE AND (valid_until IS NULL OR valid_until>=CURRENT_DATE)
+ AND (code::text = sqlc.arg(classification_code)::text OR ncm = sqlc.arg(classification_code)::text));
+
+-- name: GetEffectiveItemFiscalDefaults :one
+SELECT f.id,f.code,f.ncm,f.cest,f.default_origin,f.un_tributacao,f.un_ipi,f.ipi_rate,
+ f.default_icms_rate,f.pis_rate,f.cofins_rate,f.default_calculate_pis_cofins
+FROM fiscal_classifications f
+WHERE f.enterprise_id=sqlc.arg(enterprise_id) AND f.is_active
+ AND f.valid_from<=CURRENT_DATE AND (f.valid_until IS NULL OR f.valid_until>=CURRENT_DATE)
+ AND (f.code::text=sqlc.arg(classification_code)::text OR f.ncm=sqlc.arg(classification_code)::text)
+ORDER BY CASE WHEN f.code::text=sqlc.arg(classification_code)::text THEN 0 ELSE 1 END,f.valid_from DESC,f.id DESC LIMIT 1;

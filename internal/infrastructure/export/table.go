@@ -45,6 +45,7 @@ func ParseFormat(s string) (Format, bool) {
 // strings already formatted for display; the caller owns locale/number
 // formatting so the encoders stay simple and predictable.
 type Table struct {
+	Orientation string     // retrato (padrao) ou paisagem
 	Title       string     // report heading (e.g. "Clientes")
 	Subtitle    string     // optional second line (filters, company, period)
 	Columns     []string   // header labels
@@ -107,6 +108,9 @@ func (b *Branding) infoLines() []string {
 
 // Validate guards the invariants the encoders rely on.
 func (t *Table) Validate() error {
+	if t.Orientation != "" && t.Orientation != "retrato" && t.Orientation != "paisagem" {
+		return fmt.Errorf("export: orientation must be retrato or paisagem")
+	}
 	if len(t.Columns) == 0 {
 		return fmt.Errorf("export: table has no columns")
 	}

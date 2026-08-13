@@ -29,6 +29,10 @@ func (missingItemRepository) Create(context.Context, *entity.Item) (*entity.Item
 func (missingItemRepository) FindItemByCode(context.Context, valueobject.ItemCode) (*entity.Item, error) {
 	return nil, repository.ErrNotFound
 }
+
+func (missingItemRepository) FindItemByBusinessCode(context.Context, valueobject.BusinessCode) (*entity.Item, error) {
+	return nil, repository.ErrNotFound
+}
 func (missingItemRepository) ListAll(context.Context) ([]*entity.Item, error) {
 	return nil, errors.New("unexpected ListAll call")
 }
@@ -38,7 +42,7 @@ func (missingItemRepository) ListAllWithMasks(context.Context) ([]entity.ItemWit
 
 func TestFindItemByCodeTranslatesRepositoryNotFound(t *testing.T) {
 	uc := NewFindItemByCode(missingItemRepository{}, findItemAuth{})
-	_, err := uc.Execute(context.Background(), request.FindItemByCodeDTO{Code: valueobject.ItemCode(10001)})
+	_, err := uc.Execute(context.Background(), request.FindItemByCodeDTO{Code: "TEA452-0"})
 	if !errors.Is(err, errorsuc.ErrProductNotFound) {
 		t.Fatalf("expected ErrProductNotFound, got %v", err)
 	}

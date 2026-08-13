@@ -3,6 +3,7 @@ package item_uc
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -14,12 +15,20 @@ import (
 
 type createItemAuth struct{ ports.AuthService }
 
-func (createItemAuth) CanCreateItem(context.Context) bool { return true }
+func (createItemAuth) CanCreateItem(context.Context) bool          { return true }
+func (createItemAuth) EnterpriseID(context.Context) (int64, error) { return 7, nil }
+func (createItemAuth) UserID(context.Context) (uuid.UUID, error) {
+	return uuid.MustParse("00000000-0000-0000-0000-000000000007"), nil
+}
 
 type createItemRepository struct {
 	missingItemRepository
 	base    *entity.Item
 	created *entity.Item
+}
+
+func (r *createItemRepository) NextAutomaticBusinessCode(context.Context, int64) (valueobject.BusinessCode, error) {
+	return "1", nil
 }
 
 func (r *createItemRepository) FindItemByCode(_ context.Context, code valueobject.ItemCode) (*entity.Item, error) {
@@ -44,6 +53,20 @@ func TestCreateItemAcceptsNoItemBase(t *testing.T) {
 	}
 	if repo.created != item {
 		t.Fatal("expected item to be persisted")
+	}
+}
+
+func TestCreateItemGeneratesCodeWhenOmitted(t *testing.T) {
+	repo := &createItemRepository{}
+	uc := NewCreateItemUseCase(repo, createItemAuth{})
+	item := itemForCreateTest()
+	item.BusinessCode = ""
+	created, err := uc.Execute(context.Background(), item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Code != "1" {
+		t.Fatalf("codigo automatico inesperado: %q", created.Code)
 	}
 }
 
@@ -85,11 +108,12 @@ func TestCreateItemRejectsUnknownBaseInPortuguese(t *testing.T) {
 
 func itemForCreateTest() *entity.Item {
 	return &entity.Item{
-		Code:        valueobject.ItemCode(12345),
-		Name:        "Transformador 30 kVA",
-		Nature:      entity.ItemConfigured,
-		Situation:   types.LINHA,
-		Health:      types.ACTIVE,
-		Engineering: entity.Engineering{},
+		Code:         valueobject.ItemCode(12345),
+		BusinessCode: valueobject.BusinessCode("TEA452-0"),
+		Name:         "Transformador 30 kVA",
+		Nature:       entity.ItemConfigured,
+		Situation:    types.LINHA,
+		Health:       types.ACTIVE,
+		Engineering:  entity.Engineering{},
 	}
 }
