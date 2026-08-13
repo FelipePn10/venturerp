@@ -167,7 +167,7 @@ type ItemAccountingResponse struct {
 	AccountingClassificationCode     *string          `json:"accounting_classification_code,omitempty"`
 	CEST                             *string          `json:"cest,omitempty"`
 	InputCode                        *string          `json:"input_code,omitempty"`
-	CalculatePISCOFINS               bool             `json:"calculate_pis_cofins"`
+	CalculatePISCOFINS               *bool            `json:"calculate_pis_cofins,omitempty"`
 	Notes                            *string          `json:"notes,omitempty"`
 }
 

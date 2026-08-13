@@ -139,7 +139,7 @@ func (uc *UpdateItemUseCase) Execute(ctx context.Context, code int64, dto reques
 			item.Accounting.InputCode = cleanUpdate(*a.InputCode)
 		}
 		if a.CalculatePISCOFINS != nil {
-			item.Accounting.CalculatePISCOFINS = *a.CalculatePISCOFINS
+			item.Accounting.CalculatePISCOFINS = a.CalculatePISCOFINS
 		}
 		if a.Notes != nil {
 			item.Accounting.Notes = cleanUpdate(*a.Notes)

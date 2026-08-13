@@ -55,7 +55,7 @@ func toCommercial(d *request.CommercialDTO) itementity.Commercial {
 func toAccounting(d *request.AccountingDTO, legacy *request.LegacyAccountingDTO) itementity.Accounting {
 	if d == nil {
 		if legacy != nil {
-			return itementity.Accounting{CalculatePISCOFINS: legacy.CalculatePISCOFINS}
+			return itementity.Accounting{CalculatePISCOFINS: &legacy.CalculatePISCOFINS}
 		}
 		return itementity.Accounting{}
 	}

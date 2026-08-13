@@ -145,7 +145,7 @@ type CreateItemParams struct {
 	SuppliesReceivingChecklist                 bool
 	SuppliesHarvest                            bool
 	CommercialWarrantyDays                     int32
-	AccountingCalculatePisCofins               bool
+	AccountingCalculatePisCofins               pgtype.Bool
 	CommercialDescription                      pgtype.Text
 	CommercialSaleType                         pgtype.Text
 	CommercialVolumeConversionFactor           pgtype.Numeric
@@ -875,8 +875,9 @@ UPDATE items SET
  accounting_purchase_ipi_type=$27, accounting_purchase_ipi_rate=$28, accounting_icms_rate=$29,
  accounting_sale_unit_of_measurement=$30, accounting_purchase_unit_of_measurement=$31,
  accounting_inventory_group_code=$32, accounting_classification_code=$33, accounting_cest=$34,
- accounting_input_code=$35, accounting_calculate_pis_cofins=$36, accounting_notes=$37
-WHERE business_code=$1 AND enterprise_id=$38
+ accounting_input_code=$35, accounting_notes=$36,
+ accounting_calculate_pis_cofins=$38::boolean
+WHERE business_code=$1 AND enterprise_id=$37
 RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code
 `
 
@@ -916,9 +917,9 @@ type UpdateItemCommercialAccountingParams struct {
 	AccountingClassificationCode               pgtype.Text
 	AccountingCest                             pgtype.Text
 	AccountingInputCode                        pgtype.Text
-	AccountingCalculatePisCofins               bool
 	AccountingNotes                            pgtype.Text
 	EnterpriseID                               int64
+	AccountingCalculatePisCofins               pgtype.Bool
 }
 
 func (q *Queries) UpdateItemCommercialAccounting(ctx context.Context, arg UpdateItemCommercialAccountingParams) (Item, error) {
@@ -958,9 +959,9 @@ func (q *Queries) UpdateItemCommercialAccounting(ctx context.Context, arg Update
 		arg.AccountingClassificationCode,
 		arg.AccountingCest,
 		arg.AccountingInputCode,
-		arg.AccountingCalculatePisCofins,
 		arg.AccountingNotes,
 		arg.EnterpriseID,
+		arg.AccountingCalculatePisCofins,
 	)
 	var i Item
 	err := row.Scan(

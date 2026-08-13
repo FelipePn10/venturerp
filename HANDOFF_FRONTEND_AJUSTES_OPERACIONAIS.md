@@ -235,6 +235,8 @@ Criar token (ADMIN): `POST /api/production-order/scanner/tokens`:
 ```
 
 Codifique `barcode_value` em Code 128 ou QR. Nunca use os IDs no lugar do token.
+O layout backend `manufacturing.ManufacturingOrder` também aceita esse valor e
+gera Code 128 vetorial no PDF, com legenda mascarada e sem revelar o token em texto.
 
 Leitura: `POST /api/production-order/scanner/scan`:
 
@@ -311,6 +313,22 @@ laudo, usando o `quality_report_id` retornado.
   `quality_report_id` à ordem de inspeção;
 - mostrar status, nome, data e responsável de cada laudo vinculado;
 - tratar `400`, `401/403`, `404`, `409` e `422` sem ocultar a mensagem do backend.
+
+## 12. Herança do indicador PIS/COFINS — IMPLEMENTADO NO BACKEND
+
+No `POST /api/items`, `accounting.calculate_pis_cofins` possui três estados:
+
+- campo ausente: não grava override e herda da classificação fiscal;
+- `true`: grava sobrescrita afirmativa no item;
+- `false`: grava sobrescrita negativa no item.
+
+Quando herdado, `accounting.calculate_pis_cofins` não é enviado na resposta bruta
+do item. O valor resolvido fica em
+`fiscal_effective.purchase.calculate_pis_cofins` e
+`fiscal_effective.sale.calculate_pis_cofins`, enquanto
+`sources.calculate_pis_cofins` retorna `HERDADO`. Nos dois valores explícitos, a
+fonte retorna `SOBRESCRITO`. Portanto, o frontend não deve preencher `false` por
+padrão: deve omitir a propriedade enquanto o usuário não escolher sobrescrever.
 
 ## Operação realizada em produção
 
