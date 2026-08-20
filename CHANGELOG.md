@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.7] — 2026-08-20
+
+- feat: entrega alertas enterprise e correcoes operacionais (`a812d32`)
+
 ## [v1.1.6] — 2026-08-13
 
 - feat: finaliza documentos industriais e heranca fiscal (`9bce3f7`)
