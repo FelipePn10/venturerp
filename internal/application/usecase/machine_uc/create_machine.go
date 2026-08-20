@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
+	"github.com/google/uuid"
 )
 
 type CreateMachineUseCase struct {
@@ -27,6 +28,13 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, dto request.CreateM
 
 	if dto.Capacity <= 0 {
 		return nil, errors.New("capacity must be greater than zero")
+	}
+	authenticatedUserID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if authenticatedUserID == uuid.Nil {
+		return nil, errors.New("authenticated user is required")
 	}
 
 	if dto.EfficiencyRate < 0 || dto.EfficiencyRate > 1 {
@@ -54,7 +62,7 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, dto request.CreateM
 		CapacityPeriod:  dto.CapacityPeriod,
 		EfficiencyRate:  dto.EfficiencyRate,
 		IsActive:        dto.IsActive,
-		CreatedBy:       dto.CreatedBy,
+		CreatedBy:       authenticatedUserID,
 	}
 	created, err := uc.Repo.Create(ctx, m)
 	if err != nil {

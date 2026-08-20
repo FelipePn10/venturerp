@@ -20,16 +20,20 @@ func tenantRequest(body string, enterpriseCode int64) *http.Request {
 }
 
 func TestTenantBodyGuardRewritesForeignEnterpriseRecursively(t *testing.T) {
-	var got string
-	h := TenantBodyGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		got = string(body)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, tenantRequest(`{"items":[{"enterprise_code":77}]}`, 42))
-	if rec.Code != http.StatusNoContent || got != `{"items":[{"enterprise_code":42}]}` {
-		t.Fatalf("status/body = %d/%q", rec.Code, got)
+	for _, role := range []string{"ADMIN", "USER"} {
+		t.Run(role, func(t *testing.T) {
+			var got string
+			h := TenantBodyGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				got = string(body)
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, tenantRequest(`{"items":[{"enterprise_code":77}]}`, 42))
+			if rec.Code != http.StatusNoContent || got != `{"items":[{"enterprise_code":42}]}` {
+				t.Fatalf("status/body = %d/%q", rec.Code, got)
+			}
+		})
 	}
 }
 

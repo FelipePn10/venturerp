@@ -14,26 +14,27 @@ import (
 const addCuttingPlanConsumption = `-- name: AddCuttingPlanConsumption :one
 
 INSERT INTO cutting_plan_consumptions (
-    plan_id, item_code, source_type, lot, remnant_id,
+    plan_id, enterprise_id, item_code, source_type, lot, remnant_id,
     quantity, length_mm, unit_cost, total_cost, warehouse_id, movement_id
 ) VALUES (
-    $1, $2, $3, $4, $5,
+    $1, $12, $2, $3, $4, $5,
     $6, $7, $8, $9, $10, $11
-) RETURNING id, plan_id, item_code, source_type, lot, remnant_id, quantity, length_mm, unit_cost, total_cost, warehouse_id, movement_id, created_at
+) RETURNING id, plan_id, item_code, source_type, lot, remnant_id, quantity, length_mm, unit_cost, total_cost, warehouse_id, movement_id, created_at, enterprise_id
 `
 
 type AddCuttingPlanConsumptionParams struct {
-	PlanID      int64
-	ItemCode    int64
-	SourceType  string
-	Lot         pgtype.Text
-	RemnantID   *int64
-	Quantity    pgtype.Numeric
-	LengthMm    pgtype.Numeric
-	UnitCost    pgtype.Numeric
-	TotalCost   pgtype.Numeric
-	WarehouseID int64
-	MovementID  *int64
+	PlanID       int64
+	ItemCode     int64
+	SourceType   string
+	Lot          pgtype.Text
+	RemnantID    *int64
+	Quantity     pgtype.Numeric
+	LengthMm     pgtype.Numeric
+	UnitCost     pgtype.Numeric
+	TotalCost    pgtype.Numeric
+	WarehouseID  int64
+	MovementID   *int64
+	EnterpriseID int64
 }
 
 // ─── cutting_plan_consumptions ────────────────────────────────────────────────
@@ -50,6 +51,7 @@ func (q *Queries) AddCuttingPlanConsumption(ctx context.Context, arg AddCuttingP
 		arg.TotalCost,
 		arg.WarehouseID,
 		arg.MovementID,
+		arg.EnterpriseID,
 	)
 	var i CuttingPlanConsumption
 	err := row.Scan(
@@ -66,6 +68,7 @@ func (q *Queries) AddCuttingPlanConsumption(ctx context.Context, arg AddCuttingP
 		&i.WarehouseID,
 		&i.MovementID,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -107,14 +110,14 @@ func (q *Queries) AddCuttingPlanOrderCost(ctx context.Context, arg AddCuttingPla
 const addCuttingPlanPart = `-- name: AddCuttingPlanPart :one
 
 INSERT INTO cutting_plan_parts (
-    plan_id, item_code, label, length_mm, quantity, source_ref,
+    plan_id, enterprise_id, item_code, label, length_mm, quantity, source_ref,
     width_mm, height_mm, grain, allow_rotation, geometry,
     edge_top, edge_bottom, edge_left, edge_right, band_item_code, band_cost_per_m
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
+    $1, $18, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11,
     $12, $13, $14, $15, $16, $17
-) RETURNING id, plan_id, item_code, label, length_mm, quantity, source_ref, created_at, width_mm, height_mm, grain, allow_rotation, geometry, edge_top, edge_bottom, edge_left, edge_right, band_item_code, band_cost_per_m
+) RETURNING id, plan_id, item_code, label, length_mm, quantity, source_ref, created_at, width_mm, height_mm, grain, allow_rotation, geometry, edge_top, edge_bottom, edge_left, edge_right, band_item_code, band_cost_per_m, enterprise_id
 `
 
 type AddCuttingPlanPartParams struct {
@@ -135,6 +138,7 @@ type AddCuttingPlanPartParams struct {
 	EdgeRight     bool
 	BandItemCode  *int64
 	BandCostPerM  pgtype.Numeric
+	EnterpriseID  int64
 }
 
 // ─── cutting_plan_parts ───────────────────────────────────────────────────────
@@ -157,6 +161,7 @@ func (q *Queries) AddCuttingPlanPart(ctx context.Context, arg AddCuttingPlanPart
 		arg.EdgeRight,
 		arg.BandItemCode,
 		arg.BandCostPerM,
+		arg.EnterpriseID,
 	)
 	var i CuttingPlanPart
 	err := row.Scan(
@@ -179,6 +184,7 @@ func (q *Queries) AddCuttingPlanPart(ctx context.Context, arg AddCuttingPlanPart
 		&i.EdgeRight,
 		&i.BandItemCode,
 		&i.BandCostPerM,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -186,24 +192,25 @@ func (q *Queries) AddCuttingPlanPart(ctx context.Context, arg AddCuttingPlanPart
 const addCuttingStockPiece = `-- name: AddCuttingStockPiece :one
 
 INSERT INTO cutting_stock_pieces (
-    plan_id, length_mm, quantity, lot, is_remnant, remnant_id, heat_number,
+    plan_id, enterprise_id, length_mm, quantity, lot, is_remnant, remnant_id, heat_number,
     width_mm, height_mm
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7,
+    $1, $10, $2, $3, $4, $5, $6, $7,
     $8, $9
-) RETURNING id, plan_id, length_mm, quantity, lot, is_remnant, created_at, remnant_id, heat_number, width_mm, height_mm
+) RETURNING id, plan_id, length_mm, quantity, lot, is_remnant, created_at, remnant_id, heat_number, width_mm, height_mm, enterprise_id
 `
 
 type AddCuttingStockPieceParams struct {
-	PlanID     int64
-	LengthMm   pgtype.Numeric
-	Quantity   int32
-	Lot        pgtype.Text
-	IsRemnant  bool
-	RemnantID  *int64
-	HeatNumber pgtype.Text
-	WidthMm    pgtype.Numeric
-	HeightMm   pgtype.Numeric
+	PlanID       int64
+	LengthMm     pgtype.Numeric
+	Quantity     int32
+	Lot          pgtype.Text
+	IsRemnant    bool
+	RemnantID    *int64
+	HeatNumber   pgtype.Text
+	WidthMm      pgtype.Numeric
+	HeightMm     pgtype.Numeric
+	EnterpriseID int64
 }
 
 // ─── cutting_stock_pieces ─────────────────────────────────────────────────────
@@ -218,6 +225,7 @@ func (q *Queries) AddCuttingStockPiece(ctx context.Context, arg AddCuttingStockP
 		arg.HeatNumber,
 		arg.WidthMm,
 		arg.HeightMm,
+		arg.EnterpriseID,
 	)
 	var i CuttingStockPiece
 	err := row.Scan(
@@ -232,22 +240,23 @@ func (q *Queries) AddCuttingStockPiece(ctx context.Context, arg AddCuttingStockP
 		&i.HeatNumber,
 		&i.WidthMm,
 		&i.HeightMm,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createCuttingPattern = `-- name: CreateCuttingPattern :one
 INSERT INTO cutting_patterns (
-    plan_id, sequence, stock_length_mm, repeat_count,
+    plan_id, enterprise_id, sequence, stock_length_mm, repeat_count,
     used_mm, kerf_loss_mm, remnant_mm, utilization_pct, is_remnant,
     stock_width_mm, stock_height_mm, used_area_mm2, remnant_area_mm2,
     remnant_width_mm, remnant_height_mm
 ) VALUES (
-    $1, $2, $3, $4,
+    $1, $16, $2, $3, $4,
     $5, $6, $7, $8, $9,
     $10, $11, $12, $13,
     $14, $15
-) RETURNING id, plan_id, sequence, stock_length_mm, repeat_count, used_mm, kerf_loss_mm, remnant_mm, utilization_pct, is_remnant, created_at, stock_width_mm, stock_height_mm, used_area_mm2, remnant_area_mm2, remnant_width_mm, remnant_height_mm
+) RETURNING id, plan_id, sequence, stock_length_mm, repeat_count, used_mm, kerf_loss_mm, remnant_mm, utilization_pct, is_remnant, created_at, stock_width_mm, stock_height_mm, used_area_mm2, remnant_area_mm2, remnant_width_mm, remnant_height_mm, enterprise_id
 `
 
 type CreateCuttingPatternParams struct {
@@ -266,6 +275,7 @@ type CreateCuttingPatternParams struct {
 	RemnantAreaMm2  pgtype.Numeric
 	RemnantWidthMm  pgtype.Numeric
 	RemnantHeightMm pgtype.Numeric
+	EnterpriseID    int64
 }
 
 func (q *Queries) CreateCuttingPattern(ctx context.Context, arg CreateCuttingPatternParams) (CuttingPattern, error) {
@@ -285,6 +295,7 @@ func (q *Queries) CreateCuttingPattern(ctx context.Context, arg CreateCuttingPat
 		arg.RemnantAreaMm2,
 		arg.RemnantWidthMm,
 		arg.RemnantHeightMm,
+		arg.EnterpriseID,
 	)
 	var i CuttingPattern
 	err := row.Scan(
@@ -305,33 +316,35 @@ func (q *Queries) CreateCuttingPattern(ctx context.Context, arg CreateCuttingPat
 		&i.RemnantAreaMm2,
 		&i.RemnantWidthMm,
 		&i.RemnantHeightMm,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createCuttingPatternPlacement = `-- name: CreateCuttingPatternPlacement :one
 INSERT INTO cutting_pattern_placements (
-    pattern_id, sequence, part_id, label, length_mm, offset_mm,
+    pattern_id, enterprise_id, sequence, part_id, label, length_mm, offset_mm,
     pos_x_mm, pos_y_mm, width_mm, height_mm, rotated, rotation_deg
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
+    $1, $13, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12
-) RETURNING id, pattern_id, sequence, part_id, label, length_mm, offset_mm, pos_x_mm, pos_y_mm, width_mm, height_mm, rotated, rotation_deg
+) RETURNING id, pattern_id, sequence, part_id, label, length_mm, offset_mm, pos_x_mm, pos_y_mm, width_mm, height_mm, rotated, rotation_deg, enterprise_id
 `
 
 type CreateCuttingPatternPlacementParams struct {
-	PatternID   int64
-	Sequence    int32
-	PartID      *int64
-	Label       string
-	LengthMm    pgtype.Numeric
-	OffsetMm    pgtype.Numeric
-	PosXMm      pgtype.Numeric
-	PosYMm      pgtype.Numeric
-	WidthMm     pgtype.Numeric
-	HeightMm    pgtype.Numeric
-	Rotated     bool
-	RotationDeg pgtype.Numeric
+	PatternID    int64
+	Sequence     int32
+	PartID       *int64
+	Label        string
+	LengthMm     pgtype.Numeric
+	OffsetMm     pgtype.Numeric
+	PosXMm       pgtype.Numeric
+	PosYMm       pgtype.Numeric
+	WidthMm      pgtype.Numeric
+	HeightMm     pgtype.Numeric
+	Rotated      bool
+	RotationDeg  pgtype.Numeric
+	EnterpriseID int64
 }
 
 func (q *Queries) CreateCuttingPatternPlacement(ctx context.Context, arg CreateCuttingPatternPlacementParams) (CuttingPatternPlacement, error) {
@@ -348,6 +361,7 @@ func (q *Queries) CreateCuttingPatternPlacement(ctx context.Context, arg CreateC
 		arg.HeightMm,
 		arg.Rotated,
 		arg.RotationDeg,
+		arg.EnterpriseID,
 	)
 	var i CuttingPatternPlacement
 	err := row.Scan(
@@ -364,6 +378,7 @@ func (q *Queries) CreateCuttingPatternPlacement(ctx context.Context, arg CreateC
 		&i.HeightMm,
 		&i.Rotated,
 		&i.RotationDeg,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -375,15 +390,15 @@ INSERT INTO cutting_plans (
     kerf_mm, trim_mm, min_remnant_mm,
     warehouse_id, production_order_code, lot_consumption_mode, include_remnants,
     stock_uom, uom_factor,
-    created_by
+    created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, 'RASCUNHO',
     $5, $6,
     $7, $8, $9,
     $10, $11, $12, $13,
     $14, $15,
-    $16
-) RETURNING id, code, description, cut_type, source, status, material_item_code, machine_code, kerf_mm, trim_mm, min_remnant_mm, utilization_pct, scrap_pct, stock_used_count, cut_count, total_demand, total_stock, created_at, updated_at, created_by, warehouse_id, production_order_code, lot_consumption_mode, include_remnants, released_at, stock_uom, uom_factor
+    $16, $17
+) RETURNING id, code, description, cut_type, source, status, material_item_code, machine_code, kerf_mm, trim_mm, min_remnant_mm, utilization_pct, scrap_pct, stock_used_count, cut_count, total_demand, total_stock, created_at, updated_at, created_by, warehouse_id, production_order_code, lot_consumption_mode, include_remnants, released_at, stock_uom, uom_factor, enterprise_id
 `
 
 type CreateCuttingPlanParams struct {
@@ -403,6 +418,7 @@ type CreateCuttingPlanParams struct {
 	StockUom            string
 	UomFactor           pgtype.Numeric
 	CreatedBy           pgtype.UUID
+	EnterpriseID        int64
 }
 
 func (q *Queries) CreateCuttingPlan(ctx context.Context, arg CreateCuttingPlanParams) (CuttingPlan, error) {
@@ -423,6 +439,7 @@ func (q *Queries) CreateCuttingPlan(ctx context.Context, arg CreateCuttingPlanPa
 		arg.StockUom,
 		arg.UomFactor,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i CuttingPlan
 	err := row.Scan(
@@ -453,6 +470,7 @@ func (q *Queries) CreateCuttingPlan(ctx context.Context, arg CreateCuttingPlanPa
 		&i.ReleasedAt,
 		&i.StockUom,
 		&i.UomFactor,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -460,14 +478,14 @@ func (q *Queries) CreateCuttingPlan(ctx context.Context, arg CreateCuttingPlanPa
 const createStockRemnant = `-- name: CreateStockRemnant :one
 
 INSERT INTO stock_remnants (
-    item_code, warehouse_id, length_mm, lot, heat_number, certificate,
+    enterprise_id, item_code, warehouse_id, length_mm, lot, heat_number, certificate,
     status, unit_cost, origin_plan_id, created_by,
     width_mm, height_mm
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
+    $12, $1, $2, $3, $4, $5, $6,
     'AVAILABLE', $7, $8, $9,
     $10, $11
-) RETURNING id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm
+) RETURNING id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm, enterprise_id
 `
 
 type CreateStockRemnantParams struct {
@@ -482,6 +500,7 @@ type CreateStockRemnantParams struct {
 	CreatedBy    pgtype.UUID
 	WidthMm      pgtype.Numeric
 	HeightMm     pgtype.Numeric
+	EnterpriseID int64
 }
 
 // ─── stock_remnants ───────────────────────────────────────────────────────────
@@ -498,6 +517,7 @@ func (q *Queries) CreateStockRemnant(ctx context.Context, arg CreateStockRemnant
 		arg.CreatedBy,
 		arg.WidthMm,
 		arg.HeightMm,
+		arg.EnterpriseID,
 	)
 	var i StockRemnant
 	err := row.Scan(
@@ -517,6 +537,7 @@ func (q *Queries) CreateStockRemnant(ctx context.Context, arg CreateStockRemnant
 		&i.CreatedBy,
 		&i.WidthMm,
 		&i.HeightMm,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -562,7 +583,7 @@ func (q *Queries) DeleteRemnantStockPieces(ctx context.Context, planID int64) er
 }
 
 const getCuttingPlanByID = `-- name: GetCuttingPlanByID :one
-SELECT id, code, description, cut_type, source, status, material_item_code, machine_code, kerf_mm, trim_mm, min_remnant_mm, utilization_pct, scrap_pct, stock_used_count, cut_count, total_demand, total_stock, created_at, updated_at, created_by, warehouse_id, production_order_code, lot_consumption_mode, include_remnants, released_at, stock_uom, uom_factor FROM cutting_plans WHERE id = $1
+SELECT id, code, description, cut_type, source, status, material_item_code, machine_code, kerf_mm, trim_mm, min_remnant_mm, utilization_pct, scrap_pct, stock_used_count, cut_count, total_demand, total_stock, created_at, updated_at, created_by, warehouse_id, production_order_code, lot_consumption_mode, include_remnants, released_at, stock_uom, uom_factor, enterprise_id FROM cutting_plans WHERE id = $1
 `
 
 func (q *Queries) GetCuttingPlanByID(ctx context.Context, id int64) (CuttingPlan, error) {
@@ -596,18 +617,19 @@ func (q *Queries) GetCuttingPlanByID(ctx context.Context, id int64) (CuttingPlan
 		&i.ReleasedAt,
 		&i.StockUom,
 		&i.UomFactor,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getCuttingSettings = `-- name: GetCuttingSettings :one
 
-SELECT id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at FROM cutting_settings WHERE id = 1
+SELECT id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at, enterprise_id FROM cutting_settings WHERE enterprise_id = $1
 `
 
-// ─── cutting_settings (singleton id=1) ────────────────────────────────────────
-func (q *Queries) GetCuttingSettings(ctx context.Context) (CuttingSetting, error) {
-	row := q.db.QueryRow(ctx, getCuttingSettings)
+// ─── cutting_settings (one row per tenant) ───────────────────────────────────
+func (q *Queries) GetCuttingSettings(ctx context.Context, enterpriseID int64) (CuttingSetting, error) {
+	row := q.db.QueryRow(ctx, getCuttingSettings, enterpriseID)
 	var i CuttingSetting
 	err := row.Scan(
 		&i.ID,
@@ -615,12 +637,13 @@ func (q *Queries) GetCuttingSettings(ctx context.Context) (CuttingSetting, error
 		&i.DefaultMinRemnantMm,
 		&i.DefaultWarehouseID,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getStockRemnant = `-- name: GetStockRemnant :one
-SELECT id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm FROM stock_remnants WHERE id = $1
+SELECT id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm, enterprise_id FROM stock_remnants WHERE id = $1
 `
 
 func (q *Queries) GetStockRemnant(ctx context.Context, id int64) (StockRemnant, error) {
@@ -643,6 +666,7 @@ func (q *Queries) GetStockRemnant(ctx context.Context, id int64) (StockRemnant, 
 		&i.CreatedBy,
 		&i.WidthMm,
 		&i.HeightMm,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -700,7 +724,7 @@ func (q *Queries) ListAvailableLotsFIFO(ctx context.Context, arg ListAvailableLo
 }
 
 const listAvailableRemnants = `-- name: ListAvailableRemnants :many
-SELECT id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm FROM stock_remnants
+SELECT id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm, enterprise_id FROM stock_remnants
 WHERE item_code = $1 AND warehouse_id = $2 AND status = 'AVAILABLE'
 ORDER BY length_mm ASC, id ASC
 `
@@ -736,6 +760,7 @@ func (q *Queries) ListAvailableRemnants(ctx context.Context, arg ListAvailableRe
 			&i.CreatedBy,
 			&i.WidthMm,
 			&i.HeightMm,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -748,7 +773,7 @@ func (q *Queries) ListAvailableRemnants(ctx context.Context, arg ListAvailableRe
 }
 
 const listCuttingPatternPlacements = `-- name: ListCuttingPatternPlacements :many
-SELECT id, pattern_id, sequence, part_id, label, length_mm, offset_mm, pos_x_mm, pos_y_mm, width_mm, height_mm, rotated, rotation_deg FROM cutting_pattern_placements WHERE pattern_id = $1 ORDER BY sequence
+SELECT id, pattern_id, sequence, part_id, label, length_mm, offset_mm, pos_x_mm, pos_y_mm, width_mm, height_mm, rotated, rotation_deg, enterprise_id FROM cutting_pattern_placements WHERE pattern_id = $1 ORDER BY sequence
 `
 
 func (q *Queries) ListCuttingPatternPlacements(ctx context.Context, patternID int64) ([]CuttingPatternPlacement, error) {
@@ -774,6 +799,7 @@ func (q *Queries) ListCuttingPatternPlacements(ctx context.Context, patternID in
 			&i.HeightMm,
 			&i.Rotated,
 			&i.RotationDeg,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -786,7 +812,7 @@ func (q *Queries) ListCuttingPatternPlacements(ctx context.Context, patternID in
 }
 
 const listCuttingPatternsByPlan = `-- name: ListCuttingPatternsByPlan :many
-SELECT id, plan_id, sequence, stock_length_mm, repeat_count, used_mm, kerf_loss_mm, remnant_mm, utilization_pct, is_remnant, created_at, stock_width_mm, stock_height_mm, used_area_mm2, remnant_area_mm2, remnant_width_mm, remnant_height_mm FROM cutting_patterns WHERE plan_id = $1 ORDER BY sequence
+SELECT id, plan_id, sequence, stock_length_mm, repeat_count, used_mm, kerf_loss_mm, remnant_mm, utilization_pct, is_remnant, created_at, stock_width_mm, stock_height_mm, used_area_mm2, remnant_area_mm2, remnant_width_mm, remnant_height_mm, enterprise_id FROM cutting_patterns WHERE plan_id = $1 ORDER BY sequence
 `
 
 func (q *Queries) ListCuttingPatternsByPlan(ctx context.Context, planID int64) ([]CuttingPattern, error) {
@@ -816,6 +842,7 @@ func (q *Queries) ListCuttingPatternsByPlan(ctx context.Context, planID int64) (
 			&i.RemnantAreaMm2,
 			&i.RemnantWidthMm,
 			&i.RemnantHeightMm,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -828,7 +855,7 @@ func (q *Queries) ListCuttingPatternsByPlan(ctx context.Context, planID int64) (
 }
 
 const listCuttingPlanConsumptions = `-- name: ListCuttingPlanConsumptions :many
-SELECT id, plan_id, item_code, source_type, lot, remnant_id, quantity, length_mm, unit_cost, total_cost, warehouse_id, movement_id, created_at FROM cutting_plan_consumptions WHERE plan_id = $1 ORDER BY id
+SELECT id, plan_id, item_code, source_type, lot, remnant_id, quantity, length_mm, unit_cost, total_cost, warehouse_id, movement_id, created_at, enterprise_id FROM cutting_plan_consumptions WHERE plan_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListCuttingPlanConsumptions(ctx context.Context, planID int64) ([]CuttingPlanConsumption, error) {
@@ -854,6 +881,7 @@ func (q *Queries) ListCuttingPlanConsumptions(ctx context.Context, planID int64)
 			&i.WarehouseID,
 			&i.MovementID,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -897,7 +925,7 @@ func (q *Queries) ListCuttingPlanOrderCosts(ctx context.Context, planID int64) (
 }
 
 const listCuttingPlanParts = `-- name: ListCuttingPlanParts :many
-SELECT id, plan_id, item_code, label, length_mm, quantity, source_ref, created_at, width_mm, height_mm, grain, allow_rotation, geometry, edge_top, edge_bottom, edge_left, edge_right, band_item_code, band_cost_per_m FROM cutting_plan_parts WHERE plan_id = $1 ORDER BY id
+SELECT id, plan_id, item_code, label, length_mm, quantity, source_ref, created_at, width_mm, height_mm, grain, allow_rotation, geometry, edge_top, edge_bottom, edge_left, edge_right, band_item_code, band_cost_per_m, enterprise_id FROM cutting_plan_parts WHERE plan_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListCuttingPlanParts(ctx context.Context, planID int64) ([]CuttingPlanPart, error) {
@@ -929,6 +957,7 @@ func (q *Queries) ListCuttingPlanParts(ctx context.Context, planID int64) ([]Cut
 			&i.EdgeRight,
 			&i.BandItemCode,
 			&i.BandCostPerM,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -941,7 +970,7 @@ func (q *Queries) ListCuttingPlanParts(ctx context.Context, planID int64) ([]Cut
 }
 
 const listCuttingPlans = `-- name: ListCuttingPlans :many
-SELECT id, code, description, cut_type, source, status, material_item_code, machine_code, kerf_mm, trim_mm, min_remnant_mm, utilization_pct, scrap_pct, stock_used_count, cut_count, total_demand, total_stock, created_at, updated_at, created_by, warehouse_id, production_order_code, lot_consumption_mode, include_remnants, released_at, stock_uom, uom_factor FROM cutting_plans
+SELECT id, code, description, cut_type, source, status, material_item_code, machine_code, kerf_mm, trim_mm, min_remnant_mm, utilization_pct, scrap_pct, stock_used_count, cut_count, total_demand, total_stock, created_at, updated_at, created_by, warehouse_id, production_order_code, lot_consumption_mode, include_remnants, released_at, stock_uom, uom_factor, enterprise_id FROM cutting_plans
 WHERE ($1::BOOLEAN = FALSE OR status IN ('RASCUNHO','OTIMIZADO'))
 ORDER BY code DESC
 `
@@ -983,6 +1012,7 @@ func (q *Queries) ListCuttingPlans(ctx context.Context, dollar_1 bool) ([]Cuttin
 			&i.ReleasedAt,
 			&i.StockUom,
 			&i.UomFactor,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -995,7 +1025,7 @@ func (q *Queries) ListCuttingPlans(ctx context.Context, dollar_1 bool) ([]Cuttin
 }
 
 const listCuttingStockPieces = `-- name: ListCuttingStockPieces :many
-SELECT id, plan_id, length_mm, quantity, lot, is_remnant, created_at, remnant_id, heat_number, width_mm, height_mm FROM cutting_stock_pieces WHERE plan_id = $1 ORDER BY id
+SELECT id, plan_id, length_mm, quantity, lot, is_remnant, created_at, remnant_id, heat_number, width_mm, height_mm, enterprise_id FROM cutting_stock_pieces WHERE plan_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListCuttingStockPieces(ctx context.Context, planID int64) ([]CuttingStockPiece, error) {
@@ -1019,6 +1049,7 @@ func (q *Queries) ListCuttingStockPieces(ctx context.Context, planID int64) ([]C
 			&i.HeatNumber,
 			&i.WidthMm,
 			&i.HeightMm,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1031,7 +1062,7 @@ func (q *Queries) ListCuttingStockPieces(ctx context.Context, planID int64) ([]C
 }
 
 const listRemnantsByItem = `-- name: ListRemnantsByItem :many
-SELECT id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm FROM stock_remnants
+SELECT id, item_code, warehouse_id, length_mm, lot, heat_number, certificate, status, unit_cost, origin_plan_id, consumed_plan_id, created_at, updated_at, created_by, width_mm, height_mm, enterprise_id FROM stock_remnants
 WHERE item_code = $1 AND ($2::BOOLEAN = FALSE OR status = 'AVAILABLE')
 ORDER BY status, length_mm ASC
 `
@@ -1067,6 +1098,7 @@ func (q *Queries) ListRemnantsByItem(ctx context.Context, arg ListRemnantsByItem
 			&i.CreatedBy,
 			&i.WidthMm,
 			&i.HeightMm,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1097,11 +1129,12 @@ func (q *Queries) MarkRemnantConsumed(ctx context.Context, arg MarkRemnantConsum
 const nextCuttingPlanCode = `-- name: NextCuttingPlanCode :one
 
 SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM cutting_plans
+WHERE enterprise_id = $1
 `
 
 // ─── cutting_plans ────────────────────────────────────────────────────────────
-func (q *Queries) NextCuttingPlanCode(ctx context.Context) (int32, error) {
-	row := q.db.QueryRow(ctx, nextCuttingPlanCode)
+func (q *Queries) NextCuttingPlanCode(ctx context.Context, enterpriseID int64) (int32, error) {
+	row := q.db.QueryRow(ctx, nextCuttingPlanCode, enterpriseID)
 	var next_code int32
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -1179,24 +1212,30 @@ func (q *Queries) UpdateCuttingPlanResult(ctx context.Context, arg UpdateCutting
 }
 
 const upsertCuttingSettings = `-- name: UpsertCuttingSettings :one
-INSERT INTO cutting_settings (id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at)
-VALUES (1, $1, $2, $3, NOW())
-ON CONFLICT (id) DO UPDATE SET
+INSERT INTO cutting_settings (enterprise_id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at)
+VALUES ($1, $2, $3, $4, NOW())
+ON CONFLICT (enterprise_id) DO UPDATE SET
     default_consumption_mode = EXCLUDED.default_consumption_mode,
     default_min_remnant_mm   = EXCLUDED.default_min_remnant_mm,
     default_warehouse_id     = EXCLUDED.default_warehouse_id,
     updated_at               = NOW()
-RETURNING id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at
+RETURNING id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at, enterprise_id
 `
 
 type UpsertCuttingSettingsParams struct {
+	EnterpriseID           int64
 	DefaultConsumptionMode string
 	DefaultMinRemnantMm    pgtype.Numeric
 	DefaultWarehouseID     *int64
 }
 
 func (q *Queries) UpsertCuttingSettings(ctx context.Context, arg UpsertCuttingSettingsParams) (CuttingSetting, error) {
-	row := q.db.QueryRow(ctx, upsertCuttingSettings, arg.DefaultConsumptionMode, arg.DefaultMinRemnantMm, arg.DefaultWarehouseID)
+	row := q.db.QueryRow(ctx, upsertCuttingSettings,
+		arg.EnterpriseID,
+		arg.DefaultConsumptionMode,
+		arg.DefaultMinRemnantMm,
+		arg.DefaultWarehouseID,
+	)
 	var i CuttingSetting
 	err := row.Scan(
 		&i.ID,
@@ -1204,6 +1243,7 @@ func (q *Queries) UpsertCuttingSettings(ctx context.Context, arg UpsertCuttingSe
 		&i.DefaultMinRemnantMm,
 		&i.DefaultWarehouseID,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

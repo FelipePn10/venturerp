@@ -7,17 +7,22 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/group/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 func (r *repositoryGroupSQLC) Create(
 	ctx context.Context,
 	group *entity.Group,
 ) (*entity.Group, error) {
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	params := sqlc.CreateGroupParams{
 		Code:         int32(group.Code),
 		Description:  group.Description,
-		EnterpriseID: int64(group.EnterpriseID),
+		EnterpriseID: tenantID,
 		CreatedBy:    pgutil.ToPgUUID(group.CreatedBy),
 	}
 
@@ -30,7 +35,11 @@ func (r *repositoryGroupSQLC) Create(
 }
 
 func (r *repositoryGroupSQLC) GetByCode(ctx context.Context, code int) (*entity.Group, error) {
-	row, err := r.q.GetGroupByCode(ctx, int32(code))
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetGroupByCode(ctx, sqlc.GetGroupByCodeParams{EnterpriseID: tenantID, Code: int32(code)})
 	if err != nil {
 		return nil, fmt.Errorf("get group by code %d: %w", code, err)
 	}
@@ -38,7 +47,11 @@ func (r *repositoryGroupSQLC) GetByCode(ctx context.Context, code int) (*entity.
 }
 
 func (r *repositoryGroupSQLC) List(ctx context.Context) ([]*entity.Group, error) {
-	rows, err := r.q.ListGroups(ctx)
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListGroups(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list groups: %w", err)
 	}
@@ -50,10 +63,12 @@ func (r *repositoryGroupSQLC) List(ctx context.Context) ([]*entity.Group, error)
 }
 
 func (r *repositoryGroupSQLC) Update(ctx context.Context, group *entity.Group) (*entity.Group, error) {
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateGroup(ctx, sqlc.UpdateGroupParams{
-		Code:         int32(group.Code),
-		Description:  group.Description,
-		EnterpriseID: int64(group.EnterpriseID),
+		Code: int32(group.Code), Description: group.Description, EnterpriseID: tenantID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("update group %d: %w", group.Code, err)

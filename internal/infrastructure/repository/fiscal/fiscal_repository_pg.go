@@ -143,6 +143,10 @@ func (r *FiscalRepositoryPG) ListEntries(ctx context.Context) ([]*entity.FiscalE
 }
 
 func (r *FiscalRepositoryPG) ListEntriesByStatus(ctx context.Context, status entity.FiscalEntryStatus) ([]*entity.FiscalEntry, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
@@ -150,7 +154,7 @@ func (r *FiscalRepositoryPG) ListEntriesByStatus(ctx context.Context, status ent
 		        valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		        tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
 		        is_active, created_at, updated_at, created_by, supplier_code
-		 FROM public.fiscal_entries WHERE status = $1 ORDER BY created_at DESC`, status)
+		 FROM public.fiscal_entries WHERE status = $1 AND enterprise_id=$2 ORDER BY created_at DESC`, status, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal entries by status: %w", err)
 	}
@@ -159,16 +163,20 @@ func (r *FiscalRepositoryPG) ListEntriesByStatus(ctx context.Context, status ent
 }
 
 func (r *FiscalRepositoryPG) UpdateEntryStatus(ctx context.Context, id int64, status entity.FiscalEntryStatus) (*entity.FiscalEntry, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	var e entity.FiscalEntry
 	err := r.pool.QueryRow(ctx,
-		`UPDATE public.fiscal_entries SET status = $1, updated_at = NOW() WHERE id = $2
+		`UPDATE public.fiscal_entries SET status = $1, updated_at = NOW() WHERE id = $2 AND enterprise_id=$3
 		 RETURNING id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		           cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		           valor_produtos, valor_frete, valor_seguro, valor_desconto,
 		           valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 		           tipo_documento, purchase_order_code, cte_code, status, xml_path, notes,
 		           is_active, created_at, updated_at, created_by, supplier_code`,
-		status, id,
+		status, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.Modelo, &e.DataEmissao, &e.DataEntrada,
 		&e.CnpjEmitente, &e.RazaoSocialEmitente, &e.IEEmitente, &e.UFEmitente,
 		&e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
@@ -182,9 +190,13 @@ func (r *FiscalRepositoryPG) UpdateEntryStatus(ctx context.Context, id int64, st
 }
 
 func (r *FiscalRepositoryPG) GetNextNFNumber(ctx context.Context) (int64, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return 0, tenantErr
+	}
 	var next int64
 	err := r.pool.QueryRow(ctx,
-		`SELECT COALESCE(MAX(numero_nf), 0) + 1 FROM public.fiscal_exits`).Scan(&next)
+		`SELECT COALESCE(MAX(numero_nf), 0) + 1 FROM public.fiscal_exits WHERE enterprise_id=$1`, enterpriseID).Scan(&next)
 	if err != nil {
 		return 0, fmt.Errorf("getting next NF number: %w", err)
 	}
@@ -231,7 +243,12 @@ func scanEntryItems(rows pgx.Rows) ([]*entity.FiscalEntryItem, error) {
 // ---------- Fiscal Exits ----------
 
 func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExit) (*entity.FiscalExit, error) {
-	err := r.pool.QueryRow(ctx,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	e.EnterpriseID = enterpriseID
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO public.fiscal_exits
 			(chave_acesso, numero_nf, serie, data_emissao, data_saida,
 			 cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
@@ -239,8 +256,8 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 			 valor_ipi, valor_icms, valor_pis, valor_cofins, valor_total,
 			 sales_order_code, status, created_by, base_icms_st, valor_icms_st,
 			 source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
-			 fiscal_coupon_date, fiscal_coupon_ecf_serial)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+			 fiscal_coupon_date, fiscal_coupon_ecf_serial,enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.DataEmissao, e.DataSaida,
 		e.CnpjDestinatario, e.RazaoSocialDestinatario, e.IEDestinatario, e.UFDestinatario,
@@ -248,7 +265,7 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 		e.ValorIPI, e.ValorICMS, e.ValorPIS, e.ValorCOFINS, e.ValorTotal,
 		e.SalesOrderCode, e.Status, e.CreatedBy, e.BaseICMSST, e.ValorICMSST,
 		e.SourceType, e.ShipmentLoadCode, e.ShipmentCode, e.FiscalCouponNumber,
-		e.FiscalCouponDate, e.FiscalCouponECFSerial,
+		e.FiscalCouponDate, e.FiscalCouponECFSerial, enterpriseID,
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit: %w", err)
@@ -279,8 +296,12 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 }
 
 func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity.FiscalExit, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var e entity.FiscalExit
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		        cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 		        cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -289,7 +310,7 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
 		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		        fiscal_coupon_date, fiscal_coupon_ecf_serial
-		 FROM public.fiscal_exits WHERE id = $1`, id,
+		 FROM public.fiscal_exits WHERE id = $1 AND enterprise_id=$2`, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
@@ -308,13 +329,17 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 }
 
 func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int64) ([]*entity.FiscalExitItem, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, fiscal_exit_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 		        base_icms, aliq_icms, valor_icms, valor_icms_diferido,
 		        base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 		        cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description,
 		        base_icms_st, aliq_icms_st, valor_icms_st, mva, created_at
-		 FROM public.fiscal_exit_items WHERE fiscal_exit_id = $1 ORDER BY sequence`, fiscalExitID)
+		 FROM public.fiscal_exit_items i WHERE fiscal_exit_id = $1 AND EXISTS(SELECT 1 FROM fiscal_exits x WHERE x.id=i.fiscal_exit_id AND x.enterprise_id=$2) ORDER BY sequence`, fiscalExitID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exit items: %w", err)
 	}
@@ -323,6 +348,10 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 }
 
 func (r *FiscalRepositoryPG) ListExits(ctx context.Context) ([]*entity.FiscalExit, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		        cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
@@ -332,7 +361,7 @@ func (r *FiscalRepositoryPG) ListExits(ctx context.Context) ([]*entity.FiscalExi
 		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
 		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		        fiscal_coupon_date, fiscal_coupon_ecf_serial
-		 FROM public.fiscal_exits ORDER BY created_at DESC`)
+		 FROM public.fiscal_exits WHERE enterprise_id=$1 ORDER BY created_at DESC`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exits: %w", err)
 	}
@@ -341,6 +370,10 @@ func (r *FiscalRepositoryPG) ListExits(ctx context.Context) ([]*entity.FiscalExi
 }
 
 func (r *FiscalRepositoryPG) ListExitsByStatus(ctx context.Context, status entity.FiscalExitStatus) ([]*entity.FiscalExit, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		        cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
@@ -350,7 +383,7 @@ func (r *FiscalRepositoryPG) ListExitsByStatus(ctx context.Context, status entit
 		        is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
 		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		        fiscal_coupon_date, fiscal_coupon_ecf_serial
-		 FROM public.fiscal_exits WHERE status = $1 ORDER BY created_at DESC`, status)
+		 FROM public.fiscal_exits WHERE status = $1 AND enterprise_id=$2 ORDER BY created_at DESC`, status, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exits by status: %w", err)
 	}
@@ -359,9 +392,13 @@ func (r *FiscalRepositoryPG) ListExitsByStatus(ctx context.Context, status entit
 }
 
 func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, status entity.FiscalExitStatus) (*entity.FiscalExit, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	var e entity.FiscalExit
 	err := r.pool.QueryRow(ctx,
-		`UPDATE public.fiscal_exits SET status = $1, updated_at = NOW() WHERE id = $2
+		`UPDATE public.fiscal_exits SET status = $1, updated_at = NOW() WHERE id = $2 AND enterprise_id=$3
 		 RETURNING id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		           cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 		           cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -370,7 +407,7 @@ func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, sta
 		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
 		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		           fiscal_coupon_date, fiscal_coupon_ecf_serial`,
-		status, id,
+		status, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
@@ -386,6 +423,10 @@ func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, sta
 }
 
 func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef, xmlPath, danfePath string) (*entity.FiscalExit, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	var e entity.FiscalExit
 	err := r.pool.QueryRow(ctx,
 		`UPDATE public.fiscal_exits SET
@@ -393,7 +434,7 @@ func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int
 		     xml_path    = NULLIF($5, ''),
 		     danfe_path  = NULLIF($6, ''),
 		     status = 'AUTHORIZED', updated_at = NOW()
-		 WHERE id = $4
+		 WHERE id = $4 AND enterprise_id=$7
 		 RETURNING id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		           cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 		           cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -402,7 +443,7 @@ func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int
 		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
 		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		           fiscal_coupon_date, fiscal_coupon_ecf_serial`,
-		chaveAcesso, protocolo, focusRef, id, xmlPath, danfePath,
+		chaveAcesso, protocolo, focusRef, id, xmlPath, danfePath, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,
@@ -723,6 +764,10 @@ func (r *FiscalRepositoryPG) ListICMSInternal(ctx context.Context) (map[string]s
 // ---------- Cancel with motivo ----------
 
 func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64, motivo string, userID uuid.UUID) (*entity.FiscalExit, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	var e entity.FiscalExit
 	err := r.pool.QueryRow(ctx,
 		`UPDATE public.fiscal_exits SET
@@ -731,7 +776,7 @@ func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64,
 		     data_cancelamento = NOW(),
 		     cancelado_por = $2,
 		     updated_at = NOW()
-		 WHERE id = $3
+		 WHERE id = $3 AND enterprise_id=$4
 		 RETURNING id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		           cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 		           cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -740,7 +785,7 @@ func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64,
 		           is_active, created_at, updated_at, created_by, base_icms_st, valor_icms_st,
 		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		           fiscal_coupon_date, fiscal_coupon_ecf_serial`,
-		motivo, userID, id,
+		motivo, userID, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
 		&e.Cfop, &e.NaturezaOperacao, &e.ValorProdutos, &e.ValorFrete, &e.ValorSeguro, &e.ValorDesconto,

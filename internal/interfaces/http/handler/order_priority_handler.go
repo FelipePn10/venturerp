@@ -26,7 +26,7 @@ func (h *OrderPriorityHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)

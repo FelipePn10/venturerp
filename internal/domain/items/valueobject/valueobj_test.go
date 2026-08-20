@@ -1,6 +1,9 @@
 package valueobject
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestNewItemCode(t *testing.T) {
 	if _, err := NewItemCode(0); err == nil {
@@ -72,6 +75,37 @@ func TestCyclicalCountConfig(t *testing.T) {
 	}
 	if _, err := NewCyclicalCountConfig(30); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCyclicalCountConfigJSONContractAndLegacyRead(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		want int
+	}{{`{"days_interval":15}`, 15}, {`{"DaysInterval":7}`, 7}} {
+		var got CyclicalCountConfig
+		if err := json.Unmarshal([]byte(tc.body), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.DaysInterval != tc.want || !got.IsValid() {
+			t.Fatalf("json=%s config=%+v", tc.body, got)
+		}
+	}
+	for _, invalid := range []string{`{"days":1}`, `{"days_interval":0}`, `{"days_interval":-1}`} {
+		var got CyclicalCountConfig
+		if err := json.Unmarshal([]byte(invalid), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.IsValid() {
+			t.Fatalf("contrato inválido aceito: %s", invalid)
+		}
+	}
+	encoded, err := json.Marshal(CyclicalCountConfig{DaysInterval: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(encoded) != `{"days_interval":30}` {
+		t.Fatalf("resposta fora do contrato: %s", encoded)
 	}
 }
 

@@ -48,7 +48,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if err != nil {
 		return nil, err
 	}
-	if exit.Status != entity.ExitStatusDraft {
+	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization {
 		return nil, fmt.Errorf("NF-e deve estar em rascunho para autorizar, status atual: %s", exit.Status)
 	}
 
@@ -134,6 +134,12 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		FormaPagamento: []focusnfe.NFEFormaPagamento{
 			{FormaPagamento: "01", Valor: exit.ValorTotal},
 		},
+	}
+
+	if exit.Status == entity.ExitStatusDraft {
+		if _, err = uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusAwaitingAuthorization); err != nil {
+			return nil, fmt.Errorf("registrando NF-e como aguardando autorização: %w", err)
+		}
 	}
 
 	focusResp, err := focusCli.EmitirNFe(ctx, ref, payload)

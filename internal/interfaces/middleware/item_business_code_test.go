@@ -47,3 +47,12 @@ func TestItemReferencePathDoesNotConfuseOrderLineWithItem(t *testing.T) {
 		}
 	}
 }
+
+func TestItemClassificationsIsAStaticPath(t *testing.T) {
+	if !isStaticItemsPath("classifications") {
+		t.Fatal("/api/items/classifications foi tratado como código comercial de item")
+	}
+	if isStaticItemsPath("4853") || isStaticItemsPath("TEA452-0") {
+		t.Fatal("código comercial foi tratado como segmento estático")
+	}
+}

@@ -277,6 +277,9 @@ func (i *Item) Validate() error {
 	if i.Engineering.Dimensions != nil && !i.Engineering.Dimensions.IsValid() {
 		return errors.New("invalid dimensions")
 	}
+	if i.Warehouse.CyclicalCountConfig != nil && !i.Warehouse.CyclicalCountConfig.IsValid() {
+		return errors.New("invalid cyclical count config")
+	}
 
 	if !i.Engineering.Weight.IsValid() {
 		return errors.New("invalid weight")

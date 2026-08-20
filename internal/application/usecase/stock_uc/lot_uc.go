@@ -29,6 +29,7 @@ func (uc *RegisterLotUseCase) Execute(ctx context.Context, dto request.RegisterL
 
 	lot := &entity.StockLot{
 		ItemCode:     dto.ItemCode,
+		Mask:         dto.Mask,
 		Lot:          dto.Lot,
 		HeatNumber:   dto.HeatNumber,
 		Certificate:  dto.Certificate,

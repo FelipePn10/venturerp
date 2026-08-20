@@ -92,16 +92,15 @@ func toItemPDMResponse(p entity.PDM) response.ItemPDMResponse {
 }
 
 func toItemWarehouseResponse(w entity.Warehouse) response.ItemWarehouseResponse {
-	var cyclical *int
+	var cyclical *response.ItemCyclicalCountConfigResponse
 	if w.CyclicalCountConfig != nil {
-		v := w.CyclicalCountConfig.DaysInterval
-		cyclical = &v
+		cyclical = &response.ItemCyclicalCountConfigResponse{DaysInterval: w.CyclicalCountConfig.DaysInterval}
 	}
 	return response.ItemWarehouseResponse{
 		WarehouseCode:                   w.WarehouseCode,
 		UnitOfMeasurement:               w.UnitOfMeasurement.String(),
 		AutomaticLow:                    w.AutomaticLow,
-		CyclicalCountDaysInterval:       cyclical,
+		CyclicalCountConfig:             cyclical,
 		MinimumStock:                    w.MinimumStock,
 		AverageMonthlyConsumptionManual: w.AverageMonthlyConsumptionManual,
 	}

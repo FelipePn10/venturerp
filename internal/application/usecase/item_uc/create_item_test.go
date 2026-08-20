@@ -3,7 +3,7 @@ package item_uc
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
+	"fmt"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
+	"github.com/google/uuid"
 )
 
 type createItemAuth struct{ ports.AuthService }
@@ -23,8 +24,15 @@ func (createItemAuth) UserID(context.Context) (uuid.UUID, error) {
 
 type createItemRepository struct {
 	missingItemRepository
-	base    *entity.Item
-	created *entity.Item
+	base      *entity.Item
+	created   *entity.Item
+	pdmErr    error
+	pdmTenant int64
+}
+
+func (r *createItemRepository) ValidatePDMReferences(_ context.Context, tenant int64, _, _ int) error {
+	r.pdmTenant = tenant
+	return r.pdmErr
 }
 
 func (r *createItemRepository) NextAutomaticBusinessCode(context.Context, int64) (valueobject.BusinessCode, error) {
@@ -103,6 +111,30 @@ func TestCreateItemRejectsUnknownBaseInPortuguese(t *testing.T) {
 	_, err := uc.Execute(context.Background(), item)
 	if !errors.Is(err, ErrItemBaseNotFound) {
 		t.Fatalf("expected localized missing base error, got %v", err)
+	}
+}
+
+func TestCreateItemRejectsInvalidOrCrossTenantPDMBeforePersisting(t *testing.T) {
+	for _, tt := range []struct {
+		name            string
+		group, modifier int
+	}{{"grupo inexistente", 999999, 0}, {"modificador inexistente", 0, 999999}, {"referência de outra empresa", 77, 88}} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &createItemRepository{pdmErr: fmt.Errorf("%w: referência PDM fora da empresa", repository.ErrInvalidReference)}
+			item := itemForCreateTest()
+			item.PDM.GroupCode = int32(tt.group)
+			item.PDM.ModifierCode = int32(tt.modifier)
+			_, err := NewCreateItemUseCase(repo, createItemAuth{}).Execute(context.Background(), item)
+			if !errors.Is(err, repository.ErrInvalidReference) {
+				t.Fatalf("erro inesperado: %v", err)
+			}
+			if repo.created != nil {
+				t.Fatal("item foi persistido parcialmente")
+			}
+			if repo.pdmTenant != 7 {
+				t.Fatalf("tenant validado=%d", repo.pdmTenant)
+			}
+		})
 	}
 }
 

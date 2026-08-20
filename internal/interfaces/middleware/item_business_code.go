@@ -34,9 +34,15 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 				next.ServeHTTP(w, r)
 				return
 			}
-			if err = translateItemPath(r, pool, enterpriseID); err != nil {
-				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-				return
+			if !nativeItemBusinessCodePath(r) {
+				if err = translateKnownItemURLPath(r, pool, enterpriseID); err != nil {
+					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+					return
+				}
+				if err = translateItemPath(r, pool, enterpriseID); err != nil {
+					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+					return
+				}
 			}
 			if err = translateItemQuery(r, pool, enterpriseID); err != nil {
 				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
@@ -69,6 +75,104 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 	}
 }
 
+func nativeItemBusinessCodePath(r *http.Request) bool {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) != 3 && len(parts) != 4 {
+		return false
+	}
+	if parts[0] != "api" || parts[1] != "items" || parts[2] == "create" || parts[2] == "with-masks" || parts[2] == "search" || parts[2] == "structure" {
+		return false
+	}
+	return len(parts) == 3 || (len(parts) == 4 && parts[3] == "activation-readiness")
+}
+
+func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID int64) error {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 3 || parts[0] != "api" {
+		return nil
+	}
+	index := -1
+	if parts[1] == "items" {
+		index = 2
+		if parts[2] == "search" {
+			if len(parts) < 4 {
+				return nil
+			}
+			index = 3
+		} else if parts[2] == "structure" {
+			if len(parts) >= 5 && parts[3] == "resolve" {
+				index = 4
+			} else {
+				return nil
+			}
+		} else if isStaticItemsPath(parts[2]) {
+			return nil
+		}
+	} else {
+		patterns := []struct {
+			prefix []string
+			index  int
+		}{
+			{[]string{"api", "stock", "movements", "item"}, 4},
+			{[]string{"api", "configurator", "items"}, 3},
+			{[]string{"api", "quality", "plans", "by-item"}, 4},
+			{[]string{"api", "standard-cost", "items"}, 3},
+			{[]string{"api", "mrp-calculation", "profile"}, 3},
+			{[]string{"api", "item-calendar-promise"}, 2},
+			{[]string{"api", "financial", "relatorios", "ficha-tecnica"}, 4},
+		}
+		for _, pattern := range patterns {
+			if len(parts) <= pattern.index || len(parts) < len(pattern.prefix) {
+				continue
+			}
+			matches := true
+			for i, value := range pattern.prefix {
+				if parts[i] != value {
+					matches = false
+					break
+				}
+			}
+			if matches {
+				index = pattern.index
+				break
+			}
+		}
+	}
+	if index < 0 {
+		return nil
+	}
+	publicCode := parts[index]
+	id, err := resolveBusinessCode(r.Context(), pool, enterpriseID, publicCode)
+	if err != nil {
+		return err
+	}
+	parts[index] = strconv.FormatInt(id, 10)
+	r.URL.Path = "/" + strings.Join(parts, "/")
+	r.URL.RawPath = ""
+	// In a chi middleware registered inside a routed Group, the outer router has
+	// already captured URL parameters before this middleware runs. Rewriting only
+	// URL.Path therefore leaves chi.URLParam with the public code. Keep both views
+	// consistent so the real API router (not just an isolated middleware router)
+	// hands the immutable internal ID to legacy handlers.
+	if rc := chi.RouteContext(r.Context()); rc != nil {
+		for i, key := range rc.URLParams.Keys {
+			if (key == "code" || key == "itemCode" || key == "item_code") && rc.URLParams.Values[i] == publicCode {
+				rc.URLParams.Values[i] = strconv.FormatInt(id, 10)
+			}
+		}
+	}
+	return nil
+}
+
+func isStaticItemsPath(segment string) bool {
+	switch segment {
+	case "create", "with-masks", "classifications":
+		return true
+	default:
+		return false
+	}
+}
+
 func bypassItemResponseTranslation(r *http.Request) bool {
 	path := r.URL.Path
 	if strings.HasPrefix(path, "/api/reports/") || strings.Contains(path, "/download") || strings.Contains(path, "/attachments/") {
@@ -92,9 +196,6 @@ func translateItemPath(r *http.Request, pool *pgxpool.Pool, e int64) error {
 			continue
 		}
 		value := rc.URLParams.Values[i]
-		if _, err := strconv.ParseInt(value, 10, 64); err == nil {
-			continue
-		}
 		id, err := resolveBusinessCode(r.Context(), pool, e, value)
 		if err != nil {
 			return err
@@ -113,9 +214,6 @@ func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 		}
 		for i, value := range values {
 			if strings.TrimSpace(value) == "" {
-				continue
-			}
-			if _, err := strconv.ParseInt(value, 10, 64); err == nil {
 				continue
 			}
 			parts := strings.Split(value, ",")
@@ -205,6 +303,9 @@ func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) error {
 	case map[string]any:
 		for key, v := range node {
 			if _, ok := itemReferenceKeys[key]; ok {
+				if key == "item_code" && strings.HasPrefix(r.URL.Path, "/api/stock/cycle-counts") {
+					continue
+				}
 				translated, err := translateInputReference(r, pool, e, v)
 				if err != nil {
 					return fmt.Errorf("%s: %w", key, err)

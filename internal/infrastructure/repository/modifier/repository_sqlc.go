@@ -7,15 +7,21 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/modifier/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 func (r *repositoryModifierSQLC) Create(
 	ctx context.Context,
 	modifier *entity.Modifier,
 ) (*entity.Modifier, error) {
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	params := sqlc.CreateModifierParams{
-		Description: modifier.Description,
-		CreatedBy:   pgutil.ToPgUUID(modifier.CreatedBy),
+		Description:  modifier.Description,
+		EnterpriseID: tenantID,
+		CreatedBy:    pgutil.ToPgUUID(modifier.CreatedBy),
 	}
 
 	dbModifier, err := r.q.CreateModifier(ctx, params)
@@ -27,7 +33,11 @@ func (r *repositoryModifierSQLC) Create(
 }
 
 func (r *repositoryModifierSQLC) GetByID(ctx context.Context, id int) (*entity.Modifier, error) {
-	row, err := r.q.GetModifierByID(ctx, int64(id))
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetModifierByID(ctx, sqlc.GetModifierByIDParams{EnterpriseID: tenantID, ID: int64(id)})
 	if err != nil {
 		return nil, fmt.Errorf("get modifier by id %d: %w", id, err)
 	}
@@ -35,7 +45,11 @@ func (r *repositoryModifierSQLC) GetByID(ctx context.Context, id int) (*entity.M
 }
 
 func (r *repositoryModifierSQLC) List(ctx context.Context) ([]*entity.Modifier, error) {
-	rows, err := r.q.ListModifiers(ctx)
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListModifiers(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list modifiers: %w", err)
 	}
@@ -47,9 +61,12 @@ func (r *repositoryModifierSQLC) List(ctx context.Context) ([]*entity.Modifier, 
 }
 
 func (r *repositoryModifierSQLC) Update(ctx context.Context, modifier *entity.Modifier) (*entity.Modifier, error) {
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateModifier(ctx, sqlc.UpdateModifierParams{
-		ID:          int64(modifier.ID),
-		Description: modifier.Description,
+		EnterpriseID: tenantID, ID: int64(modifier.ID), Description: modifier.Description,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("update modifier %d: %w", modifier.ID, err)

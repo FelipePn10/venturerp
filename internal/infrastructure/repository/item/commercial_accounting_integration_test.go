@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -57,7 +56,7 @@ func TestItemCommercialAccountingRepositoryAndHTTPPartialUpdate(t *testing.T) {
 	h := handler.NewCreateItemHandler(nil, uc, nil, nil, nil)
 	router := chi.NewRouter()
 	router.Put("/api/items/{code}", h.UpdateItem)
-	req := httptest.NewRequest(http.MethodPut, "/api/items/"+strconv.FormatInt(int64(original.Code), 10), strings.NewReader(`{"commercial":{"warranty_days":730},"accounting":{"origin":0,"calculate_pis_cofins":false}}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/items/"+string(original.BusinessCode), strings.NewReader(`{"commercial":{"warranty_days":730},"accounting":{"origin":0,"calculate_pis_cofins":false}}`))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -78,7 +77,7 @@ func TestItemCommercialAccountingRepositoryAndHTTPPartialUpdate(t *testing.T) {
 	if _, err = tx.Exec(context.Background(), "SAVEPOINT invalid_reference"); err != nil {
 		t.Fatal(err)
 	}
-	badReq := httptest.NewRequest(http.MethodPut, "/api/items/"+strconv.FormatInt(int64(original.Code), 10), strings.NewReader(`{"commercial":{"transfer_warehouse_code":999999999}}`))
+	badReq := httptest.NewRequest(http.MethodPut, "/api/items/"+string(original.BusinessCode), strings.NewReader(`{"commercial":{"transfer_warehouse_code":999999999}}`))
 	badReq = badReq.WithContext(ctx)
 	badRec := httptest.NewRecorder()
 	router.ServeHTTP(badRec, badReq)

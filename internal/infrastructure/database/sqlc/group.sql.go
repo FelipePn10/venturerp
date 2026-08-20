@@ -50,11 +50,16 @@ func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group
 }
 
 const getGroupByCode = `-- name: GetGroupByCode :one
-SELECT id, code, description, enterprise_id, created_by, created_at FROM groups WHERE code = $1
+SELECT id, code, description, enterprise_id, created_by, created_at FROM groups WHERE enterprise_id = $1 AND code = $2
 `
 
-func (q *Queries) GetGroupByCode(ctx context.Context, code int32) (Group, error) {
-	row := q.db.QueryRow(ctx, getGroupByCode, code)
+type GetGroupByCodeParams struct {
+	EnterpriseID int64
+	Code         int32
+}
+
+func (q *Queries) GetGroupByCode(ctx context.Context, arg GetGroupByCodeParams) (Group, error) {
+	row := q.db.QueryRow(ctx, getGroupByCode, arg.EnterpriseID, arg.Code)
 	var i Group
 	err := row.Scan(
 		&i.ID,
@@ -68,11 +73,11 @@ func (q *Queries) GetGroupByCode(ctx context.Context, code int32) (Group, error)
 }
 
 const listGroups = `-- name: ListGroups :many
-SELECT id, code, description, enterprise_id, created_by, created_at FROM groups ORDER BY code
+SELECT id, code, description, enterprise_id, created_by, created_at FROM groups WHERE enterprise_id = $1 ORDER BY code
 `
 
-func (q *Queries) ListGroups(ctx context.Context) ([]Group, error) {
-	rows, err := q.db.Query(ctx, listGroups)
+func (q *Queries) ListGroups(ctx context.Context, enterpriseID int64) ([]Group, error) {
+	rows, err := q.db.Query(ctx, listGroups, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,19 +105,19 @@ func (q *Queries) ListGroups(ctx context.Context) ([]Group, error) {
 
 const updateGroup = `-- name: UpdateGroup :one
 UPDATE groups
-SET description = $2, enterprise_id = $3
-WHERE code = $1
+SET description = $3
+WHERE enterprise_id = $1 AND code = $2
 RETURNING id, code, description, enterprise_id, created_by, created_at
 `
 
 type UpdateGroupParams struct {
+	EnterpriseID int64
 	Code         int32
 	Description  string
-	EnterpriseID int64
 }
 
 func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) (Group, error) {
-	row := q.db.QueryRow(ctx, updateGroup, arg.Code, arg.Description, arg.EnterpriseID)
+	row := q.db.QueryRow(ctx, updateGroup, arg.EnterpriseID, arg.Code, arg.Description)
 	var i Group
 	err := row.Scan(
 		&i.ID,

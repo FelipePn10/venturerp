@@ -14,52 +14,61 @@ import (
 const createModifier = `-- name: CreateModifier :one
 INSERT INTO modifier (
     description,
+    enterprise_id,
     created_by
 ) VALUES (
-$1, $2
+$1, $2, $3
 )
-RETURNING id, description, created_by, created_at
+RETURNING id, description, created_by, created_at, enterprise_id
 `
 
 type CreateModifierParams struct {
-	Description string
-	CreatedBy   pgtype.UUID
+	Description  string
+	EnterpriseID int64
+	CreatedBy    pgtype.UUID
 }
 
 func (q *Queries) CreateModifier(ctx context.Context, arg CreateModifierParams) (Modifier, error) {
-	row := q.db.QueryRow(ctx, createModifier, arg.Description, arg.CreatedBy)
+	row := q.db.QueryRow(ctx, createModifier, arg.Description, arg.EnterpriseID, arg.CreatedBy)
 	var i Modifier
 	err := row.Scan(
 		&i.ID,
 		&i.Description,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getModifierByID = `-- name: GetModifierByID :one
-SELECT id, description, created_by, created_at FROM modifier WHERE id = $1
+SELECT id, description, created_by, created_at, enterprise_id FROM modifier WHERE enterprise_id = $1 AND id = $2
 `
 
-func (q *Queries) GetModifierByID(ctx context.Context, id int64) (Modifier, error) {
-	row := q.db.QueryRow(ctx, getModifierByID, id)
+type GetModifierByIDParams struct {
+	EnterpriseID int64
+	ID           int64
+}
+
+func (q *Queries) GetModifierByID(ctx context.Context, arg GetModifierByIDParams) (Modifier, error) {
+	row := q.db.QueryRow(ctx, getModifierByID, arg.EnterpriseID, arg.ID)
 	var i Modifier
 	err := row.Scan(
 		&i.ID,
 		&i.Description,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listModifiers = `-- name: ListModifiers :many
-SELECT id, description, created_by, created_at FROM modifier ORDER BY id
+SELECT id, description, created_by, created_at, enterprise_id FROM modifier WHERE enterprise_id = $1 ORDER BY id
 `
 
-func (q *Queries) ListModifiers(ctx context.Context) ([]Modifier, error) {
-	rows, err := q.db.Query(ctx, listModifiers)
+func (q *Queries) ListModifiers(ctx context.Context, enterpriseID int64) ([]Modifier, error) {
+	rows, err := q.db.Query(ctx, listModifiers, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +81,7 @@ func (q *Queries) ListModifiers(ctx context.Context) ([]Modifier, error) {
 			&i.Description,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -85,24 +95,26 @@ func (q *Queries) ListModifiers(ctx context.Context) ([]Modifier, error) {
 
 const updateModifier = `-- name: UpdateModifier :one
 UPDATE modifier
-SET description = $2
-WHERE id = $1
-RETURNING id, description, created_by, created_at
+SET description = $3
+WHERE enterprise_id = $1 AND id = $2
+RETURNING id, description, created_by, created_at, enterprise_id
 `
 
 type UpdateModifierParams struct {
-	ID          int64
-	Description string
+	EnterpriseID int64
+	ID           int64
+	Description  string
 }
 
 func (q *Queries) UpdateModifier(ctx context.Context, arg UpdateModifierParams) (Modifier, error) {
-	row := q.db.QueryRow(ctx, updateModifier, arg.ID, arg.Description)
+	row := q.db.QueryRow(ctx, updateModifier, arg.EnterpriseID, arg.ID, arg.Description)
 	var i Modifier
 	err := row.Scan(
 		&i.ID,
 		&i.Description,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

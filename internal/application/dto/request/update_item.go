@@ -1,13 +1,43 @@
 package request
 
 import (
+	"bytes"
+	"encoding/json"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/shopspring/decimal"
 )
 
 type UpdateItemDTO struct {
 	Commercial *UpdateCommercialDTO `json:"commercial,omitempty"`
 	Accounting *UpdateAccountingDTO `json:"accounting,omitempty"`
+	Warehouse  *UpdateWarehouseDTO  `json:"warehouse,omitempty"`
+}
+
+type UpdateWarehouseDTO struct {
+	CyclicalCountConfig OptionalCyclicalCountConfig `json:"cyclical_count_config,omitempty"`
+}
+
+// OptionalCyclicalCountConfig distinguishes omission (preserve) from an
+// explicit null (disable), which plain pointers cannot do with encoding/json.
+type OptionalCyclicalCountConfig struct {
+	Set   bool
+	Value *valueobject.CyclicalCountConfig
+}
+
+func (o *OptionalCyclicalCountConfig) UnmarshalJSON(data []byte) error {
+	o.Set = true
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		o.Value = nil
+		return nil
+	}
+	var value valueobject.CyclicalCountConfig
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	o.Value = &value
+	return nil
 }
 
 type UpdateCommercialDTO struct {

@@ -12,6 +12,7 @@ import (
 type StockLot struct {
 	ID           int64
 	ItemCode     int64
+	Mask         string
 	Lot          string
 	HeatNumber   *string
 	Certificate  *string

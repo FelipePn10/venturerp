@@ -1,6 +1,7 @@
 package item
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -147,6 +148,17 @@ func (r *RepositoryItemSQLC) Create(
 	return created, nil
 }
 
+func (r *RepositoryItemSQLC) ValidatePDMReferences(ctx context.Context, enterpriseID int64, groupCode, modifierCode int) error {
+	valid, err := r.q.ValidateItemPDMReferences(ctx, sqlc.ValidateItemPDMReferencesParams{EnterpriseID: enterpriseID, Column2: int64(groupCode), Column3: int64(modifierCode)})
+	if err != nil {
+		return fmt.Errorf("validar referências PDM: %w", err)
+	}
+	if !valid.Valid || !valid.Bool {
+		return fmt.Errorf("%w: grupo ou modificador PDM não existe na empresa autenticada", itemrepo.ErrInvalidReference)
+	}
+	return nil
+}
+
 func (r *RepositoryItemSQLC) NextAutomaticBusinessCode(ctx context.Context, enterpriseID int64) (valueobject.BusinessCode, error) {
 	code, err := r.q.NextAutomaticItemBusinessCode(ctx, enterpriseID)
 	if err != nil {
@@ -159,11 +171,15 @@ func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, ite
 	if err := r.validateFiscalReferences(ctx, item); err != nil {
 		return nil, err
 	}
+	cyclicalCountConfig, err := json.Marshal(item.Warehouse.CyclicalCountConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshal cyclical_count_config: %w", err)
+	}
 	p := sqlc.UpdateItemCommercialAccountingParams{BusinessCode: string(item.BusinessCode), EnterpriseID: item.EnterpriseID, CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
 		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
 		CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange, CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes, CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS, CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging, CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
-		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes)}
+		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes), WarehouseCyclicalCountConfig: cyclicalCountConfig}
 	dbItem, err := r.q.UpdateItemCommercialAccounting(ctx, p)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -338,7 +354,7 @@ func mapDBItemToEntity(
 
 	var engineeringDimensions *valueobject.Dimensions
 
-	if len(dbItem.EngineeringDimensions) > 0 {
+	if hasOptionalJSONValue(dbItem.EngineeringDimensions) {
 
 		var v valueobject.Dimensions
 
@@ -351,7 +367,7 @@ func mapDBItemToEntity(
 
 	var planningReorderPoint *valueobject.ReorderPoint
 
-	if len(dbItem.PlanningReorderPoint) > 0 {
+	if hasOptionalJSONValue(dbItem.PlanningReorderPoint) {
 
 		var v valueobject.ReorderPoint
 
@@ -364,7 +380,7 @@ func mapDBItemToEntity(
 
 	var cyclicalCount *valueobject.CyclicalCountConfig
 
-	if len(dbItem.WarehouseCyclicalCountConfig) > 0 {
+	if hasOptionalJSONValue(dbItem.WarehouseCyclicalCountConfig) {
 
 		var v valueobject.CyclicalCountConfig
 
@@ -459,6 +475,24 @@ func mapDBItemToEntity(
 		CreatedBy: pgutil.FromPgUUID(dbItem.CreatedBy),
 		CreatedAt: pgutil.FromPgTimestamp(dbItem.CreatedAt),
 	}, nil
+}
+
+// hasOptionalJSONValue normalizes the absence markers found in optional JSONB
+// value objects. Historical rows may contain SQL NULL, JSON null or an empty
+// object instead of NULL. Non-empty values remain present so their domain
+// validation cannot be bypassed by the persistence mapper.
+func hasOptionalJSONValue(raw []byte) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return false
+	}
+
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &object); err == nil && len(object) == 0 {
+		return false
+	}
+
+	return true
 }
 
 func unitOfMeasurementToPgText(value *types.TypeUnitOfMeasurementItem) pgtype.Text {

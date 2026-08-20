@@ -28,14 +28,27 @@ func (uc *UseCase) SaveParameters(ctx context.Context, dto request.SaveSalesQuot
 	if err != nil {
 		return nil, err
 	}
-	return uc.Repo.SaveParameters(ctx, &entity.Parameters{EnterpriseCode: tenantID, PurchaseOrderPrompt: dto.PurchaseOrderPrompt, DeliveryAuthorizationPrompt: dto.DeliveryAuthorizationPrompt, FinalConsumerCustomerCode: dto.FinalConsumerCustomerCode, AllowServiceItemsNFCe: dto.AllowServiceItemsNFCe, DefaultNFCe: dto.DefaultNFCe, MinimumCIFFreight: dto.MinimumCIFFreight, AddRedeliveryToFreight: dto.AddRedeliveryToFreight})
+	p := &entity.Parameters{EnterpriseCode: tenantID, PurchaseOrderPrompt: dto.PurchaseOrderPrompt, DeliveryAuthorizationPrompt: dto.DeliveryAuthorizationPrompt, FinalConsumerCustomerCode: dto.FinalConsumerCustomerCode, AllowServiceItemsNFCe: dto.AllowServiceItemsNFCe, DefaultNFCe: dto.DefaultNFCe, MinimumCIFFreight: dto.MinimumCIFFreight, AddRedeliveryToFreight: dto.AddRedeliveryToFreight}
+	if err := p.Validate(); err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	return uc.Repo.SaveParameters(ctx, p)
 }
 
 func (uc *UseCase) SaveCommissionPattern(ctx context.Context, dto request.SaveCommissionPatternDTO) (*entity.CommissionPattern, error) {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.SaveCommissionPattern(ctx, &entity.CommissionPattern{Code: dto.Code, Description: dto.Description, CommissionPct: dto.CommissionPct, InvoicePct: dto.InvoicePct, PaymentPct: dto.PaymentPct})
+	p := &entity.CommissionPattern{Code: dto.Code, Description: dto.Description, CommissionPct: dto.CommissionPct, InvoicePct: dto.InvoicePct, PaymentPct: dto.PaymentPct}
+	validationCode := p.Code
+	if p.Code == 0 {
+		p.Code = 1
+	}
+	if err := p.Validate(); err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	p.Code = validationCode
+	return uc.Repo.SaveCommissionPattern(ctx, p)
 }
 func (uc *UseCase) ListCommissionPatterns(ctx context.Context) ([]*entity.CommissionPattern, error) {
 	if !uc.Auth.CanGetSalesOrder(ctx) {
@@ -47,7 +60,16 @@ func (uc *UseCase) SaveCancellationReason(ctx context.Context, dto request.SaveC
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.SaveCancellationReason(ctx, &entity.CancellationReason{Code: dto.Code, Description: dto.Description, AllowUncancel: dto.AllowUncancel, RequireComplement: dto.RequireComplement})
+	v := &entity.CancellationReason{Code: dto.Code, Description: dto.Description, AllowUncancel: dto.AllowUncancel, RequireComplement: dto.RequireComplement}
+	validationCode := v.Code
+	if v.Code == 0 {
+		v.Code = 1
+	}
+	if err := v.Validate(); err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	v.Code = validationCode
+	return uc.Repo.SaveCancellationReason(ctx, v)
 }
 func (uc *UseCase) ListCancellationReasons(ctx context.Context) ([]*entity.CancellationReason, error) {
 	if !uc.Auth.CanGetSalesOrder(ctx) {

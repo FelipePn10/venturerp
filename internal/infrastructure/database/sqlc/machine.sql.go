@@ -83,9 +83,10 @@ INSERT INTO machines (
     capacity_unit,
     capacity_period,
     efficiency_rate,
-    created_by
+    created_by,
+    enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 `
 
@@ -99,6 +100,7 @@ type CreateMachineParams struct {
 	CapacityPeriod  CapacityPeriodEnum
 	EfficiencyRate  pgtype.Numeric
 	CreatedBy       pgtype.UUID
+	EnterpriseID    *int64
 }
 
 func (q *Queries) CreateMachine(ctx context.Context, arg CreateMachineParams) (Machine, error) {
@@ -112,6 +114,7 @@ func (q *Queries) CreateMachine(ctx context.Context, arg CreateMachineParams) (M
 		arg.CapacityPeriod,
 		arg.EfficiencyRate,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i Machine
 	err := row.Scan(
@@ -153,9 +156,10 @@ INSERT INTO machine_types (
     type,
     requires_operator,
     is_active,
-    created_by
+    created_by,
+    enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 `
 
@@ -167,6 +171,7 @@ type CreateMachineTypeParams struct {
 	RequiresOperator bool
 	IsActive         bool
 	CreatedBy        pgtype.UUID
+	EnterpriseID     *int64
 }
 
 func (q *Queries) CreateMachineType(ctx context.Context, arg CreateMachineTypeParams) (MachineType, error) {
@@ -178,6 +183,7 @@ func (q *Queries) CreateMachineType(ctx context.Context, arg CreateMachineTypePa
 		arg.RequiresOperator,
 		arg.IsActive,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i MachineType
 	err := row.Scan(
@@ -349,11 +355,16 @@ func (q *Queries) GetMachineByCode(ctx context.Context, code int64) (Machine, er
 const getMachineTypeByCode = `-- name: GetMachineTypeByCode :one
 SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 FROM machine_types
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetMachineTypeByCode(ctx context.Context, code int64) (MachineType, error) {
-	row := q.db.QueryRow(ctx, getMachineTypeByCode, code)
+type GetMachineTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetMachineTypeByCode(ctx context.Context, arg GetMachineTypeByCodeParams) (MachineType, error) {
+	row := q.db.QueryRow(ctx, getMachineTypeByCode, arg.Code, arg.EnterpriseID)
 	var i MachineType
 	err := row.Scan(
 		&i.ID,

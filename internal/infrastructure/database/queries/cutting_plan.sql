@@ -1,7 +1,8 @@
 -- ─── cutting_plans ────────────────────────────────────────────────────────────
 
 -- name: NextCuttingPlanCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM cutting_plans;
+SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM cutting_plans
+WHERE enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: CreateCuttingPlan :one
 INSERT INTO cutting_plans (
@@ -10,14 +11,14 @@ INSERT INTO cutting_plans (
     kerf_mm, trim_mm, min_remnant_mm,
     warehouse_id, production_order_code, lot_consumption_mode, include_remnants,
     stock_uom, uom_factor,
-    created_by
+    created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, 'RASCUNHO',
     $5, $6,
     $7, $8, $9,
     $10, $11, $12, $13,
     $14, $15,
-    $16
+    $16, sqlc.arg(enterprise_id)
 ) RETURNING *;
 
 -- name: GetCuttingPlanByID :one
@@ -47,11 +48,11 @@ DELETE FROM cutting_plans WHERE id = $1;
 
 -- name: AddCuttingPlanPart :one
 INSERT INTO cutting_plan_parts (
-    plan_id, item_code, label, length_mm, quantity, source_ref,
+    plan_id, enterprise_id, item_code, label, length_mm, quantity, source_ref,
     width_mm, height_mm, grain, allow_rotation, geometry,
     edge_top, edge_bottom, edge_left, edge_right, band_item_code, band_cost_per_m
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
+    $1, sqlc.arg(enterprise_id), $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11,
     $12, $13, $14, $15, $16, $17
 ) RETURNING *;
@@ -66,10 +67,10 @@ DELETE FROM cutting_plan_parts WHERE id = $1;
 
 -- name: AddCuttingStockPiece :one
 INSERT INTO cutting_stock_pieces (
-    plan_id, length_mm, quantity, lot, is_remnant, remnant_id, heat_number,
+    plan_id, enterprise_id, length_mm, quantity, lot, is_remnant, remnant_id, heat_number,
     width_mm, height_mm
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7,
+    $1, sqlc.arg(enterprise_id), $2, $3, $4, $5, $6, $7,
     $8, $9
 ) RETURNING *;
 
@@ -89,12 +90,12 @@ DELETE FROM cutting_patterns WHERE plan_id = $1;
 
 -- name: CreateCuttingPattern :one
 INSERT INTO cutting_patterns (
-    plan_id, sequence, stock_length_mm, repeat_count,
+    plan_id, enterprise_id, sequence, stock_length_mm, repeat_count,
     used_mm, kerf_loss_mm, remnant_mm, utilization_pct, is_remnant,
     stock_width_mm, stock_height_mm, used_area_mm2, remnant_area_mm2,
     remnant_width_mm, remnant_height_mm
 ) VALUES (
-    $1, $2, $3, $4,
+    $1, sqlc.arg(enterprise_id), $2, $3, $4,
     $5, $6, $7, $8, $9,
     $10, $11, $12, $13,
     $14, $15
@@ -105,10 +106,10 @@ SELECT * FROM cutting_patterns WHERE plan_id = $1 ORDER BY sequence;
 
 -- name: CreateCuttingPatternPlacement :one
 INSERT INTO cutting_pattern_placements (
-    pattern_id, sequence, part_id, label, length_mm, offset_mm,
+    pattern_id, enterprise_id, sequence, part_id, label, length_mm, offset_mm,
     pos_x_mm, pos_y_mm, width_mm, height_mm, rotated, rotation_deg
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
+    $1, sqlc.arg(enterprise_id), $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12
 ) RETURNING *;
 
@@ -128,11 +129,11 @@ WHERE id = $1;
 
 -- name: CreateStockRemnant :one
 INSERT INTO stock_remnants (
-    item_code, warehouse_id, length_mm, lot, heat_number, certificate,
+    enterprise_id, item_code, warehouse_id, length_mm, lot, heat_number, certificate,
     status, unit_cost, origin_plan_id, created_by,
     width_mm, height_mm
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
+    sqlc.arg(enterprise_id), $1, $2, $3, $4, $5, $6,
     'AVAILABLE', $7, $8, $9,
     $10, $11
 ) RETURNING *;
@@ -159,25 +160,25 @@ WHERE id = $1 AND status = 'AVAILABLE';
 
 -- name: AddCuttingPlanConsumption :one
 INSERT INTO cutting_plan_consumptions (
-    plan_id, item_code, source_type, lot, remnant_id,
+    plan_id, enterprise_id, item_code, source_type, lot, remnant_id,
     quantity, length_mm, unit_cost, total_cost, warehouse_id, movement_id
 ) VALUES (
-    $1, $2, $3, $4, $5,
+    $1, sqlc.arg(enterprise_id), $2, $3, $4, $5,
     $6, $7, $8, $9, $10, $11
 ) RETURNING *;
 
 -- name: ListCuttingPlanConsumptions :many
 SELECT * FROM cutting_plan_consumptions WHERE plan_id = $1 ORDER BY id;
 
--- ─── cutting_settings (singleton id=1) ────────────────────────────────────────
+-- ─── cutting_settings (one row per tenant) ───────────────────────────────────
 
 -- name: GetCuttingSettings :one
-SELECT * FROM cutting_settings WHERE id = 1;
+SELECT * FROM cutting_settings WHERE enterprise_id = $1;
 
 -- name: UpsertCuttingSettings :one
-INSERT INTO cutting_settings (id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at)
-VALUES (1, $1, $2, $3, NOW())
-ON CONFLICT (id) DO UPDATE SET
+INSERT INTO cutting_settings (enterprise_id, default_consumption_mode, default_min_remnant_mm, default_warehouse_id, updated_at)
+VALUES ($1, $2, $3, $4, NOW())
+ON CONFLICT (enterprise_id) DO UPDATE SET
     default_consumption_mode = EXCLUDED.default_consumption_mode,
     default_min_remnant_mm   = EXCLUDED.default_min_remnant_mm,
     default_warehouse_id     = EXCLUDED.default_warehouse_id,

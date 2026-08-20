@@ -280,6 +280,31 @@ porte, Simples e MEI. CNPJ inválido retorna `400`, inexistente `404` e indispon
 do provedor `502`. Após o fornecedor existir, a consulta cadastral fiscal permanece em
 `POST /api/suppliers/{code}/sefaz-query`.
 
+Ao clicar na lupa, não preencher somente o nome. O Desktop deve aplicar o mesmo
+mapeamento tanto no cadastro de cliente quanto no de fornecedor:
+
+| Resposta de `GET /api/cnpj/{cnpj}` | Campo do formulário |
+|---|---|
+| `legal_name` | razão social / `name` |
+| `trade_name` | nome fantasia / `trade_name` |
+| `state_registration` | inscrição estadual / `state_registration` |
+| `address.zip_code` | CEP |
+| `address.street` | logradouro |
+| `address.number` | número |
+| `address.complement` | complemento |
+| `address.neighborhood` | bairro |
+| `address.city` | cidade |
+| `address.uf` | UF |
+| `email` | e-mail principal |
+| `phone` | telefone principal |
+| `main_activity.code` | CNAE principal |
+
+`registration_status`, `legal_nature`, `size`, `opening_date`, `simples_optant`,
+`mei`, `state_registrations` e `secondary_activities` também são devolvidos. A
+tela deve preencher apenas valores presentes, preservar campos que a fonte não
+informou e permitir revisão manual antes de salvar. A consulta não cria nem altera
+o cliente/fornecedor no backend.
+
 ## 11. Laudos e certificados do fornecedor — IMPLEMENTADO NO BACKEND
 
 - Criar/anexar: `POST /api/item-suppliers/{id}/quality-reports`;

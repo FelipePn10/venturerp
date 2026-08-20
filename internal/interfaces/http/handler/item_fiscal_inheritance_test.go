@@ -84,6 +84,9 @@ func TestCreateItemHTTPPreservesPISCOFINSInheritanceAndOverrides(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
 				t.Fatal(err)
 			}
+			if envelope.Data.Code != fmt.Sprintf("FISC-%d", i+1) {
+				t.Fatalf("código comercial não foi preservado como string: %q", envelope.Data.Code)
+			}
 			for name, effective := range map[string]*response.EffectiveFiscalContextResponse{"purchase": envelope.Data.FiscalEffective.Purchase, "sale": envelope.Data.FiscalEffective.Sale} {
 				if effective == nil || effective.CalculatePISCOFINS == nil || *effective.CalculatePISCOFINS != tc.expected || effective.Sources["calculate_pis_cofins"] != tc.expectedSource {
 					t.Errorf("%s effective=%+v", name, effective)

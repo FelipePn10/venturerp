@@ -2,19 +2,32 @@ package mrp_uc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
+	notificationentity "github.com/FelipePn10/panossoerp/internal/domain/notification/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 type NotifyExceptionsUseCase struct {
 	repo     mrprepo.MRPCalculationRepository
 	webhook  *notification.WebhookClient
 	emailSvc *notification.EmailService
+	outbox   ports.NotificationOutboxWriter
+}
+
+func (uc *NotifyExceptionsUseCase) WithOutbox(outbox ports.NotificationOutboxWriter) *NotifyExceptionsUseCase {
+	uc.outbox = outbox
+	return uc
 }
 
 func NewNotifyExceptionsUseCase(repo mrprepo.MRPCalculationRepository, emailSvc *notification.EmailService) *NotifyExceptionsUseCase {
@@ -59,7 +72,17 @@ func (uc *NotifyExceptionsUseCase) Execute(ctx context.Context, dto NotifyExcept
 		}
 	}
 
-	if len(dto.EmailTo) > 0 && uc.emailSvc != nil {
+	if len(dto.EmailTo) > 0 && uc.outbox != nil {
+		enterpriseID, tenantErr := tenant.ID(ctx)
+		payload, marshalErr := json.Marshal(summary)
+		if tenantErr == nil && marshalErr == nil {
+			digest := sha256.Sum256(payload)
+			enqueueErr := uc.outbox.Enqueue(ctx, notificationentity.OutboxEvent{EnterpriseID: enterpriseID, EventKey: "MRP_EXCECAO", EventVersion: 1, AggregateType: "PLANO_MRP", AggregateInternalID: fmt.Sprint(dto.PlanCode), Payload: payload, DeduplicationKey: "plano:" + fmt.Sprint(dto.PlanCode) + ":" + hex.EncodeToString(digest[:12]), OccurredAt: summary.GeneratedAt})
+			if enqueueErr != nil {
+				slog.Warn("não foi possível registrar alerta MRP", "plano", dto.PlanCode, "erro", enqueueErr)
+			}
+		}
+	} else if len(dto.EmailTo) > 0 && uc.emailSvc != nil {
 		subject := fmt.Sprintf("[MRP] Exceções no Plano %d — %d ocorrência(s)", dto.PlanCode, summary.Total)
 		if err := uc.emailSvc.Send(dto.EmailTo, subject, summary.FormatText()); err != nil {
 			return summary, fmt.Errorf("email delivery failed: %w", err)

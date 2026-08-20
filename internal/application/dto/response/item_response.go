@@ -64,12 +64,16 @@ type ItemAttributeResponse struct {
 
 // ItemWarehouseResponse is the warehouse folder of an item.
 type ItemWarehouseResponse struct {
-	WarehouseCode                   int    `json:"warehouse_code"`
-	UnitOfMeasurement               string `json:"unit_of_measurement"`
-	AutomaticLow                    bool   `json:"automatic_low"`
-	CyclicalCountDaysInterval       *int   `json:"cyclical_count_days_interval,omitempty"`
-	MinimumStock                    int32  `json:"minimum_stock"`
-	AverageMonthlyConsumptionManual *int   `json:"average_monthly_consumption_manual,omitempty"`
+	WarehouseCode                   int                              `json:"warehouse_code"`
+	UnitOfMeasurement               string                           `json:"unit_of_measurement"`
+	AutomaticLow                    bool                             `json:"automatic_low"`
+	CyclicalCountConfig             *ItemCyclicalCountConfigResponse `json:"cyclical_count_config,omitempty"`
+	MinimumStock                    int32                            `json:"minimum_stock"`
+	AverageMonthlyConsumptionManual *int                             `json:"average_monthly_consumption_manual,omitempty"`
+}
+
+type ItemCyclicalCountConfigResponse struct {
+	DaysInterval int `json:"days_interval"`
 }
 
 // ItemEngineeringResponse is the engineering folder of an item.
