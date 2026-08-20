@@ -2,6 +2,7 @@ package sales_quotation_uc
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -264,6 +265,9 @@ func (uc *UseCase) Cancel(ctx context.Context, dto request.CancelSalesQuotationD
 	}
 	reason, err := uc.Repo.GetCancellationReason(ctx, dto.ReasonCode)
 	if err != nil {
+		if errors.Is(err, repository.ErrCancellationReasonNotFound) {
+			return errorsuc.NewValidationError("cancellation reason does not exist in the authenticated enterprise")
+		}
 		return err
 	}
 	if reason.RequireComplement && (dto.Complement == nil || strings.TrimSpace(*dto.Complement) == "") {

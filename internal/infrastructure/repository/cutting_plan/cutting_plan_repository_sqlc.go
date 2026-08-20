@@ -2,6 +2,7 @@ package cutting_plan
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -30,11 +33,19 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.CuttingPlanRepository {
 // ─── plans ────────────────────────────────────────────────────────────────────
 
 func (r *CuttingPlanRepositorySQLC) NextPlanCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextCuttingPlanCode(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextCuttingPlanCode(ctx, enterpriseID)
 	return int64(v), err
 }
 
 func (r *CuttingPlanRepositorySQLC) CreatePlan(ctx context.Context, p *entity.CuttingPlan) (*entity.CuttingPlan, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateCuttingPlan(ctx, sqlc.CreateCuttingPlanParams{
 		Code:                p.Code,
 		Description:         pgutil.ToPgTextFromPtr(p.Description),
@@ -52,6 +63,7 @@ func (r *CuttingPlanRepositorySQLC) CreatePlan(ctx context.Context, p *entity.Cu
 		StockUom:            string(p.StockUoM),
 		UomFactor:           pgutil.ToPgNumericFromFloat64(p.UoMFactor),
 		CreatedBy:           pgutil.ToPgUUID(p.CreatedBy),
+		EnterpriseID:        enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating cutting plan: %w", err)
@@ -99,6 +111,10 @@ func (r *CuttingPlanRepositorySQLC) DeletePlan(ctx context.Context, id int64) er
 // ─── parts ────────────────────────────────────────────────────────────────────
 
 func (r *CuttingPlanRepositorySQLC) AddPart(ctx context.Context, part *entity.CuttingPlanPart) (*entity.CuttingPlanPart, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddCuttingPlanPart(ctx, sqlc.AddCuttingPlanPartParams{
 		PlanID:        part.PlanID,
 		ItemCode:      part.ItemCode,
@@ -117,6 +133,7 @@ func (r *CuttingPlanRepositorySQLC) AddPart(ctx context.Context, part *entity.Cu
 		EdgeRight:     part.EdgeRight,
 		BandItemCode:  part.BandItemCode,
 		BandCostPerM:  pgutil.ToPgNumericFromFloat64(part.BandCostPerM),
+		EnterpriseID:  enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adding part: %w", err)
@@ -143,16 +160,21 @@ func (r *CuttingPlanRepositorySQLC) RemovePart(ctx context.Context, id int64) er
 // ─── stock pieces ─────────────────────────────────────────────────────────────
 
 func (r *CuttingPlanRepositorySQLC) AddStockPiece(ctx context.Context, s *entity.CuttingStockPiece) (*entity.CuttingStockPiece, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddCuttingStockPiece(ctx, sqlc.AddCuttingStockPieceParams{
-		PlanID:     s.PlanID,
-		LengthMm:   pgutil.ToPgNumericFromFloat64(s.LengthMM),
-		Quantity:   int32(s.Quantity),
-		Lot:        pgutil.ToPgTextFromPtr(s.Lot),
-		IsRemnant:  s.IsRemnant,
-		RemnantID:  s.RemnantID,
-		HeatNumber: pgutil.ToPgTextFromPtr(s.HeatNumber),
-		WidthMm:    pgutil.ToPgNumericFromFloat64(s.WidthMM),
-		HeightMm:   pgutil.ToPgNumericFromFloat64(s.HeightMM),
+		PlanID:       s.PlanID,
+		LengthMm:     pgutil.ToPgNumericFromFloat64(s.LengthMM),
+		Quantity:     int32(s.Quantity),
+		Lot:          pgutil.ToPgTextFromPtr(s.Lot),
+		IsRemnant:    s.IsRemnant,
+		RemnantID:    s.RemnantID,
+		HeatNumber:   pgutil.ToPgTextFromPtr(s.HeatNumber),
+		WidthMm:      pgutil.ToPgNumericFromFloat64(s.WidthMM),
+		HeightMm:     pgutil.ToPgNumericFromFloat64(s.HeightMM),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adding stock piece: %w", err)
@@ -179,6 +201,10 @@ func (r *CuttingPlanRepositorySQLC) RemoveStockPiece(ctx context.Context, id int
 // ─── patterns (transactional replace) ─────────────────────────────────────────
 
 func (r *CuttingPlanRepositorySQLC) ReplacePatterns(ctx context.Context, planID int64, patterns []*entity.CuttingPattern) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -207,24 +233,26 @@ func (r *CuttingPlanRepositorySQLC) ReplacePatterns(ctx context.Context, planID 
 			RemnantAreaMm2:  pgutil.ToPgNumericFromFloat64(pat.RemnantAreaMM2),
 			RemnantWidthMm:  pgutil.ToPgNumericFromFloat64(pat.RemnantWidthMM),
 			RemnantHeightMm: pgutil.ToPgNumericFromFloat64(pat.RemnantHeightMM),
+			EnterpriseID:    enterpriseID,
 		})
 		if err != nil {
 			return fmt.Errorf("inserting pattern: %w", err)
 		}
 		for _, pl := range pat.Placements {
 			if _, err := qtx.CreateCuttingPatternPlacement(ctx, sqlc.CreateCuttingPatternPlacementParams{
-				PatternID:   prow.ID,
-				Sequence:    int32(pl.Sequence),
-				PartID:      pl.PartID,
-				Label:       pl.Label,
-				LengthMm:    pgutil.ToPgNumericFromFloat64(pl.LengthMM),
-				OffsetMm:    pgutil.ToPgNumericFromFloat64(pl.OffsetMM),
-				PosXMm:      pgutil.ToPgNumericFromFloat64(pl.PosXMM),
-				PosYMm:      pgutil.ToPgNumericFromFloat64(pl.PosYMM),
-				WidthMm:     pgutil.ToPgNumericFromFloat64(pl.WidthMM),
-				HeightMm:    pgutil.ToPgNumericFromFloat64(pl.HeightMM),
-				Rotated:     pl.Rotated,
-				RotationDeg: pgutil.ToPgNumericFromFloat64(pl.RotationDeg),
+				PatternID:    prow.ID,
+				Sequence:     int32(pl.Sequence),
+				PartID:       pl.PartID,
+				Label:        pl.Label,
+				LengthMm:     pgutil.ToPgNumericFromFloat64(pl.LengthMM),
+				OffsetMm:     pgutil.ToPgNumericFromFloat64(pl.OffsetMM),
+				PosXMm:       pgutil.ToPgNumericFromFloat64(pl.PosXMM),
+				PosYMm:       pgutil.ToPgNumericFromFloat64(pl.PosYMM),
+				WidthMm:      pgutil.ToPgNumericFromFloat64(pl.WidthMM),
+				HeightMm:     pgutil.ToPgNumericFromFloat64(pl.HeightMM),
+				Rotated:      pl.Rotated,
+				RotationDeg:  pgutil.ToPgNumericFromFloat64(pl.RotationDeg),
+				EnterpriseID: enterpriseID,
 			}); err != nil {
 				return fmt.Errorf("inserting placement: %w", err)
 			}
@@ -373,7 +401,14 @@ func placementRowToEntity(row sqlc.CuttingPatternPlacement) *entity.PatternPlace
 // ─── phase 2: settings ────────────────────────────────────────────────────────
 
 func (r *CuttingPlanRepositorySQLC) GetSettings(ctx context.Context) (*entity.CuttingSettings, error) {
-	row, err := r.q.GetCuttingSettings(ctx)
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetCuttingSettings(ctx, tenantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &entity.CuttingSettings{DefaultConsumptionMode: entity.ConsumptionAutomatic}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("fetching cutting settings: %w", err)
 	}
@@ -381,7 +416,12 @@ func (r *CuttingPlanRepositorySQLC) GetSettings(ctx context.Context) (*entity.Cu
 }
 
 func (r *CuttingPlanRepositorySQLC) UpsertSettings(ctx context.Context, s *entity.CuttingSettings) (*entity.CuttingSettings, error) {
+	tenantID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpsertCuttingSettings(ctx, sqlc.UpsertCuttingSettingsParams{
+		EnterpriseID:           tenantID,
 		DefaultConsumptionMode: string(s.DefaultConsumptionMode),
 		DefaultMinRemnantMm:    pgutil.ToPgNumericFromFloat64(s.DefaultMinRemnantMM),
 		DefaultWarehouseID:     s.DefaultWarehouseID,
@@ -472,6 +512,10 @@ func (r *CuttingPlanRepositorySQLC) CommitRelease(
 	newRemnants []*entity.StockRemnant,
 	consumptions []*entity.CuttingPlanConsumption,
 ) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin release tx: %w", err)
@@ -499,6 +543,7 @@ func (r *CuttingPlanRepositorySQLC) CommitRelease(
 			CreatedBy:    pgutil.ToPgUUID(rem.CreatedBy),
 			WidthMm:      pgutil.ToPgNumericFromFloat64(rem.WidthMM),
 			HeightMm:     pgutil.ToPgNumericFromFloat64(rem.HeightMM),
+			EnterpriseID: enterpriseID,
 		}); err != nil {
 			return fmt.Errorf("creating remnant: %w", err)
 		}
@@ -506,17 +551,18 @@ func (r *CuttingPlanRepositorySQLC) CommitRelease(
 
 	for _, c := range consumptions {
 		if _, err := qtx.AddCuttingPlanConsumption(ctx, sqlc.AddCuttingPlanConsumptionParams{
-			PlanID:      c.PlanID,
-			ItemCode:    c.ItemCode,
-			SourceType:  c.SourceType,
-			Lot:         pgutil.ToPgTextFromPtr(c.Lot),
-			RemnantID:   c.RemnantID,
-			Quantity:    pgutil.ToPgNumericFromFloat64(c.Quantity),
-			LengthMm:    pgutil.ToPgNumericFromFloat64(c.LengthMM),
-			UnitCost:    pgutil.ToPgNumericFromFloat64(c.UnitCost),
-			TotalCost:   pgutil.ToPgNumericFromFloat64(c.TotalCost),
-			WarehouseID: c.WarehouseID,
-			MovementID:  c.MovementID,
+			PlanID:       c.PlanID,
+			ItemCode:     c.ItemCode,
+			SourceType:   c.SourceType,
+			Lot:          pgutil.ToPgTextFromPtr(c.Lot),
+			RemnantID:    c.RemnantID,
+			Quantity:     pgutil.ToPgNumericFromFloat64(c.Quantity),
+			LengthMm:     pgutil.ToPgNumericFromFloat64(c.LengthMM),
+			UnitCost:     pgutil.ToPgNumericFromFloat64(c.UnitCost),
+			TotalCost:    pgutil.ToPgNumericFromFloat64(c.TotalCost),
+			WarehouseID:  c.WarehouseID,
+			MovementID:   c.MovementID,
+			EnterpriseID: enterpriseID,
 		}); err != nil {
 			return fmt.Errorf("recording consumption: %w", err)
 		}

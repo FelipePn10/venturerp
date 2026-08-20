@@ -753,6 +753,9 @@ func (r *Repository) GetCancellationReason(ctx context.Context, code int64) (*qu
 	}
 	v := new(quoteentity.CancellationReason)
 	err = r.pool.QueryRow(ctx, `SELECT id,enterprise_code,code,description,allow_uncancel,require_complement,is_active,created_at,updated_at FROM public.sales_quotation_cancellation_reasons WHERE enterprise_code=$1 AND code=$2 AND is_active`, tenantID, code).Scan(&v.ID, &v.EnterpriseCode, &v.Code, &v.Description, &v.AllowUncancel, &v.RequireComplement, &v.IsActive, &v.CreatedAt, &v.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, quoterepo.ErrCancellationReasonNotFound
+	}
 	return v, err
 }
 

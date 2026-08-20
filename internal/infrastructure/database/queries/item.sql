@@ -105,7 +105,8 @@ UPDATE items SET
  accounting_sale_unit_of_measurement=$30, accounting_purchase_unit_of_measurement=$31,
  accounting_inventory_group_code=$32, accounting_classification_code=$33, accounting_cest=$34,
  accounting_input_code=$35, accounting_notes=$36,
- accounting_calculate_pis_cofins=sqlc.narg(accounting_calculate_pis_cofins)::boolean
+	accounting_calculate_pis_cofins=sqlc.narg(accounting_calculate_pis_cofins)::boolean,
+	warehouse_cyclical_count_config=sqlc.narg(warehouse_cyclical_count_config)::jsonb
 WHERE business_code=$1 AND enterprise_id=$37
 RETURNING *;
 
@@ -150,3 +151,6 @@ WHERE f.enterprise_id=sqlc.arg(enterprise_id) AND f.is_active
  AND f.valid_from<=CURRENT_DATE AND (f.valid_until IS NULL OR f.valid_until>=CURRENT_DATE)
  AND (f.code::text=sqlc.arg(classification_code)::text OR f.ncm=sqlc.arg(classification_code)::text)
 ORDER BY CASE WHEN f.code::text=sqlc.arg(classification_code)::text THEN 0 ELSE 1 END,f.valid_from DESC,f.id DESC LIMIT 1;
+-- name: ValidateItemPDMReferences :one
+SELECT ($2::bigint=0 OR EXISTS(SELECT 1 FROM groups g WHERE g.enterprise_id=$1 AND g.code=$2))
+   AND ($3::bigint=0 OR EXISTS(SELECT 1 FROM modifier m WHERE m.enterprise_id=$1 AND m.id=$3)) AS valid;

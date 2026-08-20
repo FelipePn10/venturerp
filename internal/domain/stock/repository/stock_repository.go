@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 )
+
+var ErrInsufficientStock = errors.New("estoque disponível insuficiente para a reserva")
 
 type StockRepository interface {
 	// Stock movements

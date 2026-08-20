@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -43,6 +44,15 @@ type Metrics struct {
 	hist     map[string]*histogram // key: method\x00route
 	inFlight int64
 	start    time.Time
+	extra    func(context.Context) (string, error)
+}
+
+// SetExtraCollector appends bounded-cardinality application metrics to the
+// same authenticated endpoint used by the HTTP collector.
+func (m *Metrics) SetExtraCollector(collector func(context.Context) (string, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.extra = collector
 }
 
 // NewMetrics returns a ready-to-use collector.
@@ -110,6 +120,13 @@ func (m *Metrics) observe(method, route string, status int, secs float64) {
 // backslash and newline characters Prometheus requires to be escaped.
 func (m *Metrics) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var extra string
+		m.mu.Lock()
+		collector := m.extra
+		m.mu.Unlock()
+		if collector != nil {
+			extra, _ = collector(r.Context())
+		}
 		m.mu.Lock()
 		defer m.mu.Unlock()
 
@@ -148,6 +165,7 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		b.WriteString("# HELP app_uptime_seconds Seconds since the process started.\n")
 		b.WriteString("# TYPE app_uptime_seconds gauge\n")
 		fmt.Fprintf(&b, "app_uptime_seconds %g\n", time.Since(m.start).Seconds())
+		b.WriteString(extra)
 
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		_, _ = w.Write([]byte(b.String()))

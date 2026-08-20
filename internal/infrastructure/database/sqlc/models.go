@@ -3955,22 +3955,24 @@ type CuttingPattern struct {
 	RemnantAreaMm2  pgtype.Numeric
 	RemnantWidthMm  pgtype.Numeric
 	RemnantHeightMm pgtype.Numeric
+	EnterpriseID    int64
 }
 
 type CuttingPatternPlacement struct {
-	ID          int64
-	PatternID   int64
-	Sequence    int32
-	PartID      *int64
-	Label       string
-	LengthMm    pgtype.Numeric
-	OffsetMm    pgtype.Numeric
-	PosXMm      pgtype.Numeric
-	PosYMm      pgtype.Numeric
-	WidthMm     pgtype.Numeric
-	HeightMm    pgtype.Numeric
-	Rotated     bool
-	RotationDeg pgtype.Numeric
+	ID           int64
+	PatternID    int64
+	Sequence     int32
+	PartID       *int64
+	Label        string
+	LengthMm     pgtype.Numeric
+	OffsetMm     pgtype.Numeric
+	PosXMm       pgtype.Numeric
+	PosYMm       pgtype.Numeric
+	WidthMm      pgtype.Numeric
+	HeightMm     pgtype.Numeric
+	Rotated      bool
+	RotationDeg  pgtype.Numeric
+	EnterpriseID int64
 }
 
 type CuttingPlan struct {
@@ -4001,22 +4003,24 @@ type CuttingPlan struct {
 	ReleasedAt          pgtype.Timestamptz
 	StockUom            string
 	UomFactor           pgtype.Numeric
+	EnterpriseID        int64
 }
 
 type CuttingPlanConsumption struct {
-	ID          int64
-	PlanID      int64
-	ItemCode    int64
-	SourceType  string
-	Lot         pgtype.Text
-	RemnantID   *int64
-	Quantity    pgtype.Numeric
-	LengthMm    pgtype.Numeric
-	UnitCost    pgtype.Numeric
-	TotalCost   pgtype.Numeric
-	WarehouseID int64
-	MovementID  *int64
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	PlanID       int64
+	ItemCode     int64
+	SourceType   string
+	Lot          pgtype.Text
+	RemnantID    *int64
+	Quantity     pgtype.Numeric
+	LengthMm     pgtype.Numeric
+	UnitCost     pgtype.Numeric
+	TotalCost    pgtype.Numeric
+	WarehouseID  int64
+	MovementID   *int64
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type CuttingPlanOrderCost struct {
@@ -4048,6 +4052,7 @@ type CuttingPlanPart struct {
 	EdgeRight     bool
 	BandItemCode  *int64
 	BandCostPerM  pgtype.Numeric
+	EnterpriseID  int64
 }
 
 type CuttingSetting struct {
@@ -4056,20 +4061,22 @@ type CuttingSetting struct {
 	DefaultMinRemnantMm    pgtype.Numeric
 	DefaultWarehouseID     *int64
 	UpdatedAt              pgtype.Timestamptz
+	EnterpriseID           int64
 }
 
 type CuttingStockPiece struct {
-	ID         int64
-	PlanID     int64
-	LengthMm   pgtype.Numeric
-	Quantity   int32
-	Lot        pgtype.Text
-	IsRemnant  bool
-	CreatedAt  pgtype.Timestamptz
-	RemnantID  *int64
-	HeatNumber pgtype.Text
-	WidthMm    pgtype.Numeric
-	HeightMm   pgtype.Numeric
+	ID           int64
+	PlanID       int64
+	LengthMm     pgtype.Numeric
+	Quantity     int32
+	Lot          pgtype.Text
+	IsRemnant    bool
+	CreatedAt    pgtype.Timestamptz
+	RemnantID    *int64
+	HeatNumber   pgtype.Text
+	WidthMm      pgtype.Numeric
+	HeightMm     pgtype.Numeric
+	EnterpriseID int64
 }
 
 type DapiTransferReason struct {
@@ -4242,6 +4249,58 @@ type Enterprise struct {
 	Name      string
 	CreatedAt pgtype.Timestamptz
 	CreatedBy pgtype.UUID
+}
+
+type EnterpriseDepartment struct {
+	ID           pgtype.UUID
+	EnterpriseID int64
+	Code         string
+	Name         string
+	Active       bool
+	CreatedAt    pgtype.Timestamptz
+}
+
+type EnterpriseDepartmentUser struct {
+	EnterpriseID int64
+	DepartmentID pgtype.UUID
+	UserID       pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+}
+
+type EnterpriseNotificationRecipient struct {
+	ID             pgtype.UUID
+	EnterpriseID   int64
+	SubscriptionID pgtype.UUID
+	RecipientType  string
+	UserID         pgtype.UUID
+	RecipientKey   pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+}
+
+type EnterpriseNotificationSetting struct {
+	EnterpriseID       int64
+	Enabled            bool
+	DigestTime         pgtype.Time
+	Timezone           string
+	RetentionDays      int32
+	MaxAttachmentBytes int64
+	MaxEmailsPerMinute int32
+	FiscalConfigID     *int64
+	UpdatedBy          pgtype.UUID
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type EnterpriseNotificationSubscription struct {
+	ID           pgtype.UUID
+	EnterpriseID int64
+	EventKey     string
+	EventVersion int32
+	Enabled      bool
+	Cadence      string
+	Thresholds   []byte
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type EntryOperationType struct {
@@ -4450,6 +4509,20 @@ type FiscalEntry struct {
 	EnterpriseID        *int64
 }
 
+type FiscalEntryDivergence struct {
+	ID                pgtype.UUID
+	EnterpriseID      int64
+	FiscalEntryID     int64
+	FiscalEntryItemID *int64
+	DivergenceType    string
+	ExpectedValue     pgtype.Numeric
+	ActualValue       pgtype.Numeric
+	Description       string
+	State             string
+	CreatedAt         pgtype.Timestamptz
+	ResolvedAt        pgtype.Timestamptz
+}
+
 type FiscalEntryItem struct {
 	ID                     int64
 	FiscalEntryID          int64
@@ -4532,6 +4605,7 @@ type FiscalExit struct {
 	FiscalCouponNumber      pgtype.Text
 	FiscalCouponDate        pgtype.Date
 	FiscalCouponEcfSerial   pgtype.Text
+	EnterpriseID            int64
 }
 
 type FiscalExitItem struct {
@@ -5201,6 +5275,7 @@ type Item struct {
 	AccountingNotes                            pgtype.Text
 	EnterpriseID                               int64
 	BusinessCode                               string
+	CyclicalCountPolicyActivatedAt             pgtype.Timestamptz
 }
 
 type ItemBusinessCodeSequence struct {
@@ -5734,10 +5809,11 @@ type MaterialConsumption struct {
 }
 
 type Modifier struct {
-	ID          int64
-	Description string
-	CreatedBy   pgtype.UUID
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	Description  string
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type MpsSchedule struct {
@@ -5921,6 +5997,169 @@ type NonConformance struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
+}
+
+type NotificationAlert struct {
+	ID                  pgtype.UUID
+	EnterpriseID        int64
+	EventKey            string
+	EventVersion        int32
+	AggregateType       string
+	AggregateInternalID pgtype.Text
+	AggregatePublicID   pgtype.Text
+	Cycle               int32
+	DeduplicationKey    string
+	Severity            string
+	State               string
+	Summary             string
+	Details             []byte
+	OpenedAt            pgtype.Timestamptz
+	LastSeenAt          pgtype.Timestamptz
+	ResolvedAt          pgtype.Timestamptz
+	ResolutionReason    pgtype.Text
+}
+
+type NotificationDeadLetter struct {
+	ID              pgtype.UUID
+	EnterpriseID    int64
+	DeliveryID      pgtype.UUID
+	ReasonCode      string
+	SanitizedReason string
+	CreatedAt       pgtype.Timestamptz
+	RetriedAt       pgtype.Timestamptz
+	RetriedBy       pgtype.UUID
+}
+
+type NotificationDelivery struct {
+	ID                     pgtype.UUID
+	EnterpriseID           int64
+	OutboxID               pgtype.UUID
+	DigestRunID            pgtype.UUID
+	Channel                string
+	RecipientUserID        pgtype.UUID
+	RecipientEmailSnapshot string
+	RecipientNameSnapshot  string
+	SubjectSnapshot        string
+	MessageID              string
+	State                  string
+	Attempts               int32
+	NextAttemptAt          pgtype.Timestamptz
+	LeaseOwner             pgtype.Text
+	LeaseUntil             pgtype.Timestamptz
+	SentAt                 pgtype.Timestamptz
+	LastErrorCode          pgtype.Text
+	LastErrorMessage       pgtype.Text
+	CreatedAt              pgtype.Timestamptz
+	AlertID                pgtype.UUID
+}
+
+type NotificationDeliveryAttachment struct {
+	ID           pgtype.UUID
+	EnterpriseID int64
+	DeliveryID   pgtype.UUID
+	FileName     string
+	MimeType     string
+	Content      []byte
+	SizeBytes    *int64
+	Sha256       string
+	CreatedAt    pgtype.Timestamptz
+}
+
+type NotificationDeliveryAttempt struct {
+	ID             int64
+	EnterpriseID   int64
+	DeliveryID     pgtype.UUID
+	AttemptNumber  int32
+	StartedAt      pgtype.Timestamptz
+	FinishedAt     pgtype.Timestamptz
+	Outcome        string
+	ProviderCode   pgtype.Text
+	SanitizedError pgtype.Text
+	ManualRetryBy  pgtype.UUID
+}
+
+type NotificationDigestItem struct {
+	EnterpriseID     int64
+	DigestRunID      pgtype.UUID
+	RecipientUserID  pgtype.UUID
+	AlertID          pgtype.UUID
+	ModuleSnapshot   string
+	SeveritySnapshot string
+	SummarySnapshot  string
+	CreatedAt        pgtype.Timestamptz
+}
+
+type NotificationDigestRun struct {
+	ID           pgtype.UUID
+	EnterpriseID int64
+	LocalDate    pgtype.Date
+	Timezone     string
+	State        string
+	StartedAt    pgtype.Timestamptz
+	CompletedAt  pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+}
+
+type NotificationEventCatalog struct {
+	EventKey                string
+	Version                 int32
+	NamePtBr                string
+	DescriptionPtBr         string
+	Module                  string
+	EventKind               string
+	Severity                string
+	AllowedCadences         []string
+	TemplateKey             string
+	EnabledByDefault        bool
+	SuggestedRecipientRoles []string
+	MinimumPayloadSchema    []byte
+	DeduplicationPolicy     []byte
+	ResolutionPolicy        []byte
+	Active                  bool
+	CreatedAt               pgtype.Timestamptz
+	ProducerStatus          string
+	ProducerDescription     string
+}
+
+type NotificationOutbox struct {
+	ID                  pgtype.UUID
+	EnterpriseID        int64
+	EventKey            string
+	EventVersion        int32
+	AggregateType       string
+	AggregateInternalID pgtype.Text
+	AggregatePublicID   pgtype.Text
+	Payload             []byte
+	DeduplicationKey    string
+	CorrelationID       pgtype.UUID
+	OriginatorUserID    pgtype.UUID
+	OccurredAt          pgtype.Timestamptz
+	AvailableAt         pgtype.Timestamptz
+	Attempts            int32
+	NextAttemptAt       pgtype.Timestamptz
+	State               string
+	LeaseOwner          pgtype.Text
+	LeaseUntil          pgtype.Timestamptz
+	LastErrorCode       pgtype.Text
+	LastErrorMessage    pgtype.Text
+	ProcessedAt         pgtype.Timestamptz
+	CreatedAt           pgtype.Timestamptz
+}
+
+type NotificationProviderCircuit struct {
+	ProviderKey         string
+	ConsecutiveFailures int32
+	State               string
+	OpenedUntil         pgtype.Timestamptz
+	ProbeOwner          pgtype.Text
+	ProbeLeaseUntil     pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+}
+
+type NotificationProviderRateWindow struct {
+	ScopeKey    string
+	WindowStart pgtype.Timestamptz
+	SentCount   int32
 }
 
 type Operation struct {
@@ -8122,6 +8361,42 @@ type StockBalance struct {
 	AvailableQty   pgtype.Numeric
 }
 
+type StockCycleCount struct {
+	ID                 pgtype.UUID
+	EnterpriseID       int64
+	WarehouseID        int64
+	WarehouseAddressID *int64
+	ItemCode           int64
+	Mask               string
+	LotCode            string
+	ScheduledFor       pgtype.Timestamptz
+	State              string
+	ExpectedQuantity   pgtype.Numeric
+	CountedQuantity    pgtype.Numeric
+	DivergenceQuantity pgtype.Numeric
+	CountedBy          pgtype.UUID
+	ApprovedBy         pgtype.UUID
+	StartedAt          pgtype.Timestamptz
+	CompletedAt        pgtype.Timestamptz
+	ApprovedAt         pgtype.Timestamptz
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	Origin             string
+	PolicyDays         *int32
+}
+
+type StockCycleCountAudit struct {
+	ID            int64
+	EnterpriseID  int64
+	CycleCountID  pgtype.UUID
+	Action        string
+	PreviousState pgtype.Text
+	NewState      string
+	ActorUserID   pgtype.UUID
+	Details       []byte
+	CreatedAt     pgtype.Timestamptz
+}
+
 type StockLot struct {
 	ID           int64
 	ItemCode     int64
@@ -8134,6 +8409,7 @@ type StockLot struct {
 	CreatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
 	EnterpriseID int64
+	Mask         string
 }
 
 type StockLotBalance struct {
@@ -8205,6 +8481,7 @@ type StockRemnant struct {
 	CreatedBy      pgtype.UUID
 	WidthMm        pgtype.Numeric
 	HeightMm       pgtype.Numeric
+	EnterpriseID   int64
 }
 
 type StockReservation struct {
@@ -8831,6 +9108,7 @@ type User struct {
 	UpdatedAt   pgtype.Timestamptz
 	Role        string
 	AuthVersion int64
+	IsActive    bool
 }
 
 type UserEnterprise struct {

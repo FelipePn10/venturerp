@@ -10,13 +10,13 @@ $1, $2, $3, $4
 RETURNING *;
 
 -- name: GetGroupByCode :one
-SELECT * FROM groups WHERE code = $1;
+SELECT * FROM groups WHERE enterprise_id = $1 AND code = $2;
 
 -- name: ListGroups :many
-SELECT * FROM groups ORDER BY code;
+SELECT * FROM groups WHERE enterprise_id = $1 ORDER BY code;
 
 -- name: UpdateGroup :one
 UPDATE groups
-SET description = $2, enterprise_id = $3
-WHERE code = $1
+SET description = $3
+WHERE enterprise_id = $1 AND code = $2
 RETURNING *;

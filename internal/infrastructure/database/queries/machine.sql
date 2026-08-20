@@ -6,9 +6,10 @@ INSERT INTO machine_types (
     type,
     requires_operator,
     is_active,
-    created_by
+    created_by,
+    enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES ($1, $2, $3, $4, $5, $6, $7, sqlc.arg(enterprise_id))
     RETURNING *;
 
 -- name: UpdateMachineType :one
@@ -26,7 +27,7 @@ WHERE code = $6
 -- name: GetMachineTypeByCode :one
 SELECT *
 FROM machine_types
-WHERE code = $1;
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: ListMachineTypes :many
 SELECT *
@@ -49,9 +50,10 @@ INSERT INTO machines (
     capacity_unit,
     capacity_period,
     efficiency_rate,
-    created_by
+    created_by,
+    enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, sqlc.arg(enterprise_id))
     RETURNING *;
 
 -- name: UpdateMachine :one

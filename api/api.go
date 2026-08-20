@@ -57,6 +57,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_report_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/nfse_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/notification_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
@@ -136,6 +137,7 @@ import (
 	mrpCalculation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
 	mrpReportRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_report"
 	nfseRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/nfse"
+	notificationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/notification"
 	op "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/order_priority"
 	over "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
 	planned "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
@@ -177,11 +179,12 @@ import (
 )
 
 type application struct {
-	config    *config.Config
-	logger    *applogger.Logger
-	db        *database.DB
-	metrics   *httpmw.Metrics
-	auditSink *audit.PgSink
+	config             *config.Config
+	logger             *applogger.Logger
+	db                 *database.DB
+	metrics            *httpmw.Metrics
+	auditSink          *audit.PgSink
+	notificationWorker *notification.Worker
 }
 
 func (app *application) mount() chi.Router {
@@ -971,6 +974,10 @@ func (app *application) mount() chi.Router {
 	crpUC.WithMaintenance(maintRepo)
 
 	// mrp exception notifications
+	notificationRepository := notificationRepo.New(app.db.Pool)
+	if app.metrics != nil {
+		app.metrics.SetExtraCollector(notificationRepository.PrometheusMetrics)
+	}
 	emailSvc := notification.NewEmailService(notification.SMTPConfig{
 		Host:     app.config.SMTPHost,
 		Port:     app.config.SMTPPort,
@@ -978,7 +985,7 @@ func (app *application) mount() chi.Router {
 		Password: app.config.SMTPPassword,
 		From:     app.config.SMTPFrom,
 	})
-	notifyExcUC := mrp_uc.NewNotifyExceptionsUseCase(mrpRepo, emailSvc)
+	notifyExcUC := mrp_uc.NewNotifyExceptionsUseCase(mrpRepo, emailSvc).WithOutbox(notificationRepository)
 	mrpExcHandler := handler.NewMRPExceptionsHandler(notifyExcUC)
 
 	// NF-e purchase import
@@ -1095,6 +1102,12 @@ func (app *application) mount() chi.Router {
 	auditHandler := handler.NewAuditHandler(audit.NewReader(app.db.Pool))
 	systemUpdateManager := system_update_uc.NewManager(app.config.SystemUpdateDir, app.config.BackendReleaseURL, nil)
 	systemUpdateHandler := handler.NewSystemUpdateHandler(systemUpdateManager)
+	notificationHandler := handler.NewNotificationHandler(notification_uc.New(notificationRepository))
+	workerOwner := os.Getenv("HOSTNAME")
+	if workerOwner == "" {
+		workerOwner = "venturerp-api"
+	}
+	app.notificationWorker = notification.NewWorker(notificationRepository, notification.NewCentralEmailProvider(emailSvc), workerOwner)
 
 	// routes
 	idempotencyStore := httpmw.NewIdempotencyStore(24 * time.Hour)
@@ -1111,6 +1124,29 @@ func (app *application) mount() chi.Router {
 		r.With(httpmw.RequireRole("ADMIN")).Get("/api/audit-log", auditHandler.List)
 		r.With(httpmw.RequireRole("ADMIN")).Post("/api/system/update", systemUpdateHandler.Request)
 		r.With(httpmw.RequireRole("ADMIN")).Get("/api/system/update/status", systemUpdateHandler.Status)
+		r.Route("/api/notifications", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/events", notificationHandler.ListEvents)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/recipients/users", notificationHandler.ListEligibleUsers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/recipients/departments", notificationHandler.ListEligibleDepartments)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/settings", notificationHandler.GetSettings)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/settings", notificationHandler.SaveSettings)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/subscriptions", notificationHandler.ListSubscriptions)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/subscriptions", notificationHandler.CreateSubscription)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/subscriptions/{id}", notificationHandler.UpdateSubscription)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/subscriptions/{id}", notificationHandler.DeleteSubscription)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/test-email", notificationHandler.TestEmail)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/deliveries", notificationHandler.ListDeliveries)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/deliveries/{id}/retry", notificationHandler.RetryDelivery)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/dead-letters", notificationHandler.ListDeadLetters)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/alerts", notificationHandler.ListAlerts)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/alerts/{id}", notificationHandler.GetAlert)
+		})
+		r.Route("/api/stock/cycle-counts", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", notificationHandler.ListCycleCounts)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", notificationHandler.CreateCycleCount)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", notificationHandler.GetCycleCount)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/transition", notificationHandler.TransitionCycleCount)
+		})
 		r.Route("/api/password-change-requests", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", passwordChangeHandler.Request)
 			r.With(httpmw.RequireRole("ADMIN")).Get("/", passwordChangeHandler.List)
@@ -2599,6 +2635,15 @@ func (app *application) run(r chi.Router) error {
 	defer stop()
 
 	serverErr := make(chan error, 1)
+	workerDone := make(chan struct{})
+	if app.notificationWorker != nil {
+		go func() {
+			defer close(workerDone)
+			app.notificationWorker.Run(ctx)
+		}()
+	} else {
+		close(workerDone)
+	}
 	go func() {
 		app.logger.Info("server listening", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -2622,6 +2667,12 @@ func (app *application) run(r chi.Router) error {
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			app.logger.Error("graceful shutdown failed, forcing close", "error", err)
 			return srv.Close()
+		}
+		select {
+		case <-workerDone:
+		case <-shutdownCtx.Done():
+			app.logger.Error("notification worker drain timed out")
+			return shutdownCtx.Err()
 		}
 		app.logger.Info("server stopped cleanly")
 		return nil

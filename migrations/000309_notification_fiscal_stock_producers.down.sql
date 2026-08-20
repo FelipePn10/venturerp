@@ -1,0 +1,17 @@
+BEGIN;
+DROP TRIGGER IF EXISTS trg_notification_fiscal_entry_item ON fiscal_entry_items;
+DROP TRIGGER IF EXISTS trg_notification_fiscal_entry ON fiscal_entries;
+DROP TRIGGER IF EXISTS trg_notification_fiscal_exit_item ON fiscal_exit_items;
+DROP TRIGGER IF EXISTS trg_notification_fiscal_exit ON fiscal_exits;
+DROP FUNCTION IF EXISTS notification_fiscal_entry_item_event();
+DROP FUNCTION IF EXISTS notification_fiscal_entry_event();
+DROP FUNCTION IF EXISTS notification_fiscal_exit_item_event();
+DROP FUNCTION IF EXISTS notification_fiscal_exit_event();
+DROP FUNCTION IF EXISTS notification_fiscal_entry_payload(BIGINT);
+DROP FUNCTION IF EXISTS notification_fiscal_exit_payload(BIGINT);
+DROP TABLE IF EXISTS fiscal_entry_divergences;
+DROP INDEX IF EXISTS idx_fiscal_exits_tenant_status;
+UPDATE fiscal_exits SET status='DRAFT' WHERE status='AGUARDANDO_AUTORIZACAO';
+ALTER TABLE fiscal_exits ALTER COLUMN status TYPE VARCHAR(20);
+ALTER TABLE fiscal_exits DROP COLUMN IF EXISTS enterprise_id;
+COMMIT;

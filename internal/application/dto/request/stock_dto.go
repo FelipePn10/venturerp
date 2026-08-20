@@ -71,6 +71,7 @@ type RecalcConsumptionAverageDTO struct {
 // RegisterLotDTO records the traceability metadata of a raw-material lot.
 type RegisterLotDTO struct {
 	ItemCode     int64   `json:"item_code"`
+	Mask         string  `json:"mask"`
 	Lot          string  `json:"lot"`
 	HeatNumber   *string `json:"heat_number,omitempty"` // corrida
 	Certificate  *string `json:"certificate,omitempty"` // certificado de qualidade

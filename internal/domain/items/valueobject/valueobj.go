@@ -1,6 +1,7 @@
 package valueobject
 
 import (
+	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
@@ -139,7 +140,29 @@ func (a Attribute) IsValid() bool {
 //
 
 type CyclicalCountConfig struct {
-	DaysInterval int
+	DaysInterval int `json:"days_interval"`
+}
+
+// UnmarshalJSON accepts the public snake_case contract and the temporary
+// legacy spelling used by already installed Desktop versions. Unknown keys
+// intentionally leave the value invalid so domain validation rejects them.
+func (c *CyclicalCountConfig) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		DaysInterval       *int `json:"days_interval"`
+		LegacyDaysInterval *int `json:"DaysInterval"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	switch {
+	case wire.DaysInterval != nil:
+		c.DaysInterval = *wire.DaysInterval
+	case wire.LegacyDaysInterval != nil:
+		c.DaysInterval = *wire.LegacyDaysInterval
+	default:
+		c.DaysInterval = 0
+	}
+	return nil
 }
 
 func NewCyclicalCountConfig(days int) (*CyclicalCountConfig, error) {

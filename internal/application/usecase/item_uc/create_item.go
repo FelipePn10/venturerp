@@ -19,6 +19,10 @@ type automaticBusinessCodeRepository interface {
 	NextAutomaticBusinessCode(context.Context, int64) (valueobject.BusinessCode, error)
 }
 
+type pdmReferenceRepository interface {
+	ValidatePDMReferences(context.Context, int64, int, int) error
+}
+
 type CreateItemUseCase struct {
 	Repo repository.ItemRepository
 	Auth ports.AuthService
@@ -63,6 +67,15 @@ func (uc *CreateItemUseCase) Execute(
 	}
 	if !item.BusinessCode.IsValid() {
 		return nil, entity.ErrInvalidCode
+	}
+	if item.PDM.GroupCode != 0 || item.PDM.ModifierCode != 0 {
+		validator, ok := uc.Repo.(pdmReferenceRepository)
+		if !ok {
+			return nil, fmt.Errorf("validação de referências PDM indisponível")
+		}
+		if err = validator.ValidatePDMReferences(ctx, enterpriseID, int(item.PDM.GroupCode), int(item.PDM.ModifierCode)); err != nil {
+			return nil, err
+		}
 	}
 	if item.Engineering.ItemBaseCod != nil {
 		code, err := valueobject.NewItemCode(int64(*item.Engineering.ItemBaseCod))

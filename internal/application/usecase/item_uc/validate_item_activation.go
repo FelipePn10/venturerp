@@ -7,6 +7,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	conversionrepo "github.com/FelipePn10/panossoerp/internal/domain/item_conversion/repository"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
@@ -36,6 +37,10 @@ type ValidateItemActivationUseCase struct {
 	Auth          ports.AuthService
 }
 
+type activationBusinessItemRepository interface {
+	FindItemByBusinessCode(context.Context, valueobject.BusinessCode) (*itementity.Item, error)
+}
+
 func (uc *ValidateItemActivationUseCase) Execute(ctx context.Context, code int64) (*ItemActivationReport, error) {
 	if !uc.Auth.FindItemByCode(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -50,6 +55,29 @@ func (uc *ValidateItemActivationUseCase) Execute(ctx context.Context, code int64
 		return nil, err
 	}
 
+	return uc.validate(ctx, item, code)
+}
+
+func (uc *ValidateItemActivationUseCase) ExecuteBusinessCode(ctx context.Context, rawCode string) (*ItemActivationReport, error) {
+	if !uc.Auth.FindItemByCode(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	code, err := valueobject.NewBusinessCode(rawCode)
+	if err != nil {
+		return nil, err
+	}
+	repo, ok := uc.ItemRepo.(activationBusinessItemRepository)
+	if !ok {
+		return nil, itemrepo.ErrNotFound
+	}
+	item, err := repo.FindItemByBusinessCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return uc.validate(ctx, item, int64(item.Code))
+}
+
+func (uc *ValidateItemActivationUseCase) validate(ctx context.Context, item *itementity.Item, code int64) (*ItemActivationReport, error) {
 	report := &ItemActivationReport{
 		ItemCode: code,
 		ItemType: item.Engineering.Type.String(),

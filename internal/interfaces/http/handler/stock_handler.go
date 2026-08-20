@@ -2,11 +2,13 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
@@ -324,6 +326,10 @@ func (h *StockHandler) ReserveStock(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.reserveStockUC.Execute(r.Context(), dto)
 	if err != nil {
+		if errors.Is(err, stockrepo.ErrInsufficientStock) {
+			security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

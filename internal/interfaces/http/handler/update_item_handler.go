@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
@@ -12,17 +11,17 @@ import (
 )
 
 func (h *ItemHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
-	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
-	if err != nil {
+	code := chi.URLParam(r, "code")
+	if code == "" {
 		h.BadRequest(w, "invalid 'code'")
 		return
 	}
 	var dto request.UpdateItemDTO
-	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
 		h.BadRequest(w, "invalid request body")
 		return
 	}
-	updated, err := h.updateItemUC.Execute(r.Context(), code, dto)
+	updated, err := h.updateItemUC.ExecuteBusinessCode(r.Context(), code, dto)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			h.NotFound(w, "item not found")

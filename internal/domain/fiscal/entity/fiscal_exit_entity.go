@@ -9,14 +9,16 @@ import (
 type FiscalExitStatus string
 
 const (
-	ExitStatusDraft      FiscalExitStatus = "DRAFT"
-	ExitStatusAuthorized FiscalExitStatus = "AUTHORIZED"
-	ExitStatusCancelled  FiscalExitStatus = "CANCELLED"
-	ExitStatusRejected   FiscalExitStatus = "REJECTED"
+	ExitStatusDraft                 FiscalExitStatus = "DRAFT"
+	ExitStatusAuthorized            FiscalExitStatus = "AUTHORIZED"
+	ExitStatusCancelled             FiscalExitStatus = "CANCELLED"
+	ExitStatusRejected              FiscalExitStatus = "REJECTED"
+	ExitStatusAwaitingAuthorization FiscalExitStatus = "AGUARDANDO_AUTORIZACAO"
 )
 
 type FiscalExit struct {
 	ID                      int64
+	EnterpriseID            int64
 	ChaveAcesso             *string
 	NumeroNF                int64
 	Serie                   string

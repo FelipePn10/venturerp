@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
@@ -14,6 +15,10 @@ import (
 func (h *ItemHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	var req request.CreateItemDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if strings.Contains(err.Error(), "invalid TypeUnitOfMeasurementItem") {
+			jsonError(w, http.StatusUnprocessableEntity, "unidade de medida informada não existe")
+			return
+		}
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}

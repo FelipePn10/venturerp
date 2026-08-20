@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
@@ -15,6 +16,10 @@ import (
 type UpdateItemUseCase struct {
 	Repo repository.ItemRepository
 	Auth ports.AuthService
+}
+
+type updateItemBusinessRepository interface {
+	FindItemByBusinessCode(context.Context, valueobject.BusinessCode) (*entity.Item, error)
 }
 
 func NewUpdateItemUseCase(repo repository.ItemRepository, auth ports.AuthService) *UpdateItemUseCase {
@@ -33,6 +38,29 @@ func (uc *UpdateItemUseCase) Execute(ctx context.Context, code int64, dto reques
 	if err != nil {
 		return nil, err
 	}
+	return uc.update(ctx, item, dto)
+}
+
+func (uc *UpdateItemUseCase) ExecuteBusinessCode(ctx context.Context, rawCode string, dto request.UpdateItemDTO) (*response.ItemResponse, error) {
+	if !uc.Auth.CanCreateItem(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	code, err := valueobject.NewBusinessCode(rawCode)
+	if err != nil {
+		return nil, err
+	}
+	repo, ok := uc.Repo.(updateItemBusinessRepository)
+	if !ok {
+		return nil, repository.ErrNotFound
+	}
+	item, err := repo.FindItemByBusinessCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return uc.update(ctx, item, dto)
+}
+
+func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto request.UpdateItemDTO) (*response.ItemResponse, error) {
 	if c := dto.Commercial; c != nil {
 		if c.Description != nil {
 			item.Commercial.Description = cleanUpdate(*c.Description)
@@ -144,6 +172,9 @@ func (uc *UpdateItemUseCase) Execute(ctx context.Context, code int64, dto reques
 		if a.Notes != nil {
 			item.Accounting.Notes = cleanUpdate(*a.Notes)
 		}
+	}
+	if w := dto.Warehouse; w != nil && w.CyclicalCountConfig.Set {
+		item.Warehouse.CyclicalCountConfig = w.CyclicalCountConfig.Value
 	}
 	if err := item.Validate(); err != nil {
 		return nil, err

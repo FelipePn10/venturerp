@@ -10,11 +10,16 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (r *MachineRepositorySQLC) CreateType(ctx context.Context, mt *entity.MachineType) (*entity.MachineType, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateMachineType(ctx, sqlc.CreateMachineTypeParams{
 		Code:             mt.Code,
 		Name:             mt.Name,
@@ -23,6 +28,7 @@ func (r *MachineRepositorySQLC) CreateType(ctx context.Context, mt *entity.Machi
 		RequiresOperator: mt.RequiresOperator,
 		IsActive:         mt.IsActive,
 		CreatedBy:        pgutil.ToPgUUID(mt.CreatedBy),
+		EnterpriseID:     &enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create machine type: %w", err)
@@ -46,7 +52,11 @@ func (r *MachineRepositorySQLC) UpdateType(ctx context.Context, mt *entity.Machi
 }
 
 func (r *MachineRepositorySQLC) GetTypeByCode(ctx context.Context, code int64) (*entity.MachineType, error) {
-	row, err := r.q.GetMachineTypeByCode(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetMachineTypeByCode(ctx, sqlc.GetMachineTypeByCodeParams{Code: code, EnterpriseID: &enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("machine type %d not found", code)
@@ -69,6 +79,10 @@ func (r *MachineRepositorySQLC) DeleteType(ctx context.Context, code int64) erro
 }
 
 func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (*entity.Machine, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateMachine(ctx, sqlc.CreateMachineParams{
 		Code:            m.Code,
 		Name:            m.Name,
@@ -79,6 +93,7 @@ func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (
 		CapacityUnit:    sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
 		EfficiencyRate:  pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
 		CreatedBy:       pgutil.ToPgUUID(m.CreatedBy),
+		EnterpriseID:    &enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create machine: %w", err)

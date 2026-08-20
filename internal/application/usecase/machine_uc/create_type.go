@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
+	"github.com/google/uuid"
 )
 
 type CreateMachineTypeUseCase struct {
@@ -24,6 +25,13 @@ func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.Cre
 	if !dto.Type.IsValid() {
 		return nil, fmt.Errorf("invalid machine type: %s", dto.Type)
 	}
+	authenticatedUserID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if authenticatedUserID == uuid.Nil {
+		return nil, fmt.Errorf("authenticated user is required")
+	}
 	mt := &entity.MachineType{
 		Code:             dto.Code,
 		Name:             dto.Name,
@@ -31,7 +39,7 @@ func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.Cre
 		Type:             dto.Type,
 		RequiresOperator: dto.RequiresOperator,
 		IsActive:         dto.IsActive,
-		CreatedBy:        dto.CreatedBy,
+		CreatedBy:        authenticatedUserID,
 	}
 	created, err := uc.Repo.CreateType(ctx, mt)
 	if err != nil {

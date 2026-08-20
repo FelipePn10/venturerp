@@ -2,7 +2,6 @@ package employee
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -27,7 +26,7 @@ func (uc *CreateEmployeeUseCase) Execute(
 
 	e, err := entity.NewEmployee(dto.Code, dto.Name, dto.Role, dto.ParticipatesBudget, dto.TechnicalAssistant, dto.CreatedBy)
 	if err != nil {
-		return nil, fmt.Errorf("building employee: %w", err)
+		return nil, errorsuc.NewValidationError(err.Error())
 	}
 
 	created, err := uc.Repo.Create(ctx, e)

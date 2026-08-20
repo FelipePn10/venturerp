@@ -416,18 +416,20 @@ func (r *StockRepositorySQLC) CreateReservation(ctx context.Context, res *entity
 	return res, nil
 }
 
-// adjustReservedTx adds delta to reserved_qty of a balance within a transaction,
-// creating the balance row if it does not exist yet.
+// adjustReservedTx adds delta to reserved_qty of an existing balance. A
+// reservation cannot manufacture availability by creating a zero-quantity row.
 func adjustReservedTx(ctx context.Context, tx pgx.Tx, enterpriseID, itemCode int64, mask string, warehouseID int64, delta float64) error {
-	_, err := tx.Exec(ctx,
-		`INSERT INTO public.stock_balances (item_code, mask, warehouse_id, reserved_qty, enterprise_id)
-		 VALUES ($1,$2,$3,$4,$5)
-		 ON CONFLICT (enterprise_id,item_code,mask,warehouse_id) WHERE enterprise_id IS NOT NULL DO UPDATE
-		   SET reserved_qty = GREATEST(public.stock_balances.reserved_qty + EXCLUDED.reserved_qty, 0),
-		       updated_at = NOW()`,
-		itemCode, mask, warehouseID, delta, enterpriseID)
+	command, err := tx.Exec(ctx,
+		`UPDATE public.stock_balances
+		 SET reserved_qty = GREATEST(reserved_qty + $5, 0), updated_at = NOW()
+		 WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4
+		   AND ($5::numeric <= 0 OR quantity - reserved_qty >= $5::numeric)`,
+		enterpriseID, itemCode, mask, warehouseID, delta)
 	if err != nil {
 		return fmt.Errorf("adjusting reserved quantity: %w", err)
+	}
+	if command.RowsAffected() == 0 {
+		return repository.ErrInsufficientStock
 	}
 	return nil
 }
@@ -703,16 +705,16 @@ func (r *StockRepositorySQLC) UpsertLot(ctx context.Context, lot *entity.StockLo
 	}
 	err = r.pool.QueryRow(ctx,
 		`INSERT INTO public.stock_lots
-			(item_code, lot, heat_number, certificate, supplier_code, received_at, notes, created_by, enterprise_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		 ON CONFLICT (enterprise_id,item_code,lot) DO UPDATE SET
+			(item_code, mask, lot, heat_number, certificate, supplier_code, received_at, notes, created_by, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		 ON CONFLICT (enterprise_id,item_code,mask,lot) DO UPDATE SET
 			 heat_number   = EXCLUDED.heat_number,
 			 certificate   = EXCLUDED.certificate,
 			 supplier_code = EXCLUDED.supplier_code,
 			 received_at   = EXCLUDED.received_at,
 			 notes         = EXCLUDED.notes
 		 RETURNING id, created_at`,
-		lot.ItemCode, lot.Lot, lot.HeatNumber, lot.Certificate, lot.SupplierCode, lot.ReceivedAt, lot.Notes, lot.CreatedBy, enterpriseID,
+		lot.ItemCode, lot.Mask, lot.Lot, lot.HeatNumber, lot.Certificate, lot.SupplierCode, lot.ReceivedAt, lot.Notes, lot.CreatedBy, enterpriseID,
 	).Scan(&lot.ID, &lot.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("upserting stock lot: %w", err)

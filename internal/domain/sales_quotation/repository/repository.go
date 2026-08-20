@@ -2,11 +2,14 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
 	"github.com/shopspring/decimal"
 )
+
+var ErrCancellationReasonNotFound = errors.New("cancellation reason not found")
 
 type SalesQuotationFilter struct {
 	QuotationNumber     *int64

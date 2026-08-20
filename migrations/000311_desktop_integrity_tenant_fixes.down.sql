@@ -1,0 +1,11 @@
+BEGIN;
+DROP INDEX IF EXISTS idx_modifier_enterprise;
+ALTER TABLE modifier DROP COLUMN IF EXISTS enterprise_id;
+ALTER TABLE groups DROP CONSTRAINT IF EXISTS groups_enterprise_code_key;
+ALTER TABLE cutting_settings DROP CONSTRAINT cutting_settings_pkey;
+WITH keep AS (SELECT enterprise_id FROM cutting_settings ORDER BY enterprise_id LIMIT 1) DELETE FROM cutting_settings WHERE enterprise_id<>(SELECT enterprise_id FROM keep);
+UPDATE cutting_settings SET id=1;
+ALTER TABLE cutting_settings ALTER COLUMN id SET DEFAULT 1,ALTER COLUMN id SET NOT NULL;
+ALTER TABLE cutting_settings ADD PRIMARY KEY(id);
+ALTER TABLE cutting_settings DROP COLUMN enterprise_id;
+COMMIT;
