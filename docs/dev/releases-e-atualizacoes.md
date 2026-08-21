@@ -28,6 +28,22 @@ Nunca mova uma tag publicada. Corrija com nova versão, como `1.4.1`.
 
 `GET /api/version` é público e retorna `{"version":"1.4.0","min_client":"1.4.0"}`. Os valores são injetados no binário; builds locais retornam `dev`. O desktop bloqueia uma versão inferior a `min_client` antes do login.
 
+O desktop também envia `X-ERP-Client-Version` em cada chamada. Quando essa
+versão é inferior a `min_client`, o backend responde HTTP 426 com o código
+`CLIENT_UPGRADE_REQUIRED` antes de executar a operação. Isso protege sessões que
+ficaram abertas enquanto o mínimo foi elevado. `/api/version`, health e métricas
+permanecem isentos; integrações servidor-a-servidor sem o cabeçalho continuam
+funcionando, enquanto clientes Tauri antigos são reconhecidos pela origem e
+bloqueados mesmo que ainda não enviem o cabeçalho. Como transição, o desktop
+atual `1.1.9` e anteriores continuam aceitos sem o cabeçalho enquanto
+`min_client <= 1.1.9`; ao elevar o mínimo para `1.1.10` ou superior, a ausência
+do cabeçalho também resulta em HTTP 426.
+
+`version` é a versão do backend e não precisa coincidir com `min_client` nem com
+a versão mais recente do desktop. Eleve `min_client` apenas em uma mudança
+incompatível, depois de publicar e validar o instalador correspondente. Para
+melhorias compatíveis, mantenha o mínimo anterior e permita atualização gradual.
+
 **CORS do app desktop:** o front roda no WebView Chromium do Tauri, então toda
 chamada (inclusive `/api/version`) passa por CORS. Se o app instalado mostrar
 "Não foi possível validar a versão do servidor" com o backend no ar, quase

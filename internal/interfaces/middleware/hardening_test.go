@@ -74,6 +74,9 @@ func TestCORS_PreflightShortCircuits(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("preflight status = %d, want 204", rec.Code)
 	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, clientVersionHeader) {
+		t.Fatalf("desktop version header not allowed by CORS: %q", got)
+	}
 }
 
 func TestRateLimiter_BlocksAfterBurst(t *testing.T) {

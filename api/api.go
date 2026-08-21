@@ -198,6 +198,7 @@ func (app *application) mount() chi.Router {
 	r.Use(middleware.Recoverer)
 	r.Use(httpmw.SecurityHeaders)
 	r.Use(httpmw.CORS(app.corsOrigins(), app.config.IsDevelopment() && app.config.CORSAllowedOrigins == ""))
+	r.Use(httpmw.ClientVersionCompatibility(appversion.Current().MinClient))
 	r.Use(httpmw.MaxBodyBytes(app.config.MaxBodyBytes))
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(middleware.StripSlashes)
