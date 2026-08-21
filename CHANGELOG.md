@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.8] — 2026-08-21
+
+- feat: bloqueia clientes desktop incompatíveis (`bdaae5d`)
+
 ## [v1.1.7] — 2026-08-20
 
 - feat: entrega alertas enterprise e correcoes operacionais (`a812d32`)
