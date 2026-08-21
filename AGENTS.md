@@ -142,3 +142,14 @@ A resposta final deve incluir:
 - Tags `v*` acionam pipelines. Commits em `develop` ou `main` não atualizam clientes.
 - A API não acessa Docker. `POST /api/system/update` cria uma solicitação; o systemd do host executa `scripts/self-update.sh` com `flock`.
 - Preserve backup verificado, migrations, readiness e rollback. Consulte `docs/dev/releases-e-atualizacoes.md`.
+- `version` do backend e `min_client` do desktop são independentes. Releases
+  compatíveis mantêm o mínimo anterior; eleve `min_client` somente quando houver
+  incompatibilidade real e depois que o instalador assinado exigido estiver
+  publicado e validado.
+- O desktop envia `X-ERP-Client-Version` em todas as chamadas. O middleware deve
+  rejeitar versões abaixo de `min_client` com HTTP `426` e código
+  `CLIENT_UPGRADE_REQUIRED` antes de executar handlers. Preserve `/api/version`
+  público e isento, além de health/métricas, para permitir diagnóstico e update.
+- Na migração inicial, publique primeiro o backend mantendo o mínimo atual;
+  somente depois publique o desktop `1.1.10`. Clientes até `1.1.9` não enviam o
+  cabeçalho e não podem ser bloqueados antes de o novo instalador existir.
