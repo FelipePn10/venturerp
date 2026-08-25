@@ -9,7 +9,11 @@
 
 O endpoint autenticado `GET /api/cnpj/{cnpj}` consulta o cadastro empresarial
 para preencher razão social, inscrição estadual e endereço. A seleção do
-provedor não é configurável no `.env`. Emissão, consulta e cancelamento de
+provedor não é configurável no `.env`: o modo `auto` usa a **API pública do
+CNPJ.ws** (`publica.cnpj.ws`) como fonte primária — é a única que expõe as
+**Inscrições Estaduais** (`inscricoes_estaduais`, oriundas do SINTEGRA) — e cai
+na **API aberta da CNPJá** (`open.cnpja.com`) quando a primária está
+indisponível (rate-limit, timeout ou 5xx). Emissão, consulta e cancelamento de
 documentos fiscais usam exclusivamente a integração Focus NFe e as credenciais
 fiscais armazenadas por empresa. O token nunca deve ser versionado.
 
@@ -85,5 +89,7 @@ interfaces/http/handler/report_export_handler.go   POST /api/reports/export
 
 `export_test.go` valida BOM/CSV, XLSX como ZIP válido com as partes OOXML
 obrigatórias, estrutura do PDF (header/xref/EOF) e a reflexão de structs.
-`cnpj_test.go` cobre parsing de cada provedor, fallback do modo `auto` e
-propagação de `ErrNotFound`, tudo via `httptest` (sem rede real).
+`cnpj_test.go` e `cnpjws_test.go` cobrem o parsing de cada provedor,
+`fallback_test.go` cobre o fallback do modo `auto` (uso do secundário quando a
+primária está indisponível) e a propagação de `ErrNotFound`, tudo via
+`httptest` (sem rede real).
