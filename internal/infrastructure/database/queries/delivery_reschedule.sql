@@ -1,6 +1,5 @@
 -- name: CreateDeliveryReschedule :one
 INSERT INTO delivery_reschedules (
- code,
  sales_order_code,
  item_code,
  old_date,
@@ -12,8 +11,7 @@ VALUES ($1,
         $3,
         $4,
         $5,
-        $6,
-        $7)
+        $6)
     RETURNING *;
 -- name: GetDeliveryRescheduleByCode :one
 SELECT * FROM delivery_reschedules WHERE code = $1;

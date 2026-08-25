@@ -25,7 +25,6 @@ func (uc *CreateDeliveryRescheduleUseCase) Execute(
 	}
 
 	r := &entity.DeliveryReschedule{
-		Code:           dto.Code,
 		SalesOrderCode: dto.SalesOrderCode,
 		ItemCode:       dto.ItemCode,
 		OldDate:        dto.OldDate,

@@ -8,7 +8,6 @@ import (
 )
 
 type CreateDeliveryRescheduleDTO struct {
-	Code           int64                `json:"code"`
 	SalesOrderCode int64                `json:"sales_order_code"`
 	ItemCode       valueobject.ItemCode `json:"item_code"`
 	OldDate        time.Time            `json:"old_date"`
