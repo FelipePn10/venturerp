@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.9] — 2026-08-25
+
+- fix: valida contratos e rotas comerciais (`ae982f7`)
+
 ## [v1.1.8] — 2026-08-21
 
 - feat: bloqueia clientes desktop incompatíveis (`bdaae5d`)
