@@ -13,7 +13,7 @@ import (
 func (h *DeliveryRescheduleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateDeliveryRescheduleDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "Dados inválidos. O código do item deve ser informado como número.")
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)

@@ -1476,32 +1476,32 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 	var st *entity.SalesTable
 	if dto.SalesTableID == 0 {
 		if dto.SalesTableCode == 0 {
-			return nil, fmt.Errorf("sales_table_code is required")
+			return nil, fmt.Errorf("o código da tabela de vendas é obrigatório")
 		}
 		var err error
 		st, err = uc.repo.GetSalesTableByCode(ctx, dto.SalesTableCode)
 		if err != nil {
-			return nil, fmt.Errorf("sales table not found: %w", err)
+			return nil, fmt.Errorf("tabela de vendas não encontrada: %w", err)
 		}
 		dto.SalesTableID = st.ID
 	} else {
 		var err error
 		st, err = uc.repo.GetSalesTableByID(ctx, dto.SalesTableID)
 		if err != nil {
-			return nil, fmt.Errorf("sales table not found: %w", err)
+			return nil, fmt.Errorf("tabela de vendas não encontrada: %w", err)
 		}
 	}
 	if dto.ItemCode == "" {
-		return nil, fmt.Errorf("item_code is required")
+		return nil, fmt.Errorf("o código do item é obrigatório")
 	}
 	if dto.Price < 0 {
-		return nil, fmt.Errorf("price must be >= 0")
+		return nil, fmt.Errorf("o preço deve ser maior ou igual a zero")
 	}
 	if err := validateManualSalesTablePrice(st, dto.Price); err != nil {
 		return nil, err
 	}
 	if dto.Situation != "" && !validPriceSituations[dto.Situation] {
-		return nil, fmt.Errorf("situation must be ATIVO, INATIVO or PROMOCIONAL")
+		return nil, fmt.Errorf("a situação deve ser ATIVO, INATIVO ou PROMOCIONAL")
 	}
 	if dto.Situation == "" {
 		dto.Situation = "ATIVO"

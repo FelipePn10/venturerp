@@ -83,12 +83,12 @@ INSERT INTO cost_centers (id, code, description, type, start_date, is_active, cr
  (5, 500, 'Administrativo',            'ADMINISTRATIVE', '2025-06-01', true, :'START_TS', :'START_TS', :'ADMIN'::uuid),
  (6, 600, 'Comercial',                 'COMMERCIAL',     '2025-06-01', true, :'START_TS', :'START_TS', :'ADMIN'::uuid);
 
-INSERT INTO fiscal_classifications (id, code, description, ncm, ipi_rate, pis_rate, cofins_rate, created_at, updated_at, created_by) VALUES
- (1, 1, 'Estruturas metálicas',          '73089000', 5.0, 0.65, 3.0, :'START_TS', :'START_TS', :'ADMIN'::uuid),
- (2, 2, 'Artefatos de ferro/aço',        '73269000', 5.0, 0.65, 3.0, :'START_TS', :'START_TS', :'ADMIN'::uuid),
- (3, 3, 'Chapas de aço laminadas',       '72104900', 0.0, 1.65, 7.6, :'START_TS', :'START_TS', :'ADMIN'::uuid),
- (4, 4, 'Parafusos e fixadores',         '73181500', 5.0, 1.65, 7.6, :'START_TS', :'START_TS', :'ADMIN'::uuid),
- (5, 5, 'Serviços de industrialização',  NULL,       0.0, 0.65, 3.0, :'START_TS', :'START_TS', :'ADMIN'::uuid);
+INSERT INTO fiscal_classifications (id, code, description, ncm, ipi_rate, pis_rate, cofins_rate, created_at, updated_at, created_by, enterprise_id) VALUES
+ (1, 1, 'Estruturas metálicas',          '73089000', 5.0, 0.65, 3.0, :'START_TS', :'START_TS', :'ADMIN'::uuid, 1),
+ (2, 2, 'Artefatos de ferro/aço',        '73269000', 5.0, 0.65, 3.0, :'START_TS', :'START_TS', :'ADMIN'::uuid, 1),
+ (3, 3, 'Chapas de aço laminadas',       '72104900', 0.0, 1.65, 7.6, :'START_TS', :'START_TS', :'ADMIN'::uuid, 1),
+ (4, 4, 'Parafusos e fixadores',         '73181500', 5.0, 1.65, 7.6, :'START_TS', :'START_TS', :'ADMIN'::uuid, 1),
+ (5, 5, 'Serviços de industrialização',  NULL,       0.0, 0.65, 3.0, :'START_TS', :'START_TS', :'ADMIN'::uuid, 1);
 
 INSERT INTO employees (id, code, name, situation, role, created_at, updated_at, created_by) VALUES
  (1, 1001, 'Carlos Henrique Souza',  'ACTIVE', 'Operador de Produção', :'START_TS', :'START_TS', :'ADMIN'::uuid),
@@ -175,14 +175,14 @@ FROM generate_series(1, 15) i
 CROSS JOIN LATERAL (SELECT round((50 + random()*250)::numeric, 2) AS cost, i AS k) c;
 
 -- items (a partir do catálogo)
-INSERT INTO items (id, warehouse_code, code, health, created_by, created_at, nature, situation,
+INSERT INTO items (id, warehouse_code, code, health, created_by, created_at, enterprise_id, business_code, nature, situation,
   pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique,
   warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_minimum_stock,
   engineering_weight, engineering_type, engineering_type_struct, engineering_oem,
   planning_type_mrp, planning_llc, planning_ghost, supplies_type_of_use)
 SELECT ic.code,
   CASE WHEN ic.kind = 'FINISHED' THEN 2 ELSE 1 END,
-  ic.code, 'ATIVO', :'ADMIN'::uuid, :'START_TS', 2, 0,
+  ic.code, 'ATIVO', :'ADMIN'::uuid, :'START_TS', 1, ic.code::text, 2, 0,
   10, 0, '[]'::jsonb, ic.name,
   ic.uom::unit_of_measurement_enum, false, 20,
   jsonb_build_object('gross', ic.weight, 'net', round(ic.weight*0.95, 4), 'unit', 'KG'),
@@ -341,7 +341,7 @@ CROSS JOIN LATERAL (SELECT (5 + floor(random()*60))::numeric AS qty, g AS k) q;
 -- ─── 11. NOTAS FISCAIS DE SAÍDA (dos pedidos faturados) + itens ──────────────
 INSERT INTO fiscal_exits (id, numero_nf, serie, data_emissao, data_saida, cnpj_destinatario, razao_social_destinatario,
   uf_destinatario, cfop, natureza_operacao, valor_produtos, valor_icms, valor_ipi, valor_pis, valor_cofins, valor_total,
-  sales_order_code, status, chave_acesso, is_active, created_by, created_at, updated_at)
+  sales_order_code, status, chave_acesso, is_active, created_by, created_at, updated_at, enterprise_id)
 SELECT row_number() OVER (ORDER BY so.code),
   row_number() OVER (ORDER BY so.code),
   '1', so.emission_date, so.emission_date, c.document_number, c.name, 'SP',
@@ -350,7 +350,7 @@ SELECT row_number() OVER (ORDER BY so.code),
   round(so.total_net*0.0065, 2), round(so.total_net*0.03, 2),
   round(so.total_net*1.05, 2), so.code, 'AUTHORIZED',
   lpad((35250000000000000000000000000000000000000000 + so.code)::numeric::text, 44, '0'),
-  true, :'ADMIN'::uuid, so.created_at, so.created_at
+  true, :'ADMIN'::uuid, so.created_at, so.created_at, 1
 FROM sales_orders so JOIN customers c ON c.code = so.customer_code
 WHERE so.status = 'F';
 

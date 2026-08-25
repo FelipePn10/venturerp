@@ -377,7 +377,7 @@ func (h *ProductionOrderHandler) Start(w http.ResponseWriter, r *http.Request) {
 func (h *ProductionOrderHandler) AddAppointment(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddAppointmentDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para o apontamento de produção.")
 		return
 	}
 	result, err := h.addAppointmentUC.Execute(r.Context(), dto)
@@ -391,7 +391,7 @@ func (h *ProductionOrderHandler) AddAppointment(w http.ResponseWriter, r *http.R
 func (h *ProductionOrderHandler) AddConsumption(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddConsumptionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para o consumo de produção.")
 		return
 	}
 	result, err := h.addConsumptionUC.Execute(r.Context(), dto)

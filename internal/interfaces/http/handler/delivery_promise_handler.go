@@ -40,7 +40,7 @@ func (h *DeliveryPromiseHandler) Occupation(w http.ResponseWriter, r *http.Reque
 func (h *DeliveryPromiseHandler) ReserveTank(w http.ResponseWriter, r *http.Request) {
 	var dto request.DeliveryTankReservationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid body")
+		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para a reserva de tanque.")
 		return
 	}
 	result, err := h.uc.ReserveTank(r.Context(), dto)
@@ -58,7 +58,7 @@ func (h *DeliveryPromiseHandler) ReserveTank(w http.ResponseWriter, r *http.Requ
 func (h *DeliveryPromiseHandler) Reschedule(w http.ResponseWriter, r *http.Request) {
 	var dto request.DeliveryRescheduleBatchDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid body")
+		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para a reprogramação.")
 		return
 	}
 	result, err := h.uc.Reschedule(r.Context(), dto)
@@ -104,6 +104,8 @@ func (h *DeliveryPromiseHandler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errorsuc.ErrUnauthorized):
 		security.RespondError(w, http.StatusUnauthorized, err.Error())
+	case func() bool { _, ok := errorsuc.AsValidation(err); return ok }():
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
 	default:
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 	}
