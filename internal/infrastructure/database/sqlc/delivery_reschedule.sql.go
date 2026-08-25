@@ -13,7 +13,6 @@ import (
 
 const createDeliveryReschedule = `-- name: CreateDeliveryReschedule :one
 INSERT INTO delivery_reschedules (
- code,
  sales_order_code,
  item_code,
  old_date,
@@ -25,13 +24,11 @@ VALUES ($1,
         $3,
         $4,
         $5,
-        $6,
-        $7)
+        $6)
     RETURNING id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by
 `
 
 type CreateDeliveryRescheduleParams struct {
-	Code           int64
 	SalesOrderCode int64
 	ItemCode       int64
 	OldDate        pgtype.Date
@@ -42,7 +39,6 @@ type CreateDeliveryRescheduleParams struct {
 
 func (q *Queries) CreateDeliveryReschedule(ctx context.Context, arg CreateDeliveryRescheduleParams) (DeliveryReschedule, error) {
 	row := q.db.QueryRow(ctx, createDeliveryReschedule,
-		arg.Code,
 		arg.SalesOrderCode,
 		arg.ItemCode,
 		arg.OldDate,

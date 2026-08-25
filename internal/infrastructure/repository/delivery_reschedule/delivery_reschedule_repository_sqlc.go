@@ -21,7 +21,6 @@ func (r *DeliveryRescheduleRepositorySQLC) Create(
 	row, err := r.q.CreateDeliveryReschedule(
 		ctx,
 		sqlc.CreateDeliveryRescheduleParams{
-			Code:           res.Code,
 			SalesOrderCode: res.SalesOrderCode,
 			ItemCode:       int64(res.ItemCode),
 			OldDate:        pgutil.ToPgDate(res.OldDate),
