@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.11] — 2026-08-25
+
+- fix: gera código de reprogramação no banco (`3d09419`)
+
 ## [v1.1.10] — 2026-08-25
 
 - fix: preenche inscrição estadual na consulta de CNPJ (`0f6a3c0`)
