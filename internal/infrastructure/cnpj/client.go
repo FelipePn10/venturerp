@@ -4,6 +4,7 @@ package cnpj
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,10 +12,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/domain/cnpj/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/cnpj/service"
 )
 
-const defaultBaseURL = "https://open.cnpja.com"
+const (
+	defaultCnpjwsBaseURL = "https://publica.cnpj.ws"
+	defaultCnpjaBaseURL  = "https://open.cnpja.com"
+)
 
 var nonDigit = regexp.MustCompile(`\D`)
 
@@ -22,21 +27,57 @@ func onlyDigits(s string) string { return nonDigit.ReplaceAllString(s, "") }
 
 func formatCNAE(code int64) string { return strconv.FormatInt(code, 10) }
 
-// Config permits a custom endpoint only for isolated tests. Production uses
-// the fixed registry endpoint and does not expose provider selection in .env.
+// Config permits custom endpoints only for isolated tests. Production uses the
+// fixed registry endpoints and does not expose provider selection in .env.
 type Config struct {
+	// BaseURL overrides the primary provider (CNPJ.ws) endpoint.
 	BaseURL string
-	Timeout time.Duration
+	// FallbackBaseURL overrides the secondary provider (CNPJá) endpoint.
+	FallbackBaseURL string
+	Timeout         time.Duration
 }
 
+// New builds the "auto" provider: CNPJ.ws first (it carries the Inscrições
+// Estaduais), falling back to CNPJá when the primary is unavailable.
 func New(cfg Config) service.Provider {
 	if cfg.BaseURL == "" {
-		cfg.BaseURL = defaultBaseURL
+		cfg.BaseURL = defaultCnpjwsBaseURL
+	}
+	if cfg.FallbackBaseURL == "" {
+		cfg.FallbackBaseURL = defaultCnpjaBaseURL
 	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 8 * time.Second
 	}
-	return &cnpjaProvider{base: cfg.BaseURL, http: &http.Client{Timeout: cfg.Timeout}}
+	return &fallbackProvider{
+		primary: &cnpjwsProvider{
+			base: cfg.BaseURL,
+			http: &http.Client{Timeout: cfg.Timeout},
+		},
+		secondary: &cnpjaProvider{
+			base: cfg.FallbackBaseURL,
+			http: &http.Client{Timeout: cfg.Timeout},
+		},
+	}
+}
+
+// fallbackProvider tries providers in order, only moving on to the next when a
+// provider is unavailable (rate-limited, timed out, 5xx). A definitive answer
+// (ErrNotFound or a data error) is returned as-is.
+type fallbackProvider struct {
+	primary   service.Provider
+	secondary service.Provider
+}
+
+func (f *fallbackProvider) Lookup(ctx context.Context, cnpj string) (*entity.Company, error) {
+	company, err := f.primary.Lookup(ctx, cnpj)
+	if err == nil {
+		return company, nil
+	}
+	if errors.Is(err, service.ErrUnavailable) {
+		return f.secondary.Lookup(ctx, cnpj)
+	}
+	return nil, err
 }
 
 func doGET(ctx context.Context, httpc *http.Client, url string, out any) error {

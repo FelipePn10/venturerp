@@ -9,9 +9,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/cnpj/service"
 )
 
-// cnpjaProvider adapts the CNPJá Open API (open.cnpja.com/office/{cnpj}). Its
-// distinguishing feature is the `registrations` array, which carries the
-// Inscrições Estaduais the metalworking ERP needs at cadastro time.
+// cnpjaProvider adapts the CNPJá Open API (open.cnpja.com/office/{cnpj}). It
+// serves as the fallback source for cadastro auto-fill: it does not expose
+// Inscrições Estaduais (the primary CNPJ.ws provider supplies those).
 type cnpjaProvider struct {
 	base string
 	http *http.Client
@@ -63,11 +63,6 @@ type cnpjaResponse struct {
 		ID   int64  `json:"id"`
 		Text string `json:"text"`
 	} `json:"sideActivities"`
-	Registrations []struct {
-		State   string `json:"state"`
-		Number  string `json:"number"`
-		Enabled bool   `json:"enabled"`
-	} `json:"registrations"`
 }
 
 func (p *cnpjaProvider) Lookup(ctx context.Context, cnpj string) (*entity.Company, error) {
@@ -117,13 +112,6 @@ func (p *cnpjaProvider) Lookup(ctx context.Context, cnpj string) (*entity.Compan
 		c.SecondaryActivities = append(c.SecondaryActivities, entity.Activity{
 			Code:        formatCNAE(s.ID),
 			Description: strings.TrimSpace(s.Text),
-		})
-	}
-	for _, reg := range r.Registrations {
-		c.StateRegistrations = append(c.StateRegistrations, entity.StateRegistration{
-			UF:      strings.ToUpper(strings.TrimSpace(reg.State)),
-			Number:  strings.TrimSpace(reg.Number),
-			Enabled: reg.Enabled,
 		})
 	}
 	return c, nil
