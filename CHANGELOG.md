@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.10] — 2026-08-25
+
+- fix: preenche inscrição estadual na consulta de CNPJ (`0f6a3c0`)
+
 ## [v1.1.9] — 2026-08-25
 
 - fix: valida contratos e rotas comerciais (`ae982f7`)
