@@ -2,7 +2,6 @@ package delivery_promise_uc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -55,7 +54,7 @@ func (uc *DeliveryPromiseUseCase) Occupation(ctx context.Context, dto request.De
 		return nil, err
 	}
 	if to.Before(from) {
-		return nil, errors.New("to_date must be greater than or equal to from_date")
+		return nil, errorsuc.NewValidationError("a data final deve ser maior ou igual à data inicial")
 	}
 
 	days := map[string]*dpentity.TankOccupationDay{}
@@ -123,7 +122,7 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.DailyCapacity <= 0 {
-		return nil, errors.New("daily_capacity must be greater than zero")
+		return nil, errorsuc.NewValidationError("a capacidade diária deve ser maior que zero")
 	}
 	requestedDate, err := parseDate(dto.RequestedDeliveryDate)
 	if err != nil {
@@ -392,7 +391,7 @@ func (uc *DeliveryPromiseUseCase) loadRescheduleOrders(ctx context.Context, from
 func parseDate(v string) (time.Time, error) {
 	t, err := time.Parse(time.DateOnly, v)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid date %q: expected YYYY-MM-DD", v)
+		return time.Time{}, errorsuc.NewValidationError("data inválida; use o formato AAAA-MM-DD")
 	}
 	return truncateDate(t), nil
 }

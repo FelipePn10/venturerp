@@ -739,13 +739,13 @@ func (h *CustomerHandler) AddContact(w http.ResponseWriter, r *http.Request) {
 func (h *CustomerHandler) CreateSalesTablePrice(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesTablePriceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "Dados inválidos para a inclusão do preço.")
 		return
 	}
 	if dto.SalesTableCode == 0 {
 		code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid table code")
+			jsonError(w, http.StatusBadRequest, "Código da tabela de vendas inválido.")
 			return
 		}
 		dto.SalesTableCode = code
