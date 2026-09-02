@@ -29,4 +29,7 @@ func TestItemClassificationPreservesClassificationParentCode(t *testing.T) {
 			t.Fatalf("rota %s deveria preservar parent_code como código de classificação", target)
 		}
 	}
+	if nativeItemBusinessCodeRequest(httptest.NewRequest("POST", "/api/items/classifications-report", nil)) {
+		t.Fatal("rota não relacionada não deveria ignorar a tradução de códigos de item")
+	}
 }
