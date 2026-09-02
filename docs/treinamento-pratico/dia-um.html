@@ -2181,39 +2181,82 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
 </div>
 
 <h2>6.7 Plano de Corte <span class="tela">VCUT0100</span></h2>
+
+<h4>Para que serve</h4>
 <p>
-  Aqui a perda deixa de ser estimativa e vira medida. O plano de corte encaixa as peças na chapa
-  1200 × 3000 e calcula o aproveitamento real.
+  Aqui a perda deixa de ser estimativa e vira medida. O plano encaixa as peças na chapa 1200 × 3000,
+  calcula o aproveitamento real e transforma a sobra grande em <b>retalho rastreável</b>, disponível
+  para o próximo plano.
 </p>
+
 <div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Criar o plano</div>
-  <table class="campos">
-    <tr><td>Matéria-prima (item)</td><td><code>MP 10794</code> Chapa 5/16"</td></tr>
-    <tr><td>Depósito padrão</td><td><code>ALM-MP</code></td></tr>
-    <tr><td>Modo de consumo</td><td><code>Automático (FIFO)</code> ou <code>Manual (por lote)</code></td><td class="obs">Manual quando é preciso escolher a corrida específica do aço.</td></tr>
-    <tr><td>Kerf</td><td>largura do corte do laser</td></tr>
-    <tr><td>Sobra mínima padrão (mm)</td><td>abaixo disso, a sobra é sucata; acima, vira retalho rastreável</td></tr>
-    <tr><td>Refile</td><td>margem descartada nas bordas da chapa</td></tr>
+  <div class="passo-tit"><span class="n">1</span>Criar o plano — bloco Novo plano de corte</div>
+  <table class="dados">
+    <thead><tr><th style="width:24%">Campo</th><th style="width:22%">Exemplo</th><th>O que faz</th></tr></thead>
+    <tbody>
+      <tr><td><code>Matéria-prima (item)</code></td><td>MP 10794</td><td>A chapa ou barra a ser cortada.</td></tr>
+      <tr><td><code>Tipo de corte</code></td><td>linear ou bidimensional</td><td>Barra e tubo usam corte linear; chapa usa corte em duas dimensões.</td></tr>
+      <tr><td><code>Descrição</code></td><td>Corte chapa 5/16" — semana 39</td><td>Identifica o plano na lista.</td></tr>
+      <tr><td><code>Kerf</code></td><td>largura do corte</td><td>Espessura que o feixe do laser consome a cada corte. Sem isso, as peças saem menores que o previsto.</td></tr>
+      <tr><td><code>Refile</code></td><td>margem de borda</td><td>Faixa descartada nas bordas da chapa.</td></tr>
+      <tr><td><code>Sobra mín.</code></td><td>em mm</td><td><b>O divisor entre retalho e sucata:</b> sobra acima do valor vira retalho aproveitável; abaixo, vira sucata.</td></tr>
+      <tr><td><code>UoM estoque</code> · <code>Fator UoM</code></td><td><code>KG</code> · <code>226,08</code></td><td>Como converter a chapa consumida na unidade de estoque, para dar a baixa correta.</td></tr>
+      <tr><td><code>Depósito (p/ firmar)</code></td><td><code>ALM-MP</code></td><td>De onde a baixa será feita quando o plano for firmado.</td></tr>
+      <tr><td>☐ <code>semear retalhos</code></td><td>marcado</td><td><b>Traz os retalhos já existentes em estoque</b> para dentro do plano, para serem aproveitados antes de abrir chapa nova.</td></tr>
+    </tbody>
   </table>
 </div>
+
 <div class="passo">
-  <div class="passo-tit"><span class="n">2</span>Peças, estoque e otimização</div>
-  <p><span class="btn">Adicionar peça</span> (código, dimensões e quantidade — ou puxar direto das ordens),
-  <span class="btn">Adicionar estoque</span> (as chapas e retalhos disponíveis) e
-  <span class="btn">Otimizar</span>. O sistema devolve o mapa de corte e o <code>Aproveitamento</code>.</p>
+  <div class="passo-tit"><span class="n">2</span>Informar as peças — bloco Demanda / peças</div>
+  <p>Use <span class="btn">Adicionar peça</span> com <code>Etiqueta</code>, <code>Largura</code>,
+  <code>Altura</code>, <code>Comprimento (mm)</code> e <code>Qtd</code> — ou traga a demanda
+  direto das ordens com <span class="btn">Demanda</span>.</p>
 </div>
+
 <div class="passo">
-  <div class="passo-tit"><span class="n">3</span>Firmar e programar</div>
-  <p><span class="btn">Firmar (baixa)</span> dá baixa real da chapa no estoque e cadastra os retalhos como
-  material disponível para o próximo plano. <span class="btn">Agendar na máquina</span> coloca o programa
-  na fila da laser. <span class="btn">PDF</span>, <span class="btn">DXF</span> e
-  <span class="btn">Etiqueta</span> geram o material para o operador.</p>
+  <div class="passo-tit"><span class="n">3</span>Informar o estoque — bloco Estoque disponível</div>
+  <p><span class="btn">Adicionar estoque</span> ou <span class="btn">Estoque</span> para puxar o saldo.
+  Cada peça de estoque tem a marcação <code>retalho</code>, que distingue sobra reaproveitada de chapa
+  inteira.</p>
 </div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Otimizar e ler o resultado</div>
+  <p>Clique em <span class="btn">Otimizar</span>. O plano devolve:</p>
+  <table class="campos">
+    <tr><td>Aproveitamento</td><td>Percentual da chapa que virou peça. <b>É o número que se compara com a perda cadastrada na estrutura.</b></td></tr>
+    <tr><td>Sucata</td><td>O que não deu para aproveitar.</td></tr>
+    <tr><td>Estoque usado</td><td>Quantas chapas e retalhos foram consumidos.</td></tr>
+    <tr><td>Cortes</td><td>Quantidade de cortes do programa.</td></tr>
+  </table>
+  <p>O bloco <b>Padrões de corte</b> mostra o mapa de cada chapa.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Firmar e programar</div>
+  <p><span class="btn">Firmar (baixa)</span> dá baixa real da chapa no estoque e cadastra os retalhos
+  como material disponível. O bloco <b>Programa de corte</b> permite
+  <span class="btn">Agendar na máquina</span> e gerar <span class="btn">PDF</span>,
+  <span class="btn">DXF</span> e <span class="btn">Etiqueta</span> para o operador.</p>
+</div>
+
+<h4>Padrões da empresa <span class="mudo">— configure uma vez</span></h4>
+<table class="campos">
+  <tr><td>Modo de consumo</td><td><code>Automático (FIFO)</code> ou <code>Manual (por lote)</code>. Manual quando é preciso escolher a corrida específica do aço.</td></tr>
+  <tr><td>Sobra mínima padrão (mm)</td><td>Valor aplicado por padrão aos novos planos.</td></tr>
+  <tr><td>Depósito padrão</td><td>Depósito sugerido nos novos planos.</td></tr>
+</table>
+<p>Clique em <span class="btn">Salvar padrões</span>.</p>
+
 <div class="porque">
-  <b>Por que retalho rastreável muda o custo</b>
+  <b>Por que o retalho rastreável muda o custo</b>
   A perda de 26,95 % da lateral pressupõe cortar uma peça por vez. Encaixando as laterais junto com os
   fechamentos na mesma chapa, o aproveitamento real sobe e a sobra grande volta como retalho utilizável
-  em vez de virar sucata. Essa diferença aparece direto na variância de material da ordem.
+  em vez de virar sucata. Essa diferença aparece direto na variância de material da ordem (seção 6.6).
+  <br><br>
+  <b>Comparação a fazer sempre:</b> aproveitamento do plano de corte × perda cadastrada na estrutura.
+  Se a perda cadastrada for muito maior que a real, a empresa está comprando aço a mais todo mês.
 </div>
 
 <h2>6.8 Estoque, lotes e rastreabilidade <span class="tela">VEST0100</span></h2>
@@ -2255,35 +2298,63 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
 
 <h2>6.10 Romaneio de Expedição <span class="tela">VEXP0100</span></h2>
 <p>Estados: <b>Aberto → Separado → Conferido → Despachado</b>.</p>
+
 <div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Criar a partir do pedido</div>
-  <p><span class="btn">Novo romaneio</span> e depois <span class="btn">Auto-fill (pedido venda)</span> com o
-  <code>Código do pedido</code>: os itens e quantidades vêm prontos.</p>
-</div>
-<div class="passo">
-  <div class="passo-tit"><span class="n">2</span>Montar os volumes</div>
+  <div class="passo-tit"><span class="n">1</span>Criar — bloco Novo romaneio</div>
   <table class="campos">
-    <tr><td>Espécie / Marca</td><td>caixa, engradado, pallet</td></tr>
-    <tr><td>Compr. / Larg. / Alt.</td><td>dimensões do volume</td></tr>
-    <tr><td>Peso líq. unit. / Peso bruto unit.</td><td>o líquido é o produto; o bruto inclui a embalagem</td></tr>
-    <tr><td>Cubagem m³</td><td>calculada — é o que a transportadora cobra</td></tr>
+    <tr><td>Tipo</td><td><code>Pedido de Venda</code> · <code>Pedido de Compra</code> · <code>Ordem de Produção</code></td><td class="obs">Define a origem dos itens do romaneio.</td></tr>
+    <tr><td>Código do pedido</td><td>o número do pedido de origem</td></tr>
+    <tr><td>Transportadora</td><td>quem vai levar</td></tr>
+  </table>
+  <p>Use <span class="btn">Criar romaneio</span>, ou <span class="btn">Auto-fill (pedido venda)</span>
+  para trazer os itens e quantidades já prontos do pedido.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Conferir os itens — bloco Itens</div>
+  <table class="campos">
+    <tr><td>Item · Qtd · Depósito</td><td>O que sai e de onde.</td></tr>
+    <tr><td>Peso líq. unit. · Peso bruto unit.</td><td>O líquido é o produto; o bruto inclui a embalagem. Vêm do cadastro do item, aba Engenharia.</td></tr>
   </table>
 </div>
+
 <div class="passo">
-  <div class="passo-tit"><span class="n">3</span>Transporte, conferência e despacho</div>
-  <p>Preencha <code>Placa</code>, <code>Motorista</code>, <code>ANTT / Lacres</code> e
-  <code>Modalidade frete</code>, salve o transporte, clique em <span class="btn">Conferir</span> —
-  divergências entre separado e conferido ficam marcadas — e por fim
-  <span class="btn">Despachar</span>. Gere o romaneio em <span class="btn">PDF</span> para o motorista.</p>
+  <div class="passo-tit"><span class="n">3</span>Montar os volumes — bloco Volumes / packing</div>
+  <table class="campos">
+    <tr><td>Nº · Espécie · Marca</td><td>Número, tipo (caixa, engradado, pallet) e marcação do volume.</td></tr>
+    <tr><td>Compr. · Larg. · Alt.</td><td>Dimensões — a cubagem é calculada a partir delas.</td></tr>
+    <tr><td>Peso bruto</td><td>Peso do volume fechado.</td></tr>
+  </table>
+  <p>Clique em <span class="btn">Adicionar volume</span>.</p>
 </div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Transporte e NF-e</div>
+  <table class="campos">
+    <tr><td>Modalidade frete · Valor frete</td><td>CIF, FOB ou outra, e o valor.</td></tr>
+    <tr><td>Placa · Motorista · ANTT / Lacres</td><td>Dados do veículo e do transporte.</td></tr>
+    <tr><td>Previsão de entrega</td><td>Data prometida ao cliente.</td></tr>
+    <tr><td>NF-e nº · Chave NF-e</td><td><b>Preenchidos no Dia 2</b>, quando a nota for autorizada. São a ponte entre a expedição física e o documento fiscal.</td></tr>
+  </table>
+  <p><span class="btn">Salvar transporte</span>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Conferir e despachar</div>
+  <p><span class="btn">Conferir</span> compara o separado com o conferido. Havendo diferença, o romaneio
+  é marcado com <b>divergência</b> e só avança se alguém marcar <code>aceitar divergência</code> —
+  o que fica registrado. Depois, <span class="btn">Despachar</span>.</p>
+  <p>O bloco <b>Trilha de auditoria</b> guarda quem fez cada evento e quando. Gere o romaneio em
+  <span class="btn">PDF</span> para o motorista ou <span class="btn">Excel</span> para conferência.</p>
+</div>
+
 <div class="atencao">
   <b>Atenção — separação reserva, nota fiscal baixa</b>
   A separação do romaneio <b>reserva</b> o estoque, ela não dá baixa. A baixa definitiva acontece na
-  emissão da NF-e, que é assunto do Dia 2. Por isso o campo <code>Chave NF-e</code> fica vazio hoje: é a
-  ponte entre os dois dias.
+  emissão da NF-e, que é assunto do Dia 2. Por isso os campos <code>NF-e nº</code> e
+  <code>Chave NF-e</code> ficam vazios hoje.
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
 <h1>7 · Checklists de conferência</h1>
 
 <h2>7.1 Item pronto para o MRP</h2>
