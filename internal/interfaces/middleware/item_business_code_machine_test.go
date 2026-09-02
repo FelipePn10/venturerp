@@ -18,3 +18,15 @@ func TestMachineTimeUsesNativeBusinessItemCodeRequest(t *testing.T) {
 		t.Fatal("cálculo legado não deveria mudar de contrato neste ajuste")
 	}
 }
+
+func TestItemClassificationPreservesClassificationParentCode(t *testing.T) {
+	for _, target := range []string{
+		"/api/items/classifications/",
+		"/api/items/classifications/masks/1/items",
+		"/api/items/classifications/1/children",
+	} {
+		if !nativeItemBusinessCodeRequest(httptest.NewRequest("POST", target, nil)) {
+			t.Fatalf("rota %s deveria preservar parent_code como código de classificação", target)
+		}
+	}
+}
