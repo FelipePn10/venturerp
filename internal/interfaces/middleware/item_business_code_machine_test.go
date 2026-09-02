@@ -19,17 +19,19 @@ func TestMachineTimeUsesNativeBusinessItemCodeRequest(t *testing.T) {
 	}
 }
 
-func TestItemClassificationPreservesClassificationParentCode(t *testing.T) {
-	for _, target := range []string{
-		"/api/items/classifications/",
-		"/api/items/classifications/masks/1/items",
-		"/api/items/classifications/1/children",
-	} {
-		if !nativeItemBusinessCodeRequest(httptest.NewRequest("POST", target, nil)) {
-			t.Fatalf("rota %s deveria preservar parent_code como código de classificação", target)
-		}
+func TestAmbiguousItemReferenceKeysAreScopedByRoute(t *testing.T) {
+	classification := httptest.NewRequest("POST", "/api/items/classifications/", nil)
+	if isItemReferenceKey(classification, "parent_code") {
+		t.Fatal("parent_code de classificação não pode ser tratado como código de item")
 	}
-	if nativeItemBusinessCodeRequest(httptest.NewRequest("POST", "/api/items/classifications-report", nil)) {
-		t.Fatal("rota não relacionada não deveria ignorar a tradução de códigos de item")
+	productionPlan := httptest.NewRequest("POST", "/api/production-plan/create", nil)
+	if isItemReferenceKey(productionPlan, "class_item_codes") {
+		t.Fatal("class_item_codes contém códigos de classificação, não códigos de itens")
+	}
+	structure := httptest.NewRequest("POST", "/api/items/structure/create", nil)
+	for _, key := range []string{"parent_code", "child_code", "item_code"} {
+		if !isItemReferenceKey(structure, key) {
+			t.Fatalf("%s da estrutura deveria continuar sendo tratado como código de item", key)
+		}
 	}
 }
