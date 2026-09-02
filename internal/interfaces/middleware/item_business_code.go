@@ -83,7 +83,8 @@ func nativeItemBusinessCodeRequest(r *http.Request) bool {
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	return path == "/api/machine/time/create" ||
 		path == "/api/machine/time/list" ||
-		strings.HasPrefix(path, "/api/items/classifications")
+		path == "/api/items/classifications" ||
+		strings.HasPrefix(path, "/api/items/classifications/")
 }
 
 func nativeItemBusinessCodePath(r *http.Request) bool {
