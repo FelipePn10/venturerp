@@ -22,7 +22,16 @@ var itemReferenceKeys = map[string]struct{}{
 	"item_code": {}, "parent_item_code": {}, "child_item_code": {}, "root_item_code": {},
 	"material_item_code": {}, "band_item_code": {}, "scrap_item_code": {}, "service_item_code": {},
 	"reference_item_code": {}, "order_item_code": {}, "packaging_item_code": {}, "substituted_item_code": {},
-	"parent_code": {}, "child_code": {}, "item_base_cod": {}, "item_codes": {}, "class_item_codes": {}, "item_from": {}, "item_to": {},
+	"item_base_cod": {}, "item_codes": {}, "item_from": {}, "item_to": {},
+}
+
+func isItemReferenceKey(r *http.Request, key string) bool {
+	if key != "parent_code" && key != "child_code" {
+		_, ok := itemReferenceKeys[key]
+		return ok
+	}
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	return path == "/api/items/structure" || strings.HasPrefix(path, "/api/items/structure/")
 }
 
 // ItemBusinessCodeCompatibility translates public alphanumeric item references
@@ -67,7 +76,7 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 			copyHeader(w.Header(), recorder.header)
 			body := recorder.body.Bytes()
 			if strings.Contains(recorder.header.Get("Content-Type"), "application/json") && len(body) > 0 {
-				body = translateItemResponse(r.Context(), pool, enterpriseID, body)
+				body = translateItemResponse(r, pool, enterpriseID, body)
 			}
 			status := recorder.status
 			if status == 0 {
@@ -81,10 +90,7 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 
 func nativeItemBusinessCodeRequest(r *http.Request) bool {
 	path := strings.TrimSuffix(r.URL.Path, "/")
-	return path == "/api/machine/time/create" ||
-		path == "/api/machine/time/list" ||
-		path == "/api/items/classifications" ||
-		strings.HasPrefix(path, "/api/items/classifications/")
+	return path == "/api/machine/time/create" || path == "/api/machine/time/list"
 }
 
 func nativeItemBusinessCodePath(r *http.Request) bool {
@@ -221,7 +227,7 @@ func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 	query := r.URL.Query()
 	changed := false
 	for key, values := range query {
-		if _, ok := itemReferenceKeys[key]; !ok {
+		if !isItemReferenceKey(r, key) {
 			continue
 		}
 		for i, value := range values {
@@ -314,7 +320,7 @@ func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) error {
 		}
 	case map[string]any:
 		for key, v := range node {
-			if _, ok := itemReferenceKeys[key]; ok {
+			if isItemReferenceKey(r, key) {
 				if key == "item_code" && strings.HasPrefix(r.URL.Path, "/api/stock/cycle-counts") {
 					continue
 				}
@@ -431,35 +437,35 @@ func copyHeader(dst, src http.Header) {
 		}
 	}
 }
-func translateItemResponse(ctx context.Context, pool *pgxpool.Pool, e int64, raw []byte) []byte {
+func translateItemResponse(r *http.Request, pool *pgxpool.Pool, e int64, raw []byte) []byte {
 	var payload any
 	if json.Unmarshal(raw, &payload) != nil {
 		return raw
 	}
 	cache := map[int64]string{}
-	walkOutput(ctx, pool, e, payload, cache)
+	walkOutput(r, pool, e, payload, cache)
 	out, err := json.Marshal(payload)
 	if err != nil {
 		return raw
 	}
 	return out
 }
-func walkOutput(ctx context.Context, pool *pgxpool.Pool, e int64, value any, cache map[int64]string) {
+func walkOutput(r *http.Request, pool *pgxpool.Pool, e int64, value any, cache map[int64]string) {
 	switch node := value.(type) {
 	case []any:
 		for _, v := range node {
-			walkOutput(ctx, pool, e, v, cache)
+			walkOutput(r, pool, e, v, cache)
 		}
 	case map[string]any:
 		for key, v := range node {
-			if _, ok := itemReferenceKeys[key]; ok {
-				translated, legacy, ok := translateOutputReference(ctx, pool, e, v, cache)
+			if isItemReferenceKey(r, key) {
+				translated, legacy, ok := translateOutputReference(r.Context(), pool, e, v, cache)
 				if ok {
 					node["legacy_"+key] = legacy
 					node[key] = translated
 				}
 			}
-			walkOutput(ctx, pool, e, v, cache)
+			walkOutput(r, pool, e, v, cache)
 		}
 	}
 }
