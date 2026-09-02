@@ -5,7 +5,7 @@ import "encoding/json"
 // ---- Receiving notice + divergences (FAVR) ----
 
 type CreateReceivingNoticeDTO struct {
-	EnterpriseCode    int64                    `json:"enterprise_code"`
+	EnterpriseCode    int64                    `json:"-"`
 	SupplierCode      *int64                   `json:"supplier_code"`
 	PurchaseOrderCode *int64                   `json:"purchase_order_code"`
 	CarrierCode       *int64                   `json:"carrier_code"`
@@ -53,7 +53,7 @@ type ResolveReceivingDivergenceDTO struct {
 // ---- Supplier EDI (FEDS) ----
 
 type CreateEDIMessageDTO struct {
-	EnterpriseCode    int64           `json:"enterprise_code"`
+	EnterpriseCode    int64           `json:"-"`
 	SupplierCode      *int64          `json:"supplier_code"`
 	Direction         string          `json:"direction"`
 	MessageType       string          `json:"message_type"`
@@ -85,7 +85,7 @@ type EDILineDTO struct {
 // ---- Import landed cost (FREC0203 / FIMP) ----
 
 type CreateImportProcessDTO struct {
-	EnterpriseCode    int64              `json:"enterprise_code"`
+	EnterpriseCode    int64              `json:"-"`
 	SupplierCode      *int64             `json:"supplier_code"`
 	PurchaseOrderCode *int64             `json:"purchase_order_code"`
 	Reference         *string            `json:"reference"`
@@ -121,7 +121,7 @@ type UpdateImportProcessStatusDTO struct {
 // ---- Procurement parameters (FUTL0125) ----
 
 type UpsertProcurementParameterDTO struct {
-	EnterpriseCode int64   `json:"enterprise_code"`
+	EnterpriseCode int64   `json:"-"`
 	Domain         string  `json:"domain"`
 	Key            string  `json:"param_key"`
 	Value          string  `json:"param_value"`

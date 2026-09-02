@@ -25,8 +25,14 @@ func TestCommercialCanonicalRoutesArePublished(t *testing.T) {
 		`r.Route("/api/delivery-reschedule"`,
 		`Post("/create", deliveryRescheduleHandler.Create)`,
 		`Get("/list/{sales_order_code}", deliveryRescheduleHandler.ListByOrder)`,
+		`Get("/preview/{sales_order_code}", deliveryRescheduleHandler.Preview)`,
+		`Post("/batch", deliveryRescheduleHandler.CreateBatch)`,
+		`Delete("/parameters", salesQuotationHandler.ResetParameters)`,
+		`Patch("/commission-patterns/{code}/status", salesQuotationHandler.SetCommissionPatternStatus)`,
+		`Patch("/cancellation-reasons/{code}/status", salesQuotationHandler.SetCancellationReasonStatus)`,
 		`r.Route("/api/sales-quotation"`,
 		`r.Route("/api/representatives"`,
+		`Get("/sales-plans", representativeHandler.ListSalesPlans)`,
 		`r.Route("/api/sales-goals"`,
 		`r.Route("/api/consumer-service"`,
 		`r.Route("/api/delivery-promise"`,
@@ -35,8 +41,10 @@ func TestCommercialCanonicalRoutesArePublished(t *testing.T) {
 		`r.Route("/api/recurring-sales"`,
 		`Post("/{code}/recalculate-adjustment", recurringSalesHandler.RecalculateAdjustment)`,
 		`r.Route("/sales-tables"`,
+		`Get("/resolve-by-item", customerHandler.ResolveSalesTablesForItem)`,
 		`r.Route("/sales-price-policies"`,
 		`r.Route("/commercial-policies"`,
+		`Patch("/{code}/status", salesDivisionHandler.SetStatus)`,
 	}
 	for _, route := range required {
 		if !strings.Contains(apiSource, route) {

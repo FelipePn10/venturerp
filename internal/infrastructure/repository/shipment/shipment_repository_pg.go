@@ -2,11 +2,13 @@ package shipment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -60,11 +62,15 @@ func scanShipmentRow(row rowScanner) (*entity.Shipment, error) {
 }
 
 func (r *ShipmentRepositoryPG) NextCode(ctx context.Context) (int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
 	var n int64
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO public.shipment_sequences (id, last_number) VALUES (1, 1)
+	err = r.pool.QueryRow(ctx,
+		`INSERT INTO public.shipment_sequences (id, last_number) VALUES ($1, 1)
 		 ON CONFLICT (id) DO UPDATE SET last_number = shipment_sequences.last_number + 1
-		 RETURNING last_number`).Scan(&n)
+		 RETURNING last_number`, enterpriseID).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("next shipment code: %w", err)
 	}
@@ -72,16 +78,20 @@ func (r *ShipmentRepositoryPG) NextCode(ctx context.Context) (int64, error) {
 }
 
 func (r *ShipmentRepositoryPG) Create(ctx context.Context, s *entity.Shipment) (*entity.Shipment, error) {
-	err := r.pool.QueryRow(ctx,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO public.shipments
 			(code, sales_order_code, carrier_code, status, total_volumes,
 			 total_weight, total_net_weight, total_gross_weight, total_cubage_m3,
-			 notes, created_by, reference_type, purchase_order_code, production_order_code)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+			 notes, created_by, reference_type, purchase_order_code, production_order_code, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		 RETURNING id, created_at, updated_at`,
 		s.Code, s.SalesOrderCode, s.CarrierCode, string(s.Status), s.TotalVolumes,
 		s.TotalGrossWeight, s.TotalNetWeight, s.TotalGrossWeight, s.TotalCubageM3,
-		s.Notes, s.CreatedBy, s.ReferenceType, s.PurchaseOrderCode, s.ProductionOrderCode,
+		s.Notes, s.CreatedBy, s.ReferenceType, s.PurchaseOrderCode, s.ProductionOrderCode, enterpriseID,
 	).Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating shipment: %w", err)
@@ -91,11 +101,15 @@ func (r *ShipmentRepositoryPG) Create(ctx context.Context, s *entity.Shipment) (
 }
 
 func (r *ShipmentRepositoryPG) GetByCode(ctx context.Context, code int64) (*entity.Shipment, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	s, err := scanShipmentRow(r.pool.QueryRow(ctx,
-		`SELECT `+shipmentCols+` FROM public.shipments WHERE code = $1`, code))
+		`SELECT `+shipmentCols+` FROM public.shipments WHERE code = $1 AND enterprise_id=$2`, code, enterpriseID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("shipment %d not found", code)
+			return nil, fmt.Errorf("romaneio %d não encontrado", code)
 		}
 		return nil, fmt.Errorf("getting shipment: %w", err)
 	}
@@ -113,8 +127,12 @@ func (r *ShipmentRepositoryPG) List(ctx context.Context) ([]*entity.Shipment, er
 }
 
 func (r *ShipmentRepositoryPG) ListFiltered(ctx context.Context, f repository.ShipmentFilter) ([]*entity.Shipment, error) {
-	var conds []string
-	var args []any
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conds := []string{"enterprise_id = $1"}
+	args := []any{enterpriseID}
 	add := func(cond string, val any) {
 		args = append(args, val)
 		conds = append(conds, fmt.Sprintf(cond, len(args)))
@@ -165,8 +183,12 @@ func (r *ShipmentRepositoryPG) ListByProductionOrder(ctx context.Context, code i
 }
 
 func (r *ShipmentRepositoryPG) listByCol(ctx context.Context, col string, code int64) ([]*entity.Shipment, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+shipmentCols+` FROM public.shipments WHERE `+col+` = $1 ORDER BY code DESC`, code)
+		`SELECT `+shipmentCols+` FROM public.shipments WHERE `+col+` = $1 AND enterprise_id=$2 ORDER BY code DESC`, code, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing shipments by %s: %w", col, err)
 	}
@@ -175,12 +197,16 @@ func (r *ShipmentRepositoryPG) listByCol(ctx context.Context, col string, code i
 }
 
 func (r *ShipmentRepositoryPG) ListByReference(ctx context.Context, refType entity.ShipmentReferenceType, refCode int64) ([]*entity.Shipment, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+shipmentCols+` FROM public.shipments WHERE reference_type = $1
+		`SELECT `+shipmentCols+` FROM public.shipments WHERE reference_type = $1 AND enterprise_id=$3
 		   AND ((reference_type = 'SALES_ORDER' AND sales_order_code = $2)
 		     OR (reference_type = 'PURCHASE_ORDER' AND purchase_order_code = $2)
 		     OR (reference_type = 'PRODUCTION_ORDER' AND production_order_code = $2))
-		 ORDER BY code DESC`, string(refType), refCode)
+		 ORDER BY code DESC`, string(refType), refCode, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing shipments by reference %s/%d: %w", refType, refCode, err)
 	}
@@ -216,18 +242,22 @@ func statusTimestampColumn(status entity.ShipmentStatus) string {
 }
 
 func (r *ShipmentRepositoryPG) UpdateStatus(ctx context.Context, code int64, status entity.ShipmentStatus, by *uuid.UUID, note string) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	setTS := ""
 	if col := statusTimestampColumn(status); col != "" {
 		setTS = ", " + col + " = NOW()"
 	}
 	var id int64
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`UPDATE public.shipments SET status = $2, updated_at = NOW(), updated_by = $3`+setTS+
-			` WHERE code = $1 RETURNING id`,
-		code, string(status), by).Scan(&id)
+			` WHERE code = $1 AND enterprise_id = $4 RETURNING id`,
+		code, string(status), by, enterpriseID).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return fmt.Errorf("shipment %d not found", code)
+			return fmt.Errorf("romaneio %d não encontrado", code)
 		}
 		return fmt.Errorf("updating shipment status: %w", err)
 	}
@@ -235,21 +265,25 @@ func (r *ShipmentRepositoryPG) UpdateStatus(ctx context.Context, code int64, sta
 }
 
 func (r *ShipmentRepositoryPG) UpdateTransport(ctx context.Context, code int64, t repository.TransportInput, by *uuid.UUID) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	var id int64
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`UPDATE public.shipments SET
 			carrier_code = COALESCE($2, carrier_code),
 			freight_modality = $3, freight_value = $4, insurance_value = $5,
 			vehicle_plate = $6, driver_name = $7, driver_document = $8,
 			antt_code = $9, seals = $10, estimated_delivery = $11,
 			updated_at = NOW(), updated_by = $12
-		 WHERE code = $1 RETURNING id`,
+		 WHERE code = $1 AND enterprise_id = $13 RETURNING id`,
 		code, t.CarrierCode, t.FreightModality, t.FreightValue, t.InsuranceValue,
-		t.VehiclePlate, t.DriverName, t.DriverDocument, t.ANTTCode, t.Seals, t.EstimatedDelivery, by,
+		t.VehiclePlate, t.DriverName, t.DriverDocument, t.ANTTCode, t.Seals, t.EstimatedDelivery, by, enterpriseID,
 	).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return fmt.Errorf("shipment %d not found", code)
+			return fmt.Errorf("romaneio %d não encontrado", code)
 		}
 		return fmt.Errorf("updating shipment transport: %w", err)
 	}
@@ -257,15 +291,19 @@ func (r *ShipmentRepositoryPG) UpdateTransport(ctx context.Context, code int64, 
 }
 
 func (r *ShipmentRepositoryPG) SetFiscalExit(ctx context.Context, code int64, fiscalExitID, nfeNumber *int64, nfeKey *string, by *uuid.UUID) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	var id int64
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`UPDATE public.shipments SET fiscal_exit_id = $2, nfe_number = $3, nfe_key = $4,
 		        updated_at = NOW(), updated_by = $5
-		 WHERE code = $1 RETURNING id`,
-		code, fiscalExitID, nfeNumber, nfeKey, by).Scan(&id)
+		 WHERE code = $1 AND enterprise_id = $6 RETURNING id`,
+		code, fiscalExitID, nfeNumber, nfeKey, by, enterpriseID).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return fmt.Errorf("shipment %d not found", code)
+			return fmt.Errorf("romaneio %d não encontrado", code)
 		}
 		return fmt.Errorf("linking shipment to NF-e: %w", err)
 	}
@@ -275,6 +313,10 @@ func (r *ShipmentRepositoryPG) SetFiscalExit(ctx context.Context, code int64, fi
 // RecalcTotals recomputes header totals (volumes, net/gross weight, cubage) from
 // the persisted volumes; falls back to item weights when there are no volumes.
 func (r *ShipmentRepositoryPG) RecalcTotals(ctx context.Context, code int64) error {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
 	_, err := r.pool.Exec(ctx,
 		`UPDATE public.shipments s SET
 			total_volumes = COALESCE(v.cnt, 0),
@@ -283,7 +325,7 @@ func (r *ShipmentRepositoryPG) RecalcTotals(ctx context.Context, code int64) err
 			total_weight = COALESCE(v.gross, i.gross, 0),
 			total_cubage_m3 = COALESCE(v.cub, 0),
 			updated_at = NOW()
-		 FROM (SELECT id FROM public.shipments WHERE code = $1) sx
+		 FROM (SELECT id FROM public.shipments WHERE code = $1 AND enterprise_id = $2) sx
 		 LEFT JOIN LATERAL (
 			SELECT COUNT(*) cnt, SUM(net_weight) net, SUM(gross_weight) gross, SUM(cubage_m3) cub
 			FROM public.shipment_volumes WHERE shipment_id = sx.id
@@ -292,7 +334,7 @@ func (r *ShipmentRepositoryPG) RecalcTotals(ctx context.Context, code int64) err
 			SELECT SUM(quantity*unit_net_weight) net, SUM(quantity*unit_gross_weight) gross
 			FROM public.shipment_items WHERE shipment_id = sx.id
 		 ) i ON TRUE
-		 WHERE s.id = sx.id`, code)
+		 WHERE s.id = sx.id`, code, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("recalculating shipment totals: %w", err)
 	}
@@ -300,14 +342,19 @@ func (r *ShipmentRepositoryPG) RecalcTotals(ctx context.Context, code int64) err
 }
 
 func (r *ShipmentRepositoryPG) AddItem(ctx context.Context, item *entity.ShipmentItem) (*entity.ShipmentItem, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	err := r.pool.QueryRow(ctx,
 		`INSERT INTO public.shipment_items
 			(shipment_id, sequence, item_code, sales_order_item_code, warehouse_id,
 			 quantity, conferred_qty, is_conferred, unit_net_weight, unit_gross_weight, notes)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+		 WHERE EXISTS (SELECT 1 FROM public.shipments WHERE id=$1 AND enterprise_id=$12)
 		 RETURNING id, created_at`,
 		item.ShipmentID, item.Sequence, item.ItemCode, item.SalesOrderItemCode, item.WarehouseID,
-		item.Quantity, item.ConferredQty, item.IsConferred, item.UnitNetWeight, item.UnitGrossWeight, item.Notes,
+		item.Quantity, item.ConferredQty, item.IsConferred, item.UnitNetWeight, item.UnitGrossWeight, item.Notes, enterpriseID,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("adding shipment item: %w", err)
@@ -329,8 +376,14 @@ func scanShipmentItem(row rowScanner) (*entity.ShipmentItem, error) {
 }
 
 func (r *ShipmentRepositoryPG) ListItems(ctx context.Context, shipmentID int64) ([]*entity.ShipmentItem, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+shipmentItemCols+` FROM public.shipment_items WHERE shipment_id = $1 ORDER BY sequence, id`, shipmentID)
+		`SELECT `+shipmentItemCols+` FROM public.shipment_items i WHERE shipment_id = $1
+		 AND EXISTS (SELECT 1 FROM public.shipments s WHERE s.id=i.shipment_id AND s.enterprise_id=$2)
+		 ORDER BY sequence, id`, shipmentID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing shipment items: %w", err)
 	}
@@ -347,11 +400,16 @@ func (r *ShipmentRepositoryPG) ListItems(ctx context.Context, shipmentID int64) 
 }
 
 func (r *ShipmentRepositoryPG) GetItem(ctx context.Context, itemID int64) (*entity.ShipmentItem, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	it, err := scanShipmentItem(r.pool.QueryRow(ctx,
-		`SELECT `+shipmentItemCols+` FROM public.shipment_items WHERE id = $1`, itemID))
+		`SELECT `+shipmentItemCols+` FROM public.shipment_items i WHERE id = $1
+		 AND EXISTS (SELECT 1 FROM public.shipments s WHERE s.id=i.shipment_id AND s.enterprise_id=$2)`, itemID, enterpriseID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("shipment item %d not found", itemID)
+			return nil, fmt.Errorf("item de romaneio %d não encontrado", itemID)
 		}
 		return nil, fmt.Errorf("getting shipment item: %w", err)
 	}
@@ -359,9 +417,14 @@ func (r *ShipmentRepositoryPG) GetItem(ctx context.Context, itemID int64) (*enti
 }
 
 func (r *ShipmentRepositoryPG) ConferItem(ctx context.Context, itemID int64, conferredQty float64) error {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
 	_, err := r.pool.Exec(ctx,
-		`UPDATE public.shipment_items SET conferred_qty = $2, is_conferred = TRUE WHERE id = $1`,
-		itemID, conferredQty)
+		`UPDATE public.shipment_items i SET conferred_qty = $2, is_conferred = TRUE WHERE id = $1
+		 AND EXISTS (SELECT 1 FROM public.shipments s WHERE s.id=i.shipment_id AND s.enterprise_id=$3)`,
+		itemID, conferredQty, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("conferring shipment item: %w", err)
 	}
@@ -369,14 +432,19 @@ func (r *ShipmentRepositoryPG) ConferItem(ctx context.Context, itemID int64, con
 }
 
 func (r *ShipmentRepositoryPG) AddVolume(ctx context.Context, v *entity.ShipmentVolume) (*entity.ShipmentVolume, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	err := r.pool.QueryRow(ctx,
 		`INSERT INTO public.shipment_volumes
 			(shipment_id, volume_number, package_type, net_weight, gross_weight,
 			 length_cm, width_cm, height_cm, cubage_m3, marking, contents)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+		 WHERE EXISTS (SELECT 1 FROM public.shipments WHERE id=$1 AND enterprise_id=$12)
 		 RETURNING id, created_at`,
 		v.ShipmentID, v.VolumeNumber, v.PackageType, v.NetWeight, v.GrossWeight,
-		v.LengthCm, v.WidthCm, v.HeightCm, v.CubageM3, v.Marking, v.Contents,
+		v.LengthCm, v.WidthCm, v.HeightCm, v.CubageM3, v.Marking, v.Contents, enterpriseID,
 	).Scan(&v.ID, &v.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("adding shipment volume: %w", err)
@@ -385,10 +453,16 @@ func (r *ShipmentRepositoryPG) AddVolume(ctx context.Context, v *entity.Shipment
 }
 
 func (r *ShipmentRepositoryPG) ListVolumes(ctx context.Context, shipmentID int64) ([]*entity.ShipmentVolume, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, shipment_id, volume_number, package_type, net_weight, gross_weight,
 		        length_cm, width_cm, height_cm, cubage_m3, marking, contents, created_at
-		 FROM public.shipment_volumes WHERE shipment_id = $1 ORDER BY volume_number, id`, shipmentID)
+		 FROM public.shipment_volumes v WHERE shipment_id = $1
+		 AND EXISTS (SELECT 1 FROM public.shipments s WHERE s.id=v.shipment_id AND s.enterprise_id=$2)
+		 ORDER BY volume_number, id`, shipmentID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing shipment volumes: %w", err)
 	}
@@ -406,7 +480,12 @@ func (r *ShipmentRepositoryPG) ListVolumes(ctx context.Context, shipmentID int64
 }
 
 func (r *ShipmentRepositoryPG) DeleteVolume(ctx context.Context, volumeID int64) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM public.shipment_volumes WHERE id = $1`, volumeID)
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
+	_, err := r.pool.Exec(ctx, `DELETE FROM public.shipment_volumes v WHERE id = $1
+	 AND EXISTS (SELECT 1 FROM public.shipments s WHERE s.id=v.shipment_id AND s.enterprise_id=$2)`, volumeID, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("deleting shipment volume: %w", err)
 	}
@@ -414,9 +493,14 @@ func (r *ShipmentRepositoryPG) DeleteVolume(ctx context.Context, volumeID int64)
 }
 
 func (r *ShipmentRepositoryPG) AddEvent(ctx context.Context, e *entity.ShipmentEvent) error {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO public.shipment_events (shipment_id, event, note, created_by)
-		 VALUES ($1,$2,$3,$4)`, e.ShipmentID, e.Event, e.Note, e.CreatedBy)
+		 SELECT $1,$2,$3,$4 WHERE EXISTS
+		 (SELECT 1 FROM public.shipments WHERE id=$1 AND enterprise_id=$5)`, e.ShipmentID, e.Event, e.Note, e.CreatedBy, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("adding shipment event: %w", err)
 	}
@@ -424,9 +508,15 @@ func (r *ShipmentRepositoryPG) AddEvent(ctx context.Context, e *entity.ShipmentE
 }
 
 func (r *ShipmentRepositoryPG) ListEvents(ctx context.Context, shipmentID int64) ([]*entity.ShipmentEvent, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, shipment_id, event, note, created_by, created_at
-		 FROM public.shipment_events WHERE shipment_id = $1 ORDER BY created_at, id`, shipmentID)
+		 FROM public.shipment_events e WHERE shipment_id = $1
+		 AND EXISTS (SELECT 1 FROM public.shipments s WHERE s.id=e.shipment_id AND s.enterprise_id=$2)
+		 ORDER BY created_at, id`, shipmentID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing shipment events: %w", err)
 	}
@@ -474,11 +564,15 @@ func scanLoadRow(row rowScanner) (*entity.ShipmentLoad, error) {
 }
 
 func (r *ShipmentRepositoryPG) NextLoadCode(ctx context.Context) (int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
 	var n int64
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO public.shipment_load_sequences (id, last_number) VALUES (1, 1)
+	err = r.pool.QueryRow(ctx,
+		`INSERT INTO public.shipment_load_sequences (id, last_number) VALUES ($1, 1)
 		 ON CONFLICT (id) DO UPDATE SET last_number = shipment_load_sequences.last_number + 1
-		 RETURNING last_number`).Scan(&n)
+		 RETURNING last_number`, enterpriseID).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("next shipment load code: %w", err)
 	}
@@ -486,6 +580,10 @@ func (r *ShipmentRepositoryPG) NextLoadCode(ctx context.Context) (int64, error) 
 }
 
 func (r *ShipmentRepositoryPG) CreateLoad(ctx context.Context, in repository.CreateLoadInput) (*entity.ShipmentLoad, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	code, err := r.NextLoadCode(ctx)
 	if err != nil {
 		return nil, err
@@ -494,12 +592,12 @@ func (r *ShipmentRepositoryPG) CreateLoad(ctx context.Context, in repository.Cre
 		`INSERT INTO public.shipment_loads
 			(code, status, description, carrier_code, vehicle_plate, driver_name, driver_document,
 			 route_code, origin, destination, dispatch_box_code, planned_ship_date, estimated_delivery,
-			 notes, created_by)
-		 VALUES ($1,'PLANNED',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+			 notes, created_by, enterprise_id)
+		 VALUES ($1,'PLANNED',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		 RETURNING `+loadCols,
 		code, in.Description, in.CarrierCode, in.VehiclePlate, in.DriverName, in.DriverDocument,
 		in.RouteCode, in.Origin, in.Destination, in.DispatchBoxCode, in.PlannedShipDate, in.EstimatedDelivery,
-		in.Notes, in.CreatedBy,
+		in.Notes, in.CreatedBy, enterpriseID,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("creating shipment load: %w", err)
@@ -511,10 +609,14 @@ func (r *ShipmentRepositoryPG) CreateLoad(ctx context.Context, in repository.Cre
 }
 
 func (r *ShipmentRepositoryPG) GetLoadByCode(ctx context.Context, code int64) (*entity.ShipmentLoad, error) {
-	load, err := scanLoadRow(r.pool.QueryRow(ctx, `SELECT `+loadCols+` FROM public.shipment_loads WHERE code = $1`, code))
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
+	load, err := scanLoadRow(r.pool.QueryRow(ctx, `SELECT `+loadCols+` FROM public.shipment_loads WHERE code = $1 AND enterprise_id=$2`, code, enterpriseID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("shipment load %d not found", code)
+			return nil, fmt.Errorf("carga %d não encontrada", code)
 		}
 		return nil, fmt.Errorf("getting shipment load: %w", err)
 	}
@@ -532,7 +634,11 @@ func (r *ShipmentRepositoryPG) GetLoadByCode(ctx context.Context, code int64) (*
 }
 
 func (r *ShipmentRepositoryPG) ListLoads(ctx context.Context, f repository.LoadFilter) ([]*entity.ShipmentLoad, error) {
-	q, args := buildLoadListQuery(f, `SELECT `+loadCols+` FROM public.shipment_loads l`)
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
+	q, args := buildLoadListQuery(f, enterpriseID, `SELECT `+loadCols+` FROM public.shipment_loads l`)
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing shipment loads: %w", err)
@@ -549,9 +655,9 @@ func (r *ShipmentRepositoryPG) ListLoads(ctx context.Context, f repository.LoadF
 	return result, rows.Err()
 }
 
-func buildLoadListQuery(f repository.LoadFilter, base string) (string, []any) {
-	var conds []string
-	var args []any
+func buildLoadListQuery(f repository.LoadFilter, enterpriseID int64, base string) (string, []any) {
+	conds := []string{"l.enterprise_id = $1"}
+	args := []any{enterpriseID}
 	add := func(cond string, val any) {
 		args = append(args, val)
 		conds = append(conds, fmt.Sprintf(cond, len(args)))
@@ -587,41 +693,60 @@ func buildLoadListQuery(f repository.LoadFilter, base string) (string, []any) {
 }
 
 func (r *ShipmentRepositoryPG) AddShipmentToLoad(ctx context.Context, loadCode, shipmentCode int64, sequence int) (*entity.ShipmentLoadShipment, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	var out entity.ShipmentLoadShipment
 	err := r.pool.QueryRow(ctx,
-		`WITH l AS (SELECT id, code FROM public.shipment_loads WHERE code = $1),
-		      s AS (SELECT id, code FROM public.shipments WHERE code = $2)
+		`WITH l AS (SELECT id, code FROM public.shipment_loads WHERE code = $1 AND enterprise_id=$4),
+		      s AS (SELECT id, code FROM public.shipments WHERE code = $2 AND enterprise_id=$4)
 		 INSERT INTO public.shipment_load_shipments (load_id, shipment_id, sequence)
 		 SELECT l.id, s.id, $3 FROM l, s
 		 ON CONFLICT (load_id, shipment_id) DO UPDATE SET sequence = EXCLUDED.sequence
 		 RETURNING id, load_id, (SELECT code FROM l), shipment_id, (SELECT code FROM s), sequence, created_at`,
-		loadCode, shipmentCode, sequence,
+		loadCode, shipmentCode, sequence, enterpriseID,
 	).Scan(&out.ID, &out.LoadID, &out.LoadCode, &out.ShipmentID, &out.ShipmentCode, &out.Sequence, &out.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("carga %d ou romaneio %d não encontrado na empresa autenticada", loadCode, shipmentCode)
+		}
 		return nil, fmt.Errorf("adding shipment to load: %w", err)
 	}
 	return &out, nil
 }
 
 func (r *ShipmentRepositoryPG) RemoveShipmentFromLoad(ctx context.Context, loadCode, shipmentCode int64) error {
-	_, err := r.pool.Exec(ctx,
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
+	tag, err := r.pool.Exec(ctx,
 		`DELETE FROM public.shipment_load_shipments lsi
 		 USING public.shipment_loads l, public.shipments s
-		 WHERE lsi.load_id = l.id AND lsi.shipment_id = s.id AND l.code = $1 AND s.code = $2`,
-		loadCode, shipmentCode)
+		 WHERE lsi.load_id = l.id AND lsi.shipment_id = s.id AND l.code = $1 AND s.code = $2
+		 AND l.enterprise_id=$3 AND s.enterprise_id=$3`, loadCode, shipmentCode, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("removing shipment from load: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("romaneio %d não está vinculado à carga %d", shipmentCode, loadCode)
 	}
 	return nil
 }
 
 func (r *ShipmentRepositoryPG) listLoadShipments(ctx context.Context, loadID int64) ([]*entity.ShipmentLoadShipment, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT lsi.id, lsi.load_id, l.code, lsi.shipment_id, s.code, lsi.sequence, lsi.created_at
 		 FROM public.shipment_load_shipments lsi
 		 JOIN public.shipment_loads l ON l.id = lsi.load_id
 		 JOIN public.shipments s ON s.id = lsi.shipment_id
-		 WHERE lsi.load_id = $1 ORDER BY lsi.sequence, lsi.id`, loadID)
+		 WHERE lsi.load_id = $1 AND l.enterprise_id=$2 AND s.enterprise_id=$2
+		 ORDER BY lsi.sequence, lsi.id`, loadID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing load shipments: %w", err)
 	}
@@ -638,10 +763,14 @@ func (r *ShipmentRepositoryPG) listLoadShipments(ctx context.Context, loadID int
 }
 
 func (r *ShipmentRepositoryPG) AddFiscalNoteToLoad(ctx context.Context, in repository.AddFiscalNoteToLoadInput) (*entity.ShipmentLoadFiscalNote, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	var out entity.ShipmentLoadFiscalNote
 	err := r.pool.QueryRow(ctx,
-		`WITH l AS (SELECT id, code FROM public.shipment_loads WHERE code = $1),
-		      s AS (SELECT id, code FROM public.shipments WHERE code = $2)
+		`WITH l AS (SELECT id, code FROM public.shipment_loads WHERE code = $1 AND enterprise_id=$7),
+		      s AS (SELECT id, code FROM public.shipments WHERE code = $2 AND enterprise_id=$7)
 		 INSERT INTO public.shipment_load_fiscal_notes (load_id, shipment_id, fiscal_exit_id, nfe_number, nfe_key, sequence)
 		 SELECT l.id, CASE WHEN $2::bigint IS NULL THEN NULL ELSE s.id END, $3, $4, $5, $6 FROM l LEFT JOIN s ON TRUE
 		 ON CONFLICT (load_id, fiscal_exit_id) DO UPDATE SET
@@ -650,7 +779,7 @@ func (r *ShipmentRepositoryPG) AddFiscalNoteToLoad(ctx context.Context, in repos
 		 RETURNING id, load_id, (SELECT code FROM l), shipment_id,
 		           (SELECT code FROM public.shipments WHERE id = shipment_id),
 		           fiscal_exit_id, nfe_number, nfe_key, sequence, created_at`,
-		in.LoadCode, in.ShipmentCode, in.FiscalExitID, in.NFeNumber, in.NFeKey, in.Sequence,
+		in.LoadCode, in.ShipmentCode, in.FiscalExitID, in.NFeNumber, in.NFeKey, in.Sequence, enterpriseID,
 	).Scan(&out.ID, &out.LoadID, &out.LoadCode, &out.ShipmentID, &out.ShipmentCode,
 		&out.FiscalExitID, &out.NFeNumber, &out.NFeKey, &out.Sequence, &out.CreatedAt)
 	if err != nil {
@@ -660,13 +789,18 @@ func (r *ShipmentRepositoryPG) AddFiscalNoteToLoad(ctx context.Context, in repos
 }
 
 func (r *ShipmentRepositoryPG) listLoadFiscalNotes(ctx context.Context, loadID int64) ([]*entity.ShipmentLoadFiscalNote, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT n.id, n.load_id, l.code, n.shipment_id, s.code, n.fiscal_exit_id,
 		        n.nfe_number, n.nfe_key, n.sequence, n.created_at
 		 FROM public.shipment_load_fiscal_notes n
 		 JOIN public.shipment_loads l ON l.id = n.load_id
 		 LEFT JOIN public.shipments s ON s.id = n.shipment_id
-		 WHERE n.load_id = $1 ORDER BY n.sequence, n.id`, loadID)
+		 WHERE n.load_id = $1 AND l.enterprise_id=$2 AND (s.id IS NULL OR s.enterprise_id=$2)
+		 ORDER BY n.sequence, n.id`, loadID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing load fiscal notes: %w", err)
 	}
@@ -700,13 +834,17 @@ func loadStatusTimestampColumn(status entity.LoadStatus) string {
 }
 
 func (r *ShipmentRepositoryPG) UpdateLoadStatus(ctx context.Context, code int64, status entity.LoadStatus, by *uuid.UUID, note string) error {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
 	setTS := ""
 	if col := loadStatusTimestampColumn(status); col != "" {
 		setTS = ", " + col + " = NOW()"
 	}
 	_, err := r.pool.Exec(ctx,
-		`UPDATE public.shipment_loads SET status = $2, updated_at = NOW(), updated_by = $3`+setTS+` WHERE code = $1`,
-		code, string(status), by)
+		`UPDATE public.shipment_loads SET status = $2, updated_at = NOW(), updated_by = $3`+setTS+` WHERE code = $1 AND enterprise_id=$4`,
+		code, string(status), by, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("updating shipment load status: %w", err)
 	}
@@ -714,6 +852,10 @@ func (r *ShipmentRepositoryPG) UpdateLoadStatus(ctx context.Context, code int64,
 }
 
 func (r *ShipmentRepositoryPG) RecalcLoadTotals(ctx context.Context, code int64) error {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
 	_, err := r.pool.Exec(ctx,
 		`UPDATE public.shipment_loads l SET
 			total_shipments = COALESCE(s.cnt, 0),
@@ -723,7 +865,7 @@ func (r *ShipmentRepositoryPG) RecalcLoadTotals(ctx context.Context, code int64)
 			total_gross_weight = COALESCE(s.gross_weight, 0),
 			total_cubage_m3 = COALESCE(s.cubage, 0),
 			updated_at = NOW()
-		 FROM (SELECT id FROM public.shipment_loads WHERE code = $1) lx
+		 FROM (SELECT id FROM public.shipment_loads WHERE code = $1 AND enterprise_id=$2) lx
 		 LEFT JOIN LATERAL (
 			SELECT COUNT(*) cnt, SUM(sh.total_volumes) volumes, SUM(sh.total_net_weight) net_weight,
 			       SUM(sh.total_gross_weight) gross_weight, SUM(sh.total_cubage_m3) cubage
@@ -734,7 +876,7 @@ func (r *ShipmentRepositoryPG) RecalcLoadTotals(ctx context.Context, code int64)
 		 LEFT JOIN LATERAL (
 			SELECT COUNT(*) cnt FROM public.shipment_load_fiscal_notes WHERE load_id = lx.id
 		 ) n ON TRUE
-		 WHERE l.id = lx.id`, code)
+		 WHERE l.id = lx.id`, code, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("recalculating load totals: %w", err)
 	}
@@ -742,12 +884,16 @@ func (r *ShipmentRepositoryPG) RecalcLoadTotals(ctx context.Context, code int64)
 }
 
 func (r *ShipmentRepositoryPG) CreateDeliveryInstruction(ctx context.Context, d *entity.DeliveryInstruction) (*entity.DeliveryInstruction, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	err := r.pool.QueryRow(ctx,
-		`WITH l AS (SELECT id, code FROM public.shipment_loads WHERE code = $1)
-		 INSERT INTO public.shipment_delivery_instructions (load_id, customer_id, title, instruction, priority, active)
-		 VALUES ((SELECT id FROM l), $2, $3, $4, $5, $6)
+		`WITH l AS (SELECT id, code FROM public.shipment_loads WHERE code = $1 AND enterprise_id=$7)
+		 INSERT INTO public.shipment_delivery_instructions (load_id, customer_id, title, instruction, priority, active, enterprise_id)
+		 SELECT l.id, $2, $3, $4, $5, $6, $7 FROM l
 		 RETURNING id, load_id, (SELECT code FROM l), customer_id, title, instruction, priority, active, created_at, updated_at`,
-		d.LoadCode, d.CustomerID, d.Title, d.Instruction, d.Priority, d.Active,
+		d.LoadCode, d.CustomerID, d.Title, d.Instruction, d.Priority, d.Active, enterpriseID,
 	).Scan(&d.ID, &d.LoadID, &d.LoadCode, &d.CustomerID, &d.Title, &d.Instruction, &d.Priority, &d.Active, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating delivery instruction: %w", err)
@@ -756,8 +902,12 @@ func (r *ShipmentRepositoryPG) CreateDeliveryInstruction(ctx context.Context, d 
 }
 
 func (r *ShipmentRepositoryPG) ListDeliveryInstructions(ctx context.Context, loadCode *int64, activeOnly bool) ([]*entity.DeliveryInstruction, error) {
-	var conds []string
-	var args []any
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
+	conds := []string{"i.enterprise_id = $1"}
+	args := []any{enterpriseID}
 	if loadCode != nil {
 		args = append(args, *loadCode)
 		conds = append(conds, fmt.Sprintf("l.code = $%d", len(args)))
@@ -790,13 +940,23 @@ func (r *ShipmentRepositoryPG) ListDeliveryInstructions(ctx context.Context, loa
 }
 
 func (r *ShipmentRepositoryPG) CreateDispatchBox(ctx context.Context, b *entity.DispatchBox) (*entity.DispatchBox, error) {
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO public.shipment_dispatch_boxes (code, description, warehouse_id, zone, active)
-		 VALUES ($1,$2,$3,$4,$5)
-		 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description, warehouse_id = EXCLUDED.warehouse_id,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if b.WarehouseID != nil {
+		var valid bool
+		if err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM warehouse WHERE id=$1 AND enterprise_id=$2)`, *b.WarehouseID, enterpriseID).Scan(&valid); err != nil || !valid {
+			return nil, fmt.Errorf("almoxarifado da caixa de despacho não encontrado na empresa autenticada")
+		}
+	}
+	err = r.pool.QueryRow(ctx,
+		`INSERT INTO public.shipment_dispatch_boxes (code, description, warehouse_id, zone, active, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6)
+		 ON CONFLICT (enterprise_id,code) DO UPDATE SET description = EXCLUDED.description, warehouse_id = EXCLUDED.warehouse_id,
 		    zone = EXCLUDED.zone, active = EXCLUDED.active, updated_at = NOW()
 		 RETURNING id, code, description, warehouse_id, zone, active, current_load, created_at, updated_at`,
-		b.Code, b.Description, b.WarehouseID, b.Zone, b.Active,
+		b.Code, b.Description, b.WarehouseID, b.Zone, b.Active, enterpriseID,
 	).Scan(&b.ID, &b.Code, &b.Description, &b.WarehouseID, &b.Zone, &b.Active, &b.CurrentLoad, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating dispatch box: %w", err)
@@ -805,13 +965,17 @@ func (r *ShipmentRepositoryPG) CreateDispatchBox(ctx context.Context, b *entity.
 }
 
 func (r *ShipmentRepositoryPG) ListDispatchBoxes(ctx context.Context, activeOnly bool) ([]*entity.DispatchBox, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	q := `SELECT id, code, description, warehouse_id, zone, active, current_load, created_at, updated_at
-	      FROM public.shipment_dispatch_boxes`
+	      FROM public.shipment_dispatch_boxes WHERE enterprise_id=$1`
 	if activeOnly {
-		q += " WHERE active = TRUE"
+		q += " AND active = TRUE"
 	}
 	q += " ORDER BY code"
-	rows, err := r.pool.Query(ctx, q)
+	rows, err := r.pool.Query(ctx, q, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing dispatch boxes: %w", err)
 	}
@@ -828,39 +992,47 @@ func (r *ShipmentRepositoryPG) ListDispatchBoxes(ctx context.Context, activeOnly
 }
 
 func (r *ShipmentRepositoryPG) AssignBoxToLoad(ctx context.Context, loadCode int64, boxCode string, by *uuid.UUID) error {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return tenantErr
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin assign box: %w", err)
 	}
 	defer tx.Rollback(ctx)
 	tag, err := tx.Exec(ctx,
-		`UPDATE public.shipment_loads SET dispatch_box_code = $2, updated_at = NOW(), updated_by = $3 WHERE code = $1`,
-		loadCode, boxCode, by)
+		`UPDATE public.shipment_loads SET dispatch_box_code = $2, updated_at = NOW(), updated_by = $3 WHERE code = $1 AND enterprise_id=$4`,
+		loadCode, boxCode, by, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("assigning box to load: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("shipment load %d not found", loadCode)
+		return fmt.Errorf("carga %d não encontrada", loadCode)
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE public.shipment_dispatch_boxes SET current_load = NULL, updated_at = NOW() WHERE current_load = $1`,
-		loadCode); err != nil {
+		`UPDATE public.shipment_dispatch_boxes SET current_load = NULL, updated_at = NOW() WHERE current_load = $1 AND enterprise_id=$2`,
+		loadCode, enterpriseID); err != nil {
 		return fmt.Errorf("clearing previous box assignment: %w", err)
 	}
 	tag, err = tx.Exec(ctx,
-		`UPDATE public.shipment_dispatch_boxes SET current_load = $2, updated_at = NOW() WHERE code = $1`,
-		boxCode, loadCode)
+		`UPDATE public.shipment_dispatch_boxes SET current_load = $2, updated_at = NOW() WHERE code = $1 AND enterprise_id=$3`,
+		boxCode, loadCode, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("updating dispatch box assignment: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("dispatch box %s not found", boxCode)
+		return fmt.Errorf("caixa de despacho %s não encontrada", boxCode)
 	}
 	return tx.Commit(ctx)
 }
 
 func (r *ShipmentRepositoryPG) LoadMonitor(ctx context.Context, f repository.LoadFilter) ([]*repository.LoadMonitorRow, error) {
-	q, args := buildLoadListQuery(f,
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
+	q, args := buildLoadListQuery(f, enterpriseID,
 		`SELECT l.code, l.status, l.carrier_code, l.vehicle_plate, l.driver_name, l.dispatch_box_code,
 		        l.planned_ship_date, l.estimated_delivery, l.total_shipments, l.total_fiscal_notes,
 		        l.total_volumes, l.total_net_weight, l.total_gross_weight, l.total_cubage_m3,
@@ -894,7 +1066,11 @@ func (r *ShipmentRepositoryPG) LoadMonitor(ctx context.Context, f repository.Loa
 }
 
 func (r *ShipmentRepositoryPG) SeparationMonitor(ctx context.Context, f repository.LoadFilter) ([]*repository.SeparationMonitorRow, error) {
-	q, args := buildLoadListQuery(f,
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
+	q, args := buildLoadListQuery(f, enterpriseID,
 		`SELECT s.code, l.code, s.status, l.status, s.sales_order_code, COALESCE(l.carrier_code, s.carrier_code),
 		        l.dispatch_box_code, COUNT(si.id)::int,
 		        COALESCE(SUM(CASE WHEN si.is_conferred THEN 1 ELSE 0 END),0)::int,
@@ -931,6 +1107,10 @@ func (r *ShipmentRepositoryPG) SeparationMonitor(ctx context.Context, f reposito
 }
 
 func (r *ShipmentRepositoryPG) LogisticPanel(ctx context.Context) (*repository.LogisticPanelSummary, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	var s repository.LogisticPanelSummary
 	err := r.pool.QueryRow(ctx,
 		`SELECT
@@ -940,14 +1120,14 @@ func (r *ShipmentRepositoryPG) LogisticPanel(ctx context.Context) (*repository.L
 			COALESCE(SUM(CASE WHEN l.status = 'LOADED' THEN 1 ELSE 0 END),0)::int,
 			COALESCE(SUM(CASE WHEN l.status = 'SHIPPED' THEN 1 ELSE 0 END),0)::int,
 			COALESCE(SUM(CASE WHEN l.status = 'CANCELLED' THEN 1 ELSE 0 END),0)::int,
-			(SELECT COUNT(*) FROM public.shipments WHERE status = 'OPEN')::int,
-			(SELECT COUNT(*) FROM public.shipments WHERE status = 'SEPARATED')::int,
-			(SELECT COUNT(*) FROM public.shipments WHERE status = 'CONFERRED')::int,
-			(SELECT COUNT(*) FROM public.shipment_dispatch_boxes WHERE active AND current_load IS NOT NULL)::int,
-			(SELECT COUNT(*) FROM public.shipment_dispatch_boxes WHERE active AND current_load IS NULL)::int,
+			(SELECT COUNT(*) FROM public.shipments WHERE status = 'OPEN' AND enterprise_id=$1)::int,
+			(SELECT COUNT(*) FROM public.shipments WHERE status = 'SEPARATED' AND enterprise_id=$1)::int,
+			(SELECT COUNT(*) FROM public.shipments WHERE status = 'CONFERRED' AND enterprise_id=$1)::int,
+			(SELECT COUNT(*) FROM public.shipment_dispatch_boxes WHERE active AND current_load IS NOT NULL AND enterprise_id=$1)::int,
+			(SELECT COUNT(*) FROM public.shipment_dispatch_boxes WHERE active AND current_load IS NULL AND enterprise_id=$1)::int,
 			COALESCE(SUM(l.total_volumes),0)::int,
 			COALESCE(SUM(l.total_gross_weight),0)
-		 FROM public.shipment_loads l`).Scan(
+		 FROM public.shipment_loads l WHERE l.enterprise_id=$1`, enterpriseID).Scan(
 		&s.PlannedLoads, &s.ReleasedLoads, &s.LoadingLoads, &s.LoadedLoads, &s.ShippedLoads, &s.CancelledLoads,
 		&s.OpenShipments, &s.SeparatedShipments, &s.ConferredShipments, &s.BoxesOccupied, &s.BoxesAvailable,
 		&s.TotalVolumes, &s.TotalGrossWeight,

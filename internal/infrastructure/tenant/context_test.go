@@ -22,3 +22,14 @@ func TestIDReturnsSelectedEnterprise(t *testing.T) {
 		t.Fatalf("expected enterprise 42, got %d, %v", id, err)
 	}
 }
+
+func TestCodeRequiresAndReturnsAuthenticatedEnterpriseCode(t *testing.T) {
+	if _, err := Code(context.Background()); !errors.Is(err, ErrMissingEnterprise) {
+		t.Fatalf("expected ErrMissingEnterprise, got %v", err)
+	}
+	ctx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseCode: 77})
+	code, err := Code(ctx)
+	if err != nil || code != 77 {
+		t.Fatalf("Code() = %d, %v", code, err)
+	}
+}

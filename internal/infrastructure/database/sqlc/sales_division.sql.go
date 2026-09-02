@@ -16,9 +16,9 @@ INSERT INTO sales_divisions (
     code, description, commercial_analysis, financial_analysis,
     is_technical_assistance, consider_delivery_promise, consider_mrp,
     allow_outside_limits, allow_free_payment_terms, minimum_delivery_days, financial_delay_days,
-    pis_percentage, cofins_percentage, parent_division_id, created_by
+    pis_percentage, cofins_percentage, parent_division_id, created_by, enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 RETURNING id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms
 `
 
@@ -38,6 +38,7 @@ type CreateSalesDivisionParams struct {
 	CofinsPercentage        pgtype.Numeric
 	ParentDivisionID        *int64
 	CreatedBy               pgtype.UUID
+	EnterpriseID            *int64
 }
 
 func (q *Queries) CreateSalesDivision(ctx context.Context, arg CreateSalesDivisionParams) (SalesDivision, error) {
@@ -57,6 +58,7 @@ func (q *Queries) CreateSalesDivision(ctx context.Context, arg CreateSalesDivisi
 		arg.CofinsPercentage,
 		arg.ParentDivisionID,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i SalesDivision
 	err := row.Scan(
@@ -85,20 +87,31 @@ func (q *Queries) CreateSalesDivision(ctx context.Context, arg CreateSalesDivisi
 }
 
 const deleteSalesDivision = `-- name: DeleteSalesDivision :exec
-UPDATE sales_divisions SET is_active = FALSE, updated_at = NOW() WHERE code = $1
+UPDATE sales_divisions SET is_active = FALSE, updated_at = NOW()
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteSalesDivision(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteSalesDivision, code)
+type DeleteSalesDivisionParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteSalesDivision(ctx context.Context, arg DeleteSalesDivisionParams) error {
+	_, err := q.db.Exec(ctx, deleteSalesDivision, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const getSalesDivisionByCode = `-- name: GetSalesDivisionByCode :one
-SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms FROM sales_divisions WHERE code = $1
+SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms FROM sales_divisions WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetSalesDivisionByCode(ctx context.Context, code int64) (SalesDivision, error) {
-	row := q.db.QueryRow(ctx, getSalesDivisionByCode, code)
+type GetSalesDivisionByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetSalesDivisionByCode(ctx context.Context, arg GetSalesDivisionByCodeParams) (SalesDivision, error) {
+	row := q.db.QueryRow(ctx, getSalesDivisionByCode, arg.Code, arg.EnterpriseID)
 	var i SalesDivision
 	err := row.Scan(
 		&i.ID,
@@ -126,11 +139,11 @@ func (q *Queries) GetSalesDivisionByCode(ctx context.Context, code int64) (Sales
 }
 
 const listActiveSalesDivisions = `-- name: ListActiveSalesDivisions :many
-SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms FROM sales_divisions WHERE is_active = TRUE ORDER BY code
+SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms FROM sales_divisions WHERE enterprise_id = $1 AND is_active = TRUE ORDER BY code
 `
 
-func (q *Queries) ListActiveSalesDivisions(ctx context.Context) ([]SalesDivision, error) {
-	rows, err := q.db.Query(ctx, listActiveSalesDivisions)
+func (q *Queries) ListActiveSalesDivisions(ctx context.Context, enterpriseID *int64) ([]SalesDivision, error) {
+	rows, err := q.db.Query(ctx, listActiveSalesDivisions, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,11 +184,11 @@ func (q *Queries) ListActiveSalesDivisions(ctx context.Context) ([]SalesDivision
 }
 
 const listSalesDivisions = `-- name: ListSalesDivisions :many
-SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms FROM sales_divisions ORDER BY code
+SELECT id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms FROM sales_divisions WHERE enterprise_id = $1 ORDER BY code
 `
 
-func (q *Queries) ListSalesDivisions(ctx context.Context) ([]SalesDivision, error) {
-	rows, err := q.db.Query(ctx, listSalesDivisions)
+func (q *Queries) ListSalesDivisions(ctx context.Context, enterpriseID *int64) ([]SalesDivision, error) {
+	rows, err := q.db.Query(ctx, listSalesDivisions, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +244,7 @@ SET description              = $2,
     cofins_percentage        = $13,
     parent_division_id       = $14,
     updated_at               = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $15
 RETURNING id, code, description, commercial_analysis, financial_analysis, is_technical_assistance, consider_delivery_promise, consider_mrp, allow_outside_limits, minimum_delivery_days, financial_delay_days, pis_percentage, cofins_percentage, parent_division_id, is_active, created_at, updated_at, created_by, enterprise_id, allow_free_payment_terms
 `
 
@@ -250,6 +263,7 @@ type UpdateSalesDivisionParams struct {
 	PisPercentage           pgtype.Numeric
 	CofinsPercentage        pgtype.Numeric
 	ParentDivisionID        *int64
+	EnterpriseID            *int64
 }
 
 func (q *Queries) UpdateSalesDivision(ctx context.Context, arg UpdateSalesDivisionParams) (SalesDivision, error) {
@@ -268,6 +282,7 @@ func (q *Queries) UpdateSalesDivision(ctx context.Context, arg UpdateSalesDivisi
 		arg.PisPercentage,
 		arg.CofinsPercentage,
 		arg.ParentDivisionID,
+		arg.EnterpriseID,
 	)
 	var i SalesDivision
 	err := row.Scan(

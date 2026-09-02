@@ -61,6 +61,7 @@ type Table struct {
 // on purpose, as it is a raw data-interchange format.
 type Branding struct {
 	CompanyName string
+	TradeName   string
 	CNPJ        string
 	IE          string
 	Address     string // single pre-formatted line (street, city/UF, CEP)
@@ -89,6 +90,9 @@ func (b *Branding) infoLines() []string {
 	}
 	if len(ids) > 0 {
 		lines = append(lines, strings.Join(ids, "   "))
+	}
+	if b.TradeName != "" && b.TradeName != b.CompanyName {
+		lines = append(lines, "Nome fantasia: "+b.TradeName)
 	}
 	if b.Address != "" {
 		lines = append(lines, b.Address)

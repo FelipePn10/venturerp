@@ -139,3 +139,71 @@ type OrderLink struct {
 	CreatedBy         uuid.UUID
 	Notes             *string
 }
+
+type RMA struct {
+	Code                int64
+	EnterpriseID        int64
+	CallCode            int64
+	Status              string
+	ReasonCode          string
+	ReasonDescription   *string
+	EligibilityStatus   string
+	EligibilityReason   string
+	AuthorizationNumber *string
+	AuthorizedAt        *time.Time
+	ReverseCarrierCode  *int64
+	ReverseTrackingCode *string
+	ReceivedAt          *time.Time
+	InspectionNotes     *string
+	InspectedAt         *time.Time
+	Destination         *string
+	SLADueAt            time.Time
+	ProductCost         float64
+	FreightCost         float64
+	ServiceCost         float64
+	FiscalDocumentKey   *string
+	StockMovementCode   *int64
+	IdempotencyKey      string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CreatedBy           uuid.UUID
+	Items               []*RMAItem
+	Events              []*RMAEvent
+	Evidences           []*RMAEvidence
+}
+
+type RMAEvidence struct {
+	ID          uuid.UUID
+	RMACode     int64
+	FileName    string
+	ContentType string
+	Content     []byte
+	SizeBytes   int64
+	SHA256      string
+	UploadedBy  uuid.UUID
+	CreatedAt   time.Time
+}
+
+type RMAItem struct {
+	Code                 int64
+	RMACode              int64
+	CallItemCode         int64
+	ItemCode             int64
+	Quantity             float64
+	SerialNumber         *string
+	LotNumber            *string
+	RequestedDestination *string
+	InspectionResult     *string
+}
+
+type RMAEvent struct {
+	Code          int64
+	RMACode       int64
+	EventType     string
+	BeforeState   []byte
+	AfterState    []byte
+	Reason        *string
+	CorrelationID *string
+	OccurredAt    time.Time
+	ActorID       uuid.UUID
+}

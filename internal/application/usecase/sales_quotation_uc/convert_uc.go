@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	orderrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	quoteentity "github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
@@ -22,34 +23,41 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	if !uc.Quotes.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	createdBy, err := uc.Quotes.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	q, err := uc.Quotes.Repo.GetByCode(ctx, dto.Code)
 	if err != nil {
 		return nil, err
 	}
+	if err := representativevalidation.Validate(ctx, uc.Quotes.Representatives, q.RepresentativeCode); err != nil {
+		return nil, err
+	}
 	if q.ConvertedSalesOrderCode != nil {
-		return nil, errorsuc.NewValidationError("quotation already converted")
+		return nil, errorsuc.NewValidationError("o orçamento já foi convertido")
 	}
 	if q.Status == quoteentity.SalesQuotationStatusCancelled || q.Status == quoteentity.SalesQuotationStatusExpired {
-		return nil, errorsuc.NewValidationError("cancelled or expired quotation cannot be converted")
+		return nil, errorsuc.NewValidationError("orçamento cancelado ou expirado não pode ser convertido")
 	}
 	if q.Status == quoteentity.SalesQuotationStatusAttended {
-		return nil, errorsuc.NewValidationError("attended quotation cannot be converted again")
+		return nil, errorsuc.NewValidationError("orçamento atendido não pode ser convertido novamente")
 	}
 	if q.QuotationType == quoteentity.SalesQuotationTypeConsult {
-		return nil, errorsuc.NewValidationError("consultation quotation cannot be converted to sales order")
+		return nil, errorsuc.NewValidationError("orçamento de consulta não pode ser convertido em pedido")
 	}
 	if q.CommercialBlocked || q.ReleaseStatus == quoteentity.SalesQuotationReleaseBlocked {
-		return nil, errorsuc.NewValidationError("commercially blocked quotation cannot be converted")
+		return nil, errorsuc.NewValidationError("orçamento bloqueado comercialmente não pode ser convertido")
 	}
 	items, err := uc.Quotes.Repo.ListItems(ctx, q.Code)
 	if err != nil {
 		return nil, err
 	}
 	if len(items) == 0 {
-		return nil, errorsuc.NewValidationError("quotation has no items")
+		return nil, errorsuc.NewValidationError("o orçamento não possui itens para conversão")
 	}
 	if uc.UOW == nil {
-		return nil, errorsuc.NewValidationError("sales quotation conversion unit of work is not configured")
+		return nil, errorsuc.NewValidationError("a conversão do orçamento não está configurada")
 	}
 	status := orderentity.SalesOrderStatusOrder
 	if dto.Status != "" {
@@ -58,10 +66,6 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	origin := orderentity.SalesOrderOriginNormal
 	if dto.Origin != "" {
 		origin = orderentity.SalesOrderOrigin(dto.Origin)
-	}
-	createdBy := dto.CreatedBy
-	if createdBy == [16]byte{} {
-		createdBy = q.CreatedBy
 	}
 	created, err := uc.UOW.Execute(ctx, q.Code, func(orders orderrepo.SalesOrderRepository) (*orderentity.SalesOrder, error) {
 		orderNumber, err := orders.NextOrderNumber(ctx, q.EnterpriseCode)

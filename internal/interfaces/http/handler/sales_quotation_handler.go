@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_quotation_uc"
 	quoteentity "github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
 	quoterepo "github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/repository"
+	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/go-chi/chi/v5"
@@ -199,12 +200,13 @@ func (h *SalesQuotationHandler) Convert(w http.ResponseWriter, r *http.Request) 
 	}
 	var dto request.ConvertSalesQuotationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para a conversão do orçamento.")
 		return
 	}
 	dto.Code = code
 	result, err := h.convertUC.Execute(r.Context(), dto)
 	if err != nil {
+		applogger.FromContext(r.Context()).Error("falha ao converter orçamento", "quotation_code", code, "error", err)
 		security.RespondUseCaseError(w, err)
 		return
 	}
@@ -295,6 +297,50 @@ func (h *SalesQuotationHandler) SaveParameters(w http.ResponseWriter, r *http.Re
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
+}
+func (h *SalesQuotationHandler) ResetParameters(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.ResetParameters(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+func (h *SalesQuotationHandler) SetCommissionPatternStatus(w http.ResponseWriter, r *http.Request) {
+	code, ok := parseQuotationCode(w, r, "code")
+	if !ok {
+		return
+	}
+	var dto request.SetSalesQuotationSupportStatusDTO
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "situação inválida")
+		return
+	}
+	if err := h.uc.SetCommissionPatternActive(r.Context(), code, dto.IsActive); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (h *SalesQuotationHandler) SetCancellationReasonStatus(w http.ResponseWriter, r *http.Request) {
+	code, ok := parseQuotationCode(w, r, "code")
+	if !ok {
+		return
+	}
+	var dto request.SetSalesQuotationSupportStatusDTO
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "situação inválida")
+		return
+	}
+	if err := h.uc.SetCancellationReasonActive(r.Context(), code, dto.IsActive); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 func (h *SalesQuotationHandler) SaveCommissionPattern(w http.ResponseWriter, r *http.Request) {
 	var dto request.SaveCommissionPatternDTO
@@ -431,7 +477,7 @@ func (h *SalesQuotationHandler) DeleteAttachment(w http.ResponseWriter, r *http.
 func parseQuotationCode(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
 	code, err := strconv.ParseInt(chi.URLParam(r, name), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return 0, false
 	}
 	return code, true

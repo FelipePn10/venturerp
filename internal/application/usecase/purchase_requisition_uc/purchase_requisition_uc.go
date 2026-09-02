@@ -7,16 +7,22 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
 )
 
 type PurchaseRequisitionUseCase struct {
 	repo repository.PurchaseRequisitionRepository
+	auth ports.AuthService
 }
 
-func NewPurchaseRequisitionUseCase(repo repository.PurchaseRequisitionRepository) *PurchaseRequisitionUseCase {
-	return &PurchaseRequisitionUseCase{repo: repo}
+func NewPurchaseRequisitionUseCase(repo repository.PurchaseRequisitionRepository, auth ...ports.AuthService) *PurchaseRequisitionUseCase {
+	uc := &PurchaseRequisitionUseCase{repo: repo}
+	if len(auth) > 0 {
+		uc.auth = auth[0]
+	}
+	return uc
 }
 
 func parseDate(s *string) *time.Time {
@@ -31,6 +37,17 @@ func parseDate(s *string) *time.Time {
 }
 
 func (uc *PurchaseRequisitionUseCase) Create(ctx context.Context, dto request.CreatePurchaseRequisitionDTO) (*response.PurchaseRequisitionResponse, error) {
+	if uc.auth != nil {
+		enterpriseCode, err := uc.auth.EnterpriseCode(ctx)
+		if err != nil {
+			return nil, err
+		}
+		actor, err := uc.auth.UserID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dto.EnterpriseCode, dto.CreatedBy = enterpriseCode, actor
+	}
 	code, err := uc.repo.NextCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)

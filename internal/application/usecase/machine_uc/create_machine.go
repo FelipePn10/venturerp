@@ -2,7 +2,8 @@ package machine_uc
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -22,45 +23,53 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, dto request.CreateM
 	if !uc.Auth.CanCreateMachine(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.EfficiencyRate < 0 || dto.EfficiencyRate > 1 {
-		return nil, errors.New("efficiency_rate must be between 0.0 and 1.0")
+	if err := validateMachineFields(dto.Code, dto.Name, dto.MachineTypeCode, dto.Capacity); err != nil {
+		return nil, err
+	}
+	capacityUnit, err := normalizeCapacityUnit(dto.CapacityUnit)
+	if err != nil {
+		return nil, err
+	}
+	capacityPeriod, err := normalizeCapacityPeriod(dto.CapacityPeriod)
+	if err != nil {
+		return nil, err
+	}
+	efficiency, err := normalizeEfficiency(dto.EfficiencyRate)
+	if err != nil {
+		return nil, err
 	}
 
-	if dto.Capacity <= 0 {
-		return nil, errors.New("capacity must be greater than zero")
-	}
+	// O autor é sempre o usuário autenticado, nunca o corpo da requisição.
 	authenticatedUserID, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if authenticatedUserID == uuid.Nil {
-		return nil, errors.New("authenticated user is required")
+		return nil, errorsuc.NewValidationError("não foi possível identificar o usuário da sessão")
 	}
 
-	if dto.EfficiencyRate < 0 || dto.EfficiencyRate > 1 {
-		return nil, errors.New("efficiency_rate must be between 0.0 and 1.0")
+	machineType, err := uc.Repo.GetTypeByCode(ctx, dto.MachineTypeCode)
+	if err != nil || machineType == nil {
+		return nil, errorsuc.NewNotFoundError(
+			fmt.Sprintf("tipo de máquina %d não encontrado nesta empresa", dto.MachineTypeCode))
 	}
-
-	machineType, err := uc.Repo.GetTypeByCode(
-		ctx,
-		dto.MachineTypeCode,
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	if !machineType.IsActive {
-		return nil, errors.New("machine type is inactive")
+		return nil, errorsuc.NewValidationError(
+			fmt.Sprintf("o tipo de máquina %s está inativo", machineType.Name))
 	}
+	if existing, getErr := uc.Repo.GetByCode(ctx, dto.Code); getErr == nil && existing != nil {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("já existe uma máquina com o código %d", dto.Code))
+	}
+
 	m := &entity.Machine{
 		Code:            dto.Code,
-		Name:            dto.Name,
+		Name:            strings.TrimSpace(dto.Name),
 		MachineTypeCode: dto.MachineTypeCode,
 		CostCenterCode:  dto.CostCenterCode,
 		Capacity:        dto.Capacity,
-		CapacityUnit:    dto.CapacityUnit,
-		CapacityPeriod:  dto.CapacityPeriod,
-		EfficiencyRate:  dto.EfficiencyRate,
+		CapacityUnit:    capacityUnit,
+		CapacityPeriod:  capacityPeriod,
+		EfficiencyRate:  efficiency,
 		IsActive:        dto.IsActive,
 		CreatedBy:       authenticatedUserID,
 	}

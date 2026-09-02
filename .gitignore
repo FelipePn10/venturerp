@@ -11,7 +11,13 @@
 .claude
 .ai
 .ai/
+!.ai/
+!.ai/tasks/
+!.ai/tasks/ambiente-treinamento.md
 tasks/
+!.ai/tasks/
+.ai/tasks/*
+!.ai/tasks/ambiente-treinamento.md
 .docker
 .docs
 SESSION_SUMMARY.md

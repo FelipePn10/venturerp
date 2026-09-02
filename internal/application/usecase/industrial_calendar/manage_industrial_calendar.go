@@ -164,6 +164,9 @@ func (uc *ManageCalendarUseCase) GetWorkdaysInMonth(ctx context.Context, year, m
 	if !uc.Auth.CanManageIndustrialCalendar(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if err := validateMonth(year, month); err != nil {
+		return nil, err
+	}
 	list, err := uc.Repo.GetWorkdaysInMonth(ctx, year, month)
 	if err != nil {
 		return nil, err

@@ -8,14 +8,19 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/salespricing"
+	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type CreateSalesOrderItemUseCase struct {
-	Repo repository.SalesOrderRepository
-	Auth ports.AuthService
+	Repo   repository.SalesOrderRepository
+	Auth   ports.AuthService
+	Prices customerrepo.CustomerRepository
+	Items  any
 }
 
 func (uc *CreateSalesOrderItemUseCase) Execute(
@@ -27,18 +32,39 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	}
 
 	if dto.SalesOrderCode == 0 {
-		return nil, errorsuc.NewValidationError("sales_order_code is required")
+		return nil, errorsuc.NewValidationError("o código do pedido é obrigatório")
 	}
-	if dto.ItemCode == 0 {
-		return nil, errorsuc.NewValidationError("item_code is required")
+	resolvedItem, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	if err != nil {
+		return nil, err
 	}
+	itemCode := int64(resolvedItem.Code)
+	if err = itemresolution.ValidateMask(ctx, uc.Items, itemCode, dto.Mask); err != nil {
+		return nil, err
+	}
+	order, err := uc.Repo.GetByCode(ctx, dto.SalesOrderCode)
+	if err != nil {
+		return nil, err
+	}
+	tableCode := order.PriceTableCode
+	if dto.PriceTableCode != nil {
+		tableCode = dto.PriceTableCode
+	}
+	if tableCode == nil {
+		return nil, errorsuc.NewValidationError("o pedido não possui tabela de preço")
+	}
+	pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, itemCode, dto.RequestedQty)
+	if err != nil {
+		return nil, err
+	}
+	dto.UnitPrice, dto.PriceTableCode = pricing.AppliedPrice, tableCode
 
 	digitDate := datetime.ParseDateOrDefault(dto.DigitDate, time.Now())
 
 	item := &entity.SalesOrderItem{
 		SalesOrderCode:   dto.SalesOrderCode,
 		Sequence:         dto.Sequence,
-		ItemCode:         dto.ItemCode,
+		ItemCode:         itemCode,
 		Mask:             dto.Mask,
 		DigitDate:        digitDate,
 		NFType:           dto.NFType,
@@ -86,8 +112,10 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 }
 
 type UpdateSalesOrderItemUseCase struct {
-	Repo repository.SalesOrderRepository
-	Auth ports.AuthService
+	Repo   repository.SalesOrderRepository
+	Auth   ports.AuthService
+	Prices customerrepo.CustomerRepository
+	Items  any
 }
 
 func (uc *UpdateSalesOrderItemUseCase) Execute(
@@ -97,6 +125,35 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	current, err := uc.Repo.GetItem(ctx, dto.Code)
+	if err != nil {
+		return nil, err
+	}
+	if dto.ItemCode != nil {
+		resolvedItem, resolveErr := itemresolution.Resolve(ctx, uc.Items, *dto.ItemCode)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		if int64(resolvedItem.Code) != current.ItemCode {
+			return nil, errorsuc.NewValidationError("o item da linha não pode ser alterado; cancele a linha e inclua outro item")
+		}
+	}
+	order, err := uc.Repo.GetByCode(ctx, current.SalesOrderCode)
+	if err != nil {
+		return nil, err
+	}
+	tableCode := current.PriceTableCode
+	if tableCode == nil {
+		tableCode = order.PriceTableCode
+	}
+	if tableCode == nil {
+		return nil, errorsuc.NewValidationError("o pedido não possui tabela de preço")
+	}
+	pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, current.ItemCode, dto.RequestedQty)
+	if err != nil {
+		return nil, err
+	}
+	dto.UnitPrice = pricing.AppliedPrice
 
 	item := &entity.SalesOrderItem{
 		Code:             dto.Code,

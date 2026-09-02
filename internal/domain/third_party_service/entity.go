@@ -9,7 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-var ErrNotFound = errors.New("third-party service record not found")
+var ErrNotFound = errors.New("registro de serviço terceirizado não encontrado")
 
 type Price struct {
 	ID, EnterpriseID, ItemCode, SupplierCode, OperationID int64
@@ -105,16 +105,16 @@ func (p *Price) Validate() error {
 	p.UOM = strings.ToUpper(strings.TrimSpace(p.UOM))
 	p.FreightType = strings.ToUpper(strings.TrimSpace(p.FreightType))
 	if p.ItemCode <= 0 || p.SupplierCode <= 0 || p.OperationID <= 0 || p.UOM == "" || p.ReferenceDate.IsZero() {
-		return errors.New("item, supplier, operation, uom and reference_date are required")
+		return errors.New("item, fornecedor, operação, unidade e data de referência são obrigatórios")
 	}
 	if p.UnitPrice.IsNegative() || p.FreightValue.IsNegative() || p.TaxPercent.IsNegative() || p.TaxPercent.GreaterThan(decimal.NewFromInt(100)) {
-		return errors.New("price, freight and tax values are invalid")
+		return errors.New("valores de preço, frete ou imposto são inválidos")
 	}
 	if p.FreightType != "FIXED" && p.FreightType != "PERCENT" {
-		return errors.New("freight_type must be FIXED or PERCENT")
+		return errors.New("frete deve ser FIXO ou PERCENTUAL")
 	}
 	if p.ConversionFactor != nil && !p.ConversionFactor.IsPositive() {
-		return errors.New("conversion_factor must be positive")
+		return errors.New("fator de conversão deve ser positivo")
 	}
 	return nil
 }

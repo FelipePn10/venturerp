@@ -12,11 +12,11 @@ import (
 )
 
 const clearDefaultAppropriationTable = `-- name: ClearDefaultAppropriationTable :exec
-UPDATE appropriation_tables SET is_default = FALSE
+UPDATE appropriation_tables SET is_default = FALSE WHERE enterprise_id=$1
 `
 
-func (q *Queries) ClearDefaultAppropriationTable(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, clearDefaultAppropriationTable)
+func (q *Queries) ClearDefaultAppropriationTable(ctx context.Context, enterpriseID int64) error {
+	_, err := q.db.Exec(ctx, clearDefaultAppropriationTable, enterpriseID)
 	return err
 }
 
@@ -24,10 +24,10 @@ const createAppropriationTable = `-- name: CreateAppropriationTable :one
 INSERT INTO appropriation_tables (
     description, monday_pct, tuesday_pct, wednesday_pct,
     thursday_pct, friday_pct, saturday_pct, sunday_pct,
-    is_default, created_by
+    is_default, created_by, enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateAppropriationTableParams struct {
@@ -41,6 +41,7 @@ type CreateAppropriationTableParams struct {
 	SundayPct    pgtype.Numeric
 	IsDefault    bool
 	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 func (q *Queries) CreateAppropriationTable(ctx context.Context, arg CreateAppropriationTableParams) (AppropriationTable, error) {
@@ -55,6 +56,7 @@ func (q *Queries) CreateAppropriationTable(ctx context.Context, arg CreateApprop
 		arg.SundayPct,
 		arg.IsDefault,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i AppropriationTable
 	err := row.Scan(
@@ -71,23 +73,25 @@ func (q *Queries) CreateAppropriationTable(ctx context.Context, arg CreateApprop
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createSalesForecast = `-- name: CreateSalesForecast :one
-INSERT INTO sales_forecasts (item_code, mask, week, year, quantity, created_by)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, item_code, mask, week, year, quantity, created_by, created_at, updated_at
+INSERT INTO sales_forecasts (item_code, mask, week, year, quantity, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, item_code, mask, week, year, quantity, created_by, created_at, updated_at, enterprise_id
 `
 
 type CreateSalesForecastParams struct {
-	ItemCode  int64
-	Mask      pgtype.Text
-	Week      int32
-	Year      int32
-	Quantity  pgtype.Numeric
-	CreatedBy pgtype.UUID
+	ItemCode     int64
+	Mask         pgtype.Text
+	Week         int32
+	Year         int32
+	Quantity     pgtype.Numeric
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 func (q *Queries) CreateSalesForecast(ctx context.Context, arg CreateSalesForecastParams) (SalesForecast, error) {
@@ -98,6 +102,7 @@ func (q *Queries) CreateSalesForecast(ctx context.Context, arg CreateSalesForeca
 		arg.Year,
 		arg.Quantity,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i SalesForecast
 	err := row.Scan(
@@ -110,21 +115,23 @@ func (q *Queries) CreateSalesForecast(ctx context.Context, arg CreateSalesForeca
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createSalesForecastBlock = `-- name: CreateSalesForecastBlock :one
-INSERT INTO sales_forecast_blocks (start_date, end_date, reason, created_by)
-VALUES ($1, $2, $3, $4)
-RETURNING id, start_date, end_date, reason, created_at, created_by
+INSERT INTO sales_forecast_blocks (start_date, end_date, reason, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, start_date, end_date, reason, created_at, created_by, enterprise_id
 `
 
 type CreateSalesForecastBlockParams struct {
-	StartDate pgtype.Date
-	EndDate   pgtype.Date
-	Reason    pgtype.Text
-	CreatedBy pgtype.UUID
+	StartDate    pgtype.Date
+	EndDate      pgtype.Date
+	Reason       pgtype.Text
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 func (q *Queries) CreateSalesForecastBlock(ctx context.Context, arg CreateSalesForecastBlockParams) (SalesForecastBlock, error) {
@@ -133,6 +140,7 @@ func (q *Queries) CreateSalesForecastBlock(ctx context.Context, arg CreateSalesF
 		arg.EndDate,
 		arg.Reason,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i SalesForecastBlock
 	err := row.Scan(
@@ -142,34 +150,45 @@ func (q *Queries) CreateSalesForecastBlock(ctx context.Context, arg CreateSalesF
 		&i.Reason,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteSalesForecast = `-- name: DeleteSalesForecast :exec
-DELETE FROM sales_forecasts WHERE id = $1
+DELETE FROM sales_forecasts WHERE id = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteSalesForecast(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSalesForecast, id)
+type DeleteSalesForecastParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteSalesForecast(ctx context.Context, arg DeleteSalesForecastParams) error {
+	_, err := q.db.Exec(ctx, deleteSalesForecast, arg.ID, arg.EnterpriseID)
 	return err
 }
 
 const deleteSalesForecastBlock = `-- name: DeleteSalesForecastBlock :exec
-DELETE FROM sales_forecast_blocks WHERE id = $1
+DELETE FROM sales_forecast_blocks WHERE id = $1 AND enterprise_id=$2
 `
 
-func (q *Queries) DeleteSalesForecastBlock(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSalesForecastBlock, id)
+type DeleteSalesForecastBlockParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteSalesForecastBlock(ctx context.Context, arg DeleteSalesForecastBlockParams) error {
+	_, err := q.db.Exec(ctx, deleteSalesForecastBlock, arg.ID, arg.EnterpriseID)
 	return err
 }
 
 const getDefaultAppropriationTable = `-- name: GetDefaultAppropriationTable :one
-SELECT id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by FROM appropriation_tables WHERE is_default = TRUE LIMIT 1
+SELECT id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by, enterprise_id FROM appropriation_tables WHERE is_default = TRUE AND enterprise_id=$1 LIMIT 1
 `
 
-func (q *Queries) GetDefaultAppropriationTable(ctx context.Context) (AppropriationTable, error) {
-	row := q.db.QueryRow(ctx, getDefaultAppropriationTable)
+func (q *Queries) GetDefaultAppropriationTable(ctx context.Context, enterpriseID int64) (AppropriationTable, error) {
+	row := q.db.QueryRow(ctx, getDefaultAppropriationTable, enterpriseID)
 	var i AppropriationTable
 	err := row.Scan(
 		&i.ID,
@@ -185,16 +204,22 @@ func (q *Queries) GetDefaultAppropriationTable(ctx context.Context) (Appropriati
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getSalesForecastsByItem = `-- name: GetSalesForecastsByItem :many
-SELECT id, item_code, mask, week, year, quantity, created_by, created_at, updated_at FROM sales_forecasts WHERE item_code = $1 ORDER BY year, week
+SELECT id, item_code, mask, week, year, quantity, created_by, created_at, updated_at, enterprise_id FROM sales_forecasts WHERE item_code = $1 AND enterprise_id = $2 ORDER BY year, week
 `
 
-func (q *Queries) GetSalesForecastsByItem(ctx context.Context, itemCode int64) ([]SalesForecast, error) {
-	rows, err := q.db.Query(ctx, getSalesForecastsByItem, itemCode)
+type GetSalesForecastsByItemParams struct {
+	ItemCode     int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetSalesForecastsByItem(ctx context.Context, arg GetSalesForecastsByItemParams) ([]SalesForecast, error) {
+	rows, err := q.db.Query(ctx, getSalesForecastsByItem, arg.ItemCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +237,7 @@ func (q *Queries) GetSalesForecastsByItem(ctx context.Context, itemCode int64) (
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -226,23 +252,28 @@ func (q *Queries) GetSalesForecastsByItem(ctx context.Context, itemCode int64) (
 const isForecastBlocked = `-- name: IsForecastBlocked :one
 SELECT EXISTS(
     SELECT 1 FROM sales_forecast_blocks
-    WHERE start_date <= $1 AND end_date >= $1
+    WHERE start_date <= $1 AND end_date >= $1 AND enterprise_id=$2
 ) AS blocked
 `
 
-func (q *Queries) IsForecastBlocked(ctx context.Context, startDate pgtype.Date) (bool, error) {
-	row := q.db.QueryRow(ctx, isForecastBlocked, startDate)
+type IsForecastBlockedParams struct {
+	StartDate    pgtype.Date
+	EnterpriseID int64
+}
+
+func (q *Queries) IsForecastBlocked(ctx context.Context, arg IsForecastBlockedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isForecastBlocked, arg.StartDate, arg.EnterpriseID)
 	var blocked bool
 	err := row.Scan(&blocked)
 	return blocked, err
 }
 
 const listAppropriationTables = `-- name: ListAppropriationTables :many
-SELECT id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by FROM appropriation_tables ORDER BY id
+SELECT id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by, enterprise_id FROM appropriation_tables WHERE enterprise_id=$1 ORDER BY id
 `
 
-func (q *Queries) ListAppropriationTables(ctx context.Context) ([]AppropriationTable, error) {
-	rows, err := q.db.Query(ctx, listAppropriationTables)
+func (q *Queries) ListAppropriationTables(ctx context.Context, enterpriseID int64) ([]AppropriationTable, error) {
+	rows, err := q.db.Query(ctx, listAppropriationTables, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +295,7 @@ func (q *Queries) ListAppropriationTables(ctx context.Context) ([]AppropriationT
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -284,6 +316,7 @@ SELECT
 FROM public.fiscal_exit_items fei
 JOIN public.fiscal_exits fe ON fe.id = fei.fiscal_exit_id
 WHERE fe.is_active = TRUE
+  AND fe.enterprise_id = $4
   AND fe.status = 'AUTHORIZED'
   AND fe.data_emissao BETWEEN $1 AND $2
   AND fei.item_code IS NOT NULL
@@ -296,6 +329,7 @@ type ListForecastFiscalHistoryParams struct {
 	DataEmissao   pgtype.Date
 	DataEmissao_2 pgtype.Date
 	Column3       []int64
+	EnterpriseID  int64
 }
 
 type ListForecastFiscalHistoryRow struct {
@@ -306,7 +340,12 @@ type ListForecastFiscalHistoryRow struct {
 }
 
 func (q *Queries) ListForecastFiscalHistory(ctx context.Context, arg ListForecastFiscalHistoryParams) ([]ListForecastFiscalHistoryRow, error) {
-	rows, err := q.db.Query(ctx, listForecastFiscalHistory, arg.DataEmissao, arg.DataEmissao_2, arg.Column3)
+	rows, err := q.db.Query(ctx, listForecastFiscalHistory,
+		arg.DataEmissao,
+		arg.DataEmissao_2,
+		arg.Column3,
+		arg.EnterpriseID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -339,6 +378,7 @@ SELECT
 FROM public.sales_order_items soi
 JOIN public.sales_orders so ON so.code = soi.sales_order_code
 WHERE so.is_active = TRUE
+  AND so.enterprise_code = $4
   AND soi.is_active = TRUE
   AND so.emission_date BETWEEN $1 AND $2
   AND so.status <> 'CANCELLED'
@@ -356,6 +396,7 @@ type ListForecastSalesOrderHistoryParams struct {
 	EmissionDate   pgtype.Date
 	EmissionDate_2 pgtype.Date
 	Column3        []int64
+	EnterpriseCode int64
 }
 
 type ListForecastSalesOrderHistoryRow struct {
@@ -366,7 +407,12 @@ type ListForecastSalesOrderHistoryRow struct {
 }
 
 func (q *Queries) ListForecastSalesOrderHistory(ctx context.Context, arg ListForecastSalesOrderHistoryParams) ([]ListForecastSalesOrderHistoryRow, error) {
-	rows, err := q.db.Query(ctx, listForecastSalesOrderHistory, arg.EmissionDate, arg.EmissionDate_2, arg.Column3)
+	rows, err := q.db.Query(ctx, listForecastSalesOrderHistory,
+		arg.EmissionDate,
+		arg.EmissionDate_2,
+		arg.Column3,
+		arg.EnterpriseCode,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -391,11 +437,11 @@ func (q *Queries) ListForecastSalesOrderHistory(ctx context.Context, arg ListFor
 }
 
 const listSalesForecastBlocks = `-- name: ListSalesForecastBlocks :many
-SELECT id, start_date, end_date, reason, created_at, created_by FROM sales_forecast_blocks ORDER BY start_date
+SELECT id, start_date, end_date, reason, created_at, created_by, enterprise_id FROM sales_forecast_blocks WHERE enterprise_id=$1 ORDER BY start_date
 `
 
-func (q *Queries) ListSalesForecastBlocks(ctx context.Context) ([]SalesForecastBlock, error) {
-	rows, err := q.db.Query(ctx, listSalesForecastBlocks)
+func (q *Queries) ListSalesForecastBlocks(ctx context.Context, enterpriseID int64) ([]SalesForecastBlock, error) {
+	rows, err := q.db.Query(ctx, listSalesForecastBlocks, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -410,6 +456,7 @@ func (q *Queries) ListSalesForecastBlocks(ctx context.Context) ([]SalesForecastB
 			&i.Reason,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -422,11 +469,16 @@ func (q *Queries) ListSalesForecastBlocks(ctx context.Context) ([]SalesForecastB
 }
 
 const listSalesForecastsByYear = `-- name: ListSalesForecastsByYear :many
-SELECT id, item_code, mask, week, year, quantity, created_by, created_at, updated_at FROM sales_forecasts WHERE year = $1 ORDER BY item_code, week
+SELECT id, item_code, mask, week, year, quantity, created_by, created_at, updated_at, enterprise_id FROM sales_forecasts WHERE year = $1 AND enterprise_id = $2 ORDER BY item_code, week
 `
 
-func (q *Queries) ListSalesForecastsByYear(ctx context.Context, year int32) ([]SalesForecast, error) {
-	rows, err := q.db.Query(ctx, listSalesForecastsByYear, year)
+type ListSalesForecastsByYearParams struct {
+	Year         int32
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSalesForecastsByYear(ctx context.Context, arg ListSalesForecastsByYearParams) ([]SalesForecast, error) {
+	rows, err := q.db.Query(ctx, listSalesForecastsByYear, arg.Year, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -444,6 +496,7 @@ func (q *Queries) ListSalesForecastsByYear(ctx context.Context, year int32) ([]S
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -456,11 +509,16 @@ func (q *Queries) ListSalesForecastsByYear(ctx context.Context, year int32) ([]S
 }
 
 const setSingleDefaultAppropriationTable = `-- name: SetSingleDefaultAppropriationTable :exec
-UPDATE appropriation_tables SET is_default = TRUE WHERE id = $1
+UPDATE appropriation_tables SET is_default = TRUE WHERE id = $1 AND enterprise_id=$2
 `
 
-func (q *Queries) SetSingleDefaultAppropriationTable(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, setSingleDefaultAppropriationTable, id)
+type SetSingleDefaultAppropriationTableParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) SetSingleDefaultAppropriationTable(ctx context.Context, arg SetSingleDefaultAppropriationTableParams) error {
+	_, err := q.db.Exec(ctx, setSingleDefaultAppropriationTable, arg.ID, arg.EnterpriseID)
 	return err
 }
 
@@ -475,8 +533,8 @@ SET description   = $2,
     saturday_pct  = $8,
     sunday_pct    = $9,
     updated_at    = NOW()
-WHERE id = $1
-RETURNING id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by
+WHERE id = $1 AND enterprise_id=$10
+RETURNING id, description, monday_pct, tuesday_pct, wednesday_pct, thursday_pct, friday_pct, saturday_pct, sunday_pct, is_default, created_at, updated_at, created_by, enterprise_id
 `
 
 type UpdateAppropriationTableParams struct {
@@ -489,6 +547,7 @@ type UpdateAppropriationTableParams struct {
 	FridayPct    pgtype.Numeric
 	SaturdayPct  pgtype.Numeric
 	SundayPct    pgtype.Numeric
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateAppropriationTable(ctx context.Context, arg UpdateAppropriationTableParams) (AppropriationTable, error) {
@@ -502,6 +561,7 @@ func (q *Queries) UpdateAppropriationTable(ctx context.Context, arg UpdateApprop
 		arg.FridayPct,
 		arg.SaturdayPct,
 		arg.SundayPct,
+		arg.EnterpriseID,
 	)
 	var i AppropriationTable
 	err := row.Scan(
@@ -518,6 +578,7 @@ func (q *Queries) UpdateAppropriationTable(ctx context.Context, arg UpdateApprop
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -525,17 +586,18 @@ func (q *Queries) UpdateAppropriationTable(ctx context.Context, arg UpdateApprop
 const updateSalesForecast = `-- name: UpdateSalesForecast :one
 UPDATE sales_forecasts
 SET quantity = $2, updated_at = NOW()
-WHERE id = $1
-RETURNING id, item_code, mask, week, year, quantity, created_by, created_at, updated_at
+WHERE id = $1 AND enterprise_id = $3
+RETURNING id, item_code, mask, week, year, quantity, created_by, created_at, updated_at, enterprise_id
 `
 
 type UpdateSalesForecastParams struct {
-	ID       int64
-	Quantity pgtype.Numeric
+	ID           int64
+	Quantity     pgtype.Numeric
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateSalesForecast(ctx context.Context, arg UpdateSalesForecastParams) (SalesForecast, error) {
-	row := q.db.QueryRow(ctx, updateSalesForecast, arg.ID, arg.Quantity)
+	row := q.db.QueryRow(ctx, updateSalesForecast, arg.ID, arg.Quantity, arg.EnterpriseID)
 	var i SalesForecast
 	err := row.Scan(
 		&i.ID,
@@ -547,6 +609,7 @@ func (q *Queries) UpdateSalesForecast(ctx context.Context, arg UpdateSalesForeca
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	productionuc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/planned_order/repository"
@@ -20,6 +22,7 @@ import (
 	reqentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	reqrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+	structureentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	thirdparty "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/google/uuid"
@@ -36,6 +39,15 @@ var (
 // requisitions for a firmed order's external/third-party operations.
 type externalOpsReader interface {
 	GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*routingentity.ExternalOp, error)
+}
+type productionRouteReader interface {
+	GetRouteForItem(context.Context, int64, string) (*routingentity.ManufacturingRoute, error)
+}
+type productionRouteExploder interface {
+	ExplodeRoute(context.Context, int64, int64) ([]*response.ProductionOrderOperationResponse, error)
+}
+type productionStructureReader interface {
+	GetAllDirectChildren(context.Context, int64) ([]*structureentity.ItemStructure, error)
 }
 type serviceOrderGenerator interface {
 	CreateOrdersForProduction(context.Context, int64, uuid.UUID) ([]thirdparty.ServiceOrder, error)
@@ -56,10 +68,14 @@ type FirmPlannedOrderUseCase struct {
 	// requisition (one item per external op with a service item).
 	ReqRepo          reqrepo.PurchaseRequisitionRepository
 	ExternalOps      externalOpsReader
-	EnterpriseCode   int64 // enterprise the requisition belongs to (defaults to 1)
 	ServiceLinker    ports.ProductionServiceLinker
 	ReleaseValidator ports.ManufacturingReleaseValidator
 	ServiceOrders    serviceOrderGenerator
+	Routing          productionRouteReader
+	OrderOps         productionRouteExploder
+	Structure        productionStructureReader
+	// Items resolve o código de negócio do item para a criação da OF.
+	Items any
 }
 
 func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
@@ -93,6 +109,15 @@ func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto re
 		}
 		if err := uc.validateTransition(ctx, order, target); err != nil {
 			return nil, fmt.Errorf("order %d: %w", code, err)
+		}
+		if target != "PLANNED" && order.OrderType == types.OrderProduction && uc.Routing != nil {
+			mask := ""
+			if order.Mask != nil {
+				mask = *order.Mask
+			}
+			if _, routeErr := uc.Routing.GetRouteForItem(ctx, order.ItemCode, mask); routeErr != nil {
+				return nil, errorsuc.NewValidationError("o item planejado não possui roteiro de fabricação aprovado")
+			}
 		}
 		orders = append(orders, order)
 	}
@@ -219,21 +244,20 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 		return 0, nil
 	}
 
-	entCode := uc.EnterpriseCode
-	if uc.ServiceLinker != nil {
-		entCode, err = uc.ServiceLinker.CurrentEnterpriseCode(ctx)
-		if err != nil {
-			return 0, err
-		}
-	} else if entCode == 0 {
-		entCode = 1
+	entCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return 0, err
+	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return 0, err
 	}
 	code, err := uc.ReqRepo.NextCode(ctx)
 	if err != nil {
 		return 0, err
 	}
 	notes := fmt.Sprintf("Serviços da OF do item %d (firmada)", order.ItemCode)
-	req, err := reqentity.NewPurchaseRequisition(code, entCode, order.CreatedBy)
+	req, err := reqentity.NewPurchaseRequisition(code, entCode, actor)
 	if err != nil {
 		return 0, err
 	}
@@ -276,6 +300,26 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		mask = *order.Mask
 	}
 	plannedID := order.ID
+	if uc.Structure != nil {
+		var startDate, endDate *string
+		if order.StartDate != nil {
+			value := order.StartDate.Format("2006-01-02")
+			startDate = &value
+		}
+		if order.EndDate != nil {
+			value := order.EndDate.Format("2006-01-02")
+			endDate = &value
+		}
+		manual := &productionuc.CreateProductionOrderUseCase{Repo: uc.ProdOrderRepo, Auth: uc.Auth, Structure: uc.Structure, Routing: uc.Routing, OrderOps: uc.OrderOps, Items: uc.Items}
+		// A sugestão do MRP guarda a chave legada do item; o contrato do caso de
+		// uso é textual e a resolução aceita esse formato numérico.
+		return manual.Execute(ctx, request.CreateProductionOrderDTO{
+			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: order.Quantity,
+			StartDate: startDate, EndDate: endDate, CostCenterID: order.CostCenterCode,
+			EmployeeID: order.EmployeeCode, WarehouseID: order.WarehouseCode, MachineID: order.MachineCode,
+			Priority: order.Priority, Notes: order.Notes,
+		})
+	}
 	orderNumber, err := uc.ProdOrderRepo.GetNextOrderNumber(ctx)
 	if err != nil {
 		return nil, err
@@ -298,5 +342,18 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		EndDate:        order.EndDate,
 		CreatedBy:      order.CreatedBy,
 	}
-	return uc.ProdOrderRepo.Create(ctx, of)
+	created, err := uc.ProdOrderRepo.Create(ctx, of)
+	if err != nil {
+		return nil, err
+	}
+	if uc.Routing != nil && uc.OrderOps != nil {
+		route, routeErr := uc.Routing.GetRouteForItem(ctx, order.ItemCode, mask)
+		if routeErr != nil {
+			return nil, errorsuc.NewValidationError("o item planejado não possui roteiro de fabricação aprovado")
+		}
+		if _, explodeErr := uc.OrderOps.ExplodeRoute(ctx, created.ID, route.ID); explodeErr != nil {
+			return nil, explodeErr
+		}
+	}
+	return created, nil
 }

@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/export/gantt"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -22,7 +24,7 @@ func (h *APSHandler) ExportSequencingEvents(w http.ResponseWriter, r *http.Reque
 	}
 	rows, err := h.uc.ExportSequencingEvents(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	if r.URL.Query().Get("format") != "csv" {
@@ -42,7 +44,7 @@ func (h *APSHandler) ExportSequencingEvents(w http.ResponseWriter, r *http.Reque
 func (h *APSHandler) ListSequencingResources(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.uc.ListSequencingResources(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, rows)
@@ -56,7 +58,7 @@ func (h *APSHandler) ViewSequencing(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.uc.ViewSequencing(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, rows)
@@ -72,7 +74,7 @@ func formatOptionalID(v *int64) string {
 func (h *APSHandler) UpsertResourceGroup(w http.ResponseWriter, r *http.Request) {
 	var dto request.ResourceGroupDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		security.RespondErrorCode(w, http.StatusBadRequest, "PARADA_CORPO_INVALIDO", "corpo da requisição inválido")
 		return
 	}
 	v, err := h.uc.UpsertResourceGroup(r.Context(), dto)
@@ -126,7 +128,7 @@ func (h *APSHandler) UpdateSequencingSettings(w http.ResponseWriter, r *http.Req
 func (h *APSHandler) UpdateWorkCenterSequencing(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		security.RespondErrorCode(w, http.StatusBadRequest, "PARADA_ID_INVALIDO", "identificador da parada inválido")
 		return
 	}
 	var dto request.WorkCenterSequencingDTO
@@ -195,11 +197,15 @@ func (h *APSHandler) CreateMachineDowntime(w http.ResponseWriter, r *http.Reques
 	jsonResponse(w, 201, v)
 }
 func (h *APSHandler) ListMachineDowntimes(w http.ResponseWriter, r *http.Request) {
-	machineID, _ := strconv.ParseInt(r.URL.Query().Get("machine_id"), 10, 64)
+	machineID, machineErr := strconv.ParseInt(r.URL.Query().Get("machine_id"), 10, 64)
+	if machineErr != nil || machineID <= 0 {
+		jsonError(w, http.StatusBadRequest, "o campo 'machine_id' deve ser um identificador positivo")
+		return
+	}
 	from, err1 := time.Parse(time.RFC3339, r.URL.Query().Get("from"))
 	to, err2 := time.Parse(time.RFC3339, r.URL.Query().Get("to"))
 	if err1 != nil || err2 != nil {
-		jsonError(w, 400, "from/to must be RFC3339")
+		jsonError(w, http.StatusBadRequest, "os campos 'de' e 'até' devem estar no formato RFC3339 (AAAA-MM-DDTHH:MM:SSZ)")
 		return
 	}
 	v, err := h.uc.ListMachineDowntimes(r.Context(), machineID, from, to)
@@ -207,7 +213,7 @@ func (h *APSHandler) ListMachineDowntimes(w http.ResponseWriter, r *http.Request
 		jsonError(w, 422, err.Error())
 		return
 	}
-	jsonResponse(w, 200, v)
+	jsonResponse(w, 200, paginate(w, r, v))
 }
 func (h *APSHandler) DeleteMachineDowntime(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -216,6 +222,10 @@ func (h *APSHandler) DeleteMachineDowntime(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err = h.uc.DeleteMachineDowntime(r.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "não encontrada") {
+			security.RespondErrorCode(w, http.StatusNotFound, "PARADA_NAO_ENCONTRADA", err.Error())
+			return
+		}
 		jsonError(w, 422, err.Error())
 		return
 	}
@@ -422,7 +432,7 @@ func (h *APSHandler) SequenceOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.SequenceOrders(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -436,7 +446,7 @@ func (h *APSHandler) GetGanttByOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetGanttByOrder(r.Context(), orderID)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -450,7 +460,7 @@ func (h *APSHandler) GetGanttByWorkCenter(w http.ResponseWriter, r *http.Request
 	}
 	result, err := h.uc.GetGanttByWorkCenter(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -466,7 +476,7 @@ func (h *APSHandler) GetMonthGantt(w http.ResponseWriter, r *http.Request) {
 	groupBy := aps_uc.ParseGroupBy(r.URL.Query().Get("group_by"))
 	result, err := h.uc.GetMonthSchedule(r.Context(), year, month, groupBy)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -483,7 +493,7 @@ func (h *APSHandler) GetGanttBoard(w http.ResponseWriter, r *http.Request) {
 	groupBy := aps_uc.ParseGroupBy(r.URL.Query().Get("group_by"))
 	result, err := h.uc.GetBoard(r.Context(), from, to, scale, groupBy)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -504,7 +514,7 @@ func (h *APSHandler) ExportGanttBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	board, err := h.uc.BuildBoard(r.Context(), from, to, scale, groupBy)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	data, contentType, err := gantt.Render(board, format, h.ganttBranding(r.Context()))
@@ -530,7 +540,7 @@ func (h *APSHandler) RescheduleSequence(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := h.uc.RescheduleSequence(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -551,7 +561,7 @@ func (h *APSHandler) ExportMonthGantt(w http.ResponseWriter, r *http.Request) {
 
 	board, err := h.uc.BuildMonthSchedule(r.Context(), year, month, groupBy)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	data, contentType, err := gantt.Render(board, format, h.ganttBranding(r.Context()))

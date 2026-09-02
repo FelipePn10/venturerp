@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/consumer_service/entity"
 )
+
+var ErrAttachmentNotFound = errors.New("consumer service attachment not found")
 
 type ConsumerFilter struct {
 	Search     *string
@@ -72,6 +75,8 @@ type Repository interface {
 	ListCalls(ctx context.Context, enterpriseID int64, filter CallFilter) ([]*entity.Call, error)
 	AddCallReturn(ctx context.Context, enterpriseID int64, v *entity.CallReturn) (*entity.CallReturn, error)
 	AddCallAttachment(ctx context.Context, enterpriseID int64, v *entity.CallAttachment) (*entity.CallAttachment, error)
+	GetCallAttachment(ctx context.Context, enterpriseID, callCode, attachmentCode int64) (*entity.CallAttachment, error)
+	DeleteCallAttachment(ctx context.Context, enterpriseID, callCode, attachmentCode int64) error
 	AddChecklistItem(ctx context.Context, enterpriseID int64, v *entity.CallChecklistItem) (*entity.CallChecklistItem, error)
 	SetChecklistItemDone(ctx context.Context, enterpriseID, code int64, done bool, notes *string) (*entity.CallChecklistItem, error)
 	ReportCalls(ctx context.Context, enterpriseID int64, filter CallFilter) (*CallReport, error)

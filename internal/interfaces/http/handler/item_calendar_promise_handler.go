@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 )
 
 func (h *ItemCalendarPromiseHandler) Routes() chi.Router {
@@ -31,7 +29,7 @@ func (h *ItemCalendarPromiseHandler) UpsertDay(w http.ResponseWriter, r *http.Re
 	var dto request.CreateItemCalendarDayDTO
 
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid body")
+		security.RespondErrorCode(w, http.StatusBadRequest, "CALENDARIO_CORPO_INVALIDO", "corpo da requisição inválido")
 		return
 	}
 
@@ -67,7 +65,7 @@ func (h *ItemCalendarPromiseHandler) GetDay(w http.ResponseWriter, r *http.Reque
 
 	day, err := strconv.Atoi(chi.URLParam(r, "day"))
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid day")
+		security.RespondError(w, http.StatusBadRequest, "dia inválido")
 		return
 	}
 
@@ -103,7 +101,7 @@ func (h *ItemCalendarPromiseHandler) DeleteDay(w http.ResponseWriter, r *http.Re
 
 	day, err := strconv.Atoi(chi.URLParam(r, "day"))
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid day")
+		security.RespondError(w, http.StatusBadRequest, "dia inválido")
 		return
 	}
 
@@ -120,7 +118,7 @@ func (h *ItemCalendarPromiseHandler) DeleteDay(w http.ResponseWriter, r *http.Re
 func parseBaseParams(w http.ResponseWriter, r *http.Request) (int64, string, int, int, bool) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "item_code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item_code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return 0, "", 0, 0, false
 	}
 
@@ -128,13 +126,13 @@ func parseBaseParams(w http.ResponseWriter, r *http.Request) (int64, string, int
 
 	year, err := strconv.Atoi(chi.URLParam(r, "year"))
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid year")
+		security.RespondError(w, http.StatusBadRequest, "ano inválido")
 		return 0, "", 0, 0, false
 	}
 
 	month, err := strconv.Atoi(chi.URLParam(r, "month"))
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid month")
+		security.RespondError(w, http.StatusBadRequest, "mês inválido")
 		return 0, "", 0, 0, false
 	}
 
@@ -142,11 +140,5 @@ func parseBaseParams(w http.ResponseWriter, r *http.Request) (int64, string, int
 }
 
 func (h *ItemCalendarPromiseHandler) handleError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, errorsuc.ErrUnauthorized):
-		security.RespondError(w, http.StatusUnauthorized, err.Error())
-
-	default:
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
-	}
+	security.RespondUseCaseError(w, err)
 }

@@ -83,3 +83,15 @@ func TestCalculateProductionTime_DefaultWorkingMinutes(t *testing.T) {
 		t.Errorf("TotalMinutes = %v, want 480 (default day)", res.TotalMinutes)
 	}
 }
+
+func TestCalculateProductionTime_ExplainsEfficiencyAndCapacity(t *testing.T) {
+	imt := &entity.ItemMachineTime{ProductionTime: 10, ProductionTimeUnit: types.Minute, ProductionBaseQty: 5}
+	machine := &entity.Machine{Capacity: 10, CapacityPeriod: types.Hour, EfficiencyRate: 0.5}
+	res := CalculateProductionTime(imt, machine, 10, 1, 480)
+	if res.StandardCycleMinutes != 10 || res.EffectiveCycleMinutes != 20 || res.TotalMinutes != 40 {
+		t.Fatalf("componentes inesperados: %+v", res)
+	}
+	if res.MachineEfficiencyRate != 0.5 || res.ResourceTimeFactor != 1 || len(res.CalculationFactors) == 0 {
+		t.Fatalf("fatores não explicados: %+v", res)
+	}
+}

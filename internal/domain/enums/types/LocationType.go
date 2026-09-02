@@ -13,6 +13,8 @@ const (
 	RESERVA
 	TRANSITO
 	ESPECIAL
+	EXPEDICAO
+	ASSISTENCIA_TECNICA
 )
 
 func (t TypeLocation) String() string {
@@ -33,6 +35,10 @@ func (t TypeLocation) String() string {
 		return "TRÂNSITO"
 	case ESPECIAL:
 		return "ESPECIAL"
+	case EXPEDICAO:
+		return "EXPEDICAO"
+	case ASSISTENCIA_TECNICA:
+		return "ASSISTENCIA_TECNICA"
 	default:
 		return "NENHUM"
 	}
@@ -46,7 +52,9 @@ func (t *TypeLocation) UnmarshalJSON(data []byte) error {
 	value, err := unmarshalStringOrIntEnum(data, "TypeLocation", map[string]int{
 		"INTERNO": int(INTERNO), "EXTERNO": int(EXTERNO), "ASSISTÊNCIA": int(ASSISTENCIA),
 		"REJEIÇÃO": int(REJEICAO), "INSPEÇÃO": int(INSPECAO), "RESERVA": int(RESERVA),
-		"TRÂNSITO": int(TRANSITO), "ESPECIAL": int(ESPECIAL),
+		"TRÂNSITO": int(TRANSITO), "TRANSITO": int(TRANSITO), "ESPECIAL": int(ESPECIAL),
+		"ASSISTENCIA": int(ASSISTENCIA), "INSPECAO": int(INSPECAO), "REJEICAO": int(REJEICAO),
+		"EXPEDICAO": int(EXPEDICAO), "ASSISTENCIA_TECNICA": int(ASSISTENCIA_TECNICA),
 	})
 	if err != nil {
 		return err
@@ -55,4 +63,4 @@ func (t *TypeLocation) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (t TypeLocation) IsValid() bool { return t >= INTERNO && t <= ESPECIAL }
+func (t TypeLocation) IsValid() bool { return t >= INTERNO && t <= ASSISTENCIA_TECNICA }

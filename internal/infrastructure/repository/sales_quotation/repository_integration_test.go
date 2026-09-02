@@ -20,10 +20,15 @@ import (
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 )
 
 func tenantContext(enterpriseID int64) context.Context {
-	return context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
+	return context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID, EnterpriseCode: enterpriseID})
+}
+
+func tenantActorContext(enterpriseID int64, actor string) context.Context {
+	return context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{ID: actor, EnterpriseID: enterpriseID, EnterpriseCode: enterpriseID})
 }
 
 func newQuotation(number, enterpriseID int64) *quoteentity.SalesQuotation {
@@ -110,9 +115,17 @@ func TestConversionUnitOfWorkRollsBackAndPreventsConcurrentDuplicate(t *testing.
 	pool := testutil.Pool(t)
 	repo := quotepg.New(pool)
 	uow := quotepg.NewConversionUnitOfWork(pool)
-	tenantID := testutil.UniqueCode()
-	ctx := tenantContext(tenantID)
-	t.Cleanup(func() { cleanupQuotationTest(t, pool, tenantID) })
+	tenantID := int64(1_700_000_000 + testutil.UniqueCode()%100_000_000)
+	var enterpriseID int64
+	if err := pool.QueryRow(context.Background(), `INSERT INTO enterprise(code,name) VALUES($1,'Quotation Integration') RETURNING id`, tenantID).Scan(&enterpriseID); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID, EnterpriseCode: tenantID})
+	t.Cleanup(func() {
+		cleanupQuotationTest(t, pool, tenantID)
+		testutil.Exec(t, pool, `DELETE FROM notification_outbox WHERE enterprise_id=$1`, enterpriseID)
+		testutil.Exec(t, pool, `DELETE FROM enterprise WHERE id=$1`, enterpriseID)
+	})
 
 	rollbackQuote, err := repo.Create(ctx, newQuotation(301, tenantID))
 	if err != nil {
@@ -153,6 +166,8 @@ func TestConversionUnitOfWorkRollsBackAndPreventsConcurrentDuplicate(t *testing.
 	for range 2 {
 		if executeErr := <-results; executeErr == nil {
 			successes++
+		} else {
+			t.Logf("concurrent conversion result: %v", executeErr)
 		}
 	}
 	if successes != 1 {
@@ -172,5 +187,54 @@ func assertConversionCounts(t *testing.T, pool *pgxpool.Pool, tenantID, quotatio
 	}
 	if orders != wantOrders || events != wantEvents {
 		t.Fatal(fmt.Sprintf("conversion partial state: orders=%d events=%d, want %d/%d", orders, events, wantOrders, wantEvents))
+	}
+}
+
+func TestQuotationItemChangesAndEventsAreAtomic(t *testing.T) {
+	pool := testutil.Pool(t)
+	repo := quotepg.New(pool)
+	tenantID := testutil.UniqueCode()
+	actor := uuid.New().String()
+	ctx := tenantActorContext(tenantID, actor)
+	t.Cleanup(func() { cleanupQuotationTest(t, pool, tenantID) })
+
+	quotation, err := repo.Create(ctx, newQuotation(401, tenantID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := &quoteentity.SalesQuotationItem{SalesQuotationCode: quotation.Code, Sequence: 1, ItemCode: 100, RequestedQty: decimal.NewFromInt(2), UnitPrice: decimal.NewFromInt(15), TotalGross: decimal.NewFromInt(30), TotalNet: decimal.NewFromInt(30), TotalNetWithIPI: decimal.NewFromInt(30), Status: quoteentity.SalesQuotationItemStatusOpen}
+	created, err := repo.CreateItem(ctx, item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created.RequestedQty = decimal.NewFromInt(3)
+	created.TotalGross = decimal.NewFromInt(45)
+	created.TotalNet = decimal.NewFromInt(45)
+	created.TotalNetWithIPI = decimal.NewFromInt(45)
+	if _, err := repo.UpdateItem(ctx, created); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CancelItem(ctx, created.Code, 7, "Motivo de teste", nil); err != nil {
+		t.Fatal(err)
+	}
+	var events int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM sales_quotation_events WHERE sales_quotation_code=$1 AND sales_quotation_item_code=$2 AND event_type IN ('ITEM_CREATE','ITEM_UPDATE','CANCEL') AND created_by=$3 AND complement::jsonb ? 'current'`, quotation.Code, created.Code, actor).Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if events != 3 {
+		t.Fatalf("eventos de item=%d, esperado 3", events)
+	}
+
+	invalidActorCtx := tenantActorContext(tenantID, "ator-forjado-inválido")
+	_, err = repo.CreateItem(invalidActorCtx, &quoteentity.SalesQuotationItem{SalesQuotationCode: quotation.Code, Sequence: 2, ItemCode: 101, RequestedQty: decimal.NewFromInt(1), UnitPrice: decimal.NewFromInt(10), TotalGross: decimal.NewFromInt(10), TotalNet: decimal.NewFromInt(10), TotalNetWithIPI: decimal.NewFromInt(10), Status: quoteentity.SalesQuotationItemStatusOpen})
+	if err == nil {
+		t.Fatal("esperava falha do evento para comprovar rollback")
+	}
+	var rolledBackItems int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM sales_quotation_items WHERE sales_quotation_code=$1 AND sequence=2`, quotation.Code).Scan(&rolledBackItems); err != nil {
+		t.Fatal(err)
+	}
+	if rolledBackItems != 0 {
+		t.Fatalf("item persistiu sem evento: %d", rolledBackItems)
 	}
 }

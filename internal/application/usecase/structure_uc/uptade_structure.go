@@ -15,18 +15,24 @@ import (
 // Nota: a máscara (parent_mask) e os IDs pai/filho NÃO são editáveis.
 // Para mudar esses campos, remova e recrie o componente.
 type UpdateStructureComponentUseCase struct {
-	Repo repository.ItemStructureRepository
-	Auth ports.AuthService
+	Repo  repository.ItemStructureRepository
+	Auth  ports.AuthService
+	Items any
 }
 
 func NewUpdateStructureComponentUseCase(
 	repo repository.ItemStructureRepository,
 	auth ports.AuthService,
+	items ...any,
 ) *UpdateStructureComponentUseCase {
-	return &UpdateStructureComponentUseCase{
+	uc := &UpdateStructureComponentUseCase{
 		Repo: repo,
 		Auth: auth,
 	}
+	if len(items) > 0 {
+		uc.Items = items[0]
+	}
+	return uc
 }
 
 func (uc *UpdateStructureComponentUseCase) Execute(
@@ -37,10 +43,21 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	if !uc.Auth.UpdateStructure(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if dto.Position < 1 {
+		return nil, errorsuc.NewValidationError("a posição do componente é obrigatória e deve ser positiva")
+	}
 
+	parentCode, err := resolveItemCode(ctx, uc.Items, dto.ParentCode)
+	if err != nil {
+		return nil, err
+	}
+	childCode, err := resolveItemCode(ctx, uc.Items, dto.ChildCode)
+	if err != nil {
+		return nil, err
+	}
 	structure := &entity.ItemStructure{
-		ParentCode: dto.ParentCode,
-		ChildCode:  dto.ChildCode,
+		ParentCode: parentCode,
+		ChildCode:  childCode,
 		ParentMask: dto.ParentMask,
 	}
 
@@ -54,6 +71,9 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 		dto.StartDate,
 		dto.EndDate,
 		dto.LossFormula,
+		dto.QuantityFormula,
+		dto.QuantityRounding,
+		dto.QuantityScale,
 	); err != nil {
 		return nil, err
 	}

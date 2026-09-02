@@ -500,9 +500,13 @@ func scanExitItems(rows pgx.Rows) ([]*entity.FiscalExitItem, error) {
 // ---------- Fiscal Config ----------
 
 func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.FiscalConfig, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var cfg entity.FiscalConfig
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
+	err = r.pool.QueryRow(ctx,
+		`SELECT id, enterprise_id, cnpj_empresa, razao_social, COALESCE(trade_name,''), COALESCE(email,''), ie_empresa, regime_tributario, uf_empresa,
 		        icms_interno_aliquota, icms_diferimento_percentual,
 		        focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		        vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
@@ -511,8 +515,8 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		        COALESCE(cep,''), telefone,
 		        logo, logo_mime, brand_color,
 		        created_at, updated_at, updated_by
-		 FROM public.fiscal_configs ORDER BY id LIMIT 1`,
-	).Scan(&cfg.ID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
+		 FROM public.fiscal_configs WHERE enterprise_id=$1`, enterpriseID,
+	).Scan(&cfg.ID, &cfg.EnterpriseID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.TradeName, &cfg.Email, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
 		&cfg.FocusNfeToken, &cfg.FocusNfeAmbiente, &cfg.JurosMes, &cfg.MultaAtraso,
 		&cfg.VencimentoIcmsDia, &cfg.VencimentoIPIDia, &cfg.VencimentoPisCofinsDia,
@@ -531,18 +535,23 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 }
 
 func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity.FiscalConfig) (*entity.FiscalConfig, error) {
-	// Upsert: singleton row with id=1. Works on first call (no prior row) and subsequent updates.
-	err := r.pool.QueryRow(ctx,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cfg.EnterpriseID = enterpriseID
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO public.fiscal_configs
-		     (id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
+		     (enterprise_id, cnpj_empresa, razao_social, trade_name, email, ie_empresa, regime_tributario, uf_empresa,
 		      icms_interno_aliquota, icms_diferimento_percentual,
 		      focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		      vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
 		      logradouro, numero, complemento, bairro, municipio, codigo_municipio, cep, telefone,
 		      updated_at, updated_by)
-		 VALUES (1,$1,$2,$3,$4,$5,$6,$7,NULLIF(BTRIM($8),''),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW(),$23)
-		 ON CONFLICT (id) DO UPDATE SET
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF(BTRIM($11),''),$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW(),$26)
+		 ON CONFLICT (enterprise_id) DO UPDATE SET
 		     cnpj_empresa = EXCLUDED.cnpj_empresa, razao_social = EXCLUDED.razao_social,
+		     trade_name = EXCLUDED.trade_name, email = EXCLUDED.email,
 		     ie_empresa = EXCLUDED.ie_empresa, regime_tributario = EXCLUDED.regime_tributario,
 		     uf_empresa = EXCLUDED.uf_empresa,
 		     icms_interno_aliquota = EXCLUDED.icms_interno_aliquota,
@@ -558,7 +567,7 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		     municipio = EXCLUDED.municipio, codigo_municipio = EXCLUDED.codigo_municipio,
 		     cep = EXCLUDED.cep, telefone = EXCLUDED.telefone,
 		     updated_at = NOW(), updated_by = EXCLUDED.updated_by
-		 RETURNING id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
+		 RETURNING id, enterprise_id, cnpj_empresa, razao_social, COALESCE(trade_name,''), COALESCE(email,''), ie_empresa, regime_tributario, uf_empresa,
 		           icms_interno_aliquota, icms_diferimento_percentual,
 		           focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		           vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
@@ -566,14 +575,14 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		           COALESCE(bairro,''), COALESCE(municipio,''), COALESCE(codigo_municipio,''),
 		           COALESCE(cep,''), telefone,
 		           created_at, updated_at, updated_by`,
-		cfg.CnpjEmpresa, cfg.RazaoSocial, cfg.IEEmpresa, cfg.RegimeTributario, cfg.UFEmpresa,
+		cfg.EnterpriseID, cfg.CnpjEmpresa, cfg.RazaoSocial, cfg.TradeName, cfg.Email, cfg.IEEmpresa, cfg.RegimeTributario, cfg.UFEmpresa,
 		cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual,
 		cfg.FocusNfeToken, cfg.FocusNfeAmbiente, cfg.JurosMes, cfg.MultaAtraso,
 		cfg.VencimentoIcmsDia, cfg.VencimentoIPIDia, cfg.VencimentoPisCofinsDia,
 		cfg.Logradouro, cfg.Numero, cfg.Complemento, cfg.Bairro,
 		cfg.Municipio, cfg.CodigoMunicipio, cfg.CEP, cfg.Telefone,
 		cfg.UpdatedBy,
-	).Scan(&cfg.ID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
+	).Scan(&cfg.ID, &cfg.EnterpriseID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.TradeName, &cfg.Email, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
 		&cfg.FocusNfeToken, &cfg.FocusNfeAmbiente, &cfg.JurosMes, &cfg.MultaAtraso,
 		&cfg.VencimentoIcmsDia, &cfg.VencimentoIPIDia, &cfg.VencimentoPisCofinsDia,
@@ -587,14 +596,17 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 }
 
 // SetBranding stores (or clears) the company logo and/or brand colour on the
-// singleton fiscal config. Nil/empty arguments leave the corresponding column
+// fiscal config of the authenticated tenant. Nil/empty arguments leave the corresponding column
 // untouched, so callers can update the logo and the colour independently.
 func (r *FiscalRepositoryPG) SetBranding(ctx context.Context, logo []byte, logoMime, brandColor string, by uuid.UUID) error {
-	// Ensure the singleton row exists before patching individual columns.
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO public.fiscal_configs (id, cnpj_empresa, razao_social, updated_by)
-		 VALUES (1, '00000000000000', 'Empresa', $1)
-		 ON CONFLICT (id) DO NOTHING`, by)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx,
+		`INSERT INTO public.fiscal_configs (enterprise_id, cnpj_empresa, razao_social, updated_by)
+		 VALUES ($1, '00000000000000', 'Empresa', $2)
+		 ON CONFLICT (enterprise_id) DO NOTHING`, enterpriseID, by)
 	if err != nil {
 		return fmt.Errorf("ensuring fiscal config row: %w", err)
 	}
@@ -606,8 +618,8 @@ func (r *FiscalRepositoryPG) SetBranding(ctx context.Context, logo []byte, logoM
 		     brand_color = COALESCE($3, brand_color),
 		     updated_at  = NOW(),
 		     updated_by  = $4
-		 WHERE id = 1`,
-		nullBytes(logo), nullStr(logoMime), nullStr(brandColor), by)
+		 WHERE enterprise_id = $5`,
+		nullBytes(logo), nullStr(logoMime), nullStr(brandColor), by, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("setting branding: %w", err)
 	}

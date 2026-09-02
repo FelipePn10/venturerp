@@ -9,8 +9,13 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/repository"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
 
 // ErrNoConversion is returned when no direct/inverse factor is registered.
@@ -18,22 +23,74 @@ var ErrNoConversion = errors.New("não existe fator de conversão cadastrado par
 
 type ItemConversionUseCase struct {
 	repo repository.ItemConversionRepository
+	auth ports.AuthService
+	// items resolve o código de negócio do item (texto) para a chave legada.
+	items any
 }
 
-func NewItemConversionUseCase(repo repository.ItemConversionRepository) *ItemConversionUseCase {
-	return &ItemConversionUseCase{repo: repo}
+func NewItemConversionUseCase(repo repository.ItemConversionRepository, auth ports.AuthService, items ...any) *ItemConversionUseCase {
+	uc := &ItemConversionUseCase{repo: repo, auth: auth}
+	if len(items) > 0 {
+		uc.items = items[0]
+	}
+	return uc
+}
+
+// ResolveItem devolve a chave legada do item a partir do código de negócio.
+func (uc *ItemConversionUseCase) ResolveItem(ctx context.Context, code request.TextCode) (int64, error) {
+	item, err := itemresolution.Resolve(ctx, uc.items, code)
+	if err != nil {
+		return 0, err
+	}
+	return int64(item.Code), nil
+}
+
+// itemOf resolve o item pela chave legada para devolver o código de negócio na
+// resposta; a ausência não impede a operação.
+func (uc *ItemConversionUseCase) itemOf(ctx context.Context, legacy int64) *itementity.Item {
+	finder, ok := uc.items.(legacyItemFinder)
+	if !ok || legacy <= 0 {
+		return nil
+	}
+	item, err := finder.FindItemByCode(ctx, valueobject.ItemCode(legacy))
+	if err != nil {
+		return nil
+	}
+	return item
+}
+
+// legacyItemFinder é a fatia do repositório de itens usada para enriquecer a
+// resposta a partir da chave legada.
+type legacyItemFinder interface {
+	FindItemByCode(context.Context, valueobject.ItemCode) (*itementity.Item, error)
 }
 
 func (uc *ItemConversionUseCase) Create(ctx context.Context, dto request.CreateItemConversionDTO) (*response.ItemUnitConversionResponse, error) {
-	c, err := entity.NewItemUnitConversion(dto.ItemCode, dto.Mask, dto.FromUOM, dto.ToUOM, dto.Factor, dto.RoundingPercent, dto.ToleranceValue, dto.ToleranceType, dto.CreatedBy)
+	if uc.auth != nil {
+		actor, err := uc.auth.UserID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dto.CreatedBy = actor
+	}
+	itemCode, err := uc.ResolveItem(ctx, dto.ItemCode)
 	if err != nil {
 		return nil, err
+	}
+	c, err := entity.NewItemUnitConversion(itemCode, dto.Mask, dto.FromUOM, dto.ToUOM, dto.Factor, dto.RoundingPercent, dto.ToleranceValue, dto.ToleranceType, dto.CreatedBy)
+	if err != nil {
+		return nil, err
+	}
+	// Um par de unidades só pode ter um fator por item/máscara: avisamos em vez
+	// de deixar o banco recusar com uma violação de índice.
+	if existing, getErr := uc.repo.Get(ctx, itemCode, c.FromUOM, c.ToUOM); getErr == nil && existing != nil {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("já existe conversão de %s para %s neste item", c.FromUOM, c.ToUOM))
 	}
 	created, err := uc.repo.Create(ctx, c)
 	if err != nil {
 		return nil, err
 	}
-	return toItemConversionResponse(created), nil
+	return toItemConversionResponse(created, uc.itemOf(ctx, itemCode)), nil
 }
 
 func (uc *ItemConversionUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*response.ItemUnitConversionResponse, error) {
@@ -41,7 +98,7 @@ func (uc *ItemConversionUseCase) ListByItem(ctx context.Context, itemCode int64)
 	if err != nil {
 		return nil, err
 	}
-	return toItemConversionResponses(list), nil
+	return toItemConversionResponses(list, uc.itemOf(ctx, itemCode)), nil
 }
 
 func (uc *ItemConversionUseCase) Delete(ctx context.Context, id int64) error {
@@ -150,7 +207,7 @@ func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, 
 		allowed += conversion.ToleranceValue
 	}
 	if math.Abs(converted-rounded) > allowed {
-		return 0, false, fmt.Errorf("converted quantity %.8f is fractional and exceeds rounding/tolerance policy", converted)
+		return 0, false, fmt.Errorf("quantidade convertida %.8f é fracionária e excede a política de arredondamento/tolerância", converted)
 	}
 	return rounded, true, nil
 }

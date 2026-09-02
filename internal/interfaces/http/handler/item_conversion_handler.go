@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_conversion_uc"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -21,26 +23,32 @@ func NewItemConversionHandler(uc *item_conversion_uc.ItemConversionUseCase) *Ite
 func (h *ItemConversionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateItemConversionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
 }
 
+// ListByItem recebe o código de negócio do item (texto), como a tela o conhece.
 func (h *ItemConversionHandler) ListByItem(w http.ResponseWriter, r *http.Request) {
-	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
+	raw := strings.TrimSpace(chi.URLParam(r, "itemCode"))
+	if raw == "" {
+		jsonError(w, http.StatusBadRequest, "informe o código do item")
+		return
+	}
+	itemCode, err := h.uc.ResolveItem(r.Context(), request.TextCode(raw))
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	res, err := h.uc.ListByItem(r.Context(), itemCode)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -49,11 +57,11 @@ func (h *ItemConversionHandler) ListByItem(w http.ResponseWriter, r *http.Reques
 func (h *ItemConversionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "identificador inválido")
 		return
 	}
 	if err := h.uc.Delete(r.Context(), id); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -62,13 +70,18 @@ func (h *ItemConversionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Convert resolves a quantity conversion: GET ?item=&from=&to=&qty=
 func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	itemCode, _ := strconv.ParseInt(q.Get("item"), 10, 64)
-	from := q.Get("from")
-	to := q.Get("to")
+	from := strings.TrimSpace(q.Get("from"))
+	to := strings.TrimSpace(q.Get("to"))
 	qty, _ := strconv.ParseFloat(q.Get("qty"), 64)
 	mask := q.Get("mask")
-	if itemCode == 0 || from == "" || to == "" {
-		jsonError(w, http.StatusBadRequest, "item, from and to are required")
+	rawItem := strings.TrimSpace(q.Get("item"))
+	if rawItem == "" || from == "" || to == "" {
+		jsonError(w, http.StatusBadRequest, "informe o item, a unidade de origem e a de destino")
+		return
+	}
+	itemCode, err := h.uc.ResolveItem(r.Context(), request.TextCode(rawItem))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	factor, found, err := h.uc.FactorConfigured(r.Context(), itemCode, mask, from, to)
@@ -90,11 +103,12 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{
-		"item_code":     itemCode,
-		"from_uom":      from,
-		"to_uom":        to,
-		"factor":        factor,
-		"quantity":      qty,
-		"converted_qty": converted,
+		"item_code":        rawItem,
+		"legacy_item_code": itemCode,
+		"from_uom":         from,
+		"to_uom":           to,
+		"factor":           factor,
+		"quantity":         qty,
+		"converted_qty":    converted,
 	})
 }

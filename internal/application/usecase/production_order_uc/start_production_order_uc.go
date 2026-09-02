@@ -16,6 +16,9 @@ type StartProductionOrderUseCase struct {
 	Repo repository.ProductionOrderRepository
 	Auth ports.AuthService
 }
+type productionOperationsChecker interface {
+	HasProductionOperations(context.Context, int64) (bool, error)
+}
 
 func (uc *StartProductionOrderUseCase) Execute(
 	ctx context.Context,
@@ -26,6 +29,15 @@ func (uc *StartProductionOrderUseCase) Execute(
 	}
 	if dto.ID == 0 {
 		return nil, errorsuc.NewValidationError("id is required")
+	}
+	if checker, ok := uc.Repo.(productionOperationsChecker); ok {
+		hasOperations, err := checker.HasProductionOperations(ctx, dto.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOperations {
+			return nil, errorsuc.NewValidationError("a ordem de produção não possui operações; gere as operações a partir de um roteiro aprovado antes de iniciar")
+		}
 	}
 
 	// Default to the real start moment (today) when no valid date is sent,

@@ -2,14 +2,17 @@ package sales_quotation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
 	quoteentity "github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
 	quoterepo "github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,7 +30,7 @@ func New(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) NextQuotationNumber(ctx context.Context, enterpriseCode int64) (int64, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -48,7 +51,7 @@ RETURNING last_number`, enterpriseCode).Scan(&n)
 }
 
 func (r *Repository) Create(ctx context.Context, q *quoteentity.SalesQuotation) (*quoteentity.SalesQuotation, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +89,7 @@ INSERT INTO public.sales_quotations (
 }
 
 func (r *Repository) Update(ctx context.Context, q *quoteentity.SalesQuotation) (*quoteentity.SalesQuotation, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +121,7 @@ RETURNING `+quotationColumns,
 }
 
 func (r *Repository) GetByCode(ctx context.Context, code int64) (*quoteentity.SalesQuotation, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +137,7 @@ func (r *Repository) GetByCode(ctx context.Context, code int64) (*quoteentity.Sa
 }
 
 func (r *Repository) List(ctx context.Context, filter quoterepo.SalesQuotationFilter) ([]*quoteentity.SalesQuotation, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +200,7 @@ func (r *Repository) List(ctx context.Context, filter quoterepo.SalesQuotationFi
 }
 
 func (r *Repository) Cancel(ctx context.Context, code, reasonCode int64, reason string, complement *string) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
@@ -215,7 +218,7 @@ func (r *Repository) Cancel(ctx context.Context, code, reasonCode int64, reason 
 }
 
 func (r *Repository) Uncancel(ctx context.Context, code, reasonCode int64, reason string, complement *string) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
@@ -233,7 +236,7 @@ func (r *Repository) Uncancel(ctx context.Context, code, reasonCode int64, reaso
 }
 
 func (r *Repository) Attend(ctx context.Context, code int64, reason string, complement *string, eventDate time.Time) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
@@ -251,7 +254,7 @@ func (r *Repository) Attend(ctx context.Context, code int64, reason string, comp
 }
 
 func (r *Repository) ChangeStatus(ctx context.Context, code int64, status quoteentity.SalesQuotationStatus) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
@@ -263,7 +266,7 @@ func (r *Repository) ChangeStatus(ctx context.Context, code int64, status quotee
 }
 
 func (r *Repository) ChangeRelease(ctx context.Context, code int64, status quoteentity.SalesQuotationReleaseStatus, reason string) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
@@ -292,7 +295,7 @@ func (r *Repository) ChangeRelease(ctx context.Context, code int64, status quote
 }
 
 func (r *Repository) ListEvents(ctx context.Context, code int64) ([]*quoteentity.Event, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +316,7 @@ func (r *Repository) ListEvents(ctx context.Context, code int64) ([]*quoteentity
 }
 
 func (r *Repository) MarkConverted(ctx context.Context, quotationCode, salesOrderCode int64) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
@@ -331,7 +334,7 @@ func (r *Repository) MarkConverted(ctx context.Context, quotationCode, salesOrde
 }
 
 func (r *Repository) Report(ctx context.Context, filter quoterepo.SalesQuotationFilter) (*quoterepo.SalesQuotationReport, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -387,11 +390,13 @@ FROM public.sales_quotations WHERE enterprise_code=$1`
 }
 
 func (r *Repository) CreateItem(ctx context.Context, item *quoteentity.SalesQuotationItem) (*quoteentity.SalesQuotationItem, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
-	row := r.pool.QueryRow(ctx, `
+	var created *quoteentity.SalesQuotationItem
+	err = r.withTx(ctx, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
 INSERT INTO public.sales_quotation_items (
  sales_quotation_code, sequence, item_code, mask, sales_uom, warehouse_code,
  price_table_code, requested_qty, unit_price, attended_qty, cancelled_qty,
@@ -400,20 +405,32 @@ INSERT INTO public.sales_quotation_items (
 ) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,0,0,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
 WHERE EXISTS (SELECT 1 FROM public.sales_quotations q WHERE q.code=$1 AND q.enterprise_code=$20 AND q.is_active)
 RETURNING `+itemColumns,
-		item.SalesQuotationCode, item.Sequence, item.ItemCode, item.Mask, item.SalesUOM, item.WarehouseCode,
-		item.PriceTableCode, item.RequestedQty, item.UnitPrice, item.DeliveryDate, item.DeliveryDateFirm,
-		item.DiscountPct, item.IPIPct, item.STPct, item.TotalGross, item.TotalNet, item.TotalNetWithIPI,
-		string(item.Status), item.Notes, tenantID,
-	)
-	return scanItem(row)
+			item.SalesQuotationCode, item.Sequence, item.ItemCode, item.Mask, item.SalesUOM, item.WarehouseCode,
+			item.PriceTableCode, item.RequestedQty, item.UnitPrice, item.DeliveryDate, item.DeliveryDateFirm,
+			item.DiscountPct, item.IPIPct, item.STPct, item.TotalGross, item.TotalNet, item.TotalNetWithIPI,
+			string(item.Status), item.Notes, tenantID,
+		)
+		created, err = scanItem(row)
+		if err != nil {
+			return err
+		}
+		return insertItemEvent(ctx, tx, "ITEM_CREATE", nil, created)
+	})
+	return created, err
 }
 
 func (r *Repository) UpdateItem(ctx context.Context, item *quoteentity.SalesQuotationItem) (*quoteentity.SalesQuotationItem, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
-	row := r.pool.QueryRow(ctx, `
+	var updated *quoteentity.SalesQuotationItem
+	err = r.withTx(ctx, func(tx pgx.Tx) error {
+		current, getErr := scanItem(tx.QueryRow(ctx, `SELECT `+itemColumns+` FROM public.sales_quotation_items i WHERE i.code=$1 AND i.is_active AND EXISTS(SELECT 1 FROM public.sales_quotations q WHERE q.code=i.sales_quotation_code AND q.enterprise_code=$2) FOR UPDATE`, item.Code, tenantID))
+		if getErr != nil {
+			return getErr
+		}
+		row := tx.QueryRow(ctx, `
 UPDATE public.sales_quotation_items SET
  requested_qty=$1, unit_price=$2, attended_qty=$3, cancelled_qty=$4,
  delivery_date=$5, delivery_date_firm=$6, discount_pct=$7, ipi_pct=$8,
@@ -424,16 +441,59 @@ WHERE code=$15 AND is_active=TRUE AND EXISTS (
  WHERE q.code=public.sales_quotation_items.sales_quotation_code AND q.enterprise_code=$16
 )
 RETURNING `+itemColumns,
-		item.RequestedQty, item.UnitPrice, item.AttendedQty, item.CancelledQty,
-		item.DeliveryDate, item.DeliveryDateFirm, item.DiscountPct, item.IPIPct,
-		item.STPct, item.TotalGross, item.TotalNet, item.TotalNetWithIPI,
-		string(item.Status), item.Notes, item.Code, tenantID,
-	)
-	return scanItem(row)
+			item.RequestedQty, item.UnitPrice, item.AttendedQty, item.CancelledQty,
+			item.DeliveryDate, item.DeliveryDateFirm, item.DiscountPct, item.IPIPct,
+			item.STPct, item.TotalGross, item.TotalNet, item.TotalNetWithIPI,
+			string(item.Status), item.Notes, item.Code, tenantID,
+		)
+		updated, err = scanItem(row)
+		if err != nil {
+			return err
+		}
+		return insertItemEvent(ctx, tx, "ITEM_UPDATE", current, updated)
+	})
+	return updated, err
+}
+
+type quotationItemEventSnapshot struct {
+	ItemCode       int64           `json:"item_code"`
+	Sequence       int             `json:"sequence"`
+	PriceTableCode *int64          `json:"price_table_code,omitempty"`
+	Quantity       decimal.Decimal `json:"quantity"`
+	UnitPrice      decimal.Decimal `json:"unit_price"`
+	TotalNet       decimal.Decimal `json:"total_net"`
+	PricingOrigin  string          `json:"pricing_origin"`
+}
+
+func insertItemEvent(ctx context.Context, tx pgx.Tx, eventType string, previous, current *quoteentity.SalesQuotationItem) error {
+	payload := struct {
+		Previous *quotationItemEventSnapshot `json:"previous,omitempty"`
+		Current  *quotationItemEventSnapshot `json:"current"`
+	}{Current: quotationItemSnapshot(current)}
+	if previous != nil {
+		payload.Previous = quotationItemSnapshot(previous)
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events(sales_quotation_code,sales_quotation_item_code,event_type,reason,complement,created_by) VALUES($1,$2,$3,$4,$5,$6)`, current.SalesQuotationCode, current.Code, eventType, "Alteração de item do orçamento", string(encoded), quotationActor(ctx))
+	return err
+}
+
+func quotationActor(ctx context.Context) any {
+	if user, ok := ctx.Value(contextkey.UserKey).(*appsecurity.AuthUser); ok && user != nil && user.ID != "" {
+		return user.ID
+	}
+	return nil
+}
+
+func quotationItemSnapshot(item *quoteentity.SalesQuotationItem) *quotationItemEventSnapshot {
+	return &quotationItemEventSnapshot{ItemCode: item.ItemCode, Sequence: item.Sequence, PriceTableCode: item.PriceTableCode, Quantity: item.RequestedQty, UnitPrice: item.UnitPrice, TotalNet: item.TotalNet, PricingOrigin: "SALES_TABLE"}
 }
 
 func (r *Repository) GetItem(ctx context.Context, itemCode int64) (*quoteentity.SalesQuotationItem, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +502,7 @@ func (r *Repository) GetItem(ctx context.Context, itemCode int64) (*quoteentity.
 }
 
 func (r *Repository) ListItems(ctx context.Context, quotationCode int64) ([]*quoteentity.SalesQuotationItem, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -463,17 +523,29 @@ func (r *Repository) ListItems(ctx context.Context, quotationCode int64) ([]*quo
 }
 
 func (r *Repository) CancelItem(ctx context.Context, itemCode, reasonCode int64, reason string, complement *string) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
 	return r.withTx(ctx, func(tx pgx.Tx) error {
-		var quotationCode int64
-		err = tx.QueryRow(ctx, `UPDATE public.sales_quotation_items i SET status='CANCELLED',cancelled_qty=requested_qty,is_active=FALSE,updated_at=NOW() WHERE code=$1 AND is_active AND EXISTS(SELECT 1 FROM public.sales_quotations q WHERE q.code=i.sales_quotation_code AND q.enterprise_code=$2 AND q.status NOT IN ('CANCELLED','ATTENDED','EXPIRED')) RETURNING sales_quotation_code`, itemCode, tenantID).Scan(&quotationCode)
-		if err != nil {
-			return err
+		current, currentErr := scanItem(tx.QueryRow(ctx, `SELECT `+itemColumns+` FROM public.sales_quotation_items i WHERE i.code=$1 AND i.is_active AND EXISTS(SELECT 1 FROM public.sales_quotations q WHERE q.code=i.sales_quotation_code AND q.enterprise_code=$2 AND q.status NOT IN ('CANCELLED','ATTENDED','EXPIRED')) FOR UPDATE`, itemCode, tenantID))
+		if currentErr != nil {
+			return currentErr
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events(sales_quotation_code,sales_quotation_item_code,event_type,reason,complement) VALUES($1,$2,'CANCEL',$3,$4)`, quotationCode, itemCode, fmt.Sprintf("[%d] %s", reasonCode, reason), complement); err != nil {
+		updated, updateErr := scanItem(tx.QueryRow(ctx, `UPDATE public.sales_quotation_items i SET status='CANCELLED',cancelled_qty=requested_qty,is_active=FALSE,updated_at=NOW() WHERE code=$1 RETURNING `+itemColumns, itemCode))
+		if updateErr != nil {
+			return updateErr
+		}
+		payload, marshalErr := json.Marshal(struct {
+			Previous         *quotationItemEventSnapshot `json:"previous"`
+			Current          *quotationItemEventSnapshot `json:"current"`
+			ReasonComplement *string                     `json:"reason_complement,omitempty"`
+		}{quotationItemSnapshot(current), quotationItemSnapshot(updated), complement})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		quotationCode := updated.SalesQuotationCode
+		if _, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events(sales_quotation_code,sales_quotation_item_code,event_type,reason,complement,created_by) VALUES($1,$2,'CANCEL',$3,$4,$5)`, quotationCode, itemCode, fmt.Sprintf("[%d] %s", reasonCode, reason), string(payload), quotationActor(ctx)); err != nil {
 			return err
 		}
 		return r.recalculateTotalsTx(ctx, tx, tenantID, quotationCode)
@@ -481,7 +553,7 @@ func (r *Repository) CancelItem(ctx context.Context, itemCode, reasonCode int64,
 }
 
 func (r *Repository) RecalculateTotals(ctx context.Context, quotationCode int64) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
@@ -635,7 +707,7 @@ func numericToDecimal(v pgtype.Numeric) decimal.Decimal {
 var _ quoterepo.SalesQuotationRepository = (*Repository)(nil)
 
 func (r *Repository) GetParameters(ctx context.Context) (*quoteentity.Parameters, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -653,7 +725,7 @@ func (r *Repository) GetParameters(ctx context.Context) (*quoteentity.Parameters
 }
 
 func (r *Repository) SaveParameters(ctx context.Context, p *quoteentity.Parameters) (*quoteentity.Parameters, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -668,8 +740,69 @@ func (r *Repository) SaveParameters(ctx context.Context, p *quoteentity.Paramete
 	return r.GetParameters(ctx)
 }
 
+func (r *Repository) ResetParameters(ctx context.Context) (*quoteentity.Parameters, error) {
+	tenantID, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = r.pool.Exec(ctx, `DELETE FROM public.sales_quotation_parameters WHERE enterprise_code=$1`, tenantID); err != nil {
+		return nil, err
+	}
+	return r.GetParameters(ctx)
+}
+
+func (r *Repository) SetCommissionPatternActive(ctx context.Context, code int64, active bool) error {
+	tenantID, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	if !active {
+		var referenced bool
+		err = r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM public.representative_enterprises WHERE enterprise_code=$1 AND commission_pattern_code=$2 AND is_active)`, tenantID, code).Scan(&referenced)
+		if err != nil {
+			return err
+		}
+		if referenced {
+			return quoterepo.ErrConfigurationReferenced
+		}
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE public.sales_quotation_commission_patterns SET is_active=$3,updated_at=NOW() WHERE enterprise_code=$1 AND code=$2`, tenantID, code, active)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return quoterepo.ErrConfigurationNotFound
+	}
+	return nil
+}
+
+func (r *Repository) SetCancellationReasonActive(ctx context.Context, code int64, active bool) error {
+	tenantID, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	if !active {
+		var referenced bool
+		err = r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM public.sales_quotations q JOIN public.sales_quotation_cancellation_reasons r ON r.enterprise_code=q.enterprise_code AND r.code=q.cancellation_reason_code WHERE q.enterprise_code=$1 AND r.code=$2 AND q.status='CANCELLED' AND r.allow_uncancel)`, tenantID, code).Scan(&referenced)
+		if err != nil {
+			return err
+		}
+		if referenced {
+			return quoterepo.ErrConfigurationReferenced
+		}
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE public.sales_quotation_cancellation_reasons SET is_active=$3,updated_at=NOW() WHERE enterprise_code=$1 AND code=$2`, tenantID, code, active)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return quoterepo.ErrConfigurationNotFound
+	}
+	return nil
+}
+
 func (r *Repository) SaveCommissionPattern(ctx context.Context, p *quoteentity.CommissionPattern) (*quoteentity.CommissionPattern, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -688,7 +821,7 @@ func (r *Repository) SaveCommissionPattern(ctx context.Context, p *quoteentity.C
 }
 
 func (r *Repository) ListCommissionPatterns(ctx context.Context) ([]*quoteentity.CommissionPattern, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -713,7 +846,7 @@ func (r *Repository) ListCommissionPatterns(ctx context.Context) ([]*quoteentity
 }
 
 func (r *Repository) SaveCancellationReason(ctx context.Context, v *quoteentity.CancellationReason) (*quoteentity.CancellationReason, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -726,7 +859,7 @@ func (r *Repository) SaveCancellationReason(ctx context.Context, v *quoteentity.
 }
 
 func (r *Repository) ListCancellationReasons(ctx context.Context) ([]*quoteentity.CancellationReason, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -747,7 +880,7 @@ func (r *Repository) ListCancellationReasons(ctx context.Context) ([]*quoteentit
 }
 
 func (r *Repository) GetCancellationReason(ctx context.Context, code int64) (*quoteentity.CancellationReason, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -760,7 +893,7 @@ func (r *Repository) GetCancellationReason(ctx context.Context, code int64) (*qu
 }
 
 func (r *Repository) GenerateDAV(ctx context.Context, code int64) (*quoteentity.SalesQuotation, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -770,7 +903,7 @@ func (r *Repository) GenerateDAV(ctx context.Context, code int64) (*quoteentity.
 }
 
 func (r *Repository) CreateAttachment(ctx context.Context, a *quoteentity.Attachment) (*quoteentity.Attachment, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -782,7 +915,7 @@ func (r *Repository) CreateAttachment(ctx context.Context, a *quoteentity.Attach
 }
 
 func (r *Repository) ListAttachments(ctx context.Context, quotationCode int64) ([]*quoteentity.Attachment, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -803,7 +936,7 @@ func (r *Repository) ListAttachments(ctx context.Context, quotationCode int64) (
 }
 
 func (r *Repository) GetAttachment(ctx context.Context, quotationCode, attachmentID int64) (*quoteentity.Attachment, error) {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -813,7 +946,7 @@ func (r *Repository) GetAttachment(ctx context.Context, quotationCode, attachmen
 }
 
 func (r *Repository) DeleteAttachment(ctx context.Context, quotationCode, attachmentID int64) error {
-	tenantID, err := tenant.ID(ctx)
+	tenantID, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,7 @@ import (
 type BaseHandler struct{}
 
 func (h *BaseHandler) OK(w http.ResponseWriter, data any, msg ...string) {
-	message := "success"
+	message := "sucesso"
 	if len(msg) > 0 {
 		message = msg[0]
 	}
@@ -18,7 +18,7 @@ func (h *BaseHandler) OK(w http.ResponseWriter, data any, msg ...string) {
 }
 
 func (h *BaseHandler) Created(w http.ResponseWriter, data any, msg ...string) {
-	message := "created"
+	message := "criado com sucesso"
 	if len(msg) > 0 {
 		message = msg[0]
 	}
@@ -30,7 +30,7 @@ func (h *BaseHandler) BadRequest(w http.ResponseWriter, message string, details 
 }
 
 func (h *BaseHandler) NotFound(w http.ResponseWriter, message ...string) {
-	msg := "resource not found"
+	msg := "recurso não encontrado"
 	if len(message) > 0 {
 		msg = message[0]
 	}
@@ -44,13 +44,13 @@ func (h *BaseHandler) InternalError(w http.ResponseWriter, r *http.Request, err 
 		"internal server error",
 		"error", err,
 	)
-	WriteError(w, http.StatusInternalServerError, "internal_error", "Something went wrong")
+	WriteError(w, http.StatusInternalServerError, "internal_error", "ocorreu um erro interno")
 }
 
 // Conflict returns 409 for requests that clash with existing state, most
 // commonly a duplicate unique key.
 func (h *BaseHandler) Conflict(w http.ResponseWriter, message ...string) {
-	msg := "resource already exists"
+	msg := "recurso já existe"
 	if len(message) > 0 {
 		msg = message[0]
 	}
@@ -74,7 +74,28 @@ func RespondJSON(w http.ResponseWriter, status int, data interface{}) {
 
 func RespondError(w http.ResponseWriter, status int, message string) {
 	if status >= http.StatusInternalServerError {
-		message = "internal server error"
+		message = "erro interno do servidor"
 	}
-	RespondJSON(w, status, map[string]string{"error": message})
+	RespondErrorCode(w, status, defaultErrorCode(status), message)
+}
+
+func RespondErrorCode(w http.ResponseWriter, status int, code, message string) {
+	RespondJSON(w, status, map[string]string{"error": message, "code": code})
+}
+
+func defaultErrorCode(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "REQUISICAO_INVALIDA"
+	case http.StatusForbidden:
+		return "ACESSO_NEGADO"
+	case http.StatusNotFound:
+		return "REGISTRO_NAO_ENCONTRADO"
+	case http.StatusConflict:
+		return "CONFLITO_DE_DOMINIO"
+	case http.StatusUnprocessableEntity:
+		return "VALIDACAO_DE_DOMINIO"
+	default:
+		return "ERRO_INTERNO"
+	}
 }

@@ -37,7 +37,7 @@ func (h *MaintenanceHandler) CreatePlan(w http.ResponseWriter, r *http.Request) 
 func (h *MaintenanceHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondErrorCode(w, http.StatusBadRequest, "PLANO_ID_INVALIDO", "identificador do plano inválido")
 		return
 	}
 	result, err := h.uc.GetPlan(r.Context(), id)
@@ -55,13 +55,13 @@ func (h *MaintenanceHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, results)
+	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
 }
 
 func (h *MaintenanceHandler) ListPlansByMachine(w http.ResponseWriter, r *http.Request) {
 	machineID, err := strconv.ParseInt(chi.URLParam(r, "machineId"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid machine_id")
+		security.RespondErrorCode(w, http.StatusBadRequest, "MAQUINA_ID_INVALIDO", "identificador da máquina inválido")
 		return
 	}
 	results, err := h.uc.ListPlansByMachine(r.Context(), machineID)
@@ -69,13 +69,13 @@ func (h *MaintenanceHandler) ListPlansByMachine(w http.ResponseWriter, r *http.R
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, results)
+	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
 }
 
 func (h *MaintenanceHandler) DeactivatePlan(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondErrorCode(w, http.StatusBadRequest, "PLANO_ID_INVALIDO", "identificador do plano inválido")
 		return
 	}
 	if err := h.uc.DeactivatePlan(r.Context(), id); err != nil {
@@ -116,7 +116,7 @@ func (h *MaintenanceHandler) AdvanceOrder(w http.ResponseWriter, r *http.Request
 func (h *MaintenanceHandler) ListOrdersByPlan(w http.ResponseWriter, r *http.Request) {
 	planID, err := strconv.ParseInt(chi.URLParam(r, "planId"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid plan_id")
+		security.RespondErrorCode(w, http.StatusBadRequest, "PLANO_ID_INVALIDO", "identificador do plano inválido")
 		return
 	}
 	results, err := h.uc.ListOrdersByPlan(r.Context(), planID)
@@ -124,19 +124,27 @@ func (h *MaintenanceHandler) ListOrdersByPlan(w http.ResponseWriter, r *http.Req
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, results)
+	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
 }
 
 func (h *MaintenanceHandler) ListOrdersByWorkCenter(w http.ResponseWriter, r *http.Request) {
 	wcID, err := strconv.ParseInt(chi.URLParam(r, "wcId"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid work_center_id")
+		security.RespondErrorCode(w, http.StatusBadRequest, "CENTRO_TRABALHO_ID_INVALIDO", "identificador do centro de trabalho inválido")
 		return
 	}
 	fromStr := r.URL.Query().Get("from")
 	toStr := r.URL.Query().Get("to")
-	from, _ := time.Parse("2006-01-02", fromStr)
-	to, _ := time.Parse("2006-01-02", toStr)
+	from, fromErr := time.Parse("2006-01-02", fromStr)
+	if fromErr != nil {
+		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PERIODO_INVALIDO", "o campo 'from' deve estar no formato AAAA-MM-DD")
+		return
+	}
+	to, toErr := time.Parse("2006-01-02", toStr)
+	if toStr != "" && toErr != nil {
+		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PERIODO_INVALIDO", "o campo 'to' deve estar no formato AAAA-MM-DD")
+		return
+	}
 	if to.IsZero() {
 		to = from.AddDate(0, 1, 0)
 	}
@@ -145,7 +153,7 @@ func (h *MaintenanceHandler) ListOrdersByWorkCenter(w http.ResponseWriter, r *ht
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, results)
+	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
 }
 
 func (h *MaintenanceHandler) GenerateOrders(w http.ResponseWriter, r *http.Request) {

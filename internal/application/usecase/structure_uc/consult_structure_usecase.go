@@ -13,11 +13,16 @@ import (
 
 // ConsultStructureUseCase implementa VENG0401 — Consulta de Estrutura de Produto.
 type ConsultStructureUseCase struct {
-	Repo repository.StructureQueryRepository
+	Repo  repository.StructureQueryRepository
+	Items any
 }
 
-func NewConsultStructureUseCase(repo repository.StructureQueryRepository) *ConsultStructureUseCase {
-	return &ConsultStructureUseCase{Repo: repo}
+func NewConsultStructureUseCase(repo repository.StructureQueryRepository, items ...any) *ConsultStructureUseCase {
+	uc := &ConsultStructureUseCase{Repo: repo}
+	if len(items) > 0 {
+		uc.Items = items[0]
+	}
+	return uc
 }
 
 func (uc *ConsultStructureUseCase) Execute(
@@ -25,17 +30,18 @@ func (uc *ConsultStructureUseCase) Execute(
 	dto request.ConsultStructureDTO,
 ) (*response.ConsultStructureResponse, error) {
 
-	if dto.ItemCode <= 0 {
-		return nil, fmt.Errorf("item_code inválido")
+	itemCode, err := resolveItemCode(ctx, uc.Items, dto.ItemCode)
+	if err != nil {
+		return nil, err
 	}
 
 	var rows []response.ConsultStructureRowResponse
-	if err := uc.descend(ctx, dto, dto.ItemCode, dto.Mask, 1, &rows); err != nil {
+	if err := uc.descend(ctx, dto, itemCode, dto.Mask, 1, &rows); err != nil {
 		return nil, err
 	}
 
 	return &response.ConsultStructureResponse{
-		RootItemCode: dto.ItemCode,
+		RootItemCode: itemCode,
 		Mask:         dto.Mask,
 		Rows:         rows,
 	}, nil
@@ -100,13 +106,22 @@ func (uc *ConsultStructureUseCase) buildRow(
 		}
 	}
 
-	corrected := s.EffectiveQuantity() // fallback: qty * (1 + loss% / 100)
+	// As variáveis da configuração (as "perguntas" respondidas) alimentam tanto a
+	// fórmula de quantidade quanto a de perda.
+	vars := map[string]float64{}
+	if (s.HasQuantityFormula() || (s.LossFormula != nil && *s.LossFormula != "")) && childMask != "" {
+		vars, _ = uc.Repo.GetMaskAnswersWithNames(ctx, s.ChildCode, childMask)
+		if len(vars) == 0 && parentMask != "" {
+			// Fórmula escrita com as variáveis do pai (caso mais comum em
+			// FENG0210: COMPRIMENTO/PROFUNDIDADE são perguntas do produto pai).
+			vars, _ = uc.Repo.GetMaskAnswersWithNames(ctx, s.ParentCode, parentMask)
+		}
+	}
+
+	quantity, formulaApplied := s.ResolvedQuantity(vars)
+	corrected := quantity * (1 + s.LossPercentage/100.0)
 
 	if s.LossFormula != nil && *s.LossFormula != "" {
-		vars := map[string]float64{}
-		if childMask != "" {
-			vars, _ = uc.Repo.GetMaskAnswersWithNames(ctx, s.ChildCode, childMask)
-		}
 		if result, ok := formula.EvaluateSafe(*s.LossFormula, vars); ok {
 			corrected = result
 		}
@@ -126,7 +141,10 @@ func (uc *ConsultStructureUseCase) buildRow(
 		Sequence:          s.Sequence,
 		StartDate:         s.StartDate,
 		EndDate:           s.EndDate,
-		Quantity:          s.Quantity,
+		Quantity:          quantity,
+		NominalQuantity:   s.Quantity,
+		QuantityFormula:   s.QuantityFormula,
+		FormulaApplied:    formulaApplied,
 		WarehouseCode:     warehouseCode,
 		LossFormula:       s.LossFormula,
 		LossPercentage:    s.LossPercentage,

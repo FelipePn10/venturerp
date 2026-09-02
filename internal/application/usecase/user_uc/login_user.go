@@ -3,6 +3,7 @@ package user_uc
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/domain/user/repository"
@@ -10,9 +11,15 @@ import (
 )
 
 var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-used-only-for-timing"), bcrypt.DefaultCost)
+var ErrIdentitySync = errors.New("training identity synchronization failed")
+
+type IdentityMirror interface {
+	SyncIdentity(ctx context.Context, userID string, enterpriseID int64) error
+}
 
 type LoginUserUseCase struct {
-	Repo repository.UserRepository
+	Repo   repository.UserRepository
+	Mirror IdentityMirror
 }
 
 func NewLoginUserUseCase(
@@ -40,6 +47,11 @@ func (uc *LoginUserUseCase) Execute(
 	authorization, err := uc.Repo.ResolveAuthorization(ctx, user.ID.String(), login.EnterpriseCode)
 	if err != nil {
 		return "", "", "", "", 0, 0, errors.New("invalid enterprise selection")
+	}
+	if uc.Mirror != nil {
+		if err := uc.Mirror.SyncIdentity(ctx, user.ID.String(), authorization.EnterpriseID); err != nil {
+			return "", "", "", "", 0, 0, fmt.Errorf("%w: %v", ErrIdentitySync, err)
+		}
 	}
 	return user.ID.String(), authorization.Role, user.Name, user.Email,
 		authorization.EnterpriseID, authorization.AuthVersion, nil

@@ -3,40 +3,52 @@ package third_party_service_uc
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
+	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	domain "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
-type UseCase struct{ repo domain.Repository }
+type UseCase struct {
+	repo     domain.Repository
+	itemRepo itemrepo.ItemRepository
+}
 
-func New(repo domain.Repository) *UseCase { return &UseCase{repo: repo} }
-func priceFrom(dto request.ThirdPartyPriceDTO, by uuid.UUID) (*domain.Price, error) {
+func New(repo domain.Repository, itemRepos ...itemrepo.ItemRepository) *UseCase {
+	uc := &UseCase{repo: repo}
+	if len(itemRepos) > 0 {
+		uc.itemRepo = itemRepos[0]
+	}
+	return uc
+}
+func priceFrom(dto request.ThirdPartyPriceDTO, itemCode int64, by uuid.UUID) (*domain.Price, error) {
 	unit, e := decimal.NewFromString(strings.TrimSpace(dto.UnitPrice))
 	if e != nil {
-		return nil, errors.New("unit_price must be decimal")
+		return nil, errors.New("preço unitário deve ser decimal")
 	}
 	freight, e := decimal.NewFromString(defaultDecimal(dto.FreightValue))
 	if e != nil {
-		return nil, errors.New("freight_value must be decimal")
+		return nil, errors.New("valor do frete deve ser decimal")
 	}
 	tax, e := decimal.NewFromString(defaultDecimal(dto.TaxPercent))
 	if e != nil {
-		return nil, errors.New("tax_percent must be decimal")
+		return nil, errors.New("percentual de imposto deve ser decimal")
 	}
-	p := &domain.Price{ItemCode: dto.ItemCode, Mask: dto.Mask, SupplierCode: dto.SupplierCode, OperationID: dto.OperationID, UOM: dto.UOM, ReferenceDate: dto.ReferenceDate, Preferred: dto.Preferred, UnitPrice: unit, FreightType: dto.FreightType, FreightValue: freight, TaxPercent: tax, Formula: dto.Formula, CreatedBy: by}
+	p := &domain.Price{ItemCode: itemCode, Mask: dto.Mask, SupplierCode: dto.SupplierCode, OperationID: dto.OperationID, UOM: dto.UOM, ReferenceDate: dto.ReferenceDate, Preferred: dto.Preferred, UnitPrice: unit, FreightType: dto.FreightType, FreightValue: freight, TaxPercent: tax, Formula: dto.Formula, CreatedBy: by}
 	if p.FreightType == "" {
 		p.FreightType = "FIXED"
 	}
 	if dto.ConversionFactor != nil {
 		v, e := decimal.NewFromString(*dto.ConversionFactor)
 		if e != nil {
-			return nil, errors.New("conversion_factor must be decimal")
+			return nil, errors.New("fator de conversão deve ser decimal")
 		}
 		p.ConversionFactor = &v
 	}
@@ -52,7 +64,11 @@ func defaultDecimal(v string) string {
 	return v
 }
 func (u *UseCase) CreatePrice(ctx context.Context, d request.ThirdPartyPriceDTO, by uuid.UUID) (response.ThirdPartyPriceResponse, error) {
-	p, e := priceFrom(d, by)
+	itemCode, e := u.resolveItemCode(ctx, d.ItemCode)
+	if e != nil {
+		return response.ThirdPartyPriceResponse{}, e
+	}
+	p, e := priceFrom(d, itemCode, by)
 	if e != nil {
 		return response.ThirdPartyPriceResponse{}, e
 	}
@@ -60,13 +76,35 @@ func (u *UseCase) CreatePrice(ctx context.Context, d request.ThirdPartyPriceDTO,
 	return priceResponse(v), e
 }
 func (u *UseCase) UpdatePrice(ctx context.Context, id int64, d request.ThirdPartyPriceDTO, by uuid.UUID) (response.ThirdPartyPriceResponse, error) {
-	p, e := priceFrom(d, by)
+	itemCode, e := u.resolveItemCode(ctx, d.ItemCode)
+	if e != nil {
+		return response.ThirdPartyPriceResponse{}, e
+	}
+	p, e := priceFrom(d, itemCode, by)
 	if e != nil {
 		return response.ThirdPartyPriceResponse{}, e
 	}
 	p.ID = id
 	v, e := u.repo.UpdatePrice(ctx, p, d.Reason)
 	return priceResponse(v), e
+}
+
+func (u *UseCase) resolveItemCode(ctx context.Context, code request.TextCode) (int64, error) {
+	if u.itemRepo == nil {
+		// Compatibility for isolated legacy consumers/tests that still provide the
+		// internal numeric code. Production wiring always provides itemRepo so
+		// textual business codes are resolved with tenant isolation.
+		legacy, err := strconv.ParseInt(code.String(), 10, 64)
+		if err != nil || legacy <= 0 {
+			return 0, errors.New("resolvedor de item não configurado para código textual")
+		}
+		return legacy, nil
+	}
+	item, err := itemresolution.Resolve(ctx, u.itemRepo, code)
+	if err != nil {
+		return 0, err
+	}
+	return int64(item.Code), nil
 }
 func (u *UseCase) DeletePrice(ctx context.Context, id int64, reason string, by uuid.UUID) error {
 	return u.repo.DeletePrice(ctx, id, reason, by)
@@ -104,7 +142,7 @@ func (u *UseCase) CostPerUnit(ctx context.Context, item int64, mask string, oper
 		mode = "STANDARD"
 	}
 	if mode != "STANDARD" && mode != "REAL" {
-		return CostBreakdown{}, errors.New("mode must be STANDARD or REAL")
+		return CostBreakdown{}, errors.New("modo deve ser STANDARD ou REAL")
 	}
 	result := CostBreakdown{GrossUnitCost: p.UnitPrice, ConversionFactor: decimal.NewFromInt(1)}
 	if mode == "STANDARD" {
@@ -140,7 +178,7 @@ func (u *UseCase) History(ctx context.Context, id int64) ([]response.ThirdPartyH
 func (u *UseCase) Readjust(ctx context.Context, d request.ThirdPartyReadjustDTO, by uuid.UUID) ([]response.ThirdPartyPriceResponse, error) {
 	pct, e := decimal.NewFromString(d.Percent)
 	if e != nil {
-		return nil, errors.New("percent must be decimal")
+		return nil, errors.New("percentual deve ser decimal")
 	}
 	rows, e := u.repo.Readjust(ctx, d.IDs, pct, d.ReferenceDate, d.Reason, by)
 	out := make([]response.ThirdPartyPriceResponse, 0, len(rows))
@@ -176,7 +214,7 @@ func (u *UseCase) UpdateOrderStatus(ctx context.Context, id int64, d request.Thi
 func (u *UseCase) AddMovement(ctx context.Context, id int64, d request.ThirdPartyMovementDTO, by uuid.UUID) (response.ThirdPartyMovementResponse, error) {
 	q, e := decimal.NewFromString(d.Quantity)
 	if e != nil {
-		return response.ThirdPartyMovementResponse{}, errors.New("quantity must be decimal")
+		return response.ThirdPartyMovementResponse{}, errors.New("quantidade deve ser decimal")
 	}
 	v, e := u.repo.AddMovement(ctx, id, domain.Movement{MovementType: d.MovementType, Quantity: q, OccurredAt: d.OccurredAt, ReferenceType: d.ReferenceType, ReferenceCode: d.ReferenceCode, Notes: d.Notes, IdempotencyKey: d.IdempotencyKey, WarehouseID: d.WarehouseID, Lot: d.Lot, CreatedBy: by})
 	return movementResponse(v), e
@@ -184,7 +222,7 @@ func (u *UseCase) AddMovement(ctx context.Context, id int64, d request.ThirdPart
 func (u *UseCase) UpsertGlobalConversion(ctx context.Context, d request.GlobalUnitConversionDTO, by uuid.UUID) (response.GlobalUnitConversionResponse, error) {
 	f, e := decimal.NewFromString(d.Factor)
 	if e != nil {
-		return response.GlobalUnitConversionResponse{}, errors.New("factor must be decimal")
+		return response.GlobalUnitConversionResponse{}, errors.New("fator deve ser decimal")
 	}
 	v, e := u.repo.UpsertGlobalConversion(ctx, domain.GlobalConversion{FromUOM: d.FromUOM, ToUOM: d.ToUOM, Factor: f, CreatedBy: by})
 	if e != nil {

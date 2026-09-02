@@ -53,5 +53,8 @@ func (uc *FindItemByCode) Execute(
 		return nil, err
 	}
 
+	// A tela trabalha por código de negócio: traduz as referências antes de
+	// devolver, para que um cadastro parcial reabra exatamente como foi salvo.
+	fillReferenceBusinessCodes(ctx, uc.Repo, item)
 	return toItemResponse(item), nil
 }

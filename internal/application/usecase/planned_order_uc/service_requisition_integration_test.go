@@ -4,15 +4,19 @@ package planned_order_uc
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"github.com/FelipePn10/panossoerp/internal/application/security"
 	plannedentity "github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	purchasereqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 // Verifies the subcontracting hook: firming an order whose item has an external
@@ -21,8 +25,15 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	rRepo := routingRepo.New(q)
 	reqRepo := purchasereqRepo.New(q, pool)
-	ctx := context.Background()
 	uid := uuid.New()
+
+	// Os repositórios de roteiro e requisição filtram por empresa: o contexto
+	// precisa carregar o tenant como a requisição HTTP carregaria.
+	var enterpriseID int64
+	if err := pool.QueryRow(context.Background(), "SELECT MIN(id) FROM enterprise").Scan(&enterpriseID); err != nil || enterpriseID == 0 {
+		t.Skip("integration database has no enterprise")
+	}
+	ctx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 
 	serviceItem := testutil.UniqueCode()
 	supplier := testutil.UniqueCode()
@@ -42,7 +53,8 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM operations WHERE id = $1", createdOp.ID)
 
 	itemCode := testutil.UniqueCode()
-	testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", itemCode, itemCode, uid)
+	testutil.Exec(t, pool, "INSERT INTO items (code, business_code, warehouse_code, created_by, enterprise_id) VALUES ($1,$2,$3,$4,$5)",
+		itemCode, fmt.Sprintf("IT-%d", itemCode), itemCode, uid, enterpriseID)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 
 	rt, _ := routingentity.NewManufacturingRoute(testutil.UniqueCode(), itemCode, nil, 1, nil, true, nil, nil, uid)
@@ -56,7 +68,7 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 		t.Fatalf("AddRouteOperation: %v", err)
 	}
 
-	uc := &FirmPlannedOrderUseCase{ReqRepo: reqRepo, ExternalOps: rRepo, EnterpriseCode: 1}
+	uc := &FirmPlannedOrderUseCase{ReqRepo: reqRepo, ExternalOps: rRepo, Auth: &serviceReqAuth{enterprise: enterpriseID, actor: uid}}
 	order := &plannedentity.PlannedOrder{ItemCode: itemCode, Quantity: 10, CreatedBy: uid}
 
 	reqCode, err := uc.generateServiceRequisition(ctx, order)
@@ -81,3 +93,14 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 		t.Errorf("item = %+v, want service %d qty 10 price 12.5", it, serviceItem)
 	}
 }
+
+// serviceReqAuth supplies the tenant and actor that the use case now reads from
+// the JWT instead of a struct field.
+type serviceReqAuth struct {
+	ports.AuthService
+	enterprise int64
+	actor      uuid.UUID
+}
+
+func (a *serviceReqAuth) EnterpriseCode(context.Context) (int64, error) { return a.enterprise, nil }
+func (a *serviceReqAuth) UserID(context.Context) (uuid.UUID, error)     { return a.actor, nil }

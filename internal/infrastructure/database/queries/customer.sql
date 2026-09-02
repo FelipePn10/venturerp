@@ -131,6 +131,9 @@ RETURNING *;
 -- name: GetCarrierGroupByCode :one
 SELECT * FROM carrier_groups WHERE code = $1;
 
+-- name: UpdateCarrierGroup :one
+UPDATE carrier_groups SET description=$2 WHERE id=$1 RETURNING *;
+
 -- name: ListCarrierGroups :many
 SELECT * FROM carrier_groups ORDER BY code;
 
@@ -196,15 +199,15 @@ UPDATE payment_condition_installments SET is_active = FALSE WHERE id = $1;
 
 -- name: CreateSalesTable :one
 INSERT INTO sales_tables (
-    code, description, validity_start, validity_end,
+    enterprise_id, code, description, validity_start, validity_end,
     tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places,
     composition, table_type, base_date,
     allow_items_below_cent, icms_interestadual_por_dentro, observation
 ) VALUES (
-    $1, $2, $3, $4,
-    $5, $6, $7, $8,
-    $9, $10, $11,
-    $12, $13, $14
+    sqlc.arg(enterprise_id), sqlc.arg(code), sqlc.arg(description), sqlc.arg(validity_start), sqlc.arg(validity_end),
+    sqlc.arg(tolerance_min_pct), sqlc.arg(tolerance_max_pct), sqlc.arg(price_formation), sqlc.arg(decimal_places),
+    sqlc.arg(composition), sqlc.arg(table_type), sqlc.arg(base_date),
+    sqlc.arg(allow_items_below_cent), sqlc.arg(icms_interestadual_por_dentro), sqlc.arg(observation)
 ) RETURNING *;
 
 -- name: UpdateSalesTable :one
@@ -215,18 +218,20 @@ SET description = $2, validity_start = $3, validity_end = $4,
     composition = $10, table_type = $11, base_date = $12,
     allow_items_below_cent = $13, icms_interestadual_por_dentro = $14,
     observation = $15
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetSalesTableByCode :one
-SELECT * FROM sales_tables WHERE code = $1;
+SELECT * FROM sales_tables WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: ListSalesTables :many
 SELECT * FROM sales_tables
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id=sqlc.arg(enterprise_id) AND (sqlc.arg(only_active)::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextSalesTableCode :one
+-- Enquanto sales_orders.price_table_code mantiver a FK legada para code, o
+-- proximo codigo precisa permanecer globalmente unico.
 SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM sales_tables;
 
 -- ─── Invoice Types ────────────────────────────────────────────────────────────

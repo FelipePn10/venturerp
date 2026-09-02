@@ -2,6 +2,7 @@ package sales_order_uc
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -23,8 +24,8 @@ func (uc *CancelSalesOrderUseCase) Execute(ctx context.Context, dto request.Canc
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
-	if dto.Reason == "" {
-		return errorsuc.NewValidationError("reason is required")
+	if strings.TrimSpace(dto.Reason) == "" {
+		return errorsuc.NewValidationError("o motivo do cancelamento é obrigatório")
 	}
 	return uc.Repo.Cancel(ctx, dto.Code, dto.Reason, dto.Complement)
 }
@@ -111,18 +112,22 @@ func (uc *AnalyzeSalesOrderUseCase) Execute(ctx context.Context, dto request.Ana
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
-	area := dto.Area
+	area := strings.ToUpper(strings.TrimSpace(dto.Area))
 	if area != "COMMERCIAL" && area != "FINANCIAL" {
-		return errorsuc.NewValidationError("area must be COMMERCIAL or FINANCIAL")
+		return errorsuc.NewValidationError("a área deve ser COMMERCIAL ou FINANCIAL")
 	}
 	status := entity.SalesOrderAnalysisStatus(dto.Status)
 	if status != entity.SalesOrderAnalysisApproved && status != entity.SalesOrderAnalysisRejected && status != entity.SalesOrderAnalysisNotAnalyzed {
-		return errorsuc.NewValidationError("invalid analysis status")
+		return errorsuc.NewValidationError("a situação da análise deve ser APPROVED, REJECTED ou NOT_ANALYZED")
 	}
-	if dto.Reason == "" {
-		return errorsuc.NewValidationError("reason is required")
+	if strings.TrimSpace(dto.Reason) == "" {
+		return errorsuc.NewValidationError("o motivo da análise é obrigatório")
 	}
-	return uc.Repo.Analyze(ctx, dto.Code, area, status, dto.Reason, dto.CreatedBy)
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return errorsuc.ErrUnauthorized
+	}
+	return uc.Repo.Analyze(ctx, dto.Code, area, status, strings.TrimSpace(dto.Reason), actor)
 }
 
 type ReleaseSalesOrderUseCase struct {
@@ -136,12 +141,16 @@ func (uc *ReleaseSalesOrderUseCase) Execute(ctx context.Context, dto request.Rel
 	}
 	status := entity.SalesOrderReleaseStatus(dto.ReleaseStatus)
 	if status != entity.SalesOrderReleaseBlocked && status != entity.SalesOrderReleaseManual && status != entity.SalesOrderReleaseOK {
-		return errorsuc.NewValidationError("invalid release_status")
+		return errorsuc.NewValidationError("a situação de liberação deve ser BLOCKED, MANUAL ou OK")
 	}
-	if dto.Reason == "" {
-		return errorsuc.NewValidationError("reason is required")
+	if strings.TrimSpace(dto.Reason) == "" {
+		return errorsuc.NewValidationError("o motivo da liberação é obrigatório")
 	}
-	return uc.Repo.Release(ctx, dto.Code, status, dto.Reason, dto.Area, dto.CreatedBy)
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return errorsuc.ErrUnauthorized
+	}
+	return uc.Repo.Release(ctx, dto.Code, status, strings.TrimSpace(dto.Reason), strings.TrimSpace(dto.Area), actor)
 }
 
 type AttendSalesOrderUseCase struct {
@@ -153,11 +162,18 @@ func (uc *AttendSalesOrderUseCase) Execute(ctx context.Context, dto request.Atte
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
-	if dto.Reason == "" {
-		return errorsuc.NewValidationError("reason is required")
+	if strings.TrimSpace(dto.Reason) == "" {
+		return errorsuc.NewValidationError("o motivo do atendimento é obrigatório")
 	}
 	eventDate := datetime.ParseDatePtr(&dto.EventDate)
-	return uc.Repo.Attend(ctx, dto.Code, dto.Reason, eventDate, dto.CreatedBy)
+	if strings.TrimSpace(dto.EventDate) != "" && eventDate == nil {
+		return errorsuc.NewValidationError("a data do atendimento deve estar no formato ISO AAAA-MM-DD")
+	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return errorsuc.ErrUnauthorized
+	}
+	return uc.Repo.Attend(ctx, dto.Code, strings.TrimSpace(dto.Reason), eventDate, actor)
 }
 
 type ConferSalesOrderUseCase struct {
@@ -171,9 +187,16 @@ func (uc *ConferSalesOrderUseCase) Execute(ctx context.Context, dto request.Conf
 	}
 	status := entity.SalesOrderConferenceStatus(dto.Status)
 	if status != entity.SalesOrderConferencePending && status != entity.SalesOrderConferenceConferred && status != entity.SalesOrderConferenceDivergent {
-		return errorsuc.NewValidationError("invalid conference status")
+		return errorsuc.NewValidationError("a situação da conferência deve ser PENDING, CONFERRED ou DIVERGENT")
 	}
-	return uc.Repo.Confer(ctx, dto.Code, status, dto.Reason, dto.CreatedBy)
+	if strings.TrimSpace(dto.Status) == "" {
+		return errorsuc.NewValidationError("a situação da conferência é obrigatória")
+	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return errorsuc.ErrUnauthorized
+	}
+	return uc.Repo.Confer(ctx, dto.Code, status, strings.TrimSpace(dto.Reason), actor)
 }
 
 type SaveSalesOrderDelayReasonUseCase struct {
@@ -185,10 +208,17 @@ func (uc *SaveSalesOrderDelayReasonUseCase) Execute(ctx context.Context, dto req
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
-	if dto.Reason == "" || dto.Action == "" {
-		return errorsuc.NewValidationError("reason and action are required")
+	if strings.TrimSpace(dto.Reason) == "" {
+		return errorsuc.NewValidationError("o motivo do atraso é obrigatório")
 	}
-	return uc.Repo.SaveDelayReason(ctx, dto.Code, dto.Reason, dto.Action, dto.CreatedBy)
+	if strings.TrimSpace(dto.Action) == "" {
+		return errorsuc.NewValidationError("a ação para o atraso é obrigatória")
+	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return errorsuc.ErrUnauthorized
+	}
+	return uc.Repo.SaveDelayReason(ctx, dto.Code, strings.TrimSpace(dto.Reason), strings.TrimSpace(dto.Action), actor)
 }
 
 // generateDemands creates one independent demand per open order line. It is

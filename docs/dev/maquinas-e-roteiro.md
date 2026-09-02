@@ -46,7 +46,7 @@ O campo `type` usa o mesmo vocabulário canônico do PostgreSQL e da API:
 | GET | `/api/machine/types/list` | Lista tipos |
 | GET | `/api/machine/types/{code}` | Busca tipo por código |
 | POST | `/api/machine/time/create` | Cria tempo por item × máquina (variante opcional) |
-| GET | `/api/machine/time/list?item_code=123` | Lista tempos de um item |
+| GET | `/api/machine/time/list?item_code=TEA452-0` | Lista tempos de um item pelo código comercial |
 | POST | `/api/machine/time/{code}` | Busca tempo por código |
 | POST | `/api/machine/time/production/calculate` | **Calcula o tempo de produção** de uma quantidade |
 | POST | `/api/machine/schedule/create` | Cria agenda/disponibilidade |
@@ -55,10 +55,13 @@ O campo `type` usa o mesmo vocabulário canônico do PostgreSQL e da API:
 
 > Exemplos de corpo de request em [`API_REQUEST_BODIES.txt`](API_REQUEST_BODIES.txt).
 
-> ⚠️ **Filtros das listagens (query-string, não path).** `GET /time/list` exige
-> `?item_code=<código>`; `GET /schedule/list` exige `?machine_code=<código>` e aceita
+> ⚠️ **Filtros das listagens (query-string, não path).** `GET /time/list` aceita
+> `?item_code=<código>` opcional; `GET /schedule/list` exige `?machine_code=<código>` e aceita
 > `?date=YYYY-MM-DD` (default = hoje). Sem o filtro → 400 com mensagem orientando o
 > parâmetro.
+> O `item_code` público é o `items.business_code` textual. O backend resolve esse
+> código no tenant autenticado e persiste a chave numérica legada; JSON numérico
+> permanece aceito temporariamente pelo contrato `TextCode`.
 >
 > ℹ️ As tabelas `item_machine_times` e `machine_schedules` ganharam a coluna
 > `is_active` (migration `000171`) — antes o cálculo de tempo e as listagens

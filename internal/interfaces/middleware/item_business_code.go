@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,14 +46,16 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 					return
 				}
 			}
-			if err = translateItemQuery(r, pool, enterpriseID); err != nil {
-				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-				return
-			}
-			if requestHasJSON(r) && r.Body != nil {
-				if err = translateItemBody(r, pool, enterpriseID); err != nil {
+			if !nativeItemBusinessCodeRequest(r) {
+				if err = translateItemQuery(r, pool, enterpriseID); err != nil {
 					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 					return
+				}
+				if requestHasJSON(r) && r.Body != nil {
+					if err = translateItemBody(r, pool, enterpriseID); err != nil {
+						http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+						return
+					}
 				}
 			}
 			if bypassItemResponseTranslation(r) {
@@ -73,6 +77,11 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 			_, _ = w.Write(body)
 		})
 	}
+}
+
+func nativeItemBusinessCodeRequest(r *http.Request) bool {
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	return path == "/api/machine/time/create" || path == "/api/machine/time/list"
 }
 
 func nativeItemBusinessCodePath(r *http.Request) bool {
@@ -326,7 +335,37 @@ func translateInputReference(r *http.Request, pool *pgxpool.Pool, e int64, value
 		if strings.TrimSpace(typed) == "" {
 			return value, nil
 		}
-		return resolveBusinessCode(r.Context(), pool, e, typed)
+		resolved, err := resolveBusinessCode(r.Context(), pool, e, typed)
+		if err != nil {
+			return nil, err
+		}
+		if textualPricingItemContract(r) {
+			return strconv.FormatInt(resolved, 10), nil
+		}
+		return resolved, nil
+	case float64:
+		if !textualPricingItemContract(r) {
+			return value, nil
+		}
+		if typed <= 0 || math.Trunc(typed) != typed || typed > math.MaxInt64 {
+			return nil, fmt.Errorf("o código numérico legado do item é inválido")
+		}
+		resolved := int64(typed)
+		var exists bool
+		if err := pool.QueryRow(r.Context(),
+			`SELECT EXISTS(SELECT 1 FROM items WHERE enterprise_id=$1 AND code=$2)`,
+			e, resolved,
+		).Scan(&exists); err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("item não encontrado na empresa autenticada")
+		}
+		slog.WarnContext(r.Context(), "contrato numérico de item descontinuado",
+			"operation", r.Method+" "+r.URL.Path,
+			"field", "item_code",
+		)
+		return strconv.FormatInt(resolved, 10), nil
 	case []any:
 		out := make([]any, len(typed))
 		for i, v := range typed {
@@ -340,6 +379,17 @@ func translateInputReference(r *http.Request, pool *pgxpool.Pool, e int64, value
 	default:
 		return value, nil
 	}
+}
+
+// textualPricingItemContract identifies the commercial pricing endpoints whose
+// public contract uses textual item codes. Legacy clients may still send JSON
+// numbers temporarily; translateInputReference normalizes both forms to a JSON
+// string before the request DTO is decoded.
+func textualPricingItemContract(r *http.Request) bool {
+	path := r.URL.Path
+	return strings.HasPrefix(path, "/api/customers/support/sales-tables/") ||
+		strings.HasPrefix(path, "/api/sales-order/items/") ||
+		strings.HasPrefix(path, "/api/sales-quotation/items/")
 }
 func resolveBusinessCode(ctx context.Context, pool *pgxpool.Pool, e int64, code string) (int64, error) {
 	var id int64

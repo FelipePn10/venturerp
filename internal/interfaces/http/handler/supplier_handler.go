@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/supplier_uc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/export"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -160,13 +161,23 @@ func (h *SupplierHandler) ListEstablishments(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *SupplierHandler) BlockSupplier(w http.ResponseWriter, r *http.Request) {
+	code, err := parseSupplierCode(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código de fornecedor inválido")
+		return
+	}
 	var dto request.BlockSupplierDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "payload inválido: "+err.Error())
+		return
+	}
+	dto.Code = code
+	if strings.TrimSpace(dto.Reason) == "" {
+		jsonError(w, http.StatusBadRequest, "motivo do bloqueio é obrigatório")
 		return
 	}
 	if err := h.uc.BlockSupplier(r.Context(), dto); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -175,11 +186,11 @@ func (h *SupplierHandler) BlockSupplier(w http.ResponseWriter, r *http.Request) 
 func (h *SupplierHandler) UnblockSupplier(w http.ResponseWriter, r *http.Request) {
 	code, err := parseSupplierCode(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código de fornecedor inválido")
 		return
 	}
 	if err := h.uc.UnblockSupplier(r.Context(), code); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -344,19 +355,15 @@ func (h *SupplierHandler) ListEnterprises(w http.ResponseWriter, r *http.Request
 
 // GetPurchasingDefaults resolves the supplier-derived defaults (payment
 // condition, freight, financial account, default invoice type, ICMS contributor)
-// consumed by the Purchase Order and Fiscal flows. Optional ?enterprise=<code>
-// includes the per-enterprise binding fields.
+// consumed by the Purchase Order and Fiscal flows. The enterprise comes only
+// from the authenticated tenant.
 func (h *SupplierHandler) GetPurchasingDefaults(w http.ResponseWriter, r *http.Request) {
 	code, err := parseSupplierCode(r)
 	if err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid code")
 		return
 	}
-	var enterprise int64
-	if v := r.URL.Query().Get("enterprise"); v != "" {
-		enterprise, _ = strconv.ParseInt(v, 10, 64)
-	}
-	res, err := h.uc.GetPurchasingDefaults(r.Context(), code, enterprise)
+	res, err := h.uc.GetPurchasingDefaults(r.Context(), code, 0)
 	if err != nil {
 		jsonError(w, http.StatusNotFound, err.Error())
 		return
@@ -367,12 +374,7 @@ func (h *SupplierHandler) GetPurchasingDefaults(w http.ResponseWriter, r *http.R
 // ─── Parameters ─────────────────────────────────────────────────────────────
 
 func (h *SupplierHandler) GetParameters(w http.ResponseWriter, r *http.Request) {
-	ec, err := strconv.ParseInt(chi.URLParam(r, "enterpriseCode"), 10, 64)
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid enterprise code")
-		return
-	}
-	res, err := h.uc.GetParameters(r.Context(), ec)
+	res, err := h.uc.GetParameters(r.Context(), 0)
 	if err != nil {
 		jsonError(w, http.StatusNotFound, err.Error())
 		return

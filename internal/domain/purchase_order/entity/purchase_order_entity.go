@@ -79,11 +79,12 @@ type PurchaseOrder struct {
 	TalaoNumber  *string
 	AlcadaStatus string // A/B/R/I/N
 
-	IsActive  bool
-	IsFirm    bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	CreatedBy uuid.UUID
+	IsActive            bool
+	IsFirm              bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CreatedBy           uuid.UUID
+	ResponsibleUserName string
 
 	Items []*PurchaseOrderItem
 }
@@ -112,6 +113,7 @@ type PurchaseOrderItem struct {
 	InternalUOM   *string
 	InternalQty   float64
 	InternalPrice float64
+	WarehouseID   *int64
 	// Tolerância / cancelamento
 	TolerancePct          float64
 	CancelledToleranceQty float64
@@ -122,10 +124,17 @@ type PurchaseOrderItem struct {
 	CostCenterCode           *int64
 	FiscalClassificationCode *int64
 	// Referências
-	RequesterEmployeeCode *int64
-	ContractCode          *int64
-	QuotationCode         *int64
-	UtilizationType       *string // INDUSTRIALIZACAO | CONSUMO | IMOBILIZADO
+	RequesterEmployeeCode     *int64
+	ContractCode              *int64
+	QuotationCode             *int64
+	PlannedOrderCode          *int64
+	DemandType                *string
+	DemandCode                *int64
+	SalesOrderCode            *int64
+	ProductionOrderID         *int64
+	PurchaseRequisitionCode   *int64
+	PurchaseRequisitionItemID *int64
+	UtilizationType           *string // INDUSTRIALIZACAO | CONSUMO | IMOBILIZADO
 
 	IsActive  bool
 	CreatedAt time.Time

@@ -15,6 +15,7 @@ type ItemStructureRepository interface {
 	Create(ctx context.Context, structure *entity.ItemStructure) (*entity.ItemStructure, error)
 	Update(ctx context.Context, structure *entity.ItemStructure) (*entity.ItemStructure, error)
 	Delete(ctx context.Context, id int64) error
+	DeleteByCodes(ctx context.Context, parentCode, childCode int64, parentMask *string) error
 
 	// READ
 

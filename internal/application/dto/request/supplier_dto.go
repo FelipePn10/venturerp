@@ -53,7 +53,7 @@ type CreateSupplierDTO struct {
 	IsMEI                           bool      `json:"is_mei"`
 	TrackingPlatform                string    `json:"tracking_platform,omitempty"`
 	Homologated                     bool      `json:"homologated"`
-	CreatedBy                       uuid.UUID `json:"created_by"`
+	CreatedBy                       uuid.UUID `json:"-"`
 }
 
 type UpdateSupplierDTO struct {
@@ -163,7 +163,7 @@ type AddSupplierContactEmailDTO struct {
 
 type AddSupplierEnterpriseDTO struct {
 	SupplierCode         int64   `json:"supplier_code"`
-	EnterpriseCode       int64   `json:"enterprise_code"`
+	EnterpriseCode       int64   `json:"-"`
 	FinancialAccount     *string `json:"financial_account,omitempty"`
 	AppliesIPI           bool    `json:"applies_ipi"`
 	DefaultInvoiceTypeID *int64  `json:"default_invoice_type_id,omitempty"`
@@ -182,7 +182,7 @@ type UpdateSupplierEnterpriseDTO struct {
 // ─── Supplier Parameters ───────────────────────────────────────────────────
 
 type UpsertSupplierParametersDTO struct {
-	EnterpriseCode            int64   `json:"enterprise_code"`
+	EnterpriseCode            int64   `json:"-"`
 	DefaultFinancialAccount   *string `json:"default_financial_account,omitempty"`
 	UniqueItemCodePerSupplier bool    `json:"unique_item_code_per_supplier"`
 	RequiresFinancialAccount  bool    `json:"requires_financial_account"`

@@ -12,5 +12,7 @@ type SalesDivisionRepository interface {
 	GetByCode(ctx context.Context, code int64) (*entity.SalesDivision, error)
 	List(ctx context.Context) ([]*entity.SalesDivision, error)
 	ListActive(ctx context.Context) ([]*entity.SalesDivision, error)
+	HasReferences(ctx context.Context, code int64) (bool, error)
+	SetActive(ctx context.Context, code int64, active bool) (*entity.SalesDivision, error)
 	Delete(ctx context.Context, code int64) error
 }

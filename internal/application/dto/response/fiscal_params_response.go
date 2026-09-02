@@ -131,14 +131,32 @@ type ItemClassificationMaskResponse struct {
 // ─── Item Classification ──────────────────────────────────────────────────────
 
 type ItemClassificationResponse struct {
-	ID          int64     `json:"id"`
-	Code        string    `json:"code"`
-	MaskID      int64     `json:"mask_id"`
-	ParentID    *int64    `json:"parent_id,omitempty"`
-	Level       int       `json:"level"`
-	Description string    `json:"description"`
-	IsActive    bool      `json:"is_active"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID       int64  `json:"id"`
+	Code     string `json:"code"`
+	MaskID   int64  `json:"mask_id"`
+	MaskCode int64  `json:"mask_code"`
+	Mask     string `json:"mask"`
+	ParentID *int64 `json:"parent_id,omitempty"`
+	// ParentCode é o código do nível pai (vazio na raiz). A tela de classificação
+	// trabalha por código, não por identificador interno.
+	ParentCode  string `json:"parent_code"`
+	Level       int    `json:"level"`
+	Description string `json:"description"`
+	// FullDescription traz o caminho hierárquico ("Matéria-prima > Aço > Chapa").
+	FullDescription string    `json:"full_description"`
+	IsActive        bool      `json:"is_active"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type ItemClassificationCatalogResponse struct {
+	ID              int64  `json:"id"`
+	Code            string `json:"code"`
+	MaskID          int64  `json:"mask_id"`
+	MaskCode        int64  `json:"mask_code"`
+	Mask            string `json:"mask"`
+	Description     string `json:"description"`
+	MaskDescription string `json:"mask_description"`
+	IsActive        bool   `json:"is_active"`
 }
 
 // ─── Country ──────────────────────────────────────────────────────────────────

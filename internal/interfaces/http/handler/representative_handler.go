@@ -199,12 +199,30 @@ func (h *RepresentativeHandler) AddSalesPlan(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+func (h *RepresentativeHandler) ListSalesPlans(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.ListSalesPlans(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
 func (h *RepresentativeHandler) AddInterest(w http.ResponseWriter, r *http.Request) {
 	var dto request.RepresentativeInterestDTO
 	if decodeRepresentative(w, r, &dto) {
 		result, err := h.uc.AddInterest(r.Context(), dto)
 		respondRepresentative(w, result, err)
 	}
+}
+
+func (h *RepresentativeHandler) ListInterestClassifications(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.ListInterestClassifications(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func (h *RepresentativeHandler) AddPhone(w http.ResponseWriter, r *http.Request) {
@@ -260,7 +278,7 @@ func (h *RepresentativeHandler) FollowUp(w http.ResponseWriter, r *http.Request)
 func parseRepresentativeCode(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
 	code, err := strconv.ParseInt(chi.URLParam(r, name), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return 0, false
 	}
 	return code, true

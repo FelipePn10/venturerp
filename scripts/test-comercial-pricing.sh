@@ -22,6 +22,7 @@ fi
 
 USER_EMAIL="${USER_EMAIL:-admin@panossoerp.demo}"
 USER_PASS="${USER_PASS:-admin123}"
+SMOKE_ITEM_CODE="${SMOKE_ITEM_CODE:-10001}"
 
 echo "== HTTP smoke against $BASE =="
 if ! curl -sf "$BASE/health" >/dev/null 2>&1; then
@@ -38,7 +39,7 @@ if [ -z "$TOKEN" ]; then
 fi
 AUTH=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
 
-TABLE=$(curl -s -X POST "$BASE/api/customers/sales-tables" "${AUTH[@]}" \
+TABLE=$(curl -s -X POST "$BASE/api/customers/support/sales-tables/" "${AUTH[@]}" \
   -d '{"description":"Tabela Comercial Smoke","price_formation":"INFORMADO","decimal_places":2,"composition":"FOB","table_type":"NORMAL","base_date":"PEDIDO"}')
 TABLE_CODE=$(echo "$TABLE" | jq -r '.code // empty')
 TABLE_ID=$(echo "$TABLE" | jq -r '.id // empty')
@@ -48,8 +49,8 @@ if [ -z "$TABLE_CODE" ] || [ -z "$TABLE_ID" ]; then
 fi
 echo "  ok  create sales table code=$TABLE_CODE"
 
-PRICE=$(curl -s -X POST "$BASE/api/customers/sales-tables/$TABLE_CODE/prices" "${AUTH[@]}" \
-  -d '{"item_code":"SMOKE-PRC-1","price":123.45,"ume":"UN","situation":"ATIVO"}')
+PRICE=$(curl -s -X POST "$BASE/api/customers/support/sales-tables/$TABLE_CODE/prices/" "${AUTH[@]}" \
+  -d "{\"item_code\":\"$SMOKE_ITEM_CODE\",\"price\":123.45,\"ume\":\"UN\",\"situation\":\"ATIVO\"}")
 PRICE_ID=$(echo "$PRICE" | jq -r '.id // empty')
 if [ -z "$PRICE_ID" ]; then
   echo "failed to create table price: $PRICE"
@@ -57,15 +58,15 @@ if [ -z "$PRICE_ID" ]; then
 fi
 echo "  ok  create table price id=$PRICE_ID"
 
-UNIT=$(curl -s -X POST "$BASE/api/customers/sales-tables/pricing" "${AUTH[@]}" \
-  -d "{\"sales_table_code\":$TABLE_CODE,\"item_code\":\"SMOKE-PRC-1\",\"quantity\":2}" | jq -r '.unit_price // empty')
+UNIT=$(curl -s -X POST "$BASE/api/customers/support/sales-tables/pricing" "${AUTH[@]}" \
+  -d "{\"sales_table_code\":$TABLE_CODE,\"item_code\":\"$SMOKE_ITEM_CODE\",\"quantity\":2}" | jq -r '.unit_price // empty')
 if [ "$UNIT" != "123.45" ]; then
   echo "pricing returned unit_price=$UNIT, want 123.45"
   exit 1
 fi
 echo "  ok  pricing by table"
 
-SUGGESTED=$(curl -s -X POST "$BASE/api/customers/sales-tables/price-formation" "${AUTH[@]}" \
+SUGGESTED=$(curl -s -X POST "$BASE/api/customers/support/sales-tables/price-formation" "${AUTH[@]}" \
   -d "{\"sales_table_code\":$TABLE_CODE,\"base_cost\":100,\"margin_pct\":20,\"taxes_pct\":10,\"commission_pct\":5}" | jq -r '.suggested_price // empty')
 if [ "$SUGGESTED" != "153.85" ]; then
   echo "price formation returned suggested_price=$SUGGESTED, want 153.85"
@@ -73,8 +74,8 @@ if [ "$SUGGESTED" != "153.85" ]; then
 fi
 echo "  ok  price formation"
 
-POLICY=$(curl -s -X POST "$BASE/api/customers/sales-price-policies" "${AUTH[@]}" \
-  -d "{\"description\":\"Politica Smoke\",\"cost_source\":\"INFORMED\",\"margin_pct\":20,\"taxes_pct\":10,\"commission_pct\":5,\"sales_table_code\":$TABLE_CODE}")
+POLICY=$(curl -s -X POST "$BASE/api/customers/support/sales-price-policies/" "${AUTH[@]}" \
+	-d "{\"description\":\"Politica Smoke\",\"cost_source\":\"INFORMED\",\"priority\":10,\"sequence\":$TABLE_CODE,\"margin_pct\":20,\"taxes_pct\":10,\"commission_pct\":5,\"sales_table_code\":$TABLE_CODE}")
 POLICY_CODE=$(echo "$POLICY" | jq -r '.code // empty')
 if [ -z "$POLICY_CODE" ]; then
   echo "failed to create sales price policy: $POLICY"
@@ -82,7 +83,7 @@ if [ -z "$POLICY_CODE" ]; then
 fi
 echo "  ok  create price policy code=$POLICY_CODE"
 
-POLICY_SUGGESTED=$(curl -s -X POST "$BASE/api/customers/sales-tables/price-formation" "${AUTH[@]}" \
+POLICY_SUGGESTED=$(curl -s -X POST "$BASE/api/customers/support/sales-tables/price-formation" "${AUTH[@]}" \
   -d "{\"sales_table_code\":$TABLE_CODE,\"policy_code\":$POLICY_CODE,\"base_cost\":100}" | jq -r '.suggested_price // empty')
 if [ "$POLICY_SUGGESTED" != "153.85" ]; then
   echo "policy price formation returned suggested_price=$POLICY_SUGGESTED, want 153.85"
@@ -90,8 +91,8 @@ if [ "$POLICY_SUGGESTED" != "153.85" ]; then
 fi
 echo "  ok  policy price formation"
 
-GEN=$(curl -s -X POST "$BASE/api/customers/sales-tables/generate-prices" "${AUTH[@]}" \
-  -d "{\"sales_table_code\":$TABLE_CODE,\"policy_code\":$POLICY_CODE,\"item_codes\":[\"SMOKE-PRC-1\"],\"reason\":\"smoke\"}")
+GEN=$(curl -s -X POST "$BASE/api/customers/support/sales-tables/generate-prices" "${AUTH[@]}" \
+  -d "{\"sales_table_code\":$TABLE_CODE,\"policy_code\":$POLICY_CODE,\"item_codes\":[\"$SMOKE_ITEM_CODE\"],\"reason\":\"smoke\"}")
 WARNINGS=$(echo "$GEN" | jq -r '.warnings | length // 0')
 if [ "$WARNINGS" = "0" ]; then
   echo "  ok  generate prices"

@@ -2,6 +2,7 @@ package supplier_uc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -9,8 +10,16 @@ import (
 
 // GetPurchasingDefaults implements ports.SupplierPurchasingDefaultsProvider.
 // It resolves the supplier-derived defaults used when creating a purchase order
-// or an entry NF. enterpriseCode == 0 skips the per-enterprise binding fields.
+// or an entry NF. The enterprise is always resolved from the authenticated tenant.
 func (uc *SupplierUseCase) GetPurchasingDefaults(ctx context.Context, supplierCode, enterpriseCode int64) (*ports.SupplierPurchasingDefaults, error) {
+	if uc.auth == nil {
+		return nil, fmt.Errorf("serviço de autenticação não configurado")
+	}
+	authEnterprise, err := uc.auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	enterpriseCode = authEnterprise
 	s, err := uc.repo.GetSupplierByCode(ctx, supplierCode)
 	if err != nil {
 		return nil, err

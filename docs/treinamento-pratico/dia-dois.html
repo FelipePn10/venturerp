@@ -1,0 +1,956 @@
+<!-- Fonte do PDF dia-dois.pdf — reconstruir com: python3 gerar.py -->
+<div class="capa">
+  <div class="capa-faixa">
+    <div class="capa-marca">VentureERP · Capacitação Operacional</div>
+    <h1>Treinamento Prático<br>Dia 2</h1>
+    <p class="capa-sub">Fiscal, financeiro, custos e contabilidade</p>
+  </div>
+  <div class="capa-corpo">
+    <table class="capa-meta">
+      <tr><td>Público</td><td>Equipe Tecnofer — Fiscal, Financeiro, Contabilidade, Custos e Comercial</td></tr>
+      <tr><td>Duração</td><td>4 horas — 08h00 às 12h00</td></tr>
+      <tr><td>Pré-requisito</td><td>Dia 1 concluído — pedido confirmado, ordem encerrada e romaneio despachado</td></tr>
+      <tr><td>Caso-guia</td><td>Faturamento do pedido de 10 × RN 01001 e 25 × SU 02046</td></tr>
+      <tr><td>Formato</td><td>Demonstração guiada no sistema + prática no teclado</td></tr>
+      <tr><td>Data</td><td>____ / ____ / ________</td></tr>
+      <tr><td>Instrutor</td><td>______________________________________________</td></tr>
+    </table>
+    <div class="capa-nota">
+      <b>O que este dia cobre.</b> A configuração fiscal da empresa, CFOPs e naturezas de operação,
+      classificações fiscais e tabelas tributárias; emissão e autorização da NF-e de saída, entrada e
+      conferência da NF-e de compra, remessa e retorno de industrialização, CT-e e NFS-e; contas a pagar
+      e a receber geradas pelos documentos, baixas, adiantamentos, fluxo de caixa, remessa bancária e
+      conciliação; composição do custo padrão, overhead, variância e formação do preço de venda;
+      plano de contas, centros de custo, lançamentos contábeis, apuração de impostos e SPED.
+      <br><br>
+      <b>Aviso importante.</b> Todas as alíquotas, CFOPs e classificações fiscais deste material são
+      <b>exemplos didáticos</b>. O enquadramento tributário real da Tecnofer deve ser confirmado com a
+      contabilidade antes de qualquer emissão em ambiente de produção.
+    </div>
+  </div>
+  <div class="capa-rodape">
+    Continuação do Dia 1 — Do cadastro do produto à saída do acabado.
+    Documento de uso interno — não distribuir.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1 class="sem-quebra">Agenda e ponto de partida</h1>
+
+<h2>Agenda do Dia 2</h2>
+<table class="agenda">
+  <tr><td class="hora">08:00 – 08:10</td><td class="bloco">Abertura</td><td>O que o Dia 1 deixou pronto e como cada documento do chão de fábrica vira documento fiscal e financeiro.</td><td class="modo">exposição</td></tr>
+  <tr><td class="hora">08:10 – 09:00</td><td class="bloco">Bloco 1<br>Fundação fiscal</td><td>Configuração fiscal da empresa, ambiente de homologação, CFOPs e naturezas de operação, classificações fiscais (NCM), tabelas tributárias e parâmetros de ICMS/IPI. Fechamento da aba Contábil do item.</td><td class="modo">guiado + prática</td></tr>
+  <tr><td class="hora">09:00 – 09:50</td><td class="bloco">Bloco 2<br>Documentos fiscais</td><td>NF-e de saída do pedido do Dia 1, autorização, carta de correção e cancelamento. NF-e de entrada por chave e por XML. Remessa e retorno de industrialização. CT-e e NFS-e.</td><td class="modo">guiado + prática</td></tr>
+  <tr class="pausa"><td class="hora">09:50 – 10:05</td><td class="bloco">Intervalo</td><td>Café.</td><td class="modo"></td></tr>
+  <tr><td class="hora">10:05 – 10:50</td><td class="bloco">Bloco 3<br>Financeiro</td><td>Condições de pagamento e contas bancárias. Contas a receber e a pagar geradas pelas notas, baixas, adiantamentos, fluxo de caixa, remessa bancária CNAB e conciliação por extrato.</td><td class="modo">guiado + prática</td></tr>
+  <tr><td class="hora">10:50 – 11:30</td><td class="bloco">Bloco 4<br>Custos e preço</td><td>Custo/hora, custo de compra, overhead e rateio. Custo padrão em vários níveis, variância da ordem e formação do preço de venda.</td><td class="modo">guiado + prática</td></tr>
+  <tr><td class="hora">11:30 – 11:55</td><td class="bloco">Bloco 5<br>Contábil e apuração</td><td>Plano de contas, centros de custo, lançamentos e balancete, apuração de impostos, SPED e relatórios gerenciais.</td><td class="modo">guiado</td></tr>
+  <tr><td class="hora">11:55 – 12:00</td><td class="bloco">Fechamento</td><td>Rotina de fechamento mensal e dúvidas.</td><td class="modo">discussão</td></tr>
+</table>
+
+<div class="atencao">
+  <b>Aviso — este dia é mais denso que o Dia 1</b>
+  Fiscal, financeiro, custos e contabilidade são quatro assuntos que normalmente rendem um dia cada.
+  Em 4 horas cobrimos o <b>caminho principal</b> de cada um — o que a Tecnofer usa toda semana — e
+  deixamos as exceções documentadas nos anexos. Recomendação: convide para cada bloco apenas quem
+  trabalha com aquele assunto, e deixe os quatro blocos abertos a todos.
+</div>
+
+<h2>De onde partimos</h2>
+<p>No fim do Dia 1 existiam quatro coisas no sistema. Cada uma delas vira um documento hoje:</p>
+
+<div class="fluxo">
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Romaneio despachado</span><span class="c">produto separado e conferido</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx destaque"><span class="t">NF-e de saída</span><span class="c">baixa o estoque de verdade</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Contas a receber</span><span class="c">parcelas do pedido</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Fluxo de caixa</span><span class="c">entrada prevista</span></div>
+  </div>
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Pedido de compra</span><span class="c">chapas e tubos</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx destaque"><span class="t">NF-e de entrada</span><span class="c">crédito de imposto</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Contas a pagar</span><span class="c">título do fornecedor</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Custo do material</span><span class="c">alimenta o custo padrão</span></div>
+  </div>
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Remessa a terceiro</span><span class="c">bucha p/ cementação</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Nota de remessa</span><span class="c">sai sem vender</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Nota de retorno</span><span class="c">volta com serviço</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Custo de terceiro</span><span class="c">entra no custo da peça</span></div>
+  </div>
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Ordem encerrada</span><span class="c">custo real apurado</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Variância</span><span class="c">real × padrão</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Preço de venda</span><span class="c">margem defendida</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Contabilidade</span><span class="c">balancete e SPED</span></div>
+  </div>
+</div>
+
+<div class="porque">
+  <b>A ideia central do Dia 2</b>
+  Nada aqui é digitado do zero. A nota fiscal nasce do romaneio, o título nasce da nota, o custo nasce
+  da ordem e o preço nasce do custo. Se alguém está redigitando informação que já existe no sistema,
+  o processo está errado — não a pessoa.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>1 · Bloco 1 — Fundação fiscal</h1>
+
+<p>
+  Antes de emitir a primeira nota é preciso que a empresa esteja configurada, que existam CFOPs e naturezas
+  de operação, e que os itens tenham classificação fiscal. Sem isso a nota não passa na SEFAZ.
+</p>
+
+<h2>1.1 Configuração Fiscal <span class="tela">VFIS0100</span></h2>
+<p>Uma configuração por empresa. É a identidade fiscal usada em toda nota emitida.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Identificação do emitente</div>
+  <table class="campos">
+    <tr><td>CNPJ</td><td>CNPJ da Tecnofer</td></tr>
+    <tr><td>Razão Social</td><td>conforme cartão CNPJ</td></tr>
+    <tr><td>Inscrição Estadual</td><td>IE do estabelecimento emitente</td></tr>
+    <tr><td>Regime Tributário</td><td>Simples Nacional, Lucro Presumido ou Lucro Real</td><td class="obs">Define como o sistema calcula os impostos e quais campos aparecem na nota. <b>Confirmar com a contabilidade.</b></td></tr>
+    <tr><td>Telefone</td><td>contato do emitente</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Endereço</div>
+  <table class="campos">
+    <tr><td>Logradouro · Número · Complemento · Bairro</td><td>endereço fiscal</td></tr>
+    <tr><td>Município · Cód. IBGE</td><td>o código IBGE é obrigatório na nota</td></tr>
+    <tr><td>CEP</td><td>somente dígitos</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Integração com a SEFAZ</div>
+  <table class="campos">
+    <tr><td>Ambiente</td><td><code>Homologação</code> durante o treinamento</td><td class="obs">Em homologação a nota é autorizada pela SEFAZ mas <b>não tem valor fiscal</b>. É onde a equipe erra à vontade.</td></tr>
+    <tr><td>Novo token</td><td>credencial de integração</td><td class="obs">Guardado apenas no sistema. Nunca circular por e-mail ou planilha.</td></tr>
+  </table>
+</div>
+
+<div class="atencao">
+  <b>Atenção — a virada para produção</b>
+  Trocar <code>Ambiente</code> de Homologação para Produção é a ação mais delicada de todo o sistema:
+  a partir dela, cada nota autorizada é um documento fiscal real, com imposto devido e obrigação de
+  escrituração. Faça essa virada com data marcada, com a contabilidade avisada e com a numeração de
+  série conferida.
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Tributação, vencimentos e identidade visual</div>
+  <table class="campos">
+    <tr><td>ICMS interno · Diferimento ICMS</td><td>percentuais padrão da empresa</td><td class="obs">Informados como fração: <code>0,12</code> = 12 %.</td></tr>
+    <tr><td>Venc. ICMS · IPI · PIS/COFINS (dia)</td><td>dia do mês de vencimento de cada tributo</td><td class="obs">Alimenta o fluxo de caixa com as saídas de imposto previstas.</td></tr>
+    <tr><td>Multa atraso · Juros ao mês</td><td>percentuais aplicados a título vencido</td></tr>
+    <tr><td>Logo · Cor da marca</td><td>PNG ou JPEG + cor</td><td class="obs">Aparece nos relatórios e documentos gerados pelo sistema.</td></tr>
+  </table>
+</div>
+
+<h2>1.2 CFOPs e Naturezas de Operação <span class="tela">VFIS0300</span></h2>
+<p>
+  O CFOP diz <b>o que</b> a nota está fazendo: vendendo, comprando, remetendo para conserto, devolvendo.
+  É ele que determina se a operação gera imposto, gera crédito ou é apenas movimentação.
+  A regra prática: <b>5</b> no início = dentro do estado; <b>6</b> = para outro estado;
+  <b>1</b> e <b>2</b> = entradas.
+</p>
+
+<table class="dados">
+  <thead><tr><th class="cen" style="width:9%">Dentro do PR</th><th class="cen" style="width:9%">Outro estado</th><th style="width:34%">Operação</th><th>Quando a Tecnofer usa</th></tr></thead>
+  <tbody>
+    <tr><td class="cen"><b>5101</b></td><td class="cen"><b>6101</b></td><td>Venda de produção do estabelecimento</td><td>Venda da balança e do deslizante fabricados pela Tecnofer. <b>É o CFOP principal do faturamento.</b></td></tr>
+    <tr><td class="cen">5102</td><td class="cen">6102</td><td>Venda de mercadoria adquirida de terceiros</td><td>Revenda de item comprado pronto, sem industrializar.</td></tr>
+    <tr><td class="cen">1101</td><td class="cen">2101</td><td>Compra para industrialização</td><td>Entrada das chapas e tubos. <b>Gera crédito de ICMS.</b></td></tr>
+    <tr><td class="cen">1102</td><td class="cen">2102</td><td>Compra para comercialização</td><td>Item comprado para revenda.</td></tr>
+    <tr><td class="cen">1556</td><td class="cen">2556</td><td>Compra de material de uso e consumo</td><td>Disco de corte, arame, EPI. <b>Não gera crédito.</b></td></tr>
+    <tr><td class="cen"><b>5901</b></td><td class="cen"><b>6901</b></td><td>Remessa para industrialização por encomenda</td><td>Envio da bucha semi-acabada para a cementação e para a usinagem externa.</td></tr>
+    <tr><td class="cen">1902</td><td class="cen">2902</td><td>Retorno de mercadoria remetida para industrialização</td><td>Volta da bucha cementada — a parte que é <b>seu material</b> voltando.</td></tr>
+    <tr><td class="cen">1124</td><td class="cen">2124</td><td>Industrialização efetuada por outra empresa</td><td>A parcela de <b>serviço</b> cobrada pelo terceiro. É o custo que entra na peça.</td></tr>
+    <tr><td class="cen">5915</td><td class="cen">6915</td><td>Remessa para conserto ou reparo</td><td>Ferramenta ou dispositivo enviado para manutenção externa.</td></tr>
+    <tr><td class="cen">5202</td><td class="cen">6202</td><td>Devolução de compra para industrialização</td><td>Chapa recusada na inspeção de recebimento.</td></tr>
+    <tr><td class="cen">1201</td><td class="cen">2201</td><td>Devolução de venda de produção própria</td><td>Cliente devolve produto faturado.</td></tr>
+    <tr><td class="cen">5949</td><td class="cen">6949</td><td>Outra saída não especificada</td><td>Amostra, brinde, movimentação atípica. <b>Usar com parcimônia.</b></td></tr>
+  </tbody>
+</table>
+
+<p>Para cada CFOP a tela pede:</p>
+<table class="campos">
+  <tr><td>Código · Descrição</td><td>o número e o texto que sai na nota</td></tr>
+  <tr><td>Ind. Operação</td><td>entrada ou saída</td></tr>
+  <tr><td>Tipo Utilização</td><td>industrialização, comercialização, uso e consumo, imobilizado</td></tr>
+  <tr><td>DIFAL</td><td>marcar quando a operação exige diferencial de alíquota — venda interestadual para consumidor final não contribuinte</td></tr>
+  <tr><td>Doação</td><td>marcar em operação sem valor comercial</td></tr>
+</table>
+
+<div class="porque">
+  <b>Por que o CFOP da industrialização é o mais importante para a Tecnofer</b>
+  A bucha interna sai da fábrica para cementação e volta. Se essa saída for lançada como <b>venda</b>,
+  a empresa paga imposto sobre algo que não vendeu e some com o material do estoque. Com o CFOP de
+  <b>remessa para industrialização</b>, o material continua sendo seu — apenas muda de lugar — e o que
+  se paga é só o serviço do terceiro. É a diferença entre um custo de R$ 1,74 por bucha e um prejuízo fiscal.
+</div>
+
+<h2>1.3 Classificações Fiscais — NCM <span class="tela">VFIS0350</span></h2>
+<p>
+  O NCM é o código que identifica o produto para a Receita. Ele determina IPI, PIS, COFINS e,
+  quando aplicável, a substituição tributária.
+</p>
+<table class="campos">
+  <tr><td>Código · Descrição</td><td>o NCM e seu texto</td></tr>
+  <tr><td>ICMS padrão (%) · Alíq. IPI · Alíq. PIS · Alíq. COFINS</td><td>alíquotas padrão do NCM</td></tr>
+  <tr><td>CEST</td><td>obrigatório quando o produto está em regime de substituição tributária</td></tr>
+  <tr><td>Origem</td><td><code>0 — Nacional</code>, <code>1 — Importação direta</code>, <code>2 — Adquirida no mercado interno</code></td></tr>
+  <tr><td>Mod. BC ICMS · Indicador IPI · Ex Tarifário</td><td>parâmetros de cálculo do NCM</td></tr>
+  <tr><td>Início · Fim</td><td>vigência — permite manter o histórico quando a alíquota muda</td></tr>
+</table>
+
+<div class="atencao">
+  <b>Atenção — NCM é decisão da contabilidade, não do ERP</b>
+  Os NCMs abaixo são um <b>ponto de partida para a conversa</b> com a contabilidade da Tecnofer, não uma
+  definição. Classificar errado gera autuação, e o sistema aceita qualquer código que se digite.
+</div>
+<table class="dados">
+  <thead><tr><th style="width:16%">NCM sugerido</th><th style="width:38%">Descrição da posição</th><th>Itens da Tecnofer que provavelmente se enquadram</th></tr></thead>
+  <tbody>
+    <tr><td>8716.90.90</td><td>Partes de reboques e semirreboques</td><td>RN 01001 Balança Asa Delta · RN 01007 Suporte Central</td></tr>
+    <tr><td>8708.99.90</td><td>Partes e acessórios de veículos automotores</td><td>SU 02046 Deslizante Traseiro Truck</td></tr>
+    <tr><td>7225.40.90</td><td>Chapas de outras ligas de aço, laminadas a quente</td><td>MP 10300 · MP 10476 · MP 10635 · MP 10794 · MP 10952 · MP 11270 · MP 11588</td></tr>
+    <tr><td>7306.30.00</td><td>Tubos de ferro ou aço, soldados, de seção circular</td><td>MP 20603 · MP 21100</td></tr>
+  </tbody>
+</table>
+
+<h2>1.4 Tabelas Tributárias <span class="tela">VFIS0110</span> e Parâmetros <span class="tela">VFIS0320</span></h2>
+<table class="campos">
+  <tr><td><span class="tela-out">VFIS0110</span><br>por UF</td><td><code>ICMS Interno</code> e <code>ICMS Interestadual</code> por estado de destino, mais <code>Alíq. FCP</code>. É o que faz a nota para São Paulo sair com alíquota diferente da nota dentro do Paraná.</td></tr>
+  <tr><td><span class="tela-out">VFIS0110</span><br>por NCM</td><td><code>Alíq. IPI</code>, <code>Alíq. PIS</code>, <code>Alíq. COFINS</code> e os respectivos <code>CST</code>.</td></tr>
+  <tr><td><span class="tela-out">VFIS0320</span></td><td>Parâmetros de ICMS por <code>NCM / Item</code> e <code>Tipo Operação</code>, com <code>CST Contrib.</code> e <code>CST Não-Contrib.</code> — o mesmo produto tem tratamento diferente quando o cliente é contribuinte ou não.</td></tr>
+  <tr><td><span class="tela-out">VFIS0330</span></td><td>Redução de base, substituição tributária e diferimento de ICMS, quando houver benefício aplicável.</td></tr>
+</table>
+
+<h2>1.5 Fechando a aba Contábil do item</h2>
+<p>
+  No Dia 1 deixamos a aba <b>Contábil</b> do <span class="tela-out">VENT0200</span> em aberto. Agora ela pode
+  ser preenchida, porque as classificações fiscais já existem:
+</p>
+<table class="campos">
+  <tr><td>Classif. Fiscal Venda</td><td>NCM do produto acabado</td></tr>
+  <tr><td>Classif. Fiscal Compra</td><td>NCM da matéria-prima</td><td class="obs">Pode ser diferente do de venda quando o item é comprado e revendido.</td></tr>
+  <tr><td>CEST</td><td>quando houver substituição tributária</td></tr>
+  <tr><td>Alíq. ICMS (%)</td><td>alíquota padrão do item</td></tr>
+  <tr><td>Alíq. IPI Venda / Compra (%) · Tipo IPI</td><td>tributação de IPI</td></tr>
+  <tr><td>Cálculo de PIS/COFINS</td><td>conforme o regime da empresa</td></tr>
+  <tr><td>Origem</td><td>0 Nacional para o que é fabricado na Tecnofer</td></tr>
+  <tr><td>Herdar do mestre fiscal</td><td><code>Herdar</code>, <code>Sobrescrever: Sim</code> ou <code>Sobrescrever: Não</code></td><td class="obs">Herdar é o padrão: o item segue o que está no NCM. Só sobrescreva quando aquele item específico tiver tratamento diferente.</td></tr>
+</table>
+
+<div class="dica">
+  <b>Dica — configure no NCM, não no item</b>
+  Se a alíquota é do produto e não da peça específica, configure em <span class="tela-out">VFIS0350</span>
+  e deixe todos os itens herdando. Mudou a legislação, muda em um lugar só. Sobrescrever item a item
+  cria centenas de pontos de manutenção.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>2 · Bloco 2 — Documentos fiscais</h1>
+
+<h2>2.1 NF-e de Saída <span class="tela">VFIS0200</span></h2>
+<p>É o documento que fatura o pedido do Dia 1 e dá <b>baixa definitiva</b> no estoque.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Cabeçalho</div>
+  <table class="campos">
+    <tr><td>Número NF · Série</td><td>numeração sequencial da série</td><td class="obs">Nunca pular número: a SEFAZ cobra a sequência inteira.</td></tr>
+    <tr><td>Emissão</td><td>data de emissão</td></tr>
+    <tr><td>Natureza da Operação</td><td>Venda de produção do estabelecimento</td></tr>
+    <tr><td>CFOP</td><td><code>5101</code> dentro do PR · <code>6101</code> para outro estado</td></tr>
+    <tr><td>Pessoa · CNPJ/CPF Destinatário · Razão Social · IE Destinatário</td><td>vêm do cadastro do cliente</td><td class="obs">Cliente não contribuinte: preencher <code>ISENTO</code> na inscrição estadual.</td></tr>
+    <tr><td>UF Destino</td><td>define a alíquota interestadual</td></tr>
+    <tr><td>Frete · Seguro · Desconto</td><td>valores acessórios da nota</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Itens</div>
+  <table class="dados">
+    <thead><tr><th class="cen" style="width:6%">Seq</th><th style="width:14%">Cód. Item</th><th>Descrição</th><th style="width:13%">NCM</th><th class="num" style="width:8%">Qtd</th><th class="num" style="width:12%">Unit.</th><th class="num" style="width:12%">Total</th></tr></thead>
+    <tbody>
+      <tr><td class="cen">1</td><td>RN 01001</td><td>Balança Asa Delta Carreta Pino Ø 50 mm</td><td>8716.90.90</td><td class="num">10</td><td class="num">254,97</td><td class="num">2.549,70</td></tr>
+      <tr><td class="cen">2</td><td>SU 02046</td><td>Deslizante Traseiro Truck MB</td><td>8708.99.90</td><td class="num">25</td><td class="num">64,18</td><td class="num">1.604,50</td></tr>
+      <tr class="total"><td colspan="6">Total de produtos</td><td class="num">4.154,20</td></tr>
+    </tbody>
+  </table>
+    <p class="pequeno mudo">Preços do exemplo de formação de preço da seção 4.6. Os impostos são calculados
+    automaticamente ao criar a nota, a partir do NCM, do CFOP, da UF de destino e do cadastro do cliente —
+    as colunas <code>ICMS</code>, <code>IPI</code>, <code>PIS</code> e <code>COFINS</code> se preenchem sozinhas.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Autorizar</div>
+  <p>Clique em <span class="btn">Autorizar</span>. A nota é transmitida à SEFAZ e volta com o status.
+  Em <b>Homologação</b>, a autorização é válida tecnicamente mas sem efeito fiscal.</p>
+  <table class="dados">
+    <thead><tr><th style="width:22%">Status</th><th>O que significa e o que fazer</th></tr></thead>
+    <tbody>
+      <tr><td><b>Autorizada</b></td><td>Nota válida. Estoque baixado, título a receber gerado. Segue para o transporte.</td></tr>
+      <tr><td><b>Rejeitada</b></td><td>A SEFAZ recusou. A mensagem diz o motivo — quase sempre cadastro do destinatário, NCM ou CFOP incompatível com a operação. Corrija e transmita de novo.</td></tr>
+      <tr><td><b>Denegada</b></td><td>Problema na situação fiscal do destinatário. A nota não pode ser reaproveitada; é preciso resolver a pendência do cliente.</td></tr>
+      <tr><td><b>Cancelada</b></td><td>Cancelada dentro do prazo legal, com justificativa registrada.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Carta de correção e cancelamento</div>
+  <table class="campos">
+    <tr><td><span class="btn">Nova CC-e</span></td><td>Corrige informação que <b>não</b> altera valores, impostos, destinatário nem produto: dados de transporte, observações, endereço de entrega. Escreva o <code>Texto da correção</code> de forma completa — cada carta substitui a anterior.</td></tr>
+    <tr><td><span class="btn">Cancelar</span></td><td>Só dentro do prazo legal e <b>antes da circulação da mercadoria</b>. Exige justificativa. Depois do prazo, o caminho é a nota de devolução.</td></tr>
+  </table>
+</div>
+
+<div class="atencao">
+  <b>Atenção — a ponte com o Dia 1</b>
+  Foi a NF-e que baixou o estoque, não o romaneio. Enquanto a nota não é autorizada, o produto continua
+  aparecendo no saldo (reservado, mas presente). Por isso o campo <code>Chave NF-e</code> do romaneio só
+  se preenche agora — e é ele que amarra a expedição física ao documento fiscal.
+</div>
+
+<h2>2.2 NF-e de Entrada <span class="tela">VFIS0210</span></h2>
+<p>
+  É a conferência da nota que o fornecedor emitiu contra o pedido de compra que o MRP gerou.
+  Há dois caminhos de importação:
+</p>
+<table class="campos">
+  <tr><td>Importar por chave</td><td>Cole a <code>Chave de Acesso (44 dígitos)</code> e o sistema busca a nota.</td></tr>
+  <tr><td>Importar XML</td><td>Cole o <code>Conteúdo do XML</code> enviado pelo fornecedor.</td></tr>
+</table>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Conferir o cabeçalho</div>
+  <p><code>CNPJ Emitente</code>, <code>Razão Social</code>, <code>IE</code>, <code>UF</code>,
+  <code>Número NF</code>, <code>Série</code>, <code>Modelo</code>, <code>Emissão</code>, <code>CFOP</code>,
+  <code>Frete</code>, <code>Seguro</code> e <code>Desconto</code>.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Conferir os itens contra o pedido</div>
+  <p>Item a item: <code>NCM</code>, <code>Qtd</code>, <code>Unit.</code>, <code>Total</code> e os impostos
+  informados pelo emitente. Confira <b>quantidade e preço contra o pedido de compra</b> — divergências
+  dentro da tolerância cadastrada passam com alerta; fora dela, o recebimento é bloqueado.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Aprovar</div>
+  <p><span class="btn">Aprovar</span> confirma a entrada. A partir daí: o estoque de matéria-prima sobe,
+  o crédito de ICMS é registrado, o título a pagar é gerado e o preço da nota alimenta o custo de compra
+  do item.</p>
+</div>
+
+<div class="porque">
+  <b>Por que a nota de entrada é a base de todo o custo</b>
+  O R$ 4,70/kg que usamos no Dia 1 é uma referência de tabela. O custo real do RN 01001 depende do preço
+  que <b>de fato</b> foi pago na última compra de chapa. É a nota de entrada aprovada que atualiza esse
+  número — e é por isso que aprovar entrada com preço errado contamina o custo de todos os produtos que
+  usam aquela chapa.
+</div>
+
+<h2>2.3 Remessa e retorno de industrialização</h2>
+<p>O ciclo da bucha interna que vai para cementação, em quatro documentos:</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:8%">#</th><th style="width:24%">Documento</th><th class="cen" style="width:10%">CFOP</th><th>O que acontece</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td>Nota de <b>remessa</b> (emitida pela Tecnofer)</td><td class="cen">5901 / 6901</td><td>200 buchas semi-acabadas saem da fábrica. Saem do <code>ALM-PROC</code> e entram no <code>ALM-TERC</code> — continuam no seu estoque, apenas em outro local. <b>Não há venda, não há receita.</b></td></tr>
+    <tr><td class="cen">2</td><td>Nota de <b>retorno</b> (emitida pelo terceiro)</td><td class="cen">1902 / 2902</td><td>O material que é seu volta. Sai do <code>ALM-TERC</code> e retorna ao <code>ALM-PROC</code>.</td></tr>
+    <tr><td class="cen">3</td><td>Nota de <b>industrialização</b> (emitida pelo terceiro)</td><td class="cen">1124 / 2124</td><td>A cobrança do serviço: 200 × R$ 1,74 = <b>R$ 348,00</b>. Gera título a pagar e entra como custo de terceiro da peça BU 0050I.</td></tr>
+    <tr><td class="cen">4</td><td>Baixa da ordem de serviço</td><td class="cen">—</td><td>A ordem de serviço de terceiro é encerrada e o custo passa a compor o custo padrão da bucha acabada.</td></tr>
+  </tbody>
+</table>
+<div class="atencao">
+  <b>Atenção — controle de prazo</b>
+  A legislação limita o prazo de permanência do material em poder de terceiros. Acompanhe o saldo do
+  <code>ALM-TERC</code> semanalmente: material que ficou lá além do prazo vira problema fiscal e, na
+  prática, é material perdido de vista.
+</div>
+
+<h2>2.4 CT-e <span class="tela">VFIS0220</span> e NFS-e <span class="tela">VNFS0100</span></h2>
+<table class="campos">
+  <tr><td><span class="tela-out">VFIS0220</span><br>Conhecimento de Transporte</td><td>Registra o frete cobrado pela transportadora: <code>Transportadora</code>, <code>Número CT-e</code>, <code>Série</code>, <code>CFOP</code>, <code>Frete</code>, <code>Seguro</code>, <code>Base ICMS</code> e <code>Alíq. ICMS</code>. Pode ser vinculado à NF-e de entrada e <b>rateado por valor ou por peso</b> entre os itens — assim o frete da chapa entra no custo da chapa, não numa despesa genérica.</td></tr>
+  <tr><td><span class="tela-out">VNFS0100</span><br>Nota de Serviço</td><td>Para serviço prestado pela Tecnofer (montagem em campo, assistência). Pede <code>Item lista serviço</code>, <code>Cód. trib. município</code>, <code>Alíquota ISS</code>, <code>ISS retido</code>, <code>Discriminação</code> e <code>Nº RPS</code>. Fluxo: RPS → <span class="btn">Autorizar</span> → Autorizada.</td></tr>
+</table>
+
+<div class="dica">
+  <b>Dica — o frete no custo</b>
+  Ratear o CT-e por peso nas compras de chapa é o que revela o custo real do aço posto na fábrica.
+  Sem esse rateio, a chapa parece custar R$ 4,70/kg quando na verdade custa R$ 4,70 mais o frete.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>3 · Bloco 3 — Financeiro</h1>
+
+<h2>3.1 Cadastros que sustentam o financeiro</h2>
+<table class="campos">
+  <tr><td><span class="tela-out">VFIN0110</span><br>Condições de Pagamento</td><td>Cadastre pelo <code>Nome</code> e pelas <code>Parcelas (dias separados por vírgula)</code>: <code>30,60,90</code> gera três parcelas; <code>0</code> é à vista. É essa condição, amarrada ao cliente ou ao pedido, que define quantos títulos a nota vai gerar.</td></tr>
+  <tr><td><span class="tela-out">VFIN0100</span><br>Contas Bancárias</td><td><code>Banco</code>, <code>Agência</code>, <code>Conta</code>, <code>Dígito</code>, <code>Titular</code>, <code>CNPJ</code>, <code>Saldo Inicial</code> e chave PIX. O saldo inicial é o ponto de partida do fluxo de caixa — informe o saldo real do dia em que o sistema entrar em uso.</td></tr>
+  <tr><td><span class="tela-out">VFIN0130</span> · <span class="tela-out">VCTB0102</span><br>Centros de Custo</td><td>Onde a despesa é apropriada. Cadastre com <code>Cód. CC</code>, <code>Descrição</code>, <code>CC Pai</code> e vigência (<code>Data Inicial</code> deve ser o dia 1º do mês).</td></tr>
+</table>
+
+<h3>Centros de custo sugeridos para a Tecnofer</h3>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:12%">Código</th><th style="width:34%">Descrição</th><th style="width:12%">CC Pai</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr class="sub"><td class="cen">100</td><td>PRODUÇÃO</td><td class="mudo">—</td><td>Agrupa toda a fábrica.</td></tr>
+    <tr><td class="cen">110</td><td>Corte (Laser · Guilhotina · Serra)</td><td>100</td><td>Custo das máquinas de corte.</td></tr>
+    <tr><td class="cen">120</td><td>Conformação (Dobradeira · Prensa)</td><td>100</td><td></td></tr>
+    <tr><td class="cen">130</td><td>Solda e Montagem</td><td>100</td><td></td></tr>
+    <tr><td class="cen">140</td><td>Acabamento e Pintura</td><td>100</td><td></td></tr>
+    <tr class="sub"><td class="cen">200</td><td>APOIO INDUSTRIAL</td><td class="mudo">—</td><td>Custo indireto rateado à produção.</td></tr>
+    <tr><td class="cen">210</td><td>Engenharia e PCP</td><td>200</td><td></td></tr>
+    <tr><td class="cen">220</td><td>Manutenção</td><td>200</td><td></td></tr>
+    <tr><td class="cen">230</td><td>Qualidade</td><td>200</td><td></td></tr>
+    <tr><td class="cen">240</td><td>Almoxarifado e Expedição</td><td>200</td><td></td></tr>
+    <tr class="sub"><td class="cen">300</td><td>COMERCIAL</td><td class="mudo">—</td><td>Despesa de venda — não entra no custo do produto.</td></tr>
+    <tr class="sub"><td class="cen">400</td><td>ADMINISTRATIVO</td><td class="mudo">—</td><td>Despesa fixa da empresa.</td></tr>
+  </tbody>
+</table>
+
+<h2>3.2 Contas a Receber <span class="tela">VFIN0210</span></h2>
+<p>Os títulos nascem da NF-e de saída autorizada, parcelados conforme a condição de pagamento.</p>
+<table class="campos">
+  <tr><td>Cliente · NF Saída · Nº Documento</td><td>vínculo com a origem</td></tr>
+  <tr><td>Emissão · Vencimento</td><td>datas do título</td></tr>
+  <tr><td>Parc. nº / Parc. tot.</td><td>identifica a parcela: 1 de 3, 2 de 3…</td></tr>
+  <tr><td>Valor Bruto</td><td>valor da parcela</td></tr>
+  <tr><td>Forma Pagamento · Conta Bancária</td><td>como e onde entra o dinheiro</td></tr>
+  <tr><td>Status</td><td>aberto, recebido, cancelado</td></tr>
+</table>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Baixar o título</div>
+  <p><span class="btn">Baixar</span> com <code>Data Recebimento</code>, <code>Valor Recebido</code>,
+  <code>Desconto</code> e <code>Conta Bancária</code>. A partir da baixa, o valor sai do previsto e
+  entra no realizado do fluxo de caixa.</p>
+</div>
+<div class="nota">
+  <b>Nota — recebimento parcial</b>
+  Informar um <code>Valor Recebido</code> menor que o bruto deixa o saldo remanescente em aberto.
+  Não crie um título novo para o saldo: isso duplica o valor a receber no fluxo.
+</div>
+
+<h2>3.3 Contas a Pagar <span class="tela">VFIN0200</span></h2>
+<p>Mesma lógica, do outro lado: os títulos nascem da NF-e de entrada aprovada.</p>
+<table class="campos">
+  <tr><td>Fornecedor · NF Entrada · Nº Documento · Tipo Doc.</td><td>vínculo com a origem</td></tr>
+  <tr><td>Emissão · Vencimento · Valor Bruto</td><td>dados do título</td></tr>
+  <tr><td>Centro Custo · Plano Contas</td><td>onde a despesa é apropriada e em que conta contábil</td><td class="obs">É este par de campos que faz o gasto aparecer no lugar certo no balancete e no rateio de overhead.</td></tr>
+  <tr><td>Forma Pagamento · Conta Bancária</td><td>como e de onde sai o dinheiro</td></tr>
+</table>
+<p>
+  Fluxo: cadastrar → <span class="btn">Aprovar</span> (ou <span class="btn">Rejeitar</span>) →
+  <span class="btn">Baixar</span> com <code>Data Pagamento</code>, <code>Valor Pago</code> e
+  <code>Desconto</code>.
+</p>
+
+<h2>3.4 Adiantamentos <span class="tela">VFIN0600</span></h2>
+<p>
+  Para quando o cliente paga antes da entrega ou a Tecnofer antecipa ao fornecedor. Registra-se a
+  antecipação, consulta-se o saldo disponível e aplica-se esse saldo em um título a pagar ou a receber
+  quando a nota for emitida. Sem esse controle, o adiantamento vira um lançamento solto no extrato
+  que ninguém consegue explicar três meses depois.
+</p>
+
+<h2>3.5 Fluxo de Caixa <span class="tela">VFIN0300</span></h2>
+<table class="campos">
+  <tr><td>Saldos das Contas</td><td>Saldo atual de cada conta bancária e o <code>Saldo Total</code>.</td></tr>
+  <tr><td>Entradas / Saídas previstas</td><td>Títulos a receber e a pagar ainda em aberto, na data de vencimento.</td></tr>
+  <tr><td>Realizado × Projetado</td><td>O que já foi baixado contra o que ainda está previsto.</td></tr>
+  <tr><td>Saldo projetado acumulado</td><td>A linha que mostra em que dia o caixa fica negativo, se ficar.</td></tr>
+  <tr><td>Agrupar gráfico</td><td><code>Dia</code>, <code>Semana</code> ou <code>Mês</code>.</td></tr>
+</table>
+<div class="porque">
+  <b>Por que o fluxo só funciona se todo mundo lançar</b>
+  A projeção usa os títulos em aberto. Uma compra aprovada sem título lançado, ou um pedido faturado sem
+  condição de pagamento correta, simplesmente não aparece na projeção — e o caixa que parecia positivo
+  vira negativo no dia do vencimento. O fluxo de caixa é o relatório que mais depende da disciplina de
+  todas as outras áreas.
+</div>
+
+<h2>3.6 Remessa bancária <span class="tela">VFIN0610</span> e Conciliação <span class="tela">VFIN0620</span></h2>
+<table class="campos">
+  <tr><td>Remessa CNAB 240</td><td>Gera o arquivo de remessa com a configuração do banco e os títulos selecionados, para envio de cobrança ou de pagamentos. O retorno do banco baixa os títulos automaticamente.</td></tr>
+  <tr><td>Conciliação por extrato</td><td>Importa o extrato eletrônico da conta, identifica os movimentos e concilia com os lançamentos do sistema. O que não bate fica destacado para tratamento manual.</td></tr>
+</table>
+<div class="dica">
+  <b>Dica</b> Concilie <b>semanalmente</b>, não no fechamento. Divergência de uma semana se resolve em
+  minutos; divergência de um mês vira meio dia de investigação.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>4 · Bloco 4 — Custos e formação de preço</h1>
+
+<p>
+  Este bloco fecha o ciclo que começou no Dia 1: as horas de máquina, os pesos e as perdas que a Engenharia
+  cadastrou agora viram dinheiro.
+</p>
+
+<h2>4.1 Os quatro componentes do custo <span class="tela">VCUS0100</span></h2>
+<table class="dados">
+  <thead><tr><th style="width:20%">Componente</th><th style="width:26%">De onde vem</th><th>Onde se cadastra</th></tr></thead>
+  <tbody>
+    <tr><td><b>Material</b></td><td>Estrutura do produto × preço de compra do item</td><td>Quadro <b>Custo de compra por item</b>, alimentado pela nota de entrada aprovada.</td></tr>
+    <tr><td><b>Operação</b></td><td>Roteiro (setup + tempo) × custo/hora do centro</td><td>Quadro <b>Custo/hora por centro de trabalho</b>, com <code>Período</code> e <code>Moeda</code>.</td></tr>
+    <tr><td><b>Terceiro</b></td><td>Preço do serviço externo por peça ou por quilo</td><td><span class="tela-out">VTPS0100</span> Serviços de Terceiros.</td></tr>
+    <tr><td><b>Overhead</b></td><td>Custo indireto rateado à produção</td><td>Quadros <b>Base de alocação</b> e <b>Rateio de custos indiretos</b>.</td></tr>
+  </tbody>
+</table>
+
+<h3>Base de alocação e rateio</h3>
+<p>
+  A base de alocação é o <b>critério</b> de distribuição do custo indireto: hora-máquina, mão de obra
+  direta, quantidade produzida ou valor de material. O rateio define <b>quanto</b> de cada centro de apoio
+  vai para cada centro produtivo.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:26%">Custo indireto</th><th style="width:26%">Base sugerida</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr><td>Energia elétrica</td><td>Hora-máquina</td><td>Quem roda mais, consome mais.</td></tr>
+    <tr><td>Manutenção (CC 220)</td><td>Hora-máquina</td><td>Máquina mais usada quebra mais.</td></tr>
+    <tr><td>Engenharia e PCP (CC 210)</td><td>Quantidade de ordens</td><td>O esforço é por ordem, não por peça.</td></tr>
+    <tr><td>Almoxarifado (CC 240)</td><td>Valor de material movimentado</td><td>Material caro exige mais controle.</td></tr>
+    <tr><td>Qualidade (CC 230)</td><td>Quantidade inspecionada</td><td>Proporcional ao volume conferido.</td></tr>
+  </tbody>
+</table>
+
+<h2>4.2 Custo padrão <span class="tela">VPRO0300</span></h2>
+<p>
+  O custo padrão é calculado de baixo para cima: primeiro a matéria-prima, depois a peça, depois o conjunto,
+  depois o produto. Cada nível soma material + operação + terceiro + overhead e entrega o total pronto
+  para o nível de cima. Clique em <span class="btn">Recalcular composição</span> e consulte o resultado
+  por item, com as colunas <code>Material</code>, <code>Operação</code>, <code>Overhead</code> e
+  <code>Total</code>.
+</p>
+
+<h3>O RN 01001 nível a nível</h3>
+<p class="pequeno mudo">Valores por unidade do produto acabado, já multiplicados pela quantidade da estrutura.
+Overhead do exemplo: R$ 45,00 por hora-máquina.</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:7%">Nível</th><th style="width:15%">Item</th><th class="cen" style="width:6%">Qtd</th><th class="num" style="width:13%">Material</th><th class="num" style="width:13%">Operação</th><th class="num" style="width:12%">Terceiro</th><th class="num" style="width:12%">Overhead</th><th class="num">Total</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">2</td><td>TP 01001A</td><td class="cen">2</td><td class="num">44,27</td><td class="num">5,66</td><td class="num">—</td><td class="num">2,15</td><td class="num">52,08</td></tr>
+    <tr><td class="cen">2</td><td>TP 01001B</td><td class="cen">2</td><td class="num">12,41</td><td class="num">1,54</td><td class="num">—</td><td class="num">1,40</td><td class="num">15,35</td></tr>
+    <tr><td class="cen">2</td><td>TP 01001C</td><td class="cen">1</td><td class="num">6,35</td><td class="num">1,26</td><td class="num">—</td><td class="num">0,74</td><td class="num">8,35</td></tr>
+    <tr><td class="cen">2</td><td>TP 01001D</td><td class="cen">1</td><td class="num">1,27</td><td class="num">1,26</td><td class="num">—</td><td class="num">0,74</td><td class="num">3,27</td></tr>
+    <tr><td class="cen">2</td><td>BU 0120E</td><td class="cen">1</td><td class="num">7,91</td><td class="num">2,67</td><td class="num">—</td><td class="num">3,06</td><td class="num">13,64</td></tr>
+    <tr><td class="cen">2</td><td>BU 0050IB</td><td class="cen">2</td><td class="num">6,42</td><td class="num">1,36</td><td class="num">1,40</td><td class="num">1,54</td><td class="num">10,72</td></tr>
+    <tr><td class="cen">2</td><td>BU 0050I</td><td class="cen">2</td><td class="num">—</td><td class="num">—</td><td class="num">3,48</td><td class="num">—</td><td class="num">3,48</td></tr>
+    <tr><td class="cen">1</td><td>BU 0120/50</td><td class="cen">1</td><td class="num">—</td><td class="num">0,73</td><td class="num">—</td><td class="num">0,79</td><td class="num">1,52</td></tr>
+    <tr><td class="cen">0</td><td>RN 01001 <span class="mudo">montagem final</span></td><td class="cen">1</td><td class="num">—</td><td class="num">8,55</td><td class="num">—</td><td class="num">9,90</td><td class="num">18,45</td></tr>
+    <tr class="total"><td colspan="3">Custo padrão por unidade</td><td class="num">78,63</td><td class="num">23,03</td><td class="num">4,88</td><td class="num">20,31</td><td class="num">R$ 126,85</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">
+  O overhead do total é calculado sobre as 0,4513 h do produto inteiro; somar as linhas arredondadas dá
+  um centavo a mais. O sistema sempre calcula sobre o valor cheio e arredonda no fim.
+</p>
+
+<div class="nota">
+  <b>Nota — a composição em percentual</b>
+  Material 62 % · Operação 18 % · Overhead 16 % · Terceiro 4 %.
+  Num produto em que o material pesa quase dois terços do custo, <b>negociar aço e melhorar aproveitamento
+  de chapa vale mais do que acelerar máquina</b>. É esse tipo de conclusão que o custo padrão bem
+  cadastrado permite — e que a planilha, calculando um produto por vez, não mostra.
+</div>
+
+<h2>4.3 Custo real × padrão <span class="tela">VPRO0900</span></h2>
+<p>
+  Na ordem de fabricação, o botão <span class="btn">Apurar custo</span> compara o que foi planejado com
+  o que aconteceu: <code>Material real</code>, <code>Total real</code>, <code>Unit. real</code> e
+  <code>Variância total</code>.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:26%">Variância</th><th style="width:30%">Causa mais provável</th><th>O que fazer</th></tr></thead>
+  <tbody>
+    <tr><td><b>Material acima do padrão</b></td><td>Perda cadastrada menor que a real, ou aproveitamento ruim de chapa.</td><td>Comparar com o aproveitamento do plano de corte. Ajustar a perda na estrutura ou melhorar o encaixe.</td></tr>
+    <tr><td><b>Material abaixo do padrão</b></td><td>Perda cadastrada alta demais, ou consumo não apontado.</td><td>Conferir se todo o consumo foi lançado antes de comemorar.</td></tr>
+    <tr><td><b>Operação acima do padrão</b></td><td>Tempo de roteiro otimista, setup maior que o previsto, ou retrabalho.</td><td>Revisar o tempo padrão com quem opera a máquina.</td></tr>
+    <tr><td><b>Refugo alto</b></td><td>Problema de processo, ferramenta gasta ou material fora de especificação.</td><td>Cruzar com a inspeção e com a vida útil da ferramenta.</td></tr>
+  </tbody>
+</table>
+
+<h2>4.4 Formação do preço de venda</h2>
+<p>
+  Com o custo conhecido, o preço deixa de ser chute. A conta usa o <b>método do divisor</b>, porque
+  impostos e comissões incidem <b>sobre o preço</b>, não sobre o custo:
+</p>
+<div class="porque">
+  <b>A fórmula</b><br><br>
+  <span class="centro"><code>preço = custo ÷ [ 1 − (impostos % + comissão % + despesas % + margem %) ]</code></span>
+</div>
+
+<h3>Exemplo com o RN 01001</h3>
+<div class="atencao">
+  <b>Atenção</b> As alíquotas abaixo são <b>exemplos didáticos</b>. Substitua pelos percentuais reais do
+  regime tributário da Tecnofer antes de usar em precificação de verdade.
+</div>
+<table class="dados">
+  <thead><tr><th style="width:44%">Componente</th><th class="num" style="width:16%">%</th><th class="num" style="width:18%">Valor</th><th class="num">Acumulado</th></tr></thead>
+  <tbody>
+    <tr><td>Custo padrão industrial</td><td class="num">49,75 %</td><td class="num">R$ 126,85</td><td class="num">R$ 126,85</td></tr>
+    <tr><td>ICMS (venda interestadual)</td><td class="num">12,00 %</td><td class="num">R$ 30,60</td><td class="num">R$ 157,45</td></tr>
+    <tr><td>PIS</td><td class="num">1,65 %</td><td class="num">R$ 4,21</td><td class="num">R$ 161,66</td></tr>
+    <tr><td>COFINS</td><td class="num">7,60 %</td><td class="num">R$ 19,38</td><td class="num">R$ 181,04</td></tr>
+    <tr><td>Comissão e frete</td><td class="num">8,00 %</td><td class="num">R$ 20,40</td><td class="num">R$ 201,44</td></tr>
+    <tr><td>Despesas administrativas</td><td class="num">6,00 %</td><td class="num">R$ 15,30</td><td class="num">R$ 216,74</td></tr>
+    <tr><td><b>Margem de lucro</b></td><td class="num">15,00 %</td><td class="num">R$ 38,23</td><td class="num">R$ 254,97</td></tr>
+    <tr class="total"><td>Preço de venda sem IPI</td><td class="num">100,00 %</td><td class="num">R$ 254,97</td><td class="num">R$ 254,97</td></tr>
+    <tr><td>IPI <span class="mudo">— por fora, não entra no divisor</span></td><td class="num">5,00 %</td><td class="num">R$ 12,75</td><td class="num">R$ 267,72</td></tr>
+    <tr class="total"><td>Total na nota fiscal</td><td class="num">—</td><td class="num">—</td><td class="num">R$ 267,72</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">
+  Divisor = 1 − (0,12 + 0,0165 + 0,076 + 0,08 + 0,06 + 0,15) = 0,4975.
+  Preço = 126,85 ÷ 0,4975 = R$ 254,97.
+</p>
+
+<div class="porque">
+  <b>Por que o método do divisor e não “custo × 2”</b>
+  Se a Tecnofer multiplicasse o custo por 2, o preço seria R$ 253,70 — quase o mesmo número.
+  A diferença é que ninguém saberia <b>de onde ele veio</b>. Com o divisor, quando o cliente pede 10 % de
+  desconto dá para responder na hora: 10 % de desconto sobre R$ 254,97 come R$ 25,50 de uma margem de
+  R$ 38,23 — ou seja, derruba a margem de 15 % para 5 %. Essa é a conversa que o Comercial precisa ter
+  com número na mão.
+</div>
+
+<h2>4.5 Tabela de preços <span class="tela">VCST0202</span></h2>
+<p>
+  O preço calculado é gravado na tabela de venda por item, com vigência. A partir daí, o botão
+  <span class="btn">Preço da tabela</span> do orçamento e do pedido (Dia 1, seção 5) traz esse valor
+  automaticamente — e o vendedor deixa de digitar preço de memória.
+</p>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>5 · Bloco 5 — Contabilidade e apuração</h1>
+
+<h2>5.1 Plano de Contas <span class="tela">VFIN0120</span></h2>
+<p>
+  Estrutura em árvore, com <code>Código</code>, <code>Descrição</code>, <code>Código Pai</code>,
+  <code>Nível</code>, <code>Tipo</code> (sintética ou analítica) e <code>Natureza</code>
+  (<code>DÉBITO</code> ou <code>CRÉDITO</code>).
+</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:14%">Código</th><th style="width:34%">Conta</th><th class="cen" style="width:14%">Tipo</th><th>Uso na Tecnofer</th></tr></thead>
+  <tbody>
+    <tr class="sub"><td class="cen">1</td><td>ATIVO</td><td class="cen">Sintética</td><td></td></tr>
+    <tr><td class="cen">1.1.1.01</td><td>Caixa e bancos</td><td class="cen">Analítica</td><td>Baixa de título recebido.</td></tr>
+    <tr><td class="cen">1.1.2.01</td><td>Clientes a receber</td><td class="cen">Analítica</td><td>Título gerado pela NF-e de saída.</td></tr>
+    <tr><td class="cen">1.1.3.01</td><td>Estoque de matéria-prima</td><td class="cen">Analítica</td><td>Entrada de chapa e tubo.</td></tr>
+    <tr><td class="cen">1.1.3.02</td><td>Estoque em processo</td><td class="cen">Analítica</td><td>Peças e conjuntos entre ordens.</td></tr>
+    <tr><td class="cen">1.1.3.03</td><td>Estoque de produto acabado</td><td class="cen">Analítica</td><td>Conclusão da ordem de fabricação.</td></tr>
+    <tr><td class="cen">1.1.3.04</td><td>Material em poder de terceiros</td><td class="cen">Analítica</td><td>Buchas na cementação.</td></tr>
+    <tr><td class="cen">1.1.4.01</td><td>ICMS a recuperar</td><td class="cen">Analítica</td><td>Crédito das entradas.</td></tr>
+    <tr class="sub"><td class="cen">2</td><td>PASSIVO</td><td class="cen">Sintética</td><td></td></tr>
+    <tr><td class="cen">2.1.1.01</td><td>Fornecedores</td><td class="cen">Analítica</td><td>Título gerado pela NF-e de entrada.</td></tr>
+    <tr><td class="cen">2.1.2.01</td><td>ICMS a recolher</td><td class="cen">Analítica</td><td>Débito das saídas.</td></tr>
+    <tr class="sub"><td class="cen">3</td><td>RECEITA</td><td class="cen">Sintética</td><td></td></tr>
+    <tr><td class="cen">3.1.1.01</td><td>Receita de venda de produção própria</td><td class="cen">Analítica</td><td>Faturamento.</td></tr>
+    <tr class="sub"><td class="cen">4</td><td>CUSTOS E DESPESAS</td><td class="cen">Sintética</td><td></td></tr>
+    <tr><td class="cen">4.1.1.01</td><td>Custo do produto vendido</td><td class="cen">Analítica</td><td>Baixa do estoque na venda.</td></tr>
+    <tr><td class="cen">4.1.2.01</td><td>Serviços de terceiros — industrialização</td><td class="cen">Analítica</td><td>Cementação e usinagem.</td></tr>
+    <tr><td class="cen">4.2.1.01</td><td>Despesas comerciais</td><td class="cen">Analítica</td><td>Comissão e frete de venda.</td></tr>
+  </tbody>
+</table>
+
+<h2>5.2 Lançamentos e balancete <span class="tela">VCTB0200</span></h2>
+<p>
+  Todo lançamento é feito em <b>partidas dobradas</b>: uma conta a débito e outra a crédito, sempre com o
+  mesmo valor. A tela pede <code>Data</code>, <code>Débito (conta)</code>, <code>Crédito (conta)</code>,
+  <code>Valor</code> e <code>Histórico</code>, e o quadro de conferência mostra
+  <code>Total débitos</code> e <code>Total créditos</code> — que precisam ser iguais.
+</p>
+<h3>Os lançamentos do nosso caso</h3>
+<table class="dados">
+  <thead><tr><th style="width:26%">Evento</th><th style="width:24%">Débito</th><th style="width:24%">Crédito</th><th class="num">Valor</th></tr></thead>
+  <tbody>
+    <tr><td>Entrada da chapa (NF-e de compra)</td><td>1.1.3.01 Estoque MP</td><td>2.1.1.01 Fornecedores</td><td class="num">valor da nota</td></tr>
+    <tr><td>Crédito de ICMS da entrada</td><td>1.1.4.01 ICMS a recuperar</td><td>1.1.3.01 Estoque MP</td><td class="num">ICMS destacado</td></tr>
+    <tr><td>Serviço de cementação</td><td>4.1.2.01 Serviços de terceiros</td><td>2.1.1.01 Fornecedores</td><td class="num">R$ 348,00</td></tr>
+    <tr><td>Faturamento (NF-e de saída)</td><td>1.1.2.01 Clientes a receber</td><td>3.1.1.01 Receita de venda</td><td class="num">R$ 4.154,20</td></tr>
+    <tr><td>ICMS sobre a venda</td><td>4.2.1.01 Impostos sobre venda</td><td>2.1.2.01 ICMS a recolher</td><td class="num">ICMS destacado</td></tr>
+    <tr><td>Baixa do custo do produto vendido</td><td>4.1.1.01 CPV</td><td>1.1.3.03 Estoque PA</td><td class="num">custo padrão × qtd</td></tr>
+    <tr><td>Recebimento do título</td><td>1.1.1.01 Caixa e bancos</td><td>1.1.2.01 Clientes a receber</td><td class="num">valor da parcela</td></tr>
+  </tbody>
+</table>
+<p>
+  A aba <b>Balancete</b> mostra, por competência, o saldo de cada conta com <code>Débito</code>,
+  <code>Crédito</code>, <code>Saldo</code> e a natureza (<code>Devedora</code> ou <code>Credora</code>).
+</p>
+
+<h2>5.3 Apuração de Impostos <span class="tela">VFIN0400</span></h2>
+<p>
+  Informe a <code>Competência</code> no formato <code>AAAA-MM</code> e consulte. Para cada imposto o
+  sistema traz <code>Entradas (crédito)</code>, <code>Saídas (débito)</code> e
+  <code>Saldo a recolher</code>.
+</p>
+<div class="porque">
+  <b>Como ler a apuração</b>
+  O ICMS funciona por compensação: o que se pagou na compra da chapa (crédito) abate o que se deve na
+  venda da balança (débito). Só a diferença é recolhida. Por isso <b>aprovar a nota de entrada é uma
+  tarefa financeira, não burocrática</b>: nota de entrada não lançada é crédito perdido — dinheiro pago
+  a mais de imposto, todo mês.
+</div>
+
+<h2>5.4 SPED e obrigações acessórias</h2>
+<table class="campos">
+  <tr><td>SPED EFD ICMS/IPI</td><td>Escrituração fiscal digital das entradas, saídas e apuração do período. Gerada a partir das notas registradas no sistema.</td></tr>
+  <tr><td>SPED ECD <span class="tela-out">VCTB0200</span></td><td>Escrituração contábil digital: plano de contas, lançamentos e balancete.</td></tr>
+  <tr><td>Manifestação do destinatário</td><td>Confirmação, desconhecimento ou recusa das notas emitidas contra o CNPJ da Tecnofer.</td></tr>
+</table>
+<div class="atencao">
+  <b>Atenção</b> A qualidade do SPED é resultado direto do que foi lançado durante o mês. Não existe
+  “arrumar no fechamento”: se o CFOP estava errado na nota, ele estará errado no arquivo.
+</div>
+
+<h2>5.5 Relatórios <span class="tela">VFIN0500</span></h2>
+<p>Escolha o relatório, informe o <code>Período</code> e clique em <span class="btn">Gerar</span>.</p>
+<table class="dados">
+  <thead><tr><th style="width:9%">Cód.</th><th style="width:30%">Relatório</th><th>Para que serve</th></tr></thead>
+  <tbody>
+    <tr><td>R01 / R02</td><td>Livro de Entradas / de Saídas</td><td>Conferência fiscal do mês antes de fechar o SPED.</td></tr>
+    <tr><td>R03 / R04</td><td>Impostos das Saídas / das Entradas</td><td>Base da apuração — cruzar com o VFIN0400.</td></tr>
+    <tr><td>R05</td><td>DRE</td><td>Resultado do período: receita, custos, despesas e lucro.</td></tr>
+    <tr><td>R09 / R10</td><td>Aging Receber / Pagar Detalhado</td><td>Quanto está vencido e há quanto tempo. Base da cobrança.</td></tr>
+    <tr><td>R11 / R12</td><td>Extrato por Fornecedor / por Cliente</td><td>Posição consolidada de cada parceiro.</td></tr>
+    <tr><td>R13 / R14</td><td>Produtos Vendidos / Produzidos</td><td>Volume por item no período.</td></tr>
+    <tr><td>R15</td><td>Histórico de Custos</td><td>Como o custo de cada item evoluiu. É onde se vê o efeito de um reajuste do aço.</td></tr>
+    <tr><td><b>R16</b></td><td><b>Ficha Técnica com Custo</b></td><td><b>A substituta das planilhas RN 01001, RN 01007 e SU 02046</b> — estrutura, roteiro e custo do produto, calculados e sempre atualizados.</td></tr>
+    <tr><td>R17 / R18</td><td>Curva ABC de Clientes / de Produtos</td><td>Onde está concentrado o faturamento.</td></tr>
+    <tr><td>R19</td><td>Compras no Período</td><td>O que foi comprado, de quem e por quanto.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>O relatório que fecha o ciclo dos dois dias</b>
+  O <b>R16 — Ficha Técnica com Custo</b> devolve exatamente o que as planilhas da Tecnofer entregam hoje:
+  a lista de componentes, os processos com tempo e o custo total. A diferença é que ninguém digita nada.
+  Mudou a tarifa da laser, mudou o preço do aço, mudou uma perda na estrutura — a ficha do dia seguinte
+  já sai certa, para os três produtos e para todos os outros que vierem.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>6 · Rotina de fechamento mensal</h1>
+
+<p>A ordem importa: cada etapa depende da anterior estar completa.</p>
+
+<table class="dados">
+  <thead><tr><th class="cen" style="width:7%">#</th><th style="width:16%">Quando</th><th style="width:24%">O que fazer</th><th style="width:14%">Área</th><th>Tela</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td>Durante o mês</td><td>Aprovar toda NF-e de entrada recebida, sem acumular</td><td>Fiscal</td><td>VFIS0210</td></tr>
+    <tr><td class="cen">2</td><td>Semanal</td><td>Conciliar o extrato bancário</td><td>Financeiro</td><td>VFIN0620</td></tr>
+    <tr><td class="cen">3</td><td>Semanal</td><td>Conferir saldo de material em poder de terceiros</td><td>Almoxarifado</td><td>VEST0100</td></tr>
+    <tr><td class="cen">4</td><td>Último dia útil</td><td>Encerrar as ordens de fabricação concluídas e apurar custo</td><td>Produção</td><td>VPRO0900</td></tr>
+    <tr><td class="cen">5</td><td>1º dia útil</td><td>Conferir que todas as notas de saída do mês estão autorizadas</td><td>Fiscal</td><td>VFIS0200</td></tr>
+    <tr><td class="cen">6</td><td>1º dia útil</td><td>Emitir Livro de Entradas e de Saídas e conferir</td><td>Fiscal</td><td>VFIN0500 R01 · R02</td></tr>
+    <tr><td class="cen">7</td><td>2º dia útil</td><td>Rodar a apuração de impostos da competência</td><td>Fiscal</td><td>VFIN0400</td></tr>
+    <tr><td class="cen">8</td><td>2º dia útil</td><td>Recalcular o custo padrão com os preços do mês</td><td>Custos</td><td>VPRO0300</td></tr>
+    <tr><td class="cen">9</td><td>3º dia útil</td><td>Analisar variâncias das ordens encerradas</td><td>Custos · Produção</td><td>VPRO0900</td></tr>
+    <tr><td class="cen">10</td><td>3º dia útil</td><td>Revisar preços de venda se o custo mudou acima do aceitável</td><td>Comercial · Custos</td><td>VCST0202</td></tr>
+    <tr><td class="cen">11</td><td>4º dia útil</td><td>Fechar os lançamentos contábeis e emitir o balancete</td><td>Contabilidade</td><td>VCTB0200</td></tr>
+    <tr><td class="cen">12</td><td>4º dia útil</td><td>Emitir a DRE e a curva ABC do mês</td><td>Gestão</td><td>VFIN0500 R05 · R17 · R18</td></tr>
+    <tr><td class="cen">13</td><td>Conforme prazo</td><td>Gerar e transmitir o SPED</td><td>Contabilidade</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h2>6.1 Checklists</h2>
+
+<h3>Antes de autorizar uma NF-e de saída</h3>
+<ul class="check">
+  <li>Cliente com CNPJ, inscrição estadual e endereço conferidos</li>
+  <li>CFOP compatível com a operação e com a UF de destino</li>
+  <li>NCM preenchido em todos os itens</li>
+  <li>Quantidade e preço batendo com o pedido de venda</li>
+  <li>Frete e seguro lançados</li>
+  <li>Condição de pagamento correta — é ela que gera as parcelas</li>
+  <li>Numeração da série sem buraco</li>
+  <li>Ambiente correto: Homologação para treinar, Produção para valer</li>
+</ul>
+
+<h3>Antes de aprovar uma NF-e de entrada</h3>
+<ul class="check">
+  <li>Quantidade recebida conferida fisicamente</li>
+  <li>Preço unitário batendo com o pedido de compra</li>
+  <li>CFOP de entrada correto — industrialização, comercialização ou uso e consumo</li>
+  <li>Impostos destacados conferidos</li>
+  <li>Inspeção de recebimento concluída, quando o item exigir</li>
+  <li>Centro de custo e conta contábil informados no título</li>
+</ul>
+
+<h3>Antes de fechar o mês</h3>
+<ul class="check">
+  <li>Nenhuma nota de entrada do mês pendente de aprovação</li>
+  <li>Nenhuma ordem de fabricação concluída sem encerramento</li>
+  <li>Extrato bancário conciliado até o último dia</li>
+  <li>Adiantamentos aplicados ou justificados</li>
+  <li>Livro de Entradas e de Saídas conferidos</li>
+  <li>Apuração rodada e saldo a recolher conferido</li>
+  <li>Custo padrão recalculado</li>
+  <li>Balancete fechado com débitos iguais a créditos</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>7 · Exercício final — o ciclo fiscal e financeiro</h1>
+
+<p>Onze passos, partindo do romaneio despachado no Dia 1.</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:6%">#</th><th style="width:26%">O que fazer</th><th style="width:14%">Tela</th><th>Como saber que deu certo</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td>Conferir a configuração fiscal em ambiente de homologação</td><td>VFIS0100</td><td>CNPJ, IE, regime e endereço preenchidos; ambiente em Homologação.</td></tr>
+    <tr><td class="cen">2</td><td>Cadastrar os CFOPs 5101, 6101, 1101, 5901 e 1124</td><td>VFIS0300</td><td>Cinco CFOPs listados com indicador de operação correto.</td></tr>
+    <tr><td class="cen">3</td><td>Cadastrar os NCMs dos produtos e das chapas</td><td>VFIS0350</td><td>NCMs com alíquotas e vigência.</td></tr>
+    <tr><td class="cen">4</td><td>Emitir e autorizar a NF-e de saída do pedido</td><td>VFIS0200</td><td>Status <b>Autorizada</b>. O saldo do ALM-PA caiu.</td></tr>
+    <tr><td class="cen">5</td><td>Emitir uma CC-e corrigindo a observação de transporte</td><td>VFIS0200</td><td>CC-e registrada e vinculada à nota.</td></tr>
+    <tr><td class="cen">6</td><td>Importar e aprovar a NF-e de entrada da chapa</td><td>VFIS0210</td><td>Estoque de MP subiu e o crédito de ICMS foi registrado.</td></tr>
+    <tr><td class="cen">7</td><td>Conferir os títulos gerados nos dois lados</td><td>VFIN0210 · VFIN0200</td><td>Parcelas do cliente conforme a condição; título do fornecedor com centro de custo.</td></tr>
+    <tr><td class="cen">8</td><td>Baixar a primeira parcela do cliente</td><td>VFIN0210</td><td>Status recebido; valor aparece no realizado do fluxo.</td></tr>
+    <tr><td class="cen">9</td><td>Ver o fluxo de caixa projetado dos próximos 90 dias</td><td>VFIN0300</td><td>Entradas nas datas das parcelas; saídas nos vencimentos de imposto.</td></tr>
+    <tr><td class="cen">10</td><td>Recalcular o custo padrão e comparar com o Anexo B</td><td>VPRO0300</td><td>Material, operação e overhead separados; total próximo de R$ 126,85.</td></tr>
+    <tr><td class="cen">11</td><td>Rodar a apuração e emitir a DRE do período</td><td>VFIN0400 · VFIN0500</td><td>Saldo de ICMS a recolher coerente com as notas do exercício.</td></tr>
+  </tbody>
+</table>
+
+<div class="exercicio">
+  <div class="ex-tit">Perguntas para discutir no fechamento</div>
+  <b>1.</b> O aço subiu 12 %. Quanto muda o custo do RN 01001 e quanto precisa mudar o preço para
+  manter os 15 % de margem?<br>
+  <b>2.</b> Uma nota de entrada de R$ 40 mil ficou dois meses sem ser aprovada. O que a empresa perdeu
+  além do crédito de ICMS?<br>
+  <b>3.</b> O cliente pede 12 % de desconto no RN 01001. Com base na tabela da seção 4.4, o que sobra de
+  margem? Vale fechar?<br>
+  <b>4.</b> A variância de material da última ordem veio 18 % acima do padrão. Quais quatro coisas você
+  investiga, e em que ordem?
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo A · Referência rápida de CFOPs</h1>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:10%">Dentro do estado</th><th class="cen" style="width:10%">Interestadual</th><th style="width:36%">Operação</th><th class="cen" style="width:12%">Gera crédito?</th><th>Situação típica</th></tr></thead>
+  <tbody>
+    <tr class="sub"><td colspan="5">SAÍDAS</td></tr>
+    <tr><td class="cen">5101</td><td class="cen">6101</td><td>Venda de produção do estabelecimento</td><td class="cen">—</td><td>Faturamento normal.</td></tr>
+    <tr><td class="cen">5102</td><td class="cen">6102</td><td>Venda de mercadoria de terceiros</td><td class="cen">—</td><td>Revenda.</td></tr>
+    <tr><td class="cen">5901</td><td class="cen">6901</td><td>Remessa para industrialização</td><td class="cen">—</td><td>Bucha para cementação.</td></tr>
+    <tr><td class="cen">5915</td><td class="cen">6915</td><td>Remessa para conserto</td><td class="cen">—</td><td>Ferramenta em manutenção externa.</td></tr>
+    <tr><td class="cen">5202</td><td class="cen">6202</td><td>Devolução de compra para industrialização</td><td class="cen">—</td><td>Chapa recusada na inspeção.</td></tr>
+    <tr><td class="cen">5949</td><td class="cen">6949</td><td>Outra saída não especificada</td><td class="cen">—</td><td>Amostra, brinde.</td></tr>
+    <tr class="sub"><td colspan="5">ENTRADAS</td></tr>
+    <tr><td class="cen">1101</td><td class="cen">2101</td><td>Compra para industrialização</td><td class="cen"><b>Sim</b></td><td>Chapas e tubos.</td></tr>
+    <tr><td class="cen">1102</td><td class="cen">2102</td><td>Compra para comercialização</td><td class="cen"><b>Sim</b></td><td>Item para revenda.</td></tr>
+    <tr><td class="cen">1124</td><td class="cen">2124</td><td>Industrialização efetuada por outra empresa</td><td class="cen"><b>Sim</b></td><td>Serviço de cementação e usinagem.</td></tr>
+    <tr><td class="cen">1201</td><td class="cen">2201</td><td>Devolução de venda de produção própria</td><td class="cen"><b>Sim</b></td><td>Cliente devolveu.</td></tr>
+    <tr><td class="cen">1556</td><td class="cen">2556</td><td>Compra de material de uso e consumo</td><td class="cen">Não</td><td>Disco, EPI, consumível.</td></tr>
+    <tr><td class="cen">1902</td><td class="cen">2902</td><td>Retorno de mercadoria remetida para industrialização</td><td class="cen">—</td><td>Bucha voltando da cementação.</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">
+  Tabela de apoio para o treinamento. A escolha do CFOP em cada operação real é responsabilidade da
+  contabilidade da Tecnofer.
+</p>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo B · Custo e preço dos três produtos</h1>
+
+<h2>B.1 Composição do custo padrão</h2>
+<p class="pequeno mudo">Overhead do exemplo: R$ 45,00 por hora-máquina consumida pelo produto em todos os níveis.</p>
+<table class="dados">
+  <thead><tr><th style="width:18%">Produto</th><th class="num" style="width:13%">Material</th><th class="num" style="width:13%">Operação</th><th class="num" style="width:12%">Terceiro</th><th class="num" style="width:11%">Horas</th><th class="num" style="width:13%">Overhead</th><th class="num">Custo padrão</th></tr></thead>
+  <tbody>
+    <tr><td>RN 01001</td><td class="num">78,63</td><td class="num">23,03</td><td class="num">4,88</td><td class="num">0,4513</td><td class="num">20,31</td><td class="num"><b>126,85</b></td></tr>
+    <tr><td>SU 02046</td><td class="num">11,94</td><td class="num">11,64</td><td class="num">—</td><td class="num">0,1856</td><td class="num">8,35</td><td class="num"><b>31,93</b></td></tr>
+    <tr><td>RN 01007 <span class="mudo">a completar em aula</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+  </tbody>
+</table>
+
+<h2>B.2 Preço com o mesmo divisor</h2>
+<table class="dados">
+  <thead><tr><th style="width:18%">Produto</th><th class="num" style="width:18%">Custo padrão</th><th class="num" style="width:16%">Divisor</th><th class="num" style="width:20%">Preço sem IPI</th><th class="num">Total com IPI 5 %</th></tr></thead>
+  <tbody>
+    <tr><td>RN 01001</td><td class="num">R$ 126,85</td><td class="num">0,4975</td><td class="num">R$ 254,97</td><td class="num">R$ 267,72</td></tr>
+    <tr><td>SU 02046</td><td class="num">R$ 31,93</td><td class="num">0,4975</td><td class="num">R$ 64,18</td><td class="num">R$ 67,39</td></tr>
+  </tbody>
+</table>
+<div class="atencao">
+  <b>Atenção</b> Divisor calculado com ICMS 12 %, PIS 1,65 %, COFINS 7,6 %, comissão e frete 8 %,
+  despesas administrativas 6 % e margem 15 %. <b>Todos esses percentuais são exemplos.</b> Ajuste ao
+  regime real da Tecnofer antes de precificar.
+</div>
+
+<h2>B.3 Sensibilidade — o que acontece se o aço subir</h2>
+<p class="pequeno mudo">RN 01001, mantendo a margem de 15 %.</p>
+<table class="dados">
+  <thead><tr><th class="num" style="width:20%">Variação do aço</th><th class="num" style="width:20%">Material</th><th class="num" style="width:20%">Custo padrão</th><th class="num" style="width:20%">Preço necessário</th><th class="num">Aumento no preço</th></tr></thead>
+  <tbody>
+    <tr><td class="num">0 %</td><td class="num">R$ 78,63</td><td class="num">R$ 126,85</td><td class="num">R$ 254,97</td><td class="num">—</td></tr>
+    <tr><td class="num">+ 5 %</td><td class="num">R$ 82,56</td><td class="num">R$ 130,78</td><td class="num">R$ 262,87</td><td class="num">+ 3,1 %</td></tr>
+    <tr><td class="num">+ 10 %</td><td class="num">R$ 86,49</td><td class="num">R$ 134,71</td><td class="num">R$ 270,77</td><td class="num">+ 6,2 %</td></tr>
+    <tr><td class="num">+ 12 %</td><td class="num">R$ 88,07</td><td class="num">R$ 136,29</td><td class="num">R$ 273,95</td><td class="num">+ 7,4 %</td></tr>
+    <tr><td class="num">+ 20 %</td><td class="num">R$ 94,36</td><td class="num">R$ 142,58</td><td class="num">R$ 286,59</td><td class="num">+ 12,4 %</td></tr>
+  </tbody>
+</table>
+<div class="porque">
+  <b>A leitura</b>
+  Um reajuste de 12 % no aço exige 7,4 % de aumento no preço para manter a margem — não 12 %, porque o
+  material é 62 % do custo e o custo é metade do preço. Sem esse cálculo, a empresa ou repassa demais e
+  perde venda, ou repassa de menos e perde margem sem perceber. É a conta que o
+  <b>R15 — Histórico de Custos</b> permite fazer em minutos.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo C · Glossário fiscal, financeiro e contábil</h1>
+<table class="dados">
+  <thead><tr><th style="width:22%">Termo</th><th>O que significa na prática</th></tr></thead>
+  <tbody>
+    <tr><td><b>CFOP</b></td><td>Código que diz o que a nota está fazendo: vendendo, comprando, remetendo, devolvendo. Determina se há imposto e se há crédito.</td></tr>
+    <tr><td><b>NCM</b></td><td>Código que identifica o produto para a Receita. Determina IPI, PIS, COFINS e substituição tributária.</td></tr>
+    <tr><td><b>CST</b></td><td>Código de situação tributária: como aquele item é tributado naquela operação.</td></tr>
+    <tr><td><b>CEST</b></td><td>Código exigido quando o produto está em regime de substituição tributária.</td></tr>
+    <tr><td><b>Homologação × Produção</b></td><td>Homologação é o ambiente de teste da SEFAZ — a nota é autorizada mas não vale fiscalmente. Produção é para valer.</td></tr>
+    <tr><td><b>CC-e</b></td><td>Carta de correção eletrônica. Corrige o que não altera valor, imposto, destinatário nem produto.</td></tr>
+    <tr><td><b>Crédito de ICMS</b></td><td>Imposto pago na compra que abate o imposto devido na venda. Nota de entrada não lançada é crédito perdido.</td></tr>
+    <tr><td><b>DIFAL</b></td><td>Diferencial de alíquota devido em venda interestadual para consumidor final não contribuinte.</td></tr>
+    <tr><td><b>Remessa para industrialização</b></td><td>Saída de material para processo em terceiro sem venda. O material continua sendo da empresa.</td></tr>
+    <tr><td><b>CT-e</b></td><td>Conhecimento de transporte: documento do frete. Pode ser rateado nos itens por valor ou por peso.</td></tr>
+    <tr><td><b>Título</b></td><td>Cada parcela a pagar ou a receber, com vencimento próprio.</td></tr>
+    <tr><td><b>Baixa</b></td><td>Registro de que o título foi efetivamente pago ou recebido.</td></tr>
+    <tr><td><b>Aging</b></td><td>Relatório que mostra há quanto tempo cada título está vencido.</td></tr>
+    <tr><td><b>Partidas dobradas</b></td><td>Todo lançamento contábil tem um débito e um crédito de mesmo valor.</td></tr>
+    <tr><td><b>Conta sintética × analítica</b></td><td>Sintética agrupa e não recebe lançamento; analítica é onde o lançamento acontece.</td></tr>
+    <tr><td><b>Centro de custo</b></td><td>Onde a despesa é apropriada — qual área realmente consumiu o recurso.</td></tr>
+    <tr><td><b>Overhead</b></td><td>Custo indireto de fábrica rateado aos produtos por um critério (hora-máquina, valor de material…).</td></tr>
+    <tr><td><b>Custo padrão × custo real</b></td><td>Padrão é o calculado a partir do cadastro; real é o que a ordem de fato consumiu.</td></tr>
+    <tr><td><b>Variância</b></td><td>A diferença entre os dois. É o termômetro da qualidade do cadastro.</td></tr>
+    <tr><td><b>Método do divisor</b></td><td>Forma de precificar em que impostos, comissões, despesas e margem são percentuais sobre o preço, não sobre o custo.</td></tr>
+    <tr><td><b>DRE</b></td><td>Demonstração do resultado: receita menos custos e despesas, chegando ao lucro do período.</td></tr>
+    <tr><td><b>SPED</b></td><td>Arquivos digitais de escrituração fiscal (EFD) e contábil (ECD) entregues ao fisco.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque" style="margin-top:8mm">
+  <b>Fim do Dia 2 — e do treinamento</b>
+  Em dois dias a turma percorreu o caminho completo: um item cadastrado com nível, estrutura e roteiro
+  virou uma ordem planejada, uma ordem executada, um produto expedido, uma nota autorizada, um título
+  recebido e uma margem conhecida.
+  <br><br>
+  O objetivo não era decorar telas — foi entender que <b>tudo está ligado</b>. Cada campo preenchido com
+  cuidado no cadastro economiza retrabalho em quatro áreas depois. E cada campo preenchido de qualquer
+  jeito reaparece, semanas mais tarde, como um número que ninguém consegue explicar.
+</div>

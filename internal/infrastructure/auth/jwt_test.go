@@ -24,3 +24,18 @@ func TestGenerateTokenCarriesSelectedEnterprise(t *testing.T) {
 		t.Fatalf("expected auth version 1, got %d", claims.AuthVersion)
 	}
 }
+
+func TestGenerateTokenCarriesTrainingEnvironment(t *testing.T) {
+	const secret = "test-secret"
+	tokenString, err := GenerateTokenForEnvironment("user-id", "USER", 73, 1, "training", secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := &UserClaims{}
+	if _, err := jwt.ParseWithClaims(tokenString, claims, func(*jwt.Token) (interface{}, error) { return []byte(secret), nil }); err != nil {
+		t.Fatal(err)
+	}
+	if claims.Environment != "training" {
+		t.Fatalf("environment = %q, want training", claims.Environment)
+	}
+}

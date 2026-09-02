@@ -2,6 +2,7 @@ package sales_quotation_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/repository"
 	"github.com/shopspring/decimal"
 )
 
@@ -33,6 +35,57 @@ func (uc *UseCase) SaveParameters(ctx context.Context, dto request.SaveSalesQuot
 		return nil, errorsuc.NewValidationError(err.Error())
 	}
 	return uc.Repo.SaveParameters(ctx, p)
+}
+
+func (uc *UseCase) ResetParameters(ctx context.Context) (*entity.Parameters, error) {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	repo, ok := uc.Repo.(repository.ConfigurationMaintenanceRepository)
+	if !ok {
+		return nil, errorsuc.NewValidationError("restauração dos parâmetros não está disponível")
+	}
+	return repo.ResetParameters(ctx)
+}
+
+func (uc *UseCase) SetCommissionPatternActive(ctx context.Context, code int64, active bool) error {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	repo, ok := uc.Repo.(repository.ConfigurationMaintenanceRepository)
+	if !ok {
+		return errorsuc.NewValidationError("manutenção de padrões de comissão não está disponível")
+	}
+	if err := repo.SetCommissionPatternActive(ctx, code, active); err != nil {
+		if errors.Is(err, repository.ErrConfigurationReferenced) {
+			return errorsuc.NewValidationError("o padrão de comissão está vinculado a registros comerciais e não pode ser desativado")
+		}
+		if errors.Is(err, repository.ErrConfigurationNotFound) {
+			return errorsuc.NewValidationError("padrão de comissão não encontrado na empresa autenticada")
+		}
+		return err
+	}
+	return nil
+}
+
+func (uc *UseCase) SetCancellationReasonActive(ctx context.Context, code int64, active bool) error {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	repo, ok := uc.Repo.(repository.ConfigurationMaintenanceRepository)
+	if !ok {
+		return errorsuc.NewValidationError("manutenção de motivos de cancelamento não está disponível")
+	}
+	if err := repo.SetCancellationReasonActive(ctx, code, active); err != nil {
+		if errors.Is(err, repository.ErrConfigurationReferenced) {
+			return errorsuc.NewValidationError("o motivo está vinculado a orçamento cancelado que ainda pode ser descancelado")
+		}
+		if errors.Is(err, repository.ErrConfigurationNotFound) {
+			return errorsuc.NewValidationError("motivo de cancelamento não encontrado na empresa autenticada")
+		}
+		return err
+	}
+	return nil
 }
 
 func (uc *UseCase) SaveCommissionPattern(ctx context.Context, dto request.SaveCommissionPatternDTO) (*entity.CommissionPattern, error) {
@@ -164,7 +217,7 @@ func applyQuotationRules(q *entity.SalesQuotation, p *entity.Parameters) error {
 		}
 	default:
 		if typeName != "" {
-			return errorsuc.NewValidationError("invalid freight_type")
+			return errorsuc.NewValidationError("tipo de frete inválido")
 		}
 	}
 	return nil

@@ -2,15 +2,17 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	orderrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
-	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -57,7 +59,7 @@ func (h *SalesOrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateSalesOrderDTO
@@ -78,7 +80,7 @@ func (h *SalesOrderHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
@@ -99,7 +101,12 @@ func (h *SalesOrderHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SalesOrderHandler) Search(w http.ResponseWriter, r *http.Request) {
-	results, err := h.listAdvancedUC.Execute(r.Context(), parseSalesOrderFilter(r))
+	filter, err := parseSalesOrderFilter(r, true)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	results, err := h.listAdvancedUC.Execute(r.Context(), filter)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -108,7 +115,12 @@ func (h *SalesOrderHandler) Search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SalesOrderHandler) Report(w http.ResponseWriter, r *http.Request) {
-	result, err := h.reportUC.Execute(r.Context(), parseSalesOrderFilter(r))
+	filter, err := parseSalesOrderFilter(r, false)
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	result, err := h.reportUC.Execute(r.Context(), filter)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -120,7 +132,7 @@ func (h *SalesOrderHandler) ListByCustomer(w http.ResponseWriter, r *http.Reques
 	codeStr := chi.URLParam(r, "customerCode")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid customer code")
+		security.RespondError(w, http.StatusBadRequest, "código do cliente inválido")
 		return
 	}
 	results, err := h.listByCustomerUC.Execute(r.Context(), code)
@@ -145,7 +157,7 @@ func (h *SalesOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CancelSalesOrderDTO
@@ -249,7 +261,7 @@ func (h *SalesOrderHandler) Block(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.BlockSalesOrderDTO
@@ -269,7 +281,7 @@ func (h *SalesOrderHandler) Unblock(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.unblockUC.Execute(r.Context(), code); err != nil {
@@ -283,7 +295,7 @@ func (h *SalesOrderHandler) ChangeStatus(w http.ResponseWriter, r *http.Request)
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.ChangeStatusDTO
@@ -319,7 +331,7 @@ func (h *SalesOrderHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "itemCode")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	var dto request.UpdateSalesOrderItemDTO
@@ -340,7 +352,7 @@ func (h *SalesOrderHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	results, err := h.listItemsUC.Execute(r.Context(), code)
@@ -355,7 +367,7 @@ func (h *SalesOrderHandler) CancelItem(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "itemCode")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	if err := h.cancelItemUC.Execute(r.Context(), code); err != nil {
@@ -369,29 +381,27 @@ func parseSalesOrderCode(w http.ResponseWriter, r *http.Request, name string) (i
 	codeStr := chi.URLParam(r, name)
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return 0, false
 	}
 	return code, true
 }
 
-func parseSalesOrderFilter(r *http.Request) orderrepo.SalesOrderFilter {
+func parseSalesOrderFilter(r *http.Request, paginate bool) (orderrepo.SalesOrderFilter, error) {
 	q := r.URL.Query()
-	var filter orderrepo.SalesOrderFilter
-	if raw := q.Get("customer_code"); raw != "" {
-		if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			filter.CustomerCode = &v
-		}
+	filter := orderrepo.SalesOrderFilter{Search: strings.TrimSpace(q.Get("search"))}
+	var err error
+	if filter.CustomerCode, err = parsePositiveInt64Query(q.Get("customer_code"), "customer_code"); err != nil {
+		return filter, err
 	}
-	if raw := q.Get("representative_code"); raw != "" {
-		if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			filter.RepresentativeCode = &v
-		}
+	if filter.ItemCode, err = parsePositiveInt64Query(q.Get("item_code"), "item_code"); err != nil {
+		return filter, err
 	}
-	if raw := q.Get("payment_term_code"); raw != "" {
-		if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			filter.PaymentTermCode = &v
-		}
+	if filter.RepresentativeCode, err = parsePositiveInt64Query(q.Get("representative_code"), "representative_code"); err != nil {
+		return filter, err
+	}
+	if filter.PaymentTermCode, err = parsePositiveInt64Query(q.Get("payment_term_code"), "payment_term_code"); err != nil {
+		return filter, err
 	}
 	if raw := q.Get("status"); raw != "" {
 		status := orderentity.SalesOrderStatus(raw)
@@ -413,22 +423,77 @@ func parseSalesOrderFilter(r *http.Request) orderrepo.SalesOrderFilter {
 		status := orderentity.SalesOrderConferenceStatus(raw)
 		filter.ConferenceStatus = &status
 	}
-	if raw := q.Get("is_blocked"); raw != "" {
-		if v, err := strconv.ParseBool(raw); err == nil {
-			filter.IsBlocked = &v
+	if raw := strings.ToUpper(strings.TrimSpace(q.Get("workflow_status"))); raw != "" {
+		switch raw {
+		case "ANALISADO", "ATENDIDO", "CONFERIDO", "ATRASADO", "FATURADO":
+			filter.WorkflowStatus = &raw
+		default:
+			return filter, fmt.Errorf("workflow_status deve ser ANALISADO, ATENDIDO, CONFERIDO, ATRASADO ou FATURADO")
 		}
 	}
-	if raw := q.Get("emission_from"); raw != "" {
-		filter.EmissionFrom = datetime.ParseDatePtr(&raw)
+	if raw := q.Get("is_blocked"); raw != "" {
+		v, parseErr := strconv.ParseBool(raw)
+		if parseErr != nil {
+			return filter, fmt.Errorf("o campo is_blocked deve ser verdadeiro ou falso")
+		}
+		filter.IsBlocked = &v
 	}
-	if raw := q.Get("emission_to"); raw != "" {
-		filter.EmissionTo = datetime.ParseDatePtr(&raw)
+	if filter.EmissionFrom, err = parseISODateQuery(q.Get("emission_from"), "emission_from"); err != nil {
+		return filter, err
 	}
-	if raw := q.Get("delivery_from"); raw != "" {
-		filter.DeliveryFrom = datetime.ParseDatePtr(&raw)
+	if filter.EmissionTo, err = parseISODateQuery(q.Get("emission_to"), "emission_to"); err != nil {
+		return filter, err
 	}
-	if raw := q.Get("delivery_to"); raw != "" {
-		filter.DeliveryTo = datetime.ParseDatePtr(&raw)
+	if filter.DeliveryFrom, err = parseISODateQuery(q.Get("delivery_from"), "delivery_from"); err != nil {
+		return filter, err
 	}
-	return filter
+	if filter.DeliveryTo, err = parseISODateQuery(q.Get("delivery_to"), "delivery_to"); err != nil {
+		return filter, err
+	}
+	if filter.EmissionFrom != nil && filter.EmissionTo != nil && filter.EmissionFrom.After(*filter.EmissionTo) {
+		return filter, fmt.Errorf("emission_from não pode ser posterior a emission_to")
+	}
+	if filter.DeliveryFrom != nil && filter.DeliveryTo != nil && filter.DeliveryFrom.After(*filter.DeliveryTo) {
+		return filter, fmt.Errorf("delivery_from não pode ser posterior a delivery_to")
+	}
+	if paginate {
+		filter.Limit = 100
+		if raw := q.Get("limit"); raw != "" {
+			v, parseErr := strconv.ParseInt(raw, 10, 32)
+			if parseErr != nil || v < 1 || v > 500 {
+				return filter, fmt.Errorf("o campo limit deve estar entre 1 e 500")
+			}
+			filter.Limit = int32(v)
+		}
+		if raw := q.Get("offset"); raw != "" {
+			v, parseErr := strconv.ParseInt(raw, 10, 32)
+			if parseErr != nil || v < 0 {
+				return filter, fmt.Errorf("o campo offset deve ser um número inteiro maior ou igual a zero")
+			}
+			filter.Offset = int32(v)
+		}
+	}
+	return filter, nil
+}
+
+func parsePositiveInt64Query(raw, field string) (*int64, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || v <= 0 {
+		return nil, fmt.Errorf("o campo %s deve ser um código inteiro positivo", field)
+	}
+	return &v, nil
+}
+
+func parseISODateQuery(raw, field string) (*time.Time, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	v, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return nil, fmt.Errorf("o campo %s deve usar o formato AAAA-MM-DD", field)
+	}
+	return &v, nil
 }

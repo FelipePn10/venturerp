@@ -255,6 +255,21 @@ func (uc *UseCase) AddSalesPlan(ctx context.Context, dto request.RepresentativeS
 	return toSalesPlanResponse(row), nil
 }
 
+func (uc *UseCase) ListSalesPlans(ctx context.Context) ([]response.RepresentativeSalesPlanOptionResponse, error) {
+	if !uc.Auth.CanGetSalesOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	codes, err := uc.Repo.ListSalesPlanCodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]response.RepresentativeSalesPlanOptionResponse, 0, len(codes))
+	for _, code := range codes {
+		out = append(out, response.RepresentativeSalesPlanOptionResponse{Code: code})
+	}
+	return out, nil
+}
+
 func (uc *UseCase) AddInterest(ctx context.Context, dto request.RepresentativeInterestDTO) (*response.RepresentativeInterestResponse, error) {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -267,6 +282,25 @@ func (uc *UseCase) AddInterest(ctx context.Context, dto request.RepresentativeIn
 		return nil, err
 	}
 	return toInterestResponse(row), nil
+}
+
+func (uc *UseCase) ListInterestClassifications(ctx context.Context) ([]*response.RepresentativeInterestClassificationResponse, error) {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+	if err != nil || enterpriseID <= 0 {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	rows, err := uc.Repo.ListInterestClassifications(ctx, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*response.RepresentativeInterestClassificationResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &response.RepresentativeInterestClassificationResponse{ID: row.ID, Code: row.Code, MaskCode: row.MaskCode, Mask: row.Mask, Description: row.Description, MaskDescription: row.MaskDescription})
+	}
+	return out, nil
 }
 
 func (uc *UseCase) AddPhone(ctx context.Context, dto request.RepresentativePhoneDTO) (*response.RepresentativePhoneResponse, error) {

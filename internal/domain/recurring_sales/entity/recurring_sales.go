@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,15 @@ const (
 )
 
 type CommissionBase string
+
+type LifecycleStatus string
+
+const (
+	LifecycleActive    LifecycleStatus = "ATIVA"
+	LifecycleSuspended LifecycleStatus = "SUSPENSA"
+	LifecycleCancelled LifecycleStatus = "CANCELADA"
+	LifecycleEnded     LifecycleStatus = "ENCERRADA"
+)
 
 const (
 	CommissionBaseOriginal CommissionBase = "ORIGINAL"
@@ -56,34 +66,52 @@ type AdjustmentDate struct {
 }
 
 type RecurringSale struct {
-	Code                    int64
-	EnterpriseCode          int64
-	CustomerCode            int64
-	EstablishmentCode       *int64
-	ItemCode                int64
-	ItemMask                *string
-	SalesPlanCode           *int64
-	MovementType            MovementType
-	TermType                TermType
-	SaleDate                time.Time
-	NextAdjustmentDate      *time.Time
-	MonthsQuantity          *int
-	PaymentsQuantity        *int
-	GraceMonths             int
-	PaymentValue            *float64
-	Quantity                float64
-	UnitValue               float64
-	Reason                  *string
-	GeneratedOrderCode      *int64
-	GeneratedOrderAt        *time.Time
-	SourceRecurringSaleCode *int64
-	OriginalAdjustmentCode  *int64
-	AdjustmentPercent       *float64
-	IsActive                bool
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	CreatedBy               uuid.UUID
-	Representatives         []*Representative
+	Code                      int64
+	EnterpriseCode            int64
+	CustomerCode              int64
+	EstablishmentCode         *int64
+	ItemCode                  int64
+	ItemMask                  *string
+	SalesPlanCode             *int64
+	MovementType              MovementType
+	TermType                  TermType
+	SaleDate                  time.Time
+	NextAdjustmentDate        *time.Time
+	MonthsQuantity            *int
+	PaymentsQuantity          *int
+	GraceMonths               int
+	PaymentValue              *float64
+	Quantity                  float64
+	UnitValue                 float64
+	Reason                    *string
+	GeneratedOrderCode        *int64
+	GeneratedOrderAt          *time.Time
+	SourceRecurringSaleCode   *int64
+	OriginalAdjustmentCode    *int64
+	AdjustmentPercent         *float64
+	IsActive                  bool
+	LifecycleStatus           LifecycleStatus
+	EffectiveFrom             *time.Time
+	EffectiveUntil            *time.Time
+	CancellationEffectiveDate *time.Time
+	FutureOrdersPolicy        *string
+	CancelledBy               *uuid.UUID
+	Frequency                 string
+	PriceTableCode            *int64
+	CurrencyCode              string
+	AdjustmentIndex           *string
+	AdjustmentPeriodMonths    *int
+	AdjustmentFloorPct        *float64
+	AdjustmentCapPct          *float64
+	BillingPolicy             json.RawMessage
+	DeliveryPolicy            json.RawMessage
+	TaxPolicy                 json.RawMessage
+	CostCenterCode            *int64
+	RenewalPolicy             string
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	CreatedBy                 uuid.UUID
+	Representatives           []*Representative
 }
 
 type Representative struct {
@@ -117,4 +145,15 @@ type CommissionProjectionRow struct {
 	RepresentativeCode int64   `json:"representative_code"`
 	CommissionPercent  float64 `json:"commission_percent"`
 	CommissionValue    float64 `json:"commission_value"`
+}
+
+type Operation struct {
+	RecurringSaleCode int64
+	OperationType     string
+	Competence        string
+	IdempotencyKey    string
+	RequestHash       string
+	ResultCode        *int64
+	Status            string
+	ActorID           uuid.UUID
 }

@@ -16,13 +16,28 @@ func (h *PlanningParamsHandler) List(w http.ResponseWriter, r *http.Request) {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, results)
+	search := r.URL.Query().Get("number")
+	if search != "" {
+		number, parseErr := strconv.Atoi(search)
+		if parseErr != nil || number <= 0 {
+			security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PARAMETRO_NUMERO_INVALIDO", "o número do parâmetro deve ser positivo")
+			return
+		}
+		filtered := results[:0]
+		for _, result := range results {
+			if result.ParamNumber == number {
+				filtered = append(filtered, result)
+			}
+		}
+		results = filtered
+	}
+	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
 }
 
 func (h *PlanningParamsHandler) GetByNumber(w http.ResponseWriter, r *http.Request) {
 	num, err := strconv.Atoi(chi.URLParam(r, "number"))
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid param number")
+		security.RespondErrorCode(w, http.StatusBadRequest, "PARAMETRO_NUMERO_INVALIDO", "número do parâmetro inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), num)

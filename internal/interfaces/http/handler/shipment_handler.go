@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -14,6 +15,7 @@ import (
 	shipentity "github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	shiprepo "github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -65,7 +67,7 @@ type createShipmentRequest struct {
 func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createShipmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	input := shipment_uc.CreateShipmentInput{
@@ -106,12 +108,12 @@ type addShipmentItemRequest struct {
 func (h *ShipmentHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	var req addShipmentItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.AddItem(r.Context(), shipment_uc.AddShipmentItemInput{
@@ -135,7 +137,7 @@ func (h *ShipmentHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 func (h *ShipmentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	result, err := h.uc.Get(r.Context(), code)
@@ -172,6 +174,7 @@ func (h *ShipmentHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	f.Offset, _ = strconv.Atoi(q.Get("offset"))
+	normalizeCatalogPage(&f.Limit, &f.Offset)
 
 	result, err := h.uc.List(r.Context(), f)
 	if err != nil {
@@ -199,7 +202,7 @@ type createLoadRequest struct {
 func (h *ShipmentHandler) CreateLoad(w http.ResponseWriter, r *http.Request) {
 	var req createLoadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreateLoad(r.Context(), shipment_uc.CreateLoadInput{
@@ -236,7 +239,7 @@ func (h *ShipmentHandler) ListLoads(w http.ResponseWriter, r *http.Request) {
 func (h *ShipmentHandler) GetLoad(w http.ResponseWriter, r *http.Request) {
 	code, err := h.loadCodeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid load code")
+		jsonError(w, http.StatusBadRequest, "código da carga inválido")
 		return
 	}
 	result, err := h.uc.GetLoad(r.Context(), code)
@@ -255,16 +258,20 @@ type addShipmentToLoadRequest struct {
 func (h *ShipmentHandler) AddShipmentToLoad(w http.ResponseWriter, r *http.Request) {
 	code, err := h.loadCodeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid load code")
+		jsonError(w, http.StatusBadRequest, "código da carga inválido")
 		return
 	}
 	var req addShipmentToLoadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.AddShipmentToLoad(r.Context(), code, req.ShipmentCode, req.Sequence)
 	if err != nil {
+		if strings.Contains(err.Error(), "não encontrad") {
+			security.RespondErrorCode(w, http.StatusNotFound, "ROMANEIO_OU_CARGA_NAO_ENCONTRADO", err.Error())
+			return
+		}
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
@@ -274,19 +281,28 @@ func (h *ShipmentHandler) AddShipmentToLoad(w http.ResponseWriter, r *http.Reque
 func (h *ShipmentHandler) RemoveShipmentFromLoad(w http.ResponseWriter, r *http.Request) {
 	code, err := h.loadCodeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid load code")
+		jsonError(w, http.StatusBadRequest, "código da carga inválido")
 		return
 	}
 	shipmentCode, err := strconv.ParseInt(chi.URLParam(r, "shipmentCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	if err := h.uc.RemoveShipmentFromLoad(r.Context(), code, shipmentCode); err != nil {
+		if strings.Contains(err.Error(), "não encontrad") || strings.Contains(err.Error(), "não está vinculado") {
+			security.RespondErrorCode(w, http.StatusNotFound, "VINCULO_ROMANEIO_CARGA_NAO_ENCONTRADO", err.Error())
+			return
+		}
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, map[string]string{"status": "removed"})
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"status":        "REMOVED",
+		"message":       "romaneio removido da carga",
+		"shipment_code": shipmentCode,
+		"load_code":     code,
+	})
 }
 
 type addFiscalNoteToLoadRequest struct {
@@ -300,12 +316,12 @@ type addFiscalNoteToLoadRequest struct {
 func (h *ShipmentHandler) AddFiscalNoteToLoad(w http.ResponseWriter, r *http.Request) {
 	code, err := h.loadCodeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid load code")
+		jsonError(w, http.StatusBadRequest, "código da carga inválido")
 		return
 	}
 	var req addFiscalNoteToLoadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.AddFiscalNoteToLoad(r.Context(), shiprepo.AddFiscalNoteToLoadInput{
@@ -354,7 +370,7 @@ type createDeliveryInstructionRequest struct {
 func (h *ShipmentHandler) CreateDeliveryInstruction(w http.ResponseWriter, r *http.Request) {
 	var req createDeliveryInstructionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreateDeliveryInstruction(r.Context(), &shipentity.DeliveryInstruction{
@@ -397,7 +413,7 @@ type createDispatchBoxRequest struct {
 func (h *ShipmentHandler) CreateDispatchBox(w http.ResponseWriter, r *http.Request) {
 	var req createDispatchBoxRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreateDispatchBox(r.Context(), &shipentity.DispatchBox{
@@ -430,12 +446,12 @@ type assignBoxRequest struct {
 func (h *ShipmentHandler) AssignBoxToLoad(w http.ResponseWriter, r *http.Request) {
 	code, err := h.loadCodeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid load code")
+		jsonError(w, http.StatusBadRequest, "código da carga inválido")
 		return
 	}
 	var req assignBoxRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	if err := h.uc.AssignBoxToLoad(r.Context(), code, req.BoxCode, actingUser(r)); err != nil {
@@ -487,7 +503,7 @@ func (h *ShipmentHandler) ListByProductionOrder(w http.ResponseWriter, r *http.R
 func (h *ShipmentHandler) listByOrder(w http.ResponseWriter, r *http.Request, fn func(context.Context, int64) ([]*response.ShipmentResponse, error), label string) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "orderCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid "+label+" code")
+		jsonError(w, http.StatusBadRequest, "código de "+label+" inválido")
 		return
 	}
 	result, err := fn(r.Context(), code)
@@ -506,12 +522,12 @@ type conferItemRequest struct {
 func (h *ShipmentHandler) ConferItem(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	var req conferItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	if err := h.uc.ConferItem(r.Context(), code, req.ItemID, req.ConferredQty); err != nil {
@@ -573,12 +589,12 @@ type updateTransportRequest struct {
 func (h *ShipmentHandler) UpdateTransport(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	var req updateTransportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	t := shiprepo.TransportInput{
@@ -620,12 +636,12 @@ type addVolumeRequest struct {
 func (h *ShipmentHandler) AddVolume(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	var req addVolumeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.AddVolume(r.Context(), shipment_uc.AddVolumeInput{
@@ -650,7 +666,7 @@ func (h *ShipmentHandler) AddVolume(w http.ResponseWriter, r *http.Request) {
 func (h *ShipmentHandler) ListVolumes(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	result, err := h.uc.ListVolumes(r.Context(), code)
@@ -664,12 +680,12 @@ func (h *ShipmentHandler) ListVolumes(w http.ResponseWriter, r *http.Request) {
 func (h *ShipmentHandler) DeleteVolume(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	volumeID, err := strconv.ParseInt(chi.URLParam(r, "volumeID"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid volume id")
+		jsonError(w, http.StatusBadRequest, "identificador do volume inválido")
 		return
 	}
 	if err := h.uc.DeleteVolume(r.Context(), code, volumeID); err != nil {
@@ -688,12 +704,12 @@ type linkFiscalExitRequest struct {
 func (h *ShipmentHandler) LinkFiscalExit(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	var req linkFiscalExitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	if err := h.uc.LinkFiscalExit(r.Context(), code, req.FiscalExitID, req.NFeNumber, req.NFeKey, actingUser(r)); err != nil {
@@ -706,7 +722,7 @@ func (h *ShipmentHandler) LinkFiscalExit(w http.ResponseWriter, r *http.Request)
 func (h *ShipmentHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	result, err := h.uc.ListEvents(r.Context(), code)
@@ -728,7 +744,7 @@ func (h *ShipmentHandler) AutoFillFromSalesOrder(w http.ResponseWriter, r *http.
 	}
 	var req autoFillSalesOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.autoFillUC.AutoFillFromSalesOrder(r.Context(), req.SalesOrderCode, actingUser(r))
@@ -750,7 +766,7 @@ func (h *ShipmentHandler) AutoFillFromPurchaseOrder(w http.ResponseWriter, r *ht
 	}
 	var req autoFillPurchaseOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.autoFillUC.AutoFillFromPurchaseOrder(r.Context(), req.PurchaseOrderCode, actingUser(r))
@@ -772,7 +788,7 @@ func (h *ShipmentHandler) AutoFillFromProductionOrder(w http.ResponseWriter, r *
 	}
 	var req autoFillProductionOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.autoFillUC.AutoFillFromProductionOrder(r.Context(), req.ProductionOrderCode, actingUser(r))
@@ -802,7 +818,7 @@ func (h *ShipmentHandler) ExportXLSX(w http.ResponseWriter, r *http.Request) {
 func (h *ShipmentHandler) exportFile(w http.ResponseWriter, r *http.Request, format string, generate func(context.Context, int64) ([]byte, error)) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	data, err := generate(r.Context(), code)
@@ -826,7 +842,7 @@ func (h *ShipmentHandler) exportFile(w http.ResponseWriter, r *http.Request, for
 func (h *ShipmentHandler) transition(w http.ResponseWriter, r *http.Request, fn func(context.Context, int64) error, ok string) {
 	code, err := h.codeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid shipment code")
+		jsonError(w, http.StatusBadRequest, "código do romaneio inválido")
 		return
 	}
 	if err := fn(r.Context(), code); err != nil {
@@ -839,7 +855,7 @@ func (h *ShipmentHandler) transition(w http.ResponseWriter, r *http.Request, fn 
 func (h *ShipmentHandler) transitionLoad(w http.ResponseWriter, r *http.Request, next shipentity.LoadStatus, ok string) {
 	code, err := h.loadCodeParam(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid load code")
+		jsonError(w, http.StatusBadRequest, "código da carga inválido")
 		return
 	}
 	var req cancelRequest
@@ -898,5 +914,18 @@ func loadFilterFromQuery(r *http.Request) shiprepo.LoadFilter {
 	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	f.Offset, _ = strconv.Atoi(q.Get("offset"))
+	normalizeCatalogPage(&f.Limit, &f.Offset)
 	return f
+}
+
+func normalizeCatalogPage(limit, offset *int) {
+	if *limit <= 0 {
+		*limit = 50
+	}
+	if *limit > 200 {
+		*limit = 200
+	}
+	if *offset < 0 {
+		*offset = 0
+	}
 }

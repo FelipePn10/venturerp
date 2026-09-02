@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -126,6 +128,22 @@ func (uc *CustomerUseCase) ListMarketSegments(ctx context.Context, onlyActive bo
 	return out, nil
 }
 
+func (uc *CustomerUseCase) UpdateMarketSegment(ctx context.Context, code int64, dto request.UpdateMarketSegmentDTO) (*response.MarketSegmentResponse, error) {
+	current, err := uc.repo.GetMarketSegmentByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	current.Description, current.HasPISCOFINSRetention, current.RetentionIndicator, current.IsActive = dto.Description, dto.HasPISCOFINSRetention, dto.RetentionIndicator, dto.IsActive
+	if dto.ParentID != nil {
+		current.ParentID = dto.ParentID
+	}
+	updated, err := uc.repo.UpdateMarketSegment(ctx, current)
+	if err != nil {
+		return nil, err
+	}
+	return toSegmentResponse(updated), nil
+}
+
 func toSegmentResponse(s *entity.MarketSegment) *response.MarketSegmentResponse {
 	return &response.MarketSegmentResponse{
 		ID:                    s.ID,
@@ -168,6 +186,22 @@ func (uc *CustomerUseCase) ListContactTypes(ctx context.Context, onlyActive bool
 	return out, nil
 }
 
+func (uc *CustomerUseCase) UpdateContactType(ctx context.Context, code int64, dto request.UpdateContactTypeDTO) (*response.ContactTypeResponse, error) {
+	current, err := uc.repo.GetContactTypeByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(dto.Description) == "" {
+		return nil, fmt.Errorf("a descrição é obrigatória")
+	}
+	current.Description, current.IsActive = strings.TrimSpace(dto.Description), dto.IsActive
+	updated, err := uc.repo.UpdateContactType(ctx, current)
+	if err != nil {
+		return nil, err
+	}
+	return toContactTypeResponse(updated), nil
+}
+
 func toContactTypeResponse(ct *entity.CustomerContactType) *response.ContactTypeResponse {
 	return &response.ContactTypeResponse{
 		ID:          ct.ID,
@@ -201,6 +235,23 @@ func (uc *CustomerUseCase) ListCustomerTypes(ctx context.Context, onlyActive boo
 		out = append(out, toCustomerTypeResponse(ct))
 	}
 	return out, nil
+}
+
+func (uc *CustomerUseCase) UpdateCustomerType(ctx context.Context, code int64, dto request.UpdateCustomerTypeDTO) (*response.CustomerTypeResponse, error) {
+	current, err := uc.repo.GetCustomerTypeByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	validated, err := entity.NewCustomerType(code, dto.Description, entity.CustomerCategory(dto.Category), dto.DeliveryDays)
+	if err != nil {
+		return nil, err
+	}
+	validated.ID, validated.IsActive = current.ID, dto.IsActive
+	updated, err := uc.repo.UpdateCustomerType(ctx, validated)
+	if err != nil {
+		return nil, err
+	}
+	return toCustomerTypeResponse(updated), nil
 }
 
 func toCustomerTypeResponse(ct *entity.CustomerType) *response.CustomerTypeResponse {
@@ -249,6 +300,24 @@ func (uc *CustomerUseCase) ListCarriers(ctx context.Context, onlyActive bool) ([
 	return out, nil
 }
 
+func (uc *CustomerUseCase) UpdateCarrier(ctx context.Context, code int64, dto request.UpdateCarrierDTO) (*response.CarrierResponse, error) {
+	current, err := uc.repo.GetCarrierByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	validated, err := entity.NewCarrier(code, dto.Description, entity.CarrierBillingType(dto.BillingType))
+	if err != nil {
+		return nil, err
+	}
+	validated.ID, validated.IsActive = current.ID, dto.IsActive
+	validated.UsesCreditLimit, validated.ConsiderAvailable, validated.PostponeDueDate, validated.ReceiptDays, validated.PaymentDays = dto.UsesCreditLimit, dto.ConsiderAvailable, dto.PostponeDueDate, dto.ReceiptDays, dto.PaymentDays
+	updated, err := uc.repo.UpdateCarrier(ctx, validated)
+	if err != nil {
+		return nil, err
+	}
+	return toCarrierResponse(updated), nil
+}
+
 func toCarrierResponse(c *entity.Carrier) *response.CarrierResponse {
 	return &response.CarrierResponse{
 		ID:                c.ID,
@@ -293,6 +362,22 @@ func (uc *CustomerUseCase) ListCarrierGroups(ctx context.Context) ([]*response.C
 	return out, nil
 }
 
+func (uc *CustomerUseCase) UpdateCarrierGroup(ctx context.Context, code int64, dto request.UpdateCarrierGroupDTO) (*response.CarrierGroupResponse, error) {
+	if strings.TrimSpace(dto.Description) == "" {
+		return nil, fmt.Errorf("a descrição é obrigatória")
+	}
+	current, err := uc.repo.GetCarrierGroupByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	current.Description = strings.TrimSpace(dto.Description)
+	updated, err := uc.repo.UpdateCarrierGroup(ctx, current)
+	if err != nil {
+		return nil, err
+	}
+	return &response.CarrierGroupResponse{ID: updated.ID, Code: updated.Code, Description: updated.Description}, nil
+}
+
 func (uc *CustomerUseCase) AddCarrierToGroup(ctx context.Context, dto request.CarrierGroupMemberDTO) error {
 	group, err := uc.repo.GetCarrierGroupByCode(ctx, dto.CarrierGroupCode)
 	if err != nil {
@@ -334,6 +419,32 @@ func (uc *CustomerUseCase) CreatePaymentCondition(ctx context.Context, dto reque
 		return nil, err
 	}
 	return toPaymentCondResponse(created), nil
+}
+
+func (uc *CustomerUseCase) UpdatePaymentCondition(ctx context.Context, code int64, dto request.UpdatePaymentConditionDTO) (*response.PaymentConditionResponse, error) {
+	current, err := uc.repo.GetPaymentConditionByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	validated, err := entity.NewPaymentCondition(code, dto.Description, entity.PaymentAnalysis(dto.AnalysisType))
+	if err != nil {
+		return nil, err
+	}
+	validated.ID, validated.IsActive = current.ID, dto.IsActive
+	validated.ParcelStart, validated.Expenses, validated.AverageTerm = entity.PaymentParcelStart(dto.ParcelStart), dto.Expenses, dto.AverageTerm
+	validated.IsSpecial, validated.IsRevenue, validated.IsAtSight = dto.IsSpecial, dto.IsRevenue, dto.IsAtSight
+	if dto.CarrierCode != nil {
+		carrier, err := uc.repo.GetCarrierByCode(ctx, *dto.CarrierCode)
+		if err != nil {
+			return nil, fmt.Errorf("portador não encontrado: %w", err)
+		}
+		validated.CarrierID = &carrier.ID
+	}
+	updated, err := uc.repo.UpdatePaymentCondition(ctx, validated)
+	if err != nil {
+		return nil, err
+	}
+	return toPaymentCondResponse(updated), nil
 }
 
 func (uc *CustomerUseCase) AddInstallment(ctx context.Context, dto request.AddInstallmentDTO) (*response.InstallmentResponse, error) {
@@ -787,9 +898,14 @@ func (uc *CustomerUseCase) AddCommercialPolicySpecificItem(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("commercial policy not found: %w", err)
 	}
+	var itemCode *string
+	if dto.ItemCode != nil {
+		value := dto.ItemCode.String()
+		itemCode = &value
+	}
 	item, err := uc.repo.AddCommercialPolicySpecificItem(ctx, &entity.CommercialPolicySpecificItem{
 		PolicyID:           p.ID,
-		ItemCode:           dto.ItemCode,
+		ItemCode:           itemCode,
 		ItemMask:           dto.ItemMask,
 		ProductLineID:      dto.ProductLineID,
 		ItemClassification: dto.ItemClassification,
@@ -823,6 +939,11 @@ func (uc *CustomerUseCase) EvaluateCommercialPolicies(ctx context.Context, dto r
 	if err != nil {
 		return nil, err
 	}
+	var itemCode *string
+	if dto.ItemCode != nil {
+		value := dto.ItemCode.String()
+		itemCode = &value
+	}
 	result, err := entity.EvaluateCommercialPolicies(policies, entity.CommercialPolicyContext{
 		GrossValue:         dto.GrossValue,
 		Quantity:           dto.Quantity,
@@ -833,7 +954,7 @@ func (uc *CustomerUseCase) EvaluateCommercialPolicies(ctx context.Context, dto r
 		SalesTableID:       dto.SalesTableID,
 		PaymentConditionID: dto.PaymentConditionID,
 		CarrierID:          dto.CarrierID,
-		ItemCode:           dto.ItemCode,
+		ItemCode:           itemCode,
 		ItemMask:           dto.ItemMask,
 		ProductLineID:      dto.ProductLineID,
 		ItemClassification: dto.ItemClassification,
@@ -1494,8 +1615,8 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 	if dto.ItemCode == "" {
 		return nil, fmt.Errorf("o código do item é obrigatório")
 	}
-	if dto.Price < 0 {
-		return nil, fmt.Errorf("o preço deve ser maior ou igual a zero")
+	if dto.Price <= 0 {
+		return nil, errorsuc.NewValidationError("o preço deve ser maior que zero")
 	}
 	if err := validateManualSalesTablePrice(st, dto.Price); err != nil {
 		return nil, err
@@ -1508,7 +1629,7 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 	}
 	p := &entity.SalesTablePrice{
 		SalesTableID:  dto.SalesTableID,
-		ItemCode:      dto.ItemCode,
+		ItemCode:      dto.ItemCode.String(),
 		Price:         dto.Price,
 		UME:           dto.UME,
 		UMC:           dto.UMC,
@@ -1535,10 +1656,10 @@ func validateManualSalesTablePrice(st *entity.SalesTable, price float64) error {
 	}
 	switch st.PriceFormation {
 	case entity.PriceCustoMedio, entity.PriceCustoStandardTotal, entity.PriceCustoStandardMaterial:
-		return fmt.Errorf("sales table price cannot be manually maintained when price_formation is %s", st.PriceFormation)
+		return errorsuc.NewValidationError(fmt.Sprintf("o preço não pode ser informado manualmente quando a formação da tabela é %s", st.PriceFormation))
 	}
 	if price < 0.01 && !st.AllowItemsBelowCent {
-		return fmt.Errorf("sales table does not allow item prices below 0.01")
+		return errorsuc.NewValidationError("a tabela não permite preços de item abaixo de 0,01")
 	}
 	return nil
 }
@@ -1556,7 +1677,7 @@ func (uc *CustomerUseCase) UpdateSalesTablePrice(ctx context.Context, dto reques
 	}
 	st, err := uc.repo.GetSalesTableByID(ctx, current.SalesTableID)
 	if err != nil {
-		return nil, fmt.Errorf("sales table not found: %w", err)
+		return nil, errorsuc.NewValidationError("tabela de vendas não encontrada")
 	}
 	if err := validateManualSalesTablePrice(st, dto.Price); err != nil {
 		return nil, err
@@ -1625,30 +1746,30 @@ func (uc *CustomerUseCase) ListSalesTablePricesByCode(ctx context.Context, sales
 
 func (uc *CustomerUseCase) PriceSalesItem(ctx context.Context, dto request.PriceSalesItemDTO) (*response.SalesItemPricingResponse, error) {
 	if dto.SalesTableCode == 0 {
-		return nil, fmt.Errorf("sales_table_code is required")
+		return nil, errorsuc.NewValidationError("o código da tabela de vendas é obrigatório")
 	}
 	if dto.ItemCode == "" {
-		return nil, fmt.Errorf("item_code is required")
+		return nil, errorsuc.NewValidationError("o código do item é obrigatório")
 	}
 	if dto.Quantity <= 0 {
 		dto.Quantity = 1
 	}
 	st, err := uc.repo.GetSalesTableByCode(ctx, dto.SalesTableCode)
 	if err != nil {
-		return nil, fmt.Errorf("sales table not found: %w", err)
+		return nil, errorsuc.NewValidationError("tabela de vendas não encontrada")
 	}
 	if err := validateSalesTableForPricing(st, time.Now()); err != nil {
 		return nil, err
 	}
-	p, err := uc.repo.GetSalesTablePrice(ctx, st.ID, dto.ItemCode)
+	p, err := uc.repo.GetSalesTablePrice(ctx, st.ID, dto.ItemCode.String())
 	if err != nil {
 		return nil, err
 	}
 	if p.Blocked {
-		return nil, fmt.Errorf("sales table price is blocked")
+		return nil, errorsuc.NewValidationError("o preço do item está bloqueado na tabela")
 	}
 	if p.Situation == entity.PriceSituationInativo {
-		return nil, fmt.Errorf("sales table price is inactive")
+		return nil, errorsuc.NewValidationError("o preço do item está inativo na tabela")
 	}
 	return &response.SalesItemPricingResponse{
 		SalesTableCode: st.Code,
@@ -1666,12 +1787,102 @@ func (uc *CustomerUseCase) PriceSalesItem(ctx context.Context, dto request.Price
 	}, nil
 }
 
+func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto request.ResolveSalesTablesForItemDTO) (*response.SalesTableResolutionResponse, error) {
+	if strings.TrimSpace(dto.ItemCode) == "" {
+		return nil, errorsuc.NewValidationError("informe o código do item")
+	}
+	if dto.Quantity <= 0 {
+		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
+	}
+	if dto.Currency == "" {
+		dto.Currency = "BRL"
+	}
+	if !strings.EqualFold(dto.Currency, "BRL") {
+		return nil, errorsuc.NewValidationError("não existem tabelas configuradas para a moeda informada")
+	}
+	if dto.ReferenceAt.IsZero() {
+		dto.ReferenceAt = time.Now()
+	}
+	var customer *entity.Customer
+	if dto.CustomerCode != nil {
+		var err error
+		customer, err = uc.repo.GetCustomerByCode(ctx, *dto.CustomerCode)
+		if err != nil {
+			return nil, errorsuc.NewValidationError("cliente não encontrado")
+		}
+	}
+	tables, err := uc.repo.ListSalesTables(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	policies, err := uc.repo.ListCommercialPolicies(ctx, true, nil)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]response.SalesTableCandidateResponse, 0)
+	for _, table := range tables {
+		if validateSalesTableForPricing(table, dto.ReferenceAt) != nil {
+			continue
+		}
+		price, priceErr := uc.repo.GetSalesTablePrice(ctx, table.ID, dto.ItemCode)
+		if priceErr != nil || price.Blocked || price.Situation == entity.PriceSituationInativo || price.Price <= 0 {
+			continue
+		}
+		unit := ""
+		if price.UME != nil {
+			unit = *price.UME
+		}
+		if dto.Unit != "" && !strings.EqualFold(dto.Unit, unit) && (price.UMC == nil || !strings.EqualFold(dto.Unit, *price.UMC)) {
+			continue
+		}
+		priority := 40
+		source := "SALES_TABLE"
+		if table.TableType == entity.TableTypePromocional {
+			priority = 30
+		}
+		if customer != nil && customer.SalesTableID != nil && *customer.SalesTableID == table.ID {
+			priority = 10
+			source = "CUSTOMER_SALES_TABLE"
+		}
+		applied := price.Price
+		context := entity.CommercialPolicyContext{GrossValue: price.Price * dto.Quantity, Quantity: dto.Quantity, SalesTableID: &table.ID, ItemCode: &dto.ItemCode}
+		if customer != nil {
+			context.CustomerCode = &customer.Code
+			context.CustomerTypeID = customer.CustomerTypeID
+			context.MarketSegmentID = customer.MarketSegmentID
+			context.RegionID = customer.RegionID
+			context.PaymentConditionID = customer.PaymentConditionID
+			context.CarrierID = customer.CarrierID
+		}
+		if evaluation, evaluationErr := entity.EvaluateCommercialPolicies(policies, context); evaluationErr == nil && len(evaluation.Effects) > 0 {
+			applied = evaluation.NetValue / dto.Quantity
+			if priority > 20 {
+				priority = 20
+			}
+			source = "COMMERCIAL_POLICY"
+		}
+		candidates = append(candidates, response.SalesTableCandidateResponse{SalesTableCode: table.Code, Description: table.Description, BasePrice: price.Price, AppliedPrice: applied, Unit: unit, Currency: "BRL", Source: source, Priority: priority})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Priority == candidates[j].Priority {
+			return candidates[i].SalesTableCode < candidates[j].SalesTableCode
+		}
+		return candidates[i].Priority < candidates[j].Priority
+	})
+	result := &response.SalesTableResolutionResponse{Candidates: candidates}
+	if len(candidates) == 1 || (len(candidates) > 1 && candidates[0].Priority < candidates[1].Priority) {
+		result.AutoSelected = true
+		result.Selected = &candidates[0]
+	}
+	return result, nil
+}
+
 func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormSalesPriceDTO) (*response.SalesPriceFormationResponse, error) {
 	decimalPlaces := int16(2)
 	if dto.PolicyCode != nil {
 		p, err := uc.repo.GetSalesPricePolicyByCode(ctx, *dto.PolicyCode)
 		if err != nil {
-			return nil, fmt.Errorf("sales price policy not found: %w", err)
+			return nil, errorsuc.NewValidationError("política de formação de preço não encontrada")
 		}
 		if err := validateSalesPricePolicyForPricing(p, time.Now()); err != nil {
 			return nil, err
@@ -1687,9 +1898,9 @@ func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormS
 		dto.CommissionPct = p.CommissionPct
 		dto.DiscountPct = p.DiscountPct
 		if dto.BaseCost == 0 && p.CostSource != entity.SalesCostInformed && dto.ItemCode != "" {
-			itemCode, err := strconv.ParseInt(dto.ItemCode, 10, 64)
+			itemCode, err := strconv.ParseInt(dto.ItemCode.String(), 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("item_code must be numeric when resolving cost from policy")
+				return nil, errorsuc.NewValidationError("não foi possível resolver internamente o código do item para calcular o custo")
 			}
 			baseCost, _, err := uc.repo.ResolveSalesCost(ctx, itemCode, "", p.CostSource, nil)
 			if err != nil {
@@ -1701,7 +1912,7 @@ func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormS
 	if dto.SalesTableCode != 0 {
 		st, err := uc.repo.GetSalesTableByCode(ctx, dto.SalesTableCode)
 		if err != nil {
-			return nil, fmt.Errorf("sales table not found: %w", err)
+			return nil, errorsuc.NewValidationError("tabela de vendas não encontrada")
 		}
 		decimalPlaces = st.DecimalPlaces
 		if decimalPlaces < 0 {
@@ -1724,7 +1935,7 @@ func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormS
 	}
 	return &response.SalesPriceFormationResponse{
 		SalesTableCode:          dto.SalesTableCode,
-		ItemCode:                dto.ItemCode,
+		ItemCode:                dto.ItemCode.String(),
 		BaseCost:                formed.BaseCost,
 		SuggestedPrice:          formed.SuggestedPrice,
 		MarkupPct:               formed.MarkupPct,
@@ -1742,24 +1953,24 @@ func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormS
 
 func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto request.GenerateSalesTablePricesDTO) (*response.GenerateSalesTablePricesResponse, error) {
 	if dto.SalesTableCode == 0 {
-		return nil, fmt.Errorf("sales_table_code is required")
+		return nil, errorsuc.NewValidationError("o código da tabela de vendas é obrigatório")
 	}
 	if dto.PolicyCode == 0 {
-		return nil, fmt.Errorf("policy_code is required")
+		return nil, errorsuc.NewValidationError("o código da política de preço é obrigatório")
 	}
 	if len(dto.ItemCodes) == 0 {
-		return nil, fmt.Errorf("item_codes is required")
+		return nil, errorsuc.NewValidationError("informe ao menos um código de item")
 	}
 	st, err := uc.repo.GetSalesTableByCode(ctx, dto.SalesTableCode)
 	if err != nil {
-		return nil, fmt.Errorf("sales table not found: %w", err)
+		return nil, errorsuc.NewValidationError("tabela de vendas não encontrada")
 	}
 	if err := validateSalesTableForPricing(st, time.Now()); err != nil {
 		return nil, err
 	}
 	policy, err := uc.repo.GetSalesPricePolicyByCode(ctx, dto.PolicyCode)
 	if err != nil {
-		return nil, fmt.Errorf("sales price policy not found: %w", err)
+		return nil, errorsuc.NewValidationError("política de formação de preço não encontrada")
 	}
 	if err := validateSalesPricePolicyForPricing(policy, time.Now()); err != nil {
 		return nil, err
@@ -1771,14 +1982,14 @@ func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto req
 		Generated:      make([]response.GeneratedSalesTablePriceResponse, 0, len(dto.ItemCodes)),
 	}
 	for _, rawItemCode := range dto.ItemCodes {
-		itemCode, err := strconv.ParseInt(rawItemCode, 10, 64)
+		itemCode, err := strconv.ParseInt(rawItemCode.String(), 10, 64)
 		if err != nil {
-			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignored: item_code must be numeric to resolve cost", rawItemCode))
+			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignorado: não foi possível resolver internamente o código para calcular o custo", rawItemCode))
 			continue
 		}
 		baseCost, costSource, err := uc.repo.ResolveSalesCost(ctx, itemCode, "", policy.CostSource, dto.WarehouseID)
 		if err != nil {
-			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignored: %v", rawItemCode, err))
+			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignorado: %v", rawItemCode, err))
 			continue
 		}
 		formed, err := entity.FormSalesPrice(entity.SalesPriceFormationInput{
@@ -1793,12 +2004,12 @@ func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto req
 			DecimalPlaces: st.DecimalPlaces,
 		})
 		if err != nil {
-			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignored: %v", rawItemCode, err))
+			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignorado: %v", rawItemCode, err))
 			continue
 		}
 		priceRow := &entity.SalesTablePrice{
 			SalesTableID: st.ID,
-			ItemCode:     rawItemCode,
+			ItemCode:     rawItemCode.String(),
 			Price:        formed.SuggestedPrice,
 			PriceConv:    formed.SuggestedPrice,
 			Situation:    entity.PriceSituationAtivo,
@@ -1807,7 +2018,7 @@ func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto req
 		priceRow.Formula = &formula
 		saved, oldPrice, err := uc.repo.UpsertSalesTablePrice(ctx, priceRow)
 		if err != nil {
-			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignored: %v", rawItemCode, err))
+			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s ignorado: %v", rawItemCode, err))
 			continue
 		}
 		base := baseCost
@@ -1816,7 +2027,7 @@ func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto req
 			SalesTablePriceID: &saved.ID,
 			SalesTableID:      st.ID,
 			SalesTableCode:    st.Code,
-			ItemCode:          rawItemCode,
+			ItemCode:          rawItemCode.String(),
 			OldPrice:          oldPrice,
 			NewPrice:          saved.Price,
 			BaseCost:          &base,
@@ -1825,14 +2036,14 @@ func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto req
 			Reason:            dto.Reason,
 		})
 		if err != nil {
-			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s repriced without history: %v", rawItemCode, err))
+			out.Warnings = append(out.Warnings, fmt.Sprintf("item %s reprecificado sem histórico: %v", rawItemCode, err))
 		}
 		var historyID int64
 		if history != nil {
 			historyID = history.ID
 		}
 		out.Generated = append(out.Generated, response.GeneratedSalesTablePriceResponse{
-			ItemCode:   rawItemCode,
+			ItemCode:   rawItemCode.String(),
 			BaseCost:   baseCost,
 			CostSource: costSource,
 			OldPrice:   oldPrice,

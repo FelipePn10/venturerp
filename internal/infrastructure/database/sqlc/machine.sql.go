@@ -20,9 +20,10 @@ INSERT INTO item_machine_times (
     production_time_unit,
     production_base_qty,
     setup_time,
-    priority
+    priority,
+    enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     ON CONFLICT (item_code, mask, machine_code)
 DO UPDATE SET
     production_time = EXCLUDED.production_time,
@@ -41,6 +42,7 @@ type CreateItemMachineTimeParams struct {
 	ProductionBaseQty  int32
 	SetupTime          pgtype.Numeric
 	Priority           int32
+	EnterpriseID       *int64
 }
 
 func (q *Queries) CreateItemMachineTime(ctx context.Context, arg CreateItemMachineTimeParams) (ItemMachineTime, error) {
@@ -53,6 +55,7 @@ func (q *Queries) CreateItemMachineTime(ctx context.Context, arg CreateItemMachi
 		arg.ProductionBaseQty,
 		arg.SetupTime,
 		arg.Priority,
+		arg.EnterpriseID,
 	)
 	var i ItemMachineTime
 	err := row.Scan(
@@ -282,22 +285,32 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 const deleteMachine = `-- name: DeleteMachine :exec
 UPDATE machines
 SET is_active = FALSE, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteMachine(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteMachine, code)
+type DeleteMachineParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteMachine(ctx context.Context, arg DeleteMachineParams) error {
+	_, err := q.db.Exec(ctx, deleteMachine, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const deleteMachineType = `-- name: DeleteMachineType :exec
 UPDATE machine_types
 SET is_active = FALSE, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteMachineType(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteMachineType, code)
+type DeleteMachineTypeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteMachineType(ctx context.Context, arg DeleteMachineTypeParams) error {
+	_, err := q.db.Exec(ctx, deleteMachineType, arg.Code, arg.EnterpriseID)
 	return err
 }
 
@@ -315,11 +328,16 @@ func (q *Queries) DeleteSchedule(ctx context.Context, code int64) error {
 const getMachineByCode = `-- name: GetMachineByCode :one
 SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 FROM machines
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetMachineByCode(ctx context.Context, code int64) (Machine, error) {
-	row := q.db.QueryRow(ctx, getMachineByCode, code)
+type GetMachineByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetMachineByCode(ctx context.Context, arg GetMachineByCodeParams) (Machine, error) {
+	row := q.db.QueryRow(ctx, getMachineByCode, arg.Code, arg.EnterpriseID)
 	var i Machine
 	err := row.Scan(
 		&i.ID,
@@ -420,13 +438,19 @@ func (q *Queries) GetSchedule(ctx context.Context, code int64) (MachineSchedule,
 const listItemMachineTimes = `-- name: ListItemMachineTimes :many
 SELECT id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty, is_active, enterprise_id
 FROM item_machine_times
-WHERE item_code = $1
+WHERE (item_code = $1 OR $1 = 0)
+  AND enterprise_id = $2
   AND is_active = TRUE
-ORDER BY priority
+ORDER BY item_code, machine_code, priority
 `
 
-func (q *Queries) ListItemMachineTimes(ctx context.Context, itemCode int64) ([]ItemMachineTime, error) {
-	rows, err := q.db.Query(ctx, listItemMachineTimes, itemCode)
+type ListItemMachineTimesParams struct {
+	ItemCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListItemMachineTimes(ctx context.Context, arg ListItemMachineTimesParams) ([]ItemMachineTime, error) {
+	rows, err := q.db.Query(ctx, listItemMachineTimes, arg.ItemCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -463,12 +487,18 @@ const listItemsByMachine = `-- name: ListItemsByMachine :many
 SELECT id, item_code, mask, production_time, setup_time, priority, created_at, updated_at, machine_code, production_time_unit, production_base_qty, is_active, enterprise_id
 FROM item_machine_times
 WHERE machine_code = $1
+  AND enterprise_id = $2
   AND is_active = TRUE
 ORDER BY priority
 `
 
-func (q *Queries) ListItemsByMachine(ctx context.Context, machineCode int64) ([]ItemMachineTime, error) {
-	rows, err := q.db.Query(ctx, listItemsByMachine, machineCode)
+type ListItemsByMachineParams struct {
+	MachineCode  int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListItemsByMachine(ctx context.Context, arg ListItemsByMachineParams) ([]ItemMachineTime, error) {
+	rows, err := q.db.Query(ctx, listItemsByMachine, arg.MachineCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -504,12 +534,12 @@ func (q *Queries) ListItemsByMachine(ctx context.Context, machineCode int64) ([]
 const listMachineTypes = `-- name: ListMachineTypes :many
 SELECT id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 FROM machine_types
-WHERE is_active = TRUE
+WHERE is_active = TRUE AND enterprise_id = $1
 ORDER BY code
 `
 
-func (q *Queries) ListMachineTypes(ctx context.Context) ([]MachineType, error) {
-	rows, err := q.db.Query(ctx, listMachineTypes)
+func (q *Queries) ListMachineTypes(ctx context.Context, enterpriseID *int64) ([]MachineType, error) {
+	rows, err := q.db.Query(ctx, listMachineTypes, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -547,12 +577,12 @@ func (q *Queries) ListMachineTypes(ctx context.Context) ([]MachineType, error) {
 const listMachines = `-- name: ListMachines :many
 SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 FROM machines
-WHERE is_active = TRUE
+WHERE is_active = TRUE AND enterprise_id = $1
 ORDER BY code
 `
 
-func (q *Queries) ListMachines(ctx context.Context) ([]Machine, error) {
-	rows, err := q.db.Query(ctx, listMachines)
+func (q *Queries) ListMachines(ctx context.Context, enterpriseID *int64) ([]Machine, error) {
+	rows, err := q.db.Query(ctx, listMachines, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -602,12 +632,18 @@ const listMachinesByType = `-- name: ListMachinesByType :many
 SELECT id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 FROM machines
 WHERE machine_type_code = $1
+  AND enterprise_id = $2
   AND is_active = TRUE
 ORDER BY code
 `
 
-func (q *Queries) ListMachinesByType(ctx context.Context, machineTypeCode int64) ([]Machine, error) {
-	rows, err := q.db.Query(ctx, listMachinesByType, machineTypeCode)
+type ListMachinesByTypeParams struct {
+	MachineTypeCode int64
+	EnterpriseID    *int64
+}
+
+func (q *Queries) ListMachinesByType(ctx context.Context, arg ListMachinesByTypeParams) ([]Machine, error) {
+	rows, err := q.db.Query(ctx, listMachinesByType, arg.MachineTypeCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -769,7 +805,7 @@ SET
     capacity_period = $6,
     efficiency_rate = $7,
     updated_at = NOW()
-WHERE code = $6
+WHERE code = $6 AND enterprise_id = $8
     RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 `
 
@@ -781,6 +817,7 @@ type UpdateMachineParams struct {
 	CapacityUnit    MachineCapacityUnitEnum
 	CapacityPeriod  CapacityPeriodEnum
 	EfficiencyRate  pgtype.Numeric
+	EnterpriseID    *int64
 }
 
 func (q *Queries) UpdateMachine(ctx context.Context, arg UpdateMachineParams) (Machine, error) {
@@ -792,6 +829,7 @@ func (q *Queries) UpdateMachine(ctx context.Context, arg UpdateMachineParams) (M
 		arg.CapacityUnit,
 		arg.CapacityPeriod,
 		arg.EfficiencyRate,
+		arg.EnterpriseID,
 	)
 	var i Machine
 	err := row.Scan(
@@ -834,7 +872,7 @@ SET
     requires_operator = $4,
     is_active = $5,
     updated_at = NOW()
-WHERE code = $6
+WHERE code = $6 AND enterprise_id = $7
     RETURNING id, code, name, description, type, setup_time, is_active, created_at, updated_at, created_by, requires_operator, enterprise_id, machine_cost_center_id, labor_cost_center_id, capacity_hours
 `
 
@@ -845,6 +883,7 @@ type UpdateMachineTypeParams struct {
 	RequiresOperator bool
 	IsActive         bool
 	Code             int64
+	EnterpriseID     *int64
 }
 
 func (q *Queries) UpdateMachineType(ctx context.Context, arg UpdateMachineTypeParams) (MachineType, error) {
@@ -855,6 +894,7 @@ func (q *Queries) UpdateMachineType(ctx context.Context, arg UpdateMachineTypePa
 		arg.RequiresOperator,
 		arg.IsActive,
 		arg.Code,
+		arg.EnterpriseID,
 	)
 	var i MachineType
 	err := row.Scan(

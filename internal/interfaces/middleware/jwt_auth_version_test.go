@@ -111,3 +111,19 @@ func TestJWTAcceptsCurrentAuthVersion(t *testing.T) {
 		t.Fatalf("expected 204, got %d", response.Code)
 	}
 }
+
+func TestJWTRejectsTokenFromAnotherDataEnvironment(t *testing.T) {
+	const secret = "test-secret"
+	token, err := auth.GenerateTokenForEnvironment("00000000-0000-0000-0000-000000000001", "USER", 1, 2, "training", secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := JWTForEnvironment(secret, "production", applogger.New("error"), fixedAuthVersion{version: 2})(okHandler())
+	request := httptest.NewRequest(http.MethodGet, "/api/items", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", response.Code)
+	}
+}

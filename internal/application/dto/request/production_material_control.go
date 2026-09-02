@@ -84,14 +84,16 @@ type ConfigureManufacturingStockDTO struct {
 	MovementTo    *string `json:"movement_to,omitempty"`
 }
 
+// ConfigureManufacturingItemStockDTO: o item chega pelo código de negócio
+// (texto), como a tela de parâmetros de estoque (VPRO1100) o conhece.
 type ConfigureManufacturingItemStockDTO struct {
-	ItemCode           int64  `json:"item_code"`
-	StockUOM           string `json:"stock_uom"`
-	ControlsLot        bool   `json:"controls_lot"`
-	ControlsAddress    bool   `json:"controls_address"`
-	InventoryGroupType string `json:"inventory_group_type"`
-	AutomaticIssueType string `json:"automatic_issue_type"`
-	LineWarehouseID    *int64 `json:"line_warehouse_id,omitempty"`
+	ItemCode           TextCode `json:"item_code"`
+	StockUOM           string   `json:"stock_uom"`
+	ControlsLot        bool     `json:"controls_lot"`
+	ControlsAddress    bool     `json:"controls_address"`
+	InventoryGroupType string   `json:"inventory_group_type"`
+	AutomaticIssueType string   `json:"automatic_issue_type"`
+	LineWarehouseID    *int64   `json:"line_warehouse_id,omitempty"`
 }
 
 type ConfigureWarehouseAddressDTO struct {

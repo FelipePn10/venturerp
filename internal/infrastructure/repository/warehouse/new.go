@@ -1,13 +1,11 @@
 package warehouse
 
-import "github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+import "github.com/jackc/pgx/v5/pgxpool"
 
 type repositoryWarehouseSQLC struct {
-	q *sqlc.Queries
+	pool *pgxpool.Pool
 }
 
-func NewRepositoryQuestionSQLC(q *sqlc.Queries) *repositoryWarehouseSQLC {
-	return &repositoryWarehouseSQLC{
-		q: q,
-	}
+func NewRepositoryQuestionSQLC(pool *pgxpool.Pool) *repositoryWarehouseSQLC {
+	return &repositoryWarehouseSQLC{pool: pool}
 }

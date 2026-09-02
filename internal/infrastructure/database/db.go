@@ -17,10 +17,14 @@ type DB struct {
 }
 
 func NewDB(cfg *config.Config) (*DB, error) {
+	return NewDBURL(cfg.DatabaseURL)
+}
+
+func NewDBURL(databaseURL string) (*DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	poolCfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse DB config: %w", err)
 	}

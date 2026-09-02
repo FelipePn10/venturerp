@@ -8,14 +8,19 @@ import (
 )
 
 type PurchasePriceTableResponse struct {
-	ID            int64                            `json:"id"`
-	EnterpriseID  int64                            `json:"enterprise_id"`
-	Code          int64                            `json:"code"`
-	SupplierCode  int64                            `json:"supplier_code"`
-	Description   string                           `json:"description"`
-	CurrencyCode  string                           `json:"currency_code"`
+	ID           int64  `json:"id"`
+	EnterpriseID int64  `json:"enterprise_id"`
+	Code         int64  `json:"code"`
+	SupplierCode *int64 `json:"supplier_code,omitempty"`
+	Description  string `json:"description"`
+	CurrencyCode string `json:"currency_code"`
+	// Currency, ValidFrom e ValidTo repetem os campos acima com os nomes usados
+	// pela tela de tabela de preço de compra (VSUP0120).
+	Currency      string                           `json:"currency"`
 	ValidityStart *time.Time                       `json:"validity_start,omitempty"`
 	ValidityEnd   *time.Time                       `json:"validity_end,omitempty"`
+	ValidFrom     *time.Time                       `json:"valid_from,omitempty"`
+	ValidTo       *time.Time                       `json:"valid_to,omitempty"`
 	IsActive      bool                             `json:"is_active"`
 	CreatedAt     time.Time                        `json:"created_at"`
 	CreatedBy     uuid.UUID                        `json:"created_by"`

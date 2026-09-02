@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
@@ -795,15 +796,19 @@ func (r *FinancialRepositoryPG) GetFiscalCredits(ctx context.Context, competenci
 }
 
 func (r *FinancialRepositoryPG) GetFiscalConfig(ctx context.Context) (*fiscalEntity.FiscalConfig, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var cfg fiscalEntity.FiscalConfig
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
+	err = r.pool.QueryRow(ctx,
+		`SELECT id, enterprise_id, cnpj_empresa, razao_social, COALESCE(trade_name,''), COALESCE(email,''), ie_empresa, regime_tributario, uf_empresa,
 		        icms_interno_aliquota, icms_diferimento_percentual,
 		        focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		        vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
 		        created_at, updated_at, updated_by
-		 FROM public.fiscal_configs ORDER BY id LIMIT 1`,
-	).Scan(&cfg.ID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
+		 FROM public.fiscal_configs WHERE enterprise_id=$1`, enterpriseID,
+	).Scan(&cfg.ID, &cfg.EnterpriseID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.TradeName, &cfg.Email, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
 		&cfg.FocusNfeToken, &cfg.FocusNfeAmbiente, &cfg.JurosMes, &cfg.MultaAtraso,
 		&cfg.VencimentoIcmsDia, &cfg.VencimentoIPIDia, &cfg.VencimentoPisCofinsDia,

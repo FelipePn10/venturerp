@@ -6,6 +6,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/tool/repository"
 )
@@ -58,8 +59,8 @@ func (uc *ToolUseCase) Update(ctx context.Context, dto request.UpdateToolDTO) (*
 
 func (uc *ToolUseCase) Get(ctx context.Context, id int64) (*response.ToolResponse, error) {
 	t, err := uc.repo.GetTool(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("tool not found: %w", err)
+	if err != nil || t == nil {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ferramenta %d não encontrada", id))
 	}
 	return toToolResponse(t), nil
 }
@@ -76,15 +77,41 @@ func (uc *ToolUseCase) List(ctx context.Context, onlyActive bool) ([]*response.T
 	return out, nil
 }
 
+// Deactivate inativa a ferramenta. A atualização não informa quantas linhas
+// mudou, então conferimos a existência antes e o estado depois — sem isso,
+// inativar uma ferramenta inexistente respondia "sucesso" sem efeito algum.
 func (uc *ToolUseCase) Deactivate(ctx context.Context, id int64) error {
-	return uc.repo.DeactivateTool(ctx, id)
+	current, err := uc.repo.GetTool(ctx, id)
+	if err != nil || current == nil {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("ferramenta %d não encontrada", id))
+	}
+	if !current.IsActive {
+		return errorsuc.NewConflictError(fmt.Sprintf("a ferramenta %d já está inativa", id))
+	}
+	if err := uc.repo.DeactivateTool(ctx, id); err != nil {
+		return err
+	}
+	updated, err := uc.repo.GetTool(ctx, id)
+	if err != nil || updated == nil || updated.IsActive {
+		return fmt.Errorf("não foi possível inativar a ferramenta %d", id)
+	}
+	return nil
 }
 
-// ResetLife zeroes the consumed life and reactivates the tool (after replacement).
+// ResetLife zera a vida consumida e reativa a ferramenta (após a troca).
 func (uc *ToolUseCase) ResetLife(ctx context.Context, id int64) (*response.ToolResponse, error) {
+	if _, err := uc.repo.GetTool(ctx, id); err != nil {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ferramenta %d não encontrada", id))
+	}
 	t, err := uc.repo.ResetToolLife(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if t == nil {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ferramenta %d não encontrada", id))
+	}
+	if t.LifeUsed != 0 {
+		return nil, fmt.Errorf("não foi possível zerar a vida útil da ferramenta %d", id)
 	}
 	return toToolResponse(t), nil
 }
@@ -196,8 +223,23 @@ func (uc *ToolUseCase) ListSerials(ctx context.Context, toolID int64, onlyActive
 	return out, nil
 }
 
+// DeactivateSerial inativa a série física, conferindo o efeito da atualização.
 func (uc *ToolUseCase) DeactivateSerial(ctx context.Context, id int64) error {
-	return uc.repo.DeactivateToolSerial(ctx, id)
+	current, err := uc.repo.GetToolSerial(ctx, id)
+	if err != nil || current == nil {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("série de ferramenta %d não encontrada", id))
+	}
+	if !current.IsActive {
+		return errorsuc.NewConflictError(fmt.Sprintf("a série de ferramenta %d já está inativa", id))
+	}
+	if err := uc.repo.DeactivateToolSerial(ctx, id); err != nil {
+		return err
+	}
+	updated, err := uc.repo.GetToolSerial(ctx, id)
+	if err != nil || updated == nil || updated.IsActive {
+		return fmt.Errorf("não foi possível inativar a série de ferramenta %d", id)
+	}
+	return nil
 }
 
 // ─── mappers ─────────────────────────────────────────────────────────────────

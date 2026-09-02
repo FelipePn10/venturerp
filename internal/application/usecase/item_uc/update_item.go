@@ -16,14 +16,21 @@ import (
 type UpdateItemUseCase struct {
 	Repo repository.ItemRepository
 	Auth ports.AuthService
+	// FiscalCatalog valida as classificações fiscais contra o cadastro canônico
+	// (/api/fiscal-classifications). Opcional: sem ele os códigos passam livres.
+	FiscalCatalog fiscalClassificationCatalog
 }
 
 type updateItemBusinessRepository interface {
 	FindItemByBusinessCode(context.Context, valueobject.BusinessCode) (*entity.Item, error)
 }
 
-func NewUpdateItemUseCase(repo repository.ItemRepository, auth ports.AuthService) *UpdateItemUseCase {
-	return &UpdateItemUseCase{Repo: repo, Auth: auth}
+func NewUpdateItemUseCase(repo repository.ItemRepository, auth ports.AuthService, fiscalCatalog ...fiscalClassificationCatalog) *UpdateItemUseCase {
+	uc := &UpdateItemUseCase{Repo: repo, Auth: auth}
+	if len(fiscalCatalog) > 0 {
+		uc.FiscalCatalog = fiscalCatalog[0]
+	}
+	return uc
 }
 
 func (uc *UpdateItemUseCase) Execute(ctx context.Context, code int64, dto request.UpdateItemDTO) (*response.ItemResponse, error) {
@@ -90,7 +97,15 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 			item.Commercial.TechnicalAssistanceWarehouseCode = *c.TechnicalAssistanceWarehouseCode
 		}
 		if c.PackagingItemCode != nil {
-			item.Commercial.PackagingItemCode = *c.PackagingItemCode
+			// Código de negócio (texto) da tela; nil limpa a embalagem.
+			item.Commercial.PackagingItemCode = nil
+			item.Commercial.PackagingItemBusinessCode = ""
+			if *c.PackagingItemCode != nil {
+				item.Commercial.PackagingItemBusinessCode = strings.TrimSpace((*c.PackagingItemCode).String())
+			}
+			if err := resolveReferenceCodes(ctx, uc.Repo, item); err != nil {
+				return nil, err
+			}
 		}
 		if c.AllowBillingDescriptionChange != nil {
 			item.Commercial.AllowBillingDescriptionChange = *c.AllowBillingDescriptionChange
@@ -178,6 +193,15 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 	}
 	if err := item.Validate(); err != nil {
 		return nil, err
+	}
+	if uc.FiscalCatalog != nil {
+		enterpriseID, err := uc.Auth.EnterpriseID(ctx)
+		if err != nil {
+			return nil, errorsuc.ErrUnauthorized
+		}
+		if err = validateFiscalClassifications(ctx, uc.FiscalCatalog, enterpriseID, item); err != nil {
+			return nil, err
+		}
 	}
 	updated, err := uc.Repo.UpdateCommercialAccounting(ctx, item)
 	if err != nil {

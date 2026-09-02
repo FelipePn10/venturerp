@@ -8,6 +8,7 @@ import (
 )
 
 var ErrAlreadyExists = errors.New("production plan code already exists")
+var ErrNotFound = errors.New("production plan not found")
 
 type ProductionPlanRepository interface {
 	Create(ctx context.Context, plan *entity.ProductionPlan) (*entity.ProductionPlan, error)

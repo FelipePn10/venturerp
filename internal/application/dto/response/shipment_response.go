@@ -16,6 +16,7 @@ type ShipmentResponse struct {
 	ProductionOrderCode *int64  `json:"production_order_code,omitempty"`
 	CarrierCode         *int64  `json:"carrier_code,omitempty"`
 	Status              string  `json:"status"`
+	StatusLabel         string  `json:"status_label"`
 
 	TotalVolumes     int     `json:"total_volumes"`
 	TotalNetWeight   float64 `json:"total_net_weight"`
@@ -99,6 +100,7 @@ type ShipmentLoadResponse struct {
 	ID                int64      `json:"id"`
 	Code              int64      `json:"code"`
 	Status            string     `json:"status"`
+	StatusLabel       string     `json:"status_label"`
 	Description       *string    `json:"description,omitempty"`
 	CarrierCode       *int64     `json:"carrier_code,omitempty"`
 	VehiclePlate      *string    `json:"vehicle_plate,omitempty"`

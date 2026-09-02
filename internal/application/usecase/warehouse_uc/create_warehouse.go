@@ -33,9 +33,14 @@ func (uc *CreateWarehouseUseCase) Execute(
 	if !uc.Auth.CanCreateWarehouse(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.CreatedBy = actor
 
 	warehouse, err := entity.NewWarehouse(
-		dto.Code,
+		dto.Code.String(),
 		dto.Description,
 		dto.Location,
 		dto.Type,

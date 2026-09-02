@@ -44,8 +44,9 @@ func toCommercial(d *request.CommercialDTO) itementity.Commercial {
 		Description: clean(d.Description), SaleType: clean(d.SaleType), VolumeConversionFactor: d.VolumeConversionFactor,
 		SaleMultiple: d.SaleMultiple, MinimumSaleQuantity: d.MinimumSaleQuantity, EstimatedDeliveryDays: d.EstimatedDeliveryDays,
 		WarrantyDays: d.WarrantyDays, TransferWarehouseCode: d.TransferWarehouseCode,
-		TechnicalAssistanceWarehouseCode: d.TechnicalAssistanceWarehouseCode, PackagingItemCode: d.PackagingItemCode,
-		AllowBillingDescriptionChange: d.AllowBillingDescriptionChange, IssueLoadingLabels: d.IssueLoadingLabels,
+		TechnicalAssistanceWarehouseCode: d.TechnicalAssistanceWarehouseCode,
+		PackagingItemBusinessCode:        textCode(d.PackagingItemCode),
+		AllowBillingDescriptionChange:    d.AllowBillingDescriptionChange, IssueLoadingLabels: d.IssueLoadingLabels,
 		AssembleShippingVolumes: d.AssembleShippingVolumes, RequiresSpecialPackaging: d.RequiresSpecialPackaging,
 		WithholdPISCOFINS: d.WithholdPISCOFINS, IsPackaging: d.IsPackaging, MobileEnabled: d.MobileEnabled,
 		ExportPackaging: d.ExportPackaging, ClassificationCode: clean(d.ClassificationCode), Notes: clean(d.Notes),
@@ -91,12 +92,12 @@ func toWarehouse(d request.WarehouseDTO) itementity.Warehouse {
 
 func toEngineering(d request.EngineeringDTO) itementity.Engineering {
 	return itementity.Engineering{
-		ItemBaseCod: d.ItemBaseCod,
-		Weight:      d.Weight,
-		Dimensions:  d.Dimensions,
-		Type:        d.Type,
-		TypeStruct:  d.TypeStruct,
-		OEM:         d.OEM,
+		ItemBaseBusinessCode: textCode(d.ItemBaseCod),
+		Weight:               d.Weight,
+		Dimensions:           d.Dimensions,
+		Type:                 d.Type,
+		TypeStruct:           d.TypeStruct,
+		OEM:                  d.OEM,
 	}
 }
 
@@ -125,4 +126,13 @@ func toSupplies(d request.SuppliesDTO) itementity.Supplies {
 		ReceivingChecklist: d.ReceivingChecklist,
 		Harvest:            d.Harvest,
 	}
+}
+
+// textCode desembrulha um código de negócio opcional para string, tratando
+// ausência e string em branco como "não informado".
+func textCode(v *request.TextCode) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.String())
 }

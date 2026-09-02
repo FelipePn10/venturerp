@@ -3,6 +3,7 @@ package group_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -27,12 +28,20 @@ func NewCreateGroupUseCase(
 
 func (uc *CreateGroupUseCase) Execute(
 	ctx context.Context,
-	group *entity.Group,
+	dto request.CreateGroupDTO,
 ) (*response.GroupResponse, error) {
 	if !uc.Auth.CanCreateGroup(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	group, err := entity.NewGroup(dto.Code, dto.Description, 0, actor)
+	if err != nil {
+		return nil, err
+	}
 	created, err := uc.Repo.Create(ctx, group)
 	if err != nil {
 		return nil, err

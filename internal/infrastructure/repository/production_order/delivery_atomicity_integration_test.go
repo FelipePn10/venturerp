@@ -27,7 +27,7 @@ func TestRegisterDeliveryWithMovements_RollsBackEverythingWhenStockFails(t *test
 	ctx := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 	uid := uuid.New()
 	itemCode := testutil.UniqueCode()
-	testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", itemCode, itemCode, uid)
+	testutil.Exec(t, pool, "INSERT INTO items (code, business_code, warehouse_code, created_by, enterprise_id) VALUES ($1,($1::bigint)::text,$2,$3,$4)", itemCode, itemCode, uid, enterpriseID)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code=$1", itemCode)
 
 	var orderID int64

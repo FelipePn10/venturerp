@@ -1,0 +1,14 @@
+DROP INDEX IF EXISTS idx_sales_table_price_history_tenant;
+ALTER TABLE sales_table_price_history DROP COLUMN IF EXISTS enterprise_id;
+DROP INDEX IF EXISTS idx_commercial_policies_tenant_resolution;
+DROP INDEX IF EXISTS uq_commercial_policies_tenant_code;
+ALTER TABLE commercial_policies ADD CONSTRAINT commercial_policies_code_key UNIQUE(code);
+ALTER TABLE commercial_policies DROP COLUMN IF EXISTS enterprise_id;
+DROP INDEX IF EXISTS uq_sales_price_policies_tenant_precedence_period;
+DROP INDEX IF EXISTS uq_sales_price_policies_tenant_code;
+ALTER TABLE sales_price_policies ADD CONSTRAINT sales_price_policies_code_key UNIQUE(code);
+CREATE UNIQUE INDEX uq_sales_price_policies_scope_priority_sequence_period ON sales_price_policies(policy_scope,priority,sequence,COALESCE(validity_start,DATE '0001-01-01'),COALESCE(validity_end,DATE '9999-12-31'));
+ALTER TABLE sales_price_policies DROP COLUMN IF EXISTS enterprise_id;
+DROP INDEX IF EXISTS idx_sales_tables_tenant_active;
+DROP INDEX IF EXISTS idx_sales_tables_tenant_code;
+ALTER TABLE sales_tables DROP COLUMN IF EXISTS enterprise_id;

@@ -21,7 +21,7 @@ func NewStockMovementTypeHandler(uc *stock_movement_uc.StockMovementTypeUseCase)
 func (h *StockMovementTypeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var s entity.StockMovementType
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.Create(r.Context(), &s)
@@ -35,7 +35,7 @@ func (h *StockMovementTypeHandler) Create(w http.ResponseWriter, r *http.Request
 func (h *StockMovementTypeHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var s entity.StockMovementType
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.Update(r.Context(), &s)
@@ -49,7 +49,7 @@ func (h *StockMovementTypeHandler) Update(w http.ResponseWriter, r *http.Request
 func (h *StockMovementTypeHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "identificador inválido")
 		return
 	}
 	result, err := h.uc.GetByID(r.Context(), id)

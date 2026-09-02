@@ -21,7 +21,7 @@ SET
     requires_operator = $4,
     is_active = $5,
     updated_at = NOW()
-WHERE code = $6
+WHERE code = $6 AND enterprise_id = sqlc.arg(enterprise_id)
     RETURNING *;
 
 -- name: GetMachineTypeByCode :one
@@ -32,13 +32,13 @@ WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 -- name: ListMachineTypes :many
 SELECT *
 FROM machine_types
-WHERE is_active = TRUE
+WHERE is_active = TRUE AND enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY code;
 
 -- name: DeleteMachineType :exec
 UPDATE machine_types
 SET is_active = FALSE, updated_at = NOW()
-WHERE code = $1;
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: CreateMachine :one
 INSERT INTO machines (
@@ -67,31 +67,32 @@ SET
     capacity_period = $6,
     efficiency_rate = $7,
     updated_at = NOW()
-WHERE code = $6
+WHERE code = $6 AND enterprise_id = sqlc.arg(enterprise_id)
     RETURNING *;
 
 -- name: GetMachineByCode :one
 SELECT *
 FROM machines
-WHERE code = $1;
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: ListMachines :many
 SELECT *
 FROM machines
-WHERE is_active = TRUE
+WHERE is_active = TRUE AND enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY code;
 
 -- name: ListMachinesByType :many
 SELECT *
 FROM machines
 WHERE machine_type_code = $1
+  AND enterprise_id = sqlc.arg(enterprise_id)
   AND is_active = TRUE
 ORDER BY code;
 
 -- name: DeleteMachine :exec
 UPDATE machines
 SET is_active = FALSE, updated_at = NOW()
-WHERE code = $1;
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: CreateItemMachineTime :one
 INSERT INTO item_machine_times (
@@ -102,9 +103,10 @@ INSERT INTO item_machine_times (
     production_time_unit,
     production_base_qty,
     setup_time,
-    priority
+    priority,
+    enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, sqlc.arg(enterprise_id))
     ON CONFLICT (item_code, mask, machine_code)
 DO UPDATE SET
     production_time = EXCLUDED.production_time,
@@ -117,14 +119,16 @@ DO UPDATE SET
 -- name: ListItemMachineTimes :many
 SELECT *
 FROM item_machine_times
-WHERE item_code = $1
+WHERE (item_code = $1 OR $1 = 0)
+  AND enterprise_id = sqlc.arg(enterprise_id)
   AND is_active = TRUE
-ORDER BY priority;
+ORDER BY item_code, machine_code, priority;
 
 -- name: ListItemsByMachine :many
 SELECT *
 FROM item_machine_times
 WHERE machine_code = $1
+  AND enterprise_id = sqlc.arg(enterprise_id)
   AND is_active = TRUE
 ORDER BY priority;
 

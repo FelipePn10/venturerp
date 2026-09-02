@@ -44,3 +44,39 @@ func TestLoadRejectsInvalidTrustedProxyCIDR(t *testing.T) {
 		t.Fatalf("Load() error = %v, want trusted proxy validation error", err)
 	}
 }
+
+func TestLoadTrainingRequiresSeparateIdentityDatabase(t *testing.T) {
+	for name, identityURL := range map[string]string{
+		"missing":       "",
+		"same database": "postgres://localhost/training",
+		"same database with other credentials and options": "postgresql://other:secret@localhost:5432/training?application_name=identity",
+	} {
+		t.Run(name, func(t *testing.T) {
+			viper.Reset()
+			t.Cleanup(viper.Reset)
+			t.Setenv("ENV", "development")
+			t.Setenv("DATA_ENVIRONMENT", "training")
+			t.Setenv("DATABASE_URL", "postgres://localhost/training")
+			t.Setenv("IDENTITY_DATABASE_URL", identityURL)
+			if _, err := Load(); err == nil {
+				t.Fatal("Load() expected unsafe training configuration to fail")
+			}
+		})
+	}
+}
+
+func TestLoadAcceptsSeparatedTrainingDatabases(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	t.Setenv("ENV", "development")
+	t.Setenv("DATA_ENVIRONMENT", "training")
+	t.Setenv("DATABASE_URL", "postgres://localhost/training")
+	t.Setenv("IDENTITY_DATABASE_URL", "postgres://localhost/production")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.IsTraining() {
+		t.Fatal("expected training configuration")
+	}
+}

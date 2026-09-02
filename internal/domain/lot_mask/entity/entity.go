@@ -67,7 +67,22 @@ func NewLotMask(application string, createdBy uuid.UUID) (*LotMask, error) {
 	if application == "" {
 		application = "GERAL"
 	}
+	if !ValidApplication(application) {
+		return nil, errors.New("aplicação deve ser SUPRIMENTOS, PRODUCAO, VENDAS, EXPEDICAO ou GERAL")
+	}
+	if createdBy == uuid.Nil {
+		return nil, errors.New("usuário responsável é obrigatório")
+	}
 	return &LotMask{Application: application, IsActive: true, CreatedBy: createdBy}, nil
+}
+
+func ValidApplication(application string) bool {
+	switch application {
+	case "SUPRIMENTOS", "PRODUCAO", "VENDAS", "EXPEDICAO", "GERAL":
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *LotMaskPart) Validate() error {
@@ -80,10 +95,26 @@ func (p *LotMaskPart) Validate() error {
 	if p.PartType == PartData && p.DateFormat == "" {
 		p.DateFormat = "DDMMYYYY"
 	}
+	if p.PartType == PartData && !validDateFormat(p.DateFormat) {
+		return errors.New("formato de data inválido; use tokens DD, MM, YYYY, YY, HH, MI e SS")
+	}
 	if p.Size < 0 {
 		return errors.New("tamanho não pode ser negativo")
 	}
 	return nil
+}
+
+func validDateFormat(value string) bool {
+	rest := strings.ToUpper(value)
+	for _, token := range []string{"YYYY", "YY", "DD", "MM", "HH", "MI", "SS"} {
+		rest = strings.ReplaceAll(rest, token, "")
+	}
+	for _, r := range rest {
+		if r >= 'A' && r <= 'Z' {
+			return false
+		}
+	}
+	return value != ""
 }
 
 // PartUpdate carries the new sequence state to persist after a generation.

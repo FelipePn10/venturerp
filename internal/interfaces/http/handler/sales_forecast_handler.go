@@ -22,6 +22,7 @@ type SalesForecastHandler struct {
 	createAppropriationUC *sales_forecast_uc.CreateAppropriationTableUseCase
 	listAppropriationsUC  *sales_forecast_uc.ListAppropriationTablesUseCase
 	setDefaultUC          *sales_forecast_uc.SetDefaultAppropriationUseCase
+	listActualsUC         *sales_forecast_uc.ListActualDemandUseCase
 }
 
 func NewSalesForecastHandler(
@@ -35,6 +36,7 @@ func NewSalesForecastHandler(
 	createAppropriationUC *sales_forecast_uc.CreateAppropriationTableUseCase,
 	listAppropriationsUC *sales_forecast_uc.ListAppropriationTablesUseCase,
 	setDefaultUC *sales_forecast_uc.SetDefaultAppropriationUseCase,
+	listActualsUC *sales_forecast_uc.ListActualDemandUseCase,
 ) *SalesForecastHandler {
 	return &SalesForecastHandler{
 		createForecastUC:      createForecastUC,
@@ -47,7 +49,30 @@ func NewSalesForecastHandler(
 		createAppropriationUC: createAppropriationUC,
 		listAppropriationsUC:  listAppropriationsUC,
 		setDefaultUC:          setDefaultUC,
+		listActualsUC:         listActualsUC,
 	}
+}
+
+func (h *SalesForecastHandler) ListActuals(w http.ResponseWriter, r *http.Request) {
+	year, err := strconv.Atoi(r.URL.Query().Get("year"))
+	if err != nil || year <= 0 {
+		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PREVISAO_ANO_INVALIDO", "o campo 'year' deve ser um ano positivo")
+		return
+	}
+	var itemCode int64
+	if raw := r.URL.Query().Get("item_code"); raw != "" {
+		itemCode, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || itemCode <= 0 {
+			security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PREVISAO_ITEM_INVALIDO", "o campo 'item_code' deve ser um identificador positivo")
+			return
+		}
+	}
+	result, err := h.listActualsUC.Execute(r.Context(), year, itemCode, r.URL.Query().Get("source"))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, paginate(w, r, result))
 }
 
 func (h *SalesForecastHandler) CreateMonthlyForecast(w http.ResponseWriter, r *http.Request) {

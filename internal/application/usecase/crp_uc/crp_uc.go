@@ -23,6 +23,9 @@ type CRPUseCase struct {
 	repo      repository.CRPRepository
 	maintRepo maintenancerepo.MaintenanceRepository
 	routing   routeOpReader // optional; when nil, uses the legacy flat EffHours × qty
+	// plans é o catálogo de planos do modal; também garante o isolamento por
+	// empresa nas consultas de carga.
+	plans planCatalog
 }
 
 func New(repo repository.CRPRepository) *CRPUseCase {
@@ -52,6 +55,9 @@ func (uc *CRPUseCase) WithRouting(r routeOpReader) *CRPUseCase {
 //  3. Query available hours per work center.
 //  4. Upsert all entries into capacity_requirements.
 func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRPDTO) (*response.CRPSummaryResponse, error) {
+	if err := uc.assertPlanTenant(ctx, dto.PlanCode); err != nil {
+		return nil, err
+	}
 	if err := uc.repo.DeleteByPlan(ctx, dto.PlanCode); err != nil {
 		return nil, fmt.Errorf("clearing CRP for plan %d: %w", dto.PlanCode, err)
 	}
@@ -144,6 +150,9 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 }
 
 func (uc *CRPUseCase) ListByPlan(ctx context.Context, planCode int64) ([]*response.CRPEntryResponse, error) {
+	if err := uc.assertPlanTenant(ctx, planCode); err != nil {
+		return nil, err
+	}
 	reqs, err := uc.repo.ListByPlan(ctx, planCode)
 	if err != nil {
 		return nil, err
@@ -152,6 +161,9 @@ func (uc *CRPUseCase) ListByPlan(ctx context.Context, planCode int64) ([]*respon
 }
 
 func (uc *CRPUseCase) ListOverloadedByPlan(ctx context.Context, planCode int64) ([]*response.CRPEntryResponse, error) {
+	if err := uc.assertPlanTenant(ctx, planCode); err != nil {
+		return nil, err
+	}
 	reqs, err := uc.repo.ListOverloadedByPlan(ctx, planCode)
 	if err != nil {
 		return nil, err

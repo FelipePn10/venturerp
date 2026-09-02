@@ -8,5 +8,5 @@ import (
 )
 
 type SalesQuotationConversionUnitOfWork interface {
-	Execute(ctx context.Context, quotationCode int64, fn func(orderrepo.SalesOrderRepository) (*orderentity.SalesOrder,error)) (*orderentity.SalesOrder,error)
+	Execute(ctx context.Context, quotationCode int64, fn func(orderrepo.SalesOrderRepository) (*orderentity.SalesOrder, error)) (*orderentity.SalesOrder, error)
 }

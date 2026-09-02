@@ -372,6 +372,7 @@ func NewPaymentCondition(code int64, description string, analysisType PaymentAna
 
 type SalesTable struct {
 	ID                         int64
+	EnterpriseID               int64
 	Code                       int64
 	Description                string
 	ValidityStart              *time.Time
@@ -429,6 +430,7 @@ const (
 
 type SalesPricePolicy struct {
 	ID             int64
+	EnterpriseID   int64
 	Code           int64
 	Description    string
 	CostSource     SalesCostSource

@@ -50,11 +50,12 @@ type PurchaseOrderResponse struct {
 	TalaoNumber  *string `json:"talao_number,omitempty"`
 	AlcadaStatus string  `json:"alcada_status"`
 
-	IsActive  bool      `json:"is_active"`
-	IsFirm    bool      `json:"is_firm"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CreatedBy uuid.UUID `json:"created_by"`
+	IsActive            bool      `json:"is_active"`
+	IsFirm              bool      `json:"is_firm"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	CreatedBy           uuid.UUID `json:"created_by"`
+	ResponsibleUserName string    `json:"responsible_user_name"`
 
 	Items []PurchaseOrderItemResponse `json:"items,omitempty"`
 }
@@ -84,6 +85,7 @@ type PurchaseOrderItemResponse struct {
 	InternalUOM   *string `json:"internal_uom,omitempty"`
 	InternalQty   float64 `json:"internal_qty"`
 	InternalPrice float64 `json:"internal_price"`
+	WarehouseID   *int64  `json:"warehouse_id,omitempty"`
 
 	TolerancePct          float64 `json:"tolerance_pct"`
 	CancelledToleranceQty float64 `json:"cancelled_tolerance_qty"`
@@ -94,10 +96,17 @@ type PurchaseOrderItemResponse struct {
 	CostCenterCode           *int64  `json:"cost_center_code,omitempty"`
 	FiscalClassificationCode *int64  `json:"fiscal_classification_code,omitempty"`
 
-	RequesterEmployeeCode *int64  `json:"requester_employee_code,omitempty"`
-	ContractCode          *int64  `json:"contract_code,omitempty"`
-	QuotationCode         *int64  `json:"quotation_code,omitempty"`
-	UtilizationType       *string `json:"utilization_type,omitempty"`
+	RequesterEmployeeCode     *int64  `json:"requester_employee_code,omitempty"`
+	ContractCode              *int64  `json:"contract_code,omitempty"`
+	QuotationCode             *int64  `json:"quotation_code,omitempty"`
+	PlannedOrderCode          *int64  `json:"planned_order_code,omitempty"`
+	DemandType                *string `json:"demand_type,omitempty"`
+	DemandCode                *int64  `json:"demand_code,omitempty"`
+	SalesOrderCode            *int64  `json:"sales_order_code,omitempty"`
+	ProductionOrderID         *int64  `json:"production_order_id,omitempty"`
+	PurchaseRequisitionCode   *int64  `json:"purchase_requisition_code,omitempty"`
+	PurchaseRequisitionItemID *int64  `json:"purchase_requisition_item_id,omitempty"`
+	UtilizationType           *string `json:"utilization_type,omitempty"`
 
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`

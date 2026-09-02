@@ -273,7 +273,7 @@ func (r *StockRepositorySQLC) GetBalance(ctx context.Context, itemCode int64, ma
 		&b.LastMovementAt, &b.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("stock balance not found for item %d mask %s warehouse %d", itemCode, mask, warehouseID)
+			return nil, fmt.Errorf("saldo de estoque não encontrado para o item %d, máscara %s e almoxarifado %d", itemCode, mask, warehouseID)
 		}
 		return nil, fmt.Errorf("getting stock balance: %w", err)
 	}
@@ -466,7 +466,7 @@ func (r *StockRepositorySQLC) GetReservation(ctx context.Context, id int64) (*en
 		&res.Status, &res.Notes, &res.CreatedAt, &res.UpdatedAt, &res.CreatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("stock reservation %d not found", id)
+			return nil, fmt.Errorf("reserva de estoque %d não encontrada", id)
 		}
 		return nil, fmt.Errorf("getting stock reservation: %w", err)
 	}
@@ -552,7 +552,7 @@ func (r *StockRepositorySQLC) closeReservation(ctx context.Context, id int64, st
 	).Scan(&itemCode, &mask, &warehouseID, &qty, &prevStatus)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return fmt.Errorf("stock reservation %d not found", id)
+			return fmt.Errorf("reserva de estoque %d não encontrada", id)
 		}
 		return fmt.Errorf("reading reservation %d: %w", id, err)
 	}
@@ -689,7 +689,7 @@ func (r *StockRepositorySQLC) GetConsumptionAverage(ctx context.Context, itemCod
 	).Scan(&out.ID, &out.ItemCode, &out.AvgMonthlyConsumption, &out.TotalConsumed, &out.WindowMonths, &out.CalculatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("consumption average not found for item %d", itemCode)
+			return nil, fmt.Errorf("consumo médio não encontrado para o item %d", itemCode)
 		}
 		return nil, fmt.Errorf("getting consumption average: %w", err)
 	}
@@ -901,7 +901,7 @@ func (r *StockRepositorySQLC) GetInventory(ctx context.Context, id int64) (*enti
 		&inv.Status, &inv.TotalItems, &inv.CountedItems, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt, &inv.CreatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("physical inventory %d not found", id)
+			return nil, fmt.Errorf("inventário físico %d não encontrado", id)
 		}
 		return nil, fmt.Errorf("getting physical inventory: %w", err)
 	}
@@ -922,7 +922,7 @@ func (r *StockRepositorySQLC) GetInventoryByCode(ctx context.Context, code int64
 		&inv.Status, &inv.TotalItems, &inv.CountedItems, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt, &inv.CreatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("physical inventory %d not found", code)
+			return nil, fmt.Errorf("inventário físico %d não encontrado", code)
 		}
 		return nil, fmt.Errorf("getting physical inventory by code: %w", err)
 	}

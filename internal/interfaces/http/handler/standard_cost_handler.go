@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -30,6 +31,32 @@ func (h *StandardCostHandler) ListWorkCenterCosts(w http.ResponseWriter, r *http
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *StandardCostHandler) ListWorkCenters(w http.ResponseWriter, r *http.Request) {
+	limit, err := strconv.Atoi(queryDefault(r, "limit", "100"))
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, "limit inválido")
+		return
+	}
+	offset, err := strconv.Atoi(queryDefault(r, "offset", "0"))
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, "offset inválido")
+		return
+	}
+	result, err := h.uc.ListWorkCenters(r.Context(), r.URL.Query().Get("search"), limit, offset)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func queryDefault(r *http.Request, name, fallback string) string {
+	if value := r.URL.Query().Get(name); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func (h *StandardCostHandler) UpsertItemPurchaseCost(w http.ResponseWriter, r *http.Request) {

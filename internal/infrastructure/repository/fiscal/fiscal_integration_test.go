@@ -10,9 +10,11 @@ import (
 
 	"github.com/google/uuid"
 
+	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	fiscalrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 func strptr(s string) *string { return &s }
@@ -22,8 +24,21 @@ func strptr(s string) *string { return &s }
 func TestIntegration_FiscalExit_STPersistence(t *testing.T) {
 	pool := testutil.Pool(t)
 	repo := fiscalrepo.NewFiscalRepositoryPG(pool)
-	ctx := context.Background()
+	var enterpriseID int64
+	enterpriseCode := int64(1_700_000_000 + testutil.UniqueCode()%100_000_000)
+	if err := pool.QueryRow(context.Background(), `INSERT INTO enterprise(code,name) VALUES($1,'Fiscal Exit Integration') RETURNING id`, enterpriseCode).Scan(&enterpriseID); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), contextkey.UserKey, &appsecurity.AuthUser{EnterpriseID: enterpriseID})
+	t.Cleanup(func() { testutil.Exec(t, pool, "DELETE FROM enterprise WHERE id=$1", enterpriseID) })
 	user := uuid.New()
+	if _, err := pool.Exec(context.Background(), `INSERT INTO users(id,name,email,password) VALUES($1,'Fiscal Integration',$2,'x')`, user, user.String()+"@example.test"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		testutil.Exec(t, pool, "DELETE FROM notification_outbox WHERE originator_user_id=$1", user)
+		testutil.Exec(t, pool, "DELETE FROM users WHERE id=$1", user)
+	})
 
 	exit := &entity.FiscalExit{
 		NumeroNF:         testutil.UniqueCode(),

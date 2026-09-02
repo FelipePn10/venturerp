@@ -1,0 +1,18 @@
+BEGIN;
+DROP TRIGGER IF EXISTS trg_groups_structural_audit ON groups;
+DROP TRIGGER IF EXISTS trg_item_structures_structural_audit ON item_structures;
+DROP TRIGGER IF EXISTS trg_operations_structural_audit ON operations;
+DROP TRIGGER IF EXISTS trg_manufacturing_routes_structural_audit ON manufacturing_routes;
+DROP FUNCTION IF EXISTS record_manufacturing_structural_audit();
+DROP TRIGGER IF EXISTS trg_manufacturing_audit_immutable ON manufacturing_structural_audit;
+DROP FUNCTION IF EXISTS prevent_manufacturing_audit_mutation();
+DROP TABLE IF EXISTS manufacturing_structural_audit;
+DROP INDEX IF EXISTS idx_routes_enterprise_item;
+DROP INDEX IF EXISTS idx_operations_enterprise_active;
+DROP INDEX IF EXISTS uq_manufacturing_routes_enterprise_code;
+DROP INDEX IF EXISTS uq_operations_enterprise_code;
+ALTER TABLE manufacturing_routes DROP COLUMN IF EXISTS enterprise_id;
+ALTER TABLE operations DROP COLUMN IF EXISTS enterprise_id;
+ALTER TABLE operations ADD CONSTRAINT operations_code_key UNIQUE(code);
+ALTER TABLE manufacturing_routes ADD CONSTRAINT manufacturing_routes_code_key UNIQUE(code);
+COMMIT;

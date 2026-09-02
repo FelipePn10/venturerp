@@ -7,13 +7,21 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (r *PurchaseOrderRepositorySQLC) NextOrderNumber(ctx context.Context, enterpriseCode int64) (int64, error) {
+	ctxEnterprise, err := tenant.Code(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if enterpriseCode != ctxEnterprise {
+		return 0, fmt.Errorf("empresa do pedido diverge do tenant autenticado")
+	}
 	var lastNum int64
-	err := r.db.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`INSERT INTO purchase_order_sequences (enterprise_code, last_number)
 		 VALUES ($1, 1)
 		 ON CONFLICT (enterprise_code)
@@ -64,6 +72,13 @@ func (r *PurchaseOrderRepositorySQLC) CreateWithItems(ctx context.Context, o *en
 }
 
 func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*entity.PurchaseOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if o.EnterpriseCode != enterpriseCode {
+		return nil, fmt.Errorf("empresa do pedido diverge do tenant autenticado")
+	}
 	var deliveryDate pgtype.Date
 	if o.DeliveryDate != nil {
 		deliveryDate = pgtype.Date{Time: *o.DeliveryDate, Valid: true}
@@ -78,7 +93,7 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 	}
 
 	var row purchaseOrderRow
-	err := q.QueryRow(ctx,
+	err = q.QueryRow(ctx,
 		`INSERT INTO public.purchase_orders (
 			order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
@@ -123,26 +138,30 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 }
 
 func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.PurchaseOrder) (*entity.PurchaseOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var deliveryDate pgtype.Date
 	if o.DeliveryDate != nil {
 		deliveryDate = pgtype.Date{Time: *o.DeliveryDate, Valid: true}
 	}
 
 	var row purchaseOrderRow
-	err := r.db.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`UPDATE public.purchase_orders SET
 			status = $2, origin = $3, delivery_date = $4, supplier_code = $5,
 			payment_term_code = $6, currency_code = $7, shipping_address_code = $8,
 			notes = $9, total_gross = $10, total_net = $11, total_discount = $12,
 			is_firm = $13, updated_at = NOW()
-		WHERE code = $1 AND is_active = true
+		WHERE code = $1 AND enterprise_code = $14 AND is_active = true
 		RETURNING code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
 			is_active, is_firm, created_at, updated_at, created_by`,
 		o.Code, string(o.Status), string(o.Origin), deliveryDate, o.SupplierCode,
 		o.PaymentTermCode, o.CurrencyCode, o.ShippingAddressCode,
-		o.Notes, o.TotalGross, o.TotalNet, o.TotalDiscount, o.IsFirm,
+		o.Notes, o.TotalGross, o.TotalNet, o.TotalDiscount, o.IsFirm, enterpriseCode,
 	).Scan(
 		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
 		&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
@@ -155,12 +174,18 @@ func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.Purc
 		}
 		return nil, fmt.Errorf("updating purchase order: %w", err)
 	}
-	return rowToEntity(row), nil
+	result := rowToEntity(row)
+	r.resolveResponsibleUser(ctx, result)
+	return result, nil
 }
 
 func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64) (*entity.PurchaseOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var row purchaseOrderRow
-	err := r.db.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
@@ -169,7 +194,7 @@ func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64)
 			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
 			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
 			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status
-		FROM public.purchase_orders WHERE code = $1`, code,
+		FROM public.purchase_orders WHERE code = $1 AND enterprise_code = $2`, code, enterpriseCode,
 	).Scan(
 		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
 		&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
@@ -186,16 +211,22 @@ func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64)
 		}
 		return nil, fmt.Errorf("fetching purchase order: %w", err)
 	}
-	return rowToEntity(row), nil
+	result := rowToEntity(row)
+	r.resolveResponsibleUser(ctx, result)
+	return result, nil
 }
 
 func (r *PurchaseOrderRepositorySQLC) List(ctx context.Context) ([]*entity.PurchaseOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
 			is_active, is_firm, created_at, updated_at, created_by
-		FROM public.purchase_orders WHERE is_active = true ORDER BY code DESC`)
+		FROM public.purchase_orders WHERE enterprise_code = $1 AND is_active = true ORDER BY code DESC`, enterpriseCode)
 	if err != nil {
 		return nil, fmt.Errorf("listing purchase orders: %w", err)
 	}
@@ -212,29 +243,42 @@ func (r *PurchaseOrderRepositorySQLC) List(ctx context.Context) ([]*entity.Purch
 		); err != nil {
 			return nil, fmt.Errorf("scanning purchase order: %w", err)
 		}
-		result = append(result, rowToEntity(row))
+		order := rowToEntity(row)
+		r.resolveResponsibleUser(ctx, order)
+		result = append(result, order)
 	}
 	return result, rows.Err()
 }
 
 func (r *PurchaseOrderRepositorySQLC) Cancel(ctx context.Context, code int64) error {
-	_, err := r.db.Exec(ctx,
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.db.Exec(ctx,
 		`UPDATE public.purchase_orders SET status = 'CANCELLED', is_active = false, updated_at = NOW()
-		 WHERE code = $1`, code)
+		 WHERE code = $1 AND enterprise_code = $2`, code, enterpriseCode)
 	if err != nil {
 		return fmt.Errorf("cancelling purchase order %d: %w", code, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
 	}
 	return nil
 }
 
 func (r *PurchaseOrderRepositorySQLC) ListBySupplier(ctx context.Context, supplierCode int64) ([]*entity.PurchaseOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
 			is_active, is_firm, created_at, updated_at, created_by
-		FROM public.purchase_orders WHERE supplier_code = $1 AND is_active = true ORDER BY code DESC`,
-		supplierCode)
+		FROM public.purchase_orders WHERE supplier_code = $1 AND enterprise_code = $2 AND is_active = true ORDER BY code DESC`,
+		supplierCode, enterpriseCode)
 	if err != nil {
 		return nil, fmt.Errorf("listing purchase orders by supplier: %w", err)
 	}
@@ -251,19 +295,25 @@ func (r *PurchaseOrderRepositorySQLC) ListBySupplier(ctx context.Context, suppli
 		); err != nil {
 			return nil, fmt.Errorf("scanning purchase order: %w", err)
 		}
-		result = append(result, rowToEntity(row))
+		order := rowToEntity(row)
+		r.resolveResponsibleUser(ctx, order)
+		result = append(result, order)
 	}
 	return result, rows.Err()
 }
 
 func (r *PurchaseOrderRepositorySQLC) ListByStatus(ctx context.Context, status entity.PurchaseOrderStatus) ([]*entity.PurchaseOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
 			is_active, is_firm, created_at, updated_at, created_by
-		FROM public.purchase_orders WHERE status = $1 AND is_active = true ORDER BY code DESC`,
-		string(status))
+		FROM public.purchase_orders WHERE status = $1 AND enterprise_code = $2 AND is_active = true ORDER BY code DESC`,
+		string(status), enterpriseCode)
 	if err != nil {
 		return nil, fmt.Errorf("listing purchase orders by status: %w", err)
 	}
@@ -280,12 +330,17 @@ func (r *PurchaseOrderRepositorySQLC) ListByStatus(ctx context.Context, status e
 		); err != nil {
 			return nil, fmt.Errorf("scanning purchase order: %w", err)
 		}
-		result = append(result, rowToEntity(row))
+		order := rowToEntity(row)
+		r.resolveResponsibleUser(ctx, order)
+		result = append(result, order)
 	}
 	return result, rows.Err()
 }
 
 func (r *PurchaseOrderRepositorySQLC) CreateItem(ctx context.Context, item *entity.PurchaseOrderItem) (*entity.PurchaseOrderItem, error) {
+	if _, err := r.GetByCode(ctx, item.PurchaseOrderCode); err != nil {
+		return nil, err
+	}
 	return insertItem(ctx, r.db, item)
 }
 
@@ -314,9 +369,12 @@ func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem
 			icms_st_pct, promised_date, purchase_uom, internal_uom, internal_qty, internal_price,
 			tolerance_pct, cancelled_tolerance_qty, operation_type_code, invoice_type_code,
 			accounting_account, cost_center_code, requester_employee_code, contract_code,
-			quotation_code, utilization_type, fiscal_classification_code
+			quotation_code, utilization_type, fiscal_classification_code,
+			warehouse_id, planned_order_code, demand_type, demand_code, sales_order_code,
+			production_order_id, purchase_requisition_code, purchase_requisition_item_id
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-			$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+			$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
+			$33,$34,$35,$36,$37,$38,$39,$40)
 		RETURNING code, purchase_order_code, sequence, item_code, mask,
 			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
 			discount_pct, ipi_pct, icms_pct, status, delivery_date, notes,
@@ -324,7 +382,9 @@ func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem
 			icms_st_pct, promised_date, purchase_uom, internal_uom, internal_qty, internal_price,
 			tolerance_pct, cancelled_tolerance_qty, operation_type_code, invoice_type_code,
 			accounting_account, cost_center_code, requester_employee_code, contract_code,
-			quotation_code, utilization_type, fiscal_classification_code`,
+			quotation_code, utilization_type, fiscal_classification_code,
+			warehouse_id, planned_order_code, demand_type, demand_code, sales_order_code,
+			production_order_id, purchase_requisition_code, purchase_requisition_item_id`,
 		item.PurchaseOrderCode, item.Sequence, item.ItemCode, item.Mask,
 		item.RequestedQty, item.ReceivedQty, item.CancelledQty,
 		item.UnitPrice, item.TotalPrice, item.DiscountPct,
@@ -333,6 +393,8 @@ func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem
 		item.TolerancePct, item.CancelledToleranceQty, item.OperationTypeCode, item.InvoiceTypeCode,
 		pgutil.ToPgTextFromPtr(item.AccountingAccount), item.CostCenterCode, item.RequesterEmployeeCode, item.ContractCode,
 		item.QuotationCode, pgutil.ToPgTextFromPtr(item.UtilizationType), item.FiscalClassificationCode,
+		item.WarehouseID, item.PlannedOrderCode, pgutil.ToPgTextFromPtr(item.DemandType), item.DemandCode, item.SalesOrderCode,
+		item.ProductionOrderID, item.PurchaseRequisitionCode, item.PurchaseRequisitionItemID,
 	).Scan(
 		&result.Code, &result.PurchaseOrderCode, &result.Sequence, &result.ItemCode, &result.Mask,
 		&result.RequestedQty, &result.ReceivedQty, &result.CancelledQty,
@@ -343,6 +405,8 @@ func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem
 		&result.TolerancePct, &result.CancelledToleranceQty, &result.OperationTypeCode, &result.InvoiceTypeCode,
 		&result.AccountingAccount, &result.CostCenterCode, &result.RequesterEmployeeCode, &result.ContractCode,
 		&result.QuotationCode, &result.UtilizationType, &result.FiscalClassificationCode,
+		&result.WarehouseID, &result.PlannedOrderCode, &result.DemandType, &result.DemandCode, &result.SalesOrderCode,
+		&result.ProductionOrderID, &result.PurchaseRequisitionCode, &result.PurchaseRequisitionItemID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating purchase order item: %w", err)
@@ -351,6 +415,10 @@ func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem
 }
 
 func (r *PurchaseOrderRepositorySQLC) UpdateItem(ctx context.Context, item *entity.PurchaseOrderItem) (*entity.PurchaseOrderItem, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var deliveryDate pgtype.Date
 	if item.DeliveryDate != nil {
 		deliveryDate = pgtype.Date{Time: *item.DeliveryDate, Valid: true}
@@ -362,13 +430,14 @@ func (r *PurchaseOrderRepositorySQLC) UpdateItem(ctx context.Context, item *enti
 	}
 
 	var result purchaseOrderItemRow
-	err := r.db.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`UPDATE public.purchase_order_items SET
 			sequence = $2, item_code = $3, mask = $4, requested_qty = $5,
 			received_qty = $6, cancelled_qty = $7, unit_price = $8, total_price = $9,
 			discount_pct = $10, ipi_pct = $11, icms_pct = $12, status = $13,
 			delivery_date = $14, notes = $15, updated_at = NOW()
 		WHERE code = $1 AND is_active = true
+		  AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code=purchase_order_items.purchase_order_code AND po.enterprise_code=$16)
 		RETURNING code, purchase_order_code, sequence, item_code, mask,
 			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
 			discount_pct, ipi_pct, icms_pct, status, delivery_date, notes,
@@ -376,7 +445,7 @@ func (r *PurchaseOrderRepositorySQLC) UpdateItem(ctx context.Context, item *enti
 		item.Code, item.Sequence, item.ItemCode, item.Mask,
 		item.RequestedQty, item.ReceivedQty, item.CancelledQty,
 		item.UnitPrice, item.TotalPrice, item.DiscountPct,
-		item.IPIPct, item.ICMSPct, string(item.Status), deliveryDate, notes,
+		item.IPIPct, item.ICMSPct, string(item.Status), deliveryDate, notes, enterpriseCode,
 	).Scan(
 		&result.Code, &result.PurchaseOrderCode, &result.Sequence, &result.ItemCode, &result.Mask,
 		&result.RequestedQty, &result.ReceivedQty, &result.CancelledQty,
@@ -394,6 +463,10 @@ func (r *PurchaseOrderRepositorySQLC) UpdateItem(ctx context.Context, item *enti
 }
 
 func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrderCode int64) ([]*entity.PurchaseOrderItem, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx,
 		`SELECT code, purchase_order_code, sequence, item_code, mask,
 			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
@@ -402,10 +475,13 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 			icms_st_pct, promised_date, purchase_uom, internal_uom, internal_qty, internal_price,
 			tolerance_pct, cancelled_tolerance_qty, operation_type_code, invoice_type_code,
 			accounting_account, cost_center_code, requester_employee_code, contract_code,
-			quotation_code, utilization_type, fiscal_classification_code
+			quotation_code, utilization_type, fiscal_classification_code,
+			warehouse_id, planned_order_code, demand_type, demand_code, sales_order_code,
+			production_order_id, purchase_requisition_code, purchase_requisition_item_id
 		FROM public.purchase_order_items
-		WHERE purchase_order_code = $1 AND is_active = true ORDER BY sequence`,
-		purchaseOrderCode)
+		WHERE purchase_order_code = $1 AND is_active = true
+		  AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code=purchase_order_items.purchase_order_code AND po.enterprise_code=$2)
+		ORDER BY sequence`, purchaseOrderCode, enterpriseCode)
 	if err != nil {
 		return nil, fmt.Errorf("listing purchase order items: %w", err)
 	}
@@ -424,6 +500,8 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 			&row.TolerancePct, &row.CancelledToleranceQty, &row.OperationTypeCode, &row.InvoiceTypeCode,
 			&row.AccountingAccount, &row.CostCenterCode, &row.RequesterEmployeeCode, &row.ContractCode,
 			&row.QuotationCode, &row.UtilizationType, &row.FiscalClassificationCode,
+			&row.WarehouseID, &row.PlannedOrderCode, &row.DemandType, &row.DemandCode, &row.SalesOrderCode,
+			&row.ProductionOrderID, &row.PurchaseRequisitionCode, &row.PurchaseRequisitionItemID,
 		); err != nil {
 			return nil, fmt.Errorf("scanning purchase order item: %w", err)
 		}
@@ -462,6 +540,10 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 	if len(receivedByKey) == 0 {
 		return 0, nil
 	}
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return 0, err
+	}
 
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -473,7 +555,8 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 		`SELECT code, item_code, requested_qty, received_qty, cancelled_qty
 		 FROM public.purchase_order_items
 		 WHERE purchase_order_code = $1 AND is_active = true AND status <> 'CANCELLED'
-		 FOR UPDATE`, purchaseOrderCode)
+		   AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code=purchase_order_items.purchase_order_code AND po.enterprise_code=$2)
+		 FOR UPDATE`, purchaseOrderCode, enterpriseCode)
 	if err != nil {
 		return 0, fmt.Errorf("loading purchase order items for receipt: %w", err)
 	}
@@ -533,7 +616,9 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 			if _, err := tx.Exec(ctx,
 				`UPDATE public.purchase_order_items
 				 SET received_qty = $2, status = $3, updated_at = NOW()
-				 WHERE code = $1`, l.code, newReceived, string(status)); err != nil {
+				 WHERE code = $1
+				   AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code=purchase_order_items.purchase_order_code AND po.enterprise_code=$4)`,
+				l.code, newReceived, string(status), enterpriseCode); err != nil {
 				return 0, fmt.Errorf("updating received qty: %w", err)
 			}
 		}
@@ -548,8 +633,8 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 	}
 	if headerStatus != "" {
 		if _, err := tx.Exec(ctx,
-			`UPDATE public.purchase_orders SET status = $2, updated_at = NOW() WHERE code = $1`,
-			purchaseOrderCode, headerStatus); err != nil {
+			`UPDATE public.purchase_orders SET status = $2, updated_at = NOW() WHERE code = $1 AND enterprise_code=$3`,
+			purchaseOrderCode, headerStatus, enterpriseCode); err != nil {
 			return 0, fmt.Errorf("updating purchase order status: %w", err)
 		}
 	}
@@ -561,11 +646,19 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 }
 
 func (r *PurchaseOrderRepositorySQLC) CancelItem(ctx context.Context, itemCode int64) error {
-	_, err := r.db.Exec(ctx,
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.db.Exec(ctx,
 		`UPDATE public.purchase_order_items SET status = 'CANCELLED', is_active = false, updated_at = NOW()
-		 WHERE code = $1`, itemCode)
+		 WHERE code = $1
+		   AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code=purchase_order_items.purchase_order_code AND po.enterprise_code=$2)`, itemCode, enterpriseCode)
 	if err != nil {
 		return fmt.Errorf("cancelling purchase order item %d: %w", itemCode, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
 	}
 	return nil
 }
@@ -634,23 +727,31 @@ type purchaseOrderItemRow struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	// extended (migration 000140)
-	ICMSSTPct                float64
-	PromisedDate             pgtype.Date
-	PurchaseUOM              pgtype.Text
-	InternalUOM              pgtype.Text
-	InternalQty              float64
-	InternalPrice            float64
-	TolerancePct             float64
-	CancelledToleranceQty    float64
-	OperationTypeCode        *int64
-	InvoiceTypeCode          *int64
-	AccountingAccount        pgtype.Text
-	CostCenterCode           *int64
-	RequesterEmployeeCode    *int64
-	ContractCode             *int64
-	QuotationCode            *int64
-	UtilizationType          pgtype.Text
-	FiscalClassificationCode *int64
+	ICMSSTPct                 float64
+	PromisedDate              pgtype.Date
+	PurchaseUOM               pgtype.Text
+	InternalUOM               pgtype.Text
+	InternalQty               float64
+	InternalPrice             float64
+	TolerancePct              float64
+	CancelledToleranceQty     float64
+	OperationTypeCode         *int64
+	InvoiceTypeCode           *int64
+	AccountingAccount         pgtype.Text
+	CostCenterCode            *int64
+	RequesterEmployeeCode     *int64
+	ContractCode              *int64
+	QuotationCode             *int64
+	UtilizationType           pgtype.Text
+	FiscalClassificationCode  *int64
+	WarehouseID               *int64
+	PlannedOrderCode          *int64
+	DemandType                pgtype.Text
+	DemandCode                *int64
+	SalesOrderCode            *int64
+	ProductionOrderID         *int64
+	PurchaseRequisitionCode   *int64
+	PurchaseRequisitionItemID *int64
 }
 
 func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {
@@ -707,6 +808,15 @@ func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {
 	return e
 }
 
+func (r *PurchaseOrderRepositorySQLC) resolveResponsibleUser(ctx context.Context, order *entity.PurchaseOrder) {
+	if order == nil {
+		return
+	}
+	if err := r.db.QueryRow(ctx, `SELECT name FROM users WHERE id=$1`, order.CreatedBy).Scan(&order.ResponsibleUserName); err != nil {
+		order.ResponsibleUserName = "Usuário " + order.CreatedBy.String()
+	}
+}
+
 func rowItemToEntity(row purchaseOrderItemRow) *entity.PurchaseOrderItem {
 	item := &entity.PurchaseOrderItem{
 		Code:              row.Code,
@@ -753,6 +863,14 @@ func rowItemToEntity(row purchaseOrderItemRow) *entity.PurchaseOrderItem {
 	item.QuotationCode = row.QuotationCode
 	item.UtilizationType = pgutil.FromPgTextPtr(row.UtilizationType)
 	item.FiscalClassificationCode = row.FiscalClassificationCode
+	item.WarehouseID = row.WarehouseID
+	item.PlannedOrderCode = row.PlannedOrderCode
+	item.DemandType = pgutil.FromPgTextPtr(row.DemandType)
+	item.DemandCode = row.DemandCode
+	item.SalesOrderCode = row.SalesOrderCode
+	item.ProductionOrderID = row.ProductionOrderID
+	item.PurchaseRequisitionCode = row.PurchaseRequisitionCode
+	item.PurchaseRequisitionItemID = row.PurchaseRequisitionItemID
 
 	return item
 }

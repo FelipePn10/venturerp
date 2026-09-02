@@ -16,15 +16,21 @@ type UserClaims struct {
 	Role         string `json:"role"`
 	EnterpriseID int64  `json:"enterprise_id"`
 	AuthVersion  int64  `json:"auth_version"`
+	Environment  string `json:"environment"`
 	jwt.RegisteredClaims
 }
 
 func GenerateToken(userID, role string, enterpriseID, authVersion int64, secret string) (string, error) {
+	return GenerateTokenForEnvironment(userID, role, enterpriseID, authVersion, "production", secret)
+}
+
+func GenerateTokenForEnvironment(userID, role string, enterpriseID, authVersion int64, environment, secret string) (string, error) {
 	claims := UserClaims{
 		UserID:       userID,
 		Role:         role,
 		EnterpriseID: enterpriseID,
 		AuthVersion:  authVersion,
+		Environment:  environment,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "panosso-erp",
 			Subject:   userID,

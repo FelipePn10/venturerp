@@ -5,10 +5,12 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// CreateProductionOrderDTO: o item chega pelo código de negócio (texto), como a
+// tela de ordem de fabricação (VPRO0900) o conhece.
 type CreateProductionOrderDTO struct {
 	OrderNumber    *int64    `json:"order_number,omitempty"`
 	PlannedOrderID *int64    `json:"planned_order_id,omitempty"`
-	ItemCode       int64     `json:"item_code"`
+	ItemCode       TextCode  `json:"item_code"`
 	Mask           string    `json:"mask"`
 	PlannedQty     float64   `json:"planned_qty"`
 	StartDate      *string   `json:"start_date,omitempty"`
@@ -19,7 +21,7 @@ type CreateProductionOrderDTO struct {
 	WarehouseID    *int64    `json:"warehouse_id,omitempty"`
 	Priority       *string   `json:"priority,omitempty"`
 	Notes          *string   `json:"notes,omitempty"`
-	CreatedBy      uuid.UUID `json:"created_by"`
+	CreatedBy      uuid.UUID `json:"-"`
 }
 
 type StartProductionOrderDTO struct {
@@ -48,7 +50,7 @@ type AddAppointmentDTO struct {
 	ScrappedQty       float64   `json:"scrapped_qty"`
 	ScrapReason       *string   `json:"scrap_reason,omitempty"`
 	Notes             *string   `json:"notes,omitempty"`
-	CreatedBy         uuid.UUID `json:"created_by"`
+	CreatedBy         uuid.UUID `json:"-"`
 	// Backflush         WarehouseID, when set, triggers backflush: the BOM
 	// components are auto-consumed (OUT) from this warehouse in proportion to the
 	// produced quantity. Omit to disable backflush for this appointment.
@@ -64,7 +66,7 @@ type AddConsumptionDTO struct {
 	Lot               *string   `json:"lot,omitempty"`
 	ConsumptionDate   string    `json:"consumption_date"`
 	Notes             *string   `json:"notes,omitempty"`
-	CreatedBy         uuid.UUID `json:"created_by"`
+	CreatedBy         uuid.UUID `json:"-"`
 }
 
 type CompleteProductionOrderDTO struct {

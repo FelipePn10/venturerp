@@ -24,6 +24,8 @@ grep -q "/api/sales-goals" api/api.go
 if [[ -n "${BASE_URL:-}" && -n "${TOKEN:-}" ]]; then
   echo "==> Fase 6 / Metas de Vendas: smoke HTTP"
   AUTH_HEADER="Authorization: Bearer ${TOKEN}"
+  REPRESENTATIVE_CODE="$(curl -fsS "${BASE_URL}/api/representatives/list?active=true" -H "$AUTH_HEADER" | jq -r 'if type == "array" then last.code else (.data // .items // []) | last | .code end // empty')"
+  [[ -n "$REPRESENTATIVE_CODE" ]]
 
   PERIOD_JSON="$(curl -fsS -X POST "${BASE_URL}/api/sales-goals/periods/" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
@@ -36,7 +38,7 @@ if [[ -n "${BASE_URL:-}" && -n "${TOKEN:-}" ]]; then
 
   GOAL_JSON="$(curl -fsS -X POST "${BASE_URL}/api/sales-goals/create" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d "{\"representative_code\":1,\"period_code\":${PERIOD_CODE},\"analysis_base\":\"SALES\",\"award_pct\":2.5,\"notes\":\"Smoke metas\"}")"
+    -d "{\"representative_code\":${REPRESENTATIVE_CODE},\"period_code\":${PERIOD_CODE},\"analysis_base\":\"SALES\",\"award_pct\":2.5,\"notes\":\"Smoke metas\"}")"
   GOAL_CODE="$(printf '%s' "$GOAL_JSON" | sed -n 's/.*"code":\([0-9][0-9]*\).*/\1/p')"
   if [[ -z "$GOAL_CODE" ]]; then
     echo "Nao foi possivel extrair a meta criada" >&2
@@ -45,7 +47,7 @@ if [[ -n "${BASE_URL:-}" && -n "${TOKEN:-}" ]]; then
 
   curl -fsS -X POST "${BASE_URL}/api/sales-goals/items" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d "{\"goal_code\":${GOAL_CODE},\"target_type\":\"ITEM\",\"item_code\":1,\"sales_uom\":\"UN\",\"target_quantity\":10,\"target_value\":10000,\"bonus_pct\":1,\"is_active\":true}" >/dev/null
+    -d "{\"goal_code\":${GOAL_CODE},\"target_type\":\"ITEM\",\"item_code\":\"10001\",\"sales_uom\":\"UN\",\"target_quantity\":10,\"target_value\":10000,\"bonus_pct\":1,\"is_active\":true}" >/dev/null
 
   GROUP_JSON="$(curl -fsS -X POST "${BASE_URL}/api/sales-goals/group-targets" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
@@ -58,11 +60,11 @@ if [[ -n "${BASE_URL:-}" && -n "${TOKEN:-}" ]]; then
 
   curl -fsS -X POST "${BASE_URL}/api/sales-goals/group-customers" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d "{\"group_goal_id\":${GROUP_ID},\"customer_code\":1,\"representative_code\":1,\"minimum_value\":5000,\"minimum_bonus_pct\":0.5,\"probable_value\":8000,\"probable_bonus_pct\":1,\"ideal_value\":10000,\"ideal_bonus_pct\":1.5,\"is_active\":true}" >/dev/null
+    -d "{\"group_goal_id\":${GROUP_ID},\"customer_code\":1,\"representative_code\":${REPRESENTATIVE_CODE},\"minimum_value\":5000,\"minimum_bonus_pct\":0.5,\"probable_value\":8000,\"probable_bonus_pct\":1,\"ideal_value\":10000,\"ideal_bonus_pct\":1.5,\"is_active\":true}" >/dev/null
 
   curl -fsS -X POST "${BASE_URL}/api/sales-goals/balances" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d "{\"period_code\":${PERIOD_CODE},\"balance_scope\":\"REPRESENTATIVE\",\"representative_code\":1,\"goal_type\":\"SALES\",\"realized_value\":12000,\"ideal_value\":10000,\"balance_value\":2000,\"notes\":\"Excedente smoke\"}" >/dev/null
+    -d "{\"period_code\":${PERIOD_CODE},\"balance_scope\":\"REPRESENTATIVE\",\"representative_code\":${REPRESENTATIVE_CODE},\"goal_type\":\"SALES\",\"realized_value\":12000,\"ideal_value\":10000,\"balance_value\":2000,\"notes\":\"Excedente smoke\"}" >/dev/null
 
   curl -fsS "${BASE_URL}/api/sales-goals/${GOAL_CODE}" -H "$AUTH_HEADER" >/dev/null
   curl -fsS "${BASE_URL}/api/sales-goals/report?period_code=${PERIOD_CODE}&analysis_base=SALES" -H "$AUTH_HEADER" >/dev/null

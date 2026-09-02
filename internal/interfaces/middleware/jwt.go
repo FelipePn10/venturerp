@@ -19,6 +19,10 @@ type AuthorizationValidator interface {
 }
 
 func JWT(secret string, log *applogger.Logger, validators ...AuthorizationValidator) func(http.Handler) http.Handler {
+	return JWTForEnvironment(secret, "production", log, validators...)
+}
+
+func JWTForEnvironment(secret, environment string, log *applogger.Logger, validators ...AuthorizationValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions {
@@ -57,9 +61,13 @@ func JWT(secret string, log *applogger.Logger, validators ...AuthorizationValida
 				claims.UserID = claims.Subject
 			}
 			role := strings.ToUpper(strings.TrimSpace(claims.Role))
+			tokenEnvironment := strings.ToLower(strings.TrimSpace(claims.Environment))
+			if tokenEnvironment == "" {
+				tokenEnvironment = "production"
+			}
 			_, userIDErr := uuid.Parse(claims.UserID)
 			if err != nil || !token.Valid || userIDErr != nil || claims.Subject != claims.UserID ||
-				claims.EnterpriseID <= 0 || (role != "ADMIN" && role != "USER") {
+				claims.EnterpriseID <= 0 || tokenEnvironment != environment || (role != "ADMIN" && role != "USER") {
 				// Use the per-request logger so the warning carries request_id.
 				applogger.FromContext(r.Context()).Warn(
 					"invalid token attempt",

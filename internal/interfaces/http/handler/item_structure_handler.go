@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/go-chi/chi/v5"
@@ -35,8 +36,8 @@ func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if dto.ParentCode == 0 || dto.ChildCode == 0 {
-		jsonError(w, http.StatusBadRequest, "parent_code and child_code are required")
+	if dto.ParentCode.String() == "" || dto.ChildCode.String() == "" {
+		jsonError(w, http.StatusBadRequest, "parent_code e child_code são obrigatórios")
 		return
 	}
 
@@ -49,24 +50,30 @@ func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, result)
 }
 
-// Delete removes a structure component identified by code.
+// Delete removes a structure component identified by its public item codes.
 func (h *ItemStructureHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	code, err := parseCode(r, "code")
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+	parent := request.TextCode(chi.URLParam(r, "parentCode"))
+	child := request.TextCode(chi.URLParam(r, "childCode"))
+	if parent.String() == "" || child.String() == "" {
+		jsonError(w, http.StatusBadRequest, "parentCode e childCode são obrigatórios")
 		return
 	}
-
-	_ = code
-
+	var mask *string
+	if value := r.URL.Query().Get("mask"); value != "" {
+		mask = &value
+	}
+	if err := h.deleteUC.Execute(r.Context(), parent, child, mask); err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // GetTree returns the BOM tree for a root item.
 func (h *ItemStructureHandler) GetTree(w http.ResponseWriter, r *http.Request) {
-	rootItemCode, err := parseCode(r, "rootItemCode")
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+	rootItemCode := request.TextCode(chi.URLParam(r, "rootItemCode"))
+	if rootItemCode.String() == "" {
+		jsonError(w, http.StatusBadRequest, "rootItemCode é obrigatório")
 		return
 	}
 
@@ -85,9 +92,9 @@ func (h *ItemStructureHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 
 // GetAllDirectChildren returns direct children of a structure component.
 func (h *ItemStructureHandler) GetAllDirectChildren(w http.ResponseWriter, r *http.Request) {
-	parentItemCode, err := parseCode(r, "parentItemCode")
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+	parentItemCode := request.TextCode(chi.URLParam(r, "parentItemCode"))
+	if parentItemCode.String() == "" {
+		jsonError(w, http.StatusBadRequest, "parentItemCode é obrigatório")
 		return
 	}
 
@@ -151,8 +158,31 @@ func jsonResponse(w http.ResponseWriter, status int, body any) {
 }
 
 func jsonError(w http.ResponseWriter, status int, msg string) {
+	msg = strings.NewReplacer(
+		"invalid payload", "corpo da requisição inválido",
+		"invalid shipment code", "código do romaneio inválido",
+		"invalid load code", "código da carga inválido",
+		"invalid volume id", "identificador do volume inválido",
+		"invalid id", "identificador inválido",
+		"not found", "não encontrado",
+		"is required", "é obrigatório",
+		"not configured", "não configurado",
+	).Replace(msg)
 	if status >= http.StatusInternalServerError {
-		msg = "internal server error"
+		msg = "erro interno do servidor"
 	}
-	jsonResponse(w, status, map[string]string{"error": msg})
+	code := "ERRO_INTERNO"
+	switch status {
+	case http.StatusBadRequest:
+		code = "REQUISICAO_INVALIDA"
+	case http.StatusNotFound:
+		code = "REGISTRO_NAO_ENCONTRADO"
+	case http.StatusConflict:
+		code = "CONFLITO_DE_DOMINIO"
+	case http.StatusUnprocessableEntity:
+		code = "VALIDACAO_DE_DOMINIO"
+	case http.StatusForbidden:
+		code = "ACESSO_NEGADO"
+	}
+	jsonResponse(w, status, map[string]string{"error": msg, "code": code})
 }

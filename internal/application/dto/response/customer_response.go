@@ -236,6 +236,23 @@ type SalesItemPricingResponse struct {
 	Formula        *string `json:"formula,omitempty"`
 }
 
+type SalesTableCandidateResponse struct {
+	SalesTableCode int64   `json:"sales_table_code"`
+	Description    string  `json:"description"`
+	BasePrice      float64 `json:"base_price"`
+	AppliedPrice   float64 `json:"applied_price"`
+	Unit           string  `json:"unit,omitempty"`
+	Currency       string  `json:"currency"`
+	Source         string  `json:"source"`
+	Priority       int     `json:"priority"`
+}
+
+type SalesTableResolutionResponse struct {
+	AutoSelected bool                          `json:"auto_selected"`
+	Selected     *SalesTableCandidateResponse  `json:"selected,omitempty"`
+	Candidates   []SalesTableCandidateResponse `json:"candidates"`
+}
+
 type SalesPriceFormationResponse struct {
 	SalesTableCode          int64   `json:"sales_table_code"`
 	ItemCode                string  `json:"item_code,omitempty"`

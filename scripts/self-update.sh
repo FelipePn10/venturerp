@@ -23,6 +23,12 @@ source "${CONFIG_FILE}"
 DATABASE_PASSWORD="${DATABASE_PASSWORD:-$(printf '%s' "${DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^:]+:([^@]+)@.*#\1#p')}"
 
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5070/health/ready}"
+TRAINING_HEALTH_URL="${TRAINING_HEALTH_URL:-http://127.0.0.1:5071/health/ready}"
+COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
+if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
+  : "${TRAINING_API_ENV_FILE:?TRAINING_API_ENV_FILE is required when TRAINING_DATABASE_URL is set}"
+  COMPOSE_PROFILES="training"
+fi
 # UID/GID do appuser dentro do contêiner da API. A fila é a única ponte
 # API↔host: a API (não-root) precisa ler/escrever aqui, então root normaliza a
 # posse dos arquivos que produz para esse UID.
@@ -58,6 +64,17 @@ systemctl is-active --quiet "${LEGACY_SERVICE}" && LEGACY_WAS_ACTIVE=1
 REQUESTED_AT="$(jq -er '.requested_at' "${REQUEST_FILE}")"
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 BACKUP_FILE="${BACKUP_DIR}/pre-update-${VERSION}-$(date -u +%Y%m%dT%H%M%SZ).dump"
+TRAINING_BACKUP_FILE=""
+TRAINING_DATABASE_USER=""
+TRAINING_DATABASE_NAME=""
+TRAINING_DATABASE_PASSWORD=""
+if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
+  TRAINING_BACKUP_FILE="${BACKUP_DIR}/pre-update-training-${VERSION}-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  TRAINING_DATABASE_USER="${TRAINING_DATABASE_USER:-$(printf '%s' "${TRAINING_DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://([^:@/]+).*#\1#p')}"
+  TRAINING_DATABASE_NAME="${TRAINING_DATABASE_NAME:-$(printf '%s' "${TRAINING_DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^/]+/([^?]+).*$#\1#p')}"
+  TRAINING_DATABASE_PASSWORD="${TRAINING_DATABASE_PASSWORD:-$(printf '%s' "${TRAINING_DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^:]+:([^@]+)@.*#\1#p')}"
+  [[ -n "${TRAINING_DATABASE_USER}" && -n "${TRAINING_DATABASE_NAME}" && -n "${TRAINING_DATABASE_PASSWORD}" ]]
+fi
 SUCCESS=0
 
 status() {
@@ -84,16 +101,26 @@ restore_database() {
     --clean --if-exists --no-owner --no-acl <"${BACKUP_FILE}"
 }
 
+restore_training_database() {
+  [[ -z "${TRAINING_BACKUP_FILE}" ]] && return 0
+  [[ -s "${TRAINING_BACKUP_FILE}" ]] || return 1
+  docker exec -e PGPASSWORD="${TRAINING_DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" psql -U "${TRAINING_DATABASE_USER}" -d postgres -v ON_ERROR_STOP=1 \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${TRAINING_DATABASE_NAME}' AND pid <> pg_backend_pid();" >/dev/null
+  docker exec -i -e PGPASSWORD="${TRAINING_DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_restore -U "${TRAINING_DATABASE_USER}" -d "${TRAINING_DATABASE_NAME}" \
+    --clean --if-exists --no-owner --no-acl <"${TRAINING_BACKUP_FILE}"
+}
+
 rollback() {
   local exit_code="$?"
   trap - ERR
   [[ "${SUCCESS}" == "1" ]] && return 0
   status failed 90 "Falha na implantação; restaurando banco e versão anterior"
-  VENTURERP_IMAGE="${TARGET_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" \
+  COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${TARGET_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
     docker compose -f "${COMPOSE_FILE}" down --remove-orphans >/dev/null 2>&1 || true
   restore_database || true
+  restore_training_database || true
   if [[ -n "${PREVIOUS_IMAGE}" ]]; then
-    VENTURERP_IMAGE="${PREVIOUS_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" \
+    COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${PREVIOUS_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
       docker compose -f "${COMPOSE_FILE}" up -d
   elif [[ "${LEGACY_WAS_ACTIVE}" == "1" ]]; then
     systemctl start "${LEGACY_SERVICE}"
@@ -113,6 +140,12 @@ docker exec -e PGPASSWORD="${DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_dump
   --format=custom --no-owner --no-acl >"${BACKUP_FILE}"
 [[ -s "${BACKUP_FILE}" ]]
 docker exec -i "${DATABASE_CONTAINER}" pg_restore --list <"${BACKUP_FILE}" >/dev/null
+if [[ -n "${TRAINING_BACKUP_FILE}" ]]; then
+  docker exec -e PGPASSWORD="${TRAINING_DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_dump -U "${TRAINING_DATABASE_USER}" -d "${TRAINING_DATABASE_NAME}" \
+    --format=custom --no-owner --no-acl >"${TRAINING_BACKUP_FILE}"
+  [[ -s "${TRAINING_BACKUP_FILE}" ]]
+  docker exec -i "${DATABASE_CONTAINER}" pg_restore --list <"${TRAINING_BACKUP_FILE}" >/dev/null
+fi
 
 status running 30 "Baixando imagem assinada pelo pipeline"
 docker pull "${TARGET_IMAGE}"
@@ -126,14 +159,18 @@ trap rollback ERR INT TERM
 status running 45 "Parando a API e aplicando migrations"
 systemctl stop "${LEGACY_SERVICE}" >/dev/null 2>&1 || true
 if [[ -n "${PREVIOUS_IMAGE}" ]]; then
-  VENTURERP_IMAGE="${PREVIOUS_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" \
+  COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${PREVIOUS_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
     docker compose -f "${COMPOSE_FILE}" down --remove-orphans
 fi
 docker run --rm --network host -v "${MIGRATIONS_DIR}:/migrations:ro" migrate/migrate:v4.17.1 \
   -path=/migrations -database="${DATABASE_URL}" up
+if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
+  docker run --rm --network host -v "${MIGRATIONS_DIR}:/migrations:ro" migrate/migrate:v4.17.1 \
+    -path=/migrations -database="${TRAINING_DATABASE_URL}" up
+fi
 
 status running 70 "Iniciando a nova versão"
-VENTURERP_IMAGE="${TARGET_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" \
+COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${TARGET_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
   docker compose -f "${COMPOSE_FILE}" up -d
 
 status running 85 "Executando health-check de prontidão"
@@ -143,6 +180,14 @@ for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
   sleep "${HEALTH_INTERVAL_SECONDS}"
 done
 [[ "${healthy}" == "1" ]]
+if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
+  training_healthy=0
+  for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
+    if curl --fail --silent --show-error "${TRAINING_HEALTH_URL}" >/dev/null; then training_healthy=1; break; fi
+    sleep "${HEALTH_INTERVAL_SECONDS}"
+  done
+  [[ "${training_healthy}" == "1" ]]
+fi
 
 printf '%s\n' "${TARGET_IMAGE}" >"${STATE_FILE}"
 SUCCESS=1

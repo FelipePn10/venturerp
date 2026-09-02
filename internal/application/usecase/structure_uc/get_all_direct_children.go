@@ -2,7 +2,6 @@ package structure_uc
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -13,18 +12,24 @@ import (
 )
 
 type GetAllDirectChildrenUseCase struct {
-	Repo repository.ItemStructureRepository
-	Auth ports.AuthService
+	Repo  repository.ItemStructureRepository
+	Auth  ports.AuthService
+	Items any
 }
 
 func NewGetAllDirectChildrenUseCase(
 	repo repository.ItemStructureRepository,
 	auth ports.AuthService,
+	items ...any,
 ) *GetAllDirectChildrenUseCase {
-	return &GetAllDirectChildrenUseCase{
+	uc := &GetAllDirectChildrenUseCase{
 		Repo: repo,
 		Auth: auth,
 	}
+	if len(items) > 0 {
+		uc.Items = items[0]
+	}
+	return uc
 }
 
 func (uc *GetAllDirectChildrenUseCase) Execute(
@@ -36,11 +41,11 @@ func (uc *GetAllDirectChildrenUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	if dto.ParentItemCode <= 0 {
-		return nil, fmt.Errorf("parentItemCode invalid")
+	parentCode, err := resolveItemCode(ctx, uc.Items, dto.ParentItemCode)
+	if err != nil {
+		return nil, err
 	}
-
-	items, err := uc.Repo.GetAllDirectChildren(ctx, dto.ParentItemCode)
+	items, err := uc.Repo.GetAllDirectChildren(ctx, parentCode)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +66,10 @@ func toItemStructureResponse(s *entity.ItemStructure) *response.ItemStructureRes
 		Quantity:           s.Quantity,
 		LossPercentage:     s.LossPercentage,
 		LossFormula:        s.LossFormula,
+		QuantityFormula:    s.QuantityFormula,
+		QuantityRounding:   s.QuantityRounding,
+		QuantityScale:      s.QuantityScale,
+		FormulaVariables:   s.FormulaVariables(),
 		UnitOfMeasurement:  string(s.UnitOfMeasurement),
 		Sequence:           s.Sequence,
 		Notes:              s.Notes,

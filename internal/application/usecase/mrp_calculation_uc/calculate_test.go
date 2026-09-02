@@ -2,11 +2,14 @@ package mrp_calculation_uc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
+	planentity "github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
+	planrepo "github.com/FelipePn10/panossoerp/internal/domain/production_plan/repository"
 )
 
 type calculationAuth struct{ ports.AuthService }
@@ -18,6 +21,27 @@ type calculationServiceStub struct{ called bool }
 func (s *calculationServiceStub) Calculate(context.Context, int64, int64, bool) (*entity.MRPCalculationLog, error) {
 	s.called = true
 	return &entity.MRPCalculationLog{}, nil
+}
+
+type calculationPlanRepo struct {
+	planrepo.ProductionPlanRepository
+	found bool
+}
+
+func (r calculationPlanRepo) GetByCode(context.Context, int64) (*planentity.ProductionPlan, error) {
+	if !r.found {
+		return nil, planrepo.ErrNotFound
+	}
+	return &planentity.ProductionPlan{Code: 1}, nil
+}
+
+func TestRunMRPCalculationValidatesPlanBeforeCreatingCalculation(t *testing.T) {
+	service := &calculationServiceStub{}
+	uc := &RunMRPCalculationUseCase{Service: service, Auth: calculationAuth{}, Plans: calculationPlanRepo{found: false}}
+	_, err := uc.Execute(context.Background(), request.RunMRPCalculationDTO{PlanCode: 999, InitialOrderNumber: 1000})
+	if err == nil || service.called || !strings.Contains(err.Error(), "plano de referência 999 não encontrado") {
+		t.Fatalf("esperava referência inválida antes do serviço: err=%v called=%v", err, service.called)
+	}
 }
 func (*calculationServiceStub) GenerateLLC(context.Context) error                    { return nil }
 func (*calculationServiceStub) CalculateItemLLC(context.Context, int64) (int, error) { return 0, nil }

@@ -50,17 +50,18 @@ type UpdateCommercialDTO struct {
 	WarrantyDays                     *int              `json:"warranty_days,omitempty"`
 	TransferWarehouseCode            **int64           `json:"transfer_warehouse_code,omitempty"`
 	TechnicalAssistanceWarehouseCode **int64           `json:"technical_assistance_warehouse_code,omitempty"`
-	PackagingItemCode                **int64           `json:"packaging_item_code,omitempty"`
-	AllowBillingDescriptionChange    *bool             `json:"allow_billing_description_change,omitempty"`
-	IssueLoadingLabels               *bool             `json:"issue_loading_labels,omitempty"`
-	AssembleShippingVolumes          *bool             `json:"assemble_shipping_volumes,omitempty"`
-	RequiresSpecialPackaging         *bool             `json:"requires_special_packaging,omitempty"`
-	WithholdPISCOFINS                *bool             `json:"withhold_pis_cofins,omitempty"`
-	IsPackaging                      *bool             `json:"is_packaging,omitempty"`
-	MobileEnabled                    *bool             `json:"mobile_enabled,omitempty"`
-	ExportPackaging                  *bool             `json:"export_packaging,omitempty"`
-	ClassificationCode               **string          `json:"classification_code,omitempty"`
-	Notes                            **string          `json:"notes,omitempty"`
+	// PackagingItemCode chega como código de negócio (texto), como a tela o conhece.
+	PackagingItemCode             **TextCode `json:"packaging_item_code,omitempty"`
+	AllowBillingDescriptionChange *bool      `json:"allow_billing_description_change,omitempty"`
+	IssueLoadingLabels            *bool      `json:"issue_loading_labels,omitempty"`
+	AssembleShippingVolumes       *bool      `json:"assemble_shipping_volumes,omitempty"`
+	RequiresSpecialPackaging      *bool      `json:"requires_special_packaging,omitempty"`
+	WithholdPISCOFINS             *bool      `json:"withhold_pis_cofins,omitempty"`
+	IsPackaging                   *bool      `json:"is_packaging,omitempty"`
+	MobileEnabled                 *bool      `json:"mobile_enabled,omitempty"`
+	ExportPackaging               *bool      `json:"export_packaging,omitempty"`
+	ClassificationCode            **string   `json:"classification_code,omitempty"`
+	Notes                         **string   `json:"notes,omitempty"`
 }
 
 type UpdateAccountingDTO struct {

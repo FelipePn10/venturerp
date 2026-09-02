@@ -32,3 +32,7 @@ type UpdateSalesDivisionDTO struct {
 	CofinsPercentage        float64 `json:"cofins_percentage"`
 	ParentDivisionID        *int64  `json:"parent_division_id,omitempty"`
 }
+
+type SetSalesDivisionStatusDTO struct {
+	IsActive bool `json:"is_active"`
+}

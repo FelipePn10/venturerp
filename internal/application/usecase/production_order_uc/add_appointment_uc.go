@@ -34,6 +34,11 @@ func (uc *AddAppointmentUseCase) Execute(
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.CreatedBy = actor
 	if dto.ProductionOrderID <= 0 {
 		return nil, errorsuc.NewValidationError("ordem de fabricacao obrigatoria")
 	}

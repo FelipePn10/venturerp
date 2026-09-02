@@ -41,16 +41,16 @@ type RepresentativeResponse struct {
 	BlockReason             *string                                       `json:"block_reason,omitempty"`
 	CreatedAt               time.Time                                     `json:"created_at"`
 	UpdatedAt               time.Time                                     `json:"updated_at"`
-	Enterprises             []RepresentativeEnterpriseResponse            `json:"enterprises,omitempty"`
-	Accounting              []RepresentativeAccountingResponse            `json:"accounting,omitempty"`
-	Regions                 []RepresentativeRegionResponse                `json:"regions,omitempty"`
-	Segments                []RepresentativeSegmentResponse               `json:"segments,omitempty"`
-	SalesPlans              []RepresentativeSalesPlanResponse             `json:"sales_plans,omitempty"`
-	Interests               []RepresentativeInterestResponse              `json:"interests,omitempty"`
-	Phones                  []RepresentativePhoneResponse                 `json:"phones,omitempty"`
-	Emails                  []RepresentativeEmailResponse                 `json:"emails,omitempty"`
-	CorrespondenceAddresses []RepresentativeCorrespondenceAddressResponse `json:"correspondence_addresses,omitempty"`
-	Contacts                []RepresentativeContactResponse               `json:"contacts,omitempty"`
+	Enterprises             []RepresentativeEnterpriseResponse            `json:"enterprises"`
+	Accounting              []RepresentativeAccountingResponse            `json:"accounting"`
+	Regions                 []RepresentativeRegionResponse                `json:"regions"`
+	Segments                []RepresentativeSegmentResponse               `json:"segments"`
+	SalesPlans              []RepresentativeSalesPlanResponse             `json:"sales_plans"`
+	Interests               []RepresentativeInterestResponse              `json:"interests"`
+	Phones                  []RepresentativePhoneResponse                 `json:"phones"`
+	Emails                  []RepresentativeEmailResponse                 `json:"emails"`
+	CorrespondenceAddresses []RepresentativeCorrespondenceAddressResponse `json:"correspondence_addresses"`
+	Contacts                []RepresentativeContactResponse               `json:"contacts"`
 }
 
 type RepresentativeEnterpriseResponse struct {
@@ -110,12 +110,25 @@ type RepresentativeSalesPlanResponse struct {
 	CreatedAt          time.Time `json:"created_at"`
 }
 
+type RepresentativeSalesPlanOptionResponse struct {
+	Code int64 `json:"code"`
+}
+
 type RepresentativeInterestResponse struct {
 	ID                     int64     `json:"id"`
 	RepresentativeCode     int64     `json:"representative_code"`
 	ItemClassificationCode int64     `json:"item_classification_code"`
 	IsActive               bool      `json:"is_active"`
 	CreatedAt              time.Time `json:"created_at"`
+}
+
+type RepresentativeInterestClassificationResponse struct {
+	ID              int64  `json:"id"`
+	Code            string `json:"code"`
+	MaskCode        int64  `json:"mask_code"`
+	Mask            string `json:"mask"`
+	Description     string `json:"description"`
+	MaskDescription string `json:"mask_description"`
 }
 
 type RepresentativePhoneResponse struct {

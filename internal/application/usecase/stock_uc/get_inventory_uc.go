@@ -34,6 +34,9 @@ func (uc *GetInventoryUseCase) ListItems(ctx context.Context, inventoryID int64)
 	if !uc.Auth.CanGetInventory(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if _, err := uc.Repo.GetInventory(ctx, inventoryID); err != nil {
+		return nil, err
+	}
 	items, err := uc.Repo.ListInventoryItems(ctx, inventoryID)
 	if err != nil {
 		return nil, err

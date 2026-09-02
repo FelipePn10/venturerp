@@ -1,5 +1,7 @@
 package request
 
+import "github.com/google/uuid"
+
 type CreateStockMovementDTO struct {
 	ItemCode       int64   `json:"item_code"`
 	Mask           string  `json:"mask"`
@@ -40,15 +42,15 @@ type CreateInventoryDTO struct {
 }
 
 type CountInventoryItemDTO struct {
-	InventoryID      int64    `json:"inventory_id"`
-	ItemCode         int64    `json:"item_code"`
-	Mask             string   `json:"mask"`
-	WarehouseID      int64    `json:"warehouse_id"`
-	CountedQty       float64  `json:"counted_qty"`
-	UnitCost         *float64 `json:"unit_cost,omitempty"`
-	AdjustmentType   *string  `json:"adjustment_type,omitempty"`
-	AdjustmentReason *string  `json:"adjustment_reason,omitempty"`
-	CountedBy        *string  `json:"counted_by,omitempty"`
+	InventoryID      int64     `json:"inventory_id"`
+	ItemCode         int64     `json:"item_code"`
+	Mask             string    `json:"mask"`
+	WarehouseID      int64     `json:"warehouse_id"`
+	CountedQty       float64   `json:"counted_qty"`
+	UnitCost         *float64  `json:"unit_cost,omitempty"`
+	AdjustmentType   *string   `json:"adjustment_type,omitempty"`
+	AdjustmentReason *string   `json:"adjustment_reason,omitempty"`
+	CountedBy        uuid.UUID `json:"-"`
 }
 
 type AdjustInventoryItemDTO struct {

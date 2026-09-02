@@ -18,9 +18,11 @@ func (uc *UseCase) CreateReceivingNotice(ctx context.Context, dto request.Create
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.EnterpriseCode == 0 {
-		dto.EnterpriseCode = 1
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.EnterpriseCode = enterpriseCode
 	scheduledAt, err := parseTimePtr(dto.ScheduledAt)
 	if err != nil {
 		return nil, fmt.Errorf("invalid scheduled_at: %w", err)
@@ -156,18 +158,20 @@ func (uc *UseCase) CreateEDIMessage(ctx context.Context, dto request.CreateEDIMe
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.EnterpriseCode == 0 {
-		dto.EnterpriseCode = 1
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.EnterpriseCode = enterpriseCode
 	if dto.Direction != "INBOUND" && dto.Direction != "OUTBOUND" {
-		return nil, fmt.Errorf("direction must be INBOUND or OUTBOUND")
+		return nil, fmt.Errorf("direção deve ser INBOUND ou OUTBOUND")
 	}
 	if !validEDIMessageType(dto.MessageType) {
-		return nil, fmt.Errorf("invalid message_type %q", dto.MessageType)
+		return nil, fmt.Errorf("tipo de mensagem deve ser PO_CONFIRMATION, ASN ou INVOICE")
 	}
 	payload := dto.Payload
 	if len(payload) == 0 || !json.Valid(payload) {
-		payload = json.RawMessage(`{}`)
+		return nil, fmt.Errorf("payload EDI deve ser um JSON válido")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	msg := &entity.SupplierEDIMessage{
@@ -256,9 +260,11 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.EnterpriseCode == 0 {
-		dto.EnterpriseCode = 1
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.EnterpriseCode = enterpriseCode
 	if dto.Currency == "" {
 		dto.Currency = "USD"
 	}
@@ -382,20 +388,22 @@ func (uc *UseCase) UpsertParameter(ctx context.Context, dto request.UpsertProcur
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.EnterpriseCode == 0 {
-		dto.EnterpriseCode = 1
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.EnterpriseCode = enterpriseCode
 	if !validParameterDomain(dto.Domain) {
-		return nil, fmt.Errorf("invalid domain %q", dto.Domain)
+		return nil, fmt.Errorf("domínio deve ser PURCHASE_TABLE, PURCHASE_ORDER, QUOTATION, REQUISITION, RECEIVING_NOTICE, INSPECTION, SUPPLIER_EVALUATION, CONTRACT, SUPPLIER ou NF_ENTRY")
 	}
 	if dto.Key == "" {
-		return nil, fmt.Errorf("param_key is required")
+		return nil, fmt.Errorf("chave do parâmetro é obrigatória")
 	}
 	if dto.ValueType == "" {
 		dto.ValueType = "STRING"
 	}
 	if !validParameterValueType(dto.ValueType) {
-		return nil, fmt.Errorf("value_type must be STRING, NUMBER, BOOL or JSON")
+		return nil, fmt.Errorf("tipo do valor deve ser STRING, NUMBER, BOOL ou JSON")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	param := &entity.ProcurementParameter{
@@ -543,7 +551,7 @@ func validDivergenceResolution(s string) bool {
 
 func validEDIMessageType(s string) bool {
 	switch s {
-	case "ORDER_CONFIRMATION", "SHIP_NOTICE", "INVOICE", "ORDER", "OTHER":
+	case "PO_CONFIRMATION", "ASN", "INVOICE":
 		return true
 	}
 	return false

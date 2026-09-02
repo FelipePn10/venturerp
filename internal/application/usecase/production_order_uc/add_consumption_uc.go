@@ -29,6 +29,11 @@ func (uc *AddConsumptionUseCase) Execute(
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.CreatedBy = actor
 
 	consumptionDate := datetime.ParseDateOrDefault(dto.ConsumptionDate, time.Now())
 

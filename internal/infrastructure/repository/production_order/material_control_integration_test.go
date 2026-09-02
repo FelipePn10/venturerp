@@ -136,8 +136,8 @@ func TestParameter45_BlocksOrderReportingWithIssueAtRelease(t *testing.T) {
 	ctx := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 	itemCode := testutil.UniqueCode()
 	testutil.Exec(t, pool, `INSERT INTO items
-		(code,warehouse_code,production_reporting_type,material_issue_timing,created_by)
-		VALUES ($1,$1,'ORDER','REGISTRATION_RELEASE',$2)`, itemCode, uuid.New())
+		(code,business_code,warehouse_code,production_reporting_type,material_issue_timing,created_by,enterprise_id)
+		VALUES ($1,($1::bigint)::text,$1,'ORDER','REGISTRATION_RELEASE',$2,$3)`, itemCode, uuid.New(), enterpriseID)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code=$1", itemCode)
 	testutil.Exec(t, pool, "UPDATE planning_params SET value='S' WHERE enterprise_id=$1 AND param_number=45", enterpriseID)
 	defer testutil.Exec(t, pool, "UPDATE planning_params SET value='N' WHERE enterprise_id=$1 AND param_number=45", enterpriseID)

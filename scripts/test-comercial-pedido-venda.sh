@@ -18,10 +18,12 @@ if [[ -n "${BASE_URL:-}" && -n "${TOKEN:-}" ]]; then
   echo "==> Fase 4 / Pedido de Venda: smoke HTTP"
   AUTH_HEADER="Authorization: Bearer ${TOKEN}"
   USER_UUID="${USER_UUID:-00000000-0000-0000-0000-000000000001}"
+  PRICE_TABLE_CODE="$(curl -fsS "${BASE_URL}/api/customers/support/sales-tables/" -H "$AUTH_HEADER" | jq -r 'map(select(.is_active == true)) | last | .code // empty')"
+  [[ -n "$PRICE_TABLE_CODE" ]]
 
   SO_JSON="$(curl -fsS -X POST "${BASE_URL}/api/sales-order/create" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d "{\"enterprise_code\":1,\"status\":\"R\",\"origin\":\"NORMAL\",\"currency_code\":\"BRL\",\"commission_pct\":2.5,\"is_nfce\":false,\"freight_type\":\"Cif-Contrat.\",\"freight_value\":12.5,\"insurance_value\":1.5,\"project_code\":\"FASE4\",\"project_name\":\"Smoke Pedido Venda\",\"created_by\":\"${USER_UUID}\"}")"
+    -d "{\"enterprise_code\":1,\"status\":\"R\",\"origin\":\"NORMAL\",\"currency_code\":\"BRL\",\"price_table_code\":${PRICE_TABLE_CODE},\"commission_pct\":2.5,\"is_nfce\":false,\"freight_type\":\"Cif-Contrat.\",\"freight_value\":12.5,\"insurance_value\":1.5,\"project_code\":\"FASE4\",\"project_name\":\"Smoke Pedido Venda\",\"created_by\":\"${USER_UUID}\"}")"
   SO_CODE="$(printf '%s' "$SO_JSON" | sed -n 's/.*"code":\([0-9][0-9]*\).*/\1/p')"
   if [[ -z "$SO_CODE" ]]; then
     echo "Nao foi possivel extrair o codigo do pedido criado" >&2
@@ -30,7 +32,7 @@ if [[ -n "${BASE_URL:-}" && -n "${TOKEN:-}" ]]; then
 
   curl -fsS -X POST "${BASE_URL}/api/sales-order/items/create" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d "{\"sales_order_code\":${SO_CODE},\"sequence\":1,\"item_code\":1,\"requested_qty\":2,\"unit_price\":100,\"discount_pct\":5}" >/dev/null
+    -d "{\"sales_order_code\":${SO_CODE},\"sequence\":1,\"item_code\":\"10001\",\"price_table_code\":${PRICE_TABLE_CODE},\"requested_qty\":2,\"discount_pct\":5}" >/dev/null
   curl -fsS "${BASE_URL}/api/sales-order/search?status=R&conference_status=PENDING" -H "$AUTH_HEADER" >/dev/null
   curl -fsS "${BASE_URL}/api/sales-order/report?status=R" -H "$AUTH_HEADER" >/dev/null
   curl -fsS -X POST "${BASE_URL}/api/sales-order/${SO_CODE}/analyze" \

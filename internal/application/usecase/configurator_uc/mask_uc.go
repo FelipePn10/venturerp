@@ -9,6 +9,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/configurator/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -29,6 +30,15 @@ func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.Cfg
 	}
 	if len(itemChars) == 0 {
 		return nil, fmt.Errorf("item %d não possui características configuradas", dto.ItemCode)
+	}
+	// Restrições e dependências (FENG0116) valem para qualquer caminho que gere
+	// máscara, não só para a geração em lote.
+	violations, err := uc.ValidateCombination(ctx, dto.ItemCode, dto.Answers)
+	if err != nil {
+		return nil, err
+	}
+	if len(violations) > 0 {
+		return nil, errorsuc.NewValidationError(violationSummary(violations))
 	}
 	// gather provided answers per characteristic (allows multi-select)
 	answers := map[int64][]request.CfgMaskAnswerInput{}

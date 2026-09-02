@@ -106,6 +106,6 @@ type RouteDetailResponse struct {
 
 type RouteLeadTimeResponse struct {
 	RouteID      int64   `json:"route_id"`
-	TotalHours   float64 `json:"total_hours"`
+	TotalHours   float64 `json:"lead_time_hours"`
 	CriticalPath []int64 `json:"critical_path"` // route_operation IDs
 }

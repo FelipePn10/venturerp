@@ -7,6 +7,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/salespricing"
 	itemtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
@@ -21,8 +23,13 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 	if dto.SalesQuotationCode == 0 {
 		return nil, errorsuc.NewValidationError("sales_quotation_code is required")
 	}
-	if dto.ItemCode == 0 {
-		return nil, errorsuc.NewValidationError("item_code is required")
+	resolvedItem, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	if err != nil {
+		return nil, err
+	}
+	itemCode := int64(resolvedItem.Code)
+	if err = itemresolution.ValidateMask(ctx, uc.Items, itemCode, dto.Mask); err != nil {
+		return nil, err
 	}
 	if !dto.RequestedQty.IsPositive() {
 		return nil, errorsuc.NewValidationError("requested_qty must be greater than zero")
@@ -30,7 +37,7 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 	item := &entity.SalesQuotationItem{
 		SalesQuotationCode: dto.SalesQuotationCode,
 		Sequence:           dto.Sequence,
-		ItemCode:           dto.ItemCode,
+		ItemCode:           itemCode,
 		Mask:               dto.Mask,
 		SalesUOM:           dto.SalesUOM,
 		WarehouseCode:      dto.WarehouseCode,
@@ -49,10 +56,23 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 	if err != nil {
 		return nil, err
 	}
+	tableCode := quotation.PriceTableCode
+	if dto.PriceTableCode != nil {
+		tableCode = dto.PriceTableCode
+	}
+	if tableCode == nil {
+		return nil, errorsuc.NewValidationError("o orçamento não possui tabela de preço")
+	}
+	pricing, err := salespricing.Resolve(ctx, uc.Customers, *tableCode, itemCode, dto.RequestedQty.InexactFloat64())
+	if err != nil {
+		return nil, err
+	}
+	item.UnitPrice = decimal.NewFromFloat(pricing.AppliedPrice)
+	item.PriceTableCode = tableCode
 	if quotation.IsNFCe && quotation.DeliveryWithReceipt {
 		item.IPIPct = decimal.Zero
 	}
-	if err := uc.validateNFCeServiceItem(ctx, quotation, dto.ItemCode); err != nil {
+	if err := uc.validateNFCeServiceItem(ctx, quotation, itemCode); err != nil {
 		return nil, err
 	}
 	calcItemTotals(item)
@@ -86,7 +106,27 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 	if err != nil {
 		return nil, err
 	}
+	if dto.ItemCode != nil {
+		resolvedItem, resolveErr := itemresolution.Resolve(ctx, uc.Items, *dto.ItemCode)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		if int64(resolvedItem.Code) != current.ItemCode {
+			return nil, errorsuc.NewValidationError("o item da linha não pode ser alterado; cancele a linha e inclua outro item")
+		}
+	}
 	quotation, err := uc.Repo.GetByCode(ctx, current.SalesQuotationCode)
+	if err != nil {
+		return nil, err
+	}
+	tableCode := current.PriceTableCode
+	if tableCode == nil {
+		tableCode = quotation.PriceTableCode
+	}
+	if tableCode == nil {
+		return nil, errorsuc.NewValidationError("o orçamento não possui tabela de preço")
+	}
+	pricing, err := salespricing.Resolve(ctx, uc.Customers, *tableCode, current.ItemCode, dto.RequestedQty.InexactFloat64())
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +136,7 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 	item := &entity.SalesQuotationItem{
 		Code:             dto.Code,
 		RequestedQty:     dto.RequestedQty,
-		UnitPrice:        dto.UnitPrice,
+		UnitPrice:        decimal.NewFromFloat(pricing.AppliedPrice),
 		AttendedQty:      dto.AttendedQty,
 		CancelledQty:     dto.CancelledQty,
 		DeliveryDate:     datetime.ParseDatePtr(dto.DeliveryDate),

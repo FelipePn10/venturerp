@@ -88,6 +88,12 @@ func (uc *ListSalesOrdersAdvancedUseCase) Execute(ctx context.Context, filter re
 	if !uc.Auth.CanListSalesOrders(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if filter.Limit == 0 {
+		filter.Limit = 100
+	}
+	if filter.Limit < 1 || filter.Limit > 500 || filter.Offset < 0 {
+		return nil, errorsuc.NewValidationError("limit deve estar entre 1 e 500 e offset não pode ser negativo")
+	}
 	orders, err := uc.Repo.ListAdvanced(ctx, filter)
 	if err != nil {
 		return nil, err

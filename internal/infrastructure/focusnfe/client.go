@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -21,18 +22,24 @@ type Client struct {
 	baseURL   string
 	httpCli   *http.Client
 	onRequest func(endpoint, method, reqBody, respBody string, statusCode, durationMs int)
+	configErr error
 }
 
 func NewClient(token, ambiente string) *Client {
 	base := baseURLHomologacao
-	if strings.ToLower(ambiente) == "producao" {
+	providerEnvironment := strings.ToLower(strings.TrimSpace(ambiente))
+	if providerEnvironment == "producao" {
 		base = baseURLProducao
 	}
-	return &Client{
+	client := &Client{
 		token:   token,
 		baseURL: base,
 		httpCli: &http.Client{Timeout: 30 * time.Second},
 	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("DATA_ENVIRONMENT")), "training") && providerEnvironment == "producao" {
+		client.configErr = fmt.Errorf("Focus NF-e production environment is forbidden while DATA_ENVIRONMENT=training")
+	}
+	return client
 }
 
 func (c *Client) WithLogger(fn func(endpoint, method, reqBody, respBody string, statusCode, durationMs int)) *Client {
@@ -41,6 +48,9 @@ func (c *Client) WithLogger(fn func(endpoint, method, reqBody, respBody string, 
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body interface{}) ([]byte, int, error) {
+	if c.configErr != nil {
+		return nil, 0, c.configErr
+	}
 	var reqBody []byte
 	if body != nil {
 		var err error

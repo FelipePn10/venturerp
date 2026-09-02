@@ -8,8 +8,11 @@ import (
 
 type FiscalConfig struct {
 	ID                        int64
+	EnterpriseID              int64
 	CnpjEmpresa               string
 	RazaoSocial               string
+	TradeName                 string
+	Email                     string
 	IEEmpresa                 *string
 	RegimeTributario          string
 	UFEmpresa                 string

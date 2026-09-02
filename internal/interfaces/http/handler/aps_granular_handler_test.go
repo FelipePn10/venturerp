@@ -128,3 +128,21 @@ func TestAPSGranularRoutesRejectUserAndBadPayload(t *testing.T) {
 		t.Fatalf("status=%d calls=%v body=%s", rec.Code, repo.calls, rec.Body.String())
 	}
 }
+
+func TestListMachineDowntimesValidatesCanonicalFiltersInPortuguese(t *testing.T) {
+	h := NewAPSHandler(aps_uc.New(&granularAPSRepo{}), nil)
+	for _, path := range []string{
+		"/downtimes?machine_id=abc&from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z",
+		"/downtimes?machine_id=1&from=ontem&to=amanha",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		h.ListMachineDowntimes(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "must be") || strings.Contains(rec.Body.String(), "invalid") {
+			t.Fatalf("mensagem não traduzida: %s", rec.Body.String())
+		}
+	}
+}

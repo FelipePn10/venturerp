@@ -28,6 +28,9 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 	if !uc.Auth.CanCreatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if dto.WarehouseID == nil || *dto.WarehouseID <= 0 {
+		return nil, errorsuc.NewValidationError("depósito é obrigatório")
+	}
 
 	po, err := uc.Repo.GetByCode(ctx, dto.PurchaseOrderCode)
 	if err != nil {
@@ -80,34 +83,42 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 	}
 
 	item := &entity.PurchaseOrderItem{
-		PurchaseOrderCode:        po.Code,
-		Sequence:                 seq,
-		ItemCode:                 dto.ItemCode,
-		Mask:                     dto.Mask,
-		RequestedQty:             dto.RequestedQty,
-		UnitPrice:                unitPrice,
-		TotalPrice:               total,
-		DiscountPct:              dto.DiscountPct,
-		IPIPct:                   ipiPct,
-		ICMSPct:                  dto.ICMSPct,
-		ICMSSTPct:                dto.ICMSSTPct,
-		TolerancePct:             dto.TolerancePct,
-		Status:                   entity.PurchaseOrderItemStatusOPEN,
-		PurchaseUOM:              purchaseUOM,
-		InternalUOM:              dto.InternalUOM,
-		InternalQty:              internalQty,
-		InternalPrice:            internalPrice,
-		OperationTypeCode:        dto.OperationTypeCode,
-		InvoiceTypeCode:          dto.InvoiceTypeCode,
-		AccountingAccount:        dto.AccountingAccount,
-		CostCenterCode:           dto.CostCenterCode,
-		FiscalClassificationCode: dto.FiscalClassificationCode,
-		RequesterEmployeeCode:    dto.RequesterEmployeeCode,
-		ContractCode:             dto.ContractCode,
-		QuotationCode:            dto.QuotationCode,
-		UtilizationType:          dto.UtilizationType,
-		Notes:                    dto.Notes,
-		IsActive:                 true,
+		PurchaseOrderCode:         po.Code,
+		Sequence:                  seq,
+		ItemCode:                  dto.ItemCode,
+		Mask:                      dto.Mask,
+		RequestedQty:              dto.RequestedQty,
+		UnitPrice:                 unitPrice,
+		TotalPrice:                total,
+		DiscountPct:               dto.DiscountPct,
+		IPIPct:                    ipiPct,
+		ICMSPct:                   dto.ICMSPct,
+		ICMSSTPct:                 dto.ICMSSTPct,
+		TolerancePct:              dto.TolerancePct,
+		Status:                    entity.PurchaseOrderItemStatusOPEN,
+		PurchaseUOM:               purchaseUOM,
+		InternalUOM:               dto.InternalUOM,
+		InternalQty:               internalQty,
+		InternalPrice:             internalPrice,
+		WarehouseID:               dto.WarehouseID,
+		OperationTypeCode:         dto.OperationTypeCode,
+		InvoiceTypeCode:           dto.InvoiceTypeCode,
+		AccountingAccount:         dto.AccountingAccount,
+		CostCenterCode:            dto.CostCenterCode,
+		FiscalClassificationCode:  dto.FiscalClassificationCode,
+		RequesterEmployeeCode:     dto.RequesterEmployeeCode,
+		ContractCode:              dto.ContractCode,
+		QuotationCode:             dto.QuotationCode,
+		PlannedOrderCode:          dto.PlannedOrderCode,
+		DemandType:                dto.DemandType,
+		DemandCode:                dto.DemandCode,
+		SalesOrderCode:            dto.SalesOrderCode,
+		ProductionOrderID:         dto.ProductionOrderID,
+		PurchaseRequisitionCode:   dto.PurchaseRequisitionCode,
+		PurchaseRequisitionItemID: dto.PurchaseRequisitionItemID,
+		UtilizationType:           dto.UtilizationType,
+		Notes:                     dto.Notes,
+		IsActive:                  true,
 	}
 	if dto.DeliveryDate != nil {
 		if t, perr := time.Parse("2006-01-02", *dto.DeliveryDate); perr == nil {

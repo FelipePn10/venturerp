@@ -8,6 +8,20 @@ type CRPSummaryResponse struct {
 	OverloadCount int   `json:"overload_count"`
 }
 
+// CRPPlanResponse é uma linha do catálogo de planos do modal de CRP (VPRO0200):
+// o usuário escolhe daqui em vez de digitar o código do plano de cabeça.
+type CRPPlanResponse struct {
+	PlanCode int64  `json:"plan_code"`
+	Name     string `json:"name"`
+	// TotalEntries é quanto de carga já foi calculada; zero significa que o
+	// plano ainda precisa ser calculado antes de exportar.
+	TotalEntries   int64   `json:"total_entries"`
+	OverloadCount  int64   `json:"overload_count"`
+	MaxLoadPct     float64 `json:"max_load_pct"`
+	Calculated     bool    `json:"calculated"`
+	LastCalculated *string `json:"last_calculated_at,omitempty"`
+}
+
 type CRPEntryResponse struct {
 	ID             int64     `json:"id"`
 	PlanCode       int64     `json:"plan_code"`

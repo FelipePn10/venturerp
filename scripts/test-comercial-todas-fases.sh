@@ -6,6 +6,22 @@ cd "$ROOT_DIR"
 
 export GOCACHE="${GOCACHE:-/tmp/panossoerp-go-build}"
 
+# Os smokes historicamente aceitam AUTH_TOKEN ou TOKEN. Quando a suíte recebe
+# BASE_URL, autentica uma única vez e compartilha o JWT sem depender do desktop.
+if [[ -n "${BASE_URL:-}" && -z "${AUTH_TOKEN:-}" && -z "${TOKEN:-}" ]]; then
+  USER_EMAIL="${USER_EMAIL:-admin@panossoerp.demo}"
+  USER_PASS="${USER_PASS:-admin123}"
+  AUTH_TOKEN="$(curl -fsS -X POST "${BASE_URL}/users/login" \
+    -H 'Content-Type: application/json' \
+    -d "{\"email\":\"${USER_EMAIL}\",\"password\":\"${USER_PASS}\"}" | jq -r '.token // empty')"
+  if [[ -z "$AUTH_TOKEN" ]]; then
+    echo "Falha ao autenticar a suíte comercial." >&2
+    exit 1
+  fi
+  export AUTH_TOKEN
+  export TOKEN="$AUTH_TOKEN"
+fi
+
 scripts=(
   scripts/test-comercial-pricing.sh
   scripts/test-comercial-politicas.sh

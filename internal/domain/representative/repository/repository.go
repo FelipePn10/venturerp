@@ -59,6 +59,15 @@ type RepresentativeFollowUp struct {
 	Customers          []RepresentativeCustomerFollowUp
 }
 
+type InterestClassification struct {
+	ID              int64
+	Code            string
+	MaskCode        int64
+	Mask            string
+	Description     string
+	MaskDescription string
+}
+
 type RepresentativeCustomerFollowUp struct {
 	CustomerCode      int64
 	QuotationCount    int64
@@ -87,7 +96,9 @@ type RepresentativeRepository interface {
 	AddRegion(ctx context.Context, row *entity.RepresentativeRegion) (*entity.RepresentativeRegion, error)
 	AddSegment(ctx context.Context, row *entity.RepresentativeSegment) (*entity.RepresentativeSegment, error)
 	AddSalesPlan(ctx context.Context, row *entity.RepresentativeSalesPlan) (*entity.RepresentativeSalesPlan, error)
+	ListSalesPlanCodes(ctx context.Context) ([]int64, error)
 	AddInterest(ctx context.Context, row *entity.RepresentativeInterest) (*entity.RepresentativeInterest, error)
+	ListInterestClassifications(ctx context.Context, enterpriseID int64) ([]InterestClassification, error)
 	AddPhone(ctx context.Context, row *entity.RepresentativePhone) (*entity.RepresentativePhone, error)
 	AddEmail(ctx context.Context, row *entity.RepresentativeEmail) (*entity.RepresentativeEmail, error)
 	AddCorrespondenceAddress(ctx context.Context, row *entity.RepresentativeCorrespondenceAddress) (*entity.RepresentativeCorrespondenceAddress, error)

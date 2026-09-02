@@ -53,7 +53,7 @@ func TestDemandSourcesAreTenantFilteredAndResolveClassificationDescendants(t *te
 		t.Fatal(err)
 	}
 	testutil.Exec(t, pool, `INSERT INTO sales_order_items (sales_order_code,item_code,warehouse_code,requested_qty,attended_qty,cancelled_qty) VALUES ($1,$2,$5,10,3,2),($3,$4,NULL,99,0,0)`, orderCode, itemCode, otherOrderCode, otherItemCode, warehouseCode)
-	testutil.Exec(t, pool, `INSERT INTO item_classification_masks (code,mask,description) VALUES ($1,'99.999.999','MRP test')`, maskCode)
+	testutil.Exec(t, pool, `INSERT INTO item_classification_masks (code,mask,description,enterprise_id) VALUES ($1,'99.999.999','MRP test',$2)`, maskCode, enterpriseID)
 	var maskID, parentID, childID int64
 	if err := pool.QueryRow(ctx, `SELECT id FROM item_classification_masks WHERE code=$1`, maskCode).Scan(&maskID); err != nil {
 		t.Fatal(err)

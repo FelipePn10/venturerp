@@ -78,12 +78,15 @@ type ItemCyclicalCountConfigResponse struct {
 
 // ItemEngineeringResponse is the engineering folder of an item.
 type ItemEngineeringResponse struct {
-	ItemBaseCod *int                    `json:"item_base_cod,omitempty"`
-	Weight      ItemWeightResponse      `json:"weight"`
-	Dimensions  *ItemDimensionsResponse `json:"dimensions,omitempty"`
-	Type        string                  `json:"type"`
-	TypeStruct  string                  `json:"type_struct"`
-	OEM         bool                    `json:"oem"`
+	// ItemBaseCod é o código de negócio (texto) do item-base;
+	// LegacyItemBaseCod mantém a chave numérica interna.
+	ItemBaseCod       *string                 `json:"item_base_cod,omitempty"`
+	LegacyItemBaseCod *int                    `json:"legacy_item_base_cod,omitempty"`
+	Weight            ItemWeightResponse      `json:"weight"`
+	Dimensions        *ItemDimensionsResponse `json:"dimensions,omitempty"`
+	Type              string                  `json:"type"`
+	TypeStruct        string                  `json:"type_struct"`
+	OEM               bool                    `json:"oem"`
 }
 
 // ItemWeightResponse is an item weight value.
@@ -143,17 +146,20 @@ type ItemCommercialResponse struct {
 	WarrantyDays                     int              `json:"warranty_days"`
 	TransferWarehouseCode            *int64           `json:"transfer_warehouse_code,omitempty"`
 	TechnicalAssistanceWarehouseCode *int64           `json:"technical_assistance_warehouse_code,omitempty"`
-	PackagingItemCode                *int64           `json:"packaging_item_code,omitempty"`
-	AllowBillingDescriptionChange    bool             `json:"allow_billing_description_change"`
-	IssueLoadingLabels               bool             `json:"issue_loading_labels"`
-	AssembleShippingVolumes          bool             `json:"assemble_shipping_volumes"`
-	RequiresSpecialPackaging         bool             `json:"requires_special_packaging"`
-	WithholdPISCOFINS                bool             `json:"withhold_pis_cofins"`
-	IsPackaging                      bool             `json:"is_packaging"`
-	MobileEnabled                    bool             `json:"mobile_enabled"`
-	ExportPackaging                  bool             `json:"export_packaging"`
-	ClassificationCode               *string          `json:"classification_code,omitempty"`
-	Notes                            *string          `json:"notes,omitempty"`
+	// PackagingItemCode é o código de negócio (texto) do item de embalagem, como
+	// a tela o exibe; LegacyPackagingItemCode mantém a chave numérica interna.
+	PackagingItemCode             *string `json:"packaging_item_code,omitempty"`
+	LegacyPackagingItemCode       *int64  `json:"legacy_packaging_item_code,omitempty"`
+	AllowBillingDescriptionChange bool    `json:"allow_billing_description_change"`
+	IssueLoadingLabels            bool    `json:"issue_loading_labels"`
+	AssembleShippingVolumes       bool    `json:"assemble_shipping_volumes"`
+	RequiresSpecialPackaging      bool    `json:"requires_special_packaging"`
+	WithholdPISCOFINS             bool    `json:"withhold_pis_cofins"`
+	IsPackaging                   bool    `json:"is_packaging"`
+	MobileEnabled                 bool    `json:"mobile_enabled"`
+	ExportPackaging               bool    `json:"export_packaging"`
+	ClassificationCode            *string `json:"classification_code,omitempty"`
+	Notes                         *string `json:"notes,omitempty"`
 }
 
 type ItemAccountingResponse struct {

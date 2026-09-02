@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	repository "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -68,7 +70,26 @@ func textFromConferenceStatus(v *entity.SalesOrderConferenceStatus) pgtype.Text 
 	return pgutil.ToPgText(string(*v))
 }
 
+func optionalText(v string) pgtype.Text {
+	if v == "" {
+		return pgtype.Text{Valid: false}
+	}
+	return pgutil.ToPgText(v)
+}
+
+func optionalTextPtr(v *string) pgtype.Text {
+	if v == nil {
+		return pgtype.Text{Valid: false}
+	}
+	return optionalText(*v)
+}
+
 func (r *SalesOrderRepositorySQLC) NextOrderNumber(ctx context.Context, enterpriseCode int64) (int64, error) {
+	authenticatedCode, err := tenant.Code(ctx)
+	if err != nil {
+		return 0, err
+	}
+	enterpriseCode = authenticatedCode
 	n, err := r.q.NextSalesOrderNumber(ctx, enterpriseCode)
 	if err != nil {
 		return 0, fmt.Errorf("next sales order number: %w", err)
@@ -77,6 +98,11 @@ func (r *SalesOrderRepositorySQLC) NextOrderNumber(ctx context.Context, enterpri
 }
 
 func (r *SalesOrderRepositorySQLC) Create(ctx context.Context, o *entity.SalesOrder) (*entity.SalesOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	o.EnterpriseCode = enterpriseCode
 	row, err := r.q.CreateSalesOrder(ctx, sqlc.CreateSalesOrderParams{
 		OrderNumber:                 o.OrderNumber,
 		EnterpriseCode:              o.EnterpriseCode,
@@ -142,6 +168,10 @@ func (r *SalesOrderRepositorySQLC) Create(ctx context.Context, o *entity.SalesOr
 }
 
 func (r *SalesOrderRepositorySQLC) Update(ctx context.Context, o *entity.SalesOrder) (*entity.SalesOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateSalesOrder(ctx, sqlc.UpdateSalesOrderParams{
 		Code:                        o.Code,
 		Status:                      string(o.Status),
@@ -193,6 +223,7 @@ func (r *SalesOrderRepositorySQLC) Update(ctx context.Context, o *entity.SalesOr
 		SurchargeValue:              pgutil.ToPgNumericFromFloat64(o.SurchargeValue),
 		ProjectCode:                 pgutil.ToPgTextFromPtr(o.ProjectCode),
 		ProjectName:                 pgutil.ToPgTextFromPtr(o.ProjectName),
+		TenantEnterpriseCode:        enterpriseCode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating sales order: %w", err)
@@ -201,18 +232,26 @@ func (r *SalesOrderRepositorySQLC) Update(ctx context.Context, o *entity.SalesOr
 }
 
 func (r *SalesOrderRepositorySQLC) GetByCode(ctx context.Context, code int64) (*entity.SalesOrder, error) {
-	row, err := r.q.GetSalesOrderByCode(ctx, code)
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSalesOrderByCode(ctx, sqlc.GetSalesOrderByCodeParams{Code: code, TenantEnterpriseCode: enterpriseCode})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("sales order %d not found", code)
+			return nil, errorsuc.NewNotFoundError("pedido de venda não encontrado")
 		}
-		return nil, fmt.Errorf("fetching sales order: %w", err)
+		return nil, fmt.Errorf("consultar pedido de venda: %w", err)
 	}
 	return rowToEntity(row), nil
 }
 
 func (r *SalesOrderRepositorySQLC) List(ctx context.Context) ([]*entity.SalesOrder, error) {
-	rows, err := r.q.ListSalesOrders(ctx)
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSalesOrders(ctx, enterpriseCode)
 	if err != nil {
 		return nil, fmt.Errorf("listing sales orders: %w", err)
 	}
@@ -220,7 +259,11 @@ func (r *SalesOrderRepositorySQLC) List(ctx context.Context) ([]*entity.SalesOrd
 }
 
 func (r *SalesOrderRepositorySQLC) ListByCustomer(ctx context.Context, customerCode int64) ([]*entity.SalesOrder, error) {
-	rows, err := r.q.ListSalesOrdersByCustomer(ctx, &customerCode)
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSalesOrdersByCustomer(ctx, sqlc.ListSalesOrdersByCustomerParams{CustomerCode: &customerCode, TenantEnterpriseCode: enterpriseCode})
 	if err != nil {
 		return nil, fmt.Errorf("listing sales orders by customer: %w", err)
 	}
@@ -228,7 +271,11 @@ func (r *SalesOrderRepositorySQLC) ListByCustomer(ctx context.Context, customerC
 }
 
 func (r *SalesOrderRepositorySQLC) ListByStatus(ctx context.Context, status entity.SalesOrderStatus) ([]*entity.SalesOrder, error) {
-	rows, err := r.q.ListSalesOrdersByStatus(ctx, string(status))
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSalesOrdersByStatus(ctx, sqlc.ListSalesOrdersByStatusParams{Status: string(status), TenantEnterpriseCode: enterpriseCode})
 	if err != nil {
 		return nil, fmt.Errorf("listing sales orders by status: %w", err)
 	}
@@ -236,9 +283,14 @@ func (r *SalesOrderRepositorySQLC) ListByStatus(ctx context.Context, status enti
 }
 
 func (r *SalesOrderRepositorySQLC) ListByDateRange(ctx context.Context, from, to time.Time) ([]*entity.SalesOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.ListSalesOrdersByDateRange(ctx, sqlc.ListSalesOrdersByDateRangeParams{
-		EmissionDate:   pgutil.ToPgDate(from),
-		EmissionDate_2: pgutil.ToPgDate(to),
+		EmissionDate:         pgutil.ToPgDate(from),
+		EmissionDate_2:       pgutil.ToPgDate(to),
+		TenantEnterpriseCode: enterpriseCode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("listing sales orders by date range: %w", err)
@@ -247,8 +299,15 @@ func (r *SalesOrderRepositorySQLC) ListByDateRange(ctx context.Context, from, to
 }
 
 func (r *SalesOrderRepositorySQLC) ListAdvanced(ctx context.Context, filter repository.SalesOrderFilter) ([]*entity.SalesOrder, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.ListSalesOrdersAdvanced(ctx, sqlc.ListSalesOrdersAdvancedParams{
+		TenantEnterpriseCode:     enterpriseCode,
+		Search:                   optionalText(filter.Search),
 		CustomerCode:             filter.CustomerCode,
+		ItemCode:                 filter.ItemCode,
 		RepresentativeCode:       filter.RepresentativeCode,
 		PaymentTermCode:          filter.PaymentTermCode,
 		Status:                   textFromStatus(filter.Status),
@@ -257,10 +316,13 @@ func (r *SalesOrderRepositorySQLC) ListAdvanced(ctx context.Context, filter repo
 		ReleaseStatus:            textFromReleaseStatus(filter.ReleaseStatus),
 		ConferenceStatus:         textFromConferenceStatus(filter.ConferenceStatus),
 		IsBlocked:                boolPtrToPg(filter.IsBlocked),
+		WorkflowStatus:           optionalTextPtr(filter.WorkflowStatus),
 		EmissionFrom:             datePtrToPg(filter.EmissionFrom),
 		EmissionTo:               datePtrToPg(filter.EmissionTo),
 		DeliveryFrom:             datePtrToPg(filter.DeliveryFrom),
 		DeliveryTo:               datePtrToPg(filter.DeliveryTo),
+		PageLimit:                filter.Limit,
+		PageOffset:               filter.Offset,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("listing sales orders advanced: %w", err)
@@ -269,15 +331,28 @@ func (r *SalesOrderRepositorySQLC) ListAdvanced(ctx context.Context, filter repo
 }
 
 func (r *SalesOrderRepositorySQLC) Report(ctx context.Context, filter repository.SalesOrderFilter) (*repository.SalesOrderReport, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.SalesOrderReport(ctx, sqlc.SalesOrderReportParams{
-		CustomerCode:       filter.CustomerCode,
-		RepresentativeCode: filter.RepresentativeCode,
-		PaymentTermCode:    filter.PaymentTermCode,
-		Status:             textFromStatus(filter.Status),
-		EmissionFrom:       datePtrToPg(filter.EmissionFrom),
-		EmissionTo:         datePtrToPg(filter.EmissionTo),
-		DeliveryFrom:       datePtrToPg(filter.DeliveryFrom),
-		DeliveryTo:         datePtrToPg(filter.DeliveryTo),
+		TenantEnterpriseCode:     enterpriseCode,
+		Search:                   optionalText(filter.Search),
+		CustomerCode:             filter.CustomerCode,
+		ItemCode:                 filter.ItemCode,
+		RepresentativeCode:       filter.RepresentativeCode,
+		PaymentTermCode:          filter.PaymentTermCode,
+		Status:                   textFromStatus(filter.Status),
+		CommercialAnalysisStatus: textFromAnalysisStatus(filter.CommercialAnalysisStatus),
+		FinancialAnalysisStatus:  textFromAnalysisStatus(filter.FinancialAnalysisStatus),
+		ReleaseStatus:            textFromReleaseStatus(filter.ReleaseStatus),
+		ConferenceStatus:         textFromConferenceStatus(filter.ConferenceStatus),
+		IsBlocked:                boolPtrToPg(filter.IsBlocked),
+		WorkflowStatus:           optionalTextPtr(filter.WorkflowStatus),
+		EmissionFrom:             datePtrToPg(filter.EmissionFrom),
+		EmissionTo:               datePtrToPg(filter.EmissionTo),
+		DeliveryFrom:             datePtrToPg(filter.DeliveryFrom),
+		DeliveryTo:               datePtrToPg(filter.DeliveryTo),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sales order report: %w", err)
@@ -299,136 +374,221 @@ func (r *SalesOrderRepositorySQLC) Report(ctx context.Context, filter repository
 }
 
 func (r *SalesOrderRepositorySQLC) Cancel(ctx context.Context, code int64, reason string, complement *string) error {
-	if err := r.q.CancelSalesOrder(ctx, sqlc.CancelSalesOrderParams{
-		Code:             code,
-		CancelReason:     pgutil.ToPgText(reason),
-		CancelComplement: pgutil.ToPgTextFromPtr(complement),
-	}); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.CancelSalesOrder(ctx, sqlc.CancelSalesOrderParams{
+		Code:                 code,
+		CancelReason:         pgutil.ToPgText(reason),
+		CancelComplement:     pgutil.ToPgTextFromPtr(complement),
+		TenantEnterpriseCode: enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("cancelling sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	_ = r.insertEvent(ctx, code, "CANCEL", "", reason, complement, nil, nil)
 	return nil
 }
 
 func (r *SalesOrderRepositorySQLC) Block(ctx context.Context, code int64, reason string) error {
-	if err := r.q.BlockSalesOrder(ctx, sqlc.BlockSalesOrderParams{
-		Code:        code,
-		BlockReason: pgutil.ToPgText(reason),
-	}); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.BlockSalesOrder(ctx, sqlc.BlockSalesOrderParams{
+		Code:                 code,
+		BlockReason:          pgutil.ToPgText(reason),
+		TenantEnterpriseCode: enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("blocking sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	_ = r.insertEvent(ctx, code, "BLOCK", "", reason, nil, nil, nil)
 	return nil
 }
 
 func (r *SalesOrderRepositorySQLC) Unblock(ctx context.Context, code int64) error {
-	if err := r.q.UnblockSalesOrder(ctx, code); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.UnblockSalesOrder(ctx, sqlc.UnblockSalesOrderParams{Code: code, TenantEnterpriseCode: enterpriseCode})
+	if err != nil {
 		return fmt.Errorf("unblocking sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	_ = r.insertEvent(ctx, code, "UNBLOCK", "", "Desbloqueio manual", nil, nil, nil)
 	return nil
 }
 
 func (r *SalesOrderRepositorySQLC) ChangeStatus(ctx context.Context, code int64, status entity.SalesOrderStatus) error {
-	if err := r.q.ChangeSalesOrderStatus(ctx, sqlc.ChangeSalesOrderStatusParams{
-		Code:   code,
-		Status: string(status),
-	}); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.ChangeSalesOrderStatus(ctx, sqlc.ChangeSalesOrderStatusParams{
+		Code:                 code,
+		Status:               string(status),
+		TenantEnterpriseCode: enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("changing status of sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	return nil
 }
 
 func (r *SalesOrderRepositorySQLC) Analyze(ctx context.Context, code int64, area string, status entity.SalesOrderAnalysisStatus, reason string, createdBy uuid.UUID) error {
-	if err := r.q.AnalyzeSalesOrder(ctx, sqlc.AnalyzeSalesOrderParams{
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.AnalyzeSalesOrder(ctx, sqlc.AnalyzeSalesOrderParams{
 		Code:                     code,
 		Column2:                  area,
 		CommercialAnalysisStatus: string(status),
-	}); err != nil {
+		TenantEnterpriseCode:     enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("analyzing sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	return r.insertEvent(ctx, code, "ANALYZE", area, reason, nil, nil, &createdBy)
 }
 
 func (r *SalesOrderRepositorySQLC) Release(ctx context.Context, code int64, releaseStatus entity.SalesOrderReleaseStatus, reason string, area string, createdBy uuid.UUID) error {
-	if err := r.q.ReleaseSalesOrder(ctx, sqlc.ReleaseSalesOrderParams{
-		Code:          code,
-		ReleaseStatus: string(releaseStatus),
-		BlockReason:   pgutil.ToPgText(reason),
-	}); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.ReleaseSalesOrder(ctx, sqlc.ReleaseSalesOrderParams{
+		Code:                 code,
+		ReleaseStatus:        string(releaseStatus),
+		BlockReason:          pgutil.ToPgText(reason),
+		TenantEnterpriseCode: enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("releasing sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	return r.insertEvent(ctx, code, "RELEASE", area, reason, nil, nil, &createdBy)
 }
 
 func (r *SalesOrderRepositorySQLC) Attend(ctx context.Context, code int64, reason string, eventDate *time.Time, createdBy uuid.UUID) error {
-	if err := r.q.AttendSalesOrder(ctx, sqlc.AttendSalesOrderParams{
-		Code:           code,
-		AttendedReason: pgutil.ToPgText(reason),
-		AttendedAt:     timestamptzPtrToPg(eventDate),
-	}); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.AttendSalesOrder(ctx, sqlc.AttendSalesOrderParams{
+		Code:                 code,
+		AttendedReason:       pgutil.ToPgText(reason),
+		AttendedAt:           timestamptzPtrToPg(eventDate),
+		TenantEnterpriseCode: enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("attending sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	return r.insertEvent(ctx, code, "ATTEND", "", reason, nil, eventDate, &createdBy)
 }
 
 func (r *SalesOrderRepositorySQLC) Confer(ctx context.Context, code int64, status entity.SalesOrderConferenceStatus, reason string, createdBy uuid.UUID) error {
-	if err := r.q.ConferSalesOrder(ctx, sqlc.ConferSalesOrderParams{
-		Code:             code,
-		ConferenceStatus: string(status),
-	}); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.ConferSalesOrder(ctx, sqlc.ConferSalesOrderParams{
+		Code:                 code,
+		ConferenceStatus:     string(status),
+		TenantEnterpriseCode: enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("conferencing sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	return r.insertEvent(ctx, code, "CONFER", "LOGISTICS", reason, nil, nil, &createdBy)
 }
 
 func (r *SalesOrderRepositorySQLC) SaveDelayReason(ctx context.Context, code int64, reason, action string, createdBy uuid.UUID) error {
-	if err := r.q.SaveSalesOrderDelayReason(ctx, sqlc.SaveSalesOrderDelayReasonParams{
-		Code:        code,
-		DelayReason: pgutil.ToPgText(reason),
-		DelayAction: pgutil.ToPgText(action),
-	}); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.SaveSalesOrderDelayReason(ctx, sqlc.SaveSalesOrderDelayReasonParams{
+		Code:                 code,
+		DelayReason:          pgutil.ToPgText(reason),
+		DelayAction:          pgutil.ToPgText(action),
+		TenantEnterpriseCode: enterpriseCode,
+	})
+	if err != nil {
 		return fmt.Errorf("saving delay reason for sales order %d: %w", code, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
 	return r.insertEvent(ctx, code, "DELAY_REASON", "", reason, &action, nil, &createdBy)
 }
 
 func (r *SalesOrderRepositorySQLC) CreateItem(ctx context.Context, item *entity.SalesOrderItem) (*entity.SalesOrderItem, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSalesOrderItem(ctx, sqlc.CreateSalesOrderItemParams{
-		SalesOrderCode:   item.SalesOrderCode,
-		Sequence:         int32(item.Sequence),
-		ItemCode:         item.ItemCode,
-		Mask:             item.Mask,
-		DigitDate:        pgutil.ToPgDate(item.DigitDate),
-		NfType:           pgutil.ToPgTextFromPtr(item.NFType),
-		SalesUom:         pgutil.ToPgTextFromPtr(item.SalesUOM),
-		WarehouseCode:    item.WarehouseCode,
-		PriceTableCode:   item.PriceTableCode,
-		RequestedQty:     pgutil.ToPgNumericFromFloat64(item.RequestedQty),
-		UnitPrice:        pgutil.ToPgNumericFromFloat64(item.UnitPrice),
-		AttendedQty:      pgutil.ToPgNumericFromFloat64(item.AttendedQty),
-		CancelledQty:     pgutil.ToPgNumericFromFloat64(item.CancelledQty),
-		DeliveryDate:     toPgDateFromPtr(item.DeliveryDate),
-		DeliveryDateFirm: item.DeliveryDateFirm,
-		CustomerDelivery: pgutil.ToPgTextFromPtr(item.CustomerDelivery),
-		Lot:              pgutil.ToPgTextFromPtr(item.Lot),
-		CouponDelivery:   pgutil.ToPgTextFromPtr(item.CouponDelivery),
-		PaidAtCashier:    item.PaidAtCashier,
-		IpiPct:           pgutil.ToPgNumericFromFloat64(item.IPIPct),
-		IcmsPct:          pgutil.ToPgNumericFromFloat64(item.ICMSPct),
-		PisPct:           pgutil.ToPgNumericFromFloat64(item.PISPct),
-		CofinsPct:        pgutil.ToPgNumericFromFloat64(item.COFINSPct),
-		StPct:            pgutil.ToPgNumericFromFloat64(item.STPct),
-		DiscountPct:      pgutil.ToPgNumericFromFloat64(item.DiscountPct),
-		TotalGross:       pgutil.ToPgNumericFromFloat64(item.TotalGross),
-		TotalNet:         pgutil.ToPgNumericFromFloat64(item.TotalNet),
-		TotalNetWithIpi:  pgutil.ToPgNumericFromFloat64(item.TotalNetWithIPI),
-		TotalIpi:         pgutil.ToPgNumericFromFloat64(item.TotalIPI),
-		TotalSt:          pgutil.ToPgNumericFromFloat64(item.TotalST),
-		UnitWeightNet:    pgutil.ToPgNumericFromFloat64(item.UnitWeightNet),
-		UnitWeightGross:  pgutil.ToPgNumericFromFloat64(item.UnitWeightGross),
-		Status:           string(item.Status),
-		Notes:            pgutil.ToPgTextFromPtr(item.Notes),
+		SalesOrderCode:       item.SalesOrderCode,
+		Sequence:             int32(item.Sequence),
+		ItemCode:             item.ItemCode,
+		Mask:                 item.Mask,
+		DigitDate:            pgutil.ToPgDate(item.DigitDate),
+		NfType:               pgutil.ToPgTextFromPtr(item.NFType),
+		SalesUom:             pgutil.ToPgTextFromPtr(item.SalesUOM),
+		WarehouseCode:        item.WarehouseCode,
+		PriceTableCode:       item.PriceTableCode,
+		RequestedQty:         pgutil.ToPgNumericFromFloat64(item.RequestedQty),
+		UnitPrice:            pgutil.ToPgNumericFromFloat64(item.UnitPrice),
+		AttendedQty:          pgutil.ToPgNumericFromFloat64(item.AttendedQty),
+		CancelledQty:         pgutil.ToPgNumericFromFloat64(item.CancelledQty),
+		DeliveryDate:         toPgDateFromPtr(item.DeliveryDate),
+		DeliveryDateFirm:     item.DeliveryDateFirm,
+		CustomerDelivery:     pgutil.ToPgTextFromPtr(item.CustomerDelivery),
+		Lot:                  pgutil.ToPgTextFromPtr(item.Lot),
+		CouponDelivery:       pgutil.ToPgTextFromPtr(item.CouponDelivery),
+		PaidAtCashier:        item.PaidAtCashier,
+		IpiPct:               pgutil.ToPgNumericFromFloat64(item.IPIPct),
+		IcmsPct:              pgutil.ToPgNumericFromFloat64(item.ICMSPct),
+		PisPct:               pgutil.ToPgNumericFromFloat64(item.PISPct),
+		CofinsPct:            pgutil.ToPgNumericFromFloat64(item.COFINSPct),
+		StPct:                pgutil.ToPgNumericFromFloat64(item.STPct),
+		DiscountPct:          pgutil.ToPgNumericFromFloat64(item.DiscountPct),
+		TotalGross:           pgutil.ToPgNumericFromFloat64(item.TotalGross),
+		TotalNet:             pgutil.ToPgNumericFromFloat64(item.TotalNet),
+		TotalNetWithIpi:      pgutil.ToPgNumericFromFloat64(item.TotalNetWithIPI),
+		TotalIpi:             pgutil.ToPgNumericFromFloat64(item.TotalIPI),
+		TotalSt:              pgutil.ToPgNumericFromFloat64(item.TotalST),
+		UnitWeightNet:        pgutil.ToPgNumericFromFloat64(item.UnitWeightNet),
+		UnitWeightGross:      pgutil.ToPgNumericFromFloat64(item.UnitWeightGross),
+		Status:               string(item.Status),
+		Notes:                pgutil.ToPgTextFromPtr(item.Notes),
+		TenantEnterpriseCode: enterpriseCode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating sales order item: %w", err)
@@ -437,33 +597,38 @@ func (r *SalesOrderRepositorySQLC) CreateItem(ctx context.Context, item *entity.
 }
 
 func (r *SalesOrderRepositorySQLC) UpdateItem(ctx context.Context, item *entity.SalesOrderItem) (*entity.SalesOrderItem, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateSalesOrderItem(ctx, sqlc.UpdateSalesOrderItemParams{
-		Code:             item.Code,
-		RequestedQty:     pgutil.ToPgNumericFromFloat64(item.RequestedQty),
-		UnitPrice:        pgutil.ToPgNumericFromFloat64(item.UnitPrice),
-		AttendedQty:      pgutil.ToPgNumericFromFloat64(item.AttendedQty),
-		CancelledQty:     pgutil.ToPgNumericFromFloat64(item.CancelledQty),
-		DeliveryDate:     toPgDateFromPtr(item.DeliveryDate),
-		DeliveryDateFirm: item.DeliveryDateFirm,
-		CustomerDelivery: pgutil.ToPgTextFromPtr(item.CustomerDelivery),
-		Lot:              pgutil.ToPgTextFromPtr(item.Lot),
-		CouponDelivery:   pgutil.ToPgTextFromPtr(item.CouponDelivery),
-		PaidAtCashier:    item.PaidAtCashier,
-		IpiPct:           pgutil.ToPgNumericFromFloat64(item.IPIPct),
-		IcmsPct:          pgutil.ToPgNumericFromFloat64(item.ICMSPct),
-		PisPct:           pgutil.ToPgNumericFromFloat64(item.PISPct),
-		CofinsPct:        pgutil.ToPgNumericFromFloat64(item.COFINSPct),
-		StPct:            pgutil.ToPgNumericFromFloat64(item.STPct),
-		DiscountPct:      pgutil.ToPgNumericFromFloat64(item.DiscountPct),
-		TotalGross:       pgutil.ToPgNumericFromFloat64(item.TotalGross),
-		TotalNet:         pgutil.ToPgNumericFromFloat64(item.TotalNet),
-		TotalNetWithIpi:  pgutil.ToPgNumericFromFloat64(item.TotalNetWithIPI),
-		TotalIpi:         pgutil.ToPgNumericFromFloat64(item.TotalIPI),
-		TotalSt:          pgutil.ToPgNumericFromFloat64(item.TotalST),
-		UnitWeightNet:    pgutil.ToPgNumericFromFloat64(item.UnitWeightNet),
-		UnitWeightGross:  pgutil.ToPgNumericFromFloat64(item.UnitWeightGross),
-		Status:           string(item.Status),
-		Notes:            pgutil.ToPgTextFromPtr(item.Notes),
+		Code:                 item.Code,
+		RequestedQty:         pgutil.ToPgNumericFromFloat64(item.RequestedQty),
+		UnitPrice:            pgutil.ToPgNumericFromFloat64(item.UnitPrice),
+		AttendedQty:          pgutil.ToPgNumericFromFloat64(item.AttendedQty),
+		CancelledQty:         pgutil.ToPgNumericFromFloat64(item.CancelledQty),
+		DeliveryDate:         toPgDateFromPtr(item.DeliveryDate),
+		DeliveryDateFirm:     item.DeliveryDateFirm,
+		CustomerDelivery:     pgutil.ToPgTextFromPtr(item.CustomerDelivery),
+		Lot:                  pgutil.ToPgTextFromPtr(item.Lot),
+		CouponDelivery:       pgutil.ToPgTextFromPtr(item.CouponDelivery),
+		PaidAtCashier:        item.PaidAtCashier,
+		IpiPct:               pgutil.ToPgNumericFromFloat64(item.IPIPct),
+		IcmsPct:              pgutil.ToPgNumericFromFloat64(item.ICMSPct),
+		PisPct:               pgutil.ToPgNumericFromFloat64(item.PISPct),
+		CofinsPct:            pgutil.ToPgNumericFromFloat64(item.COFINSPct),
+		StPct:                pgutil.ToPgNumericFromFloat64(item.STPct),
+		DiscountPct:          pgutil.ToPgNumericFromFloat64(item.DiscountPct),
+		TotalGross:           pgutil.ToPgNumericFromFloat64(item.TotalGross),
+		TotalNet:             pgutil.ToPgNumericFromFloat64(item.TotalNet),
+		TotalNetWithIpi:      pgutil.ToPgNumericFromFloat64(item.TotalNetWithIPI),
+		TotalIpi:             pgutil.ToPgNumericFromFloat64(item.TotalIPI),
+		TotalSt:              pgutil.ToPgNumericFromFloat64(item.TotalST),
+		UnitWeightNet:        pgutil.ToPgNumericFromFloat64(item.UnitWeightNet),
+		UnitWeightGross:      pgutil.ToPgNumericFromFloat64(item.UnitWeightGross),
+		Status:               string(item.Status),
+		Notes:                pgutil.ToPgTextFromPtr(item.Notes),
+		TenantEnterpriseCode: enterpriseCode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating sales order item: %w", err)
@@ -471,8 +636,27 @@ func (r *SalesOrderRepositorySQLC) UpdateItem(ctx context.Context, item *entity.
 	return rowItemToEntity(row), nil
 }
 
+func (r *SalesOrderRepositorySQLC) GetItem(ctx context.Context, itemCode int64) (*entity.SalesOrderItem, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSalesOrderItem(ctx, sqlc.GetSalesOrderItemParams{ItemCode: itemCode, TenantEnterpriseCode: enterpriseCode})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError("item do pedido de venda não encontrado")
+		}
+		return nil, fmt.Errorf("consultar item do pedido: %w", err)
+	}
+	return rowItemToEntity(row), nil
+}
+
 func (r *SalesOrderRepositorySQLC) ListItems(ctx context.Context, salesOrderCode int64) ([]*entity.SalesOrderItem, error) {
-	rows, err := r.q.ListSalesOrderItems(ctx, salesOrderCode)
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSalesOrderItems(ctx, sqlc.ListSalesOrderItemsParams{SalesOrderCode: salesOrderCode, TenantEnterpriseCode: enterpriseCode})
 	if err != nil {
 		return nil, fmt.Errorf("listing sales order items: %w", err)
 	}
@@ -484,8 +668,16 @@ func (r *SalesOrderRepositorySQLC) ListItems(ctx context.Context, salesOrderCode
 }
 
 func (r *SalesOrderRepositorySQLC) CancelItem(ctx context.Context, itemCode int64) error {
-	if err := r.q.CancelSalesOrderItem(ctx, itemCode); err != nil {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.CancelSalesOrderItem(ctx, sqlc.CancelSalesOrderItemParams{Code: itemCode, TenantEnterpriseCode: enterpriseCode})
+	if err != nil {
 		return fmt.Errorf("cancelling sales order item %d: %w", itemCode, err)
+	}
+	if affected == 0 {
+		return errorsuc.NewNotFoundError("item do pedido de venda não encontrado")
 	}
 	return nil
 }

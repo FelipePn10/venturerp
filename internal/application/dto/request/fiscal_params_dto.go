@@ -168,7 +168,10 @@ type CreateClassificationMaskDTO struct {
 }
 
 type UpdateClassificationMaskDTO struct {
-	ID          int64  `json:"id"`
+	ID int64 `json:"id"`
+	// Code identifica a máscara pelo código de negócio quando a tela não conhece
+	// o id interno.
+	Code        int64  `json:"code"`
 	Description string `json:"description"`
 	IsActive    bool   `json:"is_active"`
 }
@@ -183,7 +186,11 @@ type CreateItemClassificationDTO struct {
 }
 
 type UpdateItemClassificationDTO struct {
-	ID          int64  `json:"id"`
+	ID int64 `json:"id"`
+	// Code + MaskCode identificam a classificação quando a tela não conhece o id
+	// interno (é assim que VCLA0100 trabalha).
+	Code        string `json:"code"`
+	MaskCode    int64  `json:"mask_code"`
 	Description string `json:"description"`
 	IsActive    bool   `json:"is_active"`
 }

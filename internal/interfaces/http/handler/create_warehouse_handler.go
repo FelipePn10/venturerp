@@ -12,7 +12,7 @@ func (h *WarehouseHandler) CreateWarehouse(w http.ResponseWriter, r *http.Reques
 	var req request.CreateWarehouseRequestDTO
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 
@@ -22,7 +22,7 @@ func (h *WarehouseHandler) CreateWarehouse(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	h.Created(w, warehouse, "warehouse created succesfully")
+	h.Created(w, warehouse, "almoxarifado criado com sucesso")
 }
 
 func (h *WarehouseHandler) ListWarehouses(w http.ResponseWriter, r *http.Request) {

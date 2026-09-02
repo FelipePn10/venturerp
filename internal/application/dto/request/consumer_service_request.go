@@ -1,6 +1,9 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"encoding/json"
+	"github.com/google/uuid"
+)
 
 type CreateConsumerServiceCallTypeDTO struct {
 	Description string    `json:"description"`
@@ -141,22 +144,20 @@ type UpdateConsumerServiceCallDTO struct {
 }
 
 type AddConsumerServiceCallReturnDTO struct {
-	CallCode     int64     `json:"call_code"`
-	ContactedAt  string    `json:"contacted_at"`
-	ContactType  string    `json:"contact_type"`
-	Description  string    `json:"description"`
-	NextReturnAt string    `json:"next_return_at"`
-	UserCode     *int64    `json:"user_code"`
-	CreatedBy    uuid.UUID `json:"created_by"`
+	CallCode     int64  `json:"call_code"`
+	ContactedAt  string `json:"contacted_at"`
+	ContactType  string `json:"contact_type"`
+	Description  string `json:"description"`
+	NextReturnAt string `json:"next_return_at"`
+	UserCode     *int64 `json:"user_code"`
 }
 
 type AddConsumerServiceCallAttachmentDTO struct {
-	CallCode    int64     `json:"call_code"`
-	FileName    string    `json:"file_name"`
-	FilePath    string    `json:"file_path"`
-	ContentType *string   `json:"content_type"`
-	Notes       *string   `json:"notes"`
-	CreatedBy   uuid.UUID `json:"created_by"`
+	CallCode    int64
+	FileName    string
+	ContentType string
+	Content     []byte
+	Notes       *string
 }
 
 type AddConsumerServiceChecklistItemDTO struct {
@@ -193,25 +194,39 @@ type CreateRecurringSalesAdjustmentDateDTO struct {
 }
 
 type CreateRecurringSaleDTO struct {
-	EnterpriseCode     int64                                  `json:"enterprise_code"`
-	CustomerCode       int64                                  `json:"customer_code"`
-	EstablishmentCode  *int64                                 `json:"establishment_code"`
-	ItemCode           int64                                  `json:"item_code"`
-	ItemMask           *string                                `json:"item_mask"`
-	SalesPlanCode      *int64                                 `json:"sales_plan_code"`
-	MovementType       string                                 `json:"movement_type"`
-	TermType           string                                 `json:"term_type"`
-	SaleDate           string                                 `json:"sale_date"`
-	NextAdjustmentDate string                                 `json:"next_adjustment_date"`
-	MonthsQuantity     *int                                   `json:"months_quantity"`
-	PaymentsQuantity   *int                                   `json:"payments_quantity"`
-	GraceMonths        int                                    `json:"grace_months"`
-	PaymentValue       *float64                               `json:"payment_value"`
-	Quantity           float64                                `json:"quantity"`
-	UnitValue          float64                                `json:"unit_value"`
-	Reason             *string                                `json:"reason"`
-	CreatedBy          uuid.UUID                              `json:"created_by"`
-	Representatives    []CreateRecurringSaleRepresentativeDTO `json:"representatives"`
+	EnterpriseCode         int64                                  `json:"enterprise_code"`
+	CustomerCode           int64                                  `json:"customer_code"`
+	EstablishmentCode      *int64                                 `json:"establishment_code"`
+	ItemCode               int64                                  `json:"item_code"`
+	ItemMask               *string                                `json:"item_mask"`
+	SalesPlanCode          *int64                                 `json:"sales_plan_code"`
+	MovementType           string                                 `json:"movement_type"`
+	TermType               string                                 `json:"term_type"`
+	SaleDate               string                                 `json:"sale_date"`
+	NextAdjustmentDate     string                                 `json:"next_adjustment_date"`
+	MonthsQuantity         *int                                   `json:"months_quantity"`
+	PaymentsQuantity       *int                                   `json:"payments_quantity"`
+	GraceMonths            int                                    `json:"grace_months"`
+	PaymentValue           *float64                               `json:"payment_value"`
+	Quantity               float64                                `json:"quantity"`
+	UnitValue              float64                                `json:"unit_value"`
+	Reason                 *string                                `json:"reason"`
+	CreatedBy              uuid.UUID                              `json:"created_by"`
+	Representatives        []CreateRecurringSaleRepresentativeDTO `json:"representatives"`
+	EffectiveFrom          string                                 `json:"effective_from"`
+	EffectiveUntil         string                                 `json:"effective_until"`
+	Frequency              string                                 `json:"frequency"`
+	PriceTableCode         *int64                                 `json:"price_table_code"`
+	CurrencyCode           string                                 `json:"currency_code"`
+	AdjustmentIndex        *string                                `json:"adjustment_index"`
+	AdjustmentPeriodMonths *int                                   `json:"adjustment_period_months"`
+	AdjustmentFloorPct     *float64                               `json:"adjustment_floor_pct"`
+	AdjustmentCapPct       *float64                               `json:"adjustment_cap_pct"`
+	BillingPolicy          json.RawMessage                        `json:"billing_policy"`
+	DeliveryPolicy         json.RawMessage                        `json:"delivery_policy"`
+	TaxPolicy              json.RawMessage                        `json:"tax_policy"`
+	CostCenterCode         *int64                                 `json:"cost_center_code"`
+	RenewalPolicy          string                                 `json:"renewal_policy"`
 }
 
 type UpdateRecurringSaleDTO struct {
@@ -249,11 +264,16 @@ type MarkRecurringSaleOrderDTO struct {
 	WarehouseCode     *int64    `json:"warehouse_code"`
 	SalesUOM          *string   `json:"sales_uom"`
 	ConfirmOrder      bool      `json:"confirm_order"`
+	Competence        string    `json:"competence"`
+	IdempotencyKey    string    `json:"-"`
 }
 
 type CancelRecurringSaleDTO struct {
-	Reason    *string   `json:"reason"`
-	CreatedBy uuid.UUID `json:"created_by"`
+	Reason             *string   `json:"reason"`
+	EffectiveDate      string    `json:"effective_date"`
+	FutureOrdersPolicy string    `json:"future_orders_policy"`
+	CorrelationID      string    `json:"correlation_id,omitempty"`
+	CreatedBy          uuid.UUID `json:"created_by"`
 }
 
 type CalculateRecurringSalesAdjustmentDTO struct {
@@ -263,9 +283,12 @@ type CalculateRecurringSalesAdjustmentDTO struct {
 	ItemCode          *int64    `json:"item_code"`
 	AdjustmentDate    string    `json:"adjustment_date"`
 	AdjustmentPercent float64   `json:"adjustment_percent"`
+	AdjustmentIndex   string    `json:"adjustment_index,omitempty"`
+	LegalBasis        string    `json:"legal_basis,omitempty"`
 	Reason            string    `json:"reason"`
 	CreatedBy         uuid.UUID `json:"created_by"`
 	Confirm           bool      `json:"confirm"`
+	IdempotencyKey    string    `json:"-"`
 }
 
 type RecalculateRecurringSalesAdjustmentDTO struct {

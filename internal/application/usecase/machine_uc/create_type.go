@@ -3,6 +3,7 @@ package machine_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -22,19 +23,30 @@ func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.Cre
 	if !uc.Auth.CanCreateType(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if strings.TrimSpace(dto.Name) == "" {
+		return nil, errorsuc.NewValidationError("informe o nome do tipo de máquina")
+	}
+	if dto.Code <= 0 {
+		return nil, errorsuc.NewValidationError("informe o código do tipo de máquina")
+	}
 	if !dto.Type.IsValid() {
-		return nil, fmt.Errorf("invalid machine type: %s", dto.Type)
+		return nil, errorsuc.NewValidationError(
+			fmt.Sprintf("classificação %q inválida para o tipo de máquina", string(dto.Type)))
 	}
 	authenticatedUserID, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if authenticatedUserID == uuid.Nil {
-		return nil, fmt.Errorf("authenticated user is required")
+		return nil, errorsuc.NewValidationError("não foi possível identificar o usuário da sessão")
+	}
+	if existing, getErr := uc.Repo.GetTypeByCode(ctx, dto.Code); getErr == nil && existing != nil {
+		return nil, errorsuc.NewConflictError(
+			fmt.Sprintf("já existe um tipo de máquina com o código %d", dto.Code))
 	}
 	mt := &entity.MachineType{
 		Code:             dto.Code,
-		Name:             dto.Name,
+		Name:             strings.TrimSpace(dto.Name),
 		Description:      dto.Description,
 		Type:             dto.Type,
 		RequiresOperator: dto.RequiresOperator,

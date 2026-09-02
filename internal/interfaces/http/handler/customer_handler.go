@@ -1,11 +1,16 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/export"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -100,6 +105,16 @@ func (h *CustomerHandler) ListMarketSegments(w http.ResponseWriter, r *http.Requ
 	jsonResponse(w, http.StatusOK, result)
 }
 
+func (h *CustomerHandler) UpdateMarketSegment(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateMarketSegmentDTO
+	code, ok := customerPathCode(w, r)
+	if !ok || !customerDecode(w, r, &dto) {
+		return
+	}
+	result, err := h.uc.UpdateMarketSegment(r.Context(), code, dto)
+	customerRespond(w, result, err)
+}
+
 // ─── Customer Contact Types ───────────────────────────────────────────────────
 
 func (h *CustomerHandler) CreateContactType(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +139,16 @@ func (h *CustomerHandler) ListContactTypes(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) UpdateContactType(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateContactTypeDTO
+	code, ok := customerPathCode(w, r)
+	if !ok || !customerDecode(w, r, &dto) {
+		return
+	}
+	result, err := h.uc.UpdateContactType(r.Context(), code, dto)
+	customerRespond(w, result, err)
 }
 
 // ─── Customer Types ───────────────────────────────────────────────────────────
@@ -152,6 +177,16 @@ func (h *CustomerHandler) ListCustomerTypes(w http.ResponseWriter, r *http.Reque
 	jsonResponse(w, http.StatusOK, result)
 }
 
+func (h *CustomerHandler) UpdateCustomerType(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateCustomerTypeDTO
+	code, ok := customerPathCode(w, r)
+	if !ok || !customerDecode(w, r, &dto) {
+		return
+	}
+	result, err := h.uc.UpdateCustomerType(r.Context(), code, dto)
+	customerRespond(w, result, err)
+}
+
 // ─── Carriers ─────────────────────────────────────────────────────────────────
 
 func (h *CustomerHandler) CreateCarrier(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +213,16 @@ func (h *CustomerHandler) ListCarriers(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, result)
 }
 
+func (h *CustomerHandler) UpdateCarrier(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateCarrierDTO
+	code, ok := customerPathCode(w, r)
+	if !ok || !customerDecode(w, r, &dto) {
+		return
+	}
+	result, err := h.uc.UpdateCarrier(r.Context(), code, dto)
+	customerRespond(w, result, err)
+}
+
 // ─── Carrier Groups ───────────────────────────────────────────────────────────
 
 func (h *CustomerHandler) CreateCarrierGroup(w http.ResponseWriter, r *http.Request) {
@@ -201,6 +246,16 @@ func (h *CustomerHandler) ListCarrierGroups(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) UpdateCarrierGroup(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateCarrierGroupDTO
+	code, ok := customerPathCode(w, r)
+	if !ok || !customerDecode(w, r, &dto) {
+		return
+	}
+	result, err := h.uc.UpdateCarrierGroup(r.Context(), code, dto)
+	customerRespond(w, result, err)
 }
 
 func (h *CustomerHandler) AddCarrierToGroup(w http.ResponseWriter, r *http.Request) {
@@ -237,6 +292,39 @@ func (h *CustomerHandler) ListPaymentConditions(w http.ResponseWriter, r *http.R
 	result, err := h.uc.ListPaymentConditions(r.Context(), onlyActive)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) UpdatePaymentCondition(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdatePaymentConditionDTO
+	code, ok := customerPathCode(w, r)
+	if !ok || !customerDecode(w, r, &dto) {
+		return
+	}
+	result, err := h.uc.UpdatePaymentCondition(r.Context(), code, dto)
+	customerRespond(w, result, err)
+}
+
+func customerPathCode(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		jsonError(w, http.StatusUnprocessableEntity, "código inválido")
+		return 0, false
+	}
+	return code, true
+}
+func customerDecode(w http.ResponseWriter, r *http.Request, dto any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dto); err != nil {
+		jsonError(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		return false
+	}
+	return true
+}
+func customerRespond(w http.ResponseWriter, result any, err error) {
+	if err != nil {
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -628,6 +716,67 @@ func (h *CustomerHandler) GetCustomer(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, result)
 }
 
+func (h *CustomerHandler) ExportCustomerPDF(w http.ResponseWriter, r *http.Request) {
+	code, err := parseCustomerCode(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	customer, err := h.uc.GetCustomer(r.Context(), code)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	establishments, err := h.uc.ListEstablishments(r.Context(), code)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	rows := [][]string{{"Cliente", fmt.Sprintf("%d — %s", customer.Code, customer.Name)}, {"Documento", customer.DocumentNumber}, {"Situação", map[bool]string{true: "Ativo", false: "Inativo"}[customer.IsActive]}, {"Limite de crédito", fmt.Sprintf("R$ %.2f", customer.CreditLimit)}, {"Condição de pagamento", optionalInt(customer.PaymentConditionID)}, {"Tabela de venda", optionalInt(customer.SalesTableID)}, {"Portador", optionalInt(customer.CarrierID)}}
+	for _, establishment := range establishments {
+		rows = append(rows, []string{"Estabelecimento", fmt.Sprintf("%d — %s — %s", establishment.Code, establishment.Name, establishment.DocumentNumber)})
+	}
+	for _, address := range customer.Addresses {
+		rows = append(rows, []string{"Endereço", joinCustomerAddress(address)})
+	}
+	for _, contact := range customer.Contacts {
+		rows = append(rows, []string{"Contato", fmt.Sprintf("%s | %s | %s", contact.Name, stringValue(contact.Email), stringValue(contact.Phone))})
+	}
+	table := &export.Table{Title: "Ficha cadastral do cliente", Subtitle: fmt.Sprintf("Código %d", customer.Code), Columns: []string{"Campo", "Informação"}, Rows: rows}
+	var output bytes.Buffer
+	if err := export.EncodePDF(&output, table); err != nil {
+		security.RespondError(w, http.StatusInternalServerError, "não foi possível gerar a ficha cadastral")
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=cliente-%d.pdf", customer.Code))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(output.Bytes())
+}
+
+func optionalInt(value *int64) string {
+	if value == nil {
+		return "Não informado"
+	}
+	return strconv.FormatInt(*value, 10)
+}
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+func joinCustomerAddress(value response.CustomerAddressResponse) string {
+	parts := []string{stringValue(value.Street), stringValue(value.Number), stringValue(value.City), stringValue(value.UF), stringValue(value.ZipCode)}
+	clean := parts[:0]
+	for _, part := range parts {
+		if part != "" {
+			clean = append(clean, part)
+		}
+	}
+	return strings.Join(clean, ", ")
+}
+
 func (h *CustomerHandler) UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	code, err := parseCustomerCode(r)
 	if err != nil {
@@ -766,7 +915,7 @@ func (h *CustomerHandler) UpdateSalesTablePrice(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.uc.UpdateSalesTablePrice(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -809,7 +958,7 @@ func (h *CustomerHandler) GenerateSalesTablePrices(w http.ResponseWriter, r *htt
 	}
 	result, err := h.uc.GenerateSalesTablePrices(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -854,7 +1003,42 @@ func (h *CustomerHandler) PriceSalesItem(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.uc.PriceSalesItem(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+func (h *CustomerHandler) ResolveSalesTablesForItem(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	dto := request.ResolveSalesTablesForItemDTO{ItemCode: query.Get("item_code"), Unit: query.Get("unit"), Currency: query.Get("currency"), Quantity: 1}
+	if raw := query.Get("quantity"); raw != "" {
+		value, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "quantidade inválida")
+			return
+		}
+		dto.Quantity = value
+	}
+	if raw := query.Get("customer_code"); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "código do cliente inválido")
+			return
+		}
+		dto.CustomerCode = &value
+	}
+	if raw := query.Get("reference_date"); raw != "" {
+		value, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "data de referência inválida")
+			return
+		}
+		dto.ReferenceAt = value
+	}
+	result, err := h.uc.ResolveSalesTablesForItem(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -868,7 +1052,7 @@ func (h *CustomerHandler) FormSalesPrice(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.uc.FormSalesPrice(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

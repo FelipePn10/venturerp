@@ -6,7 +6,7 @@ type LotMaskDTO struct {
 	ID                 int64     `json:"id"`
 	Application        string    `json:"application"`
 	CustomerCode       *int64    `json:"customer_code"`
-	ItemCode           *int64    `json:"item_code"`
+	ItemCode           *TextCode `json:"item_code"`
 	ClassificationType string    `json:"classification_type"`
 	ClassificationCode *int64    `json:"classification_code"`
 	ZeroOnYearChange   bool      `json:"zero_on_year_change"`
@@ -27,9 +27,9 @@ type LotMaskPartDTO struct {
 // GenerateLotDTO resolves which mask to use (explicit LotMaskID or by context)
 // and produces a lot code, advancing the sequence state.
 type GenerateLotDTO struct {
-	LotMaskID          *int64 `json:"lot_mask_id"`
-	Application        string `json:"application"`
-	CustomerCode       *int64 `json:"customer_code"`
-	ItemCode           *int64 `json:"item_code"`
-	ClassificationCode *int64 `json:"classification_code"`
+	LotMaskID          *int64    `json:"lot_mask_id"`
+	Application        string    `json:"application"`
+	CustomerCode       *int64    `json:"customer_code"`
+	ItemCode           *TextCode `json:"item_code"`
+	ClassificationCode *int64    `json:"classification_code"`
 }

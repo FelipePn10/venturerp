@@ -26,7 +26,10 @@ func (t TypeWarehouse) MarshalJSON() ([]byte, error) {
 }
 
 func (t *TypeWarehouse) UnmarshalJSON(data []byte) error {
-	value, err := unmarshalStringOrIntEnum(data, "TypeWarehouse", map[string]int{"LINHA DE PRODUÇÃO": int(LINHA_DE_PRODUCAO), "NORMAL": int(NORMAL)})
+	value, err := unmarshalStringOrIntEnum(data, "TypeWarehouse", map[string]int{
+		"LINHA DE PRODUÇÃO": int(LINHA_DE_PRODUCAO), "LINHA DE PRODUCAO": int(LINHA_DE_PRODUCAO),
+		"LINHA_DE_PRODUCAO": int(LINHA_DE_PRODUCAO), "NORMAL": int(NORMAL),
+	})
 	if err != nil {
 		return err
 	}

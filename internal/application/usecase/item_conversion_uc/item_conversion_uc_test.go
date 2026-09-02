@@ -53,7 +53,7 @@ func newUC(t *testing.T) *ItemConversionUseCase {
 	repo := &fakeRepo{rows: []*entity.ItemUnitConversion{
 		{ItemCode: 1, FromUOM: "CX", ToUOM: "UN", Factor: 12}, // 1 CX = 12 UN
 	}}
-	return NewItemConversionUseCase(repo)
+	return NewItemConversionUseCase(repo, nil)
 }
 
 func TestFactor_Direct(t *testing.T) {
@@ -118,12 +118,12 @@ func TestConvertQuantityAndPrice(t *testing.T) {
 
 func TestConvertQuantityAppliesRoundingAndTolerancePolicy(t *testing.T) {
 	repo := &fakeRepo{rows: []*entity.ItemUnitConversion{{ItemCode: 1, FromUOM: "UN", ToUOM: "CX", Factor: 0.167, RoundingPercent: 50, ToleranceType: "VALUE"}}}
-	got, found, err := NewItemConversionUseCase(repo).ConvertQuantityConfigured(context.Background(), 1, "", 6, "UN", "CX")
+	got, found, err := NewItemConversionUseCase(repo, nil).ConvertQuantityConfigured(context.Background(), 1, "", 6, "UN", "CX")
 	if err != nil || !found || got != 1 {
 		t.Fatalf("converted=%v found=%v err=%v", got, found, err)
 	}
 	repo.rows[0].RoundingPercent = 0
-	if _, _, err = NewItemConversionUseCase(repo).ConvertQuantityConfigured(context.Background(), 1, "", 6, "UN", "CX"); err == nil {
+	if _, _, err = NewItemConversionUseCase(repo, nil).ConvertQuantityConfigured(context.Background(), 1, "", 6, "UN", "CX"); err == nil {
 		t.Fatal("fractional quantity outside policy must be rejected")
 	}
 }
@@ -133,7 +133,7 @@ func TestFactorConfiguredUsesMaskBeforeGenericConversion(t *testing.T) {
 		{ItemCode: 1, Mask: "", FromUOM: "CX", ToUOM: "UN", Factor: 10},
 		{ItemCode: 1, Mask: "BLUE", FromUOM: "CX", ToUOM: "UN", Factor: 12},
 	}}
-	factor, found, err := NewItemConversionUseCase(repo).FactorConfigured(context.Background(), 1, "BLUE", "CX", "UN")
+	factor, found, err := NewItemConversionUseCase(repo, nil).FactorConfigured(context.Background(), 1, "BLUE", "CX", "UN")
 	if err != nil || !found || factor != 12 {
 		t.Fatalf("factor=%v found=%v err=%v", factor, found, err)
 	}

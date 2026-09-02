@@ -41,6 +41,15 @@ type ProductionTimeResult struct {
 	// MachineCapacityPerMinute is the machine's effective output per minute
 	// after applying efficiency_rate: capacity * efficiency_rate / periodInMinutes.
 	MachineCapacityPerMinute float64 `json:"machine_capacity_per_minute"`
+
+	StandardCycleMinutes  float64  `json:"standard_cycle_minutes"`
+	EffectiveCycleMinutes float64  `json:"effective_cycle_minutes"`
+	ProductionBaseQty     int      `json:"production_base_qty"`
+	MachineEfficiencyRate float64  `json:"machine_efficiency_rate"`
+	ResourceTimeFactor    float64  `json:"resource_time_factor"`
+	RequiredCapacityRate  float64  `json:"required_capacity_per_minute"`
+	WorkingMinutesPerDay  float64  `json:"working_minutes_per_day"`
+	CalculationFactors    []string `json:"calculation_factors"`
 }
 
 // CalculateProductionTime computes how long it takes to produce demandQty items
@@ -65,6 +74,12 @@ func CalculateProductionTime(
 
 	// Normalise the item-specific production time to minutes.
 	productionTimeMinutes := imt.ProductionTime * periodToMinutes(imt.ProductionTimeUnit, workingMinsPerDay)
+	efficiency := machine.EfficiencyRate
+	if efficiency <= 0 || efficiency > 1 {
+		efficiency = 1
+	}
+	resourceTimeFactor := 1.0
+	effectiveCycleMinutes := productionTimeMinutes * resourceTimeFactor / efficiency
 
 	// How many full (or partial) production cycles are needed?
 	// ceil ensures a partial last batch still reserves a full machine cycle.
@@ -74,7 +89,7 @@ func CalculateProductionTime(
 	// specific mask variant (different fixtures, jigs, or program loads per size).
 	setupMinutes := imt.SetupTime
 
-	machiningMinutes := batchCount * productionTimeMinutes
+	machiningMinutes := batchCount * effectiveCycleMinutes
 	totalMinutes := machiningMinutes + setupMinutes
 
 	// Machine effective capacity in machine-units per minute.
@@ -85,8 +100,9 @@ func CalculateProductionTime(
 	// Required throughput = demand (in machine units) / total available minutes.
 	demandInMachineUnits := demandQty * conversionFactor
 	var isBottleneck bool
+	var requiredRate float64
 	if totalMinutes > 0 && machineCapacityPerMinute > 0 {
-		requiredRate := demandInMachineUnits / totalMinutes
+		requiredRate = demandInMachineUnits / totalMinutes
 		isBottleneck = requiredRate > machineCapacityPerMinute
 	}
 
@@ -100,6 +116,19 @@ func CalculateProductionTime(
 		ConversionFactor:         conversionFactor,
 		MachineIsBottleneck:      isBottleneck,
 		MachineCapacityPerMinute: machineCapacityPerMinute,
+		StandardCycleMinutes:     productionTimeMinutes,
+		EffectiveCycleMinutes:    effectiveCycleMinutes,
+		ProductionBaseQty:        imt.ProductionBaseQty,
+		MachineEfficiencyRate:    efficiency,
+		ResourceTimeFactor:       resourceTimeFactor,
+		RequiredCapacityRate:     requiredRate,
+		WorkingMinutesPerDay:     workingMinsPerDay,
+		CalculationFactors: []string{
+			"ciclos = teto(quantidade demandada / quantidade base)",
+			"tempo efetivo por ciclo = tempo padrão × fator do recurso / eficiência",
+			"tempo total = setup + ciclos × tempo efetivo por ciclo",
+			"gargalo = capacidade requerida por minuto maior que a capacidade efetiva da máquina",
+		},
 	}
 }
 

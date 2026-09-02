@@ -69,6 +69,18 @@ func TestSMTPRespectsCancelledContext(t *testing.T) {
 		t.Fatalf("classe inesperada: %s", ports.FailureClass(err))
 	}
 }
+
+func TestTrainingEmailIsClearlyMarked(t *testing.T) {
+	service := NewEmailService(SMTPConfig{DataEnvironment: "training"})
+	message := service.decorateMessage(ports.EmailMessage{Subject: "Pedido aprovado", Text: "texto", HTML: "<p>texto</p>"})
+	if !strings.Contains(message.Subject, "TREINAMENTO - SEM VALOR") {
+		t.Fatalf("subject not marked: %q", message.Subject)
+	}
+	if !strings.Contains(message.Text, "SEM VALOR FISCAL") || !strings.Contains(message.HTML, "SEM VALOR FISCAL") {
+		t.Fatal("training warning missing from message bodies")
+	}
+}
+
 func TestRenderDeliveryEscapesDynamicHTML(t *testing.T) {
 	html, _ := RenderDelivery("Empresa <x>", "#112233", "", "Usuário", "Título", "https://erp.example.com", []byte(`{"descricao":"<script>alert(1)</script>","link":"/stock"}`))
 	if strings.Contains(html, "<script>") {

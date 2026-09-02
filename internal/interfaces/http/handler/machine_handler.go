@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -36,13 +37,13 @@ func (h *MachineHandler) CreateType(w http.ResponseWriter, r *http.Request) {
 
 	var dto request.CreateMachineTypeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
 	result, err := h.createTypeUC.Execute(r.Context(), dto, "system")
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -52,7 +53,7 @@ func (h *MachineHandler) CreateType(w http.ResponseWriter, r *http.Request) {
 func (h *MachineHandler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listTypesUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -63,13 +64,13 @@ func (h *MachineHandler) CreateMachine(w http.ResponseWriter, r *http.Request) {
 
 	var dto request.CreateMachineDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
 	result, err := h.createMachineUC.Execute(r.Context(), dto, "system")
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -79,7 +80,7 @@ func (h *MachineHandler) CreateMachine(w http.ResponseWriter, r *http.Request) {
 func (h *MachineHandler) ListMachines(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listMachinesUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -90,13 +91,13 @@ func (h *MachineHandler) CreateItemTime(w http.ResponseWriter, r *http.Request) 
 
 	var dto request.CreateItemMachineTimeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
 	result, err := h.createItemTimeUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -104,24 +105,65 @@ func (h *MachineHandler) CreateItemTime(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *MachineHandler) ListItemTimes(w http.ResponseWriter, r *http.Request) {
-	// GET /time/list?item_code=123 — the filter is a query-string param, not a
+	// GET /time/list?item_code=TEA452-0 — the filter is a query-string param, not a
 	// path segment, so it must be read from the URL query.
 	itemCodeStr := r.URL.Query().Get("item_code")
 	if itemCodeStr == "" {
 		itemCodeStr = chi.URLParam(r, "item_code")
 	}
 
-	itemCode, err := strconv.ParseInt(itemCodeStr, 10, 64)
-	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "item_code query parameter is required (e.g. ?item_code=123)")
-		return
-	}
+	itemCode := request.TextCode(itemCodeStr)
 
 	results, err := h.listItemTimesUC.Execute(r.Context(), itemCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
+	machineCodeStr := r.URL.Query().Get("machine_code")
+	if machineCodeStr != "" {
+		machineCode, parseErr := strconv.ParseInt(machineCodeStr, 10, 64)
+		if parseErr != nil || machineCode <= 0 {
+			security.RespondError(w, http.StatusBadRequest, "machine_code deve ser um código inteiro positivo")
+			return
+		}
+		filtered := results[:0]
+		for _, result := range results {
+			if result.MachineCode == machineCode {
+				filtered = append(filtered, result)
+			}
+		}
+		results = filtered
+	}
+	page, pageSize := 1, 50
+	if raw := r.URL.Query().Get("page"); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed < 1 {
+			security.RespondError(w, http.StatusBadRequest, "page deve ser positivo")
+			return
+		}
+		page = parsed
+	}
+	if raw := r.URL.Query().Get("page_size"); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed < 1 || parsed > 200 {
+			security.RespondError(w, http.StatusBadRequest, "page_size deve estar entre 1 e 200")
+			return
+		}
+		pageSize = parsed
+	}
+	total := len(results)
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	w.Header().Set("X-Total-Count", strconv.Itoa(total))
+	w.Header().Set("X-Page", strconv.Itoa(page))
+	w.Header().Set("X-Page-Size", strconv.Itoa(pageSize))
+	results = results[start:end]
 
 	security.RespondJSON(w, http.StatusOK, results)
 }
@@ -131,13 +173,13 @@ func (h *MachineHandler) CreateSchedule(w http.ResponseWriter, r *http.Request) 
 
 	var dto request.CreateMachineScheduleDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
 	result, err := h.scheduleUC.CreateSchedule(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -149,12 +191,12 @@ func (h *MachineHandler) ReorderSchedule(w http.ResponseWriter, r *http.Request)
 
 	var dto request.ReorderScheduleDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
 	if err := h.scheduleUC.ReorderSchedule(r.Context(), dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -173,7 +215,7 @@ func (h *MachineHandler) GetTypeByCode(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.listTypesUC.GetByCodeType(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -189,7 +231,7 @@ func (h *MachineHandler) GetMachineByCode(w http.ResponseWriter, r *http.Request
 
 	result, err := h.listMachinesUC.GetByCodeMachine(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -205,7 +247,7 @@ func (h *MachineHandler) GetItemTime(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.createItemTimeUC.GetByCodeTime(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -221,7 +263,7 @@ func (h *MachineHandler) GetSchedule(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.scheduleUC.GetSchedule(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -259,7 +301,7 @@ func (h *MachineHandler) ListSchedules(w http.ResponseWriter, r *http.Request) {
 		date,
 	)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -278,7 +320,7 @@ func (h *MachineHandler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Req
 	var dto request.UpdateScheduleStatusDTO
 
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
@@ -288,7 +330,7 @@ func (h *MachineHandler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Req
 		dto,
 	)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -307,7 +349,7 @@ func (h *MachineHandler) UpdateScheduleTimes(w http.ResponseWriter, r *http.Requ
 	var dto request.UpdateScheduleTimesDTO
 
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
@@ -317,7 +359,7 @@ func (h *MachineHandler) UpdateScheduleTimes(w http.ResponseWriter, r *http.Requ
 		dto,
 	)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -329,13 +371,17 @@ func (h *MachineHandler) CalculateProductionTime(w http.ResponseWriter, r *http.
 
 	var input machine_uc.ProductionTimeInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid payload")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
 	result, err := h.calculateProductionTimeUC.Execute(r.Context(), input)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		if errors.Is(err, machine_uc.ErrProductionTimeNotConfigured) {
+			security.RespondErrorCode(w, http.StatusUnprocessableEntity, "TEMPO_PRODUCAO_NAO_CADASTRADO", err.Error())
+			return
+		}
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -350,7 +396,7 @@ func (h *MachineHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.scheduleUC.DeleteSchedule(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 

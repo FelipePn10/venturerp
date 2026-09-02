@@ -64,33 +64,69 @@ type CreateTechnicalAssistanceCallItemDTO struct {
 }
 
 type AddTechnicalAssistanceReturnNoteDTO struct {
-	CallCode      int64     `json:"call_code"`
-	NoteNumber    string    `json:"note_number"`
-	NoteSeries    *string   `json:"note_series"`
-	EmissionDate  string    `json:"emission_date"`
-	CustomerCode  *int64    `json:"customer_code"`
-	OperationType string    `json:"operation_type"`
-	AccessKey     *string   `json:"access_key"`
-	TotalValue    float64   `json:"total_value"`
-	Notes         *string   `json:"notes"`
-	CreatedBy     uuid.UUID `json:"created_by"`
+	CallCode      int64   `json:"call_code"`
+	NoteNumber    string  `json:"note_number"`
+	NoteSeries    *string `json:"note_series"`
+	EmissionDate  string  `json:"emission_date"`
+	CustomerCode  *int64  `json:"customer_code"`
+	OperationType string  `json:"operation_type"`
+	AccessKey     *string `json:"access_key"`
+	TotalValue    float64 `json:"total_value"`
+	Notes         *string `json:"notes"`
 }
 
 type UpdateTechnicalAssistanceCallStatusDTO struct {
-	Code                 int64     `json:"code"`
-	Status               string    `json:"status"`
-	Diagnosis            *string   `json:"diagnosis"`
-	Solution             *string   `json:"solution"`
-	ServiceInvoiceNumber *string   `json:"service_invoice_number"`
-	CloseReason          *string   `json:"close_reason"`
-	CreatedBy            uuid.UUID `json:"created_by"`
+	Code                 int64   `json:"code"`
+	Status               string  `json:"status"`
+	Diagnosis            *string `json:"diagnosis"`
+	Solution             *string `json:"solution"`
+	ServiceInvoiceNumber *string `json:"service_invoice_number"`
+	CloseReason          *string `json:"close_reason"`
+}
+
+type CreateTechnicalAssistanceRMADTO struct {
+	CallCode          int64                           `json:"-"`
+	ReasonCode        string                          `json:"reason_code"`
+	ReasonDescription *string                         `json:"reason_description"`
+	EligibilityStatus string                          `json:"eligibility_status"`
+	EligibilityReason string                          `json:"eligibility_reason"`
+	SLADueAt          string                          `json:"sla_due_at"`
+	ProductCost       float64                         `json:"product_cost"`
+	FreightCost       float64                         `json:"freight_cost"`
+	ServiceCost       float64                         `json:"service_cost"`
+	Items             []TechnicalAssistanceRMAItemDTO `json:"items"`
+	IdempotencyKey    string                          `json:"-"`
+}
+
+type TechnicalAssistanceRMAItemDTO struct {
+	CallItemCode         int64   `json:"call_item_code"`
+	ItemCode             int64   `json:"item_code"`
+	Quantity             float64 `json:"quantity"`
+	SerialNumber         *string `json:"serial_number"`
+	LotNumber            *string `json:"lot_number"`
+	RequestedDestination *string `json:"requested_destination"`
+}
+
+type TransitionTechnicalAssistanceRMADTO struct {
+	Status              string   `json:"status"`
+	Reason              *string  `json:"reason"`
+	CorrelationID       *string  `json:"correlation_id"`
+	AuthorizationNumber *string  `json:"authorization_number"`
+	ReverseCarrierCode  *int64   `json:"reverse_carrier_code"`
+	ReverseTrackingCode *string  `json:"reverse_tracking_code"`
+	InspectionNotes     *string  `json:"inspection_notes"`
+	Destination         *string  `json:"destination"`
+	FiscalDocumentKey   *string  `json:"fiscal_document_key"`
+	StockMovementCode   *int64   `json:"stock_movement_code"`
+	ProductCost         *float64 `json:"product_cost"`
+	FreightCost         *float64 `json:"freight_cost"`
+	ServiceCost         *float64 `json:"service_cost"`
 }
 
 type GenerateTechnicalAssistanceOrdersDTO struct {
-	CallCode          int64     `json:"call_code"`
-	SalesDivisionCode *int64    `json:"sales_division_code"`
-	PriceTableCode    *int64    `json:"price_table_code"`
-	PaymentTermCode   *int64    `json:"payment_term_code"`
-	WarehouseCode     *int64    `json:"warehouse_code"`
-	CreatedBy         uuid.UUID `json:"created_by"`
+	CallCode          int64  `json:"call_code"`
+	SalesDivisionCode *int64 `json:"sales_division_code"`
+	PriceTableCode    *int64 `json:"price_table_code"`
+	PaymentTermCode   *int64 `json:"payment_term_code"`
+	WarehouseCode     *int64 `json:"warehouse_code"`
 }

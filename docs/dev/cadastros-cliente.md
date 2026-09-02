@@ -51,6 +51,8 @@ GET  /api/customers/support/regions/{code} → busca por código
 
 Classifica o mercado do cliente. Suporta hierarquia pai-filho e retenção PIS/COFINS.
 
+Criação usa `POST`; atualização usa `PUT /{code}` com o mesmo contrato editável.
+
 ```http
 POST /api/customers/support/market-segments
 {
@@ -74,6 +76,8 @@ POST /api/customers/support/market-segments
 
 Categorias de contatos (Comprador, Gerente, Diretor, etc.).
 
+Criação usa `POST`; atualização usa `PUT /{code}`.
+
 ```http
 POST /api/customers/support/contact-types
 { "description": "Comprador" }
@@ -88,6 +92,8 @@ POST /api/customers/support/contact-types
 ### 1.4 Tipo de Cliente (`/api/customers/support/customer-types`)
 
 Classifica o cliente e define dias de entrega padrão.
+
+Criação usa `POST`; atualização usa `PUT /{code}`.
 
 ```http
 POST /api/customers/support/customer-types
@@ -110,6 +116,8 @@ POST /api/customers/support/customer-types
 ### 1.5 Portador (`/api/customers/support/carriers`)
 
 Instituição financeira ou modalidade de cobrança usada para geração de títulos (banco, boleto, carteira, etc.).
+
+Criação usa `POST`; atualização usa `PUT /{code}`.
 
 ```http
 POST /api/customers/support/carriers
@@ -140,6 +148,8 @@ POST /api/customers/support/carriers
 
 Agrupa portadores para facilitar a associação em condições de pagamento.
 
+Criação usa `POST`; a descrição é atualizada por `PUT /{code}`.
+
 ```http
 POST /api/customers/support/carrier-groups
 { "description": "Portadores Principais" }
@@ -163,6 +173,8 @@ POST /api/customers/support/carrier-groups/members
 
 Define como o cliente paga (à vista, parcelado, boleto, etc.). Este é o cadastro de condição
 de pagamento **comercial do cliente**, conectado ao pedido de venda via `payment_term_code`.
+
+Criação usa `POST`; atualização usa `PUT /{code}` e preserva o código no caminho.
 
 > **Diferença do módulo financeiro:** o módulo financeiro possui sua própria "condição de
 > pagamento" (usada em contas a pagar/receber). As duas coexistem com propósitos distintos:
@@ -419,6 +431,9 @@ Cada conjunto de flags controla a **composição da base de cálculo** de cada i
 > endereço e CNAE. **Exportação:** `GET /api/customers?format=xlsx|pdf|csv` baixa
 > a lista de clientes como arquivo. Ver
 > [`integracao-cnpj-e-exportacao.md`](integracao-cnpj-e-exportacao.md).
+> **Ficha individual:** `GET /api/customers/{code}/report/pdf` gera um PDF
+> autenticado com cadastro, estabelecimentos, endereços, contatos e condições
+> comerciais, sempre limitado à empresa do JWT.
 
 Com todos os cadastros de apoio prontos, crie o cliente:
 

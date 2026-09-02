@@ -36,10 +36,12 @@ if [[ -n "${BASE_URL:-}" ]]; then
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
     -d '{"purchase_order_prompt":"Ordem de Compra","delivery_authorization_prompt":"Autorização de Entr.","allow_service_items_nfce":true,"default_nfce":false,"minimum_cif_freight":"25.50","add_redelivery_to_freight":true}' >/dev/null
   curl -fsS "${BASE_URL}/api/sales-quotation/parameters" -H "$AUTH_HEADER" | jq -e '.minimum_cif_freight == "25.5" or .minimum_cif_freight == "25.50"' >/dev/null
+  PRICE_TABLE_CODE="$(curl -fsS "${BASE_URL}/api/customers/support/sales-tables/" -H "$AUTH_HEADER" | jq -r 'map(select(.is_active == true)) | last | .code // empty')"
+  [[ -n "$PRICE_TABLE_CODE" ]]
 
   QUOTE_JSON="$(curl -fsS -X POST "${BASE_URL}/api/sales-quotation/create" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d '{"enterprise_code":1,"status":"OV","quotation_type":"VENDA","currency_code":"BRL","probability_pct":65,"commission_pct":3.5,"purchase_order_number":"OC-FOCCO-SMOKE","freight_type":"Cif-Contrat.","freight_value":10,"redelivery_freight_value":2,"insurance_value":1,"discount_value":5,"surcharge_value":3,"retained_tax_value":0.5,"release_status":"RELEASED","created_by":"00000000-0000-0000-0000-000000000001"}')"
+    -d "{\"enterprise_code\":1,\"status\":\"OV\",\"quotation_type\":\"VENDA\",\"currency_code\":\"BRL\",\"price_table_code\":${PRICE_TABLE_CODE},\"probability_pct\":65,\"commission_pct\":3.5,\"purchase_order_number\":\"OC-FOCCO-SMOKE\",\"freight_type\":\"Cif-Contrat.\",\"freight_value\":10,\"redelivery_freight_value\":2,\"insurance_value\":1,\"discount_value\":5,\"surcharge_value\":3,\"retained_tax_value\":0.5,\"release_status\":\"RELEASED\",\"created_by\":\"00000000-0000-0000-0000-000000000001\"}")"
   QUOTE_CODE="$(printf '%s' "$QUOTE_JSON" | jq -r '.code // empty')"
   if [[ -z "$QUOTE_CODE" ]]; then
     echo "Nao foi possivel extrair o codigo do orçamento criado" >&2
@@ -47,7 +49,7 @@ if [[ -n "${BASE_URL:-}" ]]; then
   fi
   ITEM_JSON="$(curl -fsS -X POST "${BASE_URL}/api/sales-quotation/items/create" \
     -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-    -d "{\"sales_quotation_code\":${QUOTE_CODE},\"sequence\":1,\"item_code\":1,\"requested_qty\":\"2\",\"unit_price\":\"100\",\"discount_pct\":\"5\"}")"
+    -d "{\"sales_quotation_code\":${QUOTE_CODE},\"sequence\":1,\"item_code\":\"10001\",\"price_table_code\":${PRICE_TABLE_CODE},\"requested_qty\":\"2\",\"discount_pct\":\"5\"}")"
   ITEM_CODE="$(printf '%s' "$ITEM_JSON" | jq -r '.code // empty')"
   [[ -n "$ITEM_CODE" ]]
   curl -fsS "${BASE_URL}/api/sales-quotation/${QUOTE_CODE}" -H "$AUTH_HEADER" >/dev/null

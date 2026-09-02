@@ -1,0 +1,440 @@
+/* ───────────────────────────────────────────────────────────────
+   Treinamento Prático VentureERP — folha de estilo dos apostilados
+   Renderizado com WeasyPrint (ver gerar.py)
+   ─────────────────────────────────────────────────────────────── */
+
+@page {
+  size: A4;
+  margin: 20mm 16mm 16mm 16mm;
+  /* @top-left é definido por gerar.py, com o nome do dia */
+  @top-right {
+    content: string(secao);
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 7.5pt;
+    color: #7c8a80;
+  }
+  @bottom-right {
+    content: counter(page);
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 8pt;
+    color: #1b5e36;
+    font-weight: bold;
+  }
+  @bottom-left {
+    content: "Tecnofer · Truckparts — uso interno";
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 7pt;
+    color: #a8b3ac;
+  }
+}
+
+@page capa {
+  margin: 0;
+  @top-left { content: none; }
+  @top-right { content: none; }
+  @bottom-right { content: none; }
+  @bottom-left { content: none; }
+}
+
+:root {
+  --verde: #1b5e36;
+  --verde-claro: #2f7d47;
+  --verde-pale: #eef5ef;
+  --borda: #d3e0d6;
+  --tinta: #22302a;
+  --mudo: #6d7c73;
+  --ambar: #9a6b12;
+  --ambar-bg: #fdf6e6;
+  --vermelho: #a33232;
+  --vermelho-bg: #fcf0ef;
+  --azul: #21556f;
+  --azul-bg: #eef4f8;
+}
+
+html {
+  font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+  font-size: 9.6pt;
+  line-height: 1.5;
+  color: var(--tinta);
+}
+
+body { margin: 0; }
+
+/* ── Capa ───────────────────────────────────────────────────── */
+.capa {
+  page: capa;
+  page-break-after: always;
+  height: 297mm;
+  position: relative;
+}
+.capa-faixa {
+  background: var(--verde);
+  color: #fff;
+  padding: 34mm 20mm 16mm 20mm;
+}
+.capa-marca {
+  font-size: 8.5pt;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: #9ed3b1;
+  margin-bottom: 14mm;
+}
+.capa h1 {
+  font-size: 30pt;
+  line-height: 1.1;
+  margin: 0 0 4mm 0;
+  color: #fff;
+  border: 0;
+  padding: 0;
+  page-break-before: avoid;
+  page-break-after: auto;
+  string-set: none;
+}
+.capa .capa-sub {
+  font-size: 13pt;
+  color: #bfe3cc;
+  font-weight: normal;
+  margin: 0;
+}
+.capa-corpo { padding: 12mm 20mm; }
+.capa-meta {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10mm;
+}
+.capa-meta td {
+  padding: 2.4mm 0;
+  border-bottom: 1px solid var(--borda);
+  font-size: 9.5pt;
+}
+.capa-meta td:first-child {
+  width: 34mm;
+  color: var(--mudo);
+  text-transform: uppercase;
+  font-size: 7.5pt;
+  letter-spacing: .08em;
+}
+.capa-nota {
+  background: var(--verde-pale);
+  border-left: 3px solid var(--verde-claro);
+  padding: 4mm 5mm;
+  font-size: 9pt;
+}
+.capa-rodape {
+  position: absolute;
+  bottom: 14mm;
+  left: 20mm;
+  right: 20mm;
+  font-size: 7.5pt;
+  color: var(--mudo);
+  border-top: 1px solid var(--borda);
+  padding-top: 3mm;
+}
+
+/* ── Títulos ────────────────────────────────────────────────── */
+h1 {
+  string-set: secao content();
+  font-size: 17pt;
+  color: var(--verde);
+  margin: 0 0 5mm 0;
+  padding-bottom: 2.5mm;
+  border-bottom: 2.5px solid var(--verde);
+  page-break-after: avoid;
+  page-break-before: always;
+}
+h1.sem-quebra { page-break-before: auto; }
+h2 {
+  font-size: 12.5pt;
+  color: var(--verde-claro);
+  margin: 7mm 0 2.5mm 0;
+  page-break-after: avoid;
+}
+h3 {
+  font-size: 10.5pt;
+  color: var(--tinta);
+  margin: 5mm 0 2mm 0;
+  page-break-after: avoid;
+}
+h4 {
+  font-size: 9.6pt;
+  color: var(--mudo);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin: 4mm 0 1.5mm 0;
+  page-break-after: avoid;
+}
+p { margin: 0 0 2.6mm 0; }
+ul, ol { margin: 0 0 3mm 0; padding-left: 5.5mm; }
+li { margin-bottom: 1.2mm; }
+strong { color: var(--verde); }
+em { font-style: normal; background: #fff6cf; padding: 0 .6mm; }
+
+/* ── Chips e códigos de tela ────────────────────────────────── */
+.tela {
+  display: inline-block;
+  background: var(--verde);
+  color: #fff;
+  font-size: 7.5pt;
+  font-weight: bold;
+  letter-spacing: .05em;
+  padding: .5mm 1.6mm;
+  border-radius: 1.5mm;
+  vertical-align: 2%;
+}
+.tela-out {
+  display: inline-block;
+  border: 1px solid var(--verde-claro);
+  color: var(--verde);
+  font-size: 7.5pt;
+  font-weight: bold;
+  padding: .3mm 1.4mm;
+  border-radius: 1.5mm;
+}
+code, .campo {
+  font-family: "DejaVu Sans Mono", monospace;
+  font-size: 8.4pt;
+  background: #f2f6f3;
+  border: 1px solid #e0eae2;
+  border-radius: 1mm;
+  padding: 0 1mm;
+}
+.btn {
+  font-size: 8.4pt;
+  font-weight: bold;
+  background: var(--verde-pale);
+  border: 1px solid var(--verde-claro);
+  color: var(--verde);
+  border-radius: 1mm;
+  padding: 0 1.4mm;
+  white-space: nowrap;
+}
+
+/* ── Tabelas ────────────────────────────────────────────────── */
+table.dados {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.3pt;
+  margin: 2.5mm 0 4mm 0;
+  page-break-inside: auto;
+}
+table.dados thead { display: table-header-group; }
+table.dados tr { page-break-inside: avoid; }
+table.dados th {
+  background: var(--verde);
+  color: #fff;
+  text-align: left;
+  padding: 1.6mm 2mm;
+  font-size: 7.6pt;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: bold;
+}
+table.dados td {
+  padding: 1.4mm 2mm;
+  border-bottom: 1px solid var(--borda);
+  vertical-align: top;
+}
+table.dados tbody tr:nth-child(even) { background: #f7faf8; }
+table.dados td.num, table.dados th.num { text-align: right; font-family: "DejaVu Sans Mono", monospace; }
+table.dados td.cen, table.dados th.cen { text-align: center; }
+table.dados tr.total td {
+  background: var(--verde-pale);
+  font-weight: bold;
+  border-top: 1.5px solid var(--verde-claro);
+  border-bottom: none;
+}
+table.dados tr.sub td { background: #eaf1ec; font-weight: bold; }
+
+/* tabela campo → preencher */
+table.campos {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.4pt;
+  margin: 2mm 0 4mm 0;
+}
+table.campos tr { page-break-inside: avoid; }
+table.campos td {
+  padding: 1.4mm 2mm;
+  border-bottom: 1px solid var(--borda);
+  vertical-align: top;
+}
+table.campos td:first-child {
+  width: 40mm;
+  font-weight: bold;
+  color: var(--verde);
+  background: #f7faf8;
+}
+table.campos td.obs { color: var(--mudo); font-size: 7.8pt; }
+
+/* ── Passos ─────────────────────────────────────────────────── */
+.passo {
+  border-left: 2.5px solid var(--verde-claro);
+  padding: 0 0 0 5mm;
+  margin: 0 0 4mm 0;
+  page-break-inside: avoid;
+}
+.passo > .passo-tit {
+  font-weight: bold;
+  color: var(--verde);
+  font-size: 9.8pt;
+  margin-bottom: 1.5mm;
+}
+.passo > .passo-tit .n {
+  display: inline-block;
+  background: var(--verde);
+  color: #fff;
+  width: 5mm;
+  height: 5mm;
+  line-height: 5mm;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 7.5pt;
+  margin-left: -9.5mm;
+  margin-right: 2mm;
+}
+
+/* ── Caixas de destaque ─────────────────────────────────────── */
+.nota, .atencao, .porque, .achado, .exercicio, .dica {
+  padding: 3mm 4mm;
+  margin: 3mm 0;
+  font-size: 8.6pt;
+  page-break-inside: avoid;
+  border-radius: 1mm;
+}
+.nota    { background: var(--azul-bg);     border-left: 3px solid var(--azul); }
+.atencao { background: var(--ambar-bg);    border-left: 3px solid var(--ambar); }
+.porque  { background: var(--verde-pale);  border-left: 3px solid var(--verde-claro); }
+.achado  { background: var(--vermelho-bg); border-left: 3px solid var(--vermelho); }
+.dica    { background: #f4f2fa;            border-left: 3px solid #6d55a5; }
+.nota b:first-child, .atencao b:first-child, .porque b:first-child,
+.achado b:first-child, .dica b:first-child {
+  display: block;
+  text-transform: uppercase;
+  font-size: 7.4pt;
+  letter-spacing: .09em;
+  margin-bottom: 1.2mm;
+}
+.nota b:first-child    { color: var(--azul); }
+.atencao b:first-child { color: var(--ambar); }
+.porque b:first-child  { color: var(--verde); }
+.achado b:first-child  { color: var(--vermelho); }
+.dica b:first-child    { color: #6d55a5; }
+.achado strong, .atencao strong { color: inherit; }
+
+.exercicio {
+  background: #fff;
+  border: 1.5px dashed var(--verde-claro);
+  border-left: 3px solid var(--verde-claro);
+}
+.exercicio > .ex-tit {
+  font-weight: bold;
+  color: var(--verde);
+  text-transform: uppercase;
+  font-size: 7.8pt;
+  letter-spacing: .09em;
+  margin-bottom: 1.5mm;
+}
+
+/* ── Árvore / diagramas monoespaçados ───────────────────────── */
+pre.arvore {
+  font-family: "DejaVu Sans Mono", monospace;
+  font-size: 7.9pt;
+  line-height: 1.42;
+  background: #f7faf8;
+  border: 1px solid var(--borda);
+  border-left: 3px solid var(--verde-claro);
+  padding: 3.5mm 4mm;
+  margin: 3mm 0;
+  white-space: pre;
+  page-break-inside: avoid;
+  overflow: hidden;
+}
+
+/* ── Fluxo em blocos ────────────────────────────────────────── */
+.fluxo {
+  margin: 4mm 0;
+  page-break-inside: avoid;
+}
+.fluxo-linha {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 2mm;
+}
+.fluxo-cx {
+  flex: 1;
+  border: 1px solid var(--verde-claro);
+  background: #fff;
+  border-radius: 1.2mm;
+  padding: 2mm;
+  font-size: 7.6pt;
+  text-align: center;
+}
+.fluxo-cx .t {
+  display: block;
+  font-weight: bold;
+  color: var(--verde);
+  font-size: 8.2pt;
+  margin-bottom: .6mm;
+}
+.fluxo-cx .c { display: block; color: var(--mudo); font-size: 6.9pt; }
+.fluxo-cx.destaque { background: var(--verde); border-color: var(--verde); }
+.fluxo-cx.destaque .t, .fluxo-cx.destaque .c { color: #fff; }
+.fluxo-cx.dia2 { border-style: dashed; background: #faf7f0; border-color: var(--ambar); }
+.fluxo-cx.dia2 .t { color: var(--ambar); }
+.fluxo-seta {
+  width: 6mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--verde-claro);
+  font-weight: bold;
+  font-size: 10pt;
+}
+
+/* ── Agenda ─────────────────────────────────────────────────── */
+table.agenda { width: 100%; border-collapse: collapse; font-size: 8.6pt; margin: 3mm 0 5mm 0; }
+table.agenda td { padding: 2mm 2mm; border-bottom: 1px solid var(--borda); vertical-align: top; }
+table.agenda td.hora {
+  width: 24mm;
+  font-family: "DejaVu Sans Mono", monospace;
+  font-weight: bold;
+  color: var(--verde);
+  white-space: nowrap;
+}
+table.agenda td.bloco { width: 30mm; font-weight: bold; }
+table.agenda td.modo { width: 26mm; font-size: 7.4pt; color: var(--mudo); text-align: right; }
+table.agenda tr.pausa td { background: #f4f6f4; color: var(--mudo); font-style: italic; }
+
+/* ── Checklist ──────────────────────────────────────────────── */
+ul.check { list-style: none; padding-left: 0; }
+ul.check li {
+  padding-left: 6mm;
+  position: relative;
+  margin-bottom: 1.6mm;
+  font-size: 8.8pt;
+}
+ul.check li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .7mm;
+  width: 3.2mm;
+  height: 3.2mm;
+  border: 1.2px solid var(--verde-claro);
+  border-radius: .6mm;
+}
+
+/* ── Sumário ────────────────────────────────────────────────── */
+ul.sumario { list-style: none; padding-left: 0; font-size: 9pt; }
+ul.sumario li { margin-bottom: 1.4mm; border-bottom: 1px dotted var(--borda); padding-bottom: 1.2mm; }
+ul.sumario li .s-num { display: inline-block; width: 9mm; color: var(--verde); font-weight: bold; }
+ul.sumario li .s-desc { color: var(--mudo); font-size: 7.8pt; display: block; padding-left: 9mm; }
+
+/* ── Utilidades ─────────────────────────────────────────────── */
+.duas-colunas { column-count: 2; column-gap: 7mm; }
+.mudo { color: var(--mudo); }
+.pequeno { font-size: 8pt; }
+.centro { text-align: center; }
+.quebra { page-break-before: always; }
+.sem-quebra-interna { page-break-inside: avoid; }
+hr.fina { border: 0; border-top: 1px solid var(--borda); margin: 5mm 0; }

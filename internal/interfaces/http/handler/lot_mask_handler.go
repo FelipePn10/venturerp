@@ -22,7 +22,7 @@ func NewLotMaskHandler(uc *lot_mask_uc.LotMaskUseCase) *LotMaskHandler {
 func (h *LotMaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.LotMaskDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.CreatedBy = actingUser(r)
@@ -46,7 +46,7 @@ func (h *LotMaskHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid lot mask id")
+		jsonError(w, http.StatusBadRequest, "identificador da máscara de lote inválido")
 		return
 	}
 	res, err := h.uc.Get(r.Context(), id)
@@ -60,12 +60,12 @@ func (h *LotMaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid lot mask id")
+		jsonError(w, http.StatusBadRequest, "identificador da máscara de lote inválido")
 		return
 	}
 	var dto request.LotMaskDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -80,7 +80,7 @@ func (h *LotMaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) Deactivate(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid lot mask id")
+		jsonError(w, http.StatusBadRequest, "identificador da máscara de lote inválido")
 		return
 	}
 	if err := h.uc.Deactivate(r.Context(), id); err != nil {
@@ -93,12 +93,12 @@ func (h *LotMaskHandler) Deactivate(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) AddPart(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid lot mask id")
+		jsonError(w, http.StatusBadRequest, "identificador da máscara de lote inválido")
 		return
 	}
 	var dto request.LotMaskPartDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddPart(r.Context(), id, dto)
@@ -112,12 +112,12 @@ func (h *LotMaskHandler) AddPart(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) UpdatePart(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid part id")
+		jsonError(w, http.StatusBadRequest, "identificador da partição inválido")
 		return
 	}
 	var dto request.LotMaskPartDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.UpdatePart(r.Context(), id, dto)
@@ -131,7 +131,7 @@ func (h *LotMaskHandler) UpdatePart(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) DeletePart(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid part id")
+		jsonError(w, http.StatusBadRequest, "identificador da partição inválido")
 		return
 	}
 	if err := h.uc.DeletePart(r.Context(), id); err != nil {
@@ -145,7 +145,7 @@ func (h *LotMaskHandler) DeletePart(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateLotDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.Generate(r.Context(), dto)

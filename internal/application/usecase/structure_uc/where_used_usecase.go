@@ -2,23 +2,29 @@ package structure_uc
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	sqrepo "github.com/FelipePn10/panossoerp/internal/domain/structure_query/repository"
 )
 
 type WhereUsedUseCase struct {
-	repo sqrepo.StructureQueryRepository
+	repo  sqrepo.StructureQueryRepository
+	items any
 }
 
-func NewWhereUsedUseCase(repo sqrepo.StructureQueryRepository) *WhereUsedUseCase {
-	return &WhereUsedUseCase{repo: repo}
+func NewWhereUsedUseCase(repo sqrepo.StructureQueryRepository, items ...any) *WhereUsedUseCase {
+	uc := &WhereUsedUseCase{repo: repo}
+	if len(items) > 0 {
+		uc.items = items[0]
+	}
+	return uc
 }
 
-func (uc *WhereUsedUseCase) Execute(ctx context.Context, itemCode int64, levels int) (*response.WhereUsedResponse, error) {
-	if itemCode <= 0 {
-		return nil, fmt.Errorf("item_code must be positive")
+func (uc *WhereUsedUseCase) Execute(ctx context.Context, publicCode request.TextCode, levels int) (*response.WhereUsedResponse, error) {
+	itemCode, err := resolveItemCode(ctx, uc.items, publicCode)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := uc.repo.GetWhereUsed(ctx, itemCode, levels)
 	if err != nil {

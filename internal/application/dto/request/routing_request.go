@@ -2,8 +2,6 @@ package request
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // ─── operations ──────────────────────────────────────────────────────────────
@@ -27,13 +25,11 @@ type CreateOperationDTO struct {
 	TimeUnit   string  `json:"time_unit"`    // MIN | HORA | DIA (default HORA)
 
 	// Subcontracting (EXTERNA / TERCEIROS).
-	SupplierID           *int64   `json:"supplier_id,omitempty"`
-	ServiceItemCode      *int64   `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64 `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32   `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance string   `json:"third_party_remittance,omitempty"`
-
-	CreatedBy uuid.UUID `json:"created_by"`
+	SupplierID           *int64    `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
+	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance string    `json:"third_party_remittance,omitempty"`
 }
 
 type UpdateOperationDTO struct {
@@ -55,24 +51,23 @@ type UpdateOperationDTO struct {
 	CrewSize   float64 `json:"crew_size"`
 	TimeUnit   string  `json:"time_unit"`
 
-	SupplierID           *int64   `json:"supplier_id,omitempty"`
-	ServiceItemCode      *int64   `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64 `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32   `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance string   `json:"third_party_remittance,omitempty"`
+	SupplierID           *int64    `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
+	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance string    `json:"third_party_remittance,omitempty"`
 }
 
 // ─── routes ──────────────────────────────────────────────────────────────────
 
 type CreateRouteDTO struct {
-	ItemCode    int64      `json:"item_code"`
+	ItemCode    TextCode   `json:"item_code"`
 	Mask        *string    `json:"mask,omitempty"`
 	Alternative int16      `json:"alternative"`
 	Description *string    `json:"description,omitempty"`
 	IsStandard  bool       `json:"is_standard"`
 	ValidFrom   *time.Time `json:"valid_from,omitempty"` // nil = valid from the beginning
 	ValidTo     *time.Time `json:"valid_to,omitempty"`   // nil = open-ended
-	CreatedBy   uuid.UUID  `json:"created_by"`
 }
 
 type UpdateRouteDTO struct {
@@ -103,35 +98,35 @@ type AddRouteOperationDTO struct {
 	CrewSize   *float64 `json:"crew_size,omitempty"`
 	TimeUnit   *string  `json:"time_unit,omitempty"`
 	// Subcontracting overrides (nil ⇒ inherit from the operation).
-	SupplierID           *int64   `json:"supplier_id,omitempty"`
-	ServiceItemCode      *int64   `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64 `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32   `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance *string  `json:"third_party_remittance,omitempty"`
-	Situation            string   `json:"situation"` // APROVADA | INATIVA | FANTASMA
-	Notes                *string  `json:"notes,omitempty"`
+	SupplierID           *int64    `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
+	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance *string   `json:"third_party_remittance,omitempty"`
+	Situation            string    `json:"situation"` // APROVADA | INATIVA | FANTASMA
+	Notes                *string   `json:"notes,omitempty"`
 }
 
 type UpdateRouteOperationDTO struct {
-	ID                   int64    `json:"id"`
-	WorkCenterID         *int64   `json:"work_center_id,omitempty"`
-	StandardTime         *float64 `json:"standard_time,omitempty"`
-	SetupTime            *float64 `json:"setup_time,omitempty"`
-	RunTime              *float64 `json:"run_time,omitempty"`
-	LaborTime            *float64 `json:"labor_time,omitempty"`
-	RunBaseQty           *float64 `json:"run_base_qty,omitempty"`
-	QueueTime            *float64 `json:"queue_time,omitempty"`
-	WaitTime             *float64 `json:"wait_time,omitempty"`
-	MoveTime             *float64 `json:"move_time,omitempty"`
-	CrewSize             *float64 `json:"crew_size,omitempty"`
-	TimeUnit             *string  `json:"time_unit,omitempty"`
-	SupplierID           *int64   `json:"supplier_id,omitempty"`
-	ServiceItemCode      *int64   `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64 `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32   `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance *string  `json:"third_party_remittance,omitempty"`
-	Situation            string   `json:"situation"`
-	Notes                *string  `json:"notes,omitempty"`
+	ID                   int64     `json:"id"`
+	WorkCenterID         *int64    `json:"work_center_id,omitempty"`
+	StandardTime         *float64  `json:"standard_time,omitempty"`
+	SetupTime            *float64  `json:"setup_time,omitempty"`
+	RunTime              *float64  `json:"run_time,omitempty"`
+	LaborTime            *float64  `json:"labor_time,omitempty"`
+	RunBaseQty           *float64  `json:"run_base_qty,omitempty"`
+	QueueTime            *float64  `json:"queue_time,omitempty"`
+	WaitTime             *float64  `json:"wait_time,omitempty"`
+	MoveTime             *float64  `json:"move_time,omitempty"`
+	CrewSize             *float64  `json:"crew_size,omitempty"`
+	TimeUnit             *string   `json:"time_unit,omitempty"`
+	SupplierID           *int64    `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
+	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance *string   `json:"third_party_remittance,omitempty"`
+	Situation            string    `json:"situation"`
+	Notes                *string   `json:"notes,omitempty"`
 }
 
 // ─── alternative resources ────────────────────────────────────────────────────

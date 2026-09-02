@@ -47,7 +47,7 @@ func New(e int64, t, a string, min decimal.Decimal, max *decimal.Decimal, value 
 }
 func (x *Tolerance) Validate() error {
 	if x.EnterpriseID <= 0 || !oneOf(x.ToleranceType, ToleranceQuantity, ToleranceItemPrice, ToleranceProductsTotal) || !oneOf(x.AppliesTo, AppliesEntryInvoice, AppliesReceivingNotice, AppliesAll) || !oneOf(x.ValueType, ValuePercent, ValueFixed) || !oneOf(x.Action, ActionBlock, ActionWarn) || x.IntervalMin.IsNegative() || x.ToleranceValue.IsNegative() || (x.IntervalMax != nil && x.IntervalMax.LessThan(x.IntervalMin)) {
-		return fmt.Errorf("invalid purchase tolerance")
+		return fmt.Errorf("tolerância de compra inválida")
 	}
 	return nil
 }

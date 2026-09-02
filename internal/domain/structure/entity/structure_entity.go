@@ -24,6 +24,9 @@ type ItemStructure struct {
 	Quantity           float64
 	LossPercentage     float64 // 0–100 (%)
 	LossFormula        *string // expressão matemática com variáveis de perguntas; substitui LossPercentage quando avaliável
+	QuantityFormula    *string // expressão que calcula a quantidade a partir das variáveis do configurador (ex.: 2*(COMPRIMENTO/1000))
+	QuantityRounding   string  // NONE | UP | DOWN | NEAREST, aplicado ao resultado da fórmula
+	QuantityScale      int16   // casas decimais do arredondamento (0–6)
 	UnitOfMeasurement  types.TypeUnitOfMeasurementItem
 	Health             types.Health
 	Sequence           int
