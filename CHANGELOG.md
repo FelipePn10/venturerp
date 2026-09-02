@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.13] — 2026-09-02
+
+- fix: preserva códigos hierárquicos de classificação por rota
+
 ## [v1.1.12] — 2026-09-02
 
 - docs: atualiza artefato do treinamento (`a4a3d91`)
