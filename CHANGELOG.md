@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.12] — 2026-09-02
+
+- docs: atualiza artefato do treinamento (`a4a3d91`)
+- docs: detalha corte e expedição no treinamento (`6d31a99`)
+- feat: conclui ajustes operacionais enterprise (`7e8714a`)
+
 ## [v1.1.11] — 2026-08-25
 
 - fix: gera código de reprogramação no banco (`3d09419`)
