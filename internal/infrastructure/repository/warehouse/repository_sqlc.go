@@ -2,107 +2,77 @@ package warehouse
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/warehouse/entity"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
-	mapper "github.com/FelipePn10/panossoerp/internal/infrastructure/mapper/warehouse"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/mapper/warehouse"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 )
 
-func (r *repositoryWarehouseSQLC) Create(
-	ctx context.Context,
-	warehouse *entity.Warehouse,
-) (*entity.Warehouse, error) {
-	params := sqlc.CreateWarehouseParams{
-		Code:                strconv.Itoa(warehouse.Code),
-		Description:         warehouse.Description,
-		Column3:             mapper.WarehouseLocationToDB(warehouse.Location),
-		Column4:             mapper.WarehouseTypeToDB(warehouse.Type),
-		Disposition:         warehouse.Disposition,
-		ReservationsAllowed: warehouse.ReservationsAllowed,
-		CreatedBy:           pgutil.ToPgUUID(warehouse.CreatedBy),
+const warehouseColumns = `id,code,description,location::text,type::text,disposition,reservations_allowed,created_by,created_at`
+
+func scanWarehouse(row pgx.Row) (*entity.Warehouse, error) {
+	var out entity.Warehouse
+	var location, warehouseType string
+	if err := row.Scan(&out.ID, &out.Code, &out.Description, &location, &warehouseType,
+		&out.Disposition, &out.ReservationsAllowed, &out.CreatedBy, &out.CreatedAt); err != nil {
+		return nil, err
 	}
-	dbWarehouse, err := r.q.CreateWarehouse(ctx, params)
+	out.Location = mapper.WarehouseLocationToDomain(location)
+	out.Type = mapper.WarehouseTypeToDomain(warehouseType)
+	return &out, nil
+}
+
+func (r *repositoryWarehouseSQLC) Create(ctx context.Context, value *entity.Warehouse) (*entity.Warehouse, error) {
+	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	code, _ := strconv.Atoi(dbWarehouse.Code)
-	return &entity.Warehouse{
-		ID:                  int32(dbWarehouse.ID),
-		Code:                code,
-		Description:         dbWarehouse.Description,
-		Location:            mapper.WarehouseLocationToDomain(dbWarehouse.Location),
-		Type:                mapper.WarehouseTypeToDomain(dbWarehouse.Type),
-		Disposition:         dbWarehouse.Disposition,
-		ReservationsAllowed: dbWarehouse.ReservationsAllowed,
-		CreatedBy:           pgutil.FromPgUUID(dbWarehouse.CreatedBy),
-		CreatedAt:           pgutil.FromPgTimestamp(dbWarehouse.CreatedAt),
-	}, nil
-}
-
-func rowToWarehouse(row sqlc.CreateWarehouseRow) *entity.Warehouse {
-	c, _ := strconv.Atoi(row.Code)
-	return &entity.Warehouse{
-		ID:                  int32(row.ID),
-		Code:                c,
-		Description:         row.Description,
-		Location:            mapper.WarehouseLocationToDomain(row.Location),
-		Type:                mapper.WarehouseTypeToDomain(row.Type),
-		Disposition:         row.Disposition,
-		ReservationsAllowed: row.ReservationsAllowed,
-		CreatedBy:           pgutil.FromPgUUID(row.CreatedBy),
-		CreatedAt:           pgutil.FromPgTimestamp(row.CreatedAt),
+	row := r.pool.QueryRow(ctx, `INSERT INTO warehouse
+		(code,description,location,type,disposition,reservations_allowed,created_by,enterprise_id)
+		VALUES ($1,$2,$3::warehouse_location,$4::warehouse_type,$5,$6,$7,$8) RETURNING `+warehouseColumns,
+		value.Code, value.Description, mapper.WarehouseLocationToDB(value.Location), mapper.WarehouseTypeToDB(value.Type),
+		value.Disposition, value.ReservationsAllowed, value.CreatedBy, enterpriseID)
+	created, err := scanWarehouse(row)
+	if err != nil {
+		return nil, fmt.Errorf("criando almoxarifado: %w", err)
 	}
-}
-
-func listRowToWarehouse(row sqlc.ListWarehousesRow) *entity.Warehouse {
-	c, _ := strconv.Atoi(row.Code)
-	return &entity.Warehouse{
-		ID:                  int32(row.ID),
-		Code:                c,
-		Description:         row.Description,
-		Location:            mapper.WarehouseLocationToDomain(row.Location),
-		Type:                mapper.WarehouseTypeToDomain(row.Type),
-		Disposition:         row.Disposition,
-		ReservationsAllowed: row.ReservationsAllowed,
-		CreatedBy:           pgutil.FromPgUUID(row.CreatedBy),
-		CreatedAt:           pgutil.FromPgTimestamp(row.CreatedAt),
-	}
-}
-
-func getRowToWarehouse(row sqlc.GetWarehouseByCodeRow) *entity.Warehouse {
-	c, _ := strconv.Atoi(row.Code)
-	return &entity.Warehouse{
-		ID:                  int32(row.ID),
-		Code:                c,
-		Description:         row.Description,
-		Location:            mapper.WarehouseLocationToDomain(row.Location),
-		Type:                mapper.WarehouseTypeToDomain(row.Type),
-		Disposition:         row.Disposition,
-		ReservationsAllowed: row.ReservationsAllowed,
-		CreatedBy:           pgutil.FromPgUUID(row.CreatedBy),
-		CreatedAt:           pgutil.FromPgTimestamp(row.CreatedAt),
-	}
+	return created, nil
 }
 
 func (r *repositoryWarehouseSQLC) List(ctx context.Context) ([]*entity.Warehouse, error) {
-	rows, err := r.q.ListWarehouses(ctx)
+	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*entity.Warehouse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, listRowToWarehouse(row))
+	rows, err := r.pool.Query(ctx, `SELECT `+warehouseColumns+` FROM warehouse WHERE enterprise_id=$1 ORDER BY code,id`, enterpriseID)
+	if err != nil {
+		return nil, fmt.Errorf("listando almoxarifados: %w", err)
 	}
-	return out, nil
+	defer rows.Close()
+	out := make([]*entity.Warehouse, 0)
+	for rows.Next() {
+		value, scanErr := scanWarehouse(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("lendo almoxarifado: %w", scanErr)
+		}
+		out = append(out, value)
+	}
+	return out, rows.Err()
 }
 
 func (r *repositoryWarehouseSQLC) GetByCode(ctx context.Context, code string) (*entity.Warehouse, error) {
-	row, err := r.q.GetWarehouseByCode(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return getRowToWarehouse(row), nil
+	value, err := scanWarehouse(r.pool.QueryRow(ctx, `SELECT `+warehouseColumns+` FROM warehouse WHERE code=$1 AND enterprise_id=$2`, code, enterpriseID))
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("almoxarifado não encontrado")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("consultando almoxarifado: %w", err)
+	}
+	return value, nil
 }

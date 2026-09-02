@@ -1,14 +1,16 @@
 package handler
 
 import (
-	"errors"
+	"encoding/json"
+	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/consumer_service_uc"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/consumer_service/entity"
 	csrepo "github.com/FelipePn10/panossoerp/internal/domain/consumer_service/repository"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -185,7 +187,10 @@ func (h *ConsumerServiceHandler) UpdateCall(w http.ResponseWriter, r *http.Reque
 
 func (h *ConsumerServiceHandler) AddCallReturn(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddConsumerServiceCallReturnDTO
-	if !decodeJSON(w, r, &dto) {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
 		return
 	}
 	if code, ok := optionalPathInt64(r, "code"); ok {
@@ -196,15 +201,92 @@ func (h *ConsumerServiceHandler) AddCallReturn(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ConsumerServiceHandler) AddCallAttachment(w http.ResponseWriter, r *http.Request) {
-	var dto request.AddConsumerServiceCallAttachmentDTO
-	if !decodeJSON(w, r, &dto) {
+	callCode, ok := pathInt64(w, r, "code")
+	if !ok {
 		return
 	}
-	if code, ok := optionalPathInt64(r, "code"); ok {
-		dto.CallCode = code
+	r.Body = http.MaxBytesReader(w, r.Body, 11*1024*1024)
+	if err := r.ParseMultipartForm(10 * 1024 * 1024); err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, "arquivo inválido ou maior que 10 MiB")
+		return
 	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		security.RespondError(w, http.StatusUnprocessableEntity, "campo multipart 'file' é obrigatório")
+		return
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, 10*1024*1024+1))
+	if err != nil || len(content) == 0 || len(content) > 10*1024*1024 {
+		security.RespondError(w, http.StatusUnprocessableEntity, "arquivo vazio, inválido ou maior que 10 MiB")
+		return
+	}
+	fileName := filepath.Base(header.Filename)
+	if fileName == "." || fileName == "" || fileName != header.Filename || strings.ContainsAny(header.Filename, `/\`) || strings.ContainsRune(header.Filename, '\x00') {
+		security.RespondError(w, http.StatusUnprocessableEntity, "nome de arquivo inválido")
+		return
+	}
+	var notes *string
+	if value := strings.TrimSpace(r.FormValue("notes")); value != "" {
+		notes = &value
+	}
+	dto := request.AddConsumerServiceCallAttachmentDTO{CallCode: callCode, FileName: fileName, ContentType: http.DetectContentType(content), Content: content, Notes: notes}
 	result, err := h.uc.AddCallAttachment(r.Context(), dto)
 	h.respond(w, result, err, http.StatusCreated)
+}
+
+func (h *ConsumerServiceHandler) ListCallAttachments(w http.ResponseWriter, r *http.Request) {
+	callCode, ok := pathInt64(w, r, "code")
+	if !ok {
+		return
+	}
+	call, err := h.uc.GetCall(r.Context(), callCode)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, call.Attachments)
+}
+
+func (h *ConsumerServiceHandler) DownloadCallAttachment(w http.ResponseWriter, r *http.Request) {
+	callCode, ok := pathInt64(w, r, "code")
+	if !ok {
+		return
+	}
+	attachmentCode, ok := pathInt64(w, r, "attachmentCode")
+	if !ok {
+		return
+	}
+	attachment, err := h.uc.GetCallAttachment(r.Context(), callCode, attachmentCode)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	contentType := "application/octet-stream"
+	if attachment.ContentType != nil {
+		contentType = *attachment.ContentType
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(attachment.FileSize, 10))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": attachment.FileName}))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(attachment.Content)
+}
+
+func (h *ConsumerServiceHandler) DeleteCallAttachment(w http.ResponseWriter, r *http.Request) {
+	callCode, ok := pathInt64(w, r, "code")
+	if !ok {
+		return
+	}
+	attachmentCode, ok := pathInt64(w, r, "attachmentCode")
+	if !ok {
+		return
+	}
+	if err := h.uc.DeleteCallAttachment(r.Context(), callCode, attachmentCode); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *ConsumerServiceHandler) AddChecklistItem(w http.ResponseWriter, r *http.Request) {
@@ -268,12 +350,7 @@ func (h *ConsumerServiceHandler) callFilter(r *http.Request) csrepo.CallFilter {
 
 func (h *ConsumerServiceHandler) respond(w http.ResponseWriter, result any, err error, status int) {
 	if err != nil {
-		switch {
-		case errors.Is(err, errorsuc.ErrUnauthorized):
-			security.RespondError(w, http.StatusUnauthorized, err.Error())
-		default:
-			security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
-		}
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, status, result)

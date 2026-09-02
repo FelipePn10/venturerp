@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
@@ -18,6 +19,8 @@ import (
 type ProductionMaterialControlUseCase struct {
 	Repo repository.ProductionOrderRepository
 	Auth ports.AuthService
+	// Items resolve o código de negócio do item (texto) para a chave legada.
+	Items any
 }
 
 type phase4MaterialRepository interface {
@@ -28,6 +31,7 @@ type phase4MaterialRepository interface {
 	ConfigureManufacturingStock(context.Context, entity.ManufacturingStockParameters) error
 	ConfigureManufacturingItemStock(context.Context, entity.ManufacturingItemStockControl) error
 	ConfigureWarehouseAddress(context.Context, int64, string, bool) error
+	ListWarehouseAddresses(context.Context, *int64) ([]entity.WarehouseAddress, error)
 	ConfigureTemporaryLot(context.Context, entity.TemporaryProductionLot) (*entity.TemporaryProductionLot, error)
 	GetMaintenance(context.Context, *int64) ([]entity.ProductionOrderMaintenanceView, error)
 }
@@ -193,7 +197,7 @@ func (uc *ProductionMaterialControlUseCase) ConfigureWMS(ctx context.Context, dt
 		return nil, errorsuc.NewValidationError("warehouse_id is required")
 	}
 	if dto.IsWMS && dto.IntermediateOutWarehouseID == nil {
-		return nil, errorsuc.NewValidationError("intermediate_out_warehouse_id is required for WMS")
+		return nil, errorsuc.NewValidationError("informe o almoxarifado intermediário de saída para almoxarifados com WMS")
 	}
 	return uc.Repo.UpsertWMSSettings(ctx, entity.WMSWarehouseSettings{WarehouseID: dto.WarehouseID, IsWMS: dto.IsWMS, IntermediateOutWarehouseID: dto.IntermediateOutWarehouseID})
 }
@@ -203,8 +207,11 @@ func (uc *ProductionMaterialControlUseCase) ConfigureStock(ctx context.Context, 
 		return errorsuc.ErrUnauthorized
 	}
 	mode := strings.ToUpper(strings.TrimSpace(dto.LotReturnMode))
+	// A = automático (o sistema escolhe o lote), I = informado (o operador
+	// informa o lote na devolução), E = estorno (devolve ao lote de origem).
 	if mode != "A" && mode != "I" && mode != "E" {
-		return errorsuc.NewValidationError("lot_return_mode must be A, I or E")
+		return errorsuc.NewValidationError(
+			"modo de devolução de lote inválido: use A (automático), I (informado pelo operador) ou E (estorno para o lote de origem)")
 	}
 	var from, to *time.Time
 	if dto.MovementFrom != nil {
@@ -214,7 +221,7 @@ func (uc *ProductionMaterialControlUseCase) ConfigureStock(ctx context.Context, 
 		to = datetime.ParseDatePtr(dto.MovementTo)
 	}
 	if from != nil && to != nil && from.After(*to) {
-		return errorsuc.NewValidationError("movement_from must not be after movement_to")
+		return errorsuc.NewValidationError("a data inicial de movimentação não pode ser posterior à final")
 	}
 	repo, err := uc.phase4()
 	if err != nil {
@@ -231,30 +238,56 @@ func (uc *ProductionMaterialControlUseCase) ConfigureItemStock(ctx context.Conte
 	if dto.AutomaticIssueType == "" {
 		dto.AutomaticIssueType = "ISSUE"
 	}
-	if dto.ItemCode == 0 || dto.StockUOM == "" || (dto.InventoryGroupType != "STANDARD" && dto.InventoryGroupType != "SECONDARY_MATERIAL") {
-		return errorsuc.NewValidationError("valid item_code, stock_uom and inventory_group_type are required")
+	if strings.TrimSpace(dto.StockUOM) == "" {
+		return errorsuc.NewValidationError("informe a unidade de estoque do item")
 	}
-	if (dto.AutomaticIssueType != "ISSUE" && dto.AutomaticIssueType != "TRANSFER") || (dto.AutomaticIssueType == "TRANSFER" && dto.LineWarehouseID == nil) {
-		return errorsuc.NewValidationError("automatic_issue_type must be ISSUE or TRANSFER with line_warehouse_id")
+	if dto.InventoryGroupType != "STANDARD" && dto.InventoryGroupType != "SECONDARY_MATERIAL" {
+		return errorsuc.NewValidationError(
+			"grupo de inventário inválido: use STANDARD (padrão) ou SECONDARY_MATERIAL (material secundário)")
+	}
+	if dto.AutomaticIssueType != "ISSUE" && dto.AutomaticIssueType != "TRANSFER" {
+		return errorsuc.NewValidationError(
+			"baixa automática inválida: use ISSUE (baixa direta) ou TRANSFER (transferência para o almoxarifado de linha)")
+	}
+	if dto.AutomaticIssueType == "TRANSFER" && dto.LineWarehouseID == nil {
+		return errorsuc.NewValidationError("informe o almoxarifado de linha para a baixa por transferência")
+	}
+	itemCode, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	if err != nil {
+		return err
 	}
 	repo, err := uc.phase4()
 	if err != nil {
 		return err
 	}
-	return repo.ConfigureManufacturingItemStock(ctx, entity.ManufacturingItemStockControl{ItemCode: dto.ItemCode, StockUOM: strings.ToUpper(dto.StockUOM), ControlsLot: dto.ControlsLot, ControlsAddress: dto.ControlsAddress, InventoryGroupType: dto.InventoryGroupType, AutomaticIssueType: dto.AutomaticIssueType, LineWarehouseID: dto.LineWarehouseID})
+	return repo.ConfigureManufacturingItemStock(ctx, entity.ManufacturingItemStockControl{ItemCode: int64(itemCode.Code), StockUOM: strings.ToUpper(dto.StockUOM), ControlsLot: dto.ControlsLot, ControlsAddress: dto.ControlsAddress, InventoryGroupType: dto.InventoryGroupType, AutomaticIssueType: dto.AutomaticIssueType, LineWarehouseID: dto.LineWarehouseID})
 }
 func (uc *ProductionMaterialControlUseCase) ConfigureAddress(ctx context.Context, dto request.ConfigureWarehouseAddressDTO) error {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
-	if dto.WarehouseID == 0 || strings.TrimSpace(dto.Address) == "" {
-		return errorsuc.NewValidationError("warehouse_id and address are required")
+	if dto.WarehouseID == 0 {
+		return errorsuc.NewValidationError("informe o almoxarifado do endereço")
+	}
+	if strings.TrimSpace(dto.Address) == "" {
+		return errorsuc.NewValidationError("informe o endereço do almoxarifado")
 	}
 	repo, err := uc.phase4()
 	if err != nil {
 		return err
 	}
 	return repo.ConfigureWarehouseAddress(ctx, dto.WarehouseID, strings.TrimSpace(dto.Address), dto.IsActive)
+}
+
+func (uc *ProductionMaterialControlUseCase) ListWarehouseAddresses(ctx context.Context, warehouseID *int64) ([]entity.WarehouseAddress, error) {
+	if !uc.Auth.CanGetSalesOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	repo, err := uc.phase4()
+	if err != nil {
+		return nil, err
+	}
+	return repo.ListWarehouseAddresses(ctx, warehouseID)
 }
 func (uc *ProductionMaterialControlUseCase) ConfigureTemporaryLot(ctx context.Context, dto request.ConfigureTemporaryProductionLotDTO) (*entity.TemporaryProductionLot, error) {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {

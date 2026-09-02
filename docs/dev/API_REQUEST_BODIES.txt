@@ -592,7 +592,7 @@ GET /api/machine/types/{code}
 
 POST /api/machine/time/create
 {
-  "item_code": 10001,
+  "item_code": "TEA452-0",
   "mask": "100#100#50",
   "machine_code": 100,
   "production_time": 5.5,
@@ -604,6 +604,7 @@ POST /api/machine/time/create
 
 GET /api/machine/time/list
 -- Sem corpo de requisição
+-- Filtro opcional pelo código comercial: ?item_code=TEA452-0
 
 POST /api/machine/time/{code}
 -- Parâmetro na URL: code (int64)

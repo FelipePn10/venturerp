@@ -5,10 +5,13 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
+	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/shopspring/decimal"
@@ -20,11 +23,21 @@ type manualOrderRepository interface {
 type manualOrderDefaultsReader interface {
 	GetManualOrderPlanner(context.Context, int64) (*int64, error)
 }
+type productionRouteReader interface {
+	GetRouteForItem(context.Context, int64, string) (*routingentity.ManufacturingRoute, error)
+}
+type productionRouteExploder interface {
+	ExplodeRoute(context.Context, int64, int64) ([]*response.ProductionOrderOperationResponse, error)
+}
 
 type CreateProductionOrderUseCase struct {
 	Repo      repository.ProductionOrderRepository
 	Auth      ports.AuthService
 	Structure coproductReader
+	Routing   productionRouteReader
+	OrderOps  productionRouteExploder
+	// Items resolve o código de negócio do item (texto) para a chave legada.
+	Items any
 }
 
 func (uc *CreateProductionOrderUseCase) Execute(
@@ -34,15 +47,21 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.ItemCode == 0 {
-		return nil, errorsuc.NewValidationError("item_code is required")
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.CreatedBy = actor
+	item, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	if err != nil {
+		return nil, err
+	}
+	itemCode := int64(item.Code)
 	if dto.PlannedQty <= 0 {
-		return nil, errorsuc.NewValidationError("planned_qty must be greater than zero")
+		return nil, errorsuc.NewValidationError("a quantidade planejada deve ser maior que zero")
 	}
 
 	var nextNum int64
-	var err error
 	if dto.OrderNumber != nil {
 		if *dto.OrderNumber <= 0 {
 			return nil, errorsuc.NewValidationError("order_number must be positive")
@@ -56,7 +75,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	}
 	if dto.EmployeeID == nil {
 		if defaults, ok := uc.Repo.(manualOrderDefaultsReader); ok {
-			dto.EmployeeID, err = defaults.GetManualOrderPlanner(ctx, dto.ItemCode)
+			dto.EmployeeID, err = defaults.GetManualOrderPlanner(ctx, itemCode)
 			if err != nil {
 				return nil, err
 			}
@@ -66,7 +85,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	order := &entity.ProductionOrder{
 		OrderNumber:    nextNum,
 		PlannedOrderID: dto.PlannedOrderID,
-		ItemCode:       dto.ItemCode,
+		ItemCode:       itemCode,
 		Mask:           dto.Mask,
 		PlannedQty:     dto.PlannedQty,
 		Status:         entity.StatusOpen,
@@ -86,7 +105,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	if uc.Structure == nil {
 		return uc.Repo.Create(ctx, order)
 	}
-	children, err := uc.Structure.GetAllDirectChildren(ctx, dto.ItemCode)
+	children, err := uc.Structure.GetAllDirectChildren(ctx, itemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +127,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		materials = append(materials, &entity.ProductionOrderMaterial{Kind: entity.MaterialDemand,
 			ItemCode: child.ChildCode, Quantity: quantity, WarehouseID: warehouse,
 			AutomaticIssue: automatic, CreatedBy: dto.CreatedBy})
-		rework = rework || child.ChildCode == dto.ItemCode
+		rework = rework || child.ChildCode == itemCode
 	}
 	if rework {
 		message := "ORDEM DE RETRABALHO"
@@ -123,5 +142,18 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	if !ok {
 		return nil, errorsuc.NewValidationError("production repository does not support atomic manual order creation")
 	}
-	return atomicRepo.CreateWithMaterials(ctx, order, materials)
+	created, err := atomicRepo.CreateWithMaterials(ctx, order, materials)
+	if err != nil {
+		return nil, err
+	}
+	if uc.Routing != nil && uc.OrderOps != nil {
+		route, routeErr := uc.Routing.GetRouteForItem(ctx, itemCode, dto.Mask)
+		if routeErr != nil {
+			return nil, errorsuc.NewValidationError("o item não possui roteiro de fabricação aprovado; cadastre o roteiro antes de criar a OF")
+		}
+		if _, explodeErr := uc.OrderOps.ExplodeRoute(ctx, created.ID, route.ID); explodeErr != nil {
+			return nil, explodeErr
+		}
+	}
+	return created, nil
 }

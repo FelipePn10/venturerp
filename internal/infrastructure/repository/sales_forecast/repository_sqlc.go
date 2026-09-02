@@ -10,7 +10,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ---- Forecasts ----
@@ -19,13 +21,18 @@ func (r *SalesForecastRepositorySQLC) CreateForecast(
 	ctx context.Context,
 	f *entity.SalesForecast,
 ) (*entity.SalesForecast, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSalesForecast(ctx, sqlc.CreateSalesForecastParams{
-		ItemCode:  f.ItemCode,
-		Mask:      pgutil.ToPgTextFromPtr(f.Mask),
-		Week:      int32(f.Week),
-		Year:      int32(f.Year),
-		Quantity:  pgutil.ToPgNumericFromFloat64(f.Quantity),
-		CreatedBy: pgutil.ToPgUUID(f.CreatedBy),
+		ItemCode:     f.ItemCode,
+		Mask:         pgutil.ToPgTextFromPtr(f.Mask),
+		Week:         int32(f.Week),
+		Year:         int32(f.Year),
+		Quantity:     pgutil.ToPgNumericFromFloat64(f.Quantity),
+		CreatedBy:    pgutil.ToPgUUID(f.CreatedBy),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating sales forecast: %w", err)
@@ -37,9 +44,14 @@ func (r *SalesForecastRepositorySQLC) UpdateForecast(
 	ctx context.Context,
 	f *entity.SalesForecast,
 ) (*entity.SalesForecast, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateSalesForecast(ctx, sqlc.UpdateSalesForecastParams{
-		ID:       f.ID,
-		Quantity: pgutil.ToPgNumericFromFloat64(f.Quantity),
+		ID:           f.ID,
+		Quantity:     pgutil.ToPgNumericFromFloat64(f.Quantity),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating sales forecast: %w", err)
@@ -51,7 +63,11 @@ func (r *SalesForecastRepositorySQLC) GetForecastByItem(
 	ctx context.Context,
 	itemCode int64,
 ) ([]*entity.SalesForecast, error) {
-	rows, err := r.q.GetSalesForecastsByItem(ctx, itemCode)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetSalesForecastsByItem(ctx, sqlc.GetSalesForecastsByItemParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("getting forecasts by item %d: %w", itemCode, err)
 	}
@@ -62,7 +78,11 @@ func (r *SalesForecastRepositorySQLC) ListForecasts(
 	ctx context.Context,
 	year int,
 ) ([]*entity.SalesForecast, error) {
-	rows, err := r.q.ListSalesForecastsByYear(ctx, int32(year))
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSalesForecastsByYear(ctx, sqlc.ListSalesForecastsByYearParams{Year: int32(year), EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("listing forecasts for year %d: %w", year, err)
 	}
@@ -73,7 +93,11 @@ func (r *SalesForecastRepositorySQLC) DeleteForecast(
 	ctx context.Context,
 	id int64,
 ) error {
-	err := r.q.DeleteSalesForecast(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	err = r.q.DeleteSalesForecast(ctx, sqlc.DeleteSalesForecastParams{ID: id, EnterpriseID: enterpriseID})
 	if err != nil {
 		return fmt.Errorf("deleting sales forecast %d: %w", id, err)
 	}
@@ -91,45 +115,61 @@ func (r *SalesForecastRepositorySQLC) ListHistoricalDemand(
 	if source == "" {
 		source = "ORDERS"
 	}
+	if r.pool == nil {
+		return nil, fmt.Errorf("consulta histórica indisponível")
+	}
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var out []*entity.HistoricalDemand
 	if source == "ORDERS" || source == "BOTH" {
-		rows, err := r.q.ListForecastSalesOrderHistory(ctx, sqlc.ListForecastSalesOrderHistoryParams{
-			EmissionDate:   pgutil.ToPgDate(from),
-			EmissionDate_2: pgutil.ToPgDate(to),
-			Column3:        itemCodes,
-		})
+		rows, err := r.pool.Query(ctx, `SELECT soi.item_code,COALESCE(NULLIF(soi.mask,''),'')::text,date_trunc('month',so.emission_date)::date,COALESCE(SUM(soi.requested_qty-soi.cancelled_qty),0)::numeric FROM public.sales_order_items soi JOIN public.sales_orders so ON so.code=soi.sales_order_code WHERE so.enterprise_code=$1 AND so.is_active AND soi.is_active AND so.emission_date BETWEEN $2 AND $3 AND so.status<>'CANCELLED' AND NOT so.is_blocked AND so.release_status IN ('RELEASED','MANUAL_RELEASED') AND so.commercial_analysis_status<>'REJECTED' AND so.financial_analysis_status<>'REJECTED' AND soi.status<>'CANCELLED' AND (cardinality($4::bigint[])=0 OR soi.item_code=ANY($4::bigint[])) GROUP BY soi.item_code,COALESCE(NULLIF(soi.mask,''),''),date_trunc('month',so.emission_date)::date ORDER BY soi.item_code,3`, enterpriseCode, from, to, itemCodes)
 		if err != nil {
 			return nil, fmt.Errorf("listing sales order forecast history: %w", err)
 		}
-		for _, row := range rows {
+		defer rows.Close()
+		for rows.Next() {
+			var itemCode int64
+			var mask string
+			var period pgtype.Date
+			var quantity pgtype.Numeric
+			if err := rows.Scan(&itemCode, &mask, &period, &quantity); err != nil {
+				return nil, err
+			}
 			out = append(out, &entity.HistoricalDemand{
-				ItemCode:    row.ItemCode,
-				Mask:        emptyStringAsNil(row.Mask),
-				PeriodMonth: pgutil.FromPgDate(row.PeriodMonth),
-				Quantity:    pgutil.FromPgNumericToFloat64(row.Quantity),
+				ItemCode: itemCode, Mask: emptyStringAsNil(mask), PeriodMonth: pgutil.FromPgDate(period), Quantity: pgutil.FromPgNumericToFloat64(quantity),
 			})
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
 		}
 	}
 	if source == "INVOICING" || source == "BOTH" {
-		rows, err := r.q.ListForecastFiscalHistory(ctx, sqlc.ListForecastFiscalHistoryParams{
-			DataEmissao:   pgutil.ToPgDate(from),
-			DataEmissao_2: pgutil.ToPgDate(to),
-			Column3:       itemCodes,
-		})
+		rows, err := r.pool.Query(ctx, `SELECT fei.item_code,NULL::text,date_trunc('month',fe.data_emissao)::date,COALESCE(SUM(fei.quantity),0)::numeric FROM public.fiscal_exit_items fei JOIN public.fiscal_exits fe ON fe.id=fei.fiscal_exit_id WHERE fe.enterprise_id=$1 AND fe.is_active AND fe.status='AUTHORIZED' AND fe.data_emissao BETWEEN $2 AND $3 AND fei.item_code IS NOT NULL AND (cardinality($4::bigint[])=0 OR fei.item_code=ANY($4::bigint[])) GROUP BY fei.item_code,date_trunc('month',fe.data_emissao)::date ORDER BY fei.item_code,3`, enterpriseID, from, to, itemCodes)
 		if err != nil {
 			return nil, fmt.Errorf("listing invoicing forecast history: %w", err)
 		}
-		for _, row := range rows {
-			if row.ItemCode == nil {
-				continue
+		defer rows.Close()
+		for rows.Next() {
+			var itemCode int64
+			var mask *string
+			var period pgtype.Date
+			var quantity pgtype.Numeric
+			if err := rows.Scan(&itemCode, &mask, &period, &quantity); err != nil {
+				return nil, err
 			}
 			out = append(out, &entity.HistoricalDemand{
-				ItemCode:    *row.ItemCode,
-				Mask:        pgutil.FromPgTextPtr(row.Mask),
-				PeriodMonth: pgutil.FromPgDate(row.PeriodMonth),
-				Quantity:    pgutil.FromPgNumericToFloat64(row.Quantity),
+				ItemCode: itemCode, Mask: mask, PeriodMonth: pgutil.FromPgDate(period), Quantity: pgutil.FromPgNumericToFloat64(quantity),
 			})
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
 		}
 	}
 	if source != "ORDERS" && source != "INVOICING" && source != "BOTH" {
@@ -144,11 +184,16 @@ func (r *SalesForecastRepositorySQLC) CreateBlock(
 	ctx context.Context,
 	b *entity.SalesForecastBlock,
 ) (*entity.SalesForecastBlock, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSalesForecastBlock(ctx, sqlc.CreateSalesForecastBlockParams{
-		StartDate: pgutil.ToPgDate(b.StartDate),
-		EndDate:   pgutil.ToPgDate(b.EndDate),
-		Reason:    pgutil.ToPgTextFromPtr(b.Reason),
-		CreatedBy: pgutil.ToPgUUID(b.CreatedBy),
+		StartDate:    pgutil.ToPgDate(b.StartDate),
+		EndDate:      pgutil.ToPgDate(b.EndDate),
+		Reason:       pgutil.ToPgTextFromPtr(b.Reason),
+		CreatedBy:    pgutil.ToPgUUID(b.CreatedBy),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating forecast block: %w", err)
@@ -159,7 +204,11 @@ func (r *SalesForecastRepositorySQLC) CreateBlock(
 func (r *SalesForecastRepositorySQLC) ListBlocks(
 	ctx context.Context,
 ) ([]*entity.SalesForecastBlock, error) {
-	rows, err := r.q.ListSalesForecastBlocks(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSalesForecastBlocks(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing forecast blocks: %w", err)
 	}
@@ -170,7 +219,11 @@ func (r *SalesForecastRepositorySQLC) IsBlocked(
 	ctx context.Context,
 	date time.Time,
 ) (bool, error) {
-	blocked, err := r.q.IsForecastBlocked(ctx, pgutil.ToPgDate(date))
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	blocked, err := r.q.IsForecastBlocked(ctx, sqlc.IsForecastBlockedParams{StartDate: pgutil.ToPgDate(date), EnterpriseID: enterpriseID})
 	if err != nil {
 		return false, fmt.Errorf("checking if date is blocked: %w", err)
 	}
@@ -181,7 +234,11 @@ func (r *SalesForecastRepositorySQLC) DeleteBlock(
 	ctx context.Context,
 	id int64,
 ) error {
-	err := r.q.DeleteSalesForecastBlock(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	err = r.q.DeleteSalesForecastBlock(ctx, sqlc.DeleteSalesForecastBlockParams{ID: id, EnterpriseID: enterpriseID})
 	if err != nil {
 		return fmt.Errorf("deleting forecast block %d: %w", id, err)
 	}
@@ -194,6 +251,10 @@ func (r *SalesForecastRepositorySQLC) CreateAppropriation(
 	ctx context.Context,
 	a *entity.AppropriationTable,
 ) (*entity.AppropriationTable, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateAppropriationTable(ctx, sqlc.CreateAppropriationTableParams{
 		Description:  a.Description,
 		MondayPct:    pgutil.ToPgNumericFromFloat64(a.MondayPct),
@@ -205,6 +266,7 @@ func (r *SalesForecastRepositorySQLC) CreateAppropriation(
 		SundayPct:    pgutil.ToPgNumericFromFloat64(a.SundayPct),
 		IsDefault:    a.IsDefault,
 		CreatedBy:    pgutil.ToPgUUID(a.CreatedBy),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating appropriation table: %w", err)
@@ -216,6 +278,10 @@ func (r *SalesForecastRepositorySQLC) UpdateAppropriation(
 	ctx context.Context,
 	a *entity.AppropriationTable,
 ) (*entity.AppropriationTable, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateAppropriationTable(ctx, sqlc.UpdateAppropriationTableParams{
 		ID:           a.ID,
 		Description:  a.Description,
@@ -226,6 +292,7 @@ func (r *SalesForecastRepositorySQLC) UpdateAppropriation(
 		FridayPct:    pgutil.ToPgNumericFromFloat64(a.FridayPct),
 		SaturdayPct:  pgutil.ToPgNumericFromFloat64(a.SaturdayPct),
 		SundayPct:    pgutil.ToPgNumericFromFloat64(a.SundayPct),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating appropriation table: %w", err)
@@ -236,7 +303,11 @@ func (r *SalesForecastRepositorySQLC) UpdateAppropriation(
 func (r *SalesForecastRepositorySQLC) GetDefaultAppropriation(
 	ctx context.Context,
 ) (*entity.AppropriationTable, error) {
-	row, err := r.q.GetDefaultAppropriationTable(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetDefaultAppropriationTable(ctx, enterpriseID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("no default appropriation table found")
@@ -249,7 +320,11 @@ func (r *SalesForecastRepositorySQLC) GetDefaultAppropriation(
 func (r *SalesForecastRepositorySQLC) ListAppropriations(
 	ctx context.Context,
 ) ([]*entity.AppropriationTable, error) {
-	rows, err := r.q.ListAppropriationTables(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAppropriationTables(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing appropriation tables: %w", err)
 	}
@@ -260,10 +335,14 @@ func (r *SalesForecastRepositorySQLC) SetDefaultAppropriation(
 	ctx context.Context,
 	id int64,
 ) error {
-	if err := r.q.ClearDefaultAppropriationTable(ctx); err != nil {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	if err := r.q.ClearDefaultAppropriationTable(ctx, enterpriseID); err != nil {
 		return fmt.Errorf("clearing default appropriation: %w", err)
 	}
-	if err := r.q.SetSingleDefaultAppropriationTable(ctx, id); err != nil {
+	if err := r.q.SetSingleDefaultAppropriationTable(ctx, sqlc.SetSingleDefaultAppropriationTableParams{ID: id, EnterpriseID: enterpriseID}); err != nil {
 		return fmt.Errorf("setting default appropriation %d: %w", id, err)
 	}
 	return nil

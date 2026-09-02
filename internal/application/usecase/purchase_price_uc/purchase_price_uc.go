@@ -9,6 +9,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/repository"
 )
@@ -16,19 +18,31 @@ import (
 type PurchasePriceUseCase struct {
 	repo repository.PurchasePriceRepository
 	auth ports.AuthService
+	// items resolve o código de negócio do item (texto) para a chave legada.
+	items any
 }
 
-func NewPurchasePriceUseCase(repo repository.PurchasePriceRepository, auth ports.AuthService) *PurchasePriceUseCase {
-	return &PurchasePriceUseCase{repo: repo, auth: auth}
+func NewPurchasePriceUseCase(repo repository.PurchasePriceRepository, auth ports.AuthService, items ...any) *PurchasePriceUseCase {
+	uc := &PurchasePriceUseCase{repo: repo, auth: auth}
+	if len(items) > 0 {
+		uc.items = items[0]
+	}
+	return uc
 }
 
 func parseDatePtr(s *string) (*time.Time, error) {
 	if s == nil || strings.TrimSpace(*s) == "" {
 		return nil, nil
 	}
-	t, err := time.Parse("2006-01-02", strings.TrimSpace(*s))
+	value := strings.TrimSpace(*s)
+	// A tela envia datas ISO; aceitamos também o timestamp completo que o
+	// navegador às vezes produz.
+	if len(value) > 10 {
+		value = value[:10]
+	}
+	t, err := time.Parse("2006-01-02", value)
 	if err != nil {
-		return nil, fmt.Errorf("invalid date %q: use YYYY-MM-DD", *s)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("data %q inválida: use o formato AAAA-MM-DD", *s))
 	}
 	return &t, nil
 }
@@ -50,14 +64,15 @@ func (uc *PurchasePriceUseCase) CreateTable(ctx context.Context, dto request.Cre
 	if err != nil {
 		return nil, fmt.Errorf("generating code: %w", err)
 	}
-	t, err := entity.NewPurchasePriceTable(enterpriseID, code, dto.SupplierCode, dto.Description, dto.CurrencyCode, actor)
+	t, err := entity.NewPurchasePriceTable(enterpriseID, code, dto.SupplierCode, dto.Description, dto.ResolvedCurrency(), actor)
 	if err != nil {
 		return nil, err
 	}
-	if t.ValidityStart, err = parseDatePtr(dto.ValidityStart); err != nil {
+	start, end := dto.ResolvedValidity()
+	if t.ValidityStart, err = parseDatePtr(start); err != nil {
 		return nil, err
 	}
-	if t.ValidityEnd, err = parseDatePtr(dto.ValidityEnd); err != nil {
+	if t.ValidityEnd, err = parseDatePtr(end); err != nil {
 		return nil, err
 	}
 	if err = t.ValidateValidity(); err != nil {
@@ -79,17 +94,21 @@ func (uc *PurchasePriceUseCase) UpdateTable(ctx context.Context, dto request.Upd
 	if err != nil {
 		return nil, err
 	}
-	if dto.SupplierCode <= 0 || strings.TrimSpace(dto.Description) == "" {
-		return nil, fmt.Errorf("supplier_code and description are required")
+	if strings.TrimSpace(dto.Description) == "" {
+		return nil, errorsuc.NewValidationError("informe a descrição da tabela de preço")
+	}
+	if dto.SupplierCode != nil && *dto.SupplierCode <= 0 {
+		return nil, errorsuc.NewValidationError("informe um fornecedor válido ou deixe a tabela sem fornecedor")
 	}
 	t.SupplierCode, t.Description, t.IsActive = dto.SupplierCode, strings.TrimSpace(dto.Description), dto.IsActive
-	if dto.CurrencyCode != "" {
-		t.CurrencyCode = strings.ToUpper(strings.TrimSpace(dto.CurrencyCode))
+	if currency := dto.ResolvedCurrency(); currency != "" {
+		t.CurrencyCode = strings.ToUpper(strings.TrimSpace(currency))
 	}
-	if t.ValidityStart, err = parseDatePtr(dto.ValidityStart); err != nil {
+	start, end := dto.ResolvedValidity()
+	if t.ValidityStart, err = parseDatePtr(start); err != nil {
 		return nil, err
 	}
-	if t.ValidityEnd, err = parseDatePtr(dto.ValidityEnd); err != nil {
+	if t.ValidityEnd, err = parseDatePtr(end); err != nil {
 		return nil, err
 	}
 	if err = t.ValidateValidity(); err != nil {
@@ -137,26 +156,38 @@ func (uc *PurchasePriceUseCase) AddItem(ctx context.Context, dto request.AddPurc
 	if err != nil {
 		return nil, err
 	}
-	item, err := entity.NewPurchasePriceTableItem(t.ID, dto.ItemCode, dto.Price)
+	itemCode, err := itemresolution.Resolve(ctx, uc.items, dto.ItemCode)
+	if err != nil {
+		return nil, err
+	}
+	item, err := entity.NewPurchasePriceTableItem(t.ID, int64(itemCode.Code), dto.Price)
 	if err != nil {
 		return nil, err
 	}
 	item.SupplierCode, item.UOM, item.MinQty, item.UpdateReplacementValue = dto.SupplierCode, dto.UOM, dto.MinQty, dto.UpdateReplacementValue
 	if item.MinQty.IsNegative() {
-		return nil, fmt.Errorf("min_qty must not be negative")
+		return nil, errorsuc.NewValidationError("a quantidade mínima não pode ser negativa")
 	}
-	if item.SupplierCode == nil {
-		item.SupplierCode = &t.SupplierCode
-	} else if *item.SupplierCode != t.SupplierCode {
-		return nil, fmt.Errorf("supplier_code must match the purchase price table supplier")
+	// Tabela com fornecedor fixo: o preço herda esse fornecedor e não pode
+	// apontar para outro. Tabela sem fornecedor aceita preço genérico (nulo) ou
+	// específico por fornecedor.
+	if t.SupplierCode != nil {
+		if item.SupplierCode == nil {
+			item.SupplierCode = t.SupplierCode
+		} else if *item.SupplierCode != *t.SupplierCode {
+			return nil, errorsuc.NewValidationError("o fornecedor do preço deve ser o mesmo da tabela")
+		}
 	}
 	if item.UpdateReplacementValue {
+		if item.SupplierCode == nil {
+			return nil, errorsuc.NewValidationError("para atualizar o valor de reposição informe o fornecedor do preço")
+		}
 		ok, err := uc.repo.IsPreferredSupplier(ctx, e, item.ItemCode, *item.SupplierCode)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("update_replacement_value requires a preferred supplier for the item")
+			return nil, errorsuc.NewValidationError("atualizar o valor de reposição exige que o fornecedor seja o preferencial do item")
 		}
 	}
 	for _, a := range dto.Adjustments {
@@ -202,10 +233,10 @@ func (uc *PurchasePriceUseCase) ListCandidates(ctx context.Context, tableCode in
 	}
 	mode, order = strings.ToUpper(mode), strings.ToUpper(order)
 	if mode != "INTERNAL" && mode != "SUPPLIER" {
-		return nil, fmt.Errorf("mode must be INTERNAL or SUPPLIER")
+		return nil, errorsuc.NewValidationError("origem inválida: use INTERNAL (código interno) ou SUPPLIER (código do fornecedor)")
 	}
 	if order != "NUMERIC" && order != "ALPHANUMERIC" {
-		return nil, fmt.Errorf("order must be NUMERIC or ALPHANUMERIC")
+		return nil, errorsuc.NewValidationError("ordenação inválida: use NUMERIC (numérica) ou ALPHANUMERIC (alfanumérica)")
 	}
 	x, err := uc.repo.ListItemCandidates(ctx, e, tableCode, mode, order, classificationID)
 	if err != nil {
@@ -224,7 +255,7 @@ func (uc *PurchasePriceUseCase) CopyAdjustments(ctx context.Context, dto request
 	}
 	mode := strings.ToUpper(dto.Mode)
 	if mode != "REPLACE" && mode != "ADD" {
-		return fmt.Errorf("mode must be REPLACE or ADD")
+		return errorsuc.NewValidationError("modo de cópia inválido: use REPLACE (substituir) ou ADD (acrescentar)")
 	}
 	return uc.repo.CopyAdjustments(ctx, e, dto.SourceItemID, dto.TargetItemID, mode)
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
@@ -114,7 +115,7 @@ func (h *StockHandler) ListMovementsByItem(w http.ResponseWriter, r *http.Reques
 	codeStr := chi.URLParam(r, "itemCode")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	results, err := h.listMovementsUC.ByItem(r.Context(), code)
@@ -129,7 +130,7 @@ func (h *StockHandler) ListMovementsByWarehouse(w http.ResponseWriter, r *http.R
 	codeStr := chi.URLParam(r, "warehouseId")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid warehouse id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do almoxarifado inválido")
 		return
 	}
 	results, err := h.listMovementsUC.ByWarehouse(r.Context(), code)
@@ -149,12 +150,12 @@ func (h *StockHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 
 	itemCode, err := strconv.ParseInt(itemCodeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item_code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	warehouseID, err := strconv.ParseInt(warehouseStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid warehouse_id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do almoxarifado inválido")
 		return
 	}
 
@@ -179,7 +180,7 @@ func (h *StockHandler) ListBalancesByWarehouse(w http.ResponseWriter, r *http.Re
 	codeStr := chi.URLParam(r, "warehouseId")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid warehouse id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do almoxarifado inválido")
 		return
 	}
 	results, err := h.getBalanceUC.ByWarehouse(r.Context(), code)
@@ -187,14 +188,60 @@ func (h *StockHandler) ListBalancesByWarehouse(w http.ResponseWriter, r *http.Re
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	itemFilter := int64(0)
+	if raw := strings.TrimSpace(r.URL.Query().Get("item_code")); raw != "" {
+		itemFilter, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || itemFilter <= 0 {
+			security.RespondError(w, http.StatusBadRequest, "código do item inválido")
+			return
+		}
+	}
+	lotFilter := strings.TrimSpace(r.URL.Query().Get("lot"))
+	if lotFilter == "" {
+		lotFilter = strings.TrimSpace(r.URL.Query().Get("mask"))
+	}
+	filtered := results[:0]
+	for _, balance := range results {
+		if itemFilter > 0 && balance.ItemCode != itemFilter {
+			continue
+		}
+		if lotFilter != "" && balance.Mask != lotFilter {
+			continue
+		}
+		filtered = append(filtered, balance)
+	}
+	results = filtered
+	page, perPage := positiveQueryInt(r, "page", 1), positiveQueryInt(r, "per_page", 50)
+	if perPage > 200 {
+		perPage = 200
+	}
+	w.Header().Set("X-Total-Count", strconv.Itoa(len(results)))
+	start := (page - 1) * perPage
+	if start >= len(results) {
+		results = results[:0]
+	} else {
+		end := start + perPage
+		if end > len(results) {
+			end = len(results)
+		}
+		results = results[start:end]
+	}
 	security.RespondJSON(w, http.StatusOK, results)
+}
+
+func positiveQueryInt(r *http.Request, name string, fallback int) int {
+	value, err := strconv.Atoi(r.URL.Query().Get(name))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func (h *StockHandler) ListBalancesByItem(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "itemCode")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	results, err := h.getBalanceUC.ByItem(r.Context(), code)
@@ -211,7 +258,7 @@ func (h *StockHandler) GetATP(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "itemCode")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	mask := r.URL.Query().Get("mask")
@@ -227,7 +274,7 @@ func (h *StockHandler) GetATP(w http.ResponseWriter, r *http.Request) {
 
 func (h *StockHandler) RecalcConsumptionAverage(w http.ResponseWriter, r *http.Request) {
 	if h.recalcCMUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "consumption average not configured")
+		security.RespondError(w, http.StatusNotImplemented, "consumo médio não configurado")
 		return
 	}
 	var dto request.RecalcConsumptionAverageDTO
@@ -243,12 +290,12 @@ func (h *StockHandler) RecalcConsumptionAverage(w http.ResponseWriter, r *http.R
 
 func (h *StockHandler) GetConsumptionAverage(w http.ResponseWriter, r *http.Request) {
 	if h.getCMUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "consumption average not configured")
+		security.RespondError(w, http.StatusNotImplemented, "consumo médio não configurado")
 		return
 	}
 	code, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	result, err := h.getCMUC.Execute(r.Context(), code)
@@ -263,7 +310,7 @@ func (h *StockHandler) GetConsumptionAverage(w http.ResponseWriter, r *http.Requ
 
 func (h *StockHandler) RegisterLot(w http.ResponseWriter, r *http.Request) {
 	if h.registerLotUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "lot traceability not configured")
+		security.RespondError(w, http.StatusNotImplemented, "rastreabilidade de lote não configurada")
 		return
 	}
 	var dto request.RegisterLotDTO
@@ -281,12 +328,12 @@ func (h *StockHandler) RegisterLot(w http.ResponseWriter, r *http.Request) {
 
 func (h *StockHandler) ListLotBalances(w http.ResponseWriter, r *http.Request) {
 	if h.listLotBalancesUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "lot traceability not configured")
+		security.RespondError(w, http.StatusNotImplemented, "rastreabilidade de lote não configurada")
 		return
 	}
 	code, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	results, err := h.listLotBalancesUC.Execute(r.Context(), code)
@@ -299,12 +346,12 @@ func (h *StockHandler) ListLotBalances(w http.ResponseWriter, r *http.Request) {
 
 func (h *StockHandler) GetLotGenealogy(w http.ResponseWriter, r *http.Request) {
 	if h.getGenealogyUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "lot traceability not configured")
+		security.RespondError(w, http.StatusNotImplemented, "rastreabilidade de lote não configurada")
 		return
 	}
 	code, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	lot := chi.URLParam(r, "lot")
@@ -340,7 +387,7 @@ func (h *StockHandler) ReleaseReservation(w http.ResponseWriter, r *http.Request
 	codeStr := chi.URLParam(r, "id")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
 		return
 	}
 	if err := h.releaseReserveUC.Execute(r.Context(), code); err != nil {
@@ -354,7 +401,7 @@ func (h *StockHandler) ConsumeReservation(w http.ResponseWriter, r *http.Request
 	codeStr := chi.URLParam(r, "id")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
 		return
 	}
 	if err := h.consumeReserveUC.Execute(r.Context(), code); err != nil {
@@ -384,7 +431,7 @@ func (h *StockHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "id")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
 		return
 	}
 	result, err := h.getInventoryUC.Execute(r.Context(), code)
@@ -444,7 +491,7 @@ func (h *StockHandler) CloseInventory(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "id")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
 		return
 	}
 	if err := h.closeInventoryUC.Execute(r.Context(), code); err != nil {
@@ -458,12 +505,12 @@ func (h *StockHandler) ListInventoryItems(w http.ResponseWriter, r *http.Request
 	codeStr := chi.URLParam(r, "id")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
 		return
 	}
 	results, err := h.getInventoryUC.ListItems(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)

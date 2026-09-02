@@ -155,6 +155,12 @@ resultado e regras comerciais.
 | Método | Rota | Ação |
 |---|---|---|
 | POST | `/create` · GET `/list` · GET `/{code}` · PUT `/{code}` · DELETE `/{code}` | CRUD completo |
+| PATCH | `/{code}/status` | Ativa/desativa sem apagar vínculos históricos (`ADMIN`) |
+
+A exclusão física permanece restrita a `ADMIN` e retorna conflito quando houver
+vínculos. A desativação preserva pedidos/orçamentos históricos; consultas de
+seleção usam somente divisões ativas. Ambas as operações respeitam o tenant e
+passam pelo middleware de auditoria HTTP.
 
 **Campos de análise (enum `sales_division_analysis_enum`).** Tanto `commercial_analysis`
 quanto `financial_analysis` só aceitam os valores abaixo (case-sensitive). São
@@ -243,9 +249,11 @@ expedição e faturamento.
 | PATCH | `/api/sales-quotation/{code}/release` | Bloqueia/libera com motivo |
 | GET | `/api/sales-quotation/{code}/events` | Lista histórico do mais recente ao mais antigo |
 | POST | `/api/sales-quotation/{code}/convert-to-order` | Converte saldo aberto para pedido de venda |
-| GET/PUT | `/api/sales-quotation/parameters` | Consulta/atualiza parâmetros do orçamento por empresa |
+| GET/PUT/DELETE | `/api/sales-quotation/parameters` | Consulta, atualiza ou restaura os padrões da empresa |
 | GET/POST | `/api/sales-quotation/commission-patterns` | Lista/grava padrões de comissão |
+| PATCH | `/api/sales-quotation/commission-patterns/{code}/status` | Ativa/desativa padrão de comissão (ADMIN) |
 | GET/POST | `/api/sales-quotation/cancellation-reasons` | Lista/grava motivos com regras D/C |
+| PATCH | `/api/sales-quotation/cancellation-reasons/{code}/status` | Ativa/desativa motivo (ADMIN) |
 | POST | `/api/sales-quotation/{code}/dav` | Registra a geração do DAV/Pré-Venda |
 | GET/POST | `/api/sales-quotation/{code}/attachments` | Lista/inclui anexo multipart (`file`) |
 | GET/DELETE | `/api/sales-quotation/{code}/attachments/{attachmentID}` | Baixa/exclui anexo |
@@ -262,6 +270,12 @@ expedição e faturamento.
 A conversão para pedido é atômica: pedido, itens, vínculo do pedido no orçamento e
 evento de conversão são confirmados na mesma transação. Uma falha em qualquer
 etapa desfaz todo o conjunto.
+
+O `DELETE /parameters` não elimina a configuração funcional: remove o override
+da empresa e devolve imediatamente os padrões definidos pelo domínio. Apoios
+inativos permanecem legíveis nos documentos históricos. Um motivo usado por
+orçamento cancelado e ainda descancelável, ou um padrão ligado a representante
+ativo, não pode ser desativado.
 
 ### Ciclo De Vida
 
@@ -376,6 +390,7 @@ reprecificação. A implementação usa os cadastros comerciais abaixo:
 | PUT | `/api/customers/sales-tables/prices` | Atualiza preço por ID |
 | DELETE | `/api/customers/sales-tables/prices/{id}` | Remove preço |
 | POST | `/api/customers/sales-tables/pricing` | Resolve preço de venda por tabela/item |
+| GET | `/api/customers/support/sales-tables/resolve-by-item` | Lista e prioriza tabelas válidas para item/cliente/quantidade/unidade/moeda/data |
 | POST | `/api/customers/sales-tables/price-formation` | Calcula preço sugerido por custo/markup/margem |
 | POST | `/api/customers/sales-tables/generate-prices` | Reprecifica itens da tabela por política |
 | GET | `/api/customers/sales-tables/{tableCode}/price-history` | Histórico da tabela, filtrável por `item_code` |
@@ -386,6 +401,20 @@ reprecificação. A implementação usa os cadastros comerciais abaixo:
 
 `POST /pricing` valida tabela ativa/vigente, preço não bloqueado e situação
 diferente de `INATIVO`; retorna preço unitário, quantidade e total bruto.
+Na inclusão e alteração de itens de pedido e orçamento, o backend também resolve
+o preço vigente pela tabela informada na linha ou na capa e substitui qualquer
+`unit_price` livre recebido. Item sem preço positivo, preço bloqueado/inativo ou
+tabela fora da vigência produz erro de negócio em português.
+
+`GET /resolve-by-item` elimina a descoberta N+1: devolve somente preços ativos e
+desbloqueados em tabelas vigentes. A ordenação prioriza vínculo do cliente,
+política comercial aplicável, tabela promocional e demais tabelas; `auto_selected`
+só é verdadeiro quando existe uma única candidata ou uma prioridade vencedora.
+
+Inclusão e alteração de item do orçamento gravam `ITEM_CREATE`/`ITEM_UPDATE` na
+mesma transação do item. O evento contém ator do JWT, sequência, estado anterior
+e novo, tabela, preço aplicado e origem. Cancelamento permanece transacional com
+o evento `CANCEL`.
 `POST /price-formation` calcula preço sugerido por:
 
 ```text
@@ -637,6 +666,13 @@ empresa de atuação, comissão, dados de contato e histórico comercial.
 | PATCH | `/{code}/block` | Bloqueia representante com motivo |
 | PATCH | `/{code}/unblock` | Remove bloqueio |
 | GET | `/report` | Relatório cadastral por representante, UF, região e status |
+
+Novos pedidos, orçamentos, metas e recorrências rejeitam representantes
+bloqueados, inativos ou não vinculados à empresa autenticada, inclusive em
+alterações, conversão do orçamento e geração recorrente. A regra é centralizada
+no backend e retorna erro de negócio em português; documentos históricos
+continuam disponíveis para leitura e relatórios. Bloqueio e desbloqueio também
+filtram o vínculo com o tenant antes do `UPDATE`.
 | GET | `/follow-up` | Ficha de acompanhamento comercial |
 
 ### Tipos de representantes
@@ -829,6 +865,7 @@ confirmados continuam entrando como demanda firme.
 | POST | `/create` | Cadastra previsão semanal manual |
 | POST | `/create-monthly` | Cadastra previsão mensal e distribui em semanas por calendário industrial |
 | POST | `/generate` | Gera previsão por média de histórico de pedidos/faturamento; também aceita modelo estatístico como melhoria |
+| GET | `/actuals?year=&item_code=&source=` | Realizado mensal por item/ano; `source=ORDERS`, `INVOICING` ou `BOTH` |
 | GET | `/list/{year}` | Lista previsões do ano |
 | GET | `/item/{itemCode}` | Lista previsões por item |
 | POST | `/blocks/create` | Bloqueia período de previsão |
@@ -1046,6 +1083,17 @@ Histórico de remarcações de data vinculado ao pedido (data original × nova �
 |---|---|---|
 | POST | `/create` | Registra a reprogramação |
 | GET | `/list/{sales_order_code}` | Lista as reprogramações do pedido |
+| GET | `/preview/{sales_order_code}` | Consolida saldo, reservas, MRP, OF/OC, CRP, APS e fiscal por item |
+| POST | `/batch` | Reprograma apenas as linhas selecionadas, atomicamente e com idempotência |
+
+O lote exige `idempotency_key`, `sales_order_code` e `items` com `item_code`,
+`sales_order_item_code`, `item_code`, `old_date`, `new_date` e motivo. O código
+da linha elimina ambiguidade quando um produto aparece mais de uma vez. A data anterior funciona como controle de
+concorrência. Qualquer linha inválida desfaz todo o lote. Itens sem saldo ou com
+nota autorizada são bloqueados em português; o backend não altera documentos
+fiscais. O ator e a empresa vêm exclusivamente do JWT. A atualização alcança a
+demanda MRP e reservas do saldo selecionado, preservando OF/OC firmes para decisão
+do planejamento.
 
 ---
 
@@ -1177,7 +1225,9 @@ ou exclusao.
 | GET | `/calls/{code}` | Consulta chamado detalhado |
 | PUT | `/calls/{code}` | Atualiza posicao/situacao/solucao |
 | POST | `/calls/{code}/returns` | Registra retorno/contato no chamado |
-| POST | `/calls/{code}/attachments` | Vincula anexo |
+| POST | `/calls/{code}/attachments` | Envia anexo multipart no campo `file` (até 10 MiB) |
+| GET | `/calls/{code}/attachments/{attachmentCode}/download` | Baixa o conteúdo após validar empresa e chamado |
+| DELETE | `/calls/{code}/attachments/{attachmentCode}` | Exclui conteúdo e metadados após validar empresa e chamado |
 | POST | `/calls/{code}/checklist` | Inclui item de checklist |
 | PATCH | `/calls/checklist/{itemCode}` | Marca/desmarca checklist |
 | GET | `/calls/report` | Indicadores de chamados |
@@ -1192,6 +1242,13 @@ Quando a situacao e `TECHNICAL_VISIT`, `visit_requested_date` e obrigatoria e o
 filtro `visit_state=PENDING|RETURNED` permite separar vistorias pendentes e
 realizadas. O relatorio retorna totais por posicao, vistorias e tempo medio de
 resolucao.
+
+Anexos aceitam PDF, PNG, JPEG e texto simples. O backend detecta o tipo real,
+normaliza o nome, armazena o conteúdo no banco e obtém a autoria exclusivamente
+do JWT; caminhos locais informados pelo cliente não fazem parte do contrato.
+Retornos de chamados também obtêm a autoria exclusivamente do JWT; o campo
+`created_by` não faz parte do DTO e, quando enviado, é rejeitado como campo
+desconhecido.
 
 ### Persistência
 
@@ -1260,6 +1317,11 @@ Tipos de vigencia: `INDEFINITE` exige `next_adjustment_date`; `FIXED` exige
 Cada recorrencia exige pelo menos um representante e exatamente um principal. A
 comissao pode ser vitalicia ou por quantidade determinada de parcelas, e a base
 pode ser `ORIGINAL` ou `ADJUSTED`.
+
+A criação da recorrência e de seus representantes ocorre em uma única transação.
+O representante é validado como existente e ativo. Listagem e detalhe devolvem
+`missing_preconditions`, `can_generate_order`, `can_cancel` e `can_adjust`, para
+que clientes não ofereçam ações incompatíveis com o estado atual.
 
 Na geracao do pedido, quando `order_code` nao e informado, o ERP cria a capa do
 pedido e os itens usando o modulo de Pedido de Venda existente. A capa recebe

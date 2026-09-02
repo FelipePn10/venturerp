@@ -1,5 +1,5 @@
 package request
 
 type GetAllDirectChildrenDTO struct {
-	ParentItemCode int64 `json:"parentItemCode"`
+	ParentItemCode TextCode `json:"parent_item_code"`
 }

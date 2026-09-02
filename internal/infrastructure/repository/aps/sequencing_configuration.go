@@ -3,6 +3,7 @@ package aps
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
 
@@ -110,7 +111,7 @@ func (r *APSRepositorySQLC) UpdateWorkCenterSequencing(ctx context.Context, id i
 	}
 	tag, err := r.pool.Exec(ctx, `UPDATE machine_types SET machine_cost_center_id=$3,labor_cost_center_id=$4,capacity_hours=$5::numeric,updated_at=NOW() WHERE id=$2 AND enterprise_id=$1`, enterpriseID, id, machineCC, laborCC, capacity)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("work center not found")
+		return errorsuc.NewNotFoundError("centro de trabalho não encontrado nesta empresa")
 	}
 	return err
 }
@@ -121,7 +122,7 @@ func (r *APSRepositorySQLC) UpdateResourceSequencing(ctx context.Context, id int
 	}
 	tag, err := r.pool.Exec(ctx, `UPDATE machines SET resource_group_id=$3,calendar_id=$4,location=NULLIF($5,''),is_critical=$6,is_active=$7,updated_at=NOW() WHERE id=$2 AND enterprise_id=$1 AND ($3::bigint IS NULL OR EXISTS(SELECT 1 FROM production_resource_groups g WHERE g.id=$3 AND g.enterprise_id=$1)) AND ($4::bigint IS NULL OR EXISTS(SELECT 1 FROM machine_calendars c WHERE c.id=$4 AND c.enterprise_id=$1))`, enterpriseID, id, group, calendar, strings.TrimSpace(location), critical, active)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("resource or tenant configuration not found")
+		return errorsuc.NewNotFoundError("recurso não encontrado nesta empresa, ou o grupo/calendário informado não pertence a ela")
 	}
 	return err
 }
@@ -132,7 +133,7 @@ func (r *APSRepositorySQLC) DeleteResourceGroup(ctx context.Context, id int64) e
 	}
 	tag, err := r.pool.Exec(ctx, `DELETE FROM production_resource_groups WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("resource group not found")
+		return errorsuc.NewNotFoundError("grupo de recursos não encontrado nesta empresa")
 	}
 	return err
 }
@@ -143,7 +144,7 @@ func (r *APSRepositorySQLC) DeleteMachineCalendar(ctx context.Context, id int64)
 	}
 	tag, err := r.pool.Exec(ctx, `DELETE FROM machine_calendars WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("machine calendar not found")
+		return errorsuc.NewNotFoundError("calendário de máquina não encontrado nesta empresa")
 	}
 	return err
 }
@@ -182,7 +183,7 @@ func (r *APSRepositorySQLC) DeleteMachineDowntime(ctx context.Context, id int64)
 	}
 	tag, err := r.pool.Exec(ctx, `DELETE FROM machine_downtimes WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("downtime not found")
+		return fmt.Errorf("parada de máquina não encontrada")
 	}
 	return err
 }
@@ -199,7 +200,7 @@ func (r *APSRepositorySQLC) UpsertEmployeeSequencingProfile(ctx context.Context,
 	var exists bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM employees WHERE id=$1 AND enterprise_id=$2)`, id, enterpriseID).Scan(&exists); err != nil || !exists {
 		if err == nil {
-			err = fmt.Errorf("employee not found")
+			err = errorsuc.NewNotFoundError("funcionário não encontrado nesta empresa")
 		}
 		return err
 	}
@@ -239,7 +240,7 @@ func (r *APSRepositorySQLC) UpsertMachineIndustrialProfile(ctx context.Context, 
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("machine not found")
+		return errorsuc.NewNotFoundError("máquina não encontrada nesta empresa")
 	}
 	if _, err = tx.Exec(ctx, `DELETE FROM machine_preventive_services WHERE machine_id=$1 AND enterprise_id=$2`, id, enterpriseID); err != nil {
 		return err
@@ -431,7 +432,7 @@ func (r *APSRepositorySQLC) UpdateMachineService(ctx context.Context, machineID,
 	var serviceID int64
 	err = tx.QueryRow(ctx, `UPDATE preventive_services s SET code=$4,description=$5,service_type=$6,updated_at=NOW() FROM machine_preventive_services ms WHERE ms.id=$3 AND ms.machine_id=$2 AND ms.enterprise_id=$1 AND s.id=ms.service_id AND s.enterprise_id=$1 RETURNING s.id`, enterpriseID, machineID, linkID, v.ServiceCode, v.Description, v.ServiceType).Scan(&serviceID)
 	if err != nil {
-		return fmt.Errorf("machine service not found: %w", err)
+		return fmt.Errorf("serviço de máquina não encontrado nesta empresa: %w", err)
 	}
 	tag, err := tx.Exec(ctx, `UPDATE machine_preventive_services SET frequency_value=$4,frequency_unit=$5,max_tolerance=$6,supplier_code=$7,implemented_on=$8,last_executed_on=$9,notes=NULLIF($10,'') WHERE id=$3 AND machine_id=$2 AND enterprise_id=$1`, enterpriseID, machineID, linkID, v.FrequencyValue, v.FrequencyUnit, v.MaxTolerance, v.SupplierCode, v.ImplementedOn, v.LastExecutedOn, v.Notes)
 	if err = affectedOrNotFound(tag, err, "machine service"); err != nil {
@@ -444,7 +445,7 @@ func (r *APSRepositorySQLC) UpdateMachineService(ctx context.Context, machineID,
 		tag, err = tx.Exec(ctx, `INSERT INTO machine_service_responsibles(machine_service_id,employee_id,enterprise_id) SELECT $1,$2,$3 WHERE EXISTS(SELECT 1 FROM employees WHERE id=$2 AND enterprise_id=$3) ON CONFLICT DO NOTHING`, linkID, employeeID, enterpriseID)
 		if err != nil || tag.RowsAffected() == 0 {
 			if err == nil {
-				err = fmt.Errorf("responsible employee not found")
+				err = errorsuc.NewNotFoundError("funcionário responsável não encontrado nesta empresa")
 			}
 			return err
 		}
@@ -509,12 +510,25 @@ func (r *APSRepositorySQLC) DeleteMachineSpecialValue(ctx context.Context, machi
 	return affectedOrNotFound(tag, err, "machine special value")
 }
 
+// resourceLabels traduz o recurso do APS para o nome que o usuário vê na tela.
+var resourceLabels = map[string]string{
+	"employee contact":      "contato do funcionário",
+	"employee function":     "função do funcionário",
+	"machine service":       "serviço de máquina",
+	"machine service item":  "item do serviço de máquina",
+	"machine special value": "valor especial da máquina",
+}
+
 func affectedOrNotFound(tag interface{ RowsAffected() int64 }, err error, resource string) error {
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("%s not found", resource)
+		label, ok := resourceLabels[resource]
+		if !ok {
+			label = resource
+		}
+		return errorsuc.NewNotFoundError(label + " não encontrado nesta empresa")
 	}
 	return nil
 }

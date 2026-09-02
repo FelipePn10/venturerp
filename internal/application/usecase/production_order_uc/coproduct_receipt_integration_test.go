@@ -38,7 +38,7 @@ func TestIntegration_CompleteReceivesCoproductScrap(t *testing.T) {
 	finished := testutil.UniqueCode()
 	scrap := testutil.UniqueCode()
 	for _, code := range []int64{finished, scrap} {
-		testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", code, code, uid)
+		testutil.Exec(t, pool, "INSERT INTO items (code, business_code, warehouse_code, created_by, enterprise_id) VALUES ($1,($1::bigint)::text,$2,$3,$4)", code, code, uid, enterpriseID)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code IN ($1,$2)", finished, scrap)
 

@@ -7,16 +7,29 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
+	"github.com/google/uuid"
 )
 
 type OperationUseCase struct {
-	repo repository.RoutingRepository
+	repo  repository.RoutingRepository
+	items any
+	auth  ports.AuthService
 }
 
-func NewOperationUseCase(repo repository.RoutingRepository) *OperationUseCase {
-	return &OperationUseCase{repo: repo}
+func NewOperationUseCase(repo repository.RoutingRepository, deps ...any) *OperationUseCase {
+	uc := &OperationUseCase{repo: repo}
+	for _, dep := range deps {
+		if auth, ok := dep.(ports.AuthService); ok {
+			uc.auth = auth
+		} else {
+			uc.items = dep
+		}
+	}
+	return uc
 }
 
 func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperationDTO) (*response.OperationResponse, error) {
@@ -34,6 +47,17 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 	if err != nil {
 		return nil, err
 	}
+	serviceItemCode, err := resolveOptionalItemCode(ctx, uc.items, dto.ServiceItemCode)
+	if err != nil {
+		return nil, err
+	}
+	var actor uuid.UUID
+	if uc.auth != nil {
+		actor, err = uc.auth.UserID(ctx)
+		if err != nil {
+			return nil, errorsuc.ErrUnauthorized
+		}
+	}
 
 	code, err := uc.repo.NextOperationCode(ctx)
 	if err != nil {
@@ -41,14 +65,14 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 	}
 
 	op, err := entity.NewOperation(code, dto.Name, dto.Description, origin,
-		dto.DefaultWorkCenterID, dto.StandardTime, dto.SetupTime, dto.CreatedBy)
+		dto.DefaultWorkCenterID, dto.StandardTime, dto.SetupTime, actor)
 	if err != nil {
 		return nil, err
 	}
 	applyOperationTime(op, dto.RunTime, dto.LaborTime, dto.RunBaseQty,
 		dto.QueueTime, dto.WaitTime, dto.MoveTime, dto.CrewSize, dto.TimeUnit)
 	op.SupplierID = dto.SupplierID
-	op.ServiceItemCode = dto.ServiceItemCode
+	op.ServiceItemCode = serviceItemCode
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
 	op.ThirdPartyRemittance = remittance
@@ -72,6 +96,10 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 	if err != nil {
 		return nil, err
 	}
+	serviceItemCode, err := resolveOptionalItemCode(ctx, uc.items, dto.ServiceItemCode)
+	if err != nil {
+		return nil, err
+	}
 	nextOrigin := entity.OperationOrigin(dto.Origin)
 	if (op.Origin == entity.OriginExternal || op.Origin == entity.OriginThirdPart) && nextOrigin == entity.OriginInternal {
 		used, usedErr := uc.repo.OperationUsedInRoutes(ctx, dto.ID)
@@ -92,7 +120,7 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 	applyOperationTime(op, dto.RunTime, dto.LaborTime, dto.RunBaseQty,
 		dto.QueueTime, dto.WaitTime, dto.MoveTime, dto.CrewSize, dto.TimeUnit)
 	op.SupplierID = dto.SupplierID
-	op.ServiceItemCode = dto.ServiceItemCode
+	op.ServiceItemCode = serviceItemCode
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
 	op.ThirdPartyRemittance = remittance

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -37,6 +38,10 @@ func (r *MachineRepositorySQLC) CreateType(ctx context.Context, mt *entity.Machi
 }
 
 func (r *MachineRepositorySQLC) UpdateType(ctx context.Context, mt *entity.MachineType) (*entity.MachineType, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateMachineType(ctx, sqlc.UpdateMachineTypeParams{
 		Code:             mt.Code,
 		Name:             mt.Name,
@@ -44,6 +49,7 @@ func (r *MachineRepositorySQLC) UpdateType(ctx context.Context, mt *entity.Machi
 		Type:             sqlc.MachineTypeEnum(mt.Type),
 		RequiresOperator: mt.RequiresOperator,
 		IsActive:         mt.IsActive,
+		EnterpriseID:     &enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("update machine type: %w", err)
@@ -67,15 +73,52 @@ func (r *MachineRepositorySQLC) GetTypeByCode(ctx context.Context, code int64) (
 }
 
 func (r *MachineRepositorySQLC) ListTypes(ctx context.Context) ([]*entity.MachineType, error) {
-	rows, err := r.q.ListMachineTypes(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListMachineTypes(ctx, &enterpriseID)
 	if err != nil {
 		return nil, err
 	}
 	return machineTypesToEntities(rows), nil
 }
 
+func (r *MachineRepositorySQLC) ListActiveWorkCenterTypes(ctx context.Context, search string, limit, offset int) ([]*entity.MachineType, int64, error) {
+	if r.pool == nil {
+		return nil, 0, fmt.Errorf("consulta de centros de trabalho não configurada")
+	}
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	search = strings.TrimSpace(search)
+	var total int64
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM machine_types WHERE enterprise_id=$1 AND is_active=TRUE AND ($2='' OR code::text ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%' OR COALESCE(description,'') ILIKE '%'||$2||'%')`, enterpriseID, search).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT id,code,name,description,type,requires_operator,is_active,created_at,updated_at,created_by FROM machine_types WHERE enterprise_id=$1 AND is_active=TRUE AND ($2='' OR code::text ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%' OR COALESCE(description,'') ILIKE '%'||$2||'%') ORDER BY code LIMIT $3 OFFSET $4`, enterpriseID, search, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := make([]*entity.MachineType, 0)
+	for rows.Next() {
+		var row sqlc.MachineType
+		if err := rows.Scan(&row.ID, &row.Code, &row.Name, &row.Description, &row.Type, &row.RequiresOperator, &row.IsActive, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, machineTypeToEntity(row))
+	}
+	return out, total, rows.Err()
+}
+
 func (r *MachineRepositorySQLC) DeleteType(ctx context.Context, code int64) error {
-	return r.q.DeleteMachineType(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeleteMachineType(ctx, sqlc.DeleteMachineTypeParams{Code: code, EnterpriseID: &enterpriseID})
 }
 
 func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (*entity.Machine, error) {
@@ -102,6 +145,10 @@ func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (
 }
 
 func (r *MachineRepositorySQLC) Update(ctx context.Context, m *entity.Machine) (*entity.Machine, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateMachine(ctx, sqlc.UpdateMachineParams{
 		Name:            m.Name,
 		MachineTypeCode: m.MachineTypeCode,
@@ -110,6 +157,7 @@ func (r *MachineRepositorySQLC) Update(ctx context.Context, m *entity.Machine) (
 		CapacityPeriod:  sqlc.CapacityPeriodEnum(m.CapacityPeriod),
 		CapacityUnit:    sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
 		EfficiencyRate:  pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
+		EnterpriseID:    &enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("update machine: %w", err)
@@ -118,7 +166,11 @@ func (r *MachineRepositorySQLC) Update(ctx context.Context, m *entity.Machine) (
 }
 
 func (r *MachineRepositorySQLC) GetByCode(ctx context.Context, code int64) (*entity.Machine, error) {
-	row, err := r.q.GetMachineByCode(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetMachineByCode(ctx, sqlc.GetMachineByCodeParams{Code: code, EnterpriseID: &enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("machine %d not found", code)
@@ -129,7 +181,11 @@ func (r *MachineRepositorySQLC) GetByCode(ctx context.Context, code int64) (*ent
 }
 
 func (r *MachineRepositorySQLC) List(ctx context.Context) ([]*entity.Machine, error) {
-	rows, err := r.q.ListMachines(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListMachines(ctx, &enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +193,11 @@ func (r *MachineRepositorySQLC) List(ctx context.Context) ([]*entity.Machine, er
 }
 
 func (r *MachineRepositorySQLC) ListByType(ctx context.Context, typeCode int64) ([]*entity.Machine, error) {
-	rows, err := r.q.ListMachinesByType(ctx, typeCode)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListMachinesByType(ctx, sqlc.ListMachinesByTypeParams{MachineTypeCode: typeCode, EnterpriseID: &enterpriseID})
 	if err != nil {
 		return nil, err
 	}
@@ -145,10 +205,18 @@ func (r *MachineRepositorySQLC) ListByType(ctx context.Context, typeCode int64) 
 }
 
 func (r *MachineRepositorySQLC) Delete(ctx context.Context, code int64) error {
-	return r.q.DeleteMachine(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeleteMachine(ctx, sqlc.DeleteMachineParams{Code: code, EnterpriseID: &enterpriseID})
 }
 
 func (r *MachineRepositorySQLC) CreateItemMachineTime(ctx context.Context, imt *entity.ItemMachineTime) (*entity.ItemMachineTime, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateItemMachineTime(ctx, sqlc.CreateItemMachineTimeParams{
 		ItemCode:           imt.ItemCode,
 		Mask:               ptrToString(imt.Mask),
@@ -158,6 +226,7 @@ func (r *MachineRepositorySQLC) CreateItemMachineTime(ctx context.Context, imt *
 		ProductionBaseQty:  int32(imt.ProductionBaseQty),
 		SetupTime:          pgutil.ToPgNumericFromFloat64(imt.SetupTime),
 		Priority:           int32(imt.Priority),
+		EnterpriseID:       &enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create item machine time: %w", err)
@@ -186,8 +255,11 @@ func (r *MachineRepositorySQLC) ListItemMachineTimes(
 	ctx context.Context,
 	itemCode int64,
 ) ([]*entity.ItemMachineTime, error) {
-
-	rows, err := r.q.ListItemMachineTimes(ctx, itemCode)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListItemMachineTimes(ctx, sqlc.ListItemMachineTimesParams{ItemCode: itemCode, EnterpriseID: &enterpriseID})
 	if err != nil {
 		return nil, err
 	}
@@ -199,8 +271,11 @@ func (r *MachineRepositorySQLC) ListItemsByMachine(
 	ctx context.Context,
 	machineCode int64,
 ) ([]*entity.ItemMachineTime, error) {
-
-	rows, err := r.q.ListItemsByMachine(ctx, machineCode)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListItemsByMachine(ctx, sqlc.ListItemsByMachineParams{MachineCode: machineCode, EnterpriseID: &enterpriseID})
 	if err != nil {
 		return nil, err
 	}

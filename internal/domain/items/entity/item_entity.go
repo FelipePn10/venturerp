@@ -87,7 +87,10 @@ type Warehouse struct {
 
 type Engineering struct {
 	ItemBaseCod *int // Somente se ItemBase (checkbox) for false
-	Weight      valueobject.Weight
+	// ItemBaseBusinessCode é o código de negócio do item-base, como a tela o
+	// envia; o caso de uso o converte em ItemBaseCod.
+	ItemBaseBusinessCode string
+	Weight               valueobject.Weight
 
 	Dimensions *valueobject.Dimensions
 
@@ -131,16 +134,19 @@ type Commercial struct {
 	TransferWarehouseCode            *int64
 	TechnicalAssistanceWarehouseCode *int64
 	PackagingItemCode                *int64
-	AllowBillingDescriptionChange    bool
-	IssueLoadingLabels               bool
-	AssembleShippingVolumes          bool
-	RequiresSpecialPackaging         bool
-	WithholdPISCOFINS                bool
-	IsPackaging                      bool
-	MobileEnabled                    bool
-	ExportPackaging                  bool
-	ClassificationCode               *string
-	Notes                            *string
+	// PackagingItemBusinessCode é o código de negócio do item de embalagem, como
+	// a tela o envia; o caso de uso o converte em PackagingItemCode.
+	PackagingItemBusinessCode     string
+	AllowBillingDescriptionChange bool
+	IssueLoadingLabels            bool
+	AssembleShippingVolumes       bool
+	RequiresSpecialPackaging      bool
+	WithholdPISCOFINS             bool
+	IsPackaging                   bool
+	MobileEnabled                 bool
+	ExportPackaging               bool
+	ClassificationCode            *string
+	Notes                         *string
 }
 
 type Accounting struct {

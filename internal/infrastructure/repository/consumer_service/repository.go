@@ -2,6 +2,7 @@ package consumer_service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -328,12 +329,36 @@ func (r *RepositoryPGX) AddCallReturn(ctx context.Context, enterpriseID int64, v
 
 func (r *RepositoryPGX) AddCallAttachment(ctx context.Context, enterpriseID int64, v *entity.CallAttachment) (*entity.CallAttachment, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_call_attachments
-		(call_code, file_name, file_path, content_type, notes, created_by)
-		SELECT $1,$2,$3,$4,$5,$6 WHERE EXISTS
-		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$7)
-		RETURNING code, call_code, file_name, file_path, content_type, notes, created_at, created_by`,
-		v.CallCode, v.FileName, v.FilePath, v.ContentType, v.Notes, pgutil.ToPgUUID(v.CreatedBy), enterpriseID)
-	return scanCallAttachment(row)
+		(call_code, file_name, file_path, file_content, file_size, content_type, notes, created_by)
+		SELECT $1,$2,NULL,$3,$4,$5,$6,$7 WHERE EXISTS
+		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$8)
+		RETURNING code, call_code, file_name, COALESCE(file_path,''), file_content, file_size, content_type, notes, created_at, created_by`,
+		v.CallCode, v.FileName, v.Content, v.FileSize, v.ContentType, v.Notes, pgutil.ToPgUUID(v.CreatedBy), enterpriseID)
+	attachment, err := scanCallAttachment(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, repository.ErrAttachmentNotFound
+	}
+	return attachment, err
+}
+
+func (r *RepositoryPGX) GetCallAttachment(ctx context.Context, enterpriseID, callCode, attachmentCode int64) (*entity.CallAttachment, error) {
+	row := r.pool.QueryRow(ctx, `SELECT a.code,a.call_code,a.file_name,COALESCE(a.file_path,''),a.file_content,COALESCE(a.file_size,0),a.content_type,a.notes,a.created_at,a.created_by FROM consumer_service_call_attachments a JOIN consumer_service_calls c ON c.code=a.call_code JOIN enterprise e ON e.code=c.enterprise_code WHERE a.code=$1 AND a.call_code=$2 AND e.id=$3`, attachmentCode, callCode, enterpriseID)
+	attachment, err := scanCallAttachment(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, repository.ErrAttachmentNotFound
+	}
+	return attachment, err
+}
+
+func (r *RepositoryPGX) DeleteCallAttachment(ctx context.Context, enterpriseID, callCode, attachmentCode int64) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM consumer_service_call_attachments a USING consumer_service_calls c,enterprise e WHERE a.code=$1 AND a.call_code=$2 AND c.code=a.call_code AND e.code=c.enterprise_code AND e.id=$3`, attachmentCode, callCode, enterpriseID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return repository.ErrAttachmentNotFound
+	}
+	return nil
 }
 
 func (r *RepositoryPGX) AddChecklistItem(ctx context.Context, enterpriseID int64, v *entity.CallChecklistItem) (*entity.CallChecklistItem, error) {
@@ -471,7 +496,7 @@ func (r *RepositoryPGX) listCallReturns(ctx context.Context, enterpriseID, callC
 }
 
 func (r *RepositoryPGX) listCallAttachments(ctx context.Context, enterpriseID, callCode int64) ([]*entity.CallAttachment, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code, call_code, file_name, file_path, content_type, notes, created_at, created_by
+	rows, err := r.pool.Query(ctx, `SELECT code, call_code, file_name, COALESCE(file_path,''), file_content, COALESCE(file_size,0), content_type, notes, created_at, created_by
 		FROM consumer_service_call_attachments WHERE call_code=$1 AND EXISTS
 		(SELECT 1 FROM consumer_service_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$2)
 		ORDER BY code`, callCode, enterpriseID)
@@ -688,7 +713,7 @@ func scanCallReturn(row pgx.Row) (*entity.CallReturn, error) {
 
 func scanCallAttachment(row pgx.Row) (*entity.CallAttachment, error) {
 	var v entity.CallAttachment
-	err := row.Scan(&v.Code, &v.CallCode, &v.FileName, &v.FilePath, &v.ContentType, &v.Notes, &v.CreatedAt, &v.CreatedBy)
+	err := row.Scan(&v.Code, &v.CallCode, &v.FileName, &v.FilePath, &v.Content, &v.FileSize, &v.ContentType, &v.Notes, &v.CreatedAt, &v.CreatedBy)
 	return &v, err
 }
 

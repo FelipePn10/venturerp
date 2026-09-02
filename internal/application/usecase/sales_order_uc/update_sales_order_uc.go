@@ -7,14 +7,16 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type UpdateSalesOrderUseCase struct {
-	Repo repository.SalesOrderRepository
-	Auth ports.AuthService
+	Repo            repository.SalesOrderRepository
+	Auth            ports.AuthService
+	Representatives representativevalidation.Repository
 }
 
 func (uc *UpdateSalesOrderUseCase) Execute(
@@ -23,6 +25,9 @@ func (uc *UpdateSalesOrderUseCase) Execute(
 ) (*response.SalesOrderResponse, error) {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
 	}
 
 	o := &entity.SalesOrder{

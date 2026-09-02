@@ -1,9 +1,10 @@
 package entity
 
 import (
-	"fmt"
 	"strings"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/google/uuid"
 )
@@ -28,16 +29,16 @@ func NewItemUnitConversion(itemCode int64, mask, fromUOM, toUOM string, factor, 
 	fromUOM = strings.ToUpper(strings.TrimSpace(fromUOM))
 	toUOM = strings.ToUpper(strings.TrimSpace(toUOM))
 	if itemCode == 0 {
-		return nil, fmt.Errorf("item_code is required")
+		return nil, errorsuc.NewValidationError("informe o item da conversão")
 	}
 	if fromUOM == "" || toUOM == "" {
-		return nil, fmt.Errorf("from_uom and to_uom are required")
+		return nil, errorsuc.NewValidationError("informe a unidade de origem e a de destino")
 	}
 	if fromUOM == toUOM {
-		return nil, fmt.Errorf("from_uom and to_uom must differ")
+		return nil, errorsuc.NewValidationError("a unidade de origem e a de destino devem ser diferentes")
 	}
 	if factor <= 0 {
-		return nil, fmt.Errorf("factor must be greater than zero")
+		return nil, errorsuc.NewValidationError("o fator de conversão deve ser maior que zero")
 	}
 	mask = strings.TrimSpace(mask)
 	toleranceType = strings.ToUpper(strings.TrimSpace(toleranceType))
@@ -45,7 +46,7 @@ func NewItemUnitConversion(itemCode int64, mask, fromUOM, toUOM string, factor, 
 		toleranceType = "VALUE"
 	}
 	if roundingPercent < 0 || roundingPercent > 100 || toleranceValue < 0 || (toleranceType != "VALUE" && toleranceType != "PERCENT") {
-		return nil, fmt.Errorf("invalid rounding/tolerance policy")
+		return nil, errorsuc.NewValidationError("política de arredondamento/tolerância inválida: o arredondamento vai de 0 a 100%, a tolerância não pode ser negativa e o tipo deve ser VALUE (valor) ou PERCENT (percentual)")
 	}
 	return &ItemUnitConversion{
 		ItemCode:        itemCode,

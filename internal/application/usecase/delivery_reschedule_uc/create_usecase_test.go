@@ -8,11 +8,15 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/delivery_reschedule/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/delivery_reschedule/repository"
+	"github.com/google/uuid"
 )
 
 type allowDeliveryRescheduleAuth struct{ ports.AuthService }
 
 func (allowDeliveryRescheduleAuth) CanCreateDeliveryReschedule(context.Context) bool { return true }
+func (allowDeliveryRescheduleAuth) UserID(context.Context) (uuid.UUID, error) {
+	return uuid.MustParse("00000000-0000-0000-0000-000000000042"), nil
+}
 
 type captureDeliveryRescheduleRepository struct {
 	repository.DeliveryRescheduleRepository
@@ -40,6 +44,9 @@ func TestCreateDeliveryRescheduleLeavesCodeGenerationToRepository(t *testing.T) 
 	}
 	if repo.inputCode != 0 {
 		t.Fatalf("use case enviou código %d; a geração deve ficar no repositório", repo.inputCode)
+	}
+	if repo.created.CreatedBy.String() != "00000000-0000-0000-0000-000000000042" {
+		t.Fatalf("created_by = %s; esperado usuário autenticado", repo.created.CreatedBy)
 	}
 	if result.Code != 42 {
 		t.Fatalf("código retornado = %d, esperado o código gerado pelo repositório", result.Code)

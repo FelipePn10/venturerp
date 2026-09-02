@@ -96,7 +96,7 @@ func (r *ProductionPlanRepositorySQLC) GetByCode(
 	row, err := r.q.GetProductionPlanByCode(ctx, sqlc.GetProductionPlanByCodeParams{Code: code, EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("production plan %d not found", code)
+			return nil, fmt.Errorf("%w: %d", repository.ErrNotFound, code)
 		}
 		return nil, fmt.Errorf("fetching production plan: %w", err)
 	}

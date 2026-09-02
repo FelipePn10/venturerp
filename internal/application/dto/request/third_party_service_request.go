@@ -7,7 +7,7 @@ type ThirdPartyPriceRuleDTO struct {
 	Answer         *string `json:"answer,omitempty"`
 }
 type ThirdPartyPriceDTO struct {
-	ItemCode         int64                    `json:"item_code"`
+	ItemCode         TextCode                 `json:"item_code"`
 	Mask             string                   `json:"mask,omitempty"`
 	SupplierCode     int64                    `json:"supplier_code"`
 	OperationID      int64                    `json:"operation_id"`

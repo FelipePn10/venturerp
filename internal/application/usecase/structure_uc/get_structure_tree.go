@@ -17,18 +17,24 @@ const maxBOMDepth = 30
 
 // GetStructureTreeUseCase retorna a árvore BOM GENÉRICA (sem máscara)
 type GetStructureTreeUseCase struct {
-	Repo repository.ItemStructureRepository
-	Auth ports.AuthService
+	Repo  repository.ItemStructureRepository
+	Auth  ports.AuthService
+	Items any
 }
 
 func NewGetStructureTreeUseCase(
 	repo repository.ItemStructureRepository,
 	auth ports.AuthService,
+	items ...any,
 ) *GetStructureTreeUseCase {
-	return &GetStructureTreeUseCase{
+	uc := &GetStructureTreeUseCase{
 		Repo: repo,
 		Auth: auth,
 	}
+	if len(items) > 0 {
+		uc.Items = items[0]
+	}
+	return uc
 }
 
 func (uc *GetStructureTreeUseCase) Execute(
@@ -40,19 +46,23 @@ func (uc *GetStructureTreeUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	exists, err := uc.Repo.ItemExists(ctx, dto.RootItemCode)
+	rootItemCode, err := resolveItemCode(ctx, uc.Items, dto.RootItemCode)
+	if err != nil {
+		return nil, err
+	}
+	exists, err := uc.Repo.ItemExists(ctx, rootItemCode)
 	if err != nil {
 		return nil, fmt.Errorf("checking root item: %w", err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("item %d not found", dto.RootItemCode)
+		return nil, fmt.Errorf("item raiz não encontrado")
 	}
 
 	visited := make(map[int64]bool)
 
 	nodes, err := uc.buildTree(
 		ctx,
-		dto.RootItemCode,
+		rootItemCode,
 		1,
 		visited,
 	)
@@ -63,7 +73,7 @@ func (uc *GetStructureTreeUseCase) Execute(
 	respNodes := mapper.MapNodes(nodes)
 
 	return &response.StructureTreeResponse{
-		RootItemCode: dto.RootItemCode,
+		RootItemCode: rootItemCode,
 		RootMask:     nil, // árvore genérica
 		Components:   respNodes,
 		TotalLevels:  mapper.MaxLevel(respNodes) + 1,

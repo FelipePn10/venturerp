@@ -1,0 +1,2673 @@
+<!-- Fonte do PDF dia-um.pdf — reconstruir com: python3 gerar.py -->
+<div class="capa">
+  <div class="capa-faixa">
+    <div class="capa-marca">VentureERP · Capacitação Operacional</div>
+    <h1>Treinamento Prático<br>Dia 1</h1>
+    <p class="capa-sub">Do cadastro do produto à saída do acabado</p>
+  </div>
+  <div class="capa-corpo">
+    <table class="capa-meta">
+      <tr><td>Público</td><td>Equipe Tecnofer — Engenharia, PCP, Compras, Produção, Almoxarifado e Comercial</td></tr>
+      <tr><td>Duração</td><td>4 horas — 08h00 às 12h00</td></tr>
+      <tr><td>Produto-guia</td><td>RN 01001 — Balança Asa Delta Carreta Pino Ø 50 mm</td></tr>
+      <tr><td>Exercício</td><td>SU 02046 — Deslizante Traseiro Truck MB</td></tr>
+      <tr><td>Formato</td><td>Demonstração guiada no sistema + prática no teclado</td></tr>
+      <tr><td>Data</td><td>____ / ____ / ________</td></tr>
+      <tr><td>Instrutor</td><td>______________________________________________</td></tr>
+    </table>
+    <div class="capa-nota">
+      <b>O que este dia cobre.</b> Todo o ciclo industrial: classificar e cadastrar itens em níveis,
+      montar a estrutura do produto, cadastrar máquinas e roteiros, registrar um orçamento e convertê-lo
+      em pedido de venda, planejar com MRP, checar capacidade com CRP, sequenciar no APS, aprovar e
+      firmar as ordens, executar a ordem de fabricação, movimentar estoque com rastreabilidade de lote,
+      inspecionar e expedir o produto acabado.
+      <br><br>
+      <b>O que fica para o Dia 2.</b> Emissão de notas fiscais, apuração de impostos, contas a pagar e a
+      receber, contabilidade e formação de preço. A única ponte comercial vista hoje é
+      <span class="tela-out">orçamento → pedido de venda</span>.
+    </div>
+  </div>
+  <div class="capa-rodape">
+    Material produzido a partir das fichas técnicas RN 01001, RN 01007 e SU 02046 fornecidas pela Tecnofer.
+    Documento de uso interno — não distribuir.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1 class="sem-quebra">Agenda e como usar este material</h1>
+
+<h2>Agenda do Dia 1</h2>
+<table class="agenda">
+  <tr><td class="hora">08:00 – 08:15</td><td class="bloco">Abertura</td><td>Como o ERP amarra o processo. O mapa do fluxo, os papéis de cada área e o que muda no dia a dia.</td><td class="modo">exposição</td></tr>
+  <tr><td class="hora">08:15 – 09:10</td><td class="bloco">Bloco 1<br>Cadastros base</td><td>Estrutura de níveis (produto → conjunto → peça → matéria-prima), classificação de itens, grupos PDM, almoxarifados, cadastro de itens e matérias-primas, fornecedor e cliente.</td><td class="modo">guiado + prática</td></tr>
+  <tr><td class="hora">09:10 – 10:00</td><td class="bloco">Bloco 2<br>Engenharia</td><td>Estrutura do produto (BOM) em vários níveis com percentual de perda, tipos de máquina, máquinas e custo/hora, biblioteca de operações e roteiro de fabricação, serviços de terceiros.</td><td class="modo">guiado + prática</td></tr>
+  <tr class="pausa"><td class="hora">10:00 – 10:15</td><td class="bloco">Intervalo</td><td>Café.</td><td class="modo"></td></tr>
+  <tr><td class="hora">10:15 – 10:55</td><td class="bloco">Bloco 3<br>Comercial</td><td>Orçamento de venda: capa, itens, condições comerciais, bloqueio e liberação. Conversão do orçamento em pedido de venda e confirmação do pedido.</td><td class="modo">guiado + prática</td></tr>
+  <tr><td class="hora">10:55 – 11:50</td><td class="bloco">Bloco 4<br>Planejamento e fábrica</td><td>Demanda, MRP, CRP, APS, firmar sugestões, pedido de compra, ordem de fabricação, plano de corte, estoque e lote, inspeção e romaneio de expedição.</td><td class="modo">guiado + prática</td></tr>
+  <tr><td class="hora">11:50 – 12:00</td><td class="bloco">Fechamento</td><td>Checklists, dúvidas e entrega do exercício do SU 02046.</td><td class="modo">discussão</td></tr>
+</table>
+
+<div class="atencao">
+  <b>Aviso honesto sobre o tempo</b>
+  Quatro horas cobrem o ciclo inteiro em <strong>demonstração guiada</strong> com uma prática por bloco —
+  não dá para cada participante cadastrar tudo sozinho. Por isso este apostilado traz o passo a passo
+  campo a campo e os anexos com todos os dados prontos: ele serve como manual de consulta depois do
+  treinamento. Se a turma precisar cadastrar do zero por conta própria, reserve um segundo encontro de
+  prática livre usando o Anexo A.
+</div>
+
+<h2>Convenções usadas neste material</h2>
+<table class="campos">
+  <tr><td><span class="tela">VENT0200</span></td><td>Código da tela. É o mesmo código que aparece no canto superior direito da tela dentro do sistema e na busca de telas. Use-o para achar a tela rapidamente.</td></tr>
+  <tr><td><span class="btn">Salvar</span></td><td>Botão que deve ser clicado.</td></tr>
+  <tr><td><code>Peso Líquido (kg)</code></td><td>Nome exato do campo na tela.</td></tr>
+  <tr><td>Passo <b>1</b>, <b>2</b>, <b>3</b>…</td><td>Sequência obrigatória. Pular passo costuma travar o passo seguinte.</td></tr>
+</table>
+
+<div class="duas-colunas">
+  <div class="nota"><b>Nota</b> Explicação ou informação de contexto.</div>
+  <div class="porque"><b>Por que isso importa</b> O efeito prático dessa configuração lá na frente no processo.</div>
+  <div class="atencao"><b>Atenção</b> Erro comum, ou algo que trava o fluxo se ficar errado.</div>
+  <div class="achado"><b>Achado nas fichas</b> Divergência encontrada nas planilhas da Tecnofer que precisa de decisão da Engenharia.</div>
+</div>
+
+<h2>Como cada tela é documentada</h2>
+<p>
+  A partir do Bloco 1, toda tela importante segue a mesma anatomia — o mesmo padrão que a documentação
+  dos grandes ERPs industriais usa. Assim você sempre sabe onde procurar:
+</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:6%">#</th><th style="width:26%">Parte</th><th>O que traz</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td><b>Para que serve</b></td><td>O papel da tela no processo, em duas linhas.</td></tr>
+    <tr><td class="cen">2</td><td><b>Pré-requisitos</b></td><td>O que precisa existir antes, senão a tela trava.</td></tr>
+    <tr><td class="cen">3</td><td><b>Como a tela é organizada</b></td><td>Abas e blocos, e para que serve cada um.</td></tr>
+    <tr><td class="cen">4</td><td><b>Campo a campo</b></td><td>Cada campo com: se é obrigatório, o que informar e <b>o efeito lá na frente</b>.</td></tr>
+    <tr><td class="cen">5</td><td><b>Procedimento</b></td><td>Os passos numerados para criar, e os caminhos alternativos quando existem.</td></tr>
+    <tr><td class="cen">6</td><td><b>Erros comuns</b></td><td>O que costuma dar errado e como perceber.</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">
+  Campos marcados com <b>Sim</b> em negrito na coluna “Obrig.” são os que a própria tela exige com
+  asterisco. Os demais podem ficar vazios, mas quase sempre há uma consequência — descrita na coluna de efeito.
+</p>
+
+<h2>Sumário</h2>
+<ul class="sumario">
+  <li><span class="s-num">1</span> O mapa do processo<span class="s-desc">Do orçamento à expedição — quem faz o quê e em que ordem</span></li>
+  <li><span class="s-num">2</span> A estrutura de níveis: reorganizando a ficha técnica<span class="s-desc">Produto acabado → conjunto → peça fabricada → matéria-prima, com a árvore do RN 01001 e os códigos novos</span></li>
+  <li><span class="s-num">3</span> Bloco 1 — Cadastros base<span class="s-desc">Classificação, grupos PDM, almoxarifados, itens, matérias-primas, fornecedor e cliente</span></li>
+  <li><span class="s-num">4</span> Bloco 2 — Engenharia<span class="s-desc">Estrutura do produto, máquinas, custo/hora, operações, roteiros e terceiros</span></li>
+  <li><span class="s-num">5</span> Bloco 3 — Comercial<span class="s-desc">Orçamento de venda e conversão em pedido</span></li>
+  <li><span class="s-num">6</span> Bloco 4 — Planejamento e chão de fábrica<span class="s-desc">Demanda, MRP, CRP, APS, ordens, corte, estoque, inspeção e expedição</span></li>
+  <li><span class="s-num">7</span> Checklists de conferência<span class="s-desc">O que verificar antes de dar cada etapa por concluída</span></li>
+  <li><span class="s-num">8</span> Exercício final — SU 02046<span class="s-desc">Ciclo completo do zero, em 12 passos</span></li>
+  <li><span class="s-num">A</span> Anexo A — Dados de cadastro do RN 01001<span class="s-desc">Itens, estrutura, roteiros e tempos convertidos</span></li>
+  <li><span class="s-num">B</span> Anexo B — Dados do SU 02046 e do RN 01007</li>
+  <li><span class="s-num">C</span> Anexo C — Máquinas, custo/hora e conversão de tempos</li>
+  <li><span class="s-num">D</span> Anexo D — Glossário</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>1 · O mapa do processo</h1>
+
+<p>
+  Antes de mexer em qualquer tela, é preciso enxergar o caminho inteiro. Tudo o que se cadastra no
+  começo existe para que as etapas seguintes funcionem sozinhas. Um item mal classificado no início
+  vira uma ordem errada no meio e uma nota fiscal errada no fim.
+</p>
+
+<div class="fluxo">
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Orçamento</span><span class="c">proposta ao cliente</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Pedido de venda</span><span class="c">compromisso firmado</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Demanda</span><span class="c">o que precisa existir</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx destaque"><span class="t">MRP</span><span class="c">o que comprar e fabricar</span></div>
+  </div>
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">CRP</span><span class="c">cabe nas máquinas?</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">APS</span><span class="c">quando cada coisa roda</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Firmar ordens</span><span class="c">sugestão vira ordem real</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Compra / Fabricação</span><span class="c">pedido de compra e OF</span></div>
+  </div>
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Execução da OF</span><span class="c">apontar, consumir, concluir</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Estoque + lote</span><span class="c">rastreabilidade</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Inspeção</span><span class="c">liberação da qualidade</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Romaneio</span><span class="c">separação e despacho</span></div>
+  </div>
+  <div class="fluxo-linha">
+    <div class="fluxo-cx dia2"><span class="t">NF-e de saída</span><span class="c">Dia 2</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx dia2"><span class="t">Contas a receber</span><span class="c">Dia 2</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx dia2"><span class="t">Apuração de impostos</span><span class="c">Dia 2</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx dia2"><span class="t">Contabilidade</span><span class="c">Dia 2</span></div>
+  </div>
+</div>
+
+<h2>1.1 Quem faz o quê</h2>
+<table class="dados">
+  <thead><tr><th>Área</th><th>Responsabilidade no fluxo</th><th>Telas principais do Dia 1</th></tr></thead>
+  <tbody>
+    <tr><td><b>Engenharia</b></td><td>Classificar e cadastrar itens, montar a estrutura do produto, definir roteiros, tempos e ferramentas.</td><td>VCLA0100 · VENT0200 · VENT0210 · VPRO0100 · VMAQ0200</td></tr>
+    <tr><td><b>Comercial</b></td><td>Registrar o orçamento, negociar condições, converter em pedido e confirmar.</td><td>VVND0300 · VVND0200 · VCLI0500</td></tr>
+    <tr><td><b>PCP / Planejamento</b></td><td>Cadastrar a demanda, rodar o MRP, avaliar capacidade no CRP, sequenciar no APS e firmar as ordens.</td><td>VPLA0102 · VMRP0100 · VPRO0200 · VPRO0210</td></tr>
+    <tr><td><b>Compras</b></td><td>Transformar sugestões de compra em pedido, negociar e acompanhar o recebimento.</td><td>VSUP0200 · VSUP0500 · VSUP0120</td></tr>
+    <tr><td><b>Produção</b></td><td>Executar a ordem de fabricação: iniciar, apontar horas e quantidades, consumir material, concluir com lote.</td><td>VPRO0900 · VCUT0100 · VPRO0400</td></tr>
+    <tr><td><b>Almoxarifado / Expedição</b></td><td>Movimentar estoque, controlar lotes, separar, conferir e despachar.</td><td>VEST0100 · VEST0200 · VEXP0100</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>Por que isso importa</b>
+  Nenhuma área trabalha isolada: o cadastro que a Engenharia faz é o que o PCP usa para planejar,
+  e é o que a Produção vê na ordem. Se o roteiro não tem tempo, o CRP não calcula carga.
+  Se o item não tem estrutura, o MRP não sabe comprar a chapa. Se a perda não está lançada,
+  compra-se aço a menos.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>2 · A estrutura de níveis: reorganizando a ficha técnica</h1>
+
+<p>
+  As fichas técnicas atuais (RN 01001, RN 01007, SU 02046) listam, numa única tabela, tudo o que compõe
+  o produto: peças fabricadas, conjuntos montados e matéria-prima misturados na mesma lista. Isso funciona
+  para calcular custo numa planilha, mas não funciona para o ERP planejar produção — porque o sistema
+  precisa saber <strong>o que é filho de quem</strong> e <strong>o que é comprado e o que é fabricado</strong>.
+</p>
+
+<h2>2.1 O que a ficha atual não diz</h2>
+<table class="dados">
+  <thead><tr><th style="width:32%">Situação na ficha</th><th>Consequência no ERP</th></tr></thead>
+  <tbody>
+    <tr><td>Todos os itens aparecem no mesmo nível, direto abaixo do produto</td><td>O MRP não sabe que a bucha interna só é necessária porque existe a bucha montada. Toda a rastreabilidade da submontagem se perde.</td></tr>
+    <tr><td>A coluna “Matéria Prima” é texto livre (<code>CHAPA DE AÇO 5/16"</code>)</td><td>Não existe item de estoque para a chapa. Sem item, não há saldo, não há compra automática, não há custo real.</td></tr>
+    <tr><td>Duas peças estão com código <code>-</code> (bucha interna acabada e semi-acabada)</td><td>Não é possível apontar produção, controlar estoque intermediário nem enviar para terceiros sem um código.</td></tr>
+    <tr><td>A bucha montada tem como “matéria-prima” outro texto: <code>BUCHA EXTERNA + BUCHA INTERNA</code></td><td>É na verdade um <strong>conjunto</strong> — precisa ser um item com estrutura própria, não uma linha descritiva.</td></tr>
+    <tr><td>Os roteiros vêm em blocos soltos, alguns repetindo o mesmo código</td><td>Sem separar o roteiro de cada nível, não se calcula lead time, carga de máquina nem custo por operação.</td></tr>
+  </tbody>
+</table>
+
+<h2>2.2 Dois conceitos que não podem se confundir</h2>
+<p>
+  Antes da tabela de níveis, uma distinção que resolve quase toda a dúvida de cadastro. Existem
+  <b>dois motivos diferentes</b> para criar um item intermediário, e eles não são a mesma coisa:
+</p>
+<table class="dados">
+  <thead><tr><th style="width:18%">Conceito</th><th style="width:26%">O que representa</th><th style="width:26%">Pergunta que responde</th><th>Exemplo na Tecnofer</th></tr></thead>
+  <tbody>
+    <tr><td><b>ESTRUTURA</b><br><span class="mudo">vertical — fase</span></td><td>O <b>mesmo produto num estado diferente</b>. É o produto avançando: cru → soldado → tratado → pintado.</td><td>“Em que ponto do processo isso está?”</td><td>Uma balança soldada, ainda sem pintura.</td></tr>
+    <tr><td><b>CONJUNTO</b><br><span class="mudo">horizontal — agrupamento</span></td><td>Um <b>grupo de peças diferentes</b> montadas entre si, que passa a ser tratado como uma coisa só.</td><td>“O que é montado junto antes de ir para o produto?”</td><td>BU 0120/50 — a bucha externa com as duas internas dentro.</td></tr>
+  </tbody>
+</table>
+<div class="nota">
+  <b>Nota — de onde vem essa ideia</b>
+  É o mesmo raciocínio de qualquer indústria que monta em etapas. Numa fábrica de estofados a árvore é
+  <i>produto → estrutura espumada → estrutura de madeira → conjunto de madeira → matéria-prima</i>:
+  “estrutura” marca a <b>fase</b> (com espuma, sem espuma) e “conjunto” marca o <b>agrupamento</b>
+  (madeira, espuma, capa). A lógica é idêntica na metalurgia — muda só o vocabulário.
+</div>
+
+<h2>2.3 A taxonomia de seis níveis</h2>
+<p>Todo item da Tecnofer passa a se encaixar em um destes seis níveis:</p>
+
+<table class="dados">
+  <thead><tr><th class="cen" style="width:7%">Nível</th><th style="width:19%">Nome</th><th style="width:26%">O que é</th><th style="width:19%">Tipo de Item no sistema</th><th>Exemplo</th></tr></thead>
+  <tbody>
+    <tr><td class="cen"><b>1</b></td><td><b>PRODUTO ACABADO</b></td><td>O que é vendido ao cliente. Tem preço de venda e sai em nota fiscal.</td><td><code>Fabricado</code> + estrutura <code>Comercial</code></td><td>RN 01001 Balança Asa Delta</td></tr>
+    <tr><td class="cen"><b>2</b></td><td><b>ESTRUTURA</b><br><span class="mudo">fase do produto</span></td><td>O produto num estado intermediário estocável. <b>Só existe quando a fase se paga</b> — ver o teste da próxima seção.</td><td><code>Fabricado</code> + estrutura <code>Industrial</code></td><td class="mudo">Nenhum hoje — nível reservado</td></tr>
+    <tr><td class="cen"><b>3</b></td><td><b>CONJUNTO</b></td><td>Submontagem que junta duas ou mais peças e tem operação própria (soldar, embuchar, montar).</td><td><code>Fabricado</code> + estrutura <code>Industrial</code></td><td>BU 0120/50 Bucha da Balança</td></tr>
+    <tr><td class="cen"><b>4</b></td><td><b>PEÇA FABRICADA</b></td><td>Peça individual feita a partir de matéria-prima. Subdividida por processo: cortada, conformada, usinada, tratada.</td><td><code>Fabricado</code> + estrutura <code>Industrial</code></td><td>TP 01001A Lateral 5/16"</td></tr>
+    <tr><td class="cen"><b>5</b></td><td><b>MATÉRIA-PRIMA</b></td><td>O que se compra pronto e entra por nota fiscal: chapa, tubo, fixador, tinta, consumível.</td><td><code>Comprado</code> + estrutura <code>Industrial</code></td><td>MP 10794 Chapa 5/16"</td></tr>
+    <tr><td class="cen"><b>6</b></td><td><b>SERVIÇO DE TERCEIRO</b></td><td>Processo feito fora: cementação, usinagem externa, zincagem. Não é material, é serviço comprado.</td><td><code>Serviço</code></td><td>Cementação da bucha interna</td></tr>
+  </tbody>
+</table>
+
+<div class="nota">
+  <b>Regra prática de decisão</b>
+  Pergunte, para cada linha da ficha, nesta ordem:
+  <br>1. <b>Isso é um processo feito fora?</b> → é <b>SERVIÇO DE TERCEIRO</b>.
+  <br>2. <b>Eu compro isso pronto de um fornecedor?</b> → é <b>MATÉRIA-PRIMA</b>.
+  <br>3. <b>Isso é o que o cliente compra de mim?</b> → é <b>PRODUTO ACABADO</b>.
+  <br>4. <b>Isso junta duas ou mais peças minhas?</b> → é <b>CONJUNTO</b>.
+  <br>5. <b>Isso é o produto inteiro, só que ainda não terminado?</b> → é <b>ESTRUTURA</b>.
+  <br>6. Sobrou → é <b>PEÇA FABRICADA</b>.
+  <br>Um item nunca muda de nível depois de cadastrado; se mudou de natureza, é outro item.
+</div>
+
+<h2>2.4 Quando criar um nível — o teste dos cinco critérios</h2>
+<p>
+  Profundidade de estrutura não é organização: é compromisso operacional. Antes de criar qualquer item
+  intermediário, aplique o teste. <b>Basta uma resposta “sim” para o nível se justificar:</b>
+</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:6%">#</th><th style="width:26%">Critério</th><th style="width:34%">Pergunta concreta</th><th>Exemplo na Tecnofer</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td><b>Para fisicamente</b></td><td>Pode ser estocado, contado num inventário ou ficar parado entre um turno e outro?</td><td>A bucha montada, esperando a montagem da balança.</td></tr>
+    <tr><td class="cen">2</td><td><b>É compartilhado</b></td><td>Serve a mais de um produto final?</td><td>TP 01022A, usada em mais de uma família de suporte.</td></tr>
+    <tr><td class="cen">3</td><td><b>Sai da empresa</b></td><td>Vai para terceiro e precisa de código para a nota de remessa?</td><td>BU 0050IB indo para a cementação.</td></tr>
+    <tr><td class="cen">4</td><td><b>É ponto de variação</b></td><td>A partir dele nascem várias versões — cor, acabamento, medida?</td><td class="mudo">Não se aplica hoje.</td></tr>
+    <tr><td class="cen">5</td><td><b>Muda de dono</b></td><td>Sai de uma ordem e entra em outra, com apontamento separado e responsável diferente?</td><td>A bucha acabada, que volta do terceiro para a montagem.</td></tr>
+  </tbody>
+</table>
+
+<div class="atencao">
+  <b>Atenção — o que custa cada nível a mais</b>
+  Neste sistema, <b>todo item fabricado que está na estrutura vira uma sugestão do MRP e uma ordem de
+  fabricação</b> — a menos que você o marque como <b>Fantasma</b> (ver a caixa seguinte). Um item “só
+  para organizar”, sem essa marcação, gera ordem, exige apontamento e cria movimento de estoque igual a
+  qualquer outro.
+  <br><br>
+  O RN 01001, como está proposto, já gera <b>nove ordens</b> por lote. Cada nível novo é uma décima
+  ordem, um apontamento a mais no chão de fábrica e um saldo a mais para conferir no inventário.
+  <br><br>
+  <b>Se nenhum dos cinco critérios for “sim”, aquilo é operação de roteiro — não nível de estrutura.</b>
+  Material que passa direto de uma operação para a seguinte, na mesma ordem, sem ser contado e sem
+  servir a outro produto, não merece um item.
+</div>
+
+<div class="dica">
+  <b>Dica — o item Fantasma: organização sem ordem</b>
+  Existe um caminho do meio, e ele resolve boa parte da dúvida sobre profundidade. Na aba
+  <b>Planejamento</b> do cadastro do item há o indicador <code>Fantasma</code>, descrito na própria tela
+  como <i>“nível na estrutura sem controle de estoque”</i>.
+  <br><br>
+  Um item marcado assim <b>aparece na árvore</b>, organiza a leitura da estrutura e recebe a quantidade
+  correta — mas o MRP <b>não gera ordem para ele</b>: atravessa o nível e explode direto os filhos, já
+  com a quantidade multiplicada. É como se o nível existisse no papel e não existisse no chão de fábrica.
+  <br><br>
+  Use quando quiser o agrupamento visual sem o custo operacional — por exemplo, um “conjunto de
+  fixação” que apenas agrupa parafusos e porcas na leitura da estrutura, mas nunca é montado
+  separadamente.
+  <br><br>
+  <span class="mudo">Observação: existe um parâmetro de planejamento que força a gravação de sugestões
+  também para itens fantasma. Ele vem <b>desligado</b> por padrão, que é o comportamento desejado.
+  Não o ligue sem entender o efeito — ele anula toda a vantagem do fantasma.</span>
+</div>
+
+<div class="atencao">
+  <b>Atenção — não confunda os dois “Fantasma” da tela de itens</b>
+  São campos diferentes, em abas diferentes, com efeitos diferentes:
+  <br><br>
+  • <b>Aba Capa → campo <code>Estado</code> → opção <code>Fantasma</code></b>: é a <b>situação
+  cadastral</b> do item, no mesmo campo que tem Ativo e Inativo. Trata do ciclo de vida do cadastro.
+  <br>
+  • <b>Aba Planejamento → <code>Indicadores</code> → caixa <code>Fantasma</code></b>: é o que faz o
+  <b>MRP atravessar o nível</b> sem gerar ordem. <b>É esta</b> que você marca para ter estrutura
+  organizacional sem custo de ordem.
+</div>
+
+<div class="dica">
+  <b>Dica — organização sai de graça na classificação</b>
+  Quando a vontade é apenas <b>organizar e enxergar melhor</b>, não crie nível de estrutura: use a
+  <b>Classificação de Itens</b> (seção 3.1). Ela agrupa, filtra e alimenta relatório de custo por família
+  sem gerar uma única ordem. Estrutura é para o que a fábrica realmente executa; classificação é para
+  como a empresa enxerga.
+</div>
+
+<h2>2.5 As decisões tomadas para a Tecnofer</h2>
+<p>
+  Cada nível candidato foi avaliado com o teste acima. Ficam registrados aqui os que <b>não</b> foram
+  criados e o motivo — para que a decisão não precise ser rediscutida do zero daqui a seis meses.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:24%">Nível avaliado</th><th class="cen" style="width:12%">Decisão</th><th>Motivo</th></tr></thead>
+  <tbody>
+    <tr><td><b>ESTRUTURA CRUA</b><br><span class="mudo">balança soldada, antes da pintura</span></td><td class="cen"><b>Não criar</b></td><td>A cor é sempre preta — <b>não há ponto de variação</b> (critério 4 negativo) e a peça não para esperando pintura (critério 1 negativo). A pintura continua como a operação 90 do roteiro do produto acabado, exatamente como está na ficha.</td></tr>
+    <tr><td><b>PEÇA CORTADA × PEÇA DOBRADA</b><br><span class="mudo">separar o blank da peça conformada</span></td><td class="cen"><b>Não criar</b></td><td>As peças cortadas <b>esperam a dobradeira por fila de gargalo</b>, não por decisão de processo: assim que a máquina libera, a peça segue na sequência. Fila de gargalo se resolve com <b>CRP e APS</b> (seções 6.3 e 6.4), não com nível de estrutura — criar o item transformaria um problema de capacidade num problema de cadastro, e ainda dobraria o número de ordens. A informação de quais peças passam pela dobradeira fica na <b>classificação</b> (4.01 cortadas × 4.02 conformadas), onde é grátis.</td></tr>
+    <tr><td><b>CONJUNTO LATERAL SOLDADO</b><br><span class="mudo">agrupar as 2 laterais + peito de pombo</span></td><td class="cen"><b>Não criar</b></td><td>São soldadas na própria bancada de montagem final, dentro da mesma ordem. Nenhum dos cinco critérios é atendido.</td></tr>
+    <tr><td><b>CONJUNTO BUCHA</b><br><span class="mudo">BU 0120/50</span></td><td class="cen"><b>Criar</b></td><td>Critérios 1 e 5: tem operação própria (embuchar na prensa), agrupa duas peças distintas e pode ficar estocado esperando a montagem.</td></tr>
+    <tr><td><b>PAR BRUTA → CEMENTADA</b><br><span class="mudo">BU 0050IB → BU 0050I</span></td><td class="cen"><b>Criar</b></td><td>Critério 3, o mais forte de todos: o material <b>sai da empresa</b>. Sem os dois códigos não há como emitir a nota de remessa nem controlar o saldo em poder de terceiros.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>Fila de gargalo não é nível de estrutura — é a lição mais importante desta seção</b>
+  As peças cortadas <b>de fato ficam esperando</b> a dobradeira. Mas esperam porque a máquina está
+  ocupada, não porque o processo foi desenhado para parar ali. Assim que o gargalo libera, a peça segue
+  na sequência normalmente.
+  <br><br>
+  Essa distinção decide o cadastro:
+  <br>• <b>Ponto de desacoplamento</b> — o processo <i>precisa</i> parar (esperar terceiro, esperar
+  decisão de cor, esperar outro pedido). → <b>vira nível de estrutura.</b>
+  <br>• <b>Fila de capacidade</b> — o processo <i>quer</i> seguir, mas o recurso está ocupado.
+  → <b>vira carga no CRP e sequenciamento no APS.</b>
+  <br><br>
+  Criar um item para a peça cortada não faria a dobradeira render mais um minuto: só transformaria
+  um problema de capacidade num problema de cadastro, com o dobro de ordens para apontar. O caminho
+  certo para essa fila é medir a carga no CRP, sequenciar no APS e usar <b>overlap</b> no roteiro para
+  a dobra começar antes de o lote de corte terminar.
+</div>
+
+<div class="nota">
+  <b>Nota — quando reabrir a discussão</b>
+  Três gatilhos fazem valer a pena reavaliar a criação de um nível:
+  <br>• <b>Cor ou acabamento passa a variar por cliente</b> → cria-se a ESTRUTURA CRUA e a pintura vira a última ordem.
+  <br>• <b>Uma peça passa a ser cortada para estoque, sem pedido definido</b> — não “esperando a máquina”, mas <b>deliberadamente antecipada</b> → aí sim o critério 1 vira “sim”.
+  <br>• <b>Uma peça passa a ser usada em outro produto</b> → o critério 2 vira “sim”; cadastre-a uma vez e ligue-a às duas estruturas.
+</div>
+
+<h2>2.6 A árvore do RN 01001</h2>
+<p>
+  Esta é a mesma ficha, reorganizada. Cada recuo é um nível de estrutura; as quantidades são
+  <strong>por unidade do pai imediato</strong>:
+</p>
+
+<pre class="arvore">
+NÍVEL 0 · PA   RN 01001    BALANÇA ASA DELTA CARRETA PINO Ø 50 MM              1 UN
+  │
+  ├─ N2 · PF   TP 01001A   LATERAL 5/16" BALANÇA CARRETA ASA DELTA LS          × 2 UN
+  │              └─ N3 · MP  MP 10794  CHAPA DE AÇO 5/16"          3,710 KG   perda 26,95 %
+  │
+  ├─ N2 · PF   TP 01001B   PEITO DE POMBO 170 × 94 × 3/8"                      × 2 UN
+  │              └─ N3 · MP  MP 10952  CHAPA DE AÇO 3/8"           1,220 KG   perda  8,20 %
+  │
+  ├─ N2 · PF   TP 01001C   FECHAMENTO SUPERIOR 504 × 102 × 3 MM                × 1 UN
+  │              └─ N3 · MP  MP 10300  CHAPA DE AÇO 3,00 MM        1,230 KG   perda  9,76 %
+  │
+  ├─ N2 · PF   TP 01001D   FECHAMENTO INFERIOR 130 × 94 × 3 MM                 × 1 UN
+  │              └─ N3 · MP  MP 10300  CHAPA DE AÇO 3,00 MM        0,240 KG   perda 12,50 %
+  │
+  └─ N1 · CJ   BU 0120/50  BUCHA DA BALANÇA 120 MM PARA PINO 50 MM             × 1 UN
+                 │
+                 ├─ N2 · PF  BU 0120E   BUCHA EXTERNA 120 MM                   × 1 UN
+                 │             └─ N3 · MP  MP 10794 CHAPA DE AÇO 5/16"  1,650 KG  perda 2,00 %
+                 │
+                 └─ N2 · PF  BU 0050I   BUCHA INTERNA 50,4 MM ACABADA          × 2 UN
+                               └─ N2 · PF  BU 0050IB BUCHA INTERNA 50,4 MM SEMI-ACABADA × 1 UN
+                                             └─ N3 · MP MP 20603 TUBO Ø 60,3 × 4,75  1 PC  perda 2,00 %
+</pre>
+
+<div class="atencao">
+  <b>Atenção — a bucha interna tem dois estágios</b>
+  Na ficha, “bucha interna acabada” e “bucha interna semi-acabada” aparecem como duas linhas de mesma
+  quantidade. Elas não são peças diferentes usadas juntas: a semi-acabada é <strong>cortada e usinada</strong>
+  e depois vai para <strong>cementação em terceiro</strong>, voltando como acabada. No ERP isso é uma
+  cadeia de dois itens, um filho do outro — é assim que se controla o material que está fora da empresa
+  e o custo do serviço de terceiro.
+</div>
+
+<h2>2.7 De-para: cada linha da ficha vira o quê</h2>
+<table class="dados">
+  <thead><tr><th style="width:13%">Código ficha</th><th style="width:12%">Código ERP</th><th>Descrição</th><th class="cen" style="width:7%">Nível</th><th style="width:13%">Tipo de Item</th><th style="width:16%">Classificação</th><th style="width:13%">Filho de</th></tr></thead>
+  <tbody>
+    <tr><td>RN 01001</td><td><b>RN 01001</b></td><td>Balança Asa Delta Carreta Pino Ø 50 mm</td><td class="cen">1 · PA</td><td>Fabricado</td><td>1.01 Balança carreta</td><td class="mudo">—</td></tr>
+    <tr><td>TP 01001A</td><td><b>TP 01001A</b></td><td>Lateral 5/16" Balança Carreta Asa Delta LS</td><td class="cen">4 · Peça</td><td>Fabricado</td><td>4.01 Cortadas</td><td>RN 01001</td></tr>
+    <tr><td>TP 01001B</td><td><b>TP 01001B</b></td><td>Peito de Pombo 170 × 94 × 3/8"</td><td class="cen">4 · Peça</td><td>Fabricado</td><td>4.02 Conformadas</td><td>RN 01001</td></tr>
+    <tr><td>TP 01001C</td><td><b>TP 01001C</b></td><td>Fechamento Superior 504 × 102 × 3 mm</td><td class="cen">4 · Peça</td><td>Fabricado</td><td>4.02 Conformadas</td><td>RN 01001</td></tr>
+    <tr><td>TP 01001D</td><td><b>TP 01001D</b></td><td>Fechamento Inferior 130 × 94 × 3 mm</td><td class="cen">4 · Peça</td><td>Fabricado</td><td>4.02 Conformadas</td><td>RN 01001</td></tr>
+    <tr><td>BU 0120/50</td><td><b>BU 0120/50</b></td><td>Bucha da Balança 120 mm para pino 50 mm</td><td class="cen">3 · Conj.</td><td>Fabricado</td><td>3.01 Buchas montadas</td><td>RN 01001</td></tr>
+    <tr><td>BU 0120E</td><td><b>BU 0120E</b></td><td>Bucha Externa 120 mm</td><td class="cen">4 · Peça</td><td>Fabricado</td><td>4.03 Usinadas e buchas</td><td>BU 0120/50</td></tr>
+    <tr><td class="mudo">— (sem código)</td><td><b>BU 0050I</b></td><td>Bucha Interna 50,4 mm <b>acabada</b> (cementada)</td><td class="cen">4 · Peça</td><td>Fabricado</td><td>4.04 Tratadas</td><td>BU 0120/50</td></tr>
+    <tr><td class="mudo">— (sem código)</td><td><b>BU 0050IB</b></td><td>Bucha Interna 50,4 mm <b>semi-acabada</b> (bruta)</td><td class="cen">4 · Peça</td><td>Fabricado</td><td>4.03 Usinadas e buchas</td><td>BU 0050I</td></tr>
+    <tr><td class="mudo">texto na coluna MP</td><td><b>MP 10794</b></td><td>Chapa de Aço 5/16" (7,94 mm) — 1200 × 3000</td><td class="cen">5 · MP</td><td>Comprado</td><td>5.01 Chapas de aço</td><td>TP 01001A · BU 0120E</td></tr>
+    <tr><td class="mudo">texto na coluna MP</td><td><b>MP 10952</b></td><td>Chapa de Aço 3/8" (9,52 mm) — 1200 × 3000</td><td class="cen">5 · MP</td><td>Comprado</td><td>5.01 Chapas de aço</td><td>TP 01001B</td></tr>
+    <tr><td class="mudo">texto na coluna MP</td><td><b>MP 10300</b></td><td>Chapa de Aço 3,00 mm — 1200 × 3000</td><td class="cen">5 · MP</td><td>Comprado</td><td>5.01 Chapas de aço</td><td>TP 01001C · TP 01001D</td></tr>
+    <tr><td class="mudo">texto na coluna MP</td><td><b>MP 20603</b></td><td>Tubo de Aço Redondo Ø 60,3 × 4,75</td><td class="cen">5 · MP</td><td>Comprado</td><td>5.02 Tubos e perfis</td><td>BU 0050IB</td></tr>
+    <tr><td class="mudo">linha “Cementação”</td><td><b>SV 6001</b></td><td>Cementação — serviço de terceiro</td><td class="cen">6 · Serv.</td><td>Serviço</td><td>6.01 Tratamento térmico</td><td>BU 0050I</td></tr>
+    <tr><td class="mudo">linha “Usinagem”</td><td><b>SV 6002</b></td><td>Usinagem externa — serviço de terceiro</td><td class="cen">6 · Serv.</td><td>Serviço</td><td>6.02 Usinagem externa</td><td>BU 0050IB</td></tr>
+  </tbody>
+</table>
+
+<div class="nota">
+  <b>Nota — por que 4.01 e 4.02 são classificações diferentes</b>
+  A distinção entre <b>peça cortada</b> (só corte, vai direto) e <b>peça conformada</b> (corte + dobra ou
+  estampo) foi a razão pela qual avaliamos separar o blank num item próprio — e a razão pela qual
+  decidimos <b>não</b> separar. A informação continua útil: ela diz quais peças passam pela dobradeira,
+  que é o segundo recurso mais caro da fábrica. Por isso ela vive na <b>classificação</b>, onde é grátis,
+  e não na estrutura, onde custaria uma ordem por peça.
+</div>
+
+<h2>2.8 Códigos novos e o padrão adotado</h2>
+<p>
+  Os códigos que a Tecnofer já usa permanecem exatamente como estão — a equipe já os conhece e eles
+  aparecem nos desenhos. Só criamos código onde faltava, seguindo o mesmo padrão de duas letras + número:
+</p>
+
+<table class="dados">
+  <thead><tr><th style="width:16%">Prefixo</th><th style="width:22%">Significa</th><th>Regra de numeração</th></tr></thead>
+  <tbody>
+    <tr><td><b>RN / SU</b></td><td>Produto acabado</td><td>Mantido como está. <code>RN</code> = linha carreta/reboque, <code>SU</code> = linha truck. Numeração de 5 dígitos existente.</td></tr>
+    <tr><td><b>TP</b></td><td>Peça fabricada do produto</td><td>Mantido: código do produto + letra sequencial (<code>TP 01001A</code>, <code>B</code>, <code>C</code>…). Peça compartilhada mantém o código da família de origem (ex.: <code>TP 01022A</code> usado no RN 01007).</td></tr>
+    <tr><td><b>BU</b></td><td>Buchas e conjuntos de bucha</td><td>Mantido. Sufixo <code>E</code> = externa, <code>I</code> = interna acabada, <code>IB</code> = interna bruta/semi-acabada. Conjunto usa <code>ØBucha/Øpino</code> (ex.: <code>BU 0120/50</code>).</td></tr>
+    <tr><td><b>MP 1xxxx</b></td><td><b>Novo</b> — chapas de aço</td><td>Os quatro dígitos após o 1 são a espessura em centésimos de milímetro: <code>MP 10300</code> = 3,00 mm; <code>MP 10794</code> = 7,94 mm (5/16").</td></tr>
+    <tr><td><b>MP 2xxxx</b></td><td><b>Novo</b> — tubos e perfis</td><td>Dígitos = diâmetro nominal em décimos de milímetro: <code>MP 20603</code> = Ø 60,3 mm.</td></tr>
+    <tr><td><b>MP 3xxxx</b></td><td><b>Novo</b> — consumíveis</td><td>Arame de solda, gás, tinta, fundo, diluente, abrasivos.</td></tr>
+  </tbody>
+</table>
+
+<h3>As matérias-primas de chapa a cadastrar</h3>
+<p>
+  Vêm da aba <em>Hora máquina</em> das fichas, que já traz o peso da chapa inteira 1200 × 3000 por espessura.
+  Preço de referência: <b>R$ 4,70 / kg</b> (Chapas Jandaia).
+</p>
+<table class="dados">
+  <thead><tr><th style="width:14%">Código</th><th>Descrição</th><th class="num" style="width:14%">Espessura</th><th class="num" style="width:20%">Peso da chapa 1200×3000</th><th class="num" style="width:16%">Custo da chapa</th></tr></thead>
+  <tbody>
+    <tr><td><b>MP 10300</b></td><td>Chapa de Aço 3,00 mm</td><td class="num">3,00 mm</td><td class="num">84,78 kg</td><td class="num">R$ 398,47</td></tr>
+    <tr><td><b>MP 10476</b></td><td>Chapa de Aço 3/16"</td><td class="num">4,76 mm</td><td class="num">134,24 kg</td><td class="num">R$ 630,93</td></tr>
+    <tr><td><b>MP 10635</b></td><td>Chapa de Aço 1/4"</td><td class="num">6,35 mm</td><td class="num">179,45 kg</td><td class="num">R$ 843,42</td></tr>
+    <tr><td><b>MP 10794</b></td><td>Chapa de Aço 5/16"</td><td class="num">7,94 mm</td><td class="num">226,08 kg</td><td class="num">R$ 1.062,58</td></tr>
+    <tr><td><b>MP 10952</b></td><td>Chapa de Aço 3/8"</td><td class="num">9,52 mm</td><td class="num">268,47 kg</td><td class="num">R$ 1.261,81</td></tr>
+    <tr><td><b>MP 11270</b></td><td>Chapa de Aço 1/2"</td><td class="num">12,70 mm</td><td class="num">358,90 kg</td><td class="num">R$ 1.686,83</td></tr>
+    <tr><td><b>MP 11588</b></td><td>Chapa de Aço 5/8"</td><td class="num">15,88 mm</td><td class="num">448,77 kg</td><td class="num">R$ 2.109,22</td></tr>
+    <tr><td><b>MP 20603</b></td><td>Tubo Redondo Ø 60,3 × 4,75 (bucha interna pino 50 mm)</td><td class="num">—</td><td class="num">109 peças / barra</td><td class="num">R$ 350,14 / barra</td></tr>
+    <tr><td><b>MP 21100</b></td><td>Tubo para Bucha Externa 110 mm</td><td class="num">—</td><td class="num">53 peças / barra</td><td class="num">R$ 813,35 / barra</td></tr>
+  </tbody>
+</table>
+
+<div class="dica">
+  <b>Dica</b>
+  As duas últimas linhas mostram por que existe a <span class="tela-out">VSUP0110</span> Conversão de UM
+  por Item: a barra é <b>comprada em barra</b> mas <b>consumida em peça</b>. O fator (109 peças por barra,
+  53 peças por barra) fica cadastrado uma vez e o sistema converte sozinho em toda compra e todo consumo.
+</div>
+
+<h2>2.6 Achados nas fichas — decisões da Engenharia</h2>
+<p>
+  Ao reconstruir as fichas encontramos sete pontos que precisam de definição antes do cadastro definitivo.
+  Nenhum deles impede o treinamento, mas todos afetam o custo calculado.
+</p>
+
+<div class="achado">
+  <b>Achado 1 — TP 01001C: dobra custeada com a máquina errada</b>
+  A operação está descrita como <b>Dobrar na Dobradeira</b>, mas o custo lançado (R$ 0,3068) corresponde
+  à hora da <b>Guilhotina</b> (R$ 55,23/h), não à da Dobradeira ERMAK (R$ 110,65/h). O item gêmeo
+  TP 01001D, com a mesma operação e o mesmo tempo, usa corretamente a hora da Dobradeira (R$ 0,6147).
+  Com a correção, o custo do TP 01001C sobe de R$ 0,95 para <b>R$ 1,26</b>.
+  <br><br><b>No ERP isso não acontece</b>: a hora vem do centro de trabalho amarrado à operação, então é
+  impossível cobrar uma operação com a tarifa de outra máquina.
+</div>
+
+<div class="achado">
+  <b>Achado 2 — BU 0120E aparece duas vezes com roteiros diferentes</b>
+  O primeiro bloco tem só <b>Embuchar na Prensa</b>; o segundo tem cortar, repicar, enrolar, soldar e
+  endireitar. Embuchar é a operação de <b>montar a bucha interna dentro da externa</b> — ou seja, é o
+  roteiro do conjunto <b>BU 0120/50</b>, não da peça BU 0120E. Foi assim que interpretamos neste material.
+  <b>Confirmar com a Engenharia.</b>
+</div>
+
+<div class="achado">
+  <b>Achado 3 — “Endireitar na Morça” não tem hora-máquina cadastrada</b>
+  A operação existe no roteiro do BU 0120E mas o recurso não aparece na tabela de hora-máquina. Os valores
+  do bloco (R$ 0,01 setup / R$ 0,28 processo) sugerem cerca de <b>R$ 22,40/h</b>. Precisamos criar o centro
+  de trabalho <b>Bancada / Morsa</b> com uma tarifa oficial.
+</div>
+
+<div class="achado">
+  <b>Achado 4 — “Montagem” também não está na tabela de hora-máquina</b>
+  Conferindo os números, a Montagem foi custeada a <b>R$ 37,09/h</b> — a mesma tarifa da Máquina de Solda.
+  Se a intenção é essa, tudo bem, mas isso precisa virar um centro de trabalho próprio
+  (<b>Mesa de Montagem</b>), senão a carga da montagem some dentro da carga da solda no CRP e o
+  sequenciamento fica errado.
+</div>
+
+<div class="achado">
+  <b>Achado 5 — Cementação está na coluna de tempo, mas é preço</b>
+  Na ficha do RN 01001 o valor <code>1,74</code> aparece na coluna “Tempo de Setup”. Ele não é tempo:
+  é o <b>custo do serviço</b> (0,300 kg × R$ 5,80/kg conforme a tabela de cementação). O mesmo vale para
+  “Usinagem (Terceirizado)” a R$ 0,70. No ERP esses dois viram <b>preço de serviço de terceiro</b>
+  <span class="tela-out">VTPS0100</span>, não tempo de máquina.
+</div>
+
+<div class="achado">
+  <b>Achado 6 — RN 01007: peça com quantidade 2 custeada como 1</b>
+  O item <b>TP 01022A</b> (Chapa 1/2" do Mancal) tem <code>Quantidade: 2</code>, mas o CUSTO TOTAL do bloco
+  é R$ 5,45 — o valor de <b>uma</b> peça. Deveria ser R$ 10,91. Todos os demais blocos das três fichas
+  multiplicam corretamente pela quantidade.
+</div>
+
+<div class="achado">
+  <b>Achado 7 — o bloco do BU 0120E usa valores arredondados de outra tabela</b>
+  Os custos de setup daquele bloco (R$ 0,02) não batem com a tarifa atual da Guilhotina (dariam R$ 0,046).
+  O bloco parece ter sido calculado com uma tabela de hora-máquina antiga e depois arredondado a 2 casas.
+  Ao recadastrar no ERP, os valores serão recalculados com as tarifas vigentes.
+</div>
+
+<div class="porque">
+  <b>Por que isso importa</b>
+  Nenhum desses erros é falha de quem montou a planilha — é o limite da planilha. Cada custo é digitado
+  à mão, então nada garante que a tarifa usada seja a da máquina certa, nem que a quantidade seja aplicada.
+  No ERP o custo é <b>calculado</b>: tarifa do centro de trabalho × tempo do roteiro × quantidade da estrutura.
+  Mudou a tarifa da energia? Recalcula tudo de uma vez. É essa a diferença que o Dia 2 vai explorar em custo padrão.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>3 · Bloco 1 — Cadastros base</h1>
+
+<p><b>Objetivo do bloco:</b> deixar o ambiente pronto para receber o produto — classificação criada,
+grupos definidos, almoxarifados abertos, itens dos quatro níveis cadastrados, fornecedor e cliente ativos.</p>
+
+<h2>3.1 Classificação de Itens <span class="tela">VCLA0100</span></h2>
+<p>
+  A classificação é a “pasta” onde o item mora. Ela organiza consultas, relatórios e a análise de custo
+  por família. Primeiro cria-se a <b>máscara</b> (o formato do código de classificação); depois as
+  classificações dentro dela, em árvore.
+</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar a máscara de classificação</div>
+  <p>No quadro <b>Máscaras de Classificação</b>, preencha e clique em <span class="btn">Adicionar</span>:</p>
+  <table class="campos">
+    <tr><td>Descrição</td><td>PRODUTOS TRUCKPARTS</td></tr>
+    <tr><td>Máscara (formato)</td><td><code>9.99.99</code></td><td class="obs">Um dígito para o nível 1, dois para o nível 2 e dois para o nível 3. Isso define quantos caracteres cada nível pode ter.</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Abrir a máscara e cadastrar as classificações</div>
+  <p>Clique em <span class="btn">Abrir</span> na máscara criada. No quadro de baixo, cadastre uma linha
+  de cada vez. O campo <code>Pai (código)</code> fica vazio no primeiro nível e recebe o código do pai nos demais.</p>
+  <table class="dados">
+    <thead><tr><th style="width:14%">Código</th><th>Descrição</th><th style="width:16%">Pai (código)</th><th class="cen" style="width:10%">Nível</th></tr></thead>
+    <tbody>
+      <tr class="sub"><td>1</td><td>PRODUTO ACABADO</td><td class="mudo">—</td><td class="cen">1</td></tr>
+      <tr><td>1.01</td><td>Balança / suspensão — linha carreta</td><td>1</td><td class="cen">2</td></tr>
+      <tr><td>1.02</td><td>Deslizante / suspensão — linha truck</td><td>1</td><td class="cen">2</td></tr>
+      <tr><td>1.03</td><td>Suportes e mancais</td><td>1</td><td class="cen">2</td></tr>
+      <tr class="sub"><td>2</td><td>ESTRUTURA <span class="mudo">(fase do produto)</span></td><td class="mudo">—</td><td class="cen">1</td></tr>
+      <tr><td>2.01</td><td>Estrutura soldada crua <span class="mudo">— reservado, sem uso hoje</span></td><td>2</td><td class="cen">2</td></tr>
+      <tr><td>2.02</td><td>Estrutura tratada / galvanizada <span class="mudo">— reservado</span></td><td>2</td><td class="cen">2</td></tr>
+      <tr class="sub"><td>3</td><td>CONJUNTO (SUBMONTAGEM)</td><td class="mudo">—</td><td class="cen">1</td></tr>
+      <tr><td>3.01</td><td>Buchas montadas</td><td>3</td><td class="cen">2</td></tr>
+      <tr><td>3.02</td><td>Conjuntos soldados</td><td>3</td><td class="cen">2</td></tr>
+      <tr class="sub"><td>4</td><td>PEÇA FABRICADA</td><td class="mudo">—</td><td class="cen">1</td></tr>
+      <tr><td>4.01</td><td>Peças cortadas <span class="mudo">(corte único — não passam pela dobradeira)</span></td><td>4</td><td class="cen">2</td></tr>
+      <tr><td>4.02</td><td>Peças conformadas <span class="mudo">(corte + dobra ou estampo)</span></td><td>4</td><td class="cen">2</td></tr>
+      <tr><td>4.03</td><td>Peças usinadas e buchas</td><td>4</td><td class="cen">2</td></tr>
+      <tr><td>4.04</td><td>Peças tratadas <span class="mudo">(cementadas, zincadas)</span></td><td>4</td><td class="cen">2</td></tr>
+      <tr><td>4.05</td><td>Arruelas, reforços e cantoneiras</td><td>4</td><td class="cen">2</td></tr>
+      <tr class="sub"><td>5</td><td>MATÉRIA-PRIMA</td><td class="mudo">—</td><td class="cen">1</td></tr>
+      <tr><td>5.01</td><td>Chapas de aço</td><td>5</td><td class="cen">2</td></tr>
+      <tr><td>5.02</td><td>Tubos e perfis</td><td>5</td><td class="cen">2</td></tr>
+      <tr><td>5.03</td><td>Consumíveis de solda e pintura</td><td>5</td><td class="cen">2</td></tr>
+      <tr class="sub"><td>6</td><td>SERVIÇO DE TERCEIRO</td><td class="mudo">—</td><td class="cen">1</td></tr>
+      <tr><td>6.01</td><td>Tratamento térmico (cementação, têmpera)</td><td>6</td><td class="cen">2</td></tr>
+      <tr><td>6.02</td><td>Usinagem externa</td><td>6</td><td class="cen">2</td></tr>
+      <tr><td>6.03</td><td>Tratamento de superfície (zincagem, galvanização)</td><td>6</td><td class="cen">2</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="porque">
+  <b>Por que 4.01 e 4.02 são classificações separadas</b>
+  Nem todo componente passa pela dobradeira — no RN 01001, a lateral vai só ao laser, enquanto o
+  fechamento superior, o inferior e o peito de pombo todos dobram. Como a dobradeira é o
+  <b>gargalo da fábrica</b>, saber de imediato quais peças a disputam vale muito para o planejamento.
+  <br><br>
+  Essa informação vive aqui, na classificação, onde é grátis — e não como nível de estrutura, que
+  custaria uma ordem por peça (seção 2.5).
+</div>
+
+<div class="dica">
+  <b>Dica</b> Cadastre o nível 1 inteiro antes de começar o nível 2 — o sistema só aceita um pai que
+  já existe. Se errar a ordem, a linha é recusada.
+</div>
+
+<h2>3.2 Grupo e Modificador PDM <span class="tela">VITE0114</span> <span class="tela">VITE0115</span></h2>
+<p>
+  Antes de cadastrar qualquer item, é obrigatório existir um <b>Grupo</b> e um <b>Modificador</b>. São os dois
+  campos com asterisco na capa do item. O grupo diz a família do item; o modificador, a variação dentro da família.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:20%">Tela</th><th style="width:12%">Código</th><th>Descrição sugerida</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="5"><span class="tela-out">VITE0114</span> Grupos</td><td>10</td><td>SUSPENSÃO CARRETA</td></tr>
+    <tr><td>11</td><td>SUSPENSÃO TRUCK</td></tr>
+    <tr><td>20</td><td>PEÇAS ESTAMPADAS E DOBRADAS</td></tr>
+    <tr><td>30</td><td>BUCHAS E MANCAIS</td></tr>
+    <tr><td>90</td><td>MATÉRIA-PRIMA SIDERÚRGICA</td></tr>
+    <tr><td rowspan="4"><span class="tela-out">VITE0115</span> Modificadores</td><td>1</td><td>PADRÃO</td></tr>
+    <tr><td>2</td><td>REFORÇADO</td></tr>
+    <tr><td>3</td><td>SEMI-ACABADO</td></tr>
+    <tr><td>4</td><td>CHAPA PLANA</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">Na tela de grupos existe o botão <span class="btn">Próximo código livre</span> — use-o para não repetir código.</p>
+
+<h2>3.3 Almoxarifados <span class="tela">VENT0800</span></h2>
+
+<h4>Para que serve</h4>
+<p>
+  Define cada depósito onde material pode existir. Nenhum movimento de estoque, ordem de fabricação,
+  plano de corte ou romaneio funciona sem o almoxarifado cadastrado.
+</p>
+
+<h4>Como a tela é organizada</h4>
+<p>Três abas: <b>Dados</b>, <b>Clientes</b> e <b>Fornecedores</b>. As duas últimas só são exigidas em
+alguns tipos de localização — ver a regra abaixo.</p>
+
+<h4>Campo a campo — aba Dados</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th class="cen" style="width:9%">Obrig.</th><th style="width:30%">O que informar</th><th>Efeito no processo</th></tr></thead>
+  <tbody>
+    <tr><td><code>Código</code></td><td class="cen"><b>Sim</b></td><td>Ex.: <code>ALMOX01</code></td><td>É o identificador usado em toda movimentação. Não muda depois.</td></tr>
+    <tr><td><code>Descrição</code></td><td class="cen"><b>Sim</b></td><td>Ex.: <code>Almoxarifado Principal</code></td><td>Nome que aparece nas listas de seleção.</td></tr>
+    <tr><td><code>Localização</code></td><td class="cen"><b>Sim</b></td><td>Uma das oito opções da tabela seguinte</td><td><b>Define o comportamento do depósito</b> e quais outros campos passam a ser obrigatórios.</td></tr>
+    <tr><td><code>Tipo</code></td><td class="cen"><b>Sim</b></td><td><code>Normal</code> ou <code>Linha de Produção</code></td><td>Linha de Produção é o depósito de chão de fábrica, de onde a ordem consome direto.</td></tr>
+    <tr><td><code>Disp. Plan.</code></td><td class="cen">Não</td><td>Marcado ou desmarcado</td><td>Marcado = o saldo deste depósito <b>conta como estoque para o MRP</b>. Desmarque em rejeição e sucata.</td></tr>
+    <tr><td><code>Almoxarifado de Expedição</code></td><td class="cen">Não</td><td>Código de outro almoxarifado</td><td>Aponta para onde o material vai quando for expedido. Tem lupa de busca ao lado.</td></tr>
+    <tr><td><code>Cliente</code></td><td class="cen">Condicional</td><td>Código do cliente</td><td rowspan="3">Obrigatórios <b>somente</b> quando a localização for <code>Externo</code> ou <code>Trânsito</code>. Cada campo tem botão de busca ao lado.</td></tr>
+    <tr><td><code>Estabelecimento</code></td><td class="cen">Condicional</td><td>Código do estabelecimento</td></tr>
+    <tr><td><code>Fornecedor</code></td><td class="cen">Condicional</td><td>Código do fornecedor</td></tr>
+    <tr><td><code>Observação</code></td><td class="cen">Não</td><td>Texto livre</td><td>Informações adicionais sobre o depósito.</td></tr>
+  </tbody>
+</table>
+
+<h4>As oito localizações e o que cada uma significa</h4>
+<p class="pequeno mudo">A própria tela exibe a explicação da localização escolhida, logo abaixo do campo.</p>
+<table class="dados">
+  <thead><tr><th style="width:18%">Localização</th><th style="width:44%">O que a tela informa</th><th>Uso na Tecnofer</th></tr></thead>
+  <tbody>
+    <tr><td><b>Interno</b></td><td>Almoxarifado localizado dentro da empresa.</td><td>Matéria-prima, processo e produto acabado.</td></tr>
+    <tr><td><b>Externo</b></td><td>Localizado no fornecedor. <b>Requer cliente, estabelecimento e fornecedor vinculados.</b></td><td><b>É o depósito da cementação</b> — onde ficam as buchas em poder do terceiro.</td></tr>
+    <tr><td><b>Assistência Técnica</b></td><td>Não pode ser alterado manualmente. Exclusivo para itens de assistência técnica.</td><td>Uso automático do módulo de assistência.</td></tr>
+    <tr><td><b>Rejeição</b></td><td>Local onde ficam itens rejeitados aguardando troca ou devolução.</td><td>Chapa recusada na inspeção e refugo da produção.</td></tr>
+    <tr><td><b>Inspeção</b></td><td>Local de conferência de produtos recebidos antes de aprovação ou rejeição.</td><td>Recebimento de aço antes da liberação da qualidade.</td></tr>
+    <tr><td><b>Expedição</b></td><td>Local onde produtos prontos ficam até o momento de venda ou carregamento.</td><td>Área de separação do romaneio.</td></tr>
+    <tr><td><b>Reserva</b></td><td>Almoxarifado para itens em reserva de estoque.</td><td>Material comprometido com pedido firme.</td></tr>
+    <tr><td><b>Trânsito</b></td><td>Itens em trânsito entre almoxarifados. <b>Requer cliente, estabelecimento e fornecedor.</b></td><td>Transferência entre unidades, se houver.</td></tr>
+  </tbody>
+</table>
+
+<h4>Como criar um almoxarifado — passo a passo</h4>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Preencher código e descrição</div>
+  <p>Na aba <b>Dados</b>, informe <code>Código</code> e <code>Descrição</code>. Se quiser <b>carregar um
+  almoxarifado já existente</b> para conferir ou alterar, digite o código e clique na lupa ao lado do
+  campo (<i>Carregar almoxarifado pelo código</i>).</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Escolher localização e tipo</div>
+  <p>Selecione a <code>Localização</code> — leia o texto explicativo que aparece logo abaixo — e o
+  <code>Tipo</code>. Se escolher <code>Externo</code> ou <code>Trânsito</code>, a tela passa a exigir
+  os três vínculos e avisa isso na própria página.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Vincular cliente, estabelecimento e fornecedor <span class="mudo">(quando exigido)</span></div>
+  <p>Digite o código em cada campo e clique na lupa correspondente para buscar e confirmar o cadastro.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Adicionar vínculos nas abas Clientes e Fornecedores</div>
+  <p>Nas abas <b>Clientes</b> e <b>Fornecedores</b>, informe o código e clique em
+  <span class="btn">Adicionar</span>. Cada linha mostra <code>Código</code> e
+  <code>Nome / Razão Social</code>, com <span class="btn">Remover</span> ao lado.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Salvar</div>
+  <p>Clique em <span class="btn">Salvar</span>. Use <span class="btn">Limpar</span> para começar um
+  cadastro novo sem sair da tela.</p>
+</div>
+
+<h4>Os almoxarifados a criar para a Tecnofer</h4>
+<table class="dados">
+  <thead><tr><th style="width:13%">Código</th><th style="width:26%">Descrição</th><th style="width:14%">Localização</th><th style="width:14%">Tipo</th><th class="cen" style="width:10%">Disp. Plan.</th><th>Para que serve</th></tr></thead>
+  <tbody>
+    <tr><td>ALM-MP</td><td>Matéria-Prima</td><td>Interno</td><td>Normal</td><td class="cen">Sim</td><td>Chapas e tubos. É de onde o plano de corte dá baixa.</td></tr>
+    <tr><td>ALM-INSP</td><td>Inspeção de Recebimento</td><td><b>Inspeção</b></td><td>Normal</td><td class="cen">Não</td><td>Aço recebido aguardando liberação da qualidade.</td></tr>
+    <tr><td>ALM-PROC</td><td>Processo / Chão de Fábrica</td><td>Interno</td><td><b>Linha de Produção</b></td><td class="cen">Sim</td><td>Peças fabricadas e conjuntos entre uma ordem e outra.</td></tr>
+    <tr><td>ALM-TERC</td><td>Material em Poder de Terceiros</td><td><b>Externo</b></td><td>Normal</td><td class="cen">Sim</td><td>Buchas na cementação. <b>Exige os três vínculos.</b></td></tr>
+    <tr><td>ALM-PA</td><td>Produto Acabado</td><td>Interno</td><td>Normal</td><td class="cen">Sim</td><td>Entrada do produto na conclusão da ordem, com lote.</td></tr>
+    <tr><td>ALM-EXP</td><td>Expedição</td><td><b>Expedição</b></td><td>Normal</td><td class="cen">Não</td><td>Separação do romaneio, antes do despacho.</td></tr>
+    <tr><td>ALM-REF</td><td>Refugo e Rejeição</td><td><b>Rejeição</b></td><td>Normal</td><td class="cen">Não</td><td>Peças refugadas no apontamento e material recusado.</td></tr>
+  </tbody>
+</table>
+
+<div class="atencao">
+  <b>Atenção — dois erros que custam caro</b>
+  <br>• Deixar <code>Disp. Plan.</code> <b>marcado</b> em ALM-REF faz o MRP planejar contando com peças
+  refugadas — e a produção para por falta de material que “existia” no sistema.
+  <br>• Cadastrar o depósito de terceiros como <code>Interno</code> em vez de <code>Externo</code>
+  quebra o controle do material em poder do fornecedor, que é obrigação fiscal (Dia 2, seção 2.3).
+</div>
+
+<h2>3.4 Cadastro de Item <span class="tela">VENT0200</span></h2>
+
+<h4>Para que serve</h4>
+<p>
+  É o cadastro mais importante do sistema. Tudo o que acontece depois — estrutura, roteiro, MRP, ordem,
+  estoque, nota fiscal e custo — lê parâmetros daqui. Um item mal cadastrado não dá erro na hora:
+  dá erro três semanas depois, em outra área.
+</p>
+
+<h4>Pré-requisitos</h4>
+<ul>
+  <li>Grupo PDM cadastrado <span class="tela-out">VITE0114</span></li>
+  <li>Modificador PDM cadastrado <span class="tela-out">VITE0115</span></li>
+  <li>Classificação criada <span class="tela-out">VCLA0100</span></li>
+  <li>Almoxarifado criado <span class="tela-out">VENT0800</span></li>
+</ul>
+
+<h4>Como a tela é organizada — sete abas</h4>
+<p>
+  A tela tem <b>uma barra de abas</b> logo abaixo do título. O que se preenche em cada uma muda conforme
+  o nível do item. Guarde este mapa: <b>é o erro mais comum procurar um campo na aba errada.</b>
+</p>
+<table class="dados">
+  <thead><tr><th style="width:15%">Aba</th><th style="width:42%">O que fica nela</th><th>Quem costuma preencher</th></tr></thead>
+  <tbody>
+    <tr><td><b>Capa</b></td><td>Identificação: código, nome, grupo e modificador PDM, estado e natureza.</td><td>Engenharia</td></tr>
+    <tr><td><b>Estoque</b></td><td>Almoxarifado padrão, unidade de armazenamento, baixa automática e contagem cíclica.</td><td>Almoxarifado</td></tr>
+    <tr><td><b>Engenharia</b></td><td>Tipo de item, tipo de estrutura, item-base, OEM, pesos e volume.</td><td>Engenharia</td></tr>
+    <tr><td><b>Planejamento</b></td><td><b>Classificação, LLC, lotes, tempos, estoque de segurança e baixa de produção.</b></td><td>PCP</td></tr>
+    <tr><td><b>Comercial</b></td><td>Descrição comercial, tipo de venda, múltiplos e mínimos de venda, garantia, embalagem.</td><td>Comercial</td></tr>
+    <tr><td><b>Contábil</b></td><td>Classificações fiscais, IPI, ICMS, CEST, PIS/COFINS, unidades de compra e venda.</td><td>Fiscal <span class="mudo">(Dia 2)</span></td></tr>
+    <tr><td><b>Suprimentos</b></td><td>Unidade de compra, almoxarifado de compra, tipo de utilização.</td><td>Compras</td></tr>
+  </tbody>
+</table>
+
+<div class="atencao">
+  <b>Atenção — três campos que quase todo mundo procura na aba errada</b>
+  <br>• <b>Classificação</b> e <b>LLC</b> ficam em <b>Planejamento</b> — não em Engenharia.
+  <br>• <b>Lote Mínimo / Máximo / Múltiplo</b>, <b>Estoque de Segurança</b> e <b>Tempo de Reposição</b>
+  ficam em <b>Planejamento</b> — não em Estoque.
+  <br>• <b>UM Venda</b> e <b>UM Compra</b> ficam em <b>Contábil</b> — não em Comercial nem Suprimentos.
+  (As abas Estoque e Suprimentos têm um campo próprio chamado apenas <code>Unidade de Medida</code>,
+  que é outra coisa: a unidade de armazenamento e a de compra, respectivamente.)
+</div>
+
+<h4>Como criar um item — o procedimento</h4>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Preencher a Capa e salvar</div>
+  <p>Preencha os obrigatórios da aba <b>Capa</b> e clique em <span class="btn">Salvar</span>. Só depois
+  percorra as demais abas. O selo vermelho no topo mostra quantos erros ainda impedem a gravação —
+  clique nele para ir direto ao campo com problema, que a tela informa em qual aba está.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Definir o comportamento na aba Engenharia</div>
+  <p>É aqui que se decide se o item vai gerar ordem de fabricação ou de compra.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Parametrizar o planejamento</div>
+  <p>Aba <b>Planejamento</b>: classificação, LLC, lotes e tempos. <b>Sem isso o MRP não planeja direito.</b></p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Completar estoque, comercial e suprimentos</div>
+  <p>Conforme o nível do item — matéria-prima não precisa de aba Comercial, produto acabado não precisa de Suprimentos.</p>
+</div>
+
+<div class="dica">
+  <b>Dica — o atalho do item-base</b>
+  Na aba <b>Engenharia</b> existe o campo <code>Usar item-base como modelo</code>. Ao selecionar um
+  item-base, o sistema <b>copia as configurações das demais abas</b>; código, nome e nome técnico
+  continuam sendo os do item novo. Cadastre um item-base por família (uma chapa, uma peça cortada, uma
+  peça conformada) e o cadastro dos próximos cai de vinte minutos para dois.
+  <br><br>
+  O item-base é criado como qualquer item, marcando <code>Natureza</code> = <code>Item Base</code> na
+  aba Capa. A própria tela avisa que um item-base não usa outro item-base como modelo.
+</div>
+
+<h3>3.4.1 Aba Capa</h3>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo</th><th class="cen" style="width:8%">Obrig.</th><th style="width:32%">O que informar</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td><code>Código</code></td><td class="cen">Sim</td><td><code>1001</code></td><td>Número inteiro maior que zero. O código alfanumérico da Truckparts (RN 01001) vai no nome.</td></tr>
+    <tr><td><code>Nome</code></td><td class="cen"><b>Sim</b></td><td>RN 01001 BALANÇA ASA DELTA CARRETA PINO Ø 50MM</td><td>Até 60 caracteres. Vira a descrição técnica se o campo seguinte ficar vazio.</td></tr>
+    <tr><td><code>Situação</code></td><td class="cen">Sim</td><td><code>Linha</code> ou <code>Promoção</code></td><td>Linha = catálogo corrente; Promoção = campanha temporária.</td></tr>
+    <tr><td><code>Nome técnico detalhado</code></td><td class="cen">Não</td><td>Balança asa delta para carreta, pino Ø 50 mm</td><td>Opcional; se vazio, usa o nome do item.</td></tr>
+    <tr><td><code>Complemento do nome</code></td><td class="cen">Não</td><td>Ex.: linha premium</td><td></td></tr>
+    <tr><td><code>Grupo (PDM)</code></td><td class="cen"><b>Sim</b></td><td><code>10</code> SUSPENSÃO CARRETA</td><td>Cadastre em <span class="tela-out">VITE0114</span> antes do item.</td></tr>
+    <tr><td><code>Modificador (PDM)</code></td><td class="cen"><b>Sim</b></td><td><code>1</code> PADRÃO</td><td>Cadastre em <span class="tela-out">VITE0115</span> antes do item.</td></tr>
+    <tr><td><code>Estado</code></td><td class="cen">Sim</td><td><code>Ativo</code> · <code>Inativo</code> · <code>Fantasma</code></td><td><b>Situação cadastral do item.</b> Não confundir com o indicador Fantasma da aba Planejamento.</td></tr>
+    <tr><td><code>Natureza</code></td><td class="cen">Sim</td><td><code>Item Base</code> · <code>Genérico</code> · <code>Configurado</code></td><td>Ver tabela abaixo.</td></tr>
+    <tr><td><code>Indicadores</code></td><td class="cen">Não</td><td>☐ Item de Processo</td><td>Marque em item que passa por operações externas / terceiros.</td></tr>
+    <tr><td><code>Observações</code></td><td class="cen">Não</td><td>Texto livre</td><td></td></tr>
+  </tbody>
+</table>
+
+<table class="dados">
+  <thead><tr><th style="width:18%">Natureza</th><th>O que a tela explica</th><th style="width:26%">Quando usar na Tecnofer</th></tr></thead>
+  <tbody>
+    <tr><td><b>Item Base</b></td><td>Modelo reutilizável com parâmetros contábeis, comerciais, de estoque e planejamento.</td><td>Um por família, para servir de molde aos demais.</td></tr>
+    <tr><td><b>Genérico</b></td><td>Agrupa materiais não estocáveis sob um código.</td><td>Consumíveis de baixo valor lançados por consumo.</td></tr>
+    <tr><td><b>Configurado</b></td><td>Item com variações, como cor e medida.</td><td>Não se aplica hoje — reservado.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.4.2 Aba Engenharia</h3>
+<table class="dados">
+  <thead><tr><th style="width:24%">Campo</th><th style="width:30%">O que informar</th><th>Efeito</th></tr></thead>
+  <tbody>
+    <tr><td><code>Tipo de Item</code></td><td><code>Fabricado</code> · <code>Comprado</code> · <code>De terceiro</code> · <code>Serviço</code></td><td><b>O campo mais decisivo do cadastro.</b> Ver tabela abaixo.</td></tr>
+    <tr><td><code>Tipo de Estrutura</code></td><td><code>Industrial</code> ou <code>Comercial</code></td><td>Industrial = o MRP gera ordem e controla estoque. Comercial = item pronto para venda.</td></tr>
+    <tr><td><code>Usar item-base como modelo</code></td><td>Código de um item-base</td><td>Copia as configurações das demais abas.</td></tr>
+    <tr><td><code>OEM</code></td><td>Marcado ou não</td><td>Montado sob marca de outra empresa.</td></tr>
+    <tr><td><code>Peso Bruto (kg)</code></td><td><code>4,710</code></td><td>Seção <b>Dimensões e Peso</b>. Vai para o romaneio e para a nota fiscal.</td></tr>
+    <tr><td><code>Peso Líquido (kg)</code></td><td><code>3,710</code></td><td>Direto da ficha, coluna Peso Líquido Unitário.</td></tr>
+    <tr><td><code>Volume Cúbico (m³)</code></td><td>medido</td><td>Usado na cubagem do romaneio e no frete.</td></tr>
+  </tbody>
+</table>
+
+<table class="dados">
+  <thead><tr><th style="width:18%">Tipo de Item</th><th style="width:38%">O que a tela explica</th><th>Itens da Tecnofer</th></tr></thead>
+  <tbody>
+    <tr><td><b>Fabricado</b></td><td>Gera ordem de fabricação — exige estrutura (BOM) e roteiro.</td><td>RN, SU, TP, BU — todos os produtos, conjuntos e peças.</td></tr>
+    <tr><td><b>Comprado</b></td><td>Gera ordem de compra — exige fornecedor preferencial.</td><td>Todas as MP: chapas, tubos, consumíveis.</td></tr>
+    <tr><td><b>De terceiro</b></td><td>Item de terceiro em poder da empresa — não gera ordem.</td><td>Material que o cliente manda para industrializar, se houver.</td></tr>
+    <tr><td><b>Serviço</b></td><td>Serviço comercial/fiscal — não gera ordem de material.</td><td>Cementação e usinagem externa.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.4.3 Aba Planejamento <span class="mudo">— a aba do PCP</span></h3>
+<p>É a aba mais densa da tela, dividida em três seções: <b>Lotes</b>, <b>Estoque e Tempos</b> e
+<b>Baixa de Produção</b>, além dos campos de topo e dos indicadores.</p>
+
+<h4>Campos de topo</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:26%">O que informar</th><th>Efeito</th></tr></thead>
+  <tbody>
+    <tr><td><code>Tipo de Planejamento</code></td><td><code>MRP normal</code> ou <code>Projeto</code></td><td>MRP normal = planejado a partir da demanda. Projeto = planejado por projeto, fora do MRP regular.</td></tr>
+    <tr><td><code>Classificação</code></td><td><code>1.01</code> Balança carreta</td><td>A classificação criada na seção 3.1. <b>Este campo fica aqui, não em Engenharia.</b></td></tr>
+    <tr><td><code>LLC</code></td><td>Número de 0 a 9</td><td>Ver a caixa abaixo.</td></tr>
+  </tbody>
+</table>
+
+<div class="nota">
+  <b>Nota — o que é o LLC e como preenchê-lo</b>
+  LLC é o nível do item na estrutura. A própria tela informa a escala:
+  <b>1 = produto final · 2 a 8 = intermediários · 9 = matéria-prima.</b>
+  <br><br>
+  Ele diz ao MRP <b>em que ordem calcular</b>: primeiro tudo que é nível 1, depois nível 2, e assim por
+  diante — para que, quando chegar na chapa, todas as peças que a consomem já tenham sido calculadas e a
+  necessidade possa ser somada de uma vez.
+  <br><br>
+  O campo é editável e você <b>pode</b> informá-lo. Mas o MRP recalcula o LLC de todos os itens quando
+  é executado com a opção de gerar LLC ligada (seção 6.2). Na prática: informe um valor coerente no
+  cadastro e deixe o MRP corrigir. Para o RN 01001 seria <code>1</code>; para as peças TP,
+  <code>3</code>; para as chapas, <code>9</code>.
+</div>
+
+<h4>Seção Lotes</h4>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo</th><th style="width:14%">RN 01001</th><th style="width:14%">TP 01001A</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Lote Mínimo</code></td><td>1</td><td>200</td><td>Menor quantidade que o MRP pode sugerir. Se a necessidade for menor, ele sobe para este valor. Serve para não abrir ordem de 3 peças com 5 minutos de setup.</td></tr>
+    <tr><td><code>Lote Máximo</code></td><td>50</td><td>1000</td><td>Maior quantidade por ordem. Necessidade acima disso é <b>quebrada em várias ordens</b>. Serve para limitar lote ao que cabe no espaço físico ou no turno.</td></tr>
+    <tr><td><code>Lote Múltiplo</code></td><td>1</td><td>200</td><td>A sugestão é arredondada <b>para cima</b> até o múltiplo. Precisou de 130 laterais com múltiplo 200 → sugere 200. Precisou de 210 → sugere 400. <b>É aqui que entra o lote econômico da ficha.</b></td></tr>
+    <tr><td><code>Qtde Máx. Ordem</code></td><td>50</td><td>1000</td><td>Teto absoluto de uma ordem.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>Por que o lote econômico da ficha vira Lote Múltiplo</b>
+  Na planilha, o lote econômico existe só para diluir o custo de setup: R$ 5,93 de preparação do laser
+  divididos por 200 peças dão R$ 0,03 por peça. No ERP ele tem função dupla — além de entrar no cálculo
+  do custo padrão, faz o MRP arredondar a sugestão. Assim a fábrica nunca recebe ordem de 7 laterais,
+  que sairiam a R$ 0,85 de setup cada.
+  <br><br>
+  <b>Regra:</b> lote econômico da ficha → <code>Lote Múltiplo</code> <b>e</b> <code>Lote Mínimo</code>.
+</div>
+
+<h4>Seção Estoque e Tempos</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:12%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Estq. Segurança</code></td><td>500 kg</td><td>Saldo que o MRP trata como intocável. Ele planeja para nunca cair abaixo disso. Use em matéria-prima de giro; deixe zero em produto sob encomenda.</td></tr>
+    <tr><td><code>Tempo Segurança</code></td><td>1 dia</td><td>Folga somada ao prazo. O material fica pronto um dia antes da necessidade real.</td></tr>
+    <tr><td><code>Tempo Reposição</code></td><td>15 dias (chapa)<br>2 dias (peça)</td><td>Prazo total para o item ficar disponível — do fornecedor, se comprado; de fabricação, se produzido. <b>É por este prazo que o MRP recua a data da ordem.</b></td></tr>
+    <tr><td><code>Cobertura (dias)</code></td><td>—</td><td>Quantos dias de demanda futura uma ordem deve cobrir.</td></tr>
+    <tr><td><code>Cob. Seg. Demanda</code></td><td>—</td><td>Cobertura adicional de segurança sobre a demanda.</td></tr>
+    <tr><td><code>Agrupamento (dias)</code></td><td>5</td><td>Junta necessidades dentro da janela numa ordem só. Sem isso, cinco pedidos na mesma semana viram cinco ordens da mesma peça.</td></tr>
+  </tbody>
+</table>
+
+<h4>Seção Baixa de Produção</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:30%">Opções</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Tp. Baixa Automática</code></td><td><code>Direta</code> · <code>Transferência</code></td><td>Como o consumo é lançado quando a baixa é automática.</td></tr>
+    <tr><td><code>Baixa OF</code></td><td><code>Não faz</code> · <code>Cadastro/Liberação</code> · <code>Entrega de Produção</code></td><td><b>Em que momento</b> o componente é consumido pela ordem: nunca, ao liberar a ordem, ou ao apontar a entrega da produção.</td></tr>
+  </tbody>
+</table>
+
+<div class="nota">
+  <b>Nota — como configurar a baixa na Tecnofer</b>
+  <br>• <b>Produto acabado</b> (RN 01001): <code>Baixa OF</code> = <code>Não faz</code> — ele é a
+  <i>entrada</i> da ordem, não o consumo.
+  <br>• <b>Peças, conjuntos e matéria-prima</b>: <code>Entrega de Produção</code> — o consumo é lançado
+  quando a produção é apontada, que é o momento em que o material realmente saiu.
+  <br>• Use <code>Cadastro/Liberação</code> apenas quando o material é separado inteiro no início da
+  ordem, o que não é o caso aqui.
+</div>
+
+<h4>Indicadores da aba Planejamento</h4>
+<table class="dados">
+  <thead><tr><th style="width:20%">Indicador</th><th style="width:34%">O que a tela explica</th><th>Uso</th></tr></thead>
+  <tbody>
+    <tr><td>☐ <b>Crítico (MPS)</b></td><td>Item crítico para análise da linha crítica no MPS.</td><td>Marque nos itens que ditam o prazo — no RN 01001, a bucha cementada, por depender de terceiro.</td></tr>
+    <tr><td>☐ <b>Exclusivo</b></td><td>Exclusivo para promessa de entrega.</td><td>Item reservado para atender promessa firme.</td></tr>
+    <tr><td>☐ <b>Fantasma</b></td><td>Nível na estrutura sem controle de estoque.</td><td><b>Faz o MRP atravessar o nível sem gerar ordem</b>, explodindo direto os filhos. Ver seção 2.4.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.4.4 Aba Estoque</h3>
+<table class="dados">
+  <thead><tr><th style="width:24%">Campo</th><th style="width:28%">O que informar</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td><code>Almoxarifado</code></td><td><code>ALM-PA</code> / <code>ALM-MP</code> / <code>ALM-PROC</code></td><td>Depósito padrão do item. <b>Em branco = almoxarifado 1.</b></td></tr>
+    <tr><td><code>Unidade de Medida</code></td><td><code>UN</code> · <code>KG</code> · <code>PC</code></td><td>UM utilizada no <b>armazenamento</b>. Não confundir com UM Venda / UM Compra, que ficam na aba Contábil.</td></tr>
+    <tr><td><code>Indicadores de Estoque</code></td><td>☐ Faz Baixa Automática<br>☐ Contagem Cíclica</td><td>Marcar Contagem Cíclica abre a seção seguinte.</td></tr>
+    <tr><td><code>Intervalo (dias)</code></td><td><code>90</code></td><td>Seção <b>Configuração de Contagem Cíclica</b>: a cada quantos dias contar.</td></tr>
+    <tr><td><code>Estoque Mínimo Alerta</code></td><td>quantidade</td><td>Dispara alerta quando o saldo cai abaixo do valor.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.4.5 Aba Comercial</h3>
+<table class="dados">
+  <thead><tr><th style="width:24%">Campo</th><th style="width:26%">O que informar</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td><code>Descrição Comercial</code></td><td>Balança Asa Delta para carreta — pino 50 mm</td><td>Texto que sai na proposta e na nota fiscal.</td></tr>
+    <tr><td><code>Tipo Venda</code></td><td><code>Venda</code> ou <code>Revenda</code></td><td>Venda = produção própria. Revenda = comprado pronto.</td></tr>
+    <tr><td><code>Fator Conv. Volume</code></td><td>número decimal</td><td>Ver a caixa da seção 3.6.</td></tr>
+    <tr><td><code>Múltiplo de Venda</code></td><td><code>1</code></td><td>O pedido só aceita quantidade múltipla deste valor. Use quando o produto só sai em par ou em caixa fechada.</td></tr>
+    <tr><td><code>Mínimo de Venda</code></td><td><code>1</code></td><td>Quantidade mínima por pedido.</td></tr>
+    <tr><td><code>Entrega Estimada (dias)</code></td><td><code>45</code></td><td>Prazo padrão usado no orçamento e no pedido.</td></tr>
+    <tr><td><code>Tempo de Garantia (dias)</code></td><td><code>365</code></td><td>Base para o controle de garantia e assistência técnica.</td></tr>
+    <tr><td><code>Almox. Transferência</code></td><td>código</td><td>Depósito de destino em transferências.</td></tr>
+    <tr><td><code>Almox. Ass. Técnica</code></td><td>código</td><td>Depósito de itens de assistência.</td></tr>
+    <tr><td><code>Item Embalagem</code></td><td>código do item</td><td>Qual embalagem acompanha o produto.</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">
+  <b>Indicadores da aba Comercial:</b> ☐ Alterar Descr. no Faturamento · ☐ Emite Etiquetas de
+  Carregamento · ☐ Montagem de Volumes de Expedição · ☐ Embalagem Diferenciada · ☐ Retenção PIS/COFINS ·
+  ☐ É Embalagem · ☐ Habilita no aplicativo · ☐ Emb. Exportação.
+</p>
+
+<h3>3.4.6 Aba Suprimentos</h3>
+<table class="dados">
+  <thead><tr><th style="width:24%">Campo</th><th style="width:30%">O que informar</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td><code>Unidade de Medida</code></td><td><code>KG</code> (chapa) · <code>BR</code> (tubo)</td><td>Padrão para pedidos de compra. <b>Deve ter fator de conversão com a UM do Estoque</b> — ver seção 3.6.</td></tr>
+    <tr><td><code>Almoxarifado</code></td><td><code>ALM-MP</code></td><td>Onde a compra entra por padrão.</td></tr>
+    <tr><td><code>Tipo de Utilização</code></td><td><code>Industrialização</code> · <code>Consumo</code> · <code>Imobilizado</code></td><td>Define o tratamento fiscal da entrada. Chapas e tubos = Industrialização; disco de corte e EPI = Consumo.</td></tr>
+    <tr><td><code>Classificação</code></td><td>classificação de compra</td><td>Agrupamento para análise de suprimentos.</td></tr>
+    <tr><td><code>Indicadores</code></td><td>☐ Check List de Recebimento<br>☐ Controle de Safra</td><td>O primeiro exige conferência na entrada; o segundo controla safra/validade.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.4.7 Aba Contábil <span class="mudo">— conteúdo do Dia 2</span></h3>
+<p>
+  Três seções: <b>Classificações Fiscais</b> (Classif. Fiscal Venda, Classif. Fiscal Compra, Origem),
+  <b>IPI e ICMS</b> (Tipo IPI Venda, Alíq. IPI Venda %, Tipo IPI Compra, Alíq. IPI Compra %, Alíq. ICMS %)
+  e <b>Unidades e Inventário</b> (UM Venda, UM Compra, Grupo de Inventário, CEST, Cálculo de PIS/COFINS).
+</p>
+<p class="pequeno mudo">
+  <code>Origem</code>: <code>0 - Nacional</code> · <code>1 - Estrangeira (Importação Direta)</code> ·
+  <code>2 - Estrangeira (Adquirida no Mercado Interno)</code>. &nbsp;
+  <code>Tipo IPI</code>: <code>Percentual</code> ou <code>Valor</code>. &nbsp;
+  <code>Alíq. ICMS</code>: a tela avisa que <code>99,99 = Isento</code> e <code>88,88 = Outras</code>. &nbsp;
+  <code>Cálculo de PIS/COFINS</code>: <code>Herdar do mestre fiscal</code> · <code>Sobrescrever: Sim</code> ·
+  <code>Sobrescrever: Não</code>.
+</p>
+<p><b>Hoje preencha apenas <code>UM Venda</code> e <code>UM Compra</code>.</b> O resto é o Bloco 1 do Dia 2.</p>
+
+<h3>3.4.8 Os três cadastros do produto-guia</h3>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo · Aba</th><th style="width:27%">RN 01001 <span class="mudo">produto</span></th><th style="width:27%">TP 01001A <span class="mudo">peça</span></th><th>MP 10794 <span class="mudo">matéria-prima</span></th></tr></thead>
+  <tbody>
+    <tr class="sub"><td colspan="4">CAPA</td></tr>
+    <tr><td>Código</td><td>1001</td><td>101011</td><td>10794</td></tr>
+    <tr><td>Nome</td><td>RN 01001 BALANÇA ASA DELTA…</td><td>TP 01001A LATERAL 5/16"…</td><td>MP 10794 CHAPA DE AÇO 5/16"…</td></tr>
+    <tr><td>Grupo (PDM)</td><td>10 SUSPENSÃO CARRETA</td><td>20 PEÇAS ESTAMPADAS</td><td>90 MP SIDERÚRGICA</td></tr>
+    <tr><td>Modificador (PDM)</td><td>1 PADRÃO</td><td>1 PADRÃO</td><td>4 CHAPA PLANA</td></tr>
+    <tr><td>Estado</td><td>Ativo</td><td>Ativo</td><td>Ativo</td></tr>
+    <tr class="sub"><td colspan="4">ENGENHARIA</td></tr>
+    <tr><td>Tipo de Item</td><td><b>Fabricado</b></td><td><b>Fabricado</b></td><td><b>Comprado</b></td></tr>
+    <tr><td>Tipo de Estrutura</td><td><b>Comercial</b></td><td>Industrial</td><td>Industrial</td></tr>
+    <tr><td>Peso Líquido (kg)</td><td>27,300</td><td>3,710</td><td>—</td></tr>
+    <tr><td>Peso Bruto (kg)</td><td>28,500</td><td>4,710</td><td>226,08 <span class="mudo">(chapa inteira)</span></td></tr>
+    <tr class="sub"><td colspan="4">PLANEJAMENTO</td></tr>
+    <tr><td>Tipo de Planejamento</td><td>MRP normal</td><td>MRP normal</td><td>MRP normal</td></tr>
+    <tr><td>Classificação</td><td>1.01</td><td>4.01</td><td>5.01</td></tr>
+    <tr><td>LLC</td><td>1</td><td>3</td><td>9</td></tr>
+    <tr><td>Lote Mínimo</td><td>1</td><td>200</td><td>226,08</td></tr>
+    <tr><td>Lote Múltiplo</td><td>1</td><td>200</td><td>226,08</td></tr>
+    <tr><td>Estq. Segurança</td><td>0</td><td>0</td><td>500</td></tr>
+    <tr><td>Tempo Reposição</td><td>5 dias</td><td>2 dias</td><td>15 dias</td></tr>
+    <tr><td>Agrupamento (dias)</td><td>5</td><td>5</td><td>10</td></tr>
+    <tr><td>Baixa OF</td><td><b>Não faz</b></td><td>Entrega de Produção</td><td>Entrega de Produção</td></tr>
+    <tr class="sub"><td colspan="4">ESTOQUE</td></tr>
+    <tr><td>Almoxarifado</td><td>ALM-PA</td><td>ALM-PROC</td><td>ALM-MP</td></tr>
+    <tr><td>Unidade de Medida</td><td>UN</td><td>UN</td><td>KG</td></tr>
+    <tr><td>Contagem Cíclica</td><td>☑ 90 dias</td><td>☐</td><td>☑ 30 dias</td></tr>
+    <tr class="sub"><td colspan="4">COMERCIAL / SUPRIMENTOS</td></tr>
+    <tr><td>Descrição Comercial</td><td>Balança Asa Delta — pino 50 mm</td><td class="mudo">não se aplica</td><td class="mudo">não se aplica</td></tr>
+    <tr><td>Tempo de Garantia</td><td>365 dias</td><td class="mudo">—</td><td class="mudo">—</td></tr>
+    <tr><td>Tipo de Utilização <span class="mudo">(Suprim.)</span></td><td class="mudo">—</td><td class="mudo">—</td><td><b>Industrialização</b></td></tr>
+    <tr><td>UM Venda / UM Compra <span class="mudo">(Contábil)</span></td><td>UN / UN</td><td>UN / UN</td><td>KG / KG</td></tr>
+  </tbody>
+</table>
+
+<div class="atencao">
+  <b>Atenção — o erro mais comum de todos</b>
+  Cadastrar matéria-prima com <code>Tipo de Item</code> = <code>Fabricado</code>. Quando isso acontece,
+  o MRP tenta <b>fabricar chapa de aço</b>: gera ordem de fabricação para a chapa, não gera pedido de
+  compra, e a produção para por falta de material sem ninguém entender o motivo.
+  <br><br>
+  <b>Toda matéria-prima é <code>Comprado</code>.</b> O teste está na seção 6.2: rode o MRP e olhe a
+  coluna Tipo.
+</div>
+
+<h2>3.5 Fornecedor <span class="tela">VSUP0500</span> e Cliente <span class="tela">VCLI0500</span></h2>
+<p>
+  Ambas as telas têm o botão <span class="btn">Consultar CNPJ</span>, que busca razão social, nome fantasia,
+  endereço e situação cadastral automaticamente — digite o CNPJ e deixe o sistema preencher.
+  Confira depois a inscrição estadual e a condição de pagamento.
+</p>
+
+<table class="dados">
+  <thead><tr><th style="width:24%">Campo</th><th style="width:38%">Fornecedor — Chapas Jandaia</th><th>Cliente — exemplo do dia</th></tr></thead>
+  <tbody>
+    <tr><td>CNPJ/CPF</td><td>informar e clicar em Consultar CNPJ</td><td>informar e clicar em Consultar CNPJ</td></tr>
+    <tr><td>Razão social</td><td>preenchido pela consulta</td><td>preenchido pela consulta</td></tr>
+    <tr><td>Fantasia</td><td>CHAPAS JANDAIA</td><td>—</td></tr>
+    <tr><td>Cond. pagto</td><td>28 dias</td><td>30/60/90</td></tr>
+    <tr><td>Contrib. ICMS</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Limite de crédito</td><td>—</td><td>definir com o Comercial</td></tr>
+    <tr><td>Situação</td><td>Ativo</td><td>Ativo</td></tr>
+  </tbody>
+</table>
+
+<div class="dica">
+  <b>Dica</b> Cadastre pelo menos um <b>endereço principal</b> e um <b>contato</b> em cada um. O endereço
+  alimenta a nota fiscal e o romaneio; o contato é quem recebe a confirmação do pedido.
+</div>
+
+<h2>3.6 Unidades, preços e fornecedor preferencial</h2>
+<p>
+  Três telas pequenas que decidem se a sugestão de compra do MRP sai pronta ou sai pela metade.
+  Sem elas, alguém precisa completar cada linha de pedido na mão.
+</p>
+
+<h3>3.6.1 Conversão de UM por Item <span class="tela">VSUP0110</span></h3>
+
+<h4>Para que serve</h4>
+<p>
+  Resolve o problema de <b>comprar numa unidade e consumir em outra</b>. O tubo Ø 60,3 é comprado
+  <b>em barra</b> e consumido <b>em peça</b>; a chapa é comprada <b>em quilo</b> mas o fornecedor
+  fatura <b>em chapa inteira</b>. Sem a conversão cadastrada, o pedido de compra sai com a quantidade
+  errada e a nota de entrada não bate com o pedido.
+</p>
+
+<h4>Campo a campo</h4>
+<table class="dados">
+  <thead><tr><th style="width:16%">Campo</th><th style="width:20%">Exemplo</th><th>O que significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>Item</code></td><td>MP 20603</td><td>Selecionado na lista. A conversão é <b>por item</b> — cada tubo tem o seu rendimento.</td></tr>
+    <tr><td><code>De (UM)</code></td><td><code>BR</code> <span class="mudo">(barra)</span></td><td>Unidade de origem — normalmente a de compra.</td></tr>
+    <tr><td><code>Para (UM)</code></td><td><code>PC</code> <span class="mudo">(peça)</span></td><td>Unidade de destino — normalmente a de estoque/consumo.</td></tr>
+    <tr><td><code>Fator</code></td><td><code>109</code></td><td><b>Quantas unidades de destino cabem em uma de origem.</b> Uma barra rende 109 buchas.</td></tr>
+  </tbody>
+</table>
+
+<h4>Como cadastrar — passo a passo</h4>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Selecionar o item</div>
+  <p>Na barra superior, escolha o item em <code>Selecionar item</code>. A tela lista as conversões já
+  cadastradas para ele.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Preencher o bloco Nova conversão</div>
+  <p>Informe <code>De (UM)</code>, <code>Para (UM)</code> e <code>Fator</code>, e grave.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Conferir no bloco Resolver conversão</div>
+  <p>O bloco <b>Resolver conversão</b> é uma calculadora de teste: informe <code>De</code>,
+  <code>Para</code> e <code>Qtde</code> e veja o <code>Resultado</code>.
+  <b>Sempre teste antes de sair da tela</b> — é assim que se descobre fator invertido.</p>
+</div>
+
+<h4>As conversões a cadastrar na Tecnofer</h4>
+<table class="dados">
+  <thead><tr><th style="width:14%">Item</th><th class="cen" style="width:10%">De</th><th class="cen" style="width:10%">Para</th><th class="num" style="width:12%">Fator</th><th>Leitura</th></tr></thead>
+  <tbody>
+    <tr><td>MP 20603</td><td class="cen">BR</td><td class="cen">PC</td><td class="num">109</td><td>Uma barra de tubo Ø 60,3 rende 109 buchas internas.</td></tr>
+    <tr><td>MP 21100</td><td class="cen">BR</td><td class="cen">PC</td><td class="num">53</td><td>Uma barra de tubo para bucha externa rende 53 peças de 110 mm.</td></tr>
+    <tr><td>MP 10794</td><td class="cen">CH</td><td class="cen">KG</td><td class="num">226,08</td><td>Uma chapa 5/16" de 1200 × 3000 pesa 226,08 kg.</td></tr>
+    <tr><td>MP 10952</td><td class="cen">CH</td><td class="cen">KG</td><td class="num">268,47</td><td>Uma chapa 3/8" pesa 268,47 kg.</td></tr>
+    <tr><td>MP 10300</td><td class="cen">CH</td><td class="cen">KG</td><td class="num">84,78</td><td>Uma chapa 3,00 mm pesa 84,78 kg.</td></tr>
+    <tr><td>MP 10476</td><td class="cen">CH</td><td class="cen">KG</td><td class="num">134,24</td><td>Uma chapa 3/16" pesa 134,24 kg.</td></tr>
+    <tr><td>MP 10635</td><td class="cen">CH</td><td class="cen">KG</td><td class="num">179,45</td><td>Uma chapa 1/4" pesa 179,45 kg.</td></tr>
+    <tr><td>MP 11270</td><td class="cen">CH</td><td class="cen">KG</td><td class="num">358,90</td><td>Uma chapa 1/2" pesa 358,90 kg.</td></tr>
+    <tr><td>MP 11588</td><td class="cen">CH</td><td class="cen">KG</td><td class="num">448,77</td><td>Uma chapa 5/8" pesa 448,77 kg.</td></tr>
+  </tbody>
+</table>
+
+<div class="atencao">
+  <b>Atenção — o fator é sempre “quantos DE PARA cabem em um DE”</b>
+  Fator invertido é o erro clássico: cadastrar <code>0,00917</code> em vez de <code>109</code> faz o MRP
+  pedir <b>onze mil barras</b> de tubo em vez de duas. Por isso o bloco <b>Resolver conversão</b> existe:
+  informe 1 barra e confira se o resultado é 109 peças.
+  <br><br>
+  Lembre também que a aba <b>Suprimentos</b> do cadastro do item avisa:
+  <i>“a unidade de compra deve ter fator de conversão com a UM do Estoque”</i>. Se a UM de compra for
+  diferente da UM de estoque e não houver conversão aqui, o item trava no pedido de compra.
+</div>
+
+<div class="nota">
+  <b>Nota — não confunda com o Fator Conv. Volume</b>
+  Na aba <b>Comercial</b> do cadastro do item existe um campo chamado <code>Fator Conv. Volume</code>.
+  Ele é <b>outra coisa</b>: converte a quantidade vendida em volume ocupado, para calcular a cubagem do
+  romaneio e o frete. Não tem relação com a conversão de unidade de compra.
+  <br><br>
+  Exemplo: se cada balança ocupa 0,18 m³ empilhada, informe <code>0,18</code>. No romaneio de 10
+  unidades, a cubagem sai 1,8 m³ automaticamente — que é o número que a transportadora cobra.
+  A conversão de compra (barra → peça) fica na VSUP0110; a de volume, no cadastro do item.
+</div>
+
+<h3>3.6.2 Tabela de Preço de Compra <span class="tela">VSUP0120</span></h3>
+
+<h4>Para que serve</h4>
+<p>
+  Guarda o preço de referência de cada item comprado, com vigência. É desse preço que sai o
+  <b>custo de material</b> no custo padrão (Dia 2, seção 4.1) e o preço sugerido no pedido de compra.
+</p>
+
+<h4>Como a tela é organizada</h4>
+<p>Duas etapas: primeiro cria-se a <b>tabela</b>, depois lançam-se os <b>preços</b> dentro dela.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar a tabela</div>
+  <p>Clique em <span class="btn">Nova tabela</span> e preencha o bloco <b>Dados da tabela</b>:</p>
+  <table class="campos">
+    <tr><td>Descrição</td><td>Ex.: <code>Tabela padrão 2026</code></td></tr>
+    <tr><td>Moeda</td><td><code>BRL</code></td></tr>
+    <tr><td>Vigência início</td><td>data de entrada em vigor</td></tr>
+    <tr><td>Vigência fim</td><td>data de encerramento — deixe em branco enquanto valer</td><td class="obs">É a vigência que permite manter o histórico: o custo de janeiro continua calculado com o preço de janeiro mesmo depois do reajuste.</td></tr>
+  </table>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Lançar os preços</div>
+  <p>Abra a tabela e use o bloco <b>Adicionar preço</b>:</p>
+  <table class="dados">
+    <thead><tr><th style="width:16%">Campo</th><th style="width:22%">Exemplo</th><th>O que faz</th></tr></thead>
+    <tbody>
+      <tr><td><code>Item</code></td><td>MP 10794</td><td>Selecionado na lista.</td></tr>
+      <tr><td><code>Preço</code></td><td><code>4,70</code></td><td>Valor unitário na UM informada ao lado.</td></tr>
+      <tr><td><code>UM</code></td><td><code>KG</code></td><td>Unidade a que o preço se refere. <b>Preço por quilo e preço por chapa são linhas diferentes.</b></td></tr>
+      <tr><td><code>Qtd mín.</code></td><td><code>1000</code></td><td>Permite <b>preço por faixa</b>: acima de mil quilos, outro preço. Lance uma linha por faixa.</td></tr>
+      <tr><td><code>Fornecedor</code></td><td>Chapas Jandaia<br><span class="mudo">ou em branco = Genérico</span></td><td>Deixe em branco para um preço de referência que vale para qualquer fornecedor.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h4>Os preços a lançar</h4>
+<table class="dados">
+  <thead><tr><th style="width:18%">Item</th><th class="num" style="width:16%">Preço</th><th class="cen" style="width:10%">UM</th><th>Fornecedor</th></tr></thead>
+  <tbody>
+    <tr><td>MP 10300 … MP 11588 <span class="mudo">(todas as chapas)</span></td><td class="num">4,70</td><td class="cen">KG</td><td>Chapas Jandaia</td></tr>
+    <tr><td>MP 20603</td><td class="num">350,14</td><td class="cen">BR</td><td>a definir</td></tr>
+    <tr><td>MP 21100</td><td class="num">813,35</td><td class="cen">BR</td><td>a definir</td></tr>
+  </tbody>
+</table>
+
+<h3>3.6.3 Fornecedor Preferencial por Item <span class="tela">VSUP0130</span></h3>
+
+<h4>Para que serve</h4>
+<p>
+  Amarra cada item comprado ao fornecedor que costuma atendê-lo, com prazo e ordem de preferência.
+  <b>Sem isso, a sugestão de compra do MRP sai sem fornecedor</b> e alguém precisa escolher item por
+  item antes de gerar o pedido.
+</p>
+
+<h4>Campo a campo — bloco Vínculo item × fornecedor</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:18%">Exemplo</th><th>O que faz — e por que importa</th></tr></thead>
+  <tbody>
+    <tr><td><code>Item</code></td><td>MP 10794</td><td>Selecionado na barra superior.</td></tr>
+    <tr><td><code>Fornecedor</code></td><td>Chapas Jandaia</td><td>Quem fornece este item.</td></tr>
+    <tr><td><code>Ranking</code></td><td><code>1</code></td><td><b>Ordem de preferência.</b> 1 é o fornecedor principal; 2 é o segundo na fila. Permite cadastrar mais de um fornecedor para o mesmo item e ter alternativa pronta quando o principal não atende — sem parar para pesquisar.</td></tr>
+    <tr><td><code>Lead time (dias)</code></td><td><code>15</code></td><td><b>Prazo de entrega deste fornecedor para este item.</b> É mais preciso que o Tempo de Reposição do cadastro do item, porque é por fornecedor: a Jandaia entrega em 15 dias, o segundo fornecedor em 25. Use-o para decidir de quem comprar quando o prazo aperta.</td></tr>
+    <tr><td><code>Cód. no fornecedor</code></td><td>código do catálogo dele</td><td>O código que <b>o fornecedor</b> usa para o mesmo produto. Sai impresso no pedido de compra, evitando que ele mande o material errado.</td></tr>
+    <tr><td><code>Descrição no fornecedor</code></td><td>descrição do catálogo dele</td><td>Idem — o texto que o fornecedor reconhece.</td></tr>
+    <tr><td><code>UM</code></td><td><code>KG</code></td><td>Unidade em que <b>este fornecedor</b> negocia. Pode ser diferente da sua UM de estoque — é aí que entra a conversão da VSUP0110.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>Por que preencher Ranking e Lead time muda a rotina de Compras</b>
+  Com os dois campos preenchidos, a sugestão do MRP já chega ao comprador com fornecedor definido,
+  prazo conhecido e o código que o fornecedor entende. O trabalho vira <b>conferir e aprovar</b>.
+  <br><br>
+  Sem eles, cada linha de sugestão exige decidir de quem comprar, estimar o prazo de cabeça e traduzir
+  a descrição — para cada um dos nove itens de matéria-prima, toda vez que o MRP roda.
+</div>
+
+<div class="exercicio">
+  <div class="ex-tit">Conferência rápida — antes de seguir</div>
+  Para o <b>MP 20603</b> (tubo), confirme que existem <b>três</b> cadastros ligados:
+  a conversão <code>BR → PC = 109</code> na VSUP0110, o preço <code>R$ 350,14/BR</code> na VSUP0120
+  e o fornecedor com ranking 1 e lead time na VSUP0130.
+  Falta qualquer um dos três e a sugestão de compra sai incompleta.
+</div>
+
+<h1>4 · Bloco 2 — Engenharia</h1>
+
+<h2>4.1 Estrutura de Produto <span class="tela">VENT0210</span></h2>
+
+<h4>Para que serve</h4>
+<p>
+  A estrutura diz <b>de que o item é feito</b>. Cadastra-se <b>um nível por vez</b>: informa-se o pai e
+  lançam-se os filhos. Depois abre-se o filho como pai e lançam-se os netos.
+  <b>Nunca se lança neto direto no avô.</b>
+</p>
+
+<h4>Pré-requisitos</h4>
+<p>Todos os itens — pai e filhos — já cadastrados na <span class="tela-out">VENT0200</span>.</p>
+
+<h4>Como a tela é organizada</h4>
+<table class="dados">
+  <thead><tr><th style="width:26%">Área da tela</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><b>Barra do item pai</b></td><td>Onde se informa <code>Código do Item Pai</code> (com botão de busca), <code>Descrição Técnica</code> e <code>UM</code>, ambos preenchidos automaticamente, e <code>Máscara (PDM)</code>, opcional.</td></tr>
+    <tr><td><b>Trilha de navegação</b></td><td>Mostra o caminho percorrido na árvore — o item raiz e cada nível aberto. <b>É clicando nela que se sobe e desce de nível</b> sem redigitar o código do pai.</td></tr>
+    <tr><td><b>Grade de componentes</b></td><td>Lista os filhos do item aberto, com as colunas Pos., Cód. Filho, Descrição, UM, Qtde, Perda %, Health, Observações, Ativo e Ações.</td></tr>
+    <tr><td><b>Formulário de inclusão</b></td><td>Onde se digita o novo componente antes de clicar em <span class="btn">Incluir Item</span>.</td></tr>
+  </tbody>
+</table>
+
+<h4>Campo a campo — inclusão de componente</h4>
+<table class="dados">
+  <thead><tr><th style="width:18%">Campo</th><th class="cen" style="width:8%">Obrig.</th><th style="width:24%">O que informar</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td><code>Cód. Filho</code></td><td class="cen"><b>Sim</b></td><td>Código do componente</td><td>Ao informar, a <code>Descrição</code> é preenchida automaticamente.</td></tr>
+    <tr><td><code>Posição</code></td><td class="cen">Não</td><td><code>10</code>, <code>20</code>, <code>30</code>…</td><td>Ordem do componente na lista. <b>Use de 10 em 10</b> para conseguir inserir depois sem renumerar tudo.</td></tr>
+    <tr><td><code>Descrição</code></td><td class="cen">—</td><td class="mudo">preenchida automaticamente</td><td>Vem do cadastro do item.</td></tr>
+    <tr><td><code>Quantidade</code></td><td class="cen"><b>Sim</b></td><td><code>2,000</code></td><td><b>Por unidade do pai imediato</b> — não por unidade do produto final.</td></tr>
+    <tr><td><code>Unid. Medida</code></td><td class="cen">Sim</td><td><code>UN</code> · <code>KG</code> · <code>PC</code></td><td>Unidade em que o componente é consumido.</td></tr>
+    <tr><td><code>Perda (%)</code></td><td class="cen">Não</td><td><code>26,95</code></td><td>Percentual de perca da ficha. Ver a caixa mais adiante.</td></tr>
+    <tr><td><code>Health</code></td><td class="cen">Não</td><td>situação do vínculo</td><td>Estado do componente dentro desta estrutura.</td></tr>
+    <tr><td><code>Observações</code></td><td class="cen">Não</td><td>texto livre</td><td>Opcional — use para registrar decisão de engenharia.</td></tr>
+    <tr><td><code>Ativo</code></td><td class="cen">—</td><td>marcado</td><td>Desmarcar tira o componente do cálculo <b>sem apagar o histórico</b>. Prefira desativar a remover.</td></tr>
+  </tbody>
+</table>
+
+<h4>Como montar uma estrutura — o procedimento</h4>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Abrir o item pai</div>
+  <p>Digite o código em <code>Código do Item Pai</code> ou use o botão de busca. A descrição técnica e a
+  UM aparecem sozinhas, confirmando que é o item certo.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Incluir cada componente</div>
+  <p>Preencha o formulário e clique em <span class="btn">Incluir Item</span>. Use
+  <span class="btn">Limpar</span> entre um e outro se quiser zerar o formulário.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Descer um nível</div>
+  <p>Clique no componente na grade para abri-lo como novo pai. A <b>trilha de navegação</b> no topo
+  mostra onde você está; clique nela para voltar a qualquer nível anterior.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Ajustar a ordem e manter</div>
+  <p>Na coluna <b>Ações</b> de cada linha existem <span class="btn">Subir</span>,
+  <span class="btn">Descer</span> e <span class="btn">Remover</span>. Subir e descer reordenam a posição;
+  para tirar um componente de circulação, prefira <b>desmarcar Ativo</b>.</p>
+</div>
+
+<div class="dica">
+  <b>Dica — confira o nível antes de incluir</b>
+  A tela mostra o <b>nível atual</b> e a <b>contagem de componentes</b>. Antes de clicar em Incluir,
+  confirme na trilha que você está no pai certo. Lançar a chapa direto no produto acabado, em vez de na
+  peça, é o erro que mais dá trabalho para desfazer — porque o MRP passa a comprar aço sem passar pela peça.
+</div>
+
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Nível 0 → 1: os componentes diretos do RN 01001</div>
+  <p>Informe <code>Código do Item Pai</code> = <code>1001</code> e adicione:</p>
+  <table class="dados">
+    <thead><tr><th class="cen" style="width:8%">Pos.</th><th style="width:16%">Cód. Filho</th><th>Descrição</th><th class="num" style="width:11%">Qtde</th><th class="cen" style="width:11%">Unid. Medida</th><th class="num" style="width:12%">Perda (%)</th></tr></thead>
+    <tbody>
+      <tr><td class="cen">10</td><td>TP 01001A</td><td>Lateral 5/16"</td><td class="num">2,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+      <tr><td class="cen">20</td><td>TP 01001B</td><td>Peito de Pombo 170 × 94 × 3/8"</td><td class="num">2,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+      <tr><td class="cen">30</td><td>TP 01001C</td><td>Fechamento Superior 504 × 102 × 3 mm</td><td class="num">1,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+      <tr><td class="cen">40</td><td>TP 01001D</td><td>Fechamento Inferior 130 × 94 × 3 mm</td><td class="num">1,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+      <tr><td class="cen">50</td><td>BU 0120/50</td><td>Bucha da Balança 120 mm p/ pino 50 mm</td><td class="num">1,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Nível 1 → 2: os componentes do conjunto BU 0120/50</div>
+  <table class="dados">
+    <thead><tr><th class="cen" style="width:8%">Pos.</th><th style="width:16%">Cód. Filho</th><th>Descrição</th><th class="num" style="width:11%">Qtde</th><th class="cen" style="width:11%">Unid. Medida</th><th class="num" style="width:12%">Perda (%)</th></tr></thead>
+    <tbody>
+      <tr><td class="cen">10</td><td>BU 0120E</td><td>Bucha Externa 120 mm</td><td class="num">1,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+      <tr><td class="cen">20</td><td>BU 0050I</td><td>Bucha Interna 50,4 mm acabada</td><td class="num">2,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Nível 2 → 3: cada peça e sua matéria-prima</div>
+  <p>Agora abra cada peça como pai. É aqui que entra a <b>perda</b>:</p>
+  <table class="dados">
+    <thead><tr><th style="width:16%">Pai</th><th style="width:16%">Cód. Filho</th><th>Matéria-prima</th><th class="num" style="width:12%">Qtde</th><th class="cen" style="width:10%">UM</th><th class="num" style="width:12%">Perda (%)</th></tr></thead>
+    <tbody>
+      <tr><td>TP 01001A</td><td>MP 10794</td><td>Chapa de Aço 5/16"</td><td class="num">3,710</td><td class="cen">KG</td><td class="num">26,95</td></tr>
+      <tr><td>TP 01001B</td><td>MP 10952</td><td>Chapa de Aço 3/8"</td><td class="num">1,220</td><td class="cen">KG</td><td class="num">8,20</td></tr>
+      <tr><td>TP 01001C</td><td>MP 10300</td><td>Chapa de Aço 3,00 mm</td><td class="num">1,230</td><td class="cen">KG</td><td class="num">9,76</td></tr>
+      <tr><td>TP 01001D</td><td>MP 10300</td><td>Chapa de Aço 3,00 mm</td><td class="num">0,240</td><td class="cen">KG</td><td class="num">12,50</td></tr>
+      <tr><td>BU 0120E</td><td>MP 10794</td><td>Chapa de Aço 5/16"</td><td class="num">1,650</td><td class="cen">KG</td><td class="num">2,00</td></tr>
+      <tr><td>BU 0050I</td><td>BU 0050IB</td><td>Bucha interna semi-acabada <span class="mudo">(não é MP — é a peça bruta)</span></td><td class="num">1,000</td><td class="cen">UN</td><td class="num">0,00</td></tr>
+      <tr><td>BU 0050IB</td><td>MP 20603</td><td>Tubo Redondo Ø 60,3 × 4,75</td><td class="num">1,000</td><td class="cen">PC</td><td class="num">2,00</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="porque">
+  <b>Por que a quantidade é o peso líquido e não o bruto</b>
+  O campo <code>Qtde</code> recebe o <b>peso líquido</b> (o que fica na peça) e o campo <code>Perda (%)</code>
+  recebe o percentual de perca da ficha. O sistema calcula sozinho o consumo real:
+  <br><br>
+  <span class="centro"><code>3,710 kg × (1 + 26,95 %) = 4,710 kg</code> — exatamente o peso bruto da ficha.</span>
+  <br><br>
+  Guardar os dois separados permite, mais tarde, ver quanto se gasta em perda por peça, por família e por
+  mês — e comparar com o aproveitamento real do plano de corte. Se você lançar direto o peso bruto,
+  perde essa informação para sempre.
+</div>
+
+<div class="atencao">
+  <b>Atenção — a perda de 26,95 % da lateral</b>
+  Uma perda desse tamanho não é desperdício de processo: é <b>a peça não ser retangular</b>. O retalho que
+  sobra em volta do recorte a laser conta como perda. É por isso que o <b>plano de corte</b> (seção 6.8)
+  importa tanto: encaixando várias peças na mesma chapa, a perda real cai muito abaixo da perda nominal
+  cadastrada aqui.
+</div>
+
+<h2>4.2 Cabeçalho e versão da estrutura <span class="tela">VBOM0100</span></h2>
+<p>
+  A estrutura pode ter versão e vigência. Isso serve para quando o desenho muda: em vez de apagar a
+  estrutura antiga (e perder o histórico de tudo que já foi produzido), cria-se uma versão nova com data
+  de início de validade. Ordens antigas continuam apontando para a estrutura que valia na época.
+</p>
+<table class="campos">
+  <tr><td>Item</td><td>RN 01001</td></tr>
+  <tr><td>Versão</td><td>1</td></tr>
+  <tr><td>Tipo</td><td>Estrutura de fabricação</td></tr>
+  <tr><td>Situação</td><td>Aprovada</td><td class="obs">O MRP só usa estrutura aprovada.</td></tr>
+  <tr><td>Válida a partir de</td><td>data de hoje</td></tr>
+</table>
+
+<h2>4.3 Tipos de Máquina <span class="tela">VMAQ0101</span> e Máquinas <span class="tela">VMAQ0200</span></h2>
+<p>Primeiro os tipos, depois as máquinas, depois os tempos por item. São três cadastros encadeados.</p>
+
+<h3>4.3.1 Tipos de Máquina <span class="tela">VMAQ0101</span></h3>
+<p>O tipo agrupa máquinas equivalentes. Serve para o sequenciamento saber que duas máquinas fazem a
+mesma coisa e para organizar relatórios de carga.</p>
+<table class="dados">
+  <thead><tr><th style="width:16%">Campo</th><th class="cen" style="width:10%">Obrig.</th><th style="width:22%">Exemplo</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td><code>Código</code></td><td class="cen"><b>Sim</b></td><td><code>1</code></td><td>Numérico sequencial.</td></tr>
+    <tr><td><code>Nome</code></td><td class="cen"><b>Sim</b></td><td><code>Serra Fita</code></td><td>Nome do tipo.</td></tr>
+    <tr><td><code>Tipo</code></td><td class="cen"><b>Sim</b></td><td>categoria</td><td>Classificação do grupo de máquinas.</td></tr>
+    <tr><td><code>Descrição</code></td><td class="cen">Não</td><td>texto livre</td><td>Opcional.</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">
+  A grade mostra Cód., Nome, Tipo, Descrição e Status, com os totalizadores de <b>Ativos</b> e
+  <b>Inativos</b>. Use <span class="btn">Novo Tipo</span> para incluir.
+  <br><b>Tipos a cadastrar:</b> CORTE · DOBRA · SOLDA · PRENSA · ACABAMENTO · PINTURA · MONTAGEM · SERRA.
+</p>
+
+<h3>4.3.2 Máquinas <span class="tela">VMAQ0200</span></h3>
+<p>
+  Esta tela tem <b>quatro blocos</b>, e é importante não confundi-los: <b>Nova máquina</b> (cadastro),
+  <b>Tempo por item × máquina</b> (o cadastro central do cálculo), <b>Cálculo de tempo de produção</b>
+  (simulador) e <b>Agenda da máquina</b> (alimenta CRP e APS).
+</p>
+
+<h4>Bloco 1 — Nova máquina</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:20%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Código</code></td><td><code>1</code></td><td>Identificador da máquina.</td></tr>
+    <tr><td><code>Nome</code></td><td><code>Laser Calfran</code></td><td>Como aparece no roteiro, no CRP e no Gantt.</td></tr>
+    <tr><td><code>Tipo</code></td><td><code>CORTE</code></td><td>Vem da VMAQ0101.</td></tr>
+    <tr><td><code>Capacidade</code></td><td><code>8</code></td><td>Quanto a máquina produz no período informado.</td></tr>
+    <tr><td><code>Unidade de capacidade</code></td><td><code>HORA</code></td><td>Em que unidade a capacidade é expressa.</td></tr>
+    <tr><td><code>Período</code></td><td><code>DIA</code></td><td>Base de tempo da capacidade — 8 horas por dia.</td></tr>
+    <tr><td><code>Eficiência</code></td><td><code>0,95</code></td><td><b>Fator de rendimento real.</b> Uma máquina de 8 h com 95 % de eficiência entrega 7,6 h úteis ao CRP. É onde entram setup não previsto, pequenas paradas e ritmo do operador.</td></tr>
+  </tbody>
+</table>
+<p>Clique em <span class="btn">Criar máquina</span>. A grade lista Código, Nome, Tipo, Capacidade,
+Unidade, Período e Efic.</p>
+
+<h4>Bloco 2 — Tempo por item × máquina <span class="mudo">(cadastro central do cálculo)</span></h4>
+<div class="atencao">
+  <b>Este é o bloco que quase todo mundo pula — e sem ele o cálculo de tempo não funciona</b>
+  Enquanto o roteiro (VPRO0100) diz <b>quais operações</b> o item percorre, este bloco guarda
+  <b>quanto tempo aquele item específico leva naquela máquina específica</b>. É o cadastro que o
+  simulador de tempo e o cálculo de capacidade consultam.
+</div>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:20%">Exemplo — TP 01001A</th><th>O que significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>Item</code> · <code>Máscara</code></td><td>TP 01001A</td><td>O item ao qual o tempo se refere.</td></tr>
+    <tr><td><code>Máquina</code></td><td>Laser Calfran</td><td>Em qual recurso.</td></tr>
+    <tr><td><code>Tempo ciclo</code></td><td><code>85</code></td><td>Tempo para produzir a quantidade-base.</td></tr>
+    <tr><td><code>Unidade tempo</code></td><td><code>SEGUNDO</code></td><td><b>Permite lançar direto em segundos, como está na ficha</b> — sem converter à mão.</td></tr>
+    <tr><td><code>Qtd base</code></td><td><code>1</code></td><td>A quantas peças o tempo de ciclo se refere. Se o tempo for para 10 peças, informe 10.</td></tr>
+    <tr><td><code>Setup</code></td><td><code>180</code></td><td>Tempo de preparação, na mesma unidade.</td></tr>
+    <tr><td><code>Prioridade (1=preferida)</code></td><td><code>1</code></td><td><b>Quando o item pode rodar em mais de uma máquina</b>, define a ordem de escolha. A lateral corta preferencialmente no laser (1); a guilhotina seria a alternativa (2).</td></tr>
+  </tbody>
+</table>
+<p>Clique em <span class="btn">Cadastrar tempo</span>.</p>
+
+<div class="dica">
+  <b>Dica — este bloco resolve a fila da dobradeira</b>
+  Cadastrar a <code>Prioridade</code> de uma segunda máquina para as peças que <b>podem</b> ser dobradas
+  na prensa em vez da dobradeira dá ao planejamento uma saída legítima quando a ERMAK está lotada —
+  sem inventar item nem furar a fila.
+</div>
+
+<h4>Bloco 3 — Cálculo de tempo de produção <span class="mudo">(simulador)</span></h4>
+<p>
+  Informe <code>Item</code>, <code>Máscara</code>, <code>Máquina</code> e <code>Quantidade</code> e clique
+  em <span class="btn">Calcular tempo</span>. A tela devolve <code>Ciclos</code>,
+  <code>Setup (min)</code>, <code>Produção (min)</code>, <code>Total (min)</code>,
+  <code>Total (h)</code> e se aquele recurso é <code>Gargalo?</code>.
+</p>
+<p class="pequeno mudo">
+  Use para responder na hora “quanto tempo leva para fazer 200 laterais?” — e para conferir se o tempo
+  cadastrado bate com a realidade do chão de fábrica.
+</p>
+
+<h4>Bloco 4 — Agenda da máquina <span class="mudo">(CRP / APS)</span></h4>
+<p>
+  Registra <code>Data</code>, <code>Qtd planejada</code> e <code>Sequência</code> para a máquina.
+  É a agenda que o CRP lê como ocupação e o APS usa como ponto de partida do sequenciamento.
+  Clique em <span class="btn">Registrar</span>.
+</p>
+
+<h4>As máquinas da Tecnofer — direto da aba “Hora máquina” das fichas</h4>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:7%">Cód.</th><th style="width:24%">Nome</th><th style="width:12%">Tipo</th><th class="num" style="width:13%">Custo/hora</th><th class="num" style="width:11%">Eficiência</th><th class="cen" style="width:10%">Gargalo?</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td>Laser Calfran</td><td>CORTE</td><td class="num">R$ 118,55</td><td class="num">95 %</td><td class="cen"><b>Sim</b></td><td>Máquina mais cara da fábrica.</td></tr>
+    <tr><td class="cen">2</td><td>Dobradeira ERMAK 3300</td><td>DOBRA</td><td class="num">R$ 110,65</td><td class="num">90 %</td><td class="cen"><b>Sim</b></td><td><b>O gargalo real</b> — todo produto tem ao menos um componente que passa por ela.</td></tr>
+    <tr><td class="cen">3</td><td>Guilhotina</td><td>CORTE</td><td class="num">R$ 55,23</td><td class="num">90 %</td><td class="cen">Não</td><td>Corte reto; alternativa à laser em peça simples.</td></tr>
+    <tr><td class="cen">4</td><td>Máquina de Solda MIG</td><td>SOLDA</td><td class="num">R$ 37,09</td><td class="num">88 %</td><td class="cen">Não</td><td>Recurso com maior carga total.</td></tr>
+    <tr><td class="cen">5</td><td>Prensa</td><td>PRENSA</td><td class="num">R$ 41,66</td><td class="num">90 %</td><td class="cen">Não</td><td>Dobra, estampa, enrola e embucha.</td></tr>
+    <tr><td class="cen">6</td><td>Policorte</td><td>CORTE</td><td class="num">R$ 35,71</td><td class="num">90 %</td><td class="cen">Não</td><td></td></tr>
+    <tr><td class="cen">7</td><td>Limpeza</td><td>ACABAMENTO</td><td class="num">R$ 25,79</td><td class="num">95 %</td><td class="cen">Não</td><td></td></tr>
+    <tr><td class="cen">8</td><td>Pintura</td><td>PINTURA</td><td class="num">R$ 63,51</td><td class="num">85 %</td><td class="cen">Não</td><td>Inclui rateio de tinta e cabine.</td></tr>
+    <tr><td class="cen">9</td><td>Furadeira</td><td>CORTE</td><td class="num">R$ 26,08</td><td class="num">90 %</td><td class="cen">Não</td><td></td></tr>
+    <tr><td class="cen">10</td><td>Embalagem</td><td>ACABAMENTO</td><td class="num">R$ 25,00</td><td class="num">95 %</td><td class="cen">Não</td><td>Operador médio.</td></tr>
+    <tr><td class="cen">11</td><td>Serra Fita</td><td>SERRA</td><td class="num">R$ 39,93</td><td class="num">90 %</td><td class="cen">Não</td><td>Corte de tubo para bucha.</td></tr>
+    <tr><td class="cen">12</td><td><b>Mesa de Montagem</b></td><td>MONTAGEM</td><td class="num">R$ 37,09</td><td class="num">90 %</td><td class="cen">Não</td><td><b>Novo</b> — ver Achado 4.</td></tr>
+    <tr><td class="cen">13</td><td><b>Bancada / Morsa</b></td><td>ACABAMENTO</td><td class="num">R$ 22,40</td><td class="num">90 %</td><td class="cen">Não</td><td><b>Novo, valor a confirmar</b> — ver Achado 3.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>Por que a Dobradeira é o gargalo, e não a Laser</b>
+  A Laser é a máquina <b>mais cara</b> (R$ 118,55/h). A Dobradeira é a mais <b>disputada</b>: todo produto
+  de caminhão tem pelo menos um componente que precisa dela, enquanto vários componentes pulam a laser.
+  No RN 01001, por exemplo, a lateral vai só ao laser, mas o fechamento superior, o inferior e o peito
+  de pombo <b>todos</b> passam pela dobradeira.
+  <br><br>
+  Custo alto e carga alta são coisas diferentes — e é a carga que forma fila. Marcar
+  <code>Gargalo?</code> na Dobradeira faz o CRP e o APS priorizarem esse recurso e destacarem a
+  sobrecarga dela nos relatórios.
+</div>
+
+<h3>4.3.3 Custo/hora por centro de trabalho <span class="tela">VCUS0100</span></h3>
+<p>
+  A tarifa da máquina não fica no cadastro da máquina: é lançada no quadro <b>Custo/hora por centro de
+  trabalho</b>, com <code>Centro de trabalho</code>, <code>Custo/hora</code>, <code>Período</code> e
+  <code>Moeda</code>. Como tem período, mantém-se o histórico — a tarifa de janeiro continua valendo
+  para o custo de janeiro mesmo depois do reajuste de julho.
+</p>
+
+<h2>4.4 Biblioteca de operações e Roteiro de Fabricação <span class="tela">VPRO0100</span></h2>
+
+<h4>Para que serve</h4>
+<p>
+  Enquanto a estrutura diz <b>o que</b> compõe o item, o roteiro diz <b>como</b> ele é feito: em que
+  ordem, em qual máquina, em quanto tempo e com qual ferramenta. É o que alimenta o cálculo de lead
+  time, a carga do CRP, o sequenciamento do APS e o custo de operação.
+</p>
+
+<h4>Como a tela é organizada</h4>
+<p>Cinco blocos, que se usam nesta ordem:</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:6%">#</th><th style="width:28%">Bloco</th><th>O que se faz nele</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td><b>Operação</b> / <b>Biblioteca</b></td><td>Cadastra as operações reutilizáveis — o “verbo” do processo. Cadastra-se uma vez e usa-se em todos os roteiros.</td></tr>
+    <tr><td class="cen">2</td><td><b>Novo roteiro</b> / <b>Roteiros do item</b></td><td>Cria o roteiro do item selecionado na barra superior.</td></tr>
+    <tr><td class="cen">3</td><td><b>Operações do roteiro</b></td><td>Encadeia as operações da biblioteca no roteiro, com sequência, centro e tempos.</td></tr>
+    <tr><td class="cen">4</td><td><b>Recursos &amp; Ferramentas</b></td><td>Por operação: máquinas alternativas e ferramentas necessárias.</td></tr>
+    <tr><td class="cen">5</td><td><b>Rede de dependências</b></td><td>Define o que vem antes do quê e o overlap entre operações.</td></tr>
+  </tbody>
+</table>
+
+<h3>4.4.1 Bloco 1 — Cadastrar as operações</h3>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo</th><th style="width:24%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Nome</code></td><td><code>Corte a laser</code></td><td>Nome da operação.</td></tr>
+    <tr><td><code>Origem</code></td><td><code>INTERNA</code> · <code>EXTERNA</code> · <code>TERCEIROS</code></td><td><b>Campo decisivo.</b> A própria tela avisa: <i>“Origem define o tipo de ordem do MRP: INTERNA → OF · EXTERNA/TERCEIROS → OS.”</i></td></tr>
+    <tr><td><code>Tempo padrão (h)</code></td><td><code>0,0236</code></td><td>Tempo de referência da operação, em horas decimais.</td></tr>
+  </tbody>
+</table>
+<p>Clique em <span class="btn">+ Nova Operação</span> para incluir. A biblioteca lista #, Nome, Origem e
+Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</span> em cada linha.</p>
+
+<div class="porque">
+  <b>Por que a Origem resolve a cementação e a usinagem</b>
+  Operação com origem <code>INTERNA</code> gera <b>ordem de fabricação</b> — roda na sua máquina.
+  Operação com origem <code>EXTERNA</code> ou <code>TERCEIROS</code> gera <b>ordem de serviço</b> —
+  vai para fora, e é ela que dispara a requisição ao fornecedor.
+  <br><br>
+  É assim que a cementação da bucha entra no roteiro sem virar tempo de máquina: cadastre
+  <b>Cementação</b> com origem <code>TERCEIROS</code>. O MRP passa a gerar uma ordem de serviço, e o
+  custo vem do preço do serviço (seção 4.5), não da tarifa de um centro de trabalho.
+  <br><br>
+  <b>Isto corrige o Achado 5</b>, em que a ficha lançou R$ 1,74 de cementação numa coluna de tempo.
+</div>
+
+<h4>As operações a cadastrar</h4>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:8%">Seq. padrão</th><th style="width:24%">Operação</th><th style="width:14%">Origem</th><th style="width:20%">Centro de trabalho</th><th>Onde aparece</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">10</td><td>Cortar no Laser</td><td>INTERNA</td><td>Laser Calfran</td><td>TP 01001A · TP 01007A/B/C/E · TP 01022A · TP 02046A</td></tr>
+    <tr><td class="cen">15</td><td>Cortar na Guilhotina</td><td>INTERNA</td><td>Guilhotina</td><td>TP 01001B/C/D · BU 0120E · TP 01007D · TP 02046B</td></tr>
+    <tr><td class="cen">16</td><td>Repicar na Guilhotina</td><td>INTERNA</td><td>Guilhotina</td><td>logo após o corte na guilhotina</td></tr>
+    <tr><td class="cen">20</td><td>Cortar na Serra</td><td>INTERNA</td><td>Serra Fita</td><td>BU 0050IB</td></tr>
+    <tr><td class="cen">25</td><td>Estampar na Prensa</td><td>INTERNA</td><td>Prensa</td><td>TP 01007A</td></tr>
+    <tr><td class="cen">30</td><td>Dobrar na Dobradeira</td><td>INTERNA</td><td>Dobradeira ERMAK</td><td>TP 01001C/D · TP 01007C/D/E · TP 02046B</td></tr>
+    <tr><td class="cen">31</td><td>Dobrar na Prensa</td><td>INTERNA</td><td>Prensa</td><td>TP 01001B · TP 01022A</td></tr>
+    <tr><td class="cen">35</td><td>Enrolar na Prensa</td><td>INTERNA</td><td>Prensa</td><td>BU 0120E</td></tr>
+    <tr><td class="cen">40</td><td>Soldar na MIG</td><td>INTERNA</td><td>Máquina de Solda MIG</td><td>BU 0120E e todos os produtos acabados</td></tr>
+    <tr><td class="cen">45</td><td>Embuchar na Prensa</td><td>INTERNA</td><td>Prensa</td><td>BU 0120/50 (conjunto)</td></tr>
+    <tr><td class="cen">50</td><td>Endireitar na Morsa</td><td>INTERNA</td><td>Bancada / Morsa</td><td>BU 0120E</td></tr>
+    <tr><td class="cen">55</td><td>Usinagem</td><td><b>TERCEIROS</b></td><td class="mudo">fornecedor externo</td><td>BU 0050IB</td></tr>
+    <tr><td class="cen">60</td><td>Cementação</td><td><b>TERCEIROS</b></td><td class="mudo">fornecedor externo</td><td>BU 0050I</td></tr>
+    <tr><td class="cen">70</td><td>Montagem</td><td>INTERNA</td><td>Mesa de Montagem</td><td>todos os produtos acabados</td></tr>
+    <tr><td class="cen">80</td><td>Limpeza</td><td>INTERNA</td><td>Limpeza</td><td>todos os produtos acabados</td></tr>
+    <tr><td class="cen">90</td><td>Pintura</td><td>INTERNA</td><td>Pintura</td><td>todos os produtos acabados</td></tr>
+    <tr><td class="cen">95</td><td>Embalagem</td><td>INTERNA</td><td>Embalagem</td><td>opcional, antes da expedição</td></tr>
+  </tbody>
+</table>
+
+<h3>4.4.2 Converter os tempos da ficha</h3>
+<div class="atencao">
+  <b>Atenção — a ficha está em segundos, o roteiro pede horas</b>
+  Os campos <code>Setup (h)</code> e <code>Tempo (h)</code> são em <b>horas decimais</b>.
+  A conta é sempre <b>segundos ÷ 3600</b>:
+  <br><br>
+  <span class="centro"><code>180 s ÷ 3600 = 0,0500 h</code> &nbsp;·&nbsp; <code>85 s ÷ 3600 = 0,0236 h</code> &nbsp;·&nbsp; <code>300 s ÷ 3600 = 0,0833 h</code></span>
+  <br><br>
+  A tabela completa está no <b>Anexo C</b>. Alternativa: cadastre o tempo em
+  <span class="tela-out">VMAQ0200</span>, no bloco <b>Tempo por item × máquina</b>, onde há o campo
+  <code>Unidade tempo</code> — ali dá para lançar <b>direto em segundos</b>, como está na ficha.
+</div>
+
+<h3>4.4.3 Bloco 2 — Criar o roteiro do item</h3>
+<p>Informe o item na barra superior (campo <code>Buscar item</code>) e preencha:</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:28%">Exemplo — TP 01001A</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Descrição</code></td><td>Roteiro de fabricação — Lateral 5/16"</td><td>Nome do roteiro.</td></tr>
+    <tr><td><code>Alternativa</code></td><td><code>1</code></td><td>Permite mais de um roteiro para o mesmo item. A alternativa 2 seria “cortar na guilhotina quando a laser estiver lotada”.</td></tr>
+    <tr><td><code>Máscara</code></td><td class="mudo">em branco</td><td>Usada quando o item é configurado por máscara.</td></tr>
+    <tr><td><code>Padrão (MRP/CRP)</code></td><td>marcado</td><td><b>É o roteiro que o planejamento usa.</b> Só um por item pode ser padrão.</td></tr>
+  </tbody>
+</table>
+<p>A grade <b>Roteiros do item</b> mostra Descrição, Alt. e Padrão, com <span class="btn">Desativar</span>.</p>
+
+<h3>4.4.4 Bloco 3 — Encadear as operações</h3>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo</th><th style="width:24%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Operação</code></td><td>Cortar no Laser (INTERNA)</td><td>Escolhida na biblioteca. A lista mostra a origem entre parênteses.</td></tr>
+    <tr><td><code>Seq</code></td><td><code>10</code></td><td>Ordem de execução. Use de 10 em 10.</td></tr>
+    <tr><td><code>Centro (ID)</code></td><td>Laser Calfran</td><td><b>Onde a operação roda.</b> É daqui que sai a tarifa do custo e a carga do CRP.</td></tr>
+    <tr><td><code>Setup (h)</code></td><td><code>0,0500</code></td><td>Preparação — rateada pelo lote no custo.</td></tr>
+    <tr><td><code>Tempo (h)</code></td><td><code>0,0236</code></td><td>Tempo por peça.</td></tr>
+  </tbody>
+</table>
+<p>A grade mostra Seq, Operação, Centro, Setup (h) e Tempo, com <span class="btn">Rec/Ferr</span> e
+<span class="btn">Remover</span> em cada linha.</p>
+
+<h3>4.4.5 Bloco 4 — Recursos e ferramentas <span class="mudo">(botão Rec/Ferr)</span></h3>
+<p>Clicando em <span class="btn">Rec/Ferr</span> numa operação abre-se o painel da operação:</p>
+<table class="dados">
+  <thead><tr><th style="width:24%">Campo</th><th style="width:20%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Centro (recurso alt.)</code></td><td>Guilhotina</td><td>Máquina alternativa que também faz a operação.</td></tr>
+    <tr><td><code>Prioridade</code></td><td><code>2</code></td><td>Ordem de escolha. O APS usa a alternativa quando a primária está lotada.</td></tr>
+    <tr><td><code>Fator tempo</code></td><td><code>1,4</code></td><td><b>Quanto mais lento (ou rápido) o recurso alternativo é.</b> 1,4 significa que na guilhotina a operação leva 40 % mais tempo que no laser.</td></tr>
+    <tr><td><code>Ferramenta (ID)</code></td><td>estampo, molde, dispositivo</td><td>Ferramenta necessária. O sistema controla a vida útil e desconta a cada apontamento — ver <span class="tela-out">VPRO1000</span>.</td></tr>
+  </tbody>
+</table>
+<p>Use <span class="btn">+ Recurso</span> e <span class="btn">+ Ferramenta</span>. Na lista de recursos,
+<span class="btn">Primário</span> define qual é o principal.</p>
+
+<h3>4.4.6 Bloco 5 — Rede de dependências e overlap</h3>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:22%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Predecessora</code></td><td>Seq 10 Cortar</td><td>Operação que precisa terminar antes.</td></tr>
+    <tr><td><code>Sucessora</code></td><td>Seq 30 Dobrar</td><td>Operação que depende da anterior.</td></tr>
+    <tr><td><code>Overlap (%)</code></td><td><code>50</code></td><td>Percentual da anterior que já pode ser repassado antes de o lote inteiro terminar.</td></tr>
+  </tbody>
+</table>
+
+<div class="atencao">
+  <b>Atenção — restrição real do overlap</b>
+  A própria tela avisa: <b>overlap só vale em centro automático</b>, ou seja, em recurso que não exige
+  operador dedicado. Em máquina que depende de operador o campo não produz efeito no sequenciamento.
+  <br><br>
+  Operações <b>sem vínculo declarado rodam em paralelo</b>. No RN 01001, cortar a lateral no laser e
+  cortar o tubo na serra podem acontecer ao mesmo tempo — declarar isso encurta o lead time calculado.
+</div>
+
+<div class="porque">
+  <b>Onde o overlap ataca a fila da dobradeira</b>
+  Com overlap de 50 % entre a guilhotina e a dobradeira, a dobra começa quando metade do lote de corte
+  estiver pronta, em vez de esperar as 200 peças. Não aumenta a capacidade da ERMAK, mas <b>tira tempo
+  morto do meio do caminho</b> — que é exatamente o que a fila de gargalo cria.
+</div>
+
+<h3>4.4.7 Calcular o lead time</h3>
+<p>
+  Com as operações e dependências cadastradas, clique em
+  <span class="btn">Calcular Lead Time (CPM)</span>. O sistema percorre a rede de dependências, soma
+  setup + tempo × quantidade pelo caminho mais longo e devolve o prazo real de fabricação —
+  que é o número que deveria estar no campo <code>Tempo Reposição</code> da aba Planejamento do item.
+</p>
+
+<div class="exercicio">
+  <div class="ex-tit">Conferência — o roteiro está completo?</div>
+  Um roteiro pronto tem: operações na sequência certa, centro de trabalho em cada uma, setup e tempo
+  preenchidos, origem correta (INTERNA ou TERCEIROS), dependências declaradas e a caixa
+  <code>Padrão (MRP/CRP)</code> marcada. Falta a última e o MRP ignora o roteiro inteiro.
+</div>
+
+<h2>4.5 Serviços de terceiros <span class="tela">VTPS0100</span></h2>
+<p>
+  A cementação e a usinagem da bucha interna são feitas fora. No ERP isso não é uma operação de máquina:
+  é um <b>serviço comprado</b>, com preço por item, fornecedor e operação.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Serviço</th><th style="width:18%">Item</th><th style="width:24%">Preço</th><th>Como fica no sistema</th></tr></thead>
+  <tbody>
+    <tr><td>Usinagem</td><td>BU 0050IB</td><td>R$ 0,70 / peça</td><td>Preço fixo por peça.</td></tr>
+    <tr><td>Cementação</td><td>BU 0050I</td><td>R$ 5,80 / kg<br><span class="mudo">mínimo R$ 300,00 até 50 kg</span></td><td>Preço por quilo com valor mínimo de lote. Para a bucha de 0,300 kg dá <b>R$ 1,74/peça</b>, exatamente o valor da ficha.</td></tr>
+  </tbody>
+</table>
+<p>
+  O ciclo do terceiro é: ao firmar a ordem de fabricação, o sistema gera a <b>requisição de serviço</b> →
+  vira <b>pedido de compra</b> ao fornecedor → registra-se a <b>remessa</b> (o material sai para
+  <code>ALM-TERC</code> mas continua sendo seu) → registra-se o <b>retorno</b> → o material volta ao
+  <code>ALM-PROC</code> já como bucha acabada.
+</p>
+
+<div class="exercicio">
+  <div class="ex-tit">Prática 2 — 12 minutos</div>
+  Monte a estrutura completa do <b>SU 02046</b> (dois níveis) e o roteiro das duas peças + o roteiro de
+  montagem do produto. Dados no <b>Anexo B</b>. Ao terminar, rode
+  <span class="btn">Calcular Lead Time (CPM)</span> e anote o resultado — vamos comparar com o que o
+  APS devolver no Bloco 4.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>5 · Bloco 3 — Comercial: do orçamento ao pedido</h1>
+
+<p>
+  Este é o único assunto comercial do Dia 1, e é a porta de entrada de todo o resto: sem pedido confirmado
+  não há demanda, sem demanda não há MRP, sem MRP não há ordem.
+</p>
+
+<h2>5.1 Orçamento de Venda <span class="tela">VVND0300</span></h2>
+<p>O ciclo do orçamento é <b>proposta → liberação → conversão em pedido</b>.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Novo orçamento — capa</div>
+  <p>Clique em <span class="btn">Novo orçamento</span> e preencha a aba de identificação:</p>
+  <table class="campos">
+    <tr><td>Nº do orçamento</td><td class="mudo">automático</td></tr>
+    <tr><td>Cliente</td><td>selecionar na lista</td></tr>
+    <tr><td>Divisão de vendas</td><td>selecionar</td><td class="obs">Herda automaticamente o representante e a comissão.</td></tr>
+    <tr><td>Estabelecimento</td><td>definido pelo acesso atual</td></tr>
+    <tr><td>Depósito</td><td><code>ALM-PA</code></td></tr>
+    <tr><td>Emissão</td><td>data de hoje</td></tr>
+    <tr><td>Entrega prevista</td><td>data acordada com o cliente</td></tr>
+    <tr><td>Entrega é data firme</td><td>marcar se o cliente não aceita atraso</td><td class="obs">Data firme é respeitada pelo planejamento de entrega e pelo sequenciamento.</td></tr>
+    <tr><td>Moeda</td><td><code>Real (BRL)</code></td></tr>
+    <tr><td>Cond. pagamento</td><td>deixar em branco usa o padrão do cliente</td></tr>
+    <tr><td>Frete / Redespacho</td><td>conforme negociação</td></tr>
+    <tr><td>Comissão %</td><td>herdada do representante</td></tr>
+    <tr><td>Probabilidade %</td><td>estimativa de fechamento</td><td class="obs">Alimenta o funil comercial e a previsão de vendas.</td></tr>
+    <tr><td>Observações ao cliente</td><td>texto que sai na proposta</td></tr>
+    <tr><td>Observações internas</td><td>texto que <b>não</b> sai na proposta</td></tr>
+  </table>
+  <p><span class="btn">Salvar</span> antes de lançar itens — a tela avisa <i>“capa alterada — salve primeiro”</i>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Adicionar os itens</div>
+  <table class="dados">
+    <thead><tr><th class="cen" style="width:7%">Seq</th><th style="width:20%">Item</th><th class="num" style="width:9%">Qtd</th><th class="num" style="width:13%">Preço unit.</th><th class="num" style="width:10%">Desc. %</th><th class="num" style="width:9%">IPI %</th><th class="num">Líq. c/ IPI</th></tr></thead>
+    <tbody>
+      <tr><td class="cen">1</td><td>RN 01001</td><td class="num">10</td><td class="num">a definir</td><td class="num">0</td><td class="num">—</td><td class="num">calculado</td></tr>
+      <tr><td class="cen">2</td><td>SU 02046</td><td class="num">25</td><td class="num">a definir</td><td class="num">0</td><td class="num">—</td><td class="num">calculado</td></tr>
+    </tbody>
+  </table>
+  <p class="pequeno mudo">O botão <span class="btn">Preço da tabela</span> traz o preço vigente cadastrado
+  em <span class="tela-out">VCST0202</span> Tabelas de Venda e Preços por Item. Se não houver tabela,
+  digita-se o preço.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Anexos, bloqueio e liberação</div>
+  <ul>
+    <li><span class="btn">Incluir anexo</span> — desenho, croqui ou e-mail do cliente (até 10 MB). O arquivo sobe assim que é selecionado.</li>
+    <li><span class="btn">Bloquear</span> — trava o orçamento e exige <code>Motivo do bloqueio</code>. Usado quando falta análise de crédito ou aprovação de desconto.</li>
+    <li><span class="btn">Liberar</span> — libera o orçamento para virar pedido.</li>
+    <li><span class="btn">Gerar DAV</span> — emite o documento auxiliar de venda para o cliente.</li>
+  </ul>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Converter em pedido</div>
+  <p>Com o orçamento liberado, clique em <span class="btn">Converter em pedido</span>. O sistema cria o
+  pedido de venda com cliente, itens, quantidades, preços e condições já preenchidos, e mantém o vínculo
+  com o orçamento de origem.</p>
+</div>
+
+<div class="nota">
+  <b>Nota — orçamento parcialmente atendido</b>
+  A tela controla <code>Qtd solicitada</code>, <code>Qtd atendida</code> e <code>Qtd cancelada</code> por item.
+  Dá para converter 10 das 25 unidades agora e o restante depois: o saldo continua aberto no orçamento.
+</div>
+
+<h2>5.2 Pedido de Venda <span class="tela">VVND0200</span></h2>
+<p>O pedido segue o fluxo <b>Rascunho → Confirmado → Faturado</b>.</p>
+
+<table class="dados">
+  <thead><tr><th style="width:18%">Situação</th><th style="width:22%">O que já aconteceu</th><th>O que ainda dá para fazer</th></tr></thead>
+  <tbody>
+    <tr><td><b>Rascunho</b></td><td>Pedido criado, nada foi disparado.</td><td>Alterar itens, quantidades, preços e condições livremente.</td></tr>
+    <tr><td><b>Confirmado</b></td><td>Compromisso firmado. <b>Gera demanda para o planejamento.</b></td><td>Bloquear, desbloquear ou cancelar com motivo. Alterações passam a exigir cuidado — o MRP já enxergou este pedido.</td></tr>
+    <tr><td><b>Faturado</b></td><td>Nota fiscal emitida (Dia 2).</td><td>Somente consulta e devolução.</td></tr>
+    <tr><td><b>Cancelado</b></td><td>Encerrado com motivo registrado.</td><td>Consulta.</td></tr>
+  </tbody>
+</table>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Conferir a capa antes de confirmar</div>
+  <table class="campos">
+    <tr><td>Cliente</td><td>conferido</td></tr>
+    <tr><td>Estabelecimento</td><td>a filial que vai faturar</td></tr>
+    <tr><td>Almoxarifado</td><td><code>ALM-PA</code> — de onde sai a mercadoria</td></tr>
+    <tr><td>Emissão / Entrega</td><td>datas conferidas</td></tr>
+    <tr><td>Condição de pagamento</td><td>conferida — vira o parcelamento no contas a receber (Dia 2)</td></tr>
+    <tr><td>Frete</td><td>valor e modalidade</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Confirmar</div>
+  <p>Clique em <span class="btn">Confirmar</span>. Confira os totais no rodapé: <code>Total bruto</code>,
+  <code>Total líquido</code> e <code>Total c/ IPI+ST</code>.</p>
+</div>
+
+<div class="porque">
+  <b>Por que confirmar o pedido é o gatilho de tudo</b>
+  No instante em que o pedido passa a <b>Confirmado</b>, ele deixa de ser papel do Comercial e vira
+  compromisso da fábrica. É esse pedido que o planejamento enxerga como demanda no próximo bloco.
+  Confirmar um pedido sem data de entrega realista, ou com item sem estrutura cadastrada, é a origem
+  da maioria dos atrasos.
+</div>
+
+<div class="exercicio">
+  <div class="ex-tit">Prática 3 — 8 minutos</div>
+  Registre um orçamento para o cliente do dia com <b>10 × RN 01001</b> e <b>25 × SU 02046</b>,
+  entrega em 45 dias. Bloqueie o orçamento com o motivo “aguardando aprovação de desconto”,
+  depois libere, converta em pedido e confirme. Anote o número do pedido — ele será usado no Bloco 4.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>6 · Bloco 4 — Planejamento e chão de fábrica</h1>
+
+<h2>6.1 Demanda independente <span class="tela">VPLA0102</span></h2>
+<p>
+  Demanda independente é o que não vem de estrutura: pedido de cliente, previsão de venda, reposição de
+  estoque, protótipo. O pedido confirmado já gera demanda, mas há casos em que se lança à mão — por
+  exemplo, para produzir um lote de reposição sem pedido.
+</p>
+<table class="campos">
+  <tr><td>Nº Demanda</td><td>deixar em branco = numeração automática</td></tr>
+  <tr><td>Item</td><td>RN 01001</td></tr>
+  <tr><td>Quantidade</td><td><code>10,000</code></td></tr>
+  <tr><td>Data</td><td>data de necessidade</td><td class="obs">Precisa ser dia útil no calendário industrial, senão o sistema recusa.</td></tr>
+  <tr><td>C. Custo</td><td>centro de custo do consumo</td></tr>
+  <tr><td>Descrição</td><td>Pedido 000123 — Cliente X</td></tr>
+</table>
+
+<h2>6.2 Plano de produção e execução do MRP <span class="tela">VMRP0100</span></h2>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar o plano</div>
+  <table class="campos">
+    <tr><td>Novo — código</td><td><code>2001</code></td><td class="obs">Código do plano. Será informado em todas as telas seguintes (CRP, APS).</td></tr>
+    <tr><td>Nome</td><td>Plano Tecnofer — <span class="mudo">mês/ano</span></td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Rodar o MRP</div>
+  <p>Informe <code>Plano</code> = 2001 e <code>Nº ordem inicial</code> (o número a partir do qual as
+  ordens serão numeradas) e clique em <span class="btn">Rodar MRP</span>. A tela devolve
+  <code>Status</code>, <code>Itens processados</code> e <code>Ordens geradas</code>.</p>
+  <p class="pequeno mudo">A grade de planos mostra <code>Código</code>, <code>Nome</code>,
+  <code>Modos</code> e <code>Ativo</code>. Use <span class="btn">Listar planos</span> para recarregar.</p>
+
+  <div class="nota">
+    <b>Gerar LLC</b>
+    O MRP tem a opção de <b>recalcular o LLC de todos os itens</b> durante a execução. Deixe ligada nas
+    primeiras rodadas e sempre que a estrutura mudar — é ela que corrige os níveis informados à mão no
+    cadastro do item (seção 3.4.3).
+  </div>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Ler as sugestões — bloco <b>Sugestões de ordens</b></div>
+  <table class="dados">
+    <thead><tr><th style="width:20%">Coluna</th><th>O que significa</th></tr></thead>
+    <tbody>
+      <tr><td><code>Item</code></td><td>O item sugerido.</td></tr>
+      <tr><td><code>Qtd</code></td><td>Quantidade sugerida — já com perda aplicada e já arredondada para o lote múltiplo.</td></tr>
+      <tr><td><code>Tipo ordem</code></td><td><code>FABRICAÇÃO</code> para item Fabricado, <code>COMPRA</code> para item Comprado. <b>É aqui que se percebe na hora se algum item foi cadastrado com o tipo errado.</b></td></tr>
+      <tr><td><code>Demanda</code></td><td>Que demanda originou a sugestão — pedido, previsão ou necessidade de um item pai.</td></tr>
+      <tr><td><code>Necessidade</code></td><td>Data em que o material precisa estar pronto.</td></tr>
+      <tr><td><code>Início</code></td><td>Data em que precisa começar, recuada pelo tempo de reposição.</td></tr>
+      <tr><td><code>LLC</code></td><td>Nível do item na estrutura. O MRP calcula nível a nível: primeiro os produtos, depois conjuntos e peças, por último as matérias-primas.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Conferir as exceções — bloco <b>Exceções / alertas</b></div>
+  <p>Traz <code>Tipo</code> e <code>Descrição</code> de cada problema encontrado no cálculo: item sem
+  estrutura, sem roteiro, sem fornecedor, data no passado, estoque negativo.
+  <b>Leia sempre este bloco antes de firmar qualquer sugestão</b> — é ele que avisa que o cadastro
+  tem buraco.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Analisar um item em detalhe — bloco <b>Perfil MRP do item</b></div>
+  <p>Informe o item e veja a tabela distribuída no tempo, com <code>Data</code>,
+  <code>Planejadas</code>, <code>Firmes</code> e <code>Estoque proj.</code>. É a visão que responde
+  “por que o sistema está mandando comprar isso?”: o estoque projetado fica negativo naquela data.</p>
+</div>
+
+<div class="nota">
+  <b>Outros blocos da tela</b>
+  <br>• <b>Ordens planejadas</b> — as sugestões já firmadas, com <code>Nº ordem</code>,
+  <code>Status</code> e <code>Firme?</code>.
+  <br>• <b>Regras configuradas por item</b> — ajustes finos por <code>Tabela</code>, <code>Campo</code>,
+  <code>Regra</code> e <code>Valor</code>, para casos em que um item precisa de tratamento diferente.
+  <br>• <b>Relatórios operacionais</b> — perfil, disponibilidade, necessidades agrupadas, explosão e
+  ponto de reposição.
+  <br>• <b>Empresas inter-fábrica</b> — quando ordens de outra unidade entram como demanda neste plano.
+  Não se aplica à Tecnofer hoje.
+</div>
+
+<h3>O que o MRP deve devolver para o pedido do exercício</h3>
+<p class="pequeno">10 × RN 01001 e 25 × SU 02046, considerando estoque zero:</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:8%">LLC</th><th style="width:16%">Item</th><th style="width:16%">Tipo</th><th class="num" style="width:14%">Quantidade</th><th>De onde veio</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">0</td><td>RN 01001</td><td>FABRICAÇÃO</td><td class="num">10 UN</td><td>demanda do pedido</td></tr>
+    <tr><td class="cen">0</td><td>SU 02046</td><td>FABRICAÇÃO</td><td class="num">25 UN</td><td>demanda do pedido</td></tr>
+    <tr><td class="cen">1</td><td>BU 0120/50</td><td>FABRICAÇÃO</td><td class="num">10 UN</td><td>1 por balança</td></tr>
+    <tr><td class="cen">2</td><td>TP 01001A</td><td>FABRICAÇÃO</td><td class="num">200 UN</td><td>precisa de 20; arredonda para o lote múltiplo 200</td></tr>
+    <tr><td class="cen">2</td><td>TP 01001B</td><td>FABRICAÇÃO</td><td class="num">200 UN</td><td>precisa de 20; lote múltiplo 200</td></tr>
+    <tr><td class="cen">2</td><td>TP 01001C / D</td><td>FABRICAÇÃO</td><td class="num">100 UN cada</td><td>precisa de 10; lote múltiplo 100</td></tr>
+    <tr><td class="cen">2</td><td>BU 0120E</td><td>FABRICAÇÃO</td><td class="num">100 UN</td><td>precisa de 10; lote múltiplo 100</td></tr>
+    <tr><td class="cen">2</td><td>BU 0050I</td><td>FABRICAÇÃO</td><td class="num">200 UN</td><td>precisa de 20; lote múltiplo 200</td></tr>
+    <tr><td class="cen">2</td><td>BU 0050IB</td><td>FABRICAÇÃO</td><td class="num">200 UN</td><td>1 por bucha acabada</td></tr>
+    <tr><td class="cen">2</td><td>TP 02046A</td><td>FABRICAÇÃO</td><td class="num">200 UN</td><td>precisa de 50; lote múltiplo 200</td></tr>
+    <tr><td class="cen">2</td><td>TP 02046B</td><td>FABRICAÇÃO</td><td class="num">100 UN</td><td>precisa de 25; lote múltiplo 100</td></tr>
+    <tr><td class="cen">3</td><td>MP 10794</td><td><b>COMPRA</b></td><td class="num">1.110,3 kg</td><td>200 laterais × 4,71 kg + 100 buchas externas × 1,683 kg</td></tr>
+    <tr><td class="cen">3</td><td>MP 10952</td><td><b>COMPRA</b></td><td class="num">402,0 kg</td><td>200 peitos de pombo × 1,32 kg + 100 bases × 1,38 kg</td></tr>
+    <tr><td class="cen">3</td><td>MP 10300</td><td><b>COMPRA</b></td><td class="num">162,0 kg</td><td>100 × 1,35 kg + 100 × 0,27 kg</td></tr>
+    <tr><td class="cen">3</td><td>MP 10476</td><td><b>COMPRA</b></td><td class="num">116,0 kg</td><td>200 laterais do SU 02046 × 0,58 kg</td></tr>
+    <tr><td class="cen">3</td><td>MP 20603</td><td><b>COMPRA</b></td><td class="num">2 barras</td><td>200 peças ÷ 109 peças por barra</td></tr>
+  </tbody>
+</table>
+
+<div class="atencao">
+  <b>Atenção — o teste que revela cadastro errado</b>
+  Rode o MRP e olhe a coluna <b>Tipo</b>. Se alguma <b>chapa aparecer como FABRICAÇÃO</b>, aquele item foi
+  cadastrado como Fabricado por engano. Se alguma <b>peça TP aparecer como COMPRA</b>, o tipo está trocado
+  no sentido oposto. Corrija o cadastro e rode o MRP de novo — leva segundos e evita semanas de confusão.
+</div>
+
+<h2>6.3 CRP — a capacidade cabe? <span class="tela">VPRO0200</span></h2>
+<p>
+  O MRP responde <b>o que</b> produzir e <b>quando</b>, mas ignora se as máquinas dão conta. Quem responde
+  isso é o CRP: ele pega os roteiros das ordens sugeridas e soma a carga por centro de trabalho e por dia.
+</p>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Calcular e consultar</div>
+  <p>Informe <code>Plano MRP</code> = 2001, calcule e consulte. A grade traz por centro e por data:</p>
+  <table class="campos">
+    <tr><td>Necessário (h)</td><td>Horas que as ordens exigem daquele centro naquele dia.</td></tr>
+    <tr><td>Disponível (h)</td><td>Horas de capacidade do centro, já descontando a eficiência e as paradas de manutenção.</td></tr>
+    <tr><td>Carga %</td><td>Necessário ÷ Disponível. Acima de 100 % é sobrecarga.</td></tr>
+    <tr><td>Sobrecarga</td><td>Marcador visual. Use o filtro <span class="btn">Sobrecargas</span> para ver só os dias com problema.</td></tr>
+  </table>
+</div>
+
+<h3>A carga que o exercício gera</h3>
+<p class="pequeno">Horas de máquina por produto acabado, somando todos os níveis da estrutura:</p>
+<table class="dados">
+  <thead><tr><th style="width:26%">Centro de trabalho</th><th class="num" style="width:18%">h por RN 01001</th><th class="num" style="width:18%">h por SU 02046</th><th class="num">Total do pedido<br>(10 + 25 unidades)</th></tr></thead>
+  <tbody>
+    <tr><td>Laser Calfran</td><td class="num">0,0477</td><td class="num">0,0131</td><td class="num">0,80 h</td></tr>
+    <tr><td>Guilhotina</td><td class="num">0,0483</td><td class="num">0,0100</td><td class="num">0,73 h</td></tr>
+    <tr><td>Dobradeira ERMAK</td><td class="num">0,0128</td><td class="num">0,0425</td><td class="num">1,19 h</td></tr>
+    <tr><td>Prensa</td><td class="num">0,0644</td><td class="num">—</td><td class="num">0,64 h</td></tr>
+    <tr><td>Serra Fita</td><td class="num">0,0342</td><td class="num">—</td><td class="num">0,34 h</td></tr>
+    <tr><td>Bancada / Morsa</td><td class="num">0,0133</td><td class="num">—</td><td class="num">0,13 h</td></tr>
+    <tr><td>Máquina de Solda MIG</td><td class="num">0,1114</td><td class="num">0,0508</td><td class="num">2,38 h</td></tr>
+    <tr><td>Mesa de Montagem</td><td class="num">0,0675</td><td class="num">0,0175</td><td class="num">1,11 h</td></tr>
+    <tr><td>Limpeza</td><td class="num">0,0258</td><td class="num">0,0258</td><td class="num">0,91 h</td></tr>
+    <tr><td>Pintura</td><td class="num">0,0258</td><td class="num">0,0258</td><td class="num">0,91 h</td></tr>
+    <tr class="total"><td>Total</td><td class="num">0,4513 h</td><td class="num">0,1856 h</td><td class="num">9,15 h</td></tr>
+  </tbody>
+</table>
+<p class="pequeno mudo">
+  Valores por unidade, já incluindo o rateio do setup pelo lote econômico. Note que a solda é o recurso
+  mais carregado — não a laser, que é a mais cara. Custo alto e carga alta são coisas diferentes.
+</p>
+
+<h2>6.4 APS — sequenciamento e quadro do mês <span class="tela">VPRO0210</span></h2>
+<p>
+  O APS pega as ordens e as encaixa nas máquinas <b>respeitando a capacidade real</b>, gerando data e hora
+  de início e fim de cada operação.
+</p>
+<table class="campos">
+  <tr><td><span class="btn">Sequenciar</span></td><td>Roda o cálculo a partir de uma data inicial.</td></tr>
+  <tr><td><span class="btn">Ver Gantt</span></td><td>Mostra as barras por ordem ou por centro. <code>Agrupar por</code> alterna entre as duas visões.</td></tr>
+  <tr><td><span class="btn">Ver quadro</span></td><td>Quadro de programação mensal — a visão que vai para o chão de fábrica. Informe <code>Mês</code> e <code>Ano</code>.</td></tr>
+  <tr><td><span class="btn">Remanejar</span></td><td>Arrasta uma operação para outro dia ou outro centro. Com <code>Cascata</code> marcado, tudo que depende dela se desloca junto.</td></tr>
+  <tr><td><span class="btn">Export PDF</span> <span class="btn">Export SVG</span></td><td>Imprime o quadro para afixar na fábrica.</td></tr>
+</table>
+<div class="nota">
+  <b>Nota</b> Barras vermelhas são ordens atrasadas em relação à data de necessidade; os dias marcados como
+  sobrecarregados vêm do CRP. Se o quadro sai todo vermelho, o problema está no prazo prometido no pedido,
+  não no sequenciamento.
+</div>
+
+<h2>6.5 Firmar as sugestões e gerar as ordens</h2>
+<p>
+  Sugestão do MRP não é ordem — é proposta. Firmar é o ato de aceitar a proposta. Só depois de firmada a
+  sugestão vira <b>ordem planejada</b>, e a ordem planejada vira pedido de compra ou ordem de fabricação.
+</p>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Revisar e firmar</div>
+  <p>Na tela do MRP, selecione a sugestão e clique em <span class="btn">Firmar</span>. Ela passa a aparecer
+  na aba <b>Firmes</b> e ganha número de ordem.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Sugestões de compra → Pedido de Compra <span class="tela">VSUP0200</span></div>
+  <p>A tela de pedido de compra tem a visão <b>Compras + sugestões de MRP</b>. Selecione as sugestões,
+  agrupe por fornecedor e gere o pedido. Depois complete a capa:</p>
+  <table class="campos">
+    <tr><td>Fornecedor</td><td>Chapas Jandaia</td></tr>
+    <tr><td>Estabelecimento / Moeda</td><td>conforme a empresa</td></tr>
+    <tr><td>Frete</td><td>conforme negociação</td></tr>
+    <tr><td>Itens</td><td>quantidade, preço unitário e desconto por item</td></tr>
+  </table>
+  <p>Fluxo: cadastrar → <span class="btn">Aprovar</span> → enviar ao fornecedor → registrar recebimento.
+  Pedidos acima da alçada exigem autorização adicional.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Sugestões de fabricação → Ordem de Produção</div>
+  <p>As sugestões de fabricação viram ordens na <span class="tela-out">VPRO0900</span>, que é o próximo assunto.</p>
+</div>
+
+<div class="dica">
+  <b>Dica — o atalho do dia a dia</b>
+  A tela <span class="tela-out">VPLN0100</span> Pipeline de Planejamento executa MRP, CRP e APS de uma vez
+  só e devolve um parecer de viabilidade. Depois que a equipe dominar as três telas separadamente, use o
+  pipeline na rotina e volte às telas individuais só quando precisar investigar.
+</div>
+
+<h2>6.6 Ordem de Produção <span class="tela">VPRO0900</span></h2>
+
+<h4>Para que serve</h4>
+<p>
+  É a tela do chão de fábrica. A ordem percorre os estados
+  <b>Aberto → Em produção → Concluída → Encerrada</b>, e cada transição registra alguma coisa:
+  horas, quantidade, consumo de material, lote e custo.
+</p>
+
+<h4>Como a tela é organizada</h4>
+<table class="dados">
+  <thead><tr><th style="width:30%">Bloco</th><th>O que se faz nele</th></tr></thead>
+  <tbody>
+    <tr><td><b>Nova ordem (Aberto)</b></td><td>Cria a ordem.</td></tr>
+    <tr><td><b>Ordens</b></td><td>Lista com OF, Item, Planej., Produz., Refugo e Status.</td></tr>
+    <tr><td><b>Apontamento</b></td><td>Registra o que foi produzido e refugado.</td></tr>
+    <tr><td><b>Consumo de insumo</b></td><td>Lança a saída de material.</td></tr>
+    <tr><td><b>Conclusão</b></td><td>Dá entrada do acabado no estoque, com lote.</td></tr>
+    <tr><td><b>Custo real × padrão</b></td><td>Mostra a variância da ordem.</td></tr>
+    <tr><td><b>Operações · Apontamentos · Consumos</b></td><td>Histórico do que já foi lançado.</td></tr>
+    <tr><td><b>Materiais da OF</b></td><td>Materiais previstos e alocação de lotes.</td></tr>
+    <tr><td><b>Leitura por código de barras</b></td><td>Apontamento pelo operador, sem digitar.</td></tr>
+  </tbody>
+</table>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar a ordem — bloco Nova ordem (Aberto)</div>
+  <table class="dados">
+    <thead><tr><th style="width:22%">Campo</th><th style="width:20%">Exemplo</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td><code>Item</code></td><td>RN 01001</td><td>O item a produzir.</td></tr>
+      <tr><td><code>Qtd planejada</code></td><td><code>10</code></td><td>Quantidade da ordem.</td></tr>
+      <tr><td><code>Máquina</code></td><td>Mesa de Montagem</td><td>Recurso principal da ordem.</td></tr>
+      <tr><td><code>Centro custo</code></td><td>130 Solda e Montagem</td><td>Onde o custo da ordem é apropriado — alimenta o rateio e a contabilidade.</td></tr>
+      <tr><td><code>Prioridade</code></td><td>conforme a data de entrega</td><td>Usada pelo APS no sequenciamento.</td></tr>
+    </tbody>
+  </table>
+  <p>Clique em <span class="btn">Criar OF</span>. A ordem nasce com status <b>Aberto</b>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Explodir o roteiro</div>
+  <p>Clique em <span class="btn">Explodir roteiro</span>. A ordem recebe as operações do roteiro cadastrado
+  no Bloco 2, com sequência, centro e tempos, e elas aparecem na aba <b>Operações</b>.
+  <b>Se nada aparecer, o item está sem roteiro padrão</b> — volte à <span class="tela-out">VPRO0100</span>
+  e confirme a caixa <code>Padrão (MRP/CRP)</code>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Iniciar</div>
+  <p><span class="btn">Iniciar (→ Em produção)</span>. A partir daqui a ordem aparece para o chão de fábrica.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Apontar a produção — bloco Apontamento</div>
+  <table class="dados">
+    <thead><tr><th style="width:24%">Campo</th><th style="width:18%">Exemplo</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td><code>Qtd produzida</code></td><td><code>10</code></td><td>Peças boas.</td></tr>
+      <tr><td><code>Qtd refugada</code></td><td><code>0</code></td><td>Peças perdidas. <b>Aponte sempre</b> — refugo não lançado vira variância inexplicável.</td></tr>
+      <tr><td><code>Backflush depósito</code></td><td><code>ALM-PROC</code></td><td>Depósito de onde os componentes com baixa automática serão consumidos junto com o apontamento.</td></tr>
+    </tbody>
+  </table>
+  <p>Clique em <span class="btn">Apontar</span>. Há também
+  <span class="btn">Concluir operação</span> para fechar uma sequência do roteiro.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Consumir material — bloco Consumo de insumo</div>
+  <table class="campos">
+    <tr><td>Item insumo</td><td>o componente consumido</td></tr>
+    <tr><td>Qtd consumida</td><td>quantidade real utilizada</td></tr>
+    <tr><td>Depósito</td><td>de onde o material saiu</td></tr>
+  </table>
+  <p>Botões: <span class="btn">Consumir (saída)</span> e
+  <span class="btn">Retornar sucata (entrada)</span>, este último para devolver ao estoque o material
+  aproveitável que sobrou. No bloco <b>Materiais da OF</b> ficam os materiais previstos, a coluna
+  <code>Alocado</code> e o botão <span class="btn">Alocar lotes</span>, usado quando é preciso escolher a
+  corrida específica do aço.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">6</span>Concluir com lote — bloco Conclusão</div>
+  <table class="dados">
+    <thead><tr><th style="width:26%">Campo</th><th style="width:26%">Exemplo</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td><code>Depósito acabado</code></td><td><code>ALM-PA</code></td><td>Onde o produto entra.</td></tr>
+      <tr><td><code>Lote (rastreabilidade)</code></td><td><code>RN01001-2609-01</code></td><td><b>Sem lote não há genealogia.</b> É este número que permite, meses depois, descobrir de qual corrida de aço saiu a peça que o cliente reclamou.</td></tr>
+    </tbody>
+  </table>
+  <p><span class="btn">Concluir (→ Concluída)</span> dá entrada do acabado no estoque.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">7</span>Apurar custo e encerrar</div>
+  <p><span class="btn">Apurar custo</span> preenche o bloco <b>Custo real × padrão</b> com
+  <code>Material real</code>, <code>Total real</code>, <code>Unit. real</code> e
+  <code>Variância total</code>. Depois <span class="btn">Encerrar</span> fecha a ordem.</p>
+</div>
+
+<h4>Apontamento pelo operador — leitura por código de barras</h4>
+<p>
+  Para o chão de fábrica existe o bloco <b>Leitura de produção por código de barras</b>. Gere a etiqueta
+  com <span class="btn">Gerar código de barras</span> e o operador aponta lendo o código, preenchendo
+  apenas o que faltar:
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th>O que é</th></tr></thead>
+  <tbody>
+    <tr><td><code>Código lido</code></td><td>O que o leitor capturou.</td></tr>
+    <tr><td><code>Ação</code></td><td>Qual evento registrar com aquela leitura.</td></tr>
+    <tr><td><code>Dispositivo</code></td><td>Qual coletor/terminal fez a leitura.</td></tr>
+    <tr><td><code>Funcionário</code></td><td>Quem executou — base da análise de produtividade.</td></tr>
+    <tr><td><code>Qtd. boa</code> · <code>Qtd. refugo</code></td><td>Quantidades do apontamento.</td></tr>
+    <tr><td><code>Horas</code></td><td>Tempo real gasto. <b>É a comparação deste número com o tempo do roteiro que revela se o padrão está certo.</b></td></tr>
+    <tr><td><code>Motivo do refugo</code></td><td>Obrigatório quando há refugo.</td></tr>
+  </tbody>
+</table>
+<p>Clique em <span class="btn">Processar leitura</span>.</p>
+
+<div class="porque">
+  <b>Por que a variância é o relatório mais útil da produção</b>
+  Variância positiva grande significa que gastou-se mais material ou mais hora do que o padrão. As causas
+  são sempre uma destas quatro: perda cadastrada baixa demais, tempo de roteiro otimista, refugo não
+  apontado, ou consumo lançado no item errado. As quatro são corrigíveis — mas só se alguém olhar o número.
+</div>
+
+<h2>6.7 Plano de Corte <span class="tela">VCUT0100</span></h2>
+
+<h4>Para que serve</h4>
+<p>
+  Aqui a perda deixa de ser estimativa e vira medida. O plano encaixa as peças na chapa 1200 × 3000,
+  calcula o aproveitamento real e transforma a sobra grande em <b>retalho rastreável</b>, disponível
+  para o próximo plano.
+</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar o plano — bloco Novo plano de corte</div>
+  <table class="dados">
+    <thead><tr><th style="width:24%">Campo</th><th style="width:22%">Exemplo</th><th>O que faz</th></tr></thead>
+    <tbody>
+      <tr><td><code>Matéria-prima (item)</code></td><td>MP 10794</td><td>A chapa ou barra a ser cortada.</td></tr>
+      <tr><td><code>Tipo de corte</code></td><td>linear ou bidimensional</td><td>Barra e tubo usam corte linear; chapa usa corte em duas dimensões.</td></tr>
+      <tr><td><code>Descrição</code></td><td>Corte chapa 5/16" — semana 39</td><td>Identifica o plano na lista.</td></tr>
+      <tr><td><code>Kerf</code></td><td>largura do corte</td><td>Espessura que o feixe do laser consome a cada corte. Sem isso, as peças saem menores que o previsto.</td></tr>
+      <tr><td><code>Refile</code></td><td>margem de borda</td><td>Faixa descartada nas bordas da chapa.</td></tr>
+      <tr><td><code>Sobra mín.</code></td><td>em mm</td><td><b>O divisor entre retalho e sucata:</b> sobra acima do valor vira retalho aproveitável; abaixo, vira sucata.</td></tr>
+      <tr><td><code>UoM estoque</code> · <code>Fator UoM</code></td><td><code>KG</code> · <code>226,08</code></td><td>Como converter a chapa consumida na unidade de estoque, para dar a baixa correta.</td></tr>
+      <tr><td><code>Depósito (p/ firmar)</code></td><td><code>ALM-MP</code></td><td>De onde a baixa será feita quando o plano for firmado.</td></tr>
+      <tr><td>☐ <code>semear retalhos</code></td><td>marcado</td><td><b>Traz os retalhos já existentes em estoque</b> para dentro do plano, para serem aproveitados antes de abrir chapa nova.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Informar as peças — bloco Demanda / peças</div>
+  <p>Use <span class="btn">Adicionar peça</span> com <code>Etiqueta</code>, <code>Largura</code>,
+  <code>Altura</code>, <code>Comprimento (mm)</code> e <code>Qtd</code> — ou traga a demanda
+  direto das ordens com <span class="btn">Demanda</span>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Informar o estoque — bloco Estoque disponível</div>
+  <p><span class="btn">Adicionar estoque</span> ou <span class="btn">Estoque</span> para puxar o saldo.
+  Cada peça de estoque tem a marcação <code>retalho</code>, que distingue sobra reaproveitada de chapa
+  inteira.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Otimizar e ler o resultado</div>
+  <p>Clique em <span class="btn">Otimizar</span>. O plano devolve:</p>
+  <table class="campos">
+    <tr><td>Aproveitamento</td><td>Percentual da chapa que virou peça. <b>É o número que se compara com a perda cadastrada na estrutura.</b></td></tr>
+    <tr><td>Sucata</td><td>O que não deu para aproveitar.</td></tr>
+    <tr><td>Estoque usado</td><td>Quantas chapas e retalhos foram consumidos.</td></tr>
+    <tr><td>Cortes</td><td>Quantidade de cortes do programa.</td></tr>
+  </table>
+  <p>O bloco <b>Padrões de corte</b> mostra o mapa de cada chapa.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Firmar e programar</div>
+  <p><span class="btn">Firmar (baixa)</span> dá baixa real da chapa no estoque e cadastra os retalhos
+  como material disponível. O bloco <b>Programa de corte</b> permite
+  <span class="btn">Agendar na máquina</span> e gerar <span class="btn">PDF</span>,
+  <span class="btn">DXF</span> e <span class="btn">Etiqueta</span> para o operador.</p>
+</div>
+
+<h4>Padrões da empresa <span class="mudo">— configure uma vez</span></h4>
+<table class="campos">
+  <tr><td>Modo de consumo</td><td><code>Automático (FIFO)</code> ou <code>Manual (por lote)</code>. Manual quando é preciso escolher a corrida específica do aço.</td></tr>
+  <tr><td>Sobra mínima padrão (mm)</td><td>Valor aplicado por padrão aos novos planos.</td></tr>
+  <tr><td>Depósito padrão</td><td>Depósito sugerido nos novos planos.</td></tr>
+</table>
+<p>Clique em <span class="btn">Salvar padrões</span>.</p>
+
+<div class="porque">
+  <b>Por que o retalho rastreável muda o custo</b>
+  A perda de 26,95 % da lateral pressupõe cortar uma peça por vez. Encaixando as laterais junto com os
+  fechamentos na mesma chapa, o aproveitamento real sobe e a sobra grande volta como retalho utilizável
+  em vez de virar sucata. Essa diferença aparece direto na variância de material da ordem (seção 6.6).
+  <br><br>
+  <b>Comparação a fazer sempre:</b> aproveitamento do plano de corte × perda cadastrada na estrutura.
+  Se a perda cadastrada for muito maior que a real, a empresa está comprando aço a mais todo mês.
+</div>
+
+<h2>6.8 Estoque, lotes e rastreabilidade <span class="tela">VEST0100</span></h2>
+<table class="campos">
+  <tr><td>Lançar movimento</td><td>Entrada ou saída manual: <code>Item</code>, <code>Tipo</code>, <code>Qtd</code>, <code>Depósito</code>, <code>Preço unit.</code>, <code>Data</code> e <code>Lote</code>.</td></tr>
+  <tr><td>Saldos</td><td><code>Em mãos</code> é o físico. <code>Reservado</code> é o comprometido com ordens e pedidos. <code>Disponível (ATP)</code> é o que sobra para prometer a um cliente novo.</td></tr>
+  <tr><td>Registrar lote</td><td>Lote, <code>Corrida (heat)</code> e <code>Certificado</code> do aço. Preencher isso na entrada da chapa é o que torna a rastreabilidade possível.</td></tr>
+  <tr><td>Genealogia</td><td>Mostra a árvore completa: deste produto acabado, qual bucha; desta bucha, qual tubo; deste tubo, qual corrida e qual nota de compra.</td></tr>
+  <tr><td>Consumo médio mensal</td><td>Base para ponto de pedido. <span class="btn">Recalcular consumo do item</span> atualiza a partir do histórico real.</td></tr>
+</table>
+<div class="nota">
+  <b>Nota</b> Em <span class="tela-out">VEST0200</span> ficam os tipos de movimento e o inventário:
+  criar inventário, registrar contagem, ver <code>Saldo sist.</code> × <code>Qtd contada</code> ×
+  <code>Diferença</code> e ajustar.
+</div>
+
+<h2>6.9 Inspeção de qualidade <span class="tela">VPRO0400</span></h2>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Plano de inspeção do item</div>
+  <table class="campos">
+    <tr><td>Item / Momento</td><td>RN 01001 — inspeção final</td><td class="obs">Também existem inspeção de recebimento e de processo.</td></tr>
+  </table>
+  <p>Depois, <span class="btn">Adicionar característica</span> para cada medida:</p>
+  <table class="dados">
+    <thead><tr><th style="width:14%">Código</th><th style="width:30%">Nome</th><th class="cen" style="width:10%">Unidade</th><th class="num" style="width:13%">Nominal</th><th class="num" style="width:13%">Tol. −/+</th><th class="cen">Crítica</th></tr></thead>
+    <tbody>
+      <tr><td>DIM-01</td><td>Distância entre furos</td><td class="cen">mm</td><td class="num">a definir</td><td class="num">± 0,5</td><td class="cen">Sim</td></tr>
+      <tr><td>DIM-02</td><td>Diâmetro da bucha acabada</td><td class="cen">mm</td><td class="num">50,4</td><td class="num">+0,05 / −0,00</td><td class="cen">Sim</td></tr>
+      <tr><td>SUP-01</td><td>Espessura da pintura</td><td class="cen">µm</td><td class="num">80</td><td class="num">± 10</td><td class="cen">Não</td></tr>
+    </tbody>
+  </table>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Registrar o laudo</div>
+  <p>Informe <code>Ordem (OF)</code>, <code>Lote</code>, <code>Qtd</code> e as medições por característica.
+  O sistema conclui <code>Resultado</code> e permite definir a <code>Disposição</code> do material.
+  Fora de tolerância, use <span class="btn">Registrar NC</span> com <code>Severidade</code> e descrição.</p>
+</div>
+
+<h2>6.10 Romaneio de Expedição <span class="tela">VEXP0100</span></h2>
+<p>Estados: <b>Aberto → Separado → Conferido → Despachado</b>.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar — bloco Novo romaneio</div>
+  <table class="campos">
+    <tr><td>Tipo</td><td><code>Pedido de Venda</code> · <code>Pedido de Compra</code> · <code>Ordem de Produção</code></td><td class="obs">Define a origem dos itens do romaneio.</td></tr>
+    <tr><td>Código do pedido</td><td>o número do pedido de origem</td></tr>
+    <tr><td>Transportadora</td><td>quem vai levar</td></tr>
+  </table>
+  <p>Use <span class="btn">Criar romaneio</span>, ou <span class="btn">Auto-fill (pedido venda)</span>
+  para trazer os itens e quantidades já prontos do pedido.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Conferir os itens — bloco Itens</div>
+  <table class="campos">
+    <tr><td>Item · Qtd · Depósito</td><td>O que sai e de onde.</td></tr>
+    <tr><td>Peso líq. unit. · Peso bruto unit.</td><td>O líquido é o produto; o bruto inclui a embalagem. Vêm do cadastro do item, aba Engenharia.</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Montar os volumes — bloco Volumes / packing</div>
+  <table class="campos">
+    <tr><td>Nº · Espécie · Marca</td><td>Número, tipo (caixa, engradado, pallet) e marcação do volume.</td></tr>
+    <tr><td>Compr. · Larg. · Alt.</td><td>Dimensões — a cubagem é calculada a partir delas.</td></tr>
+    <tr><td>Peso bruto</td><td>Peso do volume fechado.</td></tr>
+  </table>
+  <p>Clique em <span class="btn">Adicionar volume</span>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Transporte e NF-e</div>
+  <table class="campos">
+    <tr><td>Modalidade frete · Valor frete</td><td>CIF, FOB ou outra, e o valor.</td></tr>
+    <tr><td>Placa · Motorista · ANTT / Lacres</td><td>Dados do veículo e do transporte.</td></tr>
+    <tr><td>Previsão de entrega</td><td>Data prometida ao cliente.</td></tr>
+    <tr><td>NF-e nº · Chave NF-e</td><td><b>Preenchidos no Dia 2</b>, quando a nota for autorizada. São a ponte entre a expedição física e o documento fiscal.</td></tr>
+  </table>
+  <p><span class="btn">Salvar transporte</span>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Conferir e despachar</div>
+  <p><span class="btn">Conferir</span> compara o separado com o conferido. Havendo diferença, o romaneio
+  é marcado com <b>divergência</b> e só avança se alguém marcar <code>aceitar divergência</code> —
+  o que fica registrado. Depois, <span class="btn">Despachar</span>.</p>
+  <p>O bloco <b>Trilha de auditoria</b> guarda quem fez cada evento e quando. Gere o romaneio em
+  <span class="btn">PDF</span> para o motorista ou <span class="btn">Excel</span> para conferência.</p>
+</div>
+
+<div class="atencao">
+  <b>Atenção — separação reserva, nota fiscal baixa</b>
+  A separação do romaneio <b>reserva</b> o estoque, ela não dá baixa. A baixa definitiva acontece na
+  emissão da NF-e, que é assunto do Dia 2. Por isso os campos <code>NF-e nº</code> e
+  <code>Chave NF-e</code> ficam vazios hoje.
+</div>
+
+<h1>7 · Checklists de conferência</h1>
+
+<h2>7.1 Item pronto para o MRP</h2>
+<p>Antes de rodar o planejamento, cada item precisa passar por esta lista:</p>
+<ul class="check">
+  <li>Código e nome preenchidos, estado <b>Ativo</b></li>
+  <li>Grupo e Modificador PDM informados</li>
+  <li><b>Tipo de Item</b> correto — Comprado para MP, Fabricado para PA/CJ/PF</li>
+  <li><b>Tipo de Estrutura</b> — Comercial só no produto acabado; Industrial nos demais</li>
+  <li>Classificação atribuída</li>
+  <li>Pesos líquido e bruto preenchidos</li>
+  <li>Almoxarifado padrão definido</li>
+  <li>Tempo de reposição maior que zero</li>
+  <li>Lote mínimo e múltiplo coerentes com o lote econômico da ficha</li>
+  <li>Unidade de compra e de venda definidas</li>
+  <li>Se Fabricado: <b>tem estrutura cadastrada</b> e <b>tem roteiro marcado como padrão</b></li>
+  <li>Se Comprado: <b>tem fornecedor preferencial</b> e <b>tem preço de compra</b></li>
+</ul>
+
+<h2>7.2 Estrutura conferida</h2>
+<ul class="check">
+  <li>Cada nível cadastrado separadamente — nada de neto lançado direto no avô</li>
+  <li>Quantidades <b>por unidade do pai imediato</b>, não por unidade do produto final</li>
+  <li>Perda lançada em toda ligação peça → matéria-prima</li>
+  <li>Quantidade = peso <b>líquido</b>; a perda faz o resto</li>
+  <li>Nenhum item aparecendo duas vezes no mesmo nível</li>
+  <li>Cabeçalho da estrutura com situação <b>Aprovada</b></li>
+</ul>
+
+<h2>7.3 Ordem de fabricação bem executada</h2>
+<ul class="check">
+  <li>Roteiro explodido antes de iniciar</li>
+  <li>Horas apontadas por operação e por funcionário</li>
+  <li>Refugo apontado com motivo — não “sumir” com peça perdida</li>
+  <li>Consumo lançado no depósito certo</li>
+  <li>Conclusão com número de lote preenchido</li>
+  <li>Custo apurado e variância analisada antes de encerrar</li>
+</ul>
+
+<h2>7.4 Checklist do dia — o que a turma deve saber fazer ao sair</h2>
+<ul class="check">
+  <li>Classificar uma peça nova nos quatro níveis sem consultar ninguém</li>
+  <li>Cadastrar um item completo, sabendo o efeito de cada aba</li>
+  <li>Montar uma estrutura de três níveis com perda</li>
+  <li>Converter tempos de ficha em tempos de roteiro</li>
+  <li>Registrar um orçamento e convertê-lo em pedido</li>
+  <li>Rodar o MRP e interpretar as sugestões</li>
+  <li>Identificar uma sobrecarga no CRP e agir sobre ela</li>
+  <li>Executar uma ordem de fabricação do início ao encerramento</li>
+  <li>Fazer entrada e saída de estoque com lote</li>
+  <li>Montar e despachar um romaneio</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>8 · Exercício final — SU 02046 do zero</h1>
+
+<p>
+  Doze passos que percorrem tudo o que foi visto. Faça sozinho, consultando os anexos.
+  O produto é simples de propósito: só duas peças e uma matéria-prima nova.
+</p>
+
+<table class="dados">
+  <thead><tr><th class="cen" style="width:7%">#</th><th style="width:22%">O que fazer</th><th style="width:14%">Tela</th><th>Como saber que deu certo</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td>Criar a matéria-prima MP 10476 Chapa 3/16"</td><td>VENT0200</td><td>Item salvo como Comprado, classificação 5.01, almoxarifado ALM-MP.</td></tr>
+    <tr><td class="cen">2</td><td>Criar as peças TP 02046A e TP 02046B</td><td>VENT0200</td><td>Ambas Fabricado / Industrial, classificação 4.01 e 4.02, lote múltiplo 200 e 100.</td></tr>
+    <tr><td class="cen">3</td><td>Criar o produto SU 02046</td><td>VENT0200</td><td>Fabricado / Comercial, classificação 1.02.</td></tr>
+    <tr><td class="cen">4</td><td>Montar a estrutura do produto</td><td>VENT0210</td><td>Dois filhos: TP 02046A × 2 e TP 02046B × 1.</td></tr>
+    <tr><td class="cen">5</td><td>Montar a estrutura de cada peça</td><td>VENT0210</td><td>Lateral: 0,310 kg com perda 87,10 %. Base: 1,200 kg com perda 15,00 %.</td></tr>
+    <tr><td class="cen">6</td><td>Criar os roteiros das duas peças</td><td>VPRO0100</td><td>Lateral: só corte a laser. Base: guilhotina, repique e dobra.</td></tr>
+    <tr><td class="cen">7</td><td>Criar o roteiro de montagem do produto</td><td>VPRO0100</td><td>Montagem, solda, limpeza e pintura, nesta ordem.</td></tr>
+    <tr><td class="cen">8</td><td>Lançar demanda de 25 unidades</td><td>VPLA0102</td><td>Demanda gravada com data em dia útil.</td></tr>
+    <tr><td class="cen">9</td><td>Rodar o MRP e conferir os tipos</td><td>VMRP0100</td><td>SU e TP como FABRICAÇÃO; MP 10476 como COMPRA, 116 kg.</td></tr>
+    <tr><td class="cen">10</td><td>Ver a carga no CRP e sequenciar no APS</td><td>VPRO0200 · VPRO0210</td><td>Dobradeira aparece como o recurso mais carregado deste produto.</td></tr>
+    <tr><td class="cen">11</td><td>Firmar, criar a OF, apontar e concluir com lote</td><td>VPRO0900</td><td>Ordem em Concluída, saldo de 25 no ALM-PA com lote.</td></tr>
+    <tr><td class="cen">12</td><td>Montar o romaneio e despachar</td><td>VEXP0100</td><td>Romaneio em Despachado, com volumes, peso e transporte preenchidos.</td></tr>
+  </tbody>
+</table>
+
+<div class="exercicio">
+  <div class="ex-tit">Perguntas para discutir no fechamento</div>
+  <b>1.</b> A lateral do SU 02046 tem 87 % de perda. Isso é erro de ficha, peça muito recortada, ou chapa
+  mal aproveitada? Como o plano de corte ajudaria a responder?<br>
+  <b>2.</b> Se a Dobradeira quebrar por três dias, o que muda no CRP e o que você faria no APS?<br>
+  <b>3.</b> O cliente ligou reclamando de uma bucha com trinca. Que caminho você percorre no sistema
+  para descobrir de qual corrida de aço ela veio?
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo A · Dados de cadastro do RN 01001</h1>
+
+<h2>A.1 Itens</h2>
+<table class="dados">
+  <thead><tr><th style="width:13%">Código</th><th>Descrição</th><th class="cen" style="width:8%">Nível</th><th style="width:11%">Tipo</th><th class="num" style="width:11%">Pç líq. (kg)</th><th class="num" style="width:11%">Pç bruto (kg)</th><th class="num" style="width:9%">Perda</th><th class="num" style="width:9%">Lote ec.</th></tr></thead>
+  <tbody>
+    <tr><td>RN 01001</td><td>Balança Asa Delta Carreta Pino Ø 50 mm</td><td class="cen">0 PA</td><td>Fabricado</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">100</td></tr>
+    <tr><td>BU 0120/50</td><td>Bucha da Balança 120 mm para pino 50 mm</td><td class="cen">1 CJ</td><td>Fabricado</td><td class="num">2,250</td><td class="num">2,295</td><td class="num">2,00 %</td><td class="num">100</td></tr>
+    <tr><td>TP 01001A</td><td>Lateral 5/16" Balança Carreta Asa Delta LS</td><td class="cen">2 PF</td><td>Fabricado</td><td class="num">3,710</td><td class="num">4,710</td><td class="num">26,95 %</td><td class="num">200</td></tr>
+    <tr><td>TP 01001B</td><td>Peito de Pombo 170 × 94 × 3/8"</td><td class="cen">2 PF</td><td>Fabricado</td><td class="num">1,220</td><td class="num">1,320</td><td class="num">8,20 %</td><td class="num">200</td></tr>
+    <tr><td>TP 01001C</td><td>Fechamento Superior 504 × 102 × 3 mm</td><td class="cen">2 PF</td><td>Fabricado</td><td class="num">1,230</td><td class="num">1,350</td><td class="num">9,76 %</td><td class="num">100</td></tr>
+    <tr><td>TP 01001D</td><td>Fechamento Inferior 130 × 94 × 3 mm</td><td class="cen">2 PF</td><td>Fabricado</td><td class="num">0,240</td><td class="num">0,270</td><td class="num">12,50 %</td><td class="num">100</td></tr>
+    <tr><td>BU 0120E</td><td>Bucha Externa 120 mm</td><td class="cen">2 PF</td><td>Fabricado</td><td class="num">1,650</td><td class="num">1,683</td><td class="num">2,00 %</td><td class="num">100</td></tr>
+    <tr><td>BU 0050I</td><td>Bucha Interna 50,4 mm acabada</td><td class="cen">2 PF</td><td>Fabricado</td><td class="num">0,300</td><td class="num">0,306</td><td class="num">2,00 %</td><td class="num">200</td></tr>
+    <tr><td>BU 0050IB</td><td>Bucha Interna 50,4 mm semi-acabada</td><td class="cen">2 PF</td><td>Fabricado</td><td class="num">0,300</td><td class="num">0,306</td><td class="num">2,00 %</td><td class="num">200</td></tr>
+    <tr><td>MP 10794</td><td>Chapa de Aço 5/16" — 1200 × 3000</td><td class="cen">3 MP</td><td>Comprado</td><td class="num">—</td><td class="num">226,08</td><td class="num">—</td><td class="num">1 chapa</td></tr>
+    <tr><td>MP 10952</td><td>Chapa de Aço 3/8" — 1200 × 3000</td><td class="cen">3 MP</td><td>Comprado</td><td class="num">—</td><td class="num">268,47</td><td class="num">—</td><td class="num">1 chapa</td></tr>
+    <tr><td>MP 10300</td><td>Chapa de Aço 3,00 mm — 1200 × 3000</td><td class="cen">3 MP</td><td>Comprado</td><td class="num">—</td><td class="num">84,78</td><td class="num">—</td><td class="num">1 chapa</td></tr>
+    <tr><td>MP 20603</td><td>Tubo Redondo Ø 60,3 × 4,75</td><td class="cen">3 MP</td><td>Comprado</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">1 barra</td></tr>
+  </tbody>
+</table>
+
+<h2>A.2 Roteiros — tempos convertidos</h2>
+<p class="pequeno mudo">Setup e tempo por peça convertidos de segundos para horas decimais (segundos ÷ 3600).</p>
+
+<table class="dados">
+  <thead><tr><th style="width:14%">Item</th><th class="cen" style="width:6%">Seq</th><th style="width:24%">Operação</th><th style="width:20%">Centro</th><th class="num" style="width:9%">Setup s</th><th class="num" style="width:10%">Setup h</th><th class="num" style="width:8%">Proc. s</th><th class="num" style="width:9%">Proc. h</th></tr></thead>
+  <tbody>
+    <tr><td>TP 01001A</td><td class="cen">10</td><td>Cortar no Laser</td><td>Laser Calfran</td><td class="num">180</td><td class="num">0,0500</td><td class="num">85</td><td class="num">0,0236</td></tr>
+    <tr><td rowspan="3">TP 01001B</td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">30</td><td>Dobrar na Prensa</td><td>Prensa</td><td class="num">600</td><td class="num">0,1667</td><td class="num">20</td><td class="num">0,0056</td></tr>
+    <tr><td rowspan="3">TP 01001C</td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">30</td><td>Dobrar na Dobradeira</td><td>Dobradeira ERMAK</td><td class="num">300</td><td class="num">0,0833</td><td class="num">20</td><td class="num">0,0056</td></tr>
+    <tr><td rowspan="3">TP 01001D</td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">30</td><td>Dobrar na Dobradeira</td><td>Dobradeira ERMAK</td><td class="num">300</td><td class="num">0,0833</td><td class="num">20</td><td class="num">0,0056</td></tr>
+    <tr><td rowspan="5">BU 0120E</td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">30</td><td>Enrolar na Prensa</td><td>Prensa</td><td class="num">300</td><td class="num">0,0833</td><td class="num">120</td><td class="num">0,0333</td></tr>
+    <tr><td class="cen">40</td><td>Soldar na MIG</td><td>Máquina de Solda</td><td class="num">300</td><td class="num">0,0833</td><td class="num">35</td><td class="num">0,0097</td></tr>
+    <tr><td class="cen">50</td><td>Endireitar na Morsa</td><td>Bancada / Morsa</td><td class="num">300</td><td class="num">0,0833</td><td class="num">45</td><td class="num">0,0125</td></tr>
+    <tr><td rowspan="2">BU 0050IB</td><td class="cen">10</td><td>Cortar na Serra</td><td>Serra Fita</td><td class="num">300</td><td class="num">0,0833</td><td class="num">60</td><td class="num">0,0167</td></tr>
+    <tr><td class="cen">20</td><td>Usinagem — terceiro</td><td class="mudo">externo</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">R$ 0,70/pç</td></tr>
+    <tr><td>BU 0050I</td><td class="cen">10</td><td>Cementação — terceiro</td><td class="mudo">externo</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">R$ 1,74/pç</td></tr>
+    <tr><td>BU 0120/50</td><td class="cen">10</td><td>Embuchar na Prensa</td><td>Prensa</td><td class="num">300</td><td class="num">0,0833</td><td class="num">60</td><td class="num">0,0167</td></tr>
+    <tr><td rowspan="4">RN 01001</td><td class="cen">10</td><td>Montagem</td><td>Mesa de Montagem</td><td class="num">300</td><td class="num">0,0833</td><td class="num">240</td><td class="num">0,0667</td></tr>
+    <tr><td class="cen">20</td><td>Soldar na MIG</td><td>Máquina de Solda</td><td class="num">300</td><td class="num">0,0833</td><td class="num">360</td><td class="num">0,1000</td></tr>
+    <tr><td class="cen">30</td><td>Limpeza</td><td>Limpeza</td><td class="num">300</td><td class="num">0,0833</td><td class="num">90</td><td class="num">0,0250</td></tr>
+    <tr><td class="cen">40</td><td>Pintura</td><td>Pintura</td><td class="num">300</td><td class="num">0,0833</td><td class="num">90</td><td class="num">0,0250</td></tr>
+  </tbody>
+</table>
+
+<h2>A.3 Custo de fabricação reconstruído</h2>
+<p class="pequeno mudo">
+  Material a R$ 4,70/kg de chapa e R$ 3,2123 por peça de tubo. Operação = (setup ÷ lote econômico + tempo)
+  × tarifa do centro. Valores por unidade de RN 01001, já multiplicados pela quantidade da estrutura.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:15%">Item</th><th class="cen" style="width:8%">Qtd</th><th class="num" style="width:15%">Material</th><th class="num" style="width:15%">Operação</th><th class="num" style="width:15%">Terceiro</th><th class="num">Total</th></tr></thead>
+  <tbody>
+    <tr><td>TP 01001A</td><td class="cen">2</td><td class="num">44,27</td><td class="num">5,66</td><td class="num">—</td><td class="num">49,93</td></tr>
+    <tr><td>TP 01001B</td><td class="cen">2</td><td class="num">12,41</td><td class="num">1,54</td><td class="num">—</td><td class="num">13,95</td></tr>
+    <tr><td>TP 01001C</td><td class="cen">1</td><td class="num">6,35</td><td class="num">1,26</td><td class="num">—</td><td class="num">7,60</td></tr>
+    <tr><td>TP 01001D</td><td class="cen">1</td><td class="num">1,27</td><td class="num">1,26</td><td class="num">—</td><td class="num">2,53</td></tr>
+    <tr><td>BU 0120E</td><td class="cen">1</td><td class="num">7,91</td><td class="num">2,67</td><td class="num">—</td><td class="num">10,58</td></tr>
+    <tr><td>BU 0050IB</td><td class="cen">2</td><td class="num">6,42</td><td class="num">1,36</td><td class="num">1,40</td><td class="num">9,19</td></tr>
+    <tr><td>BU 0050I</td><td class="cen">2</td><td class="num">—</td><td class="num">—</td><td class="num">3,48</td><td class="num">3,48</td></tr>
+    <tr><td>BU 0120/50</td><td class="cen">1</td><td class="num">—</td><td class="num">0,73</td><td class="num">—</td><td class="num">0,73</td></tr>
+    <tr><td>RN 01001 <span class="mudo">(montagem final)</span></td><td class="cen">1</td><td class="num">—</td><td class="num">8,55</td><td class="num">—</td><td class="num">8,55</td></tr>
+    <tr class="total"><td colspan="2">Custo de fabricação por unidade</td><td class="num">R$ 78,63</td><td class="num">R$ 23,03</td><td class="num">R$ 4,88</td><td class="num">R$ 106,54</td></tr>
+  </tbody>
+</table>
+<div class="nota">
+  <b>Nota</b> Este valor já corrige o Achado 1 (dobra do TP 01001C com a tarifa certa). Ainda <b>não</b>
+  inclui overhead, energia indireta, mão de obra indireta nem despesas administrativas — a composição
+  completa e a formação do preço de venda são conteúdo do <b>Dia 2</b>.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo B · SU 02046 e RN 01007</h1>
+
+<h2>B.1 SU 02046 — Deslizante Traseiro Truck MB <span class="mudo">(exercício)</span></h2>
+<pre class="arvore">
+NÍVEL 0 · PA   SU 02046    DESLIZANTE TRASEIRO TRUCK MB                        1 UN
+  ├─ N2 · PF   TP 02046A   LATERAL 3/16" DO DESLIZANTE TRASEIRO                × 2 UN
+  │              └─ N3 · MP  MP 10476  CHAPA DE AÇO 3/16"          0,310 KG   perda 87,10 %
+  └─ N2 · PF   TP 02046B   BASE 195 × 83 × 3/8"                                × 1 UN
+                 └─ N3 · MP  MP 10952  CHAPA DE AÇO 3/8"           1,200 KG   perda 15,00 %
+</pre>
+<table class="dados">
+  <thead><tr><th style="width:14%">Item</th><th class="cen" style="width:6%">Seq</th><th style="width:24%">Operação</th><th style="width:20%">Centro</th><th class="num" style="width:9%">Setup s</th><th class="num" style="width:10%">Setup h</th><th class="num" style="width:8%">Proc. s</th><th class="num" style="width:9%">Proc. h</th></tr></thead>
+  <tbody>
+    <tr><td>TP 02046A <span class="mudo">lote 200</span></td><td class="cen">10</td><td>Cortar no Laser</td><td>Laser Calfran</td><td class="num">300</td><td class="num">0,0833</td><td class="num">22</td><td class="num">0,0061</td></tr>
+    <tr><td rowspan="3">TP 02046B <span class="mudo">lote 100</span></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>Guilhotina</td><td class="num">300</td><td class="num">0,0833</td><td class="num">15</td><td class="num">0,0042</td></tr>
+    <tr><td class="cen">30</td><td>Dobrar na Dobradeira</td><td>Dobradeira ERMAK</td><td class="num">300</td><td class="num">0,0833</td><td class="num">150</td><td class="num">0,0417</td></tr>
+    <tr><td rowspan="4">SU 02046 <span class="mudo">lote 100</span></td><td class="cen">10</td><td>Montagem</td><td>Mesa de Montagem</td><td class="num">300</td><td class="num">0,0833</td><td class="num">60</td><td class="num">0,0167</td></tr>
+    <tr><td class="cen">20</td><td>Soldar na MIG</td><td>Máquina de Solda</td><td class="num">300</td><td class="num">0,0833</td><td class="num">180</td><td class="num">0,0500</td></tr>
+    <tr><td class="cen">30</td><td>Limpeza</td><td>Limpeza</td><td class="num">300</td><td class="num">0,0833</td><td class="num">90</td><td class="num">0,0250</td></tr>
+    <tr><td class="cen">40</td><td>Pintura</td><td>Pintura</td><td class="num">300</td><td class="num">0,0833</td><td class="num">90</td><td class="num">0,0250</td></tr>
+  </tbody>
+</table>
+<table class="dados">
+  <thead><tr><th style="width:24%">Composição do custo</th><th class="num" style="width:18%">Material</th><th class="num" style="width:18%">Operação</th><th class="num">Total por unidade</th></tr></thead>
+  <tbody>
+    <tr class="total"><td>SU 02046</td><td class="num">R$ 11,94</td><td class="num">R$ 11,64</td><td class="num">R$ 23,58</td></tr>
+  </tbody>
+</table>
+
+<h2>B.2 RN 01007 — Suporte Central SR 2000 Pino 50 mm <span class="mudo">(desafio)</span></h2>
+<pre class="arvore">
+NÍVEL 0 · PA   RN 01007    SUPORTE CENTRAL SR 2000 PINO 50 MM                  1 UN
+  ├─ N2 · PF   TP 01007A   CHAPA 1/4" DO SUPORTE SR 2000                       × 1 UN  → MP 10635  10,200 KG  perda 46,57 %
+  ├─ N2 · PF   TP 01007B   ARRUELA 50 × 25 × 5/16"                             × 2 UN  → MP 10794   0,160 KG  perda  6,25 %
+  ├─ N2 · PF   TP 01007C   REFORÇO 1/4" INTERNO DO SUPORTE CENTRAL             × 2 UN  → MP 10635   0,550 KG  perda 50,91 %
+  ├─ N2 · PF   TP 01022A   CHAPA 1/2" MANCAL DO SUPORTE CENTRAL   ★compartilhada × 2 UN → MP 11270  0,760 KG  perda 28,95 %
+  ├─ N2 · PF   TP 01007D   CANTONEIRA 115 × 60 × 1/4"                          × 1 UN  → MP 10635   0,350 KG  perda 14,29 %
+  └─ N2 · PF   TP 01007E   REFORÇO 1/4" DO MANCAL FERRADURA                    × 2 UN  → MP 10635   0,320 KG  perda 40,63 %
+</pre>
+<div class="nota">
+  <b>Nota — peça compartilhada</b>
+  O <b>TP 01022A</b> tem código da família 01022, não da 01007: é uma peça usada em mais de um produto.
+  Cadastre-a <b>uma única vez</b> e ligue-a às duas estruturas. Quando os dois produtos forem planejados
+  juntos, o MRP soma as necessidades numa sugestão só — é exatamente por isso que se cadastra a peça
+  compartilhada uma vez, e não duas.
+</div>
+<div class="atencao">
+  <b>Atenção</b> Este produto contém o Achado 6 (TP 01022A com quantidade 2 custeada como 1).
+  Ao cadastrar no ERP, o custo correto sai automaticamente — vale conferir a diferença contra a planilha.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo C · Máquinas, tarifas e conversão de tempos</h1>
+
+<h2>C.1 Tarifa por hora e por segundo</h2>
+<table class="dados">
+  <thead><tr><th style="width:34%">Máquina / Centro de trabalho</th><th class="num" style="width:20%">Custo/hora</th><th class="num" style="width:22%">Custo/segundo</th><th class="num">Custo/minuto</th></tr></thead>
+  <tbody>
+    <tr><td>Laser Calfran</td><td class="num">R$ 118,55</td><td class="num">R$ 0,032931</td><td class="num">R$ 1,9758</td></tr>
+    <tr><td>Dobradeira ERMAK 3300</td><td class="num">R$ 110,65</td><td class="num">R$ 0,030736</td><td class="num">R$ 1,8442</td></tr>
+    <tr><td>Guilhotina</td><td class="num">R$ 55,23</td><td class="num">R$ 0,015342</td><td class="num">R$ 0,9205</td></tr>
+    <tr><td>Máquina de Solda MIG</td><td class="num">R$ 37,09</td><td class="num">R$ 0,010303</td><td class="num">R$ 0,6182</td></tr>
+    <tr><td>Prensa</td><td class="num">R$ 41,66</td><td class="num">R$ 0,011572</td><td class="num">R$ 0,6943</td></tr>
+    <tr><td>Policorte</td><td class="num">R$ 35,71</td><td class="num">R$ 0,009919</td><td class="num">R$ 0,5952</td></tr>
+    <tr><td>Limpeza</td><td class="num">R$ 25,79</td><td class="num">R$ 0,007164</td><td class="num">R$ 0,4298</td></tr>
+    <tr><td>Pintura</td><td class="num">R$ 63,51</td><td class="num">R$ 0,017643</td><td class="num">R$ 1,0586</td></tr>
+    <tr><td>Furadeira</td><td class="num">R$ 26,08</td><td class="num">R$ 0,007244</td><td class="num">R$ 0,4347</td></tr>
+    <tr><td>Embalagem</td><td class="num">R$ 25,00</td><td class="num">R$ 0,006944</td><td class="num">R$ 0,4167</td></tr>
+    <tr><td>Serra Fita</td><td class="num">R$ 39,93</td><td class="num">R$ 0,011092</td><td class="num">R$ 0,6655</td></tr>
+    <tr><td>Mesa de Montagem <span class="mudo">novo</span></td><td class="num">R$ 37,09</td><td class="num">R$ 0,010303</td><td class="num">R$ 0,6182</td></tr>
+    <tr><td>Bancada / Morsa <span class="mudo">novo, a confirmar</span></td><td class="num">R$ 22,40</td><td class="num">R$ 0,006222</td><td class="num">R$ 0,3733</td></tr>
+  </tbody>
+</table>
+
+<h2>C.2 Conversão rápida de tempos</h2>
+<table class="dados">
+  <thead><tr><th class="num" style="width:20%">Segundos</th><th class="num" style="width:20%">Minutos</th><th class="num" style="width:24%">Horas decimais</th><th>Onde aparece nas fichas</th></tr></thead>
+  <tbody>
+    <tr><td class="num">10</td><td class="num">0,17</td><td class="num">0,0028</td><td>corte a laser da arruela</td></tr>
+    <tr><td class="num">12</td><td class="num">0,20</td><td class="num">0,0033</td><td>guilhotina da cantoneira</td></tr>
+    <tr><td class="num">15</td><td class="num">0,25</td><td class="num">0,0042</td><td>corte e repique na guilhotina</td></tr>
+    <tr><td class="num">20</td><td class="num">0,33</td><td class="num">0,0056</td><td>dobra padrão</td></tr>
+    <tr><td class="num">22</td><td class="num">0,37</td><td class="num">0,0061</td><td>laser da lateral do SU 02046</td></tr>
+    <tr><td class="num">35</td><td class="num">0,58</td><td class="num">0,0097</td><td>solda da bucha externa · estampo</td></tr>
+    <tr><td class="num">45</td><td class="num">0,75</td><td class="num">0,0125</td><td>endireitar na morsa</td></tr>
+    <tr><td class="num">60</td><td class="num">1,00</td><td class="num">0,0167</td><td>serra · embuchar</td></tr>
+    <tr><td class="num">85</td><td class="num">1,42</td><td class="num">0,0236</td><td>laser da lateral do RN 01001</td></tr>
+    <tr><td class="num">90</td><td class="num">1,50</td><td class="num">0,0250</td><td>limpeza e pintura</td></tr>
+    <tr><td class="num">120</td><td class="num">2,00</td><td class="num">0,0333</td><td>enrolar na prensa · limpeza do RN 01007</td></tr>
+    <tr><td class="num">144</td><td class="num">2,40</td><td class="num">0,0400</td><td>laser do mancal 1/2"</td></tr>
+    <tr><td class="num">150</td><td class="num">2,50</td><td class="num">0,0417</td><td>dobra da base · laser do suporte</td></tr>
+    <tr><td class="num">180</td><td class="num">3,00</td><td class="num">0,0500</td><td>setup do laser · solda do SU 02046</td></tr>
+    <tr><td class="num">240</td><td class="num">4,00</td><td class="num">0,0667</td><td>montagem do RN 01001</td></tr>
+    <tr><td class="num">300</td><td class="num">5,00</td><td class="num">0,0833</td><td>setup padrão da maioria das operações</td></tr>
+    <tr><td class="num">360</td><td class="num">6,00</td><td class="num">0,1000</td><td>solda do RN 01001</td></tr>
+    <tr><td class="num">600</td><td class="num">10,00</td><td class="num">0,1667</td><td>setup da prensa · solda do RN 01007</td></tr>
+    <tr><td class="num">1200</td><td class="num">20,00</td><td class="num">0,3333</td><td>setup do estampo</td></tr>
+    <tr><td class="num">1800</td><td class="num">30,00</td><td class="num">0,5000</td><td>setup da dobra do mancal</td></tr>
+  </tbody>
+</table>
+
+<h2>C.3 Fórmula do custo de operação</h2>
+<div class="porque">
+  <b>A conta que o ERP faz sozinho</b>
+  <br><br>
+  <span class="centro"><code>custo por peça = (setup ÷ lote econômico + tempo por peça) × tarifa do centro</code></span>
+  <br><br>
+  <b>Exemplo — TP 01001A, corte no laser:</b><br>
+  setup 180 s ÷ 200 peças = 0,90 s por peça &nbsp;+&nbsp; 85 s de processo = <b>85,90 s por peça</b><br>
+  85,90 s × R$ 0,032931/s = <b>R$ 2,8287 por peça</b> &nbsp;×&nbsp; 2 peças por balança = <b>R$ 5,6575</b>
+  <br><br>
+  É exatamente o valor da ficha. A diferença é que aqui a tarifa vem do cadastro do centro de trabalho:
+  reajustou a energia, recalcula tudo.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo D · Glossário</h1>
+<table class="dados">
+  <thead><tr><th style="width:22%">Termo</th><th>O que significa na prática</th></tr></thead>
+  <tbody>
+    <tr><td><b>Estrutura (BOM)</b></td><td>A lista do que compõe um item, nível por nível. É a “receita” do produto.</td></tr>
+    <tr><td><b>Roteiro</b></td><td>A sequência de operações para fabricar o item, com máquina e tempo de cada uma.</td></tr>
+    <tr><td><b>LLC</b></td><td>Nível mais baixo em que o item aparece em alguma estrutura. Define a ordem em que o MRP calcula.</td></tr>
+    <tr><td><b>MRP</b></td><td>Planejamento de materiais. Responde <i>o que</i> comprar e fabricar, <i>quanto</i> e <i>quando</i>.</td></tr>
+    <tr><td><b>CRP</b></td><td>Planejamento de capacidade. Responde se a carga das ordens cabe nas máquinas.</td></tr>
+    <tr><td><b>APS</b></td><td>Sequenciamento. Define a data e hora de cada operação em cada máquina, respeitando a capacidade real.</td></tr>
+    <tr><td><b>Sugestão × Ordem planejada × Ordem firme</b></td><td>Sugestão é proposta do MRP. Firmar transforma em ordem planejada. A ordem planejada vira pedido de compra ou ordem de fabricação.</td></tr>
+    <tr><td><b>Lote econômico / múltiplo</b></td><td>Quantidade mínima que compensa produzir por causa do setup. O MRP arredonda as sugestões para ele.</td></tr>
+    <tr><td><b>Perda (%)</b></td><td>Percentual de material que se perde entre o que entra e o que fica na peça. Peso bruto = peso líquido × (1 + perda).</td></tr>
+    <tr><td><b>Backflush / baixa automática</b></td><td>Consumo automático do componente quando a ordem é apontada, sem lançamento manual.</td></tr>
+    <tr><td><b>ATP</b></td><td>Disponível para promessa: o saldo que ainda pode ser prometido a um cliente novo, já descontadas as reservas.</td></tr>
+    <tr><td><b>Genealogia de lote</b></td><td>A árvore que liga o produto entregue à corrida de aço que o originou, passando por cada ordem.</td></tr>
+    <tr><td><b>Variância</b></td><td>Diferença entre o custo real da ordem e o custo padrão calculado. É o termômetro do cadastro.</td></tr>
+    <tr><td><b>Romaneio</b></td><td>Documento de expedição: o que sai, em quantos volumes, com que peso, em qual veículo.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque" style="margin-top:8mm">
+  <b>Fim do Dia 1</b>
+  Se tudo foi cadastrado corretamente, existe agora um produto acabado no estoque, com lote,
+  reservado para um pedido de venda confirmado e separado num romaneio despachado.
+  <br><br>
+  O <b>Dia 2</b> começa exatamente daqui: transformar esse romaneio em nota fiscal, essa nota em título a
+  receber, esse título em caixa, e todo o custo que acompanhamos hoje em preço de venda e margem.
+</div>

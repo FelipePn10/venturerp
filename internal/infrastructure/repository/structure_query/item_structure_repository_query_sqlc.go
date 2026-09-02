@@ -190,6 +190,11 @@ func (r *StructureQueryRepositorySQLC) ConsultChildren(
 			v := row.LossFormula.String
 			s.LossFormula = &v
 		}
+		if row.QuantityFormula.Valid {
+			v := row.QuantityFormula.String
+			s.QuantityFormula = &v
+		}
+		s.QuantityRounding, s.QuantityScale = row.QuantityRounding, row.QuantityScale
 		out = append(out, &str.ConsultRow{
 			ItemStructure: s,
 			WarehouseCode: row.WarehouseCode,

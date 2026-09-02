@@ -27,7 +27,13 @@ func (uc *CreateInventoryUseCase) Execute(ctx context.Context, dto request.Creat
 		return nil, err
 	}
 
-	startDate, _ := time.Parse("2006-01-02", dto.StartDate)
+	if dto.Code <= 0 || dto.WarehouseID <= 0 || dto.Description == "" {
+		return nil, errorsuc.NewValidationError("código, descrição e almoxarifado são obrigatórios")
+	}
+	startDate, parseErr := time.Parse("2006-01-02", dto.StartDate)
+	if parseErr != nil {
+		return nil, errorsuc.NewValidationError("data inicial inválida; use AAAA-MM-DD")
+	}
 
 	inv := &entity.PhysicalInventory{
 		Code:        dto.Code,
@@ -40,7 +46,10 @@ func (uc *CreateInventoryUseCase) Execute(ctx context.Context, dto request.Creat
 	}
 
 	if dto.EndDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.EndDate)
+		t, parseErr := time.Parse("2006-01-02", *dto.EndDate)
+		if parseErr != nil || t.Before(startDate) {
+			return nil, errorsuc.NewValidationError("data final inválida ou anterior à data inicial")
+		}
 		inv.EndDate = &t
 	}
 

@@ -55,7 +55,7 @@ func TestAvailabilityExplodesManualQuantityAndAppliesLayout(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT MIN(id) FROM enterprise").Scan(&enterpriseID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM items LIMIT 1").Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
@@ -64,7 +64,7 @@ func TestAvailabilityExplodesManualQuantityAndAppliesLayout(t *testing.T) {
 		testutil.Exec(t, pool, "DELETE FROM item_structures WHERE parent_code=$1", parent)
 		testutil.Exec(t, pool, "DELETE FROM items WHERE code=ANY($1::bigint[])", []int64{parent, child})
 	})
-	testutil.Exec(t, pool, "INSERT INTO items (code,warehouse_code,created_by) VALUES ($1,$1,$3),($2,$2,$3)", parent, child, userID)
+	testutil.Exec(t, pool, "INSERT INTO items (code,business_code,warehouse_code,created_by,enterprise_id) VALUES ($1,($1::bigint)::text,$1,$3,$4),($2,($2::bigint)::text,$2,$3,$4)", parent, child, userID, enterpriseID)
 	testutil.Exec(t, pool, "INSERT INTO item_structures (parent_code,child_code,quantity,sequence,created_by) VALUES ($1,$2,2,1,$3)", parent, child, userID)
 	repo := mrp_report.New(pool)
 	rows, err := repo.Availability(ctx, mrp_report_uc.Filter{ItemCode: &parent, Quantity: decimal.NewFromInt(3), Layout: "AMBOS"})
@@ -97,7 +97,7 @@ func TestProfileReturnsPersistedOriginsAndTenantDrawings(t *testing.T) {
 		t.Fatal(err)
 	}
 	var userID string
-	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM items LIMIT 1").Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
@@ -109,7 +109,7 @@ func TestProfileReturnsPersistedOriginsAndTenantDrawings(t *testing.T) {
 		testutil.Exec(t, pool, "DELETE FROM production_plans WHERE code=$1", plan)
 		testutil.Exec(t, pool, "DELETE FROM items WHERE code=$1", item)
 	})
-	testutil.Exec(t, pool, "INSERT INTO items(code,warehouse_code,created_by) VALUES($1,$1,$2)", item, userID)
+	testutil.Exec(t, pool, "INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,$1,$2,$3)", item, userID, enterpriseID)
 	testutil.Exec(t, pool, "INSERT INTO production_plans(code,name,created_by,enterprise_id) VALUES($1,'report',$2,$3)", plan, userID, enterpriseID)
 	testutil.Exec(t, pool, "INSERT INTO mrp_item_profiles(item_code,plan_code,calculation_date,demand,orders_planned,orders_firm,stock_projected,llc,need_date,enterprise_id) VALUES($1,$2,CURRENT_DATE,4,2,0,-2,0,CURRENT_DATE,$3)", item, plan, enterpriseID)
 	testutil.Exec(t, pool, "INSERT INTO mrp_profile_details(enterprise_id,plan_code,item_code,need_date,detail_type,source_code,quantity) VALUES($1,$2,$3,CURRENT_DATE,'SALES_ORDER',123,4)", enterpriseID, plan, item)
@@ -150,7 +150,7 @@ func TestReorderPointTraversesReleasedAndBlockedSalesOrderStructures(t *testing.
 	if err := pool.QueryRow(ctx, "SELECT id,code FROM enterprise ORDER BY id LIMIT 1").Scan(&enterpriseID, &enterpriseCode); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM items LIMIT 1").Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
@@ -163,7 +163,7 @@ func TestReorderPointTraversesReleasedAndBlockedSalesOrderStructures(t *testing.
 		testutil.Exec(t, pool, "DELETE FROM item_structures WHERE parent_code=$1", parent)
 		testutil.Exec(t, pool, "DELETE FROM items WHERE code=ANY($1::bigint[])", []int64{parent, child})
 	})
-	testutil.Exec(t, pool, "INSERT INTO items(code,warehouse_code,created_by) VALUES($1,$1,$3),($2,$2,$3)", parent, child, userID)
+	testutil.Exec(t, pool, "INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,$1,$3,$4),($2,($2::bigint)::text,$2,$3,$4)", parent, child, userID, enterpriseID)
 	testutil.Exec(t, pool, "INSERT INTO item_structures(parent_code,child_code,quantity,sequence,created_by) VALUES($1,$2,2,1,$3)", parent, child, userID)
 	testutil.Exec(t, pool, "INSERT INTO stock_balances(item_code,warehouse_id,quantity,enterprise_id) VALUES($1,1,0,$2)", child, enterpriseID)
 	for _, order := range []struct {

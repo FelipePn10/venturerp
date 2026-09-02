@@ -60,7 +60,7 @@ func (r *StockMovementTypeRepositoryPG) GetByID(ctx context.Context, id int64) (
 	s, err := scanSMT(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("stock movement type %d not found", id)
+			return nil, fmt.Errorf("tipo de movimento de estoque %d não encontrado", id)
 		}
 		return nil, fmt.Errorf("getting stock movement type: %w", err)
 	}
@@ -75,7 +75,7 @@ func (r *StockMovementTypeRepositoryPG) GetBySigla(ctx context.Context, sigla st
 	s, err := scanSMT(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("stock movement type %s not found", sigla)
+			return nil, fmt.Errorf("tipo de movimento de estoque %s não encontrado", sigla)
 		}
 		return nil, fmt.Errorf("getting stock movement type by sigla: %w", err)
 	}

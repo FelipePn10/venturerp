@@ -104,33 +104,35 @@ func (uc *UseCase) CreateApprovalLimit(ctx context.Context, dto request.CreateAp
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.EnterpriseCode == 0 {
-		dto.EnterpriseCode = 1
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.EnterpriseCode = enterpriseCode
 	switch dto.Scope {
 	case "GLOBAL", "SUPPLIER", "COST_CENTER", "CATEGORY":
 	default:
-		return nil, fmt.Errorf("scope must be GLOBAL, SUPPLIER, COST_CENTER or CATEGORY")
+		return nil, fmt.Errorf("escopo deve ser GLOBAL, SUPPLIER, COST_CENTER ou CATEGORY")
 	}
 	if dto.Scope != "GLOBAL" && (dto.ScopeRef == nil || *dto.ScopeRef == "") {
-		return nil, fmt.Errorf("scope_ref is required when scope is not GLOBAL")
+		return nil, fmt.Errorf("scope_ref é obrigatório quando o escopo não é GLOBAL")
 	}
 	if dto.AutoApproveMax < 0 {
-		return nil, fmt.Errorf("auto_approve_max must be >= 0")
+		return nil, fmt.Errorf("limite de aprovação automática deve ser maior ou igual a zero")
 	}
 	if dto.BlockAbove != nil && *dto.BlockAbove < dto.AutoApproveMax {
-		return nil, fmt.Errorf("block_above must be >= auto_approve_max")
+		return nil, fmt.Errorf("limite de bloqueio deve ser maior ou igual ao limite de aprovação automática")
 	}
 	if dto.Currency == "" {
 		dto.Currency = "BRL"
 	}
 	validFrom, err := parseOptionalDate(dto.ValidFrom, time.Now())
 	if err != nil {
-		return nil, fmt.Errorf("invalid valid_from: %w", err)
+		return nil, fmt.Errorf("data inicial inválida: %w", err)
 	}
 	validTo, err := parseDatePtr(dto.ValidTo)
 	if err != nil {
-		return nil, fmt.Errorf("invalid valid_to: %w", err)
+		return nil, fmt.Errorf("data final inválida: %w", err)
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	limit := &entity.ApprovalLimit{
@@ -153,9 +155,11 @@ func (uc *UseCase) CreateApprovalLimit(ctx context.Context, dto request.CreateAp
 }
 
 func (uc *UseCase) ListApprovalLimits(ctx context.Context, enterpriseCode int64) ([]*response.ApprovalLimitResponse, error) {
-	if enterpriseCode == 0 {
-		enterpriseCode = 1
+	authEnterprise, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	enterpriseCode = authEnterprise
 	limits, err := uc.Repo.ListApprovalLimits(ctx, enterpriseCode)
 	if err != nil {
 		return nil, err
@@ -171,9 +175,11 @@ func (uc *UseCase) ListApprovalLimits(ctx context.Context, enterpriseCode int64)
 // amount. When no rule is configured the purchase is auto-approvable (no alçada
 // control). Implements the purchase_order_uc.ApprovalPolicy port.
 func (uc *UseCase) EvaluatePurchaseApproval(ctx context.Context, enterpriseCode int64, supplierCode *int64, amount float64) (*entity.ApprovalDecision, error) {
-	if enterpriseCode == 0 {
-		enterpriseCode = 1
+	authEnterprise, authErr := uc.Auth.EnterpriseCode(ctx)
+	if authErr != nil {
+		return nil, authErr
 	}
+	enterpriseCode = authEnterprise
 	var supplierRef *string
 	if supplierCode != nil {
 		s := strconv.FormatInt(*supplierCode, 10)
@@ -211,9 +217,11 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 	if dto.ContractNumber == "" {
 		return nil, fmt.Errorf("contract_number is required")
 	}
-	if dto.EnterpriseCode == 0 {
-		dto.EnterpriseCode = 1
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.EnterpriseCode = enterpriseCode
 	if dto.Currency == "" {
 		dto.Currency = "BRL"
 	}
@@ -367,7 +375,11 @@ func (uc *UseCase) ListPurchaseMovementHistory(ctx context.Context, supplierCode
 // the item, and whether a route matched. Implements the
 // purchase_order_uc.ReceivingInspectionGate port.
 func (uc *UseCase) ResolveInspectionRoute(ctx context.Context, itemCode int64, mask string) (int64, bool) {
-	route, err := uc.Repo.FindReceivingInspectionRoute(ctx, 1, itemCode, mask, nil)
+	enterpriseCode, authErr := uc.Auth.EnterpriseCode(ctx)
+	if authErr != nil {
+		return 0, false
+	}
+	route, err := uc.Repo.FindReceivingInspectionRoute(ctx, enterpriseCode, itemCode, mask, nil)
 	if err != nil {
 		return 0, false
 	}

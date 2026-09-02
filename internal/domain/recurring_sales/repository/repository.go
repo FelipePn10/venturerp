@@ -2,9 +2,17 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/entity"
+	"github.com/google/uuid"
+)
+
+var (
+	ErrInvalidLifecycleState = errors.New("estado da recorrência não permite a operação")
+	ErrOperationInProgress   = errors.New("operação já está em processamento")
+	ErrOperationConflict     = errors.New("competência ou chave de idempotência reutilizada com outro conteúdo")
 )
 
 type Filter struct {
@@ -29,12 +37,33 @@ type ProjectionFilter struct {
 	AdjustmentPercent  float64
 }
 
+type CancellationCommand struct {
+	Code               int64
+	EffectiveDate      time.Time
+	FutureOrdersPolicy string
+	Reason             string
+	ActorID            uuid.UUID
+	CorrelationID      string
+}
+
+// AtomicCanceller is separate to preserve compatibility with published adapters.
+type AtomicCanceller interface {
+	CancelAtomic(context.Context, CancellationCommand) (*entity.RecurringSale, error)
+}
+
+type OperationRepository interface {
+	ReserveOperation(context.Context, *entity.Operation) (*entity.Operation, bool, error)
+	CompleteOperation(context.Context, *entity.Operation, int64) error
+	FailOperation(context.Context, *entity.Operation) error
+}
+
 type Repository interface {
 	UpsertParameters(ctx context.Context, p *entity.Parameters) (*entity.Parameters, error)
 	GetParameters(ctx context.Context, enterpriseCode int64) (*entity.Parameters, error)
 	CreateAdjustmentDate(ctx context.Context, v *entity.AdjustmentDate) (*entity.AdjustmentDate, error)
 	ListAdjustmentDates(ctx context.Context, filter Filter) ([]*entity.AdjustmentDate, error)
 	Create(ctx context.Context, v *entity.RecurringSale) (*entity.RecurringSale, error)
+	CreateWithRepresentatives(ctx context.Context, v *entity.RecurringSale) (*entity.RecurringSale, error)
 	Update(ctx context.Context, v *entity.RecurringSale) (*entity.RecurringSale, error)
 	Get(ctx context.Context, code int64) (*entity.RecurringSale, error)
 	List(ctx context.Context, filter Filter) ([]*entity.RecurringSale, error)

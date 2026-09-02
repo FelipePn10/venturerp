@@ -229,3 +229,40 @@ func ParseOptionValue(s string) (float64, bool) {
 	}
 	return 0, false
 }
+
+// Variables lista, em ordem de aparição e sem repetição, os identificadores
+// usados pela expressão. Uma expressão malformada devolve nil.
+func Variables(expr string) []string {
+	tokens, err := tokenize(expr)
+	if err != nil {
+		return nil
+	}
+	seen := make(map[string]bool, len(tokens))
+	out := make([]string, 0, len(tokens))
+	for _, tok := range tokens {
+		if tok.kind == tokIdent && !seen[tok.value] {
+			seen[tok.value] = true
+			out = append(out, tok.value)
+		}
+	}
+	return out
+}
+
+// Validate reports whether the expression parses. Variables are not required to
+// have a value yet — this is the check made when the formula is registered.
+func Validate(expr string) error {
+	tokens, err := tokenize(expr)
+	if err != nil {
+		return err
+	}
+	vars := make(map[string]float64, len(tokens))
+	for _, tok := range tokens {
+		if tok.kind == tokIdent {
+			// Valor arbitrário não-nulo: só queremos exercitar a gramática sem
+			// esbarrar em divisão por zero.
+			vars[tok.value] = 1
+		}
+	}
+	_, err = Evaluate(expr, vars)
+	return err
+}

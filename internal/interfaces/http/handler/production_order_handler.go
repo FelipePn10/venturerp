@@ -273,6 +273,24 @@ func (h *ProductionOrderHandler) ConfigureWarehouseAddress(w http.ResponseWriter
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *ProductionOrderHandler) ListWarehouseAddresses(w http.ResponseWriter, r *http.Request) {
+	var warehouseID *int64
+	if raw := r.URL.Query().Get("warehouse_id"); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value <= 0 {
+			security.RespondError(w, http.StatusBadRequest, "identificador do almoxarifado inválido")
+			return
+		}
+		warehouseID = &value
+	}
+	result, err := h.materialControlUC.ListWarehouseAddresses(r.Context(), warehouseID)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
 func (h *ProductionOrderHandler) ConfigureTemporaryLot(w http.ResponseWriter, r *http.Request) {
 	var dto request.ConfigureTemporaryProductionLotDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
@@ -317,13 +335,15 @@ func (h *ProductionOrderHandler) Operational(w http.ResponseWriter, r *http.Requ
 
 func (h *ProductionOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateProductionOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
 		security.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -376,7 +396,9 @@ func (h *ProductionOrderHandler) Start(w http.ResponseWriter, r *http.Request) {
 
 func (h *ProductionOrderHandler) AddAppointment(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddAppointmentDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
 		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para o apontamento de produção.")
 		return
 	}
@@ -390,7 +412,9 @@ func (h *ProductionOrderHandler) AddAppointment(w http.ResponseWriter, r *http.R
 
 func (h *ProductionOrderHandler) AddConsumption(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddConsumptionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
 		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para o consumo de produção.")
 		return
 	}

@@ -115,10 +115,10 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 		return nil, fmt.Errorf("record %d is not a receiving inspection", id)
 	}
 	if rec.ItemCode == nil || rec.WarehouseID == nil {
-		return nil, fmt.Errorf("inspection requires item_code and warehouse_id")
+		return nil, fmt.Errorf("inspeção exige código do item e depósito")
 	}
 	if dto.ApprovedQty > 0 && dto.DestinationWarehouseID == nil {
-		return nil, fmt.Errorf("destination_warehouse_id is required when approved_qty is positive")
+		return nil, fmt.Errorf("depósito de destino é obrigatório quando a quantidade aprovada for positiva")
 	}
 	if dto.ApprovedQty+dto.RejectedQty > rec.Quantity+0.0001 {
 		return nil, fmt.Errorf("disposition quantity exceeds inspected quantity")
@@ -231,9 +231,11 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.EnterpriseCode == 0 {
-		dto.EnterpriseCode = 1
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
 	}
+	dto.EnterpriseCode = enterpriseCode
 	if dto.Basis != "ITEM" && dto.Basis != "CLASSIFICATION" {
 		return nil, fmt.Errorf("basis must be ITEM or CLASSIFICATION")
 	}
@@ -244,7 +246,7 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 		return nil, fmt.Errorf("classification_code is required for CLASSIFICATION route")
 	}
 	if dto.InspectionWarehouseID <= 0 {
-		return nil, fmt.Errorf("inspection_warehouse_id is required")
+		return nil, fmt.Errorf("depósito de inspeção é obrigatório")
 	}
 	if len(dto.Steps) == 0 {
 		return nil, fmt.Errorf("at least one inspection step is required")
@@ -345,7 +347,7 @@ func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto req
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.ItemCode <= 0 || dto.WarehouseID <= 0 || dto.Quantity <= 0 {
-		return nil, fmt.Errorf("item_code, warehouse_id and quantity are required")
+		return nil, fmt.Errorf("código do item, depósito e quantidade são obrigatórios")
 	}
 	if dto.Source == "" {
 		dto.Source = "MANUAL"
@@ -506,7 +508,7 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 	}
 	if dto.MoveStock {
 		if (dto.ConformQty > 0 || dto.RestrictedQty > 0) && dto.DestinationWarehouseID == nil && dto.RestrictedWarehouseID == nil {
-			return nil, fmt.Errorf("destination_warehouse_id is required to release approved quantity")
+			return nil, fmt.Errorf("depósito de destino é obrigatório para liberar a quantidade aprovada")
 		}
 		if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty > order.Quantity+0.0001 {
 			return nil, fmt.Errorf("analysis quantity exceeds inspected order quantity")

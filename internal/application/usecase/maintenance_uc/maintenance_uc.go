@@ -6,17 +6,19 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/maintenance/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/maintenance/repository"
-	"github.com/google/uuid"
 )
 
 type MaintenanceUseCase struct {
 	repo repository.MaintenanceRepository
+	auth ports.AuthService
 }
 
-func New(repo repository.MaintenanceRepository) *MaintenanceUseCase {
-	return &MaintenanceUseCase{repo: repo}
+func New(repo repository.MaintenanceRepository, auth ports.AuthService) *MaintenanceUseCase {
+	return &MaintenanceUseCase{repo: repo, auth: auth}
 }
 
 // ─── plans ────────────────────────────────────────────────────────────────────
@@ -28,13 +30,12 @@ type CreatePlanDTO struct {
 	Frequency      string  `json:"frequency"`
 	FrequencyDays  int     `json:"frequency_days"`
 	EstimatedHours float64 `json:"estimated_hours"`
-	CreatedBy      string  `json:"created_by"`
 }
 
 func (uc *MaintenanceUseCase) CreatePlan(ctx context.Context, dto CreatePlanDTO) (*response.MaintenancePlanResponse, error) {
-	createdBy, err := uuid.Parse(dto.CreatedBy)
+	createdBy, err := uc.auth.UserID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid created_by UUID: %w", err)
+		return nil, errorsuc.ErrUnauthorized
 	}
 	plan, err := entity.NewMaintenancePlan(
 		dto.MachineID,
@@ -95,11 +96,11 @@ type CreateOrderDTO struct {
 func (uc *MaintenanceUseCase) CreateOrder(ctx context.Context, dto CreateOrderDTO) (*response.MaintenanceOrderResponse, error) {
 	scheduledDate, err := time.Parse("2006-01-02", dto.ScheduledDate)
 	if err != nil {
-		return nil, fmt.Errorf("invalid scheduled_date: %w", err)
+		return nil, errorsuc.NewValidationError("o campo 'scheduled_date' deve estar no formato AAAA-MM-DD")
 	}
 	plan, err := uc.repo.GetPlanByID(ctx, dto.PlanID)
 	if err != nil {
-		return nil, fmt.Errorf("plan %d not found: %w", dto.PlanID, err)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("plano de manutenção %d não encontrado — selecione um cadastro existente", dto.PlanID))
 	}
 	workCenterID := dto.WorkCenterID
 	if workCenterID == nil {

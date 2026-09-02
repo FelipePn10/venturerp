@@ -59,12 +59,11 @@ func TestRouteCreate_Success(t *testing.T) {
 	uc := NewRouteUseCase(repo)
 
 	dto := request.CreateRouteDTO{
-		ItemCode:    10001,
+		ItemCode:    "10001",
 		Mask:        sptr("DEFAULT"),
 		Alternative: 1,
 		Description: sptr("Rota principal Suporte SS-100"),
 		IsStandard:  true,
-		CreatedBy:   uuid.New(),
 	}
 
 	result, err := uc.Create(context.Background(), dto)
@@ -84,7 +83,7 @@ func TestRouteCreate_Success(t *testing.T) {
 
 func TestRouteCreate_InvalidItemCode(t *testing.T) {
 	uc := NewRouteUseCase(&fakeRoutingRepo{nextCode: 1})
-	_, err := uc.Create(context.Background(), request.CreateRouteDTO{ItemCode: 0})
+	_, err := uc.Create(context.Background(), request.CreateRouteDTO{})
 	if err == nil {
 		t.Fatal("expected error for ItemCode=0")
 	}
@@ -93,7 +92,7 @@ func TestRouteCreate_InvalidItemCode(t *testing.T) {
 func TestRouteCreate_DefaultAlternative(t *testing.T) {
 	repo := &fakeRoutingRepo{nextCode: 1}
 	uc := NewRouteUseCase(repo)
-	_, err := uc.Create(context.Background(), request.CreateRouteDTO{ItemCode: 1, Alternative: 0})
+	_, err := uc.Create(context.Background(), request.CreateRouteDTO{ItemCode: "1", Alternative: 0})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +104,7 @@ func TestRouteCreate_DefaultAlternative(t *testing.T) {
 func TestRouteCreate_RepoError(t *testing.T) {
 	repo := &fakeRoutingRepo{nextCode: 1, errCreate: errors.New("db down")}
 	uc := NewRouteUseCase(repo)
-	_, err := uc.Create(context.Background(), request.CreateRouteDTO{ItemCode: 5000, Alternative: 1})
+	_, err := uc.Create(context.Background(), request.CreateRouteDTO{ItemCode: "5000", Alternative: 1})
 	if err == nil {
 		t.Fatal("expected error from repo, got nil")
 	}
@@ -131,7 +130,7 @@ func TestRouteListByItem_ReturnsAll(t *testing.T) {
 	repo := &fakeRoutingRepo{route: &entity.ManufacturingRoute{ID: 501, ItemCode: 10001}}
 	uc := NewRouteUseCase(repo)
 
-	results, err := uc.ListByItem(context.Background(), 10001)
+	results, err := uc.ListByItem(context.Background(), "10001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

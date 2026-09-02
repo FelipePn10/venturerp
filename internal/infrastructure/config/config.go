@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"strings"
 
@@ -11,11 +12,13 @@ import (
 )
 
 type Config struct {
-	ServerPort  string `mapstructure:"SERVER_ADDR"`
-	DatabaseURL string `mapstructure:"DATABASE_URL"`
-	JWTSecret   string `mapstructure:"JWT_SECRET"`
-	Env         string `mapstructure:"ENV"`
-	LogLevel    string `mapstructure:"LOG_LEVEL"`
+	ServerPort          string `mapstructure:"SERVER_ADDR"`
+	DatabaseURL         string `mapstructure:"DATABASE_URL"`
+	IdentityDatabaseURL string `mapstructure:"IDENTITY_DATABASE_URL"`
+	DataEnvironment     string `mapstructure:"DATA_ENVIRONMENT"`
+	JWTSecret           string `mapstructure:"JWT_SECRET"`
+	Env                 string `mapstructure:"ENV"`
+	LogLevel            string `mapstructure:"LOG_LEVEL"`
 
 	// SMTP — e-mail alerts (optional; leave blank to disable)
 	SMTPHost     string `mapstructure:"SMTP_HOST"`
@@ -52,7 +55,7 @@ func Load() (*Config, error) {
 	viper.SetConfigType("env")
 	viper.AutomaticEnv()
 	for _, key := range []string{
-		"SERVER_ADDR", "DATABASE_URL", "JWT_SECRET", "ENV", "LOG_LEVEL",
+		"SERVER_ADDR", "DATABASE_URL", "IDENTITY_DATABASE_URL", "DATA_ENVIRONMENT", "JWT_SECRET", "ENV", "LOG_LEVEL",
 		"SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM",
 		"CORS_ALLOWED_ORIGINS", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 		"AUTH_RATE_LIMIT_RPM", "AUTH_RATE_LIMIT_BURST", "MAX_BODY_BYTES",
@@ -73,6 +76,7 @@ func Load() (*Config, error) {
 		"postgres://panossoerp:panossoerp_10203040@localhost:5432/panossoerpdatabase?sslmode=disable",
 	)
 	viper.SetDefault("ENV", "development")
+	viper.SetDefault("DATA_ENVIRONMENT", "production")
 	viper.SetDefault("LOG_LEVEL", "info")
 	viper.SetDefault("SMTP_HOST", "")
 	viper.SetDefault("SMTP_PORT", "587")
@@ -103,6 +107,22 @@ func Load() (*Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("erro parse config: %w", err)
 	}
+	cfg.DataEnvironment = strings.ToLower(strings.TrimSpace(cfg.DataEnvironment))
+	if cfg.DataEnvironment != "production" && cfg.DataEnvironment != "training" {
+		return nil, errors.New("DATA_ENVIRONMENT must be production or training")
+	}
+	if cfg.DataEnvironment == "training" {
+		if strings.TrimSpace(cfg.IdentityDatabaseURL) == "" {
+			return nil, errors.New("IDENTITY_DATABASE_URL is required in training")
+		}
+		same, err := samePostgresDatabase(cfg.DatabaseURL, cfg.IdentityDatabaseURL)
+		if err != nil {
+			return nil, err
+		}
+		if same {
+			return nil, errors.New("training DATABASE_URL must differ from IDENTITY_DATABASE_URL")
+		}
+	}
 	if !cfg.IsDevelopment() && len(strings.TrimSpace(cfg.JWTSecret)) < 32 {
 		return nil, errors.New("JWT_SECRET must contain at least 32 characters in production")
 	}
@@ -110,6 +130,31 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func (c *Config) IsTraining() bool { return c.DataEnvironment == "training" }
+
+func samePostgresDatabase(first, second string) (bool, error) {
+	parse := func(raw, name string) (host, port, database string, err error) {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Hostname() == "" || strings.TrimPrefix(u.Path, "/") == "" {
+			return "", "", "", fmt.Errorf("%s must be a PostgreSQL URL with host and database", name)
+		}
+		port = u.Port()
+		if port == "" {
+			port = "5432"
+		}
+		return strings.ToLower(u.Hostname()), port, strings.TrimPrefix(u.Path, "/"), nil
+	}
+	firstHost, firstPort, firstDatabase, err := parse(first, "DATABASE_URL")
+	if err != nil {
+		return false, err
+	}
+	secondHost, secondPort, secondDatabase, err := parse(second, "IDENTITY_DATABASE_URL")
+	if err != nil {
+		return false, err
+	}
+	return firstHost == secondHost && firstPort == secondPort && firstDatabase == secondDatabase, nil
 }
 
 func (c *Config) TrustedProxyPrefixes() ([]netip.Prefix, error) {

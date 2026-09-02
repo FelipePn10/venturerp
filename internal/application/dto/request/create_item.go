@@ -43,7 +43,8 @@ type WarehouseDTO struct {
 }
 
 type EngineeringDTO struct {
-	ItemBaseCod *int                    `json:"item_base_cod,omitempty"`
+	// ItemBaseCod chega como código de negócio (texto), como a tela o conhece.
+	ItemBaseCod *TextCode               `json:"item_base_cod,omitempty"`
 	Weight      valueobject.Weight      `json:"weight"`
 	Dimensions  *valueobject.Dimensions `json:"dimensions,omitempty"`
 	Type        types.TypeItem          `json:"type"`
@@ -84,17 +85,18 @@ type CommercialDTO struct {
 	WarrantyDays                     int              `json:"warranty_days"`
 	TransferWarehouseCode            *int64           `json:"transfer_warehouse_code,omitempty"`
 	TechnicalAssistanceWarehouseCode *int64           `json:"technical_assistance_warehouse_code,omitempty"`
-	PackagingItemCode                *int64           `json:"packaging_item_code,omitempty"`
-	AllowBillingDescriptionChange    bool             `json:"allow_billing_description_change"`
-	IssueLoadingLabels               bool             `json:"issue_loading_labels"`
-	AssembleShippingVolumes          bool             `json:"assemble_shipping_volumes"`
-	RequiresSpecialPackaging         bool             `json:"requires_special_packaging"`
-	WithholdPISCOFINS                bool             `json:"withhold_pis_cofins"`
-	IsPackaging                      bool             `json:"is_packaging"`
-	MobileEnabled                    bool             `json:"mobile_enabled"`
-	ExportPackaging                  bool             `json:"export_packaging"`
-	ClassificationCode               *string          `json:"classification_code,omitempty"`
-	Notes                            *string          `json:"notes,omitempty"`
+	// PackagingItemCode chega como código de negócio (texto), como a tela o conhece.
+	PackagingItemCode             *TextCode `json:"packaging_item_code,omitempty"`
+	AllowBillingDescriptionChange bool      `json:"allow_billing_description_change"`
+	IssueLoadingLabels            bool      `json:"issue_loading_labels"`
+	AssembleShippingVolumes       bool      `json:"assemble_shipping_volumes"`
+	RequiresSpecialPackaging      bool      `json:"requires_special_packaging"`
+	WithholdPISCOFINS             bool      `json:"withhold_pis_cofins"`
+	IsPackaging                   bool      `json:"is_packaging"`
+	MobileEnabled                 bool      `json:"mobile_enabled"`
+	ExportPackaging               bool      `json:"export_packaging"`
+	ClassificationCode            *string   `json:"classification_code,omitempty"`
+	Notes                         *string   `json:"notes,omitempty"`
 }
 
 type AccountingDTO struct {

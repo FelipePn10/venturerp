@@ -101,6 +101,10 @@ type CreateCarrierGroupDTO struct {
 	Description string `json:"description"`
 }
 
+type UpdateCarrierGroupDTO struct {
+	Description string `json:"description"`
+}
+
 type CarrierGroupMemberDTO struct {
 	CarrierGroupCode int64 `json:"carrier_group_code"`
 	CarrierCode      int64 `json:"carrier_code"`
@@ -118,6 +122,19 @@ type CreatePaymentConditionDTO struct {
 	IsSpecial    bool    `json:"is_special"`
 	IsRevenue    bool    `json:"is_revenue"`
 	IsAtSight    bool    `json:"is_at_sight"`
+}
+
+type UpdatePaymentConditionDTO struct {
+	Description  string  `json:"description"`
+	CarrierCode  *int64  `json:"carrier_code,omitempty"`
+	AnalysisType string  `json:"analysis_type"`
+	ParcelStart  string  `json:"parcel_start"`
+	Expenses     float64 `json:"expenses"`
+	AverageTerm  int16   `json:"average_term"`
+	IsSpecial    bool    `json:"is_special"`
+	IsRevenue    bool    `json:"is_revenue"`
+	IsAtSight    bool    `json:"is_at_sight"`
+	IsActive     bool    `json:"is_active"`
 }
 
 type AddInstallmentDTO struct {
@@ -323,19 +340,19 @@ type UpdateInvoiceTypeDTO struct {
 // ─── Sales Table Prices ────────────────────────────────────────────────────────
 
 type CreateSalesTablePriceDTO struct {
-	SalesTableID   int64   `json:"sales_table_id"`
-	SalesTableCode int64   `json:"sales_table_code"`
-	ItemCode       string  `json:"item_code"`
-	Price          float64 `json:"price"`
-	UME            *string `json:"ume,omitempty"`
-	UMC            *string `json:"umc,omitempty"`
-	PriceConv      float64 `json:"price_conv"`
-	Formula        *string `json:"formula,omitempty"`
-	Situation      string  `json:"situation"`
-	Blocked        bool    `json:"blocked"`
-	Observation    *string `json:"observation,omitempty"`
-	ProductLineID  *int64  `json:"product_line_id,omitempty"`
-	ItemMask       *string `json:"item_mask,omitempty"`
+	SalesTableID   int64    `json:"sales_table_id"`
+	SalesTableCode int64    `json:"sales_table_code"`
+	ItemCode       TextCode `json:"item_code"`
+	Price          float64  `json:"price"`
+	UME            *string  `json:"ume,omitempty"`
+	UMC            *string  `json:"umc,omitempty"`
+	PriceConv      float64  `json:"price_conv"`
+	Formula        *string  `json:"formula,omitempty"`
+	Situation      string   `json:"situation"`
+	Blocked        bool     `json:"blocked"`
+	Observation    *string  `json:"observation,omitempty"`
+	ProductLineID  *int64   `json:"product_line_id,omitempty"`
+	ItemMask       *string  `json:"item_mask,omitempty"`
 }
 
 type UpdateSalesTablePriceDTO struct {
@@ -353,23 +370,32 @@ type UpdateSalesTablePriceDTO struct {
 }
 
 type PriceSalesItemDTO struct {
-	SalesTableCode int64   `json:"sales_table_code"`
-	ItemCode       string  `json:"item_code"`
-	Quantity       float64 `json:"quantity"`
+	SalesTableCode int64    `json:"sales_table_code"`
+	ItemCode       TextCode `json:"item_code"`
+	Quantity       float64  `json:"quantity"`
+}
+
+type ResolveSalesTablesForItemDTO struct {
+	ItemCode     string
+	CustomerCode *int64
+	Quantity     float64
+	Unit         string
+	Currency     string
+	ReferenceAt  time.Time
 }
 
 type FormSalesPriceDTO struct {
-	SalesTableCode int64   `json:"sales_table_code"`
-	PolicyCode     *int64  `json:"policy_code,omitempty"`
-	ItemCode       string  `json:"item_code,omitempty"`
-	BaseCost       float64 `json:"base_cost"`
-	MarkupPct      float64 `json:"markup_pct"`
-	MarginPct      float64 `json:"margin_pct"`
-	ExpensesPct    float64 `json:"expenses_pct"`
-	TaxesPct       float64 `json:"taxes_pct"`
-	FreightPct     float64 `json:"freight_pct"`
-	CommissionPct  float64 `json:"commission_pct"`
-	DiscountPct    float64 `json:"discount_pct"`
+	SalesTableCode int64    `json:"sales_table_code"`
+	PolicyCode     *int64   `json:"policy_code,omitempty"`
+	ItemCode       TextCode `json:"item_code,omitempty"`
+	BaseCost       float64  `json:"base_cost"`
+	MarkupPct      float64  `json:"markup_pct"`
+	MarginPct      float64  `json:"margin_pct"`
+	ExpensesPct    float64  `json:"expenses_pct"`
+	TaxesPct       float64  `json:"taxes_pct"`
+	FreightPct     float64  `json:"freight_pct"`
+	CommissionPct  float64  `json:"commission_pct"`
+	DiscountPct    float64  `json:"discount_pct"`
 }
 
 type CreateSalesPricePolicyDTO struct {
@@ -427,11 +453,11 @@ type UpdateSalesPricePolicyDTO struct {
 }
 
 type GenerateSalesTablePricesDTO struct {
-	SalesTableCode int64    `json:"sales_table_code"`
-	PolicyCode     int64    `json:"policy_code"`
-	ItemCodes      []string `json:"item_codes"`
-	WarehouseID    *int64   `json:"warehouse_id,omitempty"`
-	Reason         *string  `json:"reason,omitempty"`
+	SalesTableCode int64      `json:"sales_table_code"`
+	PolicyCode     int64      `json:"policy_code"`
+	ItemCodes      []TextCode `json:"item_codes"`
+	WarehouseID    *int64     `json:"warehouse_id,omitempty"`
+	Reason         *string    `json:"reason,omitempty"`
 }
 
 // ─── Commercial Policies ─────────────────────────────────────────────────────
@@ -524,7 +550,7 @@ type UpdateCommercialPolicyDTO struct {
 
 type CommercialPolicySpecificItemDTO struct {
 	PolicyCode         int64      `json:"policy_code"`
-	ItemCode           *string    `json:"item_code,omitempty"`
+	ItemCode           *TextCode  `json:"item_code,omitempty"`
 	ItemMask           *string    `json:"item_mask,omitempty"`
 	ProductLineID      *int64     `json:"product_line_id,omitempty"`
 	ItemClassification *string    `json:"item_classification,omitempty"`
@@ -552,19 +578,19 @@ type CommercialPolicyLineDTO struct {
 }
 
 type EvaluateCommercialPoliciesDTO struct {
-	GrossValue         float64 `json:"gross_value"`
-	Quantity           float64 `json:"quantity"`
-	CustomerCode       *int64  `json:"customer_code,omitempty"`
-	CustomerTypeID     *int64  `json:"customer_type_id,omitempty"`
-	MarketSegmentID    *int64  `json:"market_segment_id,omitempty"`
-	RegionID           *int64  `json:"region_id,omitempty"`
-	SalesTableID       *int64  `json:"sales_table_id,omitempty"`
-	PaymentConditionID *int64  `json:"payment_condition_id,omitempty"`
-	CarrierID          *int64  `json:"carrier_id,omitempty"`
-	ItemCode           *string `json:"item_code,omitempty"`
-	ItemMask           *string `json:"item_mask,omitempty"`
-	ProductLineID      *int64  `json:"product_line_id,omitempty"`
-	ItemClassification *string `json:"item_classification,omitempty"`
+	GrossValue         float64   `json:"gross_value"`
+	Quantity           float64   `json:"quantity"`
+	CustomerCode       *int64    `json:"customer_code,omitempty"`
+	CustomerTypeID     *int64    `json:"customer_type_id,omitempty"`
+	MarketSegmentID    *int64    `json:"market_segment_id,omitempty"`
+	RegionID           *int64    `json:"region_id,omitempty"`
+	SalesTableID       *int64    `json:"sales_table_id,omitempty"`
+	PaymentConditionID *int64    `json:"payment_condition_id,omitempty"`
+	CarrierID          *int64    `json:"carrier_id,omitempty"`
+	ItemCode           *TextCode `json:"item_code,omitempty"`
+	ItemMask           *string   `json:"item_mask,omitempty"`
+	ProductLineID      *int64    `json:"product_line_id,omitempty"`
+	ItemClassification *string   `json:"item_classification,omitempty"`
 }
 
 // ─── Tax Types ────────────────────────────────────────────────────────────────

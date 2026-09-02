@@ -23,6 +23,10 @@ func (uc *CreateDeliveryRescheduleUseCase) Execute(
 	if !uc.Auth.CanCreateDeliveryReschedule(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	createdBy, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 
 	r := &entity.DeliveryReschedule{
 		SalesOrderCode: dto.SalesOrderCode,
@@ -30,7 +34,7 @@ func (uc *CreateDeliveryRescheduleUseCase) Execute(
 		OldDate:        dto.OldDate,
 		NewDate:        dto.NewDate,
 		Reason:         dto.Reason,
-		CreatedBy:      dto.CreatedBy,
+		CreatedBy:      createdBy,
 	}
 	created, err := uc.Repo.Create(ctx, r)
 	if err != nil {

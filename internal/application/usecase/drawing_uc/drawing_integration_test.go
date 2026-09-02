@@ -74,14 +74,14 @@ func TestIntegration_Drawing_TenantItemConfigurationAndRevisionReplication(t *te
 	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise ORDER BY id LIMIT 1").Scan(&enterpriseID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT created_by FROM items LIMIT 1").Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT created_by FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 	item := testutil.UniqueCode()
 	plainItem := testutil.UniqueCode()
 	mask := fmt.Sprintf("CFG-%d", testutil.UniqueCode())
-	testutil.Exec(t, pool, "INSERT INTO items(code,warehouse_code,created_by) VALUES($1,$1,$3),($2,$2,$3)", item, plainItem, userID)
+	testutil.Exec(t, pool, "INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,$1,$3,$4),($2,($2::bigint)::text,$2,$3,$4)", item, plainItem, userID, enterpriseID)
 	testutil.Exec(t, pool, "INSERT INTO item_masks(item_code,mask,mask_hash,created_by,created_at) VALUES($1,$2,$3,$4,NOW())", item, mask, fmt.Sprintf("%08d", item%100000000), userID)
 	t.Cleanup(func() {
 		testutil.Exec(t, pool, "DELETE FROM drawings WHERE item_code=$1", item)

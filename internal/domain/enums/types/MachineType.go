@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type MachineTypeEnum string
@@ -33,9 +34,9 @@ func (t *MachineTypeEnum) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	parsed := MachineTypeEnum(value)
+	parsed := MachineTypeEnum(strings.ToUpper(strings.TrimSpace(value)))
 	if !parsed.IsValid() {
-		return fmt.Errorf("invalid MachineTypeEnum: %s", value)
+		return fmt.Errorf("classificação de máquina %q inválida: use uma destas — %s", value, MachineTypeValues())
 	}
 	*t = parsed
 	return nil
@@ -63,3 +64,14 @@ const (
 	Hour   CapacityPeriod = "HORA"
 	Day    CapacityPeriod = "DIA"
 )
+
+// MachineTypeValues lista as classificações aceitas, para as mensagens de erro.
+func MachineTypeValues() string {
+	values := []MachineTypeEnum{MachineCut, MachineBend, MachineWeld, MachineAssemble,
+		MachinePaint, MachineLathe, MachineMill, MachineInject, MachinePress}
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		parts = append(parts, string(v))
+	}
+	return strings.Join(parts, ", ")
+}

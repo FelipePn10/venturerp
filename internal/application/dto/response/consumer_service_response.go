@@ -1,9 +1,11 @@
 package response
 
 import (
+	"encoding/json"
 	"time"
 
 	csrepo "github.com/FelipePn10/panossoerp/internal/domain/consumer_service/repository"
+	"github.com/google/uuid"
 )
 
 type ConsumerServiceCallTypeResponse struct {
@@ -94,6 +96,7 @@ type ConsumerServiceCallResponse struct {
 	ResponsibleUserCode   *int64                                  `json:"responsible_user_code,omitempty"`
 	Position              string                                  `json:"position"`
 	Situation             string                                  `json:"situation"`
+	SituationLabel        string                                  `json:"situation_label"`
 	OpenedAt              time.Time                               `json:"opened_at"`
 	ReturnDate            *time.Time                              `json:"return_date,omitempty"`
 	VisitRequestedDate    *time.Time                              `json:"visit_requested_date,omitempty"`
@@ -125,11 +128,12 @@ type ConsumerServiceCallReturnResponse struct {
 }
 
 type ConsumerServiceCallAttachmentResponse struct {
-	Code        int64   `json:"code"`
+	Code        int64   `json:"id"`
 	CallCode    int64   `json:"call_code"`
 	FileName    string  `json:"file_name"`
-	FilePath    string  `json:"file_path"`
 	ContentType *string `json:"content_type,omitempty"`
+	FileSize    int64   `json:"file_size"`
+	DownloadURL string  `json:"download_url"`
 	Notes       *string `json:"notes,omitempty"`
 }
 
@@ -168,33 +172,55 @@ type RecurringSalesAdjustmentDateResponse struct {
 }
 
 type RecurringSaleResponse struct {
-	Code                    int64                                 `json:"code"`
-	EnterpriseCode          int64                                 `json:"enterprise_code"`
-	CustomerCode            int64                                 `json:"customer_code"`
-	EstablishmentCode       *int64                                `json:"establishment_code,omitempty"`
-	ItemCode                int64                                 `json:"item_code"`
-	ItemMask                *string                               `json:"item_mask,omitempty"`
-	SalesPlanCode           *int64                                `json:"sales_plan_code,omitempty"`
-	MovementType            string                                `json:"movement_type"`
-	TermType                string                                `json:"term_type"`
-	SaleDate                time.Time                             `json:"sale_date"`
-	NextAdjustmentDate      *time.Time                            `json:"next_adjustment_date,omitempty"`
-	MonthsQuantity          *int                                  `json:"months_quantity,omitempty"`
-	PaymentsQuantity        *int                                  `json:"payments_quantity,omitempty"`
-	GraceMonths             int                                   `json:"grace_months"`
-	PaymentValue            *float64                              `json:"payment_value,omitempty"`
-	Quantity                float64                               `json:"quantity"`
-	UnitValue               float64                               `json:"unit_value"`
-	MonthlyValue            float64                               `json:"monthly_value"`
-	Reason                  *string                               `json:"reason,omitempty"`
-	GeneratedOrderCode      *int64                                `json:"generated_order_code,omitempty"`
-	GeneratedOrderAt        *time.Time                            `json:"generated_order_at,omitempty"`
-	SourceRecurringSaleCode *int64                                `json:"source_recurring_sale_code,omitempty"`
-	OriginalAdjustmentCode  *int64                                `json:"original_adjustment_code,omitempty"`
-	AdjustmentPercent       *float64                              `json:"adjustment_percent,omitempty"`
-	IsActive                bool                                  `json:"is_active"`
-	CreatedAt               time.Time                             `json:"created_at"`
-	Representatives         []RecurringSaleRepresentativeResponse `json:"representatives,omitempty"`
+	Code                      int64                                 `json:"code"`
+	EnterpriseCode            int64                                 `json:"enterprise_code"`
+	CustomerCode              int64                                 `json:"customer_code"`
+	EstablishmentCode         *int64                                `json:"establishment_code,omitempty"`
+	ItemCode                  int64                                 `json:"item_code"`
+	ItemMask                  *string                               `json:"item_mask,omitempty"`
+	SalesPlanCode             *int64                                `json:"sales_plan_code,omitempty"`
+	MovementType              string                                `json:"movement_type"`
+	TermType                  string                                `json:"term_type"`
+	SaleDate                  time.Time                             `json:"sale_date"`
+	NextAdjustmentDate        *time.Time                            `json:"next_adjustment_date,omitempty"`
+	MonthsQuantity            *int                                  `json:"months_quantity,omitempty"`
+	PaymentsQuantity          *int                                  `json:"payments_quantity,omitempty"`
+	GraceMonths               int                                   `json:"grace_months"`
+	PaymentValue              *float64                              `json:"payment_value,omitempty"`
+	Quantity                  float64                               `json:"quantity"`
+	UnitValue                 float64                               `json:"unit_value"`
+	MonthlyValue              float64                               `json:"monthly_value"`
+	Reason                    *string                               `json:"reason,omitempty"`
+	GeneratedOrderCode        *int64                                `json:"generated_order_code,omitempty"`
+	GeneratedOrderAt          *time.Time                            `json:"generated_order_at,omitempty"`
+	SourceRecurringSaleCode   *int64                                `json:"source_recurring_sale_code,omitempty"`
+	OriginalAdjustmentCode    *int64                                `json:"original_adjustment_code,omitempty"`
+	AdjustmentPercent         *float64                              `json:"adjustment_percent,omitempty"`
+	IsActive                  bool                                  `json:"is_active"`
+	LifecycleStatus           string                                `json:"lifecycle_status"`
+	EffectiveFrom             *time.Time                            `json:"effective_from,omitempty"`
+	EffectiveUntil            *time.Time                            `json:"effective_until,omitempty"`
+	CancellationEffectiveDate *time.Time                            `json:"cancellation_effective_date,omitempty"`
+	FutureOrdersPolicy        *string                               `json:"future_orders_policy,omitempty"`
+	Frequency                 string                                `json:"frequency"`
+	PriceTableCode            *int64                                `json:"price_table_code,omitempty"`
+	CurrencyCode              string                                `json:"currency_code"`
+	AdjustmentIndex           *string                               `json:"adjustment_index,omitempty"`
+	AdjustmentPeriodMonths    *int                                  `json:"adjustment_period_months,omitempty"`
+	AdjustmentFloorPct        *float64                              `json:"adjustment_floor_pct,omitempty"`
+	AdjustmentCapPct          *float64                              `json:"adjustment_cap_pct,omitempty"`
+	BillingPolicy             json.RawMessage                       `json:"billing_policy"`
+	DeliveryPolicy            json.RawMessage                       `json:"delivery_policy"`
+	TaxPolicy                 json.RawMessage                       `json:"tax_policy"`
+	CostCenterCode            *int64                                `json:"cost_center_code,omitempty"`
+	RenewalPolicy             string                                `json:"renewal_policy"`
+	CreatedAt                 time.Time                             `json:"created_at"`
+	Representatives           []RecurringSaleRepresentativeResponse `json:"representatives,omitempty"`
+	MissingPreconditions      []string                              `json:"missing_preconditions"`
+	CanGenerateOrder          bool                                  `json:"can_generate_order"`
+	CanCancel                 bool                                  `json:"can_cancel"`
+	CanAdjust                 bool                                  `json:"can_adjust"`
+	AllowedActions            []string                              `json:"allowed_actions"`
 }
 
 type RecurringSaleRepresentativeResponse struct {
@@ -208,8 +234,90 @@ type RecurringSaleRepresentativeResponse struct {
 }
 
 type RecurringSalesAdjustmentImpactResponse struct {
-	Rows       []RecurringSaleResponse `json:"rows"`
-	TotalRows  int                     `json:"total_rows"`
-	TotalValue float64                 `json:"total_value"`
-	Confirmed  bool                    `json:"confirmed"`
+	Rows       []RecurringSaleResponse                      `json:"rows"`
+	Impacts    []RecurringSalesAdjustmentLineImpactResponse `json:"impacts"`
+	TotalRows  int                                          `json:"total_rows"`
+	TotalValue float64                                      `json:"total_value"`
+	Confirmed  bool                                         `json:"confirmed"`
+}
+
+type RecurringSalesAdjustmentLineImpactResponse struct {
+	SourceCodes       []int64   `json:"source_codes"`
+	ItemCode          int64     `json:"item_code"`
+	ItemMask          *string   `json:"item_mask,omitempty"`
+	PreviousUnitValue float64   `json:"previous_unit_value"`
+	NewUnitValue      float64   `json:"new_unit_value"`
+	Quantity          float64   `json:"quantity"`
+	PreviousTotal     float64   `json:"previous_total"`
+	NewTotal          float64   `json:"new_total"`
+	AdjustmentPercent float64   `json:"adjustment_percent"`
+	AdjustmentIndex   string    `json:"adjustment_index,omitempty"`
+	LegalBasis        string    `json:"legal_basis,omitempty"`
+	EffectiveDate     time.Time `json:"effective_date"`
+	Reason            string    `json:"reason"`
+}
+
+type TechnicalAssistanceRMAResponse struct {
+	Code                int64                                    `json:"code"`
+	CallCode            int64                                    `json:"call_code"`
+	Status              string                                   `json:"status"`
+	ReasonCode          string                                   `json:"reason_code"`
+	ReasonDescription   *string                                  `json:"reason_description,omitempty"`
+	EligibilityStatus   string                                   `json:"eligibility_status"`
+	EligibilityReason   string                                   `json:"eligibility_reason"`
+	AuthorizationNumber *string                                  `json:"authorization_number,omitempty"`
+	AuthorizedAt        *time.Time                               `json:"authorized_at,omitempty"`
+	ReverseCarrierCode  *int64                                   `json:"reverse_carrier_code,omitempty"`
+	ReverseTrackingCode *string                                  `json:"reverse_tracking_code,omitempty"`
+	ReceivedAt          *time.Time                               `json:"received_at,omitempty"`
+	InspectionNotes     *string                                  `json:"inspection_notes,omitempty"`
+	InspectedAt         *time.Time                               `json:"inspected_at,omitempty"`
+	Destination         *string                                  `json:"destination,omitempty"`
+	SLADueAt            time.Time                                `json:"sla_due_at"`
+	ProductCost         float64                                  `json:"product_cost"`
+	FreightCost         float64                                  `json:"freight_cost"`
+	ServiceCost         float64                                  `json:"service_cost"`
+	TotalCost           float64                                  `json:"total_cost"`
+	FiscalDocumentKey   *string                                  `json:"fiscal_document_key,omitempty"`
+	StockMovementCode   *int64                                   `json:"stock_movement_code,omitempty"`
+	CreatedAt           time.Time                                `json:"created_at"`
+	UpdatedAt           time.Time                                `json:"updated_at"`
+	AllowedActions      []string                                 `json:"allowed_actions"`
+	Items               []TechnicalAssistanceRMAItemResponse     `json:"items"`
+	Events              []TechnicalAssistanceRMAEventResponse    `json:"events"`
+	Evidences           []TechnicalAssistanceRMAEvidenceResponse `json:"evidences"`
+}
+
+type TechnicalAssistanceRMAEvidenceResponse struct {
+	ID          uuid.UUID `json:"id"`
+	RMACode     int64     `json:"rma_code"`
+	FileName    string    `json:"file_name"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	SHA256      string    `json:"sha256"`
+	DownloadURL string    `json:"download_url"`
+	UploadedBy  uuid.UUID `json:"uploaded_by"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type TechnicalAssistanceRMAItemResponse struct {
+	Code                 int64   `json:"code"`
+	CallItemCode         int64   `json:"call_item_code"`
+	ItemCode             int64   `json:"item_code"`
+	Quantity             float64 `json:"quantity"`
+	SerialNumber         *string `json:"serial_number,omitempty"`
+	LotNumber            *string `json:"lot_number,omitempty"`
+	RequestedDestination *string `json:"requested_destination,omitempty"`
+	InspectionResult     *string `json:"inspection_result,omitempty"`
+}
+
+type TechnicalAssistanceRMAEventResponse struct {
+	Code          int64           `json:"code"`
+	EventType     string          `json:"event_type"`
+	BeforeState   json.RawMessage `json:"before,omitempty"`
+	AfterState    json.RawMessage `json:"after"`
+	Reason        *string         `json:"reason,omitempty"`
+	CorrelationID *string         `json:"correlation_id,omitempty"`
+	OccurredAt    time.Time       `json:"occurred_at"`
+	ActorID       uuid.UUID       `json:"actor_id"`
 }

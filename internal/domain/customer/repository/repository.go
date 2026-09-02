@@ -44,6 +44,7 @@ type CustomerRepository interface {
 
 	// ── Carrier Groups ────────────────────────────────────────────────────────
 	CreateCarrierGroup(ctx context.Context, g *entity.CarrierGroup) (*entity.CarrierGroup, error)
+	UpdateCarrierGroup(ctx context.Context, g *entity.CarrierGroup) (*entity.CarrierGroup, error)
 	GetCarrierGroupByCode(ctx context.Context, code int64) (*entity.CarrierGroup, error)
 	ListCarrierGroups(ctx context.Context) ([]*entity.CarrierGroup, error)
 	AddCarrierToGroup(ctx context.Context, groupID, carrierID int64) error

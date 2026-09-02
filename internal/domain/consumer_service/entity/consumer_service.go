@@ -171,6 +171,8 @@ type CallAttachment struct {
 	CallCode    int64
 	FileName    string
 	FilePath    string
+	Content     []byte
+	FileSize    int64
 	ContentType *string
 	Notes       *string
 	CreatedAt   time.Time

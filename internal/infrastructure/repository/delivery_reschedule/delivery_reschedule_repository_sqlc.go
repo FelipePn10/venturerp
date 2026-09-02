@@ -11,12 +11,24 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 func (r *DeliveryRescheduleRepositorySQLC) Create(
 	ctx context.Context,
 	res *entity.DeliveryReschedule,
 ) (*entity.DeliveryReschedule, error) {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		row := r.pool.QueryRow(ctx, `INSERT INTO delivery_reschedules(sales_order_code,item_code,old_date,new_date,reason,created_by,enterprise_code) SELECT $1,$2,$3,$4,$5,$6,$7 WHERE EXISTS(SELECT 1 FROM sales_orders WHERE code=$1 AND enterprise_code=$7) RETURNING code,created_at`, res.SalesOrderCode, int64(res.ItemCode), res.OldDate, res.NewDate, res.Reason, res.CreatedBy, enterpriseID)
+		if err := row.Scan(&res.Code, &res.CreatedAt); err != nil {
+			return nil, fmt.Errorf("criando reprogramação na empresa autenticada: %w", err)
+		}
+		return res, nil
+	}
 
 	row, err := r.q.CreateDeliveryReschedule(
 		ctx,
@@ -58,6 +70,28 @@ func (r *DeliveryRescheduleRepositorySQLC) ListByOrder(
 	ctx context.Context,
 	salesOrderCode int64,
 ) ([]*entity.DeliveryReschedule, error) {
+	if r.pool != nil {
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := r.pool.Query(ctx, `SELECT code,sales_order_code,item_code,old_date,new_date,reason,created_at,created_by FROM delivery_reschedules WHERE sales_order_code=$1 AND enterprise_code=$2 ORDER BY created_at DESC`, salesOrderCode, enterpriseID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var out []*entity.DeliveryReschedule
+		for rows.Next() {
+			v := new(entity.DeliveryReschedule)
+			var item int64
+			if err = rows.Scan(&v.Code, &v.SalesOrderCode, &item, &v.OldDate, &v.NewDate, &v.Reason, &v.CreatedAt, &v.CreatedBy); err != nil {
+				return nil, err
+			}
+			v.ItemCode = valueobject.ItemCode(item)
+			out = append(out, v)
+		}
+		return out, rows.Err()
+	}
 
 	rows, err := r.q.ListReschedulesByOrder(ctx, salesOrderCode)
 	if err != nil {

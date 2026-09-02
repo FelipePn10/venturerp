@@ -32,6 +32,9 @@ SELECT
     s.inherit,
     s.start_date,
     s.end_date,
+    s.quantity_formula,
+    s.quantity_rounding,
+    s.quantity_scale,
     i.warehouse_code,
     i.engineering_type_struct
 FROM item_structures s
@@ -73,6 +76,9 @@ type GetChildrenForConsultRow struct {
 	Inherit               bool
 	StartDate             pgtype.Date
 	EndDate               pgtype.Date
+	QuantityFormula       pgtype.Text
+	QuantityRounding      string
+	QuantityScale         int16
 	WarehouseCode         int64
 	EngineeringTypeStruct int16
 }
@@ -110,6 +116,9 @@ func (q *Queries) GetChildrenForConsult(ctx context.Context, arg GetChildrenForC
 			&i.Inherit,
 			&i.StartDate,
 			&i.EndDate,
+			&i.QuantityFormula,
+			&i.QuantityRounding,
+			&i.QuantityScale,
 			&i.WarehouseCode,
 			&i.EngineeringTypeStruct,
 		); err != nil {

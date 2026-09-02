@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -402,6 +403,14 @@ func (r *CustomerRepositorySQLC) GetCarrierGroupByCode(ctx context.Context, code
 	return &entity.CarrierGroup{ID: row.ID, Code: row.Code, Description: row.Description, CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt)}, nil
 }
 
+func (r *CustomerRepositorySQLC) UpdateCarrierGroup(ctx context.Context, group *entity.CarrierGroup) (*entity.CarrierGroup, error) {
+	row, err := r.q.UpdateCarrierGroup(ctx, sqlc.UpdateCarrierGroupParams{ID: group.ID, Description: group.Description})
+	if err != nil {
+		return nil, fmt.Errorf("atualizar grupo de portadores: %w", err)
+	}
+	return &entity.CarrierGroup{ID: row.ID, Code: row.Code, Description: row.Description, CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt)}, nil
+}
+
 func (r *CustomerRepositorySQLC) ListCarrierGroups(ctx context.Context) ([]*entity.CarrierGroup, error) {
 	rows, err := r.q.ListCarrierGroups(ctx)
 	if err != nil {
@@ -568,7 +577,12 @@ func installmentToEntity(row sqlc.PaymentConditionInstallment) *entity.PaymentIn
 // ─── Sales Tables ─────────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateSalesTable(ctx context.Context, st *entity.SalesTable) (*entity.SalesTable, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSalesTable(ctx, sqlc.CreateSalesTableParams{
+		EnterpriseID:               enterpriseID,
 		Code:                       st.Code,
 		Description:                st.Description,
 		ValidityStart:              pgutil.ToPgDateFromPtr(st.ValidityStart),
@@ -591,6 +605,10 @@ func (r *CustomerRepositorySQLC) CreateSalesTable(ctx context.Context, st *entit
 }
 
 func (r *CustomerRepositorySQLC) UpdateSalesTable(ctx context.Context, st *entity.SalesTable) (*entity.SalesTable, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateSalesTable(ctx, sqlc.UpdateSalesTableParams{
 		ID:                         st.ID,
 		Description:                st.Description,
@@ -607,6 +625,7 @@ func (r *CustomerRepositorySQLC) UpdateSalesTable(ctx context.Context, st *entit
 		AllowItemsBelowCent:        st.AllowItemsBelowCent,
 		IcmsInterestadualPorDentro: st.ICMSInterestadualPorDentro,
 		Observation:                pgutil.ToPgTextFromPtr(st.Observation),
+		EnterpriseID:               enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating sales table: %w", err)
@@ -615,7 +634,11 @@ func (r *CustomerRepositorySQLC) UpdateSalesTable(ctx context.Context, st *entit
 }
 
 func (r *CustomerRepositorySQLC) GetSalesTableByCode(ctx context.Context, code int64) (*entity.SalesTable, error) {
-	row, err := r.q.GetSalesTableByCode(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSalesTableByCode(ctx, sqlc.GetSalesTableByCodeParams{Code: code, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching sales table %d: %w", code, err)
 	}
@@ -623,20 +646,24 @@ func (r *CustomerRepositorySQLC) GetSalesTableByCode(ctx context.Context, code i
 }
 
 func (r *CustomerRepositorySQLC) GetSalesTableByID(ctx context.Context, id int64) (*entity.SalesTable, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, code, description, validity_start, validity_end, tolerance_min_pct,
 		       tolerance_max_pct, price_formation, decimal_places, is_active,
 		       created_at, composition, table_type, base_date, allow_items_below_cent,
 		       icms_interestadual_por_dentro, observation
 		FROM sales_tables
-		WHERE id=$1`, id)
+		WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID)
 	var st entity.SalesTable
 	var validityStart, validityEnd pgtype.Date
 	var toleranceMin, toleranceMax pgtype.Numeric
 	var formation, composition, tableType, baseDate string
 	var createdAt pgtype.Timestamptz
 	var observation pgtype.Text
-	err := row.Scan(&st.ID, &st.Code, &st.Description, &validityStart, &validityEnd,
+	err = row.Scan(&st.ID, &st.Code, &st.Description, &validityStart, &validityEnd,
 		&toleranceMin, &toleranceMax, &formation, &st.DecimalPlaces, &st.IsActive,
 		&createdAt, &composition, &tableType, &baseDate, &st.AllowItemsBelowCent,
 		&st.ICMSInterestadualPorDentro, &observation)
@@ -657,7 +684,11 @@ func (r *CustomerRepositorySQLC) GetSalesTableByID(ctx context.Context, id int64
 }
 
 func (r *CustomerRepositorySQLC) ListSalesTables(ctx context.Context, onlyActive bool) ([]*entity.SalesTable, error) {
-	rows, err := r.q.ListSalesTables(ctx, onlyActive)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSalesTables(ctx, sqlc.ListSalesTablesParams{EnterpriseID: enterpriseID, OnlyActive: onlyActive})
 	if err != nil {
 		return nil, fmt.Errorf("listing sales tables: %w", err)
 	}
@@ -669,6 +700,9 @@ func (r *CustomerRepositorySQLC) ListSalesTables(ctx context.Context, onlyActive
 }
 
 func (r *CustomerRepositorySQLC) NextSalesTableCode(ctx context.Context) (int64, error) {
+	if _, err := tenant.ID(ctx); err != nil {
+		return 0, err
+	}
 	code, err := r.q.NextSalesTableCode(ctx)
 	return int64(code), err
 }
@@ -676,6 +710,7 @@ func (r *CustomerRepositorySQLC) NextSalesTableCode(ctx context.Context) (int64,
 func salesTableToEntity(row sqlc.SalesTable) *entity.SalesTable {
 	return &entity.SalesTable{
 		ID:                         row.ID,
+		EnterpriseID:               row.EnterpriseID,
 		Code:                       row.Code,
 		Description:                row.Description,
 		ValidityStart:              pgutil.FromPgDateToPtr(row.ValidityStart),
@@ -698,14 +733,18 @@ func salesTableToEntity(row sqlc.SalesTable) *entity.SalesTable {
 // ─── Sales Price Policies ────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateSalesPricePolicy(ctx context.Context, p *entity.SalesPricePolicy) (*entity.SalesPricePolicy, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		INSERT INTO sales_price_policies (
 			code, description, cost_source, priority, sequence, policy_scope, policy_types,
 			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
 			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
 			min_margin_pct, max_discount_pct, incidences_json, sales_table_id,
-			validity_start, validity_end, observation
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23,$24)
+			validity_start, validity_end, observation, enterprise_id
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23,$24,$25)
 		RETURNING id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
 			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
 			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
@@ -715,7 +754,7 @@ func (r *CustomerRepositorySQLC) CreateSalesPricePolicy(ctx context.Context, p *
 		p.MarkupPct, p.MarginPct, p.MaxMarginPct, p.IdealMarginPct, p.MarginStepPct,
 		p.ExpensesPct, p.TaxesPct, p.FreightPct, p.CommissionPct, p.DiscountPct,
 		p.MinMarginPct, p.MaxDiscountPct, p.IncidencesJSON, p.SalesTableID,
-		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd), p.Observation,
+		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd), p.Observation, enterpriseID,
 	)
 	created, err := scanSalesPricePolicy(row)
 	if err != nil {
@@ -725,6 +764,10 @@ func (r *CustomerRepositorySQLC) CreateSalesPricePolicy(ctx context.Context, p *
 }
 
 func (r *CustomerRepositorySQLC) UpdateSalesPricePolicy(ctx context.Context, p *entity.SalesPricePolicy) (*entity.SalesPricePolicy, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		UPDATE sales_price_policies
 		SET description=$2, cost_source=$3, priority=$4, sequence=$5, policy_scope=$6,
@@ -733,7 +776,7 @@ func (r *CustomerRepositorySQLC) UpdateSalesPricePolicy(ctx context.Context, p *
 		    freight_pct=$15, commission_pct=$16, discount_pct=$17, min_margin_pct=$18,
 		    max_discount_pct=$19, incidences_json=$20::jsonb, sales_table_id=$21,
 		    validity_start=$22, validity_end=$23, is_active=$24, observation=$25, updated_at=NOW()
-		WHERE code=$1
+		WHERE code=$1 AND enterprise_id=$26
 		RETURNING id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
 			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
 			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
@@ -744,7 +787,7 @@ func (r *CustomerRepositorySQLC) UpdateSalesPricePolicy(ctx context.Context, p *
 		p.MarginStepPct, p.ExpensesPct, p.TaxesPct, p.FreightPct, p.CommissionPct,
 		p.DiscountPct, p.MinMarginPct, p.MaxDiscountPct, p.IncidencesJSON, p.SalesTableID,
 		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd),
-		p.IsActive, p.Observation,
+		p.IsActive, p.Observation, enterpriseID,
 	)
 	updated, err := scanSalesPricePolicy(row)
 	if err != nil {
@@ -754,13 +797,17 @@ func (r *CustomerRepositorySQLC) UpdateSalesPricePolicy(ctx context.Context, p *
 }
 
 func (r *CustomerRepositorySQLC) GetSalesPricePolicyByCode(ctx context.Context, code int64) (*entity.SalesPricePolicy, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
 			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
 			expenses_pct, taxes_pct, freight_pct, commission_pct, discount_pct,
 			min_margin_pct, max_discount_pct, incidences_json::text, sales_table_id,
 			validity_start, validity_end, is_active, observation, created_at, updated_at
-		FROM sales_price_policies WHERE code=$1`, code)
+		FROM sales_price_policies WHERE code=$1 AND enterprise_id=$2`, code, enterpriseID)
 	p, err := scanSalesPricePolicy(row)
 	if err != nil {
 		return nil, fmt.Errorf("fetching sales price policy %d: %w", code, err)
@@ -769,6 +816,10 @@ func (r *CustomerRepositorySQLC) GetSalesPricePolicyByCode(ctx context.Context, 
 }
 
 func (r *CustomerRepositorySQLC) ListSalesPricePolicies(ctx context.Context, onlyActive bool) ([]*entity.SalesPricePolicy, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, code, description, cost_source, priority, sequence, policy_scope, policy_types,
 			markup_pct, margin_pct, max_margin_pct, ideal_margin_pct, margin_step_pct,
@@ -776,8 +827,8 @@ func (r *CustomerRepositorySQLC) ListSalesPricePolicies(ctx context.Context, onl
 			min_margin_pct, max_discount_pct, incidences_json::text, sales_table_id,
 			validity_start, validity_end, is_active, observation, created_at, updated_at
 		FROM sales_price_policies
-		WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
-		ORDER BY code`, onlyActive)
+		WHERE enterprise_id=$1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+		ORDER BY code`, enterpriseID, onlyActive)
 	if err != nil {
 		return nil, fmt.Errorf("listing sales price policies: %w", err)
 	}
@@ -794,8 +845,12 @@ func (r *CustomerRepositorySQLC) ListSalesPricePolicies(ctx context.Context, onl
 }
 
 func (r *CustomerRepositorySQLC) NextSalesPricePolicyCode(ctx context.Context) (int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
 	var code int64
-	if err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM sales_price_policies`).Scan(&code); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM sales_price_policies WHERE enterprise_id=$1`, enterpriseID).Scan(&code); err != nil {
 		return 0, err
 	}
 	return code, nil
@@ -823,6 +878,10 @@ func scanSalesPricePolicy(row scannable) (*entity.SalesPricePolicy, error) {
 // ─── Commercial Policies ─────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateCommercialPolicy(ctx context.Context, p *entity.CommercialPolicy) (*entity.CommercialPolicy, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		INSERT INTO commercial_policies (
 			code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
@@ -832,8 +891,8 @@ func (r *CustomerRepositorySQLC) CreateCommercialPolicy(ctx context.Context, p *
 			commission_discount_mode, customer_code, customer_type_id,
 			market_segment_id, region_id, sales_table_id, payment_condition_id, carrier_id,
 			item_code, item_mask, product_line_id, item_classification, rule_json,
-			validity_start, validity_end, observation
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37::jsonb,$38,$39,$40)
+			validity_start, validity_end, observation, enterprise_id
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37::jsonb,$38,$39,$40,$41)
 		RETURNING id, code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
 			min_gross_value, max_gross_value, min_quantity, max_quantity, priority, sequence,
 			stackable, requires_approval, applies_on_net_value, allow_manual_change, allow_higher_values,
@@ -849,7 +908,7 @@ func (r *CustomerRepositorySQLC) CreateCommercialPolicy(ctx context.Context, p *
 		p.CommissionDiscountMode, p.CustomerCode, p.CustomerTypeID,
 		p.MarketSegmentID, p.RegionID, p.SalesTableID, p.PaymentConditionID, p.CarrierID,
 		p.ItemCode, p.ItemMask, p.ProductLineID, p.ItemClassification, p.RuleJSON,
-		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd), p.Observation)
+		pgutil.ToPgDateFromPtr(p.ValidityStart), pgutil.ToPgDateFromPtr(p.ValidityEnd), p.Observation, enterpriseID)
 	created, err := scanCommercialPolicy(row)
 	if err != nil {
 		return nil, fmt.Errorf("creating commercial policy: %w", err)
@@ -858,6 +917,10 @@ func (r *CustomerRepositorySQLC) CreateCommercialPolicy(ctx context.Context, p *
 }
 
 func (r *CustomerRepositorySQLC) UpdateCommercialPolicy(ctx context.Context, p *entity.CommercialPolicy) (*entity.CommercialPolicy, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		UPDATE commercial_policies
 		SET description=$2, kind=$3, choice_type=$4, calc_type=$5, percent_value=$6, fixed_value=$7,
@@ -871,7 +934,7 @@ func (r *CustomerRepositorySQLC) UpdateCommercialPolicy(ctx context.Context, p *
 			carrier_id=$32, item_code=$33, item_mask=$34, product_line_id=$35,
 			item_classification=$36, rule_json=$37::jsonb, validity_start=$38,
 			validity_end=$39, is_active=$40, observation=$41, updated_at=NOW()
-		WHERE code=$1
+		WHERE code=$1 AND enterprise_id=$42
 		RETURNING id, code, description, kind, choice_type, calc_type, percent_value, fixed_value, max_percent, max_value,
 			min_gross_value, max_gross_value, min_quantity, max_quantity, priority, sequence,
 			stackable, requires_approval, applies_on_net_value, allow_manual_change, allow_higher_values,
@@ -888,7 +951,7 @@ func (r *CustomerRepositorySQLC) UpdateCommercialPolicy(ctx context.Context, p *
 		p.CustomerCode, p.CustomerTypeID, p.MarketSegmentID, p.RegionID, p.SalesTableID,
 		p.PaymentConditionID, p.CarrierID, p.ItemCode, p.ItemMask, p.ProductLineID,
 		p.ItemClassification, p.RuleJSON, pgutil.ToPgDateFromPtr(p.ValidityStart),
-		pgutil.ToPgDateFromPtr(p.ValidityEnd), p.IsActive, p.Observation)
+		pgutil.ToPgDateFromPtr(p.ValidityEnd), p.IsActive, p.Observation, enterpriseID)
 	updated, err := scanCommercialPolicy(row)
 	if err != nil {
 		return nil, fmt.Errorf("updating commercial policy %d: %w", p.Code, err)
@@ -897,7 +960,11 @@ func (r *CustomerRepositorySQLC) UpdateCommercialPolicy(ctx context.Context, p *
 }
 
 func (r *CustomerRepositorySQLC) GetCommercialPolicyByCode(ctx context.Context, code int64) (*entity.CommercialPolicy, error) {
-	row := r.pool.QueryRow(ctx, commercialPolicySelect()+` WHERE code=$1`, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, commercialPolicySelect()+` WHERE code=$1 AND enterprise_id=$2`, code, enterpriseID)
 	p, err := scanCommercialPolicy(row)
 	if err != nil {
 		return nil, fmt.Errorf("fetching commercial policy %d: %w", code, err)
@@ -907,15 +974,19 @@ func (r *CustomerRepositorySQLC) GetCommercialPolicyByCode(ctx context.Context, 
 }
 
 func (r *CustomerRepositorySQLC) ListCommercialPolicies(ctx context.Context, onlyActive bool, kind *entity.CommercialPolicyKind) ([]*entity.CommercialPolicy, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var kindArg *string
 	if kind != nil {
 		v := string(*kind)
 		kindArg = &v
 	}
 	rows, err := r.pool.Query(ctx, commercialPolicySelect()+`
-		WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
-		  AND ($2::TEXT IS NULL OR kind = $2)
-		ORDER BY priority, sequence, code`, onlyActive, kindArg)
+		WHERE enterprise_id=$1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+		  AND ($3::TEXT IS NULL OR kind = $3)
+		ORDER BY priority, sequence, code`, enterpriseID, onlyActive, kindArg)
 	if err != nil {
 		return nil, fmt.Errorf("listing commercial policies: %w", err)
 	}
@@ -938,26 +1009,35 @@ func (r *CustomerRepositorySQLC) ListCommercialPolicies(ctx context.Context, onl
 }
 
 func (r *CustomerRepositorySQLC) NextCommercialPolicyCode(ctx context.Context) (int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
 	var code int64
-	if err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM commercial_policies`).Scan(&code); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM commercial_policies WHERE enterprise_id=$1`, enterpriseID).Scan(&code); err != nil {
 		return 0, err
 	}
 	return code, nil
 }
 
 func (r *CustomerRepositorySQLC) AddCommercialPolicyLine(ctx context.Context, line *entity.CommercialPolicyLine) (*entity.CommercialPolicyLine, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		INSERT INTO commercial_policy_lines (
 			policy_id, line_number, sequence_number, description, calc_type, percent_value,
 			fixed_value, min_value, max_value, variables_json, validity_start, validity_end
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)
+		) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12
+		  WHERE EXISTS (SELECT 1 FROM commercial_policies WHERE id=$1 AND enterprise_id=$13)
 		RETURNING id, policy_id, line_number, sequence_number, description, calc_type,
 			percent_value, fixed_value, min_value, max_value, variables_json::text,
 			validity_start, validity_end, is_active, created_at, updated_at`,
 		line.PolicyID, line.LineNumber, line.SequenceNumber, line.Description,
 		string(line.CalcType), line.PercentValue, line.FixedValue, line.MinValue,
 		line.MaxValue, line.VariablesJSON, pgutil.ToPgDateFromPtr(line.ValidityStart),
-		pgutil.ToPgDateFromPtr(line.ValidityEnd))
+		pgutil.ToPgDateFromPtr(line.ValidityEnd), enterpriseID)
 	created, err := scanCommercialPolicyLine(row)
 	if err != nil {
 		return nil, fmt.Errorf("adding commercial policy line: %w", err)
@@ -966,14 +1046,18 @@ func (r *CustomerRepositorySQLC) AddCommercialPolicyLine(ctx context.Context, li
 }
 
 func (r *CustomerRepositorySQLC) ListCommercialPolicyLines(ctx context.Context, policyCode int64) ([]*entity.CommercialPolicyLine, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT l.id, l.policy_id, l.line_number, l.sequence_number, l.description, l.calc_type,
 			l.percent_value, l.fixed_value, l.min_value, l.max_value, l.variables_json::text,
 			l.validity_start, l.validity_end, l.is_active, l.created_at, l.updated_at
 		FROM commercial_policy_lines l
 		JOIN commercial_policies p ON p.id = l.policy_id
-		WHERE p.code=$1
-		ORDER BY l.line_number, l.sequence_number`, policyCode)
+		WHERE p.code=$1 AND p.enterprise_id=$2
+		ORDER BY l.line_number, l.sequence_number`, policyCode, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing commercial policy lines: %w", err)
 	}
@@ -990,18 +1074,23 @@ func (r *CustomerRepositorySQLC) ListCommercialPolicyLines(ctx context.Context, 
 }
 
 func (r *CustomerRepositorySQLC) AddCommercialPolicySpecificItem(ctx context.Context, item *entity.CommercialPolicySpecificItem) (*entity.CommercialPolicySpecificItem, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		INSERT INTO commercial_policy_specific_items (
 			policy_id, item_code, item_mask, product_line_id, item_classification,
 			validity_start, validity_end, block_discount, block_surcharge,
 			ignore_item_policies, block_manual_change
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+		  WHERE EXISTS (SELECT 1 FROM commercial_policies WHERE id=$1 AND enterprise_id=$12)
 		RETURNING id, policy_id, item_code, item_mask, product_line_id, item_classification,
 			validity_start, validity_end, block_discount, block_surcharge,
 			ignore_item_policies, block_manual_change, created_at`,
 		item.PolicyID, item.ItemCode, item.ItemMask, item.ProductLineID, item.ItemClassification,
 		pgutil.ToPgDateFromPtr(item.ValidityStart), pgutil.ToPgDateFromPtr(item.ValidityEnd),
-		item.BlockDiscount, item.BlockSurcharge, item.IgnoreItemPolicies, item.BlockManualChange)
+		item.BlockDiscount, item.BlockSurcharge, item.IgnoreItemPolicies, item.BlockManualChange, enterpriseID)
 	created, err := scanCommercialPolicySpecificItem(row)
 	if err != nil {
 		return nil, fmt.Errorf("adding commercial policy specific item: %w", err)
@@ -1010,14 +1099,18 @@ func (r *CustomerRepositorySQLC) AddCommercialPolicySpecificItem(ctx context.Con
 }
 
 func (r *CustomerRepositorySQLC) ListCommercialPolicySpecificItems(ctx context.Context, policyCode int64) ([]*entity.CommercialPolicySpecificItem, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT i.id, i.policy_id, i.item_code, i.item_mask, i.product_line_id, i.item_classification,
 			i.validity_start, i.validity_end, i.block_discount, i.block_surcharge,
 			i.ignore_item_policies, i.block_manual_change, i.created_at
 		FROM commercial_policy_specific_items i
 		JOIN commercial_policies p ON p.id = i.policy_id
-		WHERE p.code=$1
-		ORDER BY i.id`, policyCode)
+		WHERE p.code=$1 AND p.enterprise_id=$2
+		ORDER BY i.id`, policyCode, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing commercial policy specific items: %w", err)
 	}
@@ -1759,13 +1852,18 @@ func contactToEntity(row sqlc.CustomerContact) *entity.CustomerContact {
 // ─── Sales Table Prices ───────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, error) {
-	err := r.pool.QueryRow(ctx,
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO sales_table_prices
 		 (sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+		 WHERE EXISTS (SELECT 1 FROM sales_tables WHERE id=$1 AND enterprise_id=$13)
 		 RETURNING id, created_at`,
 		p.SalesTableID, p.ItemCode, p.Price, p.UME, p.UMC, p.PriceConv,
-		p.Formula, string(p.Situation), p.Blocked, p.Observation, p.ProductLineID, p.ItemMask,
+		p.Formula, string(p.Situation), p.Blocked, p.Observation, p.ProductLineID, p.ItemMask, enterpriseID,
 	).Scan(&p.ID, &p.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating sales table price: %w", err)
@@ -1774,15 +1872,22 @@ func (r *CustomerRepositorySQLC) CreateSalesTablePrice(ctx context.Context, p *e
 }
 
 func (r *CustomerRepositorySQLC) UpsertSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, *float64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	var oldPrice pgtype.Numeric
 	row := r.pool.QueryRow(ctx,
-		`WITH old AS (
+		`WITH allowed AS (
+			SELECT id FROM sales_tables WHERE id=$1 AND enterprise_id=$13
+		 ), old AS (
 			SELECT price FROM sales_table_prices WHERE sales_table_id=$1 AND item_code=$2
+			  AND EXISTS (SELECT 1 FROM allowed)
 		 ),
 		 upserted AS (
 			INSERT INTO sales_table_prices
 			 (sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12 FROM allowed
 			 ON CONFLICT (sales_table_id, item_code) DO UPDATE
 			 SET price=EXCLUDED.price, ume=EXCLUDED.ume, umc=EXCLUDED.umc,
 			     price_conv=EXCLUDED.price_conv, formula=EXCLUDED.formula,
@@ -1799,11 +1904,11 @@ func (r *CustomerRepositorySQLC) UpsertSalesTablePrice(ctx context.Context, p *e
 		        (SELECT price FROM old)
 		 FROM upserted`,
 		p.SalesTableID, p.ItemCode, p.Price, p.UME, p.UMC, p.PriceConv,
-		p.Formula, string(p.Situation), p.Blocked, p.Observation, p.ProductLineID, p.ItemMask,
+		p.Formula, string(p.Situation), p.Blocked, p.Observation, p.ProductLineID, p.ItemMask, enterpriseID,
 	)
 	var out entity.SalesTablePrice
 	var sit string
-	err := row.Scan(&out.ID, &out.SalesTableID, &out.ItemCode, &out.Price, &out.UME, &out.UMC,
+	err = row.Scan(&out.ID, &out.SalesTableID, &out.ItemCode, &out.Price, &out.UME, &out.UMC,
 		&out.PriceConv, &out.Formula, &sit, &out.Blocked, &out.Observation,
 		&out.ProductLineID, &out.ItemMask, &out.CreatedAt, &oldPrice)
 	if err != nil {
@@ -1819,13 +1924,17 @@ func (r *CustomerRepositorySQLC) UpsertSalesTablePrice(ctx context.Context, p *e
 }
 
 func (r *CustomerRepositorySQLC) UpdateSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx,
 		`UPDATE sales_table_prices
 		 SET price=$1, ume=$2, umc=$3, price_conv=$4, formula=$5, situation=$6, blocked=$7, observation=$8, product_line_id=$9, item_mask=$10
-		 WHERE id=$11
+		 WHERE id=$11 AND EXISTS (SELECT 1 FROM sales_tables st WHERE st.id=sales_table_prices.sales_table_id AND st.enterprise_id=$12)
 		 RETURNING id, sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask, created_at`,
 		p.Price, p.UME, p.UMC, p.PriceConv, p.Formula, string(p.Situation),
-		p.Blocked, p.Observation, p.ProductLineID, p.ItemMask, p.ID,
+		p.Blocked, p.Observation, p.ProductLineID, p.ItemMask, p.ID, enterpriseID,
 	)
 	updated, err := scanSalesTablePrice(row)
 	if err != nil {
@@ -1838,10 +1947,15 @@ func (r *CustomerRepositorySQLC) UpdateSalesTablePrice(ctx context.Context, p *e
 }
 
 func (r *CustomerRepositorySQLC) GetSalesTablePrice(ctx context.Context, salesTableID int64, itemCode string) (*entity.SalesTablePrice, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask, created_at
-		 FROM sales_table_prices WHERE sales_table_id=$1 AND item_code=$2`,
-		salesTableID, itemCode)
+		`SELECT p.id, p.sales_table_id, p.item_code, p.price, p.ume, p.umc, p.price_conv, p.formula, p.situation, p.blocked, p.observation, p.product_line_id, p.item_mask, p.created_at
+		 FROM sales_table_prices p JOIN sales_tables st ON st.id=p.sales_table_id
+		 WHERE p.sales_table_id=$1 AND p.item_code=$2 AND st.enterprise_id=$3`,
+		salesTableID, itemCode, enterpriseID)
 	p, err := scanSalesTablePrice(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1853,9 +1967,14 @@ func (r *CustomerRepositorySQLC) GetSalesTablePrice(ctx context.Context, salesTa
 }
 
 func (r *CustomerRepositorySQLC) GetSalesTablePriceByID(ctx context.Context, id int64) (*entity.SalesTablePrice, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask, created_at
-		 FROM sales_table_prices WHERE id=$1`, id)
+		`SELECT p.id, p.sales_table_id, p.item_code, p.price, p.ume, p.umc, p.price_conv, p.formula, p.situation, p.blocked, p.observation, p.product_line_id, p.item_mask, p.created_at
+		 FROM sales_table_prices p JOIN sales_tables st ON st.id=p.sales_table_id
+		 WHERE p.id=$1 AND st.enterprise_id=$2`, id, enterpriseID)
 	p, err := scanSalesTablePrice(row)
 	if err != nil {
 		return nil, fmt.Errorf("fetching sales table price %d: %w", id, err)
@@ -1864,10 +1983,15 @@ func (r *CustomerRepositorySQLC) GetSalesTablePriceByID(ctx context.Context, id 
 }
 
 func (r *CustomerRepositorySQLC) ListSalesTablePrices(ctx context.Context, salesTableID int64) ([]*entity.SalesTablePrice, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, sales_table_id, item_code, price, ume, umc, price_conv, formula, situation, blocked, observation, product_line_id, item_mask, created_at
-		 FROM sales_table_prices WHERE sales_table_id=$1 ORDER BY item_code`,
-		salesTableID)
+		`SELECT p.id, p.sales_table_id, p.item_code, p.price, p.ume, p.umc, p.price_conv, p.formula, p.situation, p.blocked, p.observation, p.product_line_id, p.item_mask, p.created_at
+		 FROM sales_table_prices p JOIN sales_tables st ON st.id=p.sales_table_id
+		 WHERE p.sales_table_id=$1 AND st.enterprise_id=$2 ORDER BY p.item_code`,
+		salesTableID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing sales table prices: %w", err)
 	}
@@ -1884,7 +2008,11 @@ func (r *CustomerRepositorySQLC) ListSalesTablePrices(ctx context.Context, sales
 }
 
 func (r *CustomerRepositorySQLC) DeleteSalesTablePrice(ctx context.Context, id int64) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM sales_table_prices WHERE id=$1`, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx, `DELETE FROM sales_table_prices p USING sales_tables st WHERE p.id=$1 AND st.id=p.sales_table_id AND st.enterprise_id=$2`, id, enterpriseID)
 	return err
 }
 
@@ -1947,15 +2075,20 @@ func normalizeCostErr(err error, itemCode int64, source entity.SalesCostSource) 
 }
 
 func (r *CustomerRepositorySQLC) CreateSalesTablePriceHistory(ctx context.Context, h *entity.SalesTablePriceHistory) (*entity.SalesTablePriceHistory, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `
 		INSERT INTO sales_table_price_history (
 			sales_table_price_id, sales_table_id, sales_table_code, item_code,
-			old_price, new_price, base_cost, source, policy_code, reason
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+			old_price, new_price, base_cost, source, policy_code, reason, enterprise_id
+		) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+		  WHERE EXISTS (SELECT 1 FROM sales_tables WHERE id=$2 AND enterprise_id=$11)
 		RETURNING id, sales_table_price_id, sales_table_id, sales_table_code, item_code,
 		          old_price, new_price, base_cost, source, policy_code, reason, created_at`,
 		h.SalesTablePriceID, h.SalesTableID, h.SalesTableCode, h.ItemCode,
-		h.OldPrice, h.NewPrice, h.BaseCost, h.Source, h.PolicyCode, h.Reason)
+		h.OldPrice, h.NewPrice, h.BaseCost, h.Source, h.PolicyCode, h.Reason, enterpriseID)
 	created, err := scanSalesTablePriceHistory(row)
 	if err != nil {
 		return nil, fmt.Errorf("creating sales table price history: %w", err)
@@ -1964,12 +2097,16 @@ func (r *CustomerRepositorySQLC) CreateSalesTablePriceHistory(ctx context.Contex
 }
 
 func (r *CustomerRepositorySQLC) ListSalesTablePriceHistory(ctx context.Context, salesTableCode int64, itemCode *string) ([]*entity.SalesTablePriceHistory, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, sales_table_price_id, sales_table_id, sales_table_code, item_code,
 		       old_price, new_price, base_cost, source, policy_code, reason, created_at
 		FROM sales_table_price_history
-		WHERE sales_table_code=$1 AND ($2::TEXT IS NULL OR item_code=$2)
-		ORDER BY created_at DESC`, salesTableCode, itemCode)
+		WHERE enterprise_id=$1 AND sales_table_code=$2 AND ($3::TEXT IS NULL OR item_code=$3)
+		ORDER BY created_at DESC`, enterpriseID, salesTableCode, itemCode)
 	if err != nil {
 		return nil, fmt.Errorf("listing sales table price history: %w", err)
 	}

@@ -3,24 +3,47 @@ package routing_uc
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
+	"github.com/google/uuid"
 )
 
 type RouteUseCase struct {
-	repo repository.RoutingRepository
+	repo  repository.RoutingRepository
+	items any
+	auth  ports.AuthService
 }
 
-func NewRouteUseCase(repo repository.RoutingRepository) *RouteUseCase {
-	return &RouteUseCase{repo: repo}
+func NewRouteUseCase(repo repository.RoutingRepository, items ...any) *RouteUseCase {
+	uc := &RouteUseCase{repo: repo}
+	for _, dep := range items {
+		if auth, ok := dep.(ports.AuthService); ok {
+			uc.auth = auth
+		} else {
+			uc.items = dep
+		}
+	}
+	return uc
 }
 
 func (uc *RouteUseCase) Create(ctx context.Context, dto request.CreateRouteDTO) (*response.ManufacturingRouteResponse, error) {
-	if dto.ItemCode <= 0 {
-		return nil, fmt.Errorf("item_code must be positive")
+	itemCode, err := uc.resolveItemCode(ctx, dto.ItemCode)
+	if err != nil {
+		return nil, err
+	}
+	var actor uuid.UUID
+	if uc.auth != nil {
+		actor, err = uc.auth.UserID(ctx)
+		if err != nil {
+			return nil, errorsuc.ErrUnauthorized
+		}
 	}
 	alt := dto.Alternative
 	if alt <= 0 {
@@ -31,7 +54,7 @@ func (uc *RouteUseCase) Create(ctx context.Context, dto request.CreateRouteDTO) 
 		return nil, fmt.Errorf("generating route code: %w", err)
 	}
 
-	rt, err := entity.NewManufacturingRoute(code, dto.ItemCode, dto.Mask, alt, dto.Description, dto.IsStandard, dto.ValidFrom, dto.ValidTo, dto.CreatedBy)
+	rt, err := entity.NewManufacturingRoute(code, itemCode, dto.Mask, alt, dto.Description, dto.IsStandard, dto.ValidFrom, dto.ValidTo, actor)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +225,11 @@ func toResourceResponse(r *entity.RouteOpResource) response.RouteOpResourceRespo
 	}
 }
 
-func (uc *RouteUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*response.ManufacturingRouteResponse, error) {
+func (uc *RouteUseCase) ListByItem(ctx context.Context, publicCode request.TextCode) ([]*response.ManufacturingRouteResponse, error) {
+	itemCode, err := uc.resolveItemCode(ctx, publicCode)
+	if err != nil {
+		return nil, err
+	}
 	routes, err := uc.repo.ListRoutesByItem(ctx, itemCode)
 	if err != nil {
 		return nil, err
@@ -214,6 +241,21 @@ func (uc *RouteUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*resp
 	return out, nil
 }
 
+func (uc *RouteUseCase) resolveItemCode(ctx context.Context, publicCode request.TextCode) (int64, error) {
+	if uc.items != nil {
+		item, err := itemresolution.Resolve(ctx, uc.items, publicCode)
+		if err != nil {
+			return 0, err
+		}
+		return int64(item.Code), nil
+	}
+	code, err := strconv.ParseInt(publicCode.String(), 10, 64)
+	if err != nil || code <= 0 {
+		return 0, fmt.Errorf("item_code deve ser um código de item válido")
+	}
+	return code, nil
+}
+
 func (uc *RouteUseCase) Deactivate(ctx context.Context, id int64) error {
 	return uc.repo.DeactivateRoute(ctx, id)
 }
@@ -223,6 +265,10 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 		return nil, fmt.Errorf("invalid time_unit %q (expected MIN, HORA or DIA)", *dto.TimeUnit)
 	}
 	remittance, err := normalizeThirdPartyRemittancePtr(dto.ThirdPartyRemittance)
+	if err != nil {
+		return nil, err
+	}
+	serviceItemCode, err := resolveOptionalItemCode(ctx, uc.items, dto.ServiceItemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +291,7 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 	op.CrewSize = dto.CrewSize
 	op.TimeUnit = dto.TimeUnit
 	op.SupplierID = dto.SupplierID
-	op.ServiceItemCode = dto.ServiceItemCode
+	op.ServiceItemCode = serviceItemCode
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
 	op.ThirdPartyRemittance = remittance
@@ -266,6 +312,10 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 	if err != nil {
 		return nil, err
 	}
+	serviceItemCode, err := resolveOptionalItemCode(ctx, uc.items, dto.ServiceItemCode)
+	if err != nil {
+		return nil, err
+	}
 	op := &entity.RouteOperation{
 		ID:                   dto.ID,
 		WorkCenterID:         dto.WorkCenterID,
@@ -280,7 +330,7 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 		CrewSize:             dto.CrewSize,
 		TimeUnit:             dto.TimeUnit,
 		SupplierID:           dto.SupplierID,
-		ServiceItemCode:      dto.ServiceItemCode,
+		ServiceItemCode:      serviceItemCode,
 		CostPerUnit:          dto.CostPerUnit,
 		LeadTimeDays:         dto.LeadTimeDays,
 		ThirdPartyRemittance: remittance,

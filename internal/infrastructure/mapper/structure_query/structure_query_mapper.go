@@ -19,6 +19,12 @@ func mapNode(n *service.Node) *response.StructureTreeNodeResponse {
 		children = append(children, mapNode(c))
 	}
 
+	// Quantity já vem resolvida pelo resolver (fórmula avaliada quando possível);
+	// a quantidade fixa cadastrada continua visível em NominalQuantity.
+	quantity := n.Quantity
+	if quantity == 0 && !n.FormulaApplied {
+		quantity = n.Component.Quantity
+	}
 	return &response.StructureTreeNodeResponse{
 		Component: response.StructureComponentResponse{
 			ID:                 n.Component.ID,
@@ -26,7 +32,14 @@ func mapNode(n *service.Node) *response.StructureTreeNodeResponse {
 			ChildCode:          n.Component.ChildCode,
 			ChildDescription:   n.Component.ChildDescription,
 			ParentMask:         n.Component.ParentMask,
-			Quantity:           n.Component.Quantity,
+			Quantity:           quantity,
+			NominalQuantity:    n.Component.Quantity,
+			QuantityFormula:    n.Component.QuantityFormula,
+			QuantityRounding:   n.Component.QuantityRounding,
+			QuantityScale:      n.Component.QuantityScale,
+			FormulaApplied:     n.FormulaApplied,
+			FormulaVariables:   n.Component.FormulaVariables(),
+			EffectiveQuantity:  quantity * (1 + n.Component.LossPercentage/100),
 			UnitOfMeasurement:  n.Component.UnitOfMeasurement,
 			Health:             n.Component.Health,
 			LossPercentage:     n.Component.LossPercentage,

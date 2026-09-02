@@ -38,7 +38,7 @@ func TestSuggestionNumberAndItemLLCArePersisted(t *testing.T) {
 	}
 	testutil.Exec(t, pool, `INSERT INTO production_plans (code,name,created_by,enterprise_id) VALUES ($1,'LLC plan',$2,$3)`, planCode, userID, enterpriseID)
 	var itemID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO items (warehouse_code,code,health,created_by) VALUES (0,$1,'ATIVO',$2) RETURNING id`, itemBusinessCode, userID).Scan(&itemID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO items (warehouse_code,code,business_code,health,created_by,enterprise_id) VALUES (0,$1,($1::bigint)::text,'ATIVO',$2,$3) RETURNING id`, itemBusinessCode, userID, enterpriseID).Scan(&itemID); err != nil {
 		t.Fatal(err)
 	}
 

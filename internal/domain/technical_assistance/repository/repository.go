@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/technical_assistance/entity"
+	"github.com/google/uuid"
 )
 
 type CallFilter struct {
@@ -53,4 +54,17 @@ type Repository interface {
 	AddOrderLink(ctx context.Context, enterpriseID int64, link *entity.OrderLink) (*entity.OrderLink, error)
 	ListOrderLinks(ctx context.Context, enterpriseID, callCode int64) ([]*entity.OrderLink, error)
 	Report(ctx context.Context, enterpriseID int64, filter ReportFilter) (*Report, error)
+}
+
+type RMARepository interface {
+	CreateRMA(ctx context.Context, enterpriseID int64, rma *entity.RMA) (*entity.RMA, error)
+	GetRMA(ctx context.Context, enterpriseID, code int64) (*entity.RMA, error)
+	ListRMAsByCall(ctx context.Context, enterpriseID, callCode int64) ([]*entity.RMA, error)
+	TransitionRMA(ctx context.Context, enterpriseID, code int64, nextStatus string, reason *string, correlationID *string, actorID uuid.UUID, changes *entity.RMA) (*entity.RMA, error)
+}
+
+type RMAEvidenceRepository interface {
+	CreateRMAEvidence(context.Context, int64, *entity.RMAEvidence) (*entity.RMAEvidence, error)
+	ListRMAEvidences(context.Context, int64, int64) ([]*entity.RMAEvidence, error)
+	GetRMAEvidence(context.Context, int64, int64, uuid.UUID) (*entity.RMAEvidence, error)
 }

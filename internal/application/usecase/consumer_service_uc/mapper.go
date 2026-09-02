@@ -45,7 +45,8 @@ func toCallResponse(v *entity.Call) *response.ConsumerServiceCallResponse {
 		CustomerCode: v.CustomerCode, CallTypeCode: v.CallTypeCode, Direction: string(v.Direction),
 		InWarranty: v.InWarranty, DefectGroupCode: v.DefectGroupCode, DefectReasonCode: v.DefectReasonCode,
 		ResponsibleUserCode: v.ResponsibleUserCode, Position: string(v.Position), Situation: string(v.Situation),
-		OpenedAt: v.OpenedAt, ReturnDate: v.ReturnDate, VisitRequestedDate: v.VisitRequestedDate,
+		SituationLabel: situationLabel(v.Situation),
+		OpenedAt:       v.OpenedAt, ReturnDate: v.ReturnDate, VisitRequestedDate: v.VisitRequestedDate,
 		VisitReturnedDate: v.VisitReturnedDate, SaleStoreCode: v.SaleStoreCode, EstablishmentCode: v.EstablishmentCode,
 		TechnicianDescription: v.TechnicianDescription, Symptoms: v.Symptoms, ForwardedStoreCode: v.ForwardedStoreCode,
 		Subject: v.Subject, Description: v.Description, Solution: v.Solution, ChecklistCode: v.ChecklistCode,
@@ -63,12 +64,25 @@ func toCallResponse(v *entity.Call) *response.ConsumerServiceCallResponse {
 	return out
 }
 
+func situationLabel(value entity.CallSituation) string {
+	switch value {
+	case entity.CallSituationOrder:
+		return "Pedido"
+	case entity.CallSituationDiscontinued:
+		return "Pedido descontinuado"
+	case entity.CallSituationTechnicalVisit:
+		return "Vistoria técnica"
+	default:
+		return "Outro"
+	}
+}
+
 func toCallReturnResponse(v *entity.CallReturn) *response.ConsumerServiceCallReturnResponse {
 	return &response.ConsumerServiceCallReturnResponse{Code: v.Code, CallCode: v.CallCode, ContactedAt: v.ContactedAt, ContactType: v.ContactType, Description: v.Description, NextReturnAt: v.NextReturnAt, UserCode: v.UserCode}
 }
 
 func toCallAttachmentResponse(v *entity.CallAttachment) *response.ConsumerServiceCallAttachmentResponse {
-	return &response.ConsumerServiceCallAttachmentResponse{Code: v.Code, CallCode: v.CallCode, FileName: v.FileName, FilePath: v.FilePath, ContentType: v.ContentType, Notes: v.Notes}
+	return &response.ConsumerServiceCallAttachmentResponse{Code: v.Code, CallCode: v.CallCode, FileName: v.FileName, ContentType: v.ContentType, FileSize: v.FileSize, DownloadURL: consumerAttachmentDownloadURL(v.CallCode, v.Code), Notes: v.Notes}
 }
 
 func toChecklistItemResponse(v *entity.CallChecklistItem) *response.ConsumerServiceChecklistItemResponse {

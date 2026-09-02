@@ -19,3 +19,28 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+
+  api-training:
+    profiles: ["training"]
+    image: ${VENTURERP_IMAGE:?VENTURERP_IMAGE is required}
+    container_name: venturerp-api-training
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ${VENTURERP_TRAINING_API_ENV:-/opt/venturerp/panossoerp/.env.training}
+    environment:
+      SERVER_ADDR: "5071"
+      ENV: production
+      DATA_ENVIRONMENT: training
+      SYSTEM_UPDATE_DIR: /var/lib/venturerp-update
+    volumes:
+      - /var/lib/venturerp-update:/var/lib/venturerp-update:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    mem_limit: 256m
+    cpus: 0.50

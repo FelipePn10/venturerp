@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	divisionrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_division/repository"
@@ -19,11 +20,12 @@ import (
 )
 
 type UseCase struct {
-	Repo      repository.SalesQuotationRepository
-	Auth      ports.AuthService
-	Customers customerrepo.CustomerRepository
-	Divisions divisionrepo.SalesDivisionRepository
-	Items     itemrepo.ItemRepository
+	Repo            repository.SalesQuotationRepository
+	Auth            ports.AuthService
+	Customers       customerrepo.CustomerRepository
+	Divisions       divisionrepo.SalesDivisionRepository
+	Items           itemrepo.ItemRepository
+	Representatives representativevalidation.Repository
 }
 
 func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationDTO) (*response.SalesQuotationResponse, error) {
@@ -34,10 +36,17 @@ func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationD
 	if err != nil {
 		return nil, err
 	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	if dto.EnterpriseCode != 0 && dto.EnterpriseCode != tenantID {
 		return nil, errorsuc.NewValidationError("enterprise_code does not match authenticated tenant")
 	}
 	dto.EnterpriseCode = tenantID
+	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
+	}
 	number := dto.QuotationNumber
 	if number <= 0 {
 		number, err = uc.Repo.NextQuotationNumber(ctx, tenantID)
@@ -50,21 +59,21 @@ func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationD
 		status = entity.SalesQuotationStatus(dto.Status)
 	}
 	if !validStatus(status) {
-		return nil, errorsuc.NewValidationError("invalid quotation status")
+		return nil, errorsuc.NewValidationError("situação do orçamento inválida")
 	}
 	quotationType := entity.SalesQuotationTypeSale
 	if dto.QuotationType != "" {
 		quotationType = entity.SalesQuotationType(dto.QuotationType)
 	}
 	if !validType(quotationType) {
-		return nil, errorsuc.NewValidationError("invalid quotation_type")
+		return nil, errorsuc.NewValidationError("tipo do orçamento inválido")
 	}
 	releaseStatus := entity.SalesQuotationReleaseOK
 	if dto.ReleaseStatus != "" {
 		releaseStatus = entity.SalesQuotationReleaseStatus(dto.ReleaseStatus)
 	}
 	if !validReleaseStatus(releaseStatus) {
-		return nil, errorsuc.NewValidationError("invalid release_status")
+		return nil, errorsuc.NewValidationError("situação de liberação inválida")
 	}
 	currency := "BRL"
 	if dto.CurrencyCode != "" {
@@ -112,7 +121,7 @@ func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationD
 		DeliveryAuthorization:  dto.DeliveryAuthorization,
 		Notes:                  dto.Notes,
 		ObsCustomer:            dto.ObsCustomer,
-		CreatedBy:              dto.CreatedBy,
+		CreatedBy:              actor,
 	}
 	if err := uc.applyCustomerAndPaymentDefaults(ctx, q); err != nil {
 		return nil, err
@@ -135,6 +144,9 @@ func (uc *UseCase) Update(ctx context.Context, dto request.UpdateSalesQuotationD
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
+	}
 	current, err := uc.Repo.GetByCode(ctx, dto.Code)
 	if err != nil {
 		return nil, err
@@ -144,7 +156,7 @@ func (uc *UseCase) Update(ctx context.Context, dto request.UpdateSalesQuotationD
 		status = entity.SalesQuotationStatus(dto.Status)
 	}
 	if !validStatus(status) {
-		return nil, errorsuc.NewValidationError("invalid quotation status")
+		return nil, errorsuc.NewValidationError("situação do orçamento inválida")
 	}
 	if status != current.Status {
 		return nil, errorsuc.NewValidationError("use the status endpoint to change quotation status")
@@ -154,14 +166,14 @@ func (uc *UseCase) Update(ctx context.Context, dto request.UpdateSalesQuotationD
 		quotationType = entity.SalesQuotationType(dto.QuotationType)
 	}
 	if !validType(quotationType) {
-		return nil, errorsuc.NewValidationError("invalid quotation_type")
+		return nil, errorsuc.NewValidationError("tipo do orçamento inválido")
 	}
 	releaseStatus := current.ReleaseStatus
 	if dto.ReleaseStatus != "" {
 		releaseStatus = entity.SalesQuotationReleaseStatus(dto.ReleaseStatus)
 	}
 	if !validReleaseStatus(releaseStatus) {
-		return nil, errorsuc.NewValidationError("invalid release_status")
+		return nil, errorsuc.NewValidationError("situação de liberação inválida")
 	}
 	if releaseStatus != current.ReleaseStatus {
 		return nil, errorsuc.NewValidationError("use the release endpoint to change quotation release")
@@ -310,14 +322,14 @@ func (uc *UseCase) ChangeStatus(ctx context.Context, dto request.ChangeSalesQuot
 	}
 	status := entity.SalesQuotationStatus(dto.Status)
 	if !validStatus(status) {
-		return errorsuc.NewValidationError("invalid quotation status")
+		return errorsuc.NewValidationError("situação do orçamento inválida")
 	}
 	current, err := uc.Repo.GetByCode(ctx, dto.Code)
 	if err != nil {
 		return err
 	}
 	if !validManualTransition(current.Status, status) {
-		return errorsuc.NewValidationError("invalid quotation status transition")
+		return errorsuc.NewValidationError("transição de situação do orçamento inválida")
 	}
 	return uc.Repo.ChangeStatus(ctx, dto.Code, status)
 }
@@ -328,7 +340,7 @@ func (uc *UseCase) ChangeRelease(ctx context.Context, dto request.ChangeSalesQuo
 	}
 	status := entity.SalesQuotationReleaseStatus(dto.ReleaseStatus)
 	if !validReleaseStatus(status) {
-		return errorsuc.NewValidationError("invalid release_status")
+		return errorsuc.NewValidationError("situação de liberação inválida")
 	}
 	if strings.TrimSpace(dto.Reason) == "" {
 		return errorsuc.NewValidationError("reason is required")

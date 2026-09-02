@@ -3,9 +3,9 @@ INSERT INTO sales_divisions (
     code, description, commercial_analysis, financial_analysis,
     is_technical_assistance, consider_delivery_promise, consider_mrp,
     allow_outside_limits, allow_free_payment_terms, minimum_delivery_days, financial_delay_days,
-    pis_percentage, cofins_percentage, parent_division_id, created_by
+    pis_percentage, cofins_percentage, parent_division_id, created_by, enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, sqlc.arg(enterprise_id))
 RETURNING *;
 
 -- name: UpdateSalesDivision :one
@@ -24,17 +24,18 @@ SET description              = $2,
     cofins_percentage        = $13,
     parent_division_id       = $14,
     updated_at               = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetSalesDivisionByCode :one
-SELECT * FROM sales_divisions WHERE code = $1;
+SELECT * FROM sales_divisions WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: ListSalesDivisions :many
-SELECT * FROM sales_divisions ORDER BY code;
+SELECT * FROM sales_divisions WHERE enterprise_id = sqlc.arg(enterprise_id) ORDER BY code;
 
 -- name: ListActiveSalesDivisions :many
-SELECT * FROM sales_divisions WHERE is_active = TRUE ORDER BY code;
+SELECT * FROM sales_divisions WHERE enterprise_id = sqlc.arg(enterprise_id) AND is_active = TRUE ORDER BY code;
 
 -- name: DeleteSalesDivision :exec
-UPDATE sales_divisions SET is_active = FALSE, updated_at = NOW() WHERE code = $1;
+UPDATE sales_divisions SET is_active = FALSE, updated_at = NOW()
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);

@@ -49,9 +49,10 @@ type ItemHandler struct {
 
 type UserHandler struct {
 	*security.BaseHandler
-	registerUC *user_uc.RegisterUserUseCase
-	loginUC    *user_uc.LoginUserUseCase
-	jwtSecret  string
+	registerUC      *user_uc.RegisterUserUseCase
+	loginUC         *user_uc.LoginUserUseCase
+	jwtSecret       string
+	dataEnvironment string
 }
 
 type WarehouseHandler struct {
@@ -100,7 +101,7 @@ type ItemStructureHandler struct {
 	getAllStructure *structure_uc.GetAllDirectChildrenUseCase
 	treeUC          *structure_uc.GetStructureTreeUseCase
 	resolveUC       *structure_uc.ResolveStructureQueryUseCase
-	//deleteUC  *structure_uc.DeleteStructureComponentUseCase
+	deleteUC        *structure_uc.DeleteStructureComponentUseCase
 }
 
 type ItemQueryStructureHandler struct {
@@ -118,8 +119,9 @@ type AllocationBaseHandler struct {
 
 type DeliveryRescheduleHandler struct {
 	*security.BaseHandler
-	createUC *delivery_reschedule_uc.CreateDeliveryRescheduleUseCase
-	listUC   *delivery_reschedule_uc.ListDeliveryReschedulesUseCase
+	createUC   *delivery_reschedule_uc.CreateDeliveryRescheduleUseCase
+	listUC     *delivery_reschedule_uc.ListDeliveryReschedulesUseCase
+	planningUC *delivery_reschedule_uc.PlanningUseCase
 }
 
 type IndependentDemandHandler struct {

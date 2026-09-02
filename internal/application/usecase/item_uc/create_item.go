@@ -26,16 +26,24 @@ type pdmReferenceRepository interface {
 type CreateItemUseCase struct {
 	Repo repository.ItemRepository
 	Auth ports.AuthService
+	// FiscalCatalog valida as classificações fiscais contra o cadastro canônico
+	// (/api/fiscal-classifications). Opcional: sem ele os códigos passam livres.
+	FiscalCatalog fiscalClassificationCatalog
 }
 
 func NewCreateItemUseCase(
 	repo repository.ItemRepository,
 	auth ports.AuthService,
+	fiscalCatalog ...fiscalClassificationCatalog,
 ) *CreateItemUseCase {
-	return &CreateItemUseCase{
+	uc := &CreateItemUseCase{
 		Repo: repo,
 		Auth: auth,
 	}
+	if len(fiscalCatalog) > 0 {
+		uc.FiscalCatalog = fiscalCatalog[0]
+	}
+	return uc
 }
 
 func (uc *CreateItemUseCase) Execute(
@@ -76,6 +84,13 @@ func (uc *CreateItemUseCase) Execute(
 		if err = validator.ValidatePDMReferences(ctx, enterpriseID, int(item.PDM.GroupCode), int(item.PDM.ModifierCode)); err != nil {
 			return nil, err
 		}
+	}
+	// Item-base e item de embalagem chegam como código de negócio (texto).
+	if err = resolveReferenceCodes(ctx, uc.Repo, item); err != nil {
+		return nil, err
+	}
+	if err = validateFiscalClassifications(ctx, uc.FiscalCatalog, enterpriseID, item); err != nil {
+		return nil, err
 	}
 	if item.Engineering.ItemBaseCod != nil {
 		code, err := valueobject.NewItemCode(int64(*item.Engineering.ItemBaseCod))

@@ -132,7 +132,7 @@ type CancelSalesQuotationItemDTO struct {
 type CreateSalesQuotationItemDTO struct {
 	SalesQuotationCode int64           `json:"sales_quotation_code"`
 	Sequence           int             `json:"sequence"`
-	ItemCode           int64           `json:"item_code"`
+	ItemCode           TextCode        `json:"item_code"`
 	Mask               string          `json:"mask"`
 	SalesUOM           *string         `json:"sales_uom,omitempty"`
 	WarehouseCode      *int64          `json:"warehouse_code,omitempty"`
@@ -149,6 +149,7 @@ type CreateSalesQuotationItemDTO struct {
 
 type UpdateSalesQuotationItemDTO struct {
 	Code             int64           `json:"code"`
+	ItemCode         *TextCode       `json:"item_code,omitempty"`
 	RequestedQty     decimal.Decimal `json:"requested_qty"`
 	UnitPrice        decimal.Decimal `json:"unit_price"`
 	AttendedQty      decimal.Decimal `json:"attended_qty"`
@@ -162,10 +163,9 @@ type UpdateSalesQuotationItemDTO struct {
 }
 
 type ConvertSalesQuotationDTO struct {
-	Code      int64     `json:"code"`
-	Status    string    `json:"status"`
-	Origin    string    `json:"origin"`
-	CreatedBy uuid.UUID `json:"created_by"`
+	Code   int64  `json:"code"`
+	Status string `json:"status"`
+	Origin string `json:"origin"`
 }
 
 type SaveSalesQuotationParametersDTO struct {
@@ -191,6 +191,10 @@ type SaveCancellationReasonDTO struct {
 	Description       string `json:"description"`
 	AllowUncancel     bool   `json:"allow_uncancel"`
 	RequireComplement bool   `json:"require_complement"`
+}
+
+type SetSalesQuotationSupportStatusDTO struct {
+	IsActive bool `json:"is_active"`
 }
 
 type CreateSalesQuotationAttachmentDTO struct {

@@ -16,12 +16,23 @@ type csAllowAuth struct{ ports.AuthService }
 
 func (csAllowAuth) CanManageTechnicalAssistance(context.Context) bool { return true }
 func (csAllowAuth) EnterpriseID(context.Context) (int64, error)       { return 1, nil }
+func (csAllowAuth) UserID(context.Context) (uuid.UUID, error) {
+	return uuid.MustParse("00000000-0000-0000-0000-000000000042"), nil
+}
 
 type fakeCSRepo struct {
-	callTypes map[int64]*entity.CallType
-	consumer  *entity.Consumer
-	call      *entity.Call
-	tenantID  int64
+	callTypes   map[int64]*entity.CallType
+	consumer    *entity.Consumer
+	call        *entity.Call
+	tenantID    int64
+	returnActor uuid.UUID
+}
+
+func (f *fakeCSRepo) GetCallAttachment(context.Context, int64, int64, int64) (*entity.CallAttachment, error) {
+	return nil, csrepo.ErrAttachmentNotFound
+}
+func (f *fakeCSRepo) DeleteCallAttachment(context.Context, int64, int64, int64) error {
+	return csrepo.ErrAttachmentNotFound
 }
 
 func (f *fakeCSRepo) NextConsumerCode(context.Context) (int64, error)      { return 1, nil }
@@ -101,6 +112,7 @@ func (f *fakeCSRepo) ListCalls(context.Context, int64, csrepo.CallFilter) ([]*en
 	return nil, nil
 }
 func (f *fakeCSRepo) AddCallReturn(_ context.Context, _ int64, v *entity.CallReturn) (*entity.CallReturn, error) {
+	f.returnActor = v.CreatedBy
 	return v, nil
 }
 func (f *fakeCSRepo) AddCallAttachment(_ context.Context, _ int64, v *entity.CallAttachment) (*entity.CallAttachment, error) {
@@ -125,6 +137,18 @@ func TestCreateConsumerRejectsCNPJForPessoaFisica(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected document validation error")
+	}
+}
+
+func TestAddCallReturnUsesAuthenticatedActor(t *testing.T) {
+	repo := &fakeCSRepo{}
+	uc := &UseCase{Repo: repo, Auth: csAllowAuth{}}
+	if _, err := uc.AddCallReturn(context.Background(), request.AddConsumerServiceCallReturnDTO{CallCode: 1, ContactType: "PHONE", Description: "Retorno"}); err != nil {
+		t.Fatal(err)
+	}
+	want := uuid.MustParse("00000000-0000-0000-0000-000000000042")
+	if repo.returnActor != want {
+		t.Fatalf("autor=%s, esperado JWT %s", repo.returnActor, want)
 	}
 }
 

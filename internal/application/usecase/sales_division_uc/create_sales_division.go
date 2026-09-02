@@ -27,7 +27,7 @@ func normalizeAnalysis(value, field string) (entity.SalesDivisionAnalysis, error
 	case entity.AnalysisFree, entity.AnalysisBlockAlways, entity.AnalysisAlwaysAnalyze:
 		return a, nil
 	default:
-		return "", errorsuc.NewValidationError("invalid " + field + " value: must be FREE, BLOCK_ALWAYS or ALWAYS_ANALYZE")
+		return "", errorsuc.NewValidationError("o campo " + field + " deve ser FREE, BLOCK_ALWAYS ou ALWAYS_ANALYZE")
 	}
 }
 

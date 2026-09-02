@@ -8,14 +8,16 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
 type CreateSalesOrderUseCase struct {
-	Repo repository.SalesOrderRepository
-	Auth ports.AuthService
+	Repo            repository.SalesOrderRepository
+	Auth            ports.AuthService
+	Representatives representativevalidation.Repository
 }
 
 func (uc *CreateSalesOrderUseCase) Execute(
@@ -26,11 +28,20 @@ func (uc *CreateSalesOrderUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	if dto.EnterpriseCode == 0 {
-		return nil, errorsuc.NewValidationError("enterprise_code is required")
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
 	}
 
-	orderNum, err := uc.Repo.NextOrderNumber(ctx, dto.EnterpriseCode)
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
+
+	orderNum, err := uc.Repo.NextOrderNumber(ctx, enterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +65,7 @@ func (uc *CreateSalesOrderUseCase) Execute(
 
 	o := &entity.SalesOrder{
 		OrderNumber:                 orderNum,
-		EnterpriseCode:              dto.EnterpriseCode,
+		EnterpriseCode:              enterpriseCode,
 		Status:                      status,
 		Origin:                      origin,
 		EmissionDate:                emissionDate,
@@ -97,7 +108,7 @@ func (uc *CreateSalesOrderUseCase) Execute(
 		SurchargeValue:              dto.SurchargeValue,
 		ProjectCode:                 dto.ProjectCode,
 		ProjectName:                 dto.ProjectName,
-		CreatedBy:                   dto.CreatedBy,
+		CreatedBy:                   actor,
 	}
 
 	o.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)

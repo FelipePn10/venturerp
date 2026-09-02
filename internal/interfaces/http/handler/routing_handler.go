@@ -66,6 +66,36 @@ func (h *RoutingHandler) ListOperations(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	page, pageSize := 1, 100
+	if raw := r.URL.Query().Get("page"); raw != "" {
+		value, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || value < 1 {
+			jsonError(w, http.StatusBadRequest, "page deve ser positivo")
+			return
+		}
+		page = value
+	}
+	if raw := r.URL.Query().Get("page_size"); raw != "" {
+		value, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || value < 1 || value > 200 {
+			jsonError(w, http.StatusBadRequest, "page_size deve estar entre 1 e 200")
+			return
+		}
+		pageSize = value
+	}
+	total := len(result)
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	w.Header().Set("X-Total-Count", strconv.Itoa(total))
+	w.Header().Set("X-Page", strconv.Itoa(page))
+	w.Header().Set("X-Page-Size", strconv.Itoa(pageSize))
+	result = result[start:end]
 	jsonResponse(w, http.StatusOK, result)
 }
 
@@ -133,9 +163,9 @@ func (h *RoutingHandler) GetRouteDetail(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *RoutingHandler) ListRoutesByItem(w http.ResponseWriter, r *http.Request) {
-	itemCode, err := strconv.ParseInt(r.URL.Query().Get("item_code"), 10, 64)
-	if err != nil || itemCode <= 0 {
-		jsonError(w, http.StatusBadRequest, "item_code must be a positive integer")
+	itemCode := request.TextCode(r.URL.Query().Get("item_code"))
+	if itemCode.String() == "" {
+		jsonError(w, http.StatusBadRequest, "item_code é obrigatório")
 		return
 	}
 	result, err := h.routeUC.ListByItem(r.Context(), itemCode)

@@ -52,6 +52,43 @@ type MRPServiceImpl struct {
 	RestrictionRepo restrictionrepo.RestrictionRepository
 	SupplyPort      ports.PlannedOrderSupplyPort
 	RoutingRepo     routingrepo.RoutingRepository // nil = fallback to configured lead time
+	// MaskVars resolve as variáveis da configuração (as "perguntas" respondidas)
+	// para avaliar fórmulas de quantidade na explosão. Opcional: sem ela, vale a
+	// quantidade fixa cadastrada no componente.
+	MaskVars MaskVariableReader
+}
+
+// MaskVariableReader devolve variável → valor da configuração de um item,
+// alimentando as fórmulas de quantidade da estrutura (FENG0210).
+type MaskVariableReader interface {
+	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]float64, error)
+}
+
+// maskVarCache evita reconsultar as respostas do mesmo par item/máscara durante
+// uma explosão inteira.
+type maskVarCache struct {
+	reader MaskVariableReader
+	cache  map[string]map[string]float64
+}
+
+func newMaskVarCache(reader MaskVariableReader) *maskVarCache {
+	return &maskVarCache{reader: reader, cache: map[string]map[string]float64{}}
+}
+
+func (c *maskVarCache) vars(ctx context.Context, itemCode int64, mask string) map[string]float64 {
+	if c == nil || c.reader == nil || mask == "" {
+		return nil
+	}
+	key := fmt.Sprintf("%d|%s", itemCode, mask)
+	if cached, ok := c.cache[key]; ok {
+		return cached
+	}
+	vars, err := c.reader.GetMaskAnswersWithNames(ctx, itemCode, mask)
+	if err != nil {
+		vars = nil
+	}
+	c.cache[key] = vars
+	return vars
 }
 
 func NewMRPService(
@@ -65,8 +102,9 @@ func NewMRPService(
 	forecastRepo forecastrepo.SalesForecastRepository,
 	restrictionRepo restrictionrepo.RestrictionRepository,
 	routingRepo routingrepo.RoutingRepository,
+	maskVars ...MaskVariableReader,
 ) MRPService {
-	return &MRPServiceImpl{
+	svc := &MRPServiceImpl{
 		MRPRepo:         mrpRepo,
 		StructRepo:      structRepo,
 		DemandRepo:      demandRepo,
@@ -78,6 +116,10 @@ func NewMRPService(
 		RestrictionRepo: restrictionRepo,
 		RoutingRepo:     routingRepo,
 	}
+	if len(maskVars) > 0 {
+		svc.MaskVars = maskVars[0]
+	}
+	return svc
 }
 
 // cachedItemMRP holds the item fields the MRP needs, looked up once per item.
@@ -350,6 +392,8 @@ func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64,
 	if params == nil {
 		params = entity.DefaultTypedPlanningParams()
 	}
+	// Variáveis da configuração do pai, para as fórmulas de quantidade.
+	vars := newMaskVarCache(s.MaskVars).vars(ctx, parentCode, mask)
 	inputs := make([]*entity.MRPInput, 0, len(children))
 	for _, child := range children {
 		if !child.IsActive {
@@ -358,7 +402,8 @@ func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64,
 		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
 			continue
 		}
-		adjustedQty := applyLossFormula(quantity, child.Quantity, child.LossPercentage, params.FormulaPerdasEstrutura)
+		perUnit, _ := child.ResolvedQuantity(vars)
+		adjustedQty := applyLossFormula(quantity, perUnit, child.LossPercentage, params.FormulaPerdasEstrutura)
 		inputs = append(inputs, &entity.MRPInput{
 			ItemCode: child.ChildCode,
 			Quantity: adjustedQty,
@@ -427,6 +472,9 @@ func (s *MRPServiceImpl) calculateMRP(
 ) (int, int) {
 	totalItems := 0
 	totalOrders := 0
+	// Cache das variáveis de configuração usadas pelas fórmulas de quantidade,
+	// compartilhado por toda a explosão deste plano.
+	maskVars := newMaskVarCache(s.MaskVars)
 
 	// An order-item calculation must not introduce any additional independent source.
 	var safetyInputs []*entity.MRPInput
@@ -587,7 +635,7 @@ func (s *MRPServiceImpl) calculateMRP(
 				}
 
 				if cached.ghost && !params.ItensFantasmasGravar {
-					children := explodeFromBOMWithFormula(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura)
+					children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask))
 					for _, child := range children {
 						child.PlanCode = planCode
 						child.NeedDate = *suggestion.StartDate
@@ -597,7 +645,7 @@ func (s *MRPServiceImpl) calculateMRP(
 					continue
 				}
 
-				children := explodeFromBOMWithFormula(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura)
+				children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask))
 				for _, child := range children {
 					child.PlanCode = planCode
 					child.NeedDate = *suggestion.StartDate
@@ -1554,6 +1602,20 @@ func explodeFromBOM(
 	return explodeFromBOMWithFormula(bomMap, parentCode, mask, quantity, level, 1)
 }
 
+// explodeFromBOMWithVars expande um nível da estrutura avaliando também a
+// fórmula de quantidade de cada componente com as variáveis da configuração.
+func explodeFromBOMWithVars(
+	bomMap map[int64][]*structentity.ItemStructure,
+	parentCode int64,
+	mask string,
+	quantity float64,
+	level int,
+	formula int,
+	vars map[string]float64,
+) []*entity.MRPInput {
+	return explode(bomMap, parentCode, mask, quantity, level, formula, vars)
+}
+
 // explodeFromBOMWithFormula expands one BOM level with configurable loss formula.
 func explodeFromBOMWithFormula(
 	bomMap map[int64][]*structentity.ItemStructure,
@@ -1562,6 +1624,18 @@ func explodeFromBOMWithFormula(
 	quantity float64,
 	level int,
 	formula int,
+) []*entity.MRPInput {
+	return explode(bomMap, parentCode, mask, quantity, level, formula, nil)
+}
+
+func explode(
+	bomMap map[int64][]*structentity.ItemStructure,
+	parentCode int64,
+	mask string,
+	quantity float64,
+	level int,
+	formula int,
+	vars map[string]float64,
 ) []*entity.MRPInput {
 	if level > 20 {
 		return nil
@@ -1588,7 +1662,10 @@ func explodeFromBOMWithFormula(
 		if child.IsFixedQty {
 			base = 1
 		}
-		adjustedQty := applyLossFormula(base, child.Quantity, child.LossPercentage, formula)
+		// A quantidade por unidade do pai pode vir de fórmula (ex.:
+		// "2*(COMPRIMENTO/1000)"); sem fórmula avaliável vale a quantidade fixa.
+		perUnit, _ := child.ResolvedQuantity(vars)
+		adjustedQty := applyLossFormula(base, perUnit, child.LossPercentage, formula)
 		inputs = append(inputs, &entity.MRPInput{
 			ItemCode: child.ChildCode,
 			Quantity: adjustedQty,

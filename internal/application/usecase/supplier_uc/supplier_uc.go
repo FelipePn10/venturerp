@@ -3,9 +3,12 @@ package supplier_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/supplier/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/supplier/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
@@ -14,10 +17,15 @@ import (
 // SupplierUseCase consolidates all supplier-related operations.
 type SupplierUseCase struct {
 	repo repository.SupplierRepository
+	auth ports.AuthService
 }
 
-func NewSupplierUseCase(repo repository.SupplierRepository) *SupplierUseCase {
-	return &SupplierUseCase{repo: repo}
+func NewSupplierUseCase(repo repository.SupplierRepository, auth ...ports.AuthService) *SupplierUseCase {
+	uc := &SupplierUseCase{repo: repo}
+	if len(auth) > 0 {
+		uc.auth = auth[0]
+	}
+	return uc
 }
 
 // ─── Supplier Types ─────────────────────────────────────────────────────────
@@ -100,6 +108,13 @@ func (uc *SupplierUseCase) ListContactTypes(ctx context.Context, onlyActive bool
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 
 func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.CreateSupplierDTO) (*response.SupplierResponse, error) {
+	if uc.auth != nil {
+		actor, err := uc.auth.UserID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dto.CreatedBy = actor
+	}
 	// Reject duplicate document (spec: existing register for the same CPF/CNPJ).
 	if existing, err := uc.repo.GetSupplierByDocument(ctx, dto.DocumentNumber); err == nil && existing != nil {
 		return nil, fmt.Errorf("já existe um fornecedor (código %d) cadastrado para o documento %s", existing.Code, dto.DocumentNumber)
@@ -304,12 +319,57 @@ func (uc *SupplierUseCase) ListEstablishments(ctx context.Context, corporateCode
 	return toSupplierResponses(list), nil
 }
 
+// BlockSupplier bloqueia o fornecedor. A atualização em si não informa quantas
+// linhas mudou, então conferimos a existência antes e o estado depois — sem
+// isso, bloquear um código inexistente respondia "sucesso" sem efeito algum.
 func (uc *SupplierUseCase) BlockSupplier(ctx context.Context, dto request.BlockSupplierDTO) error {
-	return uc.repo.BlockSupplier(ctx, dto.Code, dto.Reason)
+	reason := strings.TrimSpace(dto.Reason)
+	if reason == "" {
+		return errorsuc.NewValidationError("informe o motivo do bloqueio do fornecedor")
+	}
+	current, err := uc.repo.GetSupplierByCode(ctx, dto.Code)
+	if err != nil || current == nil {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("fornecedor %d não encontrado", dto.Code))
+	}
+	if current.Blocked {
+		return errorsuc.NewConflictError(fmt.Sprintf("o fornecedor %d já está bloqueado", dto.Code))
+	}
+	if err := uc.repo.BlockSupplier(ctx, dto.Code, reason); err != nil {
+		return err
+	}
+	return uc.confirmBlockState(ctx, dto.Code, true)
 }
 
+// UnblockSupplier libera o fornecedor bloqueado.
 func (uc *SupplierUseCase) UnblockSupplier(ctx context.Context, code int64) error {
-	return uc.repo.UnblockSupplier(ctx, code)
+	current, err := uc.repo.GetSupplierByCode(ctx, code)
+	if err != nil || current == nil {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("fornecedor %d não encontrado", code))
+	}
+	if !current.Blocked {
+		return errorsuc.NewConflictError(fmt.Sprintf("o fornecedor %d não está bloqueado", code))
+	}
+	if err := uc.repo.UnblockSupplier(ctx, code); err != nil {
+		return err
+	}
+	return uc.confirmBlockState(ctx, code, false)
+}
+
+// confirmBlockState relê o fornecedor para garantir que o bloqueio realmente
+// mudou de estado antes de responder sucesso à tela.
+func (uc *SupplierUseCase) confirmBlockState(ctx context.Context, code int64, blocked bool) error {
+	updated, err := uc.repo.GetSupplierByCode(ctx, code)
+	if err != nil || updated == nil {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("fornecedor %d não encontrado após a alteração", code))
+	}
+	if updated.Blocked != blocked {
+		action := "bloquear"
+		if !blocked {
+			action = "desbloquear"
+		}
+		return fmt.Errorf("não foi possível %s o fornecedor %d", action, code)
+	}
+	return nil
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────
@@ -485,6 +545,13 @@ func (uc *SupplierUseCase) AddContactEmail(ctx context.Context, dto request.AddS
 // ─── Enterprise links ──────────────────────────────────────────────────────
 
 func (uc *SupplierUseCase) AddEnterprise(ctx context.Context, dto request.AddSupplierEnterpriseDTO) (*response.SupplierEnterpriseResponse, error) {
+	if uc.auth != nil {
+		enterpriseCode, err := uc.auth.EnterpriseCode(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dto.EnterpriseCode = enterpriseCode
+	}
 	s, err := uc.repo.GetSupplierByCode(ctx, dto.SupplierCode)
 	if err != nil {
 		return nil, err
@@ -534,6 +601,14 @@ func (uc *SupplierUseCase) ListEnterprises(ctx context.Context, supplierCode int
 // ─── Parameters ─────────────────────────────────────────────────────────────
 
 func (uc *SupplierUseCase) GetParameters(ctx context.Context, enterpriseCode int64) (*response.SupplierParametersResponse, error) {
+	if uc.auth == nil {
+		return nil, fmt.Errorf("serviço de autenticação não configurado")
+	}
+	authEnterprise, err := uc.auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	enterpriseCode = authEnterprise
 	p, err := uc.repo.GetParameters(ctx, enterpriseCode)
 	if err != nil {
 		return nil, err
@@ -542,6 +617,14 @@ func (uc *SupplierUseCase) GetParameters(ctx context.Context, enterpriseCode int
 }
 
 func (uc *SupplierUseCase) UpsertParameters(ctx context.Context, dto request.UpsertSupplierParametersDTO) (*response.SupplierParametersResponse, error) {
+	if uc.auth == nil {
+		return nil, fmt.Errorf("serviço de autenticação não configurado")
+	}
+	enterpriseCode, err := uc.auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.EnterpriseCode = enterpriseCode
 	saved, err := uc.repo.UpsertParameters(ctx, &entity.SupplierParameters{
 		EnterpriseCode:            dto.EnterpriseCode,
 		DefaultFinancialAccount:   dto.DefaultFinancialAccount,

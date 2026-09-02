@@ -3,6 +3,7 @@ package technical_assistance_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -18,10 +19,12 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/technical_assistance/entity"
 	tarepo "github.com/FelipePn10/panossoerp/internal/domain/technical_assistance/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/google/uuid"
 )
 
 type UseCase struct {
 	Repo             tarepo.Repository
+	RMAs             tarepo.RMARepository
 	SalesOrders      orderrepo.SalesOrderRepository
 	ProductionOrders prodrepo.ProductionOrderRepository
 	Auth             ports.AuthService
@@ -41,6 +44,14 @@ func (uc *UseCase) tenantID(ctx context.Context) (int64, error) {
 	return tenantID, nil
 }
 
+func (uc *UseCase) actorID(ctx context.Context) (uuid.UUID, error) {
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil || actor == uuid.Nil {
+		return uuid.Nil, errorsuc.ErrUnauthorized
+	}
+	return actor, nil
+}
+
 func (uc *UseCase) CreateDefectGroup(ctx context.Context, dto request.CreateTADefectGroupDTO) (*response.TADefectGroupResponse, error) {
 	if !uc.Auth.CanManageTechnicalAssistance(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -48,7 +59,11 @@ func (uc *UseCase) CreateDefectGroup(ctx context.Context, dto request.CreateTADe
 	if dto.Description == "" {
 		return nil, errorsuc.NewValidationError("description is required")
 	}
-	created, err := uc.Repo.CreateDefectGroup(ctx, &entity.DefectGroup{Description: dto.Description, IsActive: true, CreatedBy: dto.CreatedBy})
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	created, err := uc.Repo.CreateDefectGroup(ctx, &entity.DefectGroup{Description: dto.Description, IsActive: true, CreatedBy: actor})
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +92,10 @@ func (uc *UseCase) CreateDefectReason(ctx context.Context, dto request.CreateTAD
 	if dto.GroupCode == 0 || dto.Description == "" {
 		return nil, errorsuc.NewValidationError("group_code and description are required")
 	}
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	created, err := uc.Repo.CreateDefectReason(ctx, &entity.DefectReason{
 		GroupCode:                dto.GroupCode,
 		Description:              dto.Description,
@@ -89,7 +108,7 @@ func (uc *UseCase) CreateDefectReason(ctx context.Context, dto request.CreateTAD
 		IsService:                dto.IsService,
 		AvailableWeb:             dto.AvailableWeb,
 		IsActive:                 true,
-		CreatedBy:                dto.CreatedBy,
+		CreatedBy:                actor,
 	})
 	if err != nil {
 		return nil, err
@@ -119,9 +138,13 @@ func (uc *UseCase) CreateWarrantyResponsible(ctx context.Context, dto request.Cr
 	if dto.Name == "" || (dto.EmployeeCode == nil && dto.CustomerCode == nil) {
 		return nil, errorsuc.NewValidationError("name and employee_code or customer_code are required")
 	}
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	created, err := uc.Repo.CreateWarrantyResponsible(ctx, &entity.WarrantyResponsible{
 		Name: dto.Name, EmployeeCode: dto.EmployeeCode, CustomerCode: dto.CustomerCode,
-		Email: dto.Email, Phone: dto.Phone, IsActive: true, CreatedBy: dto.CreatedBy,
+		Email: dto.Email, Phone: dto.Phone, IsActive: true, CreatedBy: actor,
 	})
 	if err != nil {
 		return nil, err
@@ -146,6 +169,10 @@ func (uc *UseCase) ListWarrantyResponsibles(ctx context.Context, onlyActive bool
 
 func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAssistanceCallDTO) (*response.TechnicalAssistanceCallResponse, error) {
 	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	actor, err := uc.actorID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +207,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 		Subject:                 dto.Subject,
 		Description:             dto.Description,
 		ReturnNoteRequired:      dto.ReturnNoteRequired,
-		CreatedBy:               dto.CreatedBy,
+		CreatedBy:               actor,
 	}
 	created, err := uc.Repo.CreateCall(ctx, tenantID, call)
 	if err != nil {
@@ -212,7 +239,7 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 	if dto.WarrantyDays == 0 && uc.Items != nil {
 		itemCode, codeErr := valueobject.NewItemCode(dto.ItemCode)
 		if codeErr != nil {
-			return nil, errorsuc.NewValidationError("invalid item_code")
+			return nil, errorsuc.NewValidationError("item_code inválido")
 		}
 		item, itemErr := uc.Items.FindItemByCode(ctx, itemCode)
 		if itemErr != nil {
@@ -308,7 +335,22 @@ func (uc *UseCase) AddReturnNote(ctx context.Context, dto request.AddTechnicalAs
 		return nil, err
 	}
 	if dto.CallCode == 0 || dto.NoteNumber == "" || dto.EmissionDate == "" {
-		return nil, errorsuc.NewValidationError("call_code, note_number and emission_date are required")
+		return nil, errorsuc.NewValidationError("chamado, número da nota e data de emissão são obrigatórios")
+	}
+	call, err := uc.Repo.GetCall(ctx, tenantID, dto.CallCode)
+	if err != nil {
+		return nil, err
+	}
+	if call.Status == entity.CallStatusCancelled || call.Status == entity.CallStatusClosed {
+		return nil, errorsuc.NewConflictError("não é possível incluir nota de retorno em chamado cancelado ou encerrado")
+	}
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	emissionDate := parseDatePtr(dto.EmissionDate)
+	if emissionDate == nil {
+		return nil, errorsuc.NewValidationError("data de emissão inválida")
 	}
 	op := dto.OperationType
 	if op == "" {
@@ -316,8 +358,8 @@ func (uc *UseCase) AddReturnNote(ctx context.Context, dto request.AddTechnicalAs
 	}
 	created, err := uc.Repo.AddReturnNote(ctx, tenantID, &entity.ReturnNote{
 		CallCode: dto.CallCode, NoteNumber: dto.NoteNumber, NoteSeries: dto.NoteSeries,
-		EmissionDate: *parseDatePtr(dto.EmissionDate), CustomerCode: dto.CustomerCode,
-		OperationType: op, AccessKey: dto.AccessKey, TotalValue: dto.TotalValue, Notes: dto.Notes, CreatedBy: dto.CreatedBy,
+		EmissionDate: *emissionDate, CustomerCode: dto.CustomerCode,
+		OperationType: op, AccessKey: dto.AccessKey, TotalValue: dto.TotalValue, Notes: dto.Notes, CreatedBy: actor,
 	})
 	if err != nil {
 		return nil, err
@@ -335,11 +377,26 @@ func (uc *UseCase) GenerateOrders(ctx context.Context, dto request.GenerateTechn
 		return nil, err
 	}
 	if call.Status == entity.CallStatusCancelled || call.Status == entity.CallStatusClosed {
-		return nil, errorsuc.NewValidationError("cancelled or closed calls cannot generate orders")
+		return nil, errorsuc.NewValidationError("chamados cancelados ou encerrados não podem gerar pedidos ou ordens")
+	}
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	needsSalesOrder := uc.needsSalesOrder(ctx, call.Items)
+	needsProductionOrder := false
+	for _, item := range call.Items {
+		needsProductionOrder = needsProductionOrder || uc.itemNeedsProductionOrder(ctx, item)
+	}
+	if !needsSalesOrder && !needsProductionOrder {
+		return nil, errorsuc.NewConflictError("nenhum motivo de defeito do chamado permite gerar pedido ou ordem")
+	}
+	if err := validateOrderGenerationParameters(dto, needsSalesOrder, needsProductionOrder); err != nil {
+		return nil, err
 	}
 	out := &response.TechnicalAssistanceOrderGenerationResponse{CallCode: call.Code}
-	if uc.needsSalesOrder(ctx, call.Items) {
-		salesOrderCode, err := uc.generateSalesOrder(ctx, call, dto)
+	if needsSalesOrder {
+		salesOrderCode, err := uc.generateSalesOrder(ctx, call, dto, actor)
 		if err != nil {
 			return nil, err
 		}
@@ -351,7 +408,7 @@ func (uc *UseCase) GenerateOrders(ctx context.Context, dto request.GenerateTechn
 		if !uc.itemNeedsProductionOrder(ctx, item) {
 			continue
 		}
-		prodID, err := uc.generateProductionOrder(ctx, call, item, dto)
+		prodID, err := uc.generateProductionOrder(ctx, call, item, dto, actor)
 		if err != nil {
 			return nil, err
 		}
@@ -367,6 +424,9 @@ func (uc *UseCase) GenerateOrders(ctx context.Context, dto request.GenerateTechn
 func (uc *UseCase) UpdateStatus(ctx context.Context, dto request.UpdateTechnicalAssistanceCallStatusDTO) (*response.TechnicalAssistanceCallResponse, error) {
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := uc.actorID(ctx); err != nil {
 		return nil, err
 	}
 	call, err := uc.Repo.GetCall(ctx, tenantID, dto.Code)
@@ -404,7 +464,7 @@ func (uc *UseCase) Report(ctx context.Context, filter tarepo.ReportFilter) (*res
 	return uc.Repo.Report(ctx, tenantID, filter)
 }
 
-func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dto request.GenerateTechnicalAssistanceOrdersDTO) (int64, error) {
+func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dto request.GenerateTechnicalAssistanceOrdersDTO, actor uuid.UUID) (int64, error) {
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
 		return 0, err
@@ -426,7 +486,7 @@ func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dt
 		PaymentTermCode:   dto.PaymentTermCode,
 		CurrencyCode:      "BRL",
 		Notes:             strPtr(fmt.Sprintf("Pedido de assistência técnica gerado pelo chamado %d", call.CallNumber)),
-		CreatedBy:         dto.CreatedBy,
+		CreatedBy:         actor,
 	}
 	created, err := uc.SalesOrders.Create(ctx, order)
 	if err != nil {
@@ -449,11 +509,11 @@ func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dt
 			Notes:          strPtr("Item gerado por assistência técnica"),
 		})
 	}
-	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, GeneratedType: "SALES_ORDER", SalesOrderCode: &created.Code, CreatedBy: dto.CreatedBy})
+	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, GeneratedType: "SALES_ORDER", SalesOrderCode: &created.Code, CreatedBy: actor})
 	return created.Code, nil
 }
 
-func (uc *UseCase) generateProductionOrder(ctx context.Context, call *entity.Call, item *entity.CallItem, dto request.GenerateTechnicalAssistanceOrdersDTO) (int64, error) {
+func (uc *UseCase) generateProductionOrder(ctx context.Context, call *entity.Call, item *entity.CallItem, dto request.GenerateTechnicalAssistanceOrdersDTO, actor uuid.UUID) (int64, error) {
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
 		return 0, err
@@ -469,13 +529,13 @@ func (uc *UseCase) generateProductionOrder(ctx context.Context, call *entity.Cal
 		PlannedQty:  item.Quantity,
 		Status:      prodentity.StatusOpen,
 		Notes:       strPtr(fmt.Sprintf("OFT gerada pelo chamado de assistência técnica %d", call.CallNumber)),
-		CreatedBy:   dto.CreatedBy,
+		CreatedBy:   actor,
 		IsActive:    true,
 	})
 	if err != nil {
 		return 0, err
 	}
-	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, CallItemCode: &item.Code, GeneratedType: "PRODUCTION_ORDER", ProductionOrderID: &prod.ID, CreatedBy: dto.CreatedBy})
+	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, CallItemCode: &item.Code, GeneratedType: "PRODUCTION_ORDER", ProductionOrderID: &prod.ID, CreatedBy: actor})
 	return prod.ID, nil
 }
 
@@ -506,10 +566,10 @@ func (uc *UseCase) validateCanAttend(ctx context.Context, call *entity.Call) err
 
 func (uc *UseCase) itemNeedsProductionOrder(ctx context.Context, item *entity.CallItem) bool {
 	if item.DefectReasonCode == nil {
-		return true
+		return false
 	}
 	reason, err := uc.Repo.GetDefectReason(ctx, *item.DefectReasonCode)
-	return err != nil || reason.GeneratesProductionOrder
+	return err == nil && reason != nil && reason.GeneratesProductionOrder
 }
 
 func (uc *UseCase) needsSalesOrder(ctx context.Context, items []*entity.CallItem) bool {
@@ -552,4 +612,24 @@ func strPtr(s string) *string { return &s }
 
 func parseDatePtr(s string) *time.Time {
 	return datetime.ParseDatePtr(&s)
+}
+
+func validateOrderGenerationParameters(dto request.GenerateTechnicalAssistanceOrdersDTO, needsSalesOrder, needsProductionOrder bool) error {
+	missing := make([]string, 0, 4)
+	if needsSalesOrder && dto.SalesDivisionCode == nil {
+		missing = append(missing, "divisão de vendas")
+	}
+	if needsSalesOrder && dto.PriceTableCode == nil {
+		missing = append(missing, "tabela de preço")
+	}
+	if needsSalesOrder && dto.PaymentTermCode == nil {
+		missing = append(missing, "condição de pagamento")
+	}
+	if (needsSalesOrder || needsProductionOrder) && dto.WarehouseCode == nil {
+		missing = append(missing, "almoxarifado")
+	}
+	if len(missing) > 0 {
+		return errorsuc.NewValidationError("não foi possível gerar pedido ou ordem; informe: " + strings.Join(missing, ", "))
+	}
+	return nil
 }

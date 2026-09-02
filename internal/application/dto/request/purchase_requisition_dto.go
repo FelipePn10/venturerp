@@ -15,11 +15,11 @@ type RequisitionItemInput struct {
 }
 
 type CreatePurchaseRequisitionDTO struct {
-	EnterpriseCode        int64                  `json:"enterprise_code"`
+	EnterpriseCode        int64                  `json:"-"`
 	RequestTypeCode       *int64                 `json:"request_type_code,omitempty"`
 	RequesterEmployeeCode *int64                 `json:"requester_employee_code,omitempty"`
 	Notes                 *string                `json:"notes,omitempty"`
-	CreatedBy             uuid.UUID              `json:"created_by"`
+	CreatedBy             uuid.UUID              `json:"-"`
 	Items                 []RequisitionItemInput `json:"items,omitempty"`
 }
 
@@ -38,7 +38,7 @@ type GenerationSelection struct {
 }
 
 type GeneratePurchaseOrdersDTO struct {
-	EnterpriseCode int64                 `json:"enterprise_code"`
-	CreatedBy      uuid.UUID             `json:"created_by"`
+	EnterpriseCode int64                 `json:"-"`
+	CreatedBy      uuid.UUID             `json:"-"`
 	Selections     []GenerationSelection `json:"selections"`
 }

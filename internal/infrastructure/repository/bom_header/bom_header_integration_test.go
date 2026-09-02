@@ -8,17 +8,24 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/domain/bom_header/entity"
 	bomheaderrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_header"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 // Exercises the BOM header: auto-versioning per item, listing and status change.
 func TestIntegration_BomHeader_VersioningAndStatus(t *testing.T) {
 	q, pool := testutil.Queries(t)
-	repo := bomheaderrepo.New(q)
-	ctx := context.Background()
+	repo := bomheaderrepo.New(q, pool)
 	uid := uuid.New()
+
+	var enterpriseID int64
+	if err := pool.QueryRow(context.Background(), "SELECT MIN(id) FROM enterprise").Scan(&enterpriseID); err != nil || enterpriseID == 0 {
+		t.Skip("integration database has no enterprise")
+	}
+	ctx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 
 	item := testutil.UniqueCode()
 	defer testutil.Exec(t, pool, "DELETE FROM bom_headers WHERE item_code = $1", item)
@@ -59,5 +66,21 @@ func TestIntegration_BomHeader_VersioningAndStatus(t *testing.T) {
 	approved, err := repo.UpdateStatus(ctx, created.ID, entity.StatusApproved)
 	if err != nil || approved.Status != entity.StatusApproved {
 		t.Fatalf("UpdateStatus = %+v err=%v, want APPROVED", approved, err)
+	}
+
+	// Outro tenant não enxerga nem altera o cabeçalho desta empresa.
+	var otherID int64
+	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise WHERE id <> $1 ORDER BY id LIMIT 1", enterpriseID).Scan(&otherID); err == nil && otherID > 0 {
+		otherCtx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: otherID})
+		if _, err := repo.GetByID(otherCtx, created.ID); err == nil {
+			t.Fatal("cabeçalho de outra empresa foi lido")
+		}
+		if _, err := repo.UpdateStatus(otherCtx, created.ID, entity.StatusObsolete); err == nil {
+			t.Fatal("cabeçalho de outra empresa foi alterado")
+		}
+		other, err := repo.ListByItem(otherCtx, item)
+		if err != nil || len(other) != 0 {
+			t.Fatalf("listagem cruzou empresas: %d err=%v", len(other), err)
+		}
 	}
 }

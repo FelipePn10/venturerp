@@ -1,0 +1,101 @@
+### Variáveis locais (REST Client)
+@baseUrl = http://localhost:5070/api
+@token = substitua-pelo-jwt
+@idempotencyKey = smoke-ciclo-comercial-001
+
+### Pesquisa paginada de pedidos
+GET {{baseUrl}}/sales-orders/search?search=cliente&limit=100&offset=0
+Authorization: Bearer {{token}}
+
+### Relatório completo com os mesmos filtros
+GET {{baseUrl}}/sales-orders/report?search=cliente&status=ANALISADO
+Authorization: Bearer {{token}}
+
+### Criar RMA vinculado ao chamado
+POST {{baseUrl}}/technical-assistance/calls/1/rmas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}
+
+{
+  "reason": "Produto apresentou falha durante a garantia",
+  "sla_due_at": "2026-09-05T18:00:00-03:00",
+  "items": [
+    {
+      "call_line_code": 1,
+      "quantity": "1",
+      "serial_number": "SERIE-001",
+      "lot_number": "LOTE-001"
+    }
+  ]
+}
+
+### Consultar RMA no tenant autenticado
+GET {{baseUrl}}/technical-assistance/rmas/1
+Authorization: Bearer {{token}}
+
+### Transicionar RMA
+PATCH {{baseUrl}}/technical-assistance/rmas/1/transition
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "AUTORIZADO",
+  "authorization_number": "AUT-001",
+  "reason": "Elegibilidade confirmada"
+}
+
+### Enviar evidência do RMA (form-data: file)
+POST {{baseUrl}}/technical-assistance/rmas/1/evidences
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=RMAEvidence
+
+--RMAEvidence
+Content-Disposition: form-data; name="file"; filename="evidencia.pdf"
+Content-Type: application/pdf
+
+< ./evidencia.pdf
+--RMAEvidence--
+
+### Pesquisar evidências do RMA
+GET {{baseUrl}}/technical-assistance/rmas/1/evidences
+Authorization: Bearer {{token}}
+
+### Configurar competência da comissão
+PUT {{baseUrl}}/commercial-commissions/settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "competence_event": "RATEIO",
+  "invoice_share_pct": "50",
+  "receipt_share_pct": "50"
+}
+
+### Conciliar comissão
+POST {{baseUrl}}/commercial-commissions/ledger/1/CONCILIADA
+Authorization: Bearer {{token}}
+Idempotency-Key: commission-reconcile-001
+Content-Type: application/json
+
+{"reason":"Documentos fiscais e recebimentos conferidos"}
+
+### Pagar comissão
+POST {{baseUrl}}/commercial-commissions/ledger/1/PAGA
+Authorization: Bearer {{token}}
+Idempotency-Key: commission-payment-001
+Content-Type: application/json
+
+{"reason":"Pagamento autorizado","payment_reference":"PAG-001"}
+
+### Cancelar recorrência com data efetiva e política futura
+POST {{baseUrl}}/recurring-sales/1/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Encerramento contratual solicitado pelo cliente",
+  "effective_date": "2026-08-31",
+  "future_orders_policy": "CANCELAR_NAO_FATURADOS",
+  "correlation_id": "cancel-contract-001"
+}

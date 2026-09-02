@@ -41,7 +41,7 @@ func ValidStatus(s string) bool {
 
 func NewBomHeader(itemCode int64, mask *string, bomType string, version int32, validFrom *time.Time, createdBy uuid.UUID) (*BomHeader, error) {
 	if itemCode <= 0 {
-		return nil, errors.New("item_code must be positive")
+		return nil, errors.New("informe o item do cabeçalho de estrutura")
 	}
 	if bomType == "" {
 		bomType = "MBOM"

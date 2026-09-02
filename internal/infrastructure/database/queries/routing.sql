@@ -7,14 +7,14 @@ INSERT INTO operations (
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
-    is_active, created_by
+    is_active, created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8,
     $9, $10, $11,
     $12, $13, $14, $15, $16,
     $17, $18, $19, $20, $21,
-    TRUE, $22
+    TRUE, $22, sqlc.arg(enterprise_id)
 ) RETURNING *;
 
 -- name: UpdateOperation :one
@@ -40,35 +40,36 @@ UPDATE operations SET
     lead_time_days = $20,
     third_party_remittance = $21,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetOperationByID :one
-SELECT * FROM operations WHERE id = $1;
+SELECT * FROM operations WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: ListOperations :many
 SELECT * FROM operations
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id = sqlc.arg(enterprise_id)
+  AND ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: DeactivateOperation :exec
-UPDATE operations SET is_active = FALSE, updated_at = NOW() WHERE id = $1;
+UPDATE operations SET is_active = FALSE, updated_at = NOW() WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: OperationUsedInRoutes :one
-SELECT EXISTS(SELECT 1 FROM route_operations WHERE operation_id = $1 AND is_active);
+SELECT EXISTS(SELECT 1 FROM route_operations ro JOIN manufacturing_routes route ON route.id=ro.route_id WHERE ro.operation_id = $1 AND ro.is_active AND route.enterprise_id=sqlc.arg(enterprise_id));
 
 -- name: NextOperationCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM operations;
+SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM operations WHERE enterprise_id=sqlc.arg(enterprise_id);
 
 -- ─── manufacturing_routes ─────────────────────────────────────────────────────
 
 -- name: CreateRoute :one
 INSERT INTO manufacturing_routes (
     code, item_code, mask, alternative, description,
-    situation, is_standard, valid_from, valid_to, is_active, created_by
+    situation, is_standard, valid_from, valid_to, is_active, created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, TRUE, $10
+    $6, $7, $8, $9, TRUE, $10, sqlc.arg(enterprise_id)
 ) RETURNING *;
 
 -- name: UpdateRoute :one
@@ -79,34 +80,35 @@ UPDATE manufacturing_routes SET
     valid_from = $5,
     valid_to = $6,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetRouteByID :one
-SELECT * FROM manufacturing_routes WHERE id = $1;
+SELECT * FROM manufacturing_routes WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: GetRouteByItemAndAlternative :one
 SELECT * FROM manufacturing_routes
 WHERE item_code = $1
+  AND enterprise_id = sqlc.arg(enterprise_id)
   AND COALESCE(mask, '') = COALESCE($2, '')
   AND alternative = $3
   AND is_active = TRUE;
 
 -- name: ListRoutesByItem :many
 SELECT * FROM manufacturing_routes
-WHERE item_code = $1 AND is_active = TRUE
+WHERE item_code = $1 AND enterprise_id = sqlc.arg(enterprise_id) AND is_active = TRUE
 ORDER BY alternative;
 
 -- name: DeactivateRoute :exec
-UPDATE manufacturing_routes SET is_active = FALSE, updated_at = NOW() WHERE id = $1;
+UPDATE manufacturing_routes SET is_active = FALSE, updated_at = NOW() WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: NextRouteCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM manufacturing_routes;
+SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM manufacturing_routes WHERE enterprise_id=sqlc.arg(enterprise_id);
 
 -- name: ItemHasRoute :one
 SELECT EXISTS(
     SELECT 1 FROM manufacturing_routes
-    WHERE item_code = $1 AND is_active = TRUE
+    WHERE item_code = $1 AND enterprise_id=sqlc.arg(enterprise_id) AND is_active = TRUE
 ) AS has_route;
 
 -- name: GetStandardRouteForItem :one
@@ -115,6 +117,7 @@ SELECT EXISTS(
 -- recently-effective revision.
 SELECT * FROM manufacturing_routes
 WHERE item_code = $1
+  AND enterprise_id = sqlc.arg(enterprise_id)
   AND COALESCE(mask, '') = COALESCE($2, '')
   AND is_active = TRUE
   AND (valid_from IS NULL OR valid_from <= COALESCE($3::DATE, CURRENT_DATE))

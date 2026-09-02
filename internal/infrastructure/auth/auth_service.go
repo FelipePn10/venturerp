@@ -321,7 +321,7 @@ func (a *AuthService) CanUpdateSalesDivision(ctx context.Context) bool {
 }
 
 func (a *AuthService) CanDeleteSalesDivision(ctx context.Context) bool {
-	return a.hasWriteRole(ctx)
+	return a.IsAdmin(ctx)
 }
 
 func (a *AuthService) CanCreateSalesForecast(ctx context.Context) bool {

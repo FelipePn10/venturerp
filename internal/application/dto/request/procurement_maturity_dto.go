@@ -56,7 +56,7 @@ type ComputeSupplierScorecardDTO struct {
 }
 
 type CreateApprovalLimitDTO struct {
-	EnterpriseCode int64    `json:"enterprise_code"`
+	EnterpriseCode int64    `json:"-"`
 	Scope          string   `json:"scope"`
 	ScopeRef       *string  `json:"scope_ref"`
 	Currency       string   `json:"currency"`
@@ -68,7 +68,7 @@ type CreateApprovalLimitDTO struct {
 }
 
 type CreateSupplierContractDTO struct {
-	EnterpriseCode int64                          `json:"enterprise_code"`
+	EnterpriseCode int64                          `json:"-"`
 	SupplierCode   int64                          `json:"supplier_code"`
 	ContractNumber string                         `json:"contract_number"`
 	Description    *string                        `json:"description"`

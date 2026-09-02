@@ -73,6 +73,9 @@ func (uc *ShipmentUseCase) RemoveShipmentFromLoad(ctx context.Context, loadCode,
 	if load.Status != entity.LoadStatusPlanned {
 		return fmt.Errorf("só é possível remover romaneio de carga planejada")
 	}
+	if _, err := uc.Repo.GetByCode(ctx, shipmentCode); err != nil {
+		return err
+	}
 	if err := uc.Repo.RemoveShipmentFromLoad(ctx, loadCode, shipmentCode); err != nil {
 		return err
 	}

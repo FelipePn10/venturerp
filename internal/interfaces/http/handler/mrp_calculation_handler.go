@@ -22,15 +22,15 @@ func (h *MRPCalculationHandler) Run(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.runUC.Execute(r.Context(), dto)
 	if err != nil {
-		if errors.Is(err, mrp_calculation_uc.ErrInvalidPlanCode) || errors.Is(err, mrp_calculation_uc.ErrInvalidInitialOrderNumber) {
-			security.RespondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		if errors.Is(err, mrprepository.ErrCalculationInProgress) {
-			security.RespondError(w, http.StatusConflict, err.Error())
+			security.RespondErrorCode(w, http.StatusConflict, "MRP_CALCULO_EM_ANDAMENTO", "já existe um cálculo MRP em andamento para este plano")
 			return
 		}
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, mrp_calculation_uc.ErrInvalidPlanCode) || errors.Is(err, mrp_calculation_uc.ErrInvalidInitialOrderNumber) {
+			security.RespondErrorCode(w, http.StatusUnprocessableEntity, "MRP_ENTRADA_INVALIDA", err.Error())
+			return
+		}
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusAccepted, result)
@@ -40,7 +40,7 @@ func (h *MRPCalculationHandler) ConsultProfile(w http.ResponseWriter, r *http.Re
 	itemCode, itemErr := strconv.ParseInt(chi.URLParam(r, "item_code"), 10, 64)
 	planCode, planErr := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
 	if itemErr != nil || planErr != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item_code or plan_code")
+		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_REFERENCIA_INVALIDA", "os códigos do item e do plano devem ser identificadores válidos")
 		return
 	}
 	parseDate := func(value string) (*time.Time, error) {
@@ -52,12 +52,12 @@ func (h *MRPCalculationHandler) ConsultProfile(w http.ResponseWriter, r *http.Re
 	}
 	from, err := parseDate(r.URL.Query().Get("from"))
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid from")
+		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_PERIODO_INVALIDO", "o campo 'from' deve estar no formato AAAA-MM-DD")
 		return
 	}
 	to, err := parseDate(r.URL.Query().Get("to"))
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid to")
+		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_PERIODO_INVALIDO", "o campo 'to' deve estar no formato AAAA-MM-DD")
 		return
 	}
 	result, err := h.getProfileUC.Consult(r.Context(), itemCode, planCode, r.URL.Query().Get("position"), from, to)
@@ -69,8 +69,12 @@ func (h *MRPCalculationHandler) ConsultProfile(w http.ResponseWriter, r *http.Re
 }
 
 func (h *MRPCalculationHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	itemCode, _ := strconv.ParseInt(chi.URLParam(r, "item_code"), 10, 64)
-	planID, _ := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
+	itemCode, itemErr := strconv.ParseInt(chi.URLParam(r, "item_code"), 10, 64)
+	planID, planErr := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
+	if itemErr != nil || planErr != nil || itemCode <= 0 || planID <= 0 {
+		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_REFERENCIA_INVALIDA", "os códigos do item e do plano devem ser identificadores positivos")
+		return
+	}
 	results, err := h.getProfileUC.Execute(r.Context(), itemCode, planID)
 	if err != nil {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())
@@ -87,14 +91,18 @@ func (h *MRPCalculationHandler) CreateConfiguredRule(w http.ResponseWriter, r *h
 	}
 	result, err := h.configuredRulesUC.Create(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
 }
 
 func (h *MRPCalculationHandler) ListConfiguredRules(w http.ResponseWriter, r *http.Request) {
-	itemCode, _ := strconv.ParseInt(chi.URLParam(r, "item_code"), 10, 64)
+	itemCode, err := strconv.ParseInt(chi.URLParam(r, "item_code"), 10, 64)
+	if err != nil || itemCode <= 0 {
+		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_ITEM_INVALIDO", "o código do item deve ser um identificador positivo")
+		return
+	}
 	results, err := h.configuredRulesUC.ListByItem(r.Context(), itemCode)
 	if err != nil {
 		security.RespondError(w, http.StatusInternalServerError, err.Error())

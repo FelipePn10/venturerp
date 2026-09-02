@@ -11,8 +11,9 @@ type CreateMachineTypeDTO struct {
 	Description      *string               `json:"description,omitempty"`
 	Type             types.MachineTypeEnum `json:"type"`
 	RequiresOperator bool                  `json:"requires_operator"`
-	CreatedBy        uuid.UUID             `json:"created_by"`
-	IsActive         bool                  `json:"is_active"`
+	// CreatedBy vem do JWT; nunca do corpo da requisição.
+	CreatedBy uuid.UUID `json:"-"`
+	IsActive  bool      `json:"is_active"`
 }
 
 type UpdateMachineTypeDTO struct {
@@ -34,7 +35,8 @@ type CreateMachineDTO struct {
 	CapacityPeriod  types.CapacityPeriod      `json:"capacity_period"`
 	EfficiencyRate  float64                   `json:"efficiency_rate"`
 	IsActive        bool                      `json:"is_active"`
-	CreatedBy       uuid.UUID                 `json:"created_by"`
+	// CreatedBy vem do JWT; nunca do corpo da requisição.
+	CreatedBy uuid.UUID `json:"-"`
 }
 
 type UpdateMachineDTO struct {
@@ -47,11 +49,12 @@ type UpdateMachineDTO struct {
 	CapacityPeriod  types.CapacityPeriod      `json:"capacity_period"`
 	EfficiencyRate  float64                   `json:"efficiency_rate"`
 	IsActive        bool                      `json:"is_active"`
-	UpdatedBy       uuid.UUID                 `json:"updated_by"`
+	// UpdatedBy vem do JWT; nunca do corpo da requisição.
+	UpdatedBy uuid.UUID `json:"-"`
 }
 
 type CreateItemMachineTimeDTO struct {
-	ItemCode           int64                `json:"item_code"`
+	ItemCode           TextCode             `json:"item_code"`
 	Mask               *string              `json:"mask,omitempty"`
 	MachineCode        int64                `json:"machine_code"`
 	ProductionTime     float64              `json:"production_time"`

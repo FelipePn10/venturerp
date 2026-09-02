@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -48,11 +49,11 @@ type exportRequest struct {
 func (h *ReportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 	var req exportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.BadRequest(w, "invalid request body")
+		h.BadRequest(w, "corpo da requisição inválido")
 		return
 	}
 	if len(req.Columns) == 0 {
-		h.BadRequest(w, "columns is required")
+		h.BadRequest(w, "a lista de colunas é obrigatória")
 		return
 	}
 
@@ -62,8 +63,13 @@ func (h *ReportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 		Subtitle:    req.Subtitle,
 		Columns:     req.Columns,
 		Rows:        req.Rows,
-		Branding:    h.branding(r.Context()),
 	}
+	branding, err := h.branding(r.Context())
+	if err != nil {
+		h.UnprocessableEntity(w, err.Error())
+		return
+	}
+	table.Branding = branding
 
 	base := req.Filename
 	if base == "" {
@@ -75,27 +81,32 @@ func (h *ReportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// branding loads the company letterhead from the fiscal configuration. It fails
-// soft: any error (or no configured reader) simply yields an unbranded export
-// rather than blocking the download.
-func (h *ReportExportHandler) branding(ctx context.Context) *export.Branding {
+// branding loads the company letterhead from the authenticated tenant. Missing
+// registration data is a domain error: silently producing an anonymous report
+// would make the exported document operationally misleading.
+func (h *ReportExportHandler) branding(ctx context.Context) (*export.Branding, error) {
 	if h.fiscal == nil {
-		return nil
+		return nil, errors.New("não foi possível consultar os dados da empresa autenticada")
 	}
 	cfg, err := h.fiscal.GetFiscalConfig(ctx)
-	if err != nil || cfg == nil || cfg.RazaoSocial == "" {
-		return nil
+	if err != nil || cfg == nil {
+		return nil, errors.New("cadastre a configuração fiscal da empresa antes de exportar relatórios")
 	}
-	return brandingFromConfig(cfg)
+	if strings.TrimSpace(cfg.RazaoSocial) == "" || strings.TrimSpace(cfg.CnpjEmpresa) == "" {
+		return nil, errors.New("preencha a razão social e o CNPJ/CPF da empresa antes de exportar relatórios")
+	}
+	return brandingFromConfig(cfg), nil
 }
 
 // brandingFromConfig maps the company's fiscal config into the export letterhead.
 func brandingFromConfig(c *fiscalentity.FiscalConfig) *export.Branding {
 	b := &export.Branding{
 		CompanyName: c.RazaoSocial,
+		TradeName:   c.TradeName,
 		CNPJ:        formatCNPJMask(c.CnpjEmpresa),
 		Address:     formatCompanyAddress(c),
 		Logo:        c.Logo,
+		Email:       c.Email,
 	}
 	if c.IEEmpresa != nil {
 		b.IE = *c.IEEmpresa

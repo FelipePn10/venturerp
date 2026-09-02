@@ -24,6 +24,11 @@ func toResponse(rep *entity.Representative) *response.RepresentativeResponse {
 		FullAddress: rep.FullAddress, Street: rep.Street, StreetNumber: rep.StreetNumber, Complement: rep.Complement, District: rep.District,
 		MainPhone: rep.MainPhone, MainEmail: rep.MainEmail, DeviceQuantity: rep.DeviceQuantity, IsActive: rep.IsActive, Blocked: rep.Blocked,
 		BlockReason: rep.BlockReason, CreatedAt: rep.CreatedAt, UpdatedAt: rep.UpdatedAt,
+		Enterprises: []response.RepresentativeEnterpriseResponse{}, Accounting: []response.RepresentativeAccountingResponse{},
+		Regions: []response.RepresentativeRegionResponse{}, Segments: []response.RepresentativeSegmentResponse{},
+		SalesPlans: []response.RepresentativeSalesPlanResponse{}, Interests: []response.RepresentativeInterestResponse{},
+		Phones: []response.RepresentativePhoneResponse{}, Emails: []response.RepresentativeEmailResponse{},
+		CorrespondenceAddresses: []response.RepresentativeCorrespondenceAddressResponse{}, Contacts: []response.RepresentativeContactResponse{},
 	}
 	for _, row := range rep.Enterprises {
 		out.Enterprises = append(out.Enterprises, *toEnterpriseResponse(row))

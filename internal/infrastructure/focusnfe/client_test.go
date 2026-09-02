@@ -15,6 +15,17 @@ func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) 
 	return fn(req)
 }
 
+func TestTrainingEnvironmentRejectsProductionFocusEndpoint(t *testing.T) {
+	t.Setenv("DATA_ENVIRONMENT", "training")
+	client := NewClient("token", "producao")
+	if client.configErr == nil {
+		t.Fatal("expected production Focus endpoint to be rejected in training")
+	}
+	if _, _, err := client.do(context.Background(), http.MethodGet, "/nfe/test", nil); err == nil {
+		t.Fatal("expected request to fail before network access")
+	}
+}
+
 func TestEmitirNFeStopsOnHTTPErrorWithoutPolling(t *testing.T) {
 	t.Parallel()
 

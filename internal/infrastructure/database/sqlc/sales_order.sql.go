@@ -11,120 +11,171 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const analyzeSalesOrder = `-- name: AnalyzeSalesOrder :exec
+const analyzeSalesOrder = `-- name: AnalyzeSalesOrder :execrows
 UPDATE public.sales_orders
 SET commercial_analysis_status = CASE WHEN $2 = 'COMMERCIAL' THEN $3 ELSE commercial_analysis_status END,
     financial_analysis_status = CASE WHEN $2 = 'FINANCIAL' THEN $3 ELSE financial_analysis_status END,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $4
 `
 
 type AnalyzeSalesOrderParams struct {
 	Code                     int64
 	Column2                  interface{}
 	CommercialAnalysisStatus string
+	TenantEnterpriseCode     int64
 }
 
-func (q *Queries) AnalyzeSalesOrder(ctx context.Context, arg AnalyzeSalesOrderParams) error {
-	_, err := q.db.Exec(ctx, analyzeSalesOrder, arg.Code, arg.Column2, arg.CommercialAnalysisStatus)
-	return err
+func (q *Queries) AnalyzeSalesOrder(ctx context.Context, arg AnalyzeSalesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, analyzeSalesOrder,
+		arg.Code,
+		arg.Column2,
+		arg.CommercialAnalysisStatus,
+		arg.TenantEnterpriseCode,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const attendSalesOrder = `-- name: AttendSalesOrder :exec
+const attendSalesOrder = `-- name: AttendSalesOrder :execrows
 UPDATE public.sales_orders
-SET status = 'F',
-    attended_reason = $2,
+SET attended_reason = $2,
     attended_at = COALESCE($3, NOW()),
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $4
 `
 
 type AttendSalesOrderParams struct {
-	Code           int64
-	AttendedReason pgtype.Text
-	AttendedAt     pgtype.Timestamptz
+	Code                 int64
+	AttendedReason       pgtype.Text
+	AttendedAt           pgtype.Timestamptz
+	TenantEnterpriseCode int64
 }
 
-func (q *Queries) AttendSalesOrder(ctx context.Context, arg AttendSalesOrderParams) error {
-	_, err := q.db.Exec(ctx, attendSalesOrder, arg.Code, arg.AttendedReason, arg.AttendedAt)
-	return err
+func (q *Queries) AttendSalesOrder(ctx context.Context, arg AttendSalesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, attendSalesOrder,
+		arg.Code,
+		arg.AttendedReason,
+		arg.AttendedAt,
+		arg.TenantEnterpriseCode,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const blockSalesOrder = `-- name: BlockSalesOrder :exec
+const blockSalesOrder = `-- name: BlockSalesOrder :execrows
 UPDATE public.sales_orders
 SET is_blocked = TRUE, block_reason = $2, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $3
 `
 
 type BlockSalesOrderParams struct {
-	Code        int64
-	BlockReason pgtype.Text
+	Code                 int64
+	BlockReason          pgtype.Text
+	TenantEnterpriseCode int64
 }
 
-func (q *Queries) BlockSalesOrder(ctx context.Context, arg BlockSalesOrderParams) error {
-	_, err := q.db.Exec(ctx, blockSalesOrder, arg.Code, arg.BlockReason)
-	return err
+func (q *Queries) BlockSalesOrder(ctx context.Context, arg BlockSalesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, blockSalesOrder, arg.Code, arg.BlockReason, arg.TenantEnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const cancelSalesOrder = `-- name: CancelSalesOrder :exec
+const cancelSalesOrder = `-- name: CancelSalesOrder :execrows
 UPDATE public.sales_orders
 SET status = 'CANCELLED', cancel_reason = $2, cancel_complement = $3, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $4
 `
 
 type CancelSalesOrderParams struct {
-	Code             int64
-	CancelReason     pgtype.Text
-	CancelComplement pgtype.Text
+	Code                 int64
+	CancelReason         pgtype.Text
+	CancelComplement     pgtype.Text
+	TenantEnterpriseCode int64
 }
 
-func (q *Queries) CancelSalesOrder(ctx context.Context, arg CancelSalesOrderParams) error {
-	_, err := q.db.Exec(ctx, cancelSalesOrder, arg.Code, arg.CancelReason, arg.CancelComplement)
-	return err
+func (q *Queries) CancelSalesOrder(ctx context.Context, arg CancelSalesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelSalesOrder,
+		arg.Code,
+		arg.CancelReason,
+		arg.CancelComplement,
+		arg.TenantEnterpriseCode,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const cancelSalesOrderItem = `-- name: CancelSalesOrderItem :exec
+const cancelSalesOrderItem = `-- name: CancelSalesOrderItem :execrows
 UPDATE public.sales_order_items
 SET status = 'CANCELLED', cancelled_qty = requested_qty, is_active = FALSE, updated_at = NOW()
-WHERE code = $1
+WHERE sales_order_items.code = $1
+  AND EXISTS (
+      SELECT 1 FROM public.sales_orders sales_order
+      WHERE sales_order.code=sales_order_items.sales_order_code
+        AND sales_order.enterprise_code=$2
+  )
 `
 
-func (q *Queries) CancelSalesOrderItem(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, cancelSalesOrderItem, code)
-	return err
+type CancelSalesOrderItemParams struct {
+	Code                 int64
+	TenantEnterpriseCode int64
 }
 
-const changeSalesOrderStatus = `-- name: ChangeSalesOrderStatus :exec
+func (q *Queries) CancelSalesOrderItem(ctx context.Context, arg CancelSalesOrderItemParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelSalesOrderItem, arg.Code, arg.TenantEnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const changeSalesOrderStatus = `-- name: ChangeSalesOrderStatus :execrows
 UPDATE public.sales_orders
 SET status = $2, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $3
 `
 
 type ChangeSalesOrderStatusParams struct {
-	Code   int64
-	Status string
+	Code                 int64
+	Status               string
+	TenantEnterpriseCode int64
 }
 
-func (q *Queries) ChangeSalesOrderStatus(ctx context.Context, arg ChangeSalesOrderStatusParams) error {
-	_, err := q.db.Exec(ctx, changeSalesOrderStatus, arg.Code, arg.Status)
-	return err
+func (q *Queries) ChangeSalesOrderStatus(ctx context.Context, arg ChangeSalesOrderStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, changeSalesOrderStatus, arg.Code, arg.Status, arg.TenantEnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const conferSalesOrder = `-- name: ConferSalesOrder :exec
+const conferSalesOrder = `-- name: ConferSalesOrder :execrows
 UPDATE public.sales_orders
 SET conference_status = $2,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $3
 `
 
 type ConferSalesOrderParams struct {
-	Code             int64
-	ConferenceStatus string
+	Code                 int64
+	ConferenceStatus     string
+	TenantEnterpriseCode int64
 }
 
-func (q *Queries) ConferSalesOrder(ctx context.Context, arg ConferSalesOrderParams) error {
-	_, err := q.db.Exec(ctx, conferSalesOrder, arg.Code, arg.ConferenceStatus)
-	return err
+func (q *Queries) ConferSalesOrder(ctx context.Context, arg ConferSalesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, conferSalesOrder, arg.Code, arg.ConferenceStatus, arg.TenantEnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createSalesOrder = `-- name: CreateSalesOrder :one
@@ -370,7 +421,7 @@ INSERT INTO public.sales_order_items (
     total_gross, total_net, total_net_with_ipi, total_ipi, total_st,
     unit_weight_net, unit_weight_gross, status, notes
 )
-VALUES (
+SELECT
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
     $10, $11, $12, $13,
@@ -378,45 +429,49 @@ VALUES (
     $20, $21, $22, $23, $24, $25,
     $26, $27, $28, $29, $30,
     $31, $32, $33, $34
+WHERE EXISTS (
+    SELECT 1 FROM public.sales_orders
+    WHERE code=$1 AND enterprise_code=$35
 )
 RETURNING code, sales_order_code, sequence, item_code, mask, digit_date, nf_type, sales_uom, warehouse_code, price_table_code, requested_qty, unit_price, attended_qty, cancelled_qty, delivery_date, delivery_date_firm, customer_delivery, lot, coupon_delivery, paid_at_cashier, ipi_pct, icms_pct, pis_pct, cofins_pct, st_pct, discount_pct, total_gross, total_net, total_net_with_ipi, total_ipi, total_st, unit_weight_net, unit_weight_gross, status, notes, is_active, created_at, updated_at
 `
 
 type CreateSalesOrderItemParams struct {
-	SalesOrderCode   int64
-	Sequence         int32
-	ItemCode         int64
-	Mask             string
-	DigitDate        pgtype.Date
-	NfType           pgtype.Text
-	SalesUom         pgtype.Text
-	WarehouseCode    *int64
-	PriceTableCode   *int64
-	RequestedQty     pgtype.Numeric
-	UnitPrice        pgtype.Numeric
-	AttendedQty      pgtype.Numeric
-	CancelledQty     pgtype.Numeric
-	DeliveryDate     pgtype.Date
-	DeliveryDateFirm bool
-	CustomerDelivery pgtype.Text
-	Lot              pgtype.Text
-	CouponDelivery   pgtype.Text
-	PaidAtCashier    bool
-	IpiPct           pgtype.Numeric
-	IcmsPct          pgtype.Numeric
-	PisPct           pgtype.Numeric
-	CofinsPct        pgtype.Numeric
-	StPct            pgtype.Numeric
-	DiscountPct      pgtype.Numeric
-	TotalGross       pgtype.Numeric
-	TotalNet         pgtype.Numeric
-	TotalNetWithIpi  pgtype.Numeric
-	TotalIpi         pgtype.Numeric
-	TotalSt          pgtype.Numeric
-	UnitWeightNet    pgtype.Numeric
-	UnitWeightGross  pgtype.Numeric
-	Status           string
-	Notes            pgtype.Text
+	SalesOrderCode       int64
+	Sequence             int32
+	ItemCode             int64
+	Mask                 string
+	DigitDate            pgtype.Date
+	NfType               pgtype.Text
+	SalesUom             pgtype.Text
+	WarehouseCode        *int64
+	PriceTableCode       *int64
+	RequestedQty         pgtype.Numeric
+	UnitPrice            pgtype.Numeric
+	AttendedQty          pgtype.Numeric
+	CancelledQty         pgtype.Numeric
+	DeliveryDate         pgtype.Date
+	DeliveryDateFirm     bool
+	CustomerDelivery     pgtype.Text
+	Lot                  pgtype.Text
+	CouponDelivery       pgtype.Text
+	PaidAtCashier        bool
+	IpiPct               pgtype.Numeric
+	IcmsPct              pgtype.Numeric
+	PisPct               pgtype.Numeric
+	CofinsPct            pgtype.Numeric
+	StPct                pgtype.Numeric
+	DiscountPct          pgtype.Numeric
+	TotalGross           pgtype.Numeric
+	TotalNet             pgtype.Numeric
+	TotalNetWithIpi      pgtype.Numeric
+	TotalIpi             pgtype.Numeric
+	TotalSt              pgtype.Numeric
+	UnitWeightNet        pgtype.Numeric
+	UnitWeightGross      pgtype.Numeric
+	Status               string
+	Notes                pgtype.Text
+	TenantEnterpriseCode int64
 }
 
 // =========================================================
@@ -458,6 +513,7 @@ func (q *Queries) CreateSalesOrderItem(ctx context.Context, arg CreateSalesOrder
 		arg.UnitWeightGross,
 		arg.Status,
 		arg.Notes,
+		arg.TenantEnterpriseCode,
 	)
 	var i SalesOrderItem
 	err := row.Scan(
@@ -504,11 +560,16 @@ func (q *Queries) CreateSalesOrderItem(ctx context.Context, arg CreateSalesOrder
 }
 
 const getSalesOrderByCode = `-- name: GetSalesOrderByCode :one
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE code = $1
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE code = $1 AND enterprise_code = $2
 `
 
-func (q *Queries) GetSalesOrderByCode(ctx context.Context, code int64) (SalesOrder, error) {
-	row := q.db.QueryRow(ctx, getSalesOrderByCode, code)
+type GetSalesOrderByCodeParams struct {
+	Code                 int64
+	TenantEnterpriseCode int64
+}
+
+func (q *Queries) GetSalesOrderByCode(ctx context.Context, arg GetSalesOrderByCodeParams) (SalesOrder, error) {
+	row := q.db.QueryRow(ctx, getSalesOrderByCode, arg.Code, arg.TenantEnterpriseCode)
 	var i SalesOrder
 	err := row.Scan(
 		&i.Code,
@@ -585,6 +646,64 @@ func (q *Queries) GetSalesOrderByCode(ctx context.Context, code int64) (SalesOrd
 	return i, err
 }
 
+const getSalesOrderItem = `-- name: GetSalesOrderItem :one
+SELECT item.code, item.sales_order_code, item.sequence, item.item_code, item.mask, item.digit_date, item.nf_type, item.sales_uom, item.warehouse_code, item.price_table_code, item.requested_qty, item.unit_price, item.attended_qty, item.cancelled_qty, item.delivery_date, item.delivery_date_firm, item.customer_delivery, item.lot, item.coupon_delivery, item.paid_at_cashier, item.ipi_pct, item.icms_pct, item.pis_pct, item.cofins_pct, item.st_pct, item.discount_pct, item.total_gross, item.total_net, item.total_net_with_ipi, item.total_ipi, item.total_st, item.unit_weight_net, item.unit_weight_gross, item.status, item.notes, item.is_active, item.created_at, item.updated_at FROM public.sales_order_items item
+JOIN public.sales_orders sales_order ON sales_order.code=item.sales_order_code
+WHERE item.code=$1 AND item.is_active=TRUE
+  AND sales_order.enterprise_code=$2
+`
+
+type GetSalesOrderItemParams struct {
+	ItemCode             int64
+	TenantEnterpriseCode int64
+}
+
+func (q *Queries) GetSalesOrderItem(ctx context.Context, arg GetSalesOrderItemParams) (SalesOrderItem, error) {
+	row := q.db.QueryRow(ctx, getSalesOrderItem, arg.ItemCode, arg.TenantEnterpriseCode)
+	var i SalesOrderItem
+	err := row.Scan(
+		&i.Code,
+		&i.SalesOrderCode,
+		&i.Sequence,
+		&i.ItemCode,
+		&i.Mask,
+		&i.DigitDate,
+		&i.NfType,
+		&i.SalesUom,
+		&i.WarehouseCode,
+		&i.PriceTableCode,
+		&i.RequestedQty,
+		&i.UnitPrice,
+		&i.AttendedQty,
+		&i.CancelledQty,
+		&i.DeliveryDate,
+		&i.DeliveryDateFirm,
+		&i.CustomerDelivery,
+		&i.Lot,
+		&i.CouponDelivery,
+		&i.PaidAtCashier,
+		&i.IpiPct,
+		&i.IcmsPct,
+		&i.PisPct,
+		&i.CofinsPct,
+		&i.StPct,
+		&i.DiscountPct,
+		&i.TotalGross,
+		&i.TotalNet,
+		&i.TotalNetWithIpi,
+		&i.TotalIpi,
+		&i.TotalSt,
+		&i.UnitWeightNet,
+		&i.UnitWeightGross,
+		&i.Status,
+		&i.Notes,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertSalesOrderEvent = `-- name: InsertSalesOrderEvent :exec
 INSERT INTO public.sales_order_events (
     sales_order_code, event_type, area, reason, complement, event_date, created_by
@@ -618,12 +737,22 @@ func (q *Queries) InsertSalesOrderEvent(ctx context.Context, arg InsertSalesOrde
 
 const listSalesOrderItems = `-- name: ListSalesOrderItems :many
 SELECT code, sales_order_code, sequence, item_code, mask, digit_date, nf_type, sales_uom, warehouse_code, price_table_code, requested_qty, unit_price, attended_qty, cancelled_qty, delivery_date, delivery_date_firm, customer_delivery, lot, coupon_delivery, paid_at_cashier, ipi_pct, icms_pct, pis_pct, cofins_pct, st_pct, discount_pct, total_gross, total_net, total_net_with_ipi, total_ipi, total_st, unit_weight_net, unit_weight_gross, status, notes, is_active, created_at, updated_at FROM public.sales_order_items
-WHERE sales_order_code = $1 AND is_active = TRUE
+WHERE sales_order_items.sales_order_code = $1 AND sales_order_items.is_active = TRUE
+  AND EXISTS (
+      SELECT 1 FROM public.sales_orders sales_order
+      WHERE sales_order.code=sales_order_items.sales_order_code
+        AND sales_order.enterprise_code=$2
+  )
 ORDER BY sequence
 `
 
-func (q *Queries) ListSalesOrderItems(ctx context.Context, salesOrderCode int64) ([]SalesOrderItem, error) {
-	rows, err := q.db.Query(ctx, listSalesOrderItems, salesOrderCode)
+type ListSalesOrderItemsParams struct {
+	SalesOrderCode       int64
+	TenantEnterpriseCode int64
+}
+
+func (q *Queries) ListSalesOrderItems(ctx context.Context, arg ListSalesOrderItemsParams) ([]SalesOrderItem, error) {
+	rows, err := q.db.Query(ctx, listSalesOrderItems, arg.SalesOrderCode, arg.TenantEnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -682,11 +811,11 @@ func (q *Queries) ListSalesOrderItems(ctx context.Context, salesOrderCode int64)
 }
 
 const listSalesOrders = `-- name: ListSalesOrders :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE is_active = TRUE ORDER BY emission_date DESC, order_number DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE enterprise_code = $1 AND is_active = TRUE ORDER BY emission_date DESC, order_number DESC
 `
 
-func (q *Queries) ListSalesOrders(ctx context.Context) ([]SalesOrder, error) {
-	rows, err := q.db.Query(ctx, listSalesOrders)
+func (q *Queries) ListSalesOrders(ctx context.Context, tenantEnterpriseCode int64) ([]SalesOrder, error) {
+	rows, err := q.db.Query(ctx, listSalesOrders, tenantEnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -778,25 +907,47 @@ func (q *Queries) ListSalesOrders(ctx context.Context) ([]SalesOrder, error) {
 
 const listSalesOrdersAdvanced = `-- name: ListSalesOrdersAdvanced :many
 SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders
-WHERE is_active = TRUE
-  AND ($1::bigint IS NULL OR customer_code = $1::bigint)
-  AND ($2::bigint IS NULL OR representative_code = $2::bigint)
-  AND ($3::bigint IS NULL OR payment_term_code = $3::bigint)
-  AND ($4::text IS NULL OR status = $4::text)
-  AND ($5::text IS NULL OR commercial_analysis_status = $5::text)
-  AND ($6::text IS NULL OR financial_analysis_status = $6::text)
-  AND ($7::text IS NULL OR release_status = $7::text)
-  AND ($8::text IS NULL OR conference_status = $8::text)
-  AND ($9::boolean IS NULL OR is_blocked = $9::boolean)
-  AND ($10::date IS NULL OR emission_date >= $10::date)
-  AND ($11::date IS NULL OR emission_date <= $11::date)
-  AND ($12::date IS NULL OR delivery_date >= $12::date)
-  AND ($13::date IS NULL OR delivery_date <= $13::date)
-ORDER BY emission_date DESC, order_number DESC
+WHERE enterprise_code = $1 AND is_active = TRUE
+  AND ($2::text IS NULL OR EXISTS (
+    SELECT 1 FROM public.customers c
+    WHERE c.code = sales_orders.customer_code
+      AND (c.name ILIKE '%' || $2::text || '%'
+        OR c.trade_name ILIKE '%' || $2::text || '%'
+        OR c.document_number ILIKE '%' || $2::text || '%')
+  ))
+  AND ($3::bigint IS NULL OR customer_code = $3::bigint)
+  AND ($4::bigint IS NULL OR EXISTS (
+    SELECT 1 FROM public.sales_order_items soi
+    WHERE soi.sales_order_code = sales_orders.code
+      AND soi.item_code = $4::bigint
+  ))
+  AND ($5::bigint IS NULL OR representative_code = $5::bigint)
+  AND ($6::bigint IS NULL OR payment_term_code = $6::bigint)
+  AND ($7::text IS NULL OR status = $7::text)
+  AND ($8::text IS NULL OR commercial_analysis_status = $8::text)
+  AND ($9::text IS NULL OR financial_analysis_status = $9::text)
+  AND ($10::text IS NULL OR release_status = $10::text)
+  AND ($11::text IS NULL OR conference_status = $11::text)
+  AND ($12::boolean IS NULL OR is_blocked = $12::boolean)
+  AND ($13::text IS NULL OR
+       ($13::text = 'ANALISADO' AND (commercial_analysis_status <> 'NOT_ANALYZED' OR financial_analysis_status <> 'NOT_ANALYZED')) OR
+       ($13::text = 'ATENDIDO' AND attended_at IS NOT NULL) OR
+       ($13::text = 'CONFERIDO' AND conference_status = 'CONFERRED') OR
+       ($13::text = 'ATRASADO' AND delivery_date < CURRENT_DATE AND status NOT IN ('F','CANCELLED')) OR
+       ($13::text = 'FATURADO' AND status = 'F'))
+  AND ($14::date IS NULL OR emission_date >= $14::date)
+  AND ($15::date IS NULL OR emission_date <= $15::date)
+  AND ($16::date IS NULL OR delivery_date >= $16::date)
+  AND ($17::date IS NULL OR delivery_date <= $17::date)
+ORDER BY emission_date DESC, order_number DESC, code DESC
+LIMIT $19 OFFSET $18
 `
 
 type ListSalesOrdersAdvancedParams struct {
+	TenantEnterpriseCode     int64
+	Search                   pgtype.Text
 	CustomerCode             *int64
+	ItemCode                 *int64
 	RepresentativeCode       *int64
 	PaymentTermCode          *int64
 	Status                   pgtype.Text
@@ -805,15 +956,21 @@ type ListSalesOrdersAdvancedParams struct {
 	ReleaseStatus            pgtype.Text
 	ConferenceStatus         pgtype.Text
 	IsBlocked                pgtype.Bool
+	WorkflowStatus           pgtype.Text
 	EmissionFrom             pgtype.Date
 	EmissionTo               pgtype.Date
 	DeliveryFrom             pgtype.Date
 	DeliveryTo               pgtype.Date
+	PageOffset               int32
+	PageLimit                int32
 }
 
 func (q *Queries) ListSalesOrdersAdvanced(ctx context.Context, arg ListSalesOrdersAdvancedParams) ([]SalesOrder, error) {
 	rows, err := q.db.Query(ctx, listSalesOrdersAdvanced,
+		arg.TenantEnterpriseCode,
+		arg.Search,
 		arg.CustomerCode,
+		arg.ItemCode,
 		arg.RepresentativeCode,
 		arg.PaymentTermCode,
 		arg.Status,
@@ -822,10 +979,13 @@ func (q *Queries) ListSalesOrdersAdvanced(ctx context.Context, arg ListSalesOrde
 		arg.ReleaseStatus,
 		arg.ConferenceStatus,
 		arg.IsBlocked,
+		arg.WorkflowStatus,
 		arg.EmissionFrom,
 		arg.EmissionTo,
 		arg.DeliveryFrom,
 		arg.DeliveryTo,
+		arg.PageOffset,
+		arg.PageLimit,
 	)
 	if err != nil {
 		return nil, err
@@ -917,11 +1077,16 @@ func (q *Queries) ListSalesOrdersAdvanced(ctx context.Context, arg ListSalesOrde
 }
 
 const listSalesOrdersByCustomer = `-- name: ListSalesOrdersByCustomer :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE customer_code = $1 AND is_active = TRUE ORDER BY emission_date DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE customer_code = $1 AND enterprise_code = $2 AND is_active = TRUE ORDER BY emission_date DESC
 `
 
-func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, customerCode *int64) ([]SalesOrder, error) {
-	rows, err := q.db.Query(ctx, listSalesOrdersByCustomer, customerCode)
+type ListSalesOrdersByCustomerParams struct {
+	CustomerCode         *int64
+	TenantEnterpriseCode int64
+}
+
+func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, arg ListSalesOrdersByCustomerParams) ([]SalesOrder, error) {
+	rows, err := q.db.Query(ctx, listSalesOrdersByCustomer, arg.CustomerCode, arg.TenantEnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -1013,17 +1178,18 @@ func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, customerCode *i
 
 const listSalesOrdersByDateRange = `-- name: ListSalesOrdersByDateRange :many
 SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders
-WHERE emission_date BETWEEN $1 AND $2 AND is_active = TRUE
+WHERE emission_date BETWEEN $1 AND $2 AND enterprise_code = $3 AND is_active = TRUE
 ORDER BY emission_date DESC
 `
 
 type ListSalesOrdersByDateRangeParams struct {
-	EmissionDate   pgtype.Date
-	EmissionDate_2 pgtype.Date
+	EmissionDate         pgtype.Date
+	EmissionDate_2       pgtype.Date
+	TenantEnterpriseCode int64
 }
 
 func (q *Queries) ListSalesOrdersByDateRange(ctx context.Context, arg ListSalesOrdersByDateRangeParams) ([]SalesOrder, error) {
-	rows, err := q.db.Query(ctx, listSalesOrdersByDateRange, arg.EmissionDate, arg.EmissionDate_2)
+	rows, err := q.db.Query(ctx, listSalesOrdersByDateRange, arg.EmissionDate, arg.EmissionDate_2, arg.TenantEnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -1114,11 +1280,16 @@ func (q *Queries) ListSalesOrdersByDateRange(ctx context.Context, arg ListSalesO
 }
 
 const listSalesOrdersByStatus = `-- name: ListSalesOrdersByStatus :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE status = $1 AND is_active = TRUE ORDER BY emission_date DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action FROM public.sales_orders WHERE status = $1 AND enterprise_code = $2 AND is_active = TRUE ORDER BY emission_date DESC
 `
 
-func (q *Queries) ListSalesOrdersByStatus(ctx context.Context, status string) ([]SalesOrder, error) {
-	rows, err := q.db.Query(ctx, listSalesOrdersByStatus, status)
+type ListSalesOrdersByStatusParams struct {
+	Status               string
+	TenantEnterpriseCode int64
+}
+
+func (q *Queries) ListSalesOrdersByStatus(ctx context.Context, arg ListSalesOrdersByStatusParams) ([]SalesOrder, error) {
+	rows, err := q.db.Query(ctx, listSalesOrdersByStatus, arg.Status, arg.TenantEnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -1223,24 +1394,35 @@ func (q *Queries) NextSalesOrderNumber(ctx context.Context, enterpriseCode int64
 	return last_number, err
 }
 
-const releaseSalesOrder = `-- name: ReleaseSalesOrder :exec
+const releaseSalesOrder = `-- name: ReleaseSalesOrder :execrows
+WITH input AS (SELECT $4::text AS release_status)
 UPDATE public.sales_orders
-SET release_status = $2,
-    is_blocked = CASE WHEN $2 = 'BLOCKED' THEN TRUE ELSE FALSE END,
-    block_reason = CASE WHEN $2 = 'BLOCKED' THEN $3 ELSE NULL END,
+SET release_status = input.release_status,
+    is_blocked = CASE WHEN input.release_status = 'BLOCKED' THEN TRUE ELSE FALSE END,
+    block_reason = CASE WHEN input.release_status = 'BLOCKED' THEN $1 ELSE NULL END,
     updated_at = NOW()
-WHERE code = $1
+FROM input
+WHERE code = $2 AND enterprise_code = $3
 `
 
 type ReleaseSalesOrderParams struct {
-	Code          int64
-	ReleaseStatus string
-	BlockReason   pgtype.Text
+	BlockReason          pgtype.Text
+	Code                 int64
+	TenantEnterpriseCode int64
+	ReleaseStatus        string
 }
 
-func (q *Queries) ReleaseSalesOrder(ctx context.Context, arg ReleaseSalesOrderParams) error {
-	_, err := q.db.Exec(ctx, releaseSalesOrder, arg.Code, arg.ReleaseStatus, arg.BlockReason)
-	return err
+func (q *Queries) ReleaseSalesOrder(ctx context.Context, arg ReleaseSalesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseSalesOrder,
+		arg.BlockReason,
+		arg.Code,
+		arg.TenantEnterpriseCode,
+		arg.ReleaseStatus,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const salesOrderReport = `-- name: SalesOrderReport :one
@@ -1258,26 +1440,58 @@ SELECT
   COUNT(*) FILTER (WHERE conference_status='PENDING')::bigint AS conference_pending_count,
   COUNT(*) FILTER (WHERE delivery_date < CURRENT_DATE AND status NOT IN ('F','CANCELLED'))::bigint AS delayed_count
 FROM public.sales_orders
-WHERE is_active = TRUE
-  AND ($1::bigint IS NULL OR customer_code = $1::bigint)
-  AND ($2::bigint IS NULL OR representative_code = $2::bigint)
-  AND ($3::bigint IS NULL OR payment_term_code = $3::bigint)
-  AND ($4::text IS NULL OR status = $4::text)
-  AND ($5::date IS NULL OR emission_date >= $5::date)
-  AND ($6::date IS NULL OR emission_date <= $6::date)
-  AND ($7::date IS NULL OR delivery_date >= $7::date)
-  AND ($8::date IS NULL OR delivery_date <= $8::date)
+WHERE enterprise_code = $1 AND is_active = TRUE
+  AND ($2::text IS NULL OR EXISTS (
+    SELECT 1 FROM public.customers c
+    WHERE c.code = sales_orders.customer_code
+      AND (c.name ILIKE '%' || $2::text || '%'
+        OR c.trade_name ILIKE '%' || $2::text || '%'
+        OR c.document_number ILIKE '%' || $2::text || '%')
+  ))
+  AND ($3::bigint IS NULL OR customer_code = $3::bigint)
+  AND ($4::bigint IS NULL OR EXISTS (
+    SELECT 1 FROM public.sales_order_items soi
+    WHERE soi.sales_order_code = sales_orders.code
+      AND soi.item_code = $4::bigint
+  ))
+  AND ($5::bigint IS NULL OR representative_code = $5::bigint)
+  AND ($6::bigint IS NULL OR payment_term_code = $6::bigint)
+  AND ($7::text IS NULL OR status = $7::text)
+  AND ($8::text IS NULL OR commercial_analysis_status = $8::text)
+  AND ($9::text IS NULL OR financial_analysis_status = $9::text)
+  AND ($10::text IS NULL OR release_status = $10::text)
+  AND ($11::text IS NULL OR conference_status = $11::text)
+  AND ($12::boolean IS NULL OR is_blocked = $12::boolean)
+  AND ($13::text IS NULL OR
+       ($13::text = 'ANALISADO' AND (commercial_analysis_status <> 'NOT_ANALYZED' OR financial_analysis_status <> 'NOT_ANALYZED')) OR
+       ($13::text = 'ATENDIDO' AND attended_at IS NOT NULL) OR
+       ($13::text = 'CONFERIDO' AND conference_status = 'CONFERRED') OR
+       ($13::text = 'ATRASADO' AND delivery_date < CURRENT_DATE AND status NOT IN ('F','CANCELLED')) OR
+       ($13::text = 'FATURADO' AND status = 'F'))
+  AND ($14::date IS NULL OR emission_date >= $14::date)
+  AND ($15::date IS NULL OR emission_date <= $15::date)
+  AND ($16::date IS NULL OR delivery_date >= $16::date)
+  AND ($17::date IS NULL OR delivery_date <= $17::date)
 `
 
 type SalesOrderReportParams struct {
-	CustomerCode       *int64
-	RepresentativeCode *int64
-	PaymentTermCode    *int64
-	Status             pgtype.Text
-	EmissionFrom       pgtype.Date
-	EmissionTo         pgtype.Date
-	DeliveryFrom       pgtype.Date
-	DeliveryTo         pgtype.Date
+	TenantEnterpriseCode     int64
+	Search                   pgtype.Text
+	CustomerCode             *int64
+	ItemCode                 *int64
+	RepresentativeCode       *int64
+	PaymentTermCode          *int64
+	Status                   pgtype.Text
+	CommercialAnalysisStatus pgtype.Text
+	FinancialAnalysisStatus  pgtype.Text
+	ReleaseStatus            pgtype.Text
+	ConferenceStatus         pgtype.Text
+	IsBlocked                pgtype.Bool
+	WorkflowStatus           pgtype.Text
+	EmissionFrom             pgtype.Date
+	EmissionTo               pgtype.Date
+	DeliveryFrom             pgtype.Date
+	DeliveryTo               pgtype.Date
 }
 
 type SalesOrderReportRow struct {
@@ -1297,10 +1511,19 @@ type SalesOrderReportRow struct {
 
 func (q *Queries) SalesOrderReport(ctx context.Context, arg SalesOrderReportParams) (SalesOrderReportRow, error) {
 	row := q.db.QueryRow(ctx, salesOrderReport,
+		arg.TenantEnterpriseCode,
+		arg.Search,
 		arg.CustomerCode,
+		arg.ItemCode,
 		arg.RepresentativeCode,
 		arg.PaymentTermCode,
 		arg.Status,
+		arg.CommercialAnalysisStatus,
+		arg.FinancialAnalysisStatus,
+		arg.ReleaseStatus,
+		arg.ConferenceStatus,
+		arg.IsBlocked,
+		arg.WorkflowStatus,
 		arg.EmissionFrom,
 		arg.EmissionTo,
 		arg.DeliveryFrom,
@@ -1324,34 +1547,51 @@ func (q *Queries) SalesOrderReport(ctx context.Context, arg SalesOrderReportPara
 	return i, err
 }
 
-const saveSalesOrderDelayReason = `-- name: SaveSalesOrderDelayReason :exec
+const saveSalesOrderDelayReason = `-- name: SaveSalesOrderDelayReason :execrows
 UPDATE public.sales_orders
 SET delay_reason = $2,
     delay_action = $3,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $4
 `
 
 type SaveSalesOrderDelayReasonParams struct {
-	Code        int64
-	DelayReason pgtype.Text
-	DelayAction pgtype.Text
+	Code                 int64
+	DelayReason          pgtype.Text
+	DelayAction          pgtype.Text
+	TenantEnterpriseCode int64
 }
 
-func (q *Queries) SaveSalesOrderDelayReason(ctx context.Context, arg SaveSalesOrderDelayReasonParams) error {
-	_, err := q.db.Exec(ctx, saveSalesOrderDelayReason, arg.Code, arg.DelayReason, arg.DelayAction)
-	return err
+func (q *Queries) SaveSalesOrderDelayReason(ctx context.Context, arg SaveSalesOrderDelayReasonParams) (int64, error) {
+	result, err := q.db.Exec(ctx, saveSalesOrderDelayReason,
+		arg.Code,
+		arg.DelayReason,
+		arg.DelayAction,
+		arg.TenantEnterpriseCode,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const unblockSalesOrder = `-- name: UnblockSalesOrder :exec
+const unblockSalesOrder = `-- name: UnblockSalesOrder :execrows
 UPDATE public.sales_orders
 SET is_blocked = FALSE, block_reason = NULL, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_code = $2
 `
 
-func (q *Queries) UnblockSalesOrder(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, unblockSalesOrder, code)
-	return err
+type UnblockSalesOrderParams struct {
+	Code                 int64
+	TenantEnterpriseCode int64
+}
+
+func (q *Queries) UnblockSalesOrder(ctx context.Context, arg UnblockSalesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, unblockSalesOrder, arg.Code, arg.TenantEnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateSalesOrder = `-- name: UpdateSalesOrder :one
@@ -1407,7 +1647,7 @@ SET
     project_code         = $48,
     project_name         = $49,
     updated_at           = NOW()
-WHERE code = $50 AND is_active = TRUE
+WHERE code = $50 AND enterprise_code = $51 AND is_active = TRUE
 RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action
 `
 
@@ -1462,6 +1702,7 @@ type UpdateSalesOrderParams struct {
 	ProjectCode                 pgtype.Text
 	ProjectName                 pgtype.Text
 	Code                        int64
+	TenantEnterpriseCode        int64
 }
 
 func (q *Queries) UpdateSalesOrder(ctx context.Context, arg UpdateSalesOrderParams) (SalesOrder, error) {
@@ -1516,6 +1757,7 @@ func (q *Queries) UpdateSalesOrder(ctx context.Context, arg UpdateSalesOrderPara
 		arg.ProjectCode,
 		arg.ProjectName,
 		arg.Code,
+		arg.TenantEnterpriseCode,
 	)
 	var i SalesOrder
 	err := row.Scan(
@@ -1622,37 +1864,43 @@ SET
     status              = $24,
     notes               = $25,
     updated_at          = NOW()
-WHERE code = $26 AND is_active = TRUE
+WHERE sales_order_items.code = $26 AND sales_order_items.is_active = TRUE
+  AND EXISTS (
+      SELECT 1 FROM public.sales_orders sales_order
+      WHERE sales_order.code=sales_order_items.sales_order_code
+        AND sales_order.enterprise_code=$27
+  )
 RETURNING code, sales_order_code, sequence, item_code, mask, digit_date, nf_type, sales_uom, warehouse_code, price_table_code, requested_qty, unit_price, attended_qty, cancelled_qty, delivery_date, delivery_date_firm, customer_delivery, lot, coupon_delivery, paid_at_cashier, ipi_pct, icms_pct, pis_pct, cofins_pct, st_pct, discount_pct, total_gross, total_net, total_net_with_ipi, total_ipi, total_st, unit_weight_net, unit_weight_gross, status, notes, is_active, created_at, updated_at
 `
 
 type UpdateSalesOrderItemParams struct {
-	RequestedQty     pgtype.Numeric
-	UnitPrice        pgtype.Numeric
-	AttendedQty      pgtype.Numeric
-	CancelledQty     pgtype.Numeric
-	DeliveryDate     pgtype.Date
-	DeliveryDateFirm bool
-	CustomerDelivery pgtype.Text
-	Lot              pgtype.Text
-	CouponDelivery   pgtype.Text
-	PaidAtCashier    bool
-	IpiPct           pgtype.Numeric
-	IcmsPct          pgtype.Numeric
-	PisPct           pgtype.Numeric
-	CofinsPct        pgtype.Numeric
-	StPct            pgtype.Numeric
-	DiscountPct      pgtype.Numeric
-	TotalGross       pgtype.Numeric
-	TotalNet         pgtype.Numeric
-	TotalNetWithIpi  pgtype.Numeric
-	TotalIpi         pgtype.Numeric
-	TotalSt          pgtype.Numeric
-	UnitWeightNet    pgtype.Numeric
-	UnitWeightGross  pgtype.Numeric
-	Status           string
-	Notes            pgtype.Text
-	Code             int64
+	RequestedQty         pgtype.Numeric
+	UnitPrice            pgtype.Numeric
+	AttendedQty          pgtype.Numeric
+	CancelledQty         pgtype.Numeric
+	DeliveryDate         pgtype.Date
+	DeliveryDateFirm     bool
+	CustomerDelivery     pgtype.Text
+	Lot                  pgtype.Text
+	CouponDelivery       pgtype.Text
+	PaidAtCashier        bool
+	IpiPct               pgtype.Numeric
+	IcmsPct              pgtype.Numeric
+	PisPct               pgtype.Numeric
+	CofinsPct            pgtype.Numeric
+	StPct                pgtype.Numeric
+	DiscountPct          pgtype.Numeric
+	TotalGross           pgtype.Numeric
+	TotalNet             pgtype.Numeric
+	TotalNetWithIpi      pgtype.Numeric
+	TotalIpi             pgtype.Numeric
+	TotalSt              pgtype.Numeric
+	UnitWeightNet        pgtype.Numeric
+	UnitWeightGross      pgtype.Numeric
+	Status               string
+	Notes                pgtype.Text
+	Code                 int64
+	TenantEnterpriseCode int64
 }
 
 func (q *Queries) UpdateSalesOrderItem(ctx context.Context, arg UpdateSalesOrderItemParams) (SalesOrderItem, error) {
@@ -1683,6 +1931,7 @@ func (q *Queries) UpdateSalesOrderItem(ctx context.Context, arg UpdateSalesOrder
 		arg.Status,
 		arg.Notes,
 		arg.Code,
+		arg.TenantEnterpriseCode,
 	)
 	var i SalesOrderItem
 	err := row.Scan(

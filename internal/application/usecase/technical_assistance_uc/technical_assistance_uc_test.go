@@ -18,6 +18,9 @@ type taAllowAuth struct{ ports.AuthService }
 
 func (taAllowAuth) CanManageTechnicalAssistance(context.Context) bool { return true }
 func (taAllowAuth) EnterpriseID(context.Context) (int64, error)       { return 1, nil }
+func (taAllowAuth) UserID(context.Context) (uuid.UUID, error) {
+	return uuid.MustParse("00000000-0000-0000-0000-000000000042"), nil
+}
 
 type fakeItemFinder struct {
 	item *itementity.Item

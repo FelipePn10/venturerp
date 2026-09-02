@@ -49,7 +49,7 @@ func toCommercialResponse(v entity.Commercial) response.ItemCommercialResponse {
 	return response.ItemCommercialResponse{
 		Description: v.Description, SaleType: v.SaleType, VolumeConversionFactor: v.VolumeConversionFactor, SaleMultiple: v.SaleMultiple, MinimumSaleQuantity: v.MinimumSaleQuantity,
 		EstimatedDeliveryDays: v.EstimatedDeliveryDays, WarrantyDays: v.WarrantyDays, TransferWarehouseCode: v.TransferWarehouseCode, TechnicalAssistanceWarehouseCode: v.TechnicalAssistanceWarehouseCode,
-		PackagingItemCode: v.PackagingItemCode, AllowBillingDescriptionChange: v.AllowBillingDescriptionChange, IssueLoadingLabels: v.IssueLoadingLabels, AssembleShippingVolumes: v.AssembleShippingVolumes,
+		PackagingItemCode: nilIfEmpty(v.PackagingItemBusinessCode), LegacyPackagingItemCode: v.PackagingItemCode, AllowBillingDescriptionChange: v.AllowBillingDescriptionChange, IssueLoadingLabels: v.IssueLoadingLabels, AssembleShippingVolumes: v.AssembleShippingVolumes,
 		RequiresSpecialPackaging: v.RequiresSpecialPackaging, WithholdPISCOFINS: v.WithholdPISCOFINS, IsPackaging: v.IsPackaging, MobileEnabled: v.MobileEnabled, ExportPackaging: v.ExportPackaging, ClassificationCode: v.ClassificationCode, Notes: v.Notes,
 	}
 }
@@ -116,7 +116,7 @@ func toItemEngineeringResponse(e entity.Engineering) response.ItemEngineeringRes
 		}
 	}
 	return response.ItemEngineeringResponse{
-		ItemBaseCod: e.ItemBaseCod,
+		ItemBaseCod: nilIfEmpty(e.ItemBaseBusinessCode), LegacyItemBaseCod: e.ItemBaseCod,
 		Weight: response.ItemWeightResponse{
 			Gross: e.Weight.Gross,
 			Net:   e.Weight.Net,
@@ -185,4 +185,13 @@ func toItemWithMasksResponses(list []entity.ItemWithMasks) []response.ItemWithMa
 		})
 	}
 	return out
+}
+
+// nilIfEmpty devolve nil para código de negócio ausente, para o campo sair da
+// resposta em vez de vir como string vazia.
+func nilIfEmpty(code string) *string {
+	if code == "" {
+		return nil
+	}
+	return &code
 }

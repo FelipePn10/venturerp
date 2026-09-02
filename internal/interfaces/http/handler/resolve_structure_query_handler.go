@@ -14,9 +14,9 @@ import (
 func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
-	itemCode, err := strconv.ParseInt(q.Get("item_code"), 10, 64)
-	if err != nil || itemCode <= 0 {
-		jsonError(w, http.StatusBadRequest, "item_code must be a positive integer")
+	itemCode := request.TextCode(q.Get("item_code"))
+	if itemCode.String() == "" {
+		jsonError(w, http.StatusBadRequest, "item_code é obrigatório")
 		return
 	}
 
@@ -50,9 +50,9 @@ func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *h
 // WhereUsed implements implosão de estrutura — dado um componente, retorna todos os produtos que o utilizam.
 // GET /api/items/structure/where-used/{itemCode}?levels=0
 func (h *ItemQueryStructureHandler) WhereUsed(w http.ResponseWriter, r *http.Request) {
-	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
-	if err != nil || itemCode <= 0 {
-		jsonError(w, http.StatusBadRequest, "itemCode must be a positive integer")
+	itemCode := request.TextCode(chi.URLParam(r, "itemCode"))
+	if itemCode.String() == "" {
+		jsonError(w, http.StatusBadRequest, "itemCode é obrigatório")
 		return
 	}
 	levels, _ := strconv.Atoi(r.URL.Query().Get("levels"))
@@ -66,9 +66,9 @@ func (h *ItemQueryStructureHandler) WhereUsed(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ItemQueryStructureHandler) ResolveStructure(w http.ResponseWriter, r *http.Request) {
-	code, err := parseCode(r, "itemCode")
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+	code := request.TextCode(chi.URLParam(r, "itemCode"))
+	if code.String() == "" {
+		jsonError(w, http.StatusBadRequest, "itemCode é obrigatório")
 		return
 	}
 

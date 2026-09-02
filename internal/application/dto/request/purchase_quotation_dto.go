@@ -5,9 +5,9 @@ import "github.com/google/uuid"
 // CreatePurchaseQuotationDTO releases requisition items and/or planned orders to
 // a new quotation, optionally inviting suppliers.
 type CreatePurchaseQuotationDTO struct {
-	EnterpriseCode     int64     `json:"enterprise_code"`
+	EnterpriseCode     int64     `json:"-"`
 	Notes              *string   `json:"notes,omitempty"`
-	CreatedBy          uuid.UUID `json:"created_by"`
+	CreatedBy          uuid.UUID `json:"-"`
 	RequisitionItemIDs []int64   `json:"requisition_item_ids,omitempty"`
 	PlannedOrderCodes  []int64   `json:"planned_order_codes,omitempty"`
 	SupplierCodes      []int64   `json:"supplier_codes,omitempty"`
@@ -29,5 +29,5 @@ type RecordQuotationPriceDTO struct {
 
 type GenerateOrdersFromQuotationDTO struct {
 	QuotationCode int64     `json:"-"`
-	CreatedBy     uuid.UUID `json:"created_by"`
+	CreatedBy     uuid.UUID `json:"-"`
 }

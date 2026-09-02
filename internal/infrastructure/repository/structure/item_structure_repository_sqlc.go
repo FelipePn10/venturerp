@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 func (r *ItemStructureRepositorySQLC) Create(
@@ -38,6 +39,9 @@ func (r *ItemStructureRepositorySQLC) Create(
 		IsFixedQty:         s.IsFixedQty,
 		SubstituteGroup:    s.SubstituteGroup,
 		SubstitutePriority: s.SubstitutePriority,
+		QuantityFormula:    stringPtrToPgText(s.QuantityFormula),
+		QuantityRounding:   entity.NormalizeRounding(s.QuantityRounding),
+		QuantityScale:      s.QuantityScale,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating structure: %w", err)
@@ -68,6 +72,9 @@ func (r *ItemStructureRepositorySQLC) Update(
 		IsFixedQty:         s.IsFixedQty,
 		SubstituteGroup:    s.SubstituteGroup,
 		SubstitutePriority: s.SubstitutePriority,
+		QuantityFormula:    stringPtrToPgText(s.QuantityFormula),
+		QuantityRounding:   entity.NormalizeRounding(s.QuantityRounding),
+		QuantityScale:      s.QuantityScale,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating structure: %w", err)
@@ -81,6 +88,23 @@ func (r *ItemStructureRepositorySQLC) Delete(
 	id int64,
 ) error {
 	return r.q.DeactivateStructureComponent(ctx, id)
+}
+
+func (r *ItemStructureRepositorySQLC) DeleteByCodes(ctx context.Context, parentCode, childCode int64, parentMask *string) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	affected, err := r.q.DeactivateStructureComponentByCodes(ctx, sqlc.DeactivateStructureComponentByCodesParams{
+		ParentCode: parentCode, ChildCode: childCode, ParentMask: stringPtrToPgText(parentMask), EnterpriseID: enterpriseID,
+	})
+	if err != nil {
+		return fmt.Errorf("removendo componente da estrutura: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("componente não encontrado na empresa autenticada")
+	}
+	return nil
 }
 
 func (r *ItemStructureRepositorySQLC) GetByID(
@@ -254,6 +278,12 @@ func rowToEntity(row sqlc.ItemStructure) *entity.ItemStructure {
 		e.LossFormula = &v
 	}
 
+	if row.QuantityFormula.Valid {
+		v := row.QuantityFormula.String
+		e.QuantityFormula = &v
+	}
+	e.QuantityRounding, e.QuantityScale = row.QuantityRounding, row.QuantityScale
+
 	return e
 }
 
@@ -298,6 +328,12 @@ func mapDirectChildrenRows(rows []sqlc.GetAllDirectChildrenRow) []*entity.ItemSt
 			v := row.LossFormula.String
 			e.LossFormula = &v
 		}
+
+		if row.QuantityFormula.Valid {
+			v := row.QuantityFormula.String
+			e.QuantityFormula = &v
+		}
+		e.QuantityRounding, e.QuantityScale = row.QuantityRounding, row.QuantityScale
 
 		out = append(out, e)
 	}
@@ -346,6 +382,12 @@ func mapDirectChildrenWithMask(rows []sqlc.GetDirectChildrenForMaskRow) []*entit
 			v := row.LossFormula.String
 			e.LossFormula = &v
 		}
+
+		if row.QuantityFormula.Valid {
+			v := row.QuantityFormula.String
+			e.QuantityFormula = &v
+		}
+		e.QuantityRounding, e.QuantityScale = row.QuantityRounding, row.QuantityScale
 
 		out = append(out, e)
 	}

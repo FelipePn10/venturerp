@@ -8,6 +8,8 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	machineentity "github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
@@ -23,9 +25,13 @@ type routingReader interface {
 }
 
 type StandardCostUseCase struct {
-	repo       domainrepo.StandardCostRepository
-	routing    routingReader // optional; when nil, falls back to the legacy average-rate estimate
-	thirdParty thirdPartyCostReader
+	repo        domainrepo.StandardCostRepository
+	routing     routingReader // optional; when nil, falls back to the legacy average-rate estimate
+	thirdParty  thirdPartyCostReader
+	workCenters workCenterReader
+}
+type workCenterReader interface {
+	ListActiveWorkCenterTypes(context.Context, string, int, int) ([]*machineentity.MachineType, int64, error)
 }
 type thirdPartyCostReader interface {
 	StandardCostPerUnit(context.Context, int64, string, int64, time.Time) (decimal.Decimal, error)
@@ -33,6 +39,32 @@ type thirdPartyCostReader interface {
 
 func New(repo domainrepo.StandardCostRepository) *StandardCostUseCase {
 	return &StandardCostUseCase{repo: repo}
+}
+
+func (uc *StandardCostUseCase) WithWorkCenters(reader workCenterReader) *StandardCostUseCase {
+	uc.workCenters = reader
+	return uc
+}
+
+func (uc *StandardCostUseCase) ListWorkCenters(ctx context.Context, search string, limit, offset int) (*response.WorkCenterOptionPageResponse, error) {
+	if uc.workCenters == nil {
+		return nil, fmt.Errorf("consulta de centros de trabalho não configurada")
+	}
+	if limit == 0 {
+		limit = 100
+	}
+	if limit < 1 || limit > 500 || offset < 0 {
+		return nil, errorsuc.NewValidationError("limit deve estar entre 1 e 500 e offset não pode ser negativo")
+	}
+	rows, total, err := uc.workCenters.ListActiveWorkCenterTypes(ctx, search, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]response.WorkCenterOptionResponse, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, response.WorkCenterOptionResponse{ID: row.ID, Code: row.Code, Name: row.Name, Description: row.Description, IsActive: row.IsActive})
+	}
+	return &response.WorkCenterOptionPageResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 // WithRouting enables per-operation, per-work-center, quantity-aware labor costing.

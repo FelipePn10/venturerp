@@ -17,6 +17,7 @@ type SalesDivisionHandler struct {
 	getUC    *sales_division_uc.GetSalesDivisionUseCase
 	updateUC *sales_division_uc.UpdateSalesDivisionUseCase
 	deleteUC *sales_division_uc.DeleteSalesDivisionUseCase
+	statusUC *sales_division_uc.SetSalesDivisionStatusUseCase
 }
 
 func NewSalesDivisionHandler(
@@ -25,6 +26,7 @@ func NewSalesDivisionHandler(
 	getUC *sales_division_uc.GetSalesDivisionUseCase,
 	updateUC *sales_division_uc.UpdateSalesDivisionUseCase,
 	deleteUC *sales_division_uc.DeleteSalesDivisionUseCase,
+	statusUC *sales_division_uc.SetSalesDivisionStatusUseCase,
 ) *SalesDivisionHandler {
 	return &SalesDivisionHandler{
 		createUC: createUC,
@@ -32,7 +34,27 @@ func NewSalesDivisionHandler(
 		getUC:    getUC,
 		updateUC: updateUC,
 		deleteUC: deleteUC,
+		statusUC: statusUC,
 	}
+}
+
+func (h *SalesDivisionHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	var dto request.SetSalesDivisionStatusDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		return
+	}
+	result, err := h.statusUC.Execute(r.Context(), code, dto.IsActive)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func (h *SalesDivisionHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +83,7 @@ func (h *SalesDivisionHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *SalesDivisionHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código da divisão de vendas inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
@@ -75,7 +97,7 @@ func (h *SalesDivisionHandler) GetByCode(w http.ResponseWriter, r *http.Request)
 func (h *SalesDivisionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código da divisão de vendas inválido")
 		return
 	}
 	var dto request.UpdateSalesDivisionDTO
@@ -94,11 +116,11 @@ func (h *SalesDivisionHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *SalesDivisionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código da divisão de vendas inválido")
 		return
 	}
 	if err := h.deleteUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

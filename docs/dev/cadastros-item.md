@@ -265,7 +265,7 @@ Para o **APS/CRP** e o lead time, associe operações/máquinas.
 quantidade-base por ciclo):
 
 ```jsonc
-{ "item_code": 50, "machine_code": 1, "production_time": 0.5, "production_time_unit": "MINUTO", "production_base_qty": 1, "setup_time": 15 }
+{ "item_code": "TEA452-0", "machine_code": 1, "production_time": 0.5, "production_time_unit": "MINUTO", "production_base_qty": 1, "setup_time": 15 }
 ```
 
 O serviço de cálculo (`machine/service`) considera **conversão de UM**, ciclos

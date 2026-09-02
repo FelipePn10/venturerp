@@ -9,12 +9,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	toolentity "github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
 	toolRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/tool"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 // Drives the real shop-floor hook: completing (DONE) a production-order operation
@@ -31,10 +33,11 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise WHERE code=1").Scan(&enterpriseID); err != nil {
 		t.Fatalf("load enterprise: %v", err)
 	}
+	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 
 	// Work center + operation + item + route + route op.
 	var wcID int64
-	if err := pool.QueryRow(ctx, "INSERT INTO machine_types (code,name,type,requires_operator,created_by) VALUES ($1,'CT-Tool','PRESS',false,$2) RETURNING id", testutil.UniqueCode(), uid).Scan(&wcID); err != nil {
+	if err := pool.QueryRow(ctx, "INSERT INTO machine_types (code,name,type,requires_operator,created_by,enterprise_id) VALUES ($1,'CT-Tool','PRESS',false,$2,$3) RETURNING id", testutil.UniqueCode(), uid, enterpriseID).Scan(&wcID); err != nil {
 		t.Fatalf("seed wc: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM machine_types WHERE id = $1", wcID)
@@ -47,7 +50,7 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM operations WHERE id = $1", createdOp.ID)
 
 	itemCode := testutil.UniqueCode()
-	testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", itemCode, itemCode, uid)
+	testutil.Exec(t, pool, "INSERT INTO items (code, business_code, warehouse_code, created_by, enterprise_id) VALUES ($1,($1::bigint)::text,$2,$3,$4)", itemCode, itemCode, uid, enterpriseID)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 
 	rt, _ := routingentity.NewManufacturingRoute(testutil.UniqueCode(), itemCode, nil, 1, nil, true, nil, nil, uid)

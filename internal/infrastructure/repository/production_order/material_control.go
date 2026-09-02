@@ -998,6 +998,27 @@ func (r *ProductionOrderRepositoryPGX) ConfigureWarehouseAddress(ctx context.Con
 	_, err = r.pool.Exec(ctx, `INSERT INTO manufacturing_warehouse_addresses(enterprise_id,warehouse_id,address,is_active) VALUES($1,$2,$3,$4) ON CONFLICT(enterprise_id,warehouse_id,address) DO UPDATE SET is_active=EXCLUDED.is_active`, enterpriseID, warehouseID, address, active)
 	return err
 }
+func (r *ProductionOrderRepositoryPGX) ListWarehouseAddresses(ctx context.Context, warehouseID *int64) ([]entity.WarehouseAddress, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT id,warehouse_id,address,is_active FROM manufacturing_warehouse_addresses
+	 WHERE enterprise_id=$1 AND ($2::bigint IS NULL OR warehouse_id=$2) AND is_active ORDER BY warehouse_id,address,id`, enterpriseID, warehouseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]entity.WarehouseAddress, 0)
+	for rows.Next() {
+		var value entity.WarehouseAddress
+		if err := rows.Scan(&value.ID, &value.WarehouseID, &value.Address, &value.IsActive); err != nil {
+			return nil, err
+		}
+		out = append(out, value)
+	}
+	return out, rows.Err()
+}
 func (r *ProductionOrderRepositoryPGX) ConfigureTemporaryLot(ctx context.Context, lot entity.TemporaryProductionLot) (*entity.TemporaryProductionLot, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {

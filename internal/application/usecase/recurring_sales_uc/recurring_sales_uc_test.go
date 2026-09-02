@@ -2,6 +2,7 @@ package recurring_sales_uc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,12 +11,32 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/entity"
 	rsrepo "github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/repository"
+	representativeentity "github.com/FelipePn10/panossoerp/internal/domain/representative/entity"
+	representativerepo "github.com/FelipePn10/panossoerp/internal/domain/representative/repository"
 	"github.com/google/uuid"
 )
 
 type rsAllowAuth struct{ ports.AuthService }
 
-func (rsAllowAuth) CanCreateSalesOrder(context.Context) bool { return true }
+func (rsAllowAuth) CanCreateSalesOrder(context.Context) bool      { return true }
+func (rsAllowAuth) UserID(context.Context) (uuid.UUID, error)     { return uuid.New(), nil }
+func (rsAllowAuth) EnterpriseCode(context.Context) (int64, error) { return 1, nil }
+
+type activeRepresentativeRepo struct {
+	representativerepo.RepresentativeRepository
+}
+
+func (activeRepresentativeRepo) Get(_ context.Context, code int64) (*representativeentity.Representative, error) {
+	return &representativeentity.Representative{Code: code, IsActive: true}, nil
+}
+
+type blockedRecurringRepresentativeRepo struct {
+	representativerepo.RepresentativeRepository
+}
+
+func (blockedRecurringRepresentativeRepo) Get(_ context.Context, code int64) (*representativeentity.Representative, error) {
+	return &representativeentity.Representative{Code: code, IsActive: true, Blocked: true}, nil
+}
 
 type fakeRSRepo struct {
 	rows   []*entity.RecurringSale
@@ -42,6 +63,9 @@ func (f *fakeRSRepo) Create(_ context.Context, v *entity.RecurringSale) (*entity
 	f.rows = append(f.rows, v)
 	return v, nil
 }
+func (f *fakeRSRepo) CreateWithRepresentatives(ctx context.Context, v *entity.RecurringSale) (*entity.RecurringSale, error) {
+	return f.Create(ctx, v)
+}
 func (f *fakeRSRepo) Update(_ context.Context, v *entity.RecurringSale) (*entity.RecurringSale, error) {
 	return v, nil
 }
@@ -66,6 +90,11 @@ func (f *fakeRSRepo) Deactivate(context.Context, int64, *string) (*entity.Recurr
 	return f.rows[0], nil
 }
 func (f *fakeRSRepo) CreateAdjustmentLink(context.Context, int64, int64) error { return nil }
+func (f *fakeRSRepo) ReserveOperation(_ context.Context, operation *entity.Operation) (*entity.Operation, bool, error) {
+	return operation, false, nil
+}
+func (f *fakeRSRepo) CompleteOperation(context.Context, *entity.Operation, int64) error { return nil }
+func (f *fakeRSRepo) FailOperation(context.Context, *entity.Operation) error            { return nil }
 
 type fakeOrderCreator struct {
 	dto request.CreateSalesOrderDTO
@@ -136,9 +165,9 @@ func TestGenerateSalesOrderCreatesMonthlyLinesUntilAdjustment(t *testing.T) {
 			Representatives: []*entity.Representative{{RepresentativeCode: 9, IsPrimary: true, CommissionPercent: 5}},
 		}},
 	}
-	uc := &UseCase{Repo: repo, Auth: rsAllowAuth{}, SalesOrders: orderCreator, SalesOrderItems: itemCreator}
+	uc := &UseCase{Repo: repo, Auth: rsAllowAuth{}, SalesOrders: orderCreator, SalesOrderItems: itemCreator, Representatives: activeRepresentativeRepo{}}
 
-	got, err := uc.GenerateSalesOrder(context.Background(), 7, request.MarkRecurringSaleOrderDTO{})
+	got, err := uc.GenerateSalesOrder(context.Background(), 7, request.MarkRecurringSaleOrderDTO{IdempotencyKey: "test-order-2026-07", Competence: "2026-07"})
 	if err != nil {
 		t.Fatalf("GenerateSalesOrder() error = %v", err)
 	}
@@ -172,5 +201,56 @@ func TestGenerateSalesOrderKeepsManualLinkCompatibility(t *testing.T) {
 	}
 	if got.GeneratedOrderCode == nil || *got.GeneratedOrderCode != 123 {
 		t.Fatalf("generated_order_code = %v, want manual code 123", got.GeneratedOrderCode)
+	}
+}
+
+func TestRecurringCreationAndGenerationRejectBlockedRepresentative(t *testing.T) {
+	next := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	repo := &fakeRSRepo{rows: []*entity.RecurringSale{{Code: 7, MovementType: entity.MovementSale, TermType: entity.TermIndefinite, NextAdjustmentDate: &next, Representatives: []*entity.Representative{{RepresentativeCode: 9, IsPrimary: true}}}}}
+	uc := &UseCase{Repo: repo, Auth: rsAllowAuth{}, Representatives: blockedRecurringRepresentativeRepo{}, SalesOrders: &fakeOrderCreator{}, SalesOrderItems: &fakeOrderItemCreator{}}
+	_, err := uc.Create(context.Background(), request.CreateRecurringSaleDTO{EnterpriseCode: 1, CustomerCode: 2, ItemCode: 3, SaleDate: "2026-07-01", NextAdjustmentDate: "2026-10-01", Representatives: []request.CreateRecurringSaleRepresentativeDTO{{RepresentativeCode: 9, IsPrimary: true}}})
+	if err == nil || !strings.Contains(err.Error(), "bloqueado") {
+		t.Fatalf("criação deveria rejeitar representante bloqueado: %v", err)
+	}
+	_, err = uc.GenerateSalesOrder(context.Background(), 7, request.MarkRecurringSaleOrderDTO{})
+	if err == nil || !strings.Contains(err.Error(), "bloqueado") {
+		t.Fatalf("geração deveria rejeitar representante bloqueado: %v", err)
+	}
+}
+
+func TestAdjustmentPreviewExplainsPreviousAndNewValues(t *testing.T) {
+	adjustmentDate := time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC)
+	orderCode := int64(99)
+	index := "IPCA"
+	repo := &fakeRSRepo{rows: []*entity.RecurringSale{{
+		Code: 7, EnterpriseCode: 1, CustomerCode: 2, ItemCode: 3,
+		MovementType: entity.MovementSale, TermType: entity.TermIndefinite,
+		SaleDate: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), NextAdjustmentDate: &adjustmentDate,
+		Quantity: 2, UnitValue: 50, GeneratedOrderCode: &orderCode, IsActive: true, AdjustmentIndex: &index,
+	}}}
+	uc := &UseCase{Repo: repo, Auth: rsAllowAuth{}}
+	got, err := uc.CalculateAdjustment(context.Background(), request.CalculateRecurringSalesAdjustmentDTO{
+		AdjustmentDate: "2027-07-01", AdjustmentPercent: 10, Reason: "Reajuste anual",
+		LegalBasis: "Cláusula 8", Confirm: false,
+	})
+	if err != nil {
+		t.Fatalf("CalculateAdjustment() error = %v", err)
+	}
+	if len(got.Impacts) != 1 {
+		t.Fatalf("impactos = %d, esperado 1", len(got.Impacts))
+	}
+	impact := got.Impacts[0]
+	if impact.PreviousUnitValue != 50 || impact.NewUnitValue != 55 || impact.PreviousTotal != 100 || impact.NewTotal != 110 {
+		t.Fatalf("valores inesperados: %+v", impact)
+	}
+	if impact.AdjustmentIndex != "IPCA" || impact.LegalBasis != "Cláusula 8" || impact.Reason != "Reajuste anual" {
+		t.Fatalf("explicação incompleta: %+v", impact)
+	}
+}
+
+func TestActiveRecurringSaleCanBeCancelledBeforeFirstOrder(t *testing.T) {
+	got := toRecurringSaleResponse(&entity.RecurringSale{IsActive: true, LifecycleStatus: entity.LifecycleActive})
+	if !got.CanCancel {
+		t.Fatal("recorrência ativa deve permitir cancelamento antes do primeiro pedido")
 	}
 }

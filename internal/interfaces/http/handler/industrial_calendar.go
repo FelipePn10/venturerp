@@ -92,7 +92,11 @@ func (h *IndustrialCalendarHandler) GetMonth(w http.ResponseWriter, r *http.Requ
 	}
 	results, err := h.uc.GetMonth(r.Context(), year, month)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, industrial_calendar_uc.ErrInvalidCalendarDate) {
+			security.RespondErrorCode(w, http.StatusUnprocessableEntity, "CALENDARIO_DATA_INVALIDA", "ano e mês devem ser positivos e o mês deve estar entre 1 e 12")
+			return
+		}
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -106,7 +110,11 @@ func (h *IndustrialCalendarHandler) GetWorkdays(w http.ResponseWriter, r *http.R
 	}
 	results, err := h.uc.GetWorkdaysInMonth(r.Context(), year, month)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, industrial_calendar_uc.ErrInvalidCalendarDate) {
+			security.RespondErrorCode(w, http.StatusUnprocessableEntity, "CALENDARIO_DATA_INVALIDA", "ano e mês devem ser positivos e o mês deve estar entre 1 e 12")
+			return
+		}
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)

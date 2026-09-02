@@ -9,13 +9,15 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/repository"
 )
 
 type UseCase struct {
-	Repo repository.Repository
-	Auth ports.AuthService
+	Repo            repository.Repository
+	Auth            ports.AuthService
+	Representatives representativevalidation.Repository
 }
 
 func (uc *UseCase) CreatePeriod(ctx context.Context, dto request.CreateSalesGoalPeriodDTO) (*response.SalesGoalPeriodResponse, error) {
@@ -52,6 +54,9 @@ func (uc *UseCase) CreateGoal(ctx context.Context, dto request.CreateSalesGoalDT
 	if !uc.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if err := representativevalidation.ValidateRequired(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
+	}
 	g, err := goalFromCreate(dto)
 	if err != nil {
 		return nil, err
@@ -66,6 +71,9 @@ func (uc *UseCase) CreateGoal(ctx context.Context, dto request.CreateSalesGoalDT
 func (uc *UseCase) UpdateGoal(ctx context.Context, dto request.UpdateSalesGoalDTO) (*response.SalesGoalResponse, error) {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := representativevalidation.ValidateRequired(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
 	}
 	g, err := goalFromUpdate(dto)
 	if err != nil {

@@ -16,6 +16,12 @@ type Node struct {
 	RequiresMask  bool    // comp.Inherit=false + tem perguntas: subárvore precisa de máscara explícita
 	Level         int
 	Children      []*Node
+
+	// Quantity é a quantidade por unidade do pai já com a fórmula avaliada
+	// (quando houver) com as variáveis da configuração do pai; FormulaApplied
+	// diz se a fórmula foi de fato usada ou se valeu a quantidade fixa.
+	Quantity       float64
+	FormulaApplied bool
 }
 
 // Resolve constrói a árvore BOM para um item configurado (com máscara conhecida).
@@ -41,15 +47,44 @@ func (r *Resolver) Resolve(
 		return nil, err
 	}
 
+	// As variáveis da configuração do pai (COMPRIMENTO, PROFUNDIDADE, …) valem
+	// para todas as fórmulas de quantidade dos seus componentes; buscamos uma
+	// única vez por nível.
+	vars := r.formulaVars(ctx, children, itemCode, mask)
+
 	nodes := make([]*Node, 0, len(children))
 	for _, comp := range children {
 		node, err := r.resolveChild(ctx, comp, parentAnswers, level, visited, createdBy)
 		if err != nil {
 			return nil, err
 		}
+		node.Quantity, node.FormulaApplied = comp.ResolvedQuantity(vars)
 		nodes = append(nodes, node)
 	}
 	return nodes, nil
+}
+
+// formulaVars carrega as respostas nomeadas da configuração do pai apenas
+// quando algum componente do nível realmente usa fórmula de quantidade.
+func (r *Resolver) formulaVars(ctx context.Context, children []*str.ItemStructure, itemCode int64, mask string) map[string]float64 {
+	if mask == "" {
+		return nil
+	}
+	needed := false
+	for _, comp := range children {
+		if comp.HasQuantityFormula() {
+			needed = true
+			break
+		}
+	}
+	if !needed {
+		return nil
+	}
+	vars, err := r.repo.GetMaskAnswersWithNames(ctx, itemCode, mask)
+	if err != nil {
+		return nil
+	}
+	return vars
 }
 
 // ResolveGeneric constrói a árvore BOM para um item genérico (sem máscara).
@@ -73,7 +108,8 @@ func (r *Resolver) ResolveGeneric(
 
 	nodes := make([]*Node, 0, len(children))
 	for _, comp := range children {
-		node := &Node{Component: comp, Level: level}
+		// Sem máscara não há variáveis: vale a quantidade fixa cadastrada.
+		node := &Node{Component: comp, Level: level, Quantity: comp.Quantity}
 		sub, err := r.ResolveGeneric(ctx, comp.ChildCode, level+1, visited)
 		if err != nil {
 			return nil, err

@@ -3,12 +3,16 @@ package production_order_uc
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
+	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
+	itemvo "github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	poentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	porepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -29,6 +33,9 @@ type fakeAuth struct {
 func (f fakeAuth) CanCreatePlannedOrder(context.Context) bool { return f.canPlanned }
 func (f fakeAuth) CanUpdateSalesOrder(context.Context) bool   { return f.canSales }
 func (f fakeAuth) CanGetSalesOrder(context.Context) bool      { return f.canSales }
+func (f fakeAuth) UserID(context.Context) (uuid.UUID, error) {
+	return uuid.MustParse("11111111-1111-1111-1111-111111111111"), nil
+}
 
 type fakePORepo struct {
 	porepo.ProductionOrderRepository
@@ -157,6 +164,24 @@ type fakeStockRepo struct {
 	failWith  error
 }
 
+// fakeOrderItems resolve o código de negócio que a tela envia para a chave
+// legada que a OF grava.
+type fakeOrderItems struct{ item *itementity.Item }
+
+func (f *fakeOrderItems) FindItemByBusinessCode(_ context.Context, code itemvo.BusinessCode) (*itementity.Item, error) {
+	if f.item != nil && f.item.BusinessCode == code {
+		return f.item, nil
+	}
+	return nil, itemrepo.ErrNotFound
+}
+
+func (f *fakeOrderItems) FindItemByCode(_ context.Context, code itemvo.ItemCode) (*itementity.Item, error) {
+	if f.item != nil && f.item.Code == code {
+		return f.item, nil
+	}
+	return nil, itemrepo.ErrNotFound
+}
+
 type fakeDeliveryStructure struct{ children []*structentity.ItemStructure }
 
 func (f *fakeDeliveryStructure) GetAllDirectChildren(context.Context, int64) ([]*structentity.ItemStructure, error) {
@@ -171,8 +196,11 @@ func TestCreateProductionOrder_GeneratesOnlyDirectPrimaryDemands(t *testing.T) {
 		{ChildCode: 30, Quantity: 1, IsFixedQty: true},
 		{ChildCode: 40, Quantity: 1, IsCoproduct: true},
 	}}
-	uc := CreateProductionOrderUseCase{Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: structure}
-	order, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: 10, PlannedQty: 5, CreatedBy: uuid.New()})
+	uc := CreateProductionOrderUseCase{
+		Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: structure,
+		Items: &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "PROD-10"}},
+	}
+	order, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "PROD-10", PlannedQty: 5, CreatedBy: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,5 +501,35 @@ func TestOperationalConsultation_AggregatesExecution(t *testing.T) {
 	}
 	if len(result.Deliveries) != 1 || len(result.Movements) != 1 || !result.Totals["delivered"].Equal(decimal.NewFromInt(6)) || !result.Totals["pending"].Equal(decimal.NewFromInt(4)) {
 		t.Fatalf("unexpected operational result: %+v", result)
+	}
+}
+
+// A tela de OF envia o código de negócio do item; um código desconhecido é
+// recusado com 422 em PT-BR, não com 500.
+func TestCreateProductionOrder_UnknownItemIsValidationError(t *testing.T) {
+	uc := CreateProductionOrderUseCase{
+		Repo: &fakePORepo{}, Auth: fakeAuth{canPlanned: true},
+		Structure: &fakeDeliveryStructure{},
+		Items:     &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "PROD-10"}},
+	}
+	_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "NAO-EXISTE", PlannedQty: 5})
+	if _, ok := errorsuc.AsValidation(err); !ok {
+		t.Fatalf("esperado ValidationError, veio %T (%v)", err, err)
+	}
+}
+
+func TestCreateProductionOrder_NonPositiveQuantityIsRejectedInPortuguese(t *testing.T) {
+	uc := CreateProductionOrderUseCase{
+		Repo: &fakePORepo{}, Auth: fakeAuth{canPlanned: true},
+		Structure: &fakeDeliveryStructure{},
+		Items:     &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "PROD-10"}},
+	}
+	_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "PROD-10", PlannedQty: 0})
+	v, ok := errorsuc.AsValidation(err)
+	if !ok {
+		t.Fatalf("esperado ValidationError, veio %T (%v)", err, err)
+	}
+	if !strings.Contains(v.Error(), "quantidade planejada") {
+		t.Fatalf("mensagem = %q", v.Error())
 	}
 }

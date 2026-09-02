@@ -3135,6 +3135,7 @@ type AppropriationTable struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type AuditLog struct {
@@ -3154,17 +3155,18 @@ type AuditLog struct {
 }
 
 type BomHeader struct {
-	ID        int64
-	ItemCode  int64
-	Mask      pgtype.Text
-	BomType   string
-	Version   int32
-	Status    string
-	ValidFrom pgtype.Date
-	IsActive  bool
-	CreatedBy pgtype.UUID
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID           int64
+	ItemCode     int64
+	Mask         pgtype.Text
+	BomType      string
+	Version      int32
+	Status       string
+	ValidFrom    pgtype.Date
+	IsActive     bool
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type CapacityRequirement struct {
@@ -3423,6 +3425,52 @@ type Cfop struct {
 	CreatedAt       pgtype.Timestamptz
 }
 
+type CommercialCommissionEvent struct {
+	ID             pgtype.UUID
+	EnterpriseID   int64
+	LedgerCode     int64
+	EventType      string
+	BeforeState    []byte
+	AfterState     []byte
+	Reason         string
+	IdempotencyKey string
+	ActorID        pgtype.UUID
+	OccurredAt     pgtype.Timestamptz
+}
+
+type CommercialCommissionLedger struct {
+	Code               int64
+	EnterpriseID       int64
+	RepresentativeCode int64
+	SalesOrderCode     int64
+	FiscalExitID       *int64
+	ReceivableID       *int64
+	EventType          string
+	CompetenceDate     pgtype.Date
+	BaseAmount         pgtype.Numeric
+	CommissionPct      pgtype.Numeric
+	Amount             pgtype.Numeric
+	Status             string
+	ReversalOf         *int64
+	IdempotencyKey     string
+	OccurredAt         pgtype.Timestamptz
+	ActorID            pgtype.UUID
+	ReconciledAt       pgtype.Timestamptz
+	ReconciledBy       pgtype.UUID
+	PaidAt             pgtype.Timestamptz
+	PaidBy             pgtype.UUID
+	PaymentReference   pgtype.Text
+}
+
+type CommercialCommissionSetting struct {
+	EnterpriseID    int64
+	CompetenceEvent string
+	InvoiceSharePct pgtype.Numeric
+	ReceiptSharePct pgtype.Numeric
+	UpdatedAt       pgtype.Timestamptz
+	UpdatedBy       pgtype.UUID
+}
+
 type CommercialPolicy struct {
 	ID                     int64
 	Code                   int64
@@ -3468,6 +3516,7 @@ type CommercialPolicy struct {
 	Observation            pgtype.Text
 	CreatedAt              pgtype.Timestamptz
 	UpdatedAt              pgtype.Timestamptz
+	EnterpriseID           int64
 }
 
 type CommercialPolicyLine struct {
@@ -3598,11 +3647,13 @@ type ConsumerServiceCallAttachment struct {
 	Code        int64
 	CallCode    int64
 	FileName    string
-	FilePath    string
+	FilePath    pgtype.Text
 	ContentType pgtype.Text
 	Notes       pgtype.Text
 	CreatedAt   pgtype.Timestamptz
 	CreatedBy   pgtype.UUID
+	FileContent []byte
+	FileSize    int64
 }
 
 type ConsumerServiceCallChecklistItem struct {
@@ -4116,6 +4167,18 @@ type DeliveryReschedule struct {
 	Reason         pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
+	EnterpriseCode int64
+	BatchID        pgtype.UUID
+}
+
+type DeliveryRescheduleBatch struct {
+	ID             pgtype.UUID
+	EnterpriseCode int64
+	SalesOrderCode int64
+	IdempotencyKey string
+	PayloadHash    string
+	CreatedBy      pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
 }
 
 type DeliveryTankReservation struct {
@@ -4438,6 +4501,9 @@ type FiscalConfig struct {
 	Logo                      []byte
 	LogoMime                  pgtype.Text
 	BrandColor                pgtype.Text
+	EnterpriseID              int64
+	TradeName                 pgtype.Text
+	Email                     pgtype.Text
 }
 
 type FiscalCte struct {
@@ -4696,6 +4762,16 @@ type Group struct {
 	EnterpriseID int64
 	CreatedBy    pgtype.UUID
 	CreatedAt    pgtype.Timestamptz
+}
+
+type HttpIdempotencyRecord struct {
+	ScopeKey           string
+	RequestFingerprint string
+	StatusCode         *int32
+	ResponseBody       []byte
+	Completed          bool
+	CreatedAt          pgtype.Timestamptz
+	ExpiresAt          pgtype.Timestamptz
 }
 
 type IbptRate struct {
@@ -5461,6 +5537,9 @@ type ItemStructure struct {
 	IsFixedQty         bool
 	SubstituteGroup    int16
 	SubstitutePriority int16
+	QuantityFormula    pgtype.Text
+	QuantityRounding   string
+	QuantityScale      int16
 }
 
 type ItemSupplierQualityReport struct {
@@ -5528,6 +5607,7 @@ type LotMask struct {
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
 	CreatedBy          pgtype.UUID
+	EnterpriseID       int64
 }
 
 type LotMaskPart struct {
@@ -5728,20 +5808,21 @@ type ManufacturingItemParameter struct {
 }
 
 type ManufacturingRoute struct {
-	ID          int64
-	Code        int64
-	ItemCode    int64
-	Mask        pgtype.Text
-	Alternative int16
-	Description pgtype.Text
-	Situation   sqltypes.RouteSituationEnum
-	IsStandard  bool
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
-	ValidFrom   pgtype.Date
-	ValidTo     pgtype.Date
+	ID           int64
+	Code         int64
+	ItemCode     int64
+	Mask         pgtype.Text
+	Alternative  int16
+	Description  pgtype.Text
+	Situation    sqltypes.RouteSituationEnum
+	IsStandard   bool
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	ValidFrom    pgtype.Date
+	ValidTo      pgtype.Date
+	EnterpriseID int64
 }
 
 type ManufacturingSequencingSetting struct {
@@ -5775,6 +5856,18 @@ type ManufacturingStockParameter struct {
 	AutoIssueLots bool
 	MovementFrom  pgtype.Date
 	MovementTo    pgtype.Date
+}
+
+type ManufacturingStructuralAudit struct {
+	ID           int64
+	EnterpriseID int64
+	EntityType   string
+	EntityKey    string
+	Action       string
+	BeforeState  []byte
+	AfterState   []byte
+	ActorID      pgtype.UUID
+	OccurredAt   pgtype.Timestamptz
 }
 
 type ManufacturingWarehouseAddress struct {
@@ -6189,6 +6282,20 @@ type Operation struct {
 	CostPerUnit          pgtype.Numeric
 	LeadTimeDays         *int32
 	ThirdPartyRemittance string
+	EnterpriseID         int64
+}
+
+type OperationalMutationAudit struct {
+	ID             int64
+	TableName      string
+	Operation      string
+	RowKey         string
+	BeforeData     []byte
+	AfterData      []byte
+	EnterpriseID   *int64
+	ActorID        pgtype.UUID
+	IdempotencyKey pgtype.Text
+	OccurredAt     pgtype.Timestamptz
 }
 
 type OrderPriority struct {
@@ -6404,6 +6511,18 @@ type PreventiveService struct {
 	ServiceType  string
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
+}
+
+type ProcurementImmutableAudit struct {
+	ID            int64
+	EnterpriseKey int64
+	EntityType    string
+	EntityKey     string
+	Action        string
+	BeforeState   []byte
+	AfterState    []byte
+	ActorID       pgtype.UUID
+	OccurredAt    pgtype.Timestamptz
 }
 
 type ProcurementInspectionDisposition struct {
@@ -6838,49 +6957,57 @@ type PurchaseOrderCurrencyRate struct {
 }
 
 type PurchaseOrderItem struct {
-	Code                     int64
-	PurchaseOrderCode        int64
-	Sequence                 int32
-	ItemCode                 int64
-	Mask                     string
-	RequestedQty             pgtype.Numeric
-	ReceivedQty              pgtype.Numeric
-	CancelledQty             pgtype.Numeric
-	UnitPrice                pgtype.Numeric
-	TotalPrice               pgtype.Numeric
-	DiscountPct              pgtype.Numeric
-	IpiPct                   pgtype.Numeric
-	IcmsPct                  pgtype.Numeric
-	Status                   string
-	DeliveryDate             pgtype.Date
-	Notes                    pgtype.Text
-	IsActive                 bool
-	CreatedAt                pgtype.Timestamptz
-	UpdatedAt                pgtype.Timestamptz
-	PurchaseUom              pgtype.Text
-	InternalUom              pgtype.Text
-	InternalQty              pgtype.Numeric
-	InternalPrice            pgtype.Numeric
-	PromisedDate             pgtype.Date
-	TolerancePct             pgtype.Numeric
-	CancelledToleranceQty    pgtype.Numeric
-	IcmsStPct                pgtype.Numeric
-	OperationTypeCode        *int64
-	InvoiceTypeCode          *int64
-	AccountingAccount        pgtype.Text
-	CostCenterCode           *int64
-	RequesterEmployeeCode    *int64
-	ContractCode             *int64
-	QuotationCode            *int64
-	UtilizationType          pgtype.Text
-	FiscalClassificationCode *int64
-	Additions                pgtype.Numeric
-	IpiBase                  pgtype.Numeric
-	IpiValue                 pgtype.Numeric
-	IcmsBase                 pgtype.Numeric
-	IcmsValue                pgtype.Numeric
-	IcmsStBase               pgtype.Numeric
-	IcmsStValue              pgtype.Numeric
+	Code                      int64
+	PurchaseOrderCode         int64
+	Sequence                  int32
+	ItemCode                  int64
+	Mask                      string
+	RequestedQty              pgtype.Numeric
+	ReceivedQty               pgtype.Numeric
+	CancelledQty              pgtype.Numeric
+	UnitPrice                 pgtype.Numeric
+	TotalPrice                pgtype.Numeric
+	DiscountPct               pgtype.Numeric
+	IpiPct                    pgtype.Numeric
+	IcmsPct                   pgtype.Numeric
+	Status                    string
+	DeliveryDate              pgtype.Date
+	Notes                     pgtype.Text
+	IsActive                  bool
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
+	PurchaseUom               pgtype.Text
+	InternalUom               pgtype.Text
+	InternalQty               pgtype.Numeric
+	InternalPrice             pgtype.Numeric
+	PromisedDate              pgtype.Date
+	TolerancePct              pgtype.Numeric
+	CancelledToleranceQty     pgtype.Numeric
+	IcmsStPct                 pgtype.Numeric
+	OperationTypeCode         *int64
+	InvoiceTypeCode           *int64
+	AccountingAccount         pgtype.Text
+	CostCenterCode            *int64
+	RequesterEmployeeCode     *int64
+	ContractCode              *int64
+	QuotationCode             *int64
+	UtilizationType           pgtype.Text
+	FiscalClassificationCode  *int64
+	Additions                 pgtype.Numeric
+	IpiBase                   pgtype.Numeric
+	IpiValue                  pgtype.Numeric
+	IcmsBase                  pgtype.Numeric
+	IcmsValue                 pgtype.Numeric
+	IcmsStBase                pgtype.Numeric
+	IcmsStValue               pgtype.Numeric
+	WarehouseID               *int64
+	PlannedOrderCode          *int64
+	DemandType                pgtype.Text
+	DemandCode                *int64
+	SalesOrderCode            *int64
+	ProductionOrderID         *int64
+	PurchaseRequisitionCode   *int64
+	PurchaseRequisitionItemID *int64
 }
 
 type PurchaseOrderSequence struct {
@@ -7226,33 +7353,51 @@ type ReceivingNoticeItem struct {
 }
 
 type RecurringSale struct {
-	Code                    int64
-	EnterpriseCode          int64
-	CustomerCode            int64
-	EstablishmentCode       *int64
-	ItemCode                int64
-	ItemMask                pgtype.Text
-	SalesPlanCode           *int64
-	MovementType            string
-	TermType                string
-	SaleDate                pgtype.Date
-	NextAdjustmentDate      pgtype.Date
-	MonthsQuantity          *int32
-	PaymentsQuantity        *int32
-	GraceMonths             int32
-	PaymentValue            pgtype.Numeric
-	Quantity                pgtype.Numeric
-	UnitValue               pgtype.Numeric
-	Reason                  pgtype.Text
-	GeneratedOrderCode      *int64
-	GeneratedOrderAt        pgtype.Timestamptz
-	SourceRecurringSaleCode *int64
-	OriginalAdjustmentCode  *int64
-	AdjustmentPercent       pgtype.Numeric
-	IsActive                bool
-	CreatedAt               pgtype.Timestamptz
-	UpdatedAt               pgtype.Timestamptz
-	CreatedBy               pgtype.UUID
+	Code                      int64
+	EnterpriseCode            int64
+	CustomerCode              int64
+	EstablishmentCode         *int64
+	ItemCode                  int64
+	ItemMask                  pgtype.Text
+	SalesPlanCode             *int64
+	MovementType              string
+	TermType                  string
+	SaleDate                  pgtype.Date
+	NextAdjustmentDate        pgtype.Date
+	MonthsQuantity            *int32
+	PaymentsQuantity          *int32
+	GraceMonths               int32
+	PaymentValue              pgtype.Numeric
+	Quantity                  pgtype.Numeric
+	UnitValue                 pgtype.Numeric
+	Reason                    pgtype.Text
+	GeneratedOrderCode        *int64
+	GeneratedOrderAt          pgtype.Timestamptz
+	SourceRecurringSaleCode   *int64
+	OriginalAdjustmentCode    *int64
+	AdjustmentPercent         pgtype.Numeric
+	IsActive                  bool
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
+	CreatedBy                 pgtype.UUID
+	LifecycleStatus           string
+	EffectiveFrom             pgtype.Date
+	EffectiveUntil            pgtype.Date
+	Frequency                 string
+	PriceTableCode            *int64
+	CurrencyCode              string
+	AdjustmentIndex           pgtype.Text
+	AdjustmentPeriodMonths    *int32
+	AdjustmentFloorPct        pgtype.Numeric
+	AdjustmentCapPct          pgtype.Numeric
+	BillingPolicy             []byte
+	DeliveryPolicy            []byte
+	TaxPolicy                 []byte
+	CostCenterCode            *int64
+	RenewalPolicy             string
+	CancellationEffectiveDate pgtype.Date
+	FutureOrdersPolicy        pgtype.Text
+	CancelledBy               pgtype.UUID
 }
 
 type RecurringSalesAdjustmentDate struct {
@@ -7270,6 +7415,34 @@ type RecurringSalesAdjustmentLink struct {
 	AdjustmentCode          int64
 	SourceRecurringSaleCode int64
 	CreatedAt               pgtype.Timestamptz
+}
+
+type RecurringSalesEvent struct {
+	ID                pgtype.UUID
+	EnterpriseCode    int64
+	RecurringSaleCode int64
+	EventType         string
+	BeforeState       []byte
+	AfterState        []byte
+	Reason            pgtype.Text
+	CorrelationID     pgtype.Text
+	ActorID           pgtype.UUID
+	OccurredAt        pgtype.Timestamptz
+}
+
+type RecurringSalesOperation struct {
+	ID                pgtype.UUID
+	EnterpriseCode    int64
+	RecurringSaleCode int64
+	OperationType     string
+	Competence        string
+	IdempotencyKey    string
+	RequestHash       string
+	ResultCode        *int64
+	Status            string
+	ActorID           pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	CompletedAt       pgtype.Timestamptz
 }
 
 type RecurringSalesParameter struct {
@@ -7592,24 +7765,26 @@ type SalesDivision struct {
 }
 
 type SalesForecast struct {
-	ID        int64
-	ItemCode  int64
-	Mask      pgtype.Text
-	Week      int32
-	Year      int32
-	Quantity  pgtype.Numeric
-	CreatedBy pgtype.UUID
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID           int64
+	ItemCode     int64
+	Mask         pgtype.Text
+	Week         int32
+	Year         int32
+	Quantity     pgtype.Numeric
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type SalesForecastBlock struct {
-	ID        int64
-	StartDate pgtype.Date
-	EndDate   pgtype.Date
-	Reason    pgtype.Text
-	CreatedAt pgtype.Timestamptz
-	CreatedBy pgtype.UUID
+	ID           int64
+	StartDate    pgtype.Date
+	EndDate      pgtype.Date
+	Reason       pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type SalesGoal struct {
@@ -7877,6 +8052,7 @@ type SalesPricePolicy struct {
 	Observation    pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	EnterpriseID   int64
 }
 
 type SalesQuotation struct {
@@ -8057,6 +8233,7 @@ type SalesTable struct {
 	AllowItemsBelowCent        bool
 	IcmsInterestadualPorDentro bool
 	Observation                pgtype.Text
+	EnterpriseID               int64
 }
 
 type SalesTablePrice struct {
@@ -8089,6 +8266,7 @@ type SalesTablePriceHistory struct {
 	PolicyCode        *int64
 	Reason            pgtype.Text
 	CreatedAt         pgtype.Timestamptz
+	EnterpriseID      int64
 }
 
 type Shipment struct {
@@ -8126,30 +8304,33 @@ type Shipment struct {
 	ConferredAt         pgtype.Timestamptz
 	CancelledAt         pgtype.Timestamptz
 	UpdatedBy           pgtype.UUID
+	EnterpriseID        int64
 }
 
 type ShipmentDeliveryInstruction struct {
-	ID          int64
-	LoadID      *int64
-	CustomerID  *int64
-	Title       string
-	Instruction string
-	Priority    int32
-	Active      bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID           int64
+	LoadID       *int64
+	CustomerID   *int64
+	Title        string
+	Instruction  string
+	Priority     int32
+	Active       bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type ShipmentDispatchBox struct {
-	ID          int64
-	Code        string
-	Description pgtype.Text
-	WarehouseID *int64
-	Zone        pgtype.Text
-	Active      bool
-	CurrentLoad *int64
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         string
+	Description  pgtype.Text
+	WarehouseID  *int64
+	Zone         pgtype.Text
+	Active       bool
+	CurrentLoad  *int64
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type ShipmentEvent struct {
@@ -8208,6 +8389,7 @@ type ShipmentLoad struct {
 	UpdatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
 	UpdatedBy         pgtype.UUID
+	EnterpriseID      int64
 }
 
 type ShipmentLoadFiscalNote struct {
@@ -8935,6 +9117,73 @@ type TechnicalAssistanceReturnNote struct {
 	CreatedBy     pgtype.UUID
 }
 
+type TechnicalAssistanceRma struct {
+	Code                int64
+	EnterpriseID        int64
+	CallCode            int64
+	Status              string
+	ReasonCode          string
+	ReasonDescription   pgtype.Text
+	EligibilityStatus   string
+	EligibilityReason   string
+	AuthorizationNumber pgtype.Text
+	AuthorizedAt        pgtype.Timestamptz
+	ReverseCarrierCode  *int64
+	ReverseTrackingCode pgtype.Text
+	ReceivedAt          pgtype.Timestamptz
+	InspectionNotes     pgtype.Text
+	InspectedAt         pgtype.Timestamptz
+	Destination         pgtype.Text
+	SlaDueAt            pgtype.Timestamptz
+	ProductCost         pgtype.Numeric
+	FreightCost         pgtype.Numeric
+	ServiceCost         pgtype.Numeric
+	FiscalDocumentKey   pgtype.Text
+	StockMovementCode   *int64
+	IdempotencyKey      string
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+}
+
+type TechnicalAssistanceRmaEvent struct {
+	Code          int64
+	EnterpriseID  int64
+	RmaCode       int64
+	EventType     string
+	BeforeState   []byte
+	AfterState    []byte
+	Reason        pgtype.Text
+	CorrelationID pgtype.Text
+	OccurredAt    pgtype.Timestamptz
+	ActorID       pgtype.UUID
+}
+
+type TechnicalAssistanceRmaEvidence struct {
+	ID           pgtype.UUID
+	EnterpriseID int64
+	RmaCode      int64
+	FileName     string
+	ContentType  string
+	Content      []byte
+	SizeBytes    int64
+	Sha256       string
+	UploadedBy   pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+}
+
+type TechnicalAssistanceRmaItem struct {
+	Code                 int64
+	RmaCode              int64
+	CallItemCode         int64
+	ItemCode             int64
+	Quantity             pgtype.Numeric
+	SerialNumber         pgtype.Text
+	LotNumber            pgtype.Text
+	RequestedDestination pgtype.Text
+	InspectionResult     pgtype.Text
+}
+
 type TechnicalAssistanceWarrantyResponsible struct {
 	Code         int64
 	Name         string
@@ -9133,6 +9382,19 @@ type Warehouse struct {
 	Type                interface{}
 	Disposition         bool
 	ReservationsAllowed bool
+	EnterpriseID        int64
+}
+
+type WarehouseInventoryAudit struct {
+	ID           int64
+	EnterpriseID int64
+	EntityType   string
+	EntityKey    string
+	Action       string
+	BeforeState  []byte
+	AfterState   []byte
+	ActorID      pgtype.UUID
+	OccurredAt   pgtype.Timestamptz
 }
 
 type WarehouseWmsSetting struct {

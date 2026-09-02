@@ -2,6 +2,7 @@ package security
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -16,20 +17,20 @@ import (
 func RespondUseCaseError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errorsuc.ErrUnauthorized):
-		RespondError(w, http.StatusForbidden, err.Error())
+		RespondErrorCode(w, http.StatusForbidden, "ACESSO_NEGADO", "usuário não autorizado para esta operação")
 		return
 	}
 
 	if v, ok := errorsuc.AsValidation(err); ok {
-		RespondError(w, http.StatusUnprocessableEntity, v.Error())
+		RespondErrorCode(w, http.StatusUnprocessableEntity, "VALIDACAO_DE_DOMINIO", v.Error())
 		return
 	}
 	if c, ok := errorsuc.AsConflict(err); ok {
-		RespondError(w, http.StatusConflict, c.Error())
+		RespondErrorCode(w, http.StatusConflict, "CONFLITO_DE_DOMINIO", c.Error())
 		return
 	}
 	if n, ok := errorsuc.AsNotFound(err); ok {
-		RespondError(w, http.StatusNotFound, n.Error())
+		RespondErrorCode(w, http.StatusNotFound, "REGISTRO_NAO_ENCONTRADO", n.Error())
 		return
 	}
 
@@ -37,16 +38,17 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505": // unique_violation
-			RespondError(w, http.StatusConflict, "resource already exists")
+			RespondError(w, http.StatusConflict, "já existe um registro com os dados informados")
 			return
 		case "23503": // foreign_key_violation
-			RespondError(w, http.StatusUnprocessableEntity, "referenced resource not found")
+			RespondError(w, http.StatusUnprocessableEntity, "um dos vínculos informados não existe na empresa autenticada")
 			return
 		case "23502", "23514": // not_null_violation, check_violation
-			RespondError(w, http.StatusUnprocessableEntity, "invalid or missing required field")
+			RespondError(w, http.StatusUnprocessableEntity, "há um campo obrigatório ausente ou inválido")
 			return
 		}
 	}
 
+	slog.Error("erro interno em caso de uso", "error", err)
 	RespondError(w, http.StatusInternalServerError, err.Error())
 }

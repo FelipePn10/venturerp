@@ -17,15 +17,18 @@ INSERT INTO item_structures (
     is_coproduct,
     is_fixed_qty,
     substitute_group,
-    substitute_priority
+    substitute_priority,
+    quantity_formula,
+    quantity_rounding,
+    quantity_scale
 ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
          )
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale;
 
 
 -- name: GetStructureComponentByID :one
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale
 FROM item_structures
 WHERE id = $1;
 
@@ -54,7 +57,10 @@ SELECT
     s.is_coproduct,
     s.is_fixed_qty,
     s.substitute_group,
-    s.substitute_priority
+    s.substitute_priority,
+    s.quantity_formula,
+    s.quantity_rounding,
+    s.quantity_scale
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
@@ -63,7 +69,7 @@ ORDER BY s.sequence, s.id;
 
 
 -- name: GetGenericChildren :many
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, quantity_formula, quantity_rounding, quantity_scale
 FROM item_structures
 WHERE parent_code = $1
   AND parent_mask IS NULL
@@ -95,6 +101,9 @@ SELECT
     s.is_fixed_qty,
     s.substitute_group,
     s.substitute_priority,
+    s.quantity_formula,
+    s.quantity_rounding,
+    s.quantity_scale,
     i.pdm_description_technique AS child_description
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
@@ -125,6 +134,9 @@ SET
     is_fixed_qty        = $14,
     substitute_group    = $15,
     substitute_priority = $16,
+    quantity_formula    = $17,
+    quantity_rounding   = $18,
+    quantity_scale      = $19,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -133,7 +145,7 @@ WHERE parent_code = $1
         OR (parent_mask IS NULL AND $3 IS NULL)
     )
   AND is_active = TRUE
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale;
 
 -- name: DeactivateStructureComponent :exec
 UPDATE item_structures
@@ -141,6 +153,22 @@ SET
     is_active  = FALSE,
     updated_at = NOW()
 WHERE id = $1;
+
+-- name: DeactivateStructureComponentByCodes :execrows
+UPDATE item_structures AS structure
+SET is_active = FALSE, updated_at = NOW()
+WHERE structure.parent_code = $1
+  AND structure.child_code = $2
+  AND structure.parent_mask IS NOT DISTINCT FROM sqlc.narg(parent_mask)::text
+  AND structure.is_active = TRUE
+  AND EXISTS (
+      SELECT 1
+      FROM items AS parent_item
+      JOIN items AS child_item ON child_item.code = structure.child_code
+      WHERE parent_item.code = structure.parent_code
+        AND parent_item.enterprise_id = sqlc.arg(enterprise_id)
+        AND child_item.enterprise_id = sqlc.arg(enterprise_id)
+  );
 
 
 -- name: GetItemCodeAndDescription :one

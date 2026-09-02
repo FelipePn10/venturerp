@@ -64,11 +64,13 @@ func NewUserHandler(
 	registerUC *user_uc.RegisterUserUseCase,
 	loginUC *user_uc.LoginUserUseCase,
 	jwtSecret string,
+	dataEnvironment string,
 ) *UserHandler {
 	return &UserHandler{
-		registerUC: registerUC,
-		loginUC:    loginUC,
-		jwtSecret:  jwtSecret,
+		registerUC:      registerUC,
+		loginUC:         loginUC,
+		jwtSecret:       jwtSecret,
+		dataEnvironment: dataEnvironment,
 	}
 }
 
@@ -161,14 +163,14 @@ func NewItemStructureHandler(
 	updateUC *structure_uc.UpdateStructureComponentUseCase,
 	getAllStructureUC *structure_uc.GetAllDirectChildrenUseCase,
 	treeUC *structure_uc.GetStructureTreeUseCase,
-	// deleteUC *structure_uc.DeleteStructureComponentUseCase,
+	deleteUC *structure_uc.DeleteStructureComponentUseCase,
 ) *ItemStructureHandler {
 	return &ItemStructureHandler{
 		createUC:        createUC,
 		updateUC:        updateUC,
 		getAllStructure: getAllStructureUC,
 		treeUC:          treeUC,
-		//deleteUC:  deleteUC,
+		deleteUC:        deleteUC,
 	}
 }
 
@@ -217,10 +219,12 @@ func NewDeliveryPromiseParamsHandler(
 func NewDeliveryRescheduleHandler(
 	createUC *delivery_reschedule_uc.CreateDeliveryRescheduleUseCase,
 	listUC *delivery_reschedule_uc.ListDeliveryReschedulesUseCase,
+	planningUC *delivery_reschedule_uc.PlanningUseCase,
 ) *DeliveryRescheduleHandler {
 	return &DeliveryRescheduleHandler{
-		createUC: createUC,
-		listUC:   listUC,
+		createUC:   createUC,
+		listUC:     listUC,
+		planningUC: planningUC,
 	}
 }
 

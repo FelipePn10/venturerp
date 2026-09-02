@@ -2,6 +2,7 @@ package machine_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -12,6 +13,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 	machinesvc "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
 )
+
+var ErrProductionTimeNotConfigured = errors.New("tempo de produção não cadastrado")
 
 // O caso de uso CalculateProductionTime calcula quanto tempo leva para produzir
 //uma determinada quantidade demandada de uma variante de item + máscara em uma máquina
@@ -55,17 +58,17 @@ func (uc *CalculateProductionTimeUseCase) Execute(
 	}
 
 	if input.DemandQty <= 0 {
-		return nil, fmt.Errorf("demand_qty must be greater than zero")
+		return nil, errorsuc.NewValidationError("a quantidade da demanda deve ser maior que zero")
 	}
 
 	// --- 1. Fetch item to obtain its unit of measurement ---
 	itemCodeVO, err := valueobject.NewItemCode(input.ItemCode)
 	if err != nil {
-		return nil, fmt.Errorf("invalid item code: %w", err)
+		return nil, errorsuc.NewValidationError("código de item inválido")
 	}
 	item, err := uc.ItemRepo.FindItemByCode(ctx, itemCodeVO)
 	if err != nil {
-		return nil, fmt.Errorf("item %d not found: %w", input.ItemCode, err)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado nesta empresa", input.ItemCode))
 	}
 
 	// --- 2. Fetch machine ---
@@ -180,14 +183,7 @@ func (uc *CalculateProductionTimeUseCase) selectBestIMT(
 	}
 
 	if mask != "" {
-		return nil, fmt.Errorf(
-			"no active production time config found for item %d, mask '%s', machine %d "+
-				"(also checked default/empty-mask config)",
-			itemCode, mask, machineCode,
-		)
+		return nil, fmt.Errorf("%w: este item (máscara %q) não possui tempo cadastrado para a máquina selecionada. Cadastre em VMAQ0200 → Tempos", ErrProductionTimeNotConfigured, mask)
 	}
-	return nil, fmt.Errorf(
-		"no active production time config found for item %d on machine %d",
-		itemCode, machineCode,
-	)
+	return nil, fmt.Errorf("%w: este item não possui tempo cadastrado para a máquina selecionada. Cadastre em VMAQ0200 → Tempos", ErrProductionTimeNotConfigured)
 }

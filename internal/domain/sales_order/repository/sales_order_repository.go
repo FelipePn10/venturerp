@@ -9,7 +9,9 @@ import (
 )
 
 type SalesOrderFilter struct {
+	Search                   string
 	CustomerCode             *int64
+	ItemCode                 *int64
 	RepresentativeCode       *int64
 	PaymentTermCode          *int64
 	Status                   *entity.SalesOrderStatus
@@ -18,10 +20,13 @@ type SalesOrderFilter struct {
 	ReleaseStatus            *entity.SalesOrderReleaseStatus
 	ConferenceStatus         *entity.SalesOrderConferenceStatus
 	IsBlocked                *bool
+	WorkflowStatus           *string
 	EmissionFrom             *time.Time
 	EmissionTo               *time.Time
 	DeliveryFrom             *time.Time
 	DeliveryTo               *time.Time
+	Limit                    int32
+	Offset                   int32
 }
 
 type SalesOrderReport struct {
@@ -61,6 +66,7 @@ type SalesOrderRepository interface {
 	SaveDelayReason(ctx context.Context, code int64, reason, action string, createdBy uuid.UUID) error
 
 	CreateItem(ctx context.Context, item *entity.SalesOrderItem) (*entity.SalesOrderItem, error)
+	GetItem(ctx context.Context, itemCode int64) (*entity.SalesOrderItem, error)
 	UpdateItem(ctx context.Context, item *entity.SalesOrderItem) (*entity.SalesOrderItem, error)
 	ListItems(ctx context.Context, salesOrderCode int64) ([]*entity.SalesOrderItem, error)
 	CancelItem(ctx context.Context, itemCode int64) error

@@ -29,6 +29,15 @@ func main() {
 	}
 	defer db.Close()
 	log.Info("database connected")
+	authDB := db
+	if cfg.IsTraining() {
+		authDB, err = database.NewDBURL(cfg.IdentityDatabaseURL)
+		if err != nil {
+			log.Fatal("failed to connect to identity database", "error", err)
+		}
+		defer authDB.Close()
+		log.Info("production identity authority connected")
+	}
 
 	shutdownTracing, err := observability.InitTracing(context.Background(), cfg.OTELServiceName, cfg.OTELNamespace, cfg.Env)
 	if err != nil {
@@ -49,6 +58,7 @@ func main() {
 		config:    cfg,
 		logger:    log,
 		db:        db,
+		authDB:    authDB,
 		metrics:   httpmw.NewMetrics(),
 		auditSink: auditSink,
 	}

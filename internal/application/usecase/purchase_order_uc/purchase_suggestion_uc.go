@@ -60,6 +60,15 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 	if !uc.Auth.CanCreatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.EnterpriseCode = enterpriseCode
+	dto.CreatedBy, err = uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	planned, err := uc.Planned.GetByCode(ctx, dto.PlannedOrderCode)
 	if err != nil {
@@ -107,16 +116,22 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 		mask = *planned.Mask
 	}
 	item := &poentity.PurchaseOrderItem{
-		Sequence:     1,
-		ItemCode:     planned.ItemCode,
-		Mask:         mask,
-		RequestedQty: qty,
-		UnitPrice:    dto.UnitPrice,
-		TotalPrice:   qty * dto.UnitPrice,
-		Status:       poentity.PurchaseOrderItemStatusOPEN,
-		DeliveryDate: &planned.NeedDate,
-		IsActive:     true,
+		Sequence:         1,
+		ItemCode:         planned.ItemCode,
+		Mask:             mask,
+		RequestedQty:     qty,
+		UnitPrice:        dto.UnitPrice,
+		TotalPrice:       qty * dto.UnitPrice,
+		Status:           poentity.PurchaseOrderItemStatusOPEN,
+		DeliveryDate:     &planned.NeedDate,
+		IsActive:         true,
+		WarehouseID:      planned.WarehouseCode,
+		PlannedOrderCode: &planned.Code,
+		DemandCode:       planned.DemandCode,
+		SalesOrderCode:   planned.SalesOrderCode,
 	}
+	demandType := string(planned.DemandType)
+	item.DemandType = &demandType
 
 	// Atomic: order + item are created in one transaction.
 	created, err := uc.Repo.CreateWithItems(ctx, po, []*poentity.PurchaseOrderItem{item})

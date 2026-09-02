@@ -113,6 +113,7 @@ func (h *RecurringSalesHandler) MarkOrderGenerated(w http.ResponseWriter, r *htt
 	if !decodeJSON(w, r, &dto) {
 		return
 	}
+	dto.IdempotencyKey = r.Header.Get("Idempotency-Key")
 	result, err := h.uc.GenerateSalesOrder(r.Context(), code, dto)
 	h.respond(w, result, err, http.StatusOK)
 }
@@ -144,6 +145,7 @@ func (h *RecurringSalesHandler) CalculateAdjustment(w http.ResponseWriter, r *ht
 	if !decodeJSON(w, r, &dto) {
 		return
 	}
+	dto.IdempotencyKey = r.Header.Get("Idempotency-Key")
 	result, err := h.uc.CalculateAdjustment(r.Context(), dto)
 	h.respond(w, result, err, http.StatusOK)
 }

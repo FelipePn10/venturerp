@@ -17,17 +17,23 @@ type ResolveStructureQueryUseCase struct {
 	Repo     repository.StructureQueryRepository
 	Resolver *service.Resolver
 	Auth     ports.AuthService
+	Items    any
 }
 
 func NewResolveStructureQueryUseCase(
 	repo repository.StructureQueryRepository,
 	auth ports.AuthService,
+	items ...any,
 ) *ResolveStructureQueryUseCase {
-	return &ResolveStructureQueryUseCase{
+	uc := &ResolveStructureQueryUseCase{
 		Repo:     repo,
 		Resolver: service.NewResolver(repo),
 		Auth:     auth,
 	}
+	if len(items) > 0 {
+		uc.Items = items[0]
+	}
+	return uc
 }
 
 func (uc *ResolveStructureQueryUseCase) Execute(
@@ -44,32 +50,33 @@ func (uc *ResolveStructureQueryUseCase) Execute(
 		return nil, fmt.Errorf("resolving authenticated user: %w", err)
 	}
 
-	if dto.ItemCode <= 0 {
-		return nil, fmt.Errorf("invalid item code")
+	itemCode, err := resolveItemCode(ctx, uc.Items, dto.ItemCode)
+	if err != nil {
+		return nil, err
 	}
 
 	var nodes []*service.Node
 
 	if dto.Mask == "" {
-		nodes, err = uc.Resolver.ResolveGeneric(ctx, dto.ItemCode, 1, make(map[int64]bool))
+		nodes, err = uc.Resolver.ResolveGeneric(ctx, itemCode, 1, make(map[int64]bool))
 	} else {
-		rootAnswers, err := uc.Repo.GetMaskAnswersByItemAndValue(ctx, dto.ItemCode, dto.Mask)
+		rootAnswers, err := uc.Repo.GetMaskAnswersByItemAndValue(ctx, itemCode, dto.Mask)
 		if err != nil {
-			return nil, fmt.Errorf("fetching mask answers for item %d mask %q: %w", dto.ItemCode, dto.Mask, err)
+			return nil, fmt.Errorf("buscando respostas da máscara %q: %w", dto.Mask, err)
 		}
 		if len(rootAnswers) == 0 {
-			return nil, fmt.Errorf("mask %q not registered for item %d", dto.Mask, dto.ItemCode)
+			return nil, fmt.Errorf("máscara %q não cadastrada para o item", dto.Mask)
 		}
-		nodes, err = uc.Resolver.Resolve(ctx, dto.ItemCode, dto.Mask, rootAnswers, 1, make(map[int64]bool), createdBy)
+		nodes, err = uc.Resolver.Resolve(ctx, itemCode, dto.Mask, rootAnswers, 1, make(map[int64]bool), createdBy)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("resolving structure for item %d: %w", dto.ItemCode, err)
+		return nil, fmt.Errorf("resolvendo estrutura do item: %w", err)
 	}
 
 	respNodes := mapper.MapNodes(nodes)
 	return &response.StructureTreeResponse{
-		RootItemCode: dto.ItemCode,
+		RootItemCode: itemCode,
 		RootMask:     nullableString(dto.Mask),
 		Components:   respNodes,
 		TotalNodes:   countNodes(respNodes),

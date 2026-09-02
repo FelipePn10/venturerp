@@ -25,7 +25,8 @@ func (uc *UpdateMachineTypeUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !dto.Type.IsValid() {
-		return nil, fmt.Errorf("invalid machine type: %s", dto.Type)
+		return nil, errorsuc.NewValidationError(
+			fmt.Sprintf("classificação %q inválida para o tipo de máquina", string(dto.Type)))
 	}
 
 	mt := &entity.MachineType{

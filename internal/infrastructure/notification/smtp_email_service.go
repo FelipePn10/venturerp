@@ -21,6 +21,7 @@ import (
 
 type SMTPConfig struct {
 	Host, Port, User, Password, From string
+	DataEnvironment                  string
 	Timeout                          time.Duration
 }
 type EmailService struct{ cfg SMTPConfig }
@@ -45,6 +46,7 @@ func (s *EmailService) SendMessage(ctx context.Context, m ports.EmailMessage) er
 	if !s.Enabled() {
 		return &ports.EmailDeliveryError{Class: ports.EmailFailurePermanent, Code: "PROVEDOR_NAO_CONFIGURADO", Err: errors.New("provedor central de e-mail não configurado")}
 	}
+	m = s.decorateMessage(m)
 	raw, err := BuildMIME(s.cfg.From, m)
 	if err != nil {
 		return &ports.EmailDeliveryError{Class: ports.EmailFailurePermanent, Code: "MENSAGEM_INVALIDA", Err: err}
@@ -106,6 +108,18 @@ func (s *EmailService) SendMessage(ctx context.Context, m ports.EmailMessage) er
 		return err
 	}
 	return c.Quit()
+}
+
+func (s *EmailService) decorateMessage(m ports.EmailMessage) ports.EmailMessage {
+	if !strings.EqualFold(strings.TrimSpace(s.cfg.DataEnvironment), "training") {
+		return m
+	}
+	if !strings.HasPrefix(m.Subject, "[TREINAMENTO - SEM VALOR] ") {
+		m.Subject = "[TREINAMENTO - SEM VALOR] " + m.Subject
+	}
+	m.Text = "AMBIENTE DE TREINAMENTO — MENSAGEM DE TESTE, SEM VALOR FISCAL.\n\n" + m.Text
+	m.HTML = `<div style="padding:12px;background:#fff3cd;color:#664d03;font-weight:bold">AMBIENTE DE TREINAMENTO — MENSAGEM DE TESTE, SEM VALOR FISCAL.</div>` + m.HTML
+	return m
 }
 
 type CentralEmailProvider struct{ service *EmailService }

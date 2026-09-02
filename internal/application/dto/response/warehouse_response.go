@@ -9,7 +9,7 @@ import (
 // WarehouseResponse is the API representation of a warehouse.
 type WarehouseResponse struct {
 	ID                  int32     `json:"id"`
-	Code                int       `json:"code"`
+	Code                string    `json:"code"`
 	Description         string    `json:"description"`
 	Location            string    `json:"location"`
 	Type                string    `json:"type"`

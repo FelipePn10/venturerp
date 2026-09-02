@@ -18,7 +18,7 @@ const (
 	PositionCancelled = "CANCELLED"
 )
 
-var ErrAttachmentNotFound = errors.New("purchase order attachment not found")
+var ErrAttachmentNotFound = errors.New("anexo do pedido de compra não encontrado")
 
 type PurchaseOrderConsultationFilter struct {
 	OrderFrom, OrderTo       *int64
@@ -145,31 +145,31 @@ func validateConsultationFilter(f *PurchaseOrderConsultationFilter) error {
 		f.Limit = 100
 	}
 	if f.Limit < 1 || f.Limit > 500 || f.Offset < 0 {
-		return fmt.Errorf("invalid pagination")
+		return fmt.Errorf("paginação inválida")
 	}
 	f.Position = strings.ToUpper(strings.TrimSpace(f.Position))
 	f.OrderType = strings.ToUpper(strings.TrimSpace(f.OrderType))
 	f.TargetCurrency = strings.ToUpper(strings.TrimSpace(f.TargetCurrency))
 	if f.Position != "" && f.Position != PositionAttended && f.Position != PositionPending && f.Position != PositionCancelled {
-		return fmt.Errorf("invalid position")
+		return fmt.Errorf("posição inválida")
 	}
 	if f.OrderType != "" && f.OrderType != "OCL" && f.OrderType != "OSL" && f.OrderType != "ORM" && f.OrderType != "ORD" {
-		return fmt.Errorf("invalid order type")
+		return fmt.Errorf("tipo de ordenação inválido")
 	}
 	if f.Convert && (len(f.TargetCurrency) != 3 || f.BaseDate == nil) {
-		return fmt.Errorf("target_currency and base_date are required for conversion")
+		return fmt.Errorf("moeda de destino e data-base são obrigatórias para conversão")
 	}
 	if !f.Convert && (f.TargetCurrency != "" || f.BaseDate != nil) {
 		return fmt.Errorf("conversion parameters require convert=true")
 	}
 	for _, pair := range [][2]*int64{{f.OrderFrom, f.OrderTo}, {f.SupplierFrom, f.SupplierTo}, {f.ItemFrom, f.ItemTo}, {f.ImportFrom, f.ImportTo}} {
 		if pair[0] != nil && pair[1] != nil && *pair[0] > *pair[1] {
-			return fmt.Errorf("invalid interval")
+			return fmt.Errorf("intervalo inválido")
 		}
 	}
 	for _, pair := range [][2]*time.Time{{f.EmissionFrom, f.EmissionTo}, {f.DeliveryFrom, f.DeliveryTo}} {
 		if pair[0] != nil && pair[1] != nil && pair[0].After(*pair[1]) {
-			return fmt.Errorf("invalid date interval")
+			return fmt.Errorf("intervalo de datas inválido")
 		}
 	}
 	return nil

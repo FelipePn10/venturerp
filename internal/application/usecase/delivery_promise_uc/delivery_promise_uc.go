@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
 	dpentity "github.com/FelipePn10/panossoerp/internal/domain/delivery_promise/entity"
 	dprepo "github.com/FelipePn10/panossoerp/internal/domain/delivery_promise/repository"
 	rescheduleentity "github.com/FelipePn10/panossoerp/internal/domain/delivery_reschedule/entity"
@@ -21,16 +22,18 @@ import (
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	orderrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
+	"github.com/google/uuid"
 )
 
 type DeliveryPromiseUseCase struct {
-	Reservations dprepo.TankReservationRepository
-	Reschedules  reschedulerepo.DeliveryRescheduleRepository
-	Orders       orderrepo.SalesOrderRepository
-	Items        itemrepo.ItemRepository
-	Stock        stockrepo.StockRepository
-	Calendar     calendarrepo.ItemCalendarPromiseRepository
-	Auth         ports.AuthService
+	Reservations    dprepo.TankReservationRepository
+	Reschedules     reschedulerepo.DeliveryRescheduleRepository
+	Orders          orderrepo.SalesOrderRepository
+	Items           itemrepo.ItemRepository
+	Stock           stockrepo.StockRepository
+	Calendar        calendarrepo.ItemCalendarPromiseRepository
+	Auth            ports.AuthService
+	Representatives representativevalidation.Repository
 }
 
 type allocationRequest struct {
@@ -124,6 +127,10 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 	if dto.DailyCapacity <= 0 {
 		return nil, errorsuc.NewValidationError("a capacidade diária deve ser maior que zero")
 	}
+	createdBy, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	requestedDate, err := parseDate(dto.RequestedDeliveryDate)
 	if err != nil {
 		return nil, err
@@ -186,7 +193,7 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 				ExpiresAt:      expiresAt,
 				Status:         dpentity.TankReservationActive,
 				Notes:          dto.Notes,
-				CreatedBy:      dto.CreatedBy,
+				CreatedBy:      createdBy,
 			})
 			if err != nil {
 				return nil, err
@@ -207,6 +214,13 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 
 func (uc *DeliveryPromiseUseCase) Reschedule(ctx context.Context, dto request.DeliveryRescheduleBatchDTO) (*response.DeliveryRescheduleBatchResponse, error) {
 	if !uc.Auth.CanManageDeliveryPromise(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
+	}
+	createdBy, err := uc.Auth.UserID(ctx)
+	if err != nil {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	from, err := parseDate(dto.DeliveryFrom)
@@ -251,7 +265,7 @@ func (uc *DeliveryPromiseUseCase) Reschedule(ctx context.Context, dto request.De
 			out.UpdatedItems++
 			changedItems = true
 			if oldDate != nil {
-				if err := uc.registerReschedule(ctx, order.Code, line.ItemCode, *oldDate, newDate, dto); err != nil {
+				if err := uc.registerReschedule(ctx, order.Code, line.ItemCode, *oldDate, newDate, dto.Reason, createdBy); err != nil {
 					return nil, err
 				}
 			}
@@ -278,19 +292,17 @@ func (uc *DeliveryPromiseUseCase) Reschedule(ctx context.Context, dto request.De
 	return out, nil
 }
 
-func (uc *DeliveryPromiseUseCase) registerReschedule(ctx context.Context, orderCode, itemCode int64, oldDate, newDate time.Time, dto request.DeliveryRescheduleBatchDTO) error {
+func (uc *DeliveryPromiseUseCase) registerReschedule(ctx context.Context, orderCode, itemCode int64, oldDate, newDate time.Time, reason *string, createdBy uuid.UUID) error {
 	if uc.Reschedules == nil {
 		return nil
 	}
-	code := time.Now().UnixNano()
 	_, err := uc.Reschedules.Create(ctx, &rescheduleentity.DeliveryReschedule{
-		Code:           code,
 		SalesOrderCode: orderCode,
 		ItemCode:       valueobject.ItemCode(itemCode),
 		OldDate:        oldDate,
 		NewDate:        newDate,
-		Reason:         dto.Reason,
-		CreatedBy:      dto.CreatedBy,
+		Reason:         reason,
+		CreatedBy:      createdBy,
 	})
 	return err
 }

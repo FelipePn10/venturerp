@@ -69,6 +69,9 @@ SELECT
     s.inherit,
     s.start_date,
     s.end_date,
+    s.quantity_formula,
+    s.quantity_rounding,
+    s.quantity_scale,
     i.warehouse_code,
     i.engineering_type_struct
 FROM item_structures s

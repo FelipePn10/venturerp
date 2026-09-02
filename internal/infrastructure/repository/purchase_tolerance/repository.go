@@ -24,7 +24,7 @@ func scan(s scanner) (*entity.Tolerance, error) {
 }
 func (r *Repo) Save(ctx context.Context, x *entity.Tolerance) (*entity.Tolerance, error) {
 	if x.ID == 0 {
-		return scan(r.pool.QueryRow(ctx, `INSERT INTO purchase_order_tolerances(enterprise_id,tolerance_type,applies_to,interval_min,interval_max,tolerance_value,value_type,supplier_code,action,is_active,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING `+cols, x.EnterpriseID, x.ToleranceType, x.AppliesTo, x.IntervalMin, x.IntervalMax, x.ToleranceValue, x.ValueType, x.SupplierCode, x.Action, x.IsActive, x.CreatedBy))
+		return scan(r.pool.QueryRow(ctx, `INSERT INTO purchase_order_tolerances(enterprise_id,tolerance_type,applies_to,interval_min,interval_max,tolerance_value,value_type,supplier_code,action,is_active,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (enterprise_id,tolerance_type,applies_to,interval_min,supplier_code) DO UPDATE SET interval_max=EXCLUDED.interval_max,tolerance_value=EXCLUDED.tolerance_value,value_type=EXCLUDED.value_type,action=EXCLUDED.action,is_active=EXCLUDED.is_active,updated_at=NOW() RETURNING `+cols, x.EnterpriseID, x.ToleranceType, x.AppliesTo, x.IntervalMin, x.IntervalMax, x.ToleranceValue, x.ValueType, x.SupplierCode, x.Action, x.IsActive, x.CreatedBy))
 	}
 	return scan(r.pool.QueryRow(ctx, `UPDATE purchase_order_tolerances SET tolerance_type=$3,applies_to=$4,interval_min=$5,interval_max=$6,tolerance_value=$7,value_type=$8,supplier_code=$9,action=$10,is_active=$11,updated_at=NOW() WHERE enterprise_id=$1 AND id=$2 RETURNING `+cols, x.EnterpriseID, x.ID, x.ToleranceType, x.AppliesTo, x.IntervalMin, x.IntervalMax, x.ToleranceValue, x.ValueType, x.SupplierCode, x.Action, x.IsActive))
 }

@@ -60,7 +60,7 @@ func NewUpdateGroupUseCase(repo repository.GroupRepository, auth ports.AuthServi
 	return &UpdateGroupUseCase{Repo: repo, Auth: auth}
 }
 
-func (uc *UpdateGroupUseCase) Execute(ctx context.Context, code int, description string, enterpriseID int) (*response.GroupResponse, error) {
+func (uc *UpdateGroupUseCase) Execute(ctx context.Context, code int, description string) (*response.GroupResponse, error) {
 	if !uc.Auth.CanCreateGroup(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -68,9 +68,8 @@ func (uc *UpdateGroupUseCase) Execute(ctx context.Context, code int, description
 		return nil, errorsuc.NewValidationError("description is required")
 	}
 	updated, err := uc.Repo.Update(ctx, &entity.Group{
-		Code:         code,
-		Description:  description,
-		EnterpriseID: enterpriseID,
+		Code:        code,
+		Description: description,
 	})
 	if err != nil {
 		return nil, err

@@ -2,6 +2,8 @@ package machine_uc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -23,22 +25,45 @@ func (uc *UpdateMachineUseCase) Execute(
 	if !uc.Auth.CanUpdateMachine(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if err := validateMachineFields(dto.Code, dto.Name, dto.MachineTypeCode, dto.Capacity); err != nil {
+		return nil, err
+	}
+	capacityUnit, err := normalizeCapacityUnit(dto.CapacityUnit)
+	if err != nil {
+		return nil, err
+	}
+	capacityPeriod, err := normalizeCapacityPeriod(dto.CapacityPeriod)
+	if err != nil {
+		return nil, err
+	}
+	efficiency, err := normalizeEfficiency(dto.EfficiencyRate)
+	if err != nil {
+		return nil, err
+	}
+	machineType, err := uc.Repo.GetTypeByCode(ctx, dto.MachineTypeCode)
+	if err != nil || machineType == nil {
+		return nil, errorsuc.NewNotFoundError(
+			fmt.Sprintf("tipo de máquina %d não encontrado nesta empresa", dto.MachineTypeCode))
+	}
 
 	m := &entity.Machine{
 		Code:            dto.Code,
-		Name:            dto.Name,
+		Name:            strings.TrimSpace(dto.Name),
 		MachineTypeCode: dto.MachineTypeCode,
 		CostCenterCode:  dto.CostCenterCode,
 		Capacity:        dto.Capacity,
-		CapacityPeriod:  dto.CapacityPeriod,
-		CapacityUnit:    dto.CapacityUnit,
+		CapacityPeriod:  capacityPeriod,
+		CapacityUnit:    capacityUnit,
 		IsActive:        dto.IsActive,
-		EfficiencyRate:  dto.EfficiencyRate,
+		EfficiencyRate:  efficiency,
 	}
 
 	updated, err := uc.Repo.Update(ctx, m)
 	if err != nil {
 		return nil, err
+	}
+	if updated == nil {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("máquina %d não encontrada nesta empresa", dto.Code))
 	}
 	return toMachineResponse(updated), nil
 }

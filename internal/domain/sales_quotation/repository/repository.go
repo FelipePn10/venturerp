@@ -10,6 +10,14 @@ import (
 )
 
 var ErrCancellationReasonNotFound = errors.New("cancellation reason not found")
+var ErrConfigurationReferenced = errors.New("sales quotation configuration is referenced")
+var ErrConfigurationNotFound = errors.New("sales quotation configuration not found")
+
+type ConfigurationMaintenanceRepository interface {
+	ResetParameters(ctx context.Context) (*entity.Parameters, error)
+	SetCommissionPatternActive(ctx context.Context, code int64, active bool) error
+	SetCancellationReasonActive(ctx context.Context, code int64, active bool) error
+}
 
 type SalesQuotationFilter struct {
 	QuotationNumber     *int64

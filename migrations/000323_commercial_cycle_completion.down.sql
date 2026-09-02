@@ -1,0 +1,33 @@
+DROP TABLE IF EXISTS commercial_commission_events;
+ALTER TABLE commercial_commission_ledger
+    DROP COLUMN IF EXISTS payment_reference,
+    DROP COLUMN IF EXISTS paid_by,
+    DROP COLUMN IF EXISTS paid_at,
+    DROP COLUMN IF EXISTS reconciled_by,
+    DROP COLUMN IF EXISTS reconciled_at;
+DROP TABLE IF EXISTS technical_assistance_rma_evidences;
+DROP TABLE IF EXISTS recurring_sales_operations;
+DROP TABLE IF EXISTS recurring_sales_events;
+DROP INDEX IF EXISTS ux_recurring_sales_tenant_code;
+ALTER TABLE recurring_sales
+    DROP CONSTRAINT IF EXISTS recurring_sales_future_orders_policy_chk,
+    DROP CONSTRAINT IF EXISTS recurring_sales_frequency_chk,
+    DROP CONSTRAINT IF EXISTS recurring_sales_lifecycle_status_chk,
+    DROP COLUMN IF EXISTS cancelled_by,
+    DROP COLUMN IF EXISTS future_orders_policy,
+    DROP COLUMN IF EXISTS cancellation_effective_date,
+    DROP COLUMN IF EXISTS renewal_policy,
+    DROP COLUMN IF EXISTS cost_center_code,
+    DROP COLUMN IF EXISTS tax_policy,
+    DROP COLUMN IF EXISTS delivery_policy,
+    DROP COLUMN IF EXISTS billing_policy,
+    DROP COLUMN IF EXISTS adjustment_cap_pct,
+    DROP COLUMN IF EXISTS adjustment_floor_pct,
+    DROP COLUMN IF EXISTS adjustment_period_months,
+    DROP COLUMN IF EXISTS adjustment_index,
+    DROP COLUMN IF EXISTS currency_code,
+    DROP COLUMN IF EXISTS price_table_code,
+    DROP COLUMN IF EXISTS frequency,
+    DROP COLUMN IF EXISTS effective_until,
+    DROP COLUMN IF EXISTS effective_from,
+    DROP COLUMN IF EXISTS lifecycle_status;

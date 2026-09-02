@@ -25,7 +25,7 @@ VALUES ($1,
         $4,
         $5,
         $6)
-    RETURNING id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by
+    RETURNING id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id
 `
 
 type CreateDeliveryRescheduleParams struct {
@@ -57,6 +57,8 @@ func (q *Queries) CreateDeliveryReschedule(ctx context.Context, arg CreateDelive
 		&i.Reason,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseCode,
+		&i.BatchID,
 	)
 	return i, err
 }
@@ -71,7 +73,7 @@ func (q *Queries) DeleteDeliveryReschedule(ctx context.Context, code int64) erro
 }
 
 const getDeliveryRescheduleByCode = `-- name: GetDeliveryRescheduleByCode :one
-SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by FROM delivery_reschedules WHERE code = $1
+SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE code = $1
 `
 
 func (q *Queries) GetDeliveryRescheduleByCode(ctx context.Context, code int64) (DeliveryReschedule, error) {
@@ -87,12 +89,14 @@ func (q *Queries) GetDeliveryRescheduleByCode(ctx context.Context, code int64) (
 		&i.Reason,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseCode,
+		&i.BatchID,
 	)
 	return i, err
 }
 
 const listReschedulesByItem = `-- name: ListReschedulesByItem :many
-SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by FROM delivery_reschedules WHERE item_code = $1 ORDER BY created_at DESC
+SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE item_code = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListReschedulesByItem(ctx context.Context, itemCode int64) ([]DeliveryReschedule, error) {
@@ -114,6 +118,8 @@ func (q *Queries) ListReschedulesByItem(ctx context.Context, itemCode int64) ([]
 			&i.Reason,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseCode,
+			&i.BatchID,
 		); err != nil {
 			return nil, err
 		}
@@ -126,7 +132,7 @@ func (q *Queries) ListReschedulesByItem(ctx context.Context, itemCode int64) ([]
 }
 
 const listReschedulesByOrder = `-- name: ListReschedulesByOrder :many
-SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by FROM delivery_reschedules WHERE sales_order_code = $1 ORDER BY created_at DESC
+SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE sales_order_code = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListReschedulesByOrder(ctx context.Context, salesOrderCode int64) ([]DeliveryReschedule, error) {
@@ -148,6 +154,8 @@ func (q *Queries) ListReschedulesByOrder(ctx context.Context, salesOrderCode int
 			&i.Reason,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseCode,
+			&i.BatchID,
 		); err != nil {
 			return nil, err
 		}

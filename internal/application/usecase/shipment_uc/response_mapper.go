@@ -24,6 +24,7 @@ func toShipmentResponse(s *entity.Shipment) *response.ShipmentResponse {
 		ProductionOrderCode: s.ProductionOrderCode,
 		CarrierCode:         s.CarrierCode,
 		Status:              string(s.Status),
+		StatusLabel:         shipmentStatusLabel(string(s.Status)),
 		TotalVolumes:        s.TotalVolumes,
 		TotalNetWeight:      s.TotalNetWeight,
 		TotalGrossWeight:    s.TotalGrossWeight,
@@ -156,6 +157,7 @@ func toShipmentLoadResponse(l *entity.ShipmentLoad) *response.ShipmentLoadRespon
 		ID:                l.ID,
 		Code:              l.Code,
 		Status:            string(l.Status),
+		StatusLabel:       loadStatusLabel(string(l.Status)),
 		Description:       l.Description,
 		CarrierCode:       l.CarrierCode,
 		VehiclePlate:      l.VehiclePlate,
@@ -185,6 +187,42 @@ func toShipmentLoadResponse(l *entity.ShipmentLoad) *response.ShipmentLoadRespon
 		Shipments:         toShipmentLoadShipmentValues(l.Shipments),
 		FiscalNotes:       toShipmentLoadFiscalNoteValues(l.FiscalNotes),
 		Instructions:      toDeliveryInstructionValues(l.Instructions),
+	}
+}
+
+func shipmentStatusLabel(status string) string {
+	switch status {
+	case "OPEN":
+		return "Aberto"
+	case "SEPARATED":
+		return "Separado"
+	case "CONFERRED":
+		return "Conferido"
+	case "SHIPPED":
+		return "Expedido"
+	case "CANCELLED":
+		return "Cancelado"
+	default:
+		return status
+	}
+}
+
+func loadStatusLabel(status string) string {
+	switch status {
+	case "PLANNED", "OPEN":
+		return "Planejada"
+	case "RELEASED":
+		return "Liberada"
+	case "LOADING":
+		return "Em carregamento"
+	case "LOADED":
+		return "Carregada"
+	case "SHIPPED":
+		return "Expedida"
+	case "CANCELLED":
+		return "Cancelada"
+	default:
+		return status
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -27,6 +28,10 @@ func (r *RoutingRepositorySQLC) CreatedByFromUUID(v uuid.UUID) uuid.UUID { retur
 // ─── operations ──────────────────────────────────────────────────────────────
 
 func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.Operation) (*entity.Operation, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateOperation(ctx, sqlc.CreateOperationParams{
 		Code:                 op.Code,
 		Name:                 op.Name,
@@ -50,6 +55,7 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
 		CreatedBy:            pgutil.ToPgUUID(op.CreatedBy),
+		EnterpriseID:         enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating operation: %w", err)
@@ -58,6 +64,10 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 }
 
 func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.Operation) (*entity.Operation, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateOperation(ctx, sqlc.UpdateOperationParams{
 		ID:                   op.ID,
 		Name:                 op.Name,
@@ -80,6 +90,7 @@ func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.
 		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
+		EnterpriseID:         enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating operation: %w", err)
@@ -95,7 +106,11 @@ func operationRemittance(value string) string {
 }
 
 func (r *RoutingRepositorySQLC) GetOperationByID(ctx context.Context, id int64) (*entity.Operation, error) {
-	row, err := r.q.GetOperationByID(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetOperationByID(ctx, sqlc.GetOperationByIDParams{ID: id, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching operation %d: %w", id, err)
 	}
@@ -103,7 +118,11 @@ func (r *RoutingRepositorySQLC) GetOperationByID(ctx context.Context, id int64) 
 }
 
 func (r *RoutingRepositorySQLC) ListOperations(ctx context.Context, onlyActive bool) ([]*entity.Operation, error) {
-	rows, err := r.q.ListOperations(ctx, onlyActive)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListOperations(ctx, sqlc.ListOperationsParams{Column1: onlyActive, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("listing operations: %w", err)
 	}
@@ -115,32 +134,49 @@ func (r *RoutingRepositorySQLC) ListOperations(ctx context.Context, onlyActive b
 }
 
 func (r *RoutingRepositorySQLC) DeactivateOperation(ctx context.Context, id int64) error {
-	return r.q.DeactivateOperation(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeactivateOperation(ctx, sqlc.DeactivateOperationParams{ID: id, EnterpriseID: enterpriseID})
 }
 
 func (r *RoutingRepositorySQLC) OperationUsedInRoutes(ctx context.Context, id int64) (bool, error) {
-	return r.q.OperationUsedInRoutes(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	return r.q.OperationUsedInRoutes(ctx, sqlc.OperationUsedInRoutesParams{OperationID: id, EnterpriseID: enterpriseID})
 }
 
 func (r *RoutingRepositorySQLC) NextOperationCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextOperationCode(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextOperationCode(ctx, enterpriseID)
 	return int64(v), err
 }
 
 // ─── manufacturing_routes ─────────────────────────────────────────────────────
 
 func (r *RoutingRepositorySQLC) CreateRoute(ctx context.Context, rt *entity.ManufacturingRoute) (*entity.ManufacturingRoute, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateRoute(ctx, sqlc.CreateRouteParams{
-		Code:        rt.Code,
-		ItemCode:    rt.ItemCode,
-		Mask:        pgutil.ToPgTextFromPtr(rt.Mask),
-		Alternative: rt.Alternative,
-		Description: pgutil.ToPgTextFromPtr(rt.Description),
-		Situation:   sqltypes.RouteSituationEnum(rt.Situation),
-		IsStandard:  rt.IsStandard,
-		ValidFrom:   pgutil.ToPgDateFromPtr(rt.ValidFrom),
-		ValidTo:     pgutil.ToPgDateFromPtr(rt.ValidTo),
-		CreatedBy:   pgutil.ToPgUUID(rt.CreatedBy),
+		Code:         rt.Code,
+		ItemCode:     rt.ItemCode,
+		Mask:         pgutil.ToPgTextFromPtr(rt.Mask),
+		Alternative:  rt.Alternative,
+		Description:  pgutil.ToPgTextFromPtr(rt.Description),
+		Situation:    sqltypes.RouteSituationEnum(rt.Situation),
+		IsStandard:   rt.IsStandard,
+		ValidFrom:    pgutil.ToPgDateFromPtr(rt.ValidFrom),
+		ValidTo:      pgutil.ToPgDateFromPtr(rt.ValidTo),
+		CreatedBy:    pgutil.ToPgUUID(rt.CreatedBy),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating route: %w", err)
@@ -149,13 +185,18 @@ func (r *RoutingRepositorySQLC) CreateRoute(ctx context.Context, rt *entity.Manu
 }
 
 func (r *RoutingRepositorySQLC) UpdateRoute(ctx context.Context, rt *entity.ManufacturingRoute) (*entity.ManufacturingRoute, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateRoute(ctx, sqlc.UpdateRouteParams{
-		ID:          rt.ID,
-		Description: pgutil.ToPgTextFromPtr(rt.Description),
-		Situation:   sqltypes.RouteSituationEnum(rt.Situation),
-		IsStandard:  rt.IsStandard,
-		ValidFrom:   pgutil.ToPgDateFromPtr(rt.ValidFrom),
-		ValidTo:     pgutil.ToPgDateFromPtr(rt.ValidTo),
+		ID:           rt.ID,
+		Description:  pgutil.ToPgTextFromPtr(rt.Description),
+		Situation:    sqltypes.RouteSituationEnum(rt.Situation),
+		IsStandard:   rt.IsStandard,
+		ValidFrom:    pgutil.ToPgDateFromPtr(rt.ValidFrom),
+		ValidTo:      pgutil.ToPgDateFromPtr(rt.ValidTo),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating route: %w", err)
@@ -164,7 +205,11 @@ func (r *RoutingRepositorySQLC) UpdateRoute(ctx context.Context, rt *entity.Manu
 }
 
 func (r *RoutingRepositorySQLC) GetRouteByID(ctx context.Context, id int64) (*entity.ManufacturingRoute, error) {
-	row, err := r.q.GetRouteByID(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetRouteByID(ctx, sqlc.GetRouteByIDParams{ID: id, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching route %d: %w", id, err)
 	}
@@ -172,10 +217,15 @@ func (r *RoutingRepositorySQLC) GetRouteByID(ctx context.Context, id int64) (*en
 }
 
 func (r *RoutingRepositorySQLC) GetRouteByItemCode(ctx context.Context, itemCode int64, mask string, alternative int16) (*entity.ManufacturingRoute, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.GetRouteByItemAndAlternative(ctx, sqlc.GetRouteByItemAndAlternativeParams{
-		ItemCode:    itemCode,
-		Mask:        pgutil.ToPgText(mask),
-		Alternative: alternative,
+		ItemCode:     itemCode,
+		Mask:         pgutil.ToPgText(mask),
+		Alternative:  alternative,
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching route for item %d: %w", itemCode, err)
@@ -184,7 +234,11 @@ func (r *RoutingRepositorySQLC) GetRouteByItemCode(ctx context.Context, itemCode
 }
 
 func (r *RoutingRepositorySQLC) ListRoutesByItem(ctx context.Context, itemCode int64) ([]*entity.ManufacturingRoute, error) {
-	rows, err := r.q.ListRoutesByItem(ctx, itemCode)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRoutesByItem(ctx, sqlc.ListRoutesByItemParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("listing routes for item %d: %w", itemCode, err)
 	}
@@ -196,22 +250,39 @@ func (r *RoutingRepositorySQLC) ListRoutesByItem(ctx context.Context, itemCode i
 }
 
 func (r *RoutingRepositorySQLC) DeactivateRoute(ctx context.Context, id int64) error {
-	return r.q.DeactivateRoute(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeactivateRoute(ctx, sqlc.DeactivateRouteParams{ID: id, EnterpriseID: enterpriseID})
 }
 
 func (r *RoutingRepositorySQLC) NextRouteCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextRouteCode(ctx)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextRouteCode(ctx, enterpriseID)
 	return int64(v), err
 }
 
 func (r *RoutingRepositorySQLC) ItemHasRoute(ctx context.Context, itemCode int64) (bool, error) {
-	return r.q.ItemHasRoute(ctx, itemCode)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	return r.q.ItemHasRoute(ctx, sqlc.ItemHasRouteParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
 }
 
 func (r *RoutingRepositorySQLC) GetRouteForItem(ctx context.Context, itemCode int64, mask string) (*entity.ManufacturingRoute, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.GetStandardRouteForItem(ctx, sqlc.GetStandardRouteForItemParams{
-		ItemCode: itemCode,
-		Mask:     pgutil.ToPgText(mask),
+		ItemCode:     itemCode,
+		Mask:         pgutil.ToPgText(mask),
+		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching standard route for item %d: %w", itemCode, err)

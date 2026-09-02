@@ -2,6 +2,8 @@ package consumer_service_uc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/consumer_service/entity"
 	csrepo "github.com/FelipePn10/panossoerp/internal/domain/consumer_service/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/google/uuid"
 )
 
 type UseCase struct {
@@ -37,6 +40,14 @@ func (uc *UseCase) tenantID(ctx context.Context) (int64, error) {
 	return tenantID, nil
 }
 
+func (uc *UseCase) actorID(ctx context.Context) (uuid.UUID, error) {
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil || actor == uuid.Nil {
+		return uuid.Nil, errorsuc.ErrUnauthorized
+	}
+	return actor, nil
+}
+
 func (uc *UseCase) CreateCallType(ctx context.Context, dto request.CreateConsumerServiceCallTypeDTO) (*response.ConsumerServiceCallTypeResponse, error) {
 	if err := uc.ensureAllowed(ctx); err != nil {
 		return nil, err
@@ -44,7 +55,11 @@ func (uc *UseCase) CreateCallType(ctx context.Context, dto request.CreateConsume
 	if strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("description is required")
 	}
-	created, err := uc.Repo.CreateCallType(ctx, &entity.CallType{Description: strings.TrimSpace(dto.Description), IsComplaint: dto.IsComplaint, IsActive: true, CreatedBy: dto.CreatedBy})
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	created, err := uc.Repo.CreateCallType(ctx, &entity.CallType{Description: strings.TrimSpace(dto.Description), IsComplaint: dto.IsComplaint, IsActive: true, CreatedBy: actor})
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +88,11 @@ func (uc *UseCase) CreateKnowledgeSource(ctx context.Context, dto request.Create
 	if strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("description is required")
 	}
-	created, err := uc.Repo.CreateKnowledgeSource(ctx, &entity.KnowledgeSource{Description: strings.TrimSpace(dto.Description), IsActive: true, CreatedBy: dto.CreatedBy})
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	created, err := uc.Repo.CreateKnowledgeSource(ctx, &entity.KnowledgeSource{Description: strings.TrimSpace(dto.Description), IsActive: true, CreatedBy: actor})
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +119,10 @@ func (uc *UseCase) CreateConsumer(ctx context.Context, dto request.CreateConsume
 	if err != nil {
 		return nil, err
 	}
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(dto.Name) == "" {
 		return nil, errorsuc.NewValidationError("name is required")
 	}
@@ -121,7 +144,7 @@ func (uc *UseCase) CreateConsumer(ctx context.Context, dto request.CreateConsume
 		Code: code, Name: strings.TrimSpace(dto.Name), IsActive: true, PersonType: personType, CPF: dto.CPF, RG: dto.RG,
 		CNPJ: dto.CNPJ, StateRegistration: dto.StateRegistration, ZipCode: dto.ZipCode, City: dto.City, State: dto.State,
 		Address: dto.Address, AddressNumber: dto.AddressNumber, Complement: dto.Complement, District: dto.District,
-		MarketSegmentCode: dto.MarketSegmentCode, KnowledgeCode: dto.KnowledgeCode, Notes: dto.Notes, CreatedBy: dto.CreatedBy,
+		MarketSegmentCode: dto.MarketSegmentCode, KnowledgeCode: dto.KnowledgeCode, Notes: dto.Notes, CreatedBy: actor,
 	}
 	created, err := uc.Repo.CreateConsumer(ctx, tenantID, consumer)
 	if err != nil {
@@ -265,6 +288,10 @@ func (uc *UseCase) CreateCustomerContact(ctx context.Context, dto request.Create
 	if err != nil {
 		return nil, err
 	}
+	actor, err := uc.actorID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if dto.CustomerCode == 0 || strings.TrimSpace(dto.ContactType) == "" || strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("customer_code, contact_type and description are required")
 	}
@@ -272,7 +299,7 @@ func (uc *UseCase) CreateCustomerContact(ctx context.Context, dto request.Create
 	scheduledAt := parseDateTimeOrNow(dto.ScheduledAt)
 	created, err := uc.Repo.CreateCustomerContact(ctx, tenantID, &entity.CustomerContactHistory{
 		CustomerCode: dto.CustomerCode, OpenedAt: openedAt, ScheduledAt: scheduledAt, UserCode: dto.UserCode,
-		ContactType: strings.ToUpper(strings.TrimSpace(dto.ContactType)), Description: strings.TrimSpace(dto.Description), CreatedBy: dto.CreatedBy,
+		ContactType: strings.ToUpper(strings.TrimSpace(dto.ContactType)), Description: strings.TrimSpace(dto.Description), CreatedBy: actor,
 	})
 	if err != nil {
 		return nil, err
@@ -298,6 +325,10 @@ func (uc *UseCase) ListCustomerContacts(ctx context.Context, filter csrepo.Custo
 
 func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerServiceCallDTO) (*response.ConsumerServiceCallResponse, error) {
 	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	actor, err := uc.actorID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +359,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 		VisitRequestedDate: parseDatePtr(dto.VisitRequestedDate), VisitReturnedDate: parseDatePtr(dto.VisitReturnedDate),
 		SaleStoreCode: dto.SaleStoreCode, EstablishmentCode: dto.EstablishmentCode, TechnicianDescription: dto.TechnicianDescription,
 		Symptoms: dto.Symptoms, ForwardedStoreCode: dto.ForwardedStoreCode, Subject: strings.TrimSpace(dto.Subject),
-		Description: dto.Description, ChecklistCode: dto.ChecklistCode, IsActive: true, CreatedBy: dto.CreatedBy,
+		Description: dto.Description, ChecklistCode: dto.ChecklistCode, IsActive: true, CreatedBy: actor,
 	}
 	created, err := uc.Repo.CreateCall(ctx, tenantID, call)
 	if err != nil {
@@ -416,10 +447,14 @@ func (uc *UseCase) AddCallReturn(ctx context.Context, dto request.AddConsumerSer
 	if dto.CallCode == 0 || strings.TrimSpace(dto.ContactType) == "" || strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("call_code, contact_type and description are required")
 	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	created, err := uc.Repo.AddCallReturn(ctx, tenantID, &entity.CallReturn{
 		CallCode: dto.CallCode, ContactedAt: parseDateTimeOrNow(dto.ContactedAt),
 		ContactType: strings.ToUpper(strings.TrimSpace(dto.ContactType)), Description: strings.TrimSpace(dto.Description),
-		NextReturnAt: parseDatePtr(dto.NextReturnAt), UserCode: dto.UserCode, CreatedBy: dto.CreatedBy,
+		NextReturnAt: parseDatePtr(dto.NextReturnAt), UserCode: dto.UserCode, CreatedBy: actor,
 	})
 	if err != nil {
 		return nil, err
@@ -432,17 +467,70 @@ func (uc *UseCase) AddCallAttachment(ctx context.Context, dto request.AddConsume
 	if err != nil {
 		return nil, err
 	}
-	if dto.CallCode == 0 || strings.TrimSpace(dto.FileName) == "" || strings.TrimSpace(dto.FilePath) == "" {
-		return nil, errorsuc.NewValidationError("call_code, file_name and file_path are required")
+	if dto.CallCode == 0 || strings.TrimSpace(dto.FileName) == "" || len(dto.Content) == 0 {
+		return nil, errorsuc.NewValidationError("chamado, nome e conteúdo do arquivo são obrigatórios")
 	}
+	if len(dto.Content) > 10*1024*1024 {
+		return nil, errorsuc.NewValidationError("o arquivo excede o limite de 10 MiB")
+	}
+	if !allowedConsumerAttachmentType(dto.ContentType) {
+		return nil, errorsuc.NewValidationError("tipo de arquivo não permitido; envie PDF, PNG, JPEG ou texto")
+	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	contentType := dto.ContentType
 	created, err := uc.Repo.AddCallAttachment(ctx, tenantID, &entity.CallAttachment{
-		CallCode: dto.CallCode, FileName: strings.TrimSpace(dto.FileName), FilePath: strings.TrimSpace(dto.FilePath),
-		ContentType: dto.ContentType, Notes: dto.Notes, CreatedBy: dto.CreatedBy,
+		CallCode: dto.CallCode, FileName: strings.TrimSpace(dto.FileName), Content: dto.Content, FileSize: int64(len(dto.Content)),
+		ContentType: &contentType, Notes: dto.Notes, CreatedBy: actor,
 	})
 	if err != nil {
+		if errors.Is(err, csrepo.ErrAttachmentNotFound) {
+			return nil, errorsuc.NewNotFoundError("chamado não encontrado")
+		}
 		return nil, err
 	}
 	return toCallAttachmentResponse(created), nil
+}
+
+func (uc *UseCase) GetCallAttachment(ctx context.Context, callCode, attachmentCode int64) (*entity.CallAttachment, error) {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	attachment, err := uc.Repo.GetCallAttachment(ctx, tenantID, callCode, attachmentCode)
+	if errors.Is(err, csrepo.ErrAttachmentNotFound) {
+		return nil, errorsuc.NewNotFoundError("anexo não encontrado para este chamado")
+	}
+	return attachment, err
+}
+
+func (uc *UseCase) DeleteCallAttachment(ctx context.Context, callCode, attachmentCode int64) error {
+	tenantID, err := uc.tenantID(ctx)
+	if err != nil {
+		return err
+	}
+	if err := uc.Repo.DeleteCallAttachment(ctx, tenantID, callCode, attachmentCode); err != nil {
+		if errors.Is(err, csrepo.ErrAttachmentNotFound) {
+			return errorsuc.NewNotFoundError("anexo não encontrado para este chamado")
+		}
+		return err
+	}
+	return nil
+}
+
+func allowedConsumerAttachmentType(contentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
+	case "application/pdf", "image/png", "image/jpeg", "text/plain":
+		return true
+	default:
+		return false
+	}
+}
+
+func consumerAttachmentDownloadURL(callCode, attachmentCode int64) string {
+	return fmt.Sprintf("/api/consumer-service/calls/%d/attachments/%d/download", callCode, attachmentCode)
 }
 
 func (uc *UseCase) AddChecklistItem(ctx context.Context, dto request.AddConsumerServiceChecklistItemDTO) (*response.ConsumerServiceChecklistItemResponse, error) {

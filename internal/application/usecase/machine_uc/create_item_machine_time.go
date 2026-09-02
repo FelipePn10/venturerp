@@ -8,8 +8,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
-	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
 	machinesvc "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
@@ -28,12 +29,18 @@ func (uc *CreateItemMachineTimeUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	if err := uc.validateUnitCompatibility(ctx, dto.ItemCode, dto.MachineCode); err != nil {
+	item, err := itemresolution.Resolve(ctx, uc.ItemRepo, dto.ItemCode)
+	if err != nil {
+		return nil, err
+	}
+	itemCode := int64(item.Code)
+
+	if err := uc.validateUnitCompatibility(ctx, item, dto.MachineCode); err != nil {
 		return nil, err
 	}
 
 	imt := &entity.ItemMachineTime{
-		ItemCode:           dto.ItemCode,
+		ItemCode:           itemCode,
 		Mask:               dto.Mask,
 		MachineCode:        dto.MachineCode,
 		ProductionTime:     dto.ProductionTime,
@@ -62,19 +69,9 @@ func (uc *CreateItemMachineTimeUseCase) GetByCodeTime(
 
 func (uc *CreateItemMachineTimeUseCase) validateUnitCompatibility(
 	ctx context.Context,
-	itemCode int64,
+	item *itementity.Item,
 	machineCode int64,
 ) error {
-	itemCodeVO, err := valueobject.NewItemCode(itemCode)
-	if err != nil {
-		return fmt.Errorf("item code is invalid: %w", err)
-	}
-
-	item, err := uc.ItemRepo.FindItemByCode(ctx, itemCodeVO)
-	if err != nil {
-		return fmt.Errorf("item %d not found: %w", itemCode, err)
-	}
-
 	machine, err := uc.Repo.GetByCode(ctx, machineCode)
 	if err != nil {
 		return fmt.Errorf("machine %d not found: %w", machineCode, err)
@@ -86,8 +83,8 @@ func (uc *CreateItemMachineTimeUseCase) validateUnitCompatibility(
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"invalid configuration — item '%d' uses unit '%s' but machine '%d' operates on '%s': %w",
-			itemCode, item.Warehouse.UnitOfMeasurement,
+			"invalid configuration — item '%s' uses unit '%s' but machine '%d' operates on '%s': %w",
+			item.BusinessCode, item.Warehouse.UnitOfMeasurement,
 			machineCode, machine.CapacityUnit,
 			err,
 		)

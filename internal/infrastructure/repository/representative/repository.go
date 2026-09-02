@@ -10,6 +10,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/representative/entity"
 	reprepo "github.com/FelipePn10/panossoerp/internal/domain/representative/repository"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -82,7 +83,11 @@ WHERE code=$1 RETURNING `+repColumns,
 }
 
 func (r *Repository) Get(ctx context.Context, code int64) (*entity.Representative, error) {
-	row := r.pool.QueryRow(ctx, `SELECT `+repColumns+` FROM public.representatives WHERE code=$1`, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `SELECT `+prefixedRepColumns("r")+` FROM public.representatives r WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseID)
 	rep, err := scanRep(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -90,7 +95,9 @@ func (r *Repository) Get(ctx context.Context, code int64) (*entity.Representativ
 		}
 		return nil, err
 	}
-	_ = r.loadChildren(ctx, rep)
+	if err := r.loadChildren(ctx, rep); err != nil {
+		return nil, fmt.Errorf("carregar detalhes do representante %d: %w", code, err)
+	}
 	return rep, nil
 }
 
@@ -114,12 +121,26 @@ func (r *Repository) List(ctx context.Context, filter reprepo.RepresentativeFilt
 }
 
 func (r *Repository) Block(ctx context.Context, code int64, reason string) error {
-	_, err := r.pool.Exec(ctx, `UPDATE public.representatives SET blocked=TRUE, block_reason=$2, updated_at=NOW() WHERE code=$1`, code, reason)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=TRUE, block_reason=$2, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$3)`, code, reason, enterpriseID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return fmt.Errorf("representante %d não encontrado na empresa autenticada", code)
+	}
 	return err
 }
 
 func (r *Repository) Unblock(ctx context.Context, code int64) error {
-	_, err := r.pool.Exec(ctx, `UPDATE public.representatives SET blocked=FALSE, block_reason=NULL, updated_at=NOW() WHERE code=$1`, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=FALSE, block_reason=NULL, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return fmt.Errorf("representante %d não encontrado na empresa autenticada", code)
+	}
 	return err
 }
 
@@ -156,9 +177,75 @@ func (r *Repository) AddSalesPlan(ctx context.Context, row *entity.Representativ
 	return scanSalesPlan(scan)
 }
 
+func (r *Repository) ListSalesPlanCodes(ctx context.Context) ([]int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT DISTINCT sales_plan_code
+FROM (
+    SELECT sales_plan_code FROM public.representative_sales_plans
+    WHERE is_active=TRUE AND (enterprise_code IS NULL OR enterprise_code=$1)
+    UNION
+    SELECT sales_plan_code FROM public.recurring_sales
+    WHERE enterprise_code=$1 AND sales_plan_code IS NOT NULL
+    UNION
+    SELECT generic_sales_plan_code FROM public.recurring_sales_parameters
+    WHERE enterprise_code=$1 AND generic_sales_plan_code IS NOT NULL
+) plans
+ORDER BY sales_plan_code`, enterpriseID)
+	if err != nil {
+		return nil, fmt.Errorf("listar planos de vendas: %w", err)
+	}
+	defer rows.Close()
+	codes := []int64{}
+	for rows.Next() {
+		var code int64
+		if err := rows.Scan(&code); err != nil {
+			return nil, fmt.Errorf("ler plano de vendas: %w", err)
+		}
+		codes = append(codes, code)
+	}
+	return codes, rows.Err()
+}
+
 func (r *Repository) AddInterest(ctx context.Context, row *entity.RepresentativeInterest) (*entity.RepresentativeInterest, error) {
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_interests (representative_code,item_classification_code,is_active) VALUES ($1,$2,$3) ON CONFLICT (representative_code,item_classification_code) DO UPDATE SET is_active=$3 RETURNING id,representative_code,item_classification_code,is_active,created_at`, row.RepresentativeCode, row.ItemClassificationCode, row.IsActive)
 	return scanInterest(scan)
+}
+
+func (r *Repository) ListInterestClassifications(ctx context.Context, enterpriseID int64) ([]reprepo.InterestClassification, error) {
+	contextEnterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if contextEnterpriseID != enterpriseID {
+		return nil, fmt.Errorf("empresa informada não corresponde à empresa autenticada")
+	}
+	rows, err := r.pool.Query(ctx, `
+SELECT DISTINCT classification.id, classification.code, mask.code, mask.mask,
+       classification.description, mask.description
+FROM public.item_classification_assignments assignment
+JOIN public.item_classifications classification
+  ON classification.id = assignment.classification_id AND classification.is_active
+JOIN public.item_classification_masks mask
+  ON mask.id = classification.mask_id AND mask.is_active
+JOIN public.items item ON item.code = assignment.item_code AND item.is_active
+WHERE assignment.enterprise_id = $1
+ORDER BY mask.code, classification.code`, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]reprepo.InterestClassification, 0)
+	for rows.Next() {
+		var classification reprepo.InterestClassification
+		if err := rows.Scan(&classification.ID, &classification.Code, &classification.MaskCode, &classification.Mask, &classification.Description, &classification.MaskDescription); err != nil {
+			return nil, err
+		}
+		out = append(out, classification)
+	}
+	return out, rows.Err()
 }
 
 func (r *Repository) AddPhone(ctx context.Context, row *entity.RepresentativePhone) (*entity.RepresentativePhone, error) {
@@ -466,36 +553,101 @@ func (r *Repository) loadChildren(ctx context.Context, rep *entity.Representativ
 		}
 		return rows.Err()
 	}
-	_ = load(`SELECT id,representative_code,enterprise_code,enterprise_name,commission_pattern_code,commission_pct,is_default,is_active,created_at,updated_at FROM public.representative_enterprises WHERE representative_code=$1 ORDER BY enterprise_code`, func(rows pgx.Rows) error {
+	if err := load(`SELECT id,representative_code,enterprise_code,enterprise_name,commission_pattern_code,commission_pct,is_default,is_active,created_at,updated_at FROM public.representative_enterprises WHERE representative_code=$1 ORDER BY enterprise_code`, func(rows pgx.Rows) error {
 		v, e := scanEnterprise(rows)
+		if e != nil {
+			return e
+		}
 		rep.Enterprises = append(rep.Enterprises, v)
-		return e
-	})
-	_ = load(`SELECT id,representative_code,enterprise_code,event_type,debit_account_code,debit_cost_center_code,credit_account_code,credit_cost_center_code,history_code,created_at,updated_at FROM public.representative_accounting WHERE representative_code=$1 ORDER BY event_type`, func(rows pgx.Rows) error {
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,enterprise_code,event_type,debit_account_code,debit_cost_center_code,credit_account_code,credit_cost_center_code,history_code,created_at,updated_at FROM public.representative_accounting WHERE representative_code=$1 ORDER BY event_type`, func(rows pgx.Rows) error {
 		v, e := scanAccounting(rows)
+		if e != nil {
+			return e
+		}
 		rep.Accounting = append(rep.Accounting, v)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,enterprise_code,region_code,microregion_code,is_active,created_at FROM public.representative_regions WHERE representative_code=$1 ORDER BY region_code`, func(rows pgx.Rows) error {
+		v, e := scanRegion(rows)
+		if e == nil {
+			rep.Regions = append(rep.Regions, v)
+		}
 		return e
-	})
-	_ = load(`SELECT id,representative_code,enterprise_code,region_code,microregion_code,is_active,created_at FROM public.representative_regions WHERE representative_code=$1 ORDER BY region_code`, func(rows pgx.Rows) error { v, e := scanRegion(rows); rep.Regions = append(rep.Regions, v); return e })
-	_ = load(`SELECT id,representative_code,enterprise_code,microregion_code,market_segment_code,is_active,created_at FROM public.representative_segments WHERE representative_code=$1 ORDER BY market_segment_code`, func(rows pgx.Rows) error { v, e := scanSegment(rows); rep.Segments = append(rep.Segments, v); return e })
-	_ = load(`SELECT id,representative_code,enterprise_code,microregion_code,sales_plan_code,is_active,created_at FROM public.representative_sales_plans WHERE representative_code=$1 ORDER BY sales_plan_code`, func(rows pgx.Rows) error {
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,enterprise_code,microregion_code,market_segment_code,is_active,created_at FROM public.representative_segments WHERE representative_code=$1 ORDER BY market_segment_code`, func(rows pgx.Rows) error {
+		v, e := scanSegment(rows)
+		if e == nil {
+			rep.Segments = append(rep.Segments, v)
+		}
+		return e
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,enterprise_code,microregion_code,sales_plan_code,is_active,created_at FROM public.representative_sales_plans WHERE representative_code=$1 ORDER BY sales_plan_code`, func(rows pgx.Rows) error {
 		v, e := scanSalesPlan(rows)
+		if e != nil {
+			return e
+		}
 		rep.SalesPlans = append(rep.SalesPlans, v)
-		return e
-	})
-	_ = load(`SELECT id,representative_code,item_classification_code,is_active,created_at FROM public.representative_interests WHERE representative_code=$1 ORDER BY item_classification_code`, func(rows pgx.Rows) error {
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,item_classification_code,is_active,created_at FROM public.representative_interests WHERE representative_code=$1 ORDER BY item_classification_code`, func(rows pgx.Rows) error {
 		v, e := scanInterest(rows)
+		if e != nil {
+			return e
+		}
 		rep.Interests = append(rep.Interests, v)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,ddi,ddd,phone,phone_type,ranking,created_at FROM public.representative_phones WHERE representative_code=$1 ORDER BY ranking,id`, func(rows pgx.Rows) error {
+		v, e := scanPhone(rows)
+		if e == nil {
+			rep.Phones = append(rep.Phones, v)
+		}
 		return e
-	})
-	_ = load(`SELECT id,representative_code,ddi,ddd,phone,phone_type,ranking,created_at FROM public.representative_phones WHERE representative_code=$1 ORDER BY ranking,id`, func(rows pgx.Rows) error { v, e := scanPhone(rows); rep.Phones = append(rep.Phones, v); return e })
-	_ = load(`SELECT id,representative_code,email,ranking,created_at FROM public.representative_emails WHERE representative_code=$1 ORDER BY ranking,id`, func(rows pgx.Rows) error { v, e := scanEmail(rows); rep.Emails = append(rep.Emails, v); return e })
-	_ = load(`SELECT id,representative_code,postal_code,city,state,full_address,street,street_number,complement,district,is_default,created_at,updated_at FROM public.representative_correspondence_addresses WHERE representative_code=$1 ORDER BY is_default DESC,id`, func(rows pgx.Rows) error {
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,email,ranking,created_at FROM public.representative_emails WHERE representative_code=$1 ORDER BY ranking,id`, func(rows pgx.Rows) error {
+		v, e := scanEmail(rows)
+		if e == nil {
+			rep.Emails = append(rep.Emails, v)
+		}
+		return e
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,postal_code,city,state,full_address,street,street_number,complement,district,is_default,created_at,updated_at FROM public.representative_correspondence_addresses WHERE representative_code=$1 ORDER BY is_default DESC,id`, func(rows pgx.Rows) error {
 		v, e := scanCorrespondence(rows)
+		if e != nil {
+			return e
+		}
 		rep.CorrespondenceAddresses = append(rep.CorrespondenceAddresses, v)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := load(`SELECT id,representative_code,contact_type_code,name,role,phone,email,notes,is_active,created_at,updated_at FROM public.representative_contacts WHERE representative_code=$1 ORDER BY name`, func(rows pgx.Rows) error {
+		v, e := scanContact(rows)
+		if e == nil {
+			rep.Contacts = append(rep.Contacts, v)
+		}
 		return e
-	})
-	_ = load(`SELECT id,representative_code,contact_type_code,name,role,phone,email,notes,is_active,created_at,updated_at FROM public.representative_contacts WHERE representative_code=$1 ORDER BY name`, func(rows pgx.Rows) error { v, e := scanContact(rows); rep.Contacts = append(rep.Contacts, v); return e })
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -851,19 +851,20 @@ func (q *Queries) CreateRegion(ctx context.Context, arg CreateRegionParams) (Reg
 const createSalesTable = `-- name: CreateSalesTable :one
 
 INSERT INTO sales_tables (
-    code, description, validity_start, validity_end,
+    enterprise_id, code, description, validity_start, validity_end,
     tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places,
     composition, table_type, base_date,
     allow_items_below_cent, icms_interestadual_por_dentro, observation
 ) VALUES (
-    $1, $2, $3, $4,
-    $5, $6, $7, $8,
-    $9, $10, $11,
-    $12, $13, $14
-) RETURNING id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation
+    $1, $2, $3, $4, $5,
+    $6, $7, $8, $9,
+    $10, $11, $12,
+    $13, $14, $15
+) RETURNING id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation, enterprise_id
 `
 
 type CreateSalesTableParams struct {
+	EnterpriseID               int64
 	Code                       int64
 	Description                string
 	ValidityStart              pgtype.Date
@@ -883,6 +884,7 @@ type CreateSalesTableParams struct {
 // ─── Sales Tables ─────────────────────────────────────────────────────────────
 func (q *Queries) CreateSalesTable(ctx context.Context, arg CreateSalesTableParams) (SalesTable, error) {
 	row := q.db.QueryRow(ctx, createSalesTable,
+		arg.EnterpriseID,
 		arg.Code,
 		arg.Description,
 		arg.ValidityStart,
@@ -917,6 +919,7 @@ func (q *Queries) CreateSalesTable(ctx context.Context, arg CreateSalesTablePara
 		&i.AllowItemsBelowCent,
 		&i.IcmsInterestadualPorDentro,
 		&i.Observation,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -1416,11 +1419,16 @@ func (q *Queries) GetRegionByCode(ctx context.Context, code int64) (Region, erro
 }
 
 const getSalesTableByCode = `-- name: GetSalesTableByCode :one
-SELECT id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation FROM sales_tables WHERE code = $1
+SELECT id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation, enterprise_id FROM sales_tables WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetSalesTableByCode(ctx context.Context, code int64) (SalesTable, error) {
-	row := q.db.QueryRow(ctx, getSalesTableByCode, code)
+type GetSalesTableByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetSalesTableByCode(ctx context.Context, arg GetSalesTableByCodeParams) (SalesTable, error) {
+	row := q.db.QueryRow(ctx, getSalesTableByCode, arg.Code, arg.EnterpriseID)
 	var i SalesTable
 	err := row.Scan(
 		&i.ID,
@@ -1440,6 +1448,7 @@ func (q *Queries) GetSalesTableByCode(ctx context.Context, code int64) (SalesTab
 		&i.AllowItemsBelowCent,
 		&i.IcmsInterestadualPorDentro,
 		&i.Observation,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -2054,13 +2063,18 @@ func (q *Queries) ListRegions(ctx context.Context, dollar_1 bool) ([]Region, err
 }
 
 const listSalesTables = `-- name: ListSalesTables :many
-SELECT id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation FROM sales_tables
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation, enterprise_id FROM sales_tables
+WHERE enterprise_id=$1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
 
-func (q *Queries) ListSalesTables(ctx context.Context, dollar_1 bool) ([]SalesTable, error) {
-	rows, err := q.db.Query(ctx, listSalesTables, dollar_1)
+type ListSalesTablesParams struct {
+	EnterpriseID int64
+	OnlyActive   bool
+}
+
+func (q *Queries) ListSalesTables(ctx context.Context, arg ListSalesTablesParams) ([]SalesTable, error) {
+	rows, err := q.db.Query(ctx, listSalesTables, arg.EnterpriseID, arg.OnlyActive)
 	if err != nil {
 		return nil, err
 	}
@@ -2086,6 +2100,7 @@ func (q *Queries) ListSalesTables(ctx context.Context, dollar_1 bool) ([]SalesTa
 			&i.AllowItemsBelowCent,
 			&i.IcmsInterestadualPorDentro,
 			&i.Observation,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -2242,6 +2257,8 @@ const nextSalesTableCode = `-- name: NextSalesTableCode :one
 SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM sales_tables
 `
 
+// Enquanto sales_orders.price_table_code mantiver a FK legada para code, o
+// proximo codigo precisa permanecer globalmente unico.
 func (q *Queries) NextSalesTableCode(ctx context.Context) (int32, error) {
 	row := q.db.QueryRow(ctx, nextSalesTableCode)
 	var next_code int32
@@ -2386,6 +2403,27 @@ func (q *Queries) UpdateCarrier(ctx context.Context, arg UpdateCarrierParams) (C
 		&i.ReceiptDays,
 		&i.PaymentDays,
 		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateCarrierGroup = `-- name: UpdateCarrierGroup :one
+UPDATE carrier_groups SET description=$2 WHERE id=$1 RETURNING id, code, description, created_at
+`
+
+type UpdateCarrierGroupParams struct {
+	ID          int64
+	Description string
+}
+
+func (q *Queries) UpdateCarrierGroup(ctx context.Context, arg UpdateCarrierGroupParams) (CarrierGroup, error) {
+	row := q.db.QueryRow(ctx, updateCarrierGroup, arg.ID, arg.Description)
+	var i CarrierGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Description,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -3005,8 +3043,8 @@ SET description = $2, validity_start = $3, validity_end = $4,
     composition = $10, table_type = $11, base_date = $12,
     allow_items_below_cent = $13, icms_interestadual_por_dentro = $14,
     observation = $15
-WHERE id = $1
-RETURNING id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation
+WHERE id = $1 AND enterprise_id = $16
+RETURNING id, code, description, validity_start, validity_end, tolerance_min_pct, tolerance_max_pct, price_formation, decimal_places, is_active, created_at, composition, table_type, base_date, allow_items_below_cent, icms_interestadual_por_dentro, observation, enterprise_id
 `
 
 type UpdateSalesTableParams struct {
@@ -3025,6 +3063,7 @@ type UpdateSalesTableParams struct {
 	AllowItemsBelowCent        bool
 	IcmsInterestadualPorDentro bool
 	Observation                pgtype.Text
+	EnterpriseID               int64
 }
 
 func (q *Queries) UpdateSalesTable(ctx context.Context, arg UpdateSalesTableParams) (SalesTable, error) {
@@ -3044,6 +3083,7 @@ func (q *Queries) UpdateSalesTable(ctx context.Context, arg UpdateSalesTablePara
 		arg.AllowItemsBelowCent,
 		arg.IcmsInterestadualPorDentro,
 		arg.Observation,
+		arg.EnterpriseID,
 	)
 	var i SalesTable
 	err := row.Scan(
@@ -3064,6 +3104,7 @@ func (q *Queries) UpdateSalesTable(ctx context.Context, arg UpdateSalesTablePara
 		&i.AllowItemsBelowCent,
 		&i.IcmsInterestadualPorDentro,
 		&i.Observation,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
