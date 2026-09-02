@@ -6,6 +6,22 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.11] — 2026-08-25
+
+- fix: gera código de reprogramação no banco (`3d09419`)
+
+## [v1.1.10] — 2026-08-25
+
+- fix: preenche inscrição estadual na consulta de CNPJ (`0f6a3c0`)
+
+## [v1.1.9] — 2026-08-25
+
+- fix: valida contratos e rotas comerciais (`ae982f7`)
+
+## [v1.1.8] — 2026-08-21
+
+- feat: bloqueia clientes desktop incompatíveis (`bdaae5d`)
+
 ## [v1.1.7] — 2026-08-20
 
 - feat: entrega alertas enterprise e correcoes operacionais (`a812d32`)
