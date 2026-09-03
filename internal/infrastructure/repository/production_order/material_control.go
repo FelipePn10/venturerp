@@ -1003,8 +1003,8 @@ func (r *ProductionOrderRepositoryPGX) ListWarehouseAddresses(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT id,warehouse_id,address,is_active FROM manufacturing_warehouse_addresses
-	 WHERE enterprise_id=$1 AND ($2::bigint IS NULL OR warehouse_id=$2) AND is_active ORDER BY warehouse_id,address,id`, enterpriseID, warehouseID)
+	rows, err := r.pool.Query(ctx, `SELECT warehouse_id,address,is_active FROM manufacturing_warehouse_addresses
+	 WHERE enterprise_id=$1 AND ($2::bigint IS NULL OR warehouse_id=$2) AND is_active ORDER BY warehouse_id,address`, enterpriseID, warehouseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1012,7 +1012,7 @@ func (r *ProductionOrderRepositoryPGX) ListWarehouseAddresses(ctx context.Contex
 	out := make([]entity.WarehouseAddress, 0)
 	for rows.Next() {
 		var value entity.WarehouseAddress
-		if err := rows.Scan(&value.ID, &value.WarehouseID, &value.Address, &value.IsActive); err != nil {
+		if err := rows.Scan(&value.WarehouseID, &value.Address, &value.IsActive); err != nil {
 			return nil, err
 		}
 		out = append(out, value)
