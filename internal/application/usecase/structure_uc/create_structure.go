@@ -66,7 +66,7 @@ func (uc *CreateStructureComponentUseCase) Execute(
 		return nil, fmt.Errorf("checking parent item: %w", err)
 	}
 	if !parentExists {
-		return nil, fmt.Errorf("item pai não encontrado")
+		return nil, errorsuc.NewNotFoundError("item pai não encontrado")
 	}
 
 	childExists, err := uc.Repo.ItemExists(ctx, childCode)
@@ -74,7 +74,7 @@ func (uc *CreateStructureComponentUseCase) Execute(
 		return nil, fmt.Errorf("checking child item: %w", err)
 	}
 	if !childExists {
-		return nil, fmt.Errorf("item filho não encontrado")
+		return nil, errorsuc.NewNotFoundError("item filho não encontrado")
 	}
 
 	// só bloqueia se o filho já é ancestral do pai (A→B→C→A)

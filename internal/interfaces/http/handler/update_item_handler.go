@@ -24,7 +24,7 @@ func (h *ItemHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.updateItemUC.ExecuteBusinessCode(r.Context(), code, dto)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			h.NotFound(w, "item not found")
+			h.NotFound(w, "item não encontrado")
 			return
 		}
 		if errors.Is(err, repository.ErrInvalidReference) {

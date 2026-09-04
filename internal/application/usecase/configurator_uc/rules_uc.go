@@ -3,6 +3,7 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -348,7 +349,7 @@ func equivToResponse(r sqlc.DBCfgEquivalentRule) *response.CfgEquivalentRuleResp
 func (uc *ConfiguratorUseCase) AddReceivingItem(ctx context.Context, charID int64, dto request.CfgReceivingItemDTO) (*response.CfgReceivingItemResponse, error) {
 	char, err := uc.Q.GetCfgCharacteristic(ctx, charID)
 	if err != nil {
-		return nil, fmt.Errorf("característica %d não encontrada", charID)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("característica %d não encontrada", charID))
 	}
 	if char.ReceivingType == entity.RecebNenhum {
 		return nil, fmt.Errorf("a característica não possui tipo de recebimento")

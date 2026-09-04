@@ -3,6 +3,7 @@ package fiscal
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -94,7 +95,7 @@ func (r *FiscalRepositoryPG) GetEntryByID(ctx context.Context, id int64) (*entit
 		&e.IsActive, &e.CreatedAt, &e.UpdatedAt, &e.CreatedBy, &e.SupplierCode)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("fiscal entry %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de entrada %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting fiscal entry: %w", err)
 	}
@@ -321,7 +322,7 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		&e.FiscalCouponDate, &e.FiscalCouponECFSerial)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("fiscal exit %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de saída %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting fiscal exit: %w", err)
 	}
@@ -527,7 +528,7 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("fiscal config not found")
+			return nil, errorsuc.NewNotFoundError("parametrização fiscal não encontrada")
 		}
 		return nil, fmt.Errorf("getting fiscal config: %w", err)
 	}
@@ -650,7 +651,7 @@ func (r *FiscalRepositoryPG) GetNcmTax(ctx context.Context, ncm string) (*entity
 	).Scan(&n.ID, &n.Ncm, &n.AliqIPI, &n.AliqPis, &n.AliqCofins, &n.CstPis, &n.CstCofins, &n.CstIPI, &n.Description, &n.IsActive, &n.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("NCM tax %s not found", ncm)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tributação do NCM %s não cadastrada", ncm))
 		}
 		return nil, fmt.Errorf("getting NCM tax: %w", err)
 	}
@@ -712,7 +713,7 @@ func (r *FiscalRepositoryPG) GetICMSInterstate(ctx context.Context, originUF, de
 	).Scan(&aliq)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("ICMS interstate not found for %s -> %s", originUF, destUF)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ICMS interestadual não cadastrado de %s para %s", originUF, destUF))
 		}
 		return nil, fmt.Errorf("getting ICMS interstate: %w", err)
 	}
@@ -726,7 +727,7 @@ func (r *FiscalRepositoryPG) GetICMSInternal(ctx context.Context, uf string) (*f
 	).Scan(&aliqICMS, &aliqFCP)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil, fmt.Errorf("ICMS internal not found for %s", uf)
+			return nil, nil, errorsuc.NewNotFoundError(fmt.Sprintf("ICMS interno não cadastrado para a UF %s", uf))
 		}
 		return nil, nil, fmt.Errorf("getting ICMS internal: %w", err)
 	}
@@ -904,7 +905,7 @@ func (r *FiscalRepositoryPG) GetCTeByID(ctx context.Context, id int64) (*entity.
 		&c.FocusRef, &c.Protocolo, &c.EmissionData)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("CT-e %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("CT-e %d não encontrado", id))
 		}
 		return nil, fmt.Errorf("getting CT-e: %w", err)
 	}

@@ -52,7 +52,7 @@ func (h *MaintenanceHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("active") != "false"
 	results, err := h.uc.ListPlans(r.Context(), onlyActive)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
@@ -66,7 +66,7 @@ func (h *MaintenanceHandler) ListPlansByMachine(w http.ResponseWriter, r *http.R
 	}
 	results, err := h.uc.ListPlansByMachine(r.Context(), machineID)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
@@ -79,7 +79,7 @@ func (h *MaintenanceHandler) DeactivatePlan(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := h.uc.DeactivatePlan(r.Context(), id); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"status": "deactivated"})
@@ -121,7 +121,7 @@ func (h *MaintenanceHandler) ListOrdersByPlan(w http.ResponseWriter, r *http.Req
 	}
 	results, err := h.uc.ListOrdersByPlan(r.Context(), planID)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
@@ -150,7 +150,7 @@ func (h *MaintenanceHandler) ListOrdersByWorkCenter(w http.ResponseWriter, r *ht
 	}
 	results, err := h.uc.ListOrdersByWorkCenter(r.Context(), wcID, from, to)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, paginate(w, r, results))
@@ -165,7 +165,7 @@ func (h *MaintenanceHandler) GenerateOrders(w http.ResponseWriter, r *http.Reque
 	}
 	count, err := h.uc.GenerateOrders(r.Context(), horizonDays)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]int{"orders_created": count})

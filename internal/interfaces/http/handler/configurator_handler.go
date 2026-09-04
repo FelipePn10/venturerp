@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -58,7 +59,7 @@ func (h *ConfiguratorHandler) GetSet(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.uc.GetSet(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -142,7 +143,7 @@ func (h *ConfiguratorHandler) GetVariable(w http.ResponseWriter, r *http.Request
 	}
 	res, err := h.uc.GetVariable(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -247,7 +248,7 @@ func (h *ConfiguratorHandler) GetCharacteristic(w http.ResponseWriter, r *http.R
 	}
 	res, err := h.uc.GetCharacteristic(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -455,7 +456,7 @@ func (h *ConfiguratorHandler) GetDescriptionType(w http.ResponseWriter, r *http.
 	}
 	res, err := h.uc.GetDescriptionType(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -533,7 +534,7 @@ func (h *ConfiguratorHandler) GetItemDescription(w http.ResponseWriter, r *http.
 	}
 	res, err := h.uc.GetItemDescription(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -643,7 +644,7 @@ func (h *ConfiguratorHandler) GetEquivalentRule(w http.ResponseWriter, r *http.R
 	}
 	res, err := h.uc.GetEquivalentRule(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -735,7 +736,7 @@ func (h *ConfiguratorHandler) GetItemRule(w http.ResponseWriter, r *http.Request
 	}
 	res, err := h.uc.GetItemRule(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

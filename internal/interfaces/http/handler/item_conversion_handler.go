@@ -86,7 +86,7 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 	}
 	factor, found, err := h.uc.FactorConfigured(r.Context(), itemCode, mask, from, to)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	if !found {

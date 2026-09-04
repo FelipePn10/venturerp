@@ -94,7 +94,7 @@ func (h *SalesOrderHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 func (h *SalesOrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -137,7 +137,7 @@ func (h *SalesOrderHandler) ListByCustomer(w http.ResponseWriter, r *http.Reques
 	}
 	results, err := h.listByCustomerUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -147,7 +147,7 @@ func (h *SalesOrderHandler) ListByStatus(w http.ResponseWriter, r *http.Request)
 	status := chi.URLParam(r, "status")
 	results, err := h.listByStatusUC.Execute(r.Context(), status)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -271,7 +271,7 @@ func (h *SalesOrderHandler) Block(w http.ResponseWriter, r *http.Request) {
 	}
 	dto.Code = code
 	if err := h.blockUC.Execute(r.Context(), dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -285,7 +285,7 @@ func (h *SalesOrderHandler) Unblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.unblockUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -305,7 +305,7 @@ func (h *SalesOrderHandler) ChangeStatus(w http.ResponseWriter, r *http.Request)
 	}
 	dto.Code = code
 	if err := h.changeStatusUC.Execute(r.Context(), dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -342,7 +342,7 @@ func (h *SalesOrderHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	dto.Code = code
 	result, err := h.updateItemUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -357,7 +357,7 @@ func (h *SalesOrderHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 	}
 	results, err := h.listItemsUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -371,7 +371,7 @@ func (h *SalesOrderHandler) CancelItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.cancelItemUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -54,7 +54,7 @@ func (h *SupplierHandler) UpdateSupplierType(w http.ResponseWriter, r *http.Requ
 func (h *SupplierHandler) ListSupplierTypes(w http.ResponseWriter, r *http.Request) {
 	res, err := h.uc.ListSupplierTypes(r.Context(), onlyActiveParam(r))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -79,7 +79,7 @@ func (h *SupplierHandler) CreateContactType(w http.ResponseWriter, r *http.Reque
 func (h *SupplierHandler) ListContactTypes(w http.ResponseWriter, r *http.Request) {
 	res, err := h.uc.ListContactTypes(r.Context(), onlyActiveParam(r))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -128,7 +128,7 @@ func (h *SupplierHandler) GetSupplier(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.uc.GetSupplier(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -137,7 +137,7 @@ func (h *SupplierHandler) GetSupplier(w http.ResponseWriter, r *http.Request) {
 func (h *SupplierHandler) ListSuppliers(w http.ResponseWriter, r *http.Request) {
 	res, err := h.uc.ListSuppliers(r.Context(), onlyActiveParam(r))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	if done, _ := export.WriteSlice(w, r, "Fornecedores", "fornecedores", res); done {
@@ -154,7 +154,7 @@ func (h *SupplierHandler) ListEstablishments(w http.ResponseWriter, r *http.Requ
 	}
 	res, err := h.uc.ListEstablishments(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -347,7 +347,7 @@ func (h *SupplierHandler) ListEnterprises(w http.ResponseWriter, r *http.Request
 	}
 	res, err := h.uc.ListEnterprises(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -365,7 +365,7 @@ func (h *SupplierHandler) GetPurchasingDefaults(w http.ResponseWriter, r *http.R
 	}
 	res, err := h.uc.GetPurchasingDefaults(r.Context(), code, 0)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -376,7 +376,7 @@ func (h *SupplierHandler) GetPurchasingDefaults(w http.ResponseWriter, r *http.R
 func (h *SupplierHandler) GetParameters(w http.ResponseWriter, r *http.Request) {
 	res, err := h.uc.GetParameters(r.Context(), 0)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

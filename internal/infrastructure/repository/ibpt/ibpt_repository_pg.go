@@ -3,6 +3,7 @@ package ibpt
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/ibpt/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/ibpt/repository"
@@ -78,7 +79,7 @@ func (r *IBPTRepositoryPG) GetByNCM(ctx context.Context, ncm, uf string) (*entit
 		&e.Estadual, &e.Municipal, &e.VigenciaInicio, &e.VigenciaFim, &e.Chave, &e.Versao, &e.Fonte, &e.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("IBPT não encontrado para NCM %s/%s", ncm, uf)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("IBPT não encontrado para NCM %s/%s", ncm, uf))
 		}
 		return nil, fmt.Errorf("getting ibpt rate: %w", err)
 	}

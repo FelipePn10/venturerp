@@ -3,6 +3,7 @@ package structure
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
@@ -102,7 +103,7 @@ func (r *ItemStructureRepositorySQLC) DeleteByCodes(ctx context.Context, parentC
 		return fmt.Errorf("removendo componente da estrutura: %w", err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("componente não encontrado na empresa autenticada")
+		return errorsuc.NewNotFoundError("componente não encontrado na empresa autenticada")
 	}
 	return nil
 }

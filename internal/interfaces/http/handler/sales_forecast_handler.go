@@ -83,7 +83,7 @@ func (h *SalesForecastHandler) CreateMonthlyForecast(w http.ResponseWriter, r *h
 	}
 	result, err := h.createMonthlyUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -97,7 +97,7 @@ func (h *SalesForecastHandler) GenerateForecast(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.generateForecastUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -113,7 +113,7 @@ func (h *SalesForecastHandler) CreateForecast(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.createForecastUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -128,7 +128,7 @@ func (h *SalesForecastHandler) ListForecasts(w http.ResponseWriter, r *http.Requ
 	}
 	results, err := h.listForecastsUC.Execute(r.Context(), year)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -142,7 +142,7 @@ func (h *SalesForecastHandler) GetForecastByItem(w http.ResponseWriter, r *http.
 	}
 	results, err := h.getForecastByItemUC.Execute(r.Context(), itemCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -158,7 +158,7 @@ func (h *SalesForecastHandler) CreateBlock(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.createBlockUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -167,7 +167,7 @@ func (h *SalesForecastHandler) CreateBlock(w http.ResponseWriter, r *http.Reques
 func (h *SalesForecastHandler) ListBlocks(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listBlocksUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -183,7 +183,7 @@ func (h *SalesForecastHandler) CreateAppropriation(w http.ResponseWriter, r *htt
 	}
 	result, err := h.createAppropriationUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -192,7 +192,7 @@ func (h *SalesForecastHandler) CreateAppropriation(w http.ResponseWriter, r *htt
 func (h *SalesForecastHandler) ListAppropriations(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listAppropriationsUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -205,7 +205,7 @@ func (h *SalesForecastHandler) SetDefaultAppropriation(w http.ResponseWriter, r 
 		return
 	}
 	if err := h.setDefaultUC.Execute(r.Context(), dto.ID); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"status": "default appropriation table updated"})

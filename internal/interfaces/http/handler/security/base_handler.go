@@ -39,11 +39,20 @@ func (h *BaseHandler) NotFound(w http.ResponseWriter, message ...string) {
 
 // InternalError logs the real error (with request_id from context) and returns
 // a generic message to the client — never leaking internal details.
+// InternalError é o destino dos erros que o handler não classificou. Antes de
+// assumir falha do servidor, ele deixa RespondUseCaseError reconhecer o que
+// for conhecido — chave duplicada vira 409 "já existe", registro ausente vira
+// 404, violação de domínio vira 422. Sem isso, cadastrar um código repetido
+// respondia "ocorreu um erro interno", que não diz ao usuário o que houve.
 func (h *BaseHandler) InternalError(w http.ResponseWriter, r *http.Request, err error) {
 	applogger.FromContext(r.Context()).Error(
 		"internal server error",
 		"error", err,
 	)
+	if isClassified(err) {
+		RespondUseCaseError(w, err)
+		return
+	}
 	WriteError(w, http.StatusInternalServerError, "internal_error", "ocorreu um erro interno")
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/jackc/pgx/v5"
 
@@ -58,7 +59,7 @@ func (r *DeliveryRescheduleRepositorySQLC) GetByCode(
 	row, err := r.q.GetDeliveryRescheduleByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("delivery reschedule %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("reprogramação de entrega %d não encontrada", code))
 		}
 		return nil, fmt.Errorf("fetching delivery reschedule: %w", err)
 	}

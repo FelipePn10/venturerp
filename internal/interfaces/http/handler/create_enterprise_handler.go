@@ -47,7 +47,7 @@ func (h *EnterpriseHandler) GetEnterprise(w http.ResponseWriter, r *http.Request
 	}
 	result, err := h.getEnterpriseUC.Execute(r.Context(), code)
 	if err != nil {
-		h.NotFound(w, "enterprise not found")
+		h.NotFound(w, "empresa não encontrada")
 		return
 	}
 	h.OK(w, result)

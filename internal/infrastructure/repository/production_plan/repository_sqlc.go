@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/repository"
@@ -78,7 +79,7 @@ func (r *ProductionPlanRepositorySQLC) Update(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("production plan %d not found", plan.Code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("plano de produção %d não encontrado", plan.Code))
 		}
 		return nil, fmt.Errorf("updating production plan: %w", err)
 	}

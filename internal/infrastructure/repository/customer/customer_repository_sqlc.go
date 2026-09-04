@@ -3,6 +3,7 @@ package customer
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
@@ -1939,7 +1940,7 @@ func (r *CustomerRepositorySQLC) UpdateSalesTablePrice(ctx context.Context, p *e
 	updated, err := scanSalesTablePrice(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("sales table price %d not found", p.ID)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("preço %d da tabela de venda não encontrado", p.ID))
 		}
 		return nil, fmt.Errorf("updating sales table price %d: %w", p.ID, err)
 	}
@@ -1959,7 +1960,7 @@ func (r *CustomerRepositorySQLC) GetSalesTablePrice(ctx context.Context, salesTa
 	p, err := scanSalesTablePrice(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("sales table price not found for table %d item %s", salesTableID, itemCode)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("preço não cadastrado na tabela %d para o item %s", salesTableID, itemCode))
 		}
 		return nil, fmt.Errorf("getting sales table price: %w", err)
 	}
@@ -2069,7 +2070,7 @@ func normalizeCostErr(err error, itemCode int64, source entity.SalesCostSource) 
 		return nil
 	}
 	if err == pgx.ErrNoRows {
-		return fmt.Errorf("cost not found for item %d using source %s", itemCode, source)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("custo do item %d não encontrado para a origem %s", itemCode, source))
 	}
 	return err
 }

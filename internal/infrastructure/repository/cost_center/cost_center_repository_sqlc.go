@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cost_center/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -63,7 +64,7 @@ func (r *CostCenterRepositorySQLC) GetByCode(
 	row, err := r.q.GetCostCenterByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("cost center %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("centro de custo %d não encontrado", code))
 		}
 		return nil, fmt.Errorf("fetching cost center: %w", err)
 	}

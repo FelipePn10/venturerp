@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -34,6 +35,16 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 		return
 	}
 
+	// Consulta que não achou a linha é "registro não encontrado", não falha do
+	// servidor. Sem isto, todo repositório que deixa o pgx.ErrNoRows subir sem
+	// embrulhar devolve 500 com "erro interno do servidor" — que não diz nada
+	// ao usuário e ainda esconde o motivo real.
+	if errors.Is(err, pgx.ErrNoRows) {
+		RespondErrorCode(w, http.StatusNotFound, "REGISTRO_NAO_ENCONTRADO",
+			"registro não encontrado na empresa autenticada")
+		return
+	}
+
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
@@ -51,4 +62,26 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 
 	slog.Error("erro interno em caso de uso", "error", err)
 	RespondError(w, http.StatusInternalServerError, err.Error())
+}
+
+// isClassified diz se RespondUseCaseError sabe traduzir este erro em algo que
+// o usuário entenda, em vez de cair no 500 genérico.
+func isClassified(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, errorsuc.ErrUnauthorized) || errors.Is(err, pgx.ErrNoRows) {
+		return true
+	}
+	if _, ok := errorsuc.AsValidation(err); ok {
+		return true
+	}
+	if _, ok := errorsuc.AsConflict(err); ok {
+		return true
+	}
+	if _, ok := errorsuc.AsNotFound(err); ok {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr)
 }

@@ -3,6 +3,7 @@ package financial
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -65,7 +66,7 @@ func (r *FinancialRepositoryPG) GetContaBancaria(ctx context.Context, id int64) 
 		&c.CreatedAt, &c.UpdatedAt, &c.CreatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("conta bancaria %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("conta bancária %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting conta bancaria: %w", err)
 	}
@@ -710,7 +711,7 @@ func (r *FinancialRepositoryPG) GetTaxAssessment(ctx context.Context, imposto, c
 		&t.Status, &t.CpID, &t.DataVencimento, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("tax assessment %s/%s not found", imposto, competencia)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("apuração de %s da competência %s não encontrada", imposto, competencia))
 		}
 		return nil, fmt.Errorf("getting tax assessment: %w", err)
 	}
@@ -815,7 +816,7 @@ func (r *FinancialRepositoryPG) GetFiscalConfig(ctx context.Context) (*fiscalEnt
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("fiscal config not found")
+			return nil, errorsuc.NewNotFoundError("parametrização fiscal não encontrada")
 		}
 		return nil, fmt.Errorf("getting fiscal config: %w", err)
 	}
@@ -841,7 +842,7 @@ func (r *FinancialRepositoryPG) scanContaPagarRow(row pgx.Row) (*entity.ContaPag
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("conta pagar not found")
+			return nil, errorsuc.NewNotFoundError("conta a pagar não encontrada")
 		}
 		return nil, fmt.Errorf("scanning conta pagar: %w", err)
 	}
@@ -897,7 +898,7 @@ func (r *FinancialRepositoryPG) scanContaReceberRow(row pgx.Row) (*entity.ContaR
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("conta receber not found")
+			return nil, errorsuc.NewNotFoundError("conta a receber não encontrada")
 		}
 		return nil, fmt.Errorf("scanning conta receber: %w", err)
 	}

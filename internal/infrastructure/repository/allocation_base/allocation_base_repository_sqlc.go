@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/allocation_base/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -56,7 +57,7 @@ func (r *AllocationBaseRepositorySQLC) GetByCode(
 	row, err := r.q.GetAllocationBaseByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("allocation base %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("base de rateio %d não encontrada", code))
 		}
 		return nil, fmt.Errorf("fetching allocation base: %w", err)
 	}

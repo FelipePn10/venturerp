@@ -109,7 +109,7 @@ func (uc *ItemSupplierUseCase) ListBySupplier(ctx context.Context, supplier int6
 }
 func (uc *ItemSupplierUseCase) SearchExternal(ctx context.Context, supplier int64, term string) ([]*response.ItemPreferredSupplierResponse, error) {
 	if supplier <= 0 || strings.TrimSpace(term) == "" {
-		return nil, fmt.Errorf("supplier_code e termo sao obrigatorios")
+		return nil, fmt.Errorf("informe o fornecedor e o termo de busca")
 	}
 	e, err := uc.auth.EnterpriseID(ctx)
 	if err != nil {
@@ -130,7 +130,7 @@ func (uc *ItemSupplierUseCase) ResolveExternal(ctx context.Context, supplier int
 		strategy = "DESCRICAO"
 	}
 	if supplier <= 0 || term == "" {
-		return nil, fmt.Errorf("fornecedor e codigo/descricao externa sao obrigatorios")
+		return nil, fmt.Errorf("informe o fornecedor e o código ou a descrição externa")
 	}
 	e, err := uc.auth.EnterpriseID(ctx)
 	if err != nil {

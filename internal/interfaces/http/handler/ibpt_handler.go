@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/ibpt_uc"
@@ -42,12 +43,12 @@ func (h *IBPTHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 	ncm := r.URL.Query().Get("ncm")
 	uf := r.URL.Query().Get("uf")
 	if ncm == "" || uf == "" {
-		jsonError(w, http.StatusBadRequest, "ncm and uf are required")
+		jsonError(w, http.StatusBadRequest, "informe o NCM e a UF")
 		return
 	}
 	rate, err := h.uc.Lookup(r.Context(), ncm, uf)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, rate)

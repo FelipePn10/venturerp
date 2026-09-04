@@ -3,6 +3,7 @@ package nfse
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/repository"
@@ -77,7 +78,7 @@ func (r *NFSeRepositoryPG) GetByID(ctx context.Context, id int64) (*entity.NFSe,
 	n, err := scanNFSe(r.pool.QueryRow(ctx, `SELECT `+nfseColumns+` FROM public.nfse WHERE id = $1`, id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("NFS-e %d não encontrada", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("NFS-e %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting NFS-e: %w", err)
 	}

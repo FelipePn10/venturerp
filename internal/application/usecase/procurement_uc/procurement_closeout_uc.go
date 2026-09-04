@@ -296,7 +296,7 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 	}
 	for _, it := range dto.Items {
 		if it.ItemCode <= 0 || it.Quantity <= 0 {
-			return nil, fmt.Errorf("import item requires item_code and positive quantity")
+			return nil, fmt.Errorf("cada item importado precisa de código e quantidade maior que zero")
 		}
 		process.Items = append(process.Items, &entity.ImportProcessItem{
 			ItemCode:     it.ItemCode,

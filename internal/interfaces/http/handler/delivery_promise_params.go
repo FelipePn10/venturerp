@@ -30,7 +30,7 @@ func (h *DeliveryPromiseParamsHandler) Update(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.uc.Save(r.Context(), dto, "system")
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

@@ -7,6 +7,7 @@ package tool_sheet_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -264,11 +265,11 @@ func (uc *ToolSheetUseCase) validateAssignment(ctx context.Context, operationID,
 		return fmt.Errorf("operation_id, tool_id and serial_id are required")
 	}
 	if _, err := uc.Q.GetProductionOrderOperation(ctx, operationID); err != nil {
-		return fmt.Errorf("operação %d não encontrada", operationID)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("operação %d não encontrada", operationID))
 	}
 	serial, err := uc.Q.GetToolSerial(ctx, serialID)
 	if err != nil {
-		return fmt.Errorf("série %d não encontrada", serialID)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("série %d não encontrada", serialID))
 	}
 	if serial.ToolID != toolID {
 		return fmt.Errorf("a série %d não pertence à ferramenta %d", serialID, toolID)

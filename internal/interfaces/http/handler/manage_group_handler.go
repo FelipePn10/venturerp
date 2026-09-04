@@ -17,7 +17,7 @@ func (h *GroupHandler) GetGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getGroupUC.Execute(r.Context(), code)
 	if err != nil {
-		h.NotFound(w, "group not found")
+		h.NotFound(w, "grupo PDM não encontrado")
 		return
 	}
 	h.OK(w, result)

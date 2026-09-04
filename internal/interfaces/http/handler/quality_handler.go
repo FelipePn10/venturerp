@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -33,7 +34,7 @@ func (h *QualityHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetPlan(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -106,7 +107,7 @@ func (h *QualityHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetRecord(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -164,7 +165,7 @@ func (h *QualityHandler) GetNC(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetNC(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

@@ -107,7 +107,7 @@ func (h *DeliveryPromiseHandler) handleError(w http.ResponseWriter, err error) {
 	case func() bool { _, ok := errorsuc.AsValidation(err); return ok }():
 		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
 	default:
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 	}
 }
 

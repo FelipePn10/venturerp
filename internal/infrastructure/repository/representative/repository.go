@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
 
@@ -91,7 +92,7 @@ func (r *Repository) Get(ctx context.Context, code int64) (*entity.Representativ
 	rep, err := scanRep(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("representative %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado", code))
 		}
 		return nil, err
 	}
@@ -127,7 +128,7 @@ func (r *Repository) Block(ctx context.Context, code int64, reason string) error
 	}
 	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=TRUE, block_reason=$2, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$3)`, code, reason, enterpriseID)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("representante %d não encontrado na empresa autenticada", code)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado na empresa autenticada", code))
 	}
 	return err
 }
@@ -139,7 +140,7 @@ func (r *Repository) Unblock(ctx context.Context, code int64) error {
 	}
 	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=FALSE, block_reason=NULL, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseID)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("representante %d não encontrado na empresa autenticada", code)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado na empresa autenticada", code))
 	}
 	return err
 }

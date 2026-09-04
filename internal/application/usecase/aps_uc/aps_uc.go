@@ -3,6 +3,7 @@ package aps_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"sort"
 	"strings"
 	"time"
@@ -394,7 +395,7 @@ func (uc *APSUseCase) CreateMachineDowntime(ctx context.Context, dto request.Mac
 	}
 	kind := strings.ToUpper(strings.TrimSpace(dto.DowntimeType))
 	if dto.MachineID <= 0 || dto.StartsAt.IsZero() || !dto.EndsAt.After(dto.StartsAt) || strings.TrimSpace(dto.Reason) == "" {
-		return response.MachineDowntimeResponse{}, fmt.Errorf("machine, valid interval and reason are required")
+		return response.MachineDowntimeResponse{}, errorsuc.NewValidationError("informe a máquina, um intervalo válido e o motivo da parada")
 	}
 	if kind != "PLANNED" && kind != "UNPLANNED" && kind != "MAINTENANCE" {
 		return response.MachineDowntimeResponse{}, fmt.Errorf("invalid downtime_type")

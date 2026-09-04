@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
 
@@ -129,7 +130,7 @@ func (r *Repository) GetByCode(ctx context.Context, code int64) (*quoteentity.Sa
 	q, err := scanQuotation(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("sales quotation %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("orçamento de venda %d não encontrado", code))
 		}
 		return nil, err
 	}

@@ -98,7 +98,8 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error": "rate limit exceeded, slow down",
+				"code":  "MUITAS_REQUISICOES",
+				"error": "muitas operações em pouco tempo; aguarde alguns instantes e tente novamente",
 			})
 			return
 		}

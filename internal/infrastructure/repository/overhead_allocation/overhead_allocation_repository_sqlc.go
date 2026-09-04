@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/overhead_allocation/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -87,7 +88,7 @@ func (r *OverheadAllocationRepositorySQLC) GetByCode(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("overhead allocation %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("rateio de despesas indiretas %d não encontrado", code))
 		}
 
 		return nil, fmt.Errorf("fetching overhead allocation: %w", err)

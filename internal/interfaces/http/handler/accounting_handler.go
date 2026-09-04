@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 	"time"
@@ -55,7 +56,7 @@ func (h *AccountingHandler) Balancete(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.balanceteUC.Execute(r.Context(), planID, empresaID, from, to)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -107,7 +108,7 @@ func (h *AccountingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 func (h *AccountingHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 	plans, err := h.planUC.List(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, plans)
@@ -175,7 +176,7 @@ func (h *AccountingHandler) ListAccounts(w http.ResponseWriter, r *http.Request)
 	}
 	accounts, err := h.acctUC.ListByPlan(r.Context(), planID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, accounts)
@@ -254,7 +255,7 @@ func (h *AccountingHandler) ListJournalEntries(w http.ResponseWriter, r *http.Re
 
 	entries, err := h.entryUC.ListByPeriod(r.Context(), planID, empresaID, from, to)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, entries)

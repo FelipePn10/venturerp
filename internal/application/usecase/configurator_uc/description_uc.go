@@ -3,6 +3,7 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -78,7 +79,7 @@ func (uc *ConfiguratorUseCase) CreateItemDescription(ctx context.Context, dto re
 		return nil, fmt.Errorf("item_code e description_type_id são obrigatórios")
 	}
 	if _, err := uc.Q.GetCfgDescriptionType(ctx, dto.DescriptionTypeID); err != nil {
-		return nil, fmt.Errorf("tipo de descrição %d não encontrado", dto.DescriptionTypeID)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tipo de descrição %d não encontrado", dto.DescriptionTypeID))
 	}
 	// idempotent: reuse an existing header
 	if existing, err := uc.Q.GetCfgItemDescriptionByItemType(ctx, dto.ItemCode, dto.DescriptionTypeID); err == nil {

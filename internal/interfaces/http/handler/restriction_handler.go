@@ -19,7 +19,7 @@ func (h *RestrictionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -28,7 +28,7 @@ func (h *RestrictionHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *RestrictionHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -56,7 +56,7 @@ func (h *RestrictionHandler) GetByItem(w http.ResponseWriter, r *http.Request) {
 	}
 	results, err := h.getByItemUC.Execute(r.Context(), itemCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -87,7 +87,7 @@ func (h *RestrictionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.updateUC.Execute(r.Context(), res)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -101,7 +101,7 @@ func (h *RestrictionHandler) GetByCustomer(w http.ResponseWriter, r *http.Reques
 	}
 	results, err := h.getByCustomerUC.Execute(r.Context(), customerCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -126,7 +126,7 @@ func (h *RestrictionHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.evaluateUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -139,7 +139,7 @@ func (h *RestrictionHandler) Deactivate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := h.deactivateUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

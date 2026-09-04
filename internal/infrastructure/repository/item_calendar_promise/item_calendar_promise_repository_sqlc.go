@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/item_calendar_promise/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -36,7 +37,7 @@ func (r *ItemCalendarPromiseRepositorySQLC) GetDay(ctx context.Context, itemCode
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("item calendar day not found")
+			return nil, errorsuc.NewNotFoundError("dia do calendário do item não encontrado")
 		}
 		return nil, fmt.Errorf("fetching item calendar day: %w", err)
 	}

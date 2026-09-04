@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -42,7 +43,7 @@ func (h *EntryOperationHandler) GetStateGroup(w http.ResponseWriter, r *http.Req
 	}
 	res, err := h.uc.GetStateGroup(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -51,7 +52,7 @@ func (h *EntryOperationHandler) GetStateGroup(w http.ResponseWriter, r *http.Req
 func (h *EntryOperationHandler) ListStateGroups(w http.ResponseWriter, r *http.Request) {
 	res, err := h.uc.ListStateGroups(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -114,7 +115,7 @@ func (h *EntryOperationHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.uc.GetEntryOperation(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -124,7 +125,7 @@ func (h *EntryOperationHandler) List(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	res, err := h.uc.ListEntryOperations(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

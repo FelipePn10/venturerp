@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 	"time"
@@ -62,7 +63,7 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	records, err := h.reader.List(r.Context(), f)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, records)

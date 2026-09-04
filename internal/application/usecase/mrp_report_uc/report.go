@@ -135,7 +135,7 @@ func validateFilter(filter *Filter, report string) error {
 		return errorsuc.NewValidationError("invalid position")
 	}
 	if (report == "profile" || report == "grouped") && filter.PlanCode == nil {
-		return errorsuc.NewValidationError("plan_code is required")
+		return errorsuc.NewValidationError("informe o plano de MRP")
 	}
 	for _, p := range filter.Periods {
 		if p.To.Before(p.From) {
@@ -150,7 +150,7 @@ func validateFilter(filter *Filter, report string) error {
 		return errorsuc.NewValidationError(fmt.Sprintf("invalid layout for %s report", report))
 	}
 	if report == "availability" && len(filter.SalesOrderCodes) == 0 && (filter.ItemCode == nil || !filter.Quantity.IsPositive()) {
-		return errorsuc.NewValidationError("sales_orders or item_code with positive quantity are required")
+		return errorsuc.NewValidationError("informe os pedidos de venda ou um item com quantidade maior que zero")
 	}
 	if report == "grouped" && len(filter.Periods) > 0 && len(filter.Periods) != 6 {
 		return errorsuc.NewValidationError("grouped needs requires exactly six periods when periods are informed")
@@ -292,7 +292,7 @@ func (uc *UseCase) Explosion(ctx context.Context, itemCode int64, quantity decim
 		return nil, err
 	}
 	if len(filter.ProductionOrderCodes) == 0 && len(filter.LoadCodes) == 0 && (itemCode == 0 || !quantity.IsPositive()) {
-		return nil, errorsuc.NewValidationError("item_code and positive quantity, production_orders or loads are required")
+		return nil, errorsuc.NewValidationError("informe um item com quantidade maior que zero, ordens de produção ou cargas")
 	}
 	if err := validateFilter(&filter, "explosion"); err != nil {
 		return nil, err

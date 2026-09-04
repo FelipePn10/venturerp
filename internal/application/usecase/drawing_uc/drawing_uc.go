@@ -5,6 +5,7 @@ package drawing_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -147,7 +148,7 @@ func (uc *DrawingUseCase) UpdateRevision(ctx context.Context, id int64, dto requ
 	}
 	belongs, err := uc.Q.DrawingRevisionBelongsToEnterprise(ctx, id, enterpriseID)
 	if err != nil || !belongs {
-		return nil, fmt.Errorf("revisão não encontrada para a empresa")
+		return nil, errorsuc.NewNotFoundError("revisão não encontrada para a empresa")
 	}
 	dto.ID = id
 	row, err := uc.Q.UpdateDrawingRevisionForEnterprise(ctx, enterpriseID, revisionParams(0, dto, id), pgutil.ToPgUUID(dto.UpdatedBy))
@@ -187,7 +188,7 @@ func (uc *DrawingUseCase) DeleteRevision(ctx context.Context, id int64) error {
 	}
 	belongs, err := uc.Q.DrawingRevisionBelongsToEnterprise(ctx, id, enterpriseID)
 	if err != nil || !belongs {
-		return fmt.Errorf("revisão não encontrada para a empresa")
+		return errorsuc.NewNotFoundError("revisão não encontrada para a empresa")
 	}
 	return uc.Q.DeleteDrawingRevision(ctx, id)
 }
@@ -201,7 +202,7 @@ func (uc *DrawingUseCase) AddDistribution(ctx context.Context, revisionID int64,
 	}
 	belongs, err := uc.Q.DrawingRevisionBelongsToEnterprise(ctx, revisionID, enterpriseID)
 	if err != nil || !belongs {
-		return nil, fmt.Errorf("revisão não encontrada para a empresa")
+		return nil, errorsuc.NewNotFoundError("revisão não encontrada para a empresa")
 	}
 	if dto.Recipient == "" {
 		return nil, fmt.Errorf("destinatário é obrigatório")
@@ -224,7 +225,7 @@ func (uc *DrawingUseCase) DeleteDistribution(ctx context.Context, id int64) erro
 	}
 	belongs, err := uc.Q.DrawingDistributionBelongsToEnterprise(ctx, id, enterpriseID)
 	if err != nil || !belongs {
-		return fmt.Errorf("distribuição não encontrada para a empresa")
+		return errorsuc.NewNotFoundError("distribuição não encontrada para a empresa")
 	}
 	return uc.Q.DeleteDrawingDistribution(ctx, id)
 }
@@ -238,7 +239,7 @@ func (uc *DrawingUseCase) AddCharacteristic(ctx context.Context, drawingID int64
 	}
 	belongs, err := uc.Q.DrawingBelongsToEnterprise(ctx, drawingID, enterpriseID)
 	if err != nil || !belongs {
-		return nil, fmt.Errorf("desenho não encontrado para a empresa")
+		return nil, errorsuc.NewNotFoundError("desenho não encontrado para a empresa")
 	}
 	op := dto.Operator
 	if op == "" {
@@ -261,7 +262,7 @@ func (uc *DrawingUseCase) ListCharacteristics(ctx context.Context, drawingID int
 	}
 	belongs, err := uc.Q.DrawingBelongsToEnterprise(ctx, drawingID, enterpriseID)
 	if err != nil || !belongs {
-		return nil, fmt.Errorf("desenho não encontrado para a empresa")
+		return nil, errorsuc.NewNotFoundError("desenho não encontrado para a empresa")
 	}
 	rows, err := uc.Q.ListDrawingCharacteristics(ctx, drawingID)
 	if err != nil {
@@ -284,7 +285,7 @@ func (uc *DrawingUseCase) DeleteCharacteristic(ctx context.Context, id int64) er
 	}
 	belongs, err := uc.Q.DrawingCharacteristicBelongsToEnterprise(ctx, id, enterpriseID)
 	if err != nil || !belongs {
-		return fmt.Errorf("característica não encontrada para a empresa")
+		return errorsuc.NewNotFoundError("característica não encontrada para a empresa")
 	}
 	return uc.Q.DeleteDrawingCharacteristic(ctx, id)
 }

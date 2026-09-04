@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -110,7 +111,7 @@ func (r *PlannedOrderRepositorySQLC) GetByCode(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("planned order %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem planejada %d não encontrada", code))
 		}
 
 		return nil, fmt.Errorf("fetching planned order: %w", err)
@@ -143,7 +144,7 @@ func (r *PlannedOrderRepositorySQLC) GetByNumber(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("planned order number %d not found", number)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem planejada número %d não encontrada", number))
 		}
 
 		return nil, fmt.Errorf("fetching planned order by number: %w", err)

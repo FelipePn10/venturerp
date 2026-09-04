@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"mime"
 	"net/http"
 	"strconv"
@@ -41,7 +42,7 @@ func (h *ItemSupplierHandler) ListByItem(w http.ResponseWriter, r *http.Request)
 	}
 	res, err := h.uc.ListByItem(r.Context(), itemCode)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -55,7 +56,7 @@ func (h *ItemSupplierHandler) ListBySupplier(w http.ResponseWriter, r *http.Requ
 	}
 	res, err := h.uc.ListBySupplier(r.Context(), supplierCode)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -64,7 +65,7 @@ func (h *ItemSupplierHandler) ListBySupplier(w http.ResponseWriter, r *http.Requ
 func (h *ItemSupplierHandler) SearchExternal(w http.ResponseWriter, r *http.Request) {
 	supplier, err := strconv.ParseInt(r.URL.Query().Get("supplier_code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "supplier_code invalido")
+		jsonError(w, http.StatusBadRequest, "código do fornecedor inválido")
 		return
 	}
 	res, err := h.uc.SearchExternal(r.Context(), supplier, r.URL.Query().Get("term"))
@@ -102,7 +103,7 @@ func (h *ItemSupplierHandler) ListQualityReports(w http.ResponseWriter, r *http.
 	}
 	res, err := h.uc.ListQualityReports(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -111,12 +112,12 @@ func (h *ItemSupplierHandler) ListQualityReports(w http.ResponseWriter, r *http.
 func (h *ItemSupplierHandler) DownloadQualityReport(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "reportID"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "id do laudo invalido")
+		jsonError(w, http.StatusBadRequest, "identificador do laudo inválido")
 		return
 	}
 	report, err := h.uc.GetQualityReport(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, "laudo nao encontrado")
+		jsonError(w, http.StatusNotFound, "laudo não encontrado")
 		return
 	}
 	if len(report.Content) == 0 {
@@ -142,7 +143,7 @@ func (h *ItemSupplierHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.uc.Delete(r.Context(), id); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -142,7 +142,7 @@ func (h *ShipmentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.Get(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -178,7 +178,7 @@ func (h *ShipmentHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.uc.List(r.Context(), f)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -230,7 +230,7 @@ func (h *ShipmentHandler) CreateLoad(w http.ResponseWriter, r *http.Request) {
 func (h *ShipmentHandler) ListLoads(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListLoads(r.Context(), loadFilterFromQuery(r))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -244,7 +244,7 @@ func (h *ShipmentHandler) GetLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetLoad(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -397,7 +397,7 @@ func (h *ShipmentHandler) ListDeliveryInstructions(w http.ResponseWriter, r *htt
 	activeOnly := r.URL.Query().Get("active_only") != "false"
 	result, err := h.uc.ListDeliveryInstructions(r.Context(), loadCode, activeOnly)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -433,7 +433,7 @@ func (h *ShipmentHandler) ListDispatchBoxes(w http.ResponseWriter, r *http.Reque
 	activeOnly := r.URL.Query().Get("active_only") != "false"
 	result, err := h.uc.ListDispatchBoxes(r.Context(), activeOnly)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -464,7 +464,7 @@ func (h *ShipmentHandler) AssignBoxToLoad(w http.ResponseWriter, r *http.Request
 func (h *ShipmentHandler) LoadMonitor(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.LoadMonitor(r.Context(), loadFilterFromQuery(r))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -473,7 +473,7 @@ func (h *ShipmentHandler) LoadMonitor(w http.ResponseWriter, r *http.Request) {
 func (h *ShipmentHandler) SeparationMonitor(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.SeparationMonitor(r.Context(), loadFilterFromQuery(r))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -482,7 +482,7 @@ func (h *ShipmentHandler) SeparationMonitor(w http.ResponseWriter, r *http.Reque
 func (h *ShipmentHandler) LogisticPanel(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.LogisticPanel(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -508,7 +508,7 @@ func (h *ShipmentHandler) listByOrder(w http.ResponseWriter, r *http.Request, fn
 	}
 	result, err := fn(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -671,7 +671,7 @@ func (h *ShipmentHandler) ListVolumes(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.ListVolumes(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -727,7 +727,7 @@ func (h *ShipmentHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.ListEvents(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -823,7 +823,7 @@ func (h *ShipmentHandler) exportFile(w http.ResponseWriter, r *http.Request, for
 	}
 	data, err := generate(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	contentType := "application/pdf"

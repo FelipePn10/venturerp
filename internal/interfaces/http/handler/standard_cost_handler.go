@@ -81,7 +81,7 @@ func (h *StandardCostHandler) GetItemPurchaseCost(w http.ResponseWriter, r *http
 	}
 	result, err := h.uc.GetItemPurchaseCost(r.Context(), itemCode)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -110,7 +110,7 @@ func (h *StandardCostHandler) GetStandardCost(w http.ResponseWriter, r *http.Req
 	mask := r.URL.Query().Get("mask")
 	result, err := h.uc.GetStandardCost(r.Context(), itemCode, mask)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

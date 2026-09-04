@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -51,7 +52,7 @@ func (h *LotMaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.uc.Get(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

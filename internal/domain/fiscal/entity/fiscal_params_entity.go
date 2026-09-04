@@ -328,6 +328,18 @@ const (
 	SimplesAnexoVI  SimplesNacionalAnnex = "VI"
 )
 
+// IsValidSimplesNacionalAnnex diz se o texto é um dos anexos previstos em lei.
+// O banco usa um enum, então um valor fora da lista precisa ser recusado antes
+// da consulta — senão o Postgres devolve um erro cru que não ajuda o usuário.
+func IsValidSimplesNacionalAnnex(value string) bool {
+	switch SimplesNacionalAnnex(value) {
+	case SimplesAnexoI, SimplesAnexoII, SimplesAnexoIII, SimplesAnexoIV, SimplesAnexoV, SimplesAnexoVI:
+		return true
+	default:
+		return false
+	}
+}
+
 type SimplesNacionalApuracao struct {
 	ID                  int64
 	Period              string

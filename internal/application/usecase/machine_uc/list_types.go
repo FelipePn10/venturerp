@@ -27,14 +27,15 @@ func (uc *ListMachineTypesUseCase) Execute(
 	return toMachineTypeResponses(list), nil
 }
 
+// GetByCodeType devolve o tipo de máquina — não a máquina.
 func (uc *ListMachineTypesUseCase) GetByCodeType(
 	ctx context.Context,
 	code int64,
-) (*response.MachineResponse, error) {
+) (*response.MachineTypeResponse, error) {
 
-	m, err := uc.Repo.GetByCode(ctx, code)
+	t, err := uc.Repo.GetTypeByCode(ctx, code)
 	if err != nil {
 		return nil, err
 	}
-	return toMachineResponse(m), nil
+	return toMachineTypeResponse(t), nil
 }

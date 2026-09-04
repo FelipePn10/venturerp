@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -29,7 +30,7 @@ func (h *CuttingPlanHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 	onlyOpen := r.URL.Query().Get("only_open") == "true"
 	result, err := h.uc.List(r.Context(), onlyOpen)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -43,7 +44,7 @@ func (h *CuttingPlanHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetDetail(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -170,7 +171,7 @@ func (h *CuttingPlanHandler) ListOrderCosts(w http.ResponseWriter, r *http.Reque
 	}
 	result, err := h.uc.ListOrderCosts(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -181,7 +182,7 @@ func (h *CuttingPlanHandler) ListOrderCosts(w http.ResponseWriter, r *http.Reque
 func (h *CuttingPlanHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.GetSettings(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -212,7 +213,7 @@ func (h *CuttingPlanHandler) ListRemnants(w http.ResponseWriter, r *http.Request
 	onlyAvailable := r.URL.Query().Get("only_available") == "true"
 	result, err := h.uc.ListRemnants(r.Context(), itemCode, onlyAvailable)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

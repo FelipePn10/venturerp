@@ -3,6 +3,7 @@ package purchase_order
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
@@ -170,7 +171,7 @@ func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.Purc
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("purchase order %d not found or inactive", o.Code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("pedido de compra %d não encontrado ou inativo", o.Code))
 		}
 		return nil, fmt.Errorf("updating purchase order: %w", err)
 	}
@@ -207,7 +208,7 @@ func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64)
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("purchase order %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("pedido de compra %d não encontrado", code))
 		}
 		return nil, fmt.Errorf("fetching purchase order: %w", err)
 	}
@@ -455,7 +456,7 @@ func (r *PurchaseOrderRepositorySQLC) UpdateItem(ctx context.Context, item *enti
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("purchase order item %d not found", item.Code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d do pedido de compra não encontrado", item.Code))
 		}
 		return nil, fmt.Errorf("updating purchase order item: %w", err)
 	}

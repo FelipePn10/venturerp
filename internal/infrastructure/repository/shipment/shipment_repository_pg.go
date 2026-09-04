@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
@@ -109,7 +110,7 @@ func (r *ShipmentRepositoryPG) GetByCode(ctx context.Context, code int64) (*enti
 		`SELECT `+shipmentCols+` FROM public.shipments WHERE code = $1 AND enterprise_id=$2`, code, enterpriseID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("romaneio %d não encontrado", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("romaneio %d não encontrado", code))
 		}
 		return nil, fmt.Errorf("getting shipment: %w", err)
 	}
@@ -257,7 +258,7 @@ func (r *ShipmentRepositoryPG) UpdateStatus(ctx context.Context, code int64, sta
 		code, string(status), by, enterpriseID).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return fmt.Errorf("romaneio %d não encontrado", code)
+			return errorsuc.NewNotFoundError(fmt.Sprintf("romaneio %d não encontrado", code))
 		}
 		return fmt.Errorf("updating shipment status: %w", err)
 	}
@@ -283,7 +284,7 @@ func (r *ShipmentRepositoryPG) UpdateTransport(ctx context.Context, code int64, 
 	).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return fmt.Errorf("romaneio %d não encontrado", code)
+			return errorsuc.NewNotFoundError(fmt.Sprintf("romaneio %d não encontrado", code))
 		}
 		return fmt.Errorf("updating shipment transport: %w", err)
 	}
@@ -303,7 +304,7 @@ func (r *ShipmentRepositoryPG) SetFiscalExit(ctx context.Context, code int64, fi
 		code, fiscalExitID, nfeNumber, nfeKey, by, enterpriseID).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return fmt.Errorf("romaneio %d não encontrado", code)
+			return errorsuc.NewNotFoundError(fmt.Sprintf("romaneio %d não encontrado", code))
 		}
 		return fmt.Errorf("linking shipment to NF-e: %w", err)
 	}
@@ -409,7 +410,7 @@ func (r *ShipmentRepositoryPG) GetItem(ctx context.Context, itemID int64) (*enti
 		 AND EXISTS (SELECT 1 FROM public.shipments s WHERE s.id=i.shipment_id AND s.enterprise_id=$2)`, itemID, enterpriseID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("item de romaneio %d não encontrado", itemID)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item de romaneio %d não encontrado", itemID))
 		}
 		return nil, fmt.Errorf("getting shipment item: %w", err)
 	}
@@ -616,7 +617,7 @@ func (r *ShipmentRepositoryPG) GetLoadByCode(ctx context.Context, code int64) (*
 	load, err := scanLoadRow(r.pool.QueryRow(ctx, `SELECT `+loadCols+` FROM public.shipment_loads WHERE code = $1 AND enterprise_id=$2`, code, enterpriseID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("carga %d não encontrada", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("carga %d não encontrada", code))
 		}
 		return nil, fmt.Errorf("getting shipment load: %w", err)
 	}
@@ -709,7 +710,7 @@ func (r *ShipmentRepositoryPG) AddShipmentToLoad(ctx context.Context, loadCode, 
 	).Scan(&out.ID, &out.LoadID, &out.LoadCode, &out.ShipmentID, &out.ShipmentCode, &out.Sequence, &out.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("carga %d ou romaneio %d não encontrado na empresa autenticada", loadCode, shipmentCode)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("carga %d ou romaneio %d não encontrado na empresa autenticada", loadCode, shipmentCode))
 		}
 		return nil, fmt.Errorf("adding shipment to load: %w", err)
 	}
@@ -947,7 +948,7 @@ func (r *ShipmentRepositoryPG) CreateDispatchBox(ctx context.Context, b *entity.
 	if b.WarehouseID != nil {
 		var valid bool
 		if err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM warehouse WHERE id=$1 AND enterprise_id=$2)`, *b.WarehouseID, enterpriseID).Scan(&valid); err != nil || !valid {
-			return nil, fmt.Errorf("almoxarifado da caixa de despacho não encontrado na empresa autenticada")
+			return nil, errorsuc.NewNotFoundError("almoxarifado da caixa de despacho não encontrado na empresa autenticada")
 		}
 	}
 	err = r.pool.QueryRow(ctx,
@@ -1008,7 +1009,7 @@ func (r *ShipmentRepositoryPG) AssignBoxToLoad(ctx context.Context, loadCode int
 		return fmt.Errorf("assigning box to load: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("carga %d não encontrada", loadCode)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("carga %d não encontrada", loadCode))
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE public.shipment_dispatch_boxes SET current_load = NULL, updated_at = NOW() WHERE current_load = $1 AND enterprise_id=$2`,
@@ -1022,7 +1023,7 @@ func (r *ShipmentRepositoryPG) AssignBoxToLoad(ctx context.Context, loadCode int
 		return fmt.Errorf("updating dispatch box assignment: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("caixa de despacho %s não encontrada", boxCode)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("caixa de despacho %s não encontrada", boxCode))
 	}
 	return tx.Commit(ctx)
 }

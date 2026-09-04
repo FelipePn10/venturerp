@@ -5,6 +5,7 @@ package lot_mask_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -156,7 +157,7 @@ func (uc *LotMaskUseCase) Deactivate(ctx context.Context, id int64) error {
 		}
 		tag, err := uc.Pool.Exec(ctx, `UPDATE lot_masks SET is_active=FALSE,updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID)
 		if err == nil && tag.RowsAffected() == 0 {
-			return fmt.Errorf("máscara de lote não encontrada")
+			return errorsuc.NewNotFoundError("máscara de lote não encontrada")
 		}
 		return err
 	}
@@ -287,7 +288,7 @@ func (uc *LotMaskUseCase) ensureMaskTenant(ctx context.Context, id int64) error 
 		return err
 	}
 	if !valid {
-		return fmt.Errorf("máscara de lote não encontrada")
+		return errorsuc.NewNotFoundError("máscara de lote não encontrada")
 	}
 	return nil
 }
@@ -306,7 +307,7 @@ func (uc *LotMaskUseCase) ensurePartTenant(ctx context.Context, id int64) error 
 		return err
 	}
 	if !valid {
-		return fmt.Errorf("partição da máscara de lote não encontrada")
+		return errorsuc.NewNotFoundError("partição da máscara de lote não encontrada")
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -40,7 +41,7 @@ func (h *ToolSheetHandler) GetSheet(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetSheet(r.Context(), orderID)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
