@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.14] — 2026-09-04
+
+- fix: corrige listagem de endereços de almoxarifado (#130) (`ecaf468`)
+
 ## [v1.1.13] — 2026-09-02
 
 - fix: preserva códigos hierárquicos de classificação por rota
