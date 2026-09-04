@@ -4,6 +4,7 @@ package production_order_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
@@ -25,35 +26,42 @@ func TestListWarehouseAddressesMatchesCompositeKeyTable(t *testing.T) {
 	ctx := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 	repo := production_order.NewProductionOrderRepositoryPGX(pool)
 
-	const warehouse int64 = 7
-	if err := repo.ConfigureWarehouseAddress(ctx, warehouse, "B-02", true); err != nil {
+	// TEST_DATABASE_URL é persistente e não há rollback entre execuções: o
+	// endereço precisa ser único e removido ao final para não contaminar
+	// consultas de outros testes.
+	warehouse := testutil.UniqueCode()
+	address := fmt.Sprintf("END-%d", warehouse)
+	if err := repo.ConfigureWarehouseAddress(ctx, warehouse, address, true); err != nil {
 		t.Fatalf("não configurou o endereço: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.Exec(t, pool,
+			"DELETE FROM manufacturing_warehouse_addresses WHERE enterprise_id=$1 AND warehouse_id=$2 AND address=$3",
+			enterpriseID, warehouse, address)
+	})
 
 	all, err := repo.ListWarehouseAddresses(ctx, nil)
 	if err != nil {
 		t.Fatalf("listagem sem filtro falhou: %v", err)
 	}
 	found := false
-	for _, address := range all {
-		if address.WarehouseID == warehouse && address.Address == "B-02" {
+	for _, item := range all {
+		if item.WarehouseID == warehouse && item.Address == address {
 			found = true
-			if !address.IsActive {
+			if !item.IsActive {
 				t.Fatal("endereço ativo veio como inativo")
 			}
 		}
 	}
 	if !found {
-		t.Fatalf("endereço configurado não apareceu na listagem: %+v", all)
+		t.Fatalf("endereço configurado não apareceu na listagem de %d registro(s)", len(all))
 	}
 
-	filtered, err := repo.ListWarehouseAddresses(ctx, &[]int64{warehouse}[0])
+	filtered, err := repo.ListWarehouseAddresses(ctx, &warehouse)
 	if err != nil {
 		t.Fatalf("listagem filtrada falhou: %v", err)
 	}
-	for _, address := range filtered {
-		if address.WarehouseID != warehouse {
-			t.Fatalf("filtro por almoxarifado vazou outro registro: %+v", address)
-		}
+	if len(filtered) != 1 || filtered[0].Address != address {
+		t.Fatalf("filtro por almoxarifado devolveu %+v, esperado apenas %q", filtered, address)
 	}
 }
