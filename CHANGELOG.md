@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.15] — 2026-09-05
+
+- fix: devolve status correto e mensagens em português nos erros (#132) (`ccd42ef`)
+
 ## [v1.1.14] — 2026-09-04
 
 - fix: corrige listagem de endereços de almoxarifado (#130) (`ecaf468`)
