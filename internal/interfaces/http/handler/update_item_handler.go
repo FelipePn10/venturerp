@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -17,8 +17,7 @@ func (h *ItemHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		h.BadRequest(w, "invalid request body")
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	updated, err := h.updateItemUC.ExecuteBusinessCode(r.Context(), code, dto)

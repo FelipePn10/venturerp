@@ -12,7 +12,7 @@ import (
 
 var (
 	ErrInvalidCode      = errors.New("invalid code")
-	ErrInvalidCreatedBy = errors.New("created_by cannot be empty")
+	ErrInvalidCreatedBy = errors.New("não foi possível identificar o usuário que está criando o registro")
 )
 
 func NewItem(

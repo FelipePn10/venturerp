@@ -21,7 +21,7 @@ func NewItemActivationHandler(uc *item_uc.ValidateItemActivationUseCase) *ItemAc
 func (h *ItemActivationHandler) ValidateActivation(w http.ResponseWriter, r *http.Request) {
 	code := chi.URLParam(r, "code")
 	if code == "" {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	report, err := h.uc.ExecuteBusinessCode(r.Context(), code)

@@ -86,10 +86,10 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		}
 		line := byCode[item.PurchaseOrderItemCode]
 		if line == nil {
-			return nil, fmt.Errorf("purchase order item %d does not belong to order %d", item.PurchaseOrderItemCode, dto.PurchaseOrderCode)
+			return nil, fmt.Errorf("o item %d não pertence ao pedido de compra %d", item.PurchaseOrderItemCode, dto.PurchaseOrderCode)
 		}
 		if line.Status == poentity.PurchaseOrderItemStatusCANCELLED {
-			return nil, fmt.Errorf("purchase order item %d is cancelled", item.PurchaseOrderItemCode)
+			return nil, fmt.Errorf("o item %d do pedido de compra está cancelado", item.PurchaseOrderItemCode)
 		}
 		remaining := line.RequestedQty - line.ReceivedQty - line.CancelledQty
 		toleranceHandled := false
@@ -111,7 +111,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		if !toleranceHandled {
 			toleranceRemaining := line.TolerancePct/100*line.RequestedQty + line.CancelledToleranceQty
 			if item.Quantity > remaining+toleranceRemaining+0.0001 {
-				return nil, fmt.Errorf("receipt quantity %.4f exceeds remaining %.4f for purchase order item %d", item.Quantity, remaining, item.PurchaseOrderItemCode)
+				return nil, fmt.Errorf("a quantidade recebida %.4f passa do saldo de %.4f do item %d do pedido de compra", item.Quantity, remaining, item.PurchaseOrderItemCode)
 			}
 		}
 
@@ -200,7 +200,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		return nil, err
 	}
 	if matched != len(receivedByLine) {
-		return nil, fmt.Errorf("registered %d receipt lines, expected %d", matched, len(receivedByLine))
+		return nil, fmt.Errorf("foram gravadas %d linhas de recebimento, mas eram esperadas %d", matched, len(receivedByLine))
 	}
 	updated, err := uc.Repo.GetByCode(ctx, dto.PurchaseOrderCode)
 	if err != nil {

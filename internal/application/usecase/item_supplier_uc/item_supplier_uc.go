@@ -26,7 +26,7 @@ func parseOptionalDate(s *string) (*time.Time, error) {
 	}
 	x, err := time.Parse("2006-01-02", strings.TrimSpace(*s))
 	if err != nil {
-		return nil, fmt.Errorf("invalid date %q: use YYYY-MM-DD", *s)
+		return nil, fmt.Errorf("data %q inválida: use o formato ano-mês-dia", *s)
 	}
 	return &x, nil
 }
@@ -73,7 +73,7 @@ func (uc *ItemSupplierUseCase) Upsert(ctx context.Context, d request.UpsertItemP
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("conversion_factor is allowed only for generic XML-import items")
+			return nil, fmt.Errorf("o fator de conversão só vale para itens genéricos de importação de XML")
 		}
 	}
 	if err = s.Validate(); err != nil {
@@ -177,7 +177,7 @@ func (uc *ItemSupplierUseCase) CreateQualityReport(ctx context.Context, link int
 	}
 	on, err := time.Parse("2006-01-02", d.RegisteredOn)
 	if err != nil {
-		return nil, fmt.Errorf("registered_on must use YYYY-MM-DD")
+		return nil, fmt.Errorf("informe a data de registro no formato ano-mês-dia")
 	}
 	q, err := entity.NewQualityReport(e, link, on, d.Status, by)
 	if err != nil {

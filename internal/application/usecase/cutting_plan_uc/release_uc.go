@@ -67,10 +67,10 @@ func (uc *CuttingPlanUseCase) ReleasePlan(ctx context.Context, planID int64) (*r
 		return nil, err
 	}
 	if plan.Status == entity.PlanStatusReleased {
-		return nil, fmt.Errorf("plan already firmed")
+		return nil, fmt.Errorf("este plano já foi firmado")
 	}
 	if plan.Status != entity.PlanStatusOptimized {
-		return nil, fmt.Errorf("plan must be optimised before firming (status=%s)", plan.Status)
+		return nil, fmt.Errorf("otimize o plano antes de firmá-lo (situação atual: %s)", plan.Status)
 	}
 
 	settings, err := uc.repo.GetSettings(ctx)
@@ -82,7 +82,7 @@ func (uc *CuttingPlanUseCase) ReleasePlan(ctx context.Context, planID int64) (*r
 		warehouse = settings.DefaultWarehouseID
 	}
 	if warehouse == nil {
-		return nil, fmt.Errorf("no warehouse set on plan or company settings to post the baixa against")
+		return nil, fmt.Errorf("nenhum almoxarifado definido no plano ou nos parâmetros da empresa para lançar a baixa")
 	}
 	mode := plan.EffectiveConsumptionMode(settings)
 
@@ -91,7 +91,7 @@ func (uc *CuttingPlanUseCase) ReleasePlan(ctx context.Context, planID int64) (*r
 		return nil, err
 	}
 	if len(patterns) == 0 {
-		return nil, fmt.Errorf("nothing to firm; optimise the plan first")
+		return nil, fmt.Errorf("não há o que firmar: otimize o plano antes")
 	}
 	stockPieces, err := uc.repo.ListStockPieces(ctx, planID)
 	if err != nil {
@@ -151,13 +151,13 @@ func (uc *CuttingPlanUseCase) ReleasePlan(ctx context.Context, planID int64) (*r
 			if is2D {
 				u = popUnit2D(&units, pat.StockWidthMM, pat.StockHeightMM, pat.IsRemnant)
 				if u == nil {
-					return nil, fmt.Errorf("stock mismatch: no available %.0f×%.0fmm sheet for a pattern (re-optimise the plan)", pat.StockWidthMM, pat.StockHeightMM)
+					return nil, fmt.Errorf("estoque incompatível: não há chapa de %.0f×%.0fmm disponível para um padrão; otimize o plano de novo", pat.StockWidthMM, pat.StockHeightMM)
 				}
 				pieceQty, qErr = service.StockQtyForArea(plan.StockUoM, u.width, u.height, plan.UoMFactor)
 			} else {
 				u = popUnit(&units, pat.StockLengthMM, pat.IsRemnant)
 				if u == nil {
-					return nil, fmt.Errorf("stock mismatch: no available %.0fmm piece for a pattern (re-optimise the plan)", pat.StockLengthMM)
+					return nil, fmt.Errorf("estoque incompatível: não há peça de %.0fmm disponível para um padrão; otimize o plano de novo", pat.StockLengthMM)
 				}
 				pieceQty, qErr = service.StockQtyForLength(plan.StockUoM, u.length, plan.UoMFactor)
 			}
@@ -279,7 +279,7 @@ func (uc *CuttingPlanUseCase) resolveLot(
 ) (lot, heat, cert *string, cost float64, err error) {
 	if mode == entity.ConsumptionManual {
 		if u.lot == nil || *u.lot == "" {
-			return nil, nil, nil, 0, fmt.Errorf("manual consumption: a stock piece has no lot assigned")
+			return nil, nil, nil, 0, fmt.Errorf("consumo manual: uma peça do estoque está sem lote atribuído")
 		}
 		cost = avgCost
 		h, c := u.heat, (*string)(nil)
@@ -425,7 +425,7 @@ func (uc *CuttingPlanUseCase) GetSettings(ctx context.Context) (*response.Cuttin
 func (uc *CuttingPlanUseCase) UpdateSettings(ctx context.Context, dto request.CuttingSettingsDTO) (*response.CuttingSettingsResponse, error) {
 	mode := entity.ConsumptionMode(dto.DefaultConsumptionMode)
 	if mode != entity.ConsumptionAutomatic && mode != entity.ConsumptionManual {
-		return nil, fmt.Errorf("invalid default_consumption_mode %q (AUTOMATIC|MANUAL)", dto.DefaultConsumptionMode)
+		return nil, fmt.Errorf("modo de consumo padrão %q inválido: use automático ou manual", dto.DefaultConsumptionMode)
 	}
 	s, err := uc.repo.UpsertSettings(ctx, &entity.CuttingSettings{
 		DefaultConsumptionMode: mode,

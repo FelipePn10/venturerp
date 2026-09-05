@@ -33,7 +33,7 @@ func (trueShapeBBox) Optimize(demand []DemandPiece, stock []StockPiece, p CutPar
 
 	g, err := Optimizer(entity.CutTypeGuillotine2D)
 	if err != nil {
-		return nil, errors.New("true-shape bbox provider requires the 2D guillotine optimiser")
+		return nil, errors.New("o cálculo por contorno real exige o otimizador guilhotina 2D")
 	}
 	sol, err := g.Optimize(bb, stock, p)
 	if err != nil {

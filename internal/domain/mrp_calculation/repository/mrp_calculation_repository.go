@@ -9,7 +9,7 @@ import (
 	salesdivision "github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
 )
 
-var ErrCalculationInProgress = errors.New("material planning calculation already in progress")
+var ErrCalculationInProgress = errors.New("já existe um cálculo de planejamento de materiais em andamento")
 
 type MRPCalculationRepository interface {
 	CreateProfile(ctx context.Context, p *entity.MRPItemProfile) (*entity.MRPItemProfile, error)

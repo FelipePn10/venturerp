@@ -174,7 +174,7 @@ func (p *parser) parsePrimary() (float64, error) {
 			return 0, err
 		}
 		if p.peek().kind != tokRParen {
-			return 0, fmt.Errorf("expected ')' near position %d", p.pos)
+			return 0, fmt.Errorf("falta fechar um parêntese perto da posição %d", p.pos)
 		}
 		p.consume()
 		return v, nil

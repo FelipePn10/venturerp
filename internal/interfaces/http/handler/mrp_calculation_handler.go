@@ -130,7 +130,7 @@ func (h *MRPCalculationHandler) ListExceptions(w http.ResponseWriter, r *http.Re
 func (h *MRPCalculationHandler) FirmarSugestao(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil || code <= 0 {
-		security.RespondError(w, http.StatusBadRequest, "invalid suggestion code")
+		security.RespondError(w, http.StatusBadRequest, "código de sugestão inválido")
 		return
 	}
 	result, err := h.firmarSugestaoUC.Execute(r.Context(), code)

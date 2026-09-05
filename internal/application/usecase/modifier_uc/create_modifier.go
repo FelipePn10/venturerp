@@ -33,6 +33,16 @@ func (uc *CreateModifierUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	// O autor sai do usuário autenticado, como no cadastro de grupo. Confiar no
+	// created_by do corpo deixava o campo em branco quando a tela não o enviava
+	// — e o banco recusava o registro por chave estrangeira, com uma mensagem
+	// que não dizia nada ao usuário.
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	modifier.CreatedBy = actor
+
 	created, err := uc.Repo.Create(ctx, modifier)
 	if err != nil {
 		return nil, err

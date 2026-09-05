@@ -8,9 +8,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
 
-var ErrNotFound = errors.New("item not found")
-var ErrInvalidReference = errors.New("item folder contains an unknown reference")
-var ErrConflict = errors.New("item code already exists for this enterprise")
+var ErrNotFound = errors.New("item não encontrado")
+var ErrInvalidReference = errors.New("a pasta do item contém uma referência desconhecida")
+var ErrConflict = errors.New("já existe um item com este código na empresa")
 
 type ItemRepository interface {
 	Create(ctx context.Context, item *entity.Item) (*entity.Item, error)

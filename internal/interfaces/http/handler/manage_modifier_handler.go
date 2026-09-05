@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -43,8 +43,7 @@ func (h *ModifierHandler) UpdateModifier(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var body updateModifierBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		h.BadRequest(w, "invalid request body")
+	if !security.DecodeBody(w, r, &body) {
 		return
 	}
 	result, err := h.updateModifierUC.Execute(r.Context(), id, body.Description)

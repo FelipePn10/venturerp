@@ -22,7 +22,7 @@ import (
 // truth for how a cut translates into a stock baixa.
 func StockQtyForLength(uom types.TypeUnitOfMeasurementItem, lengthMM, factorPerMeter float64) (float64, error) {
 	if lengthMM < 0 {
-		return 0, fmt.Errorf("length cannot be negative")
+		return 0, fmt.Errorf("o comprimento não pode ser negativo")
 	}
 	meters := lengthMM / 1000.0
 
@@ -63,7 +63,7 @@ func StockQtyForLength(uom types.TypeUnitOfMeasurementItem, lengthMM, factorPerM
 //   - Other units fall back to a piece unless an explicit factor is given.
 func StockQtyForArea(uom types.TypeUnitOfMeasurementItem, widthMM, heightMM, factorPerM2 float64) (float64, error) {
 	if widthMM < 0 || heightMM < 0 {
-		return 0, fmt.Errorf("dimensions cannot be negative")
+		return 0, fmt.Errorf("as dimensões não podem ser negativas")
 	}
 	areaM2 := (widthMM / 1000.0) * (heightMM / 1000.0)
 

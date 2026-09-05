@@ -72,12 +72,12 @@ func (h *PurchaseOrderHandler) Consult(w http.ResponseWriter, r *http.Request) {
 func (h *PurchaseOrderHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request) {
 	orderCode, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid order code")
+		security.RespondError(w, http.StatusBadRequest, "código de ordem inválido")
 		return
 	}
 	attachmentID, err := strconv.ParseInt(chi.URLParam(r, "attachmentID"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid attachment id")
+		security.RespondError(w, http.StatusBadRequest, "anexo inválido")
 		return
 	}
 	file, err := h.consultUC.DownloadAttachment(r.Context(), orderCode, attachmentID)
@@ -253,7 +253,7 @@ func (h *PurchaseOrderHandler) ListBySupplier(w http.ResponseWriter, r *http.Req
 	codeStr := chi.URLParam(r, "supplierCode")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid supplier code")
+		security.RespondError(w, http.StatusBadRequest, "código de fornecedor inválido")
 		return
 	}
 	results, err := h.listBySupplierUC.Execute(r.Context(), code)

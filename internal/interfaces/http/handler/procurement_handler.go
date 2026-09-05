@@ -111,7 +111,7 @@ func (h *ProcurementHandler) CreateSupplierScorecard(w http.ResponseWriter, r *h
 func (h *ProcurementHandler) ListSupplierScorecards(w http.ResponseWriter, r *http.Request) {
 	supplierCode, err := strconv.ParseInt(chi.URLParam(r, "supplierCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid supplier code")
+		security.RespondError(w, http.StatusBadRequest, "código de fornecedor inválido")
 		return
 	}
 	result, err := h.uc.ListSupplierScorecards(r.Context(), supplierCode)
@@ -644,7 +644,7 @@ func (h *ProcurementHandler) CreateSupplierHomologation(w http.ResponseWriter, r
 func (h *ProcurementHandler) GenerateItemSuppliers(w http.ResponseWriter, r *http.Request) {
 	supplierCode, err := strconv.ParseInt(chi.URLParam(r, "supplierCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid supplier code")
+		security.RespondError(w, http.StatusBadRequest, "código de fornecedor inválido")
 		return
 	}
 	created, err := h.uc.GenerateItemSuppliers(r.Context(), supplierCode)
@@ -658,7 +658,7 @@ func (h *ProcurementHandler) GenerateItemSuppliers(w http.ResponseWriter, r *htt
 func (h *ProcurementHandler) ListSupplierHomologations(w http.ResponseWriter, r *http.Request) {
 	supplierCode, err := strconv.ParseInt(chi.URLParam(r, "supplierCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid supplier code")
+		security.RespondError(w, http.StatusBadRequest, "código de fornecedor inválido")
 		return
 	}
 	result, err := h.uc.ListSupplierHomologations(r.Context(), supplierCode)

@@ -70,7 +70,7 @@ func (optimizer1D) Optimize(demand []DemandPiece, stock []StockPiece, p CutParam
 // agree on placement geometry, kerf accounting and remnant preference.
 func nest1D(demand []DemandPiece, stock []StockPiece, p CutParams) ([]*bin, []DemandPiece, error) {
 	if p.Kerf < 0 || p.Trim < 0 || p.MinRemnant < 0 {
-		return nil, nil, errors.New("kerf, trim and min_remnant cannot be negative")
+		return nil, nil, errors.New("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
 	}
 
 	// Expand demand into individual units, then sort by length descending.

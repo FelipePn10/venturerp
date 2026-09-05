@@ -16,13 +16,13 @@ type TaxParamUseCase struct {
 
 func (uc *TaxParamUseCase) Create(ctx context.Context, dto request.CreateTaxParamDTO) (*response.TaxParamResponse, error) {
 	if dto.UF == "" {
-		return nil, errors.New("uf is required")
+		return nil, errors.New("informe a UF")
 	}
 	if dto.NCMCode == nil && dto.ItemCode == nil {
-		return nil, errors.New("either ncm_code or item_code must be provided")
+		return nil, errors.New("informe o NCM ou o item")
 	}
 	if dto.NCMCode != nil && dto.ItemCode != nil {
-		return nil, errors.New("only one of ncm_code or item_code may be provided")
+		return nil, errors.New("informe o NCM ou o item, não os dois")
 	}
 	p := dtoToTaxParamEntity(dto)
 	p.IsActive = true
@@ -35,7 +35,7 @@ func (uc *TaxParamUseCase) Create(ctx context.Context, dto request.CreateTaxPara
 
 func (uc *TaxParamUseCase) Update(ctx context.Context, dto request.UpdateTaxParamDTO) (*response.TaxParamResponse, error) {
 	if dto.UF == "" {
-		return nil, errors.New("uf is required")
+		return nil, errors.New("informe a UF")
 	}
 	createDTO := request.CreateTaxParamDTO(dto.CreateTaxParamDTO)
 	p := dtoToTaxParamEntity(createDTO)

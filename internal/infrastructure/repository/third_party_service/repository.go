@@ -35,7 +35,7 @@ func (r *Repo) CreatePrice(ctx context.Context, p *domain.Price, reason string) 
 }
 func (r *Repo) UpdatePrice(ctx context.Context, p *domain.Price, reason string) (*domain.Price, error) {
 	if p.ID <= 0 {
-		return nil, errors.New("price id is required")
+		return nil, errors.New("informe o preço")
 	}
 	if err := p.Validate(); err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (r *Repo) savePrice(ctx context.Context, p *domain.Price, reason, action st
 		return nil, err
 	}
 	if strings.TrimSpace(reason) == "" {
-		return nil, errors.New("change reason is required")
+		return nil, errors.New("informe o motivo da alteração")
 	}
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -67,7 +67,7 @@ func (r *Repo) savePrice(ctx context.Context, p *domain.Price, reason, action st
 
 func (r *Repo) savePriceTx(ctx context.Context, tx pgx.Tx, eid int64, p *domain.Price, reason, action string, create bool) (*domain.Price, error) {
 	if strings.TrimSpace(reason) == "" {
-		return nil, errors.New("change reason is required")
+		return nil, errors.New("informe o motivo da alteração")
 	}
 	if err := p.Validate(); err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (r *Repo) savePriceTx(ctx context.Context, tx pgx.Tx, eid int64, p *domain.
 	var valid bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM operations WHERE id=$1 AND origin IN ('EXTERNA','TERCEIROS')) AND EXISTS(SELECT 1 FROM suppliers WHERE code=$2 AND is_active) AND EXISTS(SELECT 1 FROM items WHERE code=$3)`, p.OperationID, p.SupplierCode, p.ItemCode).Scan(&valid); err != nil || !valid {
 		if err == nil {
-			err = errors.New("external operation or active supplier not found")
+			err = errors.New("operação externa ou fornecedor ativo não encontrado")
 		}
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (r *Repo) savePriceTx(ctx context.Context, tx pgx.Tx, eid int64, p *domain.
 	}
 	for _, rule := range p.Rules {
 		if strings.TrimSpace(rule.Characteristic) == "" {
-			return nil, errors.New("rule characteristic is required")
+			return nil, errors.New("informe a característica da regra")
 		}
 		if _, err = tx.Exec(ctx, `INSERT INTO third_party_service_price_rules(enterprise_id,price_id,characteristic,answer) VALUES($1,$2,$3,$4)`, eid, p.ID, strings.TrimSpace(rule.Characteristic), rule.Answer); err != nil {
 			return nil, err
@@ -125,7 +125,7 @@ func (r *Repo) DeletePrice(ctx context.Context, id int64, reason string, by uuid
 		return e
 	}
 	if strings.TrimSpace(reason) == "" {
-		return errors.New("change reason is required")
+		return errors.New("informe o motivo da alteração")
 	}
 	tx, e := r.db.Begin(ctx)
 	if e != nil {
@@ -140,7 +140,7 @@ func (r *Repo) DeletePrice(ctx context.Context, id int64, reason string, by uuid
 
 func (r *Repo) deletePriceTx(ctx context.Context, tx pgx.Tx, eid, id int64, reason string, by uuid.UUID) error {
 	if strings.TrimSpace(reason) == "" {
-		return errors.New("change reason is required")
+		return errors.New("informe o motivo da alteração")
 	}
 	p, e := r.getPrice(ctx, tx, eid, id)
 	if e != nil {
@@ -317,7 +317,7 @@ func (r *Repo) ResolvePrice(ctx context.Context, item int64, mask string, suppli
 			}
 			sameRank := (selected.Mask == mask) == (full.Mask == mask) && (selected.SupplierCode == supplier) == (full.SupplierCode == supplier) && selected.Preferred == full.Preferred && selected.ReferenceDate.Equal(full.ReferenceDate)
 			if sameRank {
-				return nil, errors.New("ambiguous third-party price rules: more than one price matches with the same priority")
+				return nil, errors.New("regras de preço de terceiros ambíguas: mais de um preço atende com a mesma prioridade")
 			}
 			break
 		}
@@ -337,7 +337,7 @@ func (r *Repo) ResolvePrice(ctx context.Context, item int64, mask string, suppli
 			return nil, formulaErr
 		}
 		if calculated.IsNegative() {
-			return nil, errors.New("formula price cannot be negative")
+			return nil, errors.New("o preço calculado pela fórmula não pode ser negativo")
 		}
 		selected.UnitPrice = calculated
 	}
@@ -439,11 +439,11 @@ func max(a, b int) int {
 
 func (r *Repo) Readjust(ctx context.Context, ids []int64, pct decimal.Decimal, ref time.Time, reason string, by uuid.UUID) ([]domain.Price, error) {
 	if len(ids) == 0 || ref.IsZero() || strings.TrimSpace(reason) == "" {
-		return nil, errors.New("ids, reference_date and reason are required")
+		return nil, errors.New("informe os registros, a data de referência e o motivo")
 	}
 	factor := decimal.NewFromInt(1).Add(pct.Div(decimal.NewFromInt(100)))
 	if !factor.IsPositive() {
-		return nil, errors.New("readjustment cannot make price negative")
+		return nil, errors.New("o reajuste não pode deixar o preço negativo")
 	}
 	eid, err := tenant.ID(ctx)
 	if err != nil {
@@ -479,7 +479,7 @@ func (r *Repo) Readjust(ctx context.Context, ids []int64, pct decimal.Decimal, r
 }
 func (r *Repo) CopyMove(ctx context.Context, ids []int64, supplier, operation int64, move bool, ref time.Time, reason string, by uuid.UUID) ([]domain.Price, error) {
 	if len(ids) == 0 || supplier <= 0 || operation <= 0 || ref.IsZero() || strings.TrimSpace(reason) == "" {
-		return nil, errors.New("ids, destination, reference_date and reason are required")
+		return nil, errors.New("informe os registros, o destino, a data de referência e o motivo")
 	}
 	eid, err := tenant.ID(ctx)
 	if err != nil {
@@ -584,7 +584,7 @@ func (r *Repo) LinkRequisitionToProduction(ctx context.Context, productionID, re
 		return err
 	}
 	if productionID <= 0 || requisitionCode <= 0 {
-		return errors.New("production_order_id and purchase_requisition_code are required")
+		return errors.New("informe a ordem de produção e a requisição de compra")
 	}
 	tag, err := r.db.Exec(ctx, `UPDATE third_party_service_orders
 		SET purchase_requisition_code=$3,updated_at=NOW()
@@ -869,7 +869,7 @@ func (r *Repo) UpdateOrderStatus(ctx context.Context, id int64, status string, r
 	status = strings.ToUpper(strings.TrimSpace(status))
 	allowed := map[string]bool{"PLANNED": true, "FIRM": true, "RELEASED_WITH_PO": true, "RELEASED_WITHOUT_PO": true, "COMPLETED": true, "CANCELLED": true}
 	if !allowed[status] {
-		return nil, errors.New("invalid service order status")
+		return nil, errors.New("situação de ordem de serviço inválida")
 	}
 	tx, e := r.db.Begin(ctx)
 	if e != nil {
@@ -884,10 +884,10 @@ func (r *Repo) UpdateOrderStatus(ctx context.Context, id int64, status string, r
 	}
 	transitions := map[string]map[string]bool{"PLANNED": {"FIRM": true, "CANCELLED": true}, "FIRM": {"RELEASED_WITH_PO": true, "RELEASED_WITHOUT_PO": true, "CANCELLED": true}, "RELEASED_WITH_PO": {"COMPLETED": true, "CANCELLED": true}, "RELEASED_WITHOUT_PO": {"COMPLETED": true, "CANCELLED": true}, "COMPLETED": {}, "CANCELLED": {}}
 	if status != current && !transitions[current][status] {
-		return nil, fmt.Errorf("invalid service order transition %s -> %s", current, status)
+		return nil, fmt.Errorf("não é possível mudar a ordem de serviço de %s para %s", current, status)
 	}
 	if status == "RELEASED_WITH_PO" && po == nil {
-		return nil, errors.New("purchase_order_code is required")
+		return nil, errors.New("informe o pedido de compra")
 	}
 	tag, e := tx.Exec(ctx, `UPDATE third_party_service_orders SET status=$3,purchase_requisition_code=COALESCE($4,purchase_requisition_code),purchase_order_code=COALESCE($5,purchase_order_code),updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, id, eid, status, req, po)
 	if e != nil {
@@ -928,7 +928,7 @@ func (r *Repo) AddMovement(ctx context.Context, id int64, v domain.Movement) (*d
 	e = tx.QueryRow(ctx, `SELECT id,service_order_id,movement_type,quantity,occurred_at,COALESCE(reference_type,''),COALESCE(reference_code,''),COALESCE(notes,''),created_by,COALESCE(idempotency_key,''),warehouse_id,COALESCE(lot,'') FROM third_party_service_movements WHERE enterprise_id=$1 AND idempotency_key=$2`, eid, v.IdempotencyKey).Scan(movementScan(&existing)...)
 	if e == nil {
 		if existing.ServiceOrderID != id || existing.MovementType != v.MovementType || !existing.Quantity.Equal(v.Quantity) {
-			return nil, errors.New("idempotency key already used with a different movement")
+			return nil, errors.New("esta chave de controle de duplicidade já foi usada em outro movimento")
 		}
 		return &existing, nil
 	}
@@ -942,10 +942,10 @@ func (r *Repo) AddMovement(ctx context.Context, id int64, v domain.Movement) (*d
 		return nil, domain.ErrNotFound
 	}
 	if status == "COMPLETED" || status == "CANCELLED" {
-		return nil, errors.New("terminal service order does not accept movements")
+		return nil, errors.New("ordem de serviço encerrada não aceita movimentos")
 	}
 	if v.MovementType != "ADJUSTMENT" && status != "RELEASED_WITH_PO" && status != "RELEASED_WITHOUT_PO" {
-		return nil, errors.New("service order must be released before logistical movements")
+		return nil, errors.New("libere a ordem de serviço antes dos movimentos logísticos")
 	}
 	var remitted, returned decimal.Decimal
 	if e = tx.QueryRow(ctx, `SELECT
@@ -1020,7 +1020,7 @@ func (r *Repo) UpsertGlobalConversion(ctx context.Context, v domain.GlobalConver
 	v.FromUOM = strings.ToUpper(strings.TrimSpace(v.FromUOM))
 	v.ToUOM = strings.ToUpper(strings.TrimSpace(v.ToUOM))
 	if v.FromUOM == "" || v.ToUOM == "" || v.FromUOM == v.ToUOM || !v.Factor.IsPositive() {
-		return nil, errors.New("invalid global conversion")
+		return nil, errors.New("conversão global inválida")
 	}
 	v.EnterpriseID = eid
 	e = r.db.QueryRow(ctx, `INSERT INTO global_unit_conversions(enterprise_id,from_uom,to_uom,factor,created_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(enterprise_id,from_uom,to_uom) DO UPDATE SET factor=EXCLUDED.factor,is_active=TRUE,updated_at=NOW() RETURNING id,is_active,created_at,updated_at`, eid, v.FromUOM, v.ToUOM, v.Factor, v.CreatedBy).Scan(&v.ID, &v.IsActive, &v.CreatedAt, &v.UpdatedAt)

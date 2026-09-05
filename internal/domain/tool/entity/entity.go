@@ -66,19 +66,19 @@ func validLifeType(lt string) bool {
 
 func NewTool(code int64, name, toolType, lifeType string, lifeLimit, cost float64, createdBy uuid.UUID) (*Tool, error) {
 	if code <= 0 {
-		return nil, errors.New("tool code must be positive")
+		return nil, errors.New("o código da ferramenta deve ser maior que zero")
 	}
 	if name == "" {
-		return nil, errors.New("tool name is required")
+		return nil, errors.New("informe o nome da ferramenta")
 	}
 	if lifeType == "" {
 		lifeType = LifePieces
 	}
 	if !validLifeType(lifeType) {
-		return nil, errors.New("life_type must be GOLPES, HORAS or PECAS")
+		return nil, errors.New("o tipo de vida útil deve ser golpes, horas ou peças")
 	}
 	if lifeLimit < 0 {
-		return nil, errors.New("life_limit cannot be negative")
+		return nil, errors.New("o limite de vida útil não pode ser negativo")
 	}
 	if toolType == "" {
 		toolType = "FERRAMENTA"
@@ -137,16 +137,16 @@ func validSerialStatus(s string) bool {
 // NewToolSerial builds a validated tool serial for a given tool master.
 func NewToolSerial(toolID int64, serialNumber, status, location, notes string, createdBy uuid.UUID) (*ToolSerial, error) {
 	if toolID <= 0 {
-		return nil, errors.New("tool_id must be positive")
+		return nil, errors.New("a ferramenta deve ser um código maior que zero")
 	}
 	if serialNumber == "" {
-		return nil, errors.New("serial_number is required")
+		return nil, errors.New("informe o número de série")
 	}
 	if status == "" {
 		status = SerialActive
 	}
 	if !validSerialStatus(status) {
-		return nil, errors.New("status must be ATIVA, MANUTENCAO, INATIVA or BAIXADA")
+		return nil, errors.New("a situação deve ser ativa, em manutenção, inativa ou baixada")
 	}
 	return &ToolSerial{
 		ToolID:       toolID,

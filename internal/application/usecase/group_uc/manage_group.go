@@ -65,7 +65,7 @@ func (uc *UpdateGroupUseCase) Execute(ctx context.Context, code int, description
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if description == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	updated, err := uc.Repo.Update(ctx, &entity.Group{
 		Code:        code,

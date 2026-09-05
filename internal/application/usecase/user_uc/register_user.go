@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var ErrRegisterUserForbidden = errors.New("user registration is restricted to the authenticated enterprise")
+var ErrRegisterUserForbidden = errors.New("o cadastro de usuários é restrito à empresa autenticada")
 
 type RegisterUserAuth interface {
 	EnterpriseID(context.Context) (int64, error)

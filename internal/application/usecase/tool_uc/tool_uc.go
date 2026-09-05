@@ -132,7 +132,7 @@ func (uc *ToolUseCase) ListNeedingReplacement(ctx context.Context) ([]*response.
 
 func (uc *ToolUseCase) AddToOperation(ctx context.Context, dto request.AddRouteOpToolDTO) (*response.RouteOpToolResponse, error) {
 	if dto.RouteOperationID <= 0 || dto.ToolID <= 0 {
-		return nil, fmt.Errorf("route_operation_id and tool_id are required")
+		return nil, fmt.Errorf("informe a operação do roteiro e a ferramenta")
 	}
 	qty := dto.QtyRequired
 	if qty <= 0 {

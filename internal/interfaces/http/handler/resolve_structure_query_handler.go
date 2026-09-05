@@ -26,7 +26,7 @@ func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *h
 	if raw := q.Get("effectiveness_date"); raw != "" {
 		t, err := time.Parse("2006-01-02", raw)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "effectiveness_date must be YYYY-MM-DD")
+			jsonError(w, http.StatusBadRequest, "informe a data de vigência no formato ano-mês-dia")
 			return
 		}
 		effectivenessDate = &t

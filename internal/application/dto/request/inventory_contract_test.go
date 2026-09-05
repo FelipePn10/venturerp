@@ -46,8 +46,15 @@ func TestWarehouseCodeAndIdentityContract(t *testing.T) {
 func TestWarehouseEnumErrorsArePortuguese(t *testing.T) {
 	var dto CreateWarehouseRequestDTO
 	err := json.Unmarshal([]byte(`{"code":"A","location":"INVALIDO","type":"NORMAL"}`), &dto)
-	if err == nil || !strings.Contains(err.Error(), "inválido") {
-		t.Fatalf("erro inesperado: %v", err)
+	if err == nil {
+		t.Fatal("valor fora da lista foi aceito")
+	}
+	// A mensagem precisa nomear o campo, repetir o valor recusado e listar o
+	// que é aceito — sem isso o usuário não sabe o que corrigir.
+	for _, trecho := range []string{"Tipo de localização", `"INVALIDO"`, "não é aceito", "INTERNO"} {
+		if !strings.Contains(err.Error(), trecho) {
+			t.Fatalf("mensagem sem %q: %v", trecho, err)
+		}
 	}
 }
 

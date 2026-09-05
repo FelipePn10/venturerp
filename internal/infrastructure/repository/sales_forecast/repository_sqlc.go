@@ -174,7 +174,7 @@ func (r *SalesForecastRepositorySQLC) ListHistoricalDemand(
 		}
 	}
 	if source != "ORDERS" && source != "INVOICING" && source != "BOTH" {
-		return nil, fmt.Errorf("invalid forecast history source %q", source)
+		return nil, fmt.Errorf("fonte de histórico de previsão %q inválida", source)
 	}
 	return out, nil
 }

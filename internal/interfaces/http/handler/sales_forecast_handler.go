@@ -137,7 +137,7 @@ func (h *SalesForecastHandler) ListForecasts(w http.ResponseWriter, r *http.Requ
 func (h *SalesForecastHandler) GetForecastByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	results, err := h.getForecastByItemUC.Execute(r.Context(), itemCode)

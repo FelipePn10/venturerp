@@ -128,12 +128,12 @@ func (h *PurchasePriceHandler) CopyAdjustments(w http.ResponseWriter, r *http.Re
 func (h *PurchasePriceHandler) ListSourcePrices(w http.ResponseWriter, r *http.Request) {
 	start, err := time.Parse("2006-01-02", r.URL.Query().Get("start"))
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "start is required in YYYY-MM-DD")
+		jsonError(w, http.StatusBadRequest, "informe a data inicial no formato ano-mês-dia")
 		return
 	}
 	end, err := time.Parse("2006-01-02", r.URL.Query().Get("end"))
 	if err != nil || end.Before(start) {
-		jsonError(w, http.StatusBadRequest, "invalid end date")
+		jsonError(w, http.StatusBadRequest, "data final inválida")
 		return
 	}
 	var supplier, table *int64

@@ -228,7 +228,7 @@ func (r *RoutingRepositorySQLC) GetRouteByItemCode(ctx context.Context, itemCode
 		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("fetching route for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("falha ao buscar o roteiro do item %d: %w", itemCode, err)
 	}
 	return routeRowToEntity(row), nil
 }
@@ -240,7 +240,7 @@ func (r *RoutingRepositorySQLC) ListRoutesByItem(ctx context.Context, itemCode i
 	}
 	rows, err := r.q.ListRoutesByItem(ctx, sqlc.ListRoutesByItemParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
 	if err != nil {
-		return nil, fmt.Errorf("listing routes for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("falha ao listar os roteiros do item %d: %w", itemCode, err)
 	}
 	out := make([]*entity.ManufacturingRoute, 0, len(rows))
 	for _, row := range rows {
@@ -285,7 +285,7 @@ func (r *RoutingRepositorySQLC) GetRouteForItem(ctx context.Context, itemCode in
 		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("fetching standard route for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("falha ao buscar o roteiro padrão do item %d: %w", itemCode, err)
 	}
 	return routeRowToEntity(row), nil
 }
@@ -353,7 +353,7 @@ func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *en
 func (r *RoutingRepositorySQLC) GetRouteOperations(ctx context.Context, routeID int64) ([]*entity.RouteOperation, error) {
 	rows, err := r.q.GetRouteOperations(ctx, routeID)
 	if err != nil {
-		return nil, fmt.Errorf("fetching route operations for route %d: %w", routeID, err)
+		return nil, fmt.Errorf("falha ao buscar as operações do roteiro %d: %w", routeID, err)
 	}
 	out := make([]*entity.RouteOperation, 0, len(rows))
 	for _, row := range rows {
@@ -396,7 +396,7 @@ func (r *RoutingRepositorySQLC) DeleteNetworkEdge(ctx context.Context, predecess
 func (r *RoutingRepositorySQLC) GetNetworkEdges(ctx context.Context, routeID int64) ([]*entity.NetworkEdge, error) {
 	rows, err := r.q.GetNetworkEdges(ctx, routeID)
 	if err != nil {
-		return nil, fmt.Errorf("fetching network edges for route %d: %w", routeID, err)
+		return nil, fmt.Errorf("falha ao buscar as precedências do roteiro %d: %w", routeID, err)
 	}
 	out := make([]*entity.NetworkEdge, 0, len(rows))
 	for _, row := range rows {
@@ -474,7 +474,7 @@ func (r *RoutingRepositorySQLC) SetRouteOpResourcePrimary(ctx context.Context, i
 func (r *RoutingRepositorySQLC) ListResourcesByRouteOp(ctx context.Context, routeOperationID int64) ([]*entity.RouteOpResource, error) {
 	rows, err := r.q.ListResourcesByRouteOp(ctx, routeOperationID)
 	if err != nil {
-		return nil, fmt.Errorf("listing resources for route op %d: %w", routeOperationID, err)
+		return nil, fmt.Errorf("falha ao listar os recursos da operação %d do roteiro: %w", routeOperationID, err)
 	}
 	out := make([]*entity.RouteOpResource, 0, len(rows))
 	for _, row := range rows {
@@ -499,7 +499,7 @@ func (r *RoutingRepositorySQLC) ListResourcesByRouteOp(ctx context.Context, rout
 func (r *RoutingRepositorySQLC) ListResourcesByRoute(ctx context.Context, routeID int64) ([]*entity.RouteOpResource, error) {
 	rows, err := r.q.ListResourcesByRoute(ctx, routeID)
 	if err != nil {
-		return nil, fmt.Errorf("listing resources for route %d: %w", routeID, err)
+		return nil, fmt.Errorf("falha ao listar os recursos do roteiro %d: %w", routeID, err)
 	}
 	out := make([]*entity.RouteOpResource, 0, len(rows))
 	for _, row := range rows {
@@ -713,7 +713,7 @@ func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOp
 func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*entity.ExternalOp, error) {
 	rows, err := r.q.GetExternalRouteOpsForItem(ctx, itemCode)
 	if err != nil {
-		return nil, fmt.Errorf("fetching external ops for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("falha ao buscar as operações externas do item %d: %w", itemCode, err)
 	}
 	out := make([]*entity.ExternalOp, 0, len(rows))
 	for _, row := range rows {

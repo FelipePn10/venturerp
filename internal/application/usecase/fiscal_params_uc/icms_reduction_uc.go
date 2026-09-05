@@ -17,7 +17,7 @@ type ICMSReductionSubstitutionUseCase struct {
 
 func (uc *ICMSReductionSubstitutionUseCase) Create(ctx context.Context, r *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
 	if r.UF == "" {
-		return nil, errors.New("uf is required")
+		return nil, errors.New("informe a UF")
 	}
 	if r.OperationType == "" {
 		r.OperationType = entity.ICMSOpAmbas
@@ -32,7 +32,7 @@ func (uc *ICMSReductionSubstitutionUseCase) Create(ctx context.Context, r *entit
 
 func (uc *ICMSReductionSubstitutionUseCase) Update(ctx context.Context, r *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
 	if r.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateICMSReductionSubstitution(ctx, r)
 	if err != nil {
@@ -73,10 +73,10 @@ type ICMSSummaryAdditionalUseCase struct {
 
 func (uc *ICMSSummaryAdditionalUseCase) Add(ctx context.Context, a *entity.ICMSSummaryEntryAdditional) (*response.ICMSSummaryEntryAdditionalResponse, error) {
 	if a.SummaryEntryID == 0 {
-		return nil, errors.New("summary_entry_id is required")
+		return nil, errors.New("informe o totalizador")
 	}
 	if a.ArrecadacaoIndicator == "" {
-		return nil, errors.New("arrecadacao_indicator is required")
+		return nil, errors.New("informe o indicador de arrecadação")
 	}
 	created, err := uc.Repo.AddICMSSummaryEntryAdditional(ctx, a)
 	if err != nil {
@@ -101,16 +101,16 @@ type ICMSSTRestitutionUseCase struct {
 
 func (uc *ICMSSTRestitutionUseCase) Create(ctx context.Context, r *entity.ICMSSTRestitution) (*response.ICMSSTRestitutionResponse, error) {
 	if r.EmpresaID == 0 {
-		return nil, errors.New("empresa_id is required")
+		return nil, errors.New("informe a empresa")
 	}
 	if err := validatePeriod(r.Period); err != nil {
 		return nil, err
 	}
 	if r.UF == "" {
-		return nil, errors.New("uf is required")
+		return nil, errors.New("informe a UF")
 	}
 	if r.RestitutionType == "" {
-		return nil, errors.New("restitution_type is required")
+		return nil, errors.New("informe o tipo de restituição")
 	}
 	r.IsActive = true
 	created, err := uc.Repo.CreateICMSSTRestitution(ctx, r)
@@ -122,7 +122,7 @@ func (uc *ICMSSTRestitutionUseCase) Create(ctx context.Context, r *entity.ICMSST
 
 func (uc *ICMSSTRestitutionUseCase) Update(ctx context.Context, r *entity.ICMSSTRestitution) (*response.ICMSSTRestitutionResponse, error) {
 	if r.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateICMSSTRestitution(ctx, r)
 	if err != nil {
@@ -158,16 +158,16 @@ type SpecialAdjustmentNoteUseCase struct {
 
 func (uc *SpecialAdjustmentNoteUseCase) Create(ctx context.Context, n *entity.SpecialAdjustmentNote) (*response.SpecialAdjustmentNoteResponse, error) {
 	if n.EmpresaID == 0 {
-		return nil, errors.New("empresa_id is required")
+		return nil, errors.New("informe a empresa")
 	}
 	if n.Purpose == "" {
-		return nil, errors.New("purpose is required")
+		return nil, errors.New("informe a finalidade")
 	}
 	if err := validatePeriod(n.Period); err != nil {
 		return nil, err
 	}
 	if n.IssueDate.IsZero() {
-		return nil, errors.New("issue_date is required")
+		return nil, errors.New("informe a data de emissão")
 	}
 	n.Status = entity.SpecialNoteRascunho
 	created, err := uc.Repo.CreateSpecialAdjustmentNote(ctx, n)
@@ -179,7 +179,7 @@ func (uc *SpecialAdjustmentNoteUseCase) Create(ctx context.Context, n *entity.Sp
 
 func (uc *SpecialAdjustmentNoteUseCase) Update(ctx context.Context, n *entity.SpecialAdjustmentNote) (*response.SpecialAdjustmentNoteResponse, error) {
 	if n.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateSpecialAdjustmentNote(ctx, n)
 	if err != nil {
@@ -209,7 +209,7 @@ func (uc *SpecialAdjustmentNoteUseCase) List(ctx context.Context, empresaID int,
 
 func (uc *SpecialAdjustmentNoteUseCase) AddItem(ctx context.Context, item *entity.SpecialAdjustmentNoteItem) (*response.SpecialAdjustmentNoteItemResponse, error) {
 	if item.NoteID == 0 {
-		return nil, errors.New("note_id is required")
+		return nil, errors.New("informe a nota")
 	}
 	created, err := uc.Repo.AddSpecialAdjustmentNoteItem(ctx, item)
 	if err != nil {

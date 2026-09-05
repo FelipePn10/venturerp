@@ -135,7 +135,7 @@ type SupplierType struct {
 
 func NewSupplierType(code int64, description string, kind SupplierKind) (*SupplierType, error) {
 	if description == "" {
-		return nil, fmt.Errorf("description is required")
+		return nil, fmt.Errorf("informe a descrição")
 	}
 	if kind == "" {
 		kind = KindNormal
@@ -161,7 +161,7 @@ type SupplierContactType struct {
 
 func NewSupplierContactType(code int64, description string) (*SupplierContactType, error) {
 	if description == "" {
-		return nil, fmt.Errorf("description is required")
+		return nil, fmt.Errorf("informe a descrição")
 	}
 	return &SupplierContactType{
 		Code:        code,
@@ -235,7 +235,7 @@ type SupplierInput struct {
 
 func NewSupplier(code int64, in SupplierInput, createdBy uuid.UUID) (*Supplier, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("code is required")
+		return nil, fmt.Errorf("informe o código")
 	}
 	if in.Name == "" {
 		return nil, fmt.Errorf("name (razão social) is required")
@@ -251,7 +251,7 @@ func NewSupplier(code int64, in SupplierInput, createdBy uuid.UUID) (*Supplier, 
 		}
 	}
 	if in.DocumentNumber == "" {
-		return nil, fmt.Errorf("document_number (CNPJ/CPF) is required")
+		return nil, fmt.Errorf("informe o CNPJ ou o CPF")
 	}
 	// Validate the check digits for Brazilian documents (ESTRANGEIRO/ISENTO skip).
 	switch in.DocumentType {

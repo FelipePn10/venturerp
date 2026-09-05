@@ -65,7 +65,7 @@ func (uc *UpdateModifierUseCase) Execute(ctx context.Context, id int, descriptio
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if description == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	updated, err := uc.Repo.Update(ctx, &entity.Modifier{ID: id, Description: description})
 	if err != nil {

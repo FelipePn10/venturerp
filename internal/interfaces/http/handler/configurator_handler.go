@@ -54,7 +54,7 @@ func (h *ConfiguratorHandler) ListSets(w http.ResponseWriter, r *http.Request) {
 func (h *ConfiguratorHandler) GetSet(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid set id")
+		jsonError(w, http.StatusBadRequest, "conjunto inválido")
 		return
 	}
 	res, err := h.uc.GetSet(r.Context(), id)
@@ -68,7 +68,7 @@ func (h *ConfiguratorHandler) GetSet(w http.ResponseWriter, r *http.Request) {
 func (h *ConfiguratorHandler) UpdateSet(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid set id")
+		jsonError(w, http.StatusBadRequest, "conjunto inválido")
 		return
 	}
 	var dto request.UpdateCfgSetDTO
@@ -88,7 +88,7 @@ func (h *ConfiguratorHandler) UpdateSet(w http.ResponseWriter, r *http.Request) 
 func (h *ConfiguratorHandler) DeactivateSet(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid set id")
+		jsonError(w, http.StatusBadRequest, "conjunto inválido")
 		return
 	}
 	if err := h.uc.DeactivateSet(r.Context(), id); err != nil {
@@ -103,7 +103,7 @@ func (h *ConfiguratorHandler) DeactivateSet(w http.ResponseWriter, r *http.Reque
 func (h *ConfiguratorHandler) CreateVariable(w http.ResponseWriter, r *http.Request) {
 	setID, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid set id")
+		jsonError(w, http.StatusBadRequest, "conjunto inválido")
 		return
 	}
 	var dto request.CreateCfgVariableDTO
@@ -124,7 +124,7 @@ func (h *ConfiguratorHandler) CreateVariable(w http.ResponseWriter, r *http.Requ
 func (h *ConfiguratorHandler) ListVariables(w http.ResponseWriter, r *http.Request) {
 	setID, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid set id")
+		jsonError(w, http.StatusBadRequest, "conjunto inválido")
 		return
 	}
 	res, err := h.uc.ListVariablesBySet(r.Context(), setID, r.URL.Query().Get("only_active") == "true")
@@ -138,7 +138,7 @@ func (h *ConfiguratorHandler) ListVariables(w http.ResponseWriter, r *http.Reque
 func (h *ConfiguratorHandler) GetVariable(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "varId")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid variable id")
+		jsonError(w, http.StatusBadRequest, "variável inválida")
 		return
 	}
 	res, err := h.uc.GetVariable(r.Context(), id)
@@ -152,7 +152,7 @@ func (h *ConfiguratorHandler) GetVariable(w http.ResponseWriter, r *http.Request
 func (h *ConfiguratorHandler) UpdateVariable(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "varId")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid variable id")
+		jsonError(w, http.StatusBadRequest, "variável inválida")
 		return
 	}
 	var dto request.UpdateCfgVariableDTO
@@ -172,7 +172,7 @@ func (h *ConfiguratorHandler) UpdateVariable(w http.ResponseWriter, r *http.Requ
 func (h *ConfiguratorHandler) DeactivateVariable(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "varId")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid variable id")
+		jsonError(w, http.StatusBadRequest, "variável inválida")
 		return
 	}
 	if err := h.uc.DeactivateVariable(r.Context(), id); err != nil {
@@ -185,7 +185,7 @@ func (h *ConfiguratorHandler) DeactivateVariable(w http.ResponseWriter, r *http.
 func (h *ConfiguratorHandler) SetVariableLanguage(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "varId")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid variable id")
+		jsonError(w, http.StatusBadRequest, "variável inválida")
 		return
 	}
 	var dto request.CfgVariableLanguageDTO
@@ -204,7 +204,7 @@ func (h *ConfiguratorHandler) SetVariableLanguage(w http.ResponseWriter, r *http
 func (h *ConfiguratorHandler) DeleteVariableLanguage(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "langId")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid language id")
+		jsonError(w, http.StatusBadRequest, "idioma inválido")
 		return
 	}
 	if err := h.uc.DeleteVariableLanguage(r.Context(), id); err != nil {
@@ -243,7 +243,7 @@ func (h *ConfiguratorHandler) ListCharacteristics(w http.ResponseWriter, r *http
 func (h *ConfiguratorHandler) GetCharacteristic(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid characteristic id")
+		jsonError(w, http.StatusBadRequest, "característica inválida")
 		return
 	}
 	res, err := h.uc.GetCharacteristic(r.Context(), id)
@@ -257,7 +257,7 @@ func (h *ConfiguratorHandler) GetCharacteristic(w http.ResponseWriter, r *http.R
 func (h *ConfiguratorHandler) UpdateCharacteristic(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid characteristic id")
+		jsonError(w, http.StatusBadRequest, "característica inválida")
 		return
 	}
 	var dto request.UpdateCfgCharacteristicDTO
@@ -277,7 +277,7 @@ func (h *ConfiguratorHandler) UpdateCharacteristic(w http.ResponseWriter, r *htt
 func (h *ConfiguratorHandler) DeactivateCharacteristic(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid characteristic id")
+		jsonError(w, http.StatusBadRequest, "característica inválida")
 		return
 	}
 	if err := h.uc.DeactivateCharacteristic(r.Context(), id); err != nil {
@@ -290,7 +290,7 @@ func (h *ConfiguratorHandler) DeactivateCharacteristic(w http.ResponseWriter, r 
 func (h *ConfiguratorHandler) SetCharacteristicLanguage(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid characteristic id")
+		jsonError(w, http.StatusBadRequest, "característica inválida")
 		return
 	}
 	var dto request.CfgCharacteristicLanguageDTO
@@ -309,7 +309,7 @@ func (h *ConfiguratorHandler) SetCharacteristicLanguage(w http.ResponseWriter, r
 func (h *ConfiguratorHandler) DeleteCharacteristicLanguage(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "langId")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid language id")
+		jsonError(w, http.StatusBadRequest, "idioma inválido")
 		return
 	}
 	if err := h.uc.DeleteCharacteristicLanguage(r.Context(), id); err != nil {
@@ -324,7 +324,7 @@ func (h *ConfiguratorHandler) DeleteCharacteristicLanguage(w http.ResponseWriter
 func (h *ConfiguratorHandler) AddItemCharacteristic(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := cfgID(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	var dto request.AddCfgItemCharacteristicDTO
@@ -344,7 +344,7 @@ func (h *ConfiguratorHandler) AddItemCharacteristic(w http.ResponseWriter, r *ht
 func (h *ConfiguratorHandler) ListItemCharacteristics(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := cfgID(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	res, err := h.uc.ListItemCharacteristics(r.Context(), itemCode)
@@ -515,7 +515,7 @@ func (h *ConfiguratorHandler) CreateItemDescription(w http.ResponseWriter, r *ht
 func (h *ConfiguratorHandler) ListItemDescriptions(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := cfgID(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	res, err := h.uc.ListItemDescriptionsByItem(r.Context(), itemCode)
@@ -625,7 +625,7 @@ func (h *ConfiguratorHandler) CreateEquivalentRule(w http.ResponseWriter, r *htt
 func (h *ConfiguratorHandler) ListEquivalentRules(w http.ResponseWriter, r *http.Request) {
 	parentItemCode, err := cfgID(r, "parentItemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid parent item code")
+		jsonError(w, http.StatusBadRequest, "código de item pai inválido")
 		return
 	}
 	res, err := h.uc.ListEquivalentRulesByParent(r.Context(), parentItemCode, r.URL.Query().Get("only_active") == "true")
@@ -717,7 +717,7 @@ func (h *ConfiguratorHandler) CreateItemRule(w http.ResponseWriter, r *http.Requ
 func (h *ConfiguratorHandler) ListItemRules(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := cfgID(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	res, err := h.uc.ListItemRulesByItem(r.Context(), itemCode, r.URL.Query().Get("only_active") == "true")
@@ -793,7 +793,7 @@ func (h *ConfiguratorHandler) EvaluateItemRules(w http.ResponseWriter, r *http.R
 func (h *ConfiguratorHandler) ListCharacteristicItems(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid characteristic id")
+		jsonError(w, http.StatusBadRequest, "característica inválida")
 		return
 	}
 	res, err := h.uc.ListItemsByCharacteristic(r.Context(), id)
@@ -809,7 +809,7 @@ func (h *ConfiguratorHandler) ListCharacteristicItems(w http.ResponseWriter, r *
 func (h *ConfiguratorHandler) AddReceivingItem(w http.ResponseWriter, r *http.Request) {
 	charID, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid characteristic id")
+		jsonError(w, http.StatusBadRequest, "característica inválida")
 		return
 	}
 	var dto request.CfgReceivingItemDTO
@@ -828,7 +828,7 @@ func (h *ConfiguratorHandler) AddReceivingItem(w http.ResponseWriter, r *http.Re
 func (h *ConfiguratorHandler) ListReceivingItems(w http.ResponseWriter, r *http.Request) {
 	charID, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid characteristic id")
+		jsonError(w, http.StatusBadRequest, "característica inválida")
 		return
 	}
 	res, err := h.uc.ListReceivingItems(r.Context(), charID)

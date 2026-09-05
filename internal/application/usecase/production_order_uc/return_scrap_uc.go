@@ -27,10 +27,10 @@ func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScr
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if uc.StockRepo == nil {
-		return nil, fmt.Errorf("scrap return not configured: stock repository missing")
+		return nil, fmt.Errorf("a devolução de refugo não está configurada")
 	}
 	if dto.Quantity <= 0 {
-		return nil, fmt.Errorf("scrap quantity must be positive")
+		return nil, fmt.Errorf("a quantidade de refugo deve ser maior que zero")
 	}
 
 	// Ensure the order exists and derive the authoring user.

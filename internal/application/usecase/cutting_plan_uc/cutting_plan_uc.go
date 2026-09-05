@@ -84,7 +84,7 @@ func (uc *CuttingPlanUseCase) resolveOptimizer(cutType entity.CutType) (service.
 // Create builds a draft plan, optionally seeding it with parts and stock pieces.
 func (uc *CuttingPlanUseCase) Create(ctx context.Context, dto request.CreateCuttingPlanDTO) (*response.CuttingPlanResponse, error) {
 	if dto.MaterialItemCode <= 0 {
-		return nil, fmt.Errorf("material_item_code is required")
+		return nil, fmt.Errorf("informe o item do material")
 	}
 	code, err := uc.repo.NextPlanCode(ctx)
 	if err != nil {
@@ -102,7 +102,7 @@ func (uc *CuttingPlanUseCase) Create(ctx context.Context, dto request.CreateCutt
 	switch plan.CutType {
 	case entity.CutTypeLinear1D, entity.CutTypeGuillotine2D, entity.CutTypeTrueShape2D:
 	default:
-		return nil, fmt.Errorf("cut_type %q not supported", plan.CutType)
+		return nil, fmt.Errorf("tipo de corte %q não suportado", plan.CutType)
 	}
 	plan.WarehouseID = dto.WarehouseID
 	plan.ProductionOrderCode = dto.ProductionOrderCode
@@ -126,7 +126,7 @@ func (uc *CuttingPlanUseCase) Create(ctx context.Context, dto request.CreateCutt
 	if dto.LotConsumptionMode != "" {
 		mode := entity.ConsumptionMode(dto.LotConsumptionMode)
 		if mode != entity.ConsumptionAutomatic && mode != entity.ConsumptionManual {
-			return nil, fmt.Errorf("invalid lot_consumption_mode %q (AUTOMATIC|MANUAL)", dto.LotConsumptionMode)
+			return nil, fmt.Errorf("modo de consumo de lote %q inválido: use automático ou manual", dto.LotConsumptionMode)
 		}
 		plan.LotConsumptionMode = &mode
 	}
@@ -276,7 +276,7 @@ func (uc *CuttingPlanUseCase) Optimize(ctx context.Context, planID int64) (*resp
 		return nil, err
 	}
 	if plan.Status == entity.PlanStatusReleased {
-		return nil, fmt.Errorf("plan already firmed; cannot re-optimize")
+		return nil, fmt.Errorf("este plano já foi firmado e não pode ser otimizado de novo")
 	}
 	// When configured, seed the plan with the material's available remnants so the
 	// optimiser consumes offcuts before opening full bars. Re-seeding is idempotent.
@@ -294,10 +294,10 @@ func (uc *CuttingPlanUseCase) Optimize(ctx context.Context, planID int64) (*resp
 		return nil, err
 	}
 	if len(parts) == 0 {
-		return nil, fmt.Errorf("plan has no parts to cut")
+		return nil, fmt.Errorf("o plano não tem peças a cortar")
 	}
 	if len(stock) == 0 {
-		return nil, fmt.Errorf("plan has no stock to cut from")
+		return nil, fmt.Errorf("o plano não tem estoque de onde cortar")
 	}
 
 	optimizer, err := uc.resolveOptimizer(plan.CutType)

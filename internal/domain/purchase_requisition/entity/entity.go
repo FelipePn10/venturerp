@@ -34,10 +34,10 @@ type PurchaseRequisition struct {
 
 func NewPurchaseRequisition(code, enterpriseCode int64, createdBy uuid.UUID) (*PurchaseRequisition, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("code is required")
+		return nil, fmt.Errorf("informe o código")
 	}
 	if enterpriseCode == 0 {
-		return nil, fmt.Errorf("enterprise_code is required")
+		return nil, fmt.Errorf("informe a empresa")
 	}
 	now := time.Now()
 	return &PurchaseRequisition{

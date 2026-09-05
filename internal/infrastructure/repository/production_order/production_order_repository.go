@@ -250,7 +250,7 @@ func (r *ProductionOrderRepositoryPGX) ValidateProductionRelease(ctx context.Con
 		return err
 	}
 	if reporting == "ORDER" && issue == "REGISTRATION_RELEASE" {
-		return fmt.Errorf("parameter 45 blocks release: order reporting with issue at registration/release")
+		return fmt.Errorf("o parâmetro 45 impede a liberação: a ordem aponta com baixa no cadastro ou na liberação")
 	}
 	rows, err := r.pool.Query(ctx, `SELECT operation.origin::text,
 		COALESCE(route_operation.third_party_remittance,operation.third_party_remittance)
@@ -279,10 +279,10 @@ func (r *ProductionOrderRepositoryPGX) ValidateProductionRelease(ctx context.Con
 		return err
 	}
 	if external > 0 && total > external {
-		return fmt.Errorf("parameter 45 blocks release: third-party operations cannot coexist with other operations")
+		return fmt.Errorf("o parâmetro 45 impede a liberação: operações de terceiros não podem conviver com outras operações")
 	}
 	if invalidRemittance {
-		return fmt.Errorf("parameter 45 blocks release: third-party remittance must use demand items")
+		return fmt.Errorf("o parâmetro 45 impede a liberação: a remessa a terceiros deve usar itens de demanda")
 	}
 	return nil
 }

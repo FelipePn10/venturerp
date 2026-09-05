@@ -484,7 +484,7 @@ func (uc *SupplierUseCase) AddContact(ctx context.Context, dto request.AddSuppli
 		return nil, err
 	}
 	if dto.Name == "" {
-		return nil, fmt.Errorf("contact name is required")
+		return nil, fmt.Errorf("informe o nome do contato")
 	}
 	ranking := dto.Ranking
 	if ranking == 0 {

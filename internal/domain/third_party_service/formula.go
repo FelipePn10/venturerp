@@ -33,7 +33,7 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 				j++
 			}
 		} else {
-			return decimal.Zero, fmt.Errorf("invalid formula character")
+			return decimal.Zero, fmt.Errorf("a fórmula contém um caractere inválido")
 		}
 		tokens = append(tokens, expr[i:j])
 		i = j
@@ -86,7 +86,7 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 				var ok bool
 				v, ok = vars[t]
 				if !ok {
-					return decimal.Zero, fmt.Errorf("formula variable %s is undefined", t)
+					return decimal.Zero, fmt.Errorf("a variável %s usada na fórmula não está definida", t)
 				}
 			}
 			stack = append(stack, v)

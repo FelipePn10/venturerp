@@ -57,7 +57,7 @@ func (uc *UseCase) CreateDefectGroup(ctx context.Context, dto request.CreateTADe
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Description == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	actor, err := uc.actorID(ctx)
 	if err != nil {
@@ -90,7 +90,7 @@ func (uc *UseCase) CreateDefectReason(ctx context.Context, dto request.CreateTAD
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.GroupCode == 0 || dto.Description == "" {
-		return nil, errorsuc.NewValidationError("group_code and description are required")
+		return nil, errorsuc.NewValidationError("informe o grupo e a descrição")
 	}
 	actor, err := uc.actorID(ctx)
 	if err != nil {
@@ -136,7 +136,7 @@ func (uc *UseCase) CreateWarrantyResponsible(ctx context.Context, dto request.Cr
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Name == "" || (dto.EmployeeCode == nil && dto.CustomerCode == nil) {
-		return nil, errorsuc.NewValidationError("name and employee_code or customer_code are required")
+		return nil, errorsuc.NewValidationError("informe o nome e o funcionário ou o cliente")
 	}
 	actor, err := uc.actorID(ctx)
 	if err != nil {
@@ -177,7 +177,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 		return nil, err
 	}
 	if dto.CustomerCode == 0 || dto.Subject == "" {
-		return nil, errorsuc.NewValidationError("customer_code and subject are required")
+		return nil, errorsuc.NewValidationError("informe o cliente e o assunto")
 	}
 	openedAt := time.Now()
 	if dto.OpenedAt != "" {
@@ -231,7 +231,7 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 		return nil, tenantErr
 	}
 	if dto.CallCode == 0 || dto.ItemCode == 0 {
-		return nil, errorsuc.NewValidationError("call_code and item_code are required")
+		return nil, errorsuc.NewValidationError("informe o chamado e o item")
 	}
 	if dto.Quantity <= 0 {
 		dto.Quantity = 1
@@ -259,7 +259,7 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 			return nil, err
 		}
 		if reason.AllowsComplement && (dto.DefectComplement == nil || *dto.DefectComplement == "") {
-			return nil, errorsuc.NewValidationError("defect_complement is required for this defect reason")
+			return nil, errorsuc.NewValidationError("este motivo de defeito exige um complemento")
 		}
 	}
 	inWarranty := false
@@ -550,15 +550,15 @@ func (uc *UseCase) validateCanAttend(ctx context.Context, call *entity.Call) err
 			return err
 		}
 		if len(notes) == 0 {
-			return errorsuc.NewValidationError("return note is required before attending the call")
+			return errorsuc.NewValidationError("informe a nota de devolução antes de atender o chamado")
 		}
 	}
 	if uc.needsSalesOrder(ctx, call.Items) && call.SalesOrderCode == nil {
-		return errorsuc.NewValidationError("sales order is required before attending the call")
+		return errorsuc.NewValidationError("informe o pedido de venda antes de atender o chamado")
 	}
 	for _, item := range call.Items {
 		if uc.itemNeedsProductionOrder(ctx, item) && call.ProductionOrderID == nil {
-			return errorsuc.NewValidationError("production order is required before attending the call")
+			return errorsuc.NewValidationError("informe a ordem de produção antes de atender o chamado")
 		}
 	}
 	return nil

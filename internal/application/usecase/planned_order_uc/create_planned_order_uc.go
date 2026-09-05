@@ -26,10 +26,10 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.ItemCode == 0 {
-		return nil, errorsuc.NewValidationError("item_code is required")
+		return nil, errorsuc.NewValidationError("informe o item")
 	}
 	if dto.Quantity <= 0 {
-		return nil, errorsuc.NewValidationError("quantity must be greater than zero")
+		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
 
 	// demand_type_enum is NOT NULL with no default; a manual planned order is
@@ -42,7 +42,7 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 		case types.DemandSalesOrder, types.DemandForecast, types.DemandIndependent,
 			types.DemandSafetyStock, types.DemandReplenishment:
 		default:
-			return nil, errorsuc.NewValidationError("invalid demand_type: must be SALES_ORDER, FORECAST, INDEPENDENT, SAFETY_STOCK or REPLENISHMENT")
+			return nil, errorsuc.NewValidationError("tipo de demanda inválido: use pedido de venda, previsão, independente, estoque de segurança ou reposição")
 		}
 	}
 

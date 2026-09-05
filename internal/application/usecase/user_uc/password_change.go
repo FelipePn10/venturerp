@@ -15,9 +15,9 @@ import (
 
 var (
 	ErrPasswordChangeForbidden = errors.New("password change operation forbidden")
-	ErrPasswordChangeInvalid   = errors.New("password change request is invalid or expired")
-	ErrCurrentPasswordInvalid  = errors.New("current password is invalid")
-	ErrWeakPassword            = errors.New("new password must have at least 12 characters, uppercase, lowercase, number and special character")
+	ErrPasswordChangeInvalid   = errors.New("o pedido de troca de senha é inválido ou expirou")
+	ErrCurrentPasswordInvalid  = errors.New("a senha atual está incorreta")
+	ErrWeakPassword            = errors.New("a nova senha precisa de ao menos 12 caracteres, com maiúscula, minúscula, número e caractere especial")
 )
 
 type PasswordChangeAuth interface {

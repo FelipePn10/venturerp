@@ -34,7 +34,7 @@ func (uc *CreateSalesForecastUseCase) Execute(
 	// Use the first day of the week (approximate: Jan 1 + (week-1)*7 days).
 	checkDate, err := weekToDate(dto.Year, dto.Week)
 	if err != nil {
-		return nil, fmt.Errorf("invalid week/year combination: %w", err)
+		return nil, fmt.Errorf("semana e ano inválidos: %w", err)
 	}
 
 	blocked, err := uc.Repo.IsBlocked(ctx, checkDate)
@@ -42,7 +42,7 @@ func (uc *CreateSalesForecastUseCase) Execute(
 		return nil, fmt.Errorf("checking forecast period: %w", err)
 	}
 	if blocked {
-		return nil, fmt.Errorf("forecast period week %d of year %d is blocked", dto.Week, dto.Year)
+		return nil, fmt.Errorf("a semana %d de %d está bloqueada para previsão", dto.Week, dto.Year)
 	}
 
 	forecast, err := entity.NewSalesForecast(

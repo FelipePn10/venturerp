@@ -66,10 +66,10 @@ func ParseScale(s string) entity.GanttScale {
 // stamps Year/Month on the result.
 func (uc *APSUseCase) BuildMonthSchedule(ctx context.Context, year, month int, groupBy entity.GanttGroupBy) (*entity.GanttMonth, error) {
 	if month < 1 || month > 12 {
-		return nil, fmt.Errorf("invalid month %d (want 1-12)", month)
+		return nil, fmt.Errorf("mês %d inválido: informe de 1 a 12", month)
 	}
 	if year < 1900 || year > 3000 {
-		return nil, fmt.Errorf("invalid year %d", year)
+		return nil, fmt.Errorf("ano %d inválido", year)
 	}
 	from := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 	to := from.AddDate(0, 1, 0)
@@ -92,7 +92,7 @@ func (uc *APSUseCase) BuildBoard(ctx context.Context, from, to time.Time, scale 
 	from = truncDay(from.In(loc))
 	to = truncDay(to.In(loc))
 	if !to.After(from) {
-		return nil, fmt.Errorf("invalid range: 'to' (%s) must be after 'from' (%s)",
+		return nil, fmt.Errorf("intervalo inválido: a data final (%s) deve ser posterior à inicial (%s)",
 			to.Format("2006-01-02"), from.Format("2006-01-02"))
 	}
 	if to.Sub(from) > maxBoardDays*24*time.Hour {

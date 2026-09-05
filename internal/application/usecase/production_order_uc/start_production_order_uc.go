@@ -28,7 +28,7 @@ func (uc *StartProductionOrderUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.ID == 0 {
-		return nil, errorsuc.NewValidationError("id is required")
+		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
 	if checker, ok := uc.Repo.(productionOperationsChecker); ok {
 		hasOperations, err := checker.HasProductionOperations(ctx, dto.ID)

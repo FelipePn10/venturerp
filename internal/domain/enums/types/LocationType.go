@@ -49,7 +49,7 @@ func (t TypeLocation) MarshalJSON() ([]byte, error) {
 }
 
 func (t *TypeLocation) UnmarshalJSON(data []byte) error {
-	value, err := unmarshalStringOrIntEnum(data, "TypeLocation", map[string]int{
+	value, err := unmarshalStringOrIntEnum(data, "Tipo de localização", map[string]int{
 		"INTERNO": int(INTERNO), "EXTERNO": int(EXTERNO), "ASSISTÊNCIA": int(ASSISTENCIA),
 		"REJEIÇÃO": int(REJEICAO), "INSPEÇÃO": int(INSPECAO), "RESERVA": int(RESERVA),
 		"TRÂNSITO": int(TRANSITO), "TRANSITO": int(TRANSITO), "ESPECIAL": int(ESPECIAL),

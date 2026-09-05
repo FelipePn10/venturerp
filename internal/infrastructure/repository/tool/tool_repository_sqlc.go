@@ -133,7 +133,7 @@ func (r *ToolRepositorySQLC) RemoveRouteOpTool(ctx context.Context, id int64) er
 func (r *ToolRepositorySQLC) ListToolsByRouteOp(ctx context.Context, routeOperationID int64) ([]*entity.RouteOpTool, error) {
 	rows, err := r.q.ListToolsByRouteOp(ctx, routeOperationID)
 	if err != nil {
-		return nil, fmt.Errorf("listing tools for route op %d: %w", routeOperationID, err)
+		return nil, fmt.Errorf("falha ao listar as ferramentas da operação %d do roteiro: %w", routeOperationID, err)
 	}
 	out := make([]*entity.RouteOpTool, 0, len(rows))
 	for _, row := range rows {
@@ -156,7 +156,7 @@ func (r *ToolRepositorySQLC) ListToolsByRouteOp(ctx context.Context, routeOperat
 func (r *ToolRepositorySQLC) ListToolsByRoute(ctx context.Context, routeID int64) ([]*entity.RouteOpTool, error) {
 	rows, err := r.q.ListToolsByRoute(ctx, routeID)
 	if err != nil {
-		return nil, fmt.Errorf("listing tools for route %d: %w", routeID, err)
+		return nil, fmt.Errorf("falha ao listar as ferramentas do roteiro %d: %w", routeID, err)
 	}
 	out := make([]*entity.RouteOpTool, 0, len(rows))
 	for _, row := range rows {
@@ -210,7 +210,7 @@ func (r *ToolRepositorySQLC) UpdateToolSerial(ctx context.Context, s *entity.Too
 func (r *ToolRepositorySQLC) GetToolSerial(ctx context.Context, id int64) (*entity.ToolSerial, error) {
 	row, err := r.q.GetToolSerial(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("tool serial %d not found: %w", id, err)
+		return nil, fmt.Errorf("número de série %d da ferramenta não encontrado: %w", id, err)
 	}
 	return toolSerialRowToEntity(row), nil
 }
@@ -218,7 +218,7 @@ func (r *ToolRepositorySQLC) GetToolSerial(ctx context.Context, id int64) (*enti
 func (r *ToolRepositorySQLC) ListToolSerials(ctx context.Context, toolID int64, onlyActive bool) ([]*entity.ToolSerial, error) {
 	rows, err := r.q.ListToolSerials(ctx, sqlc.ListToolSerialsParams{ToolID: toolID, OnlyActive: onlyActive})
 	if err != nil {
-		return nil, fmt.Errorf("listing serials for tool %d: %w", toolID, err)
+		return nil, fmt.Errorf("falha ao listar os números de série da ferramenta %d: %w", toolID, err)
 	}
 	out := make([]*entity.ToolSerial, 0, len(rows))
 	for _, row := range rows {

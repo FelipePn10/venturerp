@@ -12,7 +12,7 @@ type ComponentCode struct {
 
 func NewComponentCode(groupCode string) (ComponentCode, error) {
 	if len(groupCode) < 2 {
-		return ComponentCode{}, errors.New("group code must have at least 2 characters")
+		return ComponentCode{}, errors.New("o código do grupo precisa de ao menos 2 caracteres")
 	}
 
 	group := groupCode[:2]

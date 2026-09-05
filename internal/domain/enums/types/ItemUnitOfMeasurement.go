@@ -43,7 +43,7 @@ func (t *TypeUnitOfMeasurementItem) UnmarshalJSON(data []byte) error {
 	tmp := TypeUnitOfMeasurementItem(s)
 
 	if !tmp.IsValid() {
-		return fmt.Errorf("invalid TypeUnitOfMeasurementItem: %s", s)
+		return NewInvalidValue("Unidade de medida do item", s, ValidUnitsOfMeasurement()...)
 	}
 
 	*t = tmp
@@ -52,14 +52,14 @@ func (t *TypeUnitOfMeasurementItem) UnmarshalJSON(data []byte) error {
 
 func (t TypeUnitOfMeasurementItem) Value() (driver.Value, error) {
 	if !t.IsValid() {
-		return nil, fmt.Errorf("invalid TypeUnitOfMeasurementItem: %s", t)
+		return nil, fmt.Errorf("unidade de medida do item inválida: %s", t)
 	}
 	return string(t), nil
 }
 
 func (t *TypeUnitOfMeasurementItem) Scan(value interface{}) error {
 	if value == nil {
-		return fmt.Errorf("null value for TypeUnitOfMeasurementItem")
+		return fmt.Errorf("a unidade de medida do item não pode ficar vazia")
 	}
 
 	var str string
@@ -70,13 +70,13 @@ func (t *TypeUnitOfMeasurementItem) Scan(value interface{}) error {
 	case []byte:
 		str = string(v)
 	default:
-		return fmt.Errorf("cannot scan %T into TypeUnitOfMeasurementItem", value)
+		return fmt.Errorf("não foi possível interpretar %T como unidade de medida do item", value)
 	}
 
 	tmp := TypeUnitOfMeasurementItem(str)
 
 	if !tmp.IsValid() {
-		return fmt.Errorf("invalid TypeUnitOfMeasurementItem from DB: %s", str)
+		return fmt.Errorf("unidade de medida do item inválida no banco: %s", str)
 	}
 
 	*t = tmp
@@ -89,5 +89,15 @@ func (t TypeUnitOfMeasurementItem) IsValid() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// ValidUnitsOfMeasurement lista as unidades aceitas, para a mensagem de erro
+// dizer ao usuário o que ele pode informar.
+func ValidUnitsOfMeasurement() []string {
+	return []string{
+		string(MM), string(CM), string(M), string(IN), string(KG), string(M2), string(M3),
+		string(UN), string(MICROMETRO), string(TONELADA), string(L), string(CX), string(PC),
+		string(GL), string(PAR),
 	}
 }

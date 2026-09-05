@@ -91,7 +91,7 @@ func (uc *QualityUseCase) AddCharacteristic(ctx context.Context, dto request.Add
 
 func (uc *QualityUseCase) CreateRecord(ctx context.Context, dto request.CreateQualityRecordDTO) (*response.QualityRecordResponse, error) {
 	if dto.InspectedQty <= 0 {
-		return nil, fmt.Errorf("inspected_qty must be positive")
+		return nil, fmt.Errorf("a quantidade inspecionada deve ser maior que zero")
 	}
 	rec := &entity.QualityRecord{
 		PlanID:            dto.PlanID,

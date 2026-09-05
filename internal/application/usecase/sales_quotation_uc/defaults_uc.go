@@ -16,7 +16,7 @@ func (uc *UseCase) applyCustomerAndPaymentDefaults(ctx context.Context, q *quote
 		return err
 	}
 	if !customer.IsActive || customer.Blocked {
-		return errorsuc.NewValidationError("customer is inactive or blocked")
+		return errorsuc.NewValidationError("o cliente está inativo ou bloqueado")
 	}
 	if q.CarrierCode == nil && customer.CarrierID != nil {
 		carrier, err := uc.Customers.GetCarrierByID(ctx, *customer.CarrierID)
@@ -54,14 +54,14 @@ func (uc *UseCase) applyCustomerAndPaymentDefaults(ctx context.Context, q *quote
 		return nil
 	}
 	if q.SalesDivisionCode == nil || uc.Divisions == nil {
-		return errorsuc.NewValidationError("a sales division with free payment terms is required to override the customer payment condition")
+		return errorsuc.NewValidationError("para sobrepor a condição de pagamento do cliente é preciso uma divisão de vendas com condição livre")
 	}
 	division, err := uc.Divisions.GetByCode(ctx, *q.SalesDivisionCode)
 	if err != nil {
 		return err
 	}
 	if !division.AllowFreePaymentTerms {
-		return errorsuc.NewValidationError("sales division does not allow free payment terms")
+		return errorsuc.NewValidationError("esta divisão de vendas não permite condição de pagamento livre")
 	}
 	return nil
 }

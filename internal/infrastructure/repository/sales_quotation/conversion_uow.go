@@ -49,7 +49,7 @@ func (u *ConversionUnitOfWork) Execute(ctx context.Context, quotationCode int64,
 		return nil, err
 	}
 	if tag.RowsAffected() != 1 {
-		return nil, fmt.Errorf("sales quotation %d not found or cannot be converted", quotationCode)
+		return nil, fmt.Errorf("orçamento de venda %d não encontrado ou não pode ser convertido", quotationCode)
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events(sales_quotation_code,event_type,reason,created_by) VALUES($1,'CONVERT','Convertido em pedido de venda',$2)`, quotationCode, actor); err != nil {
 		return nil, err

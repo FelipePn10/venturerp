@@ -24,18 +24,18 @@ func (uc *UseCase) ComputeSupplierScorecard(ctx context.Context, dto request.Com
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SupplierCode <= 0 {
-		return nil, fmt.Errorf("supplier_code is required")
+		return nil, fmt.Errorf("informe o fornecedor")
 	}
 	start, err := time.Parse("2006-01-02", dto.PeriodStart)
 	if err != nil {
-		return nil, fmt.Errorf("invalid period_start: %w", err)
+		return nil, fmt.Errorf("início do período inválido: %w", err)
 	}
 	end, err := time.Parse("2006-01-02", dto.PeriodEnd)
 	if err != nil {
-		return nil, fmt.Errorf("invalid period_end: %w", err)
+		return nil, fmt.Errorf("fim do período inválido: %w", err)
 	}
 	if end.Before(start) {
-		return nil, fmt.Errorf("period_end must be on or after period_start")
+		return nil, fmt.Errorf("o fim do período deve ser igual ou posterior ao início")
 	}
 	agg, err := uc.Repo.AggregateSupplierPerformance(ctx, dto.SupplierCode, start, end)
 	if err != nil {
@@ -212,10 +212,10 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SupplierCode <= 0 {
-		return nil, fmt.Errorf("supplier_code is required")
+		return nil, fmt.Errorf("informe o fornecedor")
 	}
 	if dto.ContractNumber == "" {
-		return nil, fmt.Errorf("contract_number is required")
+		return nil, fmt.Errorf("informe o número do contrato")
 	}
 	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
 	if err != nil {
@@ -230,15 +230,15 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 		status = "DRAFT"
 	}
 	if !validContractStatus(status) {
-		return nil, fmt.Errorf("invalid status %q", status)
+		return nil, fmt.Errorf("situação %q inválida", status)
 	}
 	validFrom, err := parseOptionalDate(dto.ValidFrom, time.Now())
 	if err != nil {
-		return nil, fmt.Errorf("invalid valid_from: %w", err)
+		return nil, fmt.Errorf("início da vigência inválido: %w", err)
 	}
 	validTo, err := parseDatePtr(dto.ValidTo)
 	if err != nil {
-		return nil, fmt.Errorf("invalid valid_to: %w", err)
+		return nil, fmt.Errorf("fim da vigência inválido: %w", err)
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	contract := &entity.SupplierContract{
@@ -259,7 +259,7 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 			return nil, fmt.Errorf("contract item requires item_code")
 		}
 		if it.ContractedQty < 0 || it.UnitPrice < 0 {
-			return nil, fmt.Errorf("contract item quantities/prices must be >= 0")
+			return nil, fmt.Errorf("as quantidades e os preços dos itens do contrato devem ser maiores ou iguais a zero")
 		}
 		contract.Items = append(contract.Items, &entity.SupplierContractItem{
 			ItemCode:      it.ItemCode,
@@ -303,7 +303,7 @@ func (uc *UseCase) UpdateSupplierContractStatus(ctx context.Context, id int64, d
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validContractStatus(dto.Status) {
-		return nil, fmt.Errorf("invalid status %q", dto.Status)
+		return nil, fmt.Errorf("situação %q inválida", dto.Status)
 	}
 	contract, err := uc.Repo.UpdateSupplierContractStatus(ctx, id, dto.Status)
 	if err != nil {
@@ -317,18 +317,18 @@ func (uc *UseCase) ConsumeSupplierContract(ctx context.Context, id int64, dto re
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Quantity <= 0 {
-		return nil, fmt.Errorf("quantity must be positive")
+		return nil, fmt.Errorf("a quantidade deve ser maior que zero")
 	}
 	contract, err := uc.Repo.GetSupplierContract(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if contract.Status != "ACTIVE" {
-		return nil, fmt.Errorf("contract %d is not ACTIVE (status %s)", id, contract.Status)
+		return nil, fmt.Errorf("o contrato %d não está ativo (situação %s)", id, contract.Status)
 	}
 	item, err := uc.Repo.FindContractItem(ctx, id, dto.ItemCode, dto.Mask)
 	if err != nil {
-		return nil, fmt.Errorf("item %d/%s is not in contract %d", dto.ItemCode, dto.Mask, id)
+		return nil, fmt.Errorf("o item %d/%s não faz parte do contrato %d", dto.ItemCode, dto.Mask, id)
 	}
 	updated, err := uc.Repo.ConsumeContractItem(ctx, item.ID, dto.Quantity)
 	if err != nil {

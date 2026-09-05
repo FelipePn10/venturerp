@@ -25,7 +25,7 @@ func (uc *ScheduleMachineUseCase) CreateSchedule(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.MachineCode == 0 {
-		return nil, errorsuc.NewValidationError("machine_code is required")
+		return nil, errorsuc.NewValidationError("informe a máquina")
 	}
 
 	// Persist the real scheduled date; fall back to today rather than the zero

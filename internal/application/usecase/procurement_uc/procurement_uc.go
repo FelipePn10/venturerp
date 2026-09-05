@@ -30,14 +30,14 @@ func (uc *UseCase) CreateRecord(ctx context.Context, dto request.CreateProcureme
 	actor, _ := uc.Auth.UserID(ctx)
 	recordType := entity.RecordType(dto.RecordType)
 	if !validRecordType(recordType) {
-		return nil, fmt.Errorf("invalid record_type %q", dto.RecordType)
+		return nil, fmt.Errorf("tipo de registro %q inválido", dto.RecordType)
 	}
 	status := entity.RecordStatus(dto.Status)
 	if status == "" {
 		status = entity.StatusOpen
 	}
 	if !validStatus(status) {
-		return nil, fmt.Errorf("invalid status %q", dto.Status)
+		return nil, fmt.Errorf("situação %q inválida", dto.Status)
 	}
 	payload := dto.Payload
 	if len(payload) == 0 || !json.Valid(payload) {
@@ -90,7 +90,7 @@ func (uc *UseCase) UpdateStatus(ctx context.Context, id int64, dto request.Updat
 	}
 	status := entity.RecordStatus(dto.Status)
 	if !validStatus(status) {
-		return nil, fmt.Errorf("invalid status %q", dto.Status)
+		return nil, fmt.Errorf("situação %q inválida", dto.Status)
 	}
 	rec, err := uc.Repo.UpdateRecordStatus(ctx, id, status)
 	if err != nil {
@@ -104,7 +104,7 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.ApprovedQty < 0 || dto.RejectedQty < 0 || dto.ApprovedQty+dto.RejectedQty <= 0 {
-		return nil, fmt.Errorf("approved_qty or rejected_qty must be positive")
+		return nil, fmt.Errorf("informe a quantidade aprovada ou a rejeitada, maior que zero")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	rec, err := uc.Repo.GetRecord(ctx, id)
@@ -112,7 +112,7 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 		return nil, err
 	}
 	if rec.RecordType != entity.RecordReceivingInspection {
-		return nil, fmt.Errorf("record %d is not a receiving inspection", id)
+		return nil, fmt.Errorf("o registro %d não é uma inspeção de recebimento", id)
 	}
 	if rec.ItemCode == nil || rec.WarehouseID == nil {
 		return nil, fmt.Errorf("inspeção exige código do item e depósito")
@@ -188,11 +188,11 @@ func (uc *UseCase) CreateSupplierScorecard(ctx context.Context, dto request.Crea
 	actor, _ := uc.Auth.UserID(ctx)
 	start, err := time.Parse("2006-01-02", dto.PeriodStart)
 	if err != nil {
-		return nil, fmt.Errorf("invalid period_start: %w", err)
+		return nil, fmt.Errorf("início do período inválido: %w", err)
 	}
 	end, err := time.Parse("2006-01-02", dto.PeriodEnd)
 	if err != nil {
-		return nil, fmt.Errorf("invalid period_end: %w", err)
+		return nil, fmt.Errorf("fim do período inválido: %w", err)
 	}
 	score := &entity.SupplierScorecard{
 		SupplierCode:     dto.SupplierCode,
@@ -237,27 +237,27 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 	}
 	dto.EnterpriseCode = enterpriseCode
 	if dto.Basis != "ITEM" && dto.Basis != "CLASSIFICATION" {
-		return nil, fmt.Errorf("basis must be ITEM or CLASSIFICATION")
+		return nil, fmt.Errorf("a base deve ser item ou classificação")
 	}
 	if dto.Basis == "ITEM" && dto.ItemCode == nil {
-		return nil, fmt.Errorf("item_code is required for ITEM route")
+		return nil, fmt.Errorf("informe o item para uma regra por item")
 	}
 	if dto.Basis == "CLASSIFICATION" && (dto.ClassificationCode == nil || *dto.ClassificationCode == "") {
-		return nil, fmt.Errorf("classification_code is required for CLASSIFICATION route")
+		return nil, fmt.Errorf("informe a classificação para uma regra por classificação")
 	}
 	if dto.InspectionWarehouseID <= 0 {
 		return nil, fmt.Errorf("depósito de inspeção é obrigatório")
 	}
 	if len(dto.Steps) == 0 {
-		return nil, fmt.Errorf("at least one inspection step is required")
+		return nil, fmt.Errorf("informe ao menos uma etapa de inspeção")
 	}
 	validFrom, err := parseOptionalDate(dto.ValidFrom, time.Now())
 	if err != nil {
-		return nil, fmt.Errorf("invalid valid_from: %w", err)
+		return nil, fmt.Errorf("início da vigência inválido: %w", err)
 	}
 	validTo, err := parseDatePtr(dto.ValidTo)
 	if err != nil {
-		return nil, fmt.Errorf("invalid valid_to: %w", err)
+		return nil, fmt.Errorf("fim da vigência inválido: %w", err)
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	route := &entity.ReceivingInspectionRoute{
@@ -278,23 +278,23 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 	}
 	for _, stepDTO := range dto.Steps {
 		if stepDTO.Sequence <= 0 {
-			return nil, fmt.Errorf("step sequence must be positive")
+			return nil, fmt.Errorf("a sequência da etapa deve ser maior que zero")
 		}
 		if stepDTO.InspectionName == "" {
-			return nil, fmt.Errorf("inspection_name is required for step %d", stepDTO.Sequence)
+			return nil, fmt.Errorf("informe o nome da inspeção da etapa %d", stepDTO.Sequence)
 		}
 		if !validInspectionKind(stepDTO.Kind) {
-			return nil, fmt.Errorf("invalid kind %q for step %d", stepDTO.Kind, stepDTO.Sequence)
+			return nil, fmt.Errorf("tipo %q inválido na etapa %d", stepDTO.Kind, stepDTO.Sequence)
 		}
 		if !validAppointmentMode(stepDTO.AppointmentMode) {
-			return nil, fmt.Errorf("invalid appointment_mode %q for step %d", stepDTO.AppointmentMode, stepDTO.Sequence)
+			return nil, fmt.Errorf("modo de apontamento %q inválido na etapa %d", stepDTO.AppointmentMode, stepDTO.Sequence)
 		}
 		if stepDTO.SampleQty <= 0 {
 			stepDTO.SampleQty = 1
 		}
 		stepValidTo, err := parseDatePtr(stepDTO.ValidTo)
 		if err != nil {
-			return nil, fmt.Errorf("invalid step valid_to: %w", err)
+			return nil, fmt.Errorf("fim da vigência da etapa inválido: %w", err)
 		}
 		step := &entity.ReceivingInspectionRouteStep{
 			Sequence:        stepDTO.Sequence,
@@ -318,7 +318,7 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 		}
 		for _, attrDTO := range stepDTO.Attributes {
 			if attrDTO.Description == "" {
-				return nil, fmt.Errorf("attribute description is required for step %d", stepDTO.Sequence)
+				return nil, fmt.Errorf("informe a descrição do atributo da etapa %d", stepDTO.Sequence)
 			}
 			step.Attributes = append(step.Attributes, &entity.ReceivingInspectionStepAttribute{
 				Description: attrDTO.Description,
@@ -353,7 +353,7 @@ func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto req
 		dto.Source = "MANUAL"
 	}
 	if !validInspectionSource(dto.Source) {
-		return nil, fmt.Errorf("invalid source %q", dto.Source)
+		return nil, fmt.Errorf("origem %q inválida", dto.Source)
 	}
 	route, err := uc.Repo.FindReceivingInspectionRoute(ctx, 1, dto.ItemCode, dto.Mask, dto.ClassificationCode)
 	var routeID *int64
@@ -460,7 +460,7 @@ func (uc *UseCase) RecordReceivingInspectionResult(ctx context.Context, orderID 
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 || dto.Sequence <= 0 {
-		return nil, fmt.Errorf("order_id and sequence are required")
+		return nil, fmt.Errorf("informe a ordem e a sequência")
 	}
 	if dto.SampleIndex <= 0 {
 		dto.SampleIndex = 1
@@ -491,13 +491,13 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 {
-		return nil, fmt.Errorf("order_id is required")
+		return nil, fmt.Errorf("informe a ordem")
 	}
 	if !validInspectionTreatment(dto.Treatment) {
-		return nil, fmt.Errorf("invalid treatment %q", dto.Treatment)
+		return nil, fmt.Errorf("tratamento %q inválido", dto.Treatment)
 	}
 	if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty <= 0 {
-		return nil, fmt.Errorf("analysis quantities must be positive")
+		return nil, fmt.Errorf("as quantidades da análise devem ser maiores que zero")
 	}
 	if dto.MoveStock && !uc.Auth.CanCreateStockMovement(ctx) {
 		return nil, errorsuc.ErrUnauthorized

@@ -140,7 +140,7 @@ func (h *EntryOperationHandler) Validate(w http.ResponseWriter, r *http.Request)
 	}
 	uf := r.URL.Query().Get("uf")
 	if uf == "" {
-		jsonError(w, http.StatusBadRequest, "uf is required")
+		jsonError(w, http.StatusBadRequest, "informe a UF")
 		return
 	}
 	if verr := h.uc.ValidateUF(r.Context(), code, uf); verr != nil {

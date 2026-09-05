@@ -193,18 +193,18 @@ func (uc *UseCase) Report(ctx context.Context, filter repository.ReportFilter) (
 
 func periodFromDTO(dto request.CreateSalesGoalPeriodDTO) (*entity.Period, error) {
 	if strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	start, err := parseDate(dto.StartDate)
 	if err != nil {
-		return nil, errorsuc.NewValidationError("valid start_date is required")
+		return nil, errorsuc.NewValidationError("informe uma data inicial válida")
 	}
 	end, err := parseDate(dto.EndDate)
 	if err != nil {
-		return nil, errorsuc.NewValidationError("valid end_date is required")
+		return nil, errorsuc.NewValidationError("informe uma data final válida")
 	}
 	if end.Before(start) {
-		return nil, errorsuc.NewValidationError("end_date cannot be before start_date")
+		return nil, errorsuc.NewValidationError("a data final não pode ser anterior à inicial")
 	}
 	periodType := strings.ToUpper(strings.TrimSpace(dto.PeriodType))
 	switch periodType {
@@ -217,21 +217,21 @@ func periodFromDTO(dto request.CreateSalesGoalPeriodDTO) (*entity.Period, error)
 
 func goalFromCreate(dto request.CreateSalesGoalDTO) (*entity.Goal, error) {
 	if dto.RepresentativeCode == 0 || dto.PeriodCode == 0 {
-		return nil, errorsuc.NewValidationError("representative_code and period_code are required")
+		return nil, errorsuc.NewValidationError("informe o representante e o período")
 	}
 	if dto.AwardPct < 0 {
-		return nil, errorsuc.NewValidationError("award_pct cannot be negative")
+		return nil, errorsuc.NewValidationError("o percentual de premiação não pode ser negativo")
 	}
 	base := normalizeAnalysisBase(dto.AnalysisBase)
 	if base == "" {
-		return nil, errorsuc.NewValidationError("analysis_base must be SALES or INVOICING")
+		return nil, errorsuc.NewValidationError("a base de análise deve ser pedidos ou faturamento")
 	}
 	return &entity.Goal{RepresentativeCode: dto.RepresentativeCode, PeriodCode: dto.PeriodCode, AnalysisBase: base, AwardPct: dto.AwardPct, Notes: dto.Notes, IsActive: true}, nil
 }
 
 func goalFromUpdate(dto request.UpdateSalesGoalDTO) (*entity.Goal, error) {
 	if dto.Code == 0 {
-		return nil, errorsuc.NewValidationError("code is required")
+		return nil, errorsuc.NewValidationError("informe o código")
 	}
 	g, err := goalFromCreate(request.CreateSalesGoalDTO{RepresentativeCode: dto.RepresentativeCode, PeriodCode: dto.PeriodCode, AnalysisBase: dto.AnalysisBase, AwardPct: dto.AwardPct, Notes: dto.Notes})
 	if err != nil {
@@ -244,10 +244,10 @@ func goalFromUpdate(dto request.UpdateSalesGoalDTO) (*entity.Goal, error) {
 
 func goalItemFromDTO(dto request.SalesGoalItemDTO) (*entity.GoalItem, error) {
 	if dto.GoalCode == 0 {
-		return nil, errorsuc.NewValidationError("goal_code is required")
+		return nil, errorsuc.NewValidationError("informe a meta")
 	}
 	if dto.TargetQuantity < 0 || dto.TargetValue < 0 || dto.BonusPct < 0 {
-		return nil, errorsuc.NewValidationError("targets and bonus_pct cannot be negative")
+		return nil, errorsuc.NewValidationError("as metas e os percentuais de bônus não podem ser negativos")
 	}
 	targetType := strings.ToUpper(strings.TrimSpace(dto.TargetType))
 	targets := 0
@@ -261,7 +261,7 @@ func goalItemFromDTO(dto request.SalesGoalItemDTO) (*entity.GoalItem, error) {
 		targets++
 	}
 	if targets != 1 {
-		return nil, errorsuc.NewValidationError("inform exactly one of item_code, item_classification_code or item_group_code")
+		return nil, errorsuc.NewValidationError("informe apenas um entre item, classificação do item e grupo do item")
 	}
 	switch {
 	case targetType == "" && dto.ItemCode != nil:
@@ -272,55 +272,55 @@ func goalItemFromDTO(dto request.SalesGoalItemDTO) (*entity.GoalItem, error) {
 		targetType = "GROUP"
 	}
 	if (targetType == "ITEM" && dto.ItemCode == nil) || (targetType == "CLASSIFICATION" && dto.ItemClassificationCode == nil) || (targetType == "GROUP" && dto.ItemGroupCode == nil) {
-		return nil, errorsuc.NewValidationError("target_type does not match informed target")
+		return nil, errorsuc.NewValidationError("o tipo de alvo não corresponde ao alvo informado")
 	}
 	if targetType != "ITEM" && targetType != "CLASSIFICATION" && targetType != "GROUP" {
-		return nil, errorsuc.NewValidationError("target_type must be ITEM, CLASSIFICATION or GROUP")
+		return nil, errorsuc.NewValidationError("o tipo de alvo deve ser item, classificação ou grupo")
 	}
 	return &entity.GoalItem{GoalCode: dto.GoalCode, TargetType: targetType, ItemCode: dto.ItemCode, ItemClassificationCode: dto.ItemClassificationCode, ItemGroupCode: dto.ItemGroupCode, SalesUOM: dto.SalesUOM, TargetQuantity: dto.TargetQuantity, TargetValue: dto.TargetValue, BonusPct: dto.BonusPct, IsActive: dto.IsActive}, nil
 }
 
 func groupTargetFromDTO(dto request.SalesGoalGroupTargetDTO) (*entity.GroupTarget, error) {
 	if dto.PeriodCode == 0 || dto.CommercialGroupCode == 0 {
-		return nil, errorsuc.NewValidationError("period_code and commercial_group_code are required")
+		return nil, errorsuc.NewValidationError("informe o período e o grupo comercial")
 	}
 	goalType := normalizeAnalysisBase(dto.GoalType)
 	if goalType == "" {
-		return nil, errorsuc.NewValidationError("goal_type must be SALES or INVOICING")
+		return nil, errorsuc.NewValidationError("o tipo de meta deve ser pedidos ou faturamento")
 	}
 	if hasNegative(dto.MinimumValue, dto.MinimumBonusPct, dto.ProbableValue, dto.ProbableBonusPct, dto.IdealValue, dto.IdealBonusPct) {
-		return nil, errorsuc.NewValidationError("goal values and bonus percentages cannot be negative")
+		return nil, errorsuc.NewValidationError("os valores de meta e os percentuais de bônus não podem ser negativos")
 	}
 	return &entity.GroupTarget{PeriodCode: dto.PeriodCode, CommercialGroupCode: dto.CommercialGroupCode, GoalType: goalType, MinimumValue: dto.MinimumValue, MinimumBonusPct: dto.MinimumBonusPct, ProbableValue: dto.ProbableValue, ProbableBonusPct: dto.ProbableBonusPct, IdealValue: dto.IdealValue, IdealBonusPct: dto.IdealBonusPct, IsActive: dto.IsActive}, nil
 }
 
 func groupCustomerFromDTO(dto request.SalesGoalGroupCustomerDTO) (*entity.GroupCustomer, error) {
 	if dto.GroupGoalID == 0 || dto.CustomerCode == 0 {
-		return nil, errorsuc.NewValidationError("group_goal_id and customer_code are required")
+		return nil, errorsuc.NewValidationError("informe a meta do grupo e o cliente")
 	}
 	if hasNegative(dto.MinimumValue, dto.MinimumBonusPct, dto.ProbableValue, dto.ProbableBonusPct, dto.IdealValue, dto.IdealBonusPct) {
-		return nil, errorsuc.NewValidationError("goal values and bonus percentages cannot be negative")
+		return nil, errorsuc.NewValidationError("os valores de meta e os percentuais de bônus não podem ser negativos")
 	}
 	return &entity.GroupCustomer{GroupGoalID: dto.GroupGoalID, CustomerCode: dto.CustomerCode, RepresentativeCode: dto.RepresentativeCode, MinimumValue: dto.MinimumValue, MinimumBonusPct: dto.MinimumBonusPct, ProbableValue: dto.ProbableValue, ProbableBonusPct: dto.ProbableBonusPct, IdealValue: dto.IdealValue, IdealBonusPct: dto.IdealBonusPct, IsActive: dto.IsActive}, nil
 }
 
 func balanceFromDTO(dto request.SalesGoalBalanceDTO) (*entity.Balance, error) {
 	if dto.PeriodCode == 0 {
-		return nil, errorsuc.NewValidationError("period_code is required")
+		return nil, errorsuc.NewValidationError("informe o período")
 	}
 	scope := strings.ToUpper(strings.TrimSpace(dto.BalanceScope))
 	if (scope == "REPRESENTATIVE" && dto.RepresentativeCode == nil) || (scope == "GROUP" && dto.CommercialGroupCode == nil) || (scope == "CUSTOMER" && dto.CustomerCode == nil) {
-		return nil, errorsuc.NewValidationError("balance_scope does not match informed owner")
+		return nil, errorsuc.NewValidationError("a abrangência do saldo não corresponde ao titular informado")
 	}
 	if scope != "REPRESENTATIVE" && scope != "GROUP" && scope != "CUSTOMER" {
-		return nil, errorsuc.NewValidationError("balance_scope must be REPRESENTATIVE, GROUP or CUSTOMER")
+		return nil, errorsuc.NewValidationError("a abrangência do saldo deve ser representante, grupo ou cliente")
 	}
 	goalType := normalizeAnalysisBase(dto.GoalType)
 	if goalType == "" {
-		return nil, errorsuc.NewValidationError("goal_type must be SALES or INVOICING")
+		return nil, errorsuc.NewValidationError("o tipo de meta deve ser pedidos ou faturamento")
 	}
 	if hasNegative(dto.RealizedValue, dto.IdealValue, dto.BalanceValue) {
-		return nil, errorsuc.NewValidationError("balance values cannot be negative")
+		return nil, errorsuc.NewValidationError("os valores de saldo não podem ser negativos")
 	}
 	return &entity.Balance{PeriodCode: dto.PeriodCode, NextPeriodCode: dto.NextPeriodCode, BalanceScope: scope, RepresentativeCode: dto.RepresentativeCode, CommercialGroupCode: dto.CommercialGroupCode, CustomerCode: dto.CustomerCode, GoalType: goalType, RealizedValue: dto.RealizedValue, IdealValue: dto.IdealValue, BalanceValue: dto.BalanceValue, Notes: dto.Notes}, nil
 }

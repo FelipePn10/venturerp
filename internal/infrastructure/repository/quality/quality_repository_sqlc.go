@@ -51,7 +51,7 @@ func (r *QualityRepositorySQLC) GetPlanByID(ctx context.Context, id int64) (*ent
 func (r *QualityRepositorySQLC) ListPlansByItem(ctx context.Context, itemCode int64) ([]*entity.InspectionPlan, error) {
 	rows, err := r.q.ListPlansByItem(ctx, itemCode)
 	if err != nil {
-		return nil, fmt.Errorf("listing plans for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("falha ao listar os planos do item %d: %w", itemCode, err)
 	}
 	out := make([]*entity.InspectionPlan, 0, len(rows))
 	for _, row := range rows {
@@ -85,7 +85,7 @@ func (r *QualityRepositorySQLC) AddCharacteristic(ctx context.Context, c *entity
 func (r *QualityRepositorySQLC) ListCharacteristics(ctx context.Context, planID int64) ([]*entity.InspectionCharacteristic, error) {
 	rows, err := r.q.ListCharacteristics(ctx, planID)
 	if err != nil {
-		return nil, fmt.Errorf("listing characteristics for plan %d: %w", planID, err)
+		return nil, fmt.Errorf("falha ao listar as características do plano %d: %w", planID, err)
 	}
 	out := make([]*entity.InspectionCharacteristic, 0, len(rows))
 	for _, row := range rows {
@@ -136,7 +136,7 @@ func (r *QualityRepositorySQLC) GetRecordByID(ctx context.Context, id int64) (*e
 func (r *QualityRepositorySQLC) ListRecordsByOrder(ctx context.Context, orderID int64) ([]*entity.QualityRecord, error) {
 	rows, err := r.q.ListRecordsByOrder(ctx, orderID)
 	if err != nil {
-		return nil, fmt.Errorf("listing records for order %d: %w", orderID, err)
+		return nil, fmt.Errorf("falha ao listar os registros da ordem %d: %w", orderID, err)
 	}
 	out := make([]*entity.QualityRecord, 0, len(rows))
 	for _, row := range rows {
@@ -148,7 +148,7 @@ func (r *QualityRepositorySQLC) ListRecordsByOrder(ctx context.Context, orderID 
 func (r *QualityRepositorySQLC) ListRecordsByItem(ctx context.Context, itemCode int64) ([]*entity.QualityRecord, error) {
 	rows, err := r.q.ListRecordsByItem(ctx, itemCode)
 	if err != nil {
-		return nil, fmt.Errorf("listing records for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("falha ao listar os registros do item %d: %w", itemCode, err)
 	}
 	out := make([]*entity.QualityRecord, 0, len(rows))
 	for _, row := range rows {
@@ -200,7 +200,7 @@ func (r *QualityRepositorySQLC) ListOpenNCs(ctx context.Context) ([]*entity.NonC
 func (r *QualityRepositorySQLC) ListNCsByItem(ctx context.Context, itemCode int64) ([]*entity.NonConformance, error) {
 	rows, err := r.q.ListNCsByItem(ctx, itemCode)
 	if err != nil {
-		return nil, fmt.Errorf("listing NCs for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("falha ao listar as não conformidades do item %d: %w", itemCode, err)
 	}
 	out := make([]*entity.NonConformance, 0, len(rows))
 	for _, row := range rows {
@@ -212,7 +212,7 @@ func (r *QualityRepositorySQLC) ListNCsByItem(ctx context.Context, itemCode int6
 func (r *QualityRepositorySQLC) DispositionNC(ctx context.Context, id int64, disposition entity.NCDisposition, disposedBy string) error {
 	uid, err := uuid.Parse(disposedBy)
 	if err != nil {
-		return fmt.Errorf("invalid disposedBy UUID: %w", err)
+		return fmt.Errorf("usuário responsável pelo descarte inválido: %w", err)
 	}
 	return r.q.DispositionNC(ctx, sqlc.DispositionNCParams{
 		ID:          id,

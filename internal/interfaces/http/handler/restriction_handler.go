@@ -51,7 +51,7 @@ func (h *RestrictionHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 func (h *RestrictionHandler) GetByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	results, err := h.getByItemUC.Execute(r.Context(), itemCode)
@@ -96,7 +96,7 @@ func (h *RestrictionHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *RestrictionHandler) GetByCustomer(w http.ResponseWriter, r *http.Request) {
 	customerCode, err := strconv.ParseInt(chi.URLParam(r, "customerCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid customer code")
+		security.RespondError(w, http.StatusBadRequest, "código de cliente inválido")
 		return
 	}
 	results, err := h.getByCustomerUC.Execute(r.Context(), customerCode)

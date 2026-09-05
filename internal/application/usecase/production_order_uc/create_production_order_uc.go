@@ -64,7 +64,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	var nextNum int64
 	if dto.OrderNumber != nil {
 		if *dto.OrderNumber <= 0 {
-			return nil, errorsuc.NewValidationError("order_number must be positive")
+			return nil, errorsuc.NewValidationError("o número da ordem deve ser maior que zero")
 		}
 		nextNum = *dto.OrderNumber
 	} else {
@@ -140,7 +140,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	}
 	atomicRepo, ok := uc.Repo.(manualOrderRepository)
 	if !ok {
-		return nil, errorsuc.NewValidationError("production repository does not support atomic manual order creation")
+		return nil, errorsuc.NewValidationError("a criação manual de ordem em uma única transação não está disponível")
 	}
 	created, err := atomicRepo.CreateWithMaterials(ctx, order, materials)
 	if err != nil {

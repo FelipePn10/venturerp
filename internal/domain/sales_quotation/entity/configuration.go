@@ -33,13 +33,13 @@ func DefaultParameters(enterpriseCode int64) *Parameters {
 
 func (p *Parameters) Validate() error {
 	if p.EnterpriseCode <= 0 {
-		return errors.New("enterprise is required")
+		return errors.New("informe a empresa")
 	}
 	if strings.TrimSpace(p.PurchaseOrderPrompt) == "" || strings.TrimSpace(p.DeliveryAuthorizationPrompt) == "" {
-		return errors.New("quotation prompts are required")
+		return errors.New("informe as perguntas do orçamento")
 	}
 	if p.MinimumCIFFreight.IsNegative() {
-		return errors.New("minimum CIF freight cannot be negative")
+		return errors.New("o frete CIF mínimo não pode ser negativo")
 	}
 	return nil
 }
@@ -59,13 +59,13 @@ type CommissionPattern struct {
 
 func (p *CommissionPattern) Validate() error {
 	if p.Code <= 0 || strings.TrimSpace(p.Description) == "" {
-		return errors.New("commission pattern code and description are required")
+		return errors.New("informe o código e a descrição do padrão de comissão")
 	}
 	if p.CommissionPct.IsNegative() || p.InvoicePct.IsNegative() || p.PaymentPct.IsNegative() {
-		return errors.New("commission percentages cannot be negative")
+		return errors.New("os percentuais de comissão não podem ser negativos")
 	}
 	if !p.InvoicePct.Add(p.PaymentPct).Equal(p.CommissionPct) {
-		return errors.New("invoice_pct plus payment_pct must equal commission_pct")
+		return errors.New("a soma dos percentuais de faturamento e pagamento deve ser igual ao percentual de comissão")
 	}
 	return nil
 }
@@ -96,7 +96,7 @@ type Event struct {
 
 func (r *CancellationReason) Validate() error {
 	if r.Code <= 0 || strings.TrimSpace(r.Description) == "" {
-		return errors.New("cancellation reason code and description are required")
+		return errors.New("informe o código e a descrição do motivo de cancelamento")
 	}
 	return nil
 }
@@ -115,13 +115,13 @@ type Attachment struct {
 
 func (a *Attachment) Validate() error {
 	if a.SalesQuotationCode <= 0 || strings.TrimSpace(a.FileName) == "" {
-		return errors.New("quotation and file name are required")
+		return errors.New("informe o orçamento e o nome do arquivo")
 	}
 	if a.FileSize < 0 || a.FileSize > MaxAttachmentSize {
-		return errors.New("attachment cannot exceed 10 MB")
+		return errors.New("o anexo não pode passar de 10 MB")
 	}
 	if int64(len(a.Content)) != a.FileSize {
-		return errors.New("attachment size does not match content")
+		return errors.New("o tamanho informado do anexo não confere com o conteúdo")
 	}
 	return nil
 }

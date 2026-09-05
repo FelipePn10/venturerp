@@ -12,7 +12,7 @@ type ProductCodeMask struct {
 
 func NewProductCodeMask(groupCode string) (ProductCodeMask, error) {
 	if len(groupCode) < 2 {
-		return ProductCodeMask{}, errors.New("group code must have at least 2 characters")
+		return ProductCodeMask{}, errors.New("o código do grupo precisa de ao menos 2 caracteres")
 	}
 	group := groupCode[:2]
 	random := rand.Intn(10000)

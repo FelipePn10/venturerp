@@ -114,14 +114,14 @@ func (uc *CuttingPlanUseCase) GetProgram(ctx context.Context, planID int64) (*re
 // and an injected machine repository.
 func (uc *CuttingPlanUseCase) ScheduleOnMachine(ctx context.Context, planID int64) (*response.CutScheduleResponse, error) {
 	if uc.machines == nil {
-		return nil, fmt.Errorf("machine scheduling is not configured")
+		return nil, fmt.Errorf("a programação de máquinas não está configurada")
 	}
 	plan, err := uc.repo.GetPlanByID(ctx, planID)
 	if err != nil {
 		return nil, err
 	}
 	if plan.MachineCode == nil {
-		return nil, fmt.Errorf("plan has no machine set")
+		return nil, fmt.Errorf("o plano não tem máquina definida")
 	}
 	patterns, err := uc.repo.ListPatterns(ctx, planID)
 	if err != nil {

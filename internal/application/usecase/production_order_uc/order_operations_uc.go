@@ -59,12 +59,12 @@ func (uc *OrderOperationsUseCase) ListOperations(ctx context.Context, orderID in
 // AdvanceOperation changes an operation status (PENDING → IN_PROGRESS → DONE).
 func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto request.AdvanceOperationDTO) (*response.ProductionOrderOperationResponse, error) {
 	if dto.OperationID == 0 {
-		return nil, fmt.Errorf("operation_id is required")
+		return nil, fmt.Errorf("informe a operação")
 	}
 	switch dto.Status {
 	case "PENDING", "IN_PROGRESS", "DONE", "SKIPPED":
 	default:
-		return nil, fmt.Errorf("invalid status %q: must be PENDING, IN_PROGRESS, DONE or SKIPPED", dto.Status)
+		return nil, fmt.Errorf("situação %q inválida: use pendente, em andamento, concluída ou dispensada", dto.Status)
 	}
 	// Capture the prior status so tool-life is consumed only on the real transition
 	// INTO DONE (advancing an already-DONE operation must not double-consume).

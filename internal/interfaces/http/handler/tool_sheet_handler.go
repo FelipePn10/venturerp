@@ -36,7 +36,7 @@ func (h *ToolSheetHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 func (h *ToolSheetHandler) GetSheet(w http.ResponseWriter, r *http.Request) {
 	orderID, err := strconv.ParseInt(chi.URLParam(r, "orderId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid order id")
+		jsonError(w, http.StatusBadRequest, "ordem inválida")
 		return
 	}
 	result, err := h.uc.GetSheet(r.Context(), orderID)

@@ -22,10 +22,10 @@ type StateGroup struct {
 
 func NewStateGroup(code int64, description string, createdBy uuid.UUID) (*StateGroup, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("code is required")
+		return nil, fmt.Errorf("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("description is required")
+		return nil, fmt.Errorf("informe a descrição")
 	}
 	return &StateGroup{
 		Code:        code,
@@ -55,14 +55,14 @@ type EntryOperationType struct {
 
 func NewEntryOperationType(code int64, description, natureOperation string, createdBy uuid.UUID) (*EntryOperationType, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("code is required")
+		return nil, fmt.Errorf("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("description is required")
+		return nil, fmt.Errorf("informe a descrição")
 	}
 	natureOperation = strings.TrimSpace(natureOperation)
 	if natureOperation == "" {
-		return nil, fmt.Errorf("nature_operation is required")
+		return nil, fmt.Errorf("informe a natureza da operação")
 	}
 	switch natureOperation[0] {
 	case '1', '2', '3':

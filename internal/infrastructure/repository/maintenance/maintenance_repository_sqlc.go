@@ -173,7 +173,7 @@ func (r *MaintenanceRepositorySQLC) ListPlansByMachine(ctx context.Context, mach
 	}
 	rows, err := r.q.ListMaintenancePlansByMachine(ctx, machineID)
 	if err != nil {
-		return nil, fmt.Errorf("listing plans for machine %d: %w", machineID, err)
+		return nil, fmt.Errorf("falha ao listar os planos da máquina %d: %w", machineID, err)
 	}
 	return planSlice(rows), nil
 }
@@ -264,7 +264,7 @@ func (r *MaintenanceRepositorySQLC) ListOrdersByPlan(ctx context.Context, planID
 	}
 	rows, err := r.q.ListMaintenanceOrdersByPlan(ctx, planID)
 	if err != nil {
-		return nil, fmt.Errorf("listing orders for plan %d: %w", planID, err)
+		return nil, fmt.Errorf("falha ao listar as ordens do plano %d: %w", planID, err)
 	}
 	return orderSlice(rows), nil
 }
@@ -293,7 +293,7 @@ func (r *MaintenanceRepositorySQLC) ListOrdersByWorkCenter(ctx context.Context, 
 	rows, err := r.q.ListMaintenanceOrdersByWorkCenter(ctx, workCenterID,
 		pgutil.ToPgDate(from), pgutil.ToPgDate(to))
 	if err != nil {
-		return nil, fmt.Errorf("listing orders for work center %d: %w", workCenterID, err)
+		return nil, fmt.Errorf("falha ao listar as ordens do centro de trabalho %d: %w", workCenterID, err)
 	}
 	return orderSlice(rows), nil
 }

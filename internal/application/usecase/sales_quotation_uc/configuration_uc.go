@@ -189,7 +189,7 @@ func applyQuotationRules(q *entity.SalesQuotation, p *entity.Parameters) error {
 			q.ConsumerAddress = &address
 		}
 	} else if q.ForeignDocument != nil {
-		return errorsuc.NewValidationError("foreign_document is only allowed for the final consumer customer")
+		return errorsuc.NewValidationError("o documento estrangeiro só é permitido para consumidor final")
 	}
 	if !q.IsNFCe && q.ForeignDocument != nil {
 		return errorsuc.NewValidationError("foreign_document requires NFC-e")

@@ -30,7 +30,7 @@ func (r *repositoryEnterpriseSQLC) Create(
 		// returns 409 instead of a generic 500 on duplicate codes.
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, errorsuc.NewConflictError(fmt.Sprintf("enterprise with code %d already exists", enterprise.Code))
+			return nil, errorsuc.NewConflictError(fmt.Sprintf("já existe uma empresa com o código %d", enterprise.Code))
 		}
 		return nil, fmt.Errorf("create enterprise: %w", err)
 	}

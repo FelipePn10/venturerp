@@ -66,7 +66,7 @@ func (uc *EntryOperationUseCase) ListStateGroups(ctx context.Context) ([]*respon
 func (uc *EntryOperationUseCase) AddStateGroupUF(ctx context.Context, dto request.AddStateGroupUFDTO) error {
 	uf := strings.ToUpper(strings.TrimSpace(dto.UF))
 	if uf == "" {
-		return fmt.Errorf("uf is required")
+		return fmt.Errorf("informe a UF")
 	}
 	return uc.repo.AddStateGroupUF(ctx, dto.StateGroupCode, uf)
 }

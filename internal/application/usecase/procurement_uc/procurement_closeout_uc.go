@@ -25,7 +25,7 @@ func (uc *UseCase) CreateReceivingNotice(ctx context.Context, dto request.Create
 	dto.EnterpriseCode = enterpriseCode
 	scheduledAt, err := parseTimePtr(dto.ScheduledAt)
 	if err != nil {
-		return nil, fmt.Errorf("invalid scheduled_at: %w", err)
+		return nil, fmt.Errorf("data de agendamento inválida: %w", err)
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	notice := &entity.ReceivingNotice{
@@ -85,7 +85,7 @@ func (uc *UseCase) UpdateReceivingNoticeStatus(ctx context.Context, id int64, dt
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validNoticeStatus(dto.Status) {
-		return nil, fmt.Errorf("invalid status %q", dto.Status)
+		return nil, fmt.Errorf("situação %q inválida", dto.Status)
 	}
 	notice, err := uc.Repo.UpdateReceivingNoticeStatus(ctx, id, dto.Status, dto.Blocked)
 	if err != nil {
@@ -99,7 +99,7 @@ func (uc *UseCase) CreateReceivingDivergence(ctx context.Context, dto request.Cr
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validDivergenceType(dto.DivergenceType) {
-		return nil, fmt.Errorf("invalid divergence_type %q", dto.DivergenceType)
+		return nil, fmt.Errorf("tipo de divergência %q inválido", dto.DivergenceType)
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	div := &entity.ReceivingDivergence{
@@ -143,7 +143,7 @@ func (uc *UseCase) ResolveReceivingDivergence(ctx context.Context, id int64, dto
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validDivergenceResolution(dto.Resolution) {
-		return nil, fmt.Errorf("invalid resolution %q", dto.Resolution)
+		return nil, fmt.Errorf("resolução %q inválida", dto.Resolution)
 	}
 	updated, err := uc.Repo.ResolveReceivingDivergence(ctx, id, dto.Resolution)
 	if err != nil {
@@ -189,11 +189,11 @@ func (uc *UseCase) CreateEDIMessage(ctx context.Context, dto request.CreateEDIMe
 	for _, l := range dto.Lines {
 		confirmedDate, err := parseDatePtr(l.ConfirmedDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid confirmed_date: %w", err)
+			return nil, fmt.Errorf("data de confirmação inválida: %w", err)
 		}
 		poDate, err := parseDatePtr(l.PoDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid po_date: %w", err)
+			return nil, fmt.Errorf("data do pedido de compra inválida: %w", err)
 		}
 		line := &entity.SupplierEDILine{
 			PurchaseOrderItemCode: l.PurchaseOrderItemCode,
@@ -269,16 +269,16 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 		dto.Currency = "USD"
 	}
 	if dto.ExchangeRate <= 0 {
-		return nil, fmt.Errorf("exchange_rate must be positive")
+		return nil, fmt.Errorf("a taxa de câmbio deve ser maior que zero")
 	}
 	if dto.ApportionBasis == "" {
 		dto.ApportionBasis = "VALUE"
 	}
 	if !validApportionBasis(dto.ApportionBasis) {
-		return nil, fmt.Errorf("apportion_basis must be VALUE, WEIGHT or QUANTITY")
+		return nil, fmt.Errorf("a base de rateio deve ser valor, peso ou quantidade")
 	}
 	if len(dto.Items) == 0 {
-		return nil, fmt.Errorf("at least one import item is required")
+		return nil, fmt.Errorf("informe ao menos um item para importar")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	process := &entity.ImportProcess{
@@ -309,7 +309,7 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 	}
 	for _, e := range dto.Expenses {
 		if e.Amount < 0 {
-			return nil, fmt.Errorf("expense amount must be >= 0")
+			return nil, fmt.Errorf("o valor da despesa deve ser maior ou igual a zero")
 		}
 		inCost := true
 		if e.InItemCost != nil {
@@ -373,7 +373,7 @@ func (uc *UseCase) UpdateImportProcessStatus(ctx context.Context, id int64, dto 
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validImportStatus(dto.Status) {
-		return nil, fmt.Errorf("invalid status %q", dto.Status)
+		return nil, fmt.Errorf("situação %q inválida", dto.Status)
 	}
 	p, err := uc.Repo.UpdateImportProcessStatus(ctx, id, dto.Status)
 	if err != nil {
@@ -444,11 +444,11 @@ func (uc *UseCase) CreateSupplierHomologation(ctx context.Context, dto request.C
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SupplierCode <= 0 {
-		return nil, fmt.Errorf("supplier_code is required")
+		return nil, fmt.Errorf("informe o fornecedor")
 	}
 	validUntil, err := parseDatePtr(dto.ValidUntil)
 	if err != nil {
-		return nil, fmt.Errorf("invalid valid_until: %w", err)
+		return nil, fmt.Errorf("data de validade inválida: %w", err)
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	h := &entity.SupplierHomologation{
@@ -461,17 +461,17 @@ func (uc *UseCase) CreateSupplierHomologation(ctx context.Context, dto request.C
 	// If a status is not forced, derive it from the IQF over the given period.
 	if dto.Status != "" {
 		if !validHomologationStatus(dto.Status) {
-			return nil, fmt.Errorf("invalid status %q", dto.Status)
+			return nil, fmt.Errorf("situação %q inválida", dto.Status)
 		}
 		h.Status = dto.Status
 	} else {
 		start, err := time.Parse("2006-01-02", dto.PeriodStart)
 		if err != nil {
-			return nil, fmt.Errorf("invalid period_start: %w", err)
+			return nil, fmt.Errorf("início do período inválido: %w", err)
 		}
 		end, err := time.Parse("2006-01-02", dto.PeriodEnd)
 		if err != nil {
-			return nil, fmt.Errorf("invalid period_end: %w", err)
+			return nil, fmt.Errorf("fim do período inválido: %w", err)
 		}
 		agg, err := uc.Repo.AggregateSupplierPerformance(ctx, dto.SupplierCode, start, end)
 		if err != nil {
@@ -505,7 +505,7 @@ func (uc *UseCase) GenerateItemSuppliers(ctx context.Context, supplierCode int64
 		return 0, errorsuc.ErrUnauthorized
 	}
 	if supplierCode <= 0 {
-		return 0, fmt.Errorf("supplier_code is required")
+		return 0, fmt.Errorf("informe o fornecedor")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	return uc.Repo.GenerateItemSuppliersFromHistory(ctx, supplierCode, actor)

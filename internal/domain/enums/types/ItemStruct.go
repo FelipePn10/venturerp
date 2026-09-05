@@ -26,7 +26,7 @@ func (t TypeStructItem) MarshalJSON() ([]byte, error) {
 }
 
 func (t *TypeStructItem) UnmarshalJSON(data []byte) error {
-	value, err := unmarshalStringOrIntEnum(data, "TypeStructItem", map[string]int{"INDUSTRIAL": int(INDUSTRIAL), "COMERCIAL": int(COMERCIAL)})
+	value, err := unmarshalStringOrIntEnum(data, "Tipo de estrutura do item", map[string]int{"INDUSTRIAL": int(INDUSTRIAL), "COMERCIAL": int(COMERCIAL)})
 	if err != nil {
 		return err
 	}

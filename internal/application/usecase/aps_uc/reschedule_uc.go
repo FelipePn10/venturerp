@@ -21,10 +21,10 @@ import (
 // how interactive APS boards let the planner override and then flag the conflict.
 func (uc *APSUseCase) RescheduleSequence(ctx context.Context, dto request.RescheduleSequenceDTO) (*response.RescheduleResultResponse, error) {
 	if dto.SequenceID <= 0 {
-		return nil, fmt.Errorf("sequence_id is required")
+		return nil, fmt.Errorf("informe a sequência")
 	}
 	if dto.NewStart.IsZero() {
-		return nil, fmt.Errorf("new_start is required")
+		return nil, fmt.Errorf("informe a nova data de início")
 	}
 
 	target, err := uc.repo.GetSequence(ctx, dto.SequenceID)
@@ -45,14 +45,14 @@ func (uc *APSUseCase) RescheduleSequence(ctx context.Context, dto request.Resche
 	if dto.NewMachineID != nil {
 		selection, ok := uc.repo.(repository.SelectionRepository)
 		if !ok {
-			return nil, fmt.Errorf("machine rescheduling is not supported")
+			return nil, fmt.Errorf("a reprogramação de máquina não está disponível")
 		}
 		candidates, loadErr := selection.ListCandidateMachines(ctx, target.WorkCenterID, []int64{*dto.NewMachineID})
 		if loadErr != nil {
 			return nil, loadErr
 		}
 		if len(candidates) != 1 {
-			return nil, fmt.Errorf("machine does not belong to the selected work center or tenant")
+			return nil, fmt.Errorf("a máquina não pertence ao centro de trabalho selecionado nem à empresa autenticada")
 		}
 		target.MachineID = dto.NewMachineID
 	} else if dto.NewWorkCenterID != nil {

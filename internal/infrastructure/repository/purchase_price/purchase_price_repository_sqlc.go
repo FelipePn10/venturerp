@@ -296,7 +296,7 @@ func (r *PurchasePriceRepositorySQLC) ApplySourcePrices(ctx context.Context, e, 
 		case "ENTRY_INVOICE":
 			err = tx.QueryRow(ctx, `SELECT fi.item_code,COALESCE(fi.uom,ips.uom,i.warehouse_unit_of_measurement::text,''),fi.unit_price FROM fiscal_entry_items fi JOIN fiscal_entries fe ON fe.id=fi.fiscal_entry_id LEFT JOIN item_preferred_suppliers ips ON ips.enterprise_id=fe.enterprise_id AND ips.supplier_code=fe.supplier_code AND ips.item_code=fi.item_code AND ips.is_active LEFT JOIN items i ON i.code=fi.item_code WHERE fe.enterprise_id=$1 AND fe.supplier_code=$2 AND fi.id=$3 AND fi.unit_price>0 AND fe.is_active`, e, supplier, s.SourceID).Scan(&item, &uom, &price)
 		default:
-			return 0, fmt.Errorf("invalid source_type %q", s.SourceType)
+			return 0, fmt.Errorf("tipo de origem %q inválido", s.SourceType)
 		}
 		if err != nil {
 			return 0, err

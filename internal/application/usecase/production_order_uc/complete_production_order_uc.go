@@ -48,7 +48,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.ID == 0 {
-		return nil, errorsuc.NewValidationError("id is required")
+		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
 
 	order, err := uc.Repo.GetByCode(ctx, dto.ID)
@@ -60,7 +60,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 		warehouseID = order.WarehouseID
 	}
 	if warehouseID == nil {
-		return nil, errorsuc.NewValidationError("warehouse_id is required when the order has no destination warehouse")
+		return nil, errorsuc.NewValidationError("informe o almoxarifado, pois a ordem não tem almoxarifado de destino")
 	}
 	delivered, err := uc.Repo.GetDeliveredQuantity(ctx, dto.ID)
 	if err != nil {
@@ -76,7 +76,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 		qty = *dto.Quantity
 	}
 	if qty.IsNegative() {
-		return nil, errorsuc.NewValidationError("quantity must be greater than or equal to zero")
+		return nil, errorsuc.NewValidationError("a quantidade deve ser maior ou igual a zero")
 	}
 	key := strings.TrimSpace(dto.IdempotencyKey)
 	if key == "" {

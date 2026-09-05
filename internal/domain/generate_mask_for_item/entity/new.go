@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	ErrInvalidItemCode = errors.New("item code cannot be empty")
-	ErrInvalidMask     = errors.New("mask cannot be empty")
-	ErrInvalidMaskHash = errors.New("maskHash cannot be empty")
-	ErrInvalidHash     = errors.New("maskHash does not match mask")
-	ErrInvalidUser     = errors.New("createdBy cannot be nil UUID")
+	ErrInvalidItemCode = errors.New("informe o código do item")
+	ErrInvalidMask     = errors.New("informe a máscara")
+	ErrInvalidMaskHash = errors.New("o identificador da máscara não pode ficar vazio")
+	ErrInvalidHash     = errors.New("o identificador não corresponde à máscara informada")
+	ErrInvalidUser     = errors.New("é preciso identificar o usuário que está criando o registro")
 )
 
 func NewItemMask(

@@ -90,10 +90,10 @@ type FiscalClassification struct {
 
 func NewFiscalClassification(code int64, description string, createdBy uuid.UUID) (*FiscalClassification, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("code is required")
+		return nil, fmt.Errorf("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("description is required")
+		return nil, fmt.Errorf("informe a descrição")
 	}
 	now := time.Now()
 	return &FiscalClassification{

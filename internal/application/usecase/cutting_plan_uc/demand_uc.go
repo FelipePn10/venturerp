@@ -68,10 +68,10 @@ type matGroup struct {
 // GenerateFromOrders builds one cutting plan per raw material from the given orders.
 func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.GenerateCuttingFromOrdersDTO) (*response.GenerateCuttingDemandResponse, error) {
 	if len(dto.ProductionOrderCodes) == 0 && len(dto.PlannedOrderCodes) == 0 {
-		return nil, errors.New("at least one production_order_code or planned_order_code is required")
+		return nil, errors.New("informe ao menos uma ordem de produção ou ordem planejada")
 	}
 	if dto.MinRemnantMM < 0 || dto.KerfMM < 0 || dto.TrimMM < 0 {
-		return nil, errors.New("kerf, trim and min_remnant cannot be negative")
+		return nil, errors.New("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
 	}
 
 	// Resolve the orders to explode.
@@ -309,7 +309,7 @@ func buildAutoPart(child *itementity.Item, label string, qty int, sourceRef stri
 	if is2D {
 		w, h := float64(d.Length), float64(d.Width)
 		if w <= 0 || h <= 0 {
-			return nil, errors.New("sheet component needs Length and Width dimensions")
+			return nil, errors.New("o componente de chapa precisa das dimensões de comprimento e largura")
 		}
 		return entity.NewPart2D(0, &itemCode, label, w, h, entity.GrainNone, allowRotation, qty, &ref)
 	}

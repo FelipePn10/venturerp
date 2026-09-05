@@ -739,7 +739,7 @@ type autoFillSalesOrderRequest struct {
 
 func (h *ShipmentHandler) AutoFillFromSalesOrder(w http.ResponseWriter, r *http.Request) {
 	if h.autoFillUC == nil {
-		jsonError(w, http.StatusNotImplemented, "auto-fill not configured")
+		jsonError(w, http.StatusNotImplemented, "o preenchimento automático não está configurado")
 		return
 	}
 	var req autoFillSalesOrderRequest
@@ -761,7 +761,7 @@ type autoFillPurchaseOrderRequest struct {
 
 func (h *ShipmentHandler) AutoFillFromPurchaseOrder(w http.ResponseWriter, r *http.Request) {
 	if h.autoFillUC == nil {
-		jsonError(w, http.StatusNotImplemented, "auto-fill not configured")
+		jsonError(w, http.StatusNotImplemented, "o preenchimento automático não está configurado")
 		return
 	}
 	var req autoFillPurchaseOrderRequest
@@ -783,7 +783,7 @@ type autoFillProductionOrderRequest struct {
 
 func (h *ShipmentHandler) AutoFillFromProductionOrder(w http.ResponseWriter, r *http.Request) {
 	if h.autoFillUC == nil {
-		jsonError(w, http.StatusNotImplemented, "auto-fill not configured")
+		jsonError(w, http.StatusNotImplemented, "o preenchimento automático não está configurado")
 		return
 	}
 	var req autoFillProductionOrderRequest
@@ -801,7 +801,7 @@ func (h *ShipmentHandler) AutoFillFromProductionOrder(w http.ResponseWriter, r *
 
 func (h *ShipmentHandler) ExportPDF(w http.ResponseWriter, r *http.Request) {
 	if h.exportUC == nil {
-		jsonError(w, http.StatusNotImplemented, "export not configured")
+		jsonError(w, http.StatusNotImplemented, "a exportação não está configurada")
 		return
 	}
 	h.exportFile(w, r, "pdf", h.exportUC.GeneratePDF)
@@ -809,7 +809,7 @@ func (h *ShipmentHandler) ExportPDF(w http.ResponseWriter, r *http.Request) {
 
 func (h *ShipmentHandler) ExportXLSX(w http.ResponseWriter, r *http.Request) {
 	if h.exportUC == nil {
-		jsonError(w, http.StatusNotImplemented, "export not configured")
+		jsonError(w, http.StatusNotImplemented, "a exportação não está configurada")
 		return
 	}
 	h.exportFile(w, r, "xlsx", h.exportUC.GenerateXLSX)

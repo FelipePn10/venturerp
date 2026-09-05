@@ -66,16 +66,16 @@ func NewMaintenancePlan(
 	createdBy uuid.UUID,
 ) (*MaintenancePlan, error) {
 	if machineID <= 0 {
-		return nil, errors.New("machine_id is required")
+		return nil, errors.New("informe a máquina")
 	}
 	if description == "" {
-		return nil, errors.New("description is required")
+		return nil, errors.New("informe a descrição")
 	}
 	if frequencyDays <= 0 {
-		return nil, errors.New("frequency_days must be positive")
+		return nil, errors.New("a frequência em dias deve ser maior que zero")
 	}
 	if estimatedHours <= 0 {
-		return nil, errors.New("estimated_hours must be positive")
+		return nil, errors.New("as horas estimadas devem ser maiores que zero")
 	}
 	nextScheduled := time.Now().AddDate(0, 0, frequencyDays)
 	return &MaintenancePlan{
@@ -99,13 +99,13 @@ func NewMaintenanceOrder(
 	estimatedHours float64,
 ) (*MaintenanceOrder, error) {
 	if planID <= 0 {
-		return nil, errors.New("plan_id is required")
+		return nil, errors.New("informe o plano")
 	}
 	if scheduledDate.IsZero() {
-		return nil, errors.New("scheduled_date is required")
+		return nil, errors.New("informe a data programada")
 	}
 	if estimatedHours <= 0 {
-		return nil, errors.New("estimated_hours must be positive")
+		return nil, errors.New("as horas estimadas devem ser maiores que zero")
 	}
 	return &MaintenanceOrder{
 		PlanID:         planID,

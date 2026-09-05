@@ -9,9 +9,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-var ErrCancellationReasonNotFound = errors.New("cancellation reason not found")
-var ErrConfigurationReferenced = errors.New("sales quotation configuration is referenced")
-var ErrConfigurationNotFound = errors.New("sales quotation configuration not found")
+var ErrCancellationReasonNotFound = errors.New("motivo de cancelamento não encontrado")
+var ErrConfigurationReferenced = errors.New("esta configuração de orçamento está em uso")
+var ErrConfigurationNotFound = errors.New("configuração de orçamento de venda não encontrada")
 
 type ConfigurationMaintenanceRepository interface {
 	ResetParameters(ctx context.Context) (*entity.Parameters, error)

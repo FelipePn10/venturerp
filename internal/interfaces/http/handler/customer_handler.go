@@ -373,7 +373,7 @@ func (h *CustomerHandler) ListSalesTables(w http.ResponseWriter, r *http.Request
 func (h *CustomerHandler) GetSalesTable(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid table code")
+		jsonError(w, http.StatusBadRequest, "código de tabela inválido")
 		return
 	}
 	result, err := h.uc.GetSalesTable(r.Context(), code)
@@ -393,7 +393,7 @@ func (h *CustomerHandler) UpdateSalesTable(w http.ResponseWriter, r *http.Reques
 	if dto.Code == 0 {
 		code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid table code")
+			jsonError(w, http.StatusBadRequest, "código de tabela inválido")
 			return
 		}
 		dto.Code = code
@@ -924,7 +924,7 @@ func (h *CustomerHandler) UpdateSalesTablePrice(w http.ResponseWriter, r *http.R
 func (h *CustomerHandler) GetSalesTablePrice(w http.ResponseWriter, r *http.Request) {
 	salesTableCode, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid table code")
+		jsonError(w, http.StatusBadRequest, "código de tabela inválido")
 		return
 	}
 	itemCode := chi.URLParam(r, "itemCode")
@@ -939,7 +939,7 @@ func (h *CustomerHandler) GetSalesTablePrice(w http.ResponseWriter, r *http.Requ
 func (h *CustomerHandler) ListSalesTablePrices(w http.ResponseWriter, r *http.Request) {
 	salesTableCode, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid table code")
+		jsonError(w, http.StatusBadRequest, "código de tabela inválido")
 		return
 	}
 	result, err := h.uc.ListSalesTablePricesByCode(r.Context(), salesTableCode)
@@ -967,7 +967,7 @@ func (h *CustomerHandler) GenerateSalesTablePrices(w http.ResponseWriter, r *htt
 func (h *CustomerHandler) ListSalesTablePriceHistory(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "tableCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid table code")
+		jsonError(w, http.StatusBadRequest, "código de tabela inválido")
 		return
 	}
 	var itemCode *string

@@ -30,7 +30,7 @@ func (uc *CreateOrderPriorityUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.IntervalStart >= dto.IntervalEnd || strings.TrimSpace(dto.Priority) == "" {
-		return nil, errorsuc.NewValidationError("interval_start must be lower than interval_end and priority is required")
+		return nil, errorsuc.NewValidationError("o início do intervalo deve ser menor que o fim, e a prioridade é obrigatória")
 	}
 	existing, err := uc.Repo.List(ctx)
 	if err != nil {
@@ -38,7 +38,7 @@ func (uc *CreateOrderPriorityUseCase) Execute(
 	}
 	for _, interval := range existing {
 		if dto.IntervalStart <= interval.IntervalEnd && dto.IntervalEnd >= interval.IntervalStart {
-			return nil, errorsuc.NewConflictError(fmt.Sprintf("priority interval overlaps or touches interval %d", interval.Code))
+			return nil, errorsuc.NewConflictError(fmt.Sprintf("o intervalo de prioridade encosta ou se sobrepõe ao intervalo %d", interval.Code))
 		}
 	}
 	op := &entity.OrderPriority{
