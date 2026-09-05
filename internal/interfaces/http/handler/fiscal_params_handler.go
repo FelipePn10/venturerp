@@ -227,7 +227,7 @@ func (h *FiscalParamsHandler) ListTaxParamsByUF(w http.ResponseWriter, r *http.R
 func (h *FiscalParamsHandler) ListTaxParamsByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	onlyActive := r.URL.Query().Get("only_active") != "false"

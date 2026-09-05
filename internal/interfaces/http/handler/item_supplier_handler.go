@@ -37,7 +37,7 @@ func (h *ItemSupplierHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 func (h *ItemSupplierHandler) ListByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	res, err := h.uc.ListByItem(r.Context(), itemCode)
@@ -51,7 +51,7 @@ func (h *ItemSupplierHandler) ListByItem(w http.ResponseWriter, r *http.Request)
 func (h *ItemSupplierHandler) ListBySupplier(w http.ResponseWriter, r *http.Request) {
 	supplierCode, err := strconv.ParseInt(chi.URLParam(r, "supplierCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid supplier code")
+		jsonError(w, http.StatusBadRequest, "código de fornecedor inválido")
 		return
 	}
 	res, err := h.uc.ListBySupplier(r.Context(), supplierCode)

@@ -12,7 +12,7 @@ type ProductCode struct {
 
 func NewProductCode(groupCode string) (ProductCode, error) {
 	if len(groupCode) < 2 {
-		return ProductCode{}, errors.New("group code must have at least 2 characters")
+		return ProductCode{}, errors.New("o código do grupo precisa de ao menos 2 caracteres")
 	}
 
 	group := groupCode[:2]

@@ -66,7 +66,7 @@ func (h *IndependentDemandHandler) ListByItem(w http.ResponseWriter, r *http.Req
 
 	itemCode, err := strconv.ParseInt(itemStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *IndependentDemandHandler) ListFromDate(w http.ResponseWriter, r *http.R
 
 	date, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid date format")
+		security.RespondError(w, http.StatusBadRequest, "formato de data inválido")
 		return
 	}
 

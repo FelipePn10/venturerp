@@ -14,7 +14,7 @@ var reYYYYMM = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
 
 func validatePeriod(period string) error {
 	if !reYYYYMM.MatchString(period) {
-		return errors.New("period must be in YYYY-MM format (e.g. 2024-01)")
+		return errors.New("informe o período no formato ano-mês, por exemplo 2024-01")
 	}
 	return nil
 }
@@ -27,10 +27,10 @@ type DAPITransferReasonUseCase struct {
 
 func (uc *DAPITransferReasonUseCase) Create(ctx context.Context, d *entity.DAPITransferReason) (*response.DAPITransferReasonResponse, error) {
 	if d.Code == "" {
-		return nil, errors.New("code is required")
+		return nil, errors.New("informe o código")
 	}
 	if d.Reason == "" {
-		return nil, errors.New("reason is required")
+		return nil, errors.New("informe o motivo")
 	}
 	d.IsActive = true
 	created, err := uc.Repo.CreateDAPITransferReason(ctx, d)
@@ -42,7 +42,7 @@ func (uc *DAPITransferReasonUseCase) Create(ctx context.Context, d *entity.DAPIT
 
 func (uc *DAPITransferReasonUseCase) Update(ctx context.Context, d *entity.DAPITransferReason) (*response.DAPITransferReasonResponse, error) {
 	if d.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateDAPITransferReason(ctx, d)
 	if err != nil {
@@ -75,13 +75,13 @@ type ICMSApuracaoAdjCodeUseCase struct {
 
 func (uc *ICMSApuracaoAdjCodeUseCase) Create(ctx context.Context, c *entity.ICMSApuracaoAdjustmentCode) (*response.ICMSApuracaoAdjCodeResponse, error) {
 	if c.Code == "" {
-		return nil, errors.New("code is required")
+		return nil, errors.New("informe o código")
 	}
 	if c.UF == "" {
-		return nil, errors.New("uf is required")
+		return nil, errors.New("informe a UF")
 	}
 	if c.Description == "" {
-		return nil, errors.New("description is required")
+		return nil, errors.New("informe a descrição")
 	}
 	c.IsActive = true
 	created, err := uc.Repo.CreateICMSApuracaoAdjCode(ctx, c)
@@ -93,7 +93,7 @@ func (uc *ICMSApuracaoAdjCodeUseCase) Create(ctx context.Context, c *entity.ICMS
 
 func (uc *ICMSApuracaoAdjCodeUseCase) Update(ctx context.Context, c *entity.ICMSApuracaoAdjustmentCode) (*response.ICMSApuracaoAdjCodeResponse, error) {
 	if c.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateICMSApuracaoAdjCode(ctx, c)
 	if err != nil {
@@ -128,13 +128,13 @@ type ICMSAdjustmentCodeUseCase struct {
 
 func (uc *ICMSAdjustmentCodeUseCase) Create(ctx context.Context, c *entity.ICMSAdjustmentCode) (*response.ICMSAdjustmentCodeResponse, error) {
 	if c.UF == "" {
-		return nil, errors.New("uf is required")
+		return nil, errors.New("informe a UF")
 	}
 	if c.Code == "" {
-		return nil, errors.New("code is required")
+		return nil, errors.New("informe o código")
 	}
 	if !validTableRefs[string(c.TableRef)] {
-		return nil, errors.New("table_ref must be one of: 5.2, 5.3, 5.6, 5.7")
+		return nil, errors.New("a tabela de referência deve ser 5.2, 5.3, 5.6 ou 5.7")
 	}
 	c.IsActive = true
 	created, err := uc.Repo.CreateICMSAdjustmentCode(ctx, c)
@@ -146,7 +146,7 @@ func (uc *ICMSAdjustmentCodeUseCase) Create(ctx context.Context, c *entity.ICMSA
 
 func (uc *ICMSAdjustmentCodeUseCase) Update(ctx context.Context, c *entity.ICMSAdjustmentCode) (*response.ICMSAdjustmentCodeResponse, error) {
 	if c.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateICMSAdjustmentCode(ctx, c)
 	if err != nil {
@@ -183,10 +183,10 @@ type ICMSApuracaoLineUseCase struct {
 
 func (uc *ICMSApuracaoLineUseCase) Create(ctx context.Context, l *entity.ICMSApuracaoLine) (*response.ICMSApuracaoLineResponse, error) {
 	if l.Code == "" {
-		return nil, errors.New("code is required")
+		return nil, errors.New("informe o código")
 	}
 	if l.Description == "" {
-		return nil, errors.New("description is required")
+		return nil, errors.New("informe a descrição")
 	}
 	if !validLineTypes[string(l.LineType)] {
 		l.LineType = entity.LineTypeOutros
@@ -202,7 +202,7 @@ func (uc *ICMSApuracaoLineUseCase) Create(ctx context.Context, l *entity.ICMSApu
 
 func (uc *ICMSApuracaoLineUseCase) Update(ctx context.Context, l *entity.ICMSApuracaoLine) (*response.ICMSApuracaoLineResponse, error) {
 	if l.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateICMSApuracaoLine(ctx, l)
 	if err != nil {
@@ -238,10 +238,10 @@ func (uc *ICMSSummaryEntryUseCase) Create(ctx context.Context, e *entity.ICMSSum
 		return nil, err
 	}
 	if e.UF == "" {
-		return nil, errors.New("uf is required")
+		return nil, errors.New("informe a UF")
 	}
 	if e.ICMSBase < 0 || e.ICMSValue < 0 {
-		return nil, errors.New("icms_base and icms_value must be >= 0")
+		return nil, errors.New("a base e o valor do ICMS devem ser maiores ou iguais a zero")
 	}
 	e.IsActive = true
 	created, err := uc.Repo.CreateICMSSummaryEntry(ctx, e)
@@ -253,7 +253,7 @@ func (uc *ICMSSummaryEntryUseCase) Create(ctx context.Context, e *entity.ICMSSum
 
 func (uc *ICMSSummaryEntryUseCase) Update(ctx context.Context, e *entity.ICMSSummaryEntry) (*response.ICMSSummaryEntryResponse, error) {
 	if e.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	if e.Period != "" {
 		if err := validatePeriod(e.Period); err != nil {
@@ -261,7 +261,7 @@ func (uc *ICMSSummaryEntryUseCase) Update(ctx context.Context, e *entity.ICMSSum
 		}
 	}
 	if e.ICMSBase < 0 || e.ICMSValue < 0 {
-		return nil, errors.New("icms_base and icms_value must be >= 0")
+		return nil, errors.New("a base e o valor do ICMS devem ser maiores ou iguais a zero")
 	}
 	updated, err := uc.Repo.UpdateICMSSummaryEntry(ctx, e)
 	if err != nil {
@@ -288,10 +288,10 @@ func (uc *ICMSSummaryEntryUseCase) List(ctx context.Context, period, uf string) 
 
 func (uc *ICMSSummaryEntryUseCase) AddNote(ctx context.Context, n *entity.ICMSSummaryEntryNote) (*response.ICMSSummaryEntryNoteResponse, error) {
 	if n.SummaryEntryID == 0 {
-		return nil, errors.New("summary_entry_id is required")
+		return nil, errors.New("informe o totalizador")
 	}
 	if n.NoteNumber == "" {
-		return nil, errors.New("note_number is required")
+		return nil, errors.New("informe o número da nota")
 	}
 	created, err := uc.Repo.AddICMSSummaryEntryNote(ctx, n)
 	if err != nil {
@@ -325,10 +325,10 @@ func (uc *SimplesNacionalUseCase) Create(ctx context.Context, s *entity.SimplesN
 		return nil, err
 	}
 	if !validAnnexes[string(s.Annex)] {
-		return nil, errors.New("annex must be one of: I, II, III, IV, V, VI")
+		return nil, errors.New("o anexo deve ser I, II, III, IV, V ou VI")
 	}
 	if s.ReceitaInterna < 0 || s.ReceitaExterna < 0 {
-		return nil, errors.New("receita values must be >= 0")
+		return nil, errors.New("os valores de receita devem ser maiores ou iguais a zero")
 	}
 	s.IsActive = true
 	created, err := uc.Repo.CreateSimplesNacionalApuracao(ctx, s)
@@ -340,7 +340,7 @@ func (uc *SimplesNacionalUseCase) Create(ctx context.Context, s *entity.SimplesN
 
 func (uc *SimplesNacionalUseCase) Update(ctx context.Context, s *entity.SimplesNacionalApuracao) (*response.SimplesNacionalApuracaoResponse, error) {
 	if s.ID == 0 {
-		return nil, errors.New("id is required")
+		return nil, errors.New("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateSimplesNacionalApuracao(ctx, s)
 	if err != nil {

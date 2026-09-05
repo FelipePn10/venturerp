@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrOrderNotFound = errors.New("sales order not found")
-var ErrBatchConflict = errors.New("idempotency key reused with another payload")
-var ErrLinePrecondition = errors.New("delivery reschedule line precondition failed")
+var ErrOrderNotFound = errors.New("pedido de venda não encontrado")
+var ErrBatchConflict = errors.New("esta chave de controle de duplicidade já foi usada com outros dados")
+var ErrLinePrecondition = errors.New("a linha da reprogramação de entrega não atende às condições necessárias")
 
 type PlanningItem struct {
 	SalesOrderItemCode   int64                `json:"sales_order_item_code"`

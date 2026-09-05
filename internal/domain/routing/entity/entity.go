@@ -88,13 +88,13 @@ func NewOperation(
 	createdBy uuid.UUID,
 ) (*Operation, error) {
 	if code <= 0 {
-		return nil, errors.New("operation code must be positive")
+		return nil, errors.New("o código da operação deve ser maior que zero")
 	}
 	if name == "" {
-		return nil, errors.New("operation name is required")
+		return nil, errors.New("informe o nome da operação")
 	}
 	if standardTime < 0 {
-		return nil, errors.New("standard_time cannot be negative")
+		return nil, errors.New("o tempo padrão não pode ser negativo")
 	}
 	return &Operation{
 		Code:                code,
@@ -144,16 +144,16 @@ func NewManufacturingRoute(
 	createdBy uuid.UUID,
 ) (*ManufacturingRoute, error) {
 	if code <= 0 {
-		return nil, errors.New("route code must be positive")
+		return nil, errors.New("o código do roteiro deve ser maior que zero")
 	}
 	if itemCode <= 0 {
-		return nil, errors.New("item_code must be positive")
+		return nil, errors.New("o item deve ser um código maior que zero")
 	}
 	if alternative <= 0 {
 		alternative = 1
 	}
 	if validFrom != nil && validTo != nil && validTo.Before(*validFrom) {
-		return nil, errors.New("valid_to cannot be before valid_from")
+		return nil, errors.New("o fim da vigência não pode ser anterior ao início")
 	}
 	return &ManufacturingRoute{
 		Code:        code,
@@ -256,13 +256,13 @@ func NewRouteOperation(
 	notes *string,
 ) (*RouteOperation, error) {
 	if routeID <= 0 {
-		return nil, errors.New("route_id must be positive")
+		return nil, errors.New("o roteiro deve ser um código maior que zero")
 	}
 	if sequence <= 0 {
-		return nil, errors.New("sequence must be positive")
+		return nil, errors.New("a sequência deve ser maior que zero")
 	}
 	if operationID <= 0 {
-		return nil, errors.New("operation_id must be positive")
+		return nil, errors.New("a operação deve ser um código maior que zero")
 	}
 	return &RouteOperation{
 		RouteID:      routeID,

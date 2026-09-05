@@ -70,7 +70,7 @@ func (h *ThirdPartyServiceHandler) CreatePrice(w http.ResponseWriter, r *http.Re
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.CreatePrice(r.Context(), d, by)
@@ -92,7 +92,7 @@ func (h *ThirdPartyServiceHandler) UpdatePrice(w http.ResponseWriter, r *http.Re
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.UpdatePrice(r.Context(), id, d, by)
@@ -110,7 +110,7 @@ func (h *ThirdPartyServiceHandler) DeletePrice(w http.ResponseWriter, r *http.Re
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	if e := h.uc.DeletePrice(r.Context(), id, r.URL.Query().Get("reason"), by); e != nil {
@@ -160,7 +160,7 @@ func (h *ThirdPartyServiceHandler) ResolvePrice(w http.ResponseWriter, r *http.R
 	item := optInt(q.Get("item_code"))
 	op := optInt(q.Get("operation_id"))
 	if item == nil || op == nil {
-		jsonError(w, 400, "item_code and operation_id are required")
+		jsonError(w, 400, "informe o item e a operação")
 		return
 	}
 	supplier := int64(0)
@@ -174,7 +174,7 @@ func (h *ThirdPartyServiceHandler) ResolvePrice(w http.ResponseWriter, r *http.R
 	attrs := map[string]string{}
 	if raw := q.Get("attributes"); raw != "" {
 		if e := json.Unmarshal([]byte(raw), &attrs); e != nil {
-			jsonError(w, 400, "attributes must be a JSON object")
+			jsonError(w, 400, "os atributos precisam ser informados como um conjunto de campos")
 			return
 		}
 	}
@@ -189,7 +189,7 @@ func (h *ThirdPartyServiceHandler) ResolveCost(w http.ResponseWriter, r *http.Re
 	q := r.URL.Query()
 	item, op := optInt(q.Get("item_code")), optInt(q.Get("operation_id"))
 	if item == nil || op == nil {
-		jsonError(w, 400, "item_code and operation_id are required")
+		jsonError(w, 400, "informe o item e a operação")
 		return
 	}
 	at := time.Now()
@@ -227,7 +227,7 @@ func (h *ThirdPartyServiceHandler) Readjust(w http.ResponseWriter, r *http.Reque
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.Readjust(r.Context(), d, by)
@@ -244,7 +244,7 @@ func (h *ThirdPartyServiceHandler) CopyMove(w http.ResponseWriter, r *http.Reque
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.CopyMove(r.Context(), d, by)
@@ -257,12 +257,12 @@ func (h *ThirdPartyServiceHandler) CopyMove(w http.ResponseWriter, r *http.Reque
 func (h *ThirdPartyServiceHandler) CreateOrders(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "productionOrderID")
 	if !ok {
-		jsonError(w, 400, "invalid production order id")
+		jsonError(w, 400, "ordem de produção inválida")
 		return
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.CreateOrders(r.Context(), id, by)
@@ -348,7 +348,7 @@ func (h *ThirdPartyServiceHandler) UpdateOrderStatus(w http.ResponseWriter, r *h
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.UpdateOrderStatus(r.Context(), id, d, by)
@@ -370,7 +370,7 @@ func (h *ThirdPartyServiceHandler) AddMovement(w http.ResponseWriter, r *http.Re
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.AddMovement(r.Context(), id, d, by)
@@ -400,7 +400,7 @@ func (h *ThirdPartyServiceHandler) UpsertGlobalConversion(w http.ResponseWriter,
 	}
 	by, ok := actor(r)
 	if !ok {
-		jsonError(w, 401, "invalid authenticated user")
+		jsonError(w, 401, "usuário autenticado inválido")
 		return
 	}
 	v, e := h.uc.UpsertGlobalConversion(r.Context(), d, by)

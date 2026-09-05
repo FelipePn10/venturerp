@@ -207,7 +207,7 @@ func (h *CuttingPlanHandler) UpdateSettings(w http.ResponseWriter, r *http.Reque
 func (h *CuttingPlanHandler) ListRemnants(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(r.URL.Query().Get("item_code"), 10, 64)
 	if err != nil || itemCode <= 0 {
-		jsonError(w, http.StatusBadRequest, "item_code must be a positive integer")
+		jsonError(w, http.StatusBadRequest, "o item deve ser um código maior que zero")
 		return
 	}
 	onlyAvailable := r.URL.Query().Get("only_available") == "true"

@@ -43,7 +43,7 @@ func (uc *CreateMonthlySalesForecastUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Month < 1 || dto.Month > 12 {
-		return nil, fmt.Errorf("month must be between 1 and 12")
+		return nil, fmt.Errorf("o mês deve estar entre 1 e 12")
 	}
 	weekly, err := distributeMonthByWorkdays(ctx, uc.Calendar, dto.Year, dto.Month, dto.Quantity, dto.AcceptsFraction, "LAST", nil, nil)
 	if err != nil {
@@ -76,26 +76,26 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 
 	from, err := time.Parse("2006-01-02", dto.HistoryFrom)
 	if err != nil {
-		return nil, fmt.Errorf("invalid history_from: %w", err)
+		return nil, fmt.Errorf("início do histórico inválido: %w", err)
 	}
 	to, err := time.Parse("2006-01-02", dto.HistoryTo)
 	if err != nil {
-		return nil, fmt.Errorf("invalid history_to: %w", err)
+		return nil, fmt.Errorf("fim do histórico inválido: %w", err)
 	}
 	if to.Before(from) {
-		return nil, fmt.Errorf("history_to must be greater than or equal to history_from")
+		return nil, fmt.Errorf("a data final do histórico deve ser igual ou posterior à inicial")
 	}
 
 	startDate, err := weekToDate(dto.StartYear, dto.StartWeek)
 	if err != nil {
-		return nil, fmt.Errorf("invalid start week/year combination: %w", err)
+		return nil, fmt.Errorf("semana e ano iniciais inválidos: %w", err)
 	}
 	endDate, err := weekToDate(dto.TargetEndYear, dto.TargetEndWeek)
 	if err != nil {
-		return nil, fmt.Errorf("invalid target end week/year combination: %w", err)
+		return nil, fmt.Errorf("semana e ano finais inválidos: %w", err)
 	}
 	if endDate.Before(startDate) {
-		return nil, fmt.Errorf("target end week must be after start week")
+		return nil, fmt.Errorf("a semana final deve ser posterior à inicial")
 	}
 
 	history, err := uc.Repo.ListHistoricalDemand(ctx, dto.HistorySource, from, to, selectedItemCodes(dto))
@@ -104,7 +104,7 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 	}
 	averages := averageHistoryByItemMask(history, calendarMonthCount(from, to), dto.ProjectionPct)
 	if len(averages) == 0 {
-		return nil, fmt.Errorf("no historical demand found for selected filters")
+		return nil, fmt.Errorf("nenhuma demanda histórica encontrada para os filtros escolhidos")
 	}
 
 	var merged *response.GenerateSalesForecastResponse
@@ -126,7 +126,7 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 		}
 	}
 	if merged == nil {
-		return nil, fmt.Errorf("no forecast periods generated")
+		return nil, fmt.Errorf("nenhum período de previsão foi gerado")
 	}
 	merged.Model = "ERP_HISTORY_AVERAGE"
 	return merged, nil
@@ -147,7 +147,7 @@ func (uc *GenerateSalesForecastUseCase) executeStatistical(
 
 	startDate, err := weekToDate(dto.StartYear, dto.StartWeek)
 	if err != nil {
-		return nil, fmt.Errorf("invalid start week/year combination: %w", err)
+		return nil, fmt.Errorf("semana e ano iniciais inválidos: %w", err)
 	}
 
 	statistical, err := forecast_uc.Execute(forecast_uc.StatisticalForecastDTO{
@@ -305,7 +305,7 @@ func distributeMonthByWorkdays(
 		filtered = append(filtered, day)
 	}
 	if len(filtered) == 0 {
-		return nil, fmt.Errorf("no industrial workdays found for %04d-%02d in target range", year, month)
+		return nil, fmt.Errorf("nenhum dia útil industrial em %04d-%02d dentro do intervalo escolhido", year, month)
 	}
 
 	workdaysByWeek := map[forecastWeek]int{}

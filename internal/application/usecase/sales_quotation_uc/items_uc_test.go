@@ -52,7 +52,7 @@ func TestUpdateItemRejectsQuantityOverflow(t *testing.T) {
 		CancelledQty: decimal.NewFromInt(2),
 	})
 
-	if err == nil || !strings.Contains(err.Error(), "cannot exceed requested_qty") {
+	if err == nil || !strings.Contains(err.Error(), "não pode passar da solicitada") {
 		t.Fatalf("expected quantity overflow validation error, got %v", err)
 	}
 }

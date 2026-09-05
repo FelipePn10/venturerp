@@ -170,7 +170,7 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 	} else if uc.Firmer != nil {
 		transitioner, ok := uc.Firmer.(orderTransitioner)
 		if !ok {
-			return nil, errors.New("configured order releaser does not support RELEASED transition")
+			return nil, errors.New("a liberação configurada não permite passar a ordem para liberada")
 		}
 		released, releaseErr := transitioner.ExecuteTransition(ctx, request.TransitionPlannedOrderDTO{OrderCodes: []int64{created.Code}, Target: "RELEASED"})
 		if releaseErr != nil {

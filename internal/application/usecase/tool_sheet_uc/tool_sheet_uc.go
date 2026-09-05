@@ -262,7 +262,7 @@ func (uc *ToolSheetUseCase) ListSubstitutions(ctx context.Context, operationID, 
 // to the tool, and is available to run production.
 func (uc *ToolSheetUseCase) validateAssignment(ctx context.Context, operationID, toolID, serialID int64) error {
 	if operationID <= 0 || toolID <= 0 || serialID <= 0 {
-		return fmt.Errorf("operation_id, tool_id and serial_id are required")
+		return fmt.Errorf("informe a operação, a ferramenta e o número de série")
 	}
 	if _, err := uc.Q.GetProductionOrderOperation(ctx, operationID); err != nil {
 		return errorsuc.NewNotFoundError(fmt.Sprintf("operação %d não encontrada", operationID))

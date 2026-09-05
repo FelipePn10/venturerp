@@ -39,7 +39,7 @@ type phase4MaterialRepository interface {
 func (uc *ProductionMaterialControlUseCase) phase4() (phase4MaterialRepository, error) {
 	repo, ok := uc.Repo.(phase4MaterialRepository)
 	if !ok {
-		return nil, errorsuc.NewValidationError("production repository does not support phase 4 controls")
+		return nil, errorsuc.NewValidationError("os controles da fase 4 da produção não estão disponíveis")
 	}
 	return repo, nil
 }
@@ -58,7 +58,7 @@ func (uc *ProductionMaterialControlUseCase) Add(ctx context.Context, dto request
 	kind := entity.MaterialKind(strings.ToUpper(strings.TrimSpace(dto.Kind)))
 	if dto.ProductionOrderID == 0 || dto.ItemCode == 0 || dto.WarehouseID == 0 ||
 		(kind != entity.MaterialDemand && kind != entity.MaterialReturn) || !dto.Quantity.IsPositive() {
-		return nil, errorsuc.NewValidationError("production_order_id, kind, item_code, warehouse_id and positive quantity are required")
+		return nil, errorsuc.NewValidationError("informe a ordem de produção, o tipo, o item, o almoxarifado e uma quantidade maior que zero")
 	}
 	return uc.Repo.AddMaterial(ctx, &entity.ProductionOrderMaterial{ProductionOrderID: dto.ProductionOrderID,
 		Kind: kind, ItemCode: dto.ItemCode, Mask: dto.Mask, SubstitutedItemCode: dto.SubstitutedItemCode,
@@ -71,7 +71,7 @@ func (uc *ProductionMaterialControlUseCase) Replace(ctx context.Context, dto req
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.MaterialID == 0 || len(dto.Replacements) == 0 {
-		return nil, errorsuc.NewValidationError("material_id and replacements are required")
+		return nil, errorsuc.NewValidationError("informe o material e os substitutos")
 	}
 	replacements := make([]entity.MaterialSubstitution, 0, len(dto.Replacements))
 	for _, replacement := range dto.Replacements {
@@ -93,7 +93,7 @@ func (uc *ProductionMaterialControlUseCase) AllocateLots(ctx context.Context, dt
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.MaterialID == 0 {
-		return nil, errorsuc.NewValidationError("material_id is required")
+		return nil, errorsuc.NewValidationError("informe o material")
 	}
 	allocations := make([]entity.LotAllocation, 0, len(dto.Allocations))
 	for _, allocation := range dto.Allocations {
@@ -111,7 +111,7 @@ func (uc *ProductionMaterialControlUseCase) AllocateLotsBatch(ctx context.Contex
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if len(dto.MaterialIDs) == 0 {
-		return nil, errorsuc.NewValidationError("material_ids are required")
+		return nil, errorsuc.NewValidationError("informe os materiais")
 	}
 	lots := make([]entity.LotAllocation, 0, len(dto.Lots))
 	for _, lot := range dto.Lots {
@@ -129,7 +129,7 @@ func (uc *ProductionMaterialControlUseCase) AddScrap(ctx context.Context, dto re
 	}
 	date := datetime.ParseDateOrDefault(dto.DestinationDate, time.Now())
 	if dto.ProductionOrderID == 0 || dto.ScrapItemCode == 0 || dto.WarehouseID == 0 || (!dto.Quantity.IsPositive() && !dto.ReturnQuantity.Add(dto.ScrapQuantity).IsPositive()) {
-		return nil, fmt.Errorf("production_order_id, scrap_item_code, warehouse_id and positive quantity are required")
+		return nil, fmt.Errorf("informe a ordem de produção, o item de refugo, o almoxarifado e uma quantidade maior que zero")
 	}
 	kind := strings.ToUpper(strings.TrimSpace(dto.DestinationKind))
 	if kind == "" {
@@ -165,7 +165,7 @@ func (uc *ProductionMaterialControlUseCase) UpdateScrap(ctx context.Context, id 
 		quantity = dto.ReturnQuantity.Add(dto.ScrapQuantity)
 	}
 	if id == 0 || dto.ProductionOrderID == 0 || dto.ScrapItemCode == 0 || dto.WarehouseID == 0 || !quantity.IsPositive() {
-		return nil, errorsuc.NewValidationError("valid destination, order, item, warehouse and quantity are required")
+		return nil, errorsuc.NewValidationError("informe destino, ordem, item, almoxarifado e quantidade válidos")
 	}
 	repo, err := uc.phase4()
 	if err != nil {
@@ -194,7 +194,7 @@ func (uc *ProductionMaterialControlUseCase) ConfigureWMS(ctx context.Context, dt
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.WarehouseID == 0 {
-		return nil, errorsuc.NewValidationError("warehouse_id is required")
+		return nil, errorsuc.NewValidationError("informe o almoxarifado")
 	}
 	if dto.IsWMS && dto.IntermediateOutWarehouseID == nil {
 		return nil, errorsuc.NewValidationError("informe o almoxarifado intermediário de saída para almoxarifados com WMS")
@@ -296,7 +296,7 @@ func (uc *ProductionMaterialControlUseCase) ConfigureTemporaryLot(ctx context.Co
 	manufactured := datetime.ParseDateOrDefault(dto.ManufacturedOn, time.Time{})
 	expires := datetime.ParseDateOrDefault(dto.ExpiresOn, time.Time{})
 	if dto.ProductionOrderID == 0 || strings.TrimSpace(dto.Lot) == "" || manufactured.IsZero() || expires.Before(manufactured) || expires.Before(time.Now().Truncate(24*time.Hour)) {
-		return nil, errorsuc.NewValidationError("valid order, lot, manufacture and expiration dates are required")
+		return nil, errorsuc.NewValidationError("informe ordem, lote e datas de fabricação e validade válidos")
 	}
 	repo, err := uc.phase4()
 	if err != nil {

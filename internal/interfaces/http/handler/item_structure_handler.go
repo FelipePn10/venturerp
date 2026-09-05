@@ -145,7 +145,7 @@ func parseCode(r *http.Request, param string) (int64, error) {
 
 	code, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || code <= 0 {
-		return 0, fmt.Errorf("parameter '%s' must be a positive integer", param)
+		return 0, fmt.Errorf("o parâmetro '%s' deve ser um número maior que zero", param)
 	}
 
 	return code, nil

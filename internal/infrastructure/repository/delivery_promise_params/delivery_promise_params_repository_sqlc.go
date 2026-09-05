@@ -19,7 +19,7 @@ func (r *DeliveryPromiseParamsRepositorySQLC) Get(
 	row, err := r.q.GetDeliveryPromiseParams(ctx)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("no delivery promise params configured")
+			return nil, fmt.Errorf("os parâmetros de promessa de entrega não estão configurados")
 		}
 		return nil, fmt.Errorf("fetching delivery promise params: %w", err)
 	}

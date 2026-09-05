@@ -117,7 +117,7 @@ func TestSalesQuotationInvalidCancellationReasonIsNot500(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "cancellation reason") {
+	if !strings.Contains(rec.Body.String(), "motivo de cancelamento") {
 		t.Fatalf("mensagem de domínio ausente: %s", rec.Body.String())
 	}
 }
@@ -173,8 +173,11 @@ func TestCreateItemRejectsUnknownUnitOfMeasurement(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "unidade de medida") {
-		t.Fatalf("mensagem incompreensível: %s", rec.Body.String())
+	// O usuário precisa ver o campo, o valor recusado e as opções aceitas.
+	for _, trecho := range []string{"Unidade de medida do item", "INEXISTENTE", "não é aceito", "UN"} {
+		if !strings.Contains(rec.Body.String(), trecho) {
+			t.Fatalf("mensagem sem %q: %s", trecho, rec.Body.String())
+		}
 	}
 }
 

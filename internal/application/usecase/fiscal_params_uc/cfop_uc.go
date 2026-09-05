@@ -16,7 +16,7 @@ type CFOPUseCase struct {
 
 func (uc *CFOPUseCase) Create(ctx context.Context, dto request.CreateCFOPDTO) (*response.CFOPResponse, error) {
 	if dto.Description == "" {
-		return nil, errors.New("description is required")
+		return nil, errors.New("informe a descrição")
 	}
 	c := &entity.CFOP{
 		Code:            dto.Code,

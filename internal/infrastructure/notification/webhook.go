@@ -38,7 +38,7 @@ func NewWebhookClient() *WebhookClient {
 			}
 		}
 		if len(ips) == 0 {
-			return nil, errors.New("webhook host did not resolve to an address")
+			return nil, errors.New("não foi possível resolver o endereço de notificação")
 		}
 		for _, resolved := range ips {
 			conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(resolved.IP.String(), port))
@@ -70,10 +70,10 @@ func isPublicWebhookIP(ip net.IP) bool {
 
 func validateWebhookURL(target *neturl.URL) error {
 	if target == nil || !strings.EqualFold(target.Scheme, "https") || target.Hostname() == "" || target.User != nil {
-		return errors.New("webhook URL must be an HTTPS URL without credentials")
+		return errors.New("o endereço de notificação deve ser HTTPS e sem usuário e senha na URL")
 	}
 	if ip := net.ParseIP(target.Hostname()); ip != nil && !isPublicWebhookIP(ip) {
-		return errors.New("webhook destination must use a public address")
+		return errors.New("o endereço de notificação precisa ser público")
 	}
 	return nil
 }

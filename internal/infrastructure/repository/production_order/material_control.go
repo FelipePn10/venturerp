@@ -59,16 +59,16 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterials(ctx context.Context, 
 	_ = tx.QueryRow(ctx, `SELECT automatic_issue_type FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, order.ItemCode).Scan(&orderIssueType)
 	for _, material := range materials {
 		if !material.Quantity.IsPositive() {
-			return nil, fmt.Errorf("material quantity must be positive")
+			return nil, fmt.Errorf("a quantidade do material deve ser maior que zero")
 		}
 		if orderIssueType == "TRANSFER" && material.AutomaticIssue {
 			var lineWarehouse *int64
 			if err := tx.QueryRow(ctx, `SELECT line_warehouse_id FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, material.ItemCode).Scan(&lineWarehouse); err != nil || lineWarehouse == nil {
-				return nil, fmt.Errorf("automatic transfer requires a line warehouse for component %d", material.ItemCode)
+				return nil, fmt.Errorf("a transferência automática exige um almoxarifado de linha para o componente %d", material.ItemCode)
 			}
 			var balance decimal.Decimal
 			if err := tx.QueryRow(ctx, `SELECT quantity FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4 FOR UPDATE`, enterpriseID, material.ItemCode, material.Mask, material.WarehouseID).Scan(&balance); err != nil || balance.LessThan(material.Quantity) {
-				return nil, fmt.Errorf("insufficient stock for automatic component transfer %d", material.ItemCode)
+				return nil, fmt.Errorf("estoque insuficiente para a transferência automática do componente %d", material.ItemCode)
 			}
 			referenceType, referenceCode := "PRODUCTION_ORDER_TRANSFER", created.ID
 			q, _ := material.Quantity.Float64()
@@ -136,7 +136,7 @@ func (r *ProductionOrderRepositoryPGX) AddMaterial(ctx context.Context, material
 		return nil, err
 	}
 	if !material.Quantity.IsPositive() {
-		return nil, fmt.Errorf("material quantity must be positive")
+		return nil, fmt.Errorf("a quantidade do material deve ser maior que zero")
 	}
 	var orderItem int64
 	var planned decimal.Decimal
@@ -186,7 +186,7 @@ func (r *ProductionOrderRepositoryPGX) DeleteMaterial(ctx context.Context, mater
 		return err
 	}
 	if command.RowsAffected() == 0 {
-		return fmt.Errorf("material cannot be deleted after attendance, movement or WMS separation")
+		return fmt.Errorf("o material não pode ser excluído depois de atendido, movimentado ou separado no WMS")
 	}
 	return nil
 }
@@ -207,7 +207,7 @@ func (r *ProductionOrderRepositoryPGX) ReplaceMaterial(ctx context.Context, mate
 		return nil, err
 	}
 	if original.SubstitutedItemCode != nil || original.AttendedQuantity.IsPositive() {
-		return nil, fmt.Errorf("attended or substitute materials cannot be replaced")
+		return nil, fmt.Errorf("materiais já atendidos ou substituídos não podem ser trocados")
 	}
 	var wms bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM production_order_wms_requests
@@ -220,7 +220,7 @@ func (r *ProductionOrderRepositoryPGX) ReplaceMaterial(ctx context.Context, mate
 	total := decimal.Zero
 	for _, replacement := range replacements {
 		if replacement.ItemCode == 0 || !replacement.Quantity.IsPositive() {
-			return nil, fmt.Errorf("replacement item and positive quantity are required")
+			return nil, fmt.Errorf("informe o item substituto e uma quantidade maior que zero")
 		}
 		total = total.Add(replacement.Quantity)
 	}
@@ -260,7 +260,7 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsWithPolicy(ctx context.Contex
 	}
 	movementKind = strings.ToUpper(strings.TrimSpace(movementKind))
 	if movementKind != "REQUISITION" && movementKind != "RETURN" {
-		return nil, fmt.Errorf("movement_kind must be REQUISITION or RETURN")
+		return nil, fmt.Errorf("o tipo de movimento deve ser requisição ou devolução")
 	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -305,7 +305,7 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsWithPolicy(ctx context.Contex
 			return nil, settingsErr
 		}
 		if isWMS && intermediate == nil {
-			return nil, fmt.Errorf("WMS warehouse has no intermediate outbound warehouse")
+			return nil, fmt.Errorf("o almoxarifado WMS não tem almoxarifado intermediário de saída configurado")
 		}
 		if isWMS {
 			selectionWarehouse = *intermediate
@@ -344,24 +344,24 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsWithPolicy(ctx context.Contex
 	total := decimal.Zero
 	for _, allocation := range allocations {
 		if allocation.Lot == "" || !allocation.Quantity.IsPositive() {
-			return nil, fmt.Errorf("lot and positive quantity are required")
+			return nil, fmt.Errorf("informe o lote e uma quantidade maior que zero")
 		}
 		total = total.Add(allocation.Quantity)
 		var controlsAddress bool
 		_ = tx.QueryRow(ctx, `SELECT controls_address FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, material.ItemCode).Scan(&controlsAddress)
 		if controlsAddress && (allocation.Address == nil || strings.TrimSpace(*allocation.Address) == "") {
-			return nil, fmt.Errorf("stock address is required for item %d", material.ItemCode)
+			return nil, fmt.Errorf("informe o endereço de estoque do item %d", material.ItemCode)
 		}
 		if allocation.Address != nil {
 			var valid bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM manufacturing_warehouse_addresses WHERE enterprise_id=$1 AND warehouse_id=$2 AND address=$3 AND is_active)`, enterpriseID, allocation.WarehouseID, *allocation.Address).Scan(&valid); err != nil || !valid {
-				return nil, fmt.Errorf("invalid or inactive stock address")
+				return nil, fmt.Errorf("endereço de estoque inválido ou inativo")
 			}
 		}
 		if movementKind == "RETURN" && returnMode == "E" {
 			var used bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_lot_allocations WHERE enterprise_id=$1 AND production_order_material_id=$2 AND movement_kind='REQUISITION' AND warehouse_id=$3 AND lot=$4)`, enterpriseID, materialID, allocation.WarehouseID, allocation.Lot).Scan(&used); err != nil || !used {
-				return nil, fmt.Errorf("parameter 44 mode E requires a lot used by the material requisition")
+				return nil, fmt.Errorf("o parâmetro 44 no modo E exige um lote já usado na requisição do material")
 			}
 		}
 		if movementKind == "REQUISITION" {
@@ -373,10 +373,10 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsWithPolicy(ctx context.Contex
 				return nil, settingsErr
 			}
 			if isWMS && intermediate == nil {
-				return nil, fmt.Errorf("WMS warehouse has no intermediate outbound warehouse")
+				return nil, fmt.Errorf("o almoxarifado WMS não tem almoxarifado intermediário de saída configurado")
 			}
 			if isWMS && allocation.WarehouseID != *intermediate {
-				return nil, fmt.Errorf("lot must be selected from the WMS intermediate outbound warehouse")
+				return nil, fmt.Errorf("o lote deve ser escolhido no almoxarifado intermediário de saída do WMS")
 			}
 		}
 		if movementKind == "REQUISITION" {
@@ -385,12 +385,12 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsWithPolicy(ctx context.Contex
 				AND item_code=$2 AND mask=$3 AND warehouse_id=$4 AND lot=$5 FOR UPDATE`,
 				enterpriseID, material.ItemCode, material.Mask, allocation.WarehouseID, allocation.Lot).Scan(&balance)
 			if err != nil || balance.LessThan(allocation.Quantity) {
-				return nil, fmt.Errorf("insufficient balance for lot %s", allocation.Lot)
+				return nil, fmt.Errorf("saldo insuficiente no lote %s", allocation.Lot)
 			}
 		}
 	}
 	if total.GreaterThan(limit) {
-		return nil, fmt.Errorf("allocated quantity exceeds material quantity available for %s", strings.ToLower(movementKind))
+		return nil, fmt.Errorf("a quantidade alocada excede o material disponível para %s", strings.ToLower(movementKind))
 	}
 	if total.LessThan(limit) && !confirmPartial {
 		return nil, fmt.Errorf("partial lot allocation requires explicit confirmation")
@@ -429,7 +429,7 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsBatchWithPolicy(ctx context.C
 	}
 	movementKind = strings.ToUpper(strings.TrimSpace(movementKind))
 	if movementKind != "REQUISITION" && movementKind != "RETURN" {
-		return nil, fmt.Errorf("movement_kind must be REQUISITION or RETURN")
+		return nil, fmt.Errorf("o tipo de movimento deve ser requisição ou devolução")
 	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -453,14 +453,14 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsBatchWithPolicy(ctx context.C
 	}
 	rows.Close()
 	if len(materials) != len(materialIDs) {
-		return nil, fmt.Errorf("one or more materials do not belong to the authenticated enterprise")
+		return nil, fmt.Errorf("um ou mais materiais não pertencem à empresa autenticada")
 	}
 	itemCode, mask := materials[0].ItemCode, materials[0].Mask
 	totalNeed := decimal.Zero
 	remaining := map[int64]decimal.Decimal{}
 	for _, material := range materials {
 		if material.ItemCode != itemCode || material.Mask != mask {
-			return nil, fmt.Errorf("batch lot selection requires the same item and mask")
+			return nil, fmt.Errorf("a seleção de lotes em lote exige o mesmo item e a mesma máscara")
 		}
 		need := material.Quantity.Sub(material.AttendedQuantity)
 		if movementKind == "RETURN" {
@@ -489,7 +489,7 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsBatchWithPolicy(ctx context.C
 		return nil, settingsErr
 	}
 	if isWMS && intermediate == nil {
-		return nil, fmt.Errorf("WMS warehouse has no intermediate outbound warehouse")
+		return nil, fmt.Errorf("o almoxarifado WMS não tem almoxarifado intermediário de saída configurado")
 	}
 	if isWMS {
 		selectionWarehouse = *intermediate
@@ -503,13 +503,13 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsBatchWithPolicy(ctx context.C
 			return nil, e
 		}
 		if mwms && mout == nil {
-			return nil, fmt.Errorf("WMS warehouse has no intermediate outbound warehouse")
+			return nil, fmt.Errorf("o almoxarifado WMS não tem almoxarifado intermediário de saída configurado")
 		}
 		if mwms {
 			effective = *mout
 		}
 		if effective != selectionWarehouse {
-			return nil, fmt.Errorf("batch lot selection requires the same effective warehouse")
+			return nil, fmt.Errorf("a seleção de lotes em lote exige o mesmo almoxarifado efetivo")
 		}
 	}
 	if automaticSelection && movementKind == "RETURN" && returnMode == "A" {
@@ -544,11 +544,11 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsBatchWithPolicy(ctx context.C
 	allocatedTotal := decimal.Zero
 	for _, lot := range lots {
 		if lot.Lot == "" || !lot.Quantity.IsPositive() {
-			return nil, fmt.Errorf("lot and positive quantity are required")
+			return nil, fmt.Errorf("informe o lote e uma quantidade maior que zero")
 		}
 		lotRemaining := lot.Quantity
 		if isWMS && movementKind == "REQUISITION" && lot.WarehouseID != selectionWarehouse {
-			return nil, fmt.Errorf("lot must be selected from the WMS intermediate outbound warehouse")
+			return nil, fmt.Errorf("o lote deve ser escolhido no almoxarifado intermediário de saída do WMS")
 		}
 		if movementKind == "REQUISITION" {
 			var balance decimal.Decimal
@@ -556,7 +556,7 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsBatchWithPolicy(ctx context.C
 				return nil, err
 			}
 			if balance.LessThan(lot.Quantity) {
-				return nil, fmt.Errorf("insufficient balance for lot %s", lot.Lot)
+				return nil, fmt.Errorf("saldo insuficiente no lote %s", lot.Lot)
 			}
 		}
 		for _, material := range materials {
@@ -579,7 +579,7 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsBatchWithPolicy(ctx context.C
 			allocatedTotal = allocatedTotal.Add(quantity)
 		}
 		if lotRemaining.IsPositive() {
-			return nil, fmt.Errorf("lot quantities exceed the selected orders' requirements")
+			return nil, fmt.Errorf("as quantidades dos lotes excedem a necessidade das ordens selecionadas")
 		}
 	}
 	if movementKind == "REQUISITION" && allocatedTotal.LessThan(totalNeed) && automaticSelection {
@@ -617,14 +617,14 @@ func (r *ProductionOrderRepositoryPGX) AddScrapDestination(ctx context.Context, 
 func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, destination *entity.ScrapDestination) (*entity.ScrapDestination, error) {
 	var err error
 	if !destination.Quantity.IsPositive() && !destination.ReturnQuantity.Add(destination.ScrapQuantity).IsPositive() {
-		return nil, fmt.Errorf("scrap or return quantity must be positive")
+		return nil, fmt.Errorf("a quantidade de refugo ou de devolução deve ser maior que zero")
 	}
 	destination.DestinationKind = strings.ToUpper(strings.TrimSpace(destination.DestinationKind))
 	if destination.DestinationKind == "" {
 		destination.DestinationKind = "ORDER_ITEM"
 	}
 	if destination.DestinationKind != "ORDER_ITEM" && destination.DestinationKind != "DEMAND" {
-		return nil, fmt.Errorf("destination_kind must be ORDER_ITEM or DEMAND")
+		return nil, fmt.Errorf("o tipo de destino deve ser item da ordem ou demanda")
 	}
 	if destination.DestinationKind == "DEMAND" && destination.ProductionOrderMaterialID == nil {
 		return nil, fmt.Errorf("demand destination requires production_order_material_id")
@@ -634,14 +634,14 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 		return nil, err
 	}
 	if valued {
-		return nil, fmt.Errorf("valued production order cannot receive a destination in a prior period")
+		return nil, fmt.Errorf("ordem de produção já valorizada não aceita destino em período anterior")
 	}
 	if destination.ReturnQuantity.IsZero() && destination.ScrapQuantity.IsZero() {
 		destination.ScrapQuantity = destination.Quantity
 	}
 	destination.Quantity = destination.ReturnQuantity.Add(destination.ScrapQuantity)
 	if !destination.Quantity.IsPositive() {
-		return nil, fmt.Errorf("return_quantity or scrap_quantity must be positive")
+		return nil, fmt.Errorf("informe a quantidade devolvida ou a de refugo, maior que zero")
 	}
 	var closed bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM manufacturing_stock_closed_periods WHERE enterprise_id=$1 AND $2 BETWEEN period_from AND period_to)`, enterpriseID, destination.DestinationDate).Scan(&closed); err != nil {
@@ -658,7 +658,7 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 		return nil, err
 	}
 	if !inInterval {
-		return nil, fmt.Errorf("destination date is outside the accounting stock movement interval")
+		return nil, fmt.Errorf("a data de destino está fora do período contábil de movimentação de estoque")
 	}
 	var sourceItem int64
 	if destination.ProductionOrderMaterialID == nil {
@@ -674,21 +674,21 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 		var sourceLot, sourceAddress bool
 		_ = tx.QueryRow(ctx, `SELECT controls_lot,controls_address FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, sourceItem).Scan(&sourceLot, &sourceAddress)
 		if sourceLot && (destination.Lot == nil || strings.TrimSpace(*destination.Lot) == "") {
-			return nil, fmt.Errorf("lot is required for demand return")
+			return nil, fmt.Errorf("informe o lote para devolver a demanda")
 		}
 		if sourceAddress && (destination.Address == nil || strings.TrimSpace(*destination.Address) == "") {
-			return nil, fmt.Errorf("address is required for demand return")
+			return nil, fmt.Errorf("informe o endereço para devolver a demanda")
 		}
 		if destination.Lot != nil {
 			var used bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_lot_allocations WHERE enterprise_id=$1 AND production_order_material_id=$2 AND movement_kind='REQUISITION' AND lot=$3)`, enterpriseID, *destination.ProductionOrderMaterialID, *destination.Lot).Scan(&used); err != nil || !used {
-				return nil, fmt.Errorf("demand return lot must have been used in its requisition")
+				return nil, fmt.Errorf("o lote da devolução precisa ter sido usado na requisição da demanda")
 			}
 		}
 		if destination.Address != nil {
 			var used bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_lot_allocations WHERE enterprise_id=$1 AND production_order_material_id=$2 AND movement_kind='REQUISITION' AND address=$3)`, enterpriseID, *destination.ProductionOrderMaterialID, *destination.Address).Scan(&used); err != nil || !used {
-				return nil, fmt.Errorf("demand return address must have been used in its requisition")
+				return nil, fmt.Errorf("o endereço da devolução precisa ter sido usado na requisição da demanda")
 			}
 		}
 	}
@@ -696,21 +696,21 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 	var controlsLot, controlsAddress bool
 	err = tx.QueryRow(ctx, `SELECT inventory_group_type,stock_uom,controls_lot,controls_address FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, destination.ScrapItemCode).Scan(&scrapGroup, &scrapUOM, &controlsLot, &controlsAddress)
 	if err != nil {
-		return nil, fmt.Errorf("scrap item stock controls are required: %w", err)
+		return nil, fmt.Errorf("os controles de estoque do item de refugo são obrigatórios: %w", err)
 	}
 	if scrapGroup != "SECONDARY_MATERIAL" {
-		return nil, fmt.Errorf("scrap item must belong to the secondary material inventory group")
+		return nil, fmt.Errorf("o item de refugo deve pertencer ao grupo de inventário de material secundário")
 	}
 	if controlsLot && (destination.Lot == nil || strings.TrimSpace(*destination.Lot) == "") {
-		return nil, fmt.Errorf("lot is required for scrap item")
+		return nil, fmt.Errorf("informe o lote do item de refugo")
 	}
 	if controlsAddress && (destination.Address == nil || strings.TrimSpace(*destination.Address) == "") {
-		return nil, fmt.Errorf("stock address is required for scrap item")
+		return nil, fmt.Errorf("informe o endereço de estoque do item de refugo")
 	}
 	if destination.Address != nil {
 		var valid bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM manufacturing_warehouse_addresses WHERE enterprise_id=$1 AND warehouse_id=$2 AND address=$3 AND is_active)`, enterpriseID, destination.WarehouseID, *destination.Address).Scan(&valid); err != nil || !valid {
-			return nil, fmt.Errorf("invalid or inactive stock address")
+			return nil, fmt.Errorf("endereço de estoque inválido ou inativo")
 		}
 	}
 	if destination.ScrapUOM == "" {
@@ -727,7 +727,7 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 		var factor decimal.Decimal
 		err := tx.QueryRow(ctx, `SELECT factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$2 AND to_uom=$3 AND is_active UNION ALL SELECT 1/factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$3 AND to_uom=$2 AND is_active LIMIT 1`, destination.ScrapItemCode, destination.SourceUOM, destination.ScrapUOM).Scan(&factor)
 		if err != nil {
-			return nil, fmt.Errorf("unit conversion from %s to %s is required", destination.SourceUOM, destination.ScrapUOM)
+			return nil, fmt.Errorf("cadastre a conversão de unidade de %s para %s", destination.SourceUOM, destination.ScrapUOM)
 		}
 		convertedScrap = convertedScrap.Mul(factor)
 	}
@@ -756,7 +756,7 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 			return nil, err
 		}
 		if demandExists {
-			return nil, fmt.Errorf("all order scrap cannot be destined while demand destinations exist")
+			return nil, fmt.Errorf("não é possível destinar todo o refugo da ordem enquanto houver destinos de demanda")
 		}
 	}
 	if destination.DestinationKind == "DEMAND" {
@@ -765,7 +765,7 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 			return nil, err
 		}
 		if allOrderDestined {
-			return nil, fmt.Errorf("demand scrap cannot be destined after order item destination")
+			return nil, fmt.Errorf("o refugo da demanda não pode ser destinado depois do destino do item da ordem")
 		}
 	}
 	if destination.ID > 0 {
@@ -825,7 +825,7 @@ func (r *ProductionOrderRepositoryPGX) removeScrapDestinationTx(ctx context.Cont
 	var allowed bool
 	err = tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM manufacturing_stock_closed_periods WHERE enterprise_id=$1 AND $2 BETWEEN period_from AND period_to) AND COALESCE((SELECT CASE WHEN movement_from IS NULL AND movement_to IS NULL THEN TRUE ELSE $2 BETWEEN COALESCE(movement_from,'-infinity'::date) AND COALESCE(movement_to,'infinity'::date) END FROM manufacturing_stock_parameters WHERE enterprise_id=$1),TRUE)`, enterpriseID, date).Scan(&allowed)
 	if err != nil || !allowed {
-		return fmt.Errorf("scrap destination belongs to a closed or disallowed stock period")
+		return fmt.Errorf("o destino do refugo cai em um período de estoque fechado ou não permitido")
 	}
 	rows, err := tx.Query(ctx, `SELECT item_code,mask,warehouse_id,quantity,lot FROM stock_movements WHERE enterprise_id=$1 AND reference_type='PRODUCTION_SCRAP' AND reference_code=$2 AND movement_type='IN' FOR UPDATE`, enterpriseID, id)
 	if err != nil {
@@ -849,7 +849,7 @@ func (r *ProductionOrderRepositoryPGX) removeScrapDestinationTx(ctx context.Cont
 		m := &movements[i]
 		var balance decimal.Decimal
 		if err := tx.QueryRow(ctx, `SELECT quantity FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4 FOR UPDATE`, enterpriseID, m.ItemCode, m.Mask, m.WarehouseID).Scan(&balance); err != nil || balance.LessThan(m.ExactQuantity) {
-			return fmt.Errorf("scrap destination cannot be removed because it would make stock negative (balance=%s required=%s: %v)", balance, m.ExactQuantity, err)
+			return fmt.Errorf("o destino do refugo não pode ser removido porque deixaria o estoque negativo (saldo=%s necessário=%s: %v)", balance, m.ExactQuantity, err)
 		}
 	}
 	referenceType, referenceCode := "PRODUCTION_SCRAP_REVERSAL", id
@@ -1029,7 +1029,7 @@ func (r *ProductionOrderRepositoryPGX) ConfigureTemporaryLot(ctx context.Context
 		return nil, err
 	}
 	if command.RowsAffected() == 0 {
-		return nil, fmt.Errorf("temporary lot cannot be changed for moved, Kanban or commercial order")
+		return nil, fmt.Errorf("o lote temporário não pode ser alterado em ordem já movimentada, de Kanban ou comercial")
 	}
 	return &lot, nil
 }
@@ -1067,10 +1067,10 @@ func (r *ProductionOrderRepositoryPGX) GetMaintenance(ctx context.Context, id *i
 		}
 		order.Status = entity.ProductionOrderStatus(status)
 		if origin == "KANBAN" {
-			return nil, fmt.Errorf("this order was generated by Kanban activation and cannot be maintained; use order consultation")
+			return nil, fmt.Errorf("esta ordem foi gerada por acionamento Kanban e não pode ser alterada; use a consulta de ordens")
 		}
 		if origin == "COMMERCIAL" {
-			return nil, fmt.Errorf("commercial production orders cannot be maintained")
+			return nil, fmt.Errorf("ordens de produção comerciais não podem ser alteradas")
 		}
 		view := entity.ProductionOrderMaintenanceView{ProductionOrder: &order, OriginType: origin, OrderType: maintenanceOrderType(origin, order.Status), Rework: order.Notes != nil && strings.Contains(*order.Notes, "ORDEM DE RETRABALHO")}
 		if code != nil && manufactured != nil && expires != nil {

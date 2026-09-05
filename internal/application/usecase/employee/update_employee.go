@@ -30,7 +30,7 @@ func (uc *UpdateEmployeeUseCase) Execute(
 		sit = entity.EmployeeActive
 	}
 	if sit != entity.EmployeeActive && sit != entity.EmployeeInactive {
-		return nil, fmt.Errorf("invalid situation: %s", dto.Situation)
+		return nil, fmt.Errorf("situação inválida: %s", dto.Situation)
 	}
 
 	e := &entity.Employee{

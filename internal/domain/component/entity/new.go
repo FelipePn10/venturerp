@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	ErrInvalidCode      = errors.New("code cannot be empty")
-	ErrInvalidName      = errors.New("name cannot be empty")
-	ErrInvalidWarehouse = errors.New("ware cannot be empty")
-	ErrInvalidGroupCode = errors.New("groupCode must be greater than zero")
+	ErrInvalidCode      = errors.New("informe o código")
+	ErrInvalidName      = errors.New("informe o nome")
+	ErrInvalidWarehouse = errors.New("informe a mercadoria")
+	ErrInvalidGroupCode = errors.New("o código do grupo deve ser maior que zero")
 )
 
 func NewComponent(
@@ -42,7 +42,7 @@ func NewComponent(
 
 func ValidateComponentDeletion(id int64) error {
 	if id < 0 {
-		return errors.New("product id must be greater than zero")
+		return errors.New("o produto deve ser um código maior que zero")
 	}
 	return nil
 }

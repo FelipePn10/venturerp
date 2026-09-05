@@ -22,7 +22,7 @@ func (q Quantity) Add(other Quantity) Quantity {
 
 func NewQuantity(value decimal.Decimal) (Quantity, error) {
 	if value.LessThanOrEqual(decimal.Zero) {
-		return Quantity{}, errors.New("quantity must be greater than zero")
+		return Quantity{}, errors.New("a quantidade deve ser maior que zero")
 	}
 
 	return Quantity{value: value}, nil

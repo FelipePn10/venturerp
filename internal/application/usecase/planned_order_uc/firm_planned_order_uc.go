@@ -29,10 +29,10 @@ import (
 )
 
 var (
-	ErrInvalidPlanningTransition = errors.New("invalid planned order transition")
-	ErrFirmDateChange            = errors.New("firm planned order dates cannot be changed")
-	ErrKanbanReleaseDisabled     = errors.New("planning parameter 25 does not allow releasing Kanban items")
-	ErrOrderHasMovements         = errors.New("released order with production movements cannot return to planned")
+	ErrInvalidPlanningTransition = errors.New("mudança de situação da ordem planejada não permitida")
+	ErrFirmDateChange            = errors.New("as datas de uma ordem planejada firme não podem ser alteradas")
+	ErrKanbanReleaseDisabled     = errors.New("o parâmetro de planejamento 25 não permite liberar itens de Kanban")
+	ErrOrderHasMovements         = errors.New("ordem liberada com movimentos de produção não volta para planejada")
 )
 
 // externalOpsReader is the slice of the routing repository needed to raise service
@@ -91,11 +91,11 @@ func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto re
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if len(dto.OrderCodes) == 0 {
-		return nil, fmt.Errorf("%w: order_codes is required", ErrInvalidPlanningTransition)
+		return nil, fmt.Errorf("%w: informe as ordens", ErrInvalidPlanningTransition)
 	}
 	target := strings.ToUpper(strings.TrimSpace(dto.Target))
 	if target != "PLANNED" && target != "RELEASED" && target != "FIRM" {
-		return nil, fmt.Errorf("%w: target must be PLANNED, RELEASED or FIRM", ErrInvalidPlanningTransition)
+		return nil, fmt.Errorf("%w: o alvo deve ser planejada, liberada ou firme", ErrInvalidPlanningTransition)
 	}
 	if target == "FIRM" && (dto.StartDate != nil || dto.EndDate != nil) {
 		return nil, ErrFirmDateChange
@@ -124,7 +124,7 @@ func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto re
 
 	start, end := datetime.ParseDatePtr(dto.StartDate), datetime.ParseDatePtr(dto.EndDate)
 	if dto.StartDate != nil && start == nil || dto.EndDate != nil && end == nil {
-		return nil, fmt.Errorf("%w: invalid start_date or end_date", ErrInvalidPlanningTransition)
+		return nil, fmt.Errorf("%w: data inicial ou final inválida", ErrInvalidPlanningTransition)
 	}
 	result := make([]*response.PlannedOrderResponse, 0, len(orders))
 	for _, previous := range orders {

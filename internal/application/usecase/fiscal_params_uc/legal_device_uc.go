@@ -20,10 +20,10 @@ var validLegalDeviceTypes = map[string]bool{
 
 func (uc *LegalDeviceUseCase) Create(ctx context.Context, dto request.CreateLegalDeviceDTO) (*response.LegalDeviceResponse, error) {
 	if dto.Description == "" {
-		return nil, errors.New("description is required")
+		return nil, errors.New("informe a descrição")
 	}
 	if !validLegalDeviceTypes[dto.Type] {
-		return nil, errors.New("type must be one of: ICMS, IPI, LAUDO, PIS, COFINS")
+		return nil, errors.New("o tipo deve ser ICMS, IPI, laudo, PIS ou COFINS")
 	}
 	d := &entity.LegalDevice{
 		Type:        entity.LegalDeviceType(dto.Type),
@@ -39,7 +39,7 @@ func (uc *LegalDeviceUseCase) Create(ctx context.Context, dto request.CreateLega
 
 func (uc *LegalDeviceUseCase) Update(ctx context.Context, dto request.UpdateLegalDeviceDTO) (*response.LegalDeviceResponse, error) {
 	if !validLegalDeviceTypes[dto.Type] {
-		return nil, errors.New("type must be one of: ICMS, IPI, LAUDO, PIS, COFINS")
+		return nil, errors.New("o tipo deve ser ICMS, IPI, laudo, PIS ou COFINS")
 	}
 	d := &entity.LegalDevice{
 		ID:          dto.ID,

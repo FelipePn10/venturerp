@@ -21,7 +21,7 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SalesQuotationCode == 0 {
-		return nil, errorsuc.NewValidationError("sales_quotation_code is required")
+		return nil, errorsuc.NewValidationError("informe o orçamento de venda")
 	}
 	resolvedItem, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
 	if err != nil {
@@ -32,7 +32,7 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 		return nil, err
 	}
 	if !dto.RequestedQty.IsPositive() {
-		return nil, errorsuc.NewValidationError("requested_qty must be greater than zero")
+		return nil, errorsuc.NewValidationError("a quantidade solicitada deve ser maior que zero")
 	}
 	item := &entity.SalesQuotationItem{
 		SalesQuotationCode: dto.SalesQuotationCode,
@@ -94,13 +94,13 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !dto.RequestedQty.IsPositive() {
-		return nil, errorsuc.NewValidationError("requested_qty must be greater than zero")
+		return nil, errorsuc.NewValidationError("a quantidade solicitada deve ser maior que zero")
 	}
 	if dto.AttendedQty.IsNegative() || dto.CancelledQty.IsNegative() {
-		return nil, errorsuc.NewValidationError("attended_qty and cancelled_qty must be greater than or equal to zero")
+		return nil, errorsuc.NewValidationError("as quantidades atendida e cancelada devem ser maiores ou iguais a zero")
 	}
 	if dto.AttendedQty.Add(dto.CancelledQty).GreaterThan(dto.RequestedQty) {
-		return nil, errorsuc.NewValidationError("attended_qty plus cancelled_qty cannot exceed requested_qty")
+		return nil, errorsuc.NewValidationError("a soma das quantidades atendida e cancelada não pode passar da solicitada")
 	}
 	current, err := uc.Repo.GetItem(ctx, dto.Code)
 	if err != nil {
@@ -194,7 +194,7 @@ func (uc *UseCase) validateNFCeServiceItem(ctx context.Context, q *entity.SalesQ
 		return err
 	}
 	if !parameters.AllowServiceItemsNFCe || !q.DeliveryWithReceipt {
-		return errorsuc.NewValidationError("service items in NFC-e require parameter 27 and delivery_with_receipt")
+		return errorsuc.NewValidationError("itens de serviço na NFC-e exigem o parâmetro 27 e entrega com recibo")
 	}
 	return nil
 }
@@ -219,7 +219,7 @@ func (uc *UseCase) CancelItem(ctx context.Context, dto request.CancelSalesQuotat
 		return err
 	}
 	if reason.RequireComplement && (dto.Complement == nil || strings.TrimSpace(*dto.Complement) == "") {
-		return errorsuc.NewValidationError("complement is required for the selected cancellation reason")
+		return errorsuc.NewValidationError("o motivo de cancelamento escolhido exige um complemento")
 	}
 	return uc.Repo.CancelItem(ctx, dto.Code, reason.Code, reason.Description, dto.Complement)
 }

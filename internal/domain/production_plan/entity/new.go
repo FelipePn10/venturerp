@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	ErrInvalidPlan = errors.New("invalid production plan")
+	ErrInvalidPlan = errors.New("plano de produção inválido")
 )
 
 var validPlanningTypes = map[string]struct{}{
@@ -21,22 +21,22 @@ var validPlanningTypes = map[string]struct{}{
 func NewProductionPlan(code int64, name, independentDemands string, groupSameDateOrders bool, planningTypes []string, createdBy uuid.UUID) (*ProductionPlan, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return nil, fmt.Errorf("%w: name is required", ErrInvalidPlan)
+		return nil, fmt.Errorf("%w: informe o nome", ErrInvalidPlan)
 	}
 	if code <= 0 {
-		return nil, fmt.Errorf("%w: code must be positive", ErrInvalidPlan)
+		return nil, fmt.Errorf("%w: o código deve ser maior que zero", ErrInvalidPlan)
 	}
 	switch independentDemands {
 	case IndependentDemandsNo, IndependentDemandsFromDate, IndependentDemandsAll:
 	default:
-		return nil, fmt.Errorf("%w: independent_demands must be NO, FROM_DATE or ALL", ErrInvalidPlan)
+		return nil, fmt.Errorf("%w: as demandas independentes devem ser nenhuma, a partir de uma data ou todas", ErrInvalidPlan)
 	}
 	planningTypes, err := normalizePlanningTypes(planningTypes)
 	if err != nil {
 		return nil, err
 	}
 	if createdBy == uuid.Nil {
-		return nil, fmt.Errorf("%w: authenticated creator is required", ErrInvalidPlan)
+		return nil, fmt.Errorf("%w: é preciso um usuário autenticado para criar o registro", ErrInvalidPlan)
 	}
 	return &ProductionPlan{
 		Code:                code,
@@ -53,13 +53,13 @@ func NewProductionPlan(code int64, name, independentDemands string, groupSameDat
 func (p *ProductionPlan) Configure(classification, classItemCodes *string, orderItemCode *int64, parameters map[string]interface{}) error {
 	p.Name = strings.TrimSpace(p.Name)
 	if p.Name == "" {
-		return fmt.Errorf("%w: name is required", ErrInvalidPlan)
+		return fmt.Errorf("%w: informe o nome", ErrInvalidPlan)
 	}
 	if p.Code <= 0 {
-		return fmt.Errorf("%w: code must be positive", ErrInvalidPlan)
+		return fmt.Errorf("%w: o código deve ser maior que zero", ErrInvalidPlan)
 	}
 	if p.IndependentDemands != IndependentDemandsNo && p.IndependentDemands != IndependentDemandsFromDate && p.IndependentDemands != IndependentDemandsAll {
-		return fmt.Errorf("%w: independent_demands must be NO, FROM_DATE or ALL", ErrInvalidPlan)
+		return fmt.Errorf("%w: as demandas independentes devem ser nenhuma, a partir de uma data ou todas", ErrInvalidPlan)
 	}
 	types, err := normalizePlanningTypes(p.PlanningTypes)
 	if err != nil {
@@ -73,13 +73,13 @@ func (p *ProductionPlan) Configure(classification, classItemCodes *string, order
 		return err
 	}
 	if normalizedCodes != nil && classification == nil {
-		return fmt.Errorf("%w: classification is required when class_item_codes is informed", ErrInvalidPlan)
+		return fmt.Errorf("%w: informe a classificação quando listar códigos de itens", ErrInvalidPlan)
 	}
 	if orderItemCode != nil && *orderItemCode <= 0 {
-		return fmt.Errorf("%w: order_item_code must be positive", ErrInvalidPlan)
+		return fmt.Errorf("%w: o item da ordem deve ser um código maior que zero", ErrInvalidPlan)
 	}
 	if orderItemCode != nil && (classification != nil || normalizedCodes != nil) {
-		return fmt.Errorf("%w: order_item_code cannot be combined with classification filters", ErrInvalidPlan)
+		return fmt.Errorf("%w: o item da ordem não pode ser combinado com filtros de classificação", ErrInvalidPlan)
 	}
 
 	if parameters == nil {
@@ -89,10 +89,10 @@ func (p *ProductionPlan) Configure(classification, classItemCodes *string, order
 		raw, ok := parameters["from_date"]
 		value, stringOK := raw.(string)
 		if !ok || !stringOK {
-			return fmt.Errorf("%w: parameters.from_date is required for FROM_DATE", ErrInvalidPlan)
+			return fmt.Errorf("%w: informe a data inicial ao usar demandas a partir de uma data", ErrInvalidPlan)
 		}
 		if _, err := time.Parse("2006-01-02", value); err != nil {
-			return fmt.Errorf("%w: parameters.from_date must use YYYY-MM-DD", ErrInvalidPlan)
+			return fmt.Errorf("%w: informe a data inicial no formato ano-mês-dia", ErrInvalidPlan)
 		}
 	}
 	p.Classification, p.ClassItemCodes, p.OrderItemCode, p.Parameters = classification, normalizedCodes, orderItemCode, cloneParameters(parameters)
@@ -129,7 +129,7 @@ func normalizeClassItemCodes(value *string) (*string, error) {
 	for _, part := range strings.Split(*value, ",") {
 		code := strings.TrimSpace(part)
 		if code == "" {
-			return nil, fmt.Errorf("%w: class_item_codes must contain non-empty codes separated by commas", ErrInvalidPlan)
+			return nil, fmt.Errorf("%w: informe os códigos separados por vírgula, sem itens vazios", ErrInvalidPlan)
 		}
 		if _, ok := seen[code]; !ok {
 			seen[code] = struct{}{}

@@ -207,45 +207,45 @@ func (i *Item) Validate() error {
 	if !i.Situation.IsValid() || !i.Health.IsValid() || !i.Warehouse.UnitOfMeasurement.IsValid() ||
 		!i.Engineering.Type.IsValid() || !i.Engineering.TypeStruct.IsValid() ||
 		!i.Planning.TypeMRP.IsValid() || !i.Supplies.TypeOfUse.IsValid() {
-		return errors.New("invalid item enum value")
+		return errors.New("valor inválido para um campo de lista do item")
 	}
 	if i.Supplies.PurchaseUOM != nil && !i.Supplies.PurchaseUOM.IsValid() {
-		return errors.New("invalid purchase unit of measurement")
+		return errors.New("unidade de medida de compra inválida")
 	}
 	if i.Planning.MinimumLot < 0 || i.Planning.MultipleLot < 0 || i.Planning.SafetyStock < 0 || i.Commercial.WarrantyDays < 0 {
-		return errors.New("planning quantities and warranty days cannot be negative")
+		return errors.New("as quantidades de planejamento e os dias de garantia não podem ser negativos")
 	}
 	if i.Commercial.SaleType != nil && *i.Commercial.SaleType != "VENDA" && *i.Commercial.SaleType != "REVENDA" {
-		return errors.New("commercial.sale_type must be VENDA or REVENDA")
+		return errors.New("o tipo de venda deve ser venda ou revenda")
 	}
 	for name, value := range map[string]*decimal.Decimal{
 		"commercial.volume_conversion_factor": i.Commercial.VolumeConversionFactor,
 		"commercial.sale_multiple":            i.Commercial.SaleMultiple,
 	} {
 		if value != nil && !value.IsPositive() {
-			return errors.New(name + " must be greater than zero")
+			return errors.New(name + " deve ser maior que zero")
 		}
 	}
 	if i.Commercial.MinimumSaleQuantity != nil && i.Commercial.MinimumSaleQuantity.IsNegative() {
-		return errors.New("commercial.minimum_sale_quantity cannot be negative")
+		return errors.New("a quantidade mínima de venda não pode ser negativa")
 	}
 	if i.Commercial.EstimatedDeliveryDays != nil && *i.Commercial.EstimatedDeliveryDays < 0 {
-		return errors.New("commercial.estimated_delivery_days cannot be negative")
+		return errors.New("o prazo estimado de entrega não pode ser negativo")
 	}
 	if i.Code.IsValid() && i.Commercial.PackagingItemCode != nil && *i.Commercial.PackagingItemCode == int64(i.Code) {
-		return errors.New("commercial.packaging_item_code cannot reference the item itself")
+		return errors.New("o item de embalagem não pode ser o próprio item")
 	}
 	if i.Accounting.Origin != nil && (*i.Accounting.Origin < 0 || *i.Accounting.Origin > 8) {
-		return errors.New("accounting.origin must be between 0 and 8")
+		return errors.New("a origem da mercadoria deve estar entre 0 e 8")
 	}
 	for _, value := range []*string{i.Accounting.SaleIPIType, i.Accounting.PurchaseIPIType} {
 		if value != nil && *value != "PERCENTUAL" && *value != "VALOR" {
-			return errors.New("accounting IPI type must be PERCENTUAL or VALOR")
+			return errors.New("o tipo de IPI contábil deve ser percentual ou valor")
 		}
 	}
 	for name, value := range map[string]*decimal.Decimal{"accounting.sale_ipi_rate": i.Accounting.SaleIPIRate, "accounting.purchase_ipi_rate": i.Accounting.PurchaseIPIRate, "accounting.icms_rate": i.Accounting.ICMSRate} {
 		if value != nil && value.IsNegative() {
-			return errors.New(name + " cannot be negative")
+			return errors.New(name + " não pode ser negativo")
 		}
 	}
 	if i.Accounting.SaleUnitOfMeasurement != nil && !i.Accounting.SaleUnitOfMeasurement.IsValid() {
@@ -256,11 +256,11 @@ func (i *Item) Validate() error {
 	}
 	if i.Accounting.CEST != nil {
 		if len(*i.Accounting.CEST) != 7 {
-			return errors.New("accounting.cest must contain exactly 7 digits")
+			return errors.New("o CEST deve ter exatamente 7 dígitos")
 		}
 		for _, c := range *i.Accounting.CEST {
 			if c < '0' || c > '9' {
-				return errors.New("accounting.cest must contain exactly 7 digits")
+				return errors.New("o CEST deve ter exatamente 7 dígitos")
 			}
 		}
 	}
@@ -277,14 +277,14 @@ func (i *Item) Validate() error {
 		}
 	}
 	if i.Planning.ABCClass != nil && *i.Planning.ABCClass != "A" && *i.Planning.ABCClass != "B" && *i.Planning.ABCClass != "C" {
-		return errors.New("invalid ABC class")
+		return errors.New("classe ABC inválida")
 	}
 
 	if i.Engineering.Dimensions != nil && !i.Engineering.Dimensions.IsValid() {
 		return errors.New("invalid dimensions")
 	}
 	if i.Warehouse.CyclicalCountConfig != nil && !i.Warehouse.CyclicalCountConfig.IsValid() {
-		return errors.New("invalid cyclical count config")
+		return errors.New("configuração de contagem cíclica inválida")
 	}
 
 	if !i.Engineering.Weight.IsValid() {
@@ -292,7 +292,7 @@ func (i *Item) Validate() error {
 	}
 
 	if i.Planning.ReorderPoint != nil && !i.Planning.ReorderPoint.IsValid() {
-		return errors.New("invalid reorder point")
+		return errors.New("ponto de reposição inválido")
 	}
 
 	return nil

@@ -98,7 +98,7 @@ func (r *Repository) CancelReservation(ctx context.Context, code int64) error {
 		return fmt.Errorf("cancelling tank reservation %d: %w", code, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("active tank reservation %d not found", code)
+		return fmt.Errorf("reserva de tanque ativa %d não encontrada", code)
 	}
 	return nil
 }

@@ -132,7 +132,7 @@ func (r *PurchaseOrderRepositorySQLC) Consult(ctx context.Context, f purchase_or
 			return nil, fmt.Errorf("scan purchase order consultation: %w", err)
 		}
 		if factor == nil {
-			return nil, fmt.Errorf("exchange rate missing for order %d on %s", x.OrderNumber, f.BaseDate.Format("2006-01-02"))
+			return nil, fmt.Errorf("falta a taxa de câmbio da ordem %d em %s", x.OrderNumber, f.BaseDate.Format("2006-01-02"))
 		}
 		x.ConversionRate = *factor
 		x.DisplayCurrency = x.CurrencyCode

@@ -8,7 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/consumer_service/entity"
 )
 
-var ErrAttachmentNotFound = errors.New("consumer service attachment not found")
+var ErrAttachmentNotFound = errors.New("anexo do atendimento não encontrado")
 
 type ConsumerFilter struct {
 	Search     *string

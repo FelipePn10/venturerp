@@ -279,7 +279,7 @@ func (h *MachineHandler) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	}
 	machineCode, err := strconv.ParseInt(machineCodeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "machine_code query parameter is required (e.g. ?machine_code=123)")
+		security.RespondError(w, http.StatusBadRequest, "informe a máquina na consulta")
 		return
 	}
 
@@ -289,7 +289,7 @@ func (h *MachineHandler) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
 		parsed, perr := datetime.ParseDate(dateStr)
 		if !perr {
-			security.RespondError(w, http.StatusBadRequest, "invalid date format, expected YYYY-MM-DD")
+			security.RespondError(w, http.StatusBadRequest, "formato de data inválido: use ano-mês-dia")
 			return
 		}
 		date = parsed

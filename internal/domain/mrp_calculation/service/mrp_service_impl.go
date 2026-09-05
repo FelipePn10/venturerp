@@ -1737,7 +1737,7 @@ func shouldPlanTechnicalAssistance(input *entity.MRPInput, params *entity.TypedP
 
 func (s *MRPServiceImpl) createNumberedSuggestion(ctx context.Context, suggestion *entity.PlannedOrderSuggestion, nextOrderNumber *int64) (*entity.PlannedOrderSuggestion, error) {
 	if nextOrderNumber == nil || *nextOrderNumber <= 0 {
-		return nil, fmt.Errorf("invalid next order number")
+		return nil, fmt.Errorf("próximo número de ordem inválido")
 	}
 	number := *nextOrderNumber
 	suggestion.OrderNumber = &number

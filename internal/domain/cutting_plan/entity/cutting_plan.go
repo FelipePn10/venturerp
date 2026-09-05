@@ -231,10 +231,10 @@ func NewCuttingPlan(
 	createdBy uuid.UUID,
 ) (*CuttingPlan, error) {
 	if code <= 0 {
-		return nil, errors.New("plan code must be positive")
+		return nil, errors.New("o código do plano deve ser maior que zero")
 	}
 	if materialItemCode <= 0 {
-		return nil, errors.New("material_item_code must be positive")
+		return nil, errors.New("o item do material deve ser um código maior que zero")
 	}
 	if cutType == "" {
 		cutType = CutTypeLinear1D
@@ -243,7 +243,7 @@ func NewCuttingPlan(
 		source = SourceManual
 	}
 	if kerfMM < 0 || trimMM < 0 || minRemnantMM < 0 {
-		return nil, errors.New("kerf, trim and min_remnant cannot be negative")
+		return nil, errors.New("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
 	}
 	return &CuttingPlan{
 		Code:             code,
@@ -263,10 +263,10 @@ func NewCuttingPlan(
 // NewPart validates and builds a demanded piece.
 func NewPart(planID int64, itemCode *int64, label string, lengthMM float64, quantity int, sourceRef *string) (*CuttingPlanPart, error) {
 	if lengthMM <= 0 {
-		return nil, errors.New("part length must be positive")
+		return nil, errors.New("o comprimento da peça deve ser maior que zero")
 	}
 	if quantity <= 0 {
-		return nil, errors.New("part quantity must be positive")
+		return nil, errors.New("a quantidade da peça deve ser maior que zero")
 	}
 	return &CuttingPlanPart{
 		PlanID:    planID,
@@ -281,10 +281,10 @@ func NewPart(planID int64, itemCode *int64, label string, lengthMM float64, quan
 // NewPart2D validates and builds a rectangular (2D) demanded part.
 func NewPart2D(planID int64, itemCode *int64, label string, widthMM, heightMM float64, grain Grain, allowRotation bool, quantity int, sourceRef *string) (*CuttingPlanPart, error) {
 	if widthMM <= 0 || heightMM <= 0 {
-		return nil, errors.New("part width and height must be positive")
+		return nil, errors.New("a largura e a altura da peça devem ser maiores que zero")
 	}
 	if quantity <= 0 {
-		return nil, errors.New("part quantity must be positive")
+		return nil, errors.New("a quantidade da peça deve ser maior que zero")
 	}
 	if grain == "" {
 		grain = GrainNone
@@ -300,10 +300,10 @@ func NewPart2D(planID int64, itemCode *int64, label string, widthMM, heightMM fl
 // outline (stored as JSON) with its bounding box in width/height.
 func NewPartTrueShape(planID int64, itemCode *int64, label string, geometryJSON string, bboxW, bboxH float64, allowRotation bool, quantity int, sourceRef *string) (*CuttingPlanPart, error) {
 	if bboxW <= 0 || bboxH <= 0 {
-		return nil, errors.New("true-shape part must have a non-degenerate bounding box")
+		return nil, errors.New("a peça por contorno real precisa de um retângulo envolvente válido")
 	}
 	if quantity <= 0 {
-		return nil, errors.New("part quantity must be positive")
+		return nil, errors.New("a quantidade da peça deve ser maior que zero")
 	}
 	geo := geometryJSON
 	return &CuttingPlanPart{
@@ -316,10 +316,10 @@ func NewPartTrueShape(planID int64, itemCode *int64, label string, geometryJSON 
 // NewStockPiece2D validates and builds an available rectangular (2D) sheet.
 func NewStockPiece2D(planID int64, widthMM, heightMM float64, quantity int, lot *string, isRemnant bool) (*CuttingStockPiece, error) {
 	if widthMM <= 0 || heightMM <= 0 {
-		return nil, errors.New("stock width and height must be positive")
+		return nil, errors.New("a largura e a altura do estoque devem ser maiores que zero")
 	}
 	if quantity <= 0 {
-		return nil, errors.New("stock quantity must be positive")
+		return nil, errors.New("a quantidade em estoque deve ser maior que zero")
 	}
 	return &CuttingStockPiece{
 		PlanID: planID, WidthMM: widthMM, HeightMM: heightMM, Quantity: quantity, Lot: lot, IsRemnant: isRemnant,
@@ -329,10 +329,10 @@ func NewStockPiece2D(planID int64, widthMM, heightMM float64, quantity int, lot 
 // NewStockPiece validates and builds an available stock piece.
 func NewStockPiece(planID int64, lengthMM float64, quantity int, lot *string, isRemnant bool) (*CuttingStockPiece, error) {
 	if lengthMM <= 0 {
-		return nil, errors.New("stock length must be positive")
+		return nil, errors.New("o comprimento do estoque deve ser maior que zero")
 	}
 	if quantity <= 0 {
-		return nil, errors.New("stock quantity must be positive")
+		return nil, errors.New("a quantidade em estoque deve ser maior que zero")
 	}
 	return &CuttingStockPiece{
 		PlanID:    planID,

@@ -26,7 +26,7 @@ func (uc *CreateOverheadAllocationUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.CostCenterCode == 0 {
-		return nil, errorsuc.NewValidationError("cost_center_code is required")
+		return nil, errorsuc.NewValidationError("informe o centro de custo")
 	}
 	start, _ := time.Parse("2006-01-02", dto.PeriodStart)
 	end, _ := time.Parse("2006-01-02", dto.PeriodEnd)

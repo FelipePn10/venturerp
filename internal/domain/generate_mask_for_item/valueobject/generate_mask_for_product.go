@@ -27,16 +27,16 @@ type ItemMask struct {
 
 func NewMaskAnswer(questionID, optionID int64, position int, value string) (MaskAnswer, error) {
 	if questionID <= 0 {
-		return MaskAnswer{}, errors.New("invalid question id")
+		return MaskAnswer{}, errors.New("pergunta inválida")
 	}
 	if optionID <= 0 {
-		return MaskAnswer{}, errors.New("invalid option id")
+		return MaskAnswer{}, errors.New("opção inválida")
 	}
 	if position <= 0 {
 		return MaskAnswer{}, errors.New("invalid position")
 	}
 	if value == "" {
-		return MaskAnswer{}, errors.New("invalid option value")
+		return MaskAnswer{}, errors.New("valor de opção inválido")
 	}
 
 	return MaskAnswer{
@@ -49,10 +49,10 @@ func NewMaskAnswer(questionID, optionID int64, position int, value string) (Mask
 
 func NewItemMask(itemCode int64, answers []MaskAnswer) (ItemMask, error) {
 	if itemCode < 0 {
-		return ItemMask{}, errors.New("invalid item code")
+		return ItemMask{}, errors.New("código de item inválido")
 	}
 	if len(answers) == 0 {
-		return ItemMask{}, errors.New("mask must have at least one answer")
+		return ItemMask{}, errors.New("a máscara precisa de ao menos uma resposta")
 	}
 
 	mask := generateMask(answers)

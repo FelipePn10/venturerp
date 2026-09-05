@@ -98,7 +98,7 @@ func (h *PurchaseQuotationHandler) RecordPrice(w http.ResponseWriter, r *http.Re
 func (h *PurchaseQuotationHandler) SelectPrice(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "priceID"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid price id")
+		jsonError(w, http.StatusBadRequest, "preço inválido")
 		return
 	}
 	res, err := h.uc.SelectPrice(r.Context(), id)

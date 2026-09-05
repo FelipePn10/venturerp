@@ -53,7 +53,7 @@ type StatisticalForecastResponse struct {
 // Execute picks the best model (or uses the requested one) and returns forecasts.
 func Execute(dto StatisticalForecastDTO) (*StatisticalForecastResponse, error) {
 	if len(dto.History) < 3 {
-		return nil, fmt.Errorf("at least 3 historical data points required")
+		return nil, fmt.Errorf("são necessários ao menos 3 períodos de histórico")
 	}
 	if dto.Periods <= 0 {
 		dto.Periods = 3

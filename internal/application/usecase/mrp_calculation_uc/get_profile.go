@@ -32,7 +32,7 @@ func (uc *GetItemProfileUseCase) Consult(ctx context.Context, itemCode, planCode
 		position = "CALCULATION"
 	}
 	if position != "CALCULATION" && position != "CURRENT" {
-		return nil, errorsuc.NewValidationError("position must be CALCULATION or CURRENT")
+		return nil, errorsuc.NewValidationError("a posição deve ser cálculo ou atual")
 	}
 	filtered := make([]*response.MRPItemProfileResponse, 0, len(rows))
 	totals := map[string]float64{}

@@ -46,12 +46,12 @@ func (h *AccountingHandler) Balancete(w http.ResponseWriter, r *http.Request) {
 	empresaID, _ := strconv.Atoi(r.URL.Query().Get("empresa_id"))
 	from, err := time.Parse("2006-01-02", r.URL.Query().Get("from"))
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid from date")
+		jsonError(w, http.StatusBadRequest, "data inicial inválida")
 		return
 	}
 	to, err := time.Parse("2006-01-02", r.URL.Query().Get("to"))
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid to date")
+		jsonError(w, http.StatusBadRequest, "data final inválida")
 		return
 	}
 	result, err := h.balanceteUC.Execute(r.Context(), planID, empresaID, from, to)
@@ -80,7 +80,7 @@ func (h *AccountingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	}
 	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid valid_from date")
+		jsonError(w, http.StatusBadRequest, "data de início da vigência inválida")
 		return
 	}
 	p := &accountingEntity.AccountingPlan{
@@ -92,7 +92,7 @@ func (h *AccountingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	if req.ValidTo != "" {
 		t, err := time.Parse("2006-01-02", req.ValidTo)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid valid_to date")
+			jsonError(w, http.StatusBadRequest, "data de fim da vigência inválida")
 			return
 		}
 		p.ValidTo = &t
@@ -137,7 +137,7 @@ func (h *AccountingHandler) CreateAccount(w http.ResponseWriter, r *http.Request
 	}
 	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid valid_from date")
+		jsonError(w, http.StatusBadRequest, "data de início da vigência inválida")
 		return
 	}
 	a := &accountingEntity.AccountingAccount{
@@ -154,7 +154,7 @@ func (h *AccountingHandler) CreateAccount(w http.ResponseWriter, r *http.Request
 	if req.ValidTo != "" {
 		t, err := time.Parse("2006-01-02", req.ValidTo)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid valid_to date")
+			jsonError(w, http.StatusBadRequest, "data de fim da vigência inválida")
 			return
 		}
 		a.ValidTo = &t
@@ -244,12 +244,12 @@ func (h *AccountingHandler) ListJournalEntries(w http.ResponseWriter, r *http.Re
 	empresaID, _ := strconv.Atoi(empresaIDStr)
 	from, err := time.Parse("2006-01-02", fromStr)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid from date")
+		jsonError(w, http.StatusBadRequest, "data inicial inválida")
 		return
 	}
 	to, err := time.Parse("2006-01-02", toStr)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid to date")
+		jsonError(w, http.StatusBadRequest, "data final inválida")
 		return
 	}
 
@@ -307,12 +307,12 @@ func (h *AccountingHandler) GenerateECD(w http.ResponseWriter, r *http.Request) 
 	}
 	from, err := time.Parse("2006-01-02", req.From)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid from date")
+		jsonError(w, http.StatusBadRequest, "data inicial inválida")
 		return
 	}
 	to, err := time.Parse("2006-01-02", req.To)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid to date")
+		jsonError(w, http.StatusBadRequest, "data final inválida")
 		return
 	}
 

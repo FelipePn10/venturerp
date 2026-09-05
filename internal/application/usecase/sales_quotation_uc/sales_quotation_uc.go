@@ -41,7 +41,7 @@ func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationD
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.EnterpriseCode != 0 && dto.EnterpriseCode != tenantID {
-		return nil, errorsuc.NewValidationError("enterprise_code does not match authenticated tenant")
+		return nil, errorsuc.NewValidationError("a empresa informada não é a empresa autenticada")
 	}
 	dto.EnterpriseCode = tenantID
 	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
@@ -159,7 +159,7 @@ func (uc *UseCase) Update(ctx context.Context, dto request.UpdateSalesQuotationD
 		return nil, errorsuc.NewValidationError("situação do orçamento inválida")
 	}
 	if status != current.Status {
-		return nil, errorsuc.NewValidationError("use the status endpoint to change quotation status")
+		return nil, errorsuc.NewValidationError("use a operação de situação para alterar a situação do orçamento")
 	}
 	quotationType := current.QuotationType
 	if dto.QuotationType != "" {
@@ -176,7 +176,7 @@ func (uc *UseCase) Update(ctx context.Context, dto request.UpdateSalesQuotationD
 		return nil, errorsuc.NewValidationError("situação de liberação inválida")
 	}
 	if releaseStatus != current.ReleaseStatus {
-		return nil, errorsuc.NewValidationError("use the release endpoint to change quotation release")
+		return nil, errorsuc.NewValidationError("use a operação de liberação para alterar a liberação do orçamento")
 	}
 	current.Status = status
 	current.QuotationType = quotationType
@@ -278,12 +278,12 @@ func (uc *UseCase) Cancel(ctx context.Context, dto request.CancelSalesQuotationD
 	reason, err := uc.Repo.GetCancellationReason(ctx, dto.ReasonCode)
 	if err != nil {
 		if errors.Is(err, repository.ErrCancellationReasonNotFound) {
-			return errorsuc.NewValidationError("cancellation reason does not exist in the authenticated enterprise")
+			return errorsuc.NewValidationError("o motivo de cancelamento não existe na empresa autenticada")
 		}
 		return err
 	}
 	if reason.RequireComplement && (dto.Complement == nil || strings.TrimSpace(*dto.Complement) == "") {
-		return errorsuc.NewValidationError("complement is required for the selected cancellation reason")
+		return errorsuc.NewValidationError("o motivo de cancelamento escolhido exige um complemento")
 	}
 	return uc.Repo.Cancel(ctx, dto.Code, reason.Code, reason.Description, dto.Complement)
 }
@@ -293,7 +293,7 @@ func (uc *UseCase) Attend(ctx context.Context, dto request.AttendSalesQuotationD
 		return errorsuc.ErrUnauthorized
 	}
 	if dto.Reason == "" {
-		return errorsuc.NewValidationError("reason is required")
+		return errorsuc.NewValidationError("informe o motivo")
 	}
 	eventDate := datetime.ParseDateOrDefault(dto.EventDate, time.Now())
 	return uc.Repo.Attend(ctx, dto.Code, dto.Reason, dto.Complement, eventDate)
@@ -308,10 +308,10 @@ func (uc *UseCase) Uncancel(ctx context.Context, dto request.UncancelSalesQuotat
 		return err
 	}
 	if !reason.AllowUncancel {
-		return errorsuc.NewValidationError("selected reason does not allow uncancellation")
+		return errorsuc.NewValidationError("o motivo escolhido não permite reverter o cancelamento")
 	}
 	if reason.RequireComplement && (dto.Complement == nil || strings.TrimSpace(*dto.Complement) == "") {
-		return errorsuc.NewValidationError("complement is required for the selected cancellation reason")
+		return errorsuc.NewValidationError("o motivo de cancelamento escolhido exige um complemento")
 	}
 	return uc.Repo.Uncancel(ctx, dto.Code, reason.Code, reason.Description, dto.Complement)
 }
@@ -343,7 +343,7 @@ func (uc *UseCase) ChangeRelease(ctx context.Context, dto request.ChangeSalesQuo
 		return errorsuc.NewValidationError("situação de liberação inválida")
 	}
 	if strings.TrimSpace(dto.Reason) == "" {
-		return errorsuc.NewValidationError("reason is required")
+		return errorsuc.NewValidationError("informe o motivo")
 	}
 	return uc.Repo.ChangeRelease(ctx, dto.Code, status, strings.TrimSpace(dto.Reason))
 }

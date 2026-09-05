@@ -8,7 +8,7 @@ import (
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
-var ErrMissingEnterprise = errors.New("enterprise not selected in authenticated context")
+var ErrMissingEnterprise = errors.New("nenhuma empresa selecionada na sessão atual")
 
 func ID(ctx context.Context) (int64, error) {
 	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)

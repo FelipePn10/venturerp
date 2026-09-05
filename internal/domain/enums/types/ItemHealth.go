@@ -31,7 +31,7 @@ func (s *Health) UnmarshalJSON(data []byte) error {
 	tmp := Health(str)
 
 	if !tmp.IsValid() {
-		return fmt.Errorf("invalid Health: %s", str)
+		return NewInvalidValue("Situação do componente", str, ValidHealths()...)
 	}
 
 	*s = tmp
@@ -40,14 +40,14 @@ func (s *Health) UnmarshalJSON(data []byte) error {
 
 func (s Health) Value() (driver.Value, error) {
 	if !s.IsValid() {
-		return nil, fmt.Errorf("invalid Health: %s", s)
+		return nil, fmt.Errorf("situação do componente inválida: %s", s)
 	}
 	return string(s), nil
 }
 
 func (s *Health) Scan(value interface{}) error {
 	if value == nil {
-		return fmt.Errorf("null value for Health")
+		return fmt.Errorf("a situação do componente não pode ficar vazia")
 	}
 
 	var str string
@@ -58,13 +58,13 @@ func (s *Health) Scan(value interface{}) error {
 	case []byte:
 		str = string(v)
 	default:
-		return fmt.Errorf("cannot scan %T into Health", value)
+		return fmt.Errorf("não foi possível interpretar %T como situação do componente", value)
 	}
 
 	tmp := Health(str)
 
 	if !tmp.IsValid() {
-		return fmt.Errorf("invalid Health from DB: %s", str)
+		return fmt.Errorf("situação do componente inválida no banco: %s", str)
 	}
 
 	*s = tmp
@@ -78,4 +78,9 @@ func (t Health) IsValid() bool {
 	default:
 		return false
 	}
+}
+
+// ValidHealths lista as situações aceitas para o componente.
+func ValidHealths() []string {
+	return []string{string(ACTIVE), string(INACTIVE), string(GHOST)}
 }

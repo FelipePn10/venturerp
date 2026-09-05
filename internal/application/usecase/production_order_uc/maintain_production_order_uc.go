@@ -31,7 +31,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, err
 		}
 		if len(views) != 1 {
-			return nil, fmt.Errorf("production order is not available for maintenance")
+			return nil, fmt.Errorf("esta ordem de produção não está disponível para alteração")
 		}
 	}
 	order, err := uc.Repo.GetByCode(ctx, dto.ID)
@@ -39,14 +39,14 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 		return nil, err
 	}
 	if order.Status == entity.StatusCompleted || order.Status == entity.StatusClosed || order.Status == entity.StatusCancelled {
-		return nil, fmt.Errorf("closed, completed or cancelled production order cannot be maintained")
+		return nil, fmt.Errorf("ordem de produção encerrada, concluída ou cancelada não pode ser alterada")
 	}
 	activity, err := uc.Repo.HasProductionActivity(ctx, dto.ID)
 	if err != nil {
 		return nil, err
 	}
 	if activity {
-		return nil, fmt.Errorf("production order with movement, appointment, consumption or WMS separation cannot be maintained")
+		return nil, fmt.Errorf("ordem de produção com movimento, apontamento, consumo ou separação no WMS não pode ser alterada")
 	}
 	if dto.PlannedQty != nil {
 		allowed, err := uc.Repo.CanChangeOrderQuantity(ctx, dto.ID)
@@ -54,17 +54,17 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, err
 		}
 		if !allowed {
-			return nil, fmt.Errorf("production parameter 10 does not allow quantity changes")
+			return nil, fmt.Errorf("o parâmetro de produção 10 não permite alterar a quantidade")
 		}
 		if !dto.PlannedQty.IsPositive() || dto.PlannedQty.LessThan(decimal.NewFromFloat(order.ProducedQty)) {
-			return nil, fmt.Errorf("planned quantity must be positive and not lower than produced quantity")
+			return nil, fmt.Errorf("a quantidade planejada deve ser maior que zero e não pode ser menor que a produzida")
 		}
 		fractional, err := uc.Repo.AcceptsFractionalQuantity(ctx, order.ItemCode)
 		if err != nil {
 			return nil, err
 		}
 		if !fractional && !dto.PlannedQty.Equal(dto.PlannedQty.Truncate(0)) {
-			return nil, fmt.Errorf("item does not accept fractional quantity")
+			return nil, fmt.Errorf("este item não aceita quantidade fracionada")
 		}
 		order.PlannedQty, _ = dto.PlannedQty.Float64()
 	}
@@ -74,7 +74,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, err
 		}
 		if !allowed {
-			return nil, fmt.Errorf("production parameter 14 does not allow date changes")
+			return nil, fmt.Errorf("o parâmetro de produção 14 não permite alterar as datas")
 		}
 		if dto.StartDate != nil {
 			order.StartDate = datetime.ParseDatePtr(dto.StartDate)

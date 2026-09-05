@@ -250,7 +250,7 @@ func (h *RoutingHandler) RemoveRouteOperation(w http.ResponseWriter, r *http.Req
 func (h *RoutingHandler) GetNetworkEdges(w http.ResponseWriter, r *http.Request) {
 	routeID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid route id")
+		jsonError(w, http.StatusBadRequest, "roteiro inválido")
 		return
 	}
 	edges, err := h.routeUC.GetEdges(r.Context(), routeID)
@@ -376,7 +376,7 @@ func (h *RoutingHandler) RemoveRouteOpResource(w http.ResponseWriter, r *http.Re
 func (h *RoutingHandler) GetLeadTime(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid route id")
+		jsonError(w, http.StatusBadRequest, "roteiro inválido")
 		return
 	}
 	// Optional ?qty= scales the run (per-piece) portion of the lead time; defaults to 1.

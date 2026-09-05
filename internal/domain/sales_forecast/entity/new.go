@@ -8,13 +8,13 @@ import (
 )
 
 var (
-	ErrInvalidWeek          = errors.New("week must be between 1 and 53")
-	ErrInvalidYear          = errors.New("year must be greater than 2000")
-	ErrInvalidQuantity      = errors.New("quantity must be greater than zero")
-	ErrInvalidItemCode      = errors.New("item code must be greater than zero")
-	ErrInvalidBlockDates    = errors.New("start date must be before end date")
-	ErrInvalidDescription   = errors.New("description is required")
-	ErrPercentageSumTooHigh = errors.New("sum of all day percentages must not exceed 100")
+	ErrInvalidWeek          = errors.New("a semana deve estar entre 1 e 53")
+	ErrInvalidYear          = errors.New("o ano deve ser maior que 2000")
+	ErrInvalidQuantity      = errors.New("a quantidade deve ser maior que zero")
+	ErrInvalidItemCode      = errors.New("o código do item deve ser maior que zero")
+	ErrInvalidBlockDates    = errors.New("a data inicial deve ser anterior à final")
+	ErrInvalidDescription   = errors.New("informe a descrição")
+	ErrPercentageSumTooHigh = errors.New("a soma dos percentuais dos dias não pode passar de 100")
 )
 
 func NewSalesForecast(

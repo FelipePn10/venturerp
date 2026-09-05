@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -14,8 +14,7 @@ import (
 func (h *EnterpriseHandler) CreateEnterprise(w http.ResponseWriter, r *http.Request) {
 	var req request.CreateEnterpriseDTO
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 

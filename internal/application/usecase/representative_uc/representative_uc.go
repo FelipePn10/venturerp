@@ -24,7 +24,7 @@ func (uc *UseCase) CreateType(ctx context.Context, dto request.CreateRepresentat
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	ignores := true
 	if dto.IgnoresDirectBilling != nil {
@@ -47,10 +47,10 @@ func (uc *UseCase) UpdateType(ctx context.Context, dto request.UpdateRepresentat
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Code == 0 {
-		return nil, errorsuc.NewValidationError("code is required")
+		return nil, errorsuc.NewValidationError("informe o código")
 	}
 	if strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	t, err := uc.Repo.UpdateType(ctx, &entity.RepresentativeType{
 		Code:                 dto.Code,
@@ -111,7 +111,7 @@ func (uc *UseCase) Update(ctx context.Context, dto request.UpdateRepresentativeD
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Code == 0 {
-		return nil, errorsuc.NewValidationError("code is required")
+		return nil, errorsuc.NewValidationError("informe o código")
 	}
 	rep, err := representativeFromUpdate(dto)
 	if err != nil {
@@ -155,7 +155,7 @@ func (uc *UseCase) Block(ctx context.Context, code int64, dto request.BlockRepre
 		return errorsuc.ErrUnauthorized
 	}
 	if strings.TrimSpace(dto.Reason) == "" {
-		return errorsuc.NewValidationError("reason is required")
+		return errorsuc.NewValidationError("informe o motivo")
 	}
 	return uc.Repo.Block(ctx, code, strings.TrimSpace(dto.Reason))
 }
@@ -172,7 +172,7 @@ func (uc *UseCase) AddEnterprise(ctx context.Context, dto request.Representative
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || dto.EnterpriseCode == 0 {
-		return nil, errorsuc.NewValidationError("representative_code and enterprise_code are required")
+		return nil, errorsuc.NewValidationError("informe o representante e a empresa")
 	}
 	row, err := uc.Repo.AddEnterprise(ctx, &entity.RepresentativeEnterprise{
 		RepresentativeCode:    dto.RepresentativeCode,
@@ -195,7 +195,7 @@ func (uc *UseCase) AddAccounting(ctx context.Context, dto request.Representative
 	}
 	event := strings.ToUpper(strings.TrimSpace(dto.EventType))
 	if dto.RepresentativeCode == 0 || (event != "GENERATED" && event != "REVERSED") {
-		return nil, errorsuc.NewValidationError("representative_code and valid event_type are required")
+		return nil, errorsuc.NewValidationError("informe o representante e um tipo de evento válido")
 	}
 	row, err := uc.Repo.AddAccounting(ctx, &entity.RepresentativeAccounting{
 		RepresentativeCode:   dto.RepresentativeCode,
@@ -218,7 +218,7 @@ func (uc *UseCase) AddRegion(ctx context.Context, dto request.RepresentativeRegi
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || dto.RegionCode == 0 {
-		return nil, errorsuc.NewValidationError("representative_code and region_code are required")
+		return nil, errorsuc.NewValidationError("informe o representante e a região")
 	}
 	row, err := uc.Repo.AddRegion(ctx, &entity.RepresentativeRegion{RepresentativeCode: dto.RepresentativeCode, EnterpriseCode: dto.EnterpriseCode, RegionCode: dto.RegionCode, MicroregionCode: dto.MicroregionCode, IsActive: dto.IsActive})
 	if err != nil {
@@ -232,7 +232,7 @@ func (uc *UseCase) AddSegment(ctx context.Context, dto request.RepresentativeSeg
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || dto.MarketSegmentCode == 0 {
-		return nil, errorsuc.NewValidationError("representative_code and market_segment_code are required")
+		return nil, errorsuc.NewValidationError("informe o representante e o segmento de mercado")
 	}
 	row, err := uc.Repo.AddSegment(ctx, &entity.RepresentativeSegment{RepresentativeCode: dto.RepresentativeCode, EnterpriseCode: dto.EnterpriseCode, MicroregionCode: dto.MicroregionCode, MarketSegmentCode: dto.MarketSegmentCode, IsActive: dto.IsActive})
 	if err != nil {
@@ -246,7 +246,7 @@ func (uc *UseCase) AddSalesPlan(ctx context.Context, dto request.RepresentativeS
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || dto.SalesPlanCode == 0 {
-		return nil, errorsuc.NewValidationError("representative_code and sales_plan_code are required")
+		return nil, errorsuc.NewValidationError("informe o representante e o plano de vendas")
 	}
 	row, err := uc.Repo.AddSalesPlan(ctx, &entity.RepresentativeSalesPlan{RepresentativeCode: dto.RepresentativeCode, EnterpriseCode: dto.EnterpriseCode, MicroregionCode: dto.MicroregionCode, SalesPlanCode: dto.SalesPlanCode, IsActive: dto.IsActive})
 	if err != nil {
@@ -275,7 +275,7 @@ func (uc *UseCase) AddInterest(ctx context.Context, dto request.RepresentativeIn
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || dto.ItemClassificationCode == 0 {
-		return nil, errorsuc.NewValidationError("representative_code and item_classification_code are required")
+		return nil, errorsuc.NewValidationError("informe o representante e a classificação do item")
 	}
 	row, err := uc.Repo.AddInterest(ctx, &entity.RepresentativeInterest{RepresentativeCode: dto.RepresentativeCode, ItemClassificationCode: dto.ItemClassificationCode, IsActive: dto.IsActive})
 	if err != nil {
@@ -308,7 +308,7 @@ func (uc *UseCase) AddPhone(ctx context.Context, dto request.RepresentativePhone
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || strings.TrimSpace(dto.Phone) == "" {
-		return nil, errorsuc.NewValidationError("representative_code and phone are required")
+		return nil, errorsuc.NewValidationError("informe o representante e o telefone")
 	}
 	if dto.Ranking <= 0 {
 		dto.Ranking = 1
@@ -328,7 +328,7 @@ func (uc *UseCase) AddEmail(ctx context.Context, dto request.RepresentativeEmail
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || !strings.Contains(dto.Email, "@") {
-		return nil, errorsuc.NewValidationError("representative_code and valid email are required")
+		return nil, errorsuc.NewValidationError("informe o representante e um e-mail válido")
 	}
 	if dto.Ranking <= 0 {
 		dto.Ranking = 1
@@ -345,7 +345,7 @@ func (uc *UseCase) AddCorrespondenceAddress(ctx context.Context, dto request.Rep
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 {
-		return nil, errorsuc.NewValidationError("representative_code is required")
+		return nil, errorsuc.NewValidationError("informe o representante")
 	}
 	normalizeState(dto.State)
 	row, err := uc.Repo.AddCorrespondenceAddress(ctx, &entity.RepresentativeCorrespondenceAddress{RepresentativeCode: dto.RepresentativeCode, PostalCode: dto.PostalCode, City: dto.City, State: dto.State, FullAddress: fullAddress(dto.FullAddress, dto.Street, dto.StreetNumber), Street: dto.Street, StreetNumber: dto.StreetNumber, Complement: dto.Complement, District: dto.District, IsDefault: dto.IsDefault})
@@ -360,7 +360,7 @@ func (uc *UseCase) AddContact(ctx context.Context, dto request.RepresentativeCon
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.RepresentativeCode == 0 || strings.TrimSpace(dto.Name) == "" {
-		return nil, errorsuc.NewValidationError("representative_code and name are required")
+		return nil, errorsuc.NewValidationError("informe o representante e o nome")
 	}
 	row, err := uc.Repo.AddContact(ctx, &entity.RepresentativeContact{RepresentativeCode: dto.RepresentativeCode, ContactTypeCode: dto.ContactTypeCode, Name: strings.TrimSpace(dto.Name), Role: dto.Role, Phone: dto.Phone, Email: dto.Email, Notes: dto.Notes, IsActive: dto.IsActive})
 	if err != nil {
@@ -401,13 +401,13 @@ func (uc *UseCase) FollowUp(ctx context.Context, filter repository.FollowUpFilte
 
 func representativeFromCreate(dto request.CreateRepresentativeDTO) (*entity.Representative, error) {
 	if strings.TrimSpace(dto.Name) == "" {
-		return nil, errorsuc.NewValidationError("name is required")
+		return nil, errorsuc.NewValidationError("informe o nome")
 	}
 	if strings.TrimSpace(dto.DocumentNumber) == "" {
-		return nil, errorsuc.NewValidationError("document_number is required")
+		return nil, errorsuc.NewValidationError("informe o número do documento")
 	}
 	if dto.DeviceQuantity < 0 {
-		return nil, errorsuc.NewValidationError("device_quantity cannot be negative")
+		return nil, errorsuc.NewValidationError("a quantidade de dispositivos não pode ser negativa")
 	}
 	normalizeState(dto.State)
 	registerDate := datetime.ParseDateOrDefault(dto.RegisterDate, time.Now())

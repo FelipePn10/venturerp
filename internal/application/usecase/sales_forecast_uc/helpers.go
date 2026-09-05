@@ -8,7 +8,7 @@ import (
 // weekToDate returns a time.Time representing the Monday of the given ISO week.
 func weekToDate(year, week int) (time.Time, error) {
 	if week < 1 || week > 53 {
-		return time.Time{}, fmt.Errorf("week %d is out of range [1, 53]", week)
+		return time.Time{}, fmt.Errorf("a semana %d está fora do intervalo de 1 a 53", week)
 	}
 	// Jan 4 is always in week 1 per ISO 8601.
 	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)

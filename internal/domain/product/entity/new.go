@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	ErrInvalidCode      = errors.New("code cannot be empty")
-	ErrInvalidName      = errors.New("name cannot be empty")
-	ErrInvalidGroupCode = errors.New("groupCode must be greater than zero")
+	ErrInvalidCode      = errors.New("informe o código")
+	ErrInvalidName      = errors.New("informe o nome")
+	ErrInvalidGroupCode = errors.New("o código do grupo deve ser maior que zero")
 )
 
 func NewProduct(
@@ -28,7 +28,7 @@ func NewProduct(
 	case group_code <= "":
 		return nil, ErrInvalidGroupCode
 	case createdBy == uuid.Nil:
-		return nil, errors.New("createdBy cannot be nil UUID")
+		return nil, errors.New("é preciso identificar o usuário que está criando o registro")
 	}
 
 	id := int64(time.Now().UnixNano())
@@ -43,7 +43,7 @@ func NewProduct(
 
 func ValidateProductDeletion(id int64) error {
 	if id == 0 {
-		return errors.New("product id must be greater than zero")
+		return errors.New("o produto deve ser um código maior que zero")
 	}
 	return nil
 }

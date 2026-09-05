@@ -610,14 +610,14 @@ func parseRange(w http.ResponseWriter, r *http.Request) (time.Time, time.Time, b
 	q := r.URL.Query()
 	from, err := time.ParseInLocation("2006-01-02", q.Get("from"), time.Local)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid or missing 'from' (want YYYY-MM-DD)")
+		jsonError(w, http.StatusBadRequest, "informe a data inicial no formato ano-mês-dia")
 		return time.Time{}, time.Time{}, false
 	}
 	var to time.Time
 	if raw := q.Get("to"); raw != "" {
 		to, err = time.ParseInLocation("2006-01-02", raw, time.Local)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid 'to' (want YYYY-MM-DD)")
+			jsonError(w, http.StatusBadRequest, "data final inválida: use o formato ano-mês-dia")
 			return time.Time{}, time.Time{}, false
 		}
 		to = to.AddDate(0, 0, 1) // make the inclusive end day half-open

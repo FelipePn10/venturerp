@@ -106,7 +106,7 @@ func NewFiscalHandler(
 func (h *FiscalHandler) GetDANFE(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		security.RespondError(w, http.StatusBadRequest, "invalid exit id")
+		security.RespondError(w, http.StatusBadRequest, "nota de saída inválida")
 		return
 	}
 	result, err := h.getDANFEUC.Execute(r.Context(), id)

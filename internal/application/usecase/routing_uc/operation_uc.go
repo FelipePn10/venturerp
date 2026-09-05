@@ -34,10 +34,10 @@ func NewOperationUseCase(repo repository.RoutingRepository, deps ...any) *Operat
 
 func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperationDTO) (*response.OperationResponse, error) {
 	if dto.Name == "" {
-		return nil, fmt.Errorf("name is required")
+		return nil, fmt.Errorf("informe o nome")
 	}
 	if !validTimeUnit(dto.TimeUnit) {
-		return nil, fmt.Errorf("invalid time_unit %q (expected MIN, HORA or DIA)", dto.TimeUnit)
+		return nil, fmt.Errorf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit)
 	}
 	origin := entity.OperationOrigin(dto.Origin)
 	if origin == "" {
@@ -86,11 +86,11 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 
 func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperationDTO) (*response.OperationResponse, error) {
 	if !validTimeUnit(dto.TimeUnit) {
-		return nil, fmt.Errorf("invalid time_unit %q (expected MIN, HORA or DIA)", dto.TimeUnit)
+		return nil, fmt.Errorf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit)
 	}
 	op, err := uc.repo.GetOperationByID(ctx, dto.ID)
 	if err != nil {
-		return nil, fmt.Errorf("operation not found: %w", err)
+		return nil, fmt.Errorf("operação não encontrada: %w", err)
 	}
 	remittance, err := normalizeThirdPartyRemittance(dto.ThirdPartyRemittance)
 	if err != nil {
@@ -107,7 +107,7 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 			return nil, usedErr
 		}
 		if used {
-			return nil, fmt.Errorf("external operation used by a manufacturing route cannot become internal")
+			return nil, fmt.Errorf("operação externa usada em um roteiro de fabricação não pode virar interna")
 		}
 	}
 	op.Name = dto.Name
@@ -146,7 +146,7 @@ func normalizeThirdPartyRemittance(value string) (string, error) {
 func (uc *OperationUseCase) GetByID(ctx context.Context, id int64) (*response.OperationResponse, error) {
 	op, err := uc.repo.GetOperationByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("operation not found: %w", err)
+		return nil, fmt.Errorf("operação não encontrada: %w", err)
 	}
 	return toOperationResponse(op), nil
 }

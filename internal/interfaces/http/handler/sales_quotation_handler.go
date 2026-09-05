@@ -404,7 +404,7 @@ func (h *SalesQuotationHandler) CreateAttachment(w http.ResponseWriter, r *http.
 	r.Body = http.MaxBytesReader(w, r.Body, quoteentity.MaxAttachmentSize+(1<<20))
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "multipart file field is required")
+		security.RespondError(w, http.StatusBadRequest, "envie o arquivo")
 		return
 	}
 	defer file.Close()
@@ -415,7 +415,7 @@ func (h *SalesQuotationHandler) CreateAttachment(w http.ResponseWriter, r *http.
 	}
 	dto := request.CreateSalesQuotationAttachmentDTO{SalesQuotationCode: code, FileName: header.Filename, ContentType: header.Header.Get("Content-Type"), FileSize: int64(len(content)), Content: content}
 	if dto.FileSize > quoteentity.MaxAttachmentSize {
-		security.RespondError(w, http.StatusRequestEntityTooLarge, "attachment cannot exceed 10 MB")
+		security.RespondError(w, http.StatusRequestEntityTooLarge, "o anexo não pode passar de 10 MB")
 		return
 	}
 	result, err := h.uc.CreateAttachment(r.Context(), dto)

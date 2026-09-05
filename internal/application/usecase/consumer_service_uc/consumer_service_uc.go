@@ -53,7 +53,7 @@ func (uc *UseCase) CreateCallType(ctx context.Context, dto request.CreateConsume
 		return nil, err
 	}
 	if strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	actor, err := uc.actorID(ctx)
 	if err != nil {
@@ -86,7 +86,7 @@ func (uc *UseCase) CreateKnowledgeSource(ctx context.Context, dto request.Create
 		return nil, err
 	}
 	if strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("description is required")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	actor, err := uc.actorID(ctx)
 	if err != nil {
@@ -124,7 +124,7 @@ func (uc *UseCase) CreateConsumer(ctx context.Context, dto request.CreateConsume
 		return nil, err
 	}
 	if strings.TrimSpace(dto.Name) == "" {
-		return nil, errorsuc.NewValidationError("name is required")
+		return nil, errorsuc.NewValidationError("informe o nome")
 	}
 	personType, err := normalizePersonType(dto.PersonType)
 	if err != nil {
@@ -240,7 +240,7 @@ func (uc *UseCase) AddConsumerPhone(ctx context.Context, dto request.CreateConsu
 		return nil, err
 	}
 	if dto.ConsumerCode == 0 || strings.TrimSpace(dto.Number) == "" {
-		return nil, errorsuc.NewValidationError("consumer_code and number are required")
+		return nil, errorsuc.NewValidationError("informe o consumidor e o número")
 	}
 	phoneType := strings.ToUpper(strings.TrimSpace(dto.PhoneType))
 	if phoneType == "" {
@@ -259,7 +259,7 @@ func (uc *UseCase) AddConsumerEmail(ctx context.Context, dto request.CreateConsu
 		return nil, err
 	}
 	if dto.ConsumerCode == 0 || !strings.Contains(dto.Email, "@") {
-		return nil, errorsuc.NewValidationError("consumer_code and valid email are required")
+		return nil, errorsuc.NewValidationError("informe o consumidor e um e-mail válido")
 	}
 	created, err := uc.Repo.AddConsumerEmail(ctx, tenantID, &entity.ConsumerEmail{ConsumerCode: dto.ConsumerCode, ContactCode: dto.ContactCode, Email: strings.TrimSpace(dto.Email), IsPrimary: dto.IsPrimary})
 	if err != nil {
@@ -274,7 +274,7 @@ func (uc *UseCase) AddConsumerContact(ctx context.Context, dto request.CreateCon
 		return nil, err
 	}
 	if dto.ConsumerCode == 0 || strings.TrimSpace(dto.Name) == "" {
-		return nil, errorsuc.NewValidationError("consumer_code and name are required")
+		return nil, errorsuc.NewValidationError("informe o consumidor e o nome")
 	}
 	created, err := uc.Repo.AddConsumerContact(ctx, tenantID, &entity.ConsumerContact{ConsumerCode: dto.ConsumerCode, Name: strings.TrimSpace(dto.Name), Role: dto.Role, ContactType: dto.ContactType, Notes: dto.Notes})
 	if err != nil {
@@ -293,7 +293,7 @@ func (uc *UseCase) CreateCustomerContact(ctx context.Context, dto request.Create
 		return nil, err
 	}
 	if dto.CustomerCode == 0 || strings.TrimSpace(dto.ContactType) == "" || strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("customer_code, contact_type and description are required")
+		return nil, errorsuc.NewValidationError("informe o cliente, o tipo de contato e a descrição")
 	}
 	openedAt := parseDateTimeOrNow(dto.OpenedAt)
 	scheduledAt := parseDateTimeOrNow(dto.ScheduledAt)
@@ -333,7 +333,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 		return nil, err
 	}
 	if dto.ConsumerCode == 0 || dto.CallTypeCode == 0 || strings.TrimSpace(dto.Subject) == "" {
-		return nil, errorsuc.NewValidationError("consumer_code, call_type_code and subject are required")
+		return nil, errorsuc.NewValidationError("informe o consumidor, o tipo de chamado e o assunto")
 	}
 	callType, err := uc.Repo.GetCallType(ctx, dto.CallTypeCode)
 	if err != nil {
@@ -345,7 +345,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 		return nil, err
 	}
 	if callType.IsComplaint && (dto.Symptoms == nil || strings.TrimSpace(*dto.Symptoms) == "") {
-		return nil, errorsuc.NewValidationError("symptoms is required for complaint call types")
+		return nil, errorsuc.NewValidationError("chamados de reclamação exigem a descrição dos sintomas")
 	}
 	callNumber, err := uc.Repo.NextCallNumber(ctx, tenantID)
 	if err != nil {
@@ -402,7 +402,7 @@ func (uc *UseCase) UpdateCall(ctx context.Context, code int64, dto request.Updat
 	}
 	current.Description, current.Solution, current.ChecklistCode = dto.Description, dto.Solution, dto.ChecklistCode
 	if callType.IsComplaint && (current.Symptoms == nil || strings.TrimSpace(*current.Symptoms) == "") {
-		return nil, errorsuc.NewValidationError("symptoms is required for complaint call types")
+		return nil, errorsuc.NewValidationError("chamados de reclamação exigem a descrição dos sintomas")
 	}
 	updated, err := uc.Repo.UpdateCall(ctx, tenantID, current)
 	if err != nil {
@@ -445,7 +445,7 @@ func (uc *UseCase) AddCallReturn(ctx context.Context, dto request.AddConsumerSer
 		return nil, err
 	}
 	if dto.CallCode == 0 || strings.TrimSpace(dto.ContactType) == "" || strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("call_code, contact_type and description are required")
+		return nil, errorsuc.NewValidationError("informe o chamado, o tipo de contato e a descrição")
 	}
 	actor, err := uc.Auth.UserID(ctx)
 	if err != nil {
@@ -539,7 +539,7 @@ func (uc *UseCase) AddChecklistItem(ctx context.Context, dto request.AddConsumer
 		return nil, err
 	}
 	if dto.CallCode == 0 || strings.TrimSpace(dto.Description) == "" {
-		return nil, errorsuc.NewValidationError("call_code and description are required")
+		return nil, errorsuc.NewValidationError("informe o chamado e a descrição")
 	}
 	created, err := uc.Repo.AddChecklistItem(ctx, tenantID, &entity.CallChecklistItem{CallCode: dto.CallCode, Sequence: dto.Sequence, Description: strings.TrimSpace(dto.Description), Notes: dto.Notes})
 	if err != nil {
@@ -585,10 +585,10 @@ func normalizePersonType(value string) (string, error) {
 
 func validateConsumerDocument(personType string, cpf, cnpj *string) error {
 	if personType == "F" && cnpj != nil && strings.TrimSpace(*cnpj) != "" {
-		return errorsuc.NewValidationError("cnpj is not allowed for pessoa fisica")
+		return errorsuc.NewValidationError("pessoa física não aceita CNPJ")
 	}
 	if personType == "J" && cpf != nil && strings.TrimSpace(*cpf) != "" {
-		return errorsuc.NewValidationError("cpf is not allowed for pessoa juridica")
+		return errorsuc.NewValidationError("pessoa jurídica não aceita CPF")
 	}
 	return nil
 }
@@ -633,11 +633,11 @@ func validateVisitDates(situation entity.CallSituation, requested, returned stri
 		return nil
 	}
 	if parseDatePtr(requested) == nil {
-		return errorsuc.NewValidationError("visit_requested_date is required when situation is TECHNICAL_VISIT")
+		return errorsuc.NewValidationError("informe a data solicitada quando a situação for visita técnica")
 	}
 	if returned != "" {
 		if ret := parseDatePtr(returned); ret == nil {
-			return errorsuc.NewValidationError("visit_returned_date must be a valid date")
+			return errorsuc.NewValidationError("informe uma data de retorno da visita válida")
 		}
 	}
 	return nil

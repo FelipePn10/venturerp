@@ -1291,7 +1291,7 @@ func (r *CustomerRepositorySQLC) CreateInvoiceType(ctx context.Context, it *enti
 func (r *CustomerRepositorySQLC) UpdateInvoiceType(ctx context.Context, it *entity.InvoiceType) (*entity.InvoiceType, error) {
 	existing, err := r.q.GetInvoiceTypeByCode(ctx, it.Code)
 	if err != nil {
-		return nil, fmt.Errorf("fetching invoice type for update: %w", err)
+		return nil, fmt.Errorf("falha ao buscar o tipo de nota fiscal para alteração: %w", err)
 	}
 	row, err := r.q.UpdateInvoiceType(ctx, sqlc.UpdateInvoiceTypeParams{
 		ID:                      existing.ID,
@@ -1675,7 +1675,7 @@ func (r *CustomerRepositorySQLC) ListCustomers(ctx context.Context, onlyActive b
 func (r *CustomerRepositorySQLC) ListEstablishments(ctx context.Context, corporateCode int64) ([]*entity.Customer, error) {
 	rows, err := r.q.ListEstablishments(ctx, &corporateCode)
 	if err != nil {
-		return nil, fmt.Errorf("listing establishments for corporate %d: %w", corporateCode, err)
+		return nil, fmt.Errorf("falha ao listar os estabelecimentos do grupo %d: %w", corporateCode, err)
 	}
 	out := make([]*entity.Customer, 0, len(rows))
 	for _, row := range rows {

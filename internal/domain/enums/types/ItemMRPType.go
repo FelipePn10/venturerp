@@ -26,7 +26,7 @@ func (t TypeMRPItem) MarshalJSON() ([]byte, error) {
 }
 
 func (t *TypeMRPItem) UnmarshalJSON(data []byte) error {
-	value, err := unmarshalStringOrIntEnum(data, "TypeMRPItem", map[string]int{"NORMAL_MRP": int(NORMAL_MRP), "PROJETO": int(PROJETO)})
+	value, err := unmarshalStringOrIntEnum(data, "Tipo de MRP do item", map[string]int{"NORMAL_MRP": int(NORMAL_MRP), "PROJETO": int(PROJETO)})
 	if err != nil {
 		return err
 	}

@@ -131,7 +131,7 @@ func (a *AuthService) UserID(ctx context.Context) (uuid.UUID, error) {
 func (a *AuthService) EnterpriseID(ctx context.Context) (int64, error) {
 	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
 	if !ok || user.EnterpriseID <= 0 {
-		return 0, errors.New("enterprise not selected")
+		return 0, errors.New("nenhuma empresa selecionada")
 	}
 	return user.EnterpriseID, nil
 }
@@ -139,7 +139,7 @@ func (a *AuthService) EnterpriseID(ctx context.Context) (int64, error) {
 func (a *AuthService) EnterpriseCode(ctx context.Context) (int64, error) {
 	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
 	if !ok || user.EnterpriseCode <= 0 {
-		return 0, errors.New("enterprise not selected")
+		return 0, errors.New("nenhuma empresa selecionada")
 	}
 	return user.EnterpriseCode, nil
 }

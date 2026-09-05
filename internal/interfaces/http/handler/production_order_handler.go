@@ -138,7 +138,7 @@ func (h *ProductionOrderHandler) ReplaceMaterial(w http.ResponseWriter, r *http.
 func (h *ProductionOrderHandler) DeleteMaterial(w http.ResponseWriter, r *http.Request) {
 	materialID, err := strconv.ParseInt(chi.URLParam(r, "materialID"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid material id")
+		security.RespondError(w, http.StatusBadRequest, "material inválido")
 		return
 	}
 	if err := h.materialControlUC.Delete(r.Context(), materialID); err != nil {
@@ -193,7 +193,7 @@ func (h *ProductionOrderHandler) AddScrapDestination(w http.ResponseWriter, r *h
 func (h *ProductionOrderHandler) DeleteScrapDestination(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "destinationID"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid destination id")
+		security.RespondError(w, http.StatusBadRequest, "destino inválido")
 		return
 	}
 	if err := h.materialControlUC.DeleteScrap(r.Context(), id); err != nil {
@@ -205,7 +205,7 @@ func (h *ProductionOrderHandler) DeleteScrapDestination(w http.ResponseWriter, r
 func (h *ProductionOrderHandler) UpdateScrapDestination(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "destinationID"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid destination id")
+		security.RespondError(w, http.StatusBadRequest, "destino inválido")
 		return
 	}
 	var dto request.AddScrapDestinationDTO
@@ -511,7 +511,7 @@ func (h *ProductionOrderHandler) GetConsumptions(w http.ResponseWriter, r *http.
 
 func (h *ProductionOrderHandler) SettleCost(w http.ResponseWriter, r *http.Request) {
 	if h.settleCostUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "cost settlement not configured")
+		security.RespondError(w, http.StatusNotImplemented, "a apuração de custo não está configurada")
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -529,7 +529,7 @@ func (h *ProductionOrderHandler) SettleCost(w http.ResponseWriter, r *http.Reque
 
 func (h *ProductionOrderHandler) GetCost(w http.ResponseWriter, r *http.Request) {
 	if h.getCostUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "cost settlement not configured")
+		security.RespondError(w, http.StatusNotImplemented, "a apuração de custo não está configurada")
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -549,7 +549,7 @@ func (h *ProductionOrderHandler) GetCost(w http.ResponseWriter, r *http.Request)
 
 func (h *ProductionOrderHandler) ReturnScrap(w http.ResponseWriter, r *http.Request) {
 	if h.returnScrapUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "scrap return not configured")
+		security.RespondError(w, http.StatusNotImplemented, "a devolução de refugo não está configurada")
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -575,7 +575,7 @@ func (h *ProductionOrderHandler) ReturnScrap(w http.ResponseWriter, r *http.Requ
 
 func (h *ProductionOrderHandler) ExplodeRoute(w http.ResponseWriter, r *http.Request) {
 	if h.orderOpsUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "order operations not configured")
+		security.RespondError(w, http.StatusNotImplemented, "as operações da ordem não estão configuradas")
 		return
 	}
 	var dto request.ExplodeRouteDTO
@@ -593,7 +593,7 @@ func (h *ProductionOrderHandler) ExplodeRoute(w http.ResponseWriter, r *http.Req
 
 func (h *ProductionOrderHandler) ListOrderOperations(w http.ResponseWriter, r *http.Request) {
 	if h.orderOpsUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "order operations not configured")
+		security.RespondError(w, http.StatusNotImplemented, "as operações da ordem não estão configuradas")
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -611,7 +611,7 @@ func (h *ProductionOrderHandler) ListOrderOperations(w http.ResponseWriter, r *h
 
 func (h *ProductionOrderHandler) AdvanceOperation(w http.ResponseWriter, r *http.Request) {
 	if h.orderOpsUC == nil {
-		security.RespondError(w, http.StatusNotImplemented, "order operations not configured")
+		security.RespondError(w, http.StatusNotImplemented, "as operações da ordem não estão configuradas")
 		return
 	}
 	var dto request.AdvanceOperationDTO

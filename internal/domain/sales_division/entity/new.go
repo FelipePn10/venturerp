@@ -8,10 +8,10 @@ import (
 )
 
 var (
-	ErrDescriptionRequired       = errors.New("description is required")
-	ErrCodeInvalid               = errors.New("code must be greater than zero")
-	ErrInvalidCommercialAnalysis = errors.New("invalid commercial_analysis value: must be FREE, BLOCK_ALWAYS or ALWAYS_ANALYZE")
-	ErrInvalidFinancialAnalysis  = errors.New("invalid financial_analysis value: must be FREE, BLOCK_ALWAYS or ALWAYS_ANALYZE")
+	ErrDescriptionRequired       = errors.New("informe a descrição")
+	ErrCodeInvalid               = errors.New("o código deve ser maior que zero")
+	ErrInvalidCommercialAnalysis = errors.New("análise comercial inválida: use livre, bloquear sempre ou analisar sempre")
+	ErrInvalidFinancialAnalysis  = errors.New("análise financeira inválida: use livre, bloquear sempre ou analisar sempre")
 )
 
 func isValidAnalysis(a SalesDivisionAnalysis) bool {

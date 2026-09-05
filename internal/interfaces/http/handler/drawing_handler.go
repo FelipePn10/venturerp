@@ -45,7 +45,7 @@ func (h *DrawingHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *DrawingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid drawing id")
+		jsonError(w, http.StatusBadRequest, "desenho inválido")
 		return
 	}
 	res, err := h.uc.Get(r.Context(), id)
@@ -59,7 +59,7 @@ func (h *DrawingHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *DrawingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid drawing id")
+		jsonError(w, http.StatusBadRequest, "desenho inválido")
 		return
 	}
 	var dto request.DrawingDTO
@@ -79,7 +79,7 @@ func (h *DrawingHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *DrawingHandler) Deactivate(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid drawing id")
+		jsonError(w, http.StatusBadRequest, "desenho inválido")
 		return
 	}
 	if err := h.uc.Deactivate(r.Context(), id); err != nil {
@@ -94,7 +94,7 @@ func (h *DrawingHandler) Deactivate(w http.ResponseWriter, r *http.Request) {
 func (h *DrawingHandler) AddRevision(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid drawing id")
+		jsonError(w, http.StatusBadRequest, "desenho inválido")
 		return
 	}
 	var dto request.DrawingRevisionDTO
@@ -114,7 +114,7 @@ func (h *DrawingHandler) AddRevision(w http.ResponseWriter, r *http.Request) {
 func (h *DrawingHandler) ListRevisions(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid drawing id")
+		jsonError(w, http.StatusBadRequest, "desenho inválido")
 		return
 	}
 	res, err := h.uc.ListRevisions(r.Context(), id)
@@ -128,7 +128,7 @@ func (h *DrawingHandler) ListRevisions(w http.ResponseWriter, r *http.Request) {
 func (h *DrawingHandler) UpdateRevision(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "revId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid revision id")
+		jsonError(w, http.StatusBadRequest, "revisão inválida")
 		return
 	}
 	var dto request.DrawingRevisionDTO
@@ -163,7 +163,7 @@ func (h *DrawingHandler) MaintainItemDrawingCode(w http.ResponseWriter, r *http.
 func (h *DrawingHandler) GetItemDrawingCode(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid item code")
+		jsonError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	result, err := h.uc.GetItemDrawingCode(r.Context(), itemCode, r.URL.Query().Get("mask"))
@@ -200,7 +200,7 @@ func (h *DrawingHandler) GetManufacturingParameters(w http.ResponseWriter, r *ht
 func (h *DrawingHandler) DeleteRevision(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "revId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid revision id")
+		jsonError(w, http.StatusBadRequest, "revisão inválida")
 		return
 	}
 	if err := h.uc.DeleteRevision(r.Context(), id); err != nil {
@@ -213,7 +213,7 @@ func (h *DrawingHandler) DeleteRevision(w http.ResponseWriter, r *http.Request) 
 func (h *DrawingHandler) AddDistribution(w http.ResponseWriter, r *http.Request) {
 	revID, err := strconv.ParseInt(chi.URLParam(r, "revId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid revision id")
+		jsonError(w, http.StatusBadRequest, "revisão inválida")
 		return
 	}
 	var dto request.DrawingDistributionDTO
@@ -232,7 +232,7 @@ func (h *DrawingHandler) AddDistribution(w http.ResponseWriter, r *http.Request)
 func (h *DrawingHandler) DeleteDistribution(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "distId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid distribution id")
+		jsonError(w, http.StatusBadRequest, "distribuição inválida")
 		return
 	}
 	if err := h.uc.DeleteDistribution(r.Context(), id); err != nil {
@@ -245,7 +245,7 @@ func (h *DrawingHandler) DeleteDistribution(w http.ResponseWriter, r *http.Reque
 func (h *DrawingHandler) AddCharacteristic(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid drawing id")
+		jsonError(w, http.StatusBadRequest, "desenho inválido")
 		return
 	}
 	var dto request.DrawingCharacteristicDTO
@@ -264,7 +264,7 @@ func (h *DrawingHandler) AddCharacteristic(w http.ResponseWriter, r *http.Reques
 func (h *DrawingHandler) ListCharacteristics(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid drawing id")
+		jsonError(w, http.StatusBadRequest, "desenho inválido")
 		return
 	}
 	res, err := h.uc.ListCharacteristics(r.Context(), id)

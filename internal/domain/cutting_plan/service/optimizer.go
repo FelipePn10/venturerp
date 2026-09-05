@@ -140,7 +140,7 @@ func register(o CuttingOptimizer) { registry[o.Type()] = o }
 
 // ErrNoOptimizer is returned when no strategy is registered for a cut type —
 // e.g. true-shape before its external provider is configured.
-var ErrNoOptimizer = errors.New("no optimizer registered for cut type")
+var ErrNoOptimizer = errors.New("não há otimizador cadastrado para este tipo de corte")
 
 // Optimizer returns the registered optimiser for a cut type.
 func Optimizer(t entity.CutType) (CuttingOptimizer, error) {

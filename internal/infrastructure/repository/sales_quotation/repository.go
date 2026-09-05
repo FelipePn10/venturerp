@@ -36,7 +36,7 @@ func (r *Repository) NextQuotationNumber(ctx context.Context, enterpriseCode int
 		return 0, err
 	}
 	if enterpriseCode != tenantID {
-		return 0, fmt.Errorf("sales quotation enterprise does not match authenticated tenant")
+		return 0, fmt.Errorf("o orçamento pertence a outra empresa")
 	}
 	var n int64
 	err = r.pool.QueryRow(ctx, `
@@ -57,7 +57,7 @@ func (r *Repository) Create(ctx context.Context, q *quoteentity.SalesQuotation) 
 		return nil, err
 	}
 	if q.EnterpriseCode != tenantID {
-		return nil, fmt.Errorf("sales quotation enterprise does not match authenticated tenant")
+		return nil, fmt.Errorf("o orçamento pertence a outra empresa")
 	}
 	row := r.pool.QueryRow(ctx, `
 INSERT INTO public.sales_quotations (
@@ -211,7 +211,7 @@ func (r *Repository) Cancel(ctx context.Context, code, reasonCode int64, reason 
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("sales quotation %d not found or cannot be cancelled", code)
+			return fmt.Errorf("orçamento de venda %d não encontrado ou não pode ser cancelado", code)
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events (sales_quotation_code, event_type, reason, complement) VALUES ($1,'CANCEL',$2,$3)`, code, reason, complement)
 		return err
@@ -229,7 +229,7 @@ func (r *Repository) Uncancel(ctx context.Context, code, reasonCode int64, reaso
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("sales quotation %d not found or is not cancelled", code)
+			return fmt.Errorf("orçamento de venda %d não encontrado ou não está cancelado", code)
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events (sales_quotation_code, event_type, reason, complement) VALUES ($1,'UNCANCEL',$2,$3)`, code, reason, complement)
 		return err
@@ -247,7 +247,7 @@ func (r *Repository) Attend(ctx context.Context, code int64, reason string, comp
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("sales quotation %d not found or cannot be attended", code)
+			return fmt.Errorf("orçamento de venda %d não encontrado ou não pode ser atendido", code)
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events (sales_quotation_code, event_type, reason, complement, event_date) VALUES ($1,'ATTEND',$2,$3,$4)`, code, reason, complement, eventDate)
 		return err
@@ -261,7 +261,7 @@ func (r *Repository) ChangeStatus(ctx context.Context, code int64, status quotee
 	}
 	tag, err := r.pool.Exec(ctx, `UPDATE public.sales_quotations SET status=$3, updated_at=NOW() WHERE code=$1 AND enterprise_code=$2`, code, tenantID, string(status))
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("sales quotation %d not found", code)
+		return fmt.Errorf("orçamento de venda %d não encontrado", code)
 	}
 	return err
 }
@@ -327,7 +327,7 @@ func (r *Repository) MarkConverted(ctx context.Context, quotationCode, salesOrde
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("sales quotation %d not found or already converted", quotationCode)
+			return fmt.Errorf("orçamento de venda %d não encontrado ou já convertido", quotationCode)
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events (sales_quotation_code, event_type, reason) VALUES ($1,'CONVERT','Convertido em pedido de venda')`, quotationCode)
 		return err
@@ -953,7 +953,7 @@ func (r *Repository) DeleteAttachment(ctx context.Context, quotationCode, attach
 	}
 	tag, err := r.pool.Exec(ctx, `DELETE FROM public.sales_quotation_attachments a USING public.sales_quotations q WHERE a.id=$1 AND a.sales_quotation_code=$2 AND q.code=a.sales_quotation_code AND q.enterprise_code=$3`, attachmentID, quotationCode, tenantID)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("attachment not found")
+		return fmt.Errorf("anexo não encontrado")
 	}
 	return err
 }

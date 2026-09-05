@@ -67,7 +67,7 @@ type JournalEntryUseCase struct {
 
 func (uc *JournalEntryUseCase) Create(ctx context.Context, e *accountingEntity.AccountingJournalEntry) (*accountingEntity.AccountingJournalEntry, error) {
 	if e.Value <= 0 {
-		return nil, fmt.Errorf("entry value must be positive")
+		return nil, fmt.Errorf("o valor de entrada deve ser maior que zero")
 	}
 	return uc.Repo.CreateJournalEntry(ctx, e)
 }

@@ -37,7 +37,7 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("from"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid 'from' (use RFC3339)")
+			jsonError(w, http.StatusBadRequest, "data inicial inválida: informe data e hora completas")
 			return
 		}
 		f.From = t
@@ -45,7 +45,7 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("to"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid 'to' (use RFC3339)")
+			jsonError(w, http.StatusBadRequest, "data final inválida: informe data e hora completas")
 			return
 		}
 		f.To = t

@@ -31,7 +31,7 @@ func (c BusinessCode) IsValid() bool {
 
 func NewItemCode(code int64) (ItemCode, error) {
 	if code <= 0 {
-		return 0, errors.New("item code must be greater than zero")
+		return 0, errors.New("o código do item deve ser maior que zero")
 	}
 	return ItemCode(code), nil
 }
@@ -171,7 +171,7 @@ func NewCyclicalCountConfig(days int) (*CyclicalCountConfig, error) {
 	}
 
 	if !c.IsValid() {
-		return nil, errors.New("invalid cyclical count config")
+		return nil, errors.New("configuração de contagem cíclica inválida")
 	}
 
 	return c, nil
@@ -201,7 +201,7 @@ func NewReorderPoint(tr, cm int16, cr int, es int16) (*ReorderPoint, error) {
 	}
 
 	if !r.IsValid() {
-		return nil, errors.New("invalid reorder point")
+		return nil, errors.New("ponto de reposição inválido")
 	}
 
 	return r, nil
@@ -213,7 +213,7 @@ func (r ReorderPoint) IsValid() bool {
 
 func (r ReorderPoint) Calculate() (int, error) {
 	if r.CR == 0 {
-		return 0, errors.New("CR cannot be zero")
+		return 0, errors.New("o CR não pode ser zero")
 	}
 
 	result := (int(r.TR) * int(r.CM) / r.CR) + int(r.ES)

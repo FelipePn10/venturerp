@@ -16,7 +16,7 @@ func NewRestriction(
 	createdBy uuid.UUID,
 ) (*Restriction, error) {
 	if situation != RestrictionActive && situation != RestrictionInactive {
-		return nil, errors.New("invalid restriction situation")
+		return nil, errors.New("situação de restrição inválida")
 	}
 
 	return &Restriction{

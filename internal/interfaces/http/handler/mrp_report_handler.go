@@ -46,7 +46,7 @@ func reportDateStrict(value string) (*time.Time, error) {
 	}
 	parsed, err := time.Parse("2006-01-02", value)
 	if err != nil {
-		return nil, fmt.Errorf("invalid date, expected YYYY-MM-DD")
+		return nil, fmt.Errorf("data inválida: use o formato ano-mês-dia")
 	}
 	return &parsed, nil
 }
@@ -59,7 +59,7 @@ func reportInt64List(value string) ([]int64, error) {
 	for _, part := range parts {
 		parsed, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid integer list")
+			return nil, fmt.Errorf("a lista de códigos informada é inválida")
 		}
 		result = append(result, parsed)
 	}
@@ -71,21 +71,21 @@ func reportPeriods(value string) ([]mrp_report_uc.DateRange, error) {
 	}
 	parts := strings.Split(value, ",")
 	if len(parts) > 6 {
-		return nil, fmt.Errorf("at most six periods are allowed")
+		return nil, fmt.Errorf("informe no máximo seis períodos")
 	}
 	result := make([]mrp_report_uc.DateRange, 0, len(parts))
 	for _, part := range parts {
 		bounds := strings.Split(strings.TrimSpace(part), "|")
 		if len(bounds) != 2 {
-			return nil, fmt.Errorf("period must use YYYY-MM-DD|YYYY-MM-DD")
+			return nil, fmt.Errorf("informe o período como data inicial e final no formato ano-mês-dia")
 		}
 		from, err := time.Parse("2006-01-02", bounds[0])
 		if err != nil {
-			return nil, fmt.Errorf("invalid period start")
+			return nil, fmt.Errorf("início do período inválido")
 		}
 		to, err := time.Parse("2006-01-02", bounds[1])
 		if err != nil {
-			return nil, fmt.Errorf("invalid period end")
+			return nil, fmt.Errorf("fim do período inválido")
 		}
 		result = append(result, mrp_report_uc.DateRange{From: from, To: to})
 	}
@@ -188,7 +188,7 @@ func (h *MRPReportHandler) Explosion(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item code")
+		security.RespondError(w, http.StatusBadRequest, "código de item inválido")
 		return
 	}
 	quantity := decimal.Zero

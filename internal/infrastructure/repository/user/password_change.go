@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var errPasswordChangeNotAllowed = errors.New("password change request is not eligible")
+var errPasswordChangeNotAllowed = errors.New("este pedido de troca de senha não pode ser usado")
 
 func (r *repositoryUserSQLC) CreatePasswordChangeRequest(ctx context.Context, userID uuid.UUID, enterpriseID int64) (*userentity.PasswordChangeRequest, error) {
 	const query = `INSERT INTO password_change_requests (enterprise_id, user_id, requested_by)
@@ -114,7 +114,7 @@ func (r *repositoryUserSQLC) CompletePasswordChange(ctx context.Context, request
 		return fmt.Errorf("update password: %w", err)
 	}
 	if result.RowsAffected() != 1 {
-		return errors.New("update password affected no user")
+		return errors.New("nenhum usuário foi atualizado na troca de senha")
 	}
 	return tx.Commit(ctx)
 }

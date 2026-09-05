@@ -114,10 +114,10 @@ func validateFilter(filter *Filter, report string) error {
 	filter.ListMode = strings.ToUpper(strings.TrimSpace(filter.ListMode))
 	filter.DescriptionType = strings.ToUpper(strings.TrimSpace(filter.DescriptionType))
 	if filter.From != nil && filter.To != nil && filter.To.Before(*filter.From) {
-		return errorsuc.NewValidationError("from cannot be after to")
+		return errorsuc.NewValidationError("a data inicial não pode ser posterior à final")
 	}
 	if (filter.ClassificationMaskCode == nil) != (strings.TrimSpace(filter.ClassificationCode) == "") {
-		return errorsuc.NewValidationError("classification_mask_code and classification_code must be informed together")
+		return errorsuc.NewValidationError("informe a máscara e o código da classificação juntos")
 	}
 	allowedItemType := map[string]bool{"": true, "TODOS": true, "FABRICADO": true, "COMPRADO": true, "DE_TERCEIRO": true, "TERCEIRIZADO": true}
 	if !allowedItemType[filter.ItemType] {
@@ -129,7 +129,7 @@ func validateFilter(filter *Filter, report string) error {
 	}
 	allowedOrder := map[string]bool{"": true, "NENHUM": true, "PLANEJADOR": true, "CLASSIFICACAO": true, "ITEM": true, "CODIGO": true, "DESCRICAO": true, "DATA": true}
 	if !allowedOrder[filter.OrderBy1] || !allowedOrder[filter.OrderBy2] {
-		return errorsuc.NewValidationError("invalid report ordering")
+		return errorsuc.NewValidationError("ordenação de relatório inválida")
 	}
 	if !map[string]bool{"": true, "CALCULATION": true, "CURRENT": true}[filter.Position] {
 		return errorsuc.NewValidationError("invalid position")
@@ -139,7 +139,7 @@ func validateFilter(filter *Filter, report string) error {
 	}
 	for _, p := range filter.Periods {
 		if p.To.Before(p.From) {
-			return errorsuc.NewValidationError("period start cannot be after period end")
+			return errorsuc.NewValidationError("o início do período não pode ser posterior ao fim")
 		}
 	}
 	layouts := map[string]map[string]bool{
@@ -153,7 +153,7 @@ func validateFilter(filter *Filter, report string) error {
 		return errorsuc.NewValidationError("informe os pedidos de venda ou um item com quantidade maior que zero")
 	}
 	if report == "grouped" && len(filter.Periods) > 0 && len(filter.Periods) != 6 {
-		return errorsuc.NewValidationError("grouped needs requires exactly six periods when periods are informed")
+		return errorsuc.NewValidationError("ao informar períodos, as necessidades agrupadas exigem exatamente seis")
 	}
 	if report == "reorder" && !map[string]bool{"": true, "TODOS": true, "REORDER_POINT": true, "KANBAN": true}[filter.PlanningType] {
 		return errorsuc.NewValidationError("invalid planning_type")
