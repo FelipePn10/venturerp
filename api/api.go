@@ -103,6 +103,7 @@ import (
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/nesting"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
+	planningsched "github.com/FelipePn10/panossoerp/internal/infrastructure/planning"
 	accountingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
 	apsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aps"
@@ -144,6 +145,7 @@ import (
 	over "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
 	planned "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
 	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
+	planningrunrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_run"
 	procurementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/procurement"
 	productionOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
 	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
@@ -189,6 +191,7 @@ type application struct {
 	metrics            *httpmw.Metrics
 	auditSink          *audit.PgSink
 	notificationWorker *notification.Worker
+	planningScheduler  *planningsched.Scheduler
 }
 
 func (app *application) mount() chi.Router {
@@ -568,6 +571,13 @@ func (app *application) mount() chi.Router {
 	// planning pipeline (MRP → CRP → APS in one shot)
 	planningPipelineUC := &planning_uc.RunPlanningPipelineUseCase{MRP: mrpRunUC, CRP: crpUC, APS: apsUC}
 	planningHandler := handler.NewPlanningHandler(planningPipelineUC)
+
+	// Execução automática do planejamento na janela noturna. O cadeado por
+	// empresa vive no banco, então vários processos da API podem subir sem
+	// disputar o mesmo ciclo.
+	planningRunRepo := planningrunrepo.New(app.db.Pool)
+	planningAutoRunUC := &planning_uc.AutoRunPlanningUseCase{Pipeline: planningPipelineUC, Repo: planningRunRepo}
+	app.planningScheduler = planningsched.NewScheduler(planningAutoRunUC, app.logger)
 
 	//order priority
 	opRepo := op.NewOrderPriorityRepositorySQLC(queries)
@@ -2742,6 +2752,9 @@ func (app *application) run(r chi.Router) error {
 	defer stop()
 
 	serverErr := make(chan error, 1)
+	if app.planningScheduler != nil {
+		go app.planningScheduler.Run(ctx)
+	}
 	workerDone := make(chan struct{})
 	if app.notificationWorker != nil {
 		go func() {
