@@ -183,7 +183,7 @@ func (r *APSRepositorySQLC) DeleteMachineDowntime(ctx context.Context, id int64)
 	}
 	tag, err := r.pool.Exec(ctx, `DELETE FROM machine_downtimes WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID)
 	if err == nil && tag.RowsAffected() == 0 {
-		return fmt.Errorf("parada de máquina não encontrada")
+		return errorsuc.NewNotFoundError("parada de máquina não encontrada")
 	}
 	return err
 }

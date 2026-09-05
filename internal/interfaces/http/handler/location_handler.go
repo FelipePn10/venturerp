@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -51,7 +52,7 @@ func (h *LocationHandler) GetCountry(w http.ResponseWriter, r *http.Request) {
 	sigla := chi.URLParam(r, "sigla")
 	result, err := h.uc.GetCountryBySigla(r.Context(), sigla)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -61,7 +62,7 @@ func (h *LocationHandler) ListCountries(w http.ResponseWriter, r *http.Request) 
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListCountries(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -101,7 +102,7 @@ func (h *LocationHandler) GetUF(w http.ResponseWriter, r *http.Request) {
 	sigla := chi.URLParam(r, "sigla")
 	result, err := h.uc.GetUFBySigla(r.Context(), sigla)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -111,7 +112,7 @@ func (h *LocationHandler) ListUFs(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListUFs(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -122,7 +123,7 @@ func (h *LocationHandler) ListUFsByCountry(w http.ResponseWriter, r *http.Reques
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListUFsByCountry(r.Context(), sigla, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

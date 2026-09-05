@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -80,7 +81,7 @@ func (r *OrderPriorityRepositorySQLC) GetByCode(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("order priority %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("prioridade de ordem %d não encontrada", code))
 		}
 
 		return nil, fmt.Errorf("fetching order priority: %w", err)

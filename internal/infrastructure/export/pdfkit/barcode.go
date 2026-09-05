@@ -22,7 +22,7 @@ var code128Patterns = [...]string{
 // Subset B covers printable ASCII, which includes the opaque scanner token format.
 func Code128B(value string) ([]int, error) {
 	if value == "" {
-		return nil, fmt.Errorf("valor do codigo de barras obrigatorio")
+		return nil, fmt.Errorf("informe o valor do código de barras")
 	}
 	symbols := make([]int, 0, len(value)+3)
 	symbols = append(symbols, 104) // Start B.

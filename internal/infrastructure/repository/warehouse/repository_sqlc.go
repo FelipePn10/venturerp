@@ -3,6 +3,7 @@ package warehouse
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/warehouse/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/mapper/warehouse"
@@ -69,7 +70,7 @@ func (r *repositoryWarehouseSQLC) GetByCode(ctx context.Context, code string) (*
 	}
 	value, err := scanWarehouse(r.pool.QueryRow(ctx, `SELECT `+warehouseColumns+` FROM warehouse WHERE code=$1 AND enterprise_id=$2`, code, enterpriseID))
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("almoxarifado não encontrado")
+		return nil, errorsuc.NewNotFoundError("almoxarifado não encontrado")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("consultando almoxarifado: %w", err)

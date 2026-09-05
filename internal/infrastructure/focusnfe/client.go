@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"io"
 	"net/http"
 	"os"
@@ -321,7 +322,7 @@ func (c *Client) ConsultarNFePorChave(ctx context.Context, chaveAcesso string) (
 		return nil, fmt.Errorf("consulting NF-e entrada: %w", err)
 	}
 	if statusCode == 404 {
-		return nil, fmt.Errorf("NF-e com chave %s não encontrada", chaveAcesso)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("NF-e com chave %s não encontrada", chaveAcesso))
 	}
 	var resp NFeEntradaResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -354,7 +355,7 @@ func (c *Client) ConsultarCadastro(ctx context.Context, documento string) (*Cada
 		return nil, fmt.Errorf("consulting cadastro: %w", err)
 	}
 	if statusCode == 404 {
-		return nil, fmt.Errorf("documento %s não encontrado na SEFAZ/Receita", documento)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("documento %s não encontrado na SEFAZ/Receita", documento))
 	}
 	var resp CadastroResponse
 	if err := json.Unmarshal(body, &resp); err != nil {

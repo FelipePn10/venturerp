@@ -3,6 +3,7 @@ package stock_movement
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/stock_movement/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/stock_movement/repository"
@@ -60,7 +61,7 @@ func (r *StockMovementTypeRepositoryPG) GetByID(ctx context.Context, id int64) (
 	s, err := scanSMT(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("tipo de movimento de estoque %d não encontrado", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tipo de movimento de estoque %d não encontrado", id))
 		}
 		return nil, fmt.Errorf("getting stock movement type: %w", err)
 	}
@@ -75,7 +76,7 @@ func (r *StockMovementTypeRepositoryPG) GetBySigla(ctx context.Context, sigla st
 	s, err := scanSMT(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("tipo de movimento de estoque %s não encontrado", sigla)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tipo de movimento de estoque %s não encontrado", sigla))
 		}
 		return nil, fmt.Errorf("getting stock movement type by sigla: %w", err)
 	}

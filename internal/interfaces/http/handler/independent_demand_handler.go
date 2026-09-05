@@ -19,7 +19,7 @@ func (h *IndependentDemandHandler) Create(w http.ResponseWriter, r *http.Request
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -45,7 +45,7 @@ func (h *IndependentDemandHandler) Update(w http.ResponseWriter, r *http.Request
 
 	result, err := h.updateUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -55,7 +55,7 @@ func (h *IndependentDemandHandler) Update(w http.ResponseWriter, r *http.Request
 func (h *IndependentDemandHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -72,7 +72,7 @@ func (h *IndependentDemandHandler) ListByItem(w http.ResponseWriter, r *http.Req
 
 	result, err := h.listByItemUC.Execute(r.Context(), itemCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *IndependentDemandHandler) ListFromDate(w http.ResponseWriter, r *http.R
 
 	result, err := h.listFromDateUC.Execute(r.Context(), date)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (h *IndependentDemandHandler) Delete(w http.ResponseWriter, r *http.Request
 
 	err = h.deleteUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 

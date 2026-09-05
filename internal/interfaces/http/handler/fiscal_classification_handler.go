@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -54,7 +55,7 @@ func (h *FiscalClassificationHandler) Get(w http.ResponseWriter, r *http.Request
 	}
 	res, err := h.uc.Get(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -64,7 +65,7 @@ func (h *FiscalClassificationHandler) List(w http.ResponseWriter, r *http.Reques
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	res, err := h.uc.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

@@ -29,7 +29,7 @@ func (h *ProductionPlanHandler) Create(w http.ResponseWriter, r *http.Request) {
 			security.RespondError(w, http.StatusConflict, err.Error())
 			return
 		}
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -38,7 +38,7 @@ func (h *ProductionPlanHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ProductionPlanHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -70,7 +70,7 @@ func (h *ProductionPlanHandler) Update(w http.ResponseWriter, r *http.Request) {
 			security.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -83,7 +83,7 @@ func (h *ProductionPlanHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.deleteUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"message": "plan deleted"})

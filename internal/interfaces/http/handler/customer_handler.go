@@ -63,7 +63,7 @@ func (h *CustomerHandler) GetRegion(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetRegion(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -73,7 +73,7 @@ func (h *CustomerHandler) ListRegions(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListRegions(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -99,7 +99,7 @@ func (h *CustomerHandler) ListMarketSegments(w http.ResponseWriter, r *http.Requ
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListMarketSegments(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -135,7 +135,7 @@ func (h *CustomerHandler) ListContactTypes(w http.ResponseWriter, r *http.Reques
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListContactTypes(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -171,7 +171,7 @@ func (h *CustomerHandler) ListCustomerTypes(w http.ResponseWriter, r *http.Reque
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListCustomerTypes(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -207,7 +207,7 @@ func (h *CustomerHandler) ListCarriers(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListCarriers(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -242,7 +242,7 @@ func (h *CustomerHandler) CreateCarrierGroup(w http.ResponseWriter, r *http.Requ
 func (h *CustomerHandler) ListCarrierGroups(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListCarrierGroups(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -291,7 +291,7 @@ func (h *CustomerHandler) ListPaymentConditions(w http.ResponseWriter, r *http.R
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListPaymentConditions(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -364,7 +364,7 @@ func (h *CustomerHandler) ListSalesTables(w http.ResponseWriter, r *http.Request
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListSalesTables(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -378,7 +378,7 @@ func (h *CustomerHandler) GetSalesTable(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := h.uc.GetSalesTable(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -452,7 +452,7 @@ func (h *CustomerHandler) GetSalesPricePolicy(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.uc.GetSalesPricePolicy(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -462,7 +462,7 @@ func (h *CustomerHandler) ListSalesPricePolicies(w http.ResponseWriter, r *http.
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListSalesPricePolicies(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -514,7 +514,7 @@ func (h *CustomerHandler) GetCommercialPolicy(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.uc.GetCommercialPolicy(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -586,7 +586,7 @@ func (h *CustomerHandler) ListCommercialPolicyLines(w http.ResponseWriter, r *ht
 	}
 	result, err := h.uc.ListCommercialPolicyLines(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -600,7 +600,7 @@ func (h *CustomerHandler) ListCommercialPolicySpecificItems(w http.ResponseWrite
 	}
 	result, err := h.uc.ListCommercialPolicySpecificItems(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -654,7 +654,7 @@ func (h *CustomerHandler) ListInvoiceTypes(w http.ResponseWriter, r *http.Reques
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListInvoiceTypes(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -680,7 +680,7 @@ func (h *CustomerHandler) ListTaxTypes(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListTaxTypes(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -710,7 +710,7 @@ func (h *CustomerHandler) GetCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetCustomer(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -800,7 +800,7 @@ func (h *CustomerHandler) ListCustomers(w http.ResponseWriter, r *http.Request) 
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.ListCustomers(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	// When ?format=xlsx|pdf|csv is present, stream the same rows as a file
@@ -819,7 +819,7 @@ func (h *CustomerHandler) ListEstablishments(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.uc.ListEstablishments(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -930,7 +930,7 @@ func (h *CustomerHandler) GetSalesTablePrice(w http.ResponseWriter, r *http.Requ
 	itemCode := chi.URLParam(r, "itemCode")
 	result, err := h.uc.GetSalesTablePriceByCode(r.Context(), salesTableCode, itemCode)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -944,7 +944,7 @@ func (h *CustomerHandler) ListSalesTablePrices(w http.ResponseWriter, r *http.Re
 	}
 	result, err := h.uc.ListSalesTablePricesByCode(r.Context(), salesTableCode)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -976,7 +976,7 @@ func (h *CustomerHandler) ListSalesTablePriceHistory(w http.ResponseWriter, r *h
 	}
 	result, err := h.uc.ListSalesTablePriceHistory(r.Context(), code, itemCode)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -989,7 +989,7 @@ func (h *CustomerHandler) DeleteSalesTablePrice(w http.ResponseWriter, r *http.R
 		return
 	}
 	if err := h.uc.DeleteSalesTablePrice(r.Context(), id); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -27,7 +27,7 @@ func (h *EmployeeHandler) CreateEmployee(w http.ResponseWriter, r *http.Request)
 func (h *EmployeeHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -55,7 +55,7 @@ func (h *EmployeeHandler) UpdateEmployee(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.updateUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -68,7 +68,7 @@ func (h *EmployeeHandler) DeactivateEmployee(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := h.deactivateUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"message": "employee deactivated"})

@@ -7,6 +7,7 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -92,7 +93,7 @@ func (uc *ConfiguratorUseCase) CreateVariable(ctx context.Context, dto request.C
 		return nil, err
 	}
 	if _, err := uc.Q.GetCfgSet(ctx, dto.SetID); err != nil {
-		return nil, fmt.Errorf("conjunto %d não encontrado", dto.SetID)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("conjunto %d não encontrado", dto.SetID))
 	}
 	row, err := uc.Q.CreateCfgVariable(ctx, sqlc.CreateCfgVariableParams{
 		SetID:              v.SetID,

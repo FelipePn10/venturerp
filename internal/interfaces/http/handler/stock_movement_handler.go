@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -54,7 +55,7 @@ func (h *StockMovementTypeHandler) GetByID(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.uc.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -64,7 +65,7 @@ func (h *StockMovementTypeHandler) GetBySigla(w http.ResponseWriter, r *http.Req
 	sigla := chi.URLParam(r, "sigla")
 	result, err := h.uc.GetBySigla(r.Context(), sigla)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -74,7 +75,7 @@ func (h *StockMovementTypeHandler) List(w http.ResponseWriter, r *http.Request) 
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.uc.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

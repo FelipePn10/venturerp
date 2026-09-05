@@ -30,7 +30,7 @@ func (h *ItemHandler) FindItemByCodeHandler(
 			h.BadRequest(w, "unauthorized")
 			return
 		case errors.Is(err, errorsuc.ErrProductNotFound):
-			h.NotFound(w, "product not found")
+			h.NotFound(w, "produto não encontrado")
 			return
 		default:
 			h.InternalError(w, r, err)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_tolerance_uc"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 	"net/http"
 	"strconv"
@@ -45,7 +46,7 @@ func (h *PurchaseToleranceHandler) List(w http.ResponseWriter, r *http.Request) 
 	}
 	x, err := h.uc.List(r.Context(), supplier)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, x)
@@ -57,7 +58,7 @@ func (h *PurchaseToleranceHandler) Delete(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err = h.uc.Delete(r.Context(), id); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

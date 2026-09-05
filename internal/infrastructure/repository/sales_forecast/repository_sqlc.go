@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
 
@@ -310,7 +311,7 @@ func (r *SalesForecastRepositorySQLC) GetDefaultAppropriation(
 	row, err := r.q.GetDefaultAppropriationTable(ctx, enterpriseID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("no default appropriation table found")
+			return nil, errorsuc.NewNotFoundError("nenhuma tabela de apropriação padrão cadastrada")
 		}
 		return nil, fmt.Errorf("getting default appropriation table: %w", err)
 	}

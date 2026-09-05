@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -69,7 +70,7 @@ func (h *ICMSReductionHandler) GetReduction(w http.ResponseWriter, r *http.Reque
 	}
 	result, err := h.reductionUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -87,7 +88,7 @@ func (h *ICMSReductionHandler) ListReductions(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.reductionUC.List(r.Context(), uf, itemID, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -112,7 +113,7 @@ func (h *ICMSReductionHandler) FindReduction(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.reductionUC.Find(r.Context(), uf, itemID, customerID, opType)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -142,7 +143,7 @@ func (h *ICMSReductionHandler) ListSummaryAdditionals(w http.ResponseWriter, r *
 	}
 	result, err := h.additionalUC.List(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -186,7 +187,7 @@ func (h *ICMSReductionHandler) GetSTRestitution(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.stRestUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -199,7 +200,7 @@ func (h *ICMSReductionHandler) ListSTRestitutions(w http.ResponseWriter, r *http
 	uf := q.Get("uf")
 	result, err := h.stRestUC.List(r.Context(), empresaID, period, uf)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -243,7 +244,7 @@ func (h *ICMSReductionHandler) GetSpecialNote(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.specialNoteUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -255,7 +256,7 @@ func (h *ICMSReductionHandler) ListSpecialNotes(w http.ResponseWriter, r *http.R
 	period := q.Get("period")
 	result, err := h.specialNoteUC.List(r.Context(), empresaID, period)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -286,7 +287,7 @@ func (h *ICMSReductionHandler) ListSpecialNoteItems(w http.ResponseWriter, r *ht
 	}
 	result, err := h.specialNoteUC.ListItems(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

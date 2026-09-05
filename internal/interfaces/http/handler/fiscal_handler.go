@@ -111,7 +111,7 @@ func (h *FiscalHandler) GetDANFE(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getDANFEUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -125,7 +125,7 @@ func (h *FiscalHandler) CreateEntry(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createEntryUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -139,7 +139,7 @@ func (h *FiscalHandler) UploadNFE(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uploadNFEUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -154,7 +154,7 @@ func (h *FiscalHandler) ApproveEntry(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.approveEntryUC.Execute(r.Context(), request.ApproveFiscalEntryDTO{ID: code})
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -163,7 +163,7 @@ func (h *FiscalHandler) ApproveEntry(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) ListEntries(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listEntriesUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -192,7 +192,7 @@ func (h *FiscalHandler) CreateExit(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createExitUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -221,7 +221,7 @@ func (h *FiscalHandler) AuthorizeExit(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.authorizeExitUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -246,7 +246,7 @@ func (h *FiscalHandler) CancelExit(w http.ResponseWriter, r *http.Request) {
 		Motivo: body.Motivo,
 	})
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -255,7 +255,7 @@ func (h *FiscalHandler) CancelExit(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) ListExits(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listExitsUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -279,7 +279,7 @@ func (h *FiscalHandler) GetExit(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	result, err := h.getConfigUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -293,7 +293,7 @@ func (h *FiscalHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.updateConfigUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -320,7 +320,7 @@ func (h *FiscalHandler) EmitirCCe(w http.ResponseWriter, r *http.Request) {
 		TextoCorrecao: body.TextoCorrecao,
 	})
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -336,7 +336,7 @@ func (h *FiscalHandler) CreateCTe(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createCTeUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -345,7 +345,7 @@ func (h *FiscalHandler) CreateCTe(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) ListCTe(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listCTeUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -376,7 +376,7 @@ func (h *FiscalHandler) UpsertNcmTax(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.upsertNcmUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -385,7 +385,7 @@ func (h *FiscalHandler) UpsertNcmTax(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) ListNcmTaxes(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listNcmUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -394,7 +394,7 @@ func (h *FiscalHandler) ListNcmTaxes(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) DeleteNcmTax(w http.ResponseWriter, r *http.Request) {
 	ncm := chi.URLParam(r, "ncm")
 	if err := h.deleteNcmUC.Execute(r.Context(), ncm); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"message": "NCM desativado"})
@@ -409,7 +409,7 @@ func (h *FiscalHandler) UpsertICMSInterstate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := h.upsertInterstateUC.Execute(r.Context(), dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"message": "ICMS interestadual atualizado"})
@@ -418,7 +418,7 @@ func (h *FiscalHandler) UpsertICMSInterstate(w http.ResponseWriter, r *http.Requ
 func (h *FiscalHandler) ListICMSInterstate(w http.ResponseWriter, r *http.Request) {
 	result, err := h.listInterstateUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -431,7 +431,7 @@ func (h *FiscalHandler) UpsertICMSInternal(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := h.upsertInternalUC.Execute(r.Context(), dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"message": "ICMS interno atualizado"})
@@ -440,7 +440,7 @@ func (h *FiscalHandler) UpsertICMSInternal(w http.ResponseWriter, r *http.Reques
 func (h *FiscalHandler) ListICMSInternal(w http.ResponseWriter, r *http.Request) {
 	result, err := h.listInternalUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -457,7 +457,7 @@ func (h *FiscalHandler) ConsultarNFe(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.consultarNFeUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -472,7 +472,7 @@ func (h *FiscalHandler) ListCartasCorrecao(w http.ResponseWriter, r *http.Reques
 	}
 	results, err := h.listCartasCorrecaoUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)

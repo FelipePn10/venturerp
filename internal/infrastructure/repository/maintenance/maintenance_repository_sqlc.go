@@ -3,6 +3,7 @@ package maintenance
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/maintenance/entity"
@@ -40,7 +41,7 @@ func (r *MaintenanceRepositorySQLC) requireMachine(ctx context.Context, machineI
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("máquina %d não encontrada na empresa autenticada", machineID)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("máquina %d não encontrada na empresa autenticada", machineID))
 	}
 	return nil
 }
@@ -58,7 +59,7 @@ func (r *MaintenanceRepositorySQLC) requireWorkCenter(ctx context.Context, workC
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("centro de trabalho %d não encontrado na empresa autenticada", *workCenterID)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("centro de trabalho %d não encontrado na empresa autenticada", *workCenterID))
 	}
 	return nil
 }
@@ -128,7 +129,7 @@ func (r *MaintenanceRepositorySQLC) GetPlanByID(ctx context.Context, id int64) (
 			return nil, err
 		}
 		if !allowed {
-			return nil, fmt.Errorf("plano de manutenção %d não encontrado", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("plano de manutenção %d não encontrado", id))
 		}
 	}
 	row, err := r.q.GetMaintenancePlanByID(ctx, id)
@@ -247,7 +248,7 @@ func (r *MaintenanceRepositorySQLC) GetOrderByID(ctx context.Context, id int64) 
 			return nil, err
 		}
 		if !allowed {
-			return nil, fmt.Errorf("ordem de manutenção %d não encontrada", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de manutenção %d não encontrada", id))
 		}
 	}
 	row, err := r.q.GetMaintenanceOrderByID(ctx, id)

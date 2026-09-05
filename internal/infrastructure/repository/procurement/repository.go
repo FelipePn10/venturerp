@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/procurement/entity"
@@ -395,7 +396,7 @@ func (r *Repository) LinkReceivingInspectionQualityReport(ctx context.Context, e
 	link := &entity.ReceivingInspectionQualityReport{EnterpriseID: enterpriseID}
 	if err := row.Scan(&link.InspectionOrderID, &link.QualityReportID, &link.LinkedAt, &link.LinkedBy); err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("laudo incompatível com a empresa, o item ou o fornecedor da inspeção")
+			return nil, errorsuc.NewNotFoundError("laudo incompatível com a empresa, o item ou o fornecedor da inspeção")
 		}
 		return nil, fmt.Errorf("vinculando laudo à inspeção: %w", err)
 	}
@@ -819,7 +820,7 @@ func (r *Repository) ConsumeContractItem(ctx context.Context, contractItemID int
 		contractItemID, qty).Scan(
 		&it.ID, &it.ContractID, &it.ItemCode, &it.Mask, &it.Unit, &it.ContractedQty, &it.ConsumedQty, &it.UnitPrice, &it.MinOrderQty, &it.Notes)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("consumption %.4f exceeds contracted balance for contract item %d", qty, contractItemID)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("o consumo de %.4f excede o saldo contratado do item de contrato %d", qty, contractItemID))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("consuming contract item: %w", err)

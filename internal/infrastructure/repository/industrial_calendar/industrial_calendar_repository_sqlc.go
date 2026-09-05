@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/entity"
@@ -54,7 +55,7 @@ func (r *IndustrialCalendarRepositorySQLC) GetDay(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("calendar day not found")
+			return nil, errorsuc.NewNotFoundError("dia do calendário não encontrado")
 		}
 		return nil, fmt.Errorf("fetching calendar day: %w", err)
 	}

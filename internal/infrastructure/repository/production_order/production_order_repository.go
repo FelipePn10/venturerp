@@ -3,6 +3,7 @@ package production_order
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
@@ -831,7 +832,7 @@ func (r *ProductionOrderRepositoryPGX) GetCost(ctx context.Context, productionOr
 		&c.Currency, &c.SettledAt, &c.SettledBy)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("cost settlement not found for production order %d", productionOrderID)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("apuração de custo não encontrada para a ordem de produção %d", productionOrderID))
 		}
 		return nil, fmt.Errorf("getting production order cost: %w", err)
 	}

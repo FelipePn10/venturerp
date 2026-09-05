@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
@@ -76,7 +77,7 @@ func (r *IndependentDemandRepositorySQLC) GetByCode(
 	row, err := r.q.GetIndependentDemandByCode(ctx, sqlc.GetIndependentDemandByCodeParams{Code: code, EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("independent demand code %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("demanda independente %d não encontrada", code))
 		}
 
 		return nil, fmt.Errorf("fetching independent demand: %w", err)

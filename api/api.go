@@ -175,6 +175,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	httpmw "github.com/FelipePn10/panossoerp/internal/interfaces/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -192,6 +193,18 @@ type application struct {
 
 func (app *application) mount() chi.Router {
 	r := chi.NewRouter()
+
+	// O 404/405 padrão do chi responde em inglês e em texto puro. Como qualquer
+	// resposta pode chegar à tela, os dois passam a falar português no mesmo
+	// formato JSON das demais respostas de erro.
+	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+		security.RespondErrorCode(w, http.StatusNotFound, "ROTA_NAO_ENCONTRADA",
+			"o endereço solicitado não existe nesta versão do sistema")
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
+		security.RespondErrorCode(w, http.StatusMethodNotAllowed, "OPERACAO_NAO_PERMITIDA",
+			"esta operação não é permitida para o endereço solicitado")
+	})
 
 	r.Use(otelhttp.NewMiddleware("panossoerp-api"))
 

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"sort"
 	"strings"
 	"time"
@@ -348,7 +349,7 @@ func (r *Repo) formulaAttributes(ctx context.Context, item int64, supplied map[s
 	var pdm, weight, dimensions []byte
 	if err := r.db.QueryRow(ctx, `SELECT pdm_attributes,engineering_weight,COALESCE(engineering_dimensions,'{}'::jsonb) FROM items WHERE code=$1`, item).Scan(&pdm, &weight, &dimensions); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errors.New("item not found")
+			return nil, errorsuc.NewNotFoundError("item não encontrado")
 		}
 		return nil, err
 	}

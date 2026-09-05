@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -71,7 +72,7 @@ func (h *ICMSApuracaoHandler) GetDAPIReason(w http.ResponseWriter, r *http.Reque
 	code := chi.URLParam(r, "code")
 	result, err := h.dapiUC.GetByCode(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -81,7 +82,7 @@ func (h *ICMSApuracaoHandler) ListDAPIReasons(w http.ResponseWriter, r *http.Req
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.dapiUC.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -125,7 +126,7 @@ func (h *ICMSApuracaoHandler) GetApuracaoAdjCode(w http.ResponseWriter, r *http.
 	}
 	result, err := h.apuracaoAdjUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -136,7 +137,7 @@ func (h *ICMSApuracaoHandler) ListApuracaoAdjCodes(w http.ResponseWriter, r *htt
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.apuracaoAdjUC.List(r.Context(), uf, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -180,7 +181,7 @@ func (h *ICMSApuracaoHandler) GetAdjCode(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.adjCodeUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -192,7 +193,7 @@ func (h *ICMSApuracaoHandler) ListAdjCodes(w http.ResponseWriter, r *http.Reques
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.adjCodeUC.List(r.Context(), uf, tableRef, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -232,7 +233,7 @@ func (h *ICMSApuracaoHandler) GetApuracaoLine(w http.ResponseWriter, r *http.Req
 	code := chi.URLParam(r, "code")
 	result, err := h.apuracaoLineUC.GetByCode(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -242,7 +243,7 @@ func (h *ICMSApuracaoHandler) ListApuracaoLines(w http.ResponseWriter, r *http.R
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.apuracaoLineUC.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -286,7 +287,7 @@ func (h *ICMSApuracaoHandler) GetSummaryEntry(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.summaryUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -297,7 +298,7 @@ func (h *ICMSApuracaoHandler) ListSummaryEntries(w http.ResponseWriter, r *http.
 	uf := r.URL.Query().Get("uf")
 	result, err := h.summaryUC.List(r.Context(), period, uf)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -325,7 +326,7 @@ func (h *ICMSApuracaoHandler) ListSummaryEntryNotes(w http.ResponseWriter, r *ht
 	}
 	result, err := h.summaryUC.ListNotes(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -364,9 +365,14 @@ func (h *ICMSApuracaoHandler) UpdateSimplesApuracao(w http.ResponseWriter, r *ht
 func (h *ICMSApuracaoHandler) GetSimplesApuracao(w http.ResponseWriter, r *http.Request) {
 	period := chi.URLParam(r, "period")
 	annex := chi.URLParam(r, "annex")
+	if !fiscalEntity.IsValidSimplesNacionalAnnex(annex) {
+		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "VALIDACAO_DE_DOMINIO",
+			"anexo do Simples Nacional inválido: informe I, II, III, IV, V ou VI")
+		return
+	}
 	result, err := h.simplesUC.Get(r.Context(), period, fiscalEntity.SimplesNacionalAnnex(annex))
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -376,7 +382,7 @@ func (h *ICMSApuracaoHandler) ListSimplesApuracoes(w http.ResponseWriter, r *htt
 	period := r.URL.Query().Get("period")
 	result, err := h.simplesUC.List(r.Context(), period)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

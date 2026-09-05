@@ -33,7 +33,7 @@ func (h *OverheadAllocationHandler) Create(w http.ResponseWriter, r *http.Reques
 func (h *OverheadAllocationHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)

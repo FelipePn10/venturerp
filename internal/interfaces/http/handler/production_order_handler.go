@@ -367,7 +367,7 @@ func (h *ProductionOrderHandler) GetByCode(w http.ResponseWriter, r *http.Reques
 func (h *ProductionOrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -388,7 +388,7 @@ func (h *ProductionOrderHandler) Start(w http.ResponseWriter, r *http.Request) {
 	dto.ID = id
 	result, err := h.startUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -404,7 +404,7 @@ func (h *ProductionOrderHandler) AddAppointment(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.addAppointmentUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -420,7 +420,7 @@ func (h *ProductionOrderHandler) AddConsumption(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.addConsumptionUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -441,7 +441,7 @@ func (h *ProductionOrderHandler) Complete(w http.ResponseWriter, r *http.Request
 	dto.ID = id
 	result, err := h.completeUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -456,7 +456,7 @@ func (h *ProductionOrderHandler) Close(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.closeUC.Execute(r.Context(), request.CloseProductionOrderDTO{ID: id})
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -471,7 +471,7 @@ func (h *ProductionOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := h.cancelUC.Execute(r.Context(), request.CancelProductionOrderDTO{ID: id})
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -486,7 +486,7 @@ func (h *ProductionOrderHandler) GetAppointments(w http.ResponseWriter, r *http.
 	}
 	results, err := h.getAppointmentsUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -501,7 +501,7 @@ func (h *ProductionOrderHandler) GetConsumptions(w http.ResponseWriter, r *http.
 	}
 	results, err := h.getConsumptionsUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -521,7 +521,7 @@ func (h *ProductionOrderHandler) SettleCost(w http.ResponseWriter, r *http.Reque
 	}
 	result, err := h.settleCostUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -603,7 +603,7 @@ func (h *ProductionOrderHandler) ListOrderOperations(w http.ResponseWriter, r *h
 	}
 	result, err := h.orderOpsUC.ListOperations(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

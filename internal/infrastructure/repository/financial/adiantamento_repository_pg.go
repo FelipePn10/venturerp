@@ -3,6 +3,7 @@ package financial
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -81,7 +82,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 	).Scan(&advTipo, &advStatus, &valorOriginal, &valorUtilizado, &advActive)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("adiantamento %d não encontrado", advID)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("adiantamento %d não encontrado", advID))
 		}
 		return nil, fmt.Errorf("reading adiantamento: %w", err)
 	}
@@ -107,7 +108,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		).Scan(&bruto, &desconto, &pago, &abatido)
 		if err != nil {
 			if err == pgx.ErrNoRows {
-				return nil, fmt.Errorf("conta a pagar %d não encontrada", contaID)
+				return nil, errorsuc.NewNotFoundError(fmt.Sprintf("conta a pagar %d não encontrada", contaID))
 			}
 			return nil, fmt.Errorf("reading conta pagar: %w", err)
 		}
@@ -141,7 +142,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		).Scan(&bruto, &desconto, &recebido)
 		if err != nil {
 			if err == pgx.ErrNoRows {
-				return nil, fmt.Errorf("conta a receber %d não encontrada", contaID)
+				return nil, errorsuc.NewNotFoundError(fmt.Sprintf("conta a receber %d não encontrada", contaID))
 			}
 			return nil, fmt.Errorf("reading conta receber: %w", err)
 		}
@@ -266,7 +267,7 @@ func scanAdiantamentoRow(row pgx.Row) (*entity.Adiantamento, error) {
 		&valorOriginal, &valorUtilizado, &a.Status, &a.Descricao, &a.IsActive, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("adiantamento não encontrado")
+			return nil, errorsuc.NewNotFoundError("adiantamento não encontrado")
 		}
 		return nil, fmt.Errorf("scanning adiantamento: %w", err)
 	}

@@ -55,7 +55,7 @@ func (h *AdiantamentoHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.listUC.Execute(r.Context(), tipo, parceiroID)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

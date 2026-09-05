@@ -17,7 +17,7 @@ func (h *ModifierHandler) GetModifier(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getModifierUC.Execute(r.Context(), id)
 	if err != nil {
-		h.NotFound(w, "modifier not found")
+		h.NotFound(w, "modificador PDM não encontrado")
 		return
 	}
 	h.OK(w, result)

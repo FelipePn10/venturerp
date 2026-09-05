@@ -77,7 +77,7 @@ func (h *MRPCalculationHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 	}
 	results, err := h.getProfileUC.Execute(r.Context(), itemCode, planID)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -105,7 +105,7 @@ func (h *MRPCalculationHandler) ListConfiguredRules(w http.ResponseWriter, r *ht
 	}
 	results, err := h.configuredRulesUC.ListByItem(r.Context(), itemCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -119,7 +119,7 @@ func (h *MRPCalculationHandler) ListExceptions(w http.ResponseWriter, r *http.Re
 	}
 	results, err := h.listExceptionsUC.Execute(r.Context(), planCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -135,7 +135,7 @@ func (h *MRPCalculationHandler) FirmarSugestao(w http.ResponseWriter, r *http.Re
 	}
 	result, err := h.firmarSugestaoUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -151,7 +151,7 @@ func (h *MRPCalculationHandler) ListSuggestions(w http.ResponseWriter, r *http.R
 	}
 	results, err := h.firmarSugestaoUC.MRPRepo.ListSuggestionsByPlan(r.Context(), planCode)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)

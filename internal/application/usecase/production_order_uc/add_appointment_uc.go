@@ -43,13 +43,13 @@ func (uc *AddAppointmentUseCase) Execute(
 		return nil, errorsuc.NewValidationError("ordem de fabricacao obrigatoria")
 	}
 	if dto.EmployeeID == nil || *dto.EmployeeID <= 0 {
-		return nil, errorsuc.NewValidationError("operador obrigatorio")
+		return nil, errorsuc.NewValidationError("informe o operador")
 	}
 	if dto.ProducedQty < 0 || dto.ScrappedQty < 0 || dto.ProducedQty+dto.ScrappedQty <= 0 {
 		return nil, errorsuc.NewValidationError("quantidades boas/refugadas devem ser nao negativas e possuir total maior que zero")
 	}
 	if dto.ScrappedQty > 0 && (dto.ScrapReason == nil || strings.TrimSpace(*dto.ScrapReason) == "") {
-		return nil, errorsuc.NewValidationError("motivo do refugo obrigatorio")
+		return nil, errorsuc.NewValidationError("informe o motivo do refugo")
 	}
 
 	appointmentDate := datetime.ParseDateOrDefault(dto.AppointmentDate, time.Now())

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -40,7 +41,7 @@ func (r *RestrictionReasonRepositorySQLC) GetByCode(
 	row, err := r.q.GetRestrictionReasonByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("restriction reason %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("motivo de restrição %d não encontrado", code))
 		}
 		return nil, fmt.Errorf("fetching restriction reason: %w", err)
 	}
@@ -72,7 +73,7 @@ func (r *RestrictionReasonRepositorySQLC) Update(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("restriction reason %d not found", re.Code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("motivo de restrição %d não encontrado", re.Code))
 		}
 		return nil, fmt.Errorf("updating restriction reason: %w", err)
 	}

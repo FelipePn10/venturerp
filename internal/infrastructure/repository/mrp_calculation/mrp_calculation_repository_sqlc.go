@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepository "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
@@ -166,7 +167,7 @@ func (r *MRPCalculationRepositorySQLC) GetCalculationLog(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("calculation log %d not found", logCode)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("registro de cálculo %d não encontrado", logCode))
 		}
 
 		return nil, fmt.Errorf("fetching calculation log: %w", err)
@@ -303,7 +304,7 @@ func (r *MRPCalculationRepositorySQLC) GetSalesOrderDemand(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("sales order demand %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("demanda %d do pedido de venda não encontrada", code))
 		}
 
 		return nil, fmt.Errorf("fetching sales order demand: %w", err)

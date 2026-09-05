@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"io"
 	"log/slog"
 	"math"
@@ -368,7 +369,7 @@ func translateInputReference(r *http.Request, pool *pgxpool.Pool, e int64, value
 			return nil, err
 		}
 		if !exists {
-			return nil, fmt.Errorf("item não encontrado na empresa autenticada")
+			return nil, errorsuc.NewNotFoundError("item não encontrado na empresa autenticada")
 		}
 		slog.WarnContext(r.Context(), "contrato numérico de item descontinuado",
 			"operation", r.Method+" "+r.URL.Path,
@@ -405,7 +406,7 @@ func resolveBusinessCode(ctx context.Context, pool *pgxpool.Pool, e int64, code 
 	err := pool.QueryRow(ctx, `SELECT code FROM items WHERE enterprise_id=$1 AND business_code=upper(btrim($2))`, e, code).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return 0, fmt.Errorf("item %q nao encontrado na empresa autenticada", code)
+			return 0, fmt.Errorf("item %q não encontrado na empresa autenticada", code)
 		}
 		return 0, err
 	}

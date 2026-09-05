@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
 
@@ -65,7 +66,7 @@ func (r *MachineRepositorySQLC) GetTypeByCode(ctx context.Context, code int64) (
 	row, err := r.q.GetMachineTypeByCode(ctx, sqlc.GetMachineTypeByCodeParams{Code: code, EnterpriseID: &enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("machine type %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tipo de máquina %d não encontrado", code))
 		}
 		return nil, err
 	}
@@ -173,7 +174,7 @@ func (r *MachineRepositorySQLC) GetByCode(ctx context.Context, code int64) (*ent
 	row, err := r.q.GetMachineByCode(ctx, sqlc.GetMachineByCodeParams{Code: code, EnterpriseID: &enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("machine %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("máquina %d não encontrada", code))
 		}
 		return nil, err
 	}
@@ -313,7 +314,7 @@ func (r *MachineRepositorySQLC) GetSchedule(ctx context.Context, code int64) (*e
 	row, err := r.q.GetSchedule(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("schedule %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("programação %d não encontrada", code))
 		}
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -53,7 +54,7 @@ func (h *RoutingHandler) GetOperation(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.operationUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -63,7 +64,7 @@ func (h *RoutingHandler) ListOperations(w http.ResponseWriter, r *http.Request) 
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.operationUC.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	page, pageSize := 1, 100
@@ -156,7 +157,7 @@ func (h *RoutingHandler) GetRouteDetail(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := h.routeUC.GetDetail(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -170,7 +171,7 @@ func (h *RoutingHandler) ListRoutesByItem(w http.ResponseWriter, r *http.Request
 	}
 	result, err := h.routeUC.ListByItem(r.Context(), itemCode)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

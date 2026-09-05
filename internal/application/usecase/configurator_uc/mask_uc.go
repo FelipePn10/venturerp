@@ -56,7 +56,7 @@ func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.Cfg
 	for _, ic := range itemChars {
 		char, err := uc.Q.GetCfgCharacteristic(ctx, ic.CharacteristicID)
 		if err != nil {
-			return nil, fmt.Errorf("característica %d não encontrada", ic.CharacteristicID)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("característica %d não encontrada", ic.CharacteristicID))
 		}
 		var value string
 		var variableID *int64
@@ -152,7 +152,7 @@ func (uc *ConfiguratorUseCase) resolveChoice(ctx context.Context, ic sqlc.DBCfgI
 	}
 	v, err := uc.Q.GetCfgVariable(ctx, *varID)
 	if err != nil {
-		return "", nil, fmt.Errorf("variável %d não encontrada", *varID)
+		return "", nil, errorsuc.NewNotFoundError(fmt.Sprintf("variável %d não encontrada", *varID))
 	}
 	return v.MaskComposition, varID, nil
 }
@@ -177,7 +177,7 @@ func (uc *ConfiguratorUseCase) resolveMultiChoice(ctx context.Context, ic sqlc.D
 	for _, id := range ids {
 		v, err := uc.Q.GetCfgVariable(ctx, id)
 		if err != nil {
-			return "", nil, fmt.Errorf("variável %d não encontrada", id)
+			return "", nil, errorsuc.NewNotFoundError(fmt.Sprintf("variável %d não encontrada", id))
 		}
 		parts = append(parts, v.MaskComposition)
 	}

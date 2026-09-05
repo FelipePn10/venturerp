@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 
@@ -66,7 +67,7 @@ func (h *FiscalParamsHandler) GetLegalDevice(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.legalDeviceUC.GetByCode(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -76,7 +77,7 @@ func (h *FiscalParamsHandler) ListLegalDevices(w http.ResponseWriter, r *http.Re
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.legalDeviceUC.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -87,7 +88,7 @@ func (h *FiscalParamsHandler) ListLegalDevicesByType(w http.ResponseWriter, r *h
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.legalDeviceUC.ListByType(r.Context(), deviceType, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -131,7 +132,7 @@ func (h *FiscalParamsHandler) GetCFOP(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.cfopUC.GetByCode(r.Context(), int32(code))
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -141,7 +142,7 @@ func (h *FiscalParamsHandler) ListCFOPs(w http.ResponseWriter, r *http.Request) 
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.cfopUC.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -152,7 +153,7 @@ func (h *FiscalParamsHandler) ListCFOPsByDirection(w http.ResponseWriter, r *htt
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.cfopUC.ListByDirection(r.Context(), direction, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -196,7 +197,7 @@ func (h *FiscalParamsHandler) GetTaxParam(w http.ResponseWriter, r *http.Request
 	}
 	result, err := h.taxParamUC.GetByID(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -206,7 +207,7 @@ func (h *FiscalParamsHandler) ListTaxParams(w http.ResponseWriter, r *http.Reque
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.taxParamUC.List(r.Context(), onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -217,7 +218,7 @@ func (h *FiscalParamsHandler) ListTaxParamsByUF(w http.ResponseWriter, r *http.R
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.taxParamUC.ListByUF(r.Context(), uf, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -232,7 +233,7 @@ func (h *FiscalParamsHandler) ListTaxParamsByItem(w http.ResponseWriter, r *http
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.taxParamUC.ListByItem(r.Context(), itemCode, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -243,7 +244,7 @@ func (h *FiscalParamsHandler) ListTaxParamsByNCM(w http.ResponseWriter, r *http.
 	onlyActive := r.URL.Query().Get("only_active") != "false"
 	result, err := h.taxParamUC.ListByNCM(r.Context(), ncmCode, onlyActive)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

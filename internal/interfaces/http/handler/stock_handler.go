@@ -96,7 +96,7 @@ func (h *StockHandler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createMovementUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -105,7 +105,7 @@ func (h *StockHandler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 func (h *StockHandler) ListMovements(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listMovementsUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -120,7 +120,7 @@ func (h *StockHandler) ListMovementsByItem(w http.ResponseWriter, r *http.Reques
 	}
 	results, err := h.listMovementsUC.ByItem(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -135,7 +135,7 @@ func (h *StockHandler) ListMovementsByWarehouse(w http.ResponseWriter, r *http.R
 	}
 	results, err := h.listMovementsUC.ByWarehouse(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -170,7 +170,7 @@ func (h *StockHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 func (h *StockHandler) ListBalances(w http.ResponseWriter, r *http.Request) {
 	results, err := h.getBalanceUC.List(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -185,7 +185,7 @@ func (h *StockHandler) ListBalancesByWarehouse(w http.ResponseWriter, r *http.Re
 	}
 	results, err := h.getBalanceUC.ByWarehouse(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	itemFilter := int64(0)
@@ -246,7 +246,7 @@ func (h *StockHandler) ListBalancesByItem(w http.ResponseWriter, r *http.Request
 	}
 	results, err := h.getBalanceUC.ByItem(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -264,7 +264,7 @@ func (h *StockHandler) GetATP(w http.ResponseWriter, r *http.Request) {
 	mask := r.URL.Query().Get("mask")
 	result, err := h.getBalanceUC.ATP(r.Context(), code, mask)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -282,7 +282,7 @@ func (h *StockHandler) RecalcConsumptionAverage(w http.ResponseWriter, r *http.R
 	_ = json.NewDecoder(r.Body).Decode(&dto)
 	result, err := h.recalcCMUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -320,7 +320,7 @@ func (h *StockHandler) RegisterLot(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.registerLotUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -338,7 +338,7 @@ func (h *StockHandler) ListLotBalances(w http.ResponseWriter, r *http.Request) {
 	}
 	results, err := h.listLotBalancesUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -357,7 +357,7 @@ func (h *StockHandler) GetLotGenealogy(w http.ResponseWriter, r *http.Request) {
 	lot := chi.URLParam(r, "lot")
 	result, err := h.getGenealogyUC.Execute(r.Context(), code, lot)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -377,7 +377,7 @@ func (h *StockHandler) ReserveStock(w http.ResponseWriter, r *http.Request) {
 			security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -391,7 +391,7 @@ func (h *StockHandler) ReleaseReservation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.releaseReserveUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -405,7 +405,7 @@ func (h *StockHandler) ConsumeReservation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.consumeReserveUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -421,7 +421,7 @@ func (h *StockHandler) CreateInventory(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createInventoryUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -447,7 +447,7 @@ func (h *StockHandler) ListInventories(w http.ResponseWriter, r *http.Request) {
 	if statusFilter != "" {
 		results, err := h.listInventoriesUC.ByStatus(r.Context(), statusFilter)
 		if err != nil {
-			security.RespondError(w, http.StatusInternalServerError, err.Error())
+			security.RespondUseCaseError(w, err)
 			return
 		}
 		security.RespondJSON(w, http.StatusOK, results)
@@ -455,7 +455,7 @@ func (h *StockHandler) ListInventories(w http.ResponseWriter, r *http.Request) {
 	}
 	results, err := h.listInventoriesUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -468,7 +468,7 @@ func (h *StockHandler) CountInventoryItem(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.countInventoryUC.Execute(r.Context(), dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -481,7 +481,7 @@ func (h *StockHandler) AdjustInventoryItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := h.adjustInventoryUC.Execute(r.Context(), dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -495,7 +495,7 @@ func (h *StockHandler) CloseInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.closeInventoryUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -50,7 +51,7 @@ func (r *RestrictionRepositorySQLC) Update(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("restriction %d not found", res.Code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("restrição %d não encontrada", res.Code))
 		}
 		return nil, fmt.Errorf("updating restriction: %w", err)
 	}
@@ -64,7 +65,7 @@ func (r *RestrictionRepositorySQLC) GetByCode(
 	row, err := r.q.GetRestrictionByCode(ctx, pgtype.Int8{Int64: code, Valid: true})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("restriction %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("restrição %d não encontrada", code))
 		}
 		return nil, fmt.Errorf("fetching restriction: %w", err)
 	}

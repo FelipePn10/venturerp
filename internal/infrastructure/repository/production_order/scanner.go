@@ -23,7 +23,7 @@ func (r *ProductionOrderRepositoryPGX) CreateScanToken(ctx context.Context, toke
 		return fmt.Errorf("criar token de apontamento: %w", err)
 	}
 	if command.RowsAffected() != 1 {
-		return fmt.Errorf("ordem/operacao nao encontrada na empresa autenticada")
+		return fmt.Errorf("ordem ou operação não encontrada na empresa autenticada")
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 	var status string
 	err = tx.QueryRow(ctx, `SELECT t.id,t.production_order_id,t.operation_id,o.order_number,o.status FROM production_scan_tokens t JOIN production_orders o ON o.id=t.production_order_id AND o.enterprise_id=t.enterprise_id WHERE t.enterprise_id=$1 AND t.token_hash=$2 AND t.active AND t.valid_from<=NOW() AND (t.valid_until IS NULL OR t.valid_until>=NOW()) FOR UPDATE OF t,o`, command.EnterpriseID, command.TokenHash).Scan(&tokenID, &orderID, &operationID, &orderNumber, &status)
 	if err != nil {
-		return nil, fmt.Errorf("token invalido, expirado ou de outra empresa")
+		return nil, fmt.Errorf("token inválido, expirado ou de outra empresa")
 	}
 	operationStatus := (*string)(nil)
 	switch command.Action {

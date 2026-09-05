@@ -162,7 +162,7 @@ func (h *FinancialHandler) CreateContaBancaria(w http.ResponseWriter, r *http.Re
 	}
 	result, err := h.createContaBancariaUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -171,7 +171,7 @@ func (h *FinancialHandler) CreateContaBancaria(w http.ResponseWriter, r *http.Re
 func (h *FinancialHandler) ListContasBancarias(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listContasBancariasUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -187,7 +187,7 @@ func (h *FinancialHandler) CreateCondicaoPagamento(w http.ResponseWriter, r *htt
 	}
 	result, err := h.createCondicaoPagamentoUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -196,7 +196,7 @@ func (h *FinancialHandler) CreateCondicaoPagamento(w http.ResponseWriter, r *htt
 func (h *FinancialHandler) ListCondicoesPagamento(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listCondicoesPagamentoUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -212,7 +212,7 @@ func (h *FinancialHandler) CreatePlanoContas(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.createPlanoContasUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -221,7 +221,7 @@ func (h *FinancialHandler) CreatePlanoContas(w http.ResponseWriter, r *http.Requ
 func (h *FinancialHandler) ListPlanoContas(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listPlanoContasUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -237,7 +237,7 @@ func (h *FinancialHandler) CreateCentroCusto(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.createCentroCustoUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -246,7 +246,7 @@ func (h *FinancialHandler) CreateCentroCusto(w http.ResponseWriter, r *http.Requ
 func (h *FinancialHandler) ListCentrosCusto(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listCentrosCustoUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -262,7 +262,7 @@ func (h *FinancialHandler) CreateContaPagar(w http.ResponseWriter, r *http.Reque
 	}
 	result, err := h.createContaPagarUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -273,7 +273,7 @@ func (h *FinancialHandler) ListContasPagar(w http.ResponseWriter, r *http.Reques
 	_ = json.NewDecoder(r.Body).Decode(&dto)
 	results, err := h.listContasPagarUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -302,7 +302,7 @@ func (h *FinancialHandler) ApproveContaPagar(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := h.approveContaPagarUC.Execute(r.Context(), id); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -321,7 +321,7 @@ func (h *FinancialHandler) BaixarContaPagar(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := h.baixarContaPagarUC.Execute(r.Context(), id, dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -335,7 +335,7 @@ func (h *FinancialHandler) CancelContaPagar(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := h.cancelContaPagarUC.Execute(r.Context(), id); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -344,7 +344,7 @@ func (h *FinancialHandler) CancelContaPagar(w http.ResponseWriter, r *http.Reque
 func (h *FinancialHandler) GetAgingPagar(w http.ResponseWriter, r *http.Request) {
 	results, err := h.getAgingPagarUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -360,7 +360,7 @@ func (h *FinancialHandler) CreateContaReceber(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.createContaReceberUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -371,7 +371,7 @@ func (h *FinancialHandler) ListContasReceber(w http.ResponseWriter, r *http.Requ
 	_ = json.NewDecoder(r.Body).Decode(&dto)
 	results, err := h.listContasReceberUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -405,7 +405,7 @@ func (h *FinancialHandler) BaixarContaReceber(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := h.baixarContaReceberUC.Execute(r.Context(), id, dto); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -419,7 +419,7 @@ func (h *FinancialHandler) CancelContaReceber(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := h.cancelContaReceberUC.Execute(r.Context(), id); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -428,7 +428,7 @@ func (h *FinancialHandler) CancelContaReceber(w http.ResponseWriter, r *http.Req
 func (h *FinancialHandler) GetAgingReceber(w http.ResponseWriter, r *http.Request) {
 	results, err := h.getAgingReceberUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -442,7 +442,7 @@ func (h *FinancialHandler) GetFluxoCaixa(w http.ResponseWriter, r *http.Request)
 		parseTime(start, "2000-01-01"),
 		parseTime(end, "2099-12-31"))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -452,7 +452,7 @@ func (h *FinancialHandler) GetFluxoProjetado(w http.ResponseWriter, r *http.Requ
 	start, _ := parseDateRange(r)
 	results, err := h.getFluxoProjetadoUC.Execute(r.Context(), parseTime(start, "2000-01-01"))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -461,7 +461,7 @@ func (h *FinancialHandler) GetFluxoProjetado(w http.ResponseWriter, r *http.Requ
 func (h *FinancialHandler) GetSaldoContas(w http.ResponseWriter, r *http.Request) {
 	results, err := h.getSaldoContasUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -477,7 +477,7 @@ func (h *FinancialHandler) ApurarImpostos(w http.ResponseWriter, r *http.Request
 	}
 	results, err := h.apurarImpostosUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, results)
@@ -487,7 +487,7 @@ func (h *FinancialHandler) GetTaxAssessment(w http.ResponseWriter, r *http.Reque
 	competencia := chi.URLParam(r, "competencia")
 	results, err := h.getTaxAssessmentUC.List(r.Context(), competencia)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -516,7 +516,7 @@ func (h *FinancialHandler) GetLivroEntradas(w http.ResponseWriter, r *http.Reque
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -530,7 +530,7 @@ func (h *FinancialHandler) GetLivroSaidas(w http.ResponseWriter, r *http.Request
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -544,7 +544,7 @@ func (h *FinancialHandler) GetImpostosSaidas(w http.ResponseWriter, r *http.Requ
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -558,7 +558,7 @@ func (h *FinancialHandler) GetImpostosEntradas(w http.ResponseWriter, r *http.Re
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -572,7 +572,7 @@ func (h *FinancialHandler) GetDRE(w http.ResponseWriter, r *http.Request) {
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -583,7 +583,7 @@ func (h *FinancialHandler) GetDRE(w http.ResponseWriter, r *http.Request) {
 func (h *FinancialHandler) GetAgingReceberDetalhado(w http.ResponseWriter, r *http.Request) {
 	results, err := h.getAgingReceberDetUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -594,7 +594,7 @@ func (h *FinancialHandler) GetAgingReceberDetalhado(w http.ResponseWriter, r *ht
 func (h *FinancialHandler) GetAgingPagarDetalhado(w http.ResponseWriter, r *http.Request) {
 	results, err := h.getAgingPagarDetUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -611,7 +611,7 @@ func (h *FinancialHandler) GetExtratoPorFornecedor(w http.ResponseWriter, r *htt
 	}
 	results, err := h.getExtratoPorFornecedorUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -628,7 +628,7 @@ func (h *FinancialHandler) GetExtratoPorCliente(w http.ResponseWriter, r *http.R
 	}
 	results, err := h.getExtratoPorClienteUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -642,7 +642,7 @@ func (h *FinancialHandler) GetProdutosVendidos(w http.ResponseWriter, r *http.Re
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -656,7 +656,7 @@ func (h *FinancialHandler) GetProdutosProduzidos(w http.ResponseWriter, r *http.
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -670,7 +670,7 @@ func (h *FinancialHandler) GetHistoricoCustos(w http.ResponseWriter, r *http.Req
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -687,7 +687,7 @@ func (h *FinancialHandler) GetFichaTecnicaCusto(w http.ResponseWriter, r *http.R
 	}
 	results, err := h.getFichaTecnicaCustoUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -701,7 +701,7 @@ func (h *FinancialHandler) GetCurvaABCClientes(w http.ResponseWriter, r *http.Re
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -715,7 +715,7 @@ func (h *FinancialHandler) GetCurvaABCProdutos(w http.ResponseWriter, r *http.Re
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -729,7 +729,7 @@ func (h *FinancialHandler) GetComprasPeriodo(w http.ResponseWriter, r *http.Requ
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -753,7 +753,7 @@ func (h *FinancialHandler) ImportarOFX(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.importarOFXUC.Execute(r.Context(), contaID, body.OFXContent)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

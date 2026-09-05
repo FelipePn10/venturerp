@@ -55,7 +55,7 @@ func (uc *GetStructureTreeUseCase) Execute(
 		return nil, fmt.Errorf("checking root item: %w", err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("item raiz não encontrado")
+		return nil, errorsuc.NewNotFoundError("item raiz não encontrado")
 	}
 
 	visited := make(map[int64]bool)

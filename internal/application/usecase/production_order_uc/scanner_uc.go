@@ -77,7 +77,7 @@ func (uc *ProductionScannerUseCase) Scan(ctx context.Context, dto request.Produc
 		return nil, errorsuc.NewValidationError("acao deve ser RESOLVER, INICIAR, APONTAR ou CONCLUIR")
 	}
 	if strings.TrimSpace(dto.Token) == "" || strings.TrimSpace(dto.IdempotencyKey) == "" || strings.TrimSpace(dto.DeviceID) == "" {
-		return nil, errorsuc.NewValidationError("token, idempotency_key e device_id sao obrigatorios")
+		return nil, errorsuc.NewValidationError("informe o token, a chave de controle de duplicidade e o dispositivo")
 	}
 	good, e := decimal.NewFromString(defaultZero(dto.GoodQuantity))
 	if e != nil {
@@ -95,10 +95,10 @@ func (uc *ProductionScannerUseCase) Scan(ctx context.Context, dto request.Produc
 		return nil, errorsuc.NewValidationError("quantidades e horas nao podem ser negativas")
 	}
 	if action == entity.ScanAppoint && (dto.EmployeeID == nil || *dto.EmployeeID <= 0) {
-		return nil, errorsuc.NewValidationError("operador obrigatorio")
+		return nil, errorsuc.NewValidationError("informe o operador")
 	}
 	if scrap.IsPositive() && (dto.ScrapReason == nil || strings.TrimSpace(*dto.ScrapReason) == "") {
-		return nil, errorsuc.NewValidationError("motivo do refugo obrigatorio")
+		return nil, errorsuc.NewValidationError("informe o motivo do refugo")
 	}
 	payload, _ := json.Marshal(dto)
 	fingerprint := sha256.Sum256(payload)

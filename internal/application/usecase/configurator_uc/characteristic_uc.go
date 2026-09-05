@@ -3,6 +3,7 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -117,13 +118,13 @@ func (uc *ConfiguratorUseCase) DeleteCharacteristicLanguage(ctx context.Context,
 func (uc *ConfiguratorUseCase) checkCharRefs(ctx context.Context, c *entity.Characteristic) error {
 	if c.SetID != nil {
 		if _, err := uc.Q.GetCfgSet(ctx, *c.SetID); err != nil {
-			return fmt.Errorf("conjunto %d não encontrado", *c.SetID)
+			return errorsuc.NewNotFoundError(fmt.Sprintf("conjunto %d não encontrado", *c.SetID))
 		}
 	}
 	if c.DefaultVariableID != nil {
 		v, err := uc.Q.GetCfgVariable(ctx, *c.DefaultVariableID)
 		if err != nil {
-			return fmt.Errorf("variável default %d não encontrada", *c.DefaultVariableID)
+			return errorsuc.NewNotFoundError(fmt.Sprintf("variável default %d não encontrada", *c.DefaultVariableID))
 		}
 		if c.SetID != nil && v.SetID != *c.SetID {
 			return fmt.Errorf("a variável default não pertence ao conjunto da característica")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/planning_params/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -24,7 +25,7 @@ func (r *PlanningParamRepositorySQLC) GetByNumber(
 	row, err := r.q.GetPlanningParamByNumber(ctx, sqlc.GetPlanningParamByNumberParams{ParamNumber: int32(paramNumber), EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("planning param %d not found", paramNumber)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("parâmetro de planejamento %d não encontrado", paramNumber))
 		}
 		return nil, fmt.Errorf("fetching planning param: %w", err)
 	}
@@ -42,7 +43,7 @@ func (r *PlanningParamRepositorySQLC) GetByKey(
 	row, err := r.q.GetPlanningParamByKey(ctx, sqlc.GetPlanningParamByKeyParams{ParamKey: key, EnterpriseID: enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("planning param %q not found", key)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("parâmetro de planejamento %q não encontrado", key))
 		}
 		return nil, fmt.Errorf("fetching planning param by key: %w", err)
 	}
@@ -83,7 +84,7 @@ func (r *PlanningParamRepositorySQLC) Update(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("planning param %d not found", paramNumber)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("parâmetro de planejamento %d não encontrado", paramNumber))
 		}
 		return nil, fmt.Errorf("updating planning param: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/employee/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -44,7 +45,7 @@ func (r *RepositoryEmployeeSQLC) Update(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("employee %d not found", e.Code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("funcionário %d não encontrado", e.Code))
 		}
 		return nil, fmt.Errorf("updating employee: %w", err)
 	}
@@ -58,7 +59,7 @@ func (r *RepositoryEmployeeSQLC) GetByCode(
 	row, err := r.q.GetEmployeeByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("employee %d not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("funcionário %d não encontrado", code))
 		}
 		return nil, fmt.Errorf("fetching employee: %w", err)
 	}

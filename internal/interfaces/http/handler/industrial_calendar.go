@@ -25,7 +25,7 @@ func (h *IndustrialCalendarHandler) Routes() chi.Router {
 func (h *IndustrialCalendarHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateIndustrialCalendarDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo invalido")
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.uc.Generate(r.Context(), dto)
@@ -55,7 +55,7 @@ func calendarYearMonth(r *http.Request) (int, int, error) {
 func (h *IndustrialCalendarHandler) GenerateMonth(w http.ResponseWriter, r *http.Request) {
 	year, month, err := calendarYearMonth(r)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "ano ou mes invalido")
+		security.RespondError(w, http.StatusBadRequest, "ano ou mês inválido")
 		return
 	}
 	result, err := h.uc.GenerateMonth(r.Context(), year, month)
@@ -78,7 +78,7 @@ func (h *IndustrialCalendarHandler) CreateDay(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.uc.CreateDay(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -87,7 +87,7 @@ func (h *IndustrialCalendarHandler) CreateDay(w http.ResponseWriter, r *http.Req
 func (h *IndustrialCalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 	year, month, parseErr := calendarYearMonth(r)
 	if parseErr != nil {
-		security.RespondError(w, http.StatusBadRequest, "ano ou mes invalido")
+		security.RespondError(w, http.StatusBadRequest, "ano ou mês inválido")
 		return
 	}
 	results, err := h.uc.GetMonth(r.Context(), year, month)
@@ -105,7 +105,7 @@ func (h *IndustrialCalendarHandler) GetMonth(w http.ResponseWriter, r *http.Requ
 func (h *IndustrialCalendarHandler) GetWorkdays(w http.ResponseWriter, r *http.Request) {
 	year, month, parseErr := calendarYearMonth(r)
 	if parseErr != nil {
-		security.RespondError(w, http.StatusBadRequest, "ano ou mes invalido")
+		security.RespondError(w, http.StatusBadRequest, "ano ou mês inválido")
 		return
 	}
 	results, err := h.uc.GetWorkdaysInMonth(r.Context(), year, month)

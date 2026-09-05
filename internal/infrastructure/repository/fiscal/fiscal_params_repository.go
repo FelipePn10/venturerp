@@ -3,6 +3,7 @@ package fiscal
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
@@ -615,7 +616,7 @@ func (r *FiscalParamsRepositorySQLC) GetDAPITransferReasonByCode(ctx context.Con
 		code).Scan(&d.ID, &d.Code, &d.Reason, &d.Destination, &d.ValidFrom, &d.ValidTo, &d.IsActive, &d.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("dapi transfer reason %s not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("motivo de transferência DAPI %s não encontrado", code))
 		}
 		return nil, fmt.Errorf("getting dapi transfer reason: %w", err)
 	}
@@ -675,7 +676,7 @@ func (r *FiscalParamsRepositorySQLC) GetICMSApuracaoAdjCode(ctx context.Context,
 		Scan(&c.ID, &c.Code, &c.UF, &c.Description, &c.ValidFrom, &c.ValidTo, &c.IsActive, &c.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("icms apuracao adj code %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("código de ajuste da apuração de ICMS %d não encontrado", id))
 		}
 		return nil, fmt.Errorf("getting icms apuracao adj code: %w", err)
 	}
@@ -741,7 +742,7 @@ func (r *FiscalParamsRepositorySQLC) GetICMSAdjustmentCode(ctx context.Context, 
 		Scan(&c.ID, &c.UF, &c.Code, &c.Description, &tr, &c.ValidFrom, &c.ValidTo, &c.IsActive, &c.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("icms adjustment code %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("código de ajuste de ICMS %d não encontrado", id))
 		}
 		return nil, fmt.Errorf("getting icms adjustment code: %w", err)
 	}
@@ -814,7 +815,7 @@ func (r *FiscalParamsRepositorySQLC) GetICMSApuracaoLine(ctx context.Context, co
 		code).Scan(&l.ID, &l.Code, &l.Description, &lt, &l.AcceptsEntries, &l.Nature, &l.ApuracaoAdjCodeID, &l.IsActive, &l.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("icms apuracao line %s not found", code)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("linha %s da apuração de ICMS não encontrada", code))
 		}
 		return nil, fmt.Errorf("getting icms apuracao line: %w", err)
 	}
@@ -877,7 +878,7 @@ func (r *FiscalParamsRepositorySQLC) GetICMSSummaryEntry(ctx context.Context, id
 		Scan(&e.ID, &e.Period, &e.UF, &e.CFOPID, &e.ICMSBase, &e.ICMSValue, &e.ICMSBaseOther, &e.ICMSValueOther, &e.IsActive, &e.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("icms summary entry %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("totalizador de ICMS %d não encontrado", id))
 		}
 		return nil, fmt.Errorf("getting icms summary entry: %w", err)
 	}
@@ -985,7 +986,7 @@ func (r *FiscalParamsRepositorySQLC) GetSimplesNacionalApuracao(ctx context.Cont
 			&s.AliquotaEfetivaICMS, &s.ParcelaDeduzir, &s.Observation, &s.IsActive, &s.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("simples nacional apuracao %s/%s not found", period, annex)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("apuração do Simples Nacional %s/%s não encontrada", period, annex))
 		}
 		return nil, fmt.Errorf("getting simples nacional apuracao: %w", err)
 	}
@@ -1170,7 +1171,7 @@ func (r *FiscalParamsRepositorySQLC) GetICMSReductionSubstitution(ctx context.Co
 			pgutil.ScanPgNumericPtr(&rs.DIFALPurchaseRedPct), &rs.IsSimplesOptante, &rs.IsActive, &rs.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("icms reduction substitution %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("redução de ICMS por substituição %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting icms reduction substitution: %w", err)
 	}
@@ -1392,7 +1393,7 @@ func (r *FiscalParamsRepositorySQLC) GetICMSSTRestitution(ctx context.Context, i
 			&rs.IsActive, &rs.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("icms st restitution %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("restituição de ICMS-ST %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting icms st restitution: %w", err)
 	}
@@ -1496,7 +1497,7 @@ func (r *FiscalParamsRepositorySQLC) GetSpecialAdjustmentNote(ctx context.Contex
 			&n.TotalValue, &n.TotalICMS, &n.TotalIPI, pgutil.ScanPgTextPtr(&n.Observation), &n.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("special adjustment note %d not found", id)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota de ajuste especial %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting special adjustment note: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/entity"
@@ -360,7 +361,7 @@ func normalizeErr(err error) error {
 		return nil
 	}
 	if err == pgx.ErrNoRows {
-		return fmt.Errorf("sales goal record not found")
+		return errorsuc.NewNotFoundError("meta de vendas não encontrada")
 	}
 	return err
 }

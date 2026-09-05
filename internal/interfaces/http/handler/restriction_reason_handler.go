@@ -19,7 +19,7 @@ func (h *RestrictionReasonHandler) Create(w http.ResponseWriter, r *http.Request
 	}
 	result, err := h.createUC.Execute(r.Context(), dto.Description, dto.Situation)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -28,7 +28,7 @@ func (h *RestrictionReasonHandler) Create(w http.ResponseWriter, r *http.Request
 func (h *RestrictionReasonHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -66,7 +66,7 @@ func (h *RestrictionReasonHandler) Update(w http.ResponseWriter, r *http.Request
 		Situation:   dto.Situation,
 	})
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -79,7 +79,7 @@ func (h *RestrictionReasonHandler) Delete(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.deleteUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

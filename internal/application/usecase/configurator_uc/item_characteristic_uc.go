@@ -3,6 +3,7 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -18,7 +19,7 @@ func (uc *ConfiguratorUseCase) AddItemCharacteristic(ctx context.Context, dto re
 	}
 	char, err := uc.Q.GetCfgCharacteristic(ctx, dto.CharacteristicID)
 	if err != nil {
-		return nil, fmt.Errorf("característica %d não encontrada", dto.CharacteristicID)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("característica %d não encontrada", dto.CharacteristicID))
 	}
 	// A fórmula é obrigatória quando a característica é do tipo FORMULA (o cálculo
 	// depende de informações do item, logo é definido aqui).
@@ -134,7 +135,7 @@ func (uc *ConfiguratorUseCase) validateParent(ctx context.Context, parentID *int
 	}
 	parent, err := uc.Q.GetCfgItemCharacteristic(ctx, *parentID)
 	if err != nil {
-		return fmt.Errorf("característica pai %d não encontrada", *parentID)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("característica pai %d não encontrada", *parentID))
 	}
 	if parent.ItemCode != itemCode {
 		return fmt.Errorf("a característica pai pertence a outro item")

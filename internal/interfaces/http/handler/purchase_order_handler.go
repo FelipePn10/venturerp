@@ -198,7 +198,7 @@ func (h *PurchaseOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -219,7 +219,7 @@ func (h *PurchaseOrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	dto.Code = code
 	result, err := h.updateUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -243,7 +243,7 @@ func (h *PurchaseOrderHandler) GetByCode(w http.ResponseWriter, r *http.Request)
 func (h *PurchaseOrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -258,7 +258,7 @@ func (h *PurchaseOrderHandler) ListBySupplier(w http.ResponseWriter, r *http.Req
 	}
 	results, err := h.listBySupplierUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -268,7 +268,7 @@ func (h *PurchaseOrderHandler) ListByStatus(w http.ResponseWriter, r *http.Reque
 	status := chi.URLParam(r, "status")
 	results, err := h.listByStatusUC.Execute(r.Context(), status)
 	if err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -282,7 +282,7 @@ func (h *PurchaseOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.cancelUC.Execute(r.Context(), code); err != nil {
-		security.RespondError(w, http.StatusInternalServerError, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

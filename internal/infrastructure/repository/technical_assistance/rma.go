@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/technical_assistance/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -38,7 +39,7 @@ func (r *RepositoryPGX) CreateRMA(ctx context.Context, enterpriseID int64, value
 		return nil, err
 	}
 	if !callExists {
-		return nil, fmt.Errorf("chamado não encontrado na empresa autenticada")
+		return nil, errorsuc.NewNotFoundError("chamado não encontrado na empresa autenticada")
 	}
 	value.EnterpriseID = enterpriseID
 	err = tx.QueryRow(ctx, `INSERT INTO technical_assistance_rmas(enterprise_id,call_code,status,reason_code,reason_description,eligibility_status,eligibility_reason,sla_due_at,product_cost,freight_cost,service_cost,idempotency_key,created_by)
