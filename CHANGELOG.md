@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.16] — 2026-09-07
+
+- feat: alteração de item, resolução de código no PDM e erros tipados (`3c29707`)
+- feat: executa o planejamento na janela noturna com consistência garantida (`5225c3f`)
+- fix: traduz as mensagens ao usuário e destrava o cadastro por item-base (#134) (`a73f2ec`)
+
 ## [v1.1.15] — 2026-09-05
 
 - fix: devolve status correto e mensagens em português nos erros (#132) (`ccd42ef`)
