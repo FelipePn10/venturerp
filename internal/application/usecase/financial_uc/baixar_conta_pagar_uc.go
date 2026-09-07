@@ -37,7 +37,7 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 	}
 
 	if cp.Status != entity.ContaPagarStatusPendente && cp.Status != entity.ContaPagarStatusAprovado {
-		return fmt.Errorf("conta a pagar deve estar PENDENTE ou APROVADO para baixa, status: %s", cp.Status)
+		return errorsuc.NewValidationError(fmt.Sprintf("conta a pagar deve estar PENDENTE ou APROVADO para baixa, status: %s", cp.Status))
 	}
 
 	dataPagamento, err := time.Parse("2006-01-02", dto.DataPagamento)

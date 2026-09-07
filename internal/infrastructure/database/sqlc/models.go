@@ -5352,6 +5352,16 @@ type Item struct {
 	EnterpriseID                               int64
 	BusinessCode                               string
 	CyclicalCountPolicyActivatedAt             pgtype.Timestamptz
+	// Serve de modelo para criar outros itens.
+	IsBase bool
+	// Tem variações resolvidas pelo configurador.
+	IsConfigured bool
+	// Em desenvolvimento; controle manual.
+	IsPrototype bool
+	// Ferramenta, entra no controle de vida útil.
+	IsTool bool
+	// Item de processo em terceiros.
+	IsProcessItem bool
 }
 
 type ItemBusinessCodeSequence struct {
@@ -5540,6 +5550,30 @@ type ItemStructure struct {
 	QuantityFormula    pgtype.Text
 	QuantityRounding   string
 	QuantityScale      int16
+	WarehouseCode      *int64
+	LineWarehouseCode  *int64
+	// Perda de preparação: consumida uma vez por ordem.
+	SetupLoss    float64
+	CostLossType string
+	// Perda usada no custo, independente da perda de engenharia.
+	CostLoss       float64
+	CostCenterCode *int64
+	// Entra na linha crítica analisada pelo plano mestre.
+	IsCriticalMps       bool
+	GeneratesInspection bool
+}
+
+// Quem alterou o quê na estrutura de produto, com o antes e o depois.
+type ItemStructureHistory struct {
+	ID          int64
+	StructureID int64
+	ParentCode  int64
+	ChildCode   int64
+	Action      string
+	ChangedBy   pgtype.UUID
+	ChangedAt   pgtype.Timestamptz
+	BeforeState []byte
+	AfterState  []byte
 }
 
 type ItemSupplierQualityReport struct {
@@ -6479,6 +6513,22 @@ type PlannedOrder struct {
 	MrpSuggestionCode    *int64
 }
 
+// Janela noturna do planejamento por empresa e corte da última execução.
+type PlanningAutoRunSetting struct {
+	EnterpriseID       int64
+	IsEnabled          bool
+	RunHour            int16
+	RunMinute          int16
+	PlanCode           *int64
+	InitialOrderNumber int64
+	GenerateLlc        bool
+	// Instante lido pela última execução concluída; o que mudou depois entra na próxima.
+	LastSnapshotAt pgtype.Timestamptz
+	LastRunAt      pgtype.Timestamptz
+	LastRunStatus  pgtype.Text
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type PlanningParam struct {
 	ID           int64
 	ParamNumber  int32
@@ -6489,6 +6539,24 @@ type PlanningParam struct {
 	UpdatedAt    pgtype.Timestamptz
 	UpdatedBy    pgtype.UUID
 	EnterpriseID *int64
+}
+
+// Uma linha por execução do planejamento, com o corte lido e a origem do disparo.
+type PlanningRunHistory struct {
+	ID           int64
+	EnterpriseID int64
+	PlanCode     int64
+	Trigger      string
+	TriggeredBy  pgtype.UUID
+	SnapshotAt   pgtype.Timestamptz
+	StartedAt    pgtype.Timestamptz
+	FinishedAt   pgtype.Timestamptz
+	Status       string
+	ChangedItems int32
+	MrpOrders    int32
+	CrpOverload  int32
+	Viable       pgtype.Bool
+	Notes        pgtype.Text
 }
 
 type PlanoConta struct {

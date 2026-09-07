@@ -141,7 +141,7 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 
 	for _, line := range dto.Lines {
 		if line.Quantity <= 0 {
-			return nil, fmt.Errorf("a quantidade do item %d deve ser maior que zero", line.ItemCode)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("a quantidade do item %d deve ser maior que zero", line.ItemCode))
 		}
 		tankCode, warn := uc.tankCode(ctx, line.ItemCode)
 		if warn != "" {

@@ -68,6 +68,10 @@ func (uc *UpdateItemUseCase) ExecuteBusinessCode(ctx context.Context, rawCode st
 }
 
 func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto request.UpdateItemDTO) (*response.ItemResponse, error) {
+	applyIdentity(item, dto)
+	applyEngineeringFolder(item, dto)
+	applyPlanningFolder(item, dto)
+	applySuppliesFolder(item, dto)
 	if c := dto.Commercial; c != nil {
 		if c.Description != nil {
 			item.Commercial.Description = cleanUpdate(*c.Description)
@@ -188,8 +192,19 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 			item.Accounting.Notes = cleanUpdate(*a.Notes)
 		}
 	}
-	if w := dto.Warehouse; w != nil && w.CyclicalCountConfig.Set {
-		item.Warehouse.CyclicalCountConfig = w.CyclicalCountConfig.Value
+	if w := dto.Warehouse; w != nil {
+		if w.CyclicalCountConfig.Set {
+			item.Warehouse.CyclicalCountConfig = w.CyclicalCountConfig.Value
+		}
+		if w.UnitOfMeasurement != nil {
+			item.Warehouse.UnitOfMeasurement = *w.UnitOfMeasurement
+		}
+		if w.AutomaticLow != nil {
+			item.Warehouse.AutomaticLow = *w.AutomaticLow
+		}
+		if w.MinimumStock != nil {
+			item.Warehouse.MinimumStock = *w.MinimumStock
+		}
 	}
 	if err := item.Validate(); err != nil {
 		return nil, err
@@ -203,7 +218,7 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 			return nil, err
 		}
 	}
-	updated, err := uc.Repo.UpdateCommercialAccounting(ctx, item)
+	updated, err := uc.Repo.UpdateFolders(ctx, item)
 	if err != nil {
 		return nil, err
 	}
@@ -219,4 +234,128 @@ func cleanUpdate(v *string) *string {
 		return nil
 	}
 	return &s
+}
+
+// applyIdentity aplica identificação, marcadores de natureza e PDM. Cada campo é
+// ponteiro: ausente preserva o que já está gravado.
+func applyIdentity(item *entity.Item, dto request.UpdateItemDTO) {
+	if dto.Name != nil {
+		item.Name = strings.TrimSpace(*dto.Name)
+	}
+	if dto.Complement != nil {
+		item.Complement = cleanUpdate(*dto.Complement)
+	}
+	if dto.Nature != nil {
+		item.Nature = *dto.Nature
+	}
+	if dto.IsBase != nil {
+		item.IsBase = *dto.IsBase
+	}
+	if dto.IsConfigured != nil {
+		item.IsConfigured = *dto.IsConfigured
+	}
+	if dto.IsPrototype != nil {
+		item.IsPrototype = *dto.IsPrototype
+	}
+	if dto.IsTool != nil {
+		item.IsTool = *dto.IsTool
+	}
+	if dto.IsProcessItem != nil {
+		item.IsProcessItem = *dto.IsProcessItem
+	}
+	if dto.Situation != nil {
+		item.Situation = *dto.Situation
+	}
+	if dto.Health != nil {
+		item.Health = *dto.Health
+	}
+	if p := dto.PDM; p != nil {
+		if p.GroupCode != nil {
+			item.PDM.GroupCode = *p.GroupCode
+		}
+		if p.ModifierCode != nil {
+			item.PDM.ModifierCode = *p.ModifierCode
+		}
+		if p.DescriptionTechnique != nil {
+			item.PDM.DescriptionTechnique = strings.TrimSpace(*p.DescriptionTechnique)
+		}
+	}
+}
+
+func applyEngineeringFolder(item *entity.Item, dto request.UpdateItemDTO) {
+	e := dto.Engineering
+	if e == nil {
+		return
+	}
+	if e.Weight != nil {
+		item.Engineering.Weight = *e.Weight
+	}
+	if e.Dimensions != nil {
+		item.Engineering.Dimensions = *e.Dimensions
+	}
+	if e.Type != nil {
+		item.Engineering.Type = *e.Type
+	}
+	if e.TypeStruct != nil {
+		item.Engineering.TypeStruct = *e.TypeStruct
+	}
+	if e.OEM != nil {
+		item.Engineering.OEM = *e.OEM
+	}
+}
+
+func applyPlanningFolder(item *entity.Item, dto request.UpdateItemDTO) {
+	p := dto.Planning
+	if p == nil {
+		return
+	}
+	if p.TypeMRP != nil {
+		item.Planning.TypeMRP = *p.TypeMRP
+	}
+	if p.LLC != nil {
+		item.Planning.LLC = *p.LLC
+	}
+	if p.Ghost != nil {
+		item.Planning.Ghost = *p.Ghost
+	}
+	if p.ABCClass != nil {
+		item.Planning.ABCClass = cleanUpdate(*p.ABCClass)
+	}
+	if p.MinimumLot != nil {
+		item.Planning.MinimumLot = *p.MinimumLot
+	}
+	if p.MultipleLot != nil {
+		item.Planning.MultipleLot = *p.MultipleLot
+	}
+	if p.SafetyStock != nil {
+		item.Planning.SafetyStock = *p.SafetyStock
+	}
+	if p.Critical != nil {
+		item.Planning.Critical = *p.Critical
+	}
+	if p.Exclusive != nil {
+		item.Planning.Exclusive = *p.Exclusive
+	}
+	if p.Active != nil {
+		item.Planning.Active = *p.Active
+	}
+}
+
+func applySuppliesFolder(item *entity.Item, dto request.UpdateItemDTO) {
+	s := dto.Supplies
+	if s == nil {
+		return
+	}
+	if s.TypeOfUse != nil {
+		item.Supplies.TypeOfUse = *s.TypeOfUse
+	}
+	if s.PurchaseUOM != nil {
+		item.Supplies.PurchaseUOM = *s.PurchaseUOM
+	}
+	if s.ReceivingChecklist != nil {
+		item.Supplies.ReceivingChecklist = *s.ReceivingChecklist
+	}
+	if s.Harvest != nil {
+		item.Supplies.Harvest = *s.Harvest
+	}
 }

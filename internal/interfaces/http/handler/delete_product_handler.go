@@ -13,7 +13,7 @@ func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(idParam, 10, 64)
 
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		http.Error(w, "código inválido", http.StatusBadRequest)
 		return
 	}
 

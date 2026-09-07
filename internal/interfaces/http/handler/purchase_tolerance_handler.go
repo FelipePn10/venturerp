@@ -20,7 +20,7 @@ func NewPurchaseToleranceHandler(uc *purchase_tolerance_uc.UseCase) *PurchaseTol
 func (h *PurchaseToleranceHandler) Save(w http.ResponseWriter, r *http.Request) {
 	var d request.UpsertPurchaseToleranceDTO
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	x, err := h.uc.Save(r.Context(), d)
@@ -39,7 +39,7 @@ func (h *PurchaseToleranceHandler) List(w http.ResponseWriter, r *http.Request) 
 	if raw := r.URL.Query().Get("supplier_code"); raw != "" {
 		v, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid supplier_code")
+			jsonError(w, http.StatusBadRequest, "código do fornecedor inválido")
 			return
 		}
 		supplier = &v
@@ -54,7 +54,7 @@ func (h *PurchaseToleranceHandler) List(w http.ResponseWriter, r *http.Request) 
 func (h *PurchaseToleranceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err = h.uc.Delete(r.Context(), id); err != nil {
@@ -66,7 +66,7 @@ func (h *PurchaseToleranceHandler) Delete(w http.ResponseWriter, r *http.Request
 func (h *PurchaseToleranceHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	var d request.EvaluatePurchaseToleranceDTO
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	x, err := h.uc.Evaluate(r.Context(), d)

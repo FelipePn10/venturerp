@@ -75,7 +75,7 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 		return nil, err
 	}
 	if !isPurchaseSuggestion(planned) {
-		return nil, fmt.Errorf("ordem %d não é uma sugestão de compra aprovável (tipo/status/firme inválidos)", dto.PlannedOrderCode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("ordem %d não é uma sugestão de compra aprovável (tipo/status/firme inválidos)", dto.PlannedOrderCode))
 	}
 
 	orderNum, err := uc.Repo.NextOrderNumber(ctx, dto.EnterpriseCode)

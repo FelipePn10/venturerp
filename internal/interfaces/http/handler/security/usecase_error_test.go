@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	enums "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -71,5 +72,22 @@ func TestInternalErrorKeepsUnknownAsInternal(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "disco") {
 		t.Fatalf("vazou detalhe técnico: %s", rec.Body.String())
+	}
+}
+
+// Um valor fora de lista fechada devolvido pelo caso de uso precisa chegar ao
+// usuário como 422 dizendo o que é aceito — antes virava 500 genérico.
+func TestRespondUseCaseErrorTraduzValorForaDeListaFechada(t *testing.T) {
+	rec := httptest.NewRecorder()
+	RespondUseCaseError(rec, enums.NewInvalidValue("Operador da condição (SE)", "EQ", "EQUAL", "DIFFERENT"))
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("esperado 422, veio %d", rec.Code)
+	}
+	corpo := rec.Body.String()
+	for _, esperado := range []string{"VALOR_NAO_ACEITO", "EQ", "EQUAL", "DIFFERENT"} {
+		if !strings.Contains(corpo, esperado) {
+			t.Fatalf("a resposta deveria citar %q; veio: %s", esperado, corpo)
+		}
 	}
 }

@@ -208,7 +208,7 @@ func (h *ToolHandler) DeactivateSerial(w http.ResponseWriter, r *http.Request) {
 func (h *ToolHandler) AddRouteOpTool(w http.ResponseWriter, r *http.Request) {
 	opID, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid opId")
+		jsonError(w, http.StatusBadRequest, "código da operação inválido")
 		return
 	}
 	var dto request.AddRouteOpToolDTO
@@ -228,7 +228,7 @@ func (h *ToolHandler) AddRouteOpTool(w http.ResponseWriter, r *http.Request) {
 func (h *ToolHandler) ListRouteOpTools(w http.ResponseWriter, r *http.Request) {
 	opID, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid opId")
+		jsonError(w, http.StatusBadRequest, "código da operação inválido")
 		return
 	}
 	result, err := h.uc.ListByOperation(r.Context(), opID)
@@ -242,7 +242,7 @@ func (h *ToolHandler) ListRouteOpTools(w http.ResponseWriter, r *http.Request) {
 func (h *ToolHandler) RemoveRouteOpTool(w http.ResponseWriter, r *http.Request) {
 	linkID, err := strconv.ParseInt(chi.URLParam(r, "toolLinkId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid toolLinkId")
+		jsonError(w, http.StatusBadRequest, "vínculo de ferramenta inválido")
 		return
 	}
 	if err := h.uc.RemoveFromOperation(r.Context(), linkID); err != nil {

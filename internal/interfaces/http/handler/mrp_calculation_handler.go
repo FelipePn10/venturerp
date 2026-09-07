@@ -114,7 +114,7 @@ func (h *MRPCalculationHandler) ListConfiguredRules(w http.ResponseWriter, r *ht
 func (h *MRPCalculationHandler) ListExceptions(w http.ResponseWriter, r *http.Request) {
 	planCode, err := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid plan_code")
+		security.RespondError(w, http.StatusBadRequest, "código do plano inválido")
 		return
 	}
 	results, err := h.listExceptionsUC.Execute(r.Context(), planCode)
@@ -146,7 +146,7 @@ func (h *MRPCalculationHandler) FirmarSugestao(w http.ResponseWriter, r *http.Re
 func (h *MRPCalculationHandler) ListSuggestions(w http.ResponseWriter, r *http.Request) {
 	planCode, err := strconv.ParseInt(chi.URLParam(r, "plan_code"), 10, 64)
 	if err != nil || planCode <= 0 {
-		security.RespondError(w, http.StatusBadRequest, "invalid plan_code")
+		security.RespondError(w, http.StatusBadRequest, "código do plano inválido")
 		return
 	}
 	results, err := h.firmarSugestaoUC.MRPRepo.ListSuggestionsByPlan(r.Context(), planCode)

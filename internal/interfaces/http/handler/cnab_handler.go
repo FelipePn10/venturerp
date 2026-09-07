@@ -39,7 +39,7 @@ type cnabRemessaRequest struct {
 func (h *CNABHandler) GenerateRemessa240(w http.ResponseWriter, r *http.Request) {
 	var req cnabRemessaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 

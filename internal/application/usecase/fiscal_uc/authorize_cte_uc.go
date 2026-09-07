@@ -34,7 +34,7 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 		return nil, fmt.Errorf("CT-e %d já está autorizado", id)
 	}
 	if cte.EmissionData == nil || *cte.EmissionData == "" {
-		return nil, fmt.Errorf("CT-e %d não possui emission_data — informe os dados de emissão (partes, modal, municípios) para autorizar", id)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("CT-e %d não possui emission_data — informe os dados de emissão (partes, modal, municípios) para autorizar", id))
 	}
 
 	var payload focusnfe.CTePayload

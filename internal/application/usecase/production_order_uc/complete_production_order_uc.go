@@ -91,7 +91,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 			return nil, pendingErr
 		}
 		if pending {
-			return nil, errorsuc.NewValidationError("production order has pending service purchase orders")
+			return nil, errorsuc.NewValidationError("a ordem tem pedidos de serviço de terceiros ainda pendentes; conclua ou cancele os pedidos antes de encerrar a ordem")
 		}
 	}
 	treatExcess, err := uc.Repo.TreatProductionExcess(ctx)

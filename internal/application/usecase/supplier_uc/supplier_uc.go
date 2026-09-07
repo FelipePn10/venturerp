@@ -117,7 +117,7 @@ func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.Creat
 	}
 	// Reject duplicate document (spec: existing register for the same CPF/CNPJ).
 	if existing, err := uc.repo.GetSupplierByDocument(ctx, dto.DocumentNumber); err == nil && existing != nil {
-		return nil, fmt.Errorf("já existe um fornecedor (código %d) cadastrado para o documento %s", existing.Code, dto.DocumentNumber)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("já existe um fornecedor (código %d) cadastrado para o documento %s", existing.Code, dto.DocumentNumber))
 	}
 
 	// Resolve the supplier type to obtain both its ID and kind (IE rule).
@@ -202,20 +202,20 @@ func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.Updat
 	// Re-validate the state registration / MEI rules on update.
 	if typeKind.RequiresStateRegistration() {
 		if dto.StateRegistration == nil || *dto.StateRegistration == "" {
-			return nil, fmt.Errorf("inscrição estadual é obrigatória para este tipo de fornecedor")
+			return nil, errorsuc.NewValidationError("inscrição estadual é obrigatória para este tipo de fornecedor")
 		}
 	}
 	if dto.IsMEI && entity.PersonType(dto.PersonType) == entity.PersonFisica {
-		return nil, fmt.Errorf("microempreendedor individual não pode ser marcado para pessoa física")
+		return nil, errorsuc.NewValidationError("microempreendedor individual não pode ser marcado para pessoa física")
 	}
 	switch entity.DocumentType(dto.DocumentType) {
 	case entity.DocumentCNPJ:
 		if !validation.ValidateCNPJ(dto.DocumentNumber) {
-			return nil, fmt.Errorf("CNPJ inválido")
+			return nil, errorsuc.NewValidationError("CNPJ inválido")
 		}
 	case entity.DocumentCPF:
 		if !validation.ValidateCPF(dto.DocumentNumber) {
-			return nil, fmt.Errorf("CPF inválido")
+			return nil, errorsuc.NewValidationError("CPF inválido")
 		}
 	}
 
@@ -484,7 +484,7 @@ func (uc *SupplierUseCase) AddContact(ctx context.Context, dto request.AddSuppli
 		return nil, err
 	}
 	if dto.Name == "" {
-		return nil, fmt.Errorf("informe o nome do contato")
+		return nil, errorsuc.NewValidationError("informe o nome do contato")
 	}
 	ranking := dto.Ranking
 	if ranking == 0 {

@@ -31,13 +31,13 @@ func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.Cr
 
 	tipo := entity.AdiantamentoTipo(dto.Tipo)
 	if tipo != entity.AdiantamentoTipoPagar && tipo != entity.AdiantamentoTipoReceber {
-		return nil, fmt.Errorf("tipo inválido: use PAGAR ou RECEBER")
+		return nil, errorsuc.NewValidationError("tipo inválido: use PAGAR ou RECEBER")
 	}
 	if dto.ValorOriginal <= 0 {
-		return nil, fmt.Errorf("valor_original deve ser maior que zero")
+		return nil, errorsuc.NewValidationError("valor_original deve ser maior que zero")
 	}
 	if dto.ContaBancariaID == 0 {
-		return nil, fmt.Errorf("conta_bancaria_id é obrigatória")
+		return nil, errorsuc.NewValidationError("conta_bancaria_id é obrigatória")
 	}
 
 	data, err := time.Parse("2006-01-02", dto.DataAdiantamento)
@@ -145,7 +145,7 @@ func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, 
 			return nil, errorsuc.ErrUnauthorized
 		}
 	} else {
-		return nil, fmt.Errorf("conta_tipo inválido: use PAGAR ou RECEBER")
+		return nil, errorsuc.NewValidationError("conta_tipo inválido: use PAGAR ou RECEBER")
 	}
 
 	userID, err := uc.Auth.UserID(ctx)
@@ -153,7 +153,7 @@ func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, 
 		return nil, err
 	}
 	if dto.Valor <= 0 {
-		return nil, fmt.Errorf("valor deve ser maior que zero")
+		return nil, errorsuc.NewValidationError("valor deve ser maior que zero")
 	}
 
 	data := time.Now()

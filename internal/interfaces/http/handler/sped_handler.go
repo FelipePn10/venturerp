@@ -46,7 +46,7 @@ type generateEFDRequest struct {
 func (h *SPEDHandler) GenerateEFD(w http.ResponseWriter, r *http.Request) {
 	var req generateEFDRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 

@@ -22,66 +22,89 @@ func (r *ItemStructureRepositorySQLC) Create(
 ) (*entity.ItemStructure, error) {
 
 	row, err := r.q.CreateStructureComponent(ctx, sqlc.CreateStructureComponentParams{
-		ParentCode:         s.ParentCode,
-		ChildCode:          s.ChildCode,
-		ParentMask:         stringPtrToPgText(s.ParentMask),
-		Quantity:           s.Quantity,
-		UnitOfMeasurement:  sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
-		Health:             sqlc.HealthEnum(s.Health),
-		LossPercentage:     s.LossPercentage,
-		Sequence:           int32(s.Sequence),
-		Notes:              stringPtrToPgText(s.Notes),
-		CreatedBy:          pgutil.ToPgUUID(s.CreatedBy),
-		Inherit:            s.Inherit,
-		StartDate:          pgutil.ToPgDateFromPtr(s.StartDate),
-		EndDate:            pgutil.ToPgDateFromPtr(s.EndDate),
-		LossFormula:        stringPtrToPgText(s.LossFormula),
-		IsCoproduct:        s.IsCoproduct,
-		IsFixedQty:         s.IsFixedQty,
-		SubstituteGroup:    s.SubstituteGroup,
-		SubstitutePriority: s.SubstitutePriority,
-		QuantityFormula:    stringPtrToPgText(s.QuantityFormula),
-		QuantityRounding:   entity.NormalizeRounding(s.QuantityRounding),
-		QuantityScale:      s.QuantityScale,
+		ParentCode:          s.ParentCode,
+		ChildCode:           s.ChildCode,
+		ParentMask:          stringPtrToPgText(s.ParentMask),
+		Quantity:            s.Quantity,
+		UnitOfMeasurement:   sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
+		Health:              sqlc.HealthEnum(s.Health),
+		LossPercentage:      s.LossPercentage,
+		Sequence:            int32(s.Sequence),
+		Notes:               stringPtrToPgText(s.Notes),
+		CreatedBy:           pgutil.ToPgUUID(s.CreatedBy),
+		Inherit:             s.Inherit,
+		StartDate:           pgutil.ToPgDateFromPtr(s.StartDate),
+		EndDate:             pgutil.ToPgDateFromPtr(s.EndDate),
+		LossFormula:         stringPtrToPgText(s.LossFormula),
+		IsCoproduct:         s.IsCoproduct,
+		IsFixedQty:          s.IsFixedQty,
+		SubstituteGroup:     s.SubstituteGroup,
+		SubstitutePriority:  s.SubstitutePriority,
+		QuantityFormula:     stringPtrToPgText(s.QuantityFormula),
+		QuantityRounding:    entity.NormalizeRounding(s.QuantityRounding),
+		QuantityScale:       s.QuantityScale,
+		WarehouseCode:       s.WarehouseCode,
+		LineWarehouseCode:   s.LineWarehouseCode,
+		SetupLoss:           s.SetupLoss,
+		CostLossType:        entity.NormalizeCostLossType(s.CostLossType),
+		CostLoss:            s.CostLoss,
+		CostCenterCode:      s.CostCenterCode,
+		IsCriticalMps:       s.IsCriticalMPS,
+		GeneratesInspection: s.GeneratesInspection,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating structure: %w", err)
 	}
 
-	return rowToEntity(row), nil
+	criado := rowToEntity(row)
+	r.registrarHistorico(ctx, histInclusao, nil, criado)
+	return criado, nil
 }
 
 func (r *ItemStructureRepositorySQLC) Update(
 	ctx context.Context,
 	s *entity.ItemStructure,
 ) (*entity.ItemStructure, error) {
+	// O estado anterior é lido antes da gravação; é a metade "antes" do
+	// histórico, que sem isto só mostraria o resultado.
+	anterior := r.componenteAtual(ctx, s.ParentCode, s.ChildCode, s.ParentMask)
 
 	row, err := r.q.UpdateStructureComponent(ctx, sqlc.UpdateStructureComponentParams{
-		ParentCode:         s.ParentCode,
-		ChildCode:          s.ChildCode,
-		ParentMask:         stringPtrToPgText(s.ParentMask),
-		Quantity:           s.Quantity,
-		UnitOfMeasurement:  sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
-		Health:             sqlc.HealthEnum(s.Health),
-		LossPercentage:     s.LossPercentage,
-		Sequence:           int32(s.Sequence),
-		Notes:              stringPtrToPgText(s.Notes),
-		StartDate:          pgutil.ToPgDateFromPtr(s.StartDate),
-		EndDate:            pgutil.ToPgDateFromPtr(s.EndDate),
-		LossFormula:        stringPtrToPgText(s.LossFormula),
-		IsCoproduct:        s.IsCoproduct,
-		IsFixedQty:         s.IsFixedQty,
-		SubstituteGroup:    s.SubstituteGroup,
-		SubstitutePriority: s.SubstitutePriority,
-		QuantityFormula:    stringPtrToPgText(s.QuantityFormula),
-		QuantityRounding:   entity.NormalizeRounding(s.QuantityRounding),
-		QuantityScale:      s.QuantityScale,
+		ParentCode:          s.ParentCode,
+		ChildCode:           s.ChildCode,
+		ParentMask:          stringPtrToPgText(s.ParentMask),
+		Quantity:            s.Quantity,
+		UnitOfMeasurement:   sqlc.UnitOfMeasurementEnum(s.UnitOfMeasurement),
+		Health:              sqlc.HealthEnum(s.Health),
+		LossPercentage:      s.LossPercentage,
+		Sequence:            int32(s.Sequence),
+		Notes:               stringPtrToPgText(s.Notes),
+		StartDate:           pgutil.ToPgDateFromPtr(s.StartDate),
+		EndDate:             pgutil.ToPgDateFromPtr(s.EndDate),
+		LossFormula:         stringPtrToPgText(s.LossFormula),
+		IsCoproduct:         s.IsCoproduct,
+		IsFixedQty:          s.IsFixedQty,
+		SubstituteGroup:     s.SubstituteGroup,
+		SubstitutePriority:  s.SubstitutePriority,
+		QuantityFormula:     stringPtrToPgText(s.QuantityFormula),
+		QuantityRounding:    entity.NormalizeRounding(s.QuantityRounding),
+		QuantityScale:       s.QuantityScale,
+		WarehouseCode:       s.WarehouseCode,
+		LineWarehouseCode:   s.LineWarehouseCode,
+		SetupLoss:           s.SetupLoss,
+		CostLossType:        entity.NormalizeCostLossType(s.CostLossType),
+		CostLoss:            s.CostLoss,
+		CostCenterCode:      s.CostCenterCode,
+		IsCriticalMps:       s.IsCriticalMPS,
+		GeneratesInspection: s.GeneratesInspection,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating structure: %w", err)
 	}
 
-	return rowToEntity(row), nil
+	alterado := rowToEntity(row)
+	r.registrarHistorico(ctx, histAlteracao, anterior, alterado)
+	return alterado, nil
 }
 
 func (r *ItemStructureRepositorySQLC) Delete(
@@ -92,6 +115,7 @@ func (r *ItemStructureRepositorySQLC) Delete(
 }
 
 func (r *ItemStructureRepositorySQLC) DeleteByCodes(ctx context.Context, parentCode, childCode int64, parentMask *string) error {
+	anterior := r.componenteAtual(ctx, parentCode, childCode, parentMask)
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return err
@@ -104,6 +128,9 @@ func (r *ItemStructureRepositorySQLC) DeleteByCodes(ctx context.Context, parentC
 	}
 	if affected == 0 {
 		return errorsuc.NewNotFoundError("componente não encontrado na empresa autenticada")
+	}
+	if anterior != nil {
+		r.registrarHistorico(ctx, histExclusao, anterior, nil)
 	}
 	return nil
 }
@@ -243,25 +270,33 @@ func (r *ItemStructureRepositorySQLC) GetItemQuestions(
 
 func rowToEntity(row sqlc.ItemStructure) *entity.ItemStructure {
 	e := &entity.ItemStructure{
-		ID:                 row.ID,
-		ParentCode:         row.ParentCode,
-		ChildCode:          row.ChildCode,
-		Quantity:           row.Quantity,
-		LossPercentage:     row.LossPercentage,
-		UnitOfMeasurement:  types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
-		Health:             types.Health(row.Health),
-		Sequence:           int(row.Sequence),
-		IsActive:           row.IsActive,
-		Inherit:            row.Inherit,
-		CreatedBy:          pgutil.FromPgUUID(row.CreatedBy),
-		CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
-		StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
-		EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
-		IsCoproduct:        row.IsCoproduct,
-		IsFixedQty:         row.IsFixedQty,
-		SubstituteGroup:    row.SubstituteGroup,
-		SubstitutePriority: row.SubstitutePriority,
+		WarehouseCode:       row.WarehouseCode,
+		LineWarehouseCode:   row.LineWarehouseCode,
+		SetupLoss:           row.SetupLoss,
+		CostLossType:        row.CostLossType,
+		CostLoss:            row.CostLoss,
+		CostCenterCode:      row.CostCenterCode,
+		IsCriticalMPS:       row.IsCriticalMps,
+		GeneratesInspection: row.GeneratesInspection,
+		ID:                  row.ID,
+		ParentCode:          row.ParentCode,
+		ChildCode:           row.ChildCode,
+		Quantity:            row.Quantity,
+		LossPercentage:      row.LossPercentage,
+		UnitOfMeasurement:   types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+		Health:              types.Health(row.Health),
+		Sequence:            int(row.Sequence),
+		IsActive:            row.IsActive,
+		Inherit:             row.Inherit,
+		CreatedBy:           pgutil.FromPgUUID(row.CreatedBy),
+		CreatedAt:           pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:           pgutil.FromPgTimestamptz(row.UpdatedAt),
+		StartDate:           pgutil.FromPgDateToPtr(row.StartDate),
+		EndDate:             pgutil.FromPgDateToPtr(row.EndDate),
+		IsCoproduct:         row.IsCoproduct,
+		IsFixedQty:          row.IsFixedQty,
+		SubstituteGroup:     row.SubstituteGroup,
+		SubstitutePriority:  row.SubstitutePriority,
 	}
 
 	if row.ParentMask.Valid {

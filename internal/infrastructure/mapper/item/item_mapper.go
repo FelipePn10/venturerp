@@ -7,7 +7,7 @@ import (
 )
 
 func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
-	return itementity.NewItem(
+	item, err := itementity.NewItem(
 		d.Code,
 		d.Name,
 		d.Complement,
@@ -23,6 +23,39 @@ func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
 		toAccounting(d.Accounting, d.AccountingFiscal),
 		d.CreatedBy,
 	)
+	if err != nil {
+		return nil, err
+	}
+	aplicarMarcadores(item, d)
+	return item, nil
+}
+
+// aplicarMarcadores define as naturezas combináveis do item.
+//
+// Um item pode ser base *e* configurado ao mesmo tempo — um modelo reutilizável
+// que também tem variações. Quando a tela não envia os marcadores, eles são
+// derivados de `nature`, para quem ainda manda só a natureza continuar
+// funcionando. Depois `nature` é realinhada, porque consultas e relatórios
+// antigos ainda a leem.
+func aplicarMarcadores(item *itementity.Item, d request.CreateItemDTO) {
+	item.IsBase = d.Nature == itementity.ItemBase
+	item.IsConfigured = d.Nature == itementity.ItemConfigured
+	if d.IsBase != nil {
+		item.IsBase = *d.IsBase
+	}
+	if d.IsConfigured != nil {
+		item.IsConfigured = *d.IsConfigured
+	}
+	if d.IsPrototype != nil {
+		item.IsPrototype = *d.IsPrototype
+	}
+	if d.IsTool != nil {
+		item.IsTool = *d.IsTool
+	}
+	if d.IsProcessItem != nil {
+		item.IsProcessItem = *d.IsProcessItem
+	}
+	item.SyncNature()
 }
 
 func clean(value *string) *string {

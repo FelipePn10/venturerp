@@ -19,7 +19,7 @@ func (findItemAuth) FindItemByCode(context.Context) bool { return true }
 
 type missingItemRepository struct{}
 
-func (missingItemRepository) UpdateCommercialAccounting(context.Context, *entity.Item) (*entity.Item, error) {
+func (missingItemRepository) UpdateFolders(context.Context, *entity.Item) (*entity.Item, error) {
 	return nil, repository.ErrNotFound
 }
 

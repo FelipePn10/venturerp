@@ -26,7 +26,7 @@ type ibptImportRequest struct {
 func (h *IBPTHandler) Import(w http.ResponseWriter, r *http.Request) {
 	var req ibptImportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	n, err := h.uc.ImportFromCSV(r.Context(), req.UF, req.CSV)

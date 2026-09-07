@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	enumtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"strings"
 	"time"
 
@@ -579,7 +580,7 @@ func normalizePersonType(value string) (string, error) {
 	case "J", "PJ", "COMPANY", "PESSOA_JURIDICA":
 		return "J", nil
 	default:
-		return "", errorsuc.NewValidationError("person_type must be F or J")
+		return "", enumtypes.NewInvalidValue("Tipo de pessoa", value, "F", "J")
 	}
 }
 

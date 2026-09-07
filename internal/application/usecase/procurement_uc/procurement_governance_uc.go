@@ -24,7 +24,7 @@ func (uc *UseCase) ComputeSupplierScorecard(ctx context.Context, dto request.Com
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SupplierCode <= 0 {
-		return nil, fmt.Errorf("informe o fornecedor")
+		return nil, errorsuc.NewValidationError("informe o fornecedor")
 	}
 	start, err := time.Parse("2006-01-02", dto.PeriodStart)
 	if err != nil {
@@ -35,7 +35,7 @@ func (uc *UseCase) ComputeSupplierScorecard(ctx context.Context, dto request.Com
 		return nil, fmt.Errorf("fim do período inválido: %w", err)
 	}
 	if end.Before(start) {
-		return nil, fmt.Errorf("o fim do período deve ser igual ou posterior ao início")
+		return nil, errorsuc.NewValidationError("o fim do período deve ser igual ou posterior ao início")
 	}
 	agg, err := uc.Repo.AggregateSupplierPerformance(ctx, dto.SupplierCode, start, end)
 	if err != nil {
@@ -112,16 +112,16 @@ func (uc *UseCase) CreateApprovalLimit(ctx context.Context, dto request.CreateAp
 	switch dto.Scope {
 	case "GLOBAL", "SUPPLIER", "COST_CENTER", "CATEGORY":
 	default:
-		return nil, fmt.Errorf("escopo deve ser GLOBAL, SUPPLIER, COST_CENTER ou CATEGORY")
+		return nil, errorsuc.NewValidationError("escopo deve ser GLOBAL, SUPPLIER, COST_CENTER ou CATEGORY")
 	}
 	if dto.Scope != "GLOBAL" && (dto.ScopeRef == nil || *dto.ScopeRef == "") {
-		return nil, fmt.Errorf("scope_ref é obrigatório quando o escopo não é GLOBAL")
+		return nil, errorsuc.NewValidationError("scope_ref é obrigatório quando o escopo não é GLOBAL")
 	}
 	if dto.AutoApproveMax < 0 {
-		return nil, fmt.Errorf("limite de aprovação automática deve ser maior ou igual a zero")
+		return nil, errorsuc.NewValidationError("limite de aprovação automática deve ser maior ou igual a zero")
 	}
 	if dto.BlockAbove != nil && *dto.BlockAbove < dto.AutoApproveMax {
-		return nil, fmt.Errorf("limite de bloqueio deve ser maior ou igual ao limite de aprovação automática")
+		return nil, errorsuc.NewValidationError("limite de bloqueio deve ser maior ou igual ao limite de aprovação automática")
 	}
 	if dto.Currency == "" {
 		dto.Currency = "BRL"
@@ -212,10 +212,10 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SupplierCode <= 0 {
-		return nil, fmt.Errorf("informe o fornecedor")
+		return nil, errorsuc.NewValidationError("informe o fornecedor")
 	}
 	if dto.ContractNumber == "" {
-		return nil, fmt.Errorf("informe o número do contrato")
+		return nil, errorsuc.NewValidationError("informe o número do contrato")
 	}
 	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
 	if err != nil {
@@ -230,7 +230,7 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 		status = "DRAFT"
 	}
 	if !validContractStatus(status) {
-		return nil, fmt.Errorf("situação %q inválida", status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida", status))
 	}
 	validFrom, err := parseOptionalDate(dto.ValidFrom, time.Now())
 	if err != nil {
@@ -303,7 +303,7 @@ func (uc *UseCase) UpdateSupplierContractStatus(ctx context.Context, id int64, d
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validContractStatus(dto.Status) {
-		return nil, fmt.Errorf("situação %q inválida", dto.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida", dto.Status))
 	}
 	contract, err := uc.Repo.UpdateSupplierContractStatus(ctx, id, dto.Status)
 	if err != nil {
@@ -317,7 +317,7 @@ func (uc *UseCase) ConsumeSupplierContract(ctx context.Context, id int64, dto re
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Quantity <= 0 {
-		return nil, fmt.Errorf("a quantidade deve ser maior que zero")
+		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
 	contract, err := uc.Repo.GetSupplierContract(ctx, id)
 	if err != nil {

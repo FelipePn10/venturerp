@@ -18,7 +18,7 @@ func NewMRPExceptionsHandler(uc *mrp_uc.NotifyExceptionsUseCase) *MRPExceptionsH
 func (h *MRPExceptionsHandler) Notify(w http.ResponseWriter, r *http.Request) {
 	var dto mrp_uc.NotifyExceptionsDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.Execute(r.Context(), dto)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	enums "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -19,6 +20,15 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errorsuc.ErrUnauthorized):
 		RespondErrorCode(w, http.StatusForbidden, "ACESSO_NEGADO", "usuário não autorizado para esta operação")
+		return
+	}
+
+	// Valor fora de uma lista fechada (operador, tipo, natureza…). Sem este
+	// ramo o erro só era traduzido quando nascia na decodificação do corpo;
+	// nascendo dentro do caso de uso, virava 500 genérico.
+	var invalido *enums.InvalidValueError
+	if errors.As(err, &invalido) {
+		RespondErrorCode(w, http.StatusUnprocessableEntity, "VALOR_NAO_ACEITO", invalido.Error())
 		return
 	}
 

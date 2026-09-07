@@ -72,7 +72,7 @@ func (h *DeliveryPromiseHandler) Reschedule(w http.ResponseWriter, r *http.Reque
 func (h *DeliveryPromiseHandler) CancelReservation(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.CancelReservation(r.Context(), code); err != nil {
@@ -87,7 +87,7 @@ func (h *DeliveryPromiseHandler) ExpireReservations(w http.ResponseWriter, r *ht
 	if value := r.URL.Query().Get("now"); value != "" {
 		parsed, err := time.Parse(time.DateOnly, value)
 		if err != nil {
-			security.RespondError(w, http.StatusBadRequest, "invalid now")
+			security.RespondError(w, http.StatusBadRequest, "a data de referência informada é inválida")
 			return
 		}
 		now = parsed

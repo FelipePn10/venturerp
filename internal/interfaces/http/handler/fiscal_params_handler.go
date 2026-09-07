@@ -34,7 +34,7 @@ func NewFiscalParamsHandler(
 func (h *FiscalParamsHandler) CreateLegalDevice(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateLegalDeviceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.legalDeviceUC.Create(r.Context(), dto)
@@ -48,7 +48,7 @@ func (h *FiscalParamsHandler) CreateLegalDevice(w http.ResponseWriter, r *http.R
 func (h *FiscalParamsHandler) UpdateLegalDevice(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateLegalDeviceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.legalDeviceUC.Update(r.Context(), dto)
@@ -62,7 +62,7 @@ func (h *FiscalParamsHandler) UpdateLegalDevice(w http.ResponseWriter, r *http.R
 func (h *FiscalParamsHandler) GetLegalDevice(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.legalDeviceUC.GetByCode(r.Context(), code)
@@ -99,7 +99,7 @@ func (h *FiscalParamsHandler) ListLegalDevicesByType(w http.ResponseWriter, r *h
 func (h *FiscalParamsHandler) CreateCFOP(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCFOPDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.cfopUC.Create(r.Context(), dto)
@@ -113,7 +113,7 @@ func (h *FiscalParamsHandler) CreateCFOP(w http.ResponseWriter, r *http.Request)
 func (h *FiscalParamsHandler) UpdateCFOP(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateCFOPDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.cfopUC.Update(r.Context(), dto)
@@ -127,7 +127,7 @@ func (h *FiscalParamsHandler) UpdateCFOP(w http.ResponseWriter, r *http.Request)
 func (h *FiscalParamsHandler) GetCFOP(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 32)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.cfopUC.GetByCode(r.Context(), int32(code))
@@ -164,7 +164,7 @@ func (h *FiscalParamsHandler) ListCFOPsByDirection(w http.ResponseWriter, r *htt
 func (h *FiscalParamsHandler) CreateTaxParam(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateTaxParamDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.taxParamUC.Create(r.Context(), dto)
@@ -178,7 +178,7 @@ func (h *FiscalParamsHandler) CreateTaxParam(w http.ResponseWriter, r *http.Requ
 func (h *FiscalParamsHandler) UpdateTaxParam(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateTaxParamDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.taxParamUC.Update(r.Context(), dto)
@@ -192,7 +192,7 @@ func (h *FiscalParamsHandler) UpdateTaxParam(w http.ResponseWriter, r *http.Requ
 func (h *FiscalParamsHandler) GetTaxParam(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.taxParamUC.GetByID(r.Context(), id)

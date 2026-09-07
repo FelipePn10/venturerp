@@ -80,6 +80,17 @@ func structureQueryRowsToEntities(rows []sqlc.GetDirectChildrenForMaskRow) []*st
 			CreatedBy:         pgutil.FromPgUUID(row.CreatedBy),
 			CreatedAt:         pgutil.FromPgTimestamptz(row.CreatedAt),
 			UpdatedAt:         pgutil.FromPgTimestamptz(row.UpdatedAt),
+			// A consulta já trazia estes campos, mas o mapeamento os descartava:
+			// a estrutura era gravada com vigência, fórmula e alternativos e
+			// voltava zerada, então a tela nunca conseguia exibi-los de volta.
+			StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
+			EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
+			IsCoproduct:        row.IsCoproduct,
+			IsFixedQty:         row.IsFixedQty,
+			SubstituteGroup:    row.SubstituteGroup,
+			SubstitutePriority: row.SubstitutePriority,
+			QuantityRounding:   row.QuantityRounding,
+			QuantityScale:      row.QuantityScale,
 		}
 
 		if row.ParentMask.Valid {
@@ -90,6 +101,16 @@ func structureQueryRowsToEntities(rows []sqlc.GetDirectChildrenForMaskRow) []*st
 		if row.Notes.Valid {
 			v := row.Notes.String
 			e.Notes = &v
+		}
+
+		if row.LossFormula.Valid {
+			v := row.LossFormula.String
+			e.LossFormula = &v
+		}
+
+		if row.QuantityFormula.Valid {
+			v := row.QuantityFormula.String
+			e.QuantityFormula = &v
 		}
 
 		out = append(out, e)

@@ -51,7 +51,7 @@ func (h *ToolSheetHandler) GetSheet(w http.ResponseWriter, r *http.Request) {
 func (h *ToolSheetHandler) Assign(w http.ResponseWriter, r *http.Request) {
 	var dto request.AssignToolSerialDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.AssignedBy = actingUser(r)
@@ -67,7 +67,7 @@ func (h *ToolSheetHandler) Assign(w http.ResponseWriter, r *http.Request) {
 func (h *ToolSheetHandler) Substitute(w http.ResponseWriter, r *http.Request) {
 	var dto request.SubstituteToolSerialDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.SubstitutedBy = actingUser(r)
@@ -83,12 +83,12 @@ func (h *ToolSheetHandler) Substitute(w http.ResponseWriter, r *http.Request) {
 func (h *ToolSheetHandler) ListSubstitutions(w http.ResponseWriter, r *http.Request) {
 	operationID, err := strconv.ParseInt(r.URL.Query().Get("operation_id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid operation_id")
+		jsonError(w, http.StatusBadRequest, "código da operação inválido")
 		return
 	}
 	toolID, err := strconv.ParseInt(r.URL.Query().Get("tool_id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid tool_id")
+		jsonError(w, http.StatusBadRequest, "código da ferramenta inválido")
 		return
 	}
 	result, err := h.uc.ListSubstitutions(r.Context(), operationID, toolID)

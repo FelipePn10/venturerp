@@ -10,7 +10,7 @@ import (
 func StatisticalForecastHandler(w http.ResponseWriter, r *http.Request) {
 	var dto forecast_uc.StatisticalForecastDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := forecast_uc.Execute(dto)

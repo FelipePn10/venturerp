@@ -76,7 +76,7 @@ func (h *ProductionOrderHandler) DeliveryCandidates(w http.ResponseWriter, r *ht
 func (h *ProductionOrderHandler) Maintain(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.MaintainProductionOrderDTO
@@ -96,7 +96,7 @@ func (h *ProductionOrderHandler) Maintain(w http.ResponseWriter, r *http.Request
 func (h *ProductionOrderHandler) ListMaterials(w http.ResponseWriter, r *http.Request) {
 	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.materialControlUC.List(r.Context(), orderID, r.URL.Query().Get("kind"))
@@ -225,7 +225,7 @@ func (h *ProductionOrderHandler) Maintenance(w http.ResponseWriter, r *http.Requ
 	if raw := r.URL.Query().Get("id"); raw != "" {
 		value, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			security.RespondError(w, http.StatusBadRequest, "invalid id")
+			security.RespondError(w, http.StatusBadRequest, "código inválido")
 			return
 		}
 		id = &value
@@ -322,7 +322,7 @@ func (h *ProductionOrderHandler) ConfigureWMS(w http.ResponseWriter, r *http.Req
 func (h *ProductionOrderHandler) Operational(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.operationalUC.Execute(r.Context(), id)
@@ -353,7 +353,7 @@ func (h *ProductionOrderHandler) GetByCode(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getByCodeUC.Execute(r.Context(), id)
@@ -377,7 +377,7 @@ func (h *ProductionOrderHandler) Start(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.StartProductionOrderDTO
@@ -430,7 +430,7 @@ func (h *ProductionOrderHandler) Complete(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CompleteProductionOrderDTO
@@ -451,7 +451,7 @@ func (h *ProductionOrderHandler) Close(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.closeUC.Execute(r.Context(), request.CloseProductionOrderDTO{ID: id})
@@ -466,7 +466,7 @@ func (h *ProductionOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.cancelUC.Execute(r.Context(), request.CancelProductionOrderDTO{ID: id})
@@ -481,7 +481,7 @@ func (h *ProductionOrderHandler) GetAppointments(w http.ResponseWriter, r *http.
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	results, err := h.getAppointmentsUC.Execute(r.Context(), id)
@@ -496,7 +496,7 @@ func (h *ProductionOrderHandler) GetConsumptions(w http.ResponseWriter, r *http.
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	results, err := h.getConsumptionsUC.Execute(r.Context(), id)
@@ -516,7 +516,7 @@ func (h *ProductionOrderHandler) SettleCost(w http.ResponseWriter, r *http.Reque
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.settleCostUC.Execute(r.Context(), id)
@@ -534,7 +534,7 @@ func (h *ProductionOrderHandler) GetCost(w http.ResponseWriter, r *http.Request)
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getCostUC.Execute(r.Context(), id)
@@ -554,7 +554,7 @@ func (h *ProductionOrderHandler) ReturnScrap(w http.ResponseWriter, r *http.Requ
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.ReturnScrapDTO
@@ -598,7 +598,7 @@ func (h *ProductionOrderHandler) ListOrderOperations(w http.ResponseWriter, r *h
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.orderOpsUC.ListOperations(r.Context(), id)

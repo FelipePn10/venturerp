@@ -97,7 +97,7 @@
   <li><span class="s-num">1</span> O mapa do processo<span class="s-desc">Do orçamento à expedição — quem faz o quê e em que ordem</span></li>
   <li><span class="s-num">2</span> A estrutura de níveis: reorganizando a ficha técnica<span class="s-desc">Produto acabado → conjunto → peça fabricada → matéria-prima, com a árvore do RN 01001 e os códigos novos</span></li>
   <li><span class="s-num">3</span> Bloco 1 — Cadastros base<span class="s-desc">Classificação, grupos PDM, almoxarifados, itens, matérias-primas, fornecedor e cliente</span></li>
-  <li><span class="s-num">4</span> Bloco 2 — Engenharia<span class="s-desc">Estrutura do produto, máquinas, custo/hora, operações, roteiros e terceiros</span></li>
+  <li><span class="s-num">4</span> Bloco 2 — Engenharia<span class="s-desc">Estrutura do produto, máquinas, custo/hora, operações, roteiros, terceiros e configurador</span></li>
   <li><span class="s-num">5</span> Bloco 3 — Comercial<span class="s-desc">Orçamento de venda e conversão em pedido</span></li>
   <li><span class="s-num">6</span> Bloco 4 — Planejamento e chão de fábrica<span class="s-desc">Demanda, MRP, CRP, APS, ordens, corte, estoque, inspeção e expedição</span></li>
   <li><span class="s-num">7</span> Checklists de conferência<span class="s-desc">O que verificar antes de dar cada etapa por concluída</span></li>
@@ -160,7 +160,7 @@
 <table class="dados">
   <thead><tr><th>Área</th><th>Responsabilidade no fluxo</th><th>Telas principais do Dia 1</th></tr></thead>
   <tbody>
-    <tr><td><b>Engenharia</b></td><td>Classificar e cadastrar itens, montar a estrutura do produto, definir roteiros, tempos e ferramentas.</td><td>VCLA0100 · VENT0200 · VENT0210 · VPRO0100 · VMAQ0200</td></tr>
+    <tr><td><b>Engenharia</b></td><td>Classificar e cadastrar itens, montar a estrutura do produto, definir roteiros, tempos e ferramentas.</td><td>VCLA0100 · VENT0200 · VENT0210 · VENT0202 · VMAQ0200</td></tr>
     <tr><td><b>Comercial</b></td><td>Registrar o orçamento, negociar condições, converter em pedido e confirmar.</td><td>VVND0300 · VVND0200 · VCLI0500</td></tr>
     <tr><td><b>PCP / Planejamento</b></td><td>Cadastrar a demanda, rodar o MRP, avaliar capacidade no CRP, sequenciar no APS e firmar as ordens.</td><td>VPLA0102 · VMRP0100 · VPRO0200 · VPRO0210</td></tr>
     <tr><td><b>Compras</b></td><td>Transformar sugestões de compra em pedido, negociar e acompanhar o recebimento.</td><td>VSUP0200 · VSUP0500 · VSUP0120</td></tr>
@@ -804,8 +804,9 @@ alguns tipos de localização — ver a regra abaixo.</p>
   continuam sendo os do item novo. Cadastre um item-base por família (uma chapa, uma peça cortada, uma
   peça conformada) e o cadastro dos próximos cai de vinte minutos para dois.
   <br><br>
-  O item-base é criado como qualquer item, marcando <code>Natureza</code> = <code>Item Base</code> na
-  aba Capa. A própria tela avisa que um item-base não usa outro item-base como modelo.
+  O item-base é criado como qualquer item, marcando <b>Item Base</b> no campo <code>Natureza</code> da
+  aba Capa. Como os marcadores passaram a ser combináveis, um item-base também pode ser criado a
+  partir de outro item-base — a restrição que existia antes deixou de fazer sentido.
 </div>
 
 <h3>3.4.1 Aba Capa</h3>
@@ -820,22 +821,55 @@ alguns tipos de localização — ver a regra abaixo.</p>
     <tr><td><code>Grupo (PDM)</code></td><td class="cen"><b>Sim</b></td><td><code>10</code> SUSPENSÃO CARRETA</td><td>Cadastre em <span class="tela-out">VITE0114</span> antes do item.</td></tr>
     <tr><td><code>Modificador (PDM)</code></td><td class="cen"><b>Sim</b></td><td><code>1</code> PADRÃO</td><td>Cadastre em <span class="tela-out">VITE0115</span> antes do item.</td></tr>
     <tr><td><code>Estado</code></td><td class="cen">Sim</td><td><code>Ativo</code> · <code>Inativo</code> · <code>Fantasma</code></td><td><b>Situação cadastral do item.</b> Não confundir com o indicador Fantasma da aba Planejamento.</td></tr>
-    <tr><td><code>Natureza</code></td><td class="cen">Sim</td><td><code>Item Base</code> · <code>Genérico</code> · <code>Configurado</code></td><td>Ver tabela abaixo.</td></tr>
-    <tr><td><code>Indicadores</code></td><td class="cen">Não</td><td>☐ Item de Processo</td><td>Marque em item que passa por operações externas / terceiros.</td></tr>
+    <tr><td><code>Natureza</code></td><td class="cen">Sim</td><td>Caixas de marcação — marque quantas se aplicarem</td><td><b>São combináveis.</b> Ver tabela abaixo.</td></tr>
     <tr><td><code>Observações</code></td><td class="cen">Não</td><td>Texto livre</td><td></td></tr>
   </tbody>
 </table>
 
 <table class="dados">
-  <thead><tr><th style="width:18%">Natureza</th><th>O que a tela explica</th><th style="width:26%">Quando usar na Tecnofer</th></tr></thead>
+  <thead><tr><th style="width:20%">Marcador</th><th>O que a tela explica</th><th style="width:26%">Quando usar na Tecnofer</th></tr></thead>
   <tbody>
-    <tr><td><b>Item Base</b></td><td>Modelo reutilizável com parâmetros contábeis, comerciais, de estoque e planejamento.</td><td>Um por família, para servir de molde aos demais.</td></tr>
-    <tr><td><b>Genérico</b></td><td>Agrupa materiais não estocáveis sob um código.</td><td>Consumíveis de baixo valor lançados por consumo.</td></tr>
-    <tr><td><b>Configurado</b></td><td>Item com variações, como cor e medida.</td><td>Não se aplica hoje — reservado.</td></tr>
+    <tr><td><b>Item Base</b></td><td>Serve de modelo para criar outros itens. Grupos, modificadores e atributos do PDM só aceitam itens marcados aqui.</td><td>Um por família, para servir de molde aos demais.</td></tr>
+    <tr><td><b>Configurado</b></td><td>Tem variações — cor, medida — resolvidas pelo configurador de produto.</td><td>Produto sob medida; ver seção 4.6.</td></tr>
+    <tr><td><b>Genérico</b></td><td>Agrupa materiais não estocáveis sob um único código.</td><td>Consumíveis de baixo valor lançados por consumo.</td></tr>
+    <tr><td><b>Protótipo</b></td><td>Item em desenvolvimento pela engenharia; o controle é manual.</td><td>Peça em validação antes de entrar em linha.</td></tr>
+    <tr><td><b>Ferramenta</b></td><td>Entra no controle de vida útil da ferramentaria.</td><td>Estampos e dispositivos de solda.</td></tr>
+    <tr><td><b>Item de Processo</b></td><td>Item de processo em terceiros, criado a partir de operações externas.</td><td>Peça que sai para cementação ou usinagem.</td></tr>
   </tbody>
 </table>
 
-<h3>3.4.2 Aba Engenharia</h3>
+<div class="porque">
+  <b>Por que os marcadores são combináveis</b>
+  Até a versão anterior a natureza era uma escolha única: ou o item era base, ou configurado, ou
+  genérico. Isso obrigava a duplicar o cadastro de um produto paramétrico que também serve de molde
+  para outros — que é exatamente o caso de uma família de balanças com medidas variáveis.
+  <br><br>
+  Agora cada marcador é independente. Um mesmo item pode ser <b>Item Base</b> e <b>Configurado</b> ao
+  mesmo tempo, e continuar aparecendo tanto na lista de modelos quanto no configurador.
+</div>
+
+<h3>3.4.2 Abrir um item já cadastrado para alterar</h3>
+<p>
+  A tela não serve só para incluir. Na barra de ações, o campo <b>Abrir item para alterar…</b> carrega
+  um item existente com todas as sete abas preenchidas; o rótulo <b>Alterando o item …</b> aparece ao
+  lado para não restar dúvida sobre o que está sendo gravado.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:26%">O que acontece</th><th>Detalhe</th></tr></thead>
+  <tbody>
+    <tr><td><b>O código fica travado</b></td><td>Alterar o código criaria outro item, não renomearia este. Para um código diferente, use <span class="btn">Novo item</span> e cadastre do zero.</td></tr>
+    <tr><td><b>Grava só o que mudou</b></td><td>O que não for tocado permanece como está no banco — inclusive as pastas que você nem abriu.</td></tr>
+    <tr><td><b>Volta ao cadastro novo</b></td><td><span class="btn">Novo item</span> limpa a tela e sai do modo de alteração.</td></tr>
+  </tbody>
+</table>
+<div class="porque">
+  <b>Por que isto importa no dia a dia</b>
+  Peso errado, classificação fiscal trocada, lote múltiplo desatualizado: são correções de rotina que
+  antes exigiam abrir um chamado. Agora a própria engenharia corrige, e o item mantém o código —
+  que é o que preserva o histórico de compras, estoque e notas fiscais já emitidas.
+</div>
+
+<h3>3.4.3 Aba Engenharia</h3>
 <table class="dados">
   <thead><tr><th style="width:24%">Campo</th><th style="width:30%">O que informar</th><th>Efeito</th></tr></thead>
   <tbody>
@@ -859,7 +893,7 @@ alguns tipos de localização — ver a regra abaixo.</p>
   </tbody>
 </table>
 
-<h3>3.4.3 Aba Planejamento <span class="mudo">— a aba do PCP</span></h3>
+<h3>3.4.4 Aba Planejamento <span class="mudo">— a aba do PCP</span></h3>
 <p>É a aba mais densa da tela, dividida em três seções: <b>Lotes</b>, <b>Estoque e Tempos</b> e
 <b>Baixa de Produção</b>, além dos campos de topo e dos indicadores.</p>
 
@@ -951,7 +985,7 @@ alguns tipos de localização — ver a regra abaixo.</p>
   </tbody>
 </table>
 
-<h3>3.4.4 Aba Estoque</h3>
+<h3>3.4.5 Aba Estoque</h3>
 <table class="dados">
   <thead><tr><th style="width:24%">Campo</th><th style="width:28%">O que informar</th><th>Observação</th></tr></thead>
   <tbody>
@@ -963,7 +997,7 @@ alguns tipos de localização — ver a regra abaixo.</p>
   </tbody>
 </table>
 
-<h3>3.4.5 Aba Comercial</h3>
+<h3>3.4.6 Aba Comercial</h3>
 <table class="dados">
   <thead><tr><th style="width:24%">Campo</th><th style="width:26%">O que informar</th><th>Observação</th></tr></thead>
   <tbody>
@@ -985,7 +1019,7 @@ alguns tipos de localização — ver a regra abaixo.</p>
   ☐ É Embalagem · ☐ Habilita no aplicativo · ☐ Emb. Exportação.
 </p>
 
-<h3>3.4.6 Aba Suprimentos</h3>
+<h3>3.4.7 Aba Suprimentos</h3>
 <table class="dados">
   <thead><tr><th style="width:24%">Campo</th><th style="width:30%">O que informar</th><th>Observação</th></tr></thead>
   <tbody>
@@ -997,7 +1031,7 @@ alguns tipos de localização — ver a regra abaixo.</p>
   </tbody>
 </table>
 
-<h3>3.4.7 Aba Contábil <span class="mudo">— conteúdo do Dia 2</span></h3>
+<h3>3.4.8 Aba Contábil <span class="mudo">— conteúdo do Dia 2</span></h3>
 <p>
   Três seções: <b>Classificações Fiscais</b> (Classif. Fiscal Venda, Classif. Fiscal Compra, Origem),
   <b>IPI e ICMS</b> (Tipo IPI Venda, Alíq. IPI Venda %, Tipo IPI Compra, Alíq. IPI Compra %, Alíq. ICMS %)
@@ -1013,7 +1047,7 @@ alguns tipos de localização — ver a regra abaixo.</p>
 </p>
 <p><b>Hoje preencha apenas <code>UM Venda</code> e <code>UM Compra</code>.</b> O resto é o Bloco 1 do Dia 2.</p>
 
-<h3>3.4.8 Os três cadastros do produto-guia</h3>
+<h3>3.4.9 Os três cadastros do produto-guia</h3>
 <table class="dados">
   <thead><tr><th style="width:20%">Campo · Aba</th><th style="width:27%">RN 01001 <span class="mudo">produto</span></th><th style="width:27%">TP 01001A <span class="mudo">peça</span></th><th>MP 10794 <span class="mudo">matéria-prima</span></th></tr></thead>
   <tbody>
@@ -1273,7 +1307,8 @@ alguns tipos de localização — ver a regra abaixo.</p>
   <tbody>
     <tr><td><b>Barra do item pai</b></td><td>Onde se informa <code>Código do Item Pai</code> (com botão de busca), <code>Descrição Técnica</code> e <code>UM</code>, ambos preenchidos automaticamente, e <code>Máscara (PDM)</code>, opcional.</td></tr>
     <tr><td><b>Trilha de navegação</b></td><td>Mostra o caminho percorrido na árvore — o item raiz e cada nível aberto. <b>É clicando nela que se sobe e desce de nível</b> sem redigitar o código do pai.</td></tr>
-    <tr><td><b>Grade de componentes</b></td><td>Lista os filhos do item aberto, com as colunas Pos., Cód. Filho, Descrição, UM, Qtde, Perda %, Health, Observações, Ativo e Ações.</td></tr>
+    <tr><td><b>Grade de componentes</b></td><td>Lista os filhos do item aberto, com as colunas Pos., Cód. Filho, Descrição, UM, Qtde, Perda %, Health, Observações, Ativo e Ações. Marcadores ao lado do código sinalizam fórmula, vigência, co-produto e alternativo.</td></tr>
+    <tr><td><b>Painel de detalhe</b></td><td>Abre ao clicar na linha. É onde ficam as sete seções do componente: Identificação, Quantidades e UM, Vigência, Alternativos, <b>Consumo e custo</b>, Complemento e Indicadores.</td></tr>
     <tr><td><b>Formulário de inclusão</b></td><td>Onde se digita o novo componente antes de clicar em <span class="btn">Incluir Item</span>.</td></tr>
   </tbody>
 </table>
@@ -1293,6 +1328,51 @@ alguns tipos de localização — ver a regra abaixo.</p>
     <tr><td><code>Ativo</code></td><td class="cen">—</td><td>marcado</td><td>Desmarcar tira o componente do cálculo <b>sem apagar o histórico</b>. Prefira desativar a remover.</td></tr>
   </tbody>
 </table>
+
+<h4>O painel de detalhe — o que não cabe na grade</h4>
+<p>
+  Clicar na linha abre o painel lateral. Além dos campos da grade, é ali que ficam:
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Seção</th><th>O que se resolve nela</th></tr></thead>
+  <tbody>
+    <tr><td><b>Vigência</b></td><td>Início e fim da validade do componente. Troca de matéria-prima programada entra aqui, sem apagar o que existia.</td></tr>
+    <tr><td><b>Alternativos</b></td><td>Grupo e prioridade. Dois componentes no mesmo grupo são intercambiáveis; a prioridade diz qual a produção usa primeiro.</td></tr>
+    <tr><td><b>Consumo e custo</b></td><td>Almoxarifado de retirada, almoxarifado de linha, perda de preparação, centro de custo, perda de custo e o tipo dela.</td></tr>
+    <tr><td><b>Indicadores</b></td><td>Co-produto, quantidade por ordem, herda, fantasma, <b>crítico para o plano mestre</b> e <b>gera inspeção no processo</b>.</td></tr>
+  </tbody>
+</table>
+
+<h4>Quantidade por fórmula</h4>
+<p>
+  Quando a quantidade depende da medida do produto — e não de um número fixo — use o campo
+  <code>Fórmula da quantidade</code>. As variáveis são as respostas do configurador (seção 4.6):
+</p>
+<p class="centro"><code>2*(COMPRIMENTO/1000)+2*(PROFUNDIDADE/1000)</code></p>
+<table class="dados">
+  <thead><tr><th style="width:24%">Recurso</th><th>Para que serve</th></tr></thead>
+  <tbody>
+    <tr><td><span class="btn">Simular a fórmula</span></td><td>Responde as variáveis e mostra o resultado bruto, o arredondado, o valor com perda e o consumo por ordem — <b>antes de gravar</b>.</td></tr>
+    <tr><td><span class="btn">Copiar</span> / <span class="btn">Colar</span></td><td>Leva a fórmula, o arredondamento e as casas decimais para outro componente. Numa estrutura com dezenas de peças que repetem a mesma expressão, é o que evita o erro de digitação.</td></tr>
+    <tr><td><code>Arredondamento</code></td><td>Para cima, para baixo ou matemático — porque não se compra 2,3 barras.</td></tr>
+  </tbody>
+</table>
+
+<h4>Conferir e auditar</h4>
+<table class="dados">
+  <thead><tr><th style="width:24%">Botão</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><span class="btn">Conferir</span></td><td>Lista <b>todos</b> os problemas da estrutura de uma vez — vigência invertida, fórmula com parêntese aberto, dois alternativos com a mesma prioridade. Não grava nada.</td></tr>
+    <tr><td><span class="btn">Histórico</span></td><td>Quem alterou o quê e quando, com o antes e o depois de cada campo. É a resposta para “por que o custo do produto mudou ontem?”.</td></tr>
+    <tr><td><span class="btn">Configurador</span></td><td>Abre as perguntas do item para gerar uma configuração e aplicá-la na estrutura (seção 4.6).</td></tr>
+  </tbody>
+</table>
+<div class="nota">
+  <b>Conferir antes de salvar</b>
+  O <span class="btn">Salvar</span> também barra a gravação quando encontra problema, mas mostra a
+  lista inteira só depois da tentativa. Clicar em <span class="btn">Conferir</span> primeiro poupa a ida
+  e volta — especialmente numa estrutura grande, digitada de uma vez.
+</div>
 
 <h4>Como montar uma estrutura — o procedimento</h4>
 <div class="passo">
@@ -1449,7 +1529,7 @@ Unidade, Período e Efic.</p>
 <h4>Bloco 2 — Tempo por item × máquina <span class="mudo">(cadastro central do cálculo)</span></h4>
 <div class="atencao">
   <b>Este é o bloco que quase todo mundo pula — e sem ele o cálculo de tempo não funciona</b>
-  Enquanto o roteiro (VPRO0100) diz <b>quais operações</b> o item percorre, este bloco guarda
+  Enquanto o roteiro (VENT0202) diz <b>quais operações</b> o item percorre, este bloco guarda
   <b>quanto tempo aquele item específico leva naquela máquina específica</b>. É o cadastro que o
   simulador de tempo e o cálculo de capacidade consultam.
 </div>
@@ -1533,7 +1613,7 @@ Unidade, Período e Efic.</p>
   para o custo de janeiro mesmo depois do reajuste de julho.
 </p>
 
-<h2>4.4 Biblioteca de operações e Roteiro de Fabricação <span class="tela">VPRO0100</span></h2>
+<h2>4.4 Biblioteca de operações e Roteiro de Fabricação <span class="tela">VENT0202</span></h2>
 
 <h4>Para que serve</h4>
 <p>
@@ -1543,7 +1623,7 @@ Unidade, Período e Efic.</p>
 </p>
 
 <h4>Como a tela é organizada</h4>
-<p>Cinco blocos, que se usam nesta ordem:</p>
+<p>Seis blocos, que se usam nesta ordem:</p>
 <table class="dados">
   <thead><tr><th class="cen" style="width:6%">#</th><th style="width:28%">Bloco</th><th>O que se faz nele</th></tr></thead>
   <tbody>
@@ -1552,6 +1632,7 @@ Unidade, Período e Efic.</p>
     <tr><td class="cen">3</td><td><b>Operações do roteiro</b></td><td>Encadeia as operações da biblioteca no roteiro, com sequência, centro e tempos.</td></tr>
     <tr><td class="cen">4</td><td><b>Recursos &amp; Ferramentas</b></td><td>Por operação: máquinas alternativas e ferramentas necessárias.</td></tr>
     <tr><td class="cen">5</td><td><b>Rede de dependências</b></td><td>Define o que vem antes do quê e o overlap entre operações.</td></tr>
+    <tr><td class="cen">6</td><td><b>Tempo e custo do lote</b></td><td>Simula o roteiro para um tamanho de lote: horas e reais por operação e por peça. Não grava nada.</td></tr>
   </tbody>
 </table>
 
@@ -1560,12 +1641,55 @@ Unidade, Período e Efic.</p>
   <thead><tr><th style="width:20%">Campo</th><th style="width:24%">Exemplo</th><th>O que faz</th></tr></thead>
   <tbody>
     <tr><td><code>Nome</code></td><td><code>Corte a laser</code></td><td>Nome da operação.</td></tr>
-    <tr><td><code>Origem</code></td><td><code>INTERNA</code> · <code>EXTERNA</code> · <code>TERCEIROS</code></td><td><b>Campo decisivo.</b> A própria tela avisa: <i>“Origem define o tipo de ordem do MRP: INTERNA → OF · EXTERNA/TERCEIROS → OS.”</i></td></tr>
-    <tr><td><code>Tempo padrão (h)</code></td><td><code>0,0236</code></td><td>Tempo de referência da operação, em horas decimais.</td></tr>
+    <tr><td><code>Origem</code></td><td><code>INTERNA</code> · <code>EXTERNA</code> · <code>TERCEIROS</code></td><td><b>Campo decisivo.</b> A própria tela avisa: <i>“Define o tipo de ordem no MRP: interna → OF · externa/terceiros → OS.”</i></td></tr>
+    <tr><td><code>Unidade dos tempos</code></td><td><code>Minutos</code> · <code>Horas</code> · <code>Dias</code></td><td><b>Escolha antes de digitar os tempos.</b> Com <code>Minutos</code> não é preciso converter nada da ficha.</td></tr>
+    <tr><td><code>Centro padrão</code></td><td>Laser Calfran</td><td>Sugerido ao usar a operação num roteiro; pode ser trocado lá.</td></tr>
   </tbody>
 </table>
-<p>Clique em <span class="btn">+ Nova Operação</span> para incluir. A biblioteca lista #, Nome, Origem e
-Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</span> em cada linha.</p>
+
+<h4>Modelo de tempo</h4>
+<p>
+  Os cinco campos abaixo são o que separa um tempo estimado de um tempo que fecha com o apontamento.
+  Cada um responde a uma pergunta diferente:
+</p>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo</th><th style="width:22%">Exemplo</th><th>O que significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>Preparação (por lote)</code></td><td><code>0,50</code></td><td>Setup da máquina. Cobrado <b>uma vez por lote</b>, não por peça — é o que faz o custo unitário cair quando o lote cresce.</td></tr>
+    <tr><td><code>Máquina</code></td><td><code>0,25</code></td><td>Tempo em que a máquina fica ocupada, para produzir <code>Peças por ciclo</code> peças.</td></tr>
+    <tr><td><code>Mão de obra</code></td><td><code>0,25</code></td><td>Tempo do operador. Zero significa “igual à máquina”. Use um valor menor quando a máquina roda sozinha parte do ciclo.</td></tr>
+    <tr><td><code>Peças por ciclo</code></td><td><code>1</code> ou <code>4</code></td><td>Quantas peças saem no tempo acima. Estampo de quatro cavidades: <code>4</code>. <b>Errar aqui multiplica o custo por quatro.</b></td></tr>
+    <tr><td><code>Operadores</code></td><td><code>1</code> ou <code>2</code></td><td>Quantas pessoas atendem a operação ao mesmo tempo. Multiplica só o custo de mão de obra.</td></tr>
+    <tr><td><code>Fila</code> · <code>Espera</code> · <code>Movimentação</code></td><td><code>0,10</code></td><td>Fixos por lote. Entram no <b>prazo</b> (lead time) mas <b>não ocupam a máquina</b> — por isso não entram na carga do CRP.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>Por que separar tudo isso</b>
+  Com um único “tempo padrão”, o lote de 1 peça e o de 500 saem com o mesmo custo unitário — o que é
+  falso: a preparação é a mesma nos dois casos e se dilui. Separar preparação, ciclo e peças por ciclo
+  é o que faz o custo por peça cair de <b>R$ 20,47</b> para <b>R$ 9,50</b> quando o lote vai de 1 para 50,
+  como se vê no bloco 6.
+  <br><br>
+  O campo <code>Tempo padrão (legado)</code> continua na tela e só é usado quando <code>Máquina</code> é
+  zero — é a compatibilidade com o que já estava cadastrado.
+</div>
+
+<h4>Terceirização — aparece quando a origem não é interna</h4>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo</th><th style="width:24%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Fornecedor</code></td><td>quem executa</td><td>Vai para a ordem de serviço e para a requisição de compra.</td></tr>
+    <tr><td><code>Item de serviço</code></td><td>serviço comprado</td><td>O item que representa o serviço na nota do fornecedor.</td></tr>
+    <tr><td><code>Custo por peça</code></td><td><code>1,74</code></td><td>Preço do serviço por unidade. <b>É daqui que sai o custo da cementação</b> — não de tarifa de máquina.</td></tr>
+    <tr><td><code>Prazo (dias)</code></td><td><code>3</code></td><td>Entra no lead time do item.</td></tr>
+    <tr><td><code>O que remeter</code></td><td>os componentes da demanda · o próprio item da ordem · item genérico · não remete</td><td>Define o que sai fisicamente da fábrica na remessa.</td></tr>
+  </tbody>
+</table>
+
+<p>Clique em <span class="btn">+ Nova Operação</span> para incluir. A biblioteca lista #, Nome, Origem,
+Preparação, Máquina, Peças/ciclo, Equipe e Unidade, com <span class="btn">Editar</span> e
+<span class="btn">Desativar</span> em cada linha.</p>
 
 <div class="porque">
   <b>Por que a Origem resolve a cementação e a usinagem</b>
@@ -1605,16 +1729,15 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
 </table>
 
 <h3>4.4.2 Converter os tempos da ficha</h3>
-<div class="atencao">
-  <b>Atenção — a ficha está em segundos, o roteiro pede horas</b>
-  Os campos <code>Setup (h)</code> e <code>Tempo (h)</code> são em <b>horas decimais</b>.
-  A conta é sempre <b>segundos ÷ 3600</b>:
+<div class="nota">
+  <b>A conversão deixou de ser obrigatória</b>
+  O campo <code>Unidade dos tempos</code> da operação aceita <b>Minutos</b>, <b>Horas</b> ou <b>Dias</b>.
+  Escolhendo <b>Minutos</b>, os tempos da ficha entram como estão — o sistema converte para horas
+  internamente, e é em horas que eles aparecem no roteiro e no cálculo de custo.
   <br><br>
-  <span class="centro"><code>180 s ÷ 3600 = 0,0500 h</code> &nbsp;·&nbsp; <code>85 s ÷ 3600 = 0,0236 h</code> &nbsp;·&nbsp; <code>300 s ÷ 3600 = 0,0833 h</code></span>
-  <br><br>
-  A tabela completa está no <b>Anexo C</b>. Alternativa: cadastre o tempo em
-  <span class="tela-out">VMAQ0200</span>, no bloco <b>Tempo por item × máquina</b>, onde há o campo
-  <code>Unidade tempo</code> — ali dá para lançar <b>direto em segundos</b>, como está na ficha.
+  Se preferir lançar em horas, a conta continua sendo <b>segundos ÷ 3600</b>:
+  <span class="centro"><code>180 s = 0,0500 h</code> &nbsp;·&nbsp; <code>85 s = 0,0236 h</code> &nbsp;·&nbsp; <code>300 s = 0,0833 h</code></span>
+  A tabela completa está no <b>Anexo C</b>.
 </div>
 
 <h3>4.4.3 Bloco 2 — Criar o roteiro do item</h3>
@@ -1625,10 +1748,20 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
     <tr><td><code>Descrição</code></td><td>Roteiro de fabricação — Lateral 5/16"</td><td>Nome do roteiro.</td></tr>
     <tr><td><code>Alternativa</code></td><td><code>1</code></td><td>Permite mais de um roteiro para o mesmo item. A alternativa 2 seria “cortar na guilhotina quando a laser estiver lotada”.</td></tr>
     <tr><td><code>Máscara</code></td><td class="mudo">em branco</td><td>Usada quando o item é configurado por máscara.</td></tr>
+    <tr><td><code>Início da vigência</code></td><td><code>01/01/2026</code></td><td>Antes desta data o MRP não usa o roteiro. Em branco = vale desde sempre.</td></tr>
+    <tr><td><code>Fim da vigência</code></td><td class="mudo">em branco</td><td>Use para aposentar um roteiro numa data certa, sem apagá-lo.</td></tr>
     <tr><td><code>Padrão (MRP/CRP)</code></td><td>marcado</td><td><b>É o roteiro que o planejamento usa.</b> Só um por item pode ser padrão.</td></tr>
   </tbody>
 </table>
 <p>A grade <b>Roteiros do item</b> mostra Descrição, Alt. e Padrão, com <span class="btn">Desativar</span>.</p>
+
+<div class="nota">
+  <b>Copiar um roteiro para outra peça</b>
+  Com o roteiro aberto, o campo <b>Copiar este roteiro para</b> leva tudo para outro item: as operações
+  com os tempos que sobrescrevem a biblioteca <b>e a rede de dependências</b>. É o que faz um roteiro
+  padrão (<span class="tela-out">VENT0115</span>) valer a pena — a lateral 3/16" nasce da cópia da
+  lateral 5/16", e só o que difere é ajustado.
+</div>
 
 <h3>4.4.4 Bloco 3 — Encadear as operações</h3>
 <table class="dados">
@@ -1636,13 +1769,20 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
   <tbody>
     <tr><td><code>Operação</code></td><td>Cortar no Laser (INTERNA)</td><td>Escolhida na biblioteca. A lista mostra a origem entre parênteses.</td></tr>
     <tr><td><code>Seq</code></td><td><code>10</code></td><td>Ordem de execução. Use de 10 em 10.</td></tr>
-    <tr><td><code>Centro (ID)</code></td><td>Laser Calfran</td><td><b>Onde a operação roda.</b> É daqui que sai a tarifa do custo e a carga do CRP.</td></tr>
-    <tr><td><code>Setup (h)</code></td><td><code>0,0500</code></td><td>Preparação — rateada pelo lote no custo.</td></tr>
-    <tr><td><code>Tempo (h)</code></td><td><code>0,0236</code></td><td>Tempo por peça.</td></tr>
+    <tr><td><code>Centro de trabalho</code></td><td>Laser Calfran</td><td><b>Onde a operação roda.</b> É daqui que sai a tarifa do custo e a carga do CRP. Escolhido numa lista pesquisável — não se digita o número.</td></tr>
+    <tr><td><code>Preparação</code></td><td class="mudo">em branco</td><td>Sobrescreve a preparação da biblioteca <b>só neste roteiro</b>.</td></tr>
+    <tr><td><code>Máquina</code></td><td class="mudo">em branco</td><td>Idem para o tempo de máquina.</td></tr>
   </tbody>
 </table>
-<p>A grade mostra Seq, Operação, Centro, Setup (h) e Tempo, com <span class="btn">Rec/Ferr</span> e
-<span class="btn">Remover</span> em cada linha.</p>
+<div class="nota">
+  <b>Em branco herda</b>
+  Deixar <code>Preparação</code> e <code>Máquina</code> vazios faz a operação usar o que está na
+  biblioteca. Preencha <b>só o que é diferente neste roteiro</b> — assim, corrigir o tempo na
+  biblioteca corrige todos os roteiros que não o sobrescreveram.
+</div>
+<p>A grade mostra Seq, Operação, Centro, Preparação, Máquina, Mão de obra e Peças/ciclo — já com os
+tempos <b>resolvidos</b>, ou seja, o que a operação de fato consome depois de aplicada a herança.
+Cada linha tem <span class="btn">Rec/Ferr</span> e <span class="btn">Remover</span>.</p>
 
 <h3>4.4.5 Bloco 4 — Recursos e ferramentas <span class="mudo">(botão Rec/Ferr)</span></h3>
 <p>Clicando em <span class="btn">Rec/Ferr</span> numa operação abre-se o painel da operação:</p>
@@ -1692,11 +1832,51 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
   que é o número que deveria estar no campo <code>Tempo Reposição</code> da aba Planejamento do item.
 </p>
 
+<h3>4.4.8 Bloco 6 — Tempo e custo do lote</h3>
+<p>
+  O botão <span class="btn">Tempo e custo do lote</span> abre a pergunta que a engenharia faz o tempo
+  todo: <b>quanto custa e quanto demora fabricar 50?</b> Informe o tamanho do lote e a tela mostra,
+  operação a operação, as horas de máquina, as horas de mão de obra, as horas paradas e o custo —
+  com o total e o <b>custo por peça</b> no rodapé. Nada é gravado: é simulação.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Coluna</th><th>De onde sai</th></tr></thead>
+  <tbody>
+    <tr><td><b>Máquina</b></td><td>Preparação (uma vez) + tempo de máquina × (lote ÷ peças por ciclo).</td></tr>
+    <tr><td><b>Mão de obra</b></td><td>Tempo de mão de obra × ciclos × número de operadores. Quando o campo é zero, acompanha a máquina.</td></tr>
+    <tr><td><b>Paradas</b></td><td>Fila + espera + movimentação. Contam para o prazo, não para a carga da máquina.</td></tr>
+    <tr><td><b>Custo</b></td><td>Horas de máquina × tarifa de máquina + horas de mão de obra × tarifa de mão de obra + custo do terceiro × lote.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>O efeito que só aparece aqui</b>
+  No roteiro de exemplo — solda com 0,50 h de preparação e 0,25 h de máquina, a R$ 22,40/h de máquina
+  e R$ 14,69/h de mão de obra — o custo por peça é:
+  <br><br>
+  <span class="centro"><b>lote 1 → R$ 20,47/peça</b> &nbsp;·&nbsp; <b>lote 50 → R$ 9,50/peça</b></span>
+  <br>
+  A diferença inteira é a preparação se diluindo. É esse número que deveria orientar o lote mínimo de
+  fabricação — e é ele que some quando o roteiro guarda um “tempo padrão” só.
+</div>
+
+<div class="atencao">
+  <b>Sem tarifa cadastrada, o custo sai zero</b>
+  A tarifa vem do <b>custo/hora do centro de trabalho</b>. Se alguma operação estiver sem tarifa, a
+  tela avisa em vez de mostrar um total falso. Cadastre a tarifa antes de usar o número em decisão —
+  separando <b>máquina</b> de <b>mão de obra</b>, que é o que permite custear certo uma operação em que
+  a máquina roda sozinha ou em que dois operadores atendem o mesmo equipamento.
+</div>
+
 <div class="exercicio">
   <div class="ex-tit">Conferência — o roteiro está completo?</div>
-  Um roteiro pronto tem: operações na sequência certa, centro de trabalho em cada uma, setup e tempo
-  preenchidos, origem correta (INTERNA ou TERCEIROS), dependências declaradas e a caixa
-  <code>Padrão (MRP/CRP)</code> marcada. Falta a última e o MRP ignora o roteiro inteiro.
+  Um roteiro pronto tem: operações na sequência certa, centro de trabalho em cada uma, preparação e
+  tempo de máquina preenchidos, <b>peças por ciclo conferido</b>, origem correta (INTERNA ou TERCEIROS),
+  dependências declaradas e a caixa <code>Padrão (MRP/CRP)</code> marcada. Falta a última e o MRP
+  ignora o roteiro inteiro.
+  <br><br>
+  Antes de dar por pronto, abra <span class="btn">Tempo e custo do lote</span> com o lote que a fábrica
+  costuma rodar. Um custo por peça fora do esperado quase sempre é <code>Peças por ciclo</code> errado.
 </div>
 
 <h2>4.5 Serviços de terceiros <span class="tela">VTPS0100</span></h2>
@@ -1717,6 +1897,77 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
   <code>ALM-TERC</code> mas continua sendo seu) → registra-se o <b>retorno</b> → o material volta ao
   <code>ALM-PROC</code> já como bucha acabada.
 </p>
+
+<h2>4.6 Configurador de Produto <span class="tela">VCFG0100</span></h2>
+<p>
+  A Tecnofer trabalha hoje com produtos de medida fixa, e por isso esta tela não entra na prática do
+  dia. Ela está documentada aqui porque é o caminho quando o mesmo produto passa a ter variações —
+  medida sob encomenda, cor, acabamento — e <b>não faz sentido criar um código para cada combinação</b>.
+</p>
+
+<h4>A ideia em uma frase</h4>
+<p>
+  Um único código de produto, com <b>perguntas</b> cujas <b>respostas</b> formam uma <b>máscara</b>:
+  <code>900700 · BR#450#1800</code> é o mesmo item 900700 na cor branca, 450 mm de largura e 1800 mm
+  de altura. É a máscara que muda, não o código.
+</p>
+
+<h4>A ordem do cadastro — os cinco passos da tela</h4>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:6%">#</th><th style="width:24%">Aba</th><th>O que se faz nela</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td><b>Respostas</b></td><td>Conjuntos de respostas possíveis — “Cores de MDF”, “Espessuras de chapa” — e o pedaço que cada uma empresta à máscara.</td></tr>
+    <tr><td class="cen">2</td><td><b>Perguntas</b></td><td>As perguntas em si: texto, tipo de resposta, conjunto ligado, limites numéricos e fórmula. O botão <span class="btn">Onde é usada</span> mostra em quais itens a pergunta já está em uso antes de alterá-la.</td></tr>
+    <tr><td class="cen">3</td><td><b>Perguntas do item</b></td><td>Quais perguntas o item faz e <b>em que ordem</b>. As sequências andam de 10 em 10 e há setas para reordenar sem redigitar.</td></tr>
+    <tr><td class="cen">4</td><td><b>Restrições</b></td><td>Quais combinações existem de verdade. Ver adiante.</td></tr>
+    <tr><td class="cen">5</td><td><b>Configurar e gerar</b></td><td>Responde as perguntas e gera a máscara — individualmente ou em lote.</td></tr>
+  </tbody>
+</table>
+
+<h4>Tipos de resposta que importam para metalúrgica e movelaria</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Tipo</th><th>Quando usar</th></tr></thead>
+  <tbody>
+    <tr><td><b>Escolha única</b></td><td>Cor, acabamento, modelo. A resposta vem de um conjunto cadastrado.</td></tr>
+    <tr><td><b>Número</b></td><td>Medida sob encomenda, com <b>mínimo e máximo</b>. A tela recusa a medida fora da faixa antes de gerar a máscara — que é o que impede uma ordem impossível de produzir.</td></tr>
+    <tr><td><b>Fórmula</b></td><td>Valor calculado a partir de outras respostas, como área ou peso.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>A máscara se monta enquanto você responde</b>
+  Na aba <b>Configurar e gerar</b>, o campo <i>Máscara em formação</i> mostra o código nascendo:
+  <code>…#…#…</code> vira <code>BR#450#1800</code> à medida que as perguntas são respondidas. Só depois
+  se clica em gerar — e a caixa <code>Gravar a configuração no item</code> separa a simulação da
+  gravação de verdade.
+  <br><br>
+  A <b>geração em lote</b> cria todas as combinações de um recorte de respostas de uma vez; as
+  combinações barradas por restrição simplesmente não aparecem no resultado.
+</div>
+
+<h3>4.6.1 Restrições e dependências</h3>
+<p>
+  É aqui que se ensina ao sistema quais combinações existem. A regra se lê como uma frase, montada em
+  formulário com as perguntas do próprio item:
+</p>
+<p class="centro">
+  <b>SE</b> a Cor do painel <i>for igual a</i> <code>PT</code> <b>E</b> a Largura <i>pertencer a</i>
+  <code>400,450</code> <b>ENTÃO</b> a Profundidade <i>é inválida</i>
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Recurso</th><th>Para que serve</th></tr></thead>
+  <tbody>
+    <tr><td><b>Motivo</b></td><td>Explica ao vendedor por que a combinação não existe. Os quatro motivos usuais — comercial, técnica, processo e global — vêm sugeridos no primeiro cadastro.</td></tr>
+    <tr><td><b>Vale só para o cliente</b></td><td>Libera ou bloqueia uma combinação para um cliente específico, sem mexer na regra geral do item. A tela mostra a <b>precedência</b> de cada regra em palavras.</td></tr>
+    <tr><td><b>Auditoria</b></td><td>Responde como o vendedor responderia e mostra <b>qual regra disparou</b>, quais perguntas somem e quais são respondidas sozinhas.</td></tr>
+  </tbody>
+</table>
+<div class="nota">
+  <b>A pergunta que a auditoria responde</b>
+  “Por que essa opção sumiu da tela?” é a dúvida mais comum de quem usa um configurador. Em vez de
+  abrir um relatório à parte, responde-se a combinação na própria tela e o sistema diz:
+  <i>“A restrição #2 disparou. Some da tela: Largura (mm).”</i>
+</div>
 
 <div class="exercicio">
   <div class="ex-tit">Prática 2 — 12 minutos</div>
@@ -1883,7 +2134,7 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
     <b>Gerar LLC</b>
     O MRP tem a opção de <b>recalcular o LLC de todos os itens</b> durante a execução. Deixe ligada nas
     primeiras rodadas e sempre que a estrutura mudar — é ela que corrige os níveis informados à mão no
-    cadastro do item (seção 3.4.3).
+    cadastro do item (seção 3.4.4).
   </div>
 </div>
 
@@ -2097,7 +2348,7 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
   <div class="passo-tit"><span class="n">2</span>Explodir o roteiro</div>
   <p>Clique em <span class="btn">Explodir roteiro</span>. A ordem recebe as operações do roteiro cadastrado
   no Bloco 2, com sequência, centro e tempos, e elas aparecem na aba <b>Operações</b>.
-  <b>Se nada aparecer, o item está sem roteiro padrão</b> — volte à <span class="tela-out">VPRO0100</span>
+  <b>Se nada aparecer, o item está sem roteiro padrão</b> — volte à <span class="tela-out">VENT0202</span>
   e confirme a caixa <code>Padrão (MRP/CRP)</code>.</p>
 </div>
 
@@ -2296,6 +2547,48 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
   Fora de tolerância, use <span class="btn">Registrar NC</span> com <code>Severidade</code> e descrição.</p>
 </div>
 
+<h3>6.9.1 Roteiro de inspeção de recebimento <span class="tela">VINS0200</span></h3>
+<p>
+  O plano acima é da inspeção final, feita sobre a ordem. Para o material que <b>chega do fornecedor</b>
+  — chapa, tubo, a bucha que voltou da cementação — o plano é cadastrado uma vez, por item ou por
+  classificação, e vale para todo recebimento dentro da vigência.
+</p>
+
+<h4>Campo a campo — a etapa de inspeção</h4>
+<table class="dados">
+  <thead><tr><th style="width:20%">Campo</th><th style="width:22%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Inspeção</code></td><td>Diâmetro do furo</td><td>O que será medido.</td></tr>
+    <tr><td><code>Espécie</code></td><td><code>Valor</code> · <code>Atributo</code> · <code>Estrutura</code></td><td>Valor mede um número; atributo aprova ou reprova uma lista de itens de conferência.</td></tr>
+    <tr><td><code>Instrumento</code></td><td>Paquímetro</td><td>Com o que se mede. É o que permite cobrar calibração e repetir a medição do mesmo jeito.</td></tr>
+    <tr><td><code>Norma</code> · <code>Referência</code></td><td>ISO 2768-m · Desenho DES-1042 rev. C</td><td>De onde vem a exigência. Sai no relatório de inspeção e sustenta a auditoria.</td></tr>
+  </tbody>
+</table>
+
+<h4>Plano de amostragem</h4>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:16%">Exemplo</th><th>O que significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>Como amostrar</code></td><td>Unidades do lote</td><td>Também aceita percentual do lote, lote inteiro ou primeira peça.</td></tr>
+    <tr><td><code>Amostra</code></td><td><code>5</code></td><td>Quantas peças o inspetor mede.</td></tr>
+    <tr><td><code>Aceita até</code></td><td><code>0</code></td><td>Defeitos tolerados sem reprovar o lote.</td></tr>
+    <tr><td><code>Rejeita a partir de</code></td><td><code>1</code></td><td>A partir daqui o lote é reprovado. <b>Precisa ser maior que “aceita até”</b> — a tela recusa o contrário.</td></tr>
+  </tbody>
+</table>
+<p>
+  A grade traduz tudo isso para uma frase, que é como o inspetor lê:
+  <i>“medir 5 · aceita com até 0 defeito(s), rejeita a partir de 1 · tolerância 50,4 a 50,6”</i>.
+</p>
+
+<div class="atencao">
+  <b>A tela barra o plano incoerente</b>
+  Antes de a etapa entrar na lista, o sistema confere: tolerância invertida (mínimo maior que máximo),
+  nominal fora da faixa, aceita maior ou igual a rejeita, amostra zerada, inspeção por valor sem
+  nenhum limite e inspeção por atributo sem a lista de atributos.
+  <br><br>
+  Todos esses erros, se passassem, só apareceriam com a peça na mão do inspetor.
+</div>
+
 <h2>6.10 Romaneio de Expedição <span class="tela">VEXP0100</span></h2>
 <p>Estados: <b>Aberto → Separado → Conferido → Despachado</b>.</p>
 
@@ -2424,8 +2717,8 @@ Tempo (h), com <span class="btn">Editar</span> e <span class="btn">Desativar</sp
     <tr><td class="cen">3</td><td>Criar o produto SU 02046</td><td>VENT0200</td><td>Fabricado / Comercial, classificação 1.02.</td></tr>
     <tr><td class="cen">4</td><td>Montar a estrutura do produto</td><td>VENT0210</td><td>Dois filhos: TP 02046A × 2 e TP 02046B × 1.</td></tr>
     <tr><td class="cen">5</td><td>Montar a estrutura de cada peça</td><td>VENT0210</td><td>Lateral: 0,310 kg com perda 87,10 %. Base: 1,200 kg com perda 15,00 %.</td></tr>
-    <tr><td class="cen">6</td><td>Criar os roteiros das duas peças</td><td>VPRO0100</td><td>Lateral: só corte a laser. Base: guilhotina, repique e dobra.</td></tr>
-    <tr><td class="cen">7</td><td>Criar o roteiro de montagem do produto</td><td>VPRO0100</td><td>Montagem, solda, limpeza e pintura, nesta ordem.</td></tr>
+    <tr><td class="cen">6</td><td>Criar os roteiros das duas peças</td><td>VENT0202</td><td>Lateral: só corte a laser. Base: guilhotina, repique e dobra.</td></tr>
+    <tr><td class="cen">7</td><td>Criar o roteiro de montagem do produto</td><td>VENT0202</td><td>Montagem, solda, limpeza e pintura, nesta ordem.</td></tr>
     <tr><td class="cen">8</td><td>Lançar demanda de 25 unidades</td><td>VPLA0102</td><td>Demanda gravada com data em dia útil.</td></tr>
     <tr><td class="cen">9</td><td>Rodar o MRP e conferir os tipos</td><td>VMRP0100</td><td>SU e TP como FABRICAÇÃO; MP 10476 como COMPRA, 116 kg.</td></tr>
     <tr><td class="cen">10</td><td>Ver a carga no CRP e sequenciar no APS</td><td>VPRO0200 · VPRO0210</td><td>Dobradeira aparece como o recurso mais carregado deste produto.</td></tr>

@@ -75,7 +75,7 @@ type createPlanRequest struct {
 func (h *AccountingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var req createPlanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
@@ -132,7 +132,7 @@ type createAccountRequest struct {
 func (h *AccountingHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	var req createAccountRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
@@ -171,7 +171,7 @@ func (h *AccountingHandler) ListAccounts(w http.ResponseWriter, r *http.Request)
 	planIDStr := r.URL.Query().Get("plan_id")
 	planID, err := strconv.ParseInt(planIDStr, 10, 64)
 	if err != nil || planID == 0 {
-		jsonError(w, http.StatusBadRequest, "plan_id required")
+		jsonError(w, http.StatusBadRequest, "informe o plano de contas")
 		return
 	}
 	accounts, err := h.acctUC.ListByPlan(r.Context(), planID)
@@ -203,12 +203,12 @@ type createJournalEntryRequest struct {
 func (h *AccountingHandler) CreateJournalEntry(w http.ResponseWriter, r *http.Request) {
 	var req createJournalEntryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	entryDate, err := time.Parse("2006-01-02", req.EntryDate)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid entry_date")
+		jsonError(w, http.StatusBadRequest, "data do lançamento inválida")
 		return
 	}
 	e := &accountingEntity.AccountingJournalEntry{
@@ -272,7 +272,7 @@ type createDemonstrativeRequest struct {
 func (h *AccountingHandler) CreateDemonstrative(w http.ResponseWriter, r *http.Request) {
 	var req createDemonstrativeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	d := &accountingEntity.AccountingDemonstrative{
@@ -302,7 +302,7 @@ type generateECDRequest struct {
 func (h *AccountingHandler) GenerateECD(w http.ResponseWriter, r *http.Request) {
 	var req generateECDRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	from, err := time.Parse("2006-01-02", req.From)

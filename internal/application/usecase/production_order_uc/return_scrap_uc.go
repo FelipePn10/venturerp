@@ -30,7 +30,7 @@ func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScr
 		return nil, fmt.Errorf("a devolução de refugo não está configurada")
 	}
 	if dto.Quantity <= 0 {
-		return nil, fmt.Errorf("a quantidade de refugo deve ser maior que zero")
+		return nil, errorsuc.NewValidationError("a quantidade de refugo deve ser maior que zero")
 	}
 
 	// Ensure the order exists and derive the authoring user.

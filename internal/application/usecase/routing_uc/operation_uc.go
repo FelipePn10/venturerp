@@ -3,6 +3,7 @@ package routing_uc
 import (
 	"context"
 	"fmt"
+	enumtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -34,10 +35,10 @@ func NewOperationUseCase(repo repository.RoutingRepository, deps ...any) *Operat
 
 func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperationDTO) (*response.OperationResponse, error) {
 	if dto.Name == "" {
-		return nil, fmt.Errorf("informe o nome")
+		return nil, errorsuc.NewValidationError("informe o nome")
 	}
 	if !validTimeUnit(dto.TimeUnit) {
-		return nil, fmt.Errorf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit))
 	}
 	origin := entity.OperationOrigin(dto.Origin)
 	if origin == "" {
@@ -86,7 +87,7 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 
 func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperationDTO) (*response.OperationResponse, error) {
 	if !validTimeUnit(dto.TimeUnit) {
-		return nil, fmt.Errorf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit))
 	}
 	op, err := uc.repo.GetOperationByID(ctx, dto.ID)
 	if err != nil {
@@ -107,7 +108,7 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 			return nil, usedErr
 		}
 		if used {
-			return nil, fmt.Errorf("operação externa usada em um roteiro de fabricação não pode virar interna")
+			return nil, errorsuc.NewValidationError("operação externa usada em um roteiro de fabricação não pode virar interna")
 		}
 	}
 	op.Name = dto.Name
@@ -138,7 +139,11 @@ func normalizeThirdPartyRemittance(value string) (string, error) {
 		value = "DEMAND_ITEMS"
 	}
 	if !map[string]bool{"DEMAND_ITEMS": true, "ORDER_ITEM": true, "GENERIC": true, "NONE": true}[value] {
-		return "", fmt.Errorf("invalid third_party_remittance")
+		// Recusa em português, dizendo o que é aceito — antes era
+		// "invalid third_party_remittance" e virava 422 sem pista nenhuma.
+		return "", enumtypes.NewInvalidValue(
+			"O que remeter ao terceiro", value,
+			"DEMAND_ITEMS", "ORDER_ITEM", "GENERIC", "NONE")
 	}
 	return value, nil
 }

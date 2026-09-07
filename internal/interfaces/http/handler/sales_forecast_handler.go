@@ -123,7 +123,7 @@ func (h *SalesForecastHandler) ListForecasts(w http.ResponseWriter, r *http.Requ
 	yearStr := chi.URLParam(r, "year")
 	year, err := strconv.Atoi(yearStr)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid year")
+		security.RespondError(w, http.StatusBadRequest, "ano inválido")
 		return
 	}
 	results, err := h.listForecastsUC.Execute(r.Context(), year)

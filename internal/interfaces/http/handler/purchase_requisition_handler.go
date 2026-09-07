@@ -26,7 +26,7 @@ func NewPurchaseRequisitionHandler(
 func (h *PurchaseRequisitionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePurchaseRequisitionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.Create(r.Context(), dto)
@@ -40,7 +40,7 @@ func (h *PurchaseRequisitionHandler) Create(w http.ResponseWriter, r *http.Reque
 func (h *PurchaseRequisitionHandler) Get(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.Get(r.Context(), code)
@@ -64,12 +64,12 @@ func (h *PurchaseRequisitionHandler) List(w http.ResponseWriter, r *http.Request
 func (h *PurchaseRequisitionHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.AddRequisitionItemDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.RequisitionCode = code
@@ -85,7 +85,7 @@ func (h *PurchaseRequisitionHandler) AddItem(w http.ResponseWriter, r *http.Requ
 func (h *PurchaseRequisitionHandler) GeneratePurchaseOrders(w http.ResponseWriter, r *http.Request) {
 	var dto request.GeneratePurchaseOrdersDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.generate.Execute(r.Context(), dto)

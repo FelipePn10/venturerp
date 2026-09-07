@@ -47,7 +47,7 @@ func (h *ProductionPlanHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *ProductionPlanHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
@@ -79,7 +79,7 @@ func (h *ProductionPlanHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *ProductionPlanHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.deleteUC.Execute(r.Context(), code); err != nil {
@@ -92,7 +92,7 @@ func (h *ProductionPlanHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *ProductionPlanHandler) ListInterFactories(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil || code <= 0 {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.interFactoryUC.List(r.Context(), code)
@@ -106,7 +106,7 @@ func (h *ProductionPlanHandler) ListInterFactories(w http.ResponseWriter, r *htt
 func (h *ProductionPlanHandler) ReplaceInterFactories(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil || code <= 0 {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.ReplaceProductionPlanInterFactoriesDTO

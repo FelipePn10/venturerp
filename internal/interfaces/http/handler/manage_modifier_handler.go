@@ -12,7 +12,7 @@ import (
 func (h *ModifierHandler) GetModifier(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
-		h.BadRequest(w, "invalid id")
+		h.BadRequest(w, "código inválido")
 		return
 	}
 	result, err := h.getModifierUC.Execute(r.Context(), id)
@@ -39,7 +39,7 @@ type updateModifierBody struct {
 func (h *ModifierHandler) UpdateModifier(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
-		h.BadRequest(w, "invalid id")
+		h.BadRequest(w, "código inválido")
 		return
 	}
 	var body updateModifierBody

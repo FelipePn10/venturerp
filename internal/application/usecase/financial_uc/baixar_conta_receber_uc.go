@@ -37,7 +37,7 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 	}
 
 	if cr.Status != entity.ContaReceberStatusPendente && cr.Status != entity.ContaReceberStatusAprovado {
-		return fmt.Errorf("conta a receber deve estar PENDENTE ou APROVADO para baixa, status: %s", cr.Status)
+		return errorsuc.NewValidationError(fmt.Sprintf("conta a receber deve estar PENDENTE ou APROVADO para baixa, status: %s", cr.Status))
 	}
 
 	dataRecebimento, err := time.Parse("2006-01-02", dto.DataRecebimento)

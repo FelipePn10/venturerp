@@ -13,9 +13,10 @@ import (
 func (h *StandardCostHandler) UpsertWorkCenterCost(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertWorkCenterCostDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
+	dto.UpdatedBy = actingUser(r).String()
 	result, err := h.uc.UpsertWorkCenterCost(r.Context(), dto)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())
@@ -62,7 +63,7 @@ func queryDefault(r *http.Request, name, fallback string) string {
 func (h *StandardCostHandler) UpsertItemPurchaseCost(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertItemPurchaseCostDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.UpsertItemPurchaseCost(r.Context(), dto)
@@ -76,7 +77,7 @@ func (h *StandardCostHandler) UpsertItemPurchaseCost(w http.ResponseWriter, r *h
 func (h *StandardCostHandler) GetItemPurchaseCost(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid itemCode")
+		jsonError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	result, err := h.uc.GetItemPurchaseCost(r.Context(), itemCode)
@@ -90,7 +91,7 @@ func (h *StandardCostHandler) GetItemPurchaseCost(w http.ResponseWriter, r *http
 func (h *StandardCostHandler) RollUp(w http.ResponseWriter, r *http.Request) {
 	var dto request.CostRollupDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.RollUp(r.Context(), dto)
@@ -104,7 +105,7 @@ func (h *StandardCostHandler) RollUp(w http.ResponseWriter, r *http.Request) {
 func (h *StandardCostHandler) GetStandardCost(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid itemCode")
+		jsonError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	mask := r.URL.Query().Get("mask")

@@ -23,7 +23,7 @@ func NewLocationHandler(uc *location_uc.LocationUseCase) *LocationHandler {
 func (h *LocationHandler) CreateCountry(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCountryDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreateCountry(r.Context(), dto)
@@ -37,7 +37,7 @@ func (h *LocationHandler) CreateCountry(w http.ResponseWriter, r *http.Request) 
 func (h *LocationHandler) UpdateCountry(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateCountryDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.UpdateCountry(r.Context(), dto)
@@ -73,7 +73,7 @@ func (h *LocationHandler) ListCountries(w http.ResponseWriter, r *http.Request) 
 func (h *LocationHandler) CreateUF(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateUFDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreateUF(r.Context(), dto)
@@ -87,7 +87,7 @@ func (h *LocationHandler) CreateUF(w http.ResponseWriter, r *http.Request) {
 func (h *LocationHandler) UpdateUF(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateUFDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.UpdateUF(r.Context(), dto)

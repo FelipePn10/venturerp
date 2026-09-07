@@ -15,7 +15,7 @@ import (
 func (h *QualityHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateInspectionPlanDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreatePlan(r.Context(), dto)
@@ -29,7 +29,7 @@ func (h *QualityHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetPlan(r.Context(), id)
@@ -43,7 +43,7 @@ func (h *QualityHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) ListPlansByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid itemCode")
+		jsonError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	result, err := h.uc.ListPlansByItem(r.Context(), itemCode)
@@ -57,7 +57,7 @@ func (h *QualityHandler) ListPlansByItem(w http.ResponseWriter, r *http.Request)
 func (h *QualityHandler) DeactivatePlan(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeactivatePlan(r.Context(), id); err != nil {
@@ -72,7 +72,7 @@ func (h *QualityHandler) DeactivatePlan(w http.ResponseWriter, r *http.Request) 
 func (h *QualityHandler) AddCharacteristic(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddCharacteristicDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.AddCharacteristic(r.Context(), dto)
@@ -88,7 +88,7 @@ func (h *QualityHandler) AddCharacteristic(w http.ResponseWriter, r *http.Reques
 func (h *QualityHandler) CreateRecord(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateQualityRecordDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreateRecord(r.Context(), dto)
@@ -102,7 +102,7 @@ func (h *QualityHandler) CreateRecord(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetRecord(r.Context(), id)
@@ -116,7 +116,7 @@ func (h *QualityHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) ListRecordsByOrder(w http.ResponseWriter, r *http.Request) {
 	orderID, err := strconv.ParseInt(chi.URLParam(r, "orderID"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid orderID")
+		jsonError(w, http.StatusBadRequest, "código da ordem inválido")
 		return
 	}
 	result, err := h.uc.ListRecordsByOrder(r.Context(), orderID)
@@ -130,7 +130,7 @@ func (h *QualityHandler) ListRecordsByOrder(w http.ResponseWriter, r *http.Reque
 func (h *QualityHandler) ListRecordsByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid itemCode")
+		jsonError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	result, err := h.uc.ListRecordsByItem(r.Context(), itemCode)
@@ -146,7 +146,7 @@ func (h *QualityHandler) ListRecordsByItem(w http.ResponseWriter, r *http.Reques
 func (h *QualityHandler) CreateNC(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateNCDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.CreateNC(r.Context(), dto)
@@ -160,7 +160,7 @@ func (h *QualityHandler) CreateNC(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) GetNC(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetNC(r.Context(), id)
@@ -183,7 +183,7 @@ func (h *QualityHandler) ListOpenNCs(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) ListNCsByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid itemCode")
+		jsonError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	result, err := h.uc.ListNCsByItem(r.Context(), itemCode)
@@ -197,12 +197,12 @@ func (h *QualityHandler) ListNCsByItem(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) DispositionNC(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.DispositionNCDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	if err := h.uc.DispositionNC(r.Context(), id, dto); err != nil {

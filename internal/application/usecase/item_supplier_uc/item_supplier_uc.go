@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/repository"
 	"strings"
@@ -26,7 +27,7 @@ func parseOptionalDate(s *string) (*time.Time, error) {
 	}
 	x, err := time.Parse("2006-01-02", strings.TrimSpace(*s))
 	if err != nil {
-		return nil, fmt.Errorf("data %q inválida: use o formato ano-mês-dia", *s)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("data %q inválida: use o formato ano-mês-dia", *s))
 	}
 	return &x, nil
 }
@@ -109,7 +110,7 @@ func (uc *ItemSupplierUseCase) ListBySupplier(ctx context.Context, supplier int6
 }
 func (uc *ItemSupplierUseCase) SearchExternal(ctx context.Context, supplier int64, term string) ([]*response.ItemPreferredSupplierResponse, error) {
 	if supplier <= 0 || strings.TrimSpace(term) == "" {
-		return nil, fmt.Errorf("informe o fornecedor e o termo de busca")
+		return nil, errorsuc.NewValidationError("informe o fornecedor e o termo de busca")
 	}
 	e, err := uc.auth.EnterpriseID(ctx)
 	if err != nil {
@@ -130,7 +131,7 @@ func (uc *ItemSupplierUseCase) ResolveExternal(ctx context.Context, supplier int
 		strategy = "DESCRICAO"
 	}
 	if supplier <= 0 || term == "" {
-		return nil, fmt.Errorf("informe o fornecedor e o código ou a descrição externa")
+		return nil, errorsuc.NewValidationError("informe o fornecedor e o código ou a descrição externa")
 	}
 	e, err := uc.auth.EnterpriseID(ctx)
 	if err != nil {
@@ -177,7 +178,7 @@ func (uc *ItemSupplierUseCase) CreateQualityReport(ctx context.Context, link int
 	}
 	on, err := time.Parse("2006-01-02", d.RegisteredOn)
 	if err != nil {
-		return nil, fmt.Errorf("informe a data de registro no formato ano-mês-dia")
+		return nil, errorsuc.NewValidationError("informe a data de registro no formato ano-mês-dia")
 	}
 	q, err := entity.NewQualityReport(e, link, on, d.Status, by)
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 func (h *RoutingHandler) CreateOperation(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateOperationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.operationUC.Create(r.Context(), dto)
@@ -29,12 +29,12 @@ func (h *RoutingHandler) CreateOperation(w http.ResponseWriter, r *http.Request)
 func (h *RoutingHandler) UpdateOperation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateOperationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -49,7 +49,7 @@ func (h *RoutingHandler) UpdateOperation(w http.ResponseWriter, r *http.Request)
 func (h *RoutingHandler) GetOperation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.operationUC.GetByID(r.Context(), id)
@@ -103,7 +103,7 @@ func (h *RoutingHandler) ListOperations(w http.ResponseWriter, r *http.Request) 
 func (h *RoutingHandler) DeactivateOperation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.operationUC.Deactivate(r.Context(), id); err != nil {
@@ -118,7 +118,7 @@ func (h *RoutingHandler) DeactivateOperation(w http.ResponseWriter, r *http.Requ
 func (h *RoutingHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateRouteDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.routeUC.Create(r.Context(), dto)
@@ -132,12 +132,12 @@ func (h *RoutingHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 func (h *RoutingHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateRouteDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -152,7 +152,7 @@ func (h *RoutingHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 func (h *RoutingHandler) GetRouteDetail(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.routeUC.GetDetail(r.Context(), id)
@@ -180,7 +180,7 @@ func (h *RoutingHandler) ListRoutesByItem(w http.ResponseWriter, r *http.Request
 func (h *RoutingHandler) DeactivateRoute(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.routeUC.Deactivate(r.Context(), id); err != nil {
@@ -195,12 +195,12 @@ func (h *RoutingHandler) DeactivateRoute(w http.ResponseWriter, r *http.Request)
 func (h *RoutingHandler) AddRouteOperation(w http.ResponseWriter, r *http.Request) {
 	routeID, err := strconv.ParseInt(chi.URLParam(r, "routeId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid routeId")
+		jsonError(w, http.StatusBadRequest, "código do roteiro inválido")
 		return
 	}
 	var dto request.AddRouteOperationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.RouteID = routeID
@@ -215,12 +215,12 @@ func (h *RoutingHandler) AddRouteOperation(w http.ResponseWriter, r *http.Reques
 func (h *RoutingHandler) UpdateRouteOperation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid opId")
+		jsonError(w, http.StatusBadRequest, "código da operação inválido")
 		return
 	}
 	var dto request.UpdateRouteOperationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -235,7 +235,7 @@ func (h *RoutingHandler) UpdateRouteOperation(w http.ResponseWriter, r *http.Req
 func (h *RoutingHandler) RemoveRouteOperation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid opId")
+		jsonError(w, http.StatusBadRequest, "código da operação inválido")
 		return
 	}
 	if err := h.routeUC.RemoveOperation(r.Context(), id); err != nil {
@@ -264,7 +264,7 @@ func (h *RoutingHandler) GetNetworkEdges(w http.ResponseWriter, r *http.Request)
 func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) {
 	var dto request.SetNetworkEdgeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.routeUC.SetEdge(r.Context(), dto)
@@ -278,7 +278,7 @@ func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) 
 func (h *RoutingHandler) DeleteNetworkEdge(w http.ResponseWriter, r *http.Request) {
 	var dto request.DeleteNetworkEdgeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	if err := h.routeUC.DeleteEdge(r.Context(), dto); err != nil {
@@ -293,12 +293,12 @@ func (h *RoutingHandler) DeleteNetworkEdge(w http.ResponseWriter, r *http.Reques
 func (h *RoutingHandler) AddRouteOpResource(w http.ResponseWriter, r *http.Request) {
 	opID, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid opId")
+		jsonError(w, http.StatusBadRequest, "código da operação inválido")
 		return
 	}
 	var dto request.AddRouteOpResourceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.RouteOperationID = opID
@@ -313,7 +313,7 @@ func (h *RoutingHandler) AddRouteOpResource(w http.ResponseWriter, r *http.Reque
 func (h *RoutingHandler) ListRouteOpResources(w http.ResponseWriter, r *http.Request) {
 	opID, err := strconv.ParseInt(chi.URLParam(r, "opId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid opId")
+		jsonError(w, http.StatusBadRequest, "código da operação inválido")
 		return
 	}
 	result, err := h.routeUC.ListResources(r.Context(), opID)
@@ -327,12 +327,12 @@ func (h *RoutingHandler) ListRouteOpResources(w http.ResponseWriter, r *http.Req
 func (h *RoutingHandler) UpdateRouteOpResource(w http.ResponseWriter, r *http.Request) {
 	resID, err := strconv.ParseInt(chi.URLParam(r, "resourceId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid resourceId")
+		jsonError(w, http.StatusBadRequest, "código do recurso inválido")
 		return
 	}
 	var dto request.UpdateRouteOpResourceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = resID
@@ -347,7 +347,7 @@ func (h *RoutingHandler) UpdateRouteOpResource(w http.ResponseWriter, r *http.Re
 func (h *RoutingHandler) SetRouteOpResourcePrimary(w http.ResponseWriter, r *http.Request) {
 	resID, err := strconv.ParseInt(chi.URLParam(r, "resourceId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid resourceId")
+		jsonError(w, http.StatusBadRequest, "código do recurso inválido")
 		return
 	}
 	result, err := h.routeUC.SetPrimaryResource(r.Context(), resID)
@@ -361,7 +361,7 @@ func (h *RoutingHandler) SetRouteOpResourcePrimary(w http.ResponseWriter, r *htt
 func (h *RoutingHandler) RemoveRouteOpResource(w http.ResponseWriter, r *http.Request) {
 	resID, err := strconv.ParseInt(chi.URLParam(r, "resourceId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid resourceId")
+		jsonError(w, http.StatusBadRequest, "código do recurso inválido")
 		return
 	}
 	if err := h.routeUC.RemoveResource(r.Context(), resID); err != nil {

@@ -21,7 +21,7 @@ func NewDrawingHandler(uc *drawing_uc.DrawingUseCase) *DrawingHandler { return &
 func (h *DrawingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.DrawingDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.CreatedBy = actingUser(r)
@@ -64,7 +64,7 @@ func (h *DrawingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	var dto request.DrawingDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -99,7 +99,7 @@ func (h *DrawingHandler) AddRevision(w http.ResponseWriter, r *http.Request) {
 	}
 	var dto request.DrawingRevisionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.UpdatedBy = actingUser(r)
@@ -133,7 +133,7 @@ func (h *DrawingHandler) UpdateRevision(w http.ResponseWriter, r *http.Request) 
 	}
 	var dto request.DrawingRevisionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.UpdatedBy = actingUser(r)
@@ -148,7 +148,7 @@ func (h *DrawingHandler) UpdateRevision(w http.ResponseWriter, r *http.Request) 
 func (h *DrawingHandler) MaintainItemDrawingCode(w http.ResponseWriter, r *http.Request) {
 	var dto request.MaintainItemDrawingCodeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.UpdatedBy = actingUser(r)
@@ -177,7 +177,7 @@ func (h *DrawingHandler) GetItemDrawingCode(w http.ResponseWriter, r *http.Reque
 func (h *DrawingHandler) UpdateManufacturingParameters(w http.ResponseWriter, r *http.Request) {
 	var dto request.DrawingManufacturingParametersDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.UpdatedBy = actingUser(r)
@@ -218,7 +218,7 @@ func (h *DrawingHandler) AddDistribution(w http.ResponseWriter, r *http.Request)
 	}
 	var dto request.DrawingDistributionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddDistribution(r.Context(), revID, dto)
@@ -250,7 +250,7 @@ func (h *DrawingHandler) AddCharacteristic(w http.ResponseWriter, r *http.Reques
 	}
 	var dto request.DrawingCharacteristicDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddCharacteristic(r.Context(), id, dto)
@@ -278,7 +278,7 @@ func (h *DrawingHandler) ListCharacteristics(w http.ResponseWriter, r *http.Requ
 func (h *DrawingHandler) DeleteCharacteristic(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "charLinkId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeleteCharacteristic(r.Context(), id); err != nil {

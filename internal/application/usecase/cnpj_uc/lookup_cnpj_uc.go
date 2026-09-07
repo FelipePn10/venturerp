@@ -5,7 +5,7 @@ package cnpj_uc
 
 import (
 	"context"
-	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/cnpj/entity"
@@ -24,7 +24,7 @@ func NewLookupCNPJUseCase(provider cnpjsvc.Provider) *LookupCNPJUseCase {
 
 // ErrInvalidCNPJ is returned when the supplied document fails check-digit
 // validation, before any external call is made.
-var ErrInvalidCNPJ = fmt.Errorf("CNPJ inválido")
+var ErrInvalidCNPJ = errorsuc.NewValidationError("CNPJ inválido")
 
 // Execute validates the CNPJ and returns the registry data as a response DTO.
 // The domain errors (service.ErrNotFound / service.ErrUnavailable) are passed

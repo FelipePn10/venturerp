@@ -34,7 +34,7 @@ func actor(r *http.Request) (uuid.UUID, bool) {
 func body(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if e := json.NewDecoder(r.Body).Decode(v); e != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return false
 	}
 	return true
@@ -83,7 +83,7 @@ func (h *ThirdPartyServiceHandler) CreatePrice(w http.ResponseWriter, r *http.Re
 func (h *ThirdPartyServiceHandler) UpdatePrice(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	var d request.ThirdPartyPriceDTO
@@ -105,7 +105,7 @@ func (h *ThirdPartyServiceHandler) UpdatePrice(w http.ResponseWriter, r *http.Re
 func (h *ThirdPartyServiceHandler) DeletePrice(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	by, ok := actor(r)
@@ -122,7 +122,7 @@ func (h *ThirdPartyServiceHandler) DeletePrice(w http.ResponseWriter, r *http.Re
 func (h *ThirdPartyServiceHandler) GetPrice(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	v, e := h.uc.GetPrice(r.Context(), id)
@@ -210,7 +210,7 @@ func (h *ThirdPartyServiceHandler) ResolveCost(w http.ResponseWriter, r *http.Re
 func (h *ThirdPartyServiceHandler) History(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	v, e := h.uc.History(r.Context(), id)
@@ -326,7 +326,7 @@ func split(v string) []string {
 func (h *ThirdPartyServiceHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	v, e := h.uc.GetOrder(r.Context(), id)
@@ -339,7 +339,7 @@ func (h *ThirdPartyServiceHandler) GetOrder(w http.ResponseWriter, r *http.Reque
 func (h *ThirdPartyServiceHandler) UpdateOrderStatus(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	var d request.ThirdPartyOrderStatusDTO
@@ -361,7 +361,7 @@ func (h *ThirdPartyServiceHandler) UpdateOrderStatus(w http.ResponseWriter, r *h
 func (h *ThirdPartyServiceHandler) AddMovement(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	var d request.ThirdPartyMovementDTO
@@ -383,7 +383,7 @@ func (h *ThirdPartyServiceHandler) AddMovement(w http.ResponseWriter, r *http.Re
 func (h *ThirdPartyServiceHandler) ListMovements(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	v, e := h.uc.ListMovements(r.Context(), id)
@@ -421,7 +421,7 @@ func (h *ThirdPartyServiceHandler) ListGlobalConversions(w http.ResponseWriter, 
 func (h *ThirdPartyServiceHandler) DeleteGlobalConversion(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if e := h.uc.DeleteGlobalConversion(r.Context(), id); e != nil {
@@ -433,7 +433,7 @@ func (h *ThirdPartyServiceHandler) DeleteGlobalConversion(w http.ResponseWriter,
 func (h *ThirdPartyServiceHandler) OrderHistory(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt(r, "id")
 	if !ok {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	v, e := h.uc.OrderHistory(r.Context(), id)

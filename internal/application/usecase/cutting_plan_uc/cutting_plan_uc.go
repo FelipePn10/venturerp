@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -84,7 +85,7 @@ func (uc *CuttingPlanUseCase) resolveOptimizer(cutType entity.CutType) (service.
 // Create builds a draft plan, optionally seeding it with parts and stock pieces.
 func (uc *CuttingPlanUseCase) Create(ctx context.Context, dto request.CreateCuttingPlanDTO) (*response.CuttingPlanResponse, error) {
 	if dto.MaterialItemCode <= 0 {
-		return nil, fmt.Errorf("informe o item do material")
+		return nil, errorsuc.NewValidationError("informe o item do material")
 	}
 	code, err := uc.repo.NextPlanCode(ctx)
 	if err != nil {
@@ -126,7 +127,7 @@ func (uc *CuttingPlanUseCase) Create(ctx context.Context, dto request.CreateCutt
 	if dto.LotConsumptionMode != "" {
 		mode := entity.ConsumptionMode(dto.LotConsumptionMode)
 		if mode != entity.ConsumptionAutomatic && mode != entity.ConsumptionManual {
-			return nil, fmt.Errorf("modo de consumo de lote %q inválido: use automático ou manual", dto.LotConsumptionMode)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("modo de consumo de lote %q inválido: use automático ou manual", dto.LotConsumptionMode))
 		}
 		plan.LotConsumptionMode = &mode
 	}
@@ -276,7 +277,7 @@ func (uc *CuttingPlanUseCase) Optimize(ctx context.Context, planID int64) (*resp
 		return nil, err
 	}
 	if plan.Status == entity.PlanStatusReleased {
-		return nil, fmt.Errorf("este plano já foi firmado e não pode ser otimizado de novo")
+		return nil, errorsuc.NewValidationError("este plano já foi firmado e não pode ser otimizado de novo")
 	}
 	// When configured, seed the plan with the material's available remnants so the
 	// optimiser consumes offcuts before opening full bars. Re-seeding is idempotent.

@@ -43,7 +43,7 @@ func (uc *CreateMonthlySalesForecastUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.Month < 1 || dto.Month > 12 {
-		return nil, fmt.Errorf("o mês deve estar entre 1 e 12")
+		return nil, errorsuc.NewValidationError("o mês deve estar entre 1 e 12")
 	}
 	weekly, err := distributeMonthByWorkdays(ctx, uc.Calendar, dto.Year, dto.Month, dto.Quantity, dto.AcceptsFraction, "LAST", nil, nil)
 	if err != nil {
@@ -83,7 +83,7 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 		return nil, fmt.Errorf("fim do histórico inválido: %w", err)
 	}
 	if to.Before(from) {
-		return nil, fmt.Errorf("a data final do histórico deve ser igual ou posterior à inicial")
+		return nil, errorsuc.NewValidationError("a data final do histórico deve ser igual ou posterior à inicial")
 	}
 
 	startDate, err := weekToDate(dto.StartYear, dto.StartWeek)
@@ -95,7 +95,7 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 		return nil, fmt.Errorf("semana e ano finais inválidos: %w", err)
 	}
 	if endDate.Before(startDate) {
-		return nil, fmt.Errorf("a semana final deve ser posterior à inicial")
+		return nil, errorsuc.NewValidationError("a semana final deve ser posterior à inicial")
 	}
 
 	history, err := uc.Repo.ListHistoricalDemand(ctx, dto.HistorySource, from, to, selectedItemCodes(dto))

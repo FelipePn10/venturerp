@@ -19,7 +19,7 @@ import (
 func (h *APSHandler) ExportSequencingEvents(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequenceOrdersDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	rows, err := h.uc.ExportSequencingEvents(r.Context(), dto)
@@ -53,7 +53,7 @@ func (h *APSHandler) ListSequencingResources(w http.ResponseWriter, r *http.Requ
 func (h *APSHandler) ViewSequencing(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequencingViewDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	rows, err := h.uc.ViewSequencing(r.Context(), dto)
@@ -95,7 +95,7 @@ func (h *APSHandler) ListResourceGroups(w http.ResponseWriter, r *http.Request) 
 func (h *APSHandler) UpsertMachineCalendar(w http.ResponseWriter, r *http.Request) {
 	var dto request.MachineCalendarDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return
 	}
 	v, err := h.uc.UpsertMachineCalendar(r.Context(), dto)
@@ -116,7 +116,7 @@ func (h *APSHandler) ListMachineCalendars(w http.ResponseWriter, r *http.Request
 func (h *APSHandler) UpdateSequencingSettings(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequencingSettingsDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return
 	}
 	if err := h.uc.UpdateSequencingSettings(r.Context(), dto); err != nil {
@@ -133,7 +133,7 @@ func (h *APSHandler) UpdateWorkCenterSequencing(w http.ResponseWriter, r *http.R
 	}
 	var dto request.WorkCenterSequencingDTO
 	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return
 	}
 	if err = h.uc.UpdateWorkCenterSequencing(r.Context(), id, dto); err != nil {
@@ -145,12 +145,12 @@ func (h *APSHandler) UpdateWorkCenterSequencing(w http.ResponseWriter, r *http.R
 func (h *APSHandler) UpdateResourceSequencing(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	var dto request.ResourceSequencingDTO
 	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return
 	}
 	if err = h.uc.UpdateResourceSequencing(r.Context(), id, dto); err != nil {
@@ -162,7 +162,7 @@ func (h *APSHandler) UpdateResourceSequencing(w http.ResponseWriter, r *http.Req
 func (h *APSHandler) DeleteResourceGroup(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if err = h.uc.DeleteResourceGroup(r.Context(), id); err != nil {
@@ -174,7 +174,7 @@ func (h *APSHandler) DeleteResourceGroup(w http.ResponseWriter, r *http.Request)
 func (h *APSHandler) DeleteMachineCalendar(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if err = h.uc.DeleteMachineCalendar(r.Context(), id); err != nil {
@@ -186,7 +186,7 @@ func (h *APSHandler) DeleteMachineCalendar(w http.ResponseWriter, r *http.Reques
 func (h *APSHandler) CreateMachineDowntime(w http.ResponseWriter, r *http.Request) {
 	var dto request.MachineDowntimeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return
 	}
 	v, err := h.uc.CreateMachineDowntime(r.Context(), dto)
@@ -218,7 +218,7 @@ func (h *APSHandler) ListMachineDowntimes(w http.ResponseWriter, r *http.Request
 func (h *APSHandler) DeleteMachineDowntime(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if err = h.uc.DeleteMachineDowntime(r.Context(), id); err != nil {
@@ -234,12 +234,12 @@ func (h *APSHandler) DeleteMachineDowntime(w http.ResponseWriter, r *http.Reques
 func (h *APSHandler) UpsertEmployeeSequencingProfile(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	var dto request.EmployeeSequencingProfileDTO
 	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return
 	}
 	if err = h.uc.UpsertEmployeeSequencingProfile(r.Context(), id, dto); err != nil {
@@ -251,12 +251,12 @@ func (h *APSHandler) UpsertEmployeeSequencingProfile(w http.ResponseWriter, r *h
 func (h *APSHandler) UpsertMachineIndustrialProfile(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	var dto request.MachineIndustrialProfileDTO
 	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return
 	}
 	if err = h.uc.UpsertMachineIndustrialProfile(r.Context(), id, dto); err != nil {
@@ -268,7 +268,7 @@ func (h *APSHandler) UpsertMachineIndustrialProfile(w http.ResponseWriter, r *ht
 func (h *APSHandler) GetEmployeeSequencingProfile(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	v, err := h.uc.GetEmployeeSequencingProfile(r.Context(), id)
@@ -281,7 +281,7 @@ func (h *APSHandler) GetEmployeeSequencingProfile(w http.ResponseWriter, r *http
 func (h *APSHandler) GetMachineIndustrialProfile(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	v, err := h.uc.GetMachineIndustrialProfile(r.Context(), id)
@@ -298,7 +298,7 @@ func apsPathID(r *http.Request, name string) (int64, error) {
 func decodeAPSBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		jsonError(w, 400, "invalid payload")
+		jsonError(w, 400, "conteúdo da requisição inválido")
 		return false
 	}
 	return true
@@ -316,7 +316,7 @@ func (h *APSHandler) UpdateEmployeeContact(w http.ResponseWriter, r *http.Reques
 	id, e2 := apsPathID(r, "contactID")
 	var dto request.EmployeeContactDTO
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if !decodeAPSBody(w, r, &dto) {
@@ -328,7 +328,7 @@ func (h *APSHandler) DeleteEmployeeContact(w http.ResponseWriter, r *http.Reques
 	employeeID, e1 := apsPathID(r, "employeeID")
 	id, e2 := apsPathID(r, "contactID")
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	granularResult(w, h.uc.DeleteEmployeeContact(r.Context(), employeeID, id))
@@ -338,7 +338,7 @@ func (h *APSHandler) UpdateEmployeeFunction(w http.ResponseWriter, r *http.Reque
 	id, e2 := apsPathID(r, "functionID")
 	var dto request.EmployeeFunctionDTO
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if !decodeAPSBody(w, r, &dto) {
@@ -350,7 +350,7 @@ func (h *APSHandler) DeleteEmployeeFunction(w http.ResponseWriter, r *http.Reque
 	employeeID, e1 := apsPathID(r, "employeeID")
 	id, e2 := apsPathID(r, "functionID")
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	granularResult(w, h.uc.DeleteEmployeeFunction(r.Context(), employeeID, id))
@@ -360,7 +360,7 @@ func (h *APSHandler) UpdateMachineService(w http.ResponseWriter, r *http.Request
 	id, e2 := apsPathID(r, "serviceID")
 	var dto request.MachineServiceDTO
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if !decodeAPSBody(w, r, &dto) {
@@ -372,7 +372,7 @@ func (h *APSHandler) DeleteMachineService(w http.ResponseWriter, r *http.Request
 	machineID, e1 := apsPathID(r, "machineID")
 	id, e2 := apsPathID(r, "serviceID")
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	granularResult(w, h.uc.DeleteMachineService(r.Context(), machineID, id))
@@ -383,7 +383,7 @@ func (h *APSHandler) UpdateMachineServiceItem(w http.ResponseWriter, r *http.Req
 	id, e3 := apsPathID(r, "itemID")
 	var dto request.ServiceItemDTO
 	if e1 != nil || e2 != nil || e3 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if !decodeAPSBody(w, r, &dto) {
@@ -396,7 +396,7 @@ func (h *APSHandler) DeleteMachineServiceItem(w http.ResponseWriter, r *http.Req
 	serviceID, e2 := apsPathID(r, "serviceID")
 	id, e3 := apsPathID(r, "itemID")
 	if e1 != nil || e2 != nil || e3 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	granularResult(w, h.uc.DeleteMachineServiceItem(r.Context(), machineID, serviceID, id))
@@ -406,7 +406,7 @@ func (h *APSHandler) UpdateMachineSpecialValue(w http.ResponseWriter, r *http.Re
 	id, e2 := apsPathID(r, "fieldID")
 	var dto request.SpecialValueDTO
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	if !decodeAPSBody(w, r, &dto) {
@@ -418,7 +418,7 @@ func (h *APSHandler) DeleteMachineSpecialValue(w http.ResponseWriter, r *http.Re
 	machineID, e1 := apsPathID(r, "machineID")
 	id, e2 := apsPathID(r, "fieldID")
 	if e1 != nil || e2 != nil {
-		jsonError(w, 400, "invalid id")
+		jsonError(w, 400, "código inválido")
 		return
 	}
 	granularResult(w, h.uc.DeleteMachineSpecialValue(r.Context(), machineID, id))
@@ -427,7 +427,7 @@ func (h *APSHandler) DeleteMachineSpecialValue(w http.ResponseWriter, r *http.Re
 func (h *APSHandler) SequenceOrders(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequenceOrdersDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.SequenceOrders(r.Context(), dto)
@@ -441,7 +441,7 @@ func (h *APSHandler) SequenceOrders(w http.ResponseWriter, r *http.Request) {
 func (h *APSHandler) GetGanttByOrder(w http.ResponseWriter, r *http.Request) {
 	orderID, err := strconv.ParseInt(chi.URLParam(r, "orderID"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid orderID")
+		jsonError(w, http.StatusBadRequest, "código da ordem inválido")
 		return
 	}
 	result, err := h.uc.GetGanttByOrder(r.Context(), orderID)
@@ -455,7 +455,7 @@ func (h *APSHandler) GetGanttByOrder(w http.ResponseWriter, r *http.Request) {
 func (h *APSHandler) GetGanttByWorkCenter(w http.ResponseWriter, r *http.Request) {
 	var dto request.GanttByWorkCenterDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.GetGanttByWorkCenter(r.Context(), dto)
@@ -535,7 +535,7 @@ func (h *APSHandler) ExportGanttBoard(w http.ResponseWriter, r *http.Request) {
 func (h *APSHandler) RescheduleSequence(w http.ResponseWriter, r *http.Request) {
 	var dto request.RescheduleSequenceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.RescheduleSequence(r.Context(), dto)
@@ -592,12 +592,12 @@ func (h *APSHandler) ganttBranding(ctx context.Context) gantt.Branding {
 func parseYearMonth(w http.ResponseWriter, r *http.Request) (int, int, bool) {
 	year, err := strconv.Atoi(chi.URLParam(r, "year"))
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid year")
+		jsonError(w, http.StatusBadRequest, "ano inválido")
 		return 0, 0, false
 	}
 	month, err := strconv.Atoi(chi.URLParam(r, "month"))
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid month")
+		jsonError(w, http.StatusBadRequest, "mês inválido")
 		return 0, 0, false
 	}
 	return year, month, true

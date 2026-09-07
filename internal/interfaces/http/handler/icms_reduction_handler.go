@@ -37,7 +37,7 @@ func NewICMSReductionHandler(
 func (h *ICMSReductionHandler) CreateReduction(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.ICMSReductionSubstitution
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.reductionUC.Create(r.Context(), &body)
@@ -51,7 +51,7 @@ func (h *ICMSReductionHandler) CreateReduction(w http.ResponseWriter, r *http.Re
 func (h *ICMSReductionHandler) UpdateReduction(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.ICMSReductionSubstitution
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.reductionUC.Update(r.Context(), &body)
@@ -65,7 +65,7 @@ func (h *ICMSReductionHandler) UpdateReduction(w http.ResponseWriter, r *http.Re
 func (h *ICMSReductionHandler) GetReduction(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.reductionUC.GetByID(r.Context(), id)
@@ -124,7 +124,7 @@ func (h *ICMSReductionHandler) FindReduction(w http.ResponseWriter, r *http.Requ
 func (h *ICMSReductionHandler) AddSummaryAdditional(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.ICMSSummaryEntryAdditional
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.additionalUC.Add(r.Context(), &body)
@@ -138,7 +138,7 @@ func (h *ICMSReductionHandler) AddSummaryAdditional(w http.ResponseWriter, r *ht
 func (h *ICMSReductionHandler) ListSummaryAdditionals(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.additionalUC.List(r.Context(), id)
@@ -154,7 +154,7 @@ func (h *ICMSReductionHandler) ListSummaryAdditionals(w http.ResponseWriter, r *
 func (h *ICMSReductionHandler) CreateSTRestitution(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.ICMSSTRestitution
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.stRestUC.Create(r.Context(), &body)
@@ -168,7 +168,7 @@ func (h *ICMSReductionHandler) CreateSTRestitution(w http.ResponseWriter, r *htt
 func (h *ICMSReductionHandler) UpdateSTRestitution(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.ICMSSTRestitution
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.stRestUC.Update(r.Context(), &body)
@@ -182,7 +182,7 @@ func (h *ICMSReductionHandler) UpdateSTRestitution(w http.ResponseWriter, r *htt
 func (h *ICMSReductionHandler) GetSTRestitution(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.stRestUC.GetByID(r.Context(), id)
@@ -211,7 +211,7 @@ func (h *ICMSReductionHandler) ListSTRestitutions(w http.ResponseWriter, r *http
 func (h *ICMSReductionHandler) CreateSpecialNote(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.SpecialAdjustmentNote
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.specialNoteUC.Create(r.Context(), &body)
@@ -225,7 +225,7 @@ func (h *ICMSReductionHandler) CreateSpecialNote(w http.ResponseWriter, r *http.
 func (h *ICMSReductionHandler) UpdateSpecialNote(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.SpecialAdjustmentNote
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.specialNoteUC.Update(r.Context(), &body)
@@ -239,7 +239,7 @@ func (h *ICMSReductionHandler) UpdateSpecialNote(w http.ResponseWriter, r *http.
 func (h *ICMSReductionHandler) GetSpecialNote(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.specialNoteUC.GetByID(r.Context(), id)
@@ -265,7 +265,7 @@ func (h *ICMSReductionHandler) ListSpecialNotes(w http.ResponseWriter, r *http.R
 func (h *ICMSReductionHandler) AddSpecialNoteItem(w http.ResponseWriter, r *http.Request) {
 	var body fiscalEntity.SpecialAdjustmentNoteItem
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	if id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64); err == nil {
@@ -282,7 +282,7 @@ func (h *ICMSReductionHandler) AddSpecialNoteItem(w http.ResponseWriter, r *http
 func (h *ICMSReductionHandler) ListSpecialNoteItems(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.specialNoteUC.ListItems(r.Context(), id)

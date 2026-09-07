@@ -30,7 +30,7 @@ func (h *IndependentDemandHandler) Update(w http.ResponseWriter, r *http.Request
 
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -84,7 +84,7 @@ func (h *IndependentDemandHandler) GetByCode(w http.ResponseWriter, r *http.Requ
 
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *IndependentDemandHandler) Delete(w http.ResponseWriter, r *http.Request
 
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 

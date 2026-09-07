@@ -20,15 +20,24 @@ INSERT INTO item_structures (
     substitute_priority,
     quantity_formula,
     quantity_rounding,
-    quantity_scale
+    quantity_scale,
+    warehouse_code,
+    line_warehouse_code,
+    setup_loss,
+    cost_loss_type,
+    cost_loss,
+    cost_center_code,
+    is_critical_mps,
+    generates_inspection
 ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+             $22, $23, $24, $25, $26, $27, $28, $29
          )
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection;
 
 
 -- name: GetStructureComponentByID :one
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection
 FROM item_structures
 WHERE id = $1;
 
@@ -60,7 +69,8 @@ SELECT
     s.substitute_priority,
     s.quantity_formula,
     s.quantity_rounding,
-    s.quantity_scale
+    s.quantity_scale,
+    s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
@@ -104,6 +114,7 @@ SELECT
     s.quantity_formula,
     s.quantity_rounding,
     s.quantity_scale,
+    s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection,
     i.pdm_description_technique AS child_description
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
@@ -137,6 +148,14 @@ SET
     quantity_formula    = $17,
     quantity_rounding   = $18,
     quantity_scale      = $19,
+    warehouse_code       = $20,
+    line_warehouse_code  = $21,
+    setup_loss           = $22,
+    cost_loss_type       = $23,
+    cost_loss            = $24,
+    cost_center_code     = $25,
+    is_critical_mps      = $26,
+    generates_inspection = $27,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -145,7 +164,7 @@ WHERE parent_code = $1
         OR (parent_mask IS NULL AND $3 IS NULL)
     )
   AND is_active = TRUE
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection;
 
 -- name: DeactivateStructureComponent :exec
 UPDATE item_structures

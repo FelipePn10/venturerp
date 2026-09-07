@@ -36,7 +36,7 @@ func (h *ProcurementHandler) CreateRecord(w http.ResponseWriter, r *http.Request
 func (h *ProcurementHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetRecord(r.Context(), id)
@@ -59,7 +59,7 @@ func (h *ProcurementHandler) ListRecords(w http.ResponseWriter, r *http.Request)
 func (h *ProcurementHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateProcurementRecordStatusDTO
@@ -78,7 +78,7 @@ func (h *ProcurementHandler) UpdateStatus(w http.ResponseWriter, r *http.Request
 func (h *ProcurementHandler) DisposeInspection(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.DisposeReceivingInspectionDTO
@@ -139,7 +139,7 @@ func (h *ProcurementHandler) CreateReceivingInspectionRoute(w http.ResponseWrite
 func (h *ProcurementHandler) GetReceivingInspectionRoute(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetReceivingInspectionRoute(r.Context(), id)
@@ -227,7 +227,7 @@ func (h *ProcurementHandler) UnlinkReceivingInspectionQualityReport(w http.Respo
 func (h *ProcurementHandler) RecordReceivingInspectionResult(w http.ResponseWriter, r *http.Request) {
 	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.RecordReceivingInspectionResultDTO
@@ -246,7 +246,7 @@ func (h *ProcurementHandler) RecordReceivingInspectionResult(w http.ResponseWrit
 func (h *ProcurementHandler) AnalyzeReceivingInspectionOrder(w http.ResponseWriter, r *http.Request) {
 	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.AnalyzeReceivingInspectionOrderDTO
@@ -317,7 +317,7 @@ func (h *ProcurementHandler) CreateSupplierContract(w http.ResponseWriter, r *ht
 func (h *ProcurementHandler) GetSupplierContract(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetSupplierContract(r.Context(), id)
@@ -341,7 +341,7 @@ func (h *ProcurementHandler) ListSupplierContracts(w http.ResponseWriter, r *htt
 func (h *ProcurementHandler) UpdateSupplierContractStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateSupplierContractStatusDTO
@@ -360,7 +360,7 @@ func (h *ProcurementHandler) UpdateSupplierContractStatus(w http.ResponseWriter,
 func (h *ProcurementHandler) ConsumeSupplierContract(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.ConsumeSupplierContractDTO
@@ -395,7 +395,7 @@ func (h *ProcurementHandler) CreateReceivingNotice(w http.ResponseWriter, r *htt
 func (h *ProcurementHandler) GetReceivingNotice(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetReceivingNotice(r.Context(), id)
@@ -418,7 +418,7 @@ func (h *ProcurementHandler) ListReceivingNotices(w http.ResponseWriter, r *http
 func (h *ProcurementHandler) UpdateReceivingNoticeStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateReceivingNoticeStatusDTO
@@ -466,7 +466,7 @@ func (h *ProcurementHandler) ListReceivingDivergences(w http.ResponseWriter, r *
 func (h *ProcurementHandler) ResolveReceivingDivergence(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.ResolveReceivingDivergenceDTO
@@ -501,7 +501,7 @@ func (h *ProcurementHandler) CreateEDIMessage(w http.ResponseWriter, r *http.Req
 func (h *ProcurementHandler) GetEDIMessage(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetEDIMessage(r.Context(), id)
@@ -546,7 +546,7 @@ func (h *ProcurementHandler) CreateImportProcess(w http.ResponseWriter, r *http.
 func (h *ProcurementHandler) GetImportProcess(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetImportProcess(r.Context(), id)
@@ -569,7 +569,7 @@ func (h *ProcurementHandler) ListImportProcesses(w http.ResponseWriter, r *http.
 func (h *ProcurementHandler) RecomputeImportProcess(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.RecomputeImportProcess(r.Context(), id)
@@ -583,7 +583,7 @@ func (h *ProcurementHandler) RecomputeImportProcess(w http.ResponseWriter, r *ht
 func (h *ProcurementHandler) UpdateImportProcessStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateImportProcessStatusDTO

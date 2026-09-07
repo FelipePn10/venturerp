@@ -39,16 +39,16 @@ func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSe
 		return nil, err
 	}
 	if dto.ValorServicos <= 0 {
-		return nil, fmt.Errorf("valor_servicos deve ser maior que zero")
+		return nil, errorsuc.NewValidationError("valor_servicos deve ser maior que zero")
 	}
 	if dto.ItemListaServico == "" {
-		return nil, fmt.Errorf("item_lista_servico é obrigatório")
+		return nil, errorsuc.NewValidationError("item_lista_servico é obrigatório")
 	}
 	if dto.CodigoMunicipio == "" {
-		return nil, fmt.Errorf("codigo_municipio (prestação do serviço) é obrigatório")
+		return nil, errorsuc.NewValidationError("codigo_municipio (prestação do serviço) é obrigatório")
 	}
 	if dto.Discriminacao == "" {
-		return nil, fmt.Errorf("discriminacao é obrigatória")
+		return nil, errorsuc.NewValidationError("discriminacao é obrigatória")
 	}
 
 	dataEmissao, err := time.Parse("2006-01-02", dto.DataEmissao)
@@ -133,7 +133,7 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 		return nil, err
 	}
 	if n.Status != entity.NFSeStatusRascunho && n.Status != entity.NFSeStatusRejeitada {
-		return nil, fmt.Errorf("NFS-e deve estar em rascunho para autorizar, status atual: %s", n.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("NFS-e deve estar em rascunho para autorizar, status atual: %s", n.Status))
 	}
 
 	cfg, err := uc.Config.GetFiscalConfig(ctx)

@@ -145,31 +145,31 @@ func validateConsultationFilter(f *PurchaseOrderConsultationFilter) error {
 		f.Limit = 100
 	}
 	if f.Limit < 1 || f.Limit > 500 || f.Offset < 0 {
-		return fmt.Errorf("paginação inválida")
+		return errorsuc.NewValidationError("paginação inválida")
 	}
 	f.Position = strings.ToUpper(strings.TrimSpace(f.Position))
 	f.OrderType = strings.ToUpper(strings.TrimSpace(f.OrderType))
 	f.TargetCurrency = strings.ToUpper(strings.TrimSpace(f.TargetCurrency))
 	if f.Position != "" && f.Position != PositionAttended && f.Position != PositionPending && f.Position != PositionCancelled {
-		return fmt.Errorf("posição inválida")
+		return errorsuc.NewValidationError("posição inválida")
 	}
 	if f.OrderType != "" && f.OrderType != "OCL" && f.OrderType != "OSL" && f.OrderType != "ORM" && f.OrderType != "ORD" {
-		return fmt.Errorf("tipo de ordenação inválido")
+		return errorsuc.NewValidationError("tipo de ordenação inválido")
 	}
 	if f.Convert && (len(f.TargetCurrency) != 3 || f.BaseDate == nil) {
-		return fmt.Errorf("moeda de destino e data-base são obrigatórias para conversão")
+		return errorsuc.NewValidationError("moeda de destino e data-base são obrigatórias para conversão")
 	}
 	if !f.Convert && (f.TargetCurrency != "" || f.BaseDate != nil) {
 		return fmt.Errorf("conversion parameters require convert=true")
 	}
 	for _, pair := range [][2]*int64{{f.OrderFrom, f.OrderTo}, {f.SupplierFrom, f.SupplierTo}, {f.ItemFrom, f.ItemTo}, {f.ImportFrom, f.ImportTo}} {
 		if pair[0] != nil && pair[1] != nil && *pair[0] > *pair[1] {
-			return fmt.Errorf("intervalo inválido")
+			return errorsuc.NewValidationError("intervalo inválido")
 		}
 	}
 	for _, pair := range [][2]*time.Time{{f.EmissionFrom, f.EmissionTo}, {f.DeliveryFrom, f.DeliveryTo}} {
 		if pair[0] != nil && pair[1] != nil && pair[0].After(*pair[1]) {
-			return fmt.Errorf("intervalo de datas inválido")
+			return errorsuc.NewValidationError("intervalo de datas inválido")
 		}
 	}
 	return nil

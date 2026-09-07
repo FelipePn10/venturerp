@@ -12,7 +12,7 @@ import (
 func (h *GroupHandler) GetGroup(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.Atoi(chi.URLParam(r, "code"))
 	if err != nil {
-		h.BadRequest(w, "invalid code")
+		h.BadRequest(w, "código inválido")
 		return
 	}
 	result, err := h.getGroupUC.Execute(r.Context(), code)
@@ -69,7 +69,7 @@ type updateGroupBody struct {
 func (h *GroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.Atoi(chi.URLParam(r, "code"))
 	if err != nil {
-		h.BadRequest(w, "invalid code")
+		h.BadRequest(w, "código inválido")
 		return
 	}
 	var body updateGroupBody

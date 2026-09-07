@@ -55,7 +55,7 @@ func (uc *ConfiguratorUseCase) UpdateItemCharacteristic(ctx context.Context, dto
 		return nil, fmt.Errorf("característica do item não encontrada: %w", err)
 	}
 	if dto.Sequence <= 0 {
-		return nil, fmt.Errorf("sequência deve ser positiva")
+		return nil, errorsuc.NewValidationError("sequência deve ser positiva")
 	}
 	// Guard: a sequência só pode mudar enquanto o item não tiver máscara gerada
 	// nem fórmula no cadastro de estruturas.

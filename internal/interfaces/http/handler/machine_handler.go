@@ -209,7 +209,7 @@ func (h *MachineHandler) ReorderSchedule(w http.ResponseWriter, r *http.Request)
 func (h *MachineHandler) GetTypeByCode(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -225,7 +225,7 @@ func (h *MachineHandler) GetTypeByCode(w http.ResponseWriter, r *http.Request) {
 func (h *MachineHandler) GetMachineByCode(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -241,7 +241,7 @@ func (h *MachineHandler) GetMachineByCode(w http.ResponseWriter, r *http.Request
 func (h *MachineHandler) GetItemTime(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -257,7 +257,7 @@ func (h *MachineHandler) GetItemTime(w http.ResponseWriter, r *http.Request) {
 func (h *MachineHandler) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -313,7 +313,7 @@ func (h *MachineHandler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Req
 
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -342,7 +342,7 @@ func (h *MachineHandler) UpdateScheduleTimes(w http.ResponseWriter, r *http.Requ
 
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 
@@ -391,7 +391,7 @@ func (h *MachineHandler) CalculateProductionTime(w http.ResponseWriter, r *http.
 func (h *MachineHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 

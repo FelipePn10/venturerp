@@ -70,7 +70,7 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, dto request.CreateM
 		CapacityUnit:    capacityUnit,
 		CapacityPeriod:  capacityPeriod,
 		EfficiencyRate:  efficiency,
-		IsActive:        dto.IsActive,
+		IsActive:        dto.AtivoOuPadrao(),
 		CreatedBy:       authenticatedUserID,
 	}
 	created, err := uc.Repo.Create(ctx, m)

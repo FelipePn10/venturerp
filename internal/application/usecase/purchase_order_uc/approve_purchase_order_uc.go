@@ -46,7 +46,7 @@ func (uc *ApprovePurchaseOrderUseCase) Execute(ctx context.Context, code int64) 
 	case poentity.PurchaseOrderStatusDRAFT, poentity.PurchaseOrderStatusREQUESTED:
 		// approvable
 	default:
-		return nil, fmt.Errorf("pedido de compra %d não pode ser aprovado no status %s", code, order.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("pedido de compra %d não pode ser aprovado no status %s", code, order.Status))
 	}
 
 	amount := order.TotalNet

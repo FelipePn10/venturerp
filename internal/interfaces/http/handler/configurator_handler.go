@@ -5,6 +5,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/configurator_uc"
@@ -25,12 +26,27 @@ func cfgID(r *http.Request, key string) (int64, error) {
 	return strconv.ParseInt(chi.URLParam(r, key), 10, 64)
 }
 
+// cfgBodyItemCode resolve o código de item que veio no corpo da requisição.
+// Os DTOs antigos guardam int64, então o valor é reapresentado como texto para
+// o mesmo resolvedor usado em todo o resto do sistema.
+func (h *ConfiguratorHandler) cfgBodyItemCode(r *http.Request, code int64) (int64, error) {
+	return h.uc.ResolveNumericItemCode(r.Context(), code)
+}
+
+// cfgItemCode traduz o código de item da URL — que é o código de negócio, o
+// mesmo que aparece nas telas — para a chave interna usada nas tabelas cfg_*.
+// Sem isso, o que a tela do configurador gravava não era achado pelo painel da
+// estrutura de produto.
+func (h *ConfiguratorHandler) cfgItemCode(r *http.Request, key string) (int64, error) {
+	return h.uc.ResolveItemCode(r.Context(), request.TextCode(strings.TrimSpace(chi.URLParam(r, key))))
+}
+
 // ─── Conjuntos ────────────────────────────────────────────────────────────────
 
 func (h *ConfiguratorHandler) CreateSet(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCfgSetDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.CreatedBy = actingUser(r)
@@ -73,7 +89,7 @@ func (h *ConfiguratorHandler) UpdateSet(w http.ResponseWriter, r *http.Request) 
 	}
 	var dto request.UpdateCfgSetDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -108,7 +124,7 @@ func (h *ConfiguratorHandler) CreateVariable(w http.ResponseWriter, r *http.Requ
 	}
 	var dto request.CreateCfgVariableDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.SetID = setID
@@ -157,7 +173,7 @@ func (h *ConfiguratorHandler) UpdateVariable(w http.ResponseWriter, r *http.Requ
 	}
 	var dto request.UpdateCfgVariableDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -190,7 +206,7 @@ func (h *ConfiguratorHandler) SetVariableLanguage(w http.ResponseWriter, r *http
 	}
 	var dto request.CfgVariableLanguageDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.SetVariableLanguage(r.Context(), id, dto)
@@ -219,7 +235,7 @@ func (h *ConfiguratorHandler) DeleteVariableLanguage(w http.ResponseWriter, r *h
 func (h *ConfiguratorHandler) CreateCharacteristic(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCfgCharacteristicDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.CreatedBy = actingUser(r)
@@ -262,7 +278,7 @@ func (h *ConfiguratorHandler) UpdateCharacteristic(w http.ResponseWriter, r *htt
 	}
 	var dto request.UpdateCfgCharacteristicDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -295,7 +311,7 @@ func (h *ConfiguratorHandler) SetCharacteristicLanguage(w http.ResponseWriter, r
 	}
 	var dto request.CfgCharacteristicLanguageDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.SetCharacteristicLanguage(r.Context(), id, dto)
@@ -322,14 +338,14 @@ func (h *ConfiguratorHandler) DeleteCharacteristicLanguage(w http.ResponseWriter
 // ─── Características do Item ───────────────────────────────────────────────────
 
 func (h *ConfiguratorHandler) AddItemCharacteristic(w http.ResponseWriter, r *http.Request) {
-	itemCode, err := cfgID(r, "itemCode")
+	itemCode, err := h.cfgItemCode(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "código de item inválido")
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	var dto request.AddCfgItemCharacteristicDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ItemCode = itemCode
@@ -342,9 +358,9 @@ func (h *ConfiguratorHandler) AddItemCharacteristic(w http.ResponseWriter, r *ht
 }
 
 func (h *ConfiguratorHandler) ListItemCharacteristics(w http.ResponseWriter, r *http.Request) {
-	itemCode, err := cfgID(r, "itemCode")
+	itemCode, err := h.cfgItemCode(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "código de item inválido")
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	res, err := h.uc.ListItemCharacteristics(r.Context(), itemCode)
@@ -358,12 +374,12 @@ func (h *ConfiguratorHandler) ListItemCharacteristics(w http.ResponseWriter, r *
 func (h *ConfiguratorHandler) UpdateItemCharacteristic(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateCfgItemCharacteristicDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -378,7 +394,7 @@ func (h *ConfiguratorHandler) UpdateItemCharacteristic(w http.ResponseWriter, r 
 func (h *ConfiguratorHandler) RemoveItemCharacteristic(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.RemoveItemCharacteristic(r.Context(), id); err != nil {
@@ -393,8 +409,14 @@ func (h *ConfiguratorHandler) RemoveItemCharacteristic(w http.ResponseWriter, r 
 func (h *ConfiguratorHandler) GenerateMask(w http.ResponseWriter, r *http.Request) {
 	var dto request.CfgGenerateMaskDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ItemCode = resolved
 	}
 	dto.CreatedBy = actingUser(r)
 	res, err := h.uc.GenerateMask(r.Context(), dto)
@@ -410,8 +432,14 @@ func (h *ConfiguratorHandler) GenerateMask(w http.ResponseWriter, r *http.Reques
 func (h *ConfiguratorHandler) GenerateMasks(w http.ResponseWriter, r *http.Request) {
 	var dto request.CfgGenerateMasksDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ItemCode = resolved
 	}
 	dto.CreatedBy = actingUser(r)
 	res, err := h.uc.GenerateMasks(r.Context(), dto)
@@ -427,7 +455,7 @@ func (h *ConfiguratorHandler) GenerateMasks(w http.ResponseWriter, r *http.Reque
 func (h *ConfiguratorHandler) CreateDescriptionType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CfgDescriptionTypeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.CreatedBy = actingUser(r)
@@ -451,7 +479,7 @@ func (h *ConfiguratorHandler) ListDescriptionTypes(w http.ResponseWriter, r *htt
 func (h *ConfiguratorHandler) GetDescriptionType(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetDescriptionType(r.Context(), id)
@@ -465,12 +493,12 @@ func (h *ConfiguratorHandler) GetDescriptionType(w http.ResponseWriter, r *http.
 func (h *ConfiguratorHandler) UpdateDescriptionType(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CfgDescriptionTypeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -485,7 +513,7 @@ func (h *ConfiguratorHandler) UpdateDescriptionType(w http.ResponseWriter, r *ht
 func (h *ConfiguratorHandler) DeactivateDescriptionType(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeactivateDescriptionType(r.Context(), id); err != nil {
@@ -500,8 +528,14 @@ func (h *ConfiguratorHandler) DeactivateDescriptionType(w http.ResponseWriter, r
 func (h *ConfiguratorHandler) CreateItemDescription(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCfgItemDescriptionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ItemCode = resolved
 	}
 	dto.CreatedBy = actingUser(r)
 	res, err := h.uc.CreateItemDescription(r.Context(), dto)
@@ -513,9 +547,9 @@ func (h *ConfiguratorHandler) CreateItemDescription(w http.ResponseWriter, r *ht
 }
 
 func (h *ConfiguratorHandler) ListItemDescriptions(w http.ResponseWriter, r *http.Request) {
-	itemCode, err := cfgID(r, "itemCode")
+	itemCode, err := h.cfgItemCode(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "código de item inválido")
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	res, err := h.uc.ListItemDescriptionsByItem(r.Context(), itemCode)
@@ -529,7 +563,7 @@ func (h *ConfiguratorHandler) ListItemDescriptions(w http.ResponseWriter, r *htt
 func (h *ConfiguratorHandler) GetItemDescription(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetItemDescription(r.Context(), id)
@@ -543,12 +577,12 @@ func (h *ConfiguratorHandler) GetItemDescription(w http.ResponseWriter, r *http.
 func (h *ConfiguratorHandler) UpdateItemDescriptionLines(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateCfgItemDescriptionLinesDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.UpdateItemDescriptionLines(r.Context(), id, dto)
@@ -562,7 +596,7 @@ func (h *ConfiguratorHandler) UpdateItemDescriptionLines(w http.ResponseWriter, 
 func (h *ConfiguratorHandler) ReloadItemDescription(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.ReloadLines(r.Context(), id)
@@ -576,12 +610,12 @@ func (h *ConfiguratorHandler) ReloadItemDescription(w http.ResponseWriter, r *ht
 func (h *ConfiguratorHandler) RenderItemDescription(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CfgRenderDescriptionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.RenderItemDescription(r.Context(), id, dto)
@@ -595,7 +629,7 @@ func (h *ConfiguratorHandler) RenderItemDescription(w http.ResponseWriter, r *ht
 func (h *ConfiguratorHandler) DeleteItemDescription(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeleteItemDescription(r.Context(), id); err != nil {
@@ -610,8 +644,20 @@ func (h *ConfiguratorHandler) DeleteItemDescription(w http.ResponseWriter, r *ht
 func (h *ConfiguratorHandler) CreateEquivalentRule(w http.ResponseWriter, r *http.Request) {
 	var dto request.CfgEquivalentRuleDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ParentItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ParentItemCode = resolved
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ChildItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ChildItemCode = resolved
 	}
 	dto.CreatedBy = actingUser(r)
 	res, err := h.uc.CreateEquivalentRule(r.Context(), dto)
@@ -623,9 +669,9 @@ func (h *ConfiguratorHandler) CreateEquivalentRule(w http.ResponseWriter, r *htt
 }
 
 func (h *ConfiguratorHandler) ListEquivalentRules(w http.ResponseWriter, r *http.Request) {
-	parentItemCode, err := cfgID(r, "parentItemCode")
+	parentItemCode, err := h.cfgItemCode(r, "parentItemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "código de item pai inválido")
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	res, err := h.uc.ListEquivalentRulesByParent(r.Context(), parentItemCode, r.URL.Query().Get("only_active") == "true")
@@ -639,7 +685,7 @@ func (h *ConfiguratorHandler) ListEquivalentRules(w http.ResponseWriter, r *http
 func (h *ConfiguratorHandler) GetEquivalentRule(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetEquivalentRule(r.Context(), id)
@@ -653,12 +699,12 @@ func (h *ConfiguratorHandler) GetEquivalentRule(w http.ResponseWriter, r *http.R
 func (h *ConfiguratorHandler) UpdateEquivalentRule(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CfgEquivalentRuleDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -673,7 +719,7 @@ func (h *ConfiguratorHandler) UpdateEquivalentRule(w http.ResponseWriter, r *htt
 func (h *ConfiguratorHandler) DeactivateEquivalentRule(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeactivateEquivalentRule(r.Context(), id); err != nil {
@@ -686,8 +732,14 @@ func (h *ConfiguratorHandler) DeactivateEquivalentRule(w http.ResponseWriter, r 
 func (h *ConfiguratorHandler) ApplyEquivalent(w http.ResponseWriter, r *http.Request) {
 	var dto request.CfgApplyEquivalentDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ParentItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ParentItemCode = resolved
 	}
 	res, err := h.uc.ApplyEquivalent(r.Context(), dto)
 	if err != nil {
@@ -702,8 +754,14 @@ func (h *ConfiguratorHandler) ApplyEquivalent(w http.ResponseWriter, r *http.Req
 func (h *ConfiguratorHandler) CreateItemRule(w http.ResponseWriter, r *http.Request) {
 	var dto request.CfgItemRuleDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ItemCode = resolved
 	}
 	dto.CreatedBy = actingUser(r)
 	res, err := h.uc.CreateItemRule(r.Context(), dto)
@@ -715,9 +773,9 @@ func (h *ConfiguratorHandler) CreateItemRule(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ConfiguratorHandler) ListItemRules(w http.ResponseWriter, r *http.Request) {
-	itemCode, err := cfgID(r, "itemCode")
+	itemCode, err := h.cfgItemCode(r, "itemCode")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "código de item inválido")
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	res, err := h.uc.ListItemRulesByItem(r.Context(), itemCode, r.URL.Query().Get("only_active") == "true")
@@ -731,7 +789,7 @@ func (h *ConfiguratorHandler) ListItemRules(w http.ResponseWriter, r *http.Reque
 func (h *ConfiguratorHandler) GetItemRule(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetItemRule(r.Context(), id)
@@ -745,12 +803,12 @@ func (h *ConfiguratorHandler) GetItemRule(w http.ResponseWriter, r *http.Request
 func (h *ConfiguratorHandler) UpdateItemRule(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CfgItemRuleDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.ID = id
@@ -765,7 +823,7 @@ func (h *ConfiguratorHandler) UpdateItemRule(w http.ResponseWriter, r *http.Requ
 func (h *ConfiguratorHandler) DeleteItemRule(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeleteItemRule(r.Context(), id); err != nil {
@@ -778,8 +836,14 @@ func (h *ConfiguratorHandler) DeleteItemRule(w http.ResponseWriter, r *http.Requ
 func (h *ConfiguratorHandler) EvaluateItemRules(w http.ResponseWriter, r *http.Request) {
 	var dto request.CfgEvaluateItemRulesDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
+	}
+	if resolved, resErr := h.cfgBodyItemCode(r, dto.ItemCode); resErr != nil {
+		security.RespondUseCaseError(w, resErr)
+		return
+	} else {
+		dto.ItemCode = resolved
 	}
 	res, err := h.uc.EvaluateItemRules(r.Context(), dto)
 	if err != nil {
@@ -814,7 +878,7 @@ func (h *ConfiguratorHandler) AddReceivingItem(w http.ResponseWriter, r *http.Re
 	}
 	var dto request.CfgReceivingItemDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddReceivingItem(r.Context(), charID, dto)
@@ -842,7 +906,7 @@ func (h *ConfiguratorHandler) ListReceivingItems(w http.ResponseWriter, r *http.
 func (h *ConfiguratorHandler) DeleteReceivingItem(w http.ResponseWriter, r *http.Request) {
 	id, err := cfgID(r, "recvId")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeleteReceivingItem(r.Context(), id); err != nil {

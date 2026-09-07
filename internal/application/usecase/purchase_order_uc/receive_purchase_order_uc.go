@@ -47,10 +47,10 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		return nil, err
 	}
 	if dto.PurchaseOrderCode <= 0 {
-		return nil, fmt.Errorf("código do pedido de compra é obrigatório")
+		return nil, errorsuc.NewValidationError("código do pedido de compra é obrigatório")
 	}
 	if len(dto.Items) == 0 {
-		return nil, fmt.Errorf("ao menos um item de recebimento é obrigatório")
+		return nil, errorsuc.NewValidationError("ao menos um item de recebimento é obrigatório")
 	}
 
 	order, err := uc.Repo.GetByCode(ctx, dto.PurchaseOrderCode)
@@ -58,7 +58,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		return nil, err
 	}
 	if order.Status == poentity.PurchaseOrderStatusCANCELLED || order.Status == poentity.PurchaseOrderStatusRECEIVED {
-		return nil, fmt.Errorf("pedido de compra %d não pode ser recebido no status %s", order.Code, order.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("pedido de compra %d não pode ser recebido no status %s", order.Code, order.Status))
 	}
 	lines, err := uc.Repo.ListItems(ctx, dto.PurchaseOrderCode)
 	if err != nil {
@@ -79,10 +79,10 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 
 	for _, item := range dto.Items {
 		if item.Quantity <= 0 {
-			return nil, fmt.Errorf("quantidade deve ser positiva para o item %d do pedido de compra", item.PurchaseOrderItemCode)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("quantidade deve ser positiva para o item %d do pedido de compra", item.PurchaseOrderItemCode))
 		}
 		if item.WarehouseID <= 0 {
-			return nil, fmt.Errorf("depósito é obrigatório para o item %d do pedido de compra", item.PurchaseOrderItemCode)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("depósito é obrigatório para o item %d do pedido de compra", item.PurchaseOrderItemCode))
 		}
 		line := byCode[item.PurchaseOrderItemCode]
 		if line == nil {

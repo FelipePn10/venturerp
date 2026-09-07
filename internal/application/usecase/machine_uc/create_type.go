@@ -50,7 +50,7 @@ func (uc *CreateMachineTypeUseCase) Execute(ctx context.Context, dto request.Cre
 		Description:      dto.Description,
 		Type:             dto.Type,
 		RequiresOperator: dto.RequiresOperator,
-		IsActive:         dto.IsActive,
+		IsActive:         dto.AtivoOuPadrao(),
 		CreatedBy:        authenticatedUserID,
 	}
 	created, err := uc.Repo.CreateType(ctx, mt)

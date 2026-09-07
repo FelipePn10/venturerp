@@ -3,6 +3,7 @@ package shipment_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
@@ -14,7 +15,7 @@ type CreateLoadInput = repository.CreateLoadInput
 
 func (uc *ShipmentUseCase) CreateLoad(ctx context.Context, in CreateLoadInput) (*response.ShipmentLoadResponse, error) {
 	if in.CreatedBy == uuid.Nil {
-		return nil, fmt.Errorf("usuário responsável pela carga é obrigatório")
+		return nil, errorsuc.NewValidationError("usuário responsável pela carga é obrigatório")
 	}
 	load, err := uc.Repo.CreateLoad(ctx, in)
 	if err != nil {
@@ -52,7 +53,7 @@ func (uc *ShipmentUseCase) AddShipmentToLoad(ctx context.Context, loadCode, ship
 		return nil, err
 	}
 	if ship.Status == entity.ShipmentStatusShipped || ship.Status == entity.ShipmentStatusCancelled {
-		return nil, fmt.Errorf("romaneio %d não pode ser incluído na carga no status %s", shipmentCode, ship.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não pode ser incluído na carga no status %s", shipmentCode, ship.Status))
 	}
 	if sequence <= 0 {
 		sequence = load.TotalShipments + 1
@@ -91,7 +92,7 @@ func (uc *ShipmentUseCase) AddFiscalNoteToLoad(ctx context.Context, in repositor
 		return nil, fmt.Errorf("carga %d não aceita notas no status %s", in.LoadCode, load.Status)
 	}
 	if in.FiscalExitID <= 0 {
-		return nil, fmt.Errorf("fiscal_exit_id é obrigatório")
+		return nil, errorsuc.NewValidationError("fiscal_exit_id é obrigatório")
 	}
 	if in.Sequence <= 0 {
 		in.Sequence = load.TotalFiscalNotes + 1
@@ -110,7 +111,7 @@ func (uc *ShipmentUseCase) TransitionLoad(ctx context.Context, code int64, next 
 		return err
 	}
 	if !load.Status.CanTransitionTo(next) {
-		return fmt.Errorf("transição inválida: carga %d está %s e não pode ir para %s", code, load.Status, next)
+		return errorsuc.NewValidationError(fmt.Sprintf("transição inválida: carga %d está %s e não pode ir para %s", code, load.Status, next))
 	}
 	if next == entity.LoadStatusReleased && load.TotalShipments == 0 && len(load.Shipments) == 0 {
 		return fmt.Errorf("carga %d não possui romaneios para liberar", code)
@@ -120,7 +121,7 @@ func (uc *ShipmentUseCase) TransitionLoad(ctx context.Context, code int64, next 
 
 func (uc *ShipmentUseCase) CreateDeliveryInstruction(ctx context.Context, d *entity.DeliveryInstruction) (*response.DeliveryInstructionResponse, error) {
 	if d.Title == "" || d.Instruction == "" {
-		return nil, fmt.Errorf("título e orientação são obrigatórios")
+		return nil, errorsuc.NewValidationError("título e orientação são obrigatórios")
 	}
 	if d.Priority == 0 {
 		d.Priority = 5
@@ -143,7 +144,7 @@ func (uc *ShipmentUseCase) ListDeliveryInstructions(ctx context.Context, loadCod
 
 func (uc *ShipmentUseCase) CreateDispatchBox(ctx context.Context, b *entity.DispatchBox) (*response.DispatchBoxResponse, error) {
 	if b.Code == "" {
-		return nil, fmt.Errorf("código do box é obrigatório")
+		return nil, errorsuc.NewValidationError("código do box é obrigatório")
 	}
 	b.Active = true
 	created, err := uc.Repo.CreateDispatchBox(ctx, b)
@@ -163,7 +164,7 @@ func (uc *ShipmentUseCase) ListDispatchBoxes(ctx context.Context, activeOnly boo
 
 func (uc *ShipmentUseCase) AssignBoxToLoad(ctx context.Context, loadCode int64, boxCode string, actor uuid.UUID) error {
 	if boxCode == "" {
-		return fmt.Errorf("box de expedição é obrigatório")
+		return errorsuc.NewValidationError("box de expedição é obrigatório")
 	}
 	return uc.Repo.AssignBoxToLoad(ctx, loadCode, boxCode, &actor)
 }

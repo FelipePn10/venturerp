@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -25,7 +26,7 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		return nil, fmt.Errorf("dependências de faturamento por carga não configuradas")
 	}
 	if dto.LoadCode <= 0 {
-		return nil, fmt.Errorf("load_code é obrigatório")
+		return nil, errorsuc.NewValidationError("load_code é obrigatório")
 	}
 
 	load, err := uc.ShipmentRepo.GetLoadByCode(ctx, dto.LoadCode)
@@ -33,7 +34,7 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		return nil, err
 	}
 	if load.Status == shipentity.LoadStatusCancelled || load.Status == shipentity.LoadStatusShipped {
-		return nil, fmt.Errorf("carga %d não pode ser faturada no status %s", dto.LoadCode, load.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d não pode ser faturada no status %s", dto.LoadCode, load.Status))
 	}
 	if len(load.Shipments) == 0 {
 		return nil, fmt.Errorf("carga %d não possui romaneios para faturar", dto.LoadCode)
@@ -121,7 +122,7 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 			return nil, nil, err
 		}
 		if ship.Status == shipentity.ShipmentStatusCancelled || ship.Status == shipentity.ShipmentStatusShipped {
-			return nil, nil, fmt.Errorf("romaneio %d não pode ser faturado no status %s", ship.Code, ship.Status)
+			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não pode ser faturado no status %s", ship.Code, ship.Status))
 		}
 		if len(ship.Items) == 0 {
 			return nil, nil, fmt.Errorf("romaneio %d não possui itens para faturar", ship.Code)
@@ -208,7 +209,7 @@ func fiscalItemFromShipmentItem(
 		unitPrice = *ov.UnitPrice
 	}
 	if unitPrice <= 0 {
-		return request.CreateFiscalExitItemDTO{}, fmt.Errorf("item %d do romaneio %d sem preço; informe item_overrides.unit_price ou vincule o pedido de venda", si.ItemCode, shipmentCode)
+		return request.CreateFiscalExitItemDTO{}, errorsuc.NewValidationError(fmt.Sprintf("item %d do romaneio %d sem preço; informe item_overrides.unit_price ou vincule o pedido de venda", si.ItemCode, shipmentCode))
 	}
 
 	qty := si.Quantity

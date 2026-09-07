@@ -58,10 +58,10 @@ func (uc *ConfiguratorUseCase) resolveAnswerCodes(ctx context.Context, answers [
 
 func (uc *ConfiguratorUseCase) CreateEquivalentRule(ctx context.Context, dto request.CfgEquivalentRuleDTO) (*response.CfgEquivalentRuleResponse, error) {
 	if dto.ParentItemCode <= 0 || dto.ChildItemCode <= 0 {
-		return nil, fmt.Errorf("item pai e item filho são obrigatórios")
+		return nil, errorsuc.NewValidationError("item pai e item filho são obrigatórios")
 	}
 	if dto.ParentCharacteristicID <= 0 || dto.ChildCharacteristicID <= 0 {
-		return nil, fmt.Errorf("característica do pai e do filho são obrigatórias")
+		return nil, errorsuc.NewValidationError("característica do pai e do filho são obrigatórias")
 	}
 	row, err := uc.Q.CreateCfgEquivalentRule(ctx, equivParams(dto, 0))
 	if err != nil {
@@ -107,7 +107,7 @@ func (uc *ConfiguratorUseCase) DeactivateEquivalentRule(ctx context.Context, id 
 // the child characteristic → child variable assignment.
 func (uc *ConfiguratorUseCase) ApplyEquivalent(ctx context.Context, dto request.CfgApplyEquivalentDTO) (*response.CfgAppliedEquivalentResponse, error) {
 	if dto.ParentItemCode <= 0 {
-		return nil, fmt.Errorf("parent_item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("parent_item_code é obrigatório")
 	}
 	answers := uc.resolveAnswerCodes(ctx, dto.Answers)
 	rules, err := uc.Q.ListCfgEquivalentRulesByParent(ctx, dto.ParentItemCode, true)
@@ -141,7 +141,7 @@ func (uc *ConfiguratorUseCase) ApplyEquivalent(ctx context.Context, dto request.
 
 func (uc *ConfiguratorUseCase) CreateItemRule(ctx context.Context, dto request.CfgItemRuleDTO) (*response.CfgItemRuleResponse, error) {
 	if dto.ItemCode <= 0 || dto.TargetTable == "" || dto.TargetField == "" {
-		return nil, fmt.Errorf("item, tabela e campo são obrigatórios")
+		return nil, errorsuc.NewValidationError("item, tabela e campo são obrigatórios")
 	}
 	row, err := uc.Q.CreateCfgItemRule(ctx, itemRuleParams(dto, 0))
 	if err != nil {
@@ -196,7 +196,7 @@ func (uc *ConfiguratorUseCase) DeleteItemRule(ctx context.Context, id int64) err
 // conditions all match the item's configuration.
 func (uc *ConfiguratorUseCase) EvaluateItemRules(ctx context.Context, dto request.CfgEvaluateItemRulesDTO) (*response.CfgEvaluatedRulesResponse, error) {
 	if dto.ItemCode <= 0 {
-		return nil, fmt.Errorf("item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("item_code é obrigatório")
 	}
 	answers := uc.resolveAnswerCodes(ctx, dto.Answers)
 	rules, err := uc.Q.ListCfgItemRulesByItem(ctx, dto.ItemCode, true)
@@ -356,7 +356,7 @@ func (uc *ConfiguratorUseCase) AddReceivingItem(ctx context.Context, charID int6
 	}
 	rt := dto.ReceivingType
 	if rt != entity.RecebRecebimento && rt != entity.RecebVinculo {
-		return nil, fmt.Errorf("tipo de recebimento deve ser RECEBIMENTO ou VINCULO")
+		return nil, errorsuc.NewValidationError("tipo de recebimento deve ser RECEBIMENTO ou VINCULO")
 	}
 	row, err := uc.Q.AddCfgCharReceivingItem(ctx, charID, pgutil.ToPgInt8Ptr(dto.VariableID), rt,
 		pgutil.ToPgInt8Ptr(dto.ItemCode), pgutil.ToPgInt8Ptr(dto.ClassificationCode))

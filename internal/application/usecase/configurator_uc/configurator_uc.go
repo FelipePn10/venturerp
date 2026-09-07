@@ -26,9 +26,18 @@ type RestrictionOracle interface {
 type ConfiguratorUseCase struct {
 	Q            *sqlc.Queries
 	Restrictions RestrictionOracle // optional; nil ⇒ no restriction filtering
+	// Items traduz o código de negócio do item para a chave interna das tabelas
+	// cfg_*. Opcional apenas para os testes que não tocam em itens.
+	Items any
 }
 
 func New(q *sqlc.Queries) *ConfiguratorUseCase { return &ConfiguratorUseCase{Q: q} }
+
+// WithItems liga o repositório de itens usado para resolver o código de negócio.
+func (uc *ConfiguratorUseCase) WithItems(items any) *ConfiguratorUseCase {
+	uc.Items = items
+	return uc
+}
 
 // WithRestrictions wires the restriction oracle used by the cartesian generator.
 func (uc *ConfiguratorUseCase) WithRestrictions(o RestrictionOracle) *ConfiguratorUseCase {
@@ -52,7 +61,7 @@ func (uc *ConfiguratorUseCase) CreateSet(ctx context.Context, dto request.Create
 
 func (uc *ConfiguratorUseCase) UpdateSet(ctx context.Context, dto request.UpdateCfgSetDTO) (*response.CfgSetResponse, error) {
 	if dto.Description == "" {
-		return nil, fmt.Errorf("descrição do conjunto é obrigatória")
+		return nil, errorsuc.NewValidationError("descrição do conjunto é obrigatória")
 	}
 	row, err := uc.Q.UpdateCfgSet(ctx, dto.ID, dto.Description, dto.IsActive)
 	if err != nil {
@@ -114,7 +123,7 @@ func (uc *ConfiguratorUseCase) CreateVariable(ctx context.Context, dto request.C
 
 func (uc *ConfiguratorUseCase) UpdateVariable(ctx context.Context, dto request.UpdateCfgVariableDTO) (*response.CfgVariableResponse, error) {
 	if dto.Code == "" || dto.Description == "" {
-		return nil, fmt.Errorf("código e descrição da variável são obrigatórios")
+		return nil, errorsuc.NewValidationError("código e descrição da variável são obrigatórios")
 	}
 	maskComp := dto.MaskComposition
 	if maskComp == "" {
@@ -167,7 +176,7 @@ func (uc *ConfiguratorUseCase) DeactivateVariable(ctx context.Context, id int64)
 
 func (uc *ConfiguratorUseCase) SetVariableLanguage(ctx context.Context, variableID int64, dto request.CfgVariableLanguageDTO) (*response.CfgVariableLanguageResponse, error) {
 	if dto.Language == "" || dto.Translation == "" {
-		return nil, fmt.Errorf("idioma e tradução são obrigatórios")
+		return nil, errorsuc.NewValidationError("idioma e tradução são obrigatórios")
 	}
 	row, err := uc.Q.UpsertCfgVariableLanguage(ctx, variableID, dto.Language, textOrNull(dto.Country), dto.Translation)
 	if err != nil {

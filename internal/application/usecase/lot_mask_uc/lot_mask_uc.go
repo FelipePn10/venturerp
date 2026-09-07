@@ -91,7 +91,7 @@ func (uc *LotMaskUseCase) Update(ctx context.Context, dto request.LotMaskDTO) (*
 		app = "GERAL"
 	}
 	if !entity.ValidApplication(app) {
-		return nil, fmt.Errorf("aplicação deve ser SUPRIMENTOS, PRODUCAO, VENDAS, EXPEDICAO ou GERAL")
+		return nil, errorsuc.NewValidationError("aplicação deve ser SUPRIMENTOS, PRODUCAO, VENDAS, EXPEDICAO ou GERAL")
 	}
 	itemCode, err := uc.resolveItemCode(ctx, dto.ItemCode)
 	if err != nil {

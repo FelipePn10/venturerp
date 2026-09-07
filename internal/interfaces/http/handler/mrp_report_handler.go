@@ -121,7 +121,7 @@ func reportFilter(r *http.Request) (mrp_report_uc.Filter, error) {
 	if raw := q.Get("quantity"); raw != "" {
 		quantity, err = decimal.NewFromString(raw)
 		if err != nil {
-			return mrp_report_uc.Filter{}, fmt.Errorf("invalid quantity")
+			return mrp_report_uc.Filter{}, fmt.Errorf("quantidade inválida")
 		}
 	}
 	return mrp_report_uc.Filter{
@@ -195,7 +195,7 @@ func (h *MRPReportHandler) Explosion(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("quantity"); raw != "" {
 		quantity, err = decimal.NewFromString(raw)
 		if err != nil {
-			security.RespondError(w, http.StatusBadRequest, "invalid quantity")
+			security.RespondError(w, http.StatusBadRequest, "quantidade inválida")
 			return
 		}
 	}

@@ -38,9 +38,25 @@ type ItemStructure struct {
 	SubstituteGroup    int16      // >0 = grupo de substitutos (mesmo pai); 0 = standalone
 	SubstitutePriority int16      // menor = preferido; o mínimo do grupo é o primário
 	IsActive           bool
-	CreatedBy          uuid.UUID
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// WarehouseCode define de onde o componente é baixado; sem ele vale o
+	// almoxarifado do cadastro do item.
+	WarehouseCode *int64
+	// LineWarehouseCode é o almoxarifado de linha, junto ao operador.
+	LineWarehouseCode *int64
+	// SetupLoss é consumida uma vez por ordem (preparação da máquina), não por
+	// unidade do pai.
+	SetupLoss float64
+	// A perda de custo é separada da de engenharia: a de engenharia dimensiona
+	// a necessidade, a de custo entra no cálculo do custo.
+	CostLossType   string // PERCENTUAL | QUANTIDADE
+	CostLoss       float64
+	CostCenterCode *int64
+	// IsCriticalMPS coloca o componente na linha crítica do plano mestre.
+	IsCriticalMPS       bool
+	GeneratesInspection bool
+	CreatedBy           uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 // ConsultRow estende ItemStructure com campos desnormalizados do item filho

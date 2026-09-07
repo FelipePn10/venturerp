@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrInvalidCode      = errors.New("invalid code")
+	ErrInvalidCode      = errors.New("código inválido")
 	ErrInvalidCreatedBy = errors.New("não foi possível identificar o usuário que está criando o registro")
 )
 

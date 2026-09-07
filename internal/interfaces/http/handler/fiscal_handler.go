@@ -149,7 +149,7 @@ func (h *FiscalHandler) ApproveEntry(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.approveEntryUC.Execute(r.Context(), request.ApproveFiscalEntryDTO{ID: code})
@@ -173,7 +173,7 @@ func (h *FiscalHandler) GetEntry(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getEntryUC.Execute(r.Context(), code)
@@ -216,7 +216,7 @@ func (h *FiscalHandler) AuthorizeExit(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.authorizeExitUC.Execute(r.Context(), code)
@@ -231,7 +231,7 @@ func (h *FiscalHandler) CancelExit(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var body struct {
@@ -265,7 +265,7 @@ func (h *FiscalHandler) GetExit(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getExitUC.Execute(r.Context(), code)
@@ -305,7 +305,7 @@ func (h *FiscalHandler) EmitirCCe(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var body struct {
@@ -355,7 +355,7 @@ func (h *FiscalHandler) GetCTe(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getCTeUC.Execute(r.Context(), code)
@@ -452,7 +452,7 @@ func (h *FiscalHandler) ConsultarNFe(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.consultarNFeUC.Execute(r.Context(), id)
@@ -467,7 +467,7 @@ func (h *FiscalHandler) ListCartasCorrecao(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	results, err := h.listCartasCorrecaoUC.Execute(r.Context(), id)
