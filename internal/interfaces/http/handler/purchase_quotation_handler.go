@@ -26,7 +26,7 @@ func NewPurchaseQuotationHandler(
 func (h *PurchaseQuotationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePurchaseQuotationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.Create(r.Context(), dto)
@@ -40,7 +40,7 @@ func (h *PurchaseQuotationHandler) Create(w http.ResponseWriter, r *http.Request
 func (h *PurchaseQuotationHandler) Get(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.Get(r.Context(), code)
@@ -64,12 +64,12 @@ func (h *PurchaseQuotationHandler) List(w http.ResponseWriter, r *http.Request) 
 func (h *PurchaseQuotationHandler) AddSupplier(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.AddQuotationSupplierDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.QuotationCode = code
@@ -84,7 +84,7 @@ func (h *PurchaseQuotationHandler) AddSupplier(w http.ResponseWriter, r *http.Re
 func (h *PurchaseQuotationHandler) RecordPrice(w http.ResponseWriter, r *http.Request) {
 	var dto request.RecordQuotationPriceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.RecordPrice(r.Context(), dto)
@@ -112,12 +112,12 @@ func (h *PurchaseQuotationHandler) SelectPrice(w http.ResponseWriter, r *http.Re
 func (h *PurchaseQuotationHandler) GenerateOrders(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.GenerateOrdersFromQuotationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.QuotationCode = code

@@ -7,7 +7,9 @@ type UpsertWorkCenterCostDTO struct {
 	MachineCostPerHour float64 `json:"machine_cost_per_hour"`
 	LaborCostPerHour   float64 `json:"labor_cost_per_hour"`
 	Currency           string  `json:"currency"`
-	UpdatedBy          string  `json:"updated_by"`
+	// UpdatedBy vem do JWT; nunca do corpo da requisição — aceitar do cliente
+	// deixava qualquer um assinar a alteração de tarifa como outra pessoa.
+	UpdatedBy string `json:"-"`
 }
 
 type UpsertItemPurchaseCostDTO struct {

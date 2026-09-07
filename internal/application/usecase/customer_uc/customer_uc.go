@@ -192,7 +192,7 @@ func (uc *CustomerUseCase) UpdateContactType(ctx context.Context, code int64, dt
 		return nil, err
 	}
 	if strings.TrimSpace(dto.Description) == "" {
-		return nil, fmt.Errorf("a descrição é obrigatória")
+		return nil, errorsuc.NewValidationError("a descrição é obrigatória")
 	}
 	current.Description, current.IsActive = strings.TrimSpace(dto.Description), dto.IsActive
 	updated, err := uc.repo.UpdateContactType(ctx, current)
@@ -364,7 +364,7 @@ func (uc *CustomerUseCase) ListCarrierGroups(ctx context.Context) ([]*response.C
 
 func (uc *CustomerUseCase) UpdateCarrierGroup(ctx context.Context, code int64, dto request.UpdateCarrierGroupDTO) (*response.CarrierGroupResponse, error) {
 	if strings.TrimSpace(dto.Description) == "" {
-		return nil, fmt.Errorf("a descrição é obrigatória")
+		return nil, errorsuc.NewValidationError("a descrição é obrigatória")
 	}
 	current, err := uc.repo.GetCarrierGroupByCode(ctx, code)
 	if err != nil {
@@ -570,7 +570,7 @@ func (uc *CustomerUseCase) GetSalesTable(ctx context.Context, code int64) (*resp
 
 func (uc *CustomerUseCase) UpdateSalesTable(ctx context.Context, dto request.UpdateSalesTableDTO) (*response.SalesTableResponse, error) {
 	if dto.Code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, errorsuc.NewValidationError("informe o código")
 	}
 	st, err := uc.repo.GetSalesTableByCode(ctx, dto.Code)
 	if err != nil {
@@ -647,7 +647,7 @@ func (uc *CustomerUseCase) CreateSalesPricePolicy(ctx context.Context, dto reque
 
 func (uc *CustomerUseCase) UpdateSalesPricePolicy(ctx context.Context, dto request.UpdateSalesPricePolicyDTO) (*response.SalesPricePolicyResponse, error) {
 	if dto.Code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, errorsuc.NewValidationError("informe o código")
 	}
 	p, err := uc.repo.GetSalesPricePolicyByCode(ctx, dto.Code)
 	if err != nil {
@@ -715,7 +715,7 @@ func dtoToUpdatePolicy(dto request.CreateSalesPricePolicyDTO) request.UpdateSale
 
 func (uc *CustomerUseCase) applySalesPricePolicyDTO(ctx context.Context, p *entity.SalesPricePolicy, dto request.UpdateSalesPricePolicyDTO) error {
 	if dto.Description == "" {
-		return fmt.Errorf("informe a descrição")
+		return errorsuc.NewValidationError("informe a descrição")
 	}
 	source := entity.SalesCostSource(dto.CostSource)
 	if source == "" {
@@ -739,7 +739,7 @@ func (uc *CustomerUseCase) applySalesPricePolicyDTO(ctx context.Context, p *enti
 		p.PolicyScope = "PREC"
 	}
 	if p.PolicyScope != "PREC" && p.PolicyScope != "FPPV" {
-		return fmt.Errorf("a abrangência da política deve ser precificação ou formação de preço")
+		return errorsuc.NewValidationError("a abrangência da política deve ser precificação ou formação de preço")
 	}
 	p.PolicyTypes = dto.PolicyTypes
 	p.MarkupPct = dto.MarkupPct
@@ -755,14 +755,14 @@ func (uc *CustomerUseCase) applySalesPricePolicyDTO(ctx context.Context, p *enti
 	p.MinMarginPct = dto.MinMarginPct
 	p.MaxDiscountPct = dto.MaxDiscountPct
 	if p.MaxMarginPct > 0 && p.MinMarginPct > p.MaxMarginPct {
-		return fmt.Errorf("a margem mínima não pode ser maior que a máxima")
+		return errorsuc.NewValidationError("a margem mínima não pode ser maior que a máxima")
 	}
 	if p.IdealMarginPct > 0 {
 		if p.IdealMarginPct < p.MinMarginPct {
-			return fmt.Errorf("a margem ideal não pode ser menor que a margem mínima")
+			return errorsuc.NewValidationError("a margem ideal não pode ser menor que a margem mínima")
 		}
 		if p.MaxMarginPct > 0 && p.IdealMarginPct > p.MaxMarginPct {
-			return fmt.Errorf("a margem ideal não pode ser maior que a margem máxima")
+			return errorsuc.NewValidationError("a margem ideal não pode ser maior que a margem máxima")
 		}
 	}
 	p.IncidencesJSON = string(dto.IncidencesJSON)
@@ -770,7 +770,7 @@ func (uc *CustomerUseCase) applySalesPricePolicyDTO(ctx context.Context, p *enti
 		p.IncidencesJSON = "[]"
 	}
 	if !json.Valid([]byte(p.IncidencesJSON)) {
-		return fmt.Errorf("a configuração de incidências está inválida")
+		return errorsuc.NewValidationError("a configuração de incidências está inválida")
 	}
 	p.ValidityStart = dto.ValidityStart
 	p.ValidityEnd = dto.ValidityEnd
@@ -842,7 +842,7 @@ func (uc *CustomerUseCase) CreateCommercialPolicy(ctx context.Context, dto reque
 
 func (uc *CustomerUseCase) UpdateCommercialPolicy(ctx context.Context, dto request.UpdateCommercialPolicyDTO) (*response.CommercialPolicyResponse, error) {
 	if dto.Code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, errorsuc.NewValidationError("informe o código")
 	}
 	p, err := uc.repo.GetCommercialPolicyByCode(ctx, dto.Code)
 	if err != nil {
@@ -889,10 +889,10 @@ func (uc *CustomerUseCase) ListCommercialPolicies(ctx context.Context, onlyActiv
 
 func (uc *CustomerUseCase) AddCommercialPolicySpecificItem(ctx context.Context, dto request.CommercialPolicySpecificItemDTO) (*response.CommercialPolicySpecificItemResponse, error) {
 	if dto.PolicyCode == 0 {
-		return nil, fmt.Errorf("informe a política comercial")
+		return nil, errorsuc.NewValidationError("informe a política comercial")
 	}
 	if dto.ItemCode == nil && dto.ProductLineID == nil && dto.ItemClassification == nil {
-		return nil, fmt.Errorf("informe o item, a linha de produto ou a classificação do item")
+		return nil, errorsuc.NewValidationError("informe o item, a linha de produto ou a classificação do item")
 	}
 	p, err := uc.repo.GetCommercialPolicyByCode(ctx, dto.PolicyCode)
 	if err != nil {
@@ -1012,7 +1012,7 @@ func commercialPolicyCreateToUpdate(dto request.CreateCommercialPolicyDTO) reque
 
 func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateCommercialPolicyDTO) error {
 	if dto.Description == "" {
-		return fmt.Errorf("informe a descrição")
+		return errorsuc.NewValidationError("informe a descrição")
 	}
 	kind := entity.CommercialPolicyKind(dto.Kind)
 	if !entity.ValidCommercialPolicyKind(kind) {
@@ -1036,14 +1036,14 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 		"max_quantity":    dto.MaxQuantity,
 	} {
 		if value < 0 {
-			return fmt.Errorf("%s deve ser maior ou igual a zero", name)
+			return errorsuc.NewValidationError(fmt.Sprintf("%s deve ser maior ou igual a zero", name))
 		}
 	}
 	if dto.MaxGrossValue > 0 && dto.MinGrossValue > dto.MaxGrossValue {
-		return fmt.Errorf("o valor bruto mínimo não pode ser maior que o máximo")
+		return errorsuc.NewValidationError("o valor bruto mínimo não pode ser maior que o máximo")
 	}
 	if dto.MaxQuantity > 0 && dto.MinQuantity > dto.MaxQuantity {
-		return fmt.Errorf("a quantidade mínima não pode ser maior que a máxima")
+		return errorsuc.NewValidationError("a quantidade mínima não pode ser maior que a máxima")
 	}
 	p.Description = dto.Description
 	p.Kind = kind
@@ -1085,14 +1085,14 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 		p.DataTypesJSON = "[]"
 	}
 	if !json.Valid([]byte(p.DataTypesJSON)) {
-		return fmt.Errorf("a configuração de tipos de dados está inválida")
+		return errorsuc.NewValidationError("a configuração de tipos de dados está inválida")
 	}
 	p.CommissionDiscountMode = dto.CommissionDiscountMode
 	if p.CommissionDiscountMode == "" {
 		p.CommissionDiscountMode = "REAL"
 	}
 	if p.CommissionDiscountMode != "REAL" && p.CommissionDiscountMode != "NOMINAL" {
-		return fmt.Errorf("o desconto de comissão deve ser real ou nominal")
+		return errorsuc.NewValidationError("o desconto de comissão deve ser real ou nominal")
 	}
 	p.CustomerCode = dto.CustomerCode
 	p.CustomerTypeID = dto.CustomerTypeID
@@ -1110,7 +1110,7 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 		p.RuleJSON = "{}"
 	}
 	if !json.Valid([]byte(p.RuleJSON)) {
-		return fmt.Errorf("a configuração da regra está inválida")
+		return errorsuc.NewValidationError("a configuração da regra está inválida")
 	}
 	p.ValidityStart = dto.ValidityStart
 	p.ValidityEnd = dto.ValidityEnd
@@ -1120,10 +1120,10 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 
 func (uc *CustomerUseCase) AddCommercialPolicyLine(ctx context.Context, dto request.CommercialPolicyLineDTO) (*response.CommercialPolicyLineResponse, error) {
 	if dto.PolicyCode == 0 {
-		return nil, fmt.Errorf("informe a política comercial")
+		return nil, errorsuc.NewValidationError("informe a política comercial")
 	}
 	if dto.LineNumber == 0 {
-		return nil, fmt.Errorf("informe o número da linha")
+		return nil, errorsuc.NewValidationError("informe o número da linha")
 	}
 	p, err := uc.repo.GetCommercialPolicyByCode(ctx, dto.PolicyCode)
 	if err != nil {
@@ -1140,14 +1140,14 @@ func (uc *CustomerUseCase) AddCommercialPolicyLine(ctx context.Context, dto requ
 		return nil, fmt.Errorf("os valores da linha devem ser maiores ou iguais a zero")
 	}
 	if dto.MaxValue > 0 && dto.MinValue > dto.MaxValue {
-		return nil, fmt.Errorf("o valor mínimo não pode ser maior que o máximo")
+		return nil, errorsuc.NewValidationError("o valor mínimo não pode ser maior que o máximo")
 	}
 	variables := string(dto.VariablesJSON)
 	if variables == "" {
 		variables = "{}"
 	}
 	if !json.Valid([]byte(variables)) {
-		return nil, fmt.Errorf("a configuração de variáveis está inválida")
+		return nil, errorsuc.NewValidationError("a configuração de variáveis está inválida")
 	}
 	seq := dto.SequenceNumber
 	if seq == 0 {
@@ -1338,10 +1338,10 @@ func (uc *CustomerUseCase) ListInvoiceTypes(ctx context.Context, onlyActive bool
 
 func (uc *CustomerUseCase) UpdateInvoiceType(ctx context.Context, dto request.UpdateInvoiceTypeDTO) (*response.InvoiceTypeResponse, error) {
 	if dto.Code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, errorsuc.NewValidationError("informe o código")
 	}
 	if dto.Description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	it := &entity.InvoiceType{
 		Code:        dto.Code,
@@ -1597,7 +1597,7 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 	var st *entity.SalesTable
 	if dto.SalesTableID == 0 {
 		if dto.SalesTableCode == 0 {
-			return nil, fmt.Errorf("o código da tabela de vendas é obrigatório")
+			return nil, errorsuc.NewValidationError("o código da tabela de vendas é obrigatório")
 		}
 		var err error
 		st, err = uc.repo.GetSalesTableByCode(ctx, dto.SalesTableCode)
@@ -1613,7 +1613,7 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 		}
 	}
 	if dto.ItemCode == "" {
-		return nil, fmt.Errorf("o código do item é obrigatório")
+		return nil, errorsuc.NewValidationError("o código do item é obrigatório")
 	}
 	if dto.Price <= 0 {
 		return nil, errorsuc.NewValidationError("o preço deve ser maior que zero")
@@ -1622,7 +1622,7 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 		return nil, err
 	}
 	if dto.Situation != "" && !validPriceSituations[dto.Situation] {
-		return nil, fmt.Errorf("a situação deve ser ATIVO, INATIVO ou PROMOCIONAL")
+		return nil, errorsuc.NewValidationError("a situação deve ser ATIVO, INATIVO ou PROMOCIONAL")
 	}
 	if dto.Situation == "" {
 		dto.Situation = "ATIVO"
@@ -1666,10 +1666,10 @@ func validateManualSalesTablePrice(st *entity.SalesTable, price float64) error {
 
 func (uc *CustomerUseCase) UpdateSalesTablePrice(ctx context.Context, dto request.UpdateSalesTablePriceDTO) (*response.SalesTablePriceResponse, error) {
 	if dto.ID == 0 {
-		return nil, fmt.Errorf("informe o identificador")
+		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
 	if dto.Price < 0 {
-		return nil, fmt.Errorf("o preço deve ser maior ou igual a zero")
+		return nil, errorsuc.NewValidationError("o preço deve ser maior ou igual a zero")
 	}
 	current, err := uc.repo.GetSalesTablePriceByID(ctx, dto.ID)
 	if err != nil {
@@ -1683,7 +1683,7 @@ func (uc *CustomerUseCase) UpdateSalesTablePrice(ctx context.Context, dto reques
 		return nil, err
 	}
 	if dto.Situation != "" && !validPriceSituations[dto.Situation] {
-		return nil, fmt.Errorf("a situação deve ser ativo, inativo ou promocional")
+		return nil, errorsuc.NewValidationError("a situação deve ser ativo, inativo ou promocional")
 	}
 	if dto.Situation == "" {
 		dto.Situation = "ATIVO"
@@ -2406,7 +2406,7 @@ func (uc *CustomerUseCase) ListEstablishments(ctx context.Context, corporateCode
 
 func (uc *CustomerUseCase) BlockCustomer(ctx context.Context, dto request.BlockCustomerDTO) error {
 	if dto.Reason == "" {
-		return fmt.Errorf("informe o motivo do bloqueio")
+		return errorsuc.NewValidationError("informe o motivo do bloqueio")
 	}
 	return uc.repo.BlockCustomer(ctx, dto.CustomerCode, dto.Reason)
 }
@@ -2451,7 +2451,7 @@ func (uc *CustomerUseCase) AddContact(ctx context.Context, dto request.AddContac
 		return nil, fmt.Errorf("cliente não encontrado: %w", err)
 	}
 	if dto.Name == "" {
-		return nil, fmt.Errorf("informe o nome do contato")
+		return nil, errorsuc.NewValidationError("informe o nome do contato")
 	}
 	var contactTypeID *int64
 	if dto.ContactTypeCode != nil {

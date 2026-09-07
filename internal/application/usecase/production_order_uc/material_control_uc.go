@@ -2,7 +2,6 @@ package production_order_uc
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -129,7 +128,7 @@ func (uc *ProductionMaterialControlUseCase) AddScrap(ctx context.Context, dto re
 	}
 	date := datetime.ParseDateOrDefault(dto.DestinationDate, time.Now())
 	if dto.ProductionOrderID == 0 || dto.ScrapItemCode == 0 || dto.WarehouseID == 0 || (!dto.Quantity.IsPositive() && !dto.ReturnQuantity.Add(dto.ScrapQuantity).IsPositive()) {
-		return nil, fmt.Errorf("informe a ordem de produção, o item de refugo, o almoxarifado e uma quantidade maior que zero")
+		return nil, errorsuc.NewValidationError("informe a ordem de produção, o item de refugo, o almoxarifado e uma quantidade maior que zero")
 	}
 	kind := strings.ToUpper(strings.TrimSpace(dto.DestinationKind))
 	if kind == "" {

@@ -20,7 +20,7 @@ func NewSupplierSefazHandler(uc *supplier_uc.ConsultSupplierSefazUseCase) *Suppl
 func (h *SupplierSefazHandler) Query(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.Execute(r.Context(), code)

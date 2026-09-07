@@ -39,14 +39,14 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 		return nil, err
 	}
 	if order.Status == entity.StatusCompleted || order.Status == entity.StatusClosed || order.Status == entity.StatusCancelled {
-		return nil, fmt.Errorf("ordem de produção encerrada, concluída ou cancelada não pode ser alterada")
+		return nil, errorsuc.NewValidationError("ordem de produção encerrada, concluída ou cancelada não pode ser alterada")
 	}
 	activity, err := uc.Repo.HasProductionActivity(ctx, dto.ID)
 	if err != nil {
 		return nil, err
 	}
 	if activity {
-		return nil, fmt.Errorf("ordem de produção com movimento, apontamento, consumo ou separação no WMS não pode ser alterada")
+		return nil, errorsuc.NewValidationError("ordem de produção com movimento, apontamento, consumo ou separação no WMS não pode ser alterada")
 	}
 	if dto.PlannedQty != nil {
 		allowed, err := uc.Repo.CanChangeOrderQuantity(ctx, dto.ID)
@@ -57,7 +57,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, fmt.Errorf("o parâmetro de produção 10 não permite alterar a quantidade")
 		}
 		if !dto.PlannedQty.IsPositive() || dto.PlannedQty.LessThan(decimal.NewFromFloat(order.ProducedQty)) {
-			return nil, fmt.Errorf("a quantidade planejada deve ser maior que zero e não pode ser menor que a produzida")
+			return nil, errorsuc.NewValidationError("a quantidade planejada deve ser maior que zero e não pode ser menor que a produzida")
 		}
 		fractional, err := uc.Repo.AcceptsFractionalQuantity(ctx, order.ItemCode)
 		if err != nil {

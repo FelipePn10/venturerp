@@ -30,14 +30,14 @@ func (uc *UseCase) CreateRecord(ctx context.Context, dto request.CreateProcureme
 	actor, _ := uc.Auth.UserID(ctx)
 	recordType := entity.RecordType(dto.RecordType)
 	if !validRecordType(recordType) {
-		return nil, fmt.Errorf("tipo de registro %q inválido", dto.RecordType)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("tipo de registro %q inválido", dto.RecordType))
 	}
 	status := entity.RecordStatus(dto.Status)
 	if status == "" {
 		status = entity.StatusOpen
 	}
 	if !validStatus(status) {
-		return nil, fmt.Errorf("situação %q inválida", dto.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida", dto.Status))
 	}
 	payload := dto.Payload
 	if len(payload) == 0 || !json.Valid(payload) {
@@ -90,7 +90,7 @@ func (uc *UseCase) UpdateStatus(ctx context.Context, id int64, dto request.Updat
 	}
 	status := entity.RecordStatus(dto.Status)
 	if !validStatus(status) {
-		return nil, fmt.Errorf("situação %q inválida", dto.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida", dto.Status))
 	}
 	rec, err := uc.Repo.UpdateRecordStatus(ctx, id, status)
 	if err != nil {
@@ -104,7 +104,7 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.ApprovedQty < 0 || dto.RejectedQty < 0 || dto.ApprovedQty+dto.RejectedQty <= 0 {
-		return nil, fmt.Errorf("informe a quantidade aprovada ou a rejeitada, maior que zero")
+		return nil, errorsuc.NewValidationError("informe a quantidade aprovada ou a rejeitada, maior que zero")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	rec, err := uc.Repo.GetRecord(ctx, id)
@@ -118,7 +118,7 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 		return nil, fmt.Errorf("inspeção exige código do item e depósito")
 	}
 	if dto.ApprovedQty > 0 && dto.DestinationWarehouseID == nil {
-		return nil, fmt.Errorf("depósito de destino é obrigatório quando a quantidade aprovada for positiva")
+		return nil, errorsuc.NewValidationError("depósito de destino é obrigatório quando a quantidade aprovada for positiva")
 	}
 	if dto.ApprovedQty+dto.RejectedQty > rec.Quantity+0.0001 {
 		return nil, fmt.Errorf("disposition quantity exceeds inspected quantity")
@@ -237,19 +237,19 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 	}
 	dto.EnterpriseCode = enterpriseCode
 	if dto.Basis != "ITEM" && dto.Basis != "CLASSIFICATION" {
-		return nil, fmt.Errorf("a base deve ser item ou classificação")
+		return nil, errorsuc.NewValidationError("a base deve ser item ou classificação")
 	}
 	if dto.Basis == "ITEM" && dto.ItemCode == nil {
-		return nil, fmt.Errorf("informe o item para uma regra por item")
+		return nil, errorsuc.NewValidationError("informe o item para uma regra por item")
 	}
 	if dto.Basis == "CLASSIFICATION" && (dto.ClassificationCode == nil || *dto.ClassificationCode == "") {
-		return nil, fmt.Errorf("informe a classificação para uma regra por classificação")
+		return nil, errorsuc.NewValidationError("informe a classificação para uma regra por classificação")
 	}
 	if dto.InspectionWarehouseID <= 0 {
-		return nil, fmt.Errorf("depósito de inspeção é obrigatório")
+		return nil, errorsuc.NewValidationError("depósito de inspeção é obrigatório")
 	}
 	if len(dto.Steps) == 0 {
-		return nil, fmt.Errorf("informe ao menos uma etapa de inspeção")
+		return nil, errorsuc.NewValidationError("informe ao menos uma etapa de inspeção")
 	}
 	validFrom, err := parseOptionalDate(dto.ValidFrom, time.Now())
 	if err != nil {
@@ -278,16 +278,16 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 	}
 	for _, stepDTO := range dto.Steps {
 		if stepDTO.Sequence <= 0 {
-			return nil, fmt.Errorf("a sequência da etapa deve ser maior que zero")
+			return nil, errorsuc.NewValidationError("a sequência da etapa deve ser maior que zero")
 		}
 		if stepDTO.InspectionName == "" {
-			return nil, fmt.Errorf("informe o nome da inspeção da etapa %d", stepDTO.Sequence)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("informe o nome da inspeção da etapa %d", stepDTO.Sequence))
 		}
 		if !validInspectionKind(stepDTO.Kind) {
-			return nil, fmt.Errorf("tipo %q inválido na etapa %d", stepDTO.Kind, stepDTO.Sequence)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("tipo %q inválido na etapa %d", stepDTO.Kind, stepDTO.Sequence))
 		}
 		if !validAppointmentMode(stepDTO.AppointmentMode) {
-			return nil, fmt.Errorf("modo de apontamento %q inválido na etapa %d", stepDTO.AppointmentMode, stepDTO.Sequence)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("modo de apontamento %q inválido na etapa %d", stepDTO.AppointmentMode, stepDTO.Sequence))
 		}
 		if stepDTO.SampleQty <= 0 {
 			stepDTO.SampleQty = 1
@@ -318,7 +318,7 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 		}
 		for _, attrDTO := range stepDTO.Attributes {
 			if attrDTO.Description == "" {
-				return nil, fmt.Errorf("informe a descrição do atributo da etapa %d", stepDTO.Sequence)
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("informe a descrição do atributo da etapa %d", stepDTO.Sequence))
 			}
 			step.Attributes = append(step.Attributes, &entity.ReceivingInspectionStepAttribute{
 				Description: attrDTO.Description,
@@ -347,13 +347,13 @@ func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto req
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.ItemCode <= 0 || dto.WarehouseID <= 0 || dto.Quantity <= 0 {
-		return nil, fmt.Errorf("código do item, depósito e quantidade são obrigatórios")
+		return nil, errorsuc.NewValidationError("código do item, depósito e quantidade são obrigatórios")
 	}
 	if dto.Source == "" {
 		dto.Source = "MANUAL"
 	}
 	if !validInspectionSource(dto.Source) {
-		return nil, fmt.Errorf("origem %q inválida", dto.Source)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("origem %q inválida", dto.Source))
 	}
 	route, err := uc.Repo.FindReceivingInspectionRoute(ctx, 1, dto.ItemCode, dto.Mask, dto.ClassificationCode)
 	var routeID *int64
@@ -405,7 +405,7 @@ func (uc *UseCase) LinkReceivingInspectionQualityReport(ctx context.Context, ord
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 || dto.QualityReportID <= 0 {
-		return nil, fmt.Errorf("inspection_order_id e quality_report_id são obrigatórios")
+		return nil, errorsuc.NewValidationError("inspection_order_id e quality_report_id são obrigatórios")
 	}
 	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
 	if err != nil {
@@ -424,7 +424,7 @@ func (uc *UseCase) LinkReceivingInspectionQualityReport(ctx context.Context, ord
 
 func (uc *UseCase) ListReceivingInspectionQualityReports(ctx context.Context, orderID int64) ([]*response.ReceivingInspectionQualityReportResponse, error) {
 	if orderID <= 0 {
-		return nil, fmt.Errorf("inspection_order_id é obrigatório")
+		return nil, errorsuc.NewValidationError("inspection_order_id é obrigatório")
 	}
 	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
 	if err != nil {
@@ -446,7 +446,7 @@ func (uc *UseCase) UnlinkReceivingInspectionQualityReport(ctx context.Context, o
 		return errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 || reportID <= 0 {
-		return fmt.Errorf("inspection_order_id e quality_report_id são obrigatórios")
+		return errorsuc.NewValidationError("inspection_order_id e quality_report_id são obrigatórios")
 	}
 	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
 	if err != nil {
@@ -460,7 +460,7 @@ func (uc *UseCase) RecordReceivingInspectionResult(ctx context.Context, orderID 
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 || dto.Sequence <= 0 {
-		return nil, fmt.Errorf("informe a ordem e a sequência")
+		return nil, errorsuc.NewValidationError("informe a ordem e a sequência")
 	}
 	if dto.SampleIndex <= 0 {
 		dto.SampleIndex = 1
@@ -491,10 +491,10 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 {
-		return nil, fmt.Errorf("informe a ordem")
+		return nil, errorsuc.NewValidationError("informe a ordem")
 	}
 	if !validInspectionTreatment(dto.Treatment) {
-		return nil, fmt.Errorf("tratamento %q inválido", dto.Treatment)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("tratamento %q inválido", dto.Treatment))
 	}
 	if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty <= 0 {
 		return nil, fmt.Errorf("as quantidades da análise devem ser maiores que zero")
@@ -508,7 +508,7 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 	}
 	if dto.MoveStock {
 		if (dto.ConformQty > 0 || dto.RestrictedQty > 0) && dto.DestinationWarehouseID == nil && dto.RestrictedWarehouseID == nil {
-			return nil, fmt.Errorf("depósito de destino é obrigatório para liberar a quantidade aprovada")
+			return nil, errorsuc.NewValidationError("depósito de destino é obrigatório para liberar a quantidade aprovada")
 		}
 		if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty > order.Quantity+0.0001 {
 			return nil, fmt.Errorf("analysis quantity exceeds inspected order quantity")

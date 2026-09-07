@@ -23,7 +23,7 @@ func NewItemSupplierHandler(uc *item_supplier_uc.ItemSupplierUseCase) *ItemSuppl
 func (h *ItemSupplierHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertItemPreferredSupplierDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.Upsert(r.Context(), dto)
@@ -79,12 +79,12 @@ func (h *ItemSupplierHandler) SearchExternal(w http.ResponseWriter, r *http.Requ
 func (h *ItemSupplierHandler) CreateQualityReport(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CreateItemSupplierQualityReportDTO
 	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.CreateQualityReport(r.Context(), id, dto)
@@ -98,7 +98,7 @@ func (h *ItemSupplierHandler) CreateQualityReport(w http.ResponseWriter, r *http
 func (h *ItemSupplierHandler) ListQualityReports(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.ListQualityReports(r.Context(), id)
@@ -139,7 +139,7 @@ func (h *ItemSupplierHandler) DownloadQualityReport(w http.ResponseWriter, r *ht
 func (h *ItemSupplierHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.Delete(r.Context(), id); err != nil {

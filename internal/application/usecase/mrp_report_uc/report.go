@@ -3,6 +3,7 @@ package mrp_report_uc
 import (
 	"context"
 	"fmt"
+	enumtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"sort"
 	"strconv"
 	"strings"
@@ -121,18 +122,18 @@ func validateFilter(filter *Filter, report string) error {
 	}
 	allowedItemType := map[string]bool{"": true, "TODOS": true, "FABRICADO": true, "COMPRADO": true, "DE_TERCEIRO": true, "TERCEIRIZADO": true}
 	if !allowedItemType[filter.ItemType] {
-		return errorsuc.NewValidationError("invalid item_type")
+		return enumtypes.NewInvalidValue("Tipo de item", filter.ItemType, "TODOS", "FABRICADO", "COMPRADO", "DE_TERCEIRO", "TERCEIRIZADO")
 	}
 	allowedBreak := map[string]bool{"": true, "NENHUM": true, "PLANEJADOR": true, "CLASSIFICACAO": true, "ITEM": true}
 	if !allowedBreak[filter.BreakBy] {
-		return errorsuc.NewValidationError("invalid break_by")
+		return enumtypes.NewInvalidValue("Quebra do relatório", filter.BreakBy, "NENHUM", "PLANEJADOR", "CLASSIFICACAO", "ITEM")
 	}
 	allowedOrder := map[string]bool{"": true, "NENHUM": true, "PLANEJADOR": true, "CLASSIFICACAO": true, "ITEM": true, "CODIGO": true, "DESCRICAO": true, "DATA": true}
 	if !allowedOrder[filter.OrderBy1] || !allowedOrder[filter.OrderBy2] {
 		return errorsuc.NewValidationError("ordenação de relatório inválida")
 	}
 	if !map[string]bool{"": true, "CALCULATION": true, "CURRENT": true}[filter.Position] {
-		return errorsuc.NewValidationError("invalid position")
+		return enumtypes.NewInvalidValue("Posição", filter.Position, "CALCULATION", "CURRENT")
 	}
 	if (report == "profile" || report == "grouped") && filter.PlanCode == nil {
 		return errorsuc.NewValidationError("informe o plano de MRP")
@@ -147,7 +148,7 @@ func validateFilter(filter *Filter, report string) error {
 		"availability": {"": true, "AMBOS": true, "NECESSIDADES": true, "ITENS_PEDIDO": true},
 	}
 	if set, ok := layouts[report]; ok && !set[filter.Layout] {
-		return errorsuc.NewValidationError(fmt.Sprintf("invalid layout for %s report", report))
+		return enumtypes.NewInvalidValue(fmt.Sprintf("Layout do relatório %s", report), filter.Layout, layoutsAceitos(set)...)
 	}
 	if report == "availability" && len(filter.SalesOrderCodes) == 0 && (filter.ItemCode == nil || !filter.Quantity.IsPositive()) {
 		return errorsuc.NewValidationError("informe os pedidos de venda ou um item com quantidade maior que zero")
@@ -156,17 +157,17 @@ func validateFilter(filter *Filter, report string) error {
 		return errorsuc.NewValidationError("ao informar períodos, as necessidades agrupadas exigem exatamente seis")
 	}
 	if report == "reorder" && !map[string]bool{"": true, "TODOS": true, "REORDER_POINT": true, "KANBAN": true}[filter.PlanningType] {
-		return errorsuc.NewValidationError("invalid planning_type")
+		return enumtypes.NewInvalidValue("Tipo de planejamento", filter.PlanningType, "TODOS", "REORDER_POINT", "KANBAN")
 	}
 	if report == "reorder" && !map[string]bool{"": true, "LIBERADOS": true, "LIBERADOS_E_BLOQUEADOS": true}[filter.OrderPosition] {
-		return errorsuc.NewValidationError("invalid order_position")
+		return enumtypes.NewInvalidValue("Posição da ordem", filter.OrderPosition, "LIBERADOS", "LIBERADOS_E_BLOQUEADOS")
 	}
 	if report == "explosion" {
 		if !map[string]bool{"": true, "SIMPLES": true, "CUSTO": true, "SALDO": true, "SALDO_DEM": true}[filter.ExplosionOption] {
-			return errorsuc.NewValidationError("invalid explosion_option")
+			return enumtypes.NewInvalidValue("Opção de explosão", filter.ExplosionOption, "SIMPLES", "CUSTO", "SALDO", "SALDO_DEM")
 		}
 		if !map[string]bool{"": true, "TODOS": true, "FILHOS_IMEDIATOS": true}[filter.ListMode] {
-			return errorsuc.NewValidationError("invalid list_mode")
+			return enumtypes.NewInvalidValue("Modo de listagem", filter.ListMode, "TODOS", "FILHOS_IMEDIATOS")
 		}
 	}
 	return nil
@@ -309,4 +310,17 @@ func (uc *UseCase) ReorderPoint(ctx context.Context, filter Filter) ([]ReportRow
 	}
 	rows, err := uc.Reader.ReorderPoint(ctx, filter)
 	return finalizeRows(rows, filter), err
+}
+
+// layoutsAceitos lista, em ordem estável, os layouts que o relatório aceita —
+// para a recusa dizer ao usuário o que ele podia ter escolhido.
+func layoutsAceitos(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for k := range set {
+		if k != "" {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

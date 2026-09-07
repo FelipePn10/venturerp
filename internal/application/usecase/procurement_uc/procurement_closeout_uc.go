@@ -85,7 +85,7 @@ func (uc *UseCase) UpdateReceivingNoticeStatus(ctx context.Context, id int64, dt
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validNoticeStatus(dto.Status) {
-		return nil, fmt.Errorf("situação %q inválida", dto.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida", dto.Status))
 	}
 	notice, err := uc.Repo.UpdateReceivingNoticeStatus(ctx, id, dto.Status, dto.Blocked)
 	if err != nil {
@@ -99,7 +99,7 @@ func (uc *UseCase) CreateReceivingDivergence(ctx context.Context, dto request.Cr
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validDivergenceType(dto.DivergenceType) {
-		return nil, fmt.Errorf("tipo de divergência %q inválido", dto.DivergenceType)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("tipo de divergência %q inválido", dto.DivergenceType))
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	div := &entity.ReceivingDivergence{
@@ -143,7 +143,7 @@ func (uc *UseCase) ResolveReceivingDivergence(ctx context.Context, id int64, dto
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validDivergenceResolution(dto.Resolution) {
-		return nil, fmt.Errorf("resolução %q inválida", dto.Resolution)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("resolução %q inválida", dto.Resolution))
 	}
 	updated, err := uc.Repo.ResolveReceivingDivergence(ctx, id, dto.Resolution)
 	if err != nil {
@@ -164,14 +164,14 @@ func (uc *UseCase) CreateEDIMessage(ctx context.Context, dto request.CreateEDIMe
 	}
 	dto.EnterpriseCode = enterpriseCode
 	if dto.Direction != "INBOUND" && dto.Direction != "OUTBOUND" {
-		return nil, fmt.Errorf("direção deve ser INBOUND ou OUTBOUND")
+		return nil, errorsuc.NewValidationError("direção deve ser INBOUND ou OUTBOUND")
 	}
 	if !validEDIMessageType(dto.MessageType) {
-		return nil, fmt.Errorf("tipo de mensagem deve ser PO_CONFIRMATION, ASN ou INVOICE")
+		return nil, errorsuc.NewValidationError("tipo de mensagem deve ser PO_CONFIRMATION, ASN ou INVOICE")
 	}
 	payload := dto.Payload
 	if len(payload) == 0 || !json.Valid(payload) {
-		return nil, fmt.Errorf("payload EDI deve ser um JSON válido")
+		return nil, errorsuc.NewValidationError("payload EDI deve ser um JSON válido")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	msg := &entity.SupplierEDIMessage{
@@ -269,16 +269,16 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 		dto.Currency = "USD"
 	}
 	if dto.ExchangeRate <= 0 {
-		return nil, fmt.Errorf("a taxa de câmbio deve ser maior que zero")
+		return nil, errorsuc.NewValidationError("a taxa de câmbio deve ser maior que zero")
 	}
 	if dto.ApportionBasis == "" {
 		dto.ApportionBasis = "VALUE"
 	}
 	if !validApportionBasis(dto.ApportionBasis) {
-		return nil, fmt.Errorf("a base de rateio deve ser valor, peso ou quantidade")
+		return nil, errorsuc.NewValidationError("a base de rateio deve ser valor, peso ou quantidade")
 	}
 	if len(dto.Items) == 0 {
-		return nil, fmt.Errorf("informe ao menos um item para importar")
+		return nil, errorsuc.NewValidationError("informe ao menos um item para importar")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	process := &entity.ImportProcess{
@@ -309,7 +309,7 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 	}
 	for _, e := range dto.Expenses {
 		if e.Amount < 0 {
-			return nil, fmt.Errorf("o valor da despesa deve ser maior ou igual a zero")
+			return nil, errorsuc.NewValidationError("o valor da despesa deve ser maior ou igual a zero")
 		}
 		inCost := true
 		if e.InItemCost != nil {
@@ -373,7 +373,7 @@ func (uc *UseCase) UpdateImportProcessStatus(ctx context.Context, id int64, dto 
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if !validImportStatus(dto.Status) {
-		return nil, fmt.Errorf("situação %q inválida", dto.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida", dto.Status))
 	}
 	p, err := uc.Repo.UpdateImportProcessStatus(ctx, id, dto.Status)
 	if err != nil {
@@ -394,16 +394,16 @@ func (uc *UseCase) UpsertParameter(ctx context.Context, dto request.UpsertProcur
 	}
 	dto.EnterpriseCode = enterpriseCode
 	if !validParameterDomain(dto.Domain) {
-		return nil, fmt.Errorf("domínio deve ser PURCHASE_TABLE, PURCHASE_ORDER, QUOTATION, REQUISITION, RECEIVING_NOTICE, INSPECTION, SUPPLIER_EVALUATION, CONTRACT, SUPPLIER ou NF_ENTRY")
+		return nil, errorsuc.NewValidationError("domínio deve ser PURCHASE_TABLE, PURCHASE_ORDER, QUOTATION, REQUISITION, RECEIVING_NOTICE, INSPECTION, SUPPLIER_EVALUATION, CONTRACT, SUPPLIER ou NF_ENTRY")
 	}
 	if dto.Key == "" {
-		return nil, fmt.Errorf("chave do parâmetro é obrigatória")
+		return nil, errorsuc.NewValidationError("chave do parâmetro é obrigatória")
 	}
 	if dto.ValueType == "" {
 		dto.ValueType = "STRING"
 	}
 	if !validParameterValueType(dto.ValueType) {
-		return nil, fmt.Errorf("tipo do valor deve ser STRING, NUMBER, BOOL ou JSON")
+		return nil, errorsuc.NewValidationError("tipo do valor deve ser STRING, NUMBER, BOOL ou JSON")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	param := &entity.ProcurementParameter{
@@ -444,7 +444,7 @@ func (uc *UseCase) CreateSupplierHomologation(ctx context.Context, dto request.C
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SupplierCode <= 0 {
-		return nil, fmt.Errorf("informe o fornecedor")
+		return nil, errorsuc.NewValidationError("informe o fornecedor")
 	}
 	validUntil, err := parseDatePtr(dto.ValidUntil)
 	if err != nil {
@@ -461,7 +461,7 @@ func (uc *UseCase) CreateSupplierHomologation(ctx context.Context, dto request.C
 	// If a status is not forced, derive it from the IQF over the given period.
 	if dto.Status != "" {
 		if !validHomologationStatus(dto.Status) {
-			return nil, fmt.Errorf("situação %q inválida", dto.Status)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida", dto.Status))
 		}
 		h.Status = dto.Status
 	} else {
@@ -505,7 +505,7 @@ func (uc *UseCase) GenerateItemSuppliers(ctx context.Context, supplierCode int64
 		return 0, errorsuc.ErrUnauthorized
 	}
 	if supplierCode <= 0 {
-		return 0, fmt.Errorf("informe o fornecedor")
+		return 0, errorsuc.NewValidationError("informe o fornecedor")
 	}
 	actor, _ := uc.Auth.UserID(ctx)
 	return uc.Repo.GenerateItemSuppliersFromHistory(ctx, supplierCode, actor)

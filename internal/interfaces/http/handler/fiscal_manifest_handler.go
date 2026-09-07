@@ -23,7 +23,7 @@ func NewFiscalManifestHandler(
 func (h *FiscalManifestHandler) Manifestar(w http.ResponseWriter, r *http.Request) {
 	var dto fiscal_uc.ManifestarDestinatarioDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.manifestUC.Execute(r.Context(), dto)
@@ -37,7 +37,7 @@ func (h *FiscalManifestHandler) Manifestar(w http.ResponseWriter, r *http.Reques
 func (h *FiscalManifestHandler) Inutilizar(w http.ResponseWriter, r *http.Request) {
 	var dto fiscal_uc.InutilizarNumeracaoDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.inutilUC.Execute(r.Context(), dto)

@@ -223,6 +223,10 @@ func (r *Repository) ListInterestClassifications(ctx context.Context, enterprise
 	if contextEnterpriseID != enterpriseID {
 		return nil, fmt.Errorf("empresa informada não corresponde à empresa autenticada")
 	}
+	// A tabela items não tem coluna is_active: o estado do item é health
+	// (ATIVO / INATIVO / FANTASMA). Filtrar por is_active quebrava a consulta
+	// com "column item.is_active does not exist" e a tela de classificações de
+	// interesse do representante respondia 500.
 	rows, err := r.pool.Query(ctx, `
 SELECT DISTINCT classification.id, classification.code, mask.code, mask.mask,
        classification.description, mask.description
@@ -231,7 +235,8 @@ JOIN public.item_classifications classification
   ON classification.id = assignment.classification_id AND classification.is_active
 JOIN public.item_classification_masks mask
   ON mask.id = classification.mask_id AND mask.is_active
-JOIN public.items item ON item.code = assignment.item_code AND item.is_active
+JOIN public.items item
+  ON item.code = assignment.item_code AND item.health = 'ATIVO'
 WHERE assignment.enterprise_id = $1
 ORDER BY mask.code, classification.code`, enterpriseID)
 	if err != nil {

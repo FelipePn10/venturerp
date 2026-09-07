@@ -20,8 +20,20 @@ type Item struct {
 	Name         string
 	Complement   *string
 
-	// Checkbox
+	// Nature guarda a natureza principal e continua alimentada para quem já a
+	// lê. Os marcadores abaixo são independentes: um item pode ser base e
+	// configurado ao mesmo tempo, combinação comum em quem usa o configurador.
 	Nature ItemNature
+	// IsBase indica que o item serve de modelo para criar outros.
+	IsBase bool
+	// IsConfigured indica que o item tem variações resolvidas pelo configurador.
+	IsConfigured bool
+	// IsPrototype marca item em desenvolvimento, de controle manual.
+	IsPrototype bool
+	// IsTool marca ferramenta, que entra no controle de vida útil.
+	IsTool bool
+	// IsProcessItem marca item de processo em terceiros.
+	IsProcessItem bool
 	//---- PDM
 	PDM PDM
 
@@ -168,6 +180,21 @@ type Accounting struct {
 	Notes                            *string
 }
 
+// SyncNature alinha a natureza principal aos marcadores, do mais específico
+// para o mais genérico. Existe porque `nature` ainda é lida em consultas e
+// relatórios: sem isso um item marcado como configurado continuaria gravado
+// como genérico.
+func (i *Item) SyncNature() {
+	switch {
+	case i.IsConfigured:
+		i.Nature = ItemConfigured
+	case i.IsBase:
+		i.Nature = ItemBase
+	default:
+		i.Nature = ItemGeneric
+	}
+}
+
 type ItemNature int
 
 const (
@@ -195,7 +222,7 @@ func (i *Item) Validate() error {
 		i.BusinessCode = valueobject.BusinessCode(fmt.Sprintf("%d", i.Code))
 	}
 	if !i.BusinessCode.IsValid() {
-		return errors.New("invalid code")
+		return errors.New("código inválido")
 	}
 	i.Name = strings.TrimSpace(i.Name)
 	if i.Name == "" {

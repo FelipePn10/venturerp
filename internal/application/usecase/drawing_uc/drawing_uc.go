@@ -66,7 +66,7 @@ func (uc *DrawingUseCase) Update(ctx context.Context, dto request.DrawingDTO) (*
 		return nil, err
 	}
 	if dto.Code == "" {
-		return nil, fmt.Errorf("código do desenho é obrigatório")
+		return nil, errorsuc.NewValidationError("código do desenho é obrigatório")
 	}
 	params := drawingParams(dto, dto.ID)
 	params.EnterpriseID = enterpriseID
@@ -205,7 +205,7 @@ func (uc *DrawingUseCase) AddDistribution(ctx context.Context, revisionID int64,
 		return nil, errorsuc.NewNotFoundError("revisão não encontrada para a empresa")
 	}
 	if dto.Recipient == "" {
-		return nil, fmt.Errorf("destinatário é obrigatório")
+		return nil, errorsuc.NewValidationError("destinatário é obrigatório")
 	}
 	row, err := uc.Q.AddDrawingDistribution(ctx, revisionID, dto.Recipient,
 		pgutil.ToPgDateFromPtr(datetime.ParseDatePtr(&dto.DistributedAt)), textOrNull(dto.Notes))
@@ -296,7 +296,7 @@ func (uc *DrawingUseCase) MaintainItemDrawingCode(ctx context.Context, dto reque
 		return nil, err
 	}
 	if dto.ItemCode == 0 || strings.TrimSpace(dto.DrawingCode) == "" {
-		return nil, fmt.Errorf("item_code e drawing_code são obrigatórios")
+		return nil, errorsuc.NewValidationError("item_code e drawing_code são obrigatórios")
 	}
 	row, err := uc.Q.UpsertItemEngineeringDrawing(ctx, enterpriseID, dto.ItemCode, strings.TrimSpace(dto.Mask), strings.TrimSpace(dto.DrawingCode), pgutil.ToPgUUID(dto.UpdatedBy))
 	if err != nil {

@@ -3,6 +3,7 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -29,10 +30,10 @@ type cartOption struct {
 // dependencies drop invalid combinations; valid masks are optionally persisted.
 func (uc *ConfiguratorUseCase) GenerateMasks(ctx context.Context, dto request.CfgGenerateMasksDTO) (*response.CfgGeneratedMasksResponse, error) {
 	if dto.ItemCode <= 0 {
-		return nil, fmt.Errorf("item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("item_code é obrigatório")
 	}
 	if len(dto.Restrict) == 0 {
-		return nil, fmt.Errorf("é obrigatório restringir ao menos uma característica para reduzir o volume")
+		return nil, errorsuc.NewValidationError("é obrigatório restringir ao menos uma característica para reduzir o volume")
 	}
 	fixed := map[int64][]int64{}
 	for _, r := range dto.Restrict {
@@ -78,7 +79,7 @@ func (uc *ConfiguratorUseCase) GenerateMasks(ctx context.Context, dto request.Cf
 		dims = append(dims, opts)
 	}
 	if len(dims) == 0 {
-		return nil, fmt.Errorf("item %d não possui características do tipo Escolha configuradas", dto.ItemCode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("item %d não possui características do tipo Escolha configuradas", dto.ItemCode))
 	}
 
 	total := 1

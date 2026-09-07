@@ -15,7 +15,7 @@ import (
 func (h *CuttingPlanHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCuttingPlanDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.Create(r.Context(), dto)
@@ -39,7 +39,7 @@ func (h *CuttingPlanHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetDetail(r.Context(), id)
@@ -53,7 +53,7 @@ func (h *CuttingPlanHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) DeletePlan(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.Delete(r.Context(), id); err != nil {
@@ -67,7 +67,7 @@ func (h *CuttingPlanHandler) DeletePlan(w http.ResponseWriter, r *http.Request) 
 func (h *CuttingPlanHandler) Optimize(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.Optimize(r.Context(), id)
@@ -83,7 +83,7 @@ func (h *CuttingPlanHandler) Optimize(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) Release(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.ReleasePlan(r.Context(), id)
@@ -99,7 +99,7 @@ func (h *CuttingPlanHandler) Release(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) GenerateFromOrders(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateCuttingFromOrdersDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.demand.GenerateFromOrders(r.Context(), dto)
@@ -114,7 +114,7 @@ func (h *CuttingPlanHandler) GenerateFromOrders(w http.ResponseWriter, r *http.R
 func (h *CuttingPlanHandler) ExportMap(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	format := r.URL.Query().Get("format")
@@ -136,7 +136,7 @@ func (h *CuttingPlanHandler) ExportMap(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) GetProgram(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.GetProgram(r.Context(), id)
@@ -151,7 +151,7 @@ func (h *CuttingPlanHandler) GetProgram(w http.ResponseWriter, r *http.Request) 
 func (h *CuttingPlanHandler) Schedule(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.ScheduleOnMachine(r.Context(), id)
@@ -166,7 +166,7 @@ func (h *CuttingPlanHandler) Schedule(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) ListOrderCosts(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.uc.ListOrderCosts(r.Context(), id)
@@ -191,7 +191,7 @@ func (h *CuttingPlanHandler) GetSettings(w http.ResponseWriter, r *http.Request)
 func (h *CuttingPlanHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var dto request.CuttingSettingsDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.uc.UpdateSettings(r.Context(), dto)
@@ -224,12 +224,12 @@ func (h *CuttingPlanHandler) ListRemnants(w http.ResponseWriter, r *http.Request
 func (h *CuttingPlanHandler) AddPart(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.AddCuttingPlanPartDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.PlanID = id
@@ -244,7 +244,7 @@ func (h *CuttingPlanHandler) AddPart(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) RemovePart(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid partId")
+		jsonError(w, http.StatusBadRequest, "código da parte inválido")
 		return
 	}
 	if err := h.uc.RemovePart(r.Context(), id); err != nil {
@@ -259,12 +259,12 @@ func (h *CuttingPlanHandler) RemovePart(w http.ResponseWriter, r *http.Request) 
 func (h *CuttingPlanHandler) AddStock(w http.ResponseWriter, r *http.Request) {
 	id, err := planID(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.AddCuttingStockPieceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.PlanID = id
@@ -279,7 +279,7 @@ func (h *CuttingPlanHandler) AddStock(w http.ResponseWriter, r *http.Request) {
 func (h *CuttingPlanHandler) RemoveStock(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "stockId"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid stockId")
+		jsonError(w, http.StatusBadRequest, "código do estoque inválido")
 		return
 	}
 	if err := h.uc.RemoveStock(r.Context(), id); err != nil {

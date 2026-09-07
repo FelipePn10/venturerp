@@ -140,10 +140,25 @@ func respondSalesGoal(w http.ResponseWriter, status int, result any, err error) 
 	security.RespondJSON(w, status, result)
 }
 
+// rotuloDoCodigo traduz o nome do parâmetro da URL para o termo que o usuário
+// reconhece na tela — a recusa dizia "invalid goalCode", que não significa nada
+// para quem está cadastrando uma meta.
+var rotuloDoCodigo = map[string]string{
+	"code":         "código da meta",
+	"goalCode":     "código da meta",
+	"targetCode":   "código do alvo",
+	"customerCode": "código do cliente",
+	"groupCode":    "código do grupo",
+}
+
 func parseSalesGoalCode(w http.ResponseWriter, r *http.Request, key string) (int64, bool) {
 	code, err := strconv.ParseInt(chi.URLParam(r, key), 10, 64)
 	if err != nil || code <= 0 {
-		security.RespondError(w, http.StatusBadRequest, "invalid "+key)
+		rotulo, ok := rotuloDoCodigo[key]
+		if !ok {
+			rotulo = "código informado"
+		}
+		security.RespondError(w, http.StatusBadRequest, rotulo+" inválido")
 		return 0, false
 	}
 	return code, true

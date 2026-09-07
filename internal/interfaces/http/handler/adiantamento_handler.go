@@ -64,7 +64,7 @@ func (h *AdiantamentoHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *AdiantamentoHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), id)
@@ -78,7 +78,7 @@ func (h *AdiantamentoHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *AdiantamentoHandler) Aplicar(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.AplicarAdiantamentoDTO

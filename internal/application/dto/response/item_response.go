@@ -9,12 +9,18 @@ import (
 
 // ItemResponse is the API representation of an item with all its folders.
 type ItemResponse struct {
-	ID              int64                       `json:"id"`
-	Code            string                      `json:"code"`
-	LegacyCode      int64                       `json:"legacy_code"`
-	Name            string                      `json:"name"`
-	Complement      *string                     `json:"complement,omitempty"`
-	Nature          int                         `json:"nature"`
+	ID         int64   `json:"id"`
+	Code       string  `json:"code"`
+	LegacyCode int64   `json:"legacy_code"`
+	Name       string  `json:"name"`
+	Complement *string `json:"complement,omitempty"`
+	Nature     int     `json:"nature"`
+	// Marcadores independentes: um item pode ser base e configurado ao mesmo tempo.
+	IsBase          bool                        `json:"is_base"`
+	IsConfigured    bool                        `json:"is_configured"`
+	IsPrototype     bool                        `json:"is_prototype"`
+	IsTool          bool                        `json:"is_tool"`
+	IsProcessItem   bool                        `json:"is_process_item"`
 	PDM             ItemPDMResponse             `json:"pdm"`
 	Situation       string                      `json:"situation"`
 	Health          string                      `json:"health"`

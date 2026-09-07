@@ -54,7 +54,7 @@ func (uc *ConfiguratorUseCase) UpdateCharacteristic(ctx context.Context, dto req
 		OptionTrue: dto.OptionTrue, OptionFalse: dto.OptionFalse,
 	}
 	if c.Code == "" || c.Description == "" {
-		return nil, fmt.Errorf("código e descrição da característica são obrigatórios")
+		return nil, errorsuc.NewValidationError("código e descrição da característica são obrigatórios")
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (uc *ConfiguratorUseCase) DeactivateCharacteristic(ctx context.Context, id 
 
 func (uc *ConfiguratorUseCase) SetCharacteristicLanguage(ctx context.Context, charID int64, dto request.CfgCharacteristicLanguageDTO) (*response.CfgCharacteristicLanguageResponse, error) {
 	if dto.Language == "" || dto.Description == "" {
-		return nil, fmt.Errorf("idioma e descrição são obrigatórios")
+		return nil, errorsuc.NewValidationError("idioma e descrição são obrigatórios")
 	}
 	row, err := uc.Q.UpsertCfgCharacteristicLanguage(ctx, charID, dto.Language, dto.Description, textOrNull(dto.Mask))
 	if err != nil {

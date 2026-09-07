@@ -24,7 +24,7 @@ func NewEntryOperationHandler(uc *entry_operation_uc.EntryOperationUseCase) *Ent
 func (h *EntryOperationHandler) CreateStateGroup(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateStateGroupDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.CreateStateGroup(r.Context(), dto)
@@ -38,7 +38,7 @@ func (h *EntryOperationHandler) CreateStateGroup(w http.ResponseWriter, r *http.
 func (h *EntryOperationHandler) GetStateGroup(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetStateGroup(r.Context(), code)
@@ -61,12 +61,12 @@ func (h *EntryOperationHandler) ListStateGroups(w http.ResponseWriter, r *http.R
 func (h *EntryOperationHandler) AddStateGroupUF(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.AddStateGroupUFDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	dto.StateGroupCode = code
@@ -82,7 +82,7 @@ func (h *EntryOperationHandler) AddStateGroupUF(w http.ResponseWriter, r *http.R
 func (h *EntryOperationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateEntryOperationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.CreateEntryOperation(r.Context(), dto)
@@ -96,7 +96,7 @@ func (h *EntryOperationHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *EntryOperationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateEntryOperationDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.UpdateEntryOperation(r.Context(), dto)
@@ -110,7 +110,7 @@ func (h *EntryOperationHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *EntryOperationHandler) Get(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetEntryOperation(r.Context(), code)
@@ -135,7 +135,7 @@ func (h *EntryOperationHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *EntryOperationHandler) Validate(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	uf := r.URL.Query().Get("uf")

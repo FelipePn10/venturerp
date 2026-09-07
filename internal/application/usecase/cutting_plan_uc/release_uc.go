@@ -3,6 +3,7 @@ package cutting_plan_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"math"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -425,7 +426,7 @@ func (uc *CuttingPlanUseCase) GetSettings(ctx context.Context) (*response.Cuttin
 func (uc *CuttingPlanUseCase) UpdateSettings(ctx context.Context, dto request.CuttingSettingsDTO) (*response.CuttingSettingsResponse, error) {
 	mode := entity.ConsumptionMode(dto.DefaultConsumptionMode)
 	if mode != entity.ConsumptionAutomatic && mode != entity.ConsumptionManual {
-		return nil, fmt.Errorf("modo de consumo padrão %q inválido: use automático ou manual", dto.DefaultConsumptionMode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("modo de consumo padrão %q inválido: use automático ou manual", dto.DefaultConsumptionMode))
 	}
 	s, err := uc.repo.UpsertSettings(ctx, &entity.CuttingSettings{
 		DefaultConsumptionMode: mode,

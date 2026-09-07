@@ -123,13 +123,13 @@ func purchaseOrderConsultationFilter(r *http.Request) (purchase_order_uc.Purchas
 	if q.Get("limit") != "" {
 		f.Limit, err = strconv.Atoi(q.Get("limit"))
 		if err != nil {
-			return f, fmt.Errorf("invalid limit")
+			return f, fmt.Errorf("limite inválido")
 		}
 	}
 	if q.Get("offset") != "" {
 		f.Offset, err = strconv.Atoi(q.Get("offset"))
 		if err != nil {
-			return f, fmt.Errorf("invalid offset")
+			return f, fmt.Errorf("deslocamento inválido")
 		}
 	}
 	return f, nil
@@ -165,7 +165,7 @@ func parseOptionalBool(s string) (bool, error) {
 func (h *PurchaseOrderHandler) Approve(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.approveUC.Execute(r.Context(), code)
@@ -179,7 +179,7 @@ func (h *PurchaseOrderHandler) Approve(w http.ResponseWriter, r *http.Request) {
 func (h *PurchaseOrderHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.approveUC.Authorize(r.Context(), code)
@@ -208,7 +208,7 @@ func (h *PurchaseOrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdatePurchaseOrderDTO
@@ -229,7 +229,7 @@ func (h *PurchaseOrderHandler) GetByCode(w http.ResponseWriter, r *http.Request)
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
@@ -278,7 +278,7 @@ func (h *PurchaseOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.cancelUC.Execute(r.Context(), code); err != nil {
@@ -292,7 +292,7 @@ func (h *PurchaseOrderHandler) Receive(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "code")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.ReceivePurchaseOrderDTO

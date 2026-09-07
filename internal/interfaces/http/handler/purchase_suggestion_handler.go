@@ -40,7 +40,7 @@ func (h *PurchaseSuggestionHandler) List(w http.ResponseWriter, r *http.Request)
 func (h *PurchaseSuggestionHandler) Approve(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.ApprovePurchaseSuggestionDTO
@@ -60,7 +60,7 @@ func (h *PurchaseSuggestionHandler) Approve(w http.ResponseWriter, r *http.Reque
 func (h *PurchaseSuggestionHandler) Reject(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.rejectUC.Execute(r.Context(), code)

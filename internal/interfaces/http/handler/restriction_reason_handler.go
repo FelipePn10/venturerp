@@ -37,7 +37,7 @@ func (h *RestrictionReasonHandler) List(w http.ResponseWriter, r *http.Request) 
 func (h *RestrictionReasonHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
@@ -51,7 +51,7 @@ func (h *RestrictionReasonHandler) GetByCode(w http.ResponseWriter, r *http.Requ
 func (h *RestrictionReasonHandler) Update(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.UpdateRestrictionReasonDTO
@@ -75,7 +75,7 @@ func (h *RestrictionReasonHandler) Update(w http.ResponseWriter, r *http.Request
 func (h *RestrictionReasonHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.deleteUC.Execute(r.Context(), code); err != nil {

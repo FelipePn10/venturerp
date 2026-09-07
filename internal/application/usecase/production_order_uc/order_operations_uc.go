@@ -3,6 +3,7 @@ package production_order_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -59,12 +60,12 @@ func (uc *OrderOperationsUseCase) ListOperations(ctx context.Context, orderID in
 // AdvanceOperation changes an operation status (PENDING → IN_PROGRESS → DONE).
 func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto request.AdvanceOperationDTO) (*response.ProductionOrderOperationResponse, error) {
 	if dto.OperationID == 0 {
-		return nil, fmt.Errorf("informe a operação")
+		return nil, errorsuc.NewValidationError("informe a operação")
 	}
 	switch dto.Status {
 	case "PENDING", "IN_PROGRESS", "DONE", "SKIPPED":
 	default:
-		return nil, fmt.Errorf("situação %q inválida: use pendente, em andamento, concluída ou dispensada", dto.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida: use pendente, em andamento, concluída ou dispensada", dto.Status))
 	}
 	// Capture the prior status so tool-life is consumed only on the real transition
 	// INTO DONE (advancing an already-DONE operation must not double-consume).

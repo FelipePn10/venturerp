@@ -29,7 +29,7 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.SupplierCode == nil || *dto.SupplierCode <= 0 {
-		return nil, fmt.Errorf("fornecedor é obrigatório")
+		return nil, errorsuc.NewValidationError("fornecedor é obrigatório")
 	}
 	enterpriseCode, err := uc.Auth.EnterpriseCode(ctx)
 	if err != nil {
@@ -50,7 +50,7 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 	if dto.EmissionDate != "" {
 		emissionDate, err = time.Parse("2006-01-02", dto.EmissionDate)
 		if err != nil {
-			return nil, fmt.Errorf("data de emissão inválida; use AAAA-MM-DD")
+			return nil, errorsuc.NewValidationError("data de emissão inválida; use AAAA-MM-DD")
 		}
 	}
 
@@ -130,7 +130,7 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 	if dto.DeliveryDate != nil {
 		t, parseErr := time.Parse("2006-01-02", *dto.DeliveryDate)
 		if parseErr != nil {
-			return nil, fmt.Errorf("data de entrega inválida; use AAAA-MM-DD")
+			return nil, errorsuc.NewValidationError("data de entrega inválida; use AAAA-MM-DD")
 		}
 		o.DeliveryDate = &t
 	}
@@ -158,13 +158,13 @@ func canonicalPurchaseOrderItems(inputs []request.CreatePurchaseOrderItemDTO) ([
 	items := make([]*entity.PurchaseOrderItem, 0, len(inputs))
 	for i, input := range inputs {
 		if input.ItemCode <= 0 || input.RequestedQty <= 0 {
-			return nil, fmt.Errorf("item e quantidade positiva são obrigatórios na linha %d", i+1)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("item e quantidade positiva são obrigatórios na linha %d", i+1))
 		}
 		if input.WarehouseID == nil || *input.WarehouseID <= 0 {
-			return nil, fmt.Errorf("depósito é obrigatório na linha %d", i+1)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("depósito é obrigatório na linha %d", i+1))
 		}
 		if input.UnitPrice < 0 || input.DiscountPct < 0 || input.DiscountPct > 100 {
-			return nil, fmt.Errorf("preço ou desconto inválido na linha %d", i+1)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("preço ou desconto inválido na linha %d", i+1))
 		}
 		gross := input.RequestedQty * input.UnitPrice
 		line := &entity.PurchaseOrderItem{
@@ -194,14 +194,14 @@ func canonicalPurchaseOrderItems(inputs []request.CreatePurchaseOrderItemDTO) ([
 		if input.DeliveryDate != nil {
 			d, err := time.Parse("2006-01-02", *input.DeliveryDate)
 			if err != nil {
-				return nil, fmt.Errorf("data de entrega inválida na linha %d", i+1)
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("data de entrega inválida na linha %d", i+1))
 			}
 			line.DeliveryDate = &d
 		}
 		if input.PromisedDate != nil {
 			d, err := time.Parse("2006-01-02", *input.PromisedDate)
 			if err != nil {
-				return nil, fmt.Errorf("data prometida inválida na linha %d", i+1)
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("data prometida inválida na linha %d", i+1))
 			}
 			line.PromisedDate = &d
 		}

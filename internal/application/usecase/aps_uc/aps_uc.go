@@ -208,17 +208,17 @@ func (uc *APSUseCase) ListSequencingResources(ctx context.Context) ([]response.S
 
 func (uc *APSUseCase) ViewSequencing(ctx context.Context, dto request.SequencingViewDTO) ([]*response.GanttTaskResponse, error) {
 	if dto.ResourceGroupID <= 0 {
-		return nil, fmt.Errorf("informe o grupo de recursos")
+		return nil, errorsuc.NewValidationError("informe o grupo de recursos")
 	}
 	if dto.From.IsZero() || dto.To.IsZero() || !dto.To.After(dto.From) {
 		return nil, fmt.Errorf("as datas inicial e final devem formar um intervalo válido")
 	}
 	unit := strings.ToUpper(strings.TrimSpace(dto.TimeUnit))
 	if unit != "" && unit != "HOUR" && unit != "MINUTE" && unit != "HORA" && unit != "MINUTO" {
-		return nil, fmt.Errorf("a unidade de tempo deve ser hora ou minuto")
+		return nil, errorsuc.NewValidationError("a unidade de tempo deve ser hora ou minuto")
 	}
 	if dto.RefreshValue < 0 {
-		return nil, fmt.Errorf("o intervalo de atualização não pode ser negativo")
+		return nil, errorsuc.NewValidationError("o intervalo de atualização não pode ser negativo")
 	}
 	repo, ok := uc.repo.(repository.SelectionRepository)
 	if !ok {
@@ -281,7 +281,7 @@ func (uc *APSUseCase) UpsertResourceGroup(ctx context.Context, dto request.Resou
 	dto.Code = strings.TrimSpace(dto.Code)
 	dto.Description = strings.TrimSpace(dto.Description)
 	if dto.Code == "" || dto.Description == "" {
-		return response.ResourceGroupResponse{}, fmt.Errorf("informe o código e a descrição")
+		return response.ResourceGroupResponse{}, errorsuc.NewValidationError("informe o código e a descrição")
 	}
 	v, err := repo.UpsertResourceGroup(ctx, dto.Code, dto.Description)
 	return response.ResourceGroupResponse{ID: v.ID, Code: v.Code, Description: v.Description}, err
@@ -307,12 +307,12 @@ func (uc *APSUseCase) UpsertMachineCalendar(ctx context.Context, dto request.Mac
 		return response.MachineCalendarResponse{}, err
 	}
 	if dto.Code <= 0 || strings.TrimSpace(dto.Description) == "" {
-		return response.MachineCalendarResponse{}, fmt.Errorf("informe o código e a descrição")
+		return response.MachineCalendarResponse{}, errorsuc.NewValidationError("informe o código e a descrição")
 	}
 	intervals := make([]repository.MachineCalendarInterval, 0, len(dto.Intervals))
 	for _, v := range dto.Intervals {
 		if v.Weekday < 0 || v.Weekday > 6 || v.Start == "" || v.End == "" {
-			return response.MachineCalendarResponse{}, fmt.Errorf("intervalo de calendário inválido")
+			return response.MachineCalendarResponse{}, errorsuc.NewValidationError("intervalo de calendário inválido")
 		}
 		intervals = append(intervals, repository.MachineCalendarInterval{Weekday: v.Weekday, Start: v.Start, End: v.End})
 	}
@@ -354,13 +354,13 @@ func (uc *APSUseCase) UpdateWorkCenterSequencing(ctx context.Context, id int64, 
 		return err
 	}
 	if id <= 0 {
-		return fmt.Errorf("centro de trabalho inválido")
+		return errorsuc.NewValidationError("centro de trabalho inválido")
 	}
 	if dto.MachineCostCenterID != nil && dto.LaborCostCenterID != nil && *dto.MachineCostCenterID == *dto.LaborCostCenterID {
-		return fmt.Errorf("o centro de custo de mão de obra deve ser diferente do centro de custo da máquina")
+		return errorsuc.NewValidationError("o centro de custo de mão de obra deve ser diferente do centro de custo da máquina")
 	}
 	if strings.TrimSpace(dto.CapacityHours) == "" {
-		return fmt.Errorf("informe as horas de capacidade")
+		return errorsuc.NewValidationError("informe as horas de capacidade")
 	}
 	return repo.UpdateWorkCenterSequencing(ctx, id, dto.MachineCostCenterID, dto.LaborCostCenterID, dto.CapacityHours)
 }
@@ -409,7 +409,7 @@ func (uc *APSUseCase) ListMachineDowntimes(ctx context.Context, machineID int64,
 		return nil, err
 	}
 	if from.IsZero() || !to.After(from) {
-		return nil, fmt.Errorf("informe as datas inicial e final")
+		return nil, errorsuc.NewValidationError("informe as datas inicial e final")
 	}
 	rows, err := repo.ListMachineDowntimes(ctx, machineID, from, to)
 	if err != nil {
@@ -437,7 +437,7 @@ func (uc *APSUseCase) UpsertEmployeeSequencingProfile(ctx context.Context, id in
 		return err
 	}
 	if id <= 0 || strings.TrimSpace(dto.CreditLimit) == "" {
-		return fmt.Errorf("informe o funcionário e o limite de crédito")
+		return errorsuc.NewValidationError("informe o funcionário e o limite de crédito")
 	}
 	p := repository.EmployeeSequencingProfile{CreditLimit: dto.CreditLimit, ValidUntil: dto.ValidUntil}
 	for _, v := range dto.Contacts {
@@ -446,13 +446,13 @@ func (uc *APSUseCase) UpsertEmployeeSequencingProfile(ctx context.Context, id in
 			return fmt.Errorf("invalid contact_type")
 		}
 		if strings.TrimSpace(v.Value) == "" {
-			return fmt.Errorf("informe o valor do contato")
+			return errorsuc.NewValidationError("informe o valor do contato")
 		}
 		p.Contacts = append(p.Contacts, repository.EmployeeContact{ContactType: kind, Value: strings.TrimSpace(v.Value), IsPrimary: v.IsPrimary})
 	}
 	for _, v := range dto.Functions {
 		if strings.TrimSpace(v.FunctionName) == "" {
-			return fmt.Errorf("informe o nome da função")
+			return errorsuc.NewValidationError("informe o nome da função")
 		}
 		p.Functions = append(p.Functions, repository.EmployeeFunction{FunctionName: strings.TrimSpace(v.FunctionName), CostCenterID: v.CostCenterID, IsSupervisor: v.IsSupervisor, IsManager: v.IsManager})
 	}
@@ -465,19 +465,19 @@ func (uc *APSUseCase) UpsertMachineIndustrialProfile(ctx context.Context, id int
 	}
 	unit := strings.ToUpper(strings.TrimSpace(dto.PreparationTimeUnit))
 	if id <= 0 || strings.TrimSpace(dto.PreparationTime) == "" || (unit != "MINUTE" && unit != "HOUR") {
-		return fmt.Errorf("informe a máquina, o tempo de preparação e uma unidade válida")
+		return errorsuc.NewValidationError("informe a máquina, o tempo de preparação e uma unidade válida")
 	}
 	p := repository.MachineIndustrialProfile{UsageDescription: dto.UsageDescription, AcquiredOn: dto.AcquiredOn, PreparationTime: dto.PreparationTime, PreparationTimeUnit: unit, SupplierCode: dto.SupplierCode, Brand: dto.Brand, IsPreferred: dto.IsPreferred, MaintenanceResponsibleEmployeeID: dto.MaintenanceResponsibleEmployeeID}
 	for _, s := range dto.Services {
 		stype := strings.ToUpper(s.ServiceType)
 		funit := strings.ToUpper(s.FrequencyUnit)
 		if s.ServiceCode == "" || s.Description == "" || s.FrequencyValue <= 0 {
-			return fmt.Errorf("serviço preventivo inválido")
+			return errorsuc.NewValidationError("serviço preventivo inválido")
 		}
 		service := repository.MachineService{ServiceCode: s.ServiceCode, Description: s.Description, ServiceType: stype, FrequencyValue: s.FrequencyValue, FrequencyUnit: funit, MaxTolerance: s.MaxTolerance, SupplierCode: s.SupplierCode, ImplementedOn: s.ImplementedOn, LastExecutedOn: s.LastExecutedOn, Notes: s.Notes, ResponsibleEmployeeIDs: s.ResponsibleEmployeeIDs}
 		for _, i := range s.Items {
 			if i.ItemCode <= 0 || i.Quantity == "" {
-				return fmt.Errorf("item de serviço inválido")
+				return errorsuc.NewValidationError("item de serviço inválido")
 			}
 			service.Items = append(service.Items, repository.ServiceItem{ItemCode: i.ItemCode, Quantity: i.Quantity, Notes: i.Notes})
 		}
@@ -526,7 +526,7 @@ func (uc *APSUseCase) GetMachineIndustrialProfile(ctx context.Context, id int64)
 func validateContact(v request.EmployeeContactDTO) (repository.EmployeeContact, error) {
 	kind := strings.ToUpper(strings.TrimSpace(v.ContactType))
 	if (kind != "PHONE" && kind != "EMAIL") || strings.TrimSpace(v.Value) == "" {
-		return repository.EmployeeContact{}, fmt.Errorf("informe um tipo de contato válido e o valor")
+		return repository.EmployeeContact{}, errorsuc.NewValidationError("informe um tipo de contato válido e o valor")
 	}
 	return repository.EmployeeContact{ContactType: kind, Value: strings.TrimSpace(v.Value), IsPrimary: v.IsPrimary}, nil
 }
@@ -536,7 +536,7 @@ func (uc *APSUseCase) UpdateEmployeeContact(ctx context.Context, employeeID, con
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("informe um funcionário e um contato válidos")
+		return errorsuc.NewValidationError("informe um funcionário e um contato válidos")
 	}
 	repo, e := uc.configurationRepo()
 	if e != nil {
@@ -554,7 +554,7 @@ func (uc *APSUseCase) DeleteEmployeeContact(ctx context.Context, employeeID, con
 func validateFunction(v request.EmployeeFunctionDTO) (repository.EmployeeFunction, error) {
 	name := strings.TrimSpace(v.FunctionName)
 	if name == "" {
-		return repository.EmployeeFunction{}, fmt.Errorf("informe o nome da função")
+		return repository.EmployeeFunction{}, errorsuc.NewValidationError("informe o nome da função")
 	}
 	return repository.EmployeeFunction{FunctionName: name, CostCenterID: v.CostCenterID, IsSupervisor: v.IsSupervisor, IsManager: v.IsManager}, nil
 }
@@ -580,7 +580,7 @@ func validateService(s request.MachineServiceDTO) (repository.MachineService, er
 	st := strings.ToUpper(strings.TrimSpace(s.ServiceType))
 	fu := strings.ToUpper(strings.TrimSpace(s.FrequencyUnit))
 	if strings.TrimSpace(s.ServiceCode) == "" || strings.TrimSpace(s.Description) == "" || (st != "ELECTRICAL" && st != "MECHANICAL" && st != "BOTH") || s.FrequencyValue <= 0 || (fu != "DAY" && fu != "WEEK" && fu != "MONTH" && fu != "YEAR" && fu != "UNIT") || s.ImplementedOn.IsZero() {
-		return repository.MachineService{}, fmt.Errorf("serviço preventivo inválido")
+		return repository.MachineService{}, errorsuc.NewValidationError("serviço preventivo inválido")
 	}
 	return repository.MachineService{ServiceCode: strings.TrimSpace(s.ServiceCode), Description: strings.TrimSpace(s.Description), ServiceType: st, FrequencyValue: s.FrequencyValue, FrequencyUnit: fu, MaxTolerance: s.MaxTolerance, SupplierCode: s.SupplierCode, ImplementedOn: s.ImplementedOn, LastExecutedOn: s.LastExecutedOn, Notes: s.Notes, ResponsibleEmployeeIDs: s.ResponsibleEmployeeIDs}, nil
 }
@@ -604,7 +604,7 @@ func (uc *APSUseCase) DeleteMachineService(ctx context.Context, machineID, servi
 }
 func validateServiceItem(i request.ServiceItemDTO) (repository.ServiceItem, error) {
 	if i.ItemCode <= 0 || strings.TrimSpace(i.Quantity) == "" {
-		return repository.ServiceItem{}, fmt.Errorf("informe o item e a quantidade")
+		return repository.ServiceItem{}, errorsuc.NewValidationError("informe o item e a quantidade")
 	}
 	return repository.ServiceItem{ItemCode: i.ItemCode, Quantity: i.Quantity, Notes: i.Notes}, nil
 }

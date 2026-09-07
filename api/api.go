@@ -278,7 +278,7 @@ func (app *application) mount() chi.Router {
 	itemHandler := handler.NewCreateItemHandler(createItemUc, updateItemUc, findItemByCodeUc, listItemsUC, listItemsWithMasksUC)
 
 	// Item Structure
-	itemRepoStructure := structure.NewItemStructureRepository(queries)
+	itemRepoStructure := structure.NewItemStructureRepository(queries).WithHistory(app.db.Pool)
 	createStructureUc := structure_uc.NewCreateStructureComponentUseCase(itemRepoStructure, authService, itemRepo)
 	updateStructureUc := structure_uc.NewUpdateStructureComponentUseCase(itemRepoStructure, authService, itemRepo)
 	getAllStructureUc := structure_uc.NewGetAllDirectChildrenUseCase(itemRepoStructure, authService, itemRepo)
@@ -364,14 +364,14 @@ func (app *application) mount() chi.Router {
 	// restriction
 	restrictionR := restrictionRepo.NewRestrictionRepositorySQLC(queries)
 	restrictionReasonR := restrictionRepo.NewRestrictionReasonRepositorySQLC(queries)
-	createRestrictionUC := &restriction_uc.CreateRestrictionUseCase{Repo: restrictionR, Auth: authService}
+	createRestrictionUC := &restriction_uc.CreateRestrictionUseCase{Repo: restrictionR, Auth: authService, Items: itemRepo}
 	getRestrictionUC := &restriction_uc.GetRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	listRestrictionsUC := &restriction_uc.ListRestrictionsUseCase{Repo: restrictionR, Auth: authService}
-	getRestrictionsByItemUC := &restriction_uc.GetRestrictionsByItemUseCase{Repo: restrictionR, Auth: authService}
+	getRestrictionsByItemUC := &restriction_uc.GetRestrictionsByItemUseCase{Repo: restrictionR, Auth: authService, Items: itemRepo}
 	getRestrictionsByCustomerUC := &restriction_uc.GetRestrictionsByCustomerUseCase{Repo: restrictionR, Auth: authService}
 	updateRestrictionUC := &restriction_uc.UpdateRestrictionUseCase{Repo: restrictionR, Auth: authService}
 	deactivateRestrictionUC := &restriction_uc.DeactivateRestrictionUseCase{Repo: restrictionR, Auth: authService}
-	evaluateRestrictionsUC := &restriction_uc.EvaluateRestrictionsUseCase{Repo: restrictionR}
+	evaluateRestrictionsUC := &restriction_uc.EvaluateRestrictionsUseCase{Repo: restrictionR, Items: itemRepo}
 	restrictionHandler := handler.NewRestrictionHandler(
 		createRestrictionUC, getRestrictionUC, listRestrictionsUC,
 		getRestrictionsByItemUC, getRestrictionsByCustomerUC,
@@ -523,11 +523,15 @@ func (app *application) mount() chi.Router {
 	toolSheetHandler := handler.NewToolSheetHandler(tool_sheet_uc.New(queries))
 
 	// Configurador de Produto (Fase 1)
-	configuratorUC := configurator_uc.New(queries).WithRestrictions(evaluateRestrictionsUC)
+	configuratorUC := configurator_uc.New(queries).WithRestrictions(evaluateRestrictionsUC).WithItems(itemRepo)
 	configuratorHandler := handler.NewConfiguratorHandler(configuratorUC)
 
 	// Configurador embutido na Estrutura de Produto (VENT0210): sem tela própria,
 	// é um botão da estrutura que abre o painel e aplica a configuração.
+	structureExtrasHandler := handler.NewStructureExtrasHandler(
+		&structure_uc.SimulateQuantityFormulaUseCase{},
+		&structure_uc.ListStructureHistoryUseCase{Repo: itemRepoStructure, Items: itemRepo},
+	)
 	structureConfiguratorHandler := handler.NewStructureConfiguratorHandler(
 		structure_uc.NewStructureConfiguratorUseCase(configuratorUC, queryStructureUc, authService, itemRepo))
 
@@ -1235,6 +1239,10 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resolve/{itemCode}", queryStructureHandler.ResolveStructure)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consult", queryStructureHandler.ConsultStructure)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/where-used/{itemCode}", queryStructureHandler.WhereUsed)
+				// Conferências da tela de estrutura: simular a fórmula antes de
+				// gravar e ver quem alterou o quê depois.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/simulate-formula", structureExtrasHandler.SimulateFormula)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{itemCode}/history", structureExtrasHandler.History)
 				// Configurador embutido: um botão da própria estrutura, não uma tela.
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{itemCode}/configurator", structureConfiguratorHandler.Panel)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{itemCode}/configurator/apply", structureConfiguratorHandler.Apply)

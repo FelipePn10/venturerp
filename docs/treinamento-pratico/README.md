@@ -7,11 +7,30 @@ da Tecnofer (RN 01001, RN 01007 e SU 02046).
 
 | Arquivo | Conteúdo | Páginas |
 |---|---|---|
-| `dia-um.pdf` | Do cadastro do produto à saída do acabado — classificação, itens em 4 níveis, estrutura (BOM), máquinas, roteiros, orçamento → pedido de venda, MRP, CRP, APS, ordens, plano de corte, estoque, inspeção e romaneio | 41 |
+| `dia-um.pdf` | Do cadastro do produto à saída do acabado — classificação, itens em 4 níveis, estrutura (BOM) com fórmulas e histórico, máquinas, operações com modelo de tempo completo, roteiros com tempo e custo por lote, configurador de produto, orçamento → pedido de venda, MRP, CRP, APS, ordens, plano de corte, estoque, inspeção (final e de recebimento) e romaneio | 68 |
 | `dia-dois.pdf` | Fiscal, financeiro, custos e contabilidade — configuração fiscal, CFOPs, NCM, NF-e de saída e entrada, industrialização em terceiro, contas a pagar/receber, fluxo de caixa, custo padrão, formação de preço, plano de contas, apuração e SPED | 26 |
 
 Cada dia é de **4 horas (08h00–12h00)**, com agenda cronometrada, passo a passo campo a campo,
 caixas de destaque, exercícios práticos, checklists e anexos com todos os dados de cadastro prontos.
+
+### Atualização de setembro/2026
+
+O Dia 1 foi revisto para acompanhar as telas de engenharia:
+
+- **Roteiro de fabricação** mudou de código: `VPRO0100` deixou de existir e a tela é a **VENT0202**
+  (roteiro por item) / **VENT0115** (roteiros padrão).
+- **Modelo de tempo completo** na operação — preparação por lote, tempo de máquina, mão de obra,
+  peças por ciclo, operadores, fila, espera e movimentação — e a unidade dos tempos passou a aceitar
+  minutos, o que dispensa converter a ficha para horas.
+- **Tempo e custo do lote**: novo bloco que simula o roteiro para um tamanho de lote e mostra o custo
+  por peça (seção 4.4.8).
+- **Terceirização na própria operação** (fornecedor, item de serviço, custo por peça, prazo, remessa).
+- **Estrutura de produto**: painel de detalhe com vigência, alternativos, consumo e custo; simulação
+  de fórmula; histórico de alterações; botão Conferir.
+- **Cadastro de item**: natureza virou marcadores combináveis (um item pode ser base *e* configurado)
+  e passou a ser possível **abrir um item para alterar** (seção 3.4.2).
+- **Configurador de Produto** (VCFG0100) documentado na seção 4.6, com restrições e auditoria.
+- **Roteiro de inspeção de recebimento** (VINS0200) na seção 6.9.1, com plano de amostragem.
 
 ## Estrutura de itens adotada
 

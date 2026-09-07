@@ -136,7 +136,7 @@ func (uc *RouteUseCase) GetDetail(ctx context.Context, id int64) (*response.Rout
 
 func (uc *RouteUseCase) AddResource(ctx context.Context, dto request.AddRouteOpResourceDTO) (*response.RouteOpResourceResponse, error) {
 	if dto.RouteOperationID <= 0 || dto.WorkCenterID <= 0 {
-		return nil, fmt.Errorf("informe a operação do roteiro e o centro de trabalho")
+		return nil, errorsuc.NewValidationError("informe a operação do roteiro e o centro de trabalho")
 	}
 	tf := dto.TimeFactor
 	if tf <= 0 {
@@ -251,7 +251,7 @@ func (uc *RouteUseCase) resolveItemCode(ctx context.Context, publicCode request.
 	}
 	code, err := strconv.ParseInt(publicCode.String(), 10, 64)
 	if err != nil || code <= 0 {
-		return 0, fmt.Errorf("item_code deve ser um código de item válido")
+		return 0, errorsuc.NewValidationError("item_code deve ser um código de item válido")
 	}
 	return code, nil
 }
@@ -262,7 +262,7 @@ func (uc *RouteUseCase) Deactivate(ctx context.Context, id int64) error {
 
 func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOperationDTO) (*response.RouteOperationResponse, error) {
 	if dto.TimeUnit != nil && !validTimeUnit(*dto.TimeUnit) {
-		return nil, fmt.Errorf("unidade de tempo %q inválida: use minuto, hora ou dia", *dto.TimeUnit)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", *dto.TimeUnit))
 	}
 	remittance, err := normalizeThirdPartyRemittancePtr(dto.ThirdPartyRemittance)
 	if err != nil {
@@ -306,7 +306,7 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 
 func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateRouteOperationDTO) (*response.RouteOperationResponse, error) {
 	if dto.TimeUnit != nil && !validTimeUnit(*dto.TimeUnit) {
-		return nil, fmt.Errorf("unidade de tempo %q inválida: use minuto, hora ou dia", *dto.TimeUnit)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", *dto.TimeUnit))
 	}
 	remittance, err := normalizeThirdPartyRemittancePtr(dto.ThirdPartyRemittance)
 	if err != nil {
@@ -362,7 +362,7 @@ func (uc *RouteUseCase) RemoveOperation(ctx context.Context, id int64) error {
 
 func (uc *RouteUseCase) SetEdge(ctx context.Context, dto request.SetNetworkEdgeDTO) (*response.NetworkEdgeResponse, error) {
 	if dto.OverlapPct < 0 || dto.OverlapPct > 100 {
-		return nil, fmt.Errorf("a sobreposição deve estar entre 0 e 100")
+		return nil, errorsuc.NewValidationError("a sobreposição deve estar entre 0 e 100")
 	}
 	edge := &entity.NetworkEdge{
 		PredecessorID: dto.PredecessorID,

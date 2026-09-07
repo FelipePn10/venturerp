@@ -21,7 +21,7 @@ func NewCTeAuthorizeHandler(authorizeUC *fiscal_uc.AuthorizeCTeUseCase) *CTeAuth
 func (h *CTeAuthorizeHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.authorizeUC.Execute(r.Context(), id)

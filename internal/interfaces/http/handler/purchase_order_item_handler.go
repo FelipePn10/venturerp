@@ -24,7 +24,7 @@ func NewPurchaseOrderItemHandler(addUC *purchase_order_uc.AddPurchaseOrderItemUs
 func (h *PurchaseOrderItemHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CreatePurchaseOrderItemDTO

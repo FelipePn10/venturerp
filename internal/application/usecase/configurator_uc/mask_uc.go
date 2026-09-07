@@ -22,7 +22,7 @@ import (
 // mask value object (# join + 8-char sha256).
 func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.CfgGenerateMaskDTO) (*response.CfgGeneratedMaskResponse, error) {
 	if dto.ItemCode <= 0 {
-		return nil, fmt.Errorf("item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("item_code é obrigatório")
 	}
 	itemChars, err := uc.Q.ListCfgItemCharacteristics(ctx, dto.ItemCode)
 	if err != nil {
@@ -122,7 +122,7 @@ func (uc *ConfiguratorUseCase) resolveAnswer(
 	case entity.TypeInfCaracter:
 		val := firstValue(provided)
 		if val == "" && char.IsRequired {
-			return "", nil, fmt.Errorf("característica %s é de preenchimento obrigatório", char.Code)
+			return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s é de preenchimento obrigatório", char.Code))
 		}
 		return val, nil, nil
 	case entity.TypeInfNumerica:
@@ -201,7 +201,7 @@ func resolveNumeric(char sqlc.DBCfgCharacteristic, val string) (string, *int64, 
 	if char.NumMultiple.Valid {
 		m := pgutil.FromPgNumericToFloat64(char.NumMultiple)
 		if m > 0 && math.Mod(n, m) != 0 {
-			return "", nil, fmt.Errorf("característica %s: valor deve ser múltiplo de %g", char.Code, m)
+			return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s: valor deve ser múltiplo de %g", char.Code, m))
 		}
 	}
 	return val, nil, nil

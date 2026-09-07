@@ -49,7 +49,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		return nil, err
 	}
 	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization {
-		return nil, fmt.Errorf("NF-e deve estar em rascunho para autorizar, status atual: %s", exit.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e deve estar em rascunho para autorizar, status atual: %s", exit.Status))
 	}
 
 	items, err := uc.Repo.GetExitItems(ctx, id)

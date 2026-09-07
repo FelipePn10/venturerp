@@ -3,6 +3,7 @@ package shipment_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -163,10 +164,10 @@ func (uc *ShipmentUseCase) ConferItem(ctx context.Context, shipmentCode, itemID 
 		return err
 	}
 	if ship.Status == entity.ShipmentStatusShipped || ship.Status == entity.ShipmentStatusCancelled {
-		return fmt.Errorf("romaneio %d não pode ser conferido no status %s", shipmentCode, ship.Status)
+		return errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não pode ser conferido no status %s", shipmentCode, ship.Status))
 	}
 	if conferredQty < 0 {
-		return fmt.Errorf("quantidade conferida não pode ser negativa")
+		return errorsuc.NewValidationError("quantidade conferida não pode ser negativa")
 	}
 	return uc.Repo.ConferItem(ctx, itemID, conferredQty)
 }
@@ -322,8 +323,8 @@ func (uc *ShipmentUseCase) ListEvents(ctx context.Context, shipmentCode int64) (
 
 func guardTransition(ship *entity.Shipment, next entity.ShipmentStatus) error {
 	if !ship.Status.CanTransitionTo(next) {
-		return fmt.Errorf("transição inválida: romaneio %d está %s e não pode ir para %s",
-			ship.Code, ship.Status, next)
+		return errorsuc.NewValidationError(fmt.Sprintf("transição inválida: romaneio %d está %s e não pode ir para %s",
+			ship.Code, ship.Status, next))
 	}
 	return nil
 }

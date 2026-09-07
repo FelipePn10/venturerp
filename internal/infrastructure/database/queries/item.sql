@@ -6,6 +6,11 @@ INSERT INTO items (
     name,
     complement,
     nature,
+    is_base,
+    is_configured,
+    is_prototype,
+    is_tool,
+    is_process_item,
     situation,
     health,
 
@@ -64,7 +69,9 @@ INSERT INTO items (
     created_at
 ) VALUES (
              sqlc.arg(enterprise_id), sqlc.arg(business_code), sqlc.arg(warehouse_code), sqlc.arg(name), sqlc.arg(complement),
-             sqlc.arg(nature), sqlc.arg(situation), sqlc.arg(health), sqlc.arg(pdm_group_code), sqlc.arg(pdm_modifier_code),
+             sqlc.arg(nature), sqlc.arg(is_base), sqlc.arg(is_configured), sqlc.arg(is_prototype),
+             sqlc.arg(is_tool), sqlc.arg(is_process_item),
+             sqlc.arg(situation), sqlc.arg(health), sqlc.arg(pdm_group_code), sqlc.arg(pdm_modifier_code),
              sqlc.arg(pdm_attributes), sqlc.arg(pdm_description_technique), sqlc.arg(warehouse_unit_of_measurement),
              sqlc.arg(warehouse_automatic_low), sqlc.arg(warehouse_cyclical_count_config), sqlc.arg(warehouse_minimum_stock),
              sqlc.arg(warehouse_avg_monthly_consumption_manual), sqlc.arg(engineering_item_base_code), sqlc.arg(engineering_weight),
@@ -89,8 +96,47 @@ INSERT INTO items (
          )
     RETURNING *;
 
--- name: UpdateItemCommercialAccounting :one
+-- name: UpdateItemFolders :one
+-- Alteração do item já cadastrado: identificação, marcadores de natureza e
+-- todas as pastas que a tela VENT0200 edita. Antes só gravava Comercial e
+-- Contábil, o que deixava nome, natureza, engenharia e planejamento sem como
+-- serem corrigidos depois do cadastro.
 UPDATE items SET
+ name=sqlc.arg(name),
+ complement=sqlc.narg(complement),
+ nature=sqlc.arg(nature),
+ is_base=sqlc.arg(is_base),
+ is_configured=sqlc.arg(is_configured),
+ is_prototype=sqlc.arg(is_prototype),
+ is_tool=sqlc.arg(is_tool),
+ is_process_item=sqlc.arg(is_process_item),
+ situation=sqlc.arg(situation),
+ health=sqlc.arg(health),
+ pdm_description_technique=sqlc.arg(pdm_description_technique),
+ pdm_group_code=sqlc.arg(pdm_group_code),
+ pdm_modifier_code=sqlc.arg(pdm_modifier_code),
+ engineering_weight=sqlc.arg(engineering_weight),
+ engineering_dimensions=sqlc.narg(engineering_dimensions),
+ engineering_type=sqlc.arg(engineering_type),
+ engineering_type_struct=sqlc.arg(engineering_type_struct),
+ engineering_oem=sqlc.arg(engineering_oem),
+ planning_type_mrp=sqlc.arg(planning_type_mrp),
+ planning_llc=sqlc.arg(planning_llc),
+ planning_ghost=sqlc.arg(planning_ghost),
+ planning_abc_class=sqlc.narg(planning_abc_class),
+ planning_minimum_lot=sqlc.arg(planning_minimum_lot),
+ planning_multiple_lot=sqlc.arg(planning_multiple_lot),
+ planning_safety_stock=sqlc.arg(planning_safety_stock),
+ planning_critical=sqlc.arg(planning_critical),
+ planning_exclusive=sqlc.arg(planning_exclusive),
+ planning_active=sqlc.arg(planning_active),
+ supplies_type_of_use=sqlc.arg(supplies_type_of_use),
+ supplies_purchase_uom=sqlc.narg(supplies_purchase_uom),
+ supplies_receiving_checklist=sqlc.arg(supplies_receiving_checklist),
+ supplies_harvest=sqlc.arg(supplies_harvest),
+ warehouse_unit_of_measurement=sqlc.arg(warehouse_unit_of_measurement),
+ warehouse_automatic_low=sqlc.arg(warehouse_automatic_low),
+ warehouse_minimum_stock=sqlc.arg(warehouse_minimum_stock),
  commercial_description=$2, commercial_sale_type=$3, commercial_volume_conversion_factor=$4,
  commercial_sale_multiple=$5, commercial_minimum_sale_quantity=$6, commercial_estimated_delivery_days=$7,
  commercial_warranty_days=$8, commercial_transfer_warehouse_code=$9, commercial_technical_assistance_warehouse_code=$10,

@@ -3,6 +3,7 @@ package quality_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -91,7 +92,7 @@ func (uc *QualityUseCase) AddCharacteristic(ctx context.Context, dto request.Add
 
 func (uc *QualityUseCase) CreateRecord(ctx context.Context, dto request.CreateQualityRecordDTO) (*response.QualityRecordResponse, error) {
 	if dto.InspectedQty <= 0 {
-		return nil, fmt.Errorf("a quantidade inspecionada deve ser maior que zero")
+		return nil, errorsuc.NewValidationError("a quantidade inspecionada deve ser maior que zero")
 	}
 	rec := &entity.QualityRecord{
 		PlanID:            dto.PlanID,

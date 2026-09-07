@@ -13,7 +13,18 @@ type CreateMachineTypeDTO struct {
 	RequiresOperator bool                  `json:"requires_operator"`
 	// CreatedBy vem do JWT; nunca do corpo da requisição.
 	CreatedBy uuid.UUID `json:"-"`
-	IsActive  bool      `json:"is_active"`
+	// IsActive é ponteiro para distinguir "não informado" de "false". Sem isso o
+	// centro de trabalho nascia inativo e sumia de todas as consultas — e a
+	// criação de máquina o recusava com um erro que não explicava o motivo.
+	IsActive *bool `json:"is_active,omitempty"`
+}
+
+// AtivoOuPadrao devolve o valor informado ou `true`, que é o esperado ao criar.
+func (d CreateMachineTypeDTO) AtivoOuPadrao() bool {
+	if d.IsActive == nil {
+		return true
+	}
+	return *d.IsActive
 }
 
 type UpdateMachineTypeDTO struct {
@@ -34,9 +45,17 @@ type CreateMachineDTO struct {
 	CapacityUnit    types.MachineCapacityUnit `json:"capacity_per_unit"`
 	CapacityPeriod  types.CapacityPeriod      `json:"capacity_period"`
 	EfficiencyRate  float64                   `json:"efficiency_rate"`
-	IsActive        bool                      `json:"is_active"`
+	// Mesmo motivo do tipo de máquina: omitir passa a significar "ativa".
+	IsActive *bool `json:"is_active,omitempty"`
 	// CreatedBy vem do JWT; nunca do corpo da requisição.
 	CreatedBy uuid.UUID `json:"-"`
+}
+
+func (d CreateMachineDTO) AtivoOuPadrao() bool {
+	if d.IsActive == nil {
+		return true
+	}
+	return *d.IsActive
 }
 
 type UpdateMachineDTO struct {

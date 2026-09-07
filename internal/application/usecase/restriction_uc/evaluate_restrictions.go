@@ -32,6 +32,9 @@ type EvaluationResult struct {
 
 type EvaluateRestrictionsUseCase struct {
 	Repo repository.RestrictionRepository
+	// Items traduz o código de negócio do item para a chave interna. Só a
+	// entrada HTTP precisa disso: o configurador já chama com a chave interna.
+	Items any
 }
 
 // Execute is the full public endpoint handler: evaluates restrictions and returns
@@ -40,7 +43,11 @@ func (uc *EvaluateRestrictionsUseCase) Execute(
 	ctx context.Context,
 	dto request.EvaluateRestrictionDTO,
 ) (*EvaluationResult, error) {
-	applied, restrictionCode, err := uc.findApplied(ctx, dto.CustomerCode, dto.ItemCode, dto.ClassificationType, dto.DivisionID, dto.Answers)
+	itemCode, err := resolverCodigoDoItem(ctx, uc.Items, dto.ItemCode)
+	if err != nil {
+		return nil, err
+	}
+	applied, restrictionCode, err := uc.findApplied(ctx, dto.CustomerCode, itemCode, dto.ClassificationType, dto.DivisionID, dto.Answers)
 	if err != nil {
 		return nil, err
 	}

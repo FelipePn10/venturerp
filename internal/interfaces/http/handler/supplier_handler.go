@@ -26,7 +26,7 @@ func NewSupplierHandler(uc *supplier_uc.SupplierUseCase) *SupplierHandler {
 func (h *SupplierHandler) CreateSupplierType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierTypeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.CreateSupplierType(r.Context(), dto)
@@ -40,7 +40,7 @@ func (h *SupplierHandler) CreateSupplierType(w http.ResponseWriter, r *http.Requ
 func (h *SupplierHandler) UpdateSupplierType(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSupplierTypeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.UpdateSupplierType(r.Context(), dto)
@@ -65,7 +65,7 @@ func (h *SupplierHandler) ListSupplierTypes(w http.ResponseWriter, r *http.Reque
 func (h *SupplierHandler) CreateContactType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierContactTypeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.CreateContactType(r.Context(), dto)
@@ -90,7 +90,7 @@ func (h *SupplierHandler) ListContactTypes(w http.ResponseWriter, r *http.Reques
 func (h *SupplierHandler) CreateSupplier(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.CreateSupplier(r.Context(), dto)
@@ -109,7 +109,7 @@ func (h *SupplierHandler) CreateSupplier(w http.ResponseWriter, r *http.Request)
 func (h *SupplierHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSupplierDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.UpdateSupplier(r.Context(), dto)
@@ -123,7 +123,7 @@ func (h *SupplierHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request)
 func (h *SupplierHandler) GetSupplier(w http.ResponseWriter, r *http.Request) {
 	code, err := parseSupplierCode(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetSupplier(r.Context(), code)
@@ -149,7 +149,7 @@ func (h *SupplierHandler) ListSuppliers(w http.ResponseWriter, r *http.Request) 
 func (h *SupplierHandler) ListEstablishments(w http.ResponseWriter, r *http.Request) {
 	code, err := parseSupplierCode(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.ListEstablishments(r.Context(), code)
@@ -199,7 +199,7 @@ func (h *SupplierHandler) UnblockSupplier(w http.ResponseWriter, r *http.Request
 func (h *SupplierHandler) DeleteSupplier(w http.ResponseWriter, r *http.Request) {
 	code, err := parseSupplierCode(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeleteSupplier(r.Context(), code); err != nil {
@@ -214,7 +214,7 @@ func (h *SupplierHandler) DeleteSupplier(w http.ResponseWriter, r *http.Request)
 func (h *SupplierHandler) AddAddress(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierAddressDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddAddress(r.Context(), dto)
@@ -228,7 +228,7 @@ func (h *SupplierHandler) AddAddress(w http.ResponseWriter, r *http.Request) {
 func (h *SupplierHandler) AddPhone(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierPhoneDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddPhone(r.Context(), dto)
@@ -242,7 +242,7 @@ func (h *SupplierHandler) AddPhone(w http.ResponseWriter, r *http.Request) {
 func (h *SupplierHandler) AddEmail(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierEmailDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddEmail(r.Context(), dto)
@@ -256,7 +256,7 @@ func (h *SupplierHandler) AddEmail(w http.ResponseWriter, r *http.Request) {
 func (h *SupplierHandler) AddDueDate(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierDueDateDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddDueDate(r.Context(), dto)
@@ -270,7 +270,7 @@ func (h *SupplierHandler) AddDueDate(w http.ResponseWriter, r *http.Request) {
 func (h *SupplierHandler) AddContact(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierContactDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddContact(r.Context(), dto)
@@ -284,7 +284,7 @@ func (h *SupplierHandler) AddContact(w http.ResponseWriter, r *http.Request) {
 func (h *SupplierHandler) AddContactPhone(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierContactPhoneDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddContactPhone(r.Context(), dto)
@@ -298,7 +298,7 @@ func (h *SupplierHandler) AddContactPhone(w http.ResponseWriter, r *http.Request
 func (h *SupplierHandler) AddContactEmail(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierContactEmailDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddContactEmail(r.Context(), dto)
@@ -314,7 +314,7 @@ func (h *SupplierHandler) AddContactEmail(w http.ResponseWriter, r *http.Request
 func (h *SupplierHandler) AddEnterprise(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierEnterpriseDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.AddEnterprise(r.Context(), dto)
@@ -328,7 +328,7 @@ func (h *SupplierHandler) AddEnterprise(w http.ResponseWriter, r *http.Request) 
 func (h *SupplierHandler) UpdateEnterprise(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSupplierEnterpriseDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.UpdateEnterprise(r.Context(), dto)
@@ -342,7 +342,7 @@ func (h *SupplierHandler) UpdateEnterprise(w http.ResponseWriter, r *http.Reques
 func (h *SupplierHandler) ListEnterprises(w http.ResponseWriter, r *http.Request) {
 	code, err := parseSupplierCode(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.ListEnterprises(r.Context(), code)
@@ -360,7 +360,7 @@ func (h *SupplierHandler) ListEnterprises(w http.ResponseWriter, r *http.Request
 func (h *SupplierHandler) GetPurchasingDefaults(w http.ResponseWriter, r *http.Request) {
 	code, err := parseSupplierCode(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid code")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	res, err := h.uc.GetPurchasingDefaults(r.Context(), code, 0)
@@ -385,7 +385,7 @@ func (h *SupplierHandler) GetParameters(w http.ResponseWriter, r *http.Request) 
 func (h *SupplierHandler) UpsertParameters(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertSupplierParametersDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	res, err := h.uc.UpsertParameters(r.Context(), dto)

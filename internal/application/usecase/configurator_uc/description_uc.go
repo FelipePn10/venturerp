@@ -18,7 +18,7 @@ const descTypeCompMascara = "COMP_MASCARA"
 
 func (uc *ConfiguratorUseCase) CreateDescriptionType(ctx context.Context, dto request.CfgDescriptionTypeDTO) (*response.CfgDescriptionTypeResponse, error) {
 	if dto.Code == "" || dto.Description == "" {
-		return nil, fmt.Errorf("código e descrição do tipo são obrigatórios")
+		return nil, errorsuc.NewValidationError("código e descrição do tipo são obrigatórios")
 	}
 	kind := dto.Kind
 	if kind == "" {
@@ -33,7 +33,7 @@ func (uc *ConfiguratorUseCase) CreateDescriptionType(ctx context.Context, dto re
 
 func (uc *ConfiguratorUseCase) UpdateDescriptionType(ctx context.Context, dto request.CfgDescriptionTypeDTO) (*response.CfgDescriptionTypeResponse, error) {
 	if dto.Code == "" || dto.Description == "" {
-		return nil, fmt.Errorf("código e descrição do tipo são obrigatórios")
+		return nil, errorsuc.NewValidationError("código e descrição do tipo são obrigatórios")
 	}
 	kind := dto.Kind
 	if kind == "" {
@@ -76,7 +76,7 @@ func (uc *ConfiguratorUseCase) DeactivateDescriptionType(ctx context.Context, id
 // and loads one grid line per item characteristic.
 func (uc *ConfiguratorUseCase) CreateItemDescription(ctx context.Context, dto request.CreateCfgItemDescriptionDTO) (*response.CfgItemDescriptionResponse, error) {
 	if dto.ItemCode <= 0 || dto.DescriptionTypeID <= 0 {
-		return nil, fmt.Errorf("item_code e description_type_id são obrigatórios")
+		return nil, errorsuc.NewValidationError("item_code e description_type_id são obrigatórios")
 	}
 	if _, err := uc.Q.GetCfgDescriptionType(ctx, dto.DescriptionTypeID); err != nil {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tipo de descrição %d não encontrado", dto.DescriptionTypeID))

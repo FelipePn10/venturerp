@@ -41,7 +41,7 @@ func (h *EnterpriseHandler) CreateEnterprise(w http.ResponseWriter, r *http.Requ
 func (h *EnterpriseHandler) GetEnterprise(w http.ResponseWriter, r *http.Request) {
 	code, err := strconv.Atoi(chi.URLParam(r, "code"))
 	if err != nil {
-		h.BadRequest(w, "invalid code")
+		h.BadRequest(w, "código inválido")
 		return
 	}
 	result, err := h.getEnterpriseUC.Execute(r.Context(), code)

@@ -3,6 +3,7 @@ package aps_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"sort"
 	"time"
 
@@ -21,10 +22,10 @@ import (
 // how interactive APS boards let the planner override and then flag the conflict.
 func (uc *APSUseCase) RescheduleSequence(ctx context.Context, dto request.RescheduleSequenceDTO) (*response.RescheduleResultResponse, error) {
 	if dto.SequenceID <= 0 {
-		return nil, fmt.Errorf("informe a sequência")
+		return nil, errorsuc.NewValidationError("informe a sequência")
 	}
 	if dto.NewStart.IsZero() {
-		return nil, fmt.Errorf("informe a nova data de início")
+		return nil, errorsuc.NewValidationError("informe a nova data de início")
 	}
 
 	target, err := uc.repo.GetSequence(ctx, dto.SequenceID)

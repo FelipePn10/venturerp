@@ -48,7 +48,7 @@ func TestItemCommercialAccountingRepositoryAndHTTPPartialUpdate(t *testing.T) {
 	description := "PERSISTED COMMERCIAL DESCRIPTION"
 	original.Commercial.Description = &description
 	original.Commercial.WarrantyDays = 365
-	if _, err = repo.UpdateCommercialAccounting(ctx, original); err != nil {
+	if _, err = repo.UpdateFolders(ctx, original); err != nil {
 		t.Fatal(err)
 	}
 

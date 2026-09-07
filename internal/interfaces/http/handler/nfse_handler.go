@@ -47,7 +47,7 @@ func (h *NFSeHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *NFSeHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.authorizeUC.Execute(r.Context(), id)
@@ -61,7 +61,7 @@ func (h *NFSeHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 func (h *NFSeHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.CancelNFSeDTO
@@ -89,7 +89,7 @@ func (h *NFSeHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *NFSeHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid code")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getUC.Execute(r.Context(), id)

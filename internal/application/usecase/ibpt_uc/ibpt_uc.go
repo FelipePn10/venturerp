@@ -3,6 +3,7 @@ package ibpt_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ type IBPTUseCase struct {
 func (uc *IBPTUseCase) ImportFromCSV(ctx context.Context, uf, csvText string) (int, error) {
 	uf = strings.ToUpper(strings.TrimSpace(uf))
 	if len(uf) != 2 {
-		return 0, fmt.Errorf("UF inválida: %q", uf)
+		return 0, errorsuc.NewValidationError(fmt.Sprintf("UF inválida: %q", uf))
 	}
 
 	lines := strings.Split(strings.ReplaceAll(csvText, "\r\n", "\n"), "\n")

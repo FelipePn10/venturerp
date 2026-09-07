@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -57,7 +58,7 @@ func (uc *InutilizarNumeracaoUseCase) Execute(ctx context.Context, dto Inutiliza
 		return nil, fmt.Errorf("não autorizado")
 	}
 	if dto.NumeroFinal < dto.NumeroInicial {
-		return nil, fmt.Errorf("numero_final deve ser >= numero_inicial")
+		return nil, errorsuc.NewValidationError("numero_final deve ser >= numero_inicial")
 	}
 	cli, cfg, err := newFocusFromConfig(ctx, uc.Repo)
 	if err != nil {

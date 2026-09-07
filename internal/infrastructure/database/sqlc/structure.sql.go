@@ -33,35 +33,52 @@ INSERT INTO item_structures (
     substitute_priority,
     quantity_formula,
     quantity_rounding,
-    quantity_scale
+    quantity_scale,
+    warehouse_code,
+    line_warehouse_code,
+    setup_loss,
+    cost_loss_type,
+    cost_loss,
+    cost_center_code,
+    is_critical_mps,
+    generates_inspection
 ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+             $22, $23, $24, $25, $26, $27, $28, $29
          )
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection
 `
 
 type CreateStructureComponentParams struct {
-	ParentCode         int64
-	ChildCode          int64
-	ParentMask         pgtype.Text
-	Quantity           float64
-	UnitOfMeasurement  UnitOfMeasurementEnum
-	LossPercentage     float64
-	Sequence           int32
-	Health             HealthEnum
-	Notes              pgtype.Text
-	CreatedBy          pgtype.UUID
-	Inherit            bool
-	StartDate          pgtype.Date
-	EndDate            pgtype.Date
-	LossFormula        pgtype.Text
-	IsCoproduct        bool
-	IsFixedQty         bool
-	SubstituteGroup    int16
-	SubstitutePriority int16
-	QuantityFormula    pgtype.Text
-	QuantityRounding   string
-	QuantityScale      int16
+	ParentCode          int64
+	ChildCode           int64
+	ParentMask          pgtype.Text
+	Quantity            float64
+	UnitOfMeasurement   UnitOfMeasurementEnum
+	LossPercentage      float64
+	Sequence            int32
+	Health              HealthEnum
+	Notes               pgtype.Text
+	CreatedBy           pgtype.UUID
+	Inherit             bool
+	StartDate           pgtype.Date
+	EndDate             pgtype.Date
+	LossFormula         pgtype.Text
+	IsCoproduct         bool
+	IsFixedQty          bool
+	SubstituteGroup     int16
+	SubstitutePriority  int16
+	QuantityFormula     pgtype.Text
+	QuantityRounding    string
+	QuantityScale       int16
+	WarehouseCode       *int64
+	LineWarehouseCode   *int64
+	SetupLoss           float64
+	CostLossType        string
+	CostLoss            float64
+	CostCenterCode      *int64
+	IsCriticalMps       bool
+	GeneratesInspection bool
 }
 
 func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStructureComponentParams) (ItemStructure, error) {
@@ -87,6 +104,14 @@ func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStruct
 		arg.QuantityFormula,
 		arg.QuantityRounding,
 		arg.QuantityScale,
+		arg.WarehouseCode,
+		arg.LineWarehouseCode,
+		arg.SetupLoss,
+		arg.CostLossType,
+		arg.CostLoss,
+		arg.CostCenterCode,
+		arg.IsCriticalMps,
+		arg.GeneratesInspection,
 	)
 	var i ItemStructure
 	err := row.Scan(
@@ -115,6 +140,14 @@ func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStruct
 		&i.QuantityFormula,
 		&i.QuantityRounding,
 		&i.QuantityScale,
+		&i.WarehouseCode,
+		&i.LineWarehouseCode,
+		&i.SetupLoss,
+		&i.CostLossType,
+		&i.CostLoss,
+		&i.CostCenterCode,
+		&i.IsCriticalMps,
+		&i.GeneratesInspection,
 	)
 	return i, err
 }
@@ -196,7 +229,8 @@ SELECT
     s.substitute_priority,
     s.quantity_formula,
     s.quantity_rounding,
-    s.quantity_scale
+    s.quantity_scale,
+    s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
@@ -205,32 +239,40 @@ ORDER BY s.sequence, s.id
 `
 
 type GetAllDirectChildrenRow struct {
-	ID                 int64
-	ParentCode         int64
-	ChildCode          int64
-	ChildDescription   string
-	ParentMask         pgtype.Text
-	Quantity           float64
-	LossPercentage     float64
-	LossFormula        pgtype.Text
-	UnitOfMeasurement  UnitOfMeasurementEnum
-	Health             HealthEnum
-	Sequence           int32
-	Notes              pgtype.Text
-	IsActive           bool
-	CreatedBy          pgtype.UUID
-	CreatedAt          pgtype.Timestamptz
-	UpdatedAt          pgtype.Timestamptz
-	Inherit            bool
-	StartDate          pgtype.Date
-	EndDate            pgtype.Date
-	IsCoproduct        bool
-	IsFixedQty         bool
-	SubstituteGroup    int16
-	SubstitutePriority int16
-	QuantityFormula    pgtype.Text
-	QuantityRounding   string
-	QuantityScale      int16
+	ID                  int64
+	ParentCode          int64
+	ChildCode           int64
+	ChildDescription    string
+	ParentMask          pgtype.Text
+	Quantity            float64
+	LossPercentage      float64
+	LossFormula         pgtype.Text
+	UnitOfMeasurement   UnitOfMeasurementEnum
+	Health              HealthEnum
+	Sequence            int32
+	Notes               pgtype.Text
+	IsActive            bool
+	CreatedBy           pgtype.UUID
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	Inherit             bool
+	StartDate           pgtype.Date
+	EndDate             pgtype.Date
+	IsCoproduct         bool
+	IsFixedQty          bool
+	SubstituteGroup     int16
+	SubstitutePriority  int16
+	QuantityFormula     pgtype.Text
+	QuantityRounding    string
+	QuantityScale       int16
+	WarehouseCode       *int64
+	LineWarehouseCode   *int64
+	SetupLoss           float64
+	CostLossType        string
+	CostLoss            float64
+	CostCenterCode      *int64
+	IsCriticalMps       bool
+	GeneratesInspection bool
 }
 
 func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([]GetAllDirectChildrenRow, error) {
@@ -269,6 +311,14 @@ func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([
 			&i.QuantityFormula,
 			&i.QuantityRounding,
 			&i.QuantityScale,
+			&i.WarehouseCode,
+			&i.LineWarehouseCode,
+			&i.SetupLoss,
+			&i.CostLossType,
+			&i.CostLoss,
+			&i.CostCenterCode,
+			&i.IsCriticalMps,
+			&i.GeneratesInspection,
 		); err != nil {
 			return nil, err
 		}
@@ -307,6 +357,7 @@ SELECT
     s.quantity_formula,
     s.quantity_rounding,
     s.quantity_scale,
+    s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection,
     i.pdm_description_technique AS child_description
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
@@ -328,32 +379,40 @@ type GetDirectChildrenForMaskParams struct {
 }
 
 type GetDirectChildrenForMaskRow struct {
-	ID                 int64
-	ParentCode         int64
-	ChildCode          int64
-	ParentMask         pgtype.Text
-	Quantity           float64
-	LossPercentage     float64
-	LossFormula        pgtype.Text
-	UnitOfMeasurement  UnitOfMeasurementEnum
-	Health             HealthEnum
-	Sequence           int32
-	Notes              pgtype.Text
-	IsActive           bool
-	CreatedBy          pgtype.UUID
-	CreatedAt          pgtype.Timestamptz
-	UpdatedAt          pgtype.Timestamptz
-	Inherit            bool
-	StartDate          pgtype.Date
-	EndDate            pgtype.Date
-	IsCoproduct        bool
-	IsFixedQty         bool
-	SubstituteGroup    int16
-	SubstitutePriority int16
-	QuantityFormula    pgtype.Text
-	QuantityRounding   string
-	QuantityScale      int16
-	ChildDescription   string
+	ID                  int64
+	ParentCode          int64
+	ChildCode           int64
+	ParentMask          pgtype.Text
+	Quantity            float64
+	LossPercentage      float64
+	LossFormula         pgtype.Text
+	UnitOfMeasurement   UnitOfMeasurementEnum
+	Health              HealthEnum
+	Sequence            int32
+	Notes               pgtype.Text
+	IsActive            bool
+	CreatedBy           pgtype.UUID
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	Inherit             bool
+	StartDate           pgtype.Date
+	EndDate             pgtype.Date
+	IsCoproduct         bool
+	IsFixedQty          bool
+	SubstituteGroup     int16
+	SubstitutePriority  int16
+	QuantityFormula     pgtype.Text
+	QuantityRounding    string
+	QuantityScale       int16
+	WarehouseCode       *int64
+	LineWarehouseCode   *int64
+	SetupLoss           float64
+	CostLossType        string
+	CostLoss            float64
+	CostCenterCode      *int64
+	IsCriticalMps       bool
+	GeneratesInspection bool
+	ChildDescription    string
 }
 
 func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChildrenForMaskParams) ([]GetDirectChildrenForMaskRow, error) {
@@ -391,6 +450,14 @@ func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChi
 			&i.QuantityFormula,
 			&i.QuantityRounding,
 			&i.QuantityScale,
+			&i.WarehouseCode,
+			&i.LineWarehouseCode,
+			&i.SetupLoss,
+			&i.CostLossType,
+			&i.CostLoss,
+			&i.CostCenterCode,
+			&i.IsCriticalMps,
+			&i.GeneratesInspection,
 			&i.ChildDescription,
 		); err != nil {
 			return nil, err
@@ -500,7 +567,7 @@ func (q *Queries) GetItemCodeAndDescription(ctx context.Context, code int64) (Ge
 }
 
 const getStructureComponentByID = `-- name: GetStructureComponentByID :one
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection
 FROM item_structures
 WHERE id = $1
 `
@@ -534,6 +601,14 @@ func (q *Queries) GetStructureComponentByID(ctx context.Context, id int64) (Item
 		&i.QuantityFormula,
 		&i.QuantityRounding,
 		&i.QuantityScale,
+		&i.WarehouseCode,
+		&i.LineWarehouseCode,
+		&i.SetupLoss,
+		&i.CostLossType,
+		&i.CostLoss,
+		&i.CostCenterCode,
+		&i.IsCriticalMps,
+		&i.GeneratesInspection,
 	)
 	return i, err
 }
@@ -610,6 +685,14 @@ SET
     quantity_formula    = $17,
     quantity_rounding   = $18,
     quantity_scale      = $19,
+    warehouse_code       = $20,
+    line_warehouse_code  = $21,
+    setup_loss           = $22,
+    cost_loss_type       = $23,
+    cost_loss            = $24,
+    cost_center_code     = $25,
+    is_critical_mps      = $26,
+    generates_inspection = $27,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -618,29 +701,37 @@ WHERE parent_code = $1
         OR (parent_mask IS NULL AND $3 IS NULL)
     )
   AND is_active = TRUE
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection
 `
 
 type UpdateStructureComponentParams struct {
-	ParentCode         int64
-	ChildCode          int64
-	ParentMask         pgtype.Text
-	Quantity           float64
-	UnitOfMeasurement  UnitOfMeasurementEnum
-	LossPercentage     float64
-	Sequence           int32
-	Health             HealthEnum
-	Notes              pgtype.Text
-	StartDate          pgtype.Date
-	EndDate            pgtype.Date
-	LossFormula        pgtype.Text
-	IsCoproduct        bool
-	IsFixedQty         bool
-	SubstituteGroup    int16
-	SubstitutePriority int16
-	QuantityFormula    pgtype.Text
-	QuantityRounding   string
-	QuantityScale      int16
+	ParentCode          int64
+	ChildCode           int64
+	ParentMask          pgtype.Text
+	Quantity            float64
+	UnitOfMeasurement   UnitOfMeasurementEnum
+	LossPercentage      float64
+	Sequence            int32
+	Health              HealthEnum
+	Notes               pgtype.Text
+	StartDate           pgtype.Date
+	EndDate             pgtype.Date
+	LossFormula         pgtype.Text
+	IsCoproduct         bool
+	IsFixedQty          bool
+	SubstituteGroup     int16
+	SubstitutePriority  int16
+	QuantityFormula     pgtype.Text
+	QuantityRounding    string
+	QuantityScale       int16
+	WarehouseCode       *int64
+	LineWarehouseCode   *int64
+	SetupLoss           float64
+	CostLossType        string
+	CostLoss            float64
+	CostCenterCode      *int64
+	IsCriticalMps       bool
+	GeneratesInspection bool
 }
 
 func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStructureComponentParams) (ItemStructure, error) {
@@ -664,6 +755,14 @@ func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStruct
 		arg.QuantityFormula,
 		arg.QuantityRounding,
 		arg.QuantityScale,
+		arg.WarehouseCode,
+		arg.LineWarehouseCode,
+		arg.SetupLoss,
+		arg.CostLossType,
+		arg.CostLoss,
+		arg.CostCenterCode,
+		arg.IsCriticalMps,
+		arg.GeneratesInspection,
 	)
 	var i ItemStructure
 	err := row.Scan(
@@ -692,6 +791,14 @@ func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStruct
 		&i.QuantityFormula,
 		&i.QuantityRounding,
 		&i.QuantityScale,
+		&i.WarehouseCode,
+		&i.LineWarehouseCode,
+		&i.SetupLoss,
+		&i.CostLossType,
+		&i.CostLoss,
+		&i.CostCenterCode,
+		&i.IsCriticalMps,
+		&i.GeneratesInspection,
 	)
 	return i, err
 }

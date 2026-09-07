@@ -63,8 +63,13 @@ func (r *RepositoryItemSQLC) Create(
 
 		Complement: pgutil.ToPgTextFromPtr(item.Complement),
 
-		Nature:    int16(item.Nature),
-		Situation: int16(item.Situation),
+		Nature:        int16(item.Nature),
+		IsBase:        item.IsBase,
+		IsConfigured:  item.IsConfigured,
+		IsPrototype:   item.IsPrototype,
+		IsTool:        item.IsTool,
+		IsProcessItem: item.IsProcessItem,
+		Situation:     int16(item.Situation),
 
 		Health: sqlc.HealthEnum(item.Health),
 
@@ -167,7 +172,7 @@ func (r *RepositoryItemSQLC) NextAutomaticBusinessCode(ctx context.Context, ente
 	return valueobject.NewBusinessCode(code)
 }
 
-func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, item *entity.Item) (*entity.Item, error) {
+func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Item) (*entity.Item, error) {
 	if err := r.validateFiscalReferences(ctx, item); err != nil {
 		return nil, err
 	}
@@ -175,12 +180,37 @@ func (r *RepositoryItemSQLC) UpdateCommercialAccounting(ctx context.Context, ite
 	if err != nil {
 		return nil, fmt.Errorf("marshal cyclical_count_config: %w", err)
 	}
-	p := sqlc.UpdateItemCommercialAccountingParams{BusinessCode: string(item.BusinessCode), EnterpriseID: item.EnterpriseID, CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
+	weight, err := json.Marshal(item.Engineering.Weight)
+	if err != nil {
+		return nil, fmt.Errorf("marshal engineering_weight: %w", err)
+	}
+	dimensions, err := json.Marshal(item.Engineering.Dimensions)
+	if err != nil {
+		return nil, fmt.Errorf("marshal engineering_dimensions: %w", err)
+	}
+	p := sqlc.UpdateItemFoldersParams{BusinessCode: string(item.BusinessCode), EnterpriseID: item.EnterpriseID, CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
 		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
 		CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange, CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes, CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS, CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging, CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
-		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes), WarehouseCyclicalCountConfig: cyclicalCountConfig}
-	dbItem, err := r.q.UpdateItemCommercialAccounting(ctx, p)
+		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes), WarehouseCyclicalCountConfig: cyclicalCountConfig,
+		// Identificação, marcadores e demais pastas — o que a alteração do item
+		// precisava gravar e antes ficava de fora.
+		Name: item.Name, Complement: pgutil.ToPgTextFromPtr(item.Complement),
+		Nature: int16(item.Nature), IsBase: item.IsBase, IsConfigured: item.IsConfigured, IsPrototype: item.IsPrototype,
+		IsTool: item.IsTool, IsProcessItem: item.IsProcessItem,
+		Situation: int16(item.Situation), Health: sqlc.HealthEnum(item.Health),
+		PdmDescriptionTechnique: item.PDM.DescriptionTechnique, PdmGroupCode: int64(item.PDM.GroupCode), PdmModifierCode: int64(item.PDM.ModifierCode),
+		EngineeringWeight: weight, EngineeringDimensions: dimensions,
+		EngineeringType: int16(item.Engineering.Type), EngineeringTypeStruct: int16(item.Engineering.TypeStruct), EngineeringOem: item.Engineering.OEM,
+		PlanningTypeMrp: int16(item.Planning.TypeMRP), PlanningLlc: int32(item.Planning.LLC), PlanningGhost: item.Planning.Ghost,
+		PlanningAbcClass: pgutil.ToPgTextFromPtr(item.Planning.ABCClass), PlanningMinimumLot: item.Planning.MinimumLot,
+		PlanningMultipleLot: item.Planning.MultipleLot, PlanningSafetyStock: item.Planning.SafetyStock,
+		PlanningCritical: item.Planning.Critical, PlanningExclusive: item.Planning.Exclusive, PlanningActive: item.Planning.Active,
+		SuppliesTypeOfUse: int16(item.Supplies.TypeOfUse), SuppliesPurchaseUom: unitOfMeasurementToPgText(item.Supplies.PurchaseUOM),
+		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist, SuppliesHarvest: item.Supplies.Harvest,
+		WarehouseUnitOfMeasurement: sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
+		WarehouseAutomaticLow:      item.Warehouse.AutomaticLow, WarehouseMinimumStock: item.Warehouse.MinimumStock}
+	dbItem, err := r.q.UpdateItemFolders(ctx, p)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
@@ -399,7 +429,12 @@ func mapDBItemToEntity(
 		Name:         dbItem.Name,
 		Complement:   complement,
 
-		Nature: entity.ItemNature(dbItem.Nature),
+		Nature:        entity.ItemNature(dbItem.Nature),
+		IsBase:        dbItem.IsBase,
+		IsConfigured:  dbItem.IsConfigured,
+		IsPrototype:   dbItem.IsPrototype,
+		IsTool:        dbItem.IsTool,
+		IsProcessItem: dbItem.IsProcessItem,
 
 		PDM: entity.PDM{
 			GroupCode:            int32(dbItem.PdmGroupCode),

@@ -9,10 +9,18 @@ import (
 )
 
 type CreateItemDTO struct {
-	Code             string                  `json:"code"`
-	Name             string                  `json:"name"`
-	Complement       *string                 `json:"complement,omitempty"`
-	Nature           itementity.ItemNature   `json:"nature"`
+	Code       string                `json:"code"`
+	Name       string                `json:"name"`
+	Complement *string               `json:"complement,omitempty"`
+	Nature     itementity.ItemNature `json:"nature"`
+	// Marcadores independentes: um item pode ser base e configurado ao mesmo
+	// tempo. Quando ausentes, são derivados de `nature` para não quebrar quem
+	// ainda envia só a natureza.
+	IsBase           *bool                   `json:"is_base,omitempty"`
+	IsConfigured     *bool                   `json:"is_configured,omitempty"`
+	IsPrototype      *bool                   `json:"is_prototype,omitempty"`
+	IsTool           *bool                   `json:"is_tool,omitempty"`
+	IsProcessItem    *bool                   `json:"is_process_item,omitempty"`
 	PDM              PDMDTO                  `json:"pdm"`
 	Situation        types.TypeSituationItem `json:"situation"`
 	Health           types.Health            `json:"health"`

@@ -89,3 +89,36 @@ func (s *ItemStructure) FormulaVariables() []string {
 	}
 	return formula.Variables(*s.QuantityFormula)
 }
+
+// Tipos de perda de custo aceitos.
+const (
+	CostLossPercent  = "PERCENTUAL"
+	CostLossQuantity = "QUANTIDADE"
+)
+
+// NormalizeCostLossType devolve o tipo de perda de custo em maiúsculas, caindo
+// em PERCENTUAL quando não informado — que é como a maioria das empresas
+// cadastra a perda.
+func NormalizeCostLossType(mode string) string {
+	value := strings.ToUpper(strings.TrimSpace(mode))
+	if value != CostLossQuantity {
+		return CostLossPercent
+	}
+	return value
+}
+
+// CostQuantity devolve a quantidade que entra no cálculo do custo.
+//
+// A perda de custo é separada da perda de engenharia de propósito: a de
+// engenharia dimensiona a necessidade de compra e produção, a de custo entra
+// no valor do produto. Somar as duas é o que o FoccoERP faz na resposta 3 do
+// parâmetro 20; aqui as duas ficam explícitas.
+func (s *ItemStructure) CostQuantity(baseQuantity float64) float64 {
+	if s.CostLoss <= 0 {
+		return baseQuantity
+	}
+	if NormalizeCostLossType(s.CostLossType) == CostLossQuantity {
+		return baseQuantity + s.CostLoss
+	}
+	return baseQuantity * (1 + s.CostLoss/100)
+}

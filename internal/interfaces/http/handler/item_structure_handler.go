@@ -15,7 +15,7 @@ func (h *ItemStructureHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateStructureComponentDTO
 
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 
@@ -32,7 +32,7 @@ func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateStructureComponentDTO
 
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 
@@ -159,11 +159,11 @@ func jsonResponse(w http.ResponseWriter, status int, body any) {
 
 func jsonError(w http.ResponseWriter, status int, msg string) {
 	msg = strings.NewReplacer(
-		"invalid payload", "corpo da requisição inválido",
+		"conteúdo da requisição inválido", "corpo da requisição inválido",
 		"invalid shipment code", "código do romaneio inválido",
 		"invalid load code", "código da carga inválido",
 		"invalid volume id", "identificador do volume inválido",
-		"invalid id", "identificador inválido",
+		"código inválido", "identificador inválido",
 		"not found", "não encontrado",
 		"is required", "é obrigatório",
 		"not configured", "não configurado",

@@ -69,7 +69,7 @@ func (h *PurchasePriceHandler) ListTables(w http.ResponseWriter, r *http.Request
 	if raw := r.URL.Query().Get("supplier_code"); raw != "" {
 		v, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid supplier_code")
+			jsonError(w, http.StatusBadRequest, "código do fornecedor inválido")
 			return
 		}
 		supplier = &v
@@ -92,7 +92,7 @@ func (h *PurchasePriceHandler) ListCandidates(w http.ResponseWriter, r *http.Req
 	if raw := r.URL.Query().Get("classification_id"); raw != "" {
 		v, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid classification_id")
+			jsonError(w, http.StatusBadRequest, "código da classificação inválido")
 			return
 		}
 		classificationID = &v
@@ -140,7 +140,7 @@ func (h *PurchasePriceHandler) ListSourcePrices(w http.ResponseWriter, r *http.R
 	if raw := r.URL.Query().Get("supplier_code"); raw != "" {
 		v, e := strconv.ParseInt(raw, 10, 64)
 		if e != nil {
-			jsonError(w, http.StatusBadRequest, "invalid supplier_code")
+			jsonError(w, http.StatusBadRequest, "código do fornecedor inválido")
 			return
 		}
 		supplier = &v
@@ -148,7 +148,7 @@ func (h *PurchasePriceHandler) ListSourcePrices(w http.ResponseWriter, r *http.R
 	if raw := r.URL.Query().Get("table_code"); raw != "" {
 		v, e := strconv.ParseInt(raw, 10, 64)
 		if e != nil {
-			jsonError(w, http.StatusBadRequest, "invalid table_code")
+			jsonError(w, http.StatusBadRequest, "código da tabela inválido")
 			return
 		}
 		table = &v
@@ -206,7 +206,7 @@ func (h *PurchasePriceHandler) ListItems(w http.ResponseWriter, r *http.Request)
 func (h *PurchasePriceHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.uc.DeleteItem(r.Context(), id); err != nil {

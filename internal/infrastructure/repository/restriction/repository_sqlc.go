@@ -69,7 +69,7 @@ func (r *RestrictionRepositorySQLC) GetByCode(
 		}
 		return nil, fmt.Errorf("fetching restriction: %w", err)
 	}
-	return rowToEntity(row), nil
+	return r.comClausulas(ctx, rowToEntity(row))
 }
 
 func (r *RestrictionRepositorySQLC) GetByItemCode(
@@ -82,9 +82,35 @@ func (r *RestrictionRepositorySQLC) GetByItemCode(
 	}
 	out := make([]*entity.Restriction, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, rowToEntity(row))
+		completa, cErr := r.comClausulas(ctx, rowToEntity(row))
+		if cErr != nil {
+			return nil, cErr
+		}
+		out = append(out, completa)
 	}
 	return out, nil
+}
+
+// comClausulas preenche o "SE" e o "ENTÃO" da regra.
+//
+// Sem isso a restrição só era legível no instante em que foi criada: a
+// consulta devolvia o cabeçalho e a tela mostrava uma regra vazia, sem como
+// conferir o que ela realmente bloqueia.
+func (r *RestrictionRepositorySQLC) comClausulas(
+	ctx context.Context,
+	restricao *entity.Restriction,
+) (*entity.Restriction, error) {
+	dominantes, err := r.GetDominants(ctx, restricao.ID)
+	if err != nil {
+		return nil, err
+	}
+	determinantes, err := r.GetDeterminants(ctx, restricao.ID)
+	if err != nil {
+		return nil, err
+	}
+	restricao.Dominants = dominantes
+	restricao.Determinants = determinantes
+	return restricao, nil
 }
 
 func (r *RestrictionRepositorySQLC) GetByCustomerCode(

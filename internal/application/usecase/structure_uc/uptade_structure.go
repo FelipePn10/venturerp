@@ -80,6 +80,14 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	structure.IsCoproduct = dto.IsCoproduct
 	structure.IsFixedQty = dto.IsFixedQty
 	structure.SetSubstitute(dto.SubstituteGroup, dto.SubstitutePriority)
+	structure.WarehouseCode = dto.WarehouseCode
+	structure.LineWarehouseCode = dto.LineWarehouseCode
+	structure.SetupLoss = dto.SetupLoss
+	structure.CostLossType = entity.NormalizeCostLossType(dto.CostLossType)
+	structure.CostLoss = dto.CostLoss
+	structure.CostCenterCode = dto.CostCenterCode
+	structure.IsCriticalMPS = dto.IsCriticalMPS
+	structure.GeneratesInspection = dto.GeneratesInspection
 
 	// Executa update direto via business key
 	updated, err := uc.Repo.Update(ctx, structure)

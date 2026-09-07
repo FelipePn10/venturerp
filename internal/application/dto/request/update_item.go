@@ -5,18 +5,74 @@ import (
 	"encoding/json"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/shopspring/decimal"
 )
 
 type UpdateItemDTO struct {
-	Commercial *UpdateCommercialDTO `json:"commercial,omitempty"`
-	Accounting *UpdateAccountingDTO `json:"accounting,omitempty"`
-	Warehouse  *UpdateWarehouseDTO  `json:"warehouse,omitempty"`
+	// Identificação. Ponteiros: ausente preserva o valor gravado, presente
+	// substitui. Sem isso não havia como corrigir nome, natureza ou situação de
+	// um item já cadastrado.
+	Name          *string                  `json:"name,omitempty"`
+	Complement    **string                 `json:"complement,omitempty"`
+	Nature        *itementity.ItemNature   `json:"nature,omitempty"`
+	IsBase        *bool                    `json:"is_base,omitempty"`
+	IsConfigured  *bool                    `json:"is_configured,omitempty"`
+	IsPrototype   *bool                    `json:"is_prototype,omitempty"`
+	IsTool        *bool                    `json:"is_tool,omitempty"`
+	IsProcessItem *bool                    `json:"is_process_item,omitempty"`
+	Situation     *types.TypeSituationItem `json:"situation,omitempty"`
+	Health        *types.Health            `json:"health,omitempty"`
+
+	PDM         *UpdatePDMDTO         `json:"pdm,omitempty"`
+	Engineering *UpdateEngineeringDTO `json:"engineering,omitempty"`
+	Planning    *UpdatePlanningDTO    `json:"planning,omitempty"`
+	Supplies    *UpdateSuppliesDTO    `json:"supplies,omitempty"`
+	Commercial  *UpdateCommercialDTO  `json:"commercial,omitempty"`
+	Accounting  *UpdateAccountingDTO  `json:"accounting,omitempty"`
+	Warehouse   *UpdateWarehouseDTO   `json:"warehouse,omitempty"`
+}
+
+type UpdatePDMDTO struct {
+	GroupCode            *int32  `json:"group_code,omitempty"`
+	ModifierCode         *int32  `json:"modifier_code,omitempty"`
+	DescriptionTechnique *string `json:"description_technique,omitempty"`
+}
+
+type UpdateEngineeringDTO struct {
+	Weight     *valueobject.Weight      `json:"weight,omitempty"`
+	Dimensions **valueobject.Dimensions `json:"dimensions,omitempty"`
+	Type       *types.TypeItem          `json:"type,omitempty"`
+	TypeStruct *types.TypeStructItem    `json:"type_struct,omitempty"`
+	OEM        *bool                    `json:"oem,omitempty"`
+}
+
+type UpdatePlanningDTO struct {
+	TypeMRP     *types.TypeMRPItem `json:"type_mrp,omitempty"`
+	LLC         *int               `json:"llc,omitempty"`
+	Ghost       *bool              `json:"ghost,omitempty"`
+	ABCClass    **string           `json:"abc_class,omitempty"`
+	MinimumLot  *int64             `json:"minimum_lot,omitempty"`
+	MultipleLot *int64             `json:"multiple_lot,omitempty"`
+	SafetyStock *int64             `json:"safety_stock,omitempty"`
+	Critical    *bool              `json:"critical,omitempty"`
+	Exclusive   *bool              `json:"exclusive,omitempty"`
+	Active      *bool              `json:"active,omitempty"`
+}
+
+type UpdateSuppliesDTO struct {
+	TypeOfUse          *types.TypeOfUseItem              `json:"type_of_use,omitempty"`
+	PurchaseUOM        **types.TypeUnitOfMeasurementItem `json:"purchase_uom,omitempty"`
+	ReceivingChecklist *bool                             `json:"receiving_checklist,omitempty"`
+	Harvest            *bool                             `json:"harvest,omitempty"`
 }
 
 type UpdateWarehouseDTO struct {
-	CyclicalCountConfig OptionalCyclicalCountConfig `json:"cyclical_count_config,omitempty"`
+	CyclicalCountConfig OptionalCyclicalCountConfig      `json:"cyclical_count_config,omitempty"`
+	UnitOfMeasurement   *types.TypeUnitOfMeasurementItem `json:"unit_of_measurement,omitempty"`
+	AutomaticLow        *bool                            `json:"automatic_low,omitempty"`
+	MinimumStock        *int32                           `json:"minimum_stock,omitempty"`
 }
 
 // OptionalCyclicalCountConfig distinguishes omission (preserve) from an

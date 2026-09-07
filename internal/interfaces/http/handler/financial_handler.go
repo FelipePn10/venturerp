@@ -283,7 +283,7 @@ func (h *FinancialHandler) GetContaPagar(w http.ResponseWriter, r *http.Request)
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getContaPagarUC.Execute(r.Context(), id)
@@ -298,7 +298,7 @@ func (h *FinancialHandler) ApproveContaPagar(w http.ResponseWriter, r *http.Requ
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.approveContaPagarUC.Execute(r.Context(), id); err != nil {
@@ -312,7 +312,7 @@ func (h *FinancialHandler) BaixarContaPagar(w http.ResponseWriter, r *http.Reque
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.BaixarContaPagarDTO
@@ -331,7 +331,7 @@ func (h *FinancialHandler) CancelContaPagar(w http.ResponseWriter, r *http.Reque
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.cancelContaPagarUC.Execute(r.Context(), id); err != nil {
@@ -381,7 +381,7 @@ func (h *FinancialHandler) GetContaReceber(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	result, err := h.getContaReceberUC.Execute(r.Context(), id)
@@ -396,7 +396,7 @@ func (h *FinancialHandler) BaixarContaReceber(w http.ResponseWriter, r *http.Req
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	var dto request.BaixarContaReceberDTO
@@ -415,7 +415,7 @@ func (h *FinancialHandler) CancelContaReceber(w http.ResponseWriter, r *http.Req
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	if err := h.cancelContaReceberUC.Execute(r.Context(), id); err != nil {
@@ -606,7 +606,7 @@ func (h *FinancialHandler) GetExtratoPorFornecedor(w http.ResponseWriter, r *htt
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	results, err := h.getExtratoPorFornecedorUC.Execute(r.Context(), id)
@@ -623,7 +623,7 @@ func (h *FinancialHandler) GetExtratoPorCliente(w http.ResponseWriter, r *http.R
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid id")
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
 	results, err := h.getExtratoPorClienteUC.Execute(r.Context(), id)
@@ -682,7 +682,7 @@ func (h *FinancialHandler) GetFichaTecnicaCusto(w http.ResponseWriter, r *http.R
 	idStr := chi.URLParam(r, "item_code")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid item_code")
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
 	results, err := h.getFichaTecnicaCustoUC.Execute(r.Context(), id)
@@ -741,7 +741,7 @@ func (h *FinancialHandler) ImportarOFX(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "conta_id")
 	contaID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "invalid conta_id")
+		security.RespondError(w, http.StatusBadRequest, "código da conta inválido")
 		return
 	}
 	var body struct {
