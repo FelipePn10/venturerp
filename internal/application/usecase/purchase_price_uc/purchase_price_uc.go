@@ -13,6 +13,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type PurchasePriceUseCase struct {
@@ -100,7 +101,8 @@ func (uc *PurchasePriceUseCase) UpdateTable(ctx context.Context, dto request.Upd
 	if dto.SupplierCode != nil && *dto.SupplierCode <= 0 {
 		return nil, errorsuc.NewValidationError("informe um fornecedor válido ou deixe a tabela sem fornecedor")
 	}
-	t.SupplierCode, t.Description, t.IsActive = dto.SupplierCode, strings.TrimSpace(dto.Description), dto.IsActive
+	t.SupplierCode, t.Description = dto.SupplierCode, strings.TrimSpace(dto.Description)
+	t.IsActive = ptrutil.BoolOr(dto.IsActive, t.IsActive)
 	if currency := dto.ResolvedCurrency(); currency != "" {
 		t.CurrencyCode = strings.ToUpper(strings.TrimSpace(currency))
 	}

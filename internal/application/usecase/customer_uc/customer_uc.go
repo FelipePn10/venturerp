@@ -14,6 +14,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 // CustomerUseCase consolidates all customer-related operations.
@@ -51,7 +52,7 @@ func (uc *CustomerUseCase) UpdateRegion(ctx context.Context, dto request.UpdateR
 	reg.Description = dto.Description
 	reg.UF = dto.UF
 	reg.City = dto.City
-	reg.IsActive = dto.IsActive
+	reg.IsActive = ptrutil.BoolOr(dto.IsActive, reg.IsActive)
 	updated, err := uc.repo.UpdateRegion(ctx, reg)
 	if err != nil {
 		return nil, err
@@ -133,7 +134,8 @@ func (uc *CustomerUseCase) UpdateMarketSegment(ctx context.Context, code int64, 
 	if err != nil {
 		return nil, err
 	}
-	current.Description, current.HasPISCOFINSRetention, current.RetentionIndicator, current.IsActive = dto.Description, dto.HasPISCOFINSRetention, dto.RetentionIndicator, dto.IsActive
+	current.Description, current.HasPISCOFINSRetention, current.RetentionIndicator = dto.Description, dto.HasPISCOFINSRetention, dto.RetentionIndicator
+	current.IsActive = ptrutil.BoolOr(dto.IsActive, current.IsActive)
 	if dto.ParentID != nil {
 		current.ParentID = dto.ParentID
 	}
@@ -194,7 +196,8 @@ func (uc *CustomerUseCase) UpdateContactType(ctx context.Context, code int64, dt
 	if strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("a descrição é obrigatória")
 	}
-	current.Description, current.IsActive = strings.TrimSpace(dto.Description), dto.IsActive
+	current.Description = strings.TrimSpace(dto.Description)
+	current.IsActive = ptrutil.BoolOr(dto.IsActive, current.IsActive)
 	updated, err := uc.repo.UpdateContactType(ctx, current)
 	if err != nil {
 		return nil, err
@@ -246,7 +249,7 @@ func (uc *CustomerUseCase) UpdateCustomerType(ctx context.Context, code int64, d
 	if err != nil {
 		return nil, err
 	}
-	validated.ID, validated.IsActive = current.ID, dto.IsActive
+	validated.ID, validated.IsActive = current.ID, ptrutil.BoolOr(dto.IsActive, current.IsActive)
 	updated, err := uc.repo.UpdateCustomerType(ctx, validated)
 	if err != nil {
 		return nil, err
@@ -309,7 +312,7 @@ func (uc *CustomerUseCase) UpdateCarrier(ctx context.Context, code int64, dto re
 	if err != nil {
 		return nil, err
 	}
-	validated.ID, validated.IsActive = current.ID, dto.IsActive
+	validated.ID, validated.IsActive = current.ID, ptrutil.BoolOr(dto.IsActive, current.IsActive)
 	validated.UsesCreditLimit, validated.ConsiderAvailable, validated.PostponeDueDate, validated.ReceiptDays, validated.PaymentDays = dto.UsesCreditLimit, dto.ConsiderAvailable, dto.PostponeDueDate, dto.ReceiptDays, dto.PaymentDays
 	updated, err := uc.repo.UpdateCarrier(ctx, validated)
 	if err != nil {
@@ -430,7 +433,7 @@ func (uc *CustomerUseCase) UpdatePaymentCondition(ctx context.Context, code int6
 	if err != nil {
 		return nil, err
 	}
-	validated.ID, validated.IsActive = current.ID, dto.IsActive
+	validated.ID, validated.IsActive = current.ID, ptrutil.BoolOr(dto.IsActive, current.IsActive)
 	validated.ParcelStart, validated.Expenses, validated.AverageTerm = entity.PaymentParcelStart(dto.ParcelStart), dto.Expenses, dto.AverageTerm
 	validated.IsSpecial, validated.IsRevenue, validated.IsAtSight = dto.IsSpecial, dto.IsRevenue, dto.IsAtSight
 	if dto.CarrierCode != nil {
@@ -585,7 +588,7 @@ func (uc *CustomerUseCase) UpdateSalesTable(ctx context.Context, dto request.Upd
 	if dto.DecimalPlaces > 0 {
 		st.DecimalPlaces = dto.DecimalPlaces
 	}
-	st.IsActive = dto.IsActive
+	st.IsActive = ptrutil.BoolOr(dto.IsActive, st.IsActive)
 	if dto.Composition != "" {
 		st.Composition = entity.TableComposition(dto.Composition)
 	}
@@ -656,7 +659,7 @@ func (uc *CustomerUseCase) UpdateSalesPricePolicy(ctx context.Context, dto reque
 	if err := uc.applySalesPricePolicyDTO(ctx, p, dto); err != nil {
 		return nil, err
 	}
-	p.IsActive = dto.IsActive
+	p.IsActive = ptrutil.BoolOr(dto.IsActive, p.IsActive)
 	updated, err := uc.repo.UpdateSalesPricePolicy(ctx, p)
 	if err != nil {
 		return nil, err
@@ -684,6 +687,10 @@ func (uc *CustomerUseCase) ListSalesPricePolicies(ctx context.Context, onlyActiv
 	return out, nil
 }
 
+// A política criada nasce ativa; o campo é ponteiro para que uma atualização
+// que não o mencione preserve a situação atual.
+var verdadeiro = true
+
 func dtoToUpdatePolicy(dto request.CreateSalesPricePolicyDTO) request.UpdateSalesPricePolicyDTO {
 	return request.UpdateSalesPricePolicyDTO{
 		Description:    dto.Description,
@@ -708,7 +715,7 @@ func dtoToUpdatePolicy(dto request.CreateSalesPricePolicyDTO) request.UpdateSale
 		SalesTableCode: dto.SalesTableCode,
 		ValidityStart:  dto.ValidityStart,
 		ValidityEnd:    dto.ValidityEnd,
-		IsActive:       true,
+		IsActive:       &verdadeiro,
 		Observation:    dto.Observation,
 	}
 }
@@ -851,7 +858,7 @@ func (uc *CustomerUseCase) UpdateCommercialPolicy(ctx context.Context, dto reque
 	if err := applyCommercialPolicyDTO(p, dto); err != nil {
 		return nil, err
 	}
-	p.IsActive = dto.IsActive
+	p.IsActive = ptrutil.BoolOr(dto.IsActive, p.IsActive)
 	updated, err := uc.repo.UpdateCommercialPolicy(ctx, p)
 	if err != nil {
 		return nil, err
@@ -1005,7 +1012,7 @@ func commercialPolicyCreateToUpdate(dto request.CreateCommercialPolicyDTO) reque
 		RuleJSON:               dto.RuleJSON,
 		ValidityStart:          dto.ValidityStart,
 		ValidityEnd:            dto.ValidityEnd,
-		IsActive:               true,
+		IsActive:               &verdadeiro,
 		Observation:            dto.Observation,
 	}
 }
@@ -1347,7 +1354,7 @@ func (uc *CustomerUseCase) UpdateInvoiceType(ctx context.Context, dto request.Up
 		Code:        dto.Code,
 		Description: dto.Description,
 		Type:        entity.InvoiceTypeKind(dto.Type),
-		IsActive:    dto.IsActive,
+		IsActive:    ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	// reuse the same shared helper — field sets are identical between Create and Update DTOs
 	createLike := request.CreateInvoiceTypeDTO{

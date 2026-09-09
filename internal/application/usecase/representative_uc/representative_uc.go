@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/representative/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/representative/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type UseCase struct {
@@ -57,7 +58,7 @@ func (uc *UseCase) UpdateType(ctx context.Context, dto request.UpdateRepresentat
 		Description:          strings.TrimSpace(dto.Description),
 		IsFree:               dto.IsFree,
 		IgnoresDirectBilling: dto.IgnoresDirectBilling,
-		IsActive:             dto.IsActive,
+		IsActive:             ptrutil.BoolOrTrue(dto.IsActive),
 	})
 	if err != nil {
 		return nil, err
@@ -463,7 +464,7 @@ func representativeFromUpdate(dto request.UpdateRepresentativeDTO) (*entity.Repr
 		return nil, err
 	}
 	base.Code = dto.Code
-	base.IsActive = dto.IsActive
+	base.IsActive = ptrutil.BoolOrTrue(dto.IsActive)
 	return base, nil
 }
 

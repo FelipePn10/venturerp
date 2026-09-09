@@ -7,11 +7,14 @@ type DeliveryPromiseLineDTO struct {
 	UnitPrice float64 `json:"unit_price"`
 }
 
+// DeliveryPromiseOccupationDTO é montado a partir da query string, não de um
+// corpo JSON: os tanques chegam como `tank_code` repetido na URL. As tags ficam
+// como "-" para não anunciar um contrato de corpo que o handler nunca lê.
 type DeliveryPromiseOccupationDTO struct {
-	FromDate      string  `json:"from_date"`
-	ToDate        string  `json:"to_date"`
-	DailyCapacity float64 `json:"daily_capacity"`
-	TankCodes     []int64 `json:"tank_codes,omitempty"`
+	FromDate      string  `json:"-"`
+	ToDate        string  `json:"-"`
+	DailyCapacity float64 `json:"-"`
+	TankCodes     []int64 `json:"-"`
 }
 
 type DeliveryTankReservationDTO struct {

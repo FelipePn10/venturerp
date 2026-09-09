@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/supplier/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/supplier/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 // SupplierUseCase consolidates all supplier-related operations.
@@ -55,7 +56,9 @@ func (uc *SupplierUseCase) UpdateSupplierType(ctx context.Context, dto request.U
 	if dto.Kind != "" {
 		t.Kind = entity.SupplierKind(dto.Kind)
 	}
-	t.IsActive = dto.IsActive
+	if dto.IsActive != nil {
+		t.IsActive = *dto.IsActive
+	}
 	updated, err := uc.repo.UpdateSupplierType(ctx, t)
 	if err != nil {
 		return nil, err
@@ -220,7 +223,9 @@ func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.Updat
 	}
 
 	s.CorporateCode = dto.CorporateCode
-	s.IsActive = dto.IsActive
+	if dto.IsActive != nil {
+		s.IsActive = *dto.IsActive
+	}
 	s.IsRepresentative = dto.IsRepresentative
 	s.IsCustomer = dto.IsCustomer
 	s.Name = dto.Name
@@ -578,7 +583,7 @@ func (uc *SupplierUseCase) UpdateEnterprise(ctx context.Context, dto request.Upd
 		AppliesIPI:           dto.AppliesIPI,
 		DefaultInvoiceTypeID: dto.DefaultInvoiceTypeID,
 		PurchasePriceTableID: dto.PurchasePriceTableID,
-		IsActive:             dto.IsActive,
+		IsActive:             ptrutil.BoolOrTrue(dto.IsActive),
 	})
 	if err != nil {
 		return nil, err

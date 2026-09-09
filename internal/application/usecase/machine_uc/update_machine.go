@@ -11,6 +11,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type UpdateMachineUseCase struct {
@@ -54,7 +55,7 @@ func (uc *UpdateMachineUseCase) Execute(
 		Capacity:        dto.Capacity,
 		CapacityPeriod:  capacityPeriod,
 		CapacityUnit:    capacityUnit,
-		IsActive:        dto.IsActive,
+		IsActive:        ptrutil.BoolOrTrue(dto.IsActive),
 		EfficiencyRate:  efficiency,
 	}
 

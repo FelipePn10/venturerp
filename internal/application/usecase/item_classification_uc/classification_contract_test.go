@@ -208,7 +208,7 @@ func TestUpdateClassification_ByCodeAndMask(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := uc.UpdateClassification(ctx, request.UpdateItemClassificationDTO{
-		Code: "10", MaskCode: 1, Description: "Matérias-primas", IsActive: true,
+		Code: "10", MaskCode: 1, Description: "Matérias-primas", IsActive: &ativo,
 	})
 	if err != nil {
 		t.Fatalf("alteração por código falhou: %v", err)
@@ -218,10 +218,13 @@ func TestUpdateClassification_ByCodeAndMask(t *testing.T) {
 	}
 }
 
+// `IsActive` é ponteiro: omitido, a atualização preserva a situação atual.
+var ativo = true
+
 func TestUpdateMask_ByCode(t *testing.T) {
 	uc, repo := newTestUC(t)
 	got, err := uc.UpdateMask(context.Background(), request.UpdateClassificationMaskDTO{
-		Code: 1, Description: "Mercadológica revisada", IsActive: true,
+		Code: 1, Description: "Mercadológica revisada", IsActive: &ativo,
 	})
 	if err != nil {
 		t.Fatalf("alteração de máscara por código falhou: %v", err)

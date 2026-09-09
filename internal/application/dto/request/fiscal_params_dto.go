@@ -11,7 +11,7 @@ type UpdateLegalDeviceDTO struct {
 	ID          int64  `json:"id"`
 	Type        string `json:"type"`
 	Description string `json:"description"`
-	IsActive    bool   `json:"is_active"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── CFOP / Naturezas de Operação ──────────────────────────────────────────────
@@ -41,7 +41,7 @@ type UpdateCFOPDTO struct {
 	CodigoAnexoSN   *string `json:"codigo_anexo_sn,omitempty"`
 	DIFAL           bool    `json:"difal"`
 	Doacao          bool    `json:"doacao"`
-	IsActive        bool    `json:"is_active"`
+	IsActive        *bool   `json:"is_active,omitempty"`
 }
 
 // ─── ICMS/IPI Tax Params ────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ type CreateTaxParamDTO struct {
 
 type UpdateTaxParamDTO struct {
 	ID       int64 `json:"id"`
-	IsActive bool  `json:"is_active"`
+	IsActive *bool `json:"is_active,omitempty"`
 	CreateTaxParamDTO
 }
 
@@ -173,7 +173,7 @@ type UpdateClassificationMaskDTO struct {
 	// o id interno.
 	Code        int64  `json:"code"`
 	Description string `json:"description"`
-	IsActive    bool   `json:"is_active"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Item Classifications ────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ type UpdateItemClassificationDTO struct {
 	Code        string `json:"code"`
 	MaskCode    int64  `json:"mask_code"`
 	Description string `json:"description"`
-	IsActive    bool   `json:"is_active"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Countries ────────────────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ type UpdateCountryDTO struct {
 	DDI       *string `json:"ddi,omitempty"`
 	BacenCode *string `json:"bacen_code,omitempty"`
 	SisComex  *string `json:"sis_comex,omitempty"`
-	IsActive  bool    `json:"is_active"`
+	IsActive  *bool   `json:"is_active,omitempty"`
 }
 
 // ─── UFs ──────────────────────────────────────────────────────────────────────
@@ -229,5 +229,5 @@ type UpdateUFDTO struct {
 	Sigla    string  `json:"sigla"`
 	Name     string  `json:"name"`
 	IBGECode *string `json:"ibge_code,omitempty"`
-	IsActive bool    `json:"is_active"`
+	IsActive *bool   `json:"is_active,omitempty"`
 }

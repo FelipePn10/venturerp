@@ -197,12 +197,17 @@ type SetSalesQuotationSupportStatusDTO struct {
 	IsActive bool `json:"is_active"`
 }
 
+// CreateSalesQuotationAttachmentDTO carrega um anexo do orçamento. O envio é
+// multipart: nada aqui vem de corpo JSON. A chave de armazenamento é derivada do
+// nome do arquivo e o autor sai do token — anunciá-los como campos de entrada
+// deixava a impressão de que o cliente poderia assinar o anexo como outro
+// usuário.
 type CreateSalesQuotationAttachmentDTO struct {
-	SalesQuotationCode int64     `json:"sales_quotation_code"`
-	FileName           string    `json:"file_name"`
-	ContentType        string    `json:"content_type"`
-	FileSize           int64     `json:"file_size"`
-	StorageKey         string    `json:"storage_key"`
-	UploadedBy         uuid.UUID `json:"uploaded_by"`
+	SalesQuotationCode int64     `json:"-"`
+	FileName           string    `json:"-"`
+	ContentType        string    `json:"-"`
+	FileSize           int64     `json:"-"`
+	StorageKey         string    `json:"-"`
+	UploadedBy         uuid.UUID `json:"-"`
 	Content            []byte    `json:"-"`
 }

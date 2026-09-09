@@ -11,6 +11,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 var maskPattern = regexp.MustCompile(`^9+(\.9+)*$`)
@@ -137,7 +138,7 @@ func (uc *ItemClassificationUseCase) UpdateMask(ctx context.Context, dto request
 	m := &entity.ItemClassificationMask{
 		ID:          id,
 		Description: strings.TrimSpace(dto.Description),
-		IsActive:    dto.IsActive,
+		IsActive:    ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	updated, err := uc.Repo.UpdateClassificationMask(ctx, m)
 	if err != nil {
@@ -252,7 +253,7 @@ func (uc *ItemClassificationUseCase) UpdateClassification(ctx context.Context, d
 	c := &entity.ItemClassification{
 		ID:          id,
 		Description: strings.TrimSpace(dto.Description),
-		IsActive:    dto.IsActive,
+		IsActive:    ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	updated, err := uc.Repo.UpdateItemClassification(ctx, c)
 	if err != nil {

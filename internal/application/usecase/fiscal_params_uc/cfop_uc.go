@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type CFOPUseCase struct {
@@ -60,7 +61,7 @@ func (uc *CFOPUseCase) Update(ctx context.Context, dto request.UpdateCFOPDTO) (*
 		CodigoAnexoSN:   dto.CodigoAnexoSN,
 		DIFAL:           dto.DIFAL,
 		Doacao:          dto.Doacao,
-		IsActive:        dto.IsActive,
+		IsActive:        ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	updated, err := uc.Repo.UpdateCFOP(ctx, c)
 	if err != nil {

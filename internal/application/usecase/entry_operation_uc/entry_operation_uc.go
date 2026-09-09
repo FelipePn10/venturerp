@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/entry_operation/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/entry_operation/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type EntryOperationUseCase struct {
@@ -109,7 +110,7 @@ func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto r
 	o.ClassificationCode = dto.ClassificationCode
 	o.StateGroupCode = dto.StateGroupCode
 	o.SupplierTypeCode = dto.SupplierTypeCode
-	o.IsActive = dto.IsActive
+	o.IsActive = ptrutil.BoolOr(dto.IsActive, o.IsActive)
 	updated, err := uc.repo.UpdateEntryOperation(ctx, o)
 	if err != nil {
 		return nil, err

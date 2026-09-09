@@ -33,7 +33,7 @@ type UpdateMachineTypeDTO struct {
 	Description      *string               `json:"description,omitempty"`
 	Type             types.MachineTypeEnum `json:"type"`
 	RequiresOperator bool                  `json:"requires_operator"`
-	IsActive         bool                  `json:"is_active"`
+	IsActive         *bool                 `json:"is_active,omitempty"`
 }
 
 type CreateMachineDTO struct {
@@ -67,7 +67,7 @@ type UpdateMachineDTO struct {
 	CapacityUnit    types.MachineCapacityUnit `json:"capacity_per_unit"`
 	CapacityPeriod  types.CapacityPeriod      `json:"capacity_period"`
 	EfficiencyRate  float64                   `json:"efficiency_rate"`
-	IsActive        bool                      `json:"is_active"`
+	IsActive        *bool                     `json:"is_active,omitempty"`
 	// UpdatedBy vem do JWT; nunca do corpo da requisição.
 	UpdatedBy uuid.UUID `json:"-"`
 }

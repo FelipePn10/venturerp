@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type UpdateMachineTypeUseCase struct {
@@ -35,7 +36,7 @@ func (uc *UpdateMachineTypeUseCase) Execute(
 		Description:      dto.Description,
 		Type:             dto.Type,
 		RequiresOperator: dto.RequiresOperator,
-		IsActive:         dto.IsActive,
+		IsActive:         ptrutil.BoolOrTrue(dto.IsActive),
 	}
 
 	updated, err := uc.Repo.UpdateType(ctx, mt)

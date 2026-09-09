@@ -68,6 +68,19 @@ func (h *ItemConversionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Convert resolves a quantity conversion: GET ?item=&from=&to=&qty=
+// conversionResult é o retorno da conversão. Era um map anônimo: o contrato não
+// aparecia em lugar nenhum e a auditoria de drift acusava as chaves como
+// inexistentes no backend.
+type conversionResult struct {
+	ItemCode       string  `json:"item_code"`
+	LegacyItemCode int64   `json:"legacy_item_code"`
+	FromUOM        string  `json:"from_uom"`
+	ToUOM          string  `json:"to_uom"`
+	Factor         float64 `json:"factor"`
+	Quantity       float64 `json:"quantity"`
+	ConvertedQty   float64 `json:"converted_qty"`
+}
+
 func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	from := strings.TrimSpace(q.Get("from"))
@@ -102,13 +115,13 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, http.StatusNotFound, item_conversion_uc.ErrNoConversion.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, map[string]any{
-		"item_code":        rawItem,
-		"legacy_item_code": itemCode,
-		"from_uom":         from,
-		"to_uom":           to,
-		"factor":           factor,
-		"quantity":         qty,
-		"converted_qty":    converted,
+	jsonResponse(w, http.StatusOK, conversionResult{
+		ItemCode:       rawItem,
+		LegacyItemCode: itemCode,
+		FromUOM:        from,
+		ToUOM:          to,
+		Factor:         factor,
+		Quantity:       qty,
+		ConvertedQty:   converted,
 	})
 }

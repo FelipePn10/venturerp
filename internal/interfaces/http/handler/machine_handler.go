@@ -202,7 +202,7 @@ func (h *MachineHandler) ReorderSchedule(w http.ResponseWriter, r *http.Request)
 
 	security.RespondJSON(w, http.StatusOK, map[string]any{
 		"status":  "success",
-		"message": "schedule reordered",
+		"message": "fila da máquina reordenada",
 	})
 }
 
