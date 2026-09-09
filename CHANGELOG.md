@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.18] — 2026-09-09
+
+- fix: alteração de máquina, cadastro completo do recurso e isolamento da fila (`cd67bb8`)
+- fix: traduz as mensagens de validação do cadastro de item (`ec11f4d`)
+
 ## [v1.1.17] — 2026-09-09
 
 - fix: situação omitida em atualização deixa de inativar o cadastro (`d679960`)
