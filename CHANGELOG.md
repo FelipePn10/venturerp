@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.17] — 2026-09-09
+
+- fix: situação omitida em atualização deixa de inativar o cadastro (`d679960`)
+
 ## [v1.1.16] — 2026-09-07
 
 - feat: alteração de item, resolução de código no PDM e erros tipados (`3c29707`)
