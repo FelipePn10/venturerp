@@ -479,6 +479,8 @@ func (app *application) mount() chi.Router {
 	machineUC := &machine_uc.CreateMachineUseCase{Repo: machineRepo, Auth: authService}
 	machineListUC := &machine_uc.ListMachinesUseCase{Repo: machineRepo, Auth: authService}
 	machineGetByCodeUC := &machine_uc.GetMachineUseCase{Repo: machineRepo, Auth: authService}
+	machineUpdateUC := &machine_uc.UpdateMachineUseCase{Repo: machineRepo, Auth: authService}
+	machineTypeUpdateUC := &machine_uc.UpdateMachineTypeUseCase{Repo: machineRepo, Auth: authService}
 	//type
 	machineTypeCreateUC := &machine_uc.CreateMachineTypeUseCase{Repo: machineRepo, Auth: authService}
 	machineListTypesUC := &machine_uc.ListMachineTypesUseCase{Repo: machineRepo, Auth: authService}
@@ -495,9 +497,11 @@ func (app *application) mount() chi.Router {
 		machineUC,
 		machineListUC,
 		machineGetByCodeUC,
+		machineUpdateUC,
 		machineTypeCreateUC,
 		machineListTypesUC,
 		machineTypeGetByCodeUC,
+		machineTypeUpdateUC,
 		machineItemTimeUC,
 		machineListItemTimeUC,
 		//machineGetItemTimeUC,
@@ -1291,10 +1295,14 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateMachine)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListMachines)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", machineHandler.GetMachineByCode)
+			// Alterar o cadastro: o caso de uso existia sem rota, então máquina
+			// e tipo só podiam ser criados e excluídos, nunca corrigidos.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", machineHandler.UpdateMachine)
 			r.Route("/types", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateType)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListTypes)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", machineHandler.GetTypeByCode)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", machineHandler.UpdateType)
 			})
 			r.Route("/time", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateItemTime)

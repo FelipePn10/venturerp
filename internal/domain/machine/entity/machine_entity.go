@@ -31,9 +31,28 @@ type Machine struct {
 	CapacityPeriod  types.CapacityPeriod
 	EfficiencyRate  float64
 	IsActive        bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	CreatedBy       uuid.UUID
+
+	// Cadastro completo do recurso, no nível do que o mercado pede (FoccoERP
+	// FENG0111): a que grupo e calendário a máquina pertence, onde fica, se é
+	// gargalo, quando foi adquirida, quanto tempo leva para preparar, de quem
+	// foi comprada e quem cuida da manutenção. As colunas já existiam na
+	// tabela; faltava o caminho DTO → entidade → SQL.
+	ResourceGroupID                  *int64
+	CalendarID                       *int64
+	Location                         *string
+	IsCritical                       bool
+	UsageDescription                 *string
+	AcquiredOn                       *time.Time
+	PreparationTime                  float64
+	PreparationTimeUnit              string
+	SupplierCode                     *int64
+	Brand                            *string
+	IsPreferred                      bool
+	MaintenanceResponsibleEmployeeID *int64
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.UUID
 }
 
 type ItemMachineTime struct {

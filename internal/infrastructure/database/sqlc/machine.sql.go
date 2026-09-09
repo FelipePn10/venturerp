@@ -86,26 +86,63 @@ INSERT INTO machines (
     capacity_unit,
     capacity_period,
     efficiency_rate,
+    is_active,
+    resource_group_id,
+    calendar_id,
+    location,
+    is_critical,
+    usage_description,
+    acquired_on,
+    preparation_time,
+    preparation_time_unit,
+    supplier_code,
+    brand,
+    is_preferred,
+    maintenance_responsible_employee_id,
     created_by,
     enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7, $8,
+    $9, $10, $11, $12,
+    $13, $14, $15,
+    $16, $17, $18,
+    $19, $20, $21,
+    $22, $23)
     RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 `
 
 type CreateMachineParams struct {
-	Code            int64
-	Name            string
-	MachineTypeCode int64
-	CostCenterCode  *int64
-	Capacity        pgtype.Numeric
-	CapacityUnit    MachineCapacityUnitEnum
-	CapacityPeriod  CapacityPeriodEnum
-	EfficiencyRate  pgtype.Numeric
-	CreatedBy       pgtype.UUID
-	EnterpriseID    *int64
+	Code                             int64
+	Name                             string
+	MachineTypeCode                  int64
+	CostCenterCode                   *int64
+	Capacity                         pgtype.Numeric
+	CapacityUnit                     MachineCapacityUnitEnum
+	CapacityPeriod                   CapacityPeriodEnum
+	EfficiencyRate                   pgtype.Numeric
+	IsActive                         bool
+	ResourceGroupID                  *int64
+	CalendarID                       *int64
+	Location                         pgtype.Text
+	IsCritical                       bool
+	UsageDescription                 pgtype.Text
+	AcquiredOn                       pgtype.Date
+	PreparationTime                  pgtype.Numeric
+	PreparationTimeUnit              string
+	SupplierCode                     *int64
+	Brand                            pgtype.Text
+	IsPreferred                      bool
+	MaintenanceResponsibleEmployeeID *int64
+	CreatedBy                        pgtype.UUID
+	EnterpriseID                     *int64
 }
 
+// A tabela já tinha as colunas do cadastro completo (grupo, calendário, local,
+// criticidade, uso, aquisição, preparação, fornecedor, marca, preferencial e
+// responsável de manutenção); só o INSERT não as preenchia, e por isso nenhuma
+// delas podia ser informada.
 func (q *Queries) CreateMachine(ctx context.Context, arg CreateMachineParams) (Machine, error) {
 	row := q.db.QueryRow(ctx, createMachine,
 		arg.Code,
@@ -116,6 +153,19 @@ func (q *Queries) CreateMachine(ctx context.Context, arg CreateMachineParams) (M
 		arg.CapacityUnit,
 		arg.CapacityPeriod,
 		arg.EfficiencyRate,
+		arg.IsActive,
+		arg.ResourceGroupID,
+		arg.CalendarID,
+		arg.Location,
+		arg.IsCritical,
+		arg.UsageDescription,
+		arg.AcquiredOn,
+		arg.PreparationTime,
+		arg.PreparationTimeUnit,
+		arg.SupplierCode,
+		arg.Brand,
+		arg.IsPreferred,
+		arg.MaintenanceResponsibleEmployeeID,
 		arg.CreatedBy,
 		arg.EnterpriseID,
 	)
@@ -221,11 +271,12 @@ INSERT INTO machine_schedules (
     planned_qty,
     sequence,
     priority_override,
-    notes
+    notes,
+    enterprise_id
 )
 VALUES (
     COALESCE((SELECT MAX(code) FROM machine_schedules), 0) + 1,
-    $1, $2, $3, $4, $5, $6, $7, $8, $9)
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active, enterprise_id
 `
 
@@ -239,6 +290,7 @@ type CreateScheduleParams struct {
 	Sequence         int32
 	PriorityOverride *int32
 	Notes            pgtype.Text
+	EnterpriseID     *int64
 }
 
 // -- name: DeleteItemMachineTime :exec
@@ -247,6 +299,9 @@ type CreateScheduleParams struct {
 // WHERE code = $1;
 // code is auto-assigned (MAX+1) so callers don't have to manage the business key;
 // the column is NOT NULL UNIQUE with no DB default.
+//
+// Toda consulta desta tabela é filtrada por enterprise_id: sem isso, uma empresa
+// enxergava, alterava e excluía a fila de outra apenas informando o código.
 func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) (MachineSchedule, error) {
 	row := q.db.QueryRow(ctx, createSchedule,
 		arg.MachineCode,
@@ -258,6 +313,7 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		arg.Sequence,
 		arg.PriorityOverride,
 		arg.Notes,
+		arg.EnterpriseID,
 	)
 	var i MachineSchedule
 	err := row.Scan(
@@ -314,15 +370,25 @@ func (q *Queries) DeleteMachineType(ctx context.Context, arg DeleteMachineTypePa
 	return err
 }
 
-const deleteSchedule = `-- name: DeleteSchedule :exec
+const deleteSchedule = `-- name: DeleteSchedule :execrows
 UPDATE machine_schedules
 SET is_active = FALSE, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteSchedule(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteSchedule, code)
-	return err
+type DeleteScheduleParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+// :execrows para o caso de uso saber se algo foi de fato removido: excluir um
+// slot inexistente devolvia 200 "sucesso".
+func (q *Queries) DeleteSchedule(ctx context.Context, arg DeleteScheduleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSchedule, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getMachineByCode = `-- name: GetMachineByCode :one
@@ -407,11 +473,16 @@ func (q *Queries) GetMachineTypeByCode(ctx context.Context, arg GetMachineTypeBy
 const getSchedule = `-- name: GetSchedule :one
 SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active, enterprise_id
 FROM machine_schedules
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetSchedule(ctx context.Context, code int64) (MachineSchedule, error) {
-	row := q.db.QueryRow(ctx, getSchedule, code)
+type GetScheduleParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (MachineSchedule, error) {
+	row := q.db.QueryRow(ctx, getSchedule, arg.Code, arg.EnterpriseID)
 	var i MachineSchedule
 	err := row.Scan(
 		&i.ID,
@@ -694,6 +765,7 @@ SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, statu
 FROM machine_schedules
 WHERE machine_code = $1
   AND schedule_date = $2
+  AND enterprise_id = $3
   AND is_active = TRUE
 ORDER BY sequence
 `
@@ -701,10 +773,11 @@ ORDER BY sequence
 type ListSchedulesParams struct {
 	MachineCode  int64
 	ScheduleDate pgtype.Date
+	EnterpriseID *int64
 }
 
 func (q *Queries) ListSchedules(ctx context.Context, arg ListSchedulesParams) ([]MachineSchedule, error) {
-	rows, err := q.db.Query(ctx, listSchedules, arg.MachineCode, arg.ScheduleDate)
+	rows, err := q.db.Query(ctx, listSchedules, arg.MachineCode, arg.ScheduleDate, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -746,6 +819,7 @@ SELECT id, schedule_date, start_time, end_time, planned_qty, produced_qty, statu
 FROM machine_schedules
 WHERE machine_code = $1
   AND schedule_date BETWEEN $2 AND $3
+  AND enterprise_id = $4
   AND is_active = TRUE
 ORDER BY schedule_date, sequence
 `
@@ -754,10 +828,16 @@ type ListSchedulesByRangeParams struct {
 	MachineCode    int64
 	ScheduleDate   pgtype.Date
 	ScheduleDate_2 pgtype.Date
+	EnterpriseID   *int64
 }
 
 func (q *Queries) ListSchedulesByRange(ctx context.Context, arg ListSchedulesByRangeParams) ([]MachineSchedule, error) {
-	rows, err := q.db.Query(ctx, listSchedulesByRange, arg.MachineCode, arg.ScheduleDate, arg.ScheduleDate_2)
+	rows, err := q.db.Query(ctx, listSchedulesByRange,
+		arg.MachineCode,
+		arg.ScheduleDate,
+		arg.ScheduleDate_2,
+		arg.EnterpriseID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -804,22 +884,51 @@ SET
     capacity_unit = $5,
     capacity_period = $6,
     efficiency_rate = $7,
+    is_active = $8,
+    resource_group_id = $9,
+    calendar_id = $10,
+    location = $11,
+    is_critical = $12,
+    usage_description = $13,
+    acquired_on = $14,
+    preparation_time = $15,
+    preparation_time_unit = $16,
+    supplier_code = $17,
+    brand = $18,
+    is_preferred = $19,
+    maintenance_responsible_employee_id = $20,
     updated_at = NOW()
-WHERE code = $6 AND enterprise_id = $8
+WHERE code = $21 AND enterprise_id = $22
     RETURNING id, code, name, capacity, efficiency_rate, is_active, created_at, updated_at, created_by, machine_type_code, cost_center_code, capacity_unit, capacity_period, enterprise_id, resource_group_id, calendar_id, location, is_critical, usage_description, acquired_on, preparation_time, preparation_time_unit, supplier_code, brand, is_preferred, maintenance_responsible_employee_id
 `
 
 type UpdateMachineParams struct {
-	Name            string
-	MachineTypeCode int64
-	CostCenterCode  *int64
-	Capacity        pgtype.Numeric
-	CapacityUnit    MachineCapacityUnitEnum
-	CapacityPeriod  CapacityPeriodEnum
-	EfficiencyRate  pgtype.Numeric
-	EnterpriseID    *int64
+	Name                             string
+	MachineTypeCode                  int64
+	CostCenterCode                   *int64
+	Capacity                         pgtype.Numeric
+	CapacityUnit                     MachineCapacityUnitEnum
+	CapacityPeriod                   CapacityPeriodEnum
+	EfficiencyRate                   pgtype.Numeric
+	IsActive                         bool
+	ResourceGroupID                  *int64
+	CalendarID                       *int64
+	Location                         pgtype.Text
+	IsCritical                       bool
+	UsageDescription                 pgtype.Text
+	AcquiredOn                       pgtype.Date
+	PreparationTime                  pgtype.Numeric
+	PreparationTimeUnit              string
+	SupplierCode                     *int64
+	Brand                            pgtype.Text
+	IsPreferred                      bool
+	MaintenanceResponsibleEmployeeID *int64
+	Code                             int64
+	EnterpriseID                     *int64
 }
 
+// O WHERE usava $6 — que é `capacity_period`, não o código: a alteração
+// comparava um bigint com um enum e nunca encontrava a máquina.
 func (q *Queries) UpdateMachine(ctx context.Context, arg UpdateMachineParams) (Machine, error) {
 	row := q.db.QueryRow(ctx, updateMachine,
 		arg.Name,
@@ -829,6 +938,20 @@ func (q *Queries) UpdateMachine(ctx context.Context, arg UpdateMachineParams) (M
 		arg.CapacityUnit,
 		arg.CapacityPeriod,
 		arg.EfficiencyRate,
+		arg.IsActive,
+		arg.ResourceGroupID,
+		arg.CalendarID,
+		arg.Location,
+		arg.IsCritical,
+		arg.UsageDescription,
+		arg.AcquiredOn,
+		arg.PreparationTime,
+		arg.PreparationTimeUnit,
+		arg.SupplierCode,
+		arg.Brand,
+		arg.IsPreferred,
+		arg.MaintenanceResponsibleEmployeeID,
+		arg.Code,
 		arg.EnterpriseID,
 	)
 	var i Machine
@@ -886,6 +1009,8 @@ type UpdateMachineTypeParams struct {
 	EnterpriseID     *int64
 }
 
+// O WHERE usava $6, que é um parâmetro do SET: a alteração nunca casava a linha
+// certa. O código do tipo é parâmetro próprio.
 func (q *Queries) UpdateMachineType(ctx context.Context, arg UpdateMachineTypeParams) (MachineType, error) {
 	row := q.db.QueryRow(ctx, updateMachineType,
 		arg.Name,
@@ -923,7 +1048,7 @@ SET
     sequence = $2,
     priority_override = $3,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $4
     RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active, enterprise_id
 `
 
@@ -931,10 +1056,16 @@ type UpdateScheduleSequenceParams struct {
 	Code             int64
 	Sequence         int32
 	PriorityOverride *int32
+	EnterpriseID     *int64
 }
 
 func (q *Queries) UpdateScheduleSequence(ctx context.Context, arg UpdateScheduleSequenceParams) (MachineSchedule, error) {
-	row := q.db.QueryRow(ctx, updateScheduleSequence, arg.Code, arg.Sequence, arg.PriorityOverride)
+	row := q.db.QueryRow(ctx, updateScheduleSequence,
+		arg.Code,
+		arg.Sequence,
+		arg.PriorityOverride,
+		arg.EnterpriseID,
+	)
 	var i MachineSchedule
 	err := row.Scan(
 		&i.ID,
@@ -964,18 +1095,24 @@ SET
     status = $2,
     produced_qty = $3,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $4
     RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active, enterprise_id
 `
 
 type UpdateScheduleStatusParams struct {
-	Code        int64
-	Status      string
-	ProducedQty pgtype.Numeric
+	Code         int64
+	Status       string
+	ProducedQty  pgtype.Numeric
+	EnterpriseID *int64
 }
 
 func (q *Queries) UpdateScheduleStatus(ctx context.Context, arg UpdateScheduleStatusParams) (MachineSchedule, error) {
-	row := q.db.QueryRow(ctx, updateScheduleStatus, arg.Code, arg.Status, arg.ProducedQty)
+	row := q.db.QueryRow(ctx, updateScheduleStatus,
+		arg.Code,
+		arg.Status,
+		arg.ProducedQty,
+		arg.EnterpriseID,
+	)
 	var i MachineSchedule
 	err := row.Scan(
 		&i.ID,
@@ -1005,18 +1142,24 @@ SET
     start_time = $2,
     end_time = $3,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $4
     RETURNING id, schedule_date, start_time, end_time, planned_qty, produced_qty, status, sequence, priority_override, notes, created_at, updated_at, machine_code, order_code, code, is_active, enterprise_id
 `
 
 type UpdateScheduleTimesParams struct {
-	Code      int64
-	StartTime pgtype.Time
-	EndTime   pgtype.Time
+	Code         int64
+	StartTime    pgtype.Time
+	EndTime      pgtype.Time
+	EnterpriseID *int64
 }
 
 func (q *Queries) UpdateScheduleTimes(ctx context.Context, arg UpdateScheduleTimesParams) (MachineSchedule, error) {
-	row := q.db.QueryRow(ctx, updateScheduleTimes, arg.Code, arg.StartTime, arg.EndTime)
+	row := q.db.QueryRow(ctx, updateScheduleTimes,
+		arg.Code,
+		arg.StartTime,
+		arg.EndTime,
+		arg.EnterpriseID,
+	)
 	var i MachineSchedule
 	err := row.Scan(
 		&i.ID,

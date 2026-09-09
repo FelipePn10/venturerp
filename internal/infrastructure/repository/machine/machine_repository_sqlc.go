@@ -128,16 +128,29 @@ func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (
 		return nil, err
 	}
 	row, err := r.q.CreateMachine(ctx, sqlc.CreateMachineParams{
-		Code:            m.Code,
-		Name:            m.Name,
-		MachineTypeCode: m.MachineTypeCode,
-		CostCenterCode:  m.CostCenterCode,
-		Capacity:        pgutil.ToPgNumericFromFloat64(m.Capacity),
-		CapacityPeriod:  sqlc.CapacityPeriodEnum(m.CapacityPeriod),
-		CapacityUnit:    sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
-		EfficiencyRate:  pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
-		CreatedBy:       pgutil.ToPgUUID(m.CreatedBy),
-		EnterpriseID:    &enterpriseID,
+		Code:                             m.Code,
+		Name:                             m.Name,
+		MachineTypeCode:                  m.MachineTypeCode,
+		CostCenterCode:                   m.CostCenterCode,
+		Capacity:                         pgutil.ToPgNumericFromFloat64(m.Capacity),
+		CapacityPeriod:                   sqlc.CapacityPeriodEnum(m.CapacityPeriod),
+		CapacityUnit:                     sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
+		EfficiencyRate:                   pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
+		IsActive:                         m.IsActive,
+		ResourceGroupID:                  m.ResourceGroupID,
+		CalendarID:                       m.CalendarID,
+		Location:                         pgutil.ToPgTextFromPtr(m.Location),
+		IsCritical:                       m.IsCritical,
+		UsageDescription:                 pgutil.ToPgTextFromPtr(m.UsageDescription),
+		AcquiredOn:                       dataOuNula(m.AcquiredOn),
+		PreparationTime:                  pgutil.ToPgNumericFromFloat64(m.PreparationTime),
+		PreparationTimeUnit:              unidadeOuPadrao(m.PreparationTimeUnit),
+		SupplierCode:                     m.SupplierCode,
+		Brand:                            pgutil.ToPgTextFromPtr(m.Brand),
+		IsPreferred:                      m.IsPreferred,
+		MaintenanceResponsibleEmployeeID: m.MaintenanceResponsibleEmployeeID,
+		CreatedBy:                        pgutil.ToPgUUID(m.CreatedBy),
+		EnterpriseID:                     &enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create machine: %w", err)
@@ -151,16 +164,33 @@ func (r *MachineRepositorySQLC) Update(ctx context.Context, m *entity.Machine) (
 		return nil, err
 	}
 	row, err := r.q.UpdateMachine(ctx, sqlc.UpdateMachineParams{
-		Name:            m.Name,
-		MachineTypeCode: m.MachineTypeCode,
-		CostCenterCode:  m.CostCenterCode,
-		Capacity:        pgutil.ToPgNumericFromFloat64(m.Capacity),
-		CapacityPeriod:  sqlc.CapacityPeriodEnum(m.CapacityPeriod),
-		CapacityUnit:    sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
-		EfficiencyRate:  pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
-		EnterpriseID:    &enterpriseID,
+		Name:                             m.Name,
+		MachineTypeCode:                  m.MachineTypeCode,
+		CostCenterCode:                   m.CostCenterCode,
+		Capacity:                         pgutil.ToPgNumericFromFloat64(m.Capacity),
+		CapacityPeriod:                   sqlc.CapacityPeriodEnum(m.CapacityPeriod),
+		CapacityUnit:                     sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
+		EfficiencyRate:                   pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
+		IsActive:                         m.IsActive,
+		ResourceGroupID:                  m.ResourceGroupID,
+		CalendarID:                       m.CalendarID,
+		Location:                         pgutil.ToPgTextFromPtr(m.Location),
+		IsCritical:                       m.IsCritical,
+		UsageDescription:                 pgutil.ToPgTextFromPtr(m.UsageDescription),
+		AcquiredOn:                       dataOuNula(m.AcquiredOn),
+		PreparationTime:                  pgutil.ToPgNumericFromFloat64(m.PreparationTime),
+		PreparationTimeUnit:              unidadeOuPadrao(m.PreparationTimeUnit),
+		SupplierCode:                     m.SupplierCode,
+		Brand:                            pgutil.ToPgTextFromPtr(m.Brand),
+		IsPreferred:                      m.IsPreferred,
+		MaintenanceResponsibleEmployeeID: m.MaintenanceResponsibleEmployeeID,
+		Code:                             m.Code,
+		EnterpriseID:                     &enterpriseID,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("máquina %d não encontrada nesta empresa", m.Code))
+		}
 		return nil, fmt.Errorf("update machine: %w", err)
 	}
 	return machineToEntity(row), nil
@@ -293,7 +323,12 @@ func (r *MachineRepositorySQLC) ListItemsByMachine(
 //}
 
 func (r *MachineRepositorySQLC) CreateSchedule(ctx context.Context, s *entity.MachineSchedule) (*entity.MachineSchedule, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSchedule(ctx, sqlc.CreateScheduleParams{
+		EnterpriseID:     &enterpriseID,
 		MachineCode:      s.MachineCode,
 		OrderCode:        s.OrderCode,
 		ScheduleDate:     pgutil.ToPgDate(s.ScheduleDate),
@@ -311,7 +346,11 @@ func (r *MachineRepositorySQLC) CreateSchedule(ctx context.Context, s *entity.Ma
 }
 
 func (r *MachineRepositorySQLC) GetSchedule(ctx context.Context, code int64) (*entity.MachineSchedule, error) {
-	row, err := r.q.GetSchedule(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSchedule(ctx, sqlc.GetScheduleParams{Code: code, EnterpriseID: &enterpriseID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("programação %d não encontrada", code))
@@ -328,9 +367,14 @@ func (r *MachineRepositorySQLC) ListSchedules(
 	date time.Time,
 ) ([]*entity.MachineSchedule, error) {
 
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.ListSchedules(ctx, sqlc.ListSchedulesParams{
 		MachineCode:  machineCode,
 		ScheduleDate: pgutil.ToPgDate(date),
+		EnterpriseID: &enterpriseID,
 	})
 	if err != nil {
 		return nil, err
@@ -352,10 +396,15 @@ func (r *MachineRepositorySQLC) ListSchedulesByRange(
 	end time.Time,
 ) ([]*entity.MachineSchedule, error) {
 
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.ListSchedulesByRange(ctx, sqlc.ListSchedulesByRangeParams{
 		MachineCode:    machineCode,
 		ScheduleDate:   pgutil.ToPgDate(start),
 		ScheduleDate_2: pgutil.ToPgDate(end),
+		EnterpriseID:   &enterpriseID,
 	})
 	if err != nil {
 		return nil, err
@@ -377,13 +426,18 @@ func (r *MachineRepositorySQLC) UpdateScheduleSequence(
 	priorityOverride *int,
 ) (*entity.MachineSchedule, error) {
 
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateScheduleSequence(ctx, sqlc.UpdateScheduleSequenceParams{
 		Code:             code,
 		Sequence:         int32(sequence),
 		PriorityOverride: int32Ptr(priorityOverride),
+		EnterpriseID:     &enterpriseID,
 	})
 	if err != nil {
-		return nil, err
+		return nil, semLinhaVira404(err, code)
 	}
 
 	return scheduleToEntity(row), nil
@@ -396,13 +450,18 @@ func (r *MachineRepositorySQLC) UpdateScheduleStatus(
 	producedQty float64,
 ) (*entity.MachineSchedule, error) {
 
-	row, err := r.q.UpdateScheduleStatus(ctx, sqlc.UpdateScheduleStatusParams{
-		Code:        code,
-		Status:      status,
-		ProducedQty: pgutil.ToPgNumericFromFloat64(producedQty),
-	})
+	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	row, err := r.q.UpdateScheduleStatus(ctx, sqlc.UpdateScheduleStatusParams{
+		Code:         code,
+		Status:       status,
+		ProducedQty:  pgutil.ToPgNumericFromFloat64(producedQty),
+		EnterpriseID: &enterpriseID,
+	})
+	if err != nil {
+		return nil, semLinhaVira404(err, code)
 	}
 
 	return scheduleToEntity(row), nil
@@ -415,13 +474,18 @@ func (r *MachineRepositorySQLC) UpdateScheduleTimes(
 	endTime *time.Time,
 ) (*entity.MachineSchedule, error) {
 
-	row, err := r.q.UpdateScheduleTimes(ctx, sqlc.UpdateScheduleTimesParams{
-		Code:      code,
-		StartTime: toPgTimePtr(startTime),
-		EndTime:   toPgTimePtr(endTime),
-	})
+	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	row, err := r.q.UpdateScheduleTimes(ctx, sqlc.UpdateScheduleTimesParams{
+		Code:         code,
+		StartTime:    toPgTimePtr(startTime),
+		EndTime:      toPgTimePtr(endTime),
+		EnterpriseID: &enterpriseID,
+	})
+	if err != nil {
+		return nil, semLinhaVira404(err, code)
 	}
 
 	return scheduleToEntity(row), nil
@@ -431,7 +495,28 @@ func (r *MachineRepositorySQLC) DeleteSchedule(
 	ctx context.Context,
 	code int64,
 ) error {
-	return r.q.DeleteSchedule(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSchedule(ctx, sqlc.DeleteScheduleParams{Code: code, EnterpriseID: &enterpriseID})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("programação %d não encontrada", code))
+	}
+	return nil
+}
+
+// semLinhaVira404 traduz "nenhuma linha atualizada" para não encontrado: com o
+// filtro por empresa, um código de outra empresa some do UPDATE em vez de dar
+// erro, e o usuário precisa saber que o registro não é dele.
+func semLinhaVira404(err error, code int64) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("programação %d não encontrada", code))
+	}
+	return err
 }
 
 func machineTypeToEntity(row sqlc.MachineType) *entity.MachineType {
@@ -461,10 +546,33 @@ func machineToEntity(row sqlc.Machine) *entity.Machine {
 		CapacityUnit:    types.MachineCapacityUnit(row.CapacityUnit),
 		EfficiencyRate:  pgutil.FromPgNumericToFloat64(row.EfficiencyRate),
 		IsActive:        row.IsActive,
-		CreatedAt:       pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt:       pgutil.FromPgTimestamptz(row.UpdatedAt),
-		CreatedBy:       pgutil.FromPgUUID(row.CreatedBy),
+
+		ResourceGroupID:                  row.ResourceGroupID,
+		CalendarID:                       row.CalendarID,
+		Location:                         textoOuNil(row.Location),
+		IsCritical:                       row.IsCritical,
+		UsageDescription:                 textoOuNil(row.UsageDescription),
+		AcquiredOn:                       dataOuNil(row.AcquiredOn),
+		PreparationTime:                  pgutil.FromPgNumericToFloat64(row.PreparationTime),
+		PreparationTimeUnit:              row.PreparationTimeUnit,
+		SupplierCode:                     row.SupplierCode,
+		Brand:                            textoOuNil(row.Brand),
+		IsPreferred:                      row.IsPreferred,
+		MaintenanceResponsibleEmployeeID: row.MaintenanceResponsibleEmployeeID,
+
+		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt: pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy: pgutil.FromPgUUID(row.CreatedBy),
 	}
+}
+
+// dataOuNil é o caminho de volta de dataOuNula.
+func dataOuNil(d pgtype.Date) *time.Time {
+	if !d.Valid {
+		return nil
+	}
+	t := d.Time
+	return &t
 }
 
 func itemMachineTimeToEntity(row sqlc.ItemMachineTime) *entity.ItemMachineTime {
@@ -494,9 +602,49 @@ func scheduleToEntity(row sqlc.MachineSchedule) *entity.MachineSchedule {
 		ProducedQty:  pgutil.FromPgNumericToFloat64(row.ProducedQty),
 		Status:       row.Status,
 		Sequence:     int(row.Sequence),
-		CreatedAt:    pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt:    pgutil.FromPgTimestamptz(row.UpdatedAt),
+		// Sem estes dois a prioridade manual e a observação eram gravadas e
+		// nunca liam de volta: a coluna aparecia vazia na tela logo depois de
+		// o programador digitar o valor.
+		PriorityOverride: int32PtrToIntPtr(row.PriorityOverride),
+		Notes:            textoOuNil(row.Notes),
+		CreatedAt:        pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:        pgutil.FromPgTimestamptz(row.UpdatedAt),
 	}
+}
+
+// dataOuNula converte a data de aquisição, aceitando "não informada".
+func dataOuNula(t *time.Time) pgtype.Date {
+	if t == nil {
+		return pgtype.Date{}
+	}
+	return pgtype.Date{Time: *t, Valid: true}
+}
+
+// unidadeOuPadrao garante a unidade do tempo de preparação (coluna NOT NULL,
+// com CHECK que só aceita MINUTE ou HOUR).
+func unidadeOuPadrao(u string) string {
+	if strings.ToUpper(strings.TrimSpace(u)) == "HOUR" {
+		return "HOUR"
+	}
+	return "MINUTE"
+}
+
+// textoOuNil devolve nil para coluna nula, em vez de string vazia.
+func textoOuNil(v pgtype.Text) *string {
+	if !v.Valid {
+		return nil
+	}
+	return &v.String
+}
+
+// int32PtrToIntPtr converte a prioridade manual (int32 no banco) para o int do
+// domínio, preservando "não informado".
+func int32PtrToIntPtr(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
 }
 
 func machineTypesToEntities(rows []sqlc.MachineType) []*entity.MachineType {

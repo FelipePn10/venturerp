@@ -19,10 +19,12 @@ type MachineHandler struct {
 	createMachineUC *machine_uc.CreateMachineUseCase
 	listMachinesUC  *machine_uc.ListMachinesUseCase
 	getMachineUC    *machine_uc.GetMachineUseCase
+	updateMachineUC *machine_uc.UpdateMachineUseCase
 
 	createTypeUC     *machine_uc.CreateMachineTypeUseCase
 	listTypesUC      *machine_uc.ListMachineTypesUseCase
 	getMachineTypeUC *machine_uc.GetMachineTypeUseCase
+	updateTypeUC     *machine_uc.UpdateMachineTypeUseCase
 
 	createItemTimeUC          *machine_uc.CreateItemMachineTimeUseCase
 	listItemTimesUC           *machine_uc.ListItemMachineTimesUseCase
@@ -403,4 +405,56 @@ func (h *MachineHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request) 
 	security.RespondJSON(w, http.StatusOK, map[string]any{
 		"status": "success",
 	})
+}
+
+// UpdateMachine altera o cadastro da máquina. O caso de uso existia desde
+// sempre, mas sem handler nem rota: não havia como corrigir nome, capacidade,
+// centro de trabalho ou qualquer outro dado depois de cadastrar.
+func (h *MachineHandler) UpdateMachine(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "código da máquina inválido")
+		return
+	}
+
+	var dto request.UpdateMachineDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+		return
+	}
+	dto.Code = code
+
+	result, err := h.updateMachineUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// UpdateType altera o cadastro do tipo de máquina.
+func (h *MachineHandler) UpdateType(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "código do tipo de máquina inválido")
+		return
+	}
+
+	var dto request.UpdateMachineTypeDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+		return
+	}
+	dto.Code = code
+
+	result, err := h.updateTypeUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
