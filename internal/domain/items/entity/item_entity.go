@@ -276,10 +276,10 @@ func (i *Item) Validate() error {
 		}
 	}
 	if i.Accounting.SaleUnitOfMeasurement != nil && !i.Accounting.SaleUnitOfMeasurement.IsValid() {
-		return errors.New("invalid accounting.sale_unit_of_measurement")
+		return errors.New("unidade de medida de venda inválida na pasta Contábil")
 	}
 	if i.Accounting.PurchaseUnitOfMeasurement != nil && !i.Accounting.PurchaseUnitOfMeasurement.IsValid() {
-		return errors.New("invalid accounting.purchase_unit_of_measurement")
+		return errors.New("unidade de medida de compra inválida na pasta Contábil")
 	}
 	if i.Accounting.CEST != nil {
 		if len(*i.Accounting.CEST) != 7 {
@@ -300,22 +300,22 @@ func (i *Item) Validate() error {
 		"accounting.accounting_classification_code": {i.Accounting.AccountingClassificationCode, 80}, "accounting.input_code": {i.Accounting.InputCode, 20}, "accounting.notes": {i.Accounting.Notes, 1000},
 	} {
 		if field.value != nil && len(*field.value) > field.max {
-			return errors.New(name + " exceeds maximum length")
+			return fmt.Errorf("o campo %s passou do tamanho máximo de %d caracteres", name, field.max)
 		}
 	}
 	if i.Planning.ABCClass != nil && *i.Planning.ABCClass != "A" && *i.Planning.ABCClass != "B" && *i.Planning.ABCClass != "C" {
-		return errors.New("classe ABC inválida")
+		return errors.New("a curva ABC deve ser A, B ou C")
 	}
 
 	if i.Engineering.Dimensions != nil && !i.Engineering.Dimensions.IsValid() {
-		return errors.New("invalid dimensions")
+		return errors.New("as dimensões do item devem ser todas maiores que zero")
 	}
 	if i.Warehouse.CyclicalCountConfig != nil && !i.Warehouse.CyclicalCountConfig.IsValid() {
 		return errors.New("configuração de contagem cíclica inválida")
 	}
 
 	if !i.Engineering.Weight.IsValid() {
-		return errors.New("invalid weight")
+		return errors.New("o peso do item não pode ser negativo")
 	}
 
 	if i.Planning.ReorderPoint != nil && !i.Planning.ReorderPoint.IsValid() {
