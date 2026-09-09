@@ -268,10 +268,12 @@ func NewMachineHandler(
 	createMachineUC *machine_uc.CreateMachineUseCase,
 	listMachinesUC *machine_uc.ListMachinesUseCase,
 	getMachineUC *machine_uc.GetMachineUseCase,
+	updateMachineUC *machine_uc.UpdateMachineUseCase,
 
 	createTypeUC *machine_uc.CreateMachineTypeUseCase,
 	listTypesUC *machine_uc.ListMachineTypesUseCase,
 	getMachineTypeUC *machine_uc.GetMachineTypeUseCase,
+	updateTypeUC *machine_uc.UpdateMachineTypeUseCase,
 
 	createItemTimeUC *machine_uc.CreateItemMachineTimeUseCase,
 	listItemTimesUC *machine_uc.ListItemMachineTimesUseCase,
@@ -284,10 +286,12 @@ func NewMachineHandler(
 		createMachineUC: createMachineUC,
 		listMachinesUC:  listMachinesUC,
 		getMachineUC:    getMachineUC,
+		updateMachineUC: updateMachineUC,
 
 		createTypeUC:     createTypeUC,
 		listTypesUC:      listTypesUC,
 		getMachineTypeUC: getMachineTypeUC,
+		updateTypeUC:     updateTypeUC,
 
 		createItemTimeUC:          createItemTimeUC,
 		listItemTimesUC:           listItemTimesUC,

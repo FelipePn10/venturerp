@@ -3,6 +3,7 @@ package machine_uc
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
+	"time"
 )
 
 func toMachineTypeResponse(t *entity.MachineType) *response.MachineTypeResponse {
@@ -46,9 +47,23 @@ func toMachineResponse(m *entity.Machine) *response.MachineResponse {
 		CapacityPeriod:  string(m.CapacityPeriod),
 		EfficiencyRate:  m.EfficiencyRate,
 		IsActive:        m.IsActive,
-		CreatedAt:       m.CreatedAt,
-		UpdatedAt:       m.UpdatedAt,
-		CreatedBy:       m.CreatedBy,
+
+		ResourceGroupID:                  m.ResourceGroupID,
+		CalendarID:                       m.CalendarID,
+		Location:                         m.Location,
+		IsCritical:                       m.IsCritical,
+		UsageDescription:                 m.UsageDescription,
+		AcquiredOn:                       dataISO(m.AcquiredOn),
+		PreparationTime:                  m.PreparationTime,
+		PreparationTimeUnit:              m.PreparationTimeUnit,
+		SupplierCode:                     m.SupplierCode,
+		Brand:                            m.Brand,
+		IsPreferred:                      m.IsPreferred,
+		MaintenanceResponsibleEmployeeID: m.MaintenanceResponsibleEmployeeID,
+
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+		CreatedBy: m.CreatedBy,
 	}
 }
 
@@ -115,4 +130,14 @@ func toMachineScheduleResponses(list []*entity.MachineSchedule) []*response.Mach
 		out = append(out, toMachineScheduleResponse(s))
 	}
 	return out
+}
+
+// dataISO devolve a data de aquisição como AAAA-MM-DD, que é o formato que o
+// input de data do navegador entende.
+func dataISO(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.Format("2006-01-02")
+	return &s
 }

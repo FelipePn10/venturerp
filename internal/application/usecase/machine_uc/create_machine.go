@@ -73,6 +73,16 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, dto request.CreateM
 		IsActive:        dto.AtivoOuPadrao(),
 		CreatedBy:       authenticatedUserID,
 	}
+
+	if err := camposDeCadastro(m, camposOpcionais{
+		ResourceGroupID: dto.ResourceGroupID, CalendarID: dto.CalendarID, Location: dto.Location,
+		IsCritical: dto.IsCritical, UsageDescription: dto.UsageDescription, AcquiredOn: dto.AcquiredOn,
+		PreparationTime: dto.PreparationTime, PreparationTimeUnit: dto.PreparationTimeUnit,
+		SupplierCode: dto.SupplierCode, Brand: dto.Brand, IsPreferred: dto.IsPreferred,
+		MaintenanceResponsibleEmployeeID: dto.MaintenanceResponsibleEmployeeID,
+	}); err != nil {
+		return nil, err
+	}
 	created, err := uc.Repo.Create(ctx, m)
 	if err != nil {
 		return nil, err

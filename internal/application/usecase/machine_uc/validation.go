@@ -2,7 +2,9 @@ package machine_uc
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"strings"
+	"time"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -94,4 +96,75 @@ func validateMachineFields(code int64, name string, machineTypeCode int64, capac
 		return errorsuc.NewValidationError("a capacidade da máquina deve ser maior que zero")
 	}
 	return nil
+}
+
+// camposDeCadastro copia para a entidade os campos do cadastro completo do
+// recurso (grupo, calendário, local, criticidade, uso, aquisição, preparação,
+// fornecedor, marca, preferencial e responsável de manutenção). São opcionais:
+// o que vier nil mantém o padrão da coluna.
+func camposDeCadastro(m *entity.Machine, d camposOpcionais) error {
+	m.ResourceGroupID = d.ResourceGroupID
+	m.CalendarID = d.CalendarID
+	m.Location = textoLimpo(d.Location)
+	m.UsageDescription = textoLimpo(d.UsageDescription)
+	m.SupplierCode = d.SupplierCode
+	m.Brand = textoLimpo(d.Brand)
+	m.MaintenanceResponsibleEmployeeID = d.MaintenanceResponsibleEmployeeID
+	m.IsCritical = d.IsCritical != nil && *d.IsCritical
+	m.IsPreferred = d.IsPreferred != nil && *d.IsPreferred
+
+	if d.PreparationTime != nil {
+		if *d.PreparationTime < 0 {
+			return errorsuc.NewValidationError("o tempo de preparação não pode ser negativo")
+		}
+		m.PreparationTime = *d.PreparationTime
+	}
+	// A coluna só aceita MINUTE ou HOUR (constraint do banco). Traduzimos aqui
+	// para o usuário poder mandar "MINUTO"/"HORA" sem esbarrar no CHECK.
+	m.PreparationTimeUnit = "MINUTE"
+	if d.PreparationTimeUnit != nil && strings.TrimSpace(*d.PreparationTimeUnit) != "" {
+		switch strings.ToUpper(strings.TrimSpace(*d.PreparationTimeUnit)) {
+		case "MINUTE", "MINUTO", "MIN":
+			m.PreparationTimeUnit = "MINUTE"
+		case "HOUR", "HORA", "H":
+			m.PreparationTimeUnit = "HOUR"
+		default:
+			return errorsuc.NewValidationError("a unidade do tempo de preparação deve ser minuto ou hora")
+		}
+	}
+	if d.AcquiredOn != nil && strings.TrimSpace(*d.AcquiredOn) != "" {
+		data, err := time.Parse("2006-01-02", strings.TrimSpace(*d.AcquiredOn))
+		if err != nil {
+			return errorsuc.NewValidationError("a data de aquisição deve usar o formato ano-mês-dia")
+		}
+		m.AcquiredOn = &data
+	}
+	return nil
+}
+
+// camposOpcionais é o subconjunto comum aos DTOs de criação e alteração.
+type camposOpcionais struct {
+	ResourceGroupID                  *int64
+	CalendarID                       *int64
+	Location                         *string
+	IsCritical                       *bool
+	UsageDescription                 *string
+	AcquiredOn                       *string
+	PreparationTime                  *float64
+	PreparationTimeUnit              *string
+	SupplierCode                     *int64
+	Brand                            *string
+	IsPreferred                      *bool
+	MaintenanceResponsibleEmployeeID *int64
+}
+
+func textoLimpo(v *string) *string {
+	if v == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*v)
+	if t == "" {
+		return nil
+	}
+	return &t
 }

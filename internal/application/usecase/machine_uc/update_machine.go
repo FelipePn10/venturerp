@@ -59,6 +59,16 @@ func (uc *UpdateMachineUseCase) Execute(
 		EfficiencyRate:  efficiency,
 	}
 
+	if err := camposDeCadastro(m, camposOpcionais{
+		ResourceGroupID: dto.ResourceGroupID, CalendarID: dto.CalendarID, Location: dto.Location,
+		IsCritical: dto.IsCritical, UsageDescription: dto.UsageDescription, AcquiredOn: dto.AcquiredOn,
+		PreparationTime: dto.PreparationTime, PreparationTimeUnit: dto.PreparationTimeUnit,
+		SupplierCode: dto.SupplierCode, Brand: dto.Brand, IsPreferred: dto.IsPreferred,
+		MaintenanceResponsibleEmployeeID: dto.MaintenanceResponsibleEmployeeID,
+	}); err != nil {
+		return nil, err
+	}
+
 	updated, err := uc.Repo.Update(ctx, m)
 	if err != nil {
 		return nil, err

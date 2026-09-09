@@ -47,6 +47,23 @@ type CreateMachineDTO struct {
 	EfficiencyRate  float64                   `json:"efficiency_rate"`
 	// Mesmo motivo do tipo de máquina: omitir passa a significar "ativa".
 	IsActive *bool `json:"is_active,omitempty"`
+
+	// ─── Cadastro completo do recurso (FoccoERP FENG0111) ──────────────────
+	// Grupo de recursos e calendário definem como o sequenciamento enxerga a
+	// máquina; `is_critical` marca o gargalo; `is_preferred` decide qual
+	// recurso é alocado primeiro quando a operação aceita mais de um.
+	ResourceGroupID                  *int64   `json:"resource_group_id,omitempty"`
+	CalendarID                       *int64   `json:"calendar_id,omitempty"`
+	Location                         *string  `json:"location,omitempty"`
+	IsCritical                       *bool    `json:"is_critical,omitempty"`
+	UsageDescription                 *string  `json:"usage_description,omitempty"`
+	AcquiredOn                       *string  `json:"acquired_on,omitempty"` // AAAA-MM-DD
+	PreparationTime                  *float64 `json:"preparation_time,omitempty"`
+	PreparationTimeUnit              *string  `json:"preparation_time_unit,omitempty"`
+	SupplierCode                     *int64   `json:"supplier_code,omitempty"`
+	Brand                            *string  `json:"brand,omitempty"`
+	IsPreferred                      *bool    `json:"is_preferred,omitempty"`
+	MaintenanceResponsibleEmployeeID *int64   `json:"maintenance_responsible_employee_id,omitempty"`
 	// CreatedBy vem do JWT; nunca do corpo da requisição.
 	CreatedBy uuid.UUID `json:"-"`
 }
@@ -68,6 +85,23 @@ type UpdateMachineDTO struct {
 	CapacityPeriod  types.CapacityPeriod      `json:"capacity_period"`
 	EfficiencyRate  float64                   `json:"efficiency_rate"`
 	IsActive        *bool                     `json:"is_active,omitempty"`
+
+	// ─── Cadastro completo do recurso (FoccoERP FENG0111) ──────────────────
+	// Grupo de recursos e calendário definem como o sequenciamento enxerga a
+	// máquina; `is_critical` marca o gargalo; `is_preferred` decide qual
+	// recurso é alocado primeiro quando a operação aceita mais de um.
+	ResourceGroupID                  *int64   `json:"resource_group_id,omitempty"`
+	CalendarID                       *int64   `json:"calendar_id,omitempty"`
+	Location                         *string  `json:"location,omitempty"`
+	IsCritical                       *bool    `json:"is_critical,omitempty"`
+	UsageDescription                 *string  `json:"usage_description,omitempty"`
+	AcquiredOn                       *string  `json:"acquired_on,omitempty"` // AAAA-MM-DD
+	PreparationTime                  *float64 `json:"preparation_time,omitempty"`
+	PreparationTimeUnit              *string  `json:"preparation_time_unit,omitempty"`
+	SupplierCode                     *int64   `json:"supplier_code,omitempty"`
+	Brand                            *string  `json:"brand,omitempty"`
+	IsPreferred                      *bool    `json:"is_preferred,omitempty"`
+	MaintenanceResponsibleEmployeeID *int64   `json:"maintenance_responsible_employee_id,omitempty"`
 	// UpdatedBy vem do JWT; nunca do corpo da requisição.
 	UpdatedBy uuid.UUID `json:"-"`
 }
