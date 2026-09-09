@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type TaxParamUseCase struct {
@@ -40,7 +41,7 @@ func (uc *TaxParamUseCase) Update(ctx context.Context, dto request.UpdateTaxPara
 	createDTO := request.CreateTaxParamDTO(dto.CreateTaxParamDTO)
 	p := dtoToTaxParamEntity(createDTO)
 	p.ID = dto.ID
-	p.IsActive = dto.IsActive
+	p.IsActive = ptrutil.BoolOrTrue(dto.IsActive)
 	updated, err := uc.Repo.UpdateTaxParam(ctx, p)
 	if err != nil {
 		return nil, err

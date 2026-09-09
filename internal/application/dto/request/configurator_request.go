@@ -12,7 +12,7 @@ type CreateCfgSetDTO struct {
 type UpdateCfgSetDTO struct {
 	ID          int64  `json:"id"`
 	Description string `json:"description"`
-	IsActive    bool   `json:"is_active"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Variáveis ────────────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ type UpdateCfgVariableDTO struct {
 	Code               string `json:"code"`
 	Description        string `json:"description"`
 	MaskComposition    string `json:"mask_composition"`
-	IsActive           bool   `json:"is_active"`
+	IsActive           *bool  `json:"is_active,omitempty"`
 	IsSpecial          bool   `json:"is_special"`
 	IncludeDescription bool   `json:"include_description"`
 	SpecialData        string `json:"special_data"`
@@ -76,7 +76,7 @@ type UpdateCfgCharacteristicDTO struct {
 	Code              string   `json:"code"`
 	Description       string   `json:"description"`
 	Type              string   `json:"type"`
-	IsActive          bool     `json:"is_active"`
+	IsActive          *bool    `json:"is_active,omitempty"`
 	SetID             *int64   `json:"set_id"`
 	DefaultVariableID *int64   `json:"default_variable_id"`
 	Mask              string   `json:"mask"`

@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type LegalDeviceUseCase struct {
@@ -45,7 +46,7 @@ func (uc *LegalDeviceUseCase) Update(ctx context.Context, dto request.UpdateLega
 		ID:          dto.ID,
 		Type:        entity.LegalDeviceType(dto.Type),
 		Description: dto.Description,
-		IsActive:    dto.IsActive,
+		IsActive:    ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	updated, err := uc.Repo.UpdateLegalDevice(ctx, d)
 	if err != nil {

@@ -1306,6 +1306,13 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateSchedule)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListSchedules)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}", machineHandler.GetSchedule)
+				// Sequenciamento da fila da máquina: o caso de uso já existia,
+				// mas não tinha rota — a fila só podia crescer, nunca ser
+				// reordenada, ter o apontamento corrigido ou o slot removido.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/reorder", machineHandler.ReorderSchedule)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/status", machineHandler.UpdateScheduleStatus)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/times", machineHandler.UpdateScheduleTimes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", machineHandler.DeleteSchedule)
 			})
 		})
 		r.Route("/api/mrp-calculation", func(r chi.Router) {

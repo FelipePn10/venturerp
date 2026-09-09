@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal_classification/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal_classification/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type FiscalClassificationUseCase struct {
@@ -112,7 +113,7 @@ func (uc *FiscalClassificationUseCase) Update(ctx context.Context, dto request.U
 		return nil, err
 	}
 	applyFields(c, dto.FiscalClassificationFields)
-	c.IsActive = dto.IsActive
+	c.IsActive = ptrutil.BoolOr(dto.IsActive, c.IsActive)
 	updated, err := uc.repo.Update(ctx, c)
 	if err != nil {
 		return nil, err

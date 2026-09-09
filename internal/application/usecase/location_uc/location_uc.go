@@ -7,6 +7,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/location/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/location/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type LocationUseCase struct {
@@ -43,7 +44,7 @@ func (uc *LocationUseCase) UpdateCountry(ctx context.Context, dto request.Update
 		DDI:       dto.DDI,
 		BacenCode: dto.BacenCode,
 		SisComex:  dto.SisComex,
-		IsActive:  dto.IsActive,
+		IsActive:  ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	updated, err := uc.Repo.UpdateCountry(ctx, c)
 	if err != nil {
@@ -95,7 +96,7 @@ func (uc *LocationUseCase) UpdateUF(ctx context.Context, dto request.UpdateUFDTO
 		Sigla:    dto.Sigla,
 		Name:     dto.Name,
 		IBGECode: dto.IBGECode,
-		IsActive: dto.IsActive,
+		IsActive: ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	updated, err := uc.Repo.UpdateUF(ctx, u)
 	if err != nil {

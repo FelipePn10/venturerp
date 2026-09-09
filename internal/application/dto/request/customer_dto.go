@@ -21,7 +21,7 @@ type UpdateRegionDTO struct {
 	Description string `json:"description"`
 	UF          string `json:"uf"`
 	City        string `json:"city"`
-	IsActive    bool   `json:"is_active"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Market Segments ──────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ type UpdateMarketSegmentDTO struct {
 	ParentID              *int64 `json:"parent_id,omitempty"`
 	HasPISCOFINSRetention bool   `json:"has_pis_cofins_retention"`
 	RetentionIndicator    *int16 `json:"retention_indicator,omitempty"`
-	IsActive              bool   `json:"is_active"`
+	IsActive              *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Customer Contact Types ───────────────────────────────────────────────────
@@ -51,7 +51,7 @@ type CreateContactTypeDTO struct {
 type UpdateContactTypeDTO struct {
 	ID          int64  `json:"id"`
 	Description string `json:"description"`
-	IsActive    bool   `json:"is_active"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Customer Types ───────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ type UpdateCustomerTypeDTO struct {
 	Description  string `json:"description"`
 	Category     string `json:"category"`
 	DeliveryDays int16  `json:"delivery_days"`
-	IsActive     bool   `json:"is_active"`
+	IsActive     *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Carriers ─────────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ type UpdateCarrierDTO struct {
 	PostponeDueDate   bool   `json:"postpone_due_date"`
 	ReceiptDays       int16  `json:"receipt_days"`
 	PaymentDays       int16  `json:"payment_days"`
-	IsActive          bool   `json:"is_active"`
+	IsActive          *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Carrier Groups ───────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ type UpdatePaymentConditionDTO struct {
 	IsSpecial    bool    `json:"is_special"`
 	IsRevenue    bool    `json:"is_revenue"`
 	IsAtSight    bool    `json:"is_at_sight"`
-	IsActive     bool    `json:"is_active"`
+	IsActive     *bool   `json:"is_active,omitempty"`
 }
 
 type AddInstallmentDTO struct {
@@ -174,7 +174,7 @@ type UpdateSalesTableDTO struct {
 	ToleranceMaxPct            float64    `json:"tolerance_max_pct"`
 	PriceFormation             string     `json:"price_formation"`
 	DecimalPlaces              int16      `json:"decimal_places"`
-	IsActive                   bool       `json:"is_active"`
+	IsActive                   *bool      `json:"is_active,omitempty"`
 	Composition                string     `json:"composition"`
 	TableType                  string     `json:"table_type"`
 	BaseDate                   string     `json:"base_date"`
@@ -286,7 +286,7 @@ type UpdateInvoiceTypeDTO struct {
 	CalcDIFAL                bool    `json:"calc_difal"`
 	RequiresSalesOrder       bool    `json:"requires_sales_order"`
 	ListsFiscalBooks         bool    `json:"lists_fiscal_books"`
-	IsActive                 bool    `json:"is_active"`
+	IsActive                 *bool   `json:"is_active,omitempty"`
 	ModelNF                  *string `json:"model_nf,omitempty"`
 	CSTICMS                  *string `json:"cst_icms,omitempty"`
 	CSOSNTICMS               *string `json:"csosn_icms,omitempty"`
@@ -448,7 +448,7 @@ type UpdateSalesPricePolicyDTO struct {
 	SalesTableCode *int64          `json:"sales_table_code,omitempty"`
 	ValidityStart  *time.Time      `json:"validity_start,omitempty"`
 	ValidityEnd    *time.Time      `json:"validity_end,omitempty"`
-	IsActive       bool            `json:"is_active"`
+	IsActive       *bool           `json:"is_active,omitempty"`
 	Observation    *string         `json:"observation,omitempty"`
 }
 
@@ -544,7 +544,7 @@ type UpdateCommercialPolicyDTO struct {
 	RuleJSON               json.RawMessage `json:"rule_json"`
 	ValidityStart          *time.Time      `json:"validity_start,omitempty"`
 	ValidityEnd            *time.Time      `json:"validity_end,omitempty"`
-	IsActive               bool            `json:"is_active"`
+	IsActive               *bool           `json:"is_active,omitempty"`
 	Observation            *string         `json:"observation,omitempty"`
 }
 
@@ -669,7 +669,7 @@ type UpdateCustomerDTO struct {
 	PaymentCondVisibility string     `json:"payment_cond_visibility"`
 	CreditLimit           float64    `json:"credit_limit"`
 	Website               *string    `json:"website,omitempty"`
-	IsActive              bool       `json:"is_active"`
+	IsActive              *bool      `json:"is_active,omitempty"`
 }
 
 type BlockCustomerDTO struct {

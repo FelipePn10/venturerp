@@ -14,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/configurator/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 // RestrictionOracle validates a fully-formed combination of configurator answers
@@ -63,7 +64,7 @@ func (uc *ConfiguratorUseCase) UpdateSet(ctx context.Context, dto request.Update
 	if dto.Description == "" {
 		return nil, errorsuc.NewValidationError("descrição do conjunto é obrigatória")
 	}
-	row, err := uc.Q.UpdateCfgSet(ctx, dto.ID, dto.Description, dto.IsActive)
+	row, err := uc.Q.UpdateCfgSet(ctx, dto.ID, dto.Description, ptrutil.BoolOrTrue(dto.IsActive))
 	if err != nil {
 		return nil, fmt.Errorf("atualizando conjunto: %w", err)
 	}
@@ -134,7 +135,7 @@ func (uc *ConfiguratorUseCase) UpdateVariable(ctx context.Context, dto request.U
 		Code:               dto.Code,
 		Description:        dto.Description,
 		MaskComposition:    maskComp,
-		IsActive:           dto.IsActive,
+		IsActive:           ptrutil.BoolOrTrue(dto.IsActive),
 		IsSpecial:          dto.IsSpecial,
 		IncludeDescription: dto.IncludeDescription,
 		SpecialData:        textOrNull(dto.SpecialData),

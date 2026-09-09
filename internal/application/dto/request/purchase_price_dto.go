@@ -53,7 +53,7 @@ type UpdatePurchasePriceTableDTO struct {
 	ValidityEnd   *string `json:"validity_end,omitempty"`
 	ValidFrom     *string `json:"valid_from,omitempty"`
 	ValidTo       *string `json:"valid_to,omitempty"`
-	IsActive      bool    `json:"is_active"`
+	IsActive      *bool   `json:"is_active,omitempty"`
 }
 
 // ResolvedCurrency resolve o apelido de moeda usado pela tela.

@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/repository"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 type UseCase struct {
@@ -238,7 +239,7 @@ func goalFromUpdate(dto request.UpdateSalesGoalDTO) (*entity.Goal, error) {
 		return nil, err
 	}
 	g.Code = dto.Code
-	g.IsActive = dto.IsActive
+	g.IsActive = ptrutil.BoolOrTrue(dto.IsActive)
 	return g, nil
 }
 

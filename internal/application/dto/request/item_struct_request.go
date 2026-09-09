@@ -92,13 +92,3 @@ type ConsultStructureDTO struct {
 type GetStructureTreeDTO struct {
 	RootItemCode TextCode `json:"root_item_code"`
 }
-
-// ResolveStructureForMaskDTO representa a entrada para resolver a árvore BOM
-// completa de um item para uma configuração específica (máscara).
-//
-// A máscara é propagada automaticamente do pai para os filhos com base
-// nas perguntas compartilhadas.
-type ResolveStructureForMaskDTO struct {
-	RootItemCode  TextCode `json:"root_item_code"`
-	RootMaskValue string   `json:"root_mask_value"` // ex: "100#100#50"
-}

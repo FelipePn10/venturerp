@@ -22,7 +22,7 @@ type UpdateSalesGoalDTO struct {
 	AnalysisBase       string  `json:"analysis_base"`
 	AwardPct           float64 `json:"award_pct"`
 	Notes              *string `json:"notes,omitempty"`
-	IsActive           bool    `json:"is_active"`
+	IsActive           *bool   `json:"is_active,omitempty"`
 }
 
 type SalesGoalItemDTO struct {

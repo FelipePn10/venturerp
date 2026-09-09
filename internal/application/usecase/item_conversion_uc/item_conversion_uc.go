@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -207,7 +208,9 @@ func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, 
 		allowed += conversion.ToleranceValue
 	}
 	if math.Abs(converted-rounded) > allowed {
-		return 0, false, fmt.Errorf("quantidade convertida %.8f é fracionária e excede a política de arredondamento/tolerância", converted)
+		return 0, false, errorsuc.NewValidationError(fmt.Sprintf(
+			"o item não aceita fração e a conversão daria %s: ajuste o arredondamento ou a tolerância da conversão",
+			strconv.FormatFloat(converted, 'f', -1, 64)))
 	}
 	return rounded, true, nil
 }

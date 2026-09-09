@@ -13,7 +13,8 @@ type UpdateSupplierTypeDTO struct {
 	Code        int64  `json:"code"`
 	Description string `json:"description"`
 	Kind        string `json:"kind"`
-	IsActive    bool   `json:"is_active"`
+	// Omitido, mantém a situação atual — ver UpdateSupplierDTO.IsActive.
+	IsActive *bool `json:"is_active,omitempty"`
 }
 
 // ─── Supplier Contact Types ───────────────────────────────────────────────────
@@ -25,7 +26,7 @@ type CreateSupplierContactTypeDTO struct {
 type UpdateSupplierContactTypeDTO struct {
 	Code        int64  `json:"code"`
 	Description string `json:"description"`
-	IsActive    bool   `json:"is_active"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Supplier ───────────────────────────────────────────────────────────────
@@ -57,9 +58,12 @@ type CreateSupplierDTO struct {
 }
 
 type UpdateSupplierDTO struct {
-	Code                            int64   `json:"code"`
-	CorporateCode                   *int64  `json:"corporate_code,omitempty"`
-	IsActive                        bool    `json:"is_active"`
+	Code          int64  `json:"code"`
+	CorporateCode *int64 `json:"corporate_code,omitempty"`
+	// IsActive é ponteiro de propósito: omitido, o cadastro mantém a situação
+	// que já tinha. Como bool, qualquer atualização que não repetisse o campo
+	// inativava o fornecedor e ele sumia da listagem (que mostra só ativos).
+	IsActive                        *bool   `json:"is_active,omitempty"`
 	IsRepresentative                bool    `json:"is_representative"`
 	IsCustomer                      bool    `json:"is_customer"`
 	Name                            string  `json:"name"`
@@ -176,7 +180,7 @@ type UpdateSupplierEnterpriseDTO struct {
 	AppliesIPI           bool    `json:"applies_ipi"`
 	DefaultInvoiceTypeID *int64  `json:"default_invoice_type_id,omitempty"`
 	PurchasePriceTableID *int64  `json:"purchase_price_table_id,omitempty"`
-	IsActive             bool    `json:"is_active"`
+	IsActive             *bool   `json:"is_active,omitempty"`
 }
 
 // ─── Supplier Parameters ───────────────────────────────────────────────────

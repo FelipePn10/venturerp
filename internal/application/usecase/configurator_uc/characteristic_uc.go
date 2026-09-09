@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/configurator/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 )
 
 func (uc *ConfiguratorUseCase) CreateCharacteristic(ctx context.Context, dto request.CreateCfgCharacteristicDTO) (*response.CfgCharacteristicResponse, error) {
@@ -46,7 +47,7 @@ func (uc *ConfiguratorUseCase) CreateCharacteristic(ctx context.Context, dto req
 
 func (uc *ConfiguratorUseCase) UpdateCharacteristic(ctx context.Context, dto request.UpdateCfgCharacteristicDTO) (*response.CfgCharacteristicResponse, error) {
 	c := &entity.Characteristic{
-		Code: dto.Code, Description: dto.Description, Type: dto.Type, IsActive: dto.IsActive,
+		Code: dto.Code, Description: dto.Description, Type: dto.Type, IsActive: ptrutil.BoolOrTrue(dto.IsActive),
 		SetID: dto.SetID, DefaultVariableID: dto.DefaultVariableID, Mask: dto.Mask,
 		IsSpecial: dto.IsSpecial, AffectsPrice: dto.AffectsPrice, ControlsGoals: dto.ControlsGoals,
 		ReceivingType: dto.ReceivingType, FieldSource: dto.FieldSource, Formula: dto.Formula,

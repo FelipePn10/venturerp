@@ -31,7 +31,7 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 		return nil, err
 	}
 	if cte.Status == "AUTORIZADO" {
-		return nil, fmt.Errorf("CT-e %d já está autorizado", id)
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("CT-e %d já está autorizado", id))
 	}
 	if cte.EmissionData == nil || *cte.EmissionData == "" {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("CT-e %d não possui emission_data — informe os dados de emissão (partes, modal, municípios) para autorizar", id))
@@ -39,7 +39,7 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 
 	var payload focusnfe.CTePayload
 	if err := json.Unmarshal([]byte(*cte.EmissionData), &payload); err != nil {
-		return nil, fmt.Errorf("emission_data inválido: %w", err)
+		return nil, errorsuc.NewValidationError("os dados de emissão do CT-e estão em formato inválido: " + err.Error())
 	}
 
 	cfg, err := uc.Repo.GetFiscalConfig(ctx)
@@ -47,7 +47,7 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 		return nil, err
 	}
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado — acesse Configurações Fiscais")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais")
 	}
 
 	// Defaults and emitente from the fiscal config (the company is the emitter).

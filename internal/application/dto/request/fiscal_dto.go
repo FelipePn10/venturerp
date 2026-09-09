@@ -62,12 +62,6 @@ type CreateFiscalEntryItemDTO struct {
 	Notes             *string `json:"notes,omitempty"`
 }
 
-type UpdateFiscalEntryDTO struct {
-	ID      int64   `json:"id"`
-	Notes   *string `json:"notes,omitempty"`
-	XmlPath *string `json:"xml_path,omitempty"`
-}
-
 type ApproveFiscalEntryDTO struct {
 	ID int64 `json:"id"`
 }

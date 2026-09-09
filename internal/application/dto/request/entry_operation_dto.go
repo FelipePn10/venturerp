@@ -33,5 +33,5 @@ type UpdateEntryOperationDTO struct {
 	ClassificationCode *string `json:"classification_code,omitempty"`
 	StateGroupCode     *int64  `json:"state_group_code,omitempty"`
 	SupplierTypeCode   *int64  `json:"supplier_type_code,omitempty"`
-	IsActive           bool    `json:"is_active"`
+	IsActive           *bool   `json:"is_active,omitempty"`
 }

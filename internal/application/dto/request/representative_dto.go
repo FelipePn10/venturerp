@@ -11,7 +11,7 @@ type UpdateRepresentativeTypeDTO struct {
 	Description          string `json:"description"`
 	IsFree               bool   `json:"is_free"`
 	IgnoresDirectBilling bool   `json:"ignores_direct_billing"`
-	IsActive             bool   `json:"is_active"`
+	IsActive             *bool  `json:"is_active,omitempty"`
 }
 
 type CreateRepresentativeDTO struct {
@@ -59,7 +59,7 @@ type UpdateRepresentativeDTO struct {
 	Complement     *string `json:"complement,omitempty"`
 	District       *string `json:"district,omitempty"`
 	DeviceQuantity int     `json:"device_quantity"`
-	IsActive       bool    `json:"is_active"`
+	IsActive       *bool   `json:"is_active,omitempty"`
 }
 
 type BlockRepresentativeDTO struct {

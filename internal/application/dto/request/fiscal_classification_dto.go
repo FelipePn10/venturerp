@@ -67,7 +67,7 @@ type CreateFiscalClassificationDTO struct {
 type UpdateFiscalClassificationDTO struct {
 	Code int64 `json:"code"`
 	FiscalClassificationFields
-	IsActive bool `json:"is_active"`
+	IsActive *bool `json:"is_active,omitempty"`
 }
 
 type AddFiscalClassificationLanguageDTO struct {

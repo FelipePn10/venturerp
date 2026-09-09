@@ -108,7 +108,7 @@ func normalizePlanningTypes(values []string) ([]string, error) {
 	for _, value := range values {
 		value = strings.ToUpper(strings.TrimSpace(value))
 		if _, ok := validPlanningTypes[value]; !ok {
-			return nil, fmt.Errorf("%w: unsupported planning type %q", ErrInvalidPlan, value)
+			return nil, fmt.Errorf("%w: tipo de planejamento não suportado: %q", ErrInvalidPlan, value)
 		}
 		if _, ok := seen[value]; !ok {
 			seen[value] = struct{}{}
