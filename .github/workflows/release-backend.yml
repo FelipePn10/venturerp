@@ -66,7 +66,7 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
             MIN_CLIENT_VERSION=${{ env.MIN_CLIENT_VERSION }}
           tags: |
-            ghcr.io/felipepn10/panossoerp:${{ github.ref_name }}
+            ghcr.io/felipepn10/panossoerp:v${{ steps.version.outputs.version }}
             ghcr.io/felipepn10/panossoerp:latest
 
       - name: Attest image provenance
