@@ -19,7 +19,6 @@ func TestMachineTimeUsesNativeBusinessItemCodeRequest(t *testing.T) {
 	}
 }
 
-
 func TestAmbiguousItemReferenceKeysAreScopedByRoute(t *testing.T) {
 	classification := httptest.NewRequest("POST", "/api/items/classifications/", nil)
 	if isItemReferenceKey(classification, "parent_code") {
