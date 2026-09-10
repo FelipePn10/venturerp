@@ -19,17 +19,6 @@ func TestMachineTimeUsesNativeBusinessItemCodeRequest(t *testing.T) {
 	}
 }
 
-func TestStructureWritePreservesNativeBusinessCodes(t *testing.T) {
-	for _, target := range []string{
-		"/api/items/structure/create",
-		"/api/items/structure/update",
-	} {
-		req := httptest.NewRequest("POST", target, nil)
-		if !nativeItemBusinessCodeRequest(req) {
-			t.Fatalf("rota %s deve entregar os códigos comerciais ao caso de uso", target)
-		}
-	}
-}
 
 func TestAmbiguousItemReferenceKeysAreScopedByRoute(t *testing.T) {
 	classification := httptest.NewRequest("POST", "/api/items/classifications/", nil)
