@@ -3,6 +3,7 @@ package item_uc
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -48,6 +49,21 @@ func (uc *FindItemByCode) Execute(
 	item, err := uc.Repo.FindItemByBusinessCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
+			// O middleware de compatibilidade pode entregar aqui a chave legada
+			// numérica depois de resolver um código comercial da URL. Aceitar esse
+			// formato evita que uma busca válida por "TP-01001-A" vire um falso 404.
+			legacy, parseErr := strconv.ParseInt(string(code), 10, 64)
+			if parseErr == nil && legacy > 0 {
+				if finder, ok := any(uc.Repo).(interface {
+					FindItemByCode(context.Context, valueobject.ItemCode) (*entity.Item, error)
+				}); ok {
+					item, err = finder.FindItemByCode(ctx, valueobject.ItemCode(legacy))
+					if err == nil {
+						fillReferenceBusinessCodes(ctx, uc.Repo, item)
+						return toItemResponse(item), nil
+					}
+				}
+			}
 			return nil, errorsuc.ErrProductNotFound
 		}
 		return nil, err
