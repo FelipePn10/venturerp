@@ -104,9 +104,9 @@ type ItemWeightResponse struct {
 
 // ItemDimensionsResponse is an item dimensions value.
 type ItemDimensionsResponse struct {
-	Length int `json:"length"`
-	Width  int `json:"width"`
-	Height int `json:"height"`
+	Length int     `json:"length"`
+	Width  int     `json:"width"`
+	Height float64 `json:"height"`
 }
 
 // ItemPlanningResponse is the planning folder of an item.
