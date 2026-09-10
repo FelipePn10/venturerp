@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.22] — 2026-09-10
+
+- fix: corrige a direção da validação de ciclos ao incluir componentes na estrutura
+- fix: bloqueia autorreferência direta sem impedir a primeira relação pai-filho
+
 ## [v1.1.21] — 2026-09-10
 
 - fix: estabiliza o cadastro de estruturas com códigos de item alfanuméricos
