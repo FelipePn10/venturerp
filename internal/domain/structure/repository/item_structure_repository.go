@@ -42,7 +42,8 @@ type ItemStructureRepository interface {
 	// VALIDATIONS
 
 	ItemExists(ctx context.Context, itemCode int64) (bool, error)
-	HasCyclicReference(ctx context.Context, parentCode, childCode int64) (bool, error)
+	// HasCyclicReference informa se startCode já alcança targetCode na árvore ativa.
+	HasCyclicReference(ctx context.Context, startCode, targetCode int64) (bool, error)
 
 	// SUPPORT (MASK RUNTIME)
 	SequenceExists(ctx context.Context, parentCode int64, sequence int) (bool, error)

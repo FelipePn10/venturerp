@@ -187,12 +187,12 @@ func (r *ItemStructureRepositorySQLC) ItemExists(
 
 func (r *ItemStructureRepositorySQLC) HasCyclicReference(
 	ctx context.Context,
-	parentCode, childCode int64,
+	startCode, targetCode int64,
 ) (bool, error) {
 
 	return r.q.HasCyclicReference(ctx, sqlc.HasCyclicReferenceParams{
-		Column1: parentCode,
-		Column2: childCode,
+		Column1: startCode,
+		Column2: targetCode,
 	})
 }
 

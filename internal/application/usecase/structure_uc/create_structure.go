@@ -77,8 +77,12 @@ func (uc *CreateStructureComponentUseCase) Execute(
 		return nil, errorsuc.NewNotFoundError("item filho não encontrado")
 	}
 
-	// só bloqueia se o filho já é ancestral do pai (A→B→C→A)
-	hasCycle, err := uc.Repo.HasCyclicReference(ctx, parentCode, childCode)
+	if parentCode == childCode {
+		return nil, fmt.Errorf("o componente criaria um ciclo na estrutura")
+	}
+
+	// Ao adicionar pai → filho, só há ciclo se o filho já alcançar o pai.
+	hasCycle, err := uc.Repo.HasCyclicReference(ctx, childCode, parentCode)
 	if err != nil {
 		return nil, err
 	}
