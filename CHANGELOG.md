@@ -6,6 +6,8 @@ pipeline de release.
 
 ## Unreleased
 
+- fix: aceita espessura decimal nas dimensões do cadastro de item
+
 ## [v1.1.18] — 2026-09-09
 
 - fix: alteração de máquina, cadastro completo do recurso e isolamento da fila (`cd67bb8`)
