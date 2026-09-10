@@ -2,6 +2,7 @@ package valueobject
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -25,12 +26,12 @@ func TestDimensions(t *testing.T) {
 	if _, err := NewDimensions(0, 1, 1); err == nil {
 		t.Error("expected error for zero length")
 	}
-	d, err := NewDimensions(2, 3, 4)
+	d, err := NewDimensions(2, 3, 6.35)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := d.Volume(); got != 24 {
-		t.Errorf("Volume() = %d, want 24", got)
+	if got := d.Volume(); math.Abs(got-38.1) > 1e-9 {
+		t.Errorf("Volume() = %v, want 38.1", got)
 	}
 }
 

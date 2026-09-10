@@ -47,10 +47,10 @@ func (c ItemCode) IsValid() bool {
 type Dimensions struct {
 	Length int
 	Width  int
-	Height int
+	Height float64
 }
 
-func NewDimensions(length, width, height int) (*Dimensions, error) {
+func NewDimensions(length, width int, height float64) (*Dimensions, error) {
 	d := &Dimensions{
 		Length: length,
 		Width:  width,
@@ -68,8 +68,8 @@ func (d Dimensions) IsValid() bool {
 	return d.Length > 0 && d.Width > 0 && d.Height > 0
 }
 
-func (d Dimensions) Volume() int {
-	return d.Length * d.Width * d.Height
+func (d Dimensions) Volume() float64 {
+	return float64(d.Length) * float64(d.Width) * d.Height
 }
 
 //
