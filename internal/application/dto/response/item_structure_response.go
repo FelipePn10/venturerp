@@ -38,6 +38,15 @@ type StructureComponentResponse struct {
 	IsFixedQty         bool       `json:"is_fixed_qty"`
 	SubstituteGroup    int16      `json:"substitute_group"`
 	SubstitutePriority int16      `json:"substitute_priority"`
+	Inherit            bool       `json:"inherit"`
+	WarehouseCode      *int64     `json:"warehouse_code,omitempty"`
+	LineWarehouseCode  *int64     `json:"line_warehouse_code,omitempty"`
+	SetupLoss          float64    `json:"setup_loss"`
+	CostLossType       string     `json:"cost_loss_type"`
+	CostLoss           float64    `json:"cost_loss"`
+	CostCenterCode     *int64     `json:"cost_center_code,omitempty"`
+	IsCriticalMPS      bool       `json:"is_critical_mps"`
+	GeneratesInspection bool      `json:"generates_inspection"`
 	IsActive           bool       `json:"is_active"`
 	CreatedBy          uuid.UUID  `json:"created_by"`
 	CreatedAt          time.Time  `json:"created_at"`
