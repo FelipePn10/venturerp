@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.20] — 2026-09-10
+
+- fix: restaura o salvamento de componentes no cadastro de estrutura de produto
+
 ## [v1.1.19] — 2026-09-10
 
 - fix: aceita espessura decimal nas dimensões do cadastro de item
