@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	structurepresenter "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -25,7 +26,7 @@ func (h *ItemStructureHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, http.StatusCreated, result)
+	jsonResponse(w, http.StatusCreated, structurepresenter.ToItemStructureDTO(result))
 }
 
 func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +48,7 @@ func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, result)
+	jsonResponse(w, http.StatusOK, structurepresenter.ToItemStructureDTO(result))
 }
 
 // Delete removes a structure component identified by its public item codes.
