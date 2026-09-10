@@ -47,3 +47,24 @@ func TestFindItemByCodeTranslatesRepositoryNotFound(t *testing.T) {
 		t.Fatalf("expected ErrProductNotFound, got %v", err)
 	}
 }
+
+type translatedLegacyItemRepository struct{ missingItemRepository }
+
+func (translatedLegacyItemRepository) FindItemByCode(_ context.Context, code valueobject.ItemCode) (*entity.Item, error) {
+	if code == 202 {
+		return &entity.Item{Code: code, BusinessCode: "TP-01001-A"}, nil
+	}
+	return nil, repository.ErrNotFound
+}
+
+func TestFindItemByCodeAcceptsLegacyKeyProducedByCompatibilityMiddleware(t *testing.T) {
+	uc := NewFindItemByCode(translatedLegacyItemRepository{}, findItemAuth{})
+
+	item, err := uc.Execute(context.Background(), request.FindItemByCodeDTO{Code: "202"})
+	if err != nil {
+		t.Fatalf("buscar chave traduzida: %v", err)
+	}
+	if item.Code != "TP-01001-A" || item.LegacyCode != 202 {
+		t.Fatalf("resposta inesperada: code=%q legacy=%d", item.Code, item.LegacyCode)
+	}
+}
