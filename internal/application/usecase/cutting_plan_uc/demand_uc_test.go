@@ -72,7 +72,7 @@ func (f *fakeCut) AddPart(_ context.Context, part *entity.CuttingPlanPart) (*ent
 func itemWithDims(code int64, l, w, h int, llc int, uom types.TypeUnitOfMeasurementItem) *itementity.Item {
 	it := &itementity.Item{Code: valueobject.ItemCode(code)}
 	if l > 0 || w > 0 || h > 0 {
-		it.Engineering.Dimensions = &valueobject.Dimensions{Length: l, Width: w, Height: h}
+		it.Engineering.Dimensions = &valueobject.Dimensions{Length: l, Width: w, Height: float64(h)}
 	}
 	it.Planning.LLC = llc
 	it.Warehouse.UnitOfMeasurement = uom
