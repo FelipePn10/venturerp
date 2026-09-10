@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.21] — 2026-09-10
+
+- fix: estabiliza o cadastro de estruturas com códigos de item alfanuméricos
+- fix: preserva mensagens detalhadas de validação no fluxo de estrutura
+
 ## [v1.1.20] — 2026-09-10
 
 - fix: restaura o salvamento de componentes no cadastro de estrutura de produto
