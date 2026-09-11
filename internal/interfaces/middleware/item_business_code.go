@@ -35,6 +35,29 @@ func isItemReferenceKey(r *http.Request, key string) bool {
 	return path == "/api/items/structure" || strings.HasPrefix(path, "/api/items/structure/")
 }
 
+// isItemInputReferenceKey decide o que é traduzido na ENTRADA (corpo e query).
+//
+// Difere da saída num ponto: `parent_code`/`child_code` da estrutura não são
+// traduzidos aqui. O caso de uso da estrutura já resolve o código público por
+// conta própria (itemresolution.Resolve: comercial primeiro, chave interna como
+// alternativa), e traduzir também no middleware fazia a conversão acontecer
+// duas vezes — o interno 5 produzido aqui era reinterpretado como o comercial
+// "5" e virava o interno 2. Numa base onde códigos comerciais numéricos
+// convivem com chaves internas ("1", "5", "8" ao lado dos internos 1..15), o
+// componente era gravado sob OUTRO item: a gravação respondia 201 e a tela, ao
+// recarregar o item certo, não encontrava nada.
+//
+// Na SAÍDA a tradução continua valendo: a tela lê e exibe código público.
+func isItemInputReferenceKey(r *http.Request, key string) bool {
+	if key == "parent_code" || key == "child_code" {
+		path := strings.TrimSuffix(r.URL.Path, "/")
+		if path == "/api/items/structure" || strings.HasPrefix(path, "/api/items/structure/") {
+			return false
+		}
+	}
+	return isItemReferenceKey(r, key)
+}
+
 // ItemBusinessCodeCompatibility translates public alphanumeric item references
 // to immutable legacy IDs before handlers and translates IDs back in JSON
 // responses. During rollout, every translated response also exposes legacy_*.
@@ -228,7 +251,7 @@ func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 	query := r.URL.Query()
 	changed := false
 	for key, values := range query {
-		if !isItemReferenceKey(r, key) {
+		if !isItemInputReferenceKey(r, key) {
 			continue
 		}
 		for i, value := range values {
@@ -321,7 +344,7 @@ func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) error {
 		}
 	case map[string]any:
 		for key, v := range node {
-			if isItemReferenceKey(r, key) {
+			if isItemInputReferenceKey(r, key) {
 				if key == "item_code" && strings.HasPrefix(r.URL.Path, "/api/stock/cycle-counts") {
 					continue
 				}

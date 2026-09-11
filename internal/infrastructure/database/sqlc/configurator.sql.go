@@ -7,8 +7,16 @@ package sqlc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// cfgTenant devolve a empresa da sessão. As tabelas cfg_* não tinham dono e
+// nenhuma destas consultas filtrava: os conjuntos, variáveis e características
+// de uma empresa apareciam inteiros para qualquer outra. Ler do contexto — em
+// vez de receber por parâmetro — é o que garante que nenhuma função de acesso
+// consiga esquecer o recorte.
+func cfgTenant(ctx context.Context) (int64, error) { return tenant.ID(ctx) }
 
 type cfgScanner interface{ Scan(...any) error }
 
@@ -34,29 +42,46 @@ func scanCfgSet(sc cfgScanner) (DBCfgSet, error) {
 }
 
 func (q *Queries) CreateCfgSet(ctx context.Context, description string, createdBy pgtype.UUID) (DBCfgSet, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgSet{}, err
+	}
 	const sql = `WITH ins AS (
-		INSERT INTO cfg_sets (description, created_by) VALUES ($1,$2) RETURNING *
+		INSERT INTO cfg_sets (description, created_by, enterprise_id) VALUES ($1,$2,$3) RETURNING *
 	) SELECT ins.id, ins.description, ins.is_active, ins.created_at, ins.updated_at, ins.created_by, 0
 	FROM ins`
-	return scanCfgSet(q.db.QueryRow(ctx, sql, description, createdBy))
+	return scanCfgSet(q.db.QueryRow(ctx, sql, description, createdBy, ent))
 }
 
 func (q *Queries) UpdateCfgSet(ctx context.Context, id int64, description string, isActive bool) (DBCfgSet, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgSet{}, err
+	}
 	const sql = `WITH upd AS (
-		UPDATE cfg_sets SET description=$2, is_active=$3, updated_at=NOW() WHERE id=$1 RETURNING *
+		UPDATE cfg_sets SET description=$2, is_active=$3, updated_at=NOW()
+		WHERE id=$1 AND enterprise_id=$4 RETURNING *
 	) SELECT upd.id, upd.description, upd.is_active, upd.created_at, upd.updated_at, upd.created_by,
 		(SELECT COUNT(*) FROM cfg_variables v WHERE v.set_id = upd.id) FROM upd`
-	return scanCfgSet(q.db.QueryRow(ctx, sql, id, description, isActive))
+	return scanCfgSet(q.db.QueryRow(ctx, sql, id, description, isActive, ent))
 }
 
 func (q *Queries) GetCfgSet(ctx context.Context, id int64) (DBCfgSet, error) {
-	return scanCfgSet(q.db.QueryRow(ctx, `SELECT `+cfgSetCols+` FROM cfg_sets s WHERE s.id=$1`, id))
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgSet{}, err
+	}
+	return scanCfgSet(q.db.QueryRow(ctx, `SELECT `+cfgSetCols+` FROM cfg_sets s WHERE s.id=$1 AND s.enterprise_id=$2`, id, ent))
 }
 
 func (q *Queries) ListCfgSets(ctx context.Context, onlyActive bool) ([]DBCfgSet, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT ` + cfgSetCols + ` FROM cfg_sets s
-		WHERE ($1::BOOLEAN = FALSE OR s.is_active = TRUE) ORDER BY s.description`
-	rows, err := q.db.Query(ctx, sql, onlyActive)
+		WHERE s.enterprise_id=$2 AND ($1::BOOLEAN = FALSE OR s.is_active = TRUE) ORDER BY s.description`
+	rows, err := q.db.Query(ctx, sql, onlyActive, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +98,11 @@ func (q *Queries) ListCfgSets(ctx context.Context, onlyActive bool) ([]DBCfgSet,
 }
 
 func (q *Queries) DeactivateCfgSet(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `UPDATE cfg_sets SET is_active=FALSE, updated_at=NOW() WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `UPDATE cfg_sets SET is_active=FALSE, updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
@@ -119,11 +148,19 @@ type CreateCfgVariableParams struct {
 }
 
 func (q *Queries) CreateCfgVariable(ctx context.Context, a CreateCfgVariableParams) (DBCfgVariable, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgVariable{}, err
+	}
+	// O conjunto precisa ser da mesma empresa: sem o SELECT de checagem daria
+	// para pendurar uma variável no conjunto de outra empresa informando o id.
 	const sql = `INSERT INTO cfg_variables
-		(set_id, code, description, mask_composition, is_special, include_description, special_data, marketing, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING ` + cfgVarCols
+		(set_id, code, description, mask_composition, is_special, include_description, special_data, marketing, created_by, enterprise_id)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+		WHERE EXISTS (SELECT 1 FROM cfg_sets WHERE id=$1 AND enterprise_id=$10)
+		RETURNING ` + cfgVarCols
 	return scanCfgVariable(q.db.QueryRow(ctx, sql, a.SetID, a.Code, a.Description, a.MaskComposition,
-		a.IsSpecial, a.IncludeDescription, a.SpecialData, a.Marketing, a.CreatedBy))
+		a.IsSpecial, a.IncludeDescription, a.SpecialData, a.Marketing, a.CreatedBy, ent))
 }
 
 type UpdateCfgVariableParams struct {
@@ -139,21 +176,33 @@ type UpdateCfgVariableParams struct {
 }
 
 func (q *Queries) UpdateCfgVariable(ctx context.Context, a UpdateCfgVariableParams) (DBCfgVariable, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgVariable{}, err
+	}
 	const sql = `UPDATE cfg_variables SET code=$2, description=$3, mask_composition=$4, is_active=$5,
 		is_special=$6, include_description=$7, special_data=$8, marketing=$9, updated_at=NOW()
-		WHERE id=$1 RETURNING ` + cfgVarCols
+		WHERE id=$1 AND enterprise_id=$10 RETURNING ` + cfgVarCols
 	return scanCfgVariable(q.db.QueryRow(ctx, sql, a.ID, a.Code, a.Description, a.MaskComposition, a.IsActive,
-		a.IsSpecial, a.IncludeDescription, a.SpecialData, a.Marketing))
+		a.IsSpecial, a.IncludeDescription, a.SpecialData, a.Marketing, ent))
 }
 
 func (q *Queries) GetCfgVariable(ctx context.Context, id int64) (DBCfgVariable, error) {
-	return scanCfgVariable(q.db.QueryRow(ctx, `SELECT `+cfgVarCols+` FROM cfg_variables WHERE id=$1`, id))
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgVariable{}, err
+	}
+	return scanCfgVariable(q.db.QueryRow(ctx, `SELECT `+cfgVarCols+` FROM cfg_variables WHERE id=$1 AND enterprise_id=$2`, id, ent))
 }
 
 func (q *Queries) ListCfgVariablesBySet(ctx context.Context, setID int64, onlyActive bool) ([]DBCfgVariable, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT ` + cfgVarCols + ` FROM cfg_variables
-		WHERE set_id=$1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE) ORDER BY code`
-	rows, err := q.db.Query(ctx, sql, setID, onlyActive)
+		WHERE set_id=$1 AND enterprise_id=$3 AND ($2::BOOLEAN = FALSE OR is_active = TRUE) ORDER BY code`
+	rows, err := q.db.Query(ctx, sql, setID, onlyActive, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +219,11 @@ func (q *Queries) ListCfgVariablesBySet(ctx context.Context, setID int64, onlyAc
 }
 
 func (q *Queries) DeactivateCfgVariable(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `UPDATE cfg_variables SET is_active=FALSE, updated_at=NOW() WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `UPDATE cfg_variables SET is_active=FALSE, updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
@@ -185,19 +238,28 @@ type DBCfgVariableLanguage struct {
 }
 
 func (q *Queries) UpsertCfgVariableLanguage(ctx context.Context, variableID int64, language string, country pgtype.Text, translation string) (DBCfgVariableLanguage, error) {
-	const sql = `INSERT INTO cfg_variable_languages (variable_id, language, country, translation)
-		VALUES ($1,$2,$3,$4)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgVariableLanguage{}, err
+	}
+	const sql = `INSERT INTO cfg_variable_languages (variable_id, language, country, translation, enterprise_id)
+		SELECT $1,$2,$3,$4,$5
+		WHERE EXISTS (SELECT 1 FROM cfg_variables WHERE id=$1 AND enterprise_id=$5)
 		ON CONFLICT (variable_id, language) DO UPDATE SET country=EXCLUDED.country, translation=EXCLUDED.translation
 		RETURNING id, variable_id, language, country, translation`
 	var i DBCfgVariableLanguage
-	err := q.db.QueryRow(ctx, sql, variableID, language, country, translation).
+	err = q.db.QueryRow(ctx, sql, variableID, language, country, translation, ent).
 		Scan(&i.ID, &i.VariableID, &i.Language, &i.Country, &i.Translation)
 	return i, err
 }
 
 func (q *Queries) ListCfgVariableLanguages(ctx context.Context, variableID int64) ([]DBCfgVariableLanguage, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := q.db.Query(ctx, `SELECT id, variable_id, language, country, translation
-		FROM cfg_variable_languages WHERE variable_id=$1 ORDER BY language`, variableID)
+		FROM cfg_variable_languages WHERE variable_id=$1 AND enterprise_id=$2 ORDER BY language`, variableID, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +276,11 @@ func (q *Queries) ListCfgVariableLanguages(ctx context.Context, variableID int64
 }
 
 func (q *Queries) DeleteCfgVariableLanguage(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `DELETE FROM cfg_variable_languages WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `DELETE FROM cfg_variable_languages WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
@@ -256,8 +322,8 @@ const cfgCharCols = `c.id, c.code, c.description, c.char_type, c.is_active, c.se
 	s.description AS set_description, dv.code AS default_variable_code`
 
 const cfgCharFrom = `FROM cfg_characteristics c
-	LEFT JOIN cfg_sets s ON s.id = c.set_id
-	LEFT JOIN cfg_variables dv ON dv.id = c.default_variable_id`
+	LEFT JOIN cfg_sets s ON s.id = c.set_id AND s.enterprise_id = c.enterprise_id
+	LEFT JOIN cfg_variables dv ON dv.id = c.default_variable_id AND dv.enterprise_id = c.enterprise_id`
 
 // cfgCharReturn selects an inserted/updated characteristic straight from the
 // data-modifying CTE (`alias`), joining the lookup tables. Selecting from the
@@ -270,8 +336,8 @@ func cfgCharReturn(alias string) string {
 		alias + `.num_max, ` + alias + `.num_multiple, ` + alias + `.option_true, ` + alias + `.option_false, ` +
 		alias + `.created_at, ` + alias + `.updated_at, ` + alias + `.created_by, s.description, dv.code
 	FROM ` + alias + `
-	LEFT JOIN cfg_sets s ON s.id = ` + alias + `.set_id
-	LEFT JOIN cfg_variables dv ON dv.id = ` + alias + `.default_variable_id`
+	LEFT JOIN cfg_sets s ON s.id = ` + alias + `.set_id AND s.enterprise_id = ` + alias + `.enterprise_id
+	LEFT JOIN cfg_variables dv ON dv.id = ` + alias + `.default_variable_id AND dv.enterprise_id = ` + alias + `.enterprise_id`
 }
 
 func scanCfgCharacteristic(sc cfgScanner) (DBCfgCharacteristic, error) {
@@ -308,41 +374,57 @@ type CfgCharacteristicParams struct {
 }
 
 func (q *Queries) CreateCfgCharacteristic(ctx context.Context, a CfgCharacteristicParams) (DBCfgCharacteristic, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgCharacteristic{}, err
+	}
 	sql := `WITH ins AS (
 		INSERT INTO cfg_characteristics
 		(code, description, char_type, set_id, default_variable_id, mask, is_special, affects_price,
 		 controls_goals, receiving_type, field_source, formula, is_required, num_min, num_max, num_multiple,
-		 option_true, option_false, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+		 option_true, option_false, created_by, enterprise_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 		RETURNING *
 	) ` + cfgCharReturn("ins")
 	return scanCfgCharacteristic(q.db.QueryRow(ctx, sql, a.Code, a.Description, a.CharType, a.SetID,
 		a.DefaultVariableID, a.Mask, a.IsSpecial, a.AffectsPrice, a.ControlsGoals, a.ReceivingType,
 		a.FieldSource, a.Formula, a.IsRequired, a.NumMin, a.NumMax, a.NumMultiple, a.OptionTrue,
-		a.OptionFalse, a.CreatedBy))
+		a.OptionFalse, a.CreatedBy, ent))
 }
 
 func (q *Queries) UpdateCfgCharacteristic(ctx context.Context, a CfgCharacteristicParams) (DBCfgCharacteristic, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgCharacteristic{}, err
+	}
 	sql := `WITH upd AS (
 		UPDATE cfg_characteristics SET code=$2, description=$3, char_type=$4, is_active=$5, set_id=$6,
 		 default_variable_id=$7, mask=$8, is_special=$9, affects_price=$10, controls_goals=$11,
 		 receiving_type=$12, field_source=$13, formula=$14, is_required=$15, num_min=$16, num_max=$17,
 		 num_multiple=$18, option_true=$19, option_false=$20, updated_at=NOW()
-		WHERE id=$1 RETURNING *
+		WHERE id=$1 AND enterprise_id=$21 RETURNING *
 	) ` + cfgCharReturn("upd")
 	return scanCfgCharacteristic(q.db.QueryRow(ctx, sql, a.ID, a.Code, a.Description, a.CharType, a.IsActive,
 		a.SetID, a.DefaultVariableID, a.Mask, a.IsSpecial, a.AffectsPrice, a.ControlsGoals, a.ReceivingType,
-		a.FieldSource, a.Formula, a.IsRequired, a.NumMin, a.NumMax, a.NumMultiple, a.OptionTrue, a.OptionFalse))
+		a.FieldSource, a.Formula, a.IsRequired, a.NumMin, a.NumMax, a.NumMultiple, a.OptionTrue, a.OptionFalse, ent))
 }
 
 func (q *Queries) GetCfgCharacteristic(ctx context.Context, id int64) (DBCfgCharacteristic, error) {
-	return scanCfgCharacteristic(q.db.QueryRow(ctx, `SELECT `+cfgCharCols+` `+cfgCharFrom+` WHERE c.id=$1`, id))
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgCharacteristic{}, err
+	}
+	return scanCfgCharacteristic(q.db.QueryRow(ctx, `SELECT `+cfgCharCols+` `+cfgCharFrom+` WHERE c.id=$1 AND c.enterprise_id=$2`, id, ent))
 }
 
 func (q *Queries) ListCfgCharacteristics(ctx context.Context, onlyActive bool) ([]DBCfgCharacteristic, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT ` + cfgCharCols + ` ` + cfgCharFrom + `
-		WHERE ($1::BOOLEAN = FALSE OR c.is_active = TRUE) ORDER BY c.code`
-	rows, err := q.db.Query(ctx, sql, onlyActive)
+		WHERE c.enterprise_id=$2 AND ($1::BOOLEAN = FALSE OR c.is_active = TRUE) ORDER BY c.code`
+	rows, err := q.db.Query(ctx, sql, onlyActive, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +441,11 @@ func (q *Queries) ListCfgCharacteristics(ctx context.Context, onlyActive bool) (
 }
 
 func (q *Queries) DeactivateCfgCharacteristic(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `UPDATE cfg_characteristics SET is_active=FALSE, updated_at=NOW() WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `UPDATE cfg_characteristics SET is_active=FALSE, updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
@@ -374,19 +460,28 @@ type DBCfgCharacteristicLanguage struct {
 }
 
 func (q *Queries) UpsertCfgCharacteristicLanguage(ctx context.Context, charID int64, language, description string, mask pgtype.Text) (DBCfgCharacteristicLanguage, error) {
-	const sql = `INSERT INTO cfg_characteristic_languages (characteristic_id, language, description, mask)
-		VALUES ($1,$2,$3,$4)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgCharacteristicLanguage{}, err
+	}
+	const sql = `INSERT INTO cfg_characteristic_languages (characteristic_id, language, description, mask, enterprise_id)
+		SELECT $1,$2,$3,$4,$5
+		WHERE EXISTS (SELECT 1 FROM cfg_characteristics WHERE id=$1 AND enterprise_id=$5)
 		ON CONFLICT (characteristic_id, language) DO UPDATE SET description=EXCLUDED.description, mask=EXCLUDED.mask
 		RETURNING id, characteristic_id, language, description, mask`
 	var i DBCfgCharacteristicLanguage
-	err := q.db.QueryRow(ctx, sql, charID, language, description, mask).
+	err = q.db.QueryRow(ctx, sql, charID, language, description, mask, ent).
 		Scan(&i.ID, &i.CharacteristicID, &i.Language, &i.Description, &i.Mask)
 	return i, err
 }
 
 func (q *Queries) ListCfgCharacteristicLanguages(ctx context.Context, charID int64) ([]DBCfgCharacteristicLanguage, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := q.db.Query(ctx, `SELECT id, characteristic_id, language, description, mask
-		FROM cfg_characteristic_languages WHERE characteristic_id=$1 ORDER BY language`, charID)
+		FROM cfg_characteristic_languages WHERE characteristic_id=$1 AND enterprise_id=$2 ORDER BY language`, charID, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +498,11 @@ func (q *Queries) ListCfgCharacteristicLanguages(ctx context.Context, charID int
 }
 
 func (q *Queries) DeleteCfgCharacteristicLanguage(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `DELETE FROM cfg_characteristic_languages WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `DELETE FROM cfg_characteristic_languages WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
@@ -440,7 +539,7 @@ func cfgItemCharReturn(alias string) string {
 		alias + `.default_variable_id, ` + alias + `.parent_id, ` + alias + `.is_special, ` + alias + `.is_drawing, ` +
 		alias + `.is_load, ` + alias + `.formula, ` + alias + `.created_at, ` + alias + `.updated_at,
 		c.code, c.description, c.char_type, c.mask
-	FROM ` + alias + ` JOIN cfg_characteristics c ON c.id = ` + alias + `.characteristic_id`
+	FROM ` + alias + ` JOIN cfg_characteristics c ON c.id = ` + alias + `.characteristic_id AND c.enterprise_id = ` + alias + `.enterprise_id`
 }
 
 func scanCfgItemCharacteristic(sc cfgScanner) (DBCfgItemCharacteristic, error) {
@@ -465,36 +564,57 @@ type CfgItemCharacteristicParams struct {
 }
 
 func (q *Queries) AddCfgItemCharacteristic(ctx context.Context, a CfgItemCharacteristicParams) (DBCfgItemCharacteristic, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgItemCharacteristic{}, err
+	}
+	// A característica tem de ser da própria empresa — caso contrário bastaria
+	// informar o id alheio para amarrá-la a um item daqui.
 	sql := `WITH ins AS (
 		INSERT INTO cfg_item_characteristics
-		(item_code, characteristic_id, sequence, default_variable_id, parent_id, is_special, is_drawing, is_load, formula)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+		(item_code, characteristic_id, sequence, default_variable_id, parent_id, is_special, is_drawing, is_load, formula, enterprise_id)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+		WHERE EXISTS (SELECT 1 FROM cfg_characteristics WHERE id=$2 AND enterprise_id=$10)
+		RETURNING *
 	) ` + cfgItemCharReturn("ins")
 	return scanCfgItemCharacteristic(q.db.QueryRow(ctx, sql, a.ItemCode, a.CharacteristicID, a.Sequence,
-		a.DefaultVariableID, a.ParentID, a.IsSpecial, a.IsDrawing, a.IsLoad, a.Formula))
+		a.DefaultVariableID, a.ParentID, a.IsSpecial, a.IsDrawing, a.IsLoad, a.Formula, ent))
 }
 
 func (q *Queries) UpdateCfgItemCharacteristic(ctx context.Context, a CfgItemCharacteristicParams) (DBCfgItemCharacteristic, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgItemCharacteristic{}, err
+	}
 	sql := `WITH upd AS (
 		UPDATE cfg_item_characteristics SET sequence=$2, default_variable_id=$3, parent_id=$4,
 		 is_special=$5, is_drawing=$6, is_load=$7, formula=$8, updated_at=NOW()
-		WHERE id=$1 RETURNING *
+		WHERE id=$1 AND enterprise_id=$9 RETURNING *
 	) ` + cfgItemCharReturn("upd")
 	return scanCfgItemCharacteristic(q.db.QueryRow(ctx, sql, a.ID, a.Sequence, a.DefaultVariableID, a.ParentID,
-		a.IsSpecial, a.IsDrawing, a.IsLoad, a.Formula))
+		a.IsSpecial, a.IsDrawing, a.IsLoad, a.Formula, ent))
 }
 
 func (q *Queries) GetCfgItemCharacteristic(ctx context.Context, id int64) (DBCfgItemCharacteristic, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgItemCharacteristic{}, err
+	}
 	const sql = `SELECT ` + cfgItemCharCols + ` FROM cfg_item_characteristics ic
-		JOIN cfg_characteristics c ON c.id = ic.characteristic_id WHERE ic.id=$1`
-	return scanCfgItemCharacteristic(q.db.QueryRow(ctx, sql, id))
+		JOIN cfg_characteristics c ON c.id = ic.characteristic_id
+		WHERE ic.id=$1 AND ic.enterprise_id=$2`
+	return scanCfgItemCharacteristic(q.db.QueryRow(ctx, sql, id, ent))
 }
 
 func (q *Queries) ListCfgItemCharacteristics(ctx context.Context, itemCode int64) ([]DBCfgItemCharacteristic, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT ` + cfgItemCharCols + ` FROM cfg_item_characteristics ic
 		JOIN cfg_characteristics c ON c.id = ic.characteristic_id
-		WHERE ic.item_code=$1 ORDER BY ic.sequence`
-	rows, err := q.db.Query(ctx, sql, itemCode)
+		WHERE ic.item_code=$1 AND ic.enterprise_id=$2 ORDER BY ic.sequence`
+	rows, err := q.db.Query(ctx, sql, itemCode, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -511,18 +631,29 @@ func (q *Queries) ListCfgItemCharacteristics(ctx context.Context, itemCode int64
 }
 
 func (q *Queries) RemoveCfgItemCharacteristic(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `DELETE FROM cfg_item_characteristics WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `DELETE FROM cfg_item_characteristics WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
 // Default answers (ESCOLHA_MULT): replace the whole set atomically.
 func (q *Queries) ReplaceCfgItemCharDefaultAnswers(ctx context.Context, itemCharID int64, variableIDs []int64) error {
-	if _, err := q.db.Exec(ctx, `DELETE FROM cfg_item_char_default_answers WHERE item_characteristic_id=$1`, itemCharID); err != nil {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := q.db.Exec(ctx, `DELETE FROM cfg_item_char_default_answers
+		WHERE item_characteristic_id=$1 AND enterprise_id=$2`, itemCharID, ent); err != nil {
 		return err
 	}
 	for _, v := range variableIDs {
-		if _, err := q.db.Exec(ctx, `INSERT INTO cfg_item_char_default_answers (item_characteristic_id, variable_id)
-			VALUES ($1,$2) ON CONFLICT DO NOTHING`, itemCharID, v); err != nil {
+		if _, err := q.db.Exec(ctx, `INSERT INTO cfg_item_char_default_answers (item_characteristic_id, variable_id, enterprise_id)
+			SELECT $1,$2,$3
+			WHERE EXISTS (SELECT 1 FROM cfg_item_characteristics WHERE id=$1 AND enterprise_id=$3)
+			ON CONFLICT DO NOTHING`, itemCharID, v, ent); err != nil {
 			return err
 		}
 	}
@@ -530,8 +661,12 @@ func (q *Queries) ReplaceCfgItemCharDefaultAnswers(ctx context.Context, itemChar
 }
 
 func (q *Queries) ListCfgItemCharDefaultAnswers(ctx context.Context, itemCharID int64) ([]int64, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := q.db.Query(ctx, `SELECT variable_id FROM cfg_item_char_default_answers
-		WHERE item_characteristic_id=$1 ORDER BY variable_id`, itemCharID)
+		WHERE item_characteristic_id=$1 AND enterprise_id=$2 ORDER BY variable_id`, itemCharID, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -569,8 +704,12 @@ func (q *Queries) ItemHasStructureFormula(ctx context.Context, itemCode int64) (
 // ListItemsByCharacteristic returns the item codes that use a characteristic
 // (Botão Itens Vinculados).
 func (q *Queries) ListItemsByCharacteristic(ctx context.Context, characteristicID int64) ([]int64, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := q.db.Query(ctx, `SELECT DISTINCT item_code FROM cfg_item_characteristics
-		WHERE characteristic_id=$1 ORDER BY item_code`, characteristicID)
+		WHERE characteristic_id=$1 AND enterprise_id=$2 ORDER BY item_code`, characteristicID, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -598,9 +737,13 @@ func (q *Queries) PersistCfgItemMask(ctx context.Context, itemCode int64, mask, 
 }
 
 func (q *Queries) InsertCfgItemMaskAnswer(ctx context.Context, maskID, charID int64, variableID pgtype.Int8, value string, position int32) error {
-	_, err := q.db.Exec(ctx, `INSERT INTO cfg_item_mask_answers
-		(mask_id, characteristic_id, variable_id, answer_value, position) VALUES ($1,$2,$3,$4,$5)`,
-		maskID, charID, variableID, value, position)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `INSERT INTO cfg_item_mask_answers
+		(mask_id, characteristic_id, variable_id, answer_value, position, enterprise_id) VALUES ($1,$2,$3,$4,$5,$6)`,
+		maskID, charID, variableID, value, position, ent)
 	return err
 }
 
@@ -618,26 +761,36 @@ type DBCfgCharReceivingItem struct {
 }
 
 func (q *Queries) AddCfgCharReceivingItem(ctx context.Context, charID int64, variableID pgtype.Int8, receivingType string, itemCode, classificationCode pgtype.Int8) (DBCfgCharReceivingItem, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgCharReceivingItem{}, err
+	}
 	const sql = `WITH ins AS (
 		INSERT INTO cfg_characteristic_receiving_items
-		(characteristic_id, variable_id, receiving_type, item_code, classification_code)
-		VALUES ($1,$2,$3,$4,$5) RETURNING *
+		(characteristic_id, variable_id, receiving_type, item_code, classification_code, enterprise_id)
+		SELECT $1,$2,$3,$4,$5,$6
+		WHERE EXISTS (SELECT 1 FROM cfg_characteristics WHERE id=$1 AND enterprise_id=$6)
+		RETURNING *
 	) SELECT ins.id, ins.characteristic_id, ins.variable_id, ins.receiving_type, ins.item_code,
 		ins.classification_code, v.code
-	FROM ins LEFT JOIN cfg_variables v ON v.id = ins.variable_id`
+	FROM ins LEFT JOIN cfg_variables v ON v.id = ins.variable_id AND v.enterprise_id = ins.enterprise_id`
 	var i DBCfgCharReceivingItem
-	err := q.db.QueryRow(ctx, sql, charID, variableID, receivingType, itemCode, classificationCode).
+	err = q.db.QueryRow(ctx, sql, charID, variableID, receivingType, itemCode, classificationCode, ent).
 		Scan(&i.ID, &i.CharacteristicID, &i.VariableID, &i.ReceivingType, &i.ItemCode, &i.ClassificationCode, &i.VariableCode)
 	return i, err
 }
 
 func (q *Queries) ListCfgCharReceivingItems(ctx context.Context, charID int64) ([]DBCfgCharReceivingItem, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT r.id, r.characteristic_id, r.variable_id, r.receiving_type, r.item_code,
 		r.classification_code, v.code
 	FROM cfg_characteristic_receiving_items r
-	LEFT JOIN cfg_variables v ON v.id = r.variable_id
-	WHERE r.characteristic_id=$1 ORDER BY r.id`
-	rows, err := q.db.Query(ctx, sql, charID)
+	LEFT JOIN cfg_variables v ON v.id = r.variable_id AND v.enterprise_id = r.enterprise_id
+	WHERE r.characteristic_id=$1 AND r.enterprise_id=$2 ORDER BY r.id`
+	rows, err := q.db.Query(ctx, sql, charID, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -654,6 +807,10 @@ func (q *Queries) ListCfgCharReceivingItems(ctx context.Context, charID int64) (
 }
 
 func (q *Queries) DeleteCfgCharReceivingItem(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `DELETE FROM cfg_characteristic_receiving_items WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `DELETE FROM cfg_characteristic_receiving_items WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }

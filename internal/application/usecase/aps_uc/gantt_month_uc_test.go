@@ -15,14 +15,18 @@ import (
 // ─── fakes ────────────────────────────────────────────────────────────────────
 
 type fakeAPSRepo struct {
-	scheduled []*apsentity.GanttBar
-	fallback  []*apsentity.GanttBar
-	load      []*apsentity.GanttResourceLoad
-	deps      []*apsentity.GanttDependency           // real board edges
-	orderDeps map[int64][]*apsentity.GanttDependency // per-order edges (cascade)
-	seqs      map[int64]*apsentity.ProductionSequence
-	capacity  map[int64]float64
-	updated   []int64 // ids passed to UpdateSequence, in call order
+	matriz         []apsentity.SetupTransicao
+	itemDaOrdem    int64
+	familiaDaOrdem string
+	arestas        []apsrepo.OpEdge
+	scheduled      []*apsentity.GanttBar
+	fallback       []*apsentity.GanttBar
+	load           []*apsentity.GanttResourceLoad
+	deps           []*apsentity.GanttDependency           // real board edges
+	orderDeps      map[int64][]*apsentity.GanttDependency // per-order edges (cascade)
+	seqs           map[int64]*apsentity.ProductionSequence
+	capacity       map[int64]float64
+	updated        []int64 // ids passed to UpdateSequence, in call order
 }
 
 func (f *fakeAPSRepo) UpsertSequence(context.Context, *apsentity.ProductionSequence) (*apsentity.ProductionSequence, error) {
@@ -74,6 +78,19 @@ func (f *fakeAPSRepo) GetOpenProductionOrders(context.Context) ([]apsrepo.OrderR
 func (f *fakeAPSRepo) GetOrderOperations(context.Context, int64) ([]apsrepo.OpRow, error) {
 	return nil, nil
 }
+func (f *fakeAPSRepo) GetOrderOperationEdges(context.Context, int64) ([]apsrepo.OpEdge, error) {
+	return f.arestas, nil
+}
+func (f *fakeAPSRepo) ListSetupMatrix(context.Context, int64) ([]apsentity.SetupTransicao, error) {
+	return f.matriz, nil
+}
+func (f *fakeAPSRepo) GetOrderItem(context.Context, int64) (int64, string, error) {
+	return f.itemDaOrdem, f.familiaDaOrdem, nil
+}
+func (f *fakeAPSRepo) UpsertSetupTransicao(context.Context, apsentity.SetupTransicao, string) (int64, error) {
+	return 1, nil
+}
+func (f *fakeAPSRepo) DeleteSetupTransicao(context.Context, int64) error { return nil }
 func (f *fakeAPSRepo) GetWorkCenterCapacity(_ context.Context, wc int64) (float64, error) {
 	if v, ok := f.capacity[wc]; ok {
 		return v, nil

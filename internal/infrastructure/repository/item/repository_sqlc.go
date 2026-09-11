@@ -109,13 +109,14 @@ func (r *RepositoryItemSQLC) Create(
 		SuppliesWarehouseCode:      item.Supplies.WarehouseCode,
 		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist,
 		SuppliesHarvest:            item.Supplies.Harvest,
+		SuppliesNotes:              pgutil.ToPgTextFromPtr(item.Supplies.Notes),
 
 		CommercialWarrantyDays:       int32(item.Commercial.WarrantyDays),
 		AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS),
 		CommercialDescription:        pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple),
 		CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays),
-		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode),
+		CommercialTransferWarehouseCode: pgutil.ToPgTextFromPtr(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: pgutil.ToPgTextFromPtr(item.Commercial.TechnicalAssistanceWarehouseCode),
 		CommercialPackagingItemCode: item.Commercial.PackagingItemCode, CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange,
 		CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes,
 		CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS,
@@ -190,7 +191,7 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 	}
 	p := sqlc.UpdateItemFoldersParams{BusinessCode: string(item.BusinessCode), EnterpriseID: item.EnterpriseID, CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
-		CommercialTransferWarehouseCode: int64PtrToPgText(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: int64PtrToPgText(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
+		CommercialTransferWarehouseCode: pgutil.ToPgTextFromPtr(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: pgutil.ToPgTextFromPtr(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
 		CommercialAllowBillingDescriptionChange: item.Commercial.AllowBillingDescriptionChange, CommercialIssueLoadingLabels: item.Commercial.IssueLoadingLabels, CommercialAssembleShippingVolumes: item.Commercial.AssembleShippingVolumes, CommercialRequiresSpecialPackaging: item.Commercial.RequiresSpecialPackaging, CommercialWithholdPisCofins: item.Commercial.WithholdPISCOFINS, CommercialIsPackaging: item.Commercial.IsPackaging, CommercialMobileEnabled: item.Commercial.MobileEnabled, CommercialExportPackaging: item.Commercial.ExportPackaging, CommercialClassificationCode: pgutil.ToPgTextFromPtr(item.Commercial.ClassificationCode), CommercialNotes: pgutil.ToPgTextFromPtr(item.Commercial.Notes),
 		AccountingSaleFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.SaleFiscalClassificationCode), AccountingPurchaseFiscalClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseFiscalClassificationCode), AccountingOrigin: intPtrToInt2(item.Accounting.Origin), AccountingSaleIpiType: pgutil.ToPgTextFromPtr(item.Accounting.SaleIPIType), AccountingSaleIpiRate: decimalPtrToNumeric(item.Accounting.SaleIPIRate), AccountingPurchaseIpiType: pgutil.ToPgTextFromPtr(item.Accounting.PurchaseIPIType), AccountingPurchaseIpiRate: decimalPtrToNumeric(item.Accounting.PurchaseIPIRate), AccountingIcmsRate: decimalPtrToNumeric(item.Accounting.ICMSRate), AccountingSaleUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.SaleUnitOfMeasurement), AccountingPurchaseUnitOfMeasurement: unitOfMeasurementToPgText(item.Accounting.PurchaseUnitOfMeasurement), AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode), AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingCalculatePisCofins: boolPtrToPgBool(item.Accounting.CalculatePISCOFINS), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes), WarehouseCyclicalCountConfig: cyclicalCountConfig,
 		// Identificação, marcadores e demais pastas — o que a alteração do item
@@ -208,6 +209,8 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 		PlanningCritical: item.Planning.Critical, PlanningExclusive: item.Planning.Exclusive, PlanningActive: item.Planning.Active,
 		SuppliesTypeOfUse: int16(item.Supplies.TypeOfUse), SuppliesPurchaseUom: unitOfMeasurementToPgText(item.Supplies.PurchaseUOM),
 		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist, SuppliesHarvest: item.Supplies.Harvest,
+		SuppliesWarehouseCode: item.Supplies.WarehouseCode, SuppliesNotes: pgutil.ToPgTextFromPtr(item.Supplies.Notes),
+		WarehouseCode: int64(item.Warehouse.WarehouseCode), WarehouseAvgMonthlyConsumptionManual: intPtrToInt32Ptr(item.Warehouse.AverageMonthlyConsumptionManual),
 		WarehouseUnitOfMeasurement: sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
 		WarehouseAutomaticLow:      item.Warehouse.AutomaticLow, WarehouseMinimumStock: item.Warehouse.MinimumStock}
 	dbItem, err := r.q.UpdateItemFolders(ctx, p)
@@ -485,13 +488,14 @@ func mapDBItemToEntity(
 			WarehouseCode:      dbItem.SuppliesWarehouseCode,
 			ReceivingChecklist: dbItem.SuppliesReceivingChecklist,
 			Harvest:            dbItem.SuppliesHarvest,
+			Notes:              pgTextToStringPtr(dbItem.SuppliesNotes),
 		},
 		Commercial: entity.Commercial{
 			Description: pgTextToStringPtr(dbItem.CommercialDescription), SaleType: pgTextToStringPtr(dbItem.CommercialSaleType),
 			VolumeConversionFactor: numericToDecimalPtr(dbItem.CommercialVolumeConversionFactor), SaleMultiple: numericToDecimalPtr(dbItem.CommercialSaleMultiple),
 			MinimumSaleQuantity: numericToDecimalPtr(dbItem.CommercialMinimumSaleQuantity), EstimatedDeliveryDays: int32PtrToIntPtr(dbItem.CommercialEstimatedDeliveryDays),
-			WarrantyDays: int(dbItem.CommercialWarrantyDays), TransferWarehouseCode: pgTextToInt64Ptr(dbItem.CommercialTransferWarehouseCode),
-			TechnicalAssistanceWarehouseCode: pgTextToInt64Ptr(dbItem.CommercialTechnicalAssistanceWarehouseCode), PackagingItemCode: dbItem.CommercialPackagingItemCode,
+			WarrantyDays: int(dbItem.CommercialWarrantyDays), TransferWarehouseCode: pgTextToStringPtr(dbItem.CommercialTransferWarehouseCode),
+			TechnicalAssistanceWarehouseCode: pgTextToStringPtr(dbItem.CommercialTechnicalAssistanceWarehouseCode), PackagingItemCode: dbItem.CommercialPackagingItemCode,
 			AllowBillingDescriptionChange: dbItem.CommercialAllowBillingDescriptionChange, IssueLoadingLabels: dbItem.CommercialIssueLoadingLabels,
 			AssembleShippingVolumes: dbItem.CommercialAssembleShippingVolumes, RequiresSpecialPackaging: dbItem.CommercialRequiresSpecialPackaging,
 			WithholdPISCOFINS: dbItem.CommercialWithholdPisCofins, IsPackaging: dbItem.CommercialIsPackaging,

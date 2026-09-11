@@ -128,6 +128,11 @@ type cachedItemMRP struct {
 	typeMRP         int
 	ghost           bool
 	reorderPoint    *valueobject.ReorderPoint
+	// Política de lote do próprio cadastro do item. Eram gravados na VENT0200 e
+	// o MRP nunca os lia: só uma "regra configurada" separada aplicava lote
+	// mínimo, então os campos da tela não mudavam o planejamento.
+	minimumLot  float64
+	multipleLot float64
 }
 
 // =============================================================================
@@ -635,7 +640,7 @@ func (s *MRPServiceImpl) calculateMRP(
 				}
 
 				if cached.ghost && !params.ItensFantasmasGravar {
-					children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask))
+					children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask), *suggestion.StartDate)
 					for _, child := range children {
 						child.PlanCode = planCode
 						child.NeedDate = *suggestion.StartDate
@@ -645,7 +650,7 @@ func (s *MRPServiceImpl) calculateMRP(
 					continue
 				}
 
-				children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask))
+				children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask), *suggestion.StartDate)
 				for _, child := range children {
 					child.PlanCode = planCode
 					child.NeedDate = *suggestion.StartDate
@@ -1077,9 +1082,18 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		return output, nil
 	}
 
-	if minLot > 0 && netReq < minLot {
-		netReq = minLot
+	// 5. Item-type lookup — cached (também traz a política de lote do item).
+	cachedItem := s.ensureItemCache(ctx, itemCache, input.ItemCode)
+	if cachedItem == nil {
+		cachedItem = &cachedItemMRP{}
 	}
+
+	// Política de lote: a regra configurada tem precedência sobre o cadastro do
+	// item, porque é o ajuste fino por item/máscara.
+	if minLot <= 0 {
+		minLot = cachedItem.minimumLot
+	}
+	netReq = aplicaPoliticaDeLote(netReq, minLot, cachedItem.multipleLot)
 
 	orderType := "FABRICACAO"
 	demandType := input.DemandType
@@ -1092,11 +1106,7 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		demandType = "INTER_FACTORY"
 	}
 
-	// 5. Item-type lookup — cached.
-	cached := s.ensureItemCache(ctx, itemCache, input.ItemCode)
-	if cached == nil {
-		cached = &cachedItemMRP{}
-	}
+	cached := cachedItem
 
 	switch cached.engineeringType {
 	case 1: // COMPRADO
@@ -1530,6 +1540,8 @@ func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int6
 		cached.typeMRP = int(item.Planning.TypeMRP)
 		cached.ghost = item.Planning.Ghost
 		cached.reorderPoint = item.Planning.ReorderPoint
+		cached.minimumLot = float64(item.Planning.MinimumLot)
+		cached.multipleLot = float64(item.Planning.MultipleLot)
 	}
 	itemCache[itemCode] = cached
 	return cached
@@ -1612,8 +1624,9 @@ func explodeFromBOMWithVars(
 	level int,
 	formula int,
 	vars map[string]float64,
+	necessidade time.Time,
 ) []*entity.MRPInput {
-	return explode(bomMap, parentCode, mask, quantity, level, formula, vars)
+	return explode(bomMap, parentCode, mask, quantity, level, formula, vars, necessidade)
 }
 
 // explodeFromBOMWithFormula expands one BOM level with configurable loss formula.
@@ -1625,7 +1638,7 @@ func explodeFromBOMWithFormula(
 	level int,
 	formula int,
 ) []*entity.MRPInput {
-	return explode(bomMap, parentCode, mask, quantity, level, formula, nil)
+	return explode(bomMap, parentCode, mask, quantity, level, formula, nil, time.Time{})
 }
 
 func explode(
@@ -1636,6 +1649,7 @@ func explode(
 	level int,
 	formula int,
 	vars map[string]float64,
+	necessidade time.Time,
 ) []*entity.MRPInput {
 	if level > 20 {
 		return nil
@@ -1644,6 +1658,13 @@ func explode(
 	applicable := make([]*structentity.ItemStructure, 0, len(children))
 	for _, child := range children {
 		if child.ParentMask != nil && (mask == "" || *child.ParentMask != mask) {
+			continue
+		}
+		// A vigência é avaliada na data em que o componente será consumido, e
+		// antes da escolha do alternativo: se o material principal venceu, a
+		// necessidade vai para o próximo da prioridade em vez de sumir. Data
+		// zero = sem filtro (chamadas que não têm data de necessidade).
+		if !necessidade.IsZero() && !child.VigenteEm(necessidade) {
 			continue
 		}
 		applicable = append(applicable, child)
@@ -1936,4 +1957,23 @@ func mpsPeriodToDate(periodType string, periodValue, year int) time.Time {
 	default:
 		return time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
 	}
+}
+
+// aplicaPoliticaDeLote arredonda a necessidade líquida para a política de lote
+// do item: nunca abaixo do lote mínimo e sempre num múltiplo do lote múltiplo.
+//
+// É a ordem que SAP e FoccoERP usam — primeiro o mínimo, depois o múltiplo —
+// porque arredondar para o múltiplo antes poderia devolver uma quantidade
+// abaixo do mínimo.
+func aplicaPoliticaDeLote(necessidade, loteMinimo, loteMultiplo float64) float64 {
+	if necessidade <= 0 {
+		return necessidade
+	}
+	if loteMinimo > 0 && necessidade < loteMinimo {
+		necessidade = loteMinimo
+	}
+	if loteMultiplo > 0 {
+		necessidade = math.Ceil(necessidade/loteMultiplo) * loteMultiplo
+	}
+	return necessidade
 }

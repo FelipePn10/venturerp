@@ -62,17 +62,27 @@ type UpdatePlanningDTO struct {
 }
 
 type UpdateSuppliesDTO struct {
-	TypeOfUse          *types.TypeOfUseItem              `json:"type_of_use,omitempty"`
-	PurchaseUOM        **types.TypeUnitOfMeasurementItem `json:"purchase_uom,omitempty"`
-	ReceivingChecklist *bool                             `json:"receiving_checklist,omitempty"`
-	Harvest            *bool                             `json:"harvest,omitempty"`
+	TypeOfUse   *types.TypeOfUseItem              `json:"type_of_use,omitempty"`
+	PurchaseUOM **types.TypeUnitOfMeasurementItem `json:"purchase_uom,omitempty"`
+	// WarehouseCode não existia na alteração: o almoxarifado de suprimentos
+	// escolhido na criação ficava para sempre, e trocá-lo respondia 200 sem
+	// gravar nada.
+	WarehouseCode      *int64  `json:"warehouse_code,omitempty"`
+	ReceivingChecklist *bool   `json:"receiving_checklist,omitempty"`
+	Harvest            *bool   `json:"harvest,omitempty"`
+	Notes              *string `json:"notes,omitempty"`
 }
 
 type UpdateWarehouseDTO struct {
-	CyclicalCountConfig OptionalCyclicalCountConfig      `json:"cyclical_count_config,omitempty"`
-	UnitOfMeasurement   *types.TypeUnitOfMeasurementItem `json:"unit_of_measurement,omitempty"`
-	AutomaticLow        *bool                            `json:"automatic_low,omitempty"`
-	MinimumStock        *int32                           `json:"minimum_stock,omitempty"`
+	// WarehouseCode e AverageMonthlyConsumptionManual não existiam na
+	// alteração: o almoxarifado principal e o consumo médio informado à mão
+	// ficavam como na criação, e a tela respondia "salvo".
+	WarehouseCode                   *int64                           `json:"warehouse_code,omitempty"`
+	CyclicalCountConfig             OptionalCyclicalCountConfig      `json:"cyclical_count_config,omitempty"`
+	UnitOfMeasurement               *types.TypeUnitOfMeasurementItem `json:"unit_of_measurement,omitempty"`
+	AutomaticLow                    *bool                            `json:"automatic_low,omitempty"`
+	MinimumStock                    *int32                           `json:"minimum_stock,omitempty"`
+	AverageMonthlyConsumptionManual *int                             `json:"average_monthly_consumption_manual,omitempty"`
 }
 
 // OptionalCyclicalCountConfig distinguishes omission (preserve) from an
@@ -104,8 +114,8 @@ type UpdateCommercialDTO struct {
 	MinimumSaleQuantity              **decimal.Decimal `json:"minimum_sale_quantity,omitempty"`
 	EstimatedDeliveryDays            **int             `json:"estimated_delivery_days,omitempty"`
 	WarrantyDays                     *int              `json:"warranty_days,omitempty"`
-	TransferWarehouseCode            **int64           `json:"transfer_warehouse_code,omitempty"`
-	TechnicalAssistanceWarehouseCode **int64           `json:"technical_assistance_warehouse_code,omitempty"`
+	TransferWarehouseCode            *CodigoFlexivel   `json:"transfer_warehouse_code,omitempty"`
+	TechnicalAssistanceWarehouseCode *CodigoFlexivel   `json:"technical_assistance_warehouse_code,omitempty"`
 	// PackagingItemCode chega como código de negócio (texto), como a tela o conhece.
 	PackagingItemCode             **TextCode `json:"packaging_item_code,omitempty"`
 	AllowBillingDescriptionChange *bool      `json:"allow_billing_description_change,omitempty"`

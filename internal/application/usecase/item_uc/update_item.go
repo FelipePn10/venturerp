@@ -95,10 +95,10 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 			item.Commercial.WarrantyDays = *c.WarrantyDays
 		}
 		if c.TransferWarehouseCode != nil {
-			item.Commercial.TransferWarehouseCode = *c.TransferWarehouseCode
+			item.Commercial.TransferWarehouseCode = c.TransferWarehouseCode.Ptr()
 		}
 		if c.TechnicalAssistanceWarehouseCode != nil {
-			item.Commercial.TechnicalAssistanceWarehouseCode = *c.TechnicalAssistanceWarehouseCode
+			item.Commercial.TechnicalAssistanceWarehouseCode = c.TechnicalAssistanceWarehouseCode.Ptr()
 		}
 		if c.PackagingItemCode != nil {
 			// Código de negócio (texto) da tela; nil limpa a embalagem.
@@ -204,6 +204,13 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 		}
 		if w.MinimumStock != nil {
 			item.Warehouse.MinimumStock = *w.MinimumStock
+		}
+		if w.WarehouseCode != nil {
+			item.Warehouse.WarehouseCode = int(*w.WarehouseCode)
+		}
+		if w.AverageMonthlyConsumptionManual != nil {
+			v := *w.AverageMonthlyConsumptionManual
+			item.Warehouse.AverageMonthlyConsumptionManual = &v
 		}
 	}
 	if err := item.Validate(); err != nil {
@@ -357,5 +364,12 @@ func applySuppliesFolder(item *entity.Item, dto request.UpdateItemDTO) {
 	}
 	if s.Harvest != nil {
 		item.Supplies.Harvest = *s.Harvest
+	}
+	if s.WarehouseCode != nil {
+		v := *s.WarehouseCode
+		item.Supplies.WarehouseCode = &v
+	}
+	if s.Notes != nil {
+		item.Supplies.Notes = cleanUpdate(s.Notes)
 	}
 }

@@ -11,18 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const blockSupplier = `-- name: BlockSupplier :exec
-UPDATE suppliers SET blocked = TRUE, block_reason = $2, updated_at = NOW() WHERE code = $1
+const blockSupplier = `-- name: BlockSupplier :execrows
+UPDATE suppliers SET blocked = TRUE, block_reason = $2, updated_at = NOW()
+WHERE code = $1 AND enterprise_id = $3
 `
 
 type BlockSupplierParams struct {
-	Code        int64
-	BlockReason pgtype.Text
+	Code         int64
+	BlockReason  pgtype.Text
+	EnterpriseID int64
 }
 
-func (q *Queries) BlockSupplier(ctx context.Context, arg BlockSupplierParams) error {
-	_, err := q.db.Exec(ctx, blockSupplier, arg.Code, arg.BlockReason)
-	return err
+func (q *Queries) BlockSupplier(ctx context.Context, arg BlockSupplierParams) (int64, error) {
+	result, err := q.db.Exec(ctx, blockSupplier, arg.Code, arg.BlockReason, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createSupplier = `-- name: CreateSupplier :one
@@ -33,7 +38,8 @@ INSERT INTO suppliers (
     state_registration, municipal_registration, supplier_type_id,
     payment_condition_id, carrier_id, region_id, freight_type, register_date,
     viticola_obligation, gln_code, agriculture_ministry_registration,
-    icms_contributor, is_mei, tracking_platform, homologated, created_by
+    icms_contributor, is_mei, tracking_platform, homologated, created_by,
+    enterprise_id
 )
 VALUES (
     $1, $2, $3, $4, $5,
@@ -41,9 +47,10 @@ VALUES (
     $11, $12, $13,
     $14, $15, $16, $17, $18,
     $19, $20, $21,
-    $22, $23, $24, $25, $26
+    $22, $23, $24, $25, $26,
+    $27
 )
-RETURNING id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at
+RETURNING id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at, enterprise_id
 `
 
 type CreateSupplierParams struct {
@@ -73,6 +80,7 @@ type CreateSupplierParams struct {
 	TrackingPlatform                string
 	Homologated                     bool
 	CreatedBy                       pgtype.UUID
+	EnterpriseID                    int64
 }
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
@@ -104,6 +112,7 @@ func (q *Queries) CreateSupplier(ctx context.Context, arg CreateSupplierParams) 
 		arg.TrackingPlatform,
 		arg.Homologated,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i Supplier
 	err := row.Scan(
@@ -142,6 +151,7 @@ func (q *Queries) CreateSupplier(ctx context.Context, arg CreateSupplierParams) 
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -515,51 +525,99 @@ func (q *Queries) CreateSupplierType(ctx context.Context, arg CreateSupplierType
 	return i, err
 }
 
-const deleteSupplier = `-- name: DeleteSupplier :exec
-DELETE FROM suppliers WHERE code = $1
+const deleteSupplier = `-- name: DeleteSupplier :execrows
+DELETE FROM suppliers WHERE code = $1 AND enterprise_id = $2
 `
+
+type DeleteSupplierParams struct {
+	Code         int64
+	EnterpriseID int64
+}
 
 // Hard delete. Fails with FK violation when purchase orders reference the
 // supplier (the application surfaces a friendly message); inactivate instead.
-func (q *Queries) DeleteSupplier(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteSupplier, code)
-	return err
+func (q *Queries) DeleteSupplier(ctx context.Context, arg DeleteSupplierParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSupplier, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteSupplierAddress = `-- name: DeleteSupplierAddress :exec
-DELETE FROM supplier_addresses WHERE id = $1
+const deleteSupplierAddress = `-- name: DeleteSupplierAddress :execrows
+DELETE FROM supplier_addresses c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = $2
 `
 
-func (q *Queries) DeleteSupplierAddress(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSupplierAddress, id)
-	return err
+type DeleteSupplierAddressParams struct {
+	ID           int64
+	EnterpriseID int64
 }
 
-const deleteSupplierContact = `-- name: DeleteSupplierContact :exec
-DELETE FROM supplier_contacts WHERE id = $1
-`
-
-func (q *Queries) DeleteSupplierContact(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSupplierContact, id)
-	return err
+func (q *Queries) DeleteSupplierAddress(ctx context.Context, arg DeleteSupplierAddressParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSupplierAddress, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteSupplierDueDate = `-- name: DeleteSupplierDueDate :exec
-DELETE FROM supplier_due_dates WHERE id = $1
+const deleteSupplierContact = `-- name: DeleteSupplierContact :execrows
+DELETE FROM supplier_contacts c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = $2
 `
 
-func (q *Queries) DeleteSupplierDueDate(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSupplierDueDate, id)
-	return err
+type DeleteSupplierContactParams struct {
+	ID           int64
+	EnterpriseID int64
 }
 
-const deleteSupplierEmail = `-- name: DeleteSupplierEmail :exec
-DELETE FROM supplier_emails WHERE id = $1
+func (q *Queries) DeleteSupplierContact(ctx context.Context, arg DeleteSupplierContactParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSupplierContact, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSupplierDueDate = `-- name: DeleteSupplierDueDate :execrows
+DELETE FROM supplier_due_dates c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = $2
 `
 
-func (q *Queries) DeleteSupplierEmail(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSupplierEmail, id)
-	return err
+type DeleteSupplierDueDateParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteSupplierDueDate(ctx context.Context, arg DeleteSupplierDueDateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSupplierDueDate, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSupplierEmail = `-- name: DeleteSupplierEmail :execrows
+DELETE FROM supplier_emails c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = $2
+`
+
+type DeleteSupplierEmailParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteSupplierEmail(ctx context.Context, arg DeleteSupplierEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSupplierEmail, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteSupplierEnterprise = `-- name: DeleteSupplierEnterprise :exec
@@ -571,21 +629,36 @@ func (q *Queries) DeleteSupplierEnterprise(ctx context.Context, id int64) error 
 	return err
 }
 
-const deleteSupplierPhone = `-- name: DeleteSupplierPhone :exec
-DELETE FROM supplier_phones WHERE id = $1
+const deleteSupplierPhone = `-- name: DeleteSupplierPhone :execrows
+DELETE FROM supplier_phones c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = $2
 `
 
-func (q *Queries) DeleteSupplierPhone(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSupplierPhone, id)
-	return err
+type DeleteSupplierPhoneParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteSupplierPhone(ctx context.Context, arg DeleteSupplierPhoneParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSupplierPhone, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getSupplierByCode = `-- name: GetSupplierByCode :one
-SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at FROM suppliers WHERE code = $1
+SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM suppliers WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetSupplierByCode(ctx context.Context, code int64) (Supplier, error) {
-	row := q.db.QueryRow(ctx, getSupplierByCode, code)
+type GetSupplierByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetSupplierByCode(ctx context.Context, arg GetSupplierByCodeParams) (Supplier, error) {
+	row := q.db.QueryRow(ctx, getSupplierByCode, arg.Code, arg.EnterpriseID)
 	var i Supplier
 	err := row.Scan(
 		&i.ID,
@@ -623,16 +696,26 @@ func (q *Queries) GetSupplierByCode(ctx context.Context, code int64) (Supplier, 
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getSupplierByDocument = `-- name: GetSupplierByDocument :one
-SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at FROM suppliers WHERE document_number = $1 LIMIT 1
+SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM suppliers
+WHERE document_number = $1 AND enterprise_id = $2
+LIMIT 1
 `
 
-func (q *Queries) GetSupplierByDocument(ctx context.Context, documentNumber string) (Supplier, error) {
-	row := q.db.QueryRow(ctx, getSupplierByDocument, documentNumber)
+type GetSupplierByDocumentParams struct {
+	DocumentNumber string
+	EnterpriseID   int64
+}
+
+// A busca por CNPJ também é por empresa: sem isso, informar o documento
+// confirmava se outra empresa tinha aquele fornecedor cadastrado.
+func (q *Queries) GetSupplierByDocument(ctx context.Context, arg GetSupplierByDocumentParams) (Supplier, error) {
+	row := q.db.QueryRow(ctx, getSupplierByDocument, arg.DocumentNumber, arg.EnterpriseID)
 	var i Supplier
 	err := row.Scan(
 		&i.ID,
@@ -670,6 +753,7 @@ func (q *Queries) GetSupplierByDocument(ctx context.Context, documentNumber stri
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -738,11 +822,19 @@ func (q *Queries) GetSupplierTypeByCode(ctx context.Context, code int64) (Suppli
 }
 
 const listSupplierAddresses = `-- name: ListSupplierAddresses :many
-SELECT id, supplier_id, address_type, zip_code, street, number, complement, neighborhood, city, uf, country, is_default, created_at FROM supplier_addresses WHERE supplier_id = $1 ORDER BY id
+SELECT c.id, c.supplier_id, c.address_type, c.zip_code, c.street, c.number, c.complement, c.neighborhood, c.city, c.uf, c.country, c.is_default, c.created_at FROM supplier_addresses c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = $2
+ORDER BY c.id
 `
 
-func (q *Queries) ListSupplierAddresses(ctx context.Context, supplierID int64) ([]SupplierAddress, error) {
-	rows, err := q.db.Query(ctx, listSupplierAddresses, supplierID)
+type ListSupplierAddressesParams struct {
+	SupplierID   int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierAddresses(ctx context.Context, arg ListSupplierAddressesParams) ([]SupplierAddress, error) {
+	rows, err := q.db.Query(ctx, listSupplierAddresses, arg.SupplierID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -776,11 +868,20 @@ func (q *Queries) ListSupplierAddresses(ctx context.Context, supplierID int64) (
 }
 
 const listSupplierContactEmails = `-- name: ListSupplierContactEmails :many
-SELECT id, contact_id, value, ranking FROM supplier_contact_emails WHERE contact_id = $1 ORDER BY ranking, id
+SELECT e.id, e.contact_id, e.value, e.ranking FROM supplier_contact_emails e
+JOIN supplier_contacts c ON c.id = e.contact_id
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE e.contact_id = $1 AND s.enterprise_id = $2
+ORDER BY e.ranking, e.id
 `
 
-func (q *Queries) ListSupplierContactEmails(ctx context.Context, contactID int64) ([]SupplierContactEmail, error) {
-	rows, err := q.db.Query(ctx, listSupplierContactEmails, contactID)
+type ListSupplierContactEmailsParams struct {
+	ContactID    int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierContactEmails(ctx context.Context, arg ListSupplierContactEmailsParams) ([]SupplierContactEmail, error) {
+	rows, err := q.db.Query(ctx, listSupplierContactEmails, arg.ContactID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -805,11 +906,20 @@ func (q *Queries) ListSupplierContactEmails(ctx context.Context, contactID int64
 }
 
 const listSupplierContactPhones = `-- name: ListSupplierContactPhones :many
-SELECT id, contact_id, value, ranking FROM supplier_contact_phones WHERE contact_id = $1 ORDER BY ranking, id
+SELECT p.id, p.contact_id, p.value, p.ranking FROM supplier_contact_phones p
+JOIN supplier_contacts c ON c.id = p.contact_id
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE p.contact_id = $1 AND s.enterprise_id = $2
+ORDER BY p.ranking, p.id
 `
 
-func (q *Queries) ListSupplierContactPhones(ctx context.Context, contactID int64) ([]SupplierContactPhone, error) {
-	rows, err := q.db.Query(ctx, listSupplierContactPhones, contactID)
+type ListSupplierContactPhonesParams struct {
+	ContactID    int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierContactPhones(ctx context.Context, arg ListSupplierContactPhonesParams) ([]SupplierContactPhone, error) {
+	rows, err := q.db.Query(ctx, listSupplierContactPhones, arg.ContactID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -866,11 +976,19 @@ func (q *Queries) ListSupplierContactTypes(ctx context.Context, dollar_1 bool) (
 }
 
 const listSupplierContacts = `-- name: ListSupplierContacts :many
-SELECT id, supplier_id, contact_type_id, name, position, department, ranking, observation, purchase_order_tag, is_active, created_at FROM supplier_contacts WHERE supplier_id = $1 ORDER BY ranking, id
+SELECT c.id, c.supplier_id, c.contact_type_id, c.name, c.position, c.department, c.ranking, c.observation, c.purchase_order_tag, c.is_active, c.created_at FROM supplier_contacts c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = $2
+ORDER BY c.ranking, c.id
 `
 
-func (q *Queries) ListSupplierContacts(ctx context.Context, supplierID int64) ([]SupplierContact, error) {
-	rows, err := q.db.Query(ctx, listSupplierContacts, supplierID)
+type ListSupplierContactsParams struct {
+	SupplierID   int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierContacts(ctx context.Context, arg ListSupplierContactsParams) ([]SupplierContact, error) {
+	rows, err := q.db.Query(ctx, listSupplierContacts, arg.SupplierID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -902,11 +1020,19 @@ func (q *Queries) ListSupplierContacts(ctx context.Context, supplierID int64) ([
 }
 
 const listSupplierDueDates = `-- name: ListSupplierDueDates :many
-SELECT id, supplier_id, description, ranking, base_date, payment_condition_id, payment_type, subsequent_month, rounding, receipt_start_time, receipt_end_time, avg_unload_minutes, created_at FROM supplier_due_dates WHERE supplier_id = $1 ORDER BY ranking, id
+SELECT c.id, c.supplier_id, c.description, c.ranking, c.base_date, c.payment_condition_id, c.payment_type, c.subsequent_month, c.rounding, c.receipt_start_time, c.receipt_end_time, c.avg_unload_minutes, c.created_at FROM supplier_due_dates c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = $2
+ORDER BY c.ranking, c.id
 `
 
-func (q *Queries) ListSupplierDueDates(ctx context.Context, supplierID int64) ([]SupplierDueDate, error) {
-	rows, err := q.db.Query(ctx, listSupplierDueDates, supplierID)
+type ListSupplierDueDatesParams struct {
+	SupplierID   int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierDueDates(ctx context.Context, arg ListSupplierDueDatesParams) ([]SupplierDueDate, error) {
+	rows, err := q.db.Query(ctx, listSupplierDueDates, arg.SupplierID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -940,11 +1066,19 @@ func (q *Queries) ListSupplierDueDates(ctx context.Context, supplierID int64) ([
 }
 
 const listSupplierEmails = `-- name: ListSupplierEmails :many
-SELECT id, supplier_id, email, ranking, is_active, created_at FROM supplier_emails WHERE supplier_id = $1 ORDER BY ranking, id
+SELECT c.id, c.supplier_id, c.email, c.ranking, c.is_active, c.created_at FROM supplier_emails c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = $2
+ORDER BY c.ranking, c.id
 `
 
-func (q *Queries) ListSupplierEmails(ctx context.Context, supplierID int64) ([]SupplierEmail, error) {
-	rows, err := q.db.Query(ctx, listSupplierEmails, supplierID)
+type ListSupplierEmailsParams struct {
+	SupplierID   int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierEmails(ctx context.Context, arg ListSupplierEmailsParams) ([]SupplierEmail, error) {
+	rows, err := q.db.Query(ctx, listSupplierEmails, arg.SupplierID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1005,11 +1139,18 @@ func (q *Queries) ListSupplierEnterprises(ctx context.Context, supplierID int64)
 }
 
 const listSupplierEstablishments = `-- name: ListSupplierEstablishments :many
-SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at FROM suppliers WHERE corporate_code = $1 ORDER BY code
+SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM suppliers
+WHERE corporate_code = $1 AND enterprise_id = $2
+ORDER BY code
 `
 
-func (q *Queries) ListSupplierEstablishments(ctx context.Context, corporateCode *int64) ([]Supplier, error) {
-	rows, err := q.db.Query(ctx, listSupplierEstablishments, corporateCode)
+type ListSupplierEstablishmentsParams struct {
+	CorporateCode *int64
+	EnterpriseID  int64
+}
+
+func (q *Queries) ListSupplierEstablishments(ctx context.Context, arg ListSupplierEstablishmentsParams) ([]Supplier, error) {
+	rows, err := q.db.Query(ctx, listSupplierEstablishments, arg.CorporateCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1053,6 +1194,7 @@ func (q *Queries) ListSupplierEstablishments(ctx context.Context, corporateCode 
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1065,11 +1207,19 @@ func (q *Queries) ListSupplierEstablishments(ctx context.Context, corporateCode 
 }
 
 const listSupplierPhones = `-- name: ListSupplierPhones :many
-SELECT id, supplier_id, number, ranking, is_active, created_at FROM supplier_phones WHERE supplier_id = $1 ORDER BY ranking, id
+SELECT c.id, c.supplier_id, c.number, c.ranking, c.is_active, c.created_at FROM supplier_phones c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = $2
+ORDER BY c.ranking, c.id
 `
 
-func (q *Queries) ListSupplierPhones(ctx context.Context, supplierID int64) ([]SupplierPhone, error) {
-	rows, err := q.db.Query(ctx, listSupplierPhones, supplierID)
+type ListSupplierPhonesParams struct {
+	SupplierID   int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierPhones(ctx context.Context, arg ListSupplierPhonesParams) ([]SupplierPhone, error) {
+	rows, err := q.db.Query(ctx, listSupplierPhones, arg.SupplierID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1129,13 +1279,19 @@ func (q *Queries) ListSupplierTypes(ctx context.Context, dollar_1 bool) ([]Suppl
 }
 
 const listSuppliers = `-- name: ListSuppliers :many
-SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at FROM suppliers
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM suppliers
+WHERE enterprise_id = $2
+  AND ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
 
-func (q *Queries) ListSuppliers(ctx context.Context, dollar_1 bool) ([]Supplier, error) {
-	rows, err := q.db.Query(ctx, listSuppliers, dollar_1)
+type ListSuppliersParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSuppliers(ctx context.Context, arg ListSuppliersParams) ([]Supplier, error) {
+	rows, err := q.db.Query(ctx, listSuppliers, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1179,6 +1335,7 @@ func (q *Queries) ListSuppliers(ctx context.Context, dollar_1 bool) ([]Supplier,
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1226,28 +1383,45 @@ func (q *Queries) NextSupplierTypeCode(ctx context.Context) (int32, error) {
 const propagateStateRegistration = `-- name: PropagateStateRegistration :exec
 UPDATE suppliers
 SET state_registration = $2, updated_at = NOW()
-WHERE document_number = $1 AND code <> $3
+WHERE document_number = $1 AND code <> $3 AND enterprise_id = $4
 `
 
 type PropagateStateRegistrationParams struct {
 	DocumentNumber    string
 	StateRegistration pgtype.Text
 	Code              int64
+	EnterpriseID      int64
 }
 
 // Spec: ao alterar a IE, atualiza outros cadastros com o mesmo CNPJ/CPF.
+// Só dentro da própria empresa: a propagação não pode escrever no cadastro
+// de outra empresa que por acaso tenha o mesmo CNPJ.
 func (q *Queries) PropagateStateRegistration(ctx context.Context, arg PropagateStateRegistrationParams) error {
-	_, err := q.db.Exec(ctx, propagateStateRegistration, arg.DocumentNumber, arg.StateRegistration, arg.Code)
+	_, err := q.db.Exec(ctx, propagateStateRegistration,
+		arg.DocumentNumber,
+		arg.StateRegistration,
+		arg.Code,
+		arg.EnterpriseID,
+	)
 	return err
 }
 
-const unblockSupplier = `-- name: UnblockSupplier :exec
-UPDATE suppliers SET blocked = FALSE, block_reason = NULL, updated_at = NOW() WHERE code = $1
+const unblockSupplier = `-- name: UnblockSupplier :execrows
+UPDATE suppliers SET blocked = FALSE, block_reason = NULL, updated_at = NOW()
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) UnblockSupplier(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, unblockSupplier, code)
-	return err
+type UnblockSupplierParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) UnblockSupplier(ctx context.Context, arg UnblockSupplierParams) (int64, error) {
+	result, err := q.db.Exec(ctx, unblockSupplier, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateSupplier = `-- name: UpdateSupplier :one
@@ -1259,8 +1433,8 @@ SET corporate_code = $2, is_active = $3, is_representative = $4, is_customer = $
     viticola_obligation = $18, gln_code = $19, agriculture_ministry_registration = $20,
     icms_contributor = $21, is_mei = $22, tracking_platform = $23, homologated = $24,
     updated_at = NOW()
-WHERE code = $1
-RETURNING id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at
+WHERE code = $1 AND enterprise_id = $25
+RETURNING id, code, corporate_code, is_active, is_representative, is_customer, name, trade_name, person_type, document_type, document_number, state_registration, municipal_registration, supplier_type_id, payment_condition_id, carrier_id, region_id, freight_type, register_date, viticola_obligation, gln_code, agriculture_ministry_registration, icms_contributor, is_mei, tracking_platform, homologated, last_sefaz_query, billing_receipt_status, last_sefaz_update, sefaz_update_user, blocked, block_reason, created_at, created_by, updated_at, enterprise_id
 `
 
 type UpdateSupplierParams struct {
@@ -1288,6 +1462,7 @@ type UpdateSupplierParams struct {
 	IsMei                           bool
 	TrackingPlatform                string
 	Homologated                     bool
+	EnterpriseID                    int64
 }
 
 func (q *Queries) UpdateSupplier(ctx context.Context, arg UpdateSupplierParams) (Supplier, error) {
@@ -1316,6 +1491,7 @@ func (q *Queries) UpdateSupplier(ctx context.Context, arg UpdateSupplierParams) 
 		arg.IsMei,
 		arg.TrackingPlatform,
 		arg.Homologated,
+		arg.EnterpriseID,
 	)
 	var i Supplier
 	err := row.Scan(
@@ -1354,16 +1530,18 @@ func (q *Queries) UpdateSupplier(ctx context.Context, arg UpdateSupplierParams) 
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const updateSupplierAddress = `-- name: UpdateSupplierAddress :one
-UPDATE supplier_addresses
+UPDATE supplier_addresses a
 SET address_type = $2, zip_code = $3, street = $4, number = $5, complement = $6,
     neighborhood = $7, city = $8, uf = $9, country = $10, is_default = $11
-WHERE id = $1
-RETURNING id, supplier_id, address_type, zip_code, street, number, complement, neighborhood, city, uf, country, is_default, created_at
+FROM suppliers s
+WHERE a.id = $1 AND s.id = a.supplier_id AND s.enterprise_id = $12
+RETURNING a.id, a.supplier_id, a.address_type, a.zip_code, a.street, a.number, a.complement, a.neighborhood, a.city, a.uf, a.country, a.is_default, a.created_at
 `
 
 type UpdateSupplierAddressParams struct {
@@ -1378,6 +1556,7 @@ type UpdateSupplierAddressParams struct {
 	Uf           pgtype.Text
 	Country      string
 	IsDefault    bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateSupplierAddress(ctx context.Context, arg UpdateSupplierAddressParams) (SupplierAddress, error) {
@@ -1393,6 +1572,7 @@ func (q *Queries) UpdateSupplierAddress(ctx context.Context, arg UpdateSupplierA
 		arg.Uf,
 		arg.Country,
 		arg.IsDefault,
+		arg.EnterpriseID,
 	)
 	var i SupplierAddress
 	err := row.Scan(
@@ -1480,11 +1660,11 @@ func (q *Queries) UpdateSupplierEnterprise(ctx context.Context, arg UpdateSuppli
 	return i, err
 }
 
-const updateSupplierSefaz = `-- name: UpdateSupplierSefaz :exec
+const updateSupplierSefaz = `-- name: UpdateSupplierSefaz :execrows
 UPDATE suppliers
 SET last_sefaz_query = $2, billing_receipt_status = $3,
     last_sefaz_update = $4, sefaz_update_user = $5, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $6
 `
 
 type UpdateSupplierSefazParams struct {
@@ -1493,17 +1673,22 @@ type UpdateSupplierSefazParams struct {
 	BillingReceiptStatus pgtype.Text
 	LastSefazUpdate      pgtype.Date
 	SefazUpdateUser      pgtype.Text
+	EnterpriseID         int64
 }
 
-func (q *Queries) UpdateSupplierSefaz(ctx context.Context, arg UpdateSupplierSefazParams) error {
-	_, err := q.db.Exec(ctx, updateSupplierSefaz,
+func (q *Queries) UpdateSupplierSefaz(ctx context.Context, arg UpdateSupplierSefazParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateSupplierSefaz,
 		arg.Code,
 		arg.LastSefazQuery,
 		arg.BillingReceiptStatus,
 		arg.LastSefazUpdate,
 		arg.SefazUpdateUser,
+		arg.EnterpriseID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateSupplierType = `-- name: UpdateSupplierType :one

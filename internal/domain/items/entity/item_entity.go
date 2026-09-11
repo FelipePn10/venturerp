@@ -133,18 +133,22 @@ type Supplies struct {
 	WarehouseCode      *int64
 	ReceivingChecklist bool
 	Harvest            bool
+	// Notes existia na tela (pasta Suprimentos) sem coluna nem campo aqui: o
+	// texto digitado sumia no salvar.
+	Notes *string
 }
 
 type Commercial struct {
-	Description                      *string
-	SaleType                         *string
-	VolumeConversionFactor           *decimal.Decimal
-	SaleMultiple                     *decimal.Decimal
-	MinimumSaleQuantity              *decimal.Decimal
-	EstimatedDeliveryDays            *int
-	WarrantyDays                     int
-	TransferWarehouseCode            *int64
-	TechnicalAssistanceWarehouseCode *int64
+	Description            *string
+	SaleType               *string
+	VolumeConversionFactor *decimal.Decimal
+	SaleMultiple           *decimal.Decimal
+	MinimumSaleQuantity    *decimal.Decimal
+	EstimatedDeliveryDays  *int
+	WarrantyDays           int
+	// Código (texto) do almoxarifado — FK para warehouse(code). Não é o id.
+	TransferWarehouseCode            *string
+	TechnicalAssistanceWarehouseCode *string
 	PackagingItemCode                *int64
 	// PackagingItemBusinessCode é o código de negócio do item de embalagem, como
 	// a tela o envia; o caso de uso o converte em PackagingItemCode.
@@ -295,7 +299,7 @@ func (i *Item) Validate() error {
 		value *string
 		max   int
 	}{
-		"commercial.description": {i.Commercial.Description, 255}, "commercial.classification_code": {i.Commercial.ClassificationCode, 40}, "commercial.notes": {i.Commercial.Notes, 1000},
+		"commercial.description": {i.Commercial.Description, 255}, "commercial.classification_code": {i.Commercial.ClassificationCode, 40}, "commercial.notes": {i.Commercial.Notes, 1000}, "supplies.notes": {i.Supplies.Notes, 1000},
 		"accounting.sale_fiscal_classification_code": {i.Accounting.SaleFiscalClassificationCode, 40}, "accounting.purchase_fiscal_classification_code": {i.Accounting.PurchaseFiscalClassificationCode, 40},
 		"accounting.accounting_classification_code": {i.Accounting.AccountingClassificationCode, 80}, "accounting.input_code": {i.Accounting.InputCode, 20}, "accounting.notes": {i.Accounting.Notes, 1000},
 	} {

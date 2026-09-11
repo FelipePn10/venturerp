@@ -633,3 +633,48 @@ func leftPad2(n int) string {
 	}
 	return strconv.Itoa(n)
 }
+
+// ListSetupMatrix devolve as transições de preparação do centro de trabalho.
+func (h *APSHandler) ListSetupMatrix(w http.ResponseWriter, r *http.Request) {
+	wc, err := strconv.ParseInt(chi.URLParam(r, "workCenterID"), 10, 64)
+	if err != nil || wc <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "código do centro de trabalho inválido")
+		return
+	}
+	v, err := h.uc.ListSetupMatrix(r.Context(), wc)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, v)
+}
+
+// UpsertSetupTransition grava uma transição da matriz de preparação.
+func (h *APSHandler) UpsertSetupTransition(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var dto request.SetupTransitionDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		return
+	}
+	id, err := h.uc.UpsertSetupTransition(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
+// DeleteSetupTransition remove uma transição da matriz.
+func (h *APSHandler) DeleteSetupTransition(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "identificador da transição inválido")
+		return
+	}
+	if err := h.uc.DeleteSetupTransition(r.Context(), id); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, map[string]string{"status": "success"})
+}

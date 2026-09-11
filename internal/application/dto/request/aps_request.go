@@ -3,11 +3,18 @@ package request
 import "time"
 
 type SequenceOrdersDTO struct {
-	StartFrom     time.Time `json:"start_from"`
-	OrderIDs      []int64   `json:"order_ids,omitempty"`
-	MachineIDs    []int64   `json:"machine_ids,omitempty"`
-	WorkCenterIDs []int64   `json:"work_center_ids,omitempty"`
-	OperationIDs  []int64   `json:"operation_ids,omitempty"`
+	StartFrom time.Time `json:"start_from"`
+	// Direction escolhe o sentido da programação:
+	//   FORWARD  (padrão) — começa em StartFrom e responde "termino quando".
+	//   BACKWARD          — parte da data de entrega e responde "quando preciso
+	//                       começar". Se o resultado cair antes de agora, a
+	//                       ordem é marcada como inviável no prazo e
+	//                       reprogramada para frente, como fazem SAP e Focco.
+	Direction     string  `json:"direction,omitempty"`
+	OrderIDs      []int64 `json:"order_ids,omitempty"`
+	MachineIDs    []int64 `json:"machine_ids,omitempty"`
+	WorkCenterIDs []int64 `json:"work_center_ids,omitempty"`
+	OperationIDs  []int64 `json:"operation_ids,omitempty"`
 }
 
 type SequencingViewDTO struct {
@@ -136,4 +143,21 @@ type RescheduleSequenceDTO struct {
 	NewWorkCenterID *int64    `json:"new_work_center_id,omitempty"`
 	NewMachineID    *int64    `json:"new_machine_id,omitempty"`
 	Cascade         *bool     `json:"cascade,omitempty"`
+}
+
+// SetupTransitionDTO é uma linha da matriz de tempo de preparação: quanto custa
+// trocar de um item (ou família) para outro num centro de trabalho.
+//
+// Pelo menos um lado precisa vir preenchido — item ou família, origem ou
+// destino. Uma linha totalmente vazia valeria para qualquer transição e
+// esvaziaria o sentido da matriz.
+type SetupTransitionDTO struct {
+	WorkCenterID int64   `json:"work_center_id"`
+	FromItemCode *int64  `json:"from_item_code,omitempty"`
+	ToItemCode   *int64  `json:"to_item_code,omitempty"`
+	FromFamily   *string `json:"from_family,omitempty"`
+	ToFamily     *string `json:"to_family,omitempty"`
+	SetupMinutes float64 `json:"setup_minutes"`
+	Notes        *string `json:"notes,omitempty"`
+	IsActive     *bool   `json:"is_active,omitempty"`
 }

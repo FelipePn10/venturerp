@@ -20,11 +20,14 @@ type MachineHandler struct {
 	listMachinesUC  *machine_uc.ListMachinesUseCase
 	getMachineUC    *machine_uc.GetMachineUseCase
 	updateMachineUC *machine_uc.UpdateMachineUseCase
+	deleteMachineUC *machine_uc.DeleteMachineUseCase
+	listByTypeUC    *machine_uc.ListMachinesByTypeUseCase
 
 	createTypeUC     *machine_uc.CreateMachineTypeUseCase
 	listTypesUC      *machine_uc.ListMachineTypesUseCase
 	getMachineTypeUC *machine_uc.GetMachineTypeUseCase
 	updateTypeUC     *machine_uc.UpdateMachineTypeUseCase
+	deleteTypeUC     *machine_uc.DeleteMachineTypeUseCase
 
 	createItemTimeUC          *machine_uc.CreateItemMachineTimeUseCase
 	listItemTimesUC           *machine_uc.ListItemMachineTimesUseCase
@@ -452,6 +455,51 @@ func (h *MachineHandler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	dto.Code = code
 
 	result, err := h.updateTypeUC.Execute(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// DeleteMachine inativa a máquina. O caso de uso existia sem rota: um recurso
+// cadastrado por engano ficava para sempre nas listas e nos roteiros.
+func (h *MachineHandler) DeleteMachine(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "código da máquina inválido")
+		return
+	}
+	if err := h.deleteMachineUC.Execute(r.Context(), code); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, map[string]string{"status": "success"})
+}
+
+// DeleteType inativa o tipo de máquina.
+func (h *MachineHandler) DeleteType(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "código do tipo de máquina inválido")
+		return
+	}
+	if err := h.deleteTypeUC.Execute(r.Context(), code); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, map[string]string{"status": "success"})
+}
+
+// ListMachinesByType lista as máquinas de um tipo — é o que permite ao roteiro
+// pedir "uma serra" e ver quais recursos atendem.
+func (h *MachineHandler) ListMachinesByType(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "código do tipo de máquina inválido")
+		return
+	}
+	result, err := h.listByTypeUC.Execute(r.Context(), code)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return

@@ -12,6 +12,7 @@ import (
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
 	str "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
+	structqueryrepo "github.com/FelipePn10/panossoerp/internal/domain/structure_query/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/google/uuid"
@@ -288,4 +289,55 @@ func (r *StructureQueryRepositorySQLC) GetWhereUsed(
 		out = append(out, wu)
 	}
 	return out, nil
+}
+
+// ListItemCharacteristics devolve as características do item com a resposta
+// padrão de cada uma.
+func (r *StructureQueryRepositorySQLC) ListItemCharacteristics(ctx context.Context, itemCode int64) ([]structqueryrepo.ItemCharacteristic, error) {
+	rows, err := r.q.ListCfgItemCharacteristics(ctx, itemCode)
+	if err != nil {
+		return nil, fmt.Errorf("buscando características do item %d: %w", itemCode, err)
+	}
+	out := make([]structqueryrepo.ItemCharacteristic, 0, len(rows))
+	for _, row := range rows {
+		c := structqueryrepo.ItemCharacteristic{CharacteristicID: row.CharacteristicID, Code: row.CharCode}
+		if row.DefaultVariableID.Valid {
+			v := row.DefaultVariableID.Int64
+			c.DefaultVariableID = &v
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// ListEquivalentRules devolve as regras ativas de equivalência do item pai.
+func (r *StructureQueryRepositorySQLC) ListEquivalentRules(ctx context.Context, parentItemCode int64) ([]structqueryrepo.EquivalentRule, error) {
+	rows, err := r.q.ListCfgEquivalentRulesByParent(ctx, parentItemCode, true)
+	if err != nil {
+		return nil, fmt.Errorf("buscando regras de equivalência do item %d: %w", parentItemCode, err)
+	}
+	out := make([]structqueryrepo.EquivalentRule, 0, len(rows))
+	for _, row := range rows {
+		regra := structqueryrepo.EquivalentRule{
+			ChildItemCode:          row.ChildItemCode,
+			ParentCharacteristicID: row.ParentCharacteristicID,
+			ParentOperator:         row.ParentOperator,
+			ChildCharacteristicID:  row.ChildCharacteristicID,
+		}
+		if row.ParentVariableID.Valid {
+			v := row.ParentVariableID.Int64
+			regra.ParentVariableID = &v
+		}
+		if row.ChildVariableID.Valid {
+			v := row.ChildVariableID.Int64
+			regra.ChildVariableID = &v
+		}
+		out = append(out, regra)
+	}
+	return out, nil
+}
+
+// GetVariableMaskComposition devolve o pedaço de máscara de uma variável.
+func (r *StructureQueryRepositorySQLC) GetVariableMaskComposition(ctx context.Context, variableID int64) (string, error) {
+	return r.q.GetCfgVariableMaskComposition(ctx, variableID)
 }

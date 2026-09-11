@@ -140,6 +140,7 @@ type ItemSuppliesResponse struct {
 	WarehouseCode      *int64  `json:"warehouse_code,omitempty"`
 	ReceivingChecklist bool    `json:"receiving_checklist"`
 	Harvest            bool    `json:"harvest"`
+	Notes              *string `json:"notes,omitempty"`
 }
 
 type ItemCommercialResponse struct {
@@ -150,8 +151,8 @@ type ItemCommercialResponse struct {
 	MinimumSaleQuantity              *decimal.Decimal `json:"minimum_sale_quantity,omitempty"`
 	EstimatedDeliveryDays            *int             `json:"estimated_delivery_days,omitempty"`
 	WarrantyDays                     int              `json:"warranty_days"`
-	TransferWarehouseCode            *int64           `json:"transfer_warehouse_code,omitempty"`
-	TechnicalAssistanceWarehouseCode *int64           `json:"technical_assistance_warehouse_code,omitempty"`
+	TransferWarehouseCode            *string          `json:"transfer_warehouse_code,omitempty"`
+	TechnicalAssistanceWarehouseCode *string          `json:"technical_assistance_warehouse_code,omitempty"`
 	// PackagingItemCode é o código de negócio (texto) do item de embalagem, como
 	// a tela o exibe; LegacyPackagingItemCode mantém a chave numérica interna.
 	PackagingItemCode             *string `json:"packaging_item_code,omitempty"`

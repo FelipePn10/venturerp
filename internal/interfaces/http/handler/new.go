@@ -145,6 +145,7 @@ func NewCreateModifierHandler(
 func NewEmployeeHandler(
 	createUC *employee.CreateEmployeeUseCase,
 	listUC *employee.ListEmployeesUseCase,
+	listByRoleUC *employee.ListEmployeesByRoleUseCase,
 	getUC *employee.GetEmployeeUseCase,
 	updateUC *employee.UpdateEmployeeUseCase,
 	deactivateUC *employee.DeactivateEmployeeUseCase,
@@ -152,6 +153,7 @@ func NewEmployeeHandler(
 	return &EmployeeHandler{
 		createUC:     createUC,
 		listUC:       listUC,
+		listByRoleUC: listByRoleUC,
 		getUC:        getUC,
 		updateUC:     updateUC,
 		deactivateUC: deactivateUC,
@@ -269,11 +271,14 @@ func NewMachineHandler(
 	listMachinesUC *machine_uc.ListMachinesUseCase,
 	getMachineUC *machine_uc.GetMachineUseCase,
 	updateMachineUC *machine_uc.UpdateMachineUseCase,
+	deleteMachineUC *machine_uc.DeleteMachineUseCase,
+	listByTypeUC *machine_uc.ListMachinesByTypeUseCase,
 
 	createTypeUC *machine_uc.CreateMachineTypeUseCase,
 	listTypesUC *machine_uc.ListMachineTypesUseCase,
 	getMachineTypeUC *machine_uc.GetMachineTypeUseCase,
 	updateTypeUC *machine_uc.UpdateMachineTypeUseCase,
+	deleteTypeUC *machine_uc.DeleteMachineTypeUseCase,
 
 	createItemTimeUC *machine_uc.CreateItemMachineTimeUseCase,
 	listItemTimesUC *machine_uc.ListItemMachineTimesUseCase,
@@ -287,11 +292,14 @@ func NewMachineHandler(
 		listMachinesUC:  listMachinesUC,
 		getMachineUC:    getMachineUC,
 		updateMachineUC: updateMachineUC,
+		deleteMachineUC: deleteMachineUC,
+		listByTypeUC:    listByTypeUC,
 
 		createTypeUC:     createTypeUC,
 		listTypesUC:      listTypesUC,
 		getMachineTypeUC: getMachineTypeUC,
 		updateTypeUC:     updateTypeUC,
+		deleteTypeUC:     deleteTypeUC,
 
 		createItemTimeUC:          createItemTimeUC,
 		listItemTimesUC:           listItemTimesUC,

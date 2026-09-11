@@ -83,9 +83,11 @@ func (q *Queries) ListItemStandardCosts(ctx context.Context, itemCode int64) ([]
 
 const wccColumns = `id, work_center_id, cost_per_hour, COALESCE(machine_cost_per_hour, cost_per_hour), COALESCE(labor_cost_per_hour, 0), currency, updated_at, updated_by`
 
-const upsertWorkCenterCost = `INSERT INTO work_center_costs (work_center_id, cost_per_hour, machine_cost_per_hour, labor_cost_per_hour, currency, updated_by)
-VALUES ($1,$2,$3,$4,$5,$6)
-ON CONFLICT (work_center_id) DO UPDATE SET
+// O ON CONFLICT acompanha a restrição única, que passou a ser por empresa: o
+// custo/hora do mesmo centro é diferente em cada empresa.
+const upsertWorkCenterCost = `INSERT INTO work_center_costs (work_center_id, cost_per_hour, machine_cost_per_hour, labor_cost_per_hour, currency, updated_by, enterprise_id)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+ON CONFLICT (enterprise_id, work_center_id) DO UPDATE SET
     cost_per_hour         = EXCLUDED.cost_per_hour,
     machine_cost_per_hour = EXCLUDED.machine_cost_per_hour,
     labor_cost_per_hour   = EXCLUDED.labor_cost_per_hour,
@@ -101,6 +103,7 @@ type UpsertWorkCenterCostParams struct {
 	LaborCostPerHour   pgtype.Numeric
 	Currency           string
 	UpdatedBy          pgtype.UUID
+	EnterpriseID       int64
 }
 
 type DBWorkCenterCost struct {
@@ -116,25 +119,25 @@ type DBWorkCenterCost struct {
 
 func (q *Queries) UpsertWorkCenterCost(ctx context.Context, arg UpsertWorkCenterCostParams) (DBWorkCenterCost, error) {
 	row := q.db.QueryRow(ctx, upsertWorkCenterCost,
-		arg.WorkCenterID, arg.CostPerHour, arg.MachineCostPerHour, arg.LaborCostPerHour, arg.Currency, arg.UpdatedBy)
+		arg.WorkCenterID, arg.CostPerHour, arg.MachineCostPerHour, arg.LaborCostPerHour, arg.Currency, arg.UpdatedBy, arg.EnterpriseID)
 	var i DBWorkCenterCost
 	err := row.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.MachineCostPerHour, &i.LaborCostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy)
 	return i, err
 }
 
-const getWorkCenterCost = `SELECT ` + wccColumns + ` FROM work_center_costs WHERE work_center_id=$1`
+const getWorkCenterCost = `SELECT ` + wccColumns + ` FROM work_center_costs WHERE work_center_id=$1 AND enterprise_id=$2`
 
-func (q *Queries) GetWorkCenterCost(ctx context.Context, workCenterID int64) (DBWorkCenterCost, error) {
-	row := q.db.QueryRow(ctx, getWorkCenterCost, workCenterID)
+func (q *Queries) GetWorkCenterCost(ctx context.Context, workCenterID, enterpriseID int64) (DBWorkCenterCost, error) {
+	row := q.db.QueryRow(ctx, getWorkCenterCost, workCenterID, enterpriseID)
 	var i DBWorkCenterCost
 	err := row.Scan(&i.ID, &i.WorkCenterID, &i.CostPerHour, &i.MachineCostPerHour, &i.LaborCostPerHour, &i.Currency, &i.UpdatedAt, &i.UpdatedBy)
 	return i, err
 }
 
-const listWorkCenterCosts = `SELECT ` + wccColumns + ` FROM work_center_costs ORDER BY work_center_id`
+const listWorkCenterCosts = `SELECT ` + wccColumns + ` FROM work_center_costs WHERE enterprise_id=$1 ORDER BY work_center_id`
 
-func (q *Queries) ListWorkCenterCosts(ctx context.Context) ([]DBWorkCenterCost, error) {
-	rows, err := q.db.Query(ctx, listWorkCenterCosts)
+func (q *Queries) ListWorkCenterCosts(ctx context.Context, enterpriseID int64) ([]DBWorkCenterCost, error) {
+	rows, err := q.db.Query(ctx, listWorkCenterCosts, enterpriseID)
 	if err != nil {
 		return nil, err
 	}

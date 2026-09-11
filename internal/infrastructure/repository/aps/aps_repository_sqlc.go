@@ -3,6 +3,7 @@ package aps
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/aps/entity"
@@ -194,7 +195,29 @@ func (r *APSRepositorySQLC) GetOrderOperations(ctx context.Context, orderID int6
 			v := row.WorkCenterID.Int64
 			op.WorkCenterID = &v
 		}
+		if row.RouteOperationID.Valid {
+			v := row.RouteOperationID.Int64
+			op.RouteOperationID = &v
+		}
 		out = append(out, op)
+	}
+	return out, nil
+}
+
+// GetOrderOperationEdges traz a rede de precedências do roteiro já traduzida
+// para as operações desta ordem.
+func (r *APSRepositorySQLC) GetOrderOperationEdges(ctx context.Context, orderID int64) ([]domainrepo.OpEdge, error) {
+	rows, err := r.q.GetOrderOperationEdges(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("carregando precedências da ordem %d: %w", orderID, err)
+	}
+	out := make([]domainrepo.OpEdge, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domainrepo.OpEdge{
+			PredecessorID: row.PredecessorID,
+			SuccessorID:   row.SuccessorID,
+			OverlapPct:    pgutil.FromPgNumericToFloat64(row.OverlapPct),
+		})
 	}
 	return out, nil
 }
@@ -398,4 +421,74 @@ func seqSlice(rows []sqlc.DBProductionSequence) []*entity.ProductionSequence {
 		out = append(out, seqRowToEntity(row))
 	}
 	return out
+}
+
+// ListSetupMatrix traz as transições de preparação do centro de trabalho.
+func (r *APSRepositorySQLC) ListSetupMatrix(ctx context.Context, workCenterID int64) ([]entity.SetupTransicao, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSetupMatrix(ctx, workCenterID, enterpriseID)
+	if err != nil {
+		return nil, fmt.Errorf("carregando matriz de setup do centro %d: %w", workCenterID, err)
+	}
+	out := make([]entity.SetupTransicao, 0, len(rows))
+	for _, row := range rows {
+		t := entity.SetupTransicao{
+			ID:           row.ID,
+			WorkCenterID: row.WorkCenterID,
+			FromItemCode: row.FromItemCode,
+			ToItemCode:   row.ToItemCode,
+			SetupMinutes: pgutil.FromPgNumericToFloat64(row.SetupMinutes),
+			IsActive:     row.IsActive,
+		}
+		if row.FromFamily.Valid {
+			v := row.FromFamily.String
+			t.FromFamily = &v
+		}
+		if row.ToFamily.Valid {
+			v := row.ToFamily.String
+			t.ToFamily = &v
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// GetOrderItem devolve o item e a família da ordem para a matriz de setup.
+func (r *APSRepositorySQLC) GetOrderItem(ctx context.Context, orderID int64) (int64, string, error) {
+	return r.q.GetOrderItem(ctx, orderID)
+}
+
+// UpsertSetupTransicao grava uma transição da matriz de preparação.
+func (r *APSRepositorySQLC) UpsertSetupTransicao(ctx context.Context, t entity.SetupTransicao, notas string) (int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	de, para := "", ""
+	if t.FromFamily != nil {
+		de = *t.FromFamily
+	}
+	if t.ToFamily != nil {
+		para = *t.ToFamily
+	}
+	return r.q.UpsertSetupMatrix(ctx, enterpriseID, t.WorkCenterID, t.FromItemCode, t.ToItemCode, de, para, t.SetupMinutes, notas, t.IsActive)
+}
+
+// DeleteSetupTransicao remove uma transição; id inexistente devolve não encontrado.
+func (r *APSRepositorySQLC) DeleteSetupTransicao(ctx context.Context, id int64) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSetupMatrix(ctx, id, enterpriseID)
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("transição de setup %d não encontrada", id))
+	}
+	return nil
 }

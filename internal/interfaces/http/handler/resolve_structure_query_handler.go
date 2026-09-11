@@ -84,3 +84,18 @@ func (h *ItemQueryStructureHandler) ResolveStructure(w http.ResponseWriter, r *h
 	}
 	jsonResponse(w, http.StatusOK, result)
 }
+
+// CheckConfiguration lista os componentes cuja configuração não fecha.
+func (h *ItemQueryStructureHandler) CheckConfiguration(w http.ResponseWriter, r *http.Request) {
+	code := request.TextCode(chi.URLParam(r, "itemCode"))
+	if code.String() == "" {
+		jsonError(w, http.StatusBadRequest, "itemCode é obrigatório")
+		return
+	}
+	result, err := h.resolveUC.VerificarConfiguracao(r.Context(), code, r.URL.Query().Get("mask"))
+	if err != nil {
+		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}

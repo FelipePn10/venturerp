@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -122,7 +123,25 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 			warnings = append(warnings, fmt.Sprintf("%s: exploding BOM failed: %v", s.ref, err))
 			continue
 		}
-		for _, st := range structentity.SelectPrimarySubstituteComponents(children) {
+		// Só entra no corte o que vale hoje, e a vigência é avaliada antes da
+		// escolha do alternativo — o mesmo critério do MRP e da OF.
+		hoje := time.Now()
+		vigentes := make([]*structentity.ItemStructure, 0, len(children))
+		for _, st := range children {
+			if st.VigenteEm(hoje) {
+				vigentes = append(vigentes, st)
+			}
+		}
+		// Peça paramétrica (móvel sob medida) tem a quantidade numa fórmula
+		// sobre as respostas da configuração; sem as variáveis, o corte usava a
+		// quantidade fixa cadastrada.
+		var vars map[string]float64
+		if leitor, ok := uc.structures.(interface {
+			GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]float64, error)
+		}); ok && s.mask != "" {
+			vars, _ = leitor.GetMaskAnswersWithNames(ctx, s.item, s.mask)
+		}
+		for _, st := range structentity.SelectPrimarySubstituteComponents(vigentes) {
 			if st.IsCoproduct {
 				continue
 			}
@@ -144,7 +163,7 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 				warnings = append(warnings, fmt.Sprintf("%s: raw material %d not found", s.ref, material))
 				continue
 			}
-			qty := int(math.Ceil(s.qty * st.EffectiveQuantity()))
+			qty := int(math.Ceil(s.qty * st.EffectiveQuantityWith(vars)))
 			if qty <= 0 {
 				continue
 			}

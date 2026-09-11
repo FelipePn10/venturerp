@@ -6,18 +6,23 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetPurchaseRequisitionByCode :one
-SELECT * FROM purchase_requisitions WHERE code = $1;
+SELECT * FROM purchase_requisitions
+WHERE code = $1 AND enterprise_code = sqlc.arg(enterprise_code);
 
 -- name: ListPurchaseRequisitions :many
 SELECT * FROM purchase_requisitions
-WHERE is_active = TRUE AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','PARTIAL'))
+WHERE is_active = TRUE AND enterprise_code = sqlc.arg(enterprise_code)
+  AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','PARTIAL'))
 ORDER BY code DESC;
 
 -- name: NextPurchaseRequisitionCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_requisitions;
+-- Numeração por empresa, mesmo motivo da cotação.
+SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_requisitions
+WHERE enterprise_code = sqlc.arg(enterprise_code);
 
--- name: UpdatePurchaseRequisitionStatus :exec
-UPDATE purchase_requisitions SET status = $2, updated_at = NOW() WHERE code = $1;
+-- name: UpdatePurchaseRequisitionStatus :execrows
+UPDATE purchase_requisitions SET status = $2, updated_at = NOW()
+WHERE code = $1 AND enterprise_code = sqlc.arg(enterprise_code);
 
 -- ─── Items ────────────────────────────────────────────────────────────────────
 

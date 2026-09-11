@@ -187,9 +187,11 @@ SELECT
     mt.name AS work_center_name,
     COALESCE(mt.requires_operator, TRUE) AS requires_operator
 FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
 JOIN operations op ON op.id = ro.operation_id
 LEFT JOIN machine_types mt ON mt.id = COALESCE(ro.work_center_id, op.default_work_center_id)
 WHERE ro.route_id = $1 AND ro.is_active = TRUE
+  AND mr.enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY ro.sequence;
 
 -- name: RemoveRouteOperation :exec
@@ -212,7 +214,8 @@ WHERE predecessor_id = $1 AND successor_id = $2;
 SELECT ron.*
 FROM route_operation_network ron
 JOIN route_operations ro ON ro.id = ron.predecessor_id
-WHERE ro.route_id = $1
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+WHERE ro.route_id = $1 AND mr.enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY ron.predecessor_id, ron.successor_id;
 
 -- name: GetExternalRouteOpsForItem :many

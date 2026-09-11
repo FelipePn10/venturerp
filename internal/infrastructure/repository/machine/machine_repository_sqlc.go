@@ -119,7 +119,14 @@ func (r *MachineRepositorySQLC) DeleteType(ctx context.Context, code int64) erro
 	if err != nil {
 		return err
 	}
-	return r.q.DeleteMachineType(ctx, sqlc.DeleteMachineTypeParams{Code: code, EnterpriseID: &enterpriseID})
+	linhas, err := r.q.DeleteMachineType(ctx, sqlc.DeleteMachineTypeParams{Code: code, EnterpriseID: &enterpriseID})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("tipo de máquina %d não encontrado nesta empresa", code))
+	}
+	return nil
 }
 
 func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (*entity.Machine, error) {
@@ -240,7 +247,14 @@ func (r *MachineRepositorySQLC) Delete(ctx context.Context, code int64) error {
 	if err != nil {
 		return err
 	}
-	return r.q.DeleteMachine(ctx, sqlc.DeleteMachineParams{Code: code, EnterpriseID: &enterpriseID})
+	linhas, err := r.q.DeleteMachine(ctx, sqlc.DeleteMachineParams{Code: code, EnterpriseID: &enterpriseID})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("máquina %d não encontrada nesta empresa", code))
+	}
+	return nil
 }
 
 func (r *MachineRepositorySQLC) CreateItemMachineTime(ctx context.Context, imt *entity.ItemMachineTime) (*entity.ItemMachineTime, error) {

@@ -40,8 +40,8 @@ const cfgEquivCols = `r.id, r.parent_item_code, r.parent_uom, r.child_item_code,
 	r.formula, r.is_active, r.created_at, r.created_by, pv.code, cv.code`
 
 const cfgEquivFrom = `FROM cfg_equivalent_rules r
-	LEFT JOIN cfg_variables pv ON pv.id = r.parent_variable_id
-	LEFT JOIN cfg_variables cv ON cv.id = r.child_variable_id`
+	LEFT JOIN cfg_variables pv ON pv.id = r.parent_variable_id AND pv.enterprise_id = r.enterprise_id
+	LEFT JOIN cfg_variables cv ON cv.id = r.child_variable_id AND cv.enterprise_id = r.enterprise_id`
 
 func scanEquivRule(s cfgRuleScanner) (DBCfgEquivalentRule, error) {
 	var i DBCfgEquivalentRule
@@ -69,41 +69,57 @@ type CfgEquivalentRuleParams struct {
 }
 
 func (q *Queries) CreateCfgEquivalentRule(ctx context.Context, a CfgEquivalentRuleParams) (DBCfgEquivalentRule, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgEquivalentRule{}, err
+	}
 	const ins = `WITH r AS (
 		INSERT INTO cfg_equivalent_rules
 		(parent_item_code, parent_uom, child_item_code, child_seq, parent_characteristic_id, parent_operator,
-		 parent_variable_id, child_characteristic_id, child_operator, child_variable_id, formula, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
+		 parent_variable_id, child_characteristic_id, child_operator, child_variable_id, formula, created_by, enterprise_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
 	) SELECT ` + cfgEquivCols + ` FROM r
-		LEFT JOIN cfg_variables pv ON pv.id = r.parent_variable_id
-		LEFT JOIN cfg_variables cv ON cv.id = r.child_variable_id`
+		LEFT JOIN cfg_variables pv ON pv.id = r.parent_variable_id AND pv.enterprise_id = r.enterprise_id
+		LEFT JOIN cfg_variables cv ON cv.id = r.child_variable_id AND cv.enterprise_id = r.enterprise_id`
 	return scanEquivRule(q.db.QueryRow(ctx, ins, a.ParentItemCode, a.ParentUom, a.ChildItemCode, a.ChildSeq,
 		a.ParentCharacteristicID, a.ParentOperator, a.ParentVariableID, a.ChildCharacteristicID, a.ChildOperator,
-		a.ChildVariableID, a.Formula, a.CreatedBy))
+		a.ChildVariableID, a.Formula, a.CreatedBy, ent))
 }
 
 func (q *Queries) UpdateCfgEquivalentRule(ctx context.Context, a CfgEquivalentRuleParams) (DBCfgEquivalentRule, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgEquivalentRule{}, err
+	}
 	const upd = `WITH r AS (
 		UPDATE cfg_equivalent_rules SET parent_item_code=$2, parent_uom=$3, child_item_code=$4, child_seq=$5,
 		 parent_characteristic_id=$6, parent_operator=$7, parent_variable_id=$8, child_characteristic_id=$9,
 		 child_operator=$10, child_variable_id=$11, formula=$12, updated_at=NOW()
-		WHERE id=$1 RETURNING *
+		WHERE id=$1 AND enterprise_id=$13 RETURNING *
 	) SELECT ` + cfgEquivCols + ` FROM r
-		LEFT JOIN cfg_variables pv ON pv.id = r.parent_variable_id
-		LEFT JOIN cfg_variables cv ON cv.id = r.child_variable_id`
+		LEFT JOIN cfg_variables pv ON pv.id = r.parent_variable_id AND pv.enterprise_id = r.enterprise_id
+		LEFT JOIN cfg_variables cv ON cv.id = r.child_variable_id AND cv.enterprise_id = r.enterprise_id`
 	return scanEquivRule(q.db.QueryRow(ctx, upd, a.ID, a.ParentItemCode, a.ParentUom, a.ChildItemCode, a.ChildSeq,
 		a.ParentCharacteristicID, a.ParentOperator, a.ParentVariableID, a.ChildCharacteristicID, a.ChildOperator,
-		a.ChildVariableID, a.Formula))
+		a.ChildVariableID, a.Formula, ent))
 }
 
 func (q *Queries) GetCfgEquivalentRule(ctx context.Context, id int64) (DBCfgEquivalentRule, error) {
-	return scanEquivRule(q.db.QueryRow(ctx, `SELECT `+cfgEquivCols+` `+cfgEquivFrom+` WHERE r.id=$1`, id))
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgEquivalentRule{}, err
+	}
+	return scanEquivRule(q.db.QueryRow(ctx, `SELECT `+cfgEquivCols+` `+cfgEquivFrom+` WHERE r.id=$1 AND r.enterprise_id=$2`, id, ent))
 }
 
 func (q *Queries) ListCfgEquivalentRulesByParent(ctx context.Context, parentItemCode int64, onlyActive bool) ([]DBCfgEquivalentRule, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT ` + cfgEquivCols + ` ` + cfgEquivFrom + `
-		WHERE r.parent_item_code=$1 AND ($2::BOOLEAN = FALSE OR r.is_active = TRUE) ORDER BY r.id`
-	rows, err := q.db.Query(ctx, sql, parentItemCode, onlyActive)
+		WHERE r.parent_item_code=$1 AND r.enterprise_id=$3 AND ($2::BOOLEAN = FALSE OR r.is_active = TRUE) ORDER BY r.id`
+	rows, err := q.db.Query(ctx, sql, parentItemCode, onlyActive, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +136,11 @@ func (q *Queries) ListCfgEquivalentRulesByParent(ctx context.Context, parentItem
 }
 
 func (q *Queries) DeactivateCfgEquivalentRule(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `UPDATE cfg_equivalent_rules SET is_active=FALSE, updated_at=NOW() WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `UPDATE cfg_equivalent_rules SET is_active=FALSE, updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
@@ -161,28 +181,44 @@ type CfgItemRuleParams struct {
 }
 
 func (q *Queries) CreateCfgItemRule(ctx context.Context, a CfgItemRuleParams) (DBCfgItemRule, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgItemRule{}, err
+	}
 	const sql = `INSERT INTO cfg_item_rules
-		(item_code, target_table, target_field, content, formula, description, situation, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING ` + cfgItemRuleCols
+		(item_code, target_table, target_field, content, formula, description, situation, created_by, enterprise_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING ` + cfgItemRuleCols
 	return scanItemRule(q.db.QueryRow(ctx, sql, a.ItemCode, a.TargetTable, a.TargetField, a.Content,
-		a.Formula, a.Description, a.Situation, a.CreatedBy))
+		a.Formula, a.Description, a.Situation, a.CreatedBy, ent))
 }
 
 func (q *Queries) UpdateCfgItemRule(ctx context.Context, a CfgItemRuleParams) (DBCfgItemRule, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgItemRule{}, err
+	}
 	const sql = `UPDATE cfg_item_rules SET target_table=$2, target_field=$3, content=$4, formula=$5,
-		description=$6, situation=$7, updated_at=NOW() WHERE id=$1 RETURNING ` + cfgItemRuleCols
+		description=$6, situation=$7, updated_at=NOW() WHERE id=$1 AND enterprise_id=$8 RETURNING ` + cfgItemRuleCols
 	return scanItemRule(q.db.QueryRow(ctx, sql, a.ID, a.TargetTable, a.TargetField, a.Content,
-		a.Formula, a.Description, a.Situation))
+		a.Formula, a.Description, a.Situation, ent))
 }
 
 func (q *Queries) GetCfgItemRule(ctx context.Context, id int64) (DBCfgItemRule, error) {
-	return scanItemRule(q.db.QueryRow(ctx, `SELECT `+cfgItemRuleCols+` FROM cfg_item_rules WHERE id=$1`, id))
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgItemRule{}, err
+	}
+	return scanItemRule(q.db.QueryRow(ctx, `SELECT `+cfgItemRuleCols+` FROM cfg_item_rules WHERE id=$1 AND enterprise_id=$2`, id, ent))
 }
 
 func (q *Queries) ListCfgItemRulesByItem(ctx context.Context, itemCode int64, onlyActive bool) ([]DBCfgItemRule, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT ` + cfgItemRuleCols + ` FROM cfg_item_rules
-		WHERE item_code=$1 AND ($2::BOOLEAN = FALSE OR situation = 'ACTIVE') ORDER BY id`
-	rows, err := q.db.Query(ctx, sql, itemCode, onlyActive)
+		WHERE item_code=$1 AND enterprise_id=$3 AND ($2::BOOLEAN = FALSE OR situation = 'ACTIVE') ORDER BY id`
+	rows, err := q.db.Query(ctx, sql, itemCode, onlyActive, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +235,11 @@ func (q *Queries) ListCfgItemRulesByItem(ctx context.Context, itemCode int64, on
 }
 
 func (q *Queries) DeleteCfgItemRule(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, `DELETE FROM cfg_item_rules WHERE id=$1`, id)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `DELETE FROM cfg_item_rules WHERE id=$1 AND enterprise_id=$2`, id, ent)
 	return err
 }
 
@@ -217,22 +257,32 @@ type DBCfgItemRuleCondition struct {
 }
 
 func (q *Queries) AddCfgItemRuleCondition(ctx context.Context, ruleID, charID int64, operator string, variableID pgtype.Int8, sequence int32) (DBCfgItemRuleCondition, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return DBCfgItemRuleCondition{}, err
+	}
 	const sql = `WITH c AS (
-		INSERT INTO cfg_item_rule_conditions (rule_id, characteristic_id, operator, variable_id, sequence)
-		VALUES ($1,$2,$3,$4,$5) RETURNING *
+		INSERT INTO cfg_item_rule_conditions (rule_id, characteristic_id, operator, variable_id, sequence, enterprise_id)
+		SELECT $1,$2,$3,$4,$5,$6
+		WHERE EXISTS (SELECT 1 FROM cfg_item_rules WHERE id=$1 AND enterprise_id=$6)
+		RETURNING *
 	) SELECT c.id, c.rule_id, c.characteristic_id, c.operator, c.variable_id, c.sequence, v.code
-		FROM c LEFT JOIN cfg_variables v ON v.id = c.variable_id`
+		FROM c LEFT JOIN cfg_variables v ON v.id = c.variable_id AND v.enterprise_id = c.enterprise_id`
 	var i DBCfgItemRuleCondition
-	err := q.db.QueryRow(ctx, sql, ruleID, charID, operator, variableID, sequence).
+	err = q.db.QueryRow(ctx, sql, ruleID, charID, operator, variableID, sequence, ent).
 		Scan(&i.ID, &i.RuleID, &i.CharacteristicID, &i.Operator, &i.VariableID, &i.Sequence, &i.VariableCode)
 	return i, err
 }
 
 func (q *Queries) ListCfgItemRuleConditions(ctx context.Context, ruleID int64) ([]DBCfgItemRuleCondition, error) {
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	const sql = `SELECT c.id, c.rule_id, c.characteristic_id, c.operator, c.variable_id, c.sequence, v.code
-		FROM cfg_item_rule_conditions c LEFT JOIN cfg_variables v ON v.id = c.variable_id
-		WHERE c.rule_id=$1 ORDER BY c.sequence, c.id`
-	rows, err := q.db.Query(ctx, sql, ruleID)
+		FROM cfg_item_rule_conditions c LEFT JOIN cfg_variables v ON v.id = c.variable_id AND v.enterprise_id = c.enterprise_id
+		WHERE c.rule_id=$1 AND c.enterprise_id=$2 ORDER BY c.sequence, c.id`
+	rows, err := q.db.Query(ctx, sql, ruleID, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -249,6 +299,10 @@ func (q *Queries) ListCfgItemRuleConditions(ctx context.Context, ruleID int64) (
 }
 
 func (q *Queries) DeleteCfgItemRuleConditionsByRule(ctx context.Context, ruleID int64) error {
-	_, err := q.db.Exec(ctx, `DELETE FROM cfg_item_rule_conditions WHERE rule_id=$1`, ruleID)
+	ent, err := cfgTenant(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = q.db.Exec(ctx, `DELETE FROM cfg_item_rule_conditions WHERE rule_id=$1 AND enterprise_id=$2`, ruleID, ent)
 	return err
 }

@@ -6,6 +6,21 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.23] — 2026-09-11
+
+### Correções
+- **O cadastro de item deixava de gravar três campos na alteração.** Almoxarifado padrão, almoxarifado de suprimentos e consumo médio informado à mão ficavam como estavam na criação: a tela dizia "salvo" e o valor anterior continuava lá.
+- **As observações da pasta Suprimentos não eram gravadas** — o campo existia na tela e não tinha onde ser guardado.
+- **Os almoxarifados de transferência e de assistência técnica não aceitavam códigos com letras** (ALM-PA, ALM-EXP). O código era convertido para número e desaparecia sem erro.
+- **A lista de materiais da ordem de produção ignorava a configuração do item.** A ordem de um produto configurado recebia os componentes de todas as variantes, incluía componentes fora de vigência e usava a quantidade fixa mesmo quando havia fórmula.
+- **O MRP e o plano de corte também explodiam componentes fora de vigência.** A vigência passa a ser avaliada na data em que o componente será consumido e antes da escolha do material alternativo: se o principal venceu, a necessidade vai para o próximo da lista em vez de sumir.
+- **Estrutura sem máscara aceitava o mesmo componente duas vezes**, e a quantidade entrava em dobro no planejamento e no custo.
+
+### Melhorias
+- **A máscara do componente configurado passa a ter três origens**: a mesma característica respondida no item pai, uma regra de equivalência ou a resposta padrão da característica. O que não se encaixa em nenhuma delas é apontado como configuração incompleta, em vez de virar silenciosamente a estrutura genérica.
+- **Nova verificação de configuração da estrutura**, usada pelo botão Conferir: mostra, ainda no cadastro, qual componente tem característica sem resposta e qual é configurado sem herdar a máscara do pai.
+- **Trilha de auditoria, configurador de produto, fornecedores, motivos de restrição e custo por centro de trabalho passaram a ser separados por empresa.**
+
 ## [v1.1.22] — 2026-09-10
 
 - fix: corrige a direção da validação de ciclos ao incluir componentes na estrutura

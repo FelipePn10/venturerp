@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 )
@@ -24,7 +25,7 @@ func TestExplodeWithVars_UsesQuantityFormula(t *testing.T) {
 	}
 	vars := map[string]float64{"COMPRIMENTO": 1200, "PROFUNDIDADE": 600}
 
-	inputs := explodeFromBOMWithVars(bomMap, 1, "1200#600", 10, 1, 1, vars)
+	inputs := explodeFromBOMWithVars(bomMap, 1, "1200#600", 10, 1, 1, vars, time.Time{})
 
 	got := map[int64]float64{}
 	for _, in := range inputs {
@@ -44,7 +45,7 @@ func TestExplodeWithVars_FallsBackToFixedQuantity(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {{ChildCode: 2, Quantity: 4, QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
 	}
-	inputs := explodeFromBOMWithVars(bomMap, 1, "", 10, 1, 1, nil)
+	inputs := explodeFromBOMWithVars(bomMap, 1, "", 10, 1, 1, nil, time.Time{})
 	if len(inputs) != 1 || inputs[0].Quantity != 40 {
 		t.Fatalf("explosão = %+v, quer 40 (4 × 10)", inputs)
 	}
@@ -55,7 +56,7 @@ func TestExplodeWithVars_LossAppliesOverFormulaResult(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {{ChildCode: 2, Quantity: 1, LossPercentage: 10, QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
 	}
-	inputs := explodeFromBOMWithVars(bomMap, 1, "2000", 5, 1, 1, map[string]float64{"COMPRIMENTO": 2000})
+	inputs := explodeFromBOMWithVars(bomMap, 1, "2000", 5, 1, 1, map[string]float64{"COMPRIMENTO": 2000}, time.Time{})
 	if len(inputs) != 1 {
 		t.Fatalf("explosão = %+v", inputs)
 	}

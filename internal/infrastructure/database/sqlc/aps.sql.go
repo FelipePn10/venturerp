@@ -175,17 +175,53 @@ func (q *Queries) GetOpenProductionOrders(ctx context.Context) ([]DBOpenProducti
 }
 
 const getOrderOperations = `
-SELECT id, sequence, work_center_id, planned_hours, setup_hours
+SELECT id, sequence, work_center_id, planned_hours, setup_hours, route_operation_id
 FROM production_order_operations
 WHERE production_order_id=$1 AND status NOT IN ('DONE','SKIPPED')
 ORDER BY sequence`
 
 type DBOrderOperation struct {
-	ID           int64
-	Sequence     int32
-	WorkCenterID pgtype.Int8
-	PlannedHours pgtype.Numeric
-	SetupHours   pgtype.Numeric
+	ID               int64
+	Sequence         int32
+	WorkCenterID     pgtype.Int8
+	PlannedHours     pgtype.Numeric
+	SetupHours       pgtype.Numeric
+	RouteOperationID pgtype.Int8
+}
+
+// getOrderOperationEdges traduz a rede de precedências do roteiro para os ids
+// das operações desta ordem. Só entram arestas cujas duas pontas ainda estão
+// abertas na ordem — operação concluída não segura a sucessora.
+const getOrderOperationEdges = `
+SELECT p.id AS predecessor_id, s.id AS successor_id, COALESCE(n.overlap_pct, 0) AS overlap_pct
+FROM route_operation_network n
+JOIN production_order_operations p
+  ON p.route_operation_id = n.predecessor_id AND p.production_order_id = $1
+JOIN production_order_operations s
+  ON s.route_operation_id = n.successor_id  AND s.production_order_id = $1
+WHERE p.status NOT IN ('DONE','SKIPPED') AND s.status NOT IN ('DONE','SKIPPED')`
+
+type DBOrderOperationEdge struct {
+	PredecessorID int64
+	SuccessorID   int64
+	OverlapPct    pgtype.Numeric
+}
+
+func (q *Queries) GetOrderOperationEdges(ctx context.Context, orderID int64) ([]DBOrderOperationEdge, error) {
+	rows, err := q.db.Query(ctx, getOrderOperationEdges, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DBOrderOperationEdge{}
+	for rows.Next() {
+		var e DBOrderOperationEdge
+		if err := rows.Scan(&e.PredecessorID, &e.SuccessorID, &e.OverlapPct); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 func (q *Queries) GetOrderOperations(ctx context.Context, orderID int64) ([]DBOrderOperation, error) {
@@ -197,10 +233,94 @@ func (q *Queries) GetOrderOperations(ctx context.Context, orderID int64) ([]DBOr
 	var items []DBOrderOperation
 	for rows.Next() {
 		var i DBOrderOperation
-		if err := rows.Scan(&i.ID, &i.Sequence, &i.WorkCenterID, &i.PlannedHours, &i.SetupHours); err != nil {
+		if err := rows.Scan(&i.ID, &i.Sequence, &i.WorkCenterID, &i.PlannedHours, &i.SetupHours, &i.RouteOperationID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
 	}
 	return items, rows.Err()
+}
+
+// listSetupMatrix traz as transições de preparação de um centro de trabalho.
+const listSetupMatrix = `
+SELECT id, work_center_id, from_item_code, to_item_code, from_family, to_family,
+       setup_minutes, is_active
+FROM setup_matrix
+WHERE work_center_id = $1 AND enterprise_id = $2 AND is_active`
+
+type DBSetupTransition struct {
+	ID           int64
+	WorkCenterID int64
+	FromItemCode *int64
+	ToItemCode   *int64
+	FromFamily   pgtype.Text
+	ToFamily     pgtype.Text
+	SetupMinutes pgtype.Numeric
+	IsActive     bool
+}
+
+func (q *Queries) ListSetupMatrix(ctx context.Context, workCenterID, enterpriseID int64) ([]DBSetupTransition, error) {
+	rows, err := q.db.Query(ctx, listSetupMatrix, workCenterID, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DBSetupTransition{}
+	for rows.Next() {
+		var t DBSetupTransition
+		if err := rows.Scan(&t.ID, &t.WorkCenterID, &t.FromItemCode, &t.ToItemCode,
+			&t.FromFamily, &t.ToFamily, &t.SetupMinutes, &t.IsActive); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// getOrderItem devolve o item da ordem e a família usada pela matriz de setup.
+// A família sai da classificação comercial do item — é por ela que a fábrica
+// agrupa "mesma cor", "mesma espessura".
+const getOrderItem = `
+SELECT po.item_code, COALESCE(i.commercial_classification_code, '')
+FROM production_orders po
+LEFT JOIN items i ON i.code = po.item_code AND i.enterprise_id = po.enterprise_id
+WHERE po.id = $1`
+
+func (q *Queries) GetOrderItem(ctx context.Context, orderID int64) (int64, string, error) {
+	var itemCode int64
+	var familia string
+	err := q.db.QueryRow(ctx, getOrderItem, orderID).Scan(&itemCode, &familia)
+	return itemCode, familia, err
+}
+
+// upsertSetupMatrix grava (ou atualiza) uma transição da matriz de preparação.
+const upsertSetupMatrix = `
+INSERT INTO setup_matrix (enterprise_id, work_center_id, from_item_code, to_item_code,
+                          from_family, to_family, setup_minutes, notes, is_active)
+VALUES ($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),$7,NULLIF($8,''),$9)
+ON CONFLICT (enterprise_id, work_center_id,
+             COALESCE(from_item_code,-1), COALESCE(to_item_code,-1),
+             COALESCE(from_family,''), COALESCE(to_family,''))
+DO UPDATE SET setup_minutes = EXCLUDED.setup_minutes,
+              notes = EXCLUDED.notes,
+              is_active = EXCLUDED.is_active,
+              updated_at = NOW()
+RETURNING id`
+
+func (q *Queries) UpsertSetupMatrix(ctx context.Context, enterpriseID, workCenterID int64,
+	fromItem, toItem *int64, fromFamily, toFamily string, minutes float64, notes string, active bool) (int64, error) {
+	var id int64
+	err := q.db.QueryRow(ctx, upsertSetupMatrix, enterpriseID, workCenterID, fromItem, toItem,
+		fromFamily, toFamily, minutes, notes, active).Scan(&id)
+	return id, err
+}
+
+const deleteSetupMatrix = `DELETE FROM setup_matrix WHERE id = $1 AND enterprise_id = $2`
+
+func (q *Queries) DeleteSetupMatrix(ctx context.Context, id, enterpriseID int64) (int64, error) {
+	tag, err := q.db.Exec(ctx, deleteSetupMatrix, id, enterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }

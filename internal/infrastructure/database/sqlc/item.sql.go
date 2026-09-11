@@ -63,6 +63,7 @@ INSERT INTO items (
 	supplies_warehouse_code,
 	supplies_receiving_checklist,
 	supplies_harvest,
+	supplies_notes,
 
 	commercial_warranty_days,
 	accounting_active,
@@ -93,21 +94,21 @@ INSERT INTO items (
              $33, $34, $35, $36,
              $37, $38, $39, $40,
              $41, $42, $43,
-             $44, $45, $46,
-             TRUE, $47,
-			 $48, $49, $50,
-			 $51, $52, $53,
-			 $54, $55, $56,
-			 $57, $58, $59,
-			 $60, $61, $62,
-			 $63, $64, $65, $66,
-			 $67, $68, $69,
-			 $70, $71, $72, $73,
-			 $74, $75, $76,
-			 $77, $78, $79, $80, $81,
-			 $82, NOW()
+             $44, $45, $46, $47,
+             TRUE, $48,
+			 $49, $50, $51,
+			 $52, $53, $54,
+			 $55, $56, $57,
+			 $58, $59, $60,
+			 $61, $62, $63,
+			 $64, $65, $66, $67,
+			 $68, $69, $70,
+			 $71, $72, $73, $74,
+			 $75, $76, $77,
+			 $78, $79, $80, $81, $82,
+			 $83, NOW()
          )
-    RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item
+    RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item, supplies_notes
 `
 
 type CreateItemParams struct {
@@ -156,6 +157,7 @@ type CreateItemParams struct {
 	SuppliesWarehouseCode                      *int64
 	SuppliesReceivingChecklist                 bool
 	SuppliesHarvest                            bool
+	SuppliesNotes                              pgtype.Text
 	CommercialWarrantyDays                     int32
 	AccountingCalculatePisCofins               pgtype.Bool
 	CommercialDescription                      pgtype.Text
@@ -242,6 +244,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		arg.SuppliesWarehouseCode,
 		arg.SuppliesReceivingChecklist,
 		arg.SuppliesHarvest,
+		arg.SuppliesNotes,
 		arg.CommercialWarrantyDays,
 		arg.AccountingCalculatePisCofins,
 		arg.CommercialDescription,
@@ -373,12 +376,13 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		&i.IsPrototype,
 		&i.IsTool,
 		&i.IsProcessItem,
+		&i.SuppliesNotes,
 	)
 	return i, err
 }
 
 const findItemByBusinessCode = `-- name: FindItemByBusinessCode :one
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item, supplies_notes
 FROM items
 WHERE business_code = $1
   AND enterprise_id = $2
@@ -484,12 +488,13 @@ func (q *Queries) FindItemByBusinessCode(ctx context.Context, arg FindItemByBusi
 		&i.IsPrototype,
 		&i.IsTool,
 		&i.IsProcessItem,
+		&i.SuppliesNotes,
 	)
 	return i, err
 }
 
 const findItemByCode = `-- name: FindItemByCode :one
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item, supplies_notes
 FROM items
 WHERE code = $1
   AND enterprise_id = $2
@@ -595,6 +600,7 @@ func (q *Queries) FindItemByCode(ctx context.Context, arg FindItemByCodeParams) 
 		&i.IsPrototype,
 		&i.IsTool,
 		&i.IsProcessItem,
+		&i.SuppliesNotes,
 	)
 	return i, err
 }
@@ -650,7 +656,7 @@ func (q *Queries) GetEffectiveItemFiscalDefaults(ctx context.Context, arg GetEff
 }
 
 const getItemByID = `-- name: GetItemByID :one
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item, supplies_notes
 FROM items
 WHERE id = $1 AND enterprise_id = $2
 `
@@ -755,6 +761,7 @@ func (q *Queries) GetItemByID(ctx context.Context, arg GetItemByIDParams) (Item,
 		&i.IsPrototype,
 		&i.IsTool,
 		&i.IsProcessItem,
+		&i.SuppliesNotes,
 	)
 	return i, err
 }
@@ -778,7 +785,7 @@ func (q *Queries) ItemFiscalClassificationExists(ctx context.Context, arg ItemFi
 }
 
 const listItems = `-- name: ListItems :many
-SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item
+SELECT id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item, supplies_notes
 FROM items
 WHERE enterprise_id = $1
 ORDER BY code
@@ -885,6 +892,7 @@ func (q *Queries) ListItems(ctx context.Context, enterpriseID int64) ([]Item, er
 			&i.IsPrototype,
 			&i.IsTool,
 			&i.IsProcessItem,
+			&i.SuppliesNotes,
 		); err != nil {
 			return nil, err
 		}
@@ -941,9 +949,15 @@ UPDATE items SET
  supplies_purchase_uom=$67,
  supplies_receiving_checklist=$68,
  supplies_harvest=$69,
- warehouse_unit_of_measurement=$70,
- warehouse_automatic_low=$71,
- warehouse_minimum_stock=$72,
+ -- Os três campos abaixo não estavam na alteração: o almoxarifado principal,
+ -- o de suprimentos e o consumo médio manual ficavam como na criação.
+ supplies_warehouse_code=$70,
+ supplies_notes=$71,
+ warehouse_code=$72,
+ warehouse_avg_monthly_consumption_manual=$73,
+ warehouse_unit_of_measurement=$74,
+ warehouse_automatic_low=$75,
+ warehouse_minimum_stock=$76,
  commercial_description=$2, commercial_sale_type=$3, commercial_volume_conversion_factor=$4,
  commercial_sale_multiple=$5, commercial_minimum_sale_quantity=$6, commercial_estimated_delivery_days=$7,
  commercial_warranty_days=$8, commercial_transfer_warehouse_code=$9, commercial_technical_assistance_warehouse_code=$10,
@@ -958,10 +972,10 @@ UPDATE items SET
  accounting_sale_unit_of_measurement=$30, accounting_purchase_unit_of_measurement=$31,
  accounting_inventory_group_code=$32, accounting_classification_code=$33, accounting_cest=$34,
  accounting_input_code=$35, accounting_notes=$36,
-	accounting_calculate_pis_cofins=$73::boolean,
-	warehouse_cyclical_count_config=$74::jsonb
+	accounting_calculate_pis_cofins=$77::boolean,
+	warehouse_cyclical_count_config=$78::jsonb
 WHERE business_code=$1 AND enterprise_id=$37
-RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item
+RETURNING id, warehouse_code, code, health, created_by, created_at, complement, nature, situation, pdm_group_code, pdm_modifier_code, pdm_attributes, pdm_description_technique, warehouse_unit_of_measurement, warehouse_automatic_low, warehouse_cyclical_count_config, warehouse_minimum_stock, warehouse_avg_monthly_consumption_manual, engineering_item_base_code, engineering_weight, engineering_dimensions, engineering_type, engineering_type_struct, engineering_oem, planning_type_mrp, planning_llc, planning_reorder_point, planning_tank_code, planning_ghost, planner_employee_code, supplies_type_of_use, production_reporting_type, material_issue_timing, accepts_fractional_quantity, name, planning_abc_class, planning_minimum_lot, planning_multiple_lot, planning_safety_stock, planning_critical, planning_exclusive, planning_active, supplies_purchase_uom, supplies_warehouse_code, supplies_receiving_checklist, supplies_harvest, commercial_warranty_days, accounting_active, accounting_calculate_pis_cofins, commercial_description, commercial_sale_type, commercial_volume_conversion_factor, commercial_sale_multiple, commercial_minimum_sale_quantity, commercial_estimated_delivery_days, commercial_transfer_warehouse_code, commercial_technical_assistance_warehouse_code, commercial_packaging_item_code, commercial_allow_billing_description_change, commercial_issue_loading_labels, commercial_assemble_shipping_volumes, commercial_requires_special_packaging, commercial_withhold_pis_cofins, commercial_is_packaging, commercial_mobile_enabled, commercial_export_packaging, commercial_classification_code, commercial_notes, accounting_sale_fiscal_classification_code, accounting_purchase_fiscal_classification_code, accounting_origin, accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate, accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement, accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes, enterprise_id, business_code, cyclical_count_policy_activated_at, is_base, is_configured, is_prototype, is_tool, is_process_item, supplies_notes
 `
 
 type UpdateItemFoldersParams struct {
@@ -1034,6 +1048,10 @@ type UpdateItemFoldersParams struct {
 	SuppliesPurchaseUom                        pgtype.Text
 	SuppliesReceivingChecklist                 bool
 	SuppliesHarvest                            bool
+	SuppliesWarehouseCode                      *int64
+	SuppliesNotes                              pgtype.Text
+	WarehouseCode                              int64
+	WarehouseAvgMonthlyConsumptionManual       *int32
 	WarehouseUnitOfMeasurement                 UnitOfMeasurementEnum
 	WarehouseAutomaticLow                      bool
 	WarehouseMinimumStock                      int32
@@ -1116,6 +1134,10 @@ func (q *Queries) UpdateItemFolders(ctx context.Context, arg UpdateItemFoldersPa
 		arg.SuppliesPurchaseUom,
 		arg.SuppliesReceivingChecklist,
 		arg.SuppliesHarvest,
+		arg.SuppliesWarehouseCode,
+		arg.SuppliesNotes,
+		arg.WarehouseCode,
+		arg.WarehouseAvgMonthlyConsumptionManual,
 		arg.WarehouseUnitOfMeasurement,
 		arg.WarehouseAutomaticLow,
 		arg.WarehouseMinimumStock,
@@ -1215,6 +1237,7 @@ func (q *Queries) UpdateItemFolders(ctx context.Context, arg UpdateItemFoldersPa
 		&i.IsPrototype,
 		&i.IsTool,
 		&i.IsProcessItem,
+		&i.SuppliesNotes,
 	)
 	return i, err
 }

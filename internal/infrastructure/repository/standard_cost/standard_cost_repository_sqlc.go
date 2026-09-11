@@ -8,6 +8,7 @@ import (
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 type StandardCostRepositorySQLC struct {
@@ -59,7 +60,12 @@ func (r *StandardCostRepositorySQLC) ListItemStandardCosts(ctx context.Context, 
 // ─── work_center_costs ────────────────────────────────────────────────────────
 
 func (r *StandardCostRepositorySQLC) UpsertWorkCenterCost(ctx context.Context, wcc *entity.WorkCenterCost) (*entity.WorkCenterCost, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpsertWorkCenterCost(ctx, sqlc.UpsertWorkCenterCostParams{
+		EnterpriseID:       empresa,
 		WorkCenterID:       wcc.WorkCenterID,
 		CostPerHour:        pgutil.ToPgNumericFromFloat64(wcc.CostPerHour),
 		MachineCostPerHour: pgutil.ToPgNumericFromFloat64(wcc.MachineCostPerHour),
@@ -74,7 +80,11 @@ func (r *StandardCostRepositorySQLC) UpsertWorkCenterCost(ctx context.Context, w
 }
 
 func (r *StandardCostRepositorySQLC) GetWorkCenterCost(ctx context.Context, workCenterID int64) (*entity.WorkCenterCost, error) {
-	row, err := r.q.GetWorkCenterCost(ctx, workCenterID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetWorkCenterCost(ctx, workCenterID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("fetching work center cost for CT %d: %w", workCenterID, err)
 	}
@@ -82,7 +92,11 @@ func (r *StandardCostRepositorySQLC) GetWorkCenterCost(ctx context.Context, work
 }
 
 func (r *StandardCostRepositorySQLC) ListWorkCenterCosts(ctx context.Context) ([]*entity.WorkCenterCost, error) {
-	rows, err := r.q.ListWorkCenterCosts(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListWorkCenterCosts(ctx, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing work center costs: %w", err)
 	}

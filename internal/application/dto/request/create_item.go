@@ -81,6 +81,7 @@ type SuppliesDTO struct {
 	WarehouseCode      *int64                           `json:"warehouse_code,omitempty"`
 	ReceivingChecklist bool                             `json:"receiving_checklist"`
 	Harvest            bool                             `json:"harvest"`
+	Notes              *string                          `json:"notes,omitempty"`
 }
 
 type CommercialDTO struct {
@@ -91,8 +92,8 @@ type CommercialDTO struct {
 	MinimumSaleQuantity              *decimal.Decimal `json:"minimum_sale_quantity,omitempty"`
 	EstimatedDeliveryDays            *int             `json:"estimated_delivery_days,omitempty"`
 	WarrantyDays                     int              `json:"warranty_days"`
-	TransferWarehouseCode            *int64           `json:"transfer_warehouse_code,omitempty"`
-	TechnicalAssistanceWarehouseCode *int64           `json:"technical_assistance_warehouse_code,omitempty"`
+	TransferWarehouseCode            *CodigoFlexivel  `json:"transfer_warehouse_code,omitempty"`
+	TechnicalAssistanceWarehouseCode *CodigoFlexivel  `json:"technical_assistance_warehouse_code,omitempty"`
 	// PackagingItemCode chega como código de negócio (texto), como a tela o conhece.
 	PackagingItemCode             *TextCode `json:"packaging_item_code,omitempty"`
 	AllowBillingDescriptionChange bool      `json:"allow_billing_description_change"`

@@ -351,7 +351,11 @@ func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *en
 }
 
 func (r *RoutingRepositorySQLC) GetRouteOperations(ctx context.Context, routeID int64) ([]*entity.RouteOperation, error) {
-	rows, err := r.q.GetRouteOperations(ctx, routeID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetRouteOperations(ctx, sqlc.GetRouteOperationsParams{RouteID: routeID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao buscar as operações do roteiro %d: %w", routeID, err)
 	}
@@ -394,7 +398,11 @@ func (r *RoutingRepositorySQLC) DeleteNetworkEdge(ctx context.Context, predecess
 }
 
 func (r *RoutingRepositorySQLC) GetNetworkEdges(ctx context.Context, routeID int64) ([]*entity.NetworkEdge, error) {
-	rows, err := r.q.GetNetworkEdges(ctx, routeID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetNetworkEdges(ctx, sqlc.GetNetworkEdgesParams{RouteID: routeID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao buscar as precedências do roteiro %d: %w", routeID, err)
 	}

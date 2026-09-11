@@ -308,4 +308,13 @@ type LeadTimeResult struct {
 	RouteID      int64
 	CriticalPath []int64 // route_operation IDs in order
 	TotalHours   float64
+	// CycleOperations lista as operações que ficaram presas num ciclo de
+	// precedência (A→B→A). Sem isso o cálculo devolvia 0 h em silêncio: o
+	// topológico não processava esses nós e o roteiro parecia instantâneo —
+	// inclusive para o MRP, que usa o mesmo cálculo.
+	CycleOperations []int64
 }
+
+// HasCycle diz se a rede de precedências tem ciclo. Com ciclo, TotalHours não
+// tem significado e a rede precisa ser corrigida antes de programar.
+func (r LeadTimeResult) HasCycle() bool { return len(r.CycleOperations) > 0 }

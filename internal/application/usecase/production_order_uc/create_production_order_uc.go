@@ -3,6 +3,7 @@ package production_order_uc
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -34,8 +35,12 @@ type CreateProductionOrderUseCase struct {
 	Repo      repository.ProductionOrderRepository
 	Auth      ports.AuthService
 	Structure coproductReader
-	Routing   productionRouteReader
-	OrderOps  productionRouteExploder
+	// MaskVars devolve as variáveis da configuração (item + máscara) para
+	// avaliar a fórmula de quantidade do componente. Opcional: sem ela vale a
+	// quantidade fixa cadastrada.
+	MaskVars orderMaskVariableReader
+	Routing  productionRouteReader
+	OrderOps productionRouteExploder
 	// Items resolve o código de negócio do item (texto) para a chave legada.
 	Items any
 }
@@ -105,17 +110,34 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	if uc.Structure == nil {
 		return uc.Repo.Create(ctx, order)
 	}
-	children, err := uc.Structure.GetAllDirectChildren(ctx, itemCode)
+	children, err := uc.componentesDaOrdem(ctx, itemCode, dto.Mask)
 	if err != nil {
 		return nil, err
 	}
+	// A lista de materiais vale para a data em que a ordem começa. Sem data de
+	// início, vale a de hoje.
+	consumo := time.Now()
+	if order.StartDate != nil {
+		consumo = *order.StartDate
+	}
+	vigentes := make([]*structentity.ItemStructure, 0, len(children))
+	for _, child := range children {
+		if child.VigenteEm(consumo) {
+			vigentes = append(vigentes, child)
+		}
+	}
+	var vars map[string]float64
+	if uc.MaskVars != nil && dto.Mask != "" {
+		vars, _ = uc.MaskVars.GetMaskAnswersWithNames(ctx, itemCode, dto.Mask)
+	}
 	materials := []*entity.ProductionOrderMaterial{}
 	rework := false
-	for _, child := range structentity.SelectPrimarySubstituteComponents(children) {
-		if child.IsCoproduct || child.Quantity <= 0 {
+	for _, child := range structentity.SelectPrimarySubstituteComponents(vigentes) {
+		perUnit, _ := child.ResolvedQuantity(vars)
+		if child.IsCoproduct || perUnit <= 0 {
 			continue
 		}
-		quantity := decimal.NewFromFloat(child.Quantity)
+		quantity := decimal.NewFromFloat(perUnit)
 		if !child.IsFixedQty {
 			quantity = quantity.Mul(decimal.NewFromFloat(dto.PlannedQty))
 		}
@@ -156,4 +178,28 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		}
 	}
 	return created, nil
+}
+
+// orderMaskVariableReader resolve as variáveis da configuração de um item.
+type orderMaskVariableReader interface {
+	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]float64, error)
+}
+
+// maskBOMReader é a leitura de estrutura que respeita a máscara da ordem.
+type maskBOMReader interface {
+	GetDirectChildrenForMask(ctx context.Context, parentCode int64, mask string) ([]*structentity.ItemStructure, error)
+}
+
+// componentesDaOrdem devolve os filhos diretos que valem para a configuração da
+// ordem: os genéricos mais os da máscara informada.
+//
+// A criação da OF usava GetAllDirectChildren, que não filtra máscara: a ordem de
+// um item configurado recebia os componentes de TODAS as variantes — todas as
+// cores, todas as medidas — além dos genéricos. A leitura por máscara só não é
+// usada quando o repositório não a oferece (os dublês de teste antigos).
+func (uc *CreateProductionOrderUseCase) componentesDaOrdem(ctx context.Context, itemCode int64, mask string) ([]*structentity.ItemStructure, error) {
+	if r, ok := uc.Structure.(maskBOMReader); ok {
+		return r.GetDirectChildrenForMask(ctx, itemCode, mask)
+	}
+	return uc.Structure.GetAllDirectChildren(ctx, itemCode)
 }

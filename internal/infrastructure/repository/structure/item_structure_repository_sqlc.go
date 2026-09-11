@@ -243,6 +243,8 @@ func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
 			SubstituteGroup:    e.SubstituteGroup,
 			SubstitutePriority: e.SubstitutePriority,
 			IsActive:           true,
+			StartDate:          pgutil.FromPgDateToPtr(e.StartDate),
+			EndDate:            pgutil.FromPgDateToPtr(e.EndDate),
 		}
 		if e.ParentMask.Valid {
 			v := e.ParentMask.String
