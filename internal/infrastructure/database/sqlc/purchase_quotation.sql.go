@@ -140,11 +140,17 @@ func (q *Queries) CreatePurchaseQuotationSupplier(ctx context.Context, arg Creat
 }
 
 const getPurchaseQuotationByCode = `-- name: GetPurchaseQuotationByCode :one
-SELECT id, code, enterprise_code, status, emission_date, notes, is_active, created_at, created_by, updated_at FROM purchase_quotations WHERE code = $1
+SELECT id, code, enterprise_code, status, emission_date, notes, is_active, created_at, created_by, updated_at FROM purchase_quotations
+WHERE code = $1 AND enterprise_code = $2
 `
 
-func (q *Queries) GetPurchaseQuotationByCode(ctx context.Context, code int64) (PurchaseQuotation, error) {
-	row := q.db.QueryRow(ctx, getPurchaseQuotationByCode, code)
+type GetPurchaseQuotationByCodeParams struct {
+	Code           int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) GetPurchaseQuotationByCode(ctx context.Context, arg GetPurchaseQuotationByCodeParams) (PurchaseQuotation, error) {
+	row := q.db.QueryRow(ctx, getPurchaseQuotationByCode, arg.Code, arg.EnterpriseCode)
 	var i PurchaseQuotation
 	err := row.Scan(
 		&i.ID,
@@ -308,12 +314,18 @@ func (q *Queries) ListPurchaseQuotationSuppliers(ctx context.Context, quotationC
 
 const listPurchaseQuotations = `-- name: ListPurchaseQuotations :many
 SELECT id, code, enterprise_code, status, emission_date, notes, is_active, created_at, created_by, updated_at FROM purchase_quotations
-WHERE is_active = TRUE AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','QUOTED'))
+WHERE is_active = TRUE AND enterprise_code = $2
+  AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','QUOTED'))
 ORDER BY code DESC
 `
 
-func (q *Queries) ListPurchaseQuotations(ctx context.Context, dollar_1 bool) ([]PurchaseQuotation, error) {
-	rows, err := q.db.Query(ctx, listPurchaseQuotations, dollar_1)
+type ListPurchaseQuotationsParams struct {
+	Column1        bool
+	EnterpriseCode int64
+}
+
+func (q *Queries) ListPurchaseQuotations(ctx context.Context, arg ListPurchaseQuotationsParams) ([]PurchaseQuotation, error) {
+	rows, err := q.db.Query(ctx, listPurchaseQuotations, arg.Column1, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -382,10 +394,13 @@ func (q *Queries) ListSelectedQuotationPrices(ctx context.Context, quotationCode
 
 const nextPurchaseQuotationCode = `-- name: NextPurchaseQuotationCode :one
 SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_quotations
+WHERE enterprise_code = $1
 `
 
-func (q *Queries) NextPurchaseQuotationCode(ctx context.Context) (int32, error) {
-	row := q.db.QueryRow(ctx, nextPurchaseQuotationCode)
+// A numeração é por empresa. Global, o próximo código de uma empresa saltava
+// conforme o volume da outra — além de revelar esse volume.
+func (q *Queries) NextPurchaseQuotationCode(ctx context.Context, enterpriseCode int64) (int32, error) {
+	row := q.db.QueryRow(ctx, nextPurchaseQuotationCode, enterpriseCode)
 	var next_code int32
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -412,18 +427,23 @@ func (q *Queries) SetPriceSelected(ctx context.Context, id int64) (PurchaseQuota
 	return i, err
 }
 
-const updatePurchaseQuotationStatus = `-- name: UpdatePurchaseQuotationStatus :exec
-UPDATE purchase_quotations SET status = $2, updated_at = NOW() WHERE code = $1
+const updatePurchaseQuotationStatus = `-- name: UpdatePurchaseQuotationStatus :execrows
+UPDATE purchase_quotations SET status = $2, updated_at = NOW()
+WHERE code = $1 AND enterprise_code = $3
 `
 
 type UpdatePurchaseQuotationStatusParams struct {
-	Code   int64
-	Status string
+	Code           int64
+	Status         string
+	EnterpriseCode int64
 }
 
-func (q *Queries) UpdatePurchaseQuotationStatus(ctx context.Context, arg UpdatePurchaseQuotationStatusParams) error {
-	_, err := q.db.Exec(ctx, updatePurchaseQuotationStatus, arg.Code, arg.Status)
-	return err
+func (q *Queries) UpdatePurchaseQuotationStatus(ctx context.Context, arg UpdatePurchaseQuotationStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updatePurchaseQuotationStatus, arg.Code, arg.Status, arg.EnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertPurchaseQuotationPrice = `-- name: UpsertPurchaseQuotationPrice :one

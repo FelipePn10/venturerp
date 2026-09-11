@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -72,4 +73,22 @@ func (h *EmployeeHandler) DeactivateEmployee(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"message": "employee deactivated"})
+}
+
+// ListEmployeesByRole filtra funcionários por função. É o que o cadastro de
+// máquina usa para oferecer só mecânicos como responsável pela manutenção —
+// no FoccoERP (FENG0111) a lista já vem filtrada, e oferecer a empresa inteira
+// convida ao erro.
+func (h *EmployeeHandler) ListEmployeesByRole(w http.ResponseWriter, r *http.Request) {
+	role := strings.TrimSpace(chi.URLParam(r, "role"))
+	if role == "" {
+		security.RespondError(w, http.StatusBadRequest, "informe a função")
+		return
+	}
+	result, err := h.listByRoleUC.Execute(r.Context(), role)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }

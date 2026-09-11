@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -24,9 +25,14 @@ func (r *RestrictionReasonRepositorySQLC) Create(
 	ctx context.Context,
 	re *entity.RestrictionReason,
 ) (*entity.RestrictionReason, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateRestrictionReason(ctx, sqlc.CreateRestrictionReasonParams{
-		Description: re.Description,
-		Situation:   re.Situation,
+		Description:  re.Description,
+		Situation:    re.Situation,
+		EnterpriseID: empresa,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating restriction reason: %w", err)
@@ -38,7 +44,11 @@ func (r *RestrictionReasonRepositorySQLC) GetByCode(
 	ctx context.Context,
 	code int64,
 ) (*entity.RestrictionReason, error) {
-	row, err := r.q.GetRestrictionReasonByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetRestrictionReasonByCode(ctx, sqlc.GetRestrictionReasonByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("motivo de restrição %d não encontrado", code))
@@ -51,7 +61,11 @@ func (r *RestrictionReasonRepositorySQLC) GetByCode(
 func (r *RestrictionReasonRepositorySQLC) List(
 	ctx context.Context,
 ) ([]*entity.RestrictionReason, error) {
-	rows, err := r.q.ListRestrictionReasons(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRestrictionReasons(ctx, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing restriction reasons: %w", err)
 	}
@@ -66,10 +80,15 @@ func (r *RestrictionReasonRepositorySQLC) Update(
 	ctx context.Context,
 	re *entity.RestrictionReason,
 ) (*entity.RestrictionReason, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateRestrictionReason(ctx, sqlc.UpdateRestrictionReasonParams{
-		Code:        re.Code,
-		Description: re.Description,
-		Situation:   re.Situation,
+		Code:         re.Code,
+		Description:  re.Description,
+		Situation:    re.Situation,
+		EnterpriseID: empresa,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -81,7 +100,18 @@ func (r *RestrictionReasonRepositorySQLC) Update(
 }
 
 func (r *RestrictionReasonRepositorySQLC) Delete(ctx context.Context, code int64) error {
-	return r.q.DeleteRestrictionReason(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteRestrictionReason(ctx, sqlc.DeleteRestrictionReasonParams{Code: code, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("motivo de restrição %d não encontrado", code))
+	}
+	return nil
 }
 
 func reasonRowToEntity(row sqlc.RestrictionReason) *entity.RestrictionReason {

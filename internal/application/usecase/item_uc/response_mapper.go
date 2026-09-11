@@ -168,7 +168,7 @@ func toItemSuppliesResponse(s entity.Supplies) response.ItemSuppliesResponse {
 	}
 	return response.ItemSuppliesResponse{
 		TypeOfUse: s.TypeOfUse.String(), PurchaseUOM: purchaseUOM, WarehouseCode: s.WarehouseCode,
-		ReceivingChecklist: s.ReceivingChecklist, Harvest: s.Harvest,
+		ReceivingChecklist: s.ReceivingChecklist, Harvest: s.Harvest, Notes: s.Notes,
 	}
 }
 

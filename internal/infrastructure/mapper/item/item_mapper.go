@@ -76,8 +76,8 @@ func toCommercial(d *request.CommercialDTO) itementity.Commercial {
 	return itementity.Commercial{
 		Description: clean(d.Description), SaleType: clean(d.SaleType), VolumeConversionFactor: d.VolumeConversionFactor,
 		SaleMultiple: d.SaleMultiple, MinimumSaleQuantity: d.MinimumSaleQuantity, EstimatedDeliveryDays: d.EstimatedDeliveryDays,
-		WarrantyDays: d.WarrantyDays, TransferWarehouseCode: d.TransferWarehouseCode,
-		TechnicalAssistanceWarehouseCode: d.TechnicalAssistanceWarehouseCode,
+		WarrantyDays: d.WarrantyDays, TransferWarehouseCode: d.TransferWarehouseCode.Ptr(),
+		TechnicalAssistanceWarehouseCode: d.TechnicalAssistanceWarehouseCode.Ptr(),
 		PackagingItemBusinessCode:        textCode(d.PackagingItemCode),
 		AllowBillingDescriptionChange:    d.AllowBillingDescriptionChange, IssueLoadingLabels: d.IssueLoadingLabels,
 		AssembleShippingVolumes: d.AssembleShippingVolumes, RequiresSpecialPackaging: d.RequiresSpecialPackaging,
@@ -158,6 +158,7 @@ func toSupplies(d request.SuppliesDTO) itementity.Supplies {
 		WarehouseCode:      d.WarehouseCode,
 		ReceivingChecklist: d.ReceivingChecklist,
 		Harvest:            d.Harvest,
+		Notes:              d.Notes,
 	}
 }
 

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/supplier/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/supplier/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -128,7 +130,12 @@ func (r *SupplierRepositorySQLC) NextContactTypeCode(ctx context.Context) (int64
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 
 func (r *SupplierRepositorySQLC) CreateSupplier(ctx context.Context, s *entity.Supplier) (*entity.Supplier, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSupplier(ctx, sqlc.CreateSupplierParams{
+		EnterpriseID:                    empresa,
 		Code:                            s.Code,
 		CorporateCode:                   s.CorporateCode,
 		IsActive:                        s.IsActive,
@@ -163,7 +170,12 @@ func (r *SupplierRepositorySQLC) CreateSupplier(ctx context.Context, s *entity.S
 }
 
 func (r *SupplierRepositorySQLC) UpdateSupplier(ctx context.Context, s *entity.Supplier) (*entity.Supplier, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateSupplier(ctx, sqlc.UpdateSupplierParams{
+		EnterpriseID:                    empresa,
 		Code:                            s.Code,
 		CorporateCode:                   s.CorporateCode,
 		IsActive:                        s.IsActive,
@@ -196,7 +208,11 @@ func (r *SupplierRepositorySQLC) UpdateSupplier(ctx context.Context, s *entity.S
 }
 
 func (r *SupplierRepositorySQLC) GetSupplierByCode(ctx context.Context, code int64) (*entity.Supplier, error) {
-	row, err := r.q.GetSupplierByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSupplierByCode(ctx, sqlc.GetSupplierByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("supplier %d not found: %w", code, err)
 	}
@@ -204,7 +220,11 @@ func (r *SupplierRepositorySQLC) GetSupplierByCode(ctx context.Context, code int
 }
 
 func (r *SupplierRepositorySQLC) GetSupplierByDocument(ctx context.Context, document string) (*entity.Supplier, error) {
-	row, err := r.q.GetSupplierByDocument(ctx, document)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSupplierByDocument(ctx, sqlc.GetSupplierByDocumentParams{DocumentNumber: document, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +232,11 @@ func (r *SupplierRepositorySQLC) GetSupplierByDocument(ctx context.Context, docu
 }
 
 func (r *SupplierRepositorySQLC) ListSuppliers(ctx context.Context, onlyActive bool) ([]*entity.Supplier, error) {
-	rows, err := r.q.ListSuppliers(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSuppliers(ctx, sqlc.ListSuppliersParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +248,11 @@ func (r *SupplierRepositorySQLC) ListSuppliers(ctx context.Context, onlyActive b
 }
 
 func (r *SupplierRepositorySQLC) ListEstablishments(ctx context.Context, corporateCode int64) ([]*entity.Supplier, error) {
-	rows, err := r.q.ListSupplierEstablishments(ctx, &corporateCode)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierEstablishments(ctx, sqlc.ListSupplierEstablishmentsParams{CorporateCode: &corporateCode, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -236,14 +264,37 @@ func (r *SupplierRepositorySQLC) ListEstablishments(ctx context.Context, corpora
 }
 
 func (r *SupplierRepositorySQLC) BlockSupplier(ctx context.Context, code int64, reason string) error {
-	return r.q.BlockSupplier(ctx, sqlc.BlockSupplierParams{
-		Code:        code,
-		BlockReason: pgutil.ToPgTextFromString(reason),
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.BlockSupplier(ctx, sqlc.BlockSupplierParams{
+		Code:         code,
+		BlockReason:  pgutil.ToPgTextFromString(reason),
+		EnterpriseID: empresa,
 	})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("fornecedor %d não encontrado", code))
+	}
+	return nil
 }
 
 func (r *SupplierRepositorySQLC) UnblockSupplier(ctx context.Context, code int64) error {
-	return r.q.UnblockSupplier(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.UnblockSupplier(ctx, sqlc.UnblockSupplierParams{Code: code, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("fornecedor %d não encontrado", code))
+	}
+	return nil
 }
 
 func (r *SupplierRepositorySQLC) NextSupplierCode(ctx context.Context) (int64, error) {
@@ -252,31 +303,56 @@ func (r *SupplierRepositorySQLC) NextSupplierCode(ctx context.Context) (int64, e
 }
 
 func (r *SupplierRepositorySQLC) PropagateStateRegistration(ctx context.Context, document string, ie *string, exceptCode int64) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	return r.q.PropagateStateRegistration(ctx, sqlc.PropagateStateRegistrationParams{
 		DocumentNumber:    document,
 		StateRegistration: pgutil.ToPgTextFromPtr(ie),
 		Code:              exceptCode,
+		EnterpriseID:      empresa,
 	})
 }
 
 func (r *SupplierRepositorySQLC) UpdateSefazSnapshot(ctx context.Context, code int64, status, user string) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	now := pgutil.ToPgDate(time.Now())
-	return r.q.UpdateSupplierSefaz(ctx, sqlc.UpdateSupplierSefazParams{
+	linhas, err := r.q.UpdateSupplierSefaz(ctx, sqlc.UpdateSupplierSefazParams{
 		Code:                 code,
 		LastSefazQuery:       now,
 		BillingReceiptStatus: pgutil.ToPgTextFromString(status),
 		LastSefazUpdate:      now,
 		SefazUpdateUser:      pgutil.ToPgTextFromString(user),
+		EnterpriseID:         empresa,
 	})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("fornecedor %d não encontrado", code))
+	}
+	return nil
 }
 
 func (r *SupplierRepositorySQLC) DeleteSupplier(ctx context.Context, code int64) error {
-	if err := r.q.DeleteSupplier(ctx, code); err != nil {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSupplier(ctx, sqlc.DeleteSupplierParams{Code: code, EnterpriseID: empresa})
+	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return fmt.Errorf("não é possível excluir o fornecedor: há pedidos de compra ou processos de importação vinculados — inative-o ou desvincule-o primeiro")
 		}
 		return fmt.Errorf("deleting supplier: %w", err)
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("fornecedor %d não encontrado", code))
 	}
 	return nil
 }
@@ -304,7 +380,12 @@ func (r *SupplierRepositorySQLC) AddAddress(ctx context.Context, a *entity.Suppl
 }
 
 func (r *SupplierRepositorySQLC) UpdateAddress(ctx context.Context, a *entity.SupplierAddress) (*entity.SupplierAddress, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateSupplierAddress(ctx, sqlc.UpdateSupplierAddressParams{
+		EnterpriseID: empresa,
 		ID:           a.ID,
 		AddressType:  string(a.AddressType),
 		ZipCode:      pgutil.ToPgTextFromPtr(a.ZipCode),
@@ -324,7 +405,11 @@ func (r *SupplierRepositorySQLC) UpdateAddress(ctx context.Context, a *entity.Su
 }
 
 func (r *SupplierRepositorySQLC) ListAddresses(ctx context.Context, supplierID int64) ([]*entity.SupplierAddress, error) {
-	rows, err := r.q.ListSupplierAddresses(ctx, supplierID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierAddresses(ctx, sqlc.ListSupplierAddressesParams{SupplierID: supplierID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +421,18 @@ func (r *SupplierRepositorySQLC) ListAddresses(ctx context.Context, supplierID i
 }
 
 func (r *SupplierRepositorySQLC) DeleteAddress(ctx context.Context, id int64) error {
-	return r.q.DeleteSupplierAddress(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSupplierAddress(ctx, sqlc.DeleteSupplierAddressParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError("endereço não encontrado")
+	}
+	return nil
 }
 
 // ─── Phones ───────────────────────────────────────────────────────────────────
@@ -354,7 +450,11 @@ func (r *SupplierRepositorySQLC) AddPhone(ctx context.Context, p *entity.Supplie
 }
 
 func (r *SupplierRepositorySQLC) ListPhones(ctx context.Context, supplierID int64) ([]*entity.SupplierPhone, error) {
-	rows, err := r.q.ListSupplierPhones(ctx, supplierID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierPhones(ctx, sqlc.ListSupplierPhonesParams{SupplierID: supplierID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +466,18 @@ func (r *SupplierRepositorySQLC) ListPhones(ctx context.Context, supplierID int6
 }
 
 func (r *SupplierRepositorySQLC) DeletePhone(ctx context.Context, id int64) error {
-	return r.q.DeleteSupplierPhone(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSupplierPhone(ctx, sqlc.DeleteSupplierPhoneParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError("telefone não encontrado")
+	}
+	return nil
 }
 
 // ─── Emails ─────────────────────────────────────────────────────────────────
@@ -384,7 +495,11 @@ func (r *SupplierRepositorySQLC) AddEmail(ctx context.Context, e *entity.Supplie
 }
 
 func (r *SupplierRepositorySQLC) ListEmails(ctx context.Context, supplierID int64) ([]*entity.SupplierEmail, error) {
-	rows, err := r.q.ListSupplierEmails(ctx, supplierID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierEmails(ctx, sqlc.ListSupplierEmailsParams{SupplierID: supplierID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +511,18 @@ func (r *SupplierRepositorySQLC) ListEmails(ctx context.Context, supplierID int6
 }
 
 func (r *SupplierRepositorySQLC) DeleteEmail(ctx context.Context, id int64) error {
-	return r.q.DeleteSupplierEmail(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSupplierEmail(ctx, sqlc.DeleteSupplierEmailParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError("e-mail não encontrado")
+	}
+	return nil
 }
 
 // ─── Due Dates ─────────────────────────────────────────────────────────────────
@@ -422,7 +548,11 @@ func (r *SupplierRepositorySQLC) AddDueDate(ctx context.Context, d *entity.Suppl
 }
 
 func (r *SupplierRepositorySQLC) ListDueDates(ctx context.Context, supplierID int64) ([]*entity.SupplierDueDate, error) {
-	rows, err := r.q.ListSupplierDueDates(ctx, supplierID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierDueDates(ctx, sqlc.ListSupplierDueDatesParams{SupplierID: supplierID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +564,18 @@ func (r *SupplierRepositorySQLC) ListDueDates(ctx context.Context, supplierID in
 }
 
 func (r *SupplierRepositorySQLC) DeleteDueDate(ctx context.Context, id int64) error {
-	return r.q.DeleteSupplierDueDate(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSupplierDueDate(ctx, sqlc.DeleteSupplierDueDateParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError("vencimento não encontrado")
+	}
+	return nil
 }
 
 // ─── Contacts ─────────────────────────────────────────────────────────────────
@@ -457,7 +598,11 @@ func (r *SupplierRepositorySQLC) AddContact(ctx context.Context, c *entity.Suppl
 }
 
 func (r *SupplierRepositorySQLC) ListContacts(ctx context.Context, supplierID int64) ([]*entity.SupplierContact, error) {
-	rows, err := r.q.ListSupplierContacts(ctx, supplierID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierContacts(ctx, sqlc.ListSupplierContactsParams{SupplierID: supplierID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +614,18 @@ func (r *SupplierRepositorySQLC) ListContacts(ctx context.Context, supplierID in
 }
 
 func (r *SupplierRepositorySQLC) DeleteContact(ctx context.Context, id int64) error {
-	return r.q.DeleteSupplierContact(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSupplierContact(ctx, sqlc.DeleteSupplierContactParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError("contato não encontrado")
+	}
+	return nil
 }
 
 func (r *SupplierRepositorySQLC) AddContactPhone(ctx context.Context, p *entity.SupplierContactPhone) (*entity.SupplierContactPhone, error) {
@@ -497,7 +653,11 @@ func (r *SupplierRepositorySQLC) AddContactEmail(ctx context.Context, e *entity.
 }
 
 func (r *SupplierRepositorySQLC) ListContactPhones(ctx context.Context, contactID int64) ([]*entity.SupplierContactPhone, error) {
-	rows, err := r.q.ListSupplierContactPhones(ctx, contactID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierContactPhones(ctx, sqlc.ListSupplierContactPhonesParams{ContactID: contactID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +669,11 @@ func (r *SupplierRepositorySQLC) ListContactPhones(ctx context.Context, contactI
 }
 
 func (r *SupplierRepositorySQLC) ListContactEmails(ctx context.Context, contactID int64) ([]*entity.SupplierContactEmail, error) {
-	rows, err := r.q.ListSupplierContactEmails(ctx, contactID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierContactEmails(ctx, sqlc.ListSupplierContactEmailsParams{ContactID: contactID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}

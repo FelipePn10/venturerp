@@ -3139,19 +3139,20 @@ type AppropriationTable struct {
 }
 
 type AuditLog struct {
-	ID         int64
-	OccurredAt pgtype.Timestamptz
-	RequestID  pgtype.Text
-	UserID     pgtype.Text
-	UserRole   pgtype.Text
-	Method     string
-	Route      string
-	Path       string
-	Query      pgtype.Text
-	Status     int32
-	Ip         pgtype.Text
-	UserAgent  pgtype.Text
-	LatencyMs  *int64
+	ID           int64
+	OccurredAt   pgtype.Timestamptz
+	RequestID    pgtype.Text
+	UserID       pgtype.Text
+	UserRole     pgtype.Text
+	Method       string
+	Route        string
+	Path         string
+	Query        pgtype.Text
+	Status       int32
+	Ip           pgtype.Text
+	UserAgent    pgtype.Text
+	LatencyMs    *int64
+	EnterpriseID *int64
 }
 
 type BomHeader struct {
@@ -3252,6 +3253,7 @@ type CfgCharacteristic struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
+	EnterpriseID      int64
 }
 
 type CfgCharacteristicLanguage struct {
@@ -3260,6 +3262,7 @@ type CfgCharacteristicLanguage struct {
 	Language         string
 	Description      string
 	Mask             pgtype.Text
+	EnterpriseID     int64
 }
 
 type CfgCharacteristicReceivingItem struct {
@@ -3270,17 +3273,19 @@ type CfgCharacteristicReceivingItem struct {
 	ItemCode           *int64
 	ClassificationCode *int64
 	CreatedAt          pgtype.Timestamptz
+	EnterpriseID       int64
 }
 
 type CfgDescriptionType struct {
-	ID          int64
-	Code        string
-	Description string
-	Kind        string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	Code         string
+	Description  string
+	Kind         string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type CfgEquivalentRule struct {
@@ -3300,12 +3305,14 @@ type CfgEquivalentRule struct {
 	CreatedAt              pgtype.Timestamptz
 	UpdatedAt              pgtype.Timestamptz
 	CreatedBy              pgtype.UUID
+	EnterpriseID           int64
 }
 
 type CfgItemCharDefaultAnswer struct {
 	ID                   int64
 	ItemCharacteristicID int64
 	VariableID           int64
+	EnterpriseID         int64
 }
 
 type CfgItemCharacteristic struct {
@@ -3321,6 +3328,7 @@ type CfgItemCharacteristic struct {
 	Formula           pgtype.Text
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	EnterpriseID      int64
 }
 
 type CfgItemDescription struct {
@@ -3330,6 +3338,7 @@ type CfgItemDescription struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
+	EnterpriseID      int64
 }
 
 type CfgItemDescriptionLine struct {
@@ -3342,6 +3351,7 @@ type CfgItemDescriptionLine struct {
 	DescType             string
 	Text                 string
 	LineBreak            bool
+	EnterpriseID         int64
 }
 
 type CfgItemMaskAnswer struct {
@@ -3351,20 +3361,22 @@ type CfgItemMaskAnswer struct {
 	VariableID       *int64
 	AnswerValue      string
 	Position         int32
+	EnterpriseID     int64
 }
 
 type CfgItemRule struct {
-	ID          int64
-	ItemCode    int64
-	TargetTable string
-	TargetField string
-	Content     pgtype.Text
-	Formula     pgtype.Text
-	Description pgtype.Text
-	Situation   string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	ItemCode     int64
+	TargetTable  string
+	TargetField  string
+	Content      pgtype.Text
+	Formula      pgtype.Text
+	Description  pgtype.Text
+	Situation    string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type CfgItemRuleCondition struct {
@@ -3374,15 +3386,17 @@ type CfgItemRuleCondition struct {
 	Operator         string
 	VariableID       *int64
 	Sequence         int32
+	EnterpriseID     int64
 }
 
 type CfgSet struct {
-	ID          int64
-	Description string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type CfgVariable struct {
@@ -3399,14 +3413,16 @@ type CfgVariable struct {
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
 	CreatedBy          pgtype.UUID
+	EnterpriseID       int64
 }
 
 type CfgVariableLanguage struct {
-	ID          int64
-	VariableID  int64
-	Language    string
-	Country     pgtype.Text
-	Translation string
+	ID           int64
+	VariableID   int64
+	Language     string
+	Country      pgtype.Text
+	Translation  string
+	EnterpriseID int64
 }
 
 type Cfop struct {
@@ -3861,6 +3877,37 @@ type ContasReceber struct {
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
 	CondicaoPagamentoID *int64
+}
+
+// Margem apurada por linha de venda, com a cascata congelada na data do cálculo.
+type ContributionMargin struct {
+	ID                 int64
+	EnterpriseID       int64
+	Source             string
+	SourceID           int64
+	SourceItem         int32
+	IssueDate          pgtype.Date
+	CustomerCode       *int64
+	ItemCode           *int64
+	Quantity           pgtype.Numeric
+	GrossRevenue       pgtype.Numeric
+	Ipi                pgtype.Numeric
+	MerchandiseRevenue pgtype.Numeric
+	Icms               pgtype.Numeric
+	PisCofins          pgtype.Numeric
+	MaterialCost       pgtype.Numeric
+	ConversionCost     pgtype.Numeric
+	GrossProfit        pgtype.Numeric
+	AdminExpense       pgtype.Numeric
+	Commission         pgtype.Numeric
+	Freight            pgtype.Numeric
+	OtherExpense       pgtype.Numeric
+	FinancialExpense   pgtype.Numeric
+	IncomeTaxProvision pgtype.Numeric
+	Margin             pgtype.Numeric
+	MarginPct          pgtype.Numeric
+	CostBasis          string
+	CalculatedAt       pgtype.Timestamptz
 }
 
 type CostCenter struct {
@@ -5362,6 +5409,7 @@ type Item struct {
 	IsTool bool
 	// Item de processo em terceiros.
 	IsProcessItem bool
+	SuppliesNotes pgtype.Text
 }
 
 type ItemBusinessCodeSequence struct {
@@ -5909,6 +5957,30 @@ type ManufacturingWarehouseAddress struct {
 	WarehouseID  int64
 	Address      string
 	IsActive     bool
+}
+
+// Percentuais e prazos do mês usados no cálculo da margem de contribuição.
+type MarginParameter struct {
+	ID           int64
+	EnterpriseID int64
+	Year         int32
+	Month        int32
+	IrPct        pgtype.Numeric
+	AdminPct     pgtype.Numeric
+	FreightPct   pgtype.Numeric
+	// Taxa financeira ao mês (%); ajustada ao ciclo de caixa no cálculo.
+	FinancialRateMonthly pgtype.Numeric
+	AvgSalesTermDays     int32
+	AvgPurchaseTermDays  int32
+	ProductionCycleDays  int32
+	MaterialPaymentDays  int32
+	LaborPaymentDays     int32
+	IpiPaymentDays       int32
+	IcmsPaymentDays      int32
+	PisPaymentDays       int32
+	CofinsPaymentDays    int32
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
 }
 
 type MarketSegment struct {
@@ -7739,12 +7811,13 @@ type RestrictionDominant struct {
 }
 
 type RestrictionReason struct {
-	ID          int64
-	Code        int64
-	Description string
-	Situation   string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         int64
+	Description  string
+	Situation    string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type RouteOperation struct {
@@ -8337,6 +8410,24 @@ type SalesTablePriceHistory struct {
 	EnterpriseID      int64
 }
 
+// Tempo de preparação por transição (item ou família) em cada centro de trabalho.
+type SetupMatrix struct {
+	ID           int64
+	EnterpriseID int64
+	WorkCenterID int64
+	// Item que estava na máquina; NULL = qualquer.
+	FromItemCode *int64
+	// Item que vai entrar; NULL = qualquer.
+	ToItemCode   *int64
+	FromFamily   pgtype.Text
+	ToFamily     pgtype.Text
+	SetupMinutes pgtype.Numeric
+	Notes        pgtype.Text
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
 type Shipment struct {
 	ID                  int64
 	Code                int64
@@ -8803,6 +8894,7 @@ type Supplier struct {
 	CreatedAt                       pgtype.Timestamptz
 	CreatedBy                       pgtype.UUID
 	UpdatedAt                       pgtype.Timestamptz
+	EnterpriseID                    int64
 }
 
 type SupplierAddress struct {
@@ -9481,4 +9573,5 @@ type WorkCenterCost struct {
 	UpdatedBy          pgtype.UUID
 	MachineCostPerHour pgtype.Numeric
 	LaborCostPerHour   pgtype.Numeric
+	EnterpriseID       int64
 }

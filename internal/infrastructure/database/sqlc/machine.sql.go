@@ -338,7 +338,7 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 	return i, err
 }
 
-const deleteMachine = `-- name: DeleteMachine :exec
+const deleteMachine = `-- name: DeleteMachine :execrows
 UPDATE machines
 SET is_active = FALSE, updated_at = NOW()
 WHERE code = $1 AND enterprise_id = $2
@@ -349,12 +349,15 @@ type DeleteMachineParams struct {
 	EnterpriseID *int64
 }
 
-func (q *Queries) DeleteMachine(ctx context.Context, arg DeleteMachineParams) error {
-	_, err := q.db.Exec(ctx, deleteMachine, arg.Code, arg.EnterpriseID)
-	return err
+func (q *Queries) DeleteMachine(ctx context.Context, arg DeleteMachineParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMachine, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteMachineType = `-- name: DeleteMachineType :exec
+const deleteMachineType = `-- name: DeleteMachineType :execrows
 UPDATE machine_types
 SET is_active = FALSE, updated_at = NOW()
 WHERE code = $1 AND enterprise_id = $2
@@ -365,9 +368,14 @@ type DeleteMachineTypeParams struct {
 	EnterpriseID *int64
 }
 
-func (q *Queries) DeleteMachineType(ctx context.Context, arg DeleteMachineTypeParams) error {
-	_, err := q.db.Exec(ctx, deleteMachineType, arg.Code, arg.EnterpriseID)
-	return err
+// :execrows para o caso de uso saber se algo foi realmente inativado: excluir
+// um código inexistente devolvia 200 "sucesso".
+func (q *Queries) DeleteMachineType(ctx context.Context, arg DeleteMachineTypeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMachineType, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteSchedule = `-- name: DeleteSchedule :execrows

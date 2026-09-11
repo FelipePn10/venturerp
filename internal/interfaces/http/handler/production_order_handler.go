@@ -524,7 +524,7 @@ func (h *ProductionOrderHandler) SettleCost(w http.ResponseWriter, r *http.Reque
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderCostResponse(result))
 }
 
 func (h *ProductionOrderHandler) GetCost(w http.ResponseWriter, r *http.Request) {
@@ -539,10 +539,10 @@ func (h *ProductionOrderHandler) GetCost(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.getCostUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderCostResponse(result))
 }
 
 // ─── scrap return (sucata valorizada) ─────────────────────────────────────────

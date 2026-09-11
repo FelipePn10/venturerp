@@ -44,23 +44,25 @@ func Audit(sink audit.Sink) func(http.Handler) http.Handler {
 			}
 
 			var userID, role string
+			var enterpriseID int64
 			if u, ok := r.Context().Value(contextkey.UserKey).(*security.AuthUser); ok && u != nil {
-				userID, role = u.ID, u.Role
+				userID, role, enterpriseID = u.ID, u.Role, u.EnterpriseID
 			}
 
 			sink.Record(audit.Event{
-				OccurredAt: start,
-				RequestID:  applogger.CorrelationIDFromContext(r.Context()),
-				UserID:     userID,
-				UserRole:   role,
-				Method:     r.Method,
-				Route:      route,
-				Path:       r.URL.Path,
-				Query:      r.URL.RawQuery,
-				Status:     status,
-				IP:         realIP(r),
-				UserAgent:  r.UserAgent(),
-				LatencyMS:  time.Since(start).Milliseconds(),
+				EnterpriseID: enterpriseID,
+				OccurredAt:   start,
+				RequestID:    applogger.CorrelationIDFromContext(r.Context()),
+				UserID:       userID,
+				UserRole:     role,
+				Method:       r.Method,
+				Route:        route,
+				Path:         r.URL.Path,
+				Query:        r.URL.RawQuery,
+				Status:       status,
+				IP:           realIP(r),
+				UserAgent:    r.UserAgent(),
+				LatencyMS:    time.Since(start).Milliseconds(),
 			})
 		})
 	}

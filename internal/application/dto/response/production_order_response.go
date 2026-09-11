@@ -91,3 +91,39 @@ type ProductionOrderOperationalResponse struct {
 	Movements    []*ProductionMovementResponse    `json:"movements"`
 	Totals       map[string]decimal.Decimal       `json:"totals"`
 }
+
+// ProductionOrderCostResponse é o fechamento de custo da ordem: o que a ordem
+// realmente custou, o que deveria ter custado pelo padrão, e a diferença — em
+// material, mão de obra e indiretos.
+//
+// Antes a entidade de domínio era serializada direto, sem tags: os campos
+// chegavam ao cliente em PascalCase (`MaterialCostReal`) e qualquer renomeação
+// interna quebrava o contrato sem aviso. É a valorização de ordem que o
+// FoccoERP tem no FCST0206 e o SAP no encerramento da ordem.
+type ProductionOrderCostResponse struct {
+	ProductionOrderID int64   `json:"production_order_id"`
+	ProducedQty       float64 `json:"produced_qty"`
+
+	MaterialCostReal float64 `json:"material_cost_real"`
+	LaborCostReal    float64 `json:"labor_cost_real"`
+	OverheadCostReal float64 `json:"overhead_cost_real"`
+	TotalCostReal    float64 `json:"total_cost_real"`
+	UnitCostReal     float64 `json:"unit_cost_real"`
+
+	MaterialCostStd float64 `json:"material_cost_std"`
+	LaborCostStd    float64 `json:"labor_cost_std"`
+	OverheadCostStd float64 `json:"overhead_cost_std"`
+	TotalCostStd    float64 `json:"total_cost_std"`
+
+	MaterialVariance float64 `json:"material_variance"`
+	LaborVariance    float64 `json:"labor_variance"`
+	OverheadVariance float64 `json:"overhead_variance"`
+	TotalVariance    float64 `json:"total_variance"`
+	// VariancePct é a diferença em porcentagem do padrão. É por ela que o
+	// custo olha primeiro: R$ 500 de desvio pesam diferente numa ordem de
+	// R$ 2.000 e numa de R$ 200.000.
+	VariancePct float64 `json:"variance_pct"`
+
+	Currency  string `json:"currency"`
+	SettledAt string `json:"settled_at,omitempty"`
+}

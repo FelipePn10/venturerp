@@ -105,7 +105,11 @@ type RouteDetailResponse struct {
 }
 
 type RouteLeadTimeResponse struct {
-	RouteID      int64   `json:"route_id"`
-	TotalHours   float64 `json:"lead_time_hours"`
-	CriticalPath []int64 `json:"critical_path"` // route_operation IDs
+	// CycleOperations traz as operações presas num ciclo de precedência. Com
+	// ciclo o lead time não tem significado — a tela precisa avisar em vez de
+	// mostrar um número que parece bom.
+	CycleOperations []int64 `json:"cycle_operations,omitempty"`
+	RouteID         int64   `json:"route_id"`
+	TotalHours      float64 `json:"lead_time_hours"`
+	CriticalPath    []int64 `json:"critical_path"` // route_operation IDs
 }

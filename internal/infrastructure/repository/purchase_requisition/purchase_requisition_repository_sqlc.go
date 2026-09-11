@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,7 +39,11 @@ func (r *PurchaseRequisitionRepositorySQLC) Create(ctx context.Context, req *ent
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) GetByCode(ctx context.Context, code int64) (*entity.PurchaseRequisition, error) {
-	row, err := r.q.GetPurchaseRequisitionByCode(ctx, code)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPurchaseRequisitionByCode(ctx, sqlc.GetPurchaseRequisitionByCodeParams{Code: code, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("purchase requisition %d not found: %w", code, err)
 	}
@@ -45,7 +51,11 @@ func (r *PurchaseRequisitionRepositorySQLC) GetByCode(ctx context.Context, code 
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) List(ctx context.Context, onlyOpen bool) ([]*entity.PurchaseRequisition, error) {
-	rows, err := r.q.ListPurchaseRequisitions(ctx, onlyOpen)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPurchaseRequisitions(ctx, sqlc.ListPurchaseRequisitionsParams{Column1: onlyOpen, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +67,11 @@ func (r *PurchaseRequisitionRepositorySQLC) List(ctx context.Context, onlyOpen b
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) NextCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextPurchaseRequisitionCode(ctx)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextPurchaseRequisitionCode(ctx, empresa)
 	return int64(v), err
 }
 
@@ -113,7 +127,22 @@ func (r *PurchaseRequisitionRepositorySQLC) RegisterAttendance(ctx context.Conte
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) UpdateStatus(ctx context.Context, code int64, status string) error {
-	return r.q.UpdatePurchaseRequisitionStatus(ctx, sqlc.UpdatePurchaseRequisitionStatusParams{Code: code, Status: status})
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.UpdatePurchaseRequisitionStatus(ctx, sqlc.UpdatePurchaseRequisitionStatusParams{
+		Code: code, Status: status, EnterpriseCode: empresa,
+	})
+	if err != nil {
+		return err
+	}
+	// Zero linhas significa que o código não existe nesta empresa. Antes disso
+	// a chamada respondia sucesso sem ter alterado nada.
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("requisição %d não encontrada", code))
+	}
+	return nil
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────

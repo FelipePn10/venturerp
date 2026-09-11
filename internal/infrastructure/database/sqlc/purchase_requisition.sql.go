@@ -120,11 +120,17 @@ func (q *Queries) CreatePurchaseRequisitionItem(ctx context.Context, arg CreateP
 }
 
 const getPurchaseRequisitionByCode = `-- name: GetPurchaseRequisitionByCode :one
-SELECT id, code, enterprise_code, request_type_code, requester_employee_code, emission_date, status, notes, is_active, created_at, created_by, updated_at FROM purchase_requisitions WHERE code = $1
+SELECT id, code, enterprise_code, request_type_code, requester_employee_code, emission_date, status, notes, is_active, created_at, created_by, updated_at FROM purchase_requisitions
+WHERE code = $1 AND enterprise_code = $2
 `
 
-func (q *Queries) GetPurchaseRequisitionByCode(ctx context.Context, code int64) (PurchaseRequisition, error) {
-	row := q.db.QueryRow(ctx, getPurchaseRequisitionByCode, code)
+type GetPurchaseRequisitionByCodeParams struct {
+	Code           int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) GetPurchaseRequisitionByCode(ctx context.Context, arg GetPurchaseRequisitionByCodeParams) (PurchaseRequisition, error) {
+	row := q.db.QueryRow(ctx, getPurchaseRequisitionByCode, arg.Code, arg.EnterpriseCode)
 	var i PurchaseRequisition
 	err := row.Scan(
 		&i.ID,
@@ -218,12 +224,18 @@ func (q *Queries) ListPurchaseRequisitionItems(ctx context.Context, requisitionC
 
 const listPurchaseRequisitions = `-- name: ListPurchaseRequisitions :many
 SELECT id, code, enterprise_code, request_type_code, requester_employee_code, emission_date, status, notes, is_active, created_at, created_by, updated_at FROM purchase_requisitions
-WHERE is_active = TRUE AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','PARTIAL'))
+WHERE is_active = TRUE AND enterprise_code = $2
+  AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','PARTIAL'))
 ORDER BY code DESC
 `
 
-func (q *Queries) ListPurchaseRequisitions(ctx context.Context, dollar_1 bool) ([]PurchaseRequisition, error) {
-	rows, err := q.db.Query(ctx, listPurchaseRequisitions, dollar_1)
+type ListPurchaseRequisitionsParams struct {
+	Column1        bool
+	EnterpriseCode int64
+}
+
+func (q *Queries) ListPurchaseRequisitions(ctx context.Context, arg ListPurchaseRequisitionsParams) ([]PurchaseRequisition, error) {
+	rows, err := q.db.Query(ctx, listPurchaseRequisitions, arg.Column1, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -257,10 +269,12 @@ func (q *Queries) ListPurchaseRequisitions(ctx context.Context, dollar_1 bool) (
 
 const nextPurchaseRequisitionCode = `-- name: NextPurchaseRequisitionCode :one
 SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_requisitions
+WHERE enterprise_code = $1
 `
 
-func (q *Queries) NextPurchaseRequisitionCode(ctx context.Context) (int32, error) {
-	row := q.db.QueryRow(ctx, nextPurchaseRequisitionCode)
+// Numeração por empresa, mesmo motivo da cotação.
+func (q *Queries) NextPurchaseRequisitionCode(ctx context.Context, enterpriseCode int64) (int32, error) {
+	row := q.db.QueryRow(ctx, nextPurchaseRequisitionCode, enterpriseCode)
 	var next_code int32
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -308,16 +322,21 @@ func (q *Queries) RegisterRequisitionItemAttendance(ctx context.Context, arg Reg
 	return i, err
 }
 
-const updatePurchaseRequisitionStatus = `-- name: UpdatePurchaseRequisitionStatus :exec
-UPDATE purchase_requisitions SET status = $2, updated_at = NOW() WHERE code = $1
+const updatePurchaseRequisitionStatus = `-- name: UpdatePurchaseRequisitionStatus :execrows
+UPDATE purchase_requisitions SET status = $2, updated_at = NOW()
+WHERE code = $1 AND enterprise_code = $3
 `
 
 type UpdatePurchaseRequisitionStatusParams struct {
-	Code   int64
-	Status string
+	Code           int64
+	Status         string
+	EnterpriseCode int64
 }
 
-func (q *Queries) UpdatePurchaseRequisitionStatus(ctx context.Context, arg UpdatePurchaseRequisitionStatusParams) error {
-	_, err := q.db.Exec(ctx, updatePurchaseRequisitionStatus, arg.Code, arg.Status)
-	return err
+func (q *Queries) UpdatePurchaseRequisitionStatus(ctx context.Context, arg UpdatePurchaseRequisitionStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updatePurchaseRequisitionStatus, arg.Code, arg.Status, arg.EnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

@@ -153,7 +153,7 @@ func TestEmployeeValidationErrorsAreNot500(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			uc := &employeeuc.CreateEmployeeUseCase{Repo: tt.repo, Auth: desktopValidationAuth{}}
-			h := NewEmployeeHandler(uc, nil, nil, nil, nil)
+			h := NewEmployeeHandler(uc, nil, nil, nil, nil, nil)
 			rec := httptest.NewRecorder()
 			h.CreateEmployee(rec, httptest.NewRequest(http.MethodPost, "/api/employee/create", strings.NewReader(tt.body)))
 			if rec.Code != tt.want {

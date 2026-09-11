@@ -6,18 +6,24 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetPurchaseQuotationByCode :one
-SELECT * FROM purchase_quotations WHERE code = $1;
+SELECT * FROM purchase_quotations
+WHERE code = $1 AND enterprise_code = sqlc.arg(enterprise_code);
 
 -- name: ListPurchaseQuotations :many
 SELECT * FROM purchase_quotations
-WHERE is_active = TRUE AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','QUOTED'))
+WHERE is_active = TRUE AND enterprise_code = sqlc.arg(enterprise_code)
+  AND ($1::BOOLEAN = FALSE OR status IN ('OPEN','QUOTED'))
 ORDER BY code DESC;
 
 -- name: NextPurchaseQuotationCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_quotations;
+-- A numeração é por empresa. Global, o próximo código de uma empresa saltava
+-- conforme o volume da outra — além de revelar esse volume.
+SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_quotations
+WHERE enterprise_code = sqlc.arg(enterprise_code);
 
--- name: UpdatePurchaseQuotationStatus :exec
-UPDATE purchase_quotations SET status = $2, updated_at = NOW() WHERE code = $1;
+-- name: UpdatePurchaseQuotationStatus :execrows
+UPDATE purchase_quotations SET status = $2, updated_at = NOW()
+WHERE code = $1 AND enterprise_code = sqlc.arg(enterprise_code);
 
 -- ─── Items ────────────────────────────────────────────────────────────────────
 

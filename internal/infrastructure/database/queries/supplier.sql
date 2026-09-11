@@ -55,7 +55,8 @@ INSERT INTO suppliers (
     state_registration, municipal_registration, supplier_type_id,
     payment_condition_id, carrier_id, region_id, freight_type, register_date,
     viticola_obligation, gln_code, agriculture_ministry_registration,
-    icms_contributor, is_mei, tracking_platform, homologated, created_by
+    icms_contributor, is_mei, tracking_platform, homologated, created_by,
+    enterprise_id
 )
 VALUES (
     $1, $2, $3, $4, $5,
@@ -63,7 +64,8 @@ VALUES (
     $11, $12, $13,
     $14, $15, $16, $17, $18,
     $19, $20, $21,
-    $22, $23, $24, $25, $26
+    $22, $23, $24, $25, $26,
+    sqlc.arg(enterprise_id)
 )
 RETURNING *;
 
@@ -76,48 +78,59 @@ SET corporate_code = $2, is_active = $3, is_representative = $4, is_customer = $
     viticola_obligation = $18, gln_code = $19, agriculture_ministry_registration = $20,
     icms_contributor = $21, is_mei = $22, tracking_platform = $23, homologated = $24,
     updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetSupplierByCode :one
-SELECT * FROM suppliers WHERE code = $1;
+SELECT * FROM suppliers WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: GetSupplierByDocument :one
-SELECT * FROM suppliers WHERE document_number = $1 LIMIT 1;
+-- A busca por CNPJ também é por empresa: sem isso, informar o documento
+-- confirmava se outra empresa tinha aquele fornecedor cadastrado.
+SELECT * FROM suppliers
+WHERE document_number = $1 AND enterprise_id = sqlc.arg(enterprise_id)
+LIMIT 1;
 
 -- name: ListSuppliers :many
 SELECT * FROM suppliers
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id = sqlc.arg(enterprise_id)
+  AND ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: ListSupplierEstablishments :many
-SELECT * FROM suppliers WHERE corporate_code = $1 ORDER BY code;
+SELECT * FROM suppliers
+WHERE corporate_code = $1 AND enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY code;
 
--- name: BlockSupplier :exec
-UPDATE suppliers SET blocked = TRUE, block_reason = $2, updated_at = NOW() WHERE code = $1;
+-- name: BlockSupplier :execrows
+UPDATE suppliers SET blocked = TRUE, block_reason = $2, updated_at = NOW()
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
--- name: UnblockSupplier :exec
-UPDATE suppliers SET blocked = FALSE, block_reason = NULL, updated_at = NOW() WHERE code = $1;
+-- name: UnblockSupplier :execrows
+UPDATE suppliers SET blocked = FALSE, block_reason = NULL, updated_at = NOW()
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: NextSupplierCode :one
 SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM suppliers;
 
 -- name: PropagateStateRegistration :exec
 -- Spec: ao alterar a IE, atualiza outros cadastros com o mesmo CNPJ/CPF.
+-- Só dentro da própria empresa: a propagação não pode escrever no cadastro
+-- de outra empresa que por acaso tenha o mesmo CNPJ.
 UPDATE suppliers
 SET state_registration = $2, updated_at = NOW()
-WHERE document_number = $1 AND code <> $3;
+WHERE document_number = $1 AND code <> $3 AND enterprise_id = sqlc.arg(enterprise_id);
 
--- name: DeleteSupplier :exec
+-- name: DeleteSupplier :execrows
 -- Hard delete. Fails with FK violation when purchase orders reference the
 -- supplier (the application surfaces a friendly message); inactivate instead.
-DELETE FROM suppliers WHERE code = $1;
+DELETE FROM suppliers WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
--- name: UpdateSupplierSefaz :exec
+-- name: UpdateSupplierSefaz :execrows
 UPDATE suppliers
 SET last_sefaz_query = $2, billing_receipt_status = $3,
     last_sefaz_update = $4, sefaz_update_user = $5, updated_at = NOW()
-WHERE code = $1;
+WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- ─── Supplier Addresses ─────────────────────────────────────────────────────────
 
@@ -130,17 +143,23 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: UpdateSupplierAddress :one
-UPDATE supplier_addresses
+UPDATE supplier_addresses a
 SET address_type = $2, zip_code = $3, street = $4, number = $5, complement = $6,
     neighborhood = $7, city = $8, uf = $9, country = $10, is_default = $11
-WHERE id = $1
-RETURNING *;
+FROM suppliers s
+WHERE a.id = $1 AND s.id = a.supplier_id AND s.enterprise_id = sqlc.arg(enterprise_id)
+RETURNING a.*;
 
 -- name: ListSupplierAddresses :many
-SELECT * FROM supplier_addresses WHERE supplier_id = $1 ORDER BY id;
+SELECT c.* FROM supplier_addresses c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY c.id;
 
--- name: DeleteSupplierAddress :exec
-DELETE FROM supplier_addresses WHERE id = $1;
+-- name: DeleteSupplierAddress :execrows
+DELETE FROM supplier_addresses c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = sqlc.arg(enterprise_id);
 
 -- ─── Supplier Phones ──────────────────────────────────────────────────────────
 
@@ -150,10 +169,15 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: ListSupplierPhones :many
-SELECT * FROM supplier_phones WHERE supplier_id = $1 ORDER BY ranking, id;
+SELECT c.* FROM supplier_phones c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY c.ranking, c.id;
 
--- name: DeleteSupplierPhone :exec
-DELETE FROM supplier_phones WHERE id = $1;
+-- name: DeleteSupplierPhone :execrows
+DELETE FROM supplier_phones c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = sqlc.arg(enterprise_id);
 
 -- ─── Supplier Emails ──────────────────────────────────────────────────────────
 
@@ -163,10 +187,15 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: ListSupplierEmails :many
-SELECT * FROM supplier_emails WHERE supplier_id = $1 ORDER BY ranking, id;
+SELECT c.* FROM supplier_emails c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY c.ranking, c.id;
 
--- name: DeleteSupplierEmail :exec
-DELETE FROM supplier_emails WHERE id = $1;
+-- name: DeleteSupplierEmail :execrows
+DELETE FROM supplier_emails c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = sqlc.arg(enterprise_id);
 
 -- ─── Supplier Due Dates ─────────────────────────────────────────────────────────
 
@@ -180,10 +209,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: ListSupplierDueDates :many
-SELECT * FROM supplier_due_dates WHERE supplier_id = $1 ORDER BY ranking, id;
+SELECT c.* FROM supplier_due_dates c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY c.ranking, c.id;
 
--- name: DeleteSupplierDueDate :exec
-DELETE FROM supplier_due_dates WHERE id = $1;
+-- name: DeleteSupplierDueDate :execrows
+DELETE FROM supplier_due_dates c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = sqlc.arg(enterprise_id);
 
 -- ─── Supplier Contacts ──────────────────────────────────────────────────────────
 
@@ -196,10 +230,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: ListSupplierContacts :many
-SELECT * FROM supplier_contacts WHERE supplier_id = $1 ORDER BY ranking, id;
+SELECT c.* FROM supplier_contacts c
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE c.supplier_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY c.ranking, c.id;
 
--- name: DeleteSupplierContact :exec
-DELETE FROM supplier_contacts WHERE id = $1;
+-- name: DeleteSupplierContact :execrows
+DELETE FROM supplier_contacts c
+USING suppliers s
+WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: CreateSupplierContactPhone :one
 INSERT INTO supplier_contact_phones (contact_id, value, ranking)
@@ -207,7 +246,11 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: ListSupplierContactPhones :many
-SELECT * FROM supplier_contact_phones WHERE contact_id = $1 ORDER BY ranking, id;
+SELECT p.* FROM supplier_contact_phones p
+JOIN supplier_contacts c ON c.id = p.contact_id
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE p.contact_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY p.ranking, p.id;
 
 -- name: CreateSupplierContactEmail :one
 INSERT INTO supplier_contact_emails (contact_id, value, ranking)
@@ -215,7 +258,11 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: ListSupplierContactEmails :many
-SELECT * FROM supplier_contact_emails WHERE contact_id = $1 ORDER BY ranking, id;
+SELECT e.* FROM supplier_contact_emails e
+JOIN supplier_contacts c ON c.id = e.contact_id
+JOIN suppliers s ON s.id = c.supplier_id
+WHERE e.contact_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY e.ranking, e.id;
 
 -- ─── Supplier Enterprises ─────────────────────────────────────────────────────
 

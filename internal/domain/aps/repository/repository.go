@@ -18,6 +18,17 @@ type APSRepository interface {
 	// Data needed by the sequencing algorithm
 	GetOpenProductionOrders(ctx context.Context) ([]OrderRow, error)
 	GetOrderOperations(ctx context.Context, orderID int64) ([]OpRow, error)
+	// GetOrderOperationEdges devolve as precedências entre as operações da
+	// ordem. Lista vazia = roteiro linear (encadeia por sequência).
+	GetOrderOperationEdges(ctx context.Context, orderID int64) ([]OpEdge, error)
+	// ListSetupMatrix traz as transições de preparação do centro de trabalho.
+	// Lista vazia = sem matriz cadastrada; o setup fixo da operação prevalece.
+	ListSetupMatrix(ctx context.Context, workCenterID int64) ([]entity.SetupTransicao, error)
+	// GetOrderItem devolve o item e a família da ordem, para a matriz saber de
+	// onde para onde a máquina está trocando.
+	GetOrderItem(ctx context.Context, orderID int64) (itemCode int64, familia string, err error)
+	UpsertSetupTransicao(ctx context.Context, t entity.SetupTransicao, notas string) (int64, error)
+	DeleteSetupTransicao(ctx context.Context, id int64) error
 	GetWorkCenterCapacity(ctx context.Context, workCenterID int64) (float64, error)
 
 	// Data feeding the monthly schedule board (Gantt). [from, to) is a half-open
@@ -46,6 +57,19 @@ type OpRow struct {
 	WorkCenterID *int64
 	PlannedHours float64
 	SetupHours   float64
+	// RouteOperationID liga a operação da ordem à operação do roteiro. É por ele
+	// que o sequenciamento alcança a rede de precedências: sem isso o APS
+	// encadeava tudo em fila, serializando operações que o roteiro sabe que
+	// correm em paralelo.
+	RouteOperationID *int64
+}
+
+// OpEdge é uma aresta da rede de precedências, já traduzida para os ids das
+// operações da ordem (não os do roteiro).
+type OpEdge struct {
+	PredecessorID int64
+	SuccessorID   int64
+	OverlapPct    float64
 }
 
 type SequenceFilter struct {

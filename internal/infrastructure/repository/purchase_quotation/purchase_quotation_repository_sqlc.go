@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -34,7 +36,11 @@ func (r *PurchaseQuotationRepositorySQLC) Create(ctx context.Context, qt *entity
 }
 
 func (r *PurchaseQuotationRepositorySQLC) GetByCode(ctx context.Context, code int64) (*entity.PurchaseQuotation, error) {
-	row, err := r.q.GetPurchaseQuotationByCode(ctx, code)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPurchaseQuotationByCode(ctx, sqlc.GetPurchaseQuotationByCodeParams{Code: code, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("quotation %d not found: %w", code, err)
 	}
@@ -42,7 +48,11 @@ func (r *PurchaseQuotationRepositorySQLC) GetByCode(ctx context.Context, code in
 }
 
 func (r *PurchaseQuotationRepositorySQLC) List(ctx context.Context, onlyOpen bool) ([]*entity.PurchaseQuotation, error) {
-	rows, err := r.q.ListPurchaseQuotations(ctx, onlyOpen)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPurchaseQuotations(ctx, sqlc.ListPurchaseQuotationsParams{Column1: onlyOpen, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -54,12 +64,31 @@ func (r *PurchaseQuotationRepositorySQLC) List(ctx context.Context, onlyOpen boo
 }
 
 func (r *PurchaseQuotationRepositorySQLC) NextCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextPurchaseQuotationCode(ctx)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextPurchaseQuotationCode(ctx, empresa)
 	return int64(v), err
 }
 
 func (r *PurchaseQuotationRepositorySQLC) UpdateStatus(ctx context.Context, code int64, status string) error {
-	return r.q.UpdatePurchaseQuotationStatus(ctx, sqlc.UpdatePurchaseQuotationStatusParams{Code: code, Status: status})
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.UpdatePurchaseQuotationStatus(ctx, sqlc.UpdatePurchaseQuotationStatusParams{
+		Code: code, Status: status, EnterpriseCode: empresa,
+	})
+	if err != nil {
+		return err
+	}
+	// Zero linhas significa que o código não existe nesta empresa. Antes disso
+	// a chamada respondia sucesso sem ter alterado nada.
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("cotação %d não encontrada", code))
+	}
+	return nil
 }
 
 func (r *PurchaseQuotationRepositorySQLC) AddItem(ctx context.Context, item *entity.PurchaseQuotationItem) (*entity.PurchaseQuotationItem, error) {

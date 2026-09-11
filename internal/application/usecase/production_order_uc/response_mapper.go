@@ -3,6 +3,7 @@ package production_order_uc
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	"time"
 )
 
 func toProductionOrderResponse(o *entity.ProductionOrder) *response.ProductionOrderResponse {
@@ -94,6 +95,39 @@ func toProductionConsumptionResponses(list []*entity.ProductionConsumption) []*r
 	out := make([]*response.ProductionConsumptionResponse, 0, len(list))
 	for _, c := range list {
 		out = append(out, toProductionConsumptionResponse(c))
+	}
+	return out
+}
+
+// ToProductionOrderCostResponse traduz o fechamento de custo para o contrato da
+// API, com nomes estáveis em snake_case.
+func ToProductionOrderCostResponse(c *entity.ProductionOrderCost) *response.ProductionOrderCostResponse {
+	if c == nil {
+		return nil
+	}
+	out := &response.ProductionOrderCostResponse{
+		ProductionOrderID: c.ProductionOrderID,
+		ProducedQty:       c.ProducedQty,
+		MaterialCostReal:  c.MaterialCostReal,
+		LaborCostReal:     c.LaborCostReal,
+		OverheadCostReal:  c.OverheadCostReal,
+		TotalCostReal:     c.TotalCostReal,
+		UnitCostReal:      c.UnitCostReal,
+		MaterialCostStd:   c.MaterialCostStd,
+		LaborCostStd:      c.LaborCostStd,
+		OverheadCostStd:   c.OverheadCostStd,
+		TotalCostStd:      c.TotalCostStd,
+		MaterialVariance:  c.MaterialVariance,
+		LaborVariance:     c.LaborVariance,
+		OverheadVariance:  c.OverheadVariance,
+		TotalVariance:     c.TotalVariance,
+		Currency:          c.Currency,
+	}
+	if c.TotalCostStd != 0 {
+		out.VariancePct = c.TotalVariance / c.TotalCostStd * 100
+	}
+	if !c.SettledAt.IsZero() {
+		out.SettledAt = c.SettledAt.Format(time.RFC3339)
 	}
 	return out
 }

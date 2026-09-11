@@ -24,33 +24,33 @@ type StructureComponentResponse struct {
 	// QuantityFormula calcula a quantidade a partir das variáveis do
 	// configurador; NominalQuantity guarda a quantidade fixa cadastrada e
 	// FormulaApplied diz qual das duas valeu neste resultado.
-	QuantityFormula    *string    `json:"quantity_formula,omitempty"`
-	QuantityRounding   string     `json:"quantity_rounding,omitempty"`
-	QuantityScale      int16      `json:"quantity_scale,omitempty"`
-	NominalQuantity    float64    `json:"nominal_quantity"`
-	FormulaApplied     bool       `json:"formula_applied"`
-	FormulaVariables   []string   `json:"formula_variables,omitempty"`
-	Sequence           int        `json:"sequence"`
-	Notes              *string    `json:"notes,omitempty"`
-	StartDate          *time.Time `json:"start_date,omitempty"`
-	EndDate            *time.Time `json:"end_date,omitempty"`
-	IsCoproduct        bool       `json:"is_coproduct"`
-	IsFixedQty         bool       `json:"is_fixed_qty"`
-	SubstituteGroup    int16      `json:"substitute_group"`
-	SubstitutePriority int16      `json:"substitute_priority"`
-	Inherit            bool       `json:"inherit"`
-	WarehouseCode      *int64     `json:"warehouse_code,omitempty"`
-	LineWarehouseCode  *int64     `json:"line_warehouse_code,omitempty"`
-	SetupLoss          float64    `json:"setup_loss"`
-	CostLossType       string     `json:"cost_loss_type"`
-	CostLoss           float64    `json:"cost_loss"`
-	CostCenterCode     *int64     `json:"cost_center_code,omitempty"`
-	IsCriticalMPS      bool       `json:"is_critical_mps"`
-	GeneratesInspection bool      `json:"generates_inspection"`
-	IsActive           bool       `json:"is_active"`
-	CreatedBy          uuid.UUID  `json:"created_by"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	QuantityFormula     *string    `json:"quantity_formula,omitempty"`
+	QuantityRounding    string     `json:"quantity_rounding,omitempty"`
+	QuantityScale       int16      `json:"quantity_scale,omitempty"`
+	NominalQuantity     float64    `json:"nominal_quantity"`
+	FormulaApplied      bool       `json:"formula_applied"`
+	FormulaVariables    []string   `json:"formula_variables,omitempty"`
+	Sequence            int        `json:"sequence"`
+	Notes               *string    `json:"notes,omitempty"`
+	StartDate           *time.Time `json:"start_date,omitempty"`
+	EndDate             *time.Time `json:"end_date,omitempty"`
+	IsCoproduct         bool       `json:"is_coproduct"`
+	IsFixedQty          bool       `json:"is_fixed_qty"`
+	SubstituteGroup     int16      `json:"substitute_group"`
+	SubstitutePriority  int16      `json:"substitute_priority"`
+	Inherit             bool       `json:"inherit"`
+	WarehouseCode       *int64     `json:"warehouse_code,omitempty"`
+	LineWarehouseCode   *int64     `json:"line_warehouse_code,omitempty"`
+	SetupLoss           float64    `json:"setup_loss"`
+	CostLossType        string     `json:"cost_loss_type"`
+	CostLoss            float64    `json:"cost_loss"`
+	CostCenterCode      *int64     `json:"cost_center_code,omitempty"`
+	IsCriticalMPS       bool       `json:"is_critical_mps"`
+	GeneratesInspection bool       `json:"generates_inspection"`
+	IsActive            bool       `json:"is_active"`
+	CreatedBy           uuid.UUID  `json:"created_by"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 // StructureTreeNodeResponse representa o nó resolvido da estrutura
@@ -61,6 +61,10 @@ type StructureTreeNodeResponse struct {
 	Mask          *string `json:"mask,omitempty"`
 	EffectiveMask *string `json:"effective_mask,omitempty"` // era "Mask"
 	RequiresMask  bool    `json:"requires_mask,omitempty"`  // novo
+	// Configuração incompleta: o filho tem característica sem origem (nem no
+	// pai, nem por equivalência, nem por resposta padrão).
+	IncompleteConfiguration bool     `json:"incomplete_configuration,omitempty"`
+	MissingCharacteristics  []string `json:"missing_characteristics,omitempty"`
 	// Profundidade na árvore (1 = primeiro nível abaixo da raiz)
 	Level int `json:"level"`
 
@@ -76,4 +80,16 @@ type StructureTreeResponse struct {
 
 	TotalLevels int `json:"total_levels"`
 	TotalNodes  int `json:"total_nodes"`
+}
+
+// StructureConfigurationCheckResponse relata, por componente, se a configuração
+// fecha: quais características do filho não têm origem (nem no pai, nem por
+// regra de equivalência, nem por resposta padrão).
+type StructureConfigurationCheckResponse struct {
+	ChildCode              int64    `json:"child_code"`
+	ChildDescription       string   `json:"child_description"`
+	Configured             bool     `json:"configured"`
+	Inherits               bool     `json:"inherits"`
+	RequiresMask           bool     `json:"requires_mask"`
+	MissingCharacteristics []string `json:"missing_characteristics,omitempty"`
 }

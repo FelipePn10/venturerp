@@ -95,13 +95,34 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 		}
 	}
 
-	// Sink = node with no successors and the largest early finish.
+	// Nó não processado = preso em ciclo. Kahn só consome quem chega a grau de
+	// entrada zero; com A→B→A esses nós nunca entram na fila, sumiam do
+	// resultado e o lead time voltava 0 h sem aviso.
+	var emCiclo []int64
+	for _, op := range ops {
+		if _, ok := earlyFinish[op.ID]; !ok {
+			emCiclo = append(emCiclo, op.ID)
+		}
+	}
+	sort.Slice(emCiclo, func(i, j int) bool { return emCiclo[i] < emCiclo[j] })
+
+	// Sink = nó sem sucessores e com o maior término. Numa rede com ciclo pode
+	// não existir nenhum; nesse caso vale o maior término calculado, para o
+	// número devolvido não ser zero enquanto o usuário corrige a rede.
 	var sinkID int64
 	maxEF := 0.0
 	for id, ef := range earlyFinish {
 		if len(successors[id]) == 0 && ef >= maxEF {
 			maxEF = ef
 			sinkID = id
+		}
+	}
+	if sinkID == 0 {
+		for id, ef := range earlyFinish {
+			if ef >= maxEF {
+				maxEF = ef
+				sinkID = id
+			}
 		}
 	}
 
@@ -117,8 +138,9 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 	}
 
 	return LeadTimeResult{
-		TotalHours:   maxEF,
-		CriticalPath: path,
+		TotalHours:      maxEF,
+		CriticalPath:    path,
+		CycleOperations: emCiclo,
 	}
 }
 

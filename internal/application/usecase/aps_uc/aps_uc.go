@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	apsentity "github.com/FelipePn10/panossoerp/internal/domain/aps/entity"
 	"sort"
 	"strings"
 	"time"
@@ -18,6 +19,9 @@ import (
 type APSUseCase struct {
 	repo repository.APSRepository
 	cal  calendarrepo.IndustrialCalendarRepository
+	// matrizDeSetup guarda, por centro de trabalho, as transições já carregadas
+	// nesta execução. Sem o cache seria uma consulta por operação sequenciada.
+	matrizDeSetup map[int64][]apsentity.SetupTransicao
 }
 
 func New(repo repository.APSRepository) *APSUseCase {
@@ -69,6 +73,15 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 	}
 	wcNextAvailable := make(map[int64]time.Time)
 	machineNextAvailable := make(map[int64]time.Time)
+	// O que ficou por último em cada recurso, para o setup dependente da
+	// sequência saber de onde a máquina está trocando.
+	ultimoItemNoRecurso := make(map[int64]int64)
+	ultimaFamiliaNoRecurso := make(map[int64]string)
+
+	// Programação regressiva: parte da data de entrega de cada ordem e recua.
+	if strings.EqualFold(strings.TrimSpace(dto.Direction), "BACKWARD") {
+		return uc.sequenciaRegressivo(ctx, dto, orders, selection, selected, startFrom)
+	}
 
 	scheduledCount := 0
 	for _, order := range orders {
@@ -88,8 +101,30 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		// Clear previous sequences for this order.
 		_ = uc.repo.DeleteByOrder(ctx, order.ID)
 
+		// A rede de precedências do roteiro decide a ordem e o que pode correr
+		// em paralelo. Sem ela o sequenciamento encadeava tudo em fila e
+		// serializava operações independentes, alongando o prazo sem motivo.
+		edges, edgeErr := uc.repo.GetOrderOperationEdges(ctx, order.ID)
+		if edgeErr != nil {
+			return nil, fmt.Errorf("falha ao carregar as precedências da ordem %d: %w", order.ID, edgeErr)
+		}
+		ordenadas, ciclo := ordenaPorPrecedencia(ops, edges)
+		if len(ciclo) > 0 {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf(
+				"a ordem %d tem precedências em ciclo (operações %v); corrija o roteiro antes de sequenciar",
+				order.ID, ciclo))
+		}
+		itemDaOrdem, familiaDaOrdem, _ := uc.repo.GetOrderItem(ctx, order.ID)
+		predecessores := make(map[int64][]repository.OpEdge, len(edges))
+		for _, e := range edges {
+			predecessores[e.SuccessorID] = append(predecessores[e.SuccessorID], e)
+		}
+		// Término de cada operação já agendada, para o sucessor saber quando pode começar.
+		fimDaOperacao := make(map[int64]time.Time, len(ops))
+		duracaoDaOperacao := make(map[int64]time.Duration, len(ops))
+
 		opEndTime := startFrom
-		for _, op := range ops {
+		for _, op := range ordenadas {
 			if op.WorkCenterID == nil {
 				continue
 			}
@@ -99,12 +134,38 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 				avail = 8
 			}
 
-			// Start when both the order's previous op finished AND the selected resource is free.
+			// Início: o mais tarde entre os términos dos predecessores (descontada
+			// a sobreposição acordada) e a liberação do recurso. Sem predecessor,
+			// a operação pode começar já no início do horizonte — é isso que
+			// permite dois ramos correrem em paralelo.
+			prontoPorPrecedencia := startFrom
+			for _, e := range predecessores[op.ID] {
+				fim, ok := fimDaOperacao[e.PredecessorID]
+				if !ok {
+					continue
+				}
+				inicio := fim
+				if e.OverlapPct > 0 {
+					sobreposicao := time.Duration(float64(duracaoDaOperacao[e.PredecessorID]) * e.OverlapPct / 100.0)
+					inicio = fim.Add(-sobreposicao)
+				}
+				prontoPorPrecedencia = maxTime(prontoPorPrecedencia, inicio)
+			}
+			opEndTime = prontoPorPrecedencia
+
+			// Start when both the order's predecessors finished AND the selected resource is free.
 			earliest := maxTime(opEndTime, wcNextAvailable[wcID])
 			// Skip weekends.
 			earliest = skipToWorkday(earliest)
 
-			totalHours := op.SetupHours + op.PlannedHours
+			// Setup dependente da sequência: quanto custa trocar do que estava na
+			// máquina para este item. Sem matriz cadastrada vale o setup fixo da
+			// operação — a matriz refina, não substitui.
+			setupHoras := op.SetupHours
+			if minutos, achou := uc.setupDaTransicao(ctx, wcID, ultimoItemNoRecurso, ultimaFamiliaNoRecurso, itemDaOrdem, familiaDaOrdem); achou {
+				setupHoras = minutos / 60.0
+			}
+			totalHours := setupHoras + op.PlannedHours
 			end := time.Time{}
 			var selectedMachineID *int64
 			if selected {
@@ -162,7 +223,18 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 			if _, err := uc.repo.UpsertSequence(ctx, seq); err != nil {
 				return nil, fmt.Errorf("falha ao gravar a sequência da ordem %d operação %d: %w", order.ID, op.ID, err)
 			}
-			wcNextAvailable[wcID] = end
+			// Quando uma máquina específica foi escolhida, quem fica ocupado é ela
+			// — não o centro inteiro. Bloquear o centro fazia um centro com três
+			// máquinas se comportar como se tivesse uma.
+			if selectedMachineID == nil {
+				wcNextAvailable[wcID] = end
+			}
+			fimDaOperacao[op.ID] = end
+			duracaoDaOperacao[op.ID] = end.Sub(earliest)
+			// A máquina passa a estar "carregada" com este item: é o que a
+			// próxima operação no mesmo recurso compara para calcular o setup.
+			ultimoItemNoRecurso[wcID] = itemDaOrdem
+			ultimaFamiliaNoRecurso[wcID] = familiaDaOrdem
 			opEndTime = end
 			scheduledCount++
 		}
@@ -746,4 +818,381 @@ func minTime(a, b time.Time) time.Time {
 		return a
 	}
 	return b
+}
+
+// ordenaPorPrecedencia devolve as operações em ordem topológica — cada uma
+// depois de todos os seus predecessores — e a lista das que ficaram presas em
+// ciclo. Sem arestas, mantém a ordem por sequência, que é o roteiro linear.
+//
+// É o mesmo critério do cálculo de lead time do roteiro: se lá as operações
+// podem correr em paralelo, aqui elas precisam poder também, senão o prazo
+// prometido e o prazo programado divergem.
+func ordenaPorPrecedencia(ops []repository.OpRow, edges []repository.OpEdge) ([]repository.OpRow, []int64) {
+	if len(edges) == 0 {
+		ordenadas := make([]repository.OpRow, len(ops))
+		copy(ordenadas, ops)
+		sort.SliceStable(ordenadas, func(i, j int) bool { return ordenadas[i].Sequence < ordenadas[j].Sequence })
+		return ordenadas, nil
+	}
+
+	porID := make(map[int64]repository.OpRow, len(ops))
+	for _, op := range ops {
+		porID[op.ID] = op
+	}
+
+	grauDeEntrada := make(map[int64]int, len(ops))
+	sucessores := make(map[int64][]int64, len(ops))
+	for _, e := range edges {
+		if _, ok := porID[e.PredecessorID]; !ok {
+			continue
+		}
+		if _, ok := porID[e.SuccessorID]; !ok {
+			continue
+		}
+		sucessores[e.PredecessorID] = append(sucessores[e.PredecessorID], e.SuccessorID)
+		grauDeEntrada[e.SuccessorID]++
+	}
+
+	// Entre operações liberadas ao mesmo tempo, a de menor sequência vai antes:
+	// mantém o resultado estável e previsível para quem lê o Gantt.
+	prontas := make([]int64, 0, len(ops))
+	for _, op := range ops {
+		if grauDeEntrada[op.ID] == 0 {
+			prontas = append(prontas, op.ID)
+		}
+	}
+	ordenaPorSequencia := func(ids []int64) {
+		sort.SliceStable(ids, func(i, j int) bool { return porID[ids[i]].Sequence < porID[ids[j]].Sequence })
+	}
+	ordenaPorSequencia(prontas)
+
+	ordenadas := make([]repository.OpRow, 0, len(ops))
+	for len(prontas) > 0 {
+		atual := prontas[0]
+		prontas = prontas[1:]
+		ordenadas = append(ordenadas, porID[atual])
+		liberadas := make([]int64, 0, len(sucessores[atual]))
+		for _, suc := range sucessores[atual] {
+			grauDeEntrada[suc]--
+			if grauDeEntrada[suc] == 0 {
+				liberadas = append(liberadas, suc)
+			}
+		}
+		ordenaPorSequencia(liberadas)
+		prontas = append(prontas, liberadas...)
+		ordenaPorSequencia(prontas)
+	}
+
+	if len(ordenadas) == len(ops) {
+		return ordenadas, nil
+	}
+
+	// Sobrou operação: está presa em ciclo.
+	agendadas := make(map[int64]bool, len(ordenadas))
+	for _, op := range ordenadas {
+		agendadas[op.ID] = true
+	}
+	ciclo := make([]int64, 0)
+	for _, op := range ops {
+		if !agendadas[op.ID] {
+			ciclo = append(ciclo, op.ID)
+		}
+	}
+	sort.Slice(ciclo, func(i, j int) bool { return ciclo[i] < ciclo[j] })
+	return ordenadas, ciclo
+}
+
+// retiraDiaNaoUtil recua para a sexta quando cai em sábado ou domingo. É o
+// espelho de skipToWorkday para quem caminha no tempo para trás.
+func retiraDiaNaoUtil(t time.Time) time.Time {
+	for t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
+		t = t.Add(-24 * time.Hour)
+	}
+	return t
+}
+
+// recuaPorHorasUteis devolve o instante em que a operação precisa começar para
+// terminar em `fim`, consumindo `horas` de trabalho a `capacidadePorDia`.
+//
+// É o espelho de advanceByWorkHours. Sem ele o sequenciamento só responde
+// "começando hoje, termino quando"; com ele responde "para entregar no dia X,
+// preciso começar no dia Y" — que é a pergunta que o PCP realmente faz.
+func recuaPorHorasUteis(fim time.Time, horas, capacidadePorDia float64) time.Time {
+	if capacidadePorDia <= 0 {
+		capacidadePorDia = 8
+	}
+	t := fim
+	restante := horas
+	for restante > 0 {
+		t = retiraDiaNaoUtil(t)
+		if restante <= capacidadePorDia {
+			fracao := restante / capacidadePorDia
+			t = t.Add(-time.Duration(fracao * float64(24*time.Hour)))
+			restante = 0
+		} else {
+			restante -= capacidadePorDia
+			t = t.Add(-24 * time.Hour)
+		}
+	}
+	return retiraDiaNaoUtil(t)
+}
+
+// sequenciaRegressivo programa de trás para frente: cada operação termina o mais
+// tarde possível sem atrasar as sucessoras, e a última termina na data de
+// entrega da ordem.
+//
+// É o que responde "para entregar dia X, quando preciso começar" — e, quando o
+// início cai no passado, diz que a ordem não cabe no prazo. A programação só
+// para frente nunca chega a essa conclusão: ela sempre devolve uma data, mesmo
+// que muito depois do combinado.
+//
+// Ordens marcadas como inviáveis são reprogramadas para frente a partir de
+// agora, para o Gantt continuar mostrando a melhor data possível — é a
+// combinação "para trás, depois para frente" que SAP e FoccoERP usam.
+func (uc *APSUseCase) sequenciaRegressivo(
+	ctx context.Context,
+	dto request.SequenceOrdersDTO,
+	orders []repository.OrderRow,
+	selection repository.SelectionRepository,
+	selected bool,
+	startFrom time.Time,
+) (*response.APSSummaryResponse, error) {
+	filter := repository.SequenceFilter{OrderIDs: dto.OrderIDs, MachineIDs: dto.MachineIDs, WorkCenterIDs: dto.WorkCenterIDs, OperationIDs: dto.OperationIDs}
+
+	// Entrega mais próxima primeiro: quem tem menos folga ocupa o recurso antes.
+	sort.SliceStable(orders, func(i, j int) bool {
+		if !orders[i].PlannedDate.Equal(orders[j].PlannedDate) {
+			return orders[i].PlannedDate.Before(orders[j].PlannedDate)
+		}
+		return orders[i].Priority < orders[j].Priority
+	})
+
+	// Caminhando para trás, guardamos o instante mais cedo já ocupado em cada
+	// recurso: a próxima operação precisa terminar antes disso.
+	wcLivreAte := make(map[int64]time.Time)
+	agendadas := 0
+	atrasadas := make([]int64, 0)
+	paraFrente := make([]repository.OrderRow, 0)
+
+	for _, order := range orders {
+		var ops []repository.OpRow
+		var err error
+		if selected {
+			ops, err = selection.GetSelectedOrderOperations(ctx, order.ID, filter)
+		} else {
+			ops, err = uc.repo.GetOrderOperations(ctx, order.ID)
+		}
+		if err != nil || len(ops) == 0 {
+			continue
+		}
+
+		edges, edgeErr := uc.repo.GetOrderOperationEdges(ctx, order.ID)
+		if edgeErr != nil {
+			return nil, fmt.Errorf("falha ao carregar as precedências da ordem %d: %w", order.ID, edgeErr)
+		}
+		ordenadas, ciclo := ordenaPorPrecedencia(ops, edges)
+		if len(ciclo) > 0 {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf(
+				"a ordem %d tem precedências em ciclo (operações %v); corrija o roteiro antes de sequenciar",
+				order.ID, ciclo))
+		}
+
+		sucessores := make(map[int64][]repository.OpEdge, len(edges))
+		for _, e := range edges {
+			sucessores[e.PredecessorID] = append(sucessores[e.PredecessorID], e)
+		}
+
+		_ = uc.repo.DeleteByOrder(ctx, order.ID)
+
+		inicioDaOperacao := make(map[int64]time.Time, len(ops))
+		duracao := make(map[int64]time.Duration, len(ops))
+		sequencias := make([]*entity.ProductionSequence, 0, len(ops))
+		inicioMaisCedo := time.Time{}
+
+		// Do fim para o começo: as sucessoras já têm início definido.
+		for i := len(ordenadas) - 1; i >= 0; i-- {
+			op := ordenadas[i]
+			if op.WorkCenterID == nil {
+				continue
+			}
+			wcID := *op.WorkCenterID
+			capacidade, _ := uc.repo.GetWorkCenterCapacity(ctx, wcID)
+			if capacidade <= 0 {
+				capacidade = 8
+			}
+
+			// Termina, no máximo, na entrega — e antes do início das sucessoras
+			// (descontada a sobreposição acordada).
+			fim := order.PlannedDate
+			for _, e := range sucessores[op.ID] {
+				inicioSuc, ok := inicioDaOperacao[e.SuccessorID]
+				if !ok {
+					continue
+				}
+				limite := inicioSuc
+				if e.OverlapPct > 0 {
+					limite = inicioSuc.Add(time.Duration(float64(duracao[e.SuccessorID]) * e.OverlapPct / 100.0))
+				}
+				fim = minTime(fim, limite)
+			}
+			if livre, ok := wcLivreAte[wcID]; ok {
+				fim = minTime(fim, livre)
+			}
+			fim = retiraDiaNaoUtil(fim)
+
+			inicio := recuaPorHorasUteis(fim, op.SetupHours+op.PlannedHours, capacidade)
+			inicioDaOperacao[op.ID] = inicio
+			duracao[op.ID] = fim.Sub(inicio)
+			wcLivreAte[wcID] = inicio
+			if inicioMaisCedo.IsZero() || inicio.Before(inicioMaisCedo) {
+				inicioMaisCedo = inicio
+			}
+
+			sequencias = append(sequencias, &entity.ProductionSequence{
+				ProductionOrderID: order.ID,
+				OperationID:       &op.ID,
+				WorkCenterID:      wcID,
+				SequencePosition:  op.Sequence,
+				ScheduledStart:    inicio,
+				ScheduledEnd:      fim,
+				Status:            entity.StatusScheduled,
+			})
+		}
+
+		// Início no passado = não cabe no prazo. Reprograma para frente para o
+		// Gantt mostrar a data possível, e reporta a ordem.
+		if !inicioMaisCedo.IsZero() && inicioMaisCedo.Before(startFrom) {
+			atrasadas = append(atrasadas, order.ID)
+			paraFrente = append(paraFrente, order)
+			continue
+		}
+
+		for _, seq := range sequencias {
+			if _, err := uc.repo.UpsertSequence(ctx, seq); err != nil {
+				return nil, fmt.Errorf("falha ao gravar a sequência da ordem %d: %w", order.ID, err)
+			}
+			agendadas++
+		}
+	}
+
+	// Segunda passada: as inviáveis vão para frente, a partir de agora.
+	if len(paraFrente) > 0 {
+		frente := dto
+		frente.Direction = "FORWARD"
+		frente.OrderIDs = make([]int64, 0, len(paraFrente))
+		for _, o := range paraFrente {
+			frente.OrderIDs = append(frente.OrderIDs, o.ID)
+		}
+		resumo, err := uc.SequenceOrders(ctx, frente)
+		if err != nil {
+			return nil, err
+		}
+		agendadas += resumo.ScheduledOperations
+	}
+
+	sort.Slice(atrasadas, func(i, j int) bool { return atrasadas[i] < atrasadas[j] })
+	return &response.APSSummaryResponse{
+		ScheduledOperations: agendadas,
+		OrdersProcessed:     len(orders),
+		LateOrders:          atrasadas,
+	}, nil
+}
+
+// setupDaTransicao consulta a matriz de preparação do centro de trabalho e
+// devolve o tempo (em minutos) da troca do item que estava na máquina para o
+// que vai entrar.
+//
+// A matriz é cacheada por centro dentro da execução: numa fábrica com centenas
+// de ordens, consultar a cada operação seria uma consulta por linha do Gantt.
+func (uc *APSUseCase) setupDaTransicao(
+	ctx context.Context,
+	workCenterID int64,
+	ultimoItem map[int64]int64,
+	ultimaFamilia map[int64]string,
+	itemDestino int64,
+	familiaDestino string,
+) (float64, bool) {
+	if itemDestino == 0 {
+		return 0, false
+	}
+	if uc.matrizDeSetup == nil {
+		uc.matrizDeSetup = make(map[int64][]apsentity.SetupTransicao)
+	}
+	regras, carregado := uc.matrizDeSetup[workCenterID]
+	if !carregado {
+		var err error
+		regras, err = uc.repo.ListSetupMatrix(ctx, workCenterID)
+		if err != nil {
+			regras = nil
+		}
+		uc.matrizDeSetup[workCenterID] = regras
+	}
+	if len(regras) == 0 {
+		return 0, false
+	}
+
+	contexto := apsentity.ContextoDeSetup{ParaItem: itemDestino, ParaFam: familiaDestino}
+	if anterior, ok := ultimoItem[workCenterID]; ok && anterior != 0 {
+		contexto.DeItem = &anterior
+		contexto.DeFamilia = ultimaFamilia[workCenterID]
+	}
+	return apsentity.SetupDaTransicao(regras, contexto)
+}
+
+// ListSetupMatrix devolve as transições de preparação de um centro de trabalho.
+func (uc *APSUseCase) ListSetupMatrix(ctx context.Context, workCenterID int64) ([]response.SetupTransitionResponse, error) {
+	if workCenterID <= 0 {
+		return nil, errorsuc.NewValidationError("informe o centro de trabalho")
+	}
+	regras, err := uc.repo.ListSetupMatrix(ctx, workCenterID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]response.SetupTransitionResponse, 0, len(regras))
+	for _, r := range regras {
+		out = append(out, response.SetupTransitionResponse{
+			ID: r.ID, WorkCenterID: r.WorkCenterID,
+			FromItemCode: r.FromItemCode, ToItemCode: r.ToItemCode,
+			FromFamily: r.FromFamily, ToFamily: r.ToFamily,
+			SetupMinutes: r.SetupMinutes, IsActive: r.IsActive,
+		})
+	}
+	return out, nil
+}
+
+// UpsertSetupTransition grava uma transição da matriz de preparação.
+func (uc *APSUseCase) UpsertSetupTransition(ctx context.Context, dto request.SetupTransitionDTO) (int64, error) {
+	if dto.WorkCenterID <= 0 {
+		return 0, errorsuc.NewValidationError("informe o centro de trabalho da transição")
+	}
+	if dto.SetupMinutes < 0 {
+		return 0, errorsuc.NewValidationError("o tempo de preparação não pode ser negativo")
+	}
+	temItem := dto.FromItemCode != nil || dto.ToItemCode != nil
+	temFamilia := (dto.FromFamily != nil && strings.TrimSpace(*dto.FromFamily) != "") ||
+		(dto.ToFamily != nil && strings.TrimSpace(*dto.ToFamily) != "")
+	if !temItem && !temFamilia {
+		return 0, errorsuc.NewValidationError(
+			"informe ao menos o item ou a família de origem ou destino: uma transição sem critério valeria para tudo")
+	}
+
+	ativo := dto.IsActive == nil || *dto.IsActive
+	notas := ""
+	if dto.Notes != nil {
+		notas = strings.TrimSpace(*dto.Notes)
+	}
+	return uc.repo.UpsertSetupTransicao(ctx, apsentity.SetupTransicao{
+		WorkCenterID: dto.WorkCenterID,
+		FromItemCode: dto.FromItemCode, ToItemCode: dto.ToItemCode,
+		FromFamily: dto.FromFamily, ToFamily: dto.ToFamily,
+		SetupMinutes: dto.SetupMinutes, IsActive: ativo,
+	}, notas)
+}
+
+// DeleteSetupTransition remove uma transição da matriz.
+func (uc *APSUseCase) DeleteSetupTransition(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return errorsuc.NewValidationError("informe a transição a excluir")
+	}
+	return uc.repo.DeleteSetupTransicao(ctx, id)
 }

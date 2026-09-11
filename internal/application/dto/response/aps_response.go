@@ -5,6 +5,10 @@ import "time"
 type APSSummaryResponse struct {
 	ScheduledOperations int `json:"scheduled_operations"`
 	OrdersProcessed     int `json:"orders_processed"`
+	// LateOrders lista as ordens que, programadas de trás para frente a partir
+	// da data de entrega, precisariam começar no passado. É a resposta que o PCP
+	// procura: estas não têm como ser entregues no prazo com a capacidade atual.
+	LateOrders []int64 `json:"late_orders,omitempty"`
 }
 
 type SequencingExportRowResponse struct {
@@ -236,4 +240,16 @@ type GanttSummaryResponse struct {
 	FallbackBars   int `json:"fallback_bars"`
 	LateBars       int `json:"late_bars"`
 	OverloadedDays int `json:"overloaded_days"`
+}
+
+// SetupTransitionResponse é uma transição da matriz de preparação.
+type SetupTransitionResponse struct {
+	ID           int64   `json:"id"`
+	WorkCenterID int64   `json:"work_center_id"`
+	FromItemCode *int64  `json:"from_item_code,omitempty"`
+	ToItemCode   *int64  `json:"to_item_code,omitempty"`
+	FromFamily   *string `json:"from_family,omitempty"`
+	ToFamily     *string `json:"to_family,omitempty"`
+	SetupMinutes float64 `json:"setup_minutes"`
+	IsActive     bool    `json:"is_active"`
 }

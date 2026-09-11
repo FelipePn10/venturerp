@@ -89,6 +89,7 @@ type EmployeeHandler struct {
 	*security.BaseHandler
 	createUC     *employee.CreateEmployeeUseCase
 	listUC       *employee.ListEmployeesUseCase
+	listByRoleUC *employee.ListEmployeesByRoleUseCase
 	getUC        *employee.GetEmployeeUseCase
 	updateUC     *employee.UpdateEmployeeUseCase
 	deactivateUC *employee.DeactivateEmployeeUseCase

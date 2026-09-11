@@ -6,6 +6,11 @@ type CRPSummaryResponse struct {
 	PlanCode      int64 `json:"plan_code"`
 	TotalEntries  int   `json:"total_entries"`
 	OverloadCount int   `json:"overload_count"`
+	// WorkCentersNoCapacity lista os centros de trabalho sem capacidade
+	// cadastrada. O cálculo assume 8 h para não travar, mas o número de
+	// sobrecarga desses centros não significa nada até alguém cadastrar a
+	// capacidade real — e o usuário precisa saber disso.
+	WorkCentersNoCapacity []int64 `json:"work_centers_without_capacity,omitempty"`
 }
 
 // CRPPlanResponse é uma linha do catálogo de planos do modal de CRP (VPRO0200):

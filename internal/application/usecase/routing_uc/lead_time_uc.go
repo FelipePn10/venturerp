@@ -3,6 +3,7 @@ package routing_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
@@ -45,9 +46,10 @@ func (uc *LeadTimeUseCase) Execute(ctx context.Context, routeID int64, qty float
 	result := entity.CriticalPath(ops, edges, qty)
 	result.RouteID = routeID
 	return &response.RouteLeadTimeResponse{
-		RouteID:      result.RouteID,
-		TotalHours:   result.TotalHours,
-		CriticalPath: result.CriticalPath,
+		RouteID:         result.RouteID,
+		TotalHours:      result.TotalHours,
+		CriticalPath:    result.CriticalPath,
+		CycleOperations: result.CycleOperations,
 	}, nil
 }
 
@@ -61,6 +63,13 @@ func (uc *LeadTimeUseCase) GetRouteLeadTimeHours(ctx context.Context, itemCode i
 	result, err := uc.Execute(ctx, route.ID, qty)
 	if err != nil {
 		return 0, err
+	}
+	// O MRP não pode planejar com uma rede em ciclo: o lead time calculado não
+	// representa o roteiro. Recusar é melhor que programar com número errado.
+	if len(result.CycleOperations) > 0 {
+		return 0, errorsuc.NewValidationError(fmt.Sprintf(
+			"o roteiro do item %d tem precedências em ciclo (operações %v); corrija a rede antes de planejar",
+			itemCode, result.CycleOperations))
 	}
 	return result.TotalHours, nil
 }

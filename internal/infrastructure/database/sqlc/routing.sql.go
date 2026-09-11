@@ -446,12 +446,18 @@ const getNetworkEdges = `-- name: GetNetworkEdges :many
 SELECT ron.id, ron.predecessor_id, ron.successor_id, ron.overlap_pct, ron.created_at
 FROM route_operation_network ron
 JOIN route_operations ro ON ro.id = ron.predecessor_id
-WHERE ro.route_id = $1
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+WHERE ro.route_id = $1 AND mr.enterprise_id = $2
 ORDER BY ron.predecessor_id, ron.successor_id
 `
 
-func (q *Queries) GetNetworkEdges(ctx context.Context, routeID int64) ([]RouteOperationNetwork, error) {
-	rows, err := q.db.Query(ctx, getNetworkEdges, routeID)
+type GetNetworkEdgesParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetNetworkEdges(ctx context.Context, arg GetNetworkEdgesParams) ([]RouteOperationNetwork, error) {
+	rows, err := q.db.Query(ctx, getNetworkEdges, arg.RouteID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -635,11 +641,18 @@ SELECT
     mt.name AS work_center_name,
     COALESCE(mt.requires_operator, TRUE) AS requires_operator
 FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
 JOIN operations op ON op.id = ro.operation_id
 LEFT JOIN machine_types mt ON mt.id = COALESCE(ro.work_center_id, op.default_work_center_id)
 WHERE ro.route_id = $1 AND ro.is_active = TRUE
+  AND mr.enterprise_id = $2
 ORDER BY ro.sequence
 `
+
+type GetRouteOperationsParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
 
 type GetRouteOperationsRow struct {
 	ID                    int64
@@ -684,8 +697,8 @@ type GetRouteOperationsRow struct {
 	RequiresOperator      bool
 }
 
-func (q *Queries) GetRouteOperations(ctx context.Context, routeID int64) ([]GetRouteOperationsRow, error) {
-	rows, err := q.db.Query(ctx, getRouteOperations, routeID)
+func (q *Queries) GetRouteOperations(ctx context.Context, arg GetRouteOperationsParams) ([]GetRouteOperationsRow, error) {
+	rows, err := q.db.Query(ctx, getRouteOperations, arg.RouteID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}

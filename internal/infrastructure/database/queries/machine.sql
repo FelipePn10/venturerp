@@ -37,7 +37,9 @@ FROM machine_types
 WHERE is_active = TRUE AND enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY code;
 
--- name: DeleteMachineType :exec
+-- name: DeleteMachineType :execrows
+-- :execrows para o caso de uso saber se algo foi realmente inativado: excluir
+-- um código inexistente devolvia 200 "sucesso".
 UPDATE machine_types
 SET is_active = FALSE, updated_at = NOW()
 WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
@@ -130,7 +132,7 @@ WHERE machine_type_code = $1
   AND is_active = TRUE
 ORDER BY code;
 
--- name: DeleteMachine :exec
+-- name: DeleteMachine :execrows
 UPDATE machines
 SET is_active = FALSE, updated_at = NOW()
 WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);

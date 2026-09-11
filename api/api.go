@@ -5,6 +5,8 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
+	marginRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/margin"
 	"net/http"
 	"os"
 	"os/signal"
@@ -342,7 +344,8 @@ func (app *application) mount() chi.Router {
 	getEmployeeUC := &employeeUC.GetEmployeeUseCase{Repo: employeeRepo, Auth: authService}
 	updateEmployeeUC := &employeeUC.UpdateEmployeeUseCase{Repo: employeeRepo, Auth: authService}
 	deactivateEmployeeUC := &employeeUC.DeactivateEmployeeUseCase{Repo: employeeRepo, Auth: authService}
-	employeeHandler := handler.NewEmployeeHandler(createEmployeeUc, listEmployeesUC, getEmployeeUC, updateEmployeeUC, deactivateEmployeeUC)
+	listEmployeesByRoleUC := &employeeUC.ListEmployeesByRoleUseCase{Repo: employeeRepo, Auth: authService}
+	employeeHandler := handler.NewEmployeeHandler(createEmployeeUc, listEmployeesUC, listEmployeesByRoleUC, getEmployeeUC, updateEmployeeUC, deactivateEmployeeUC)
 
 	// planning params
 	planningParamsRepo := planningParams.NewPlanningParamRepositorySQLC(queries)
@@ -481,6 +484,9 @@ func (app *application) mount() chi.Router {
 	machineGetByCodeUC := &machine_uc.GetMachineUseCase{Repo: machineRepo, Auth: authService}
 	machineUpdateUC := &machine_uc.UpdateMachineUseCase{Repo: machineRepo, Auth: authService}
 	machineTypeUpdateUC := &machine_uc.UpdateMachineTypeUseCase{Repo: machineRepo, Auth: authService}
+	machineDeleteUC := &machine_uc.DeleteMachineUseCase{Repo: machineRepo, Auth: authService}
+	machineTypeDeleteUC := &machine_uc.DeleteMachineTypeUseCase{Repo: machineRepo, Auth: authService}
+	machineListByTypeUC := &machine_uc.ListMachinesByTypeUseCase{Repo: machineRepo, Auth: authService}
 	//type
 	machineTypeCreateUC := &machine_uc.CreateMachineTypeUseCase{Repo: machineRepo, Auth: authService}
 	machineListTypesUC := &machine_uc.ListMachineTypesUseCase{Repo: machineRepo, Auth: authService}
@@ -498,16 +504,21 @@ func (app *application) mount() chi.Router {
 		machineListUC,
 		machineGetByCodeUC,
 		machineUpdateUC,
+		machineDeleteUC,
+		machineListByTypeUC,
 		machineTypeCreateUC,
 		machineListTypesUC,
 		machineTypeGetByCodeUC,
 		machineTypeUpdateUC,
+		machineTypeDeleteUC,
 		machineItemTimeUC,
 		machineListItemTimeUC,
 		//machineGetItemTimeUC,
 		machineCalcProductionUC,
 		scheduleUC,
 	)
+
+	marginHandler := handler.NewMarginHandler(margin_uc.New(marginRepo.New(app.db.Pool)))
 
 	// routing (manufacturing routes)
 	rRepo := routingRepo.New(queries)
@@ -622,6 +633,7 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ReleaseValidator = prodOrderRepo
 	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService, Items: itemRepo}
 	prodOrderCreateUC.Structure = itemRepoStructure
+	prodOrderCreateUC.MaskVars = itemRepoStructureQuery
 	prodOrderGetByCodeUC := &productionOrderUc.GetProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderListUC := &productionOrderUc.ListProductionOrdersUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderStartUC := &productionOrderUc.StartProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
@@ -1241,6 +1253,7 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{parentCode}/{childCode}", structureHandler.Delete)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{parentItemCode}/children", structureHandler.GetAllDirectChildren)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resolve/{itemCode}", queryStructureHandler.ResolveStructure)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{itemCode}/configuration-check", queryStructureHandler.CheckConfiguration)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consult", queryStructureHandler.ConsultStructure)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/where-used/{itemCode}", queryStructureHandler.WhereUsed)
 				// Conferências da tela de estrutura: simular a fórmula antes de
@@ -1298,11 +1311,14 @@ func (app *application) mount() chi.Router {
 			// Alterar o cadastro: o caso de uso existia sem rota, então máquina
 			// e tipo só podiam ser criados e excluídos, nunca corrigidos.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", machineHandler.UpdateMachine)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", machineHandler.DeleteMachine)
 			r.Route("/types", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateType)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListTypes)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", machineHandler.GetTypeByCode)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", machineHandler.UpdateType)
+				r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", machineHandler.DeleteType)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/machines", machineHandler.ListMachinesByType)
 			})
 			r.Route("/time", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateItemTime)
@@ -1439,6 +1455,7 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/employee", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", employeeHandler.CreateEmployee)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", employeeHandler.ListEmployees)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/by-role/{role}", employeeHandler.ListEmployeesByRole)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", employeeHandler.GetEmployee)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", employeeHandler.UpdateEmployee)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/deactivate", employeeHandler.DeactivateEmployee)
@@ -2233,12 +2250,29 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/stock-remnants", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", cuttingPlanHandler.ListRemnants)
 		})
+		// Margem de contribuição (FoccoERP FCST0108/0254/0320): quanto sobra de
+		// cada venda depois de impostos, custo, despesas e do descasamento de caixa.
+		r.Route("/api/margin", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters", marginHandler.GetParameters)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters/list", marginHandler.ListParameters)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/parameters", marginHandler.SaveParameters)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/generate", marginHandler.Generate)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", marginHandler.Report)
+		})
+
 		r.Route("/api/aps", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence", apsHandler.SequenceOrders)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence/events/export", apsHandler.ExportSequencingEvents)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sequence/resources", apsHandler.ListSequencingResources)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence/view", apsHandler.ViewSequencing)
 			r.With(httpmw.RequireRole("ADMIN")).Put("/sequence/settings", apsHandler.UpdateSequencingSettings)
+			// Matriz de tempo de preparação: quanto custa trocar de um item (ou
+			// família) para outro em cada centro. É o que permite ao
+			// sequenciamento agrupar itens parecidos em vez de tratar todo
+			// setup como se fosse igual.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/setup-matrix/{workCenterID}", apsHandler.ListSetupMatrix)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/setup-matrix", apsHandler.UpsertSetupTransition)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/setup-matrix/{id}", apsHandler.DeleteSetupTransition)
 			r.With(httpmw.RequireRole("ADMIN")).Post("/resource-groups", apsHandler.UpsertResourceGroup)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resource-groups", apsHandler.ListResourceGroups)
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/resource-groups/{id}", apsHandler.DeleteResourceGroup)

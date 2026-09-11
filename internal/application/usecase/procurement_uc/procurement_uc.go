@@ -3,7 +3,9 @@ package procurement_uc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -497,13 +499,18 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("tratamento %q inválido", dto.Treatment))
 	}
 	if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty <= 0 {
-		return nil, fmt.Errorf("as quantidades da análise devem ser maiores que zero")
+		return nil, errorsuc.NewValidationError("as quantidades da análise devem ser maiores que zero")
 	}
 	if dto.MoveStock && !uc.Auth.CanCreateStockMovement(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	order, err := uc.Repo.GetReceivingInspectionOrder(ctx, orderID)
 	if err != nil {
+		// pgx.ErrNoRows vazava como "no rows in result set" — em inglês e com
+		// status de validação, quando o caso é simplesmente não existir.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", orderID))
+		}
 		return nil, err
 	}
 	if dto.MoveStock {
@@ -511,7 +518,7 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 			return nil, errorsuc.NewValidationError("depósito de destino é obrigatório para liberar a quantidade aprovada")
 		}
 		if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty > order.Quantity+0.0001 {
-			return nil, fmt.Errorf("analysis quantity exceeds inspected order quantity")
+			return nil, errorsuc.NewValidationError("a quantidade analisada é maior que a quantidade da ordem inspecionada")
 		}
 	}
 	actor, _ := uc.Auth.UserID(ctx)

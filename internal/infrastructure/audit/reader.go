@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -56,6 +57,14 @@ func (r *Reader) List(ctx context.Context, f Filter) ([]Record, error) {
 		args = append(args, val)
 		conds = append(conds, fmt.Sprintf(cond, len(args)))
 	}
+
+	// O recorte por empresa é o primeiro e não é opcional: sem ele a trilha de
+	// uma empresa aparecia inteira para qualquer outra.
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	add("enterprise_id = $%d", enterpriseID)
 
 	if f.UserID != "" {
 		add("user_id = $%d", f.UserID)

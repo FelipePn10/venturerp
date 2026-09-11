@@ -26,6 +26,8 @@ func mapNode(n *service.Node) *response.StructureTreeNodeResponse {
 		quantity = n.Component.Quantity
 	}
 	return &response.StructureTreeNodeResponse{
+		IncompleteConfiguration: n.ConfiguracaoIncompleta,
+		MissingCharacteristics:  n.CaracteristicasFaltantes,
 		Component: response.StructureComponentResponse{
 			ID:                 n.Component.ID,
 			ParentCode:         n.Component.ParentCode,

@@ -15,18 +15,21 @@ import (
 
 // Event is a single audited action: who did what, when, and with what outcome.
 type Event struct {
-	OccurredAt time.Time
-	RequestID  string
-	UserID     string
-	UserRole   string
-	Method     string
-	Route      string
-	Path       string
-	Query      string
-	Status     int
-	IP         string
-	UserAgent  string
-	LatencyMS  int64
+	// EnterpriseID é a empresa do ator. Fica em zero para evento anterior à
+	// autenticação, que não pertence a empresa nenhuma e é gravado como NULL.
+	EnterpriseID int64
+	OccurredAt   time.Time
+	RequestID    string
+	UserID       string
+	UserRole     string
+	Method       string
+	Route        string
+	Path         string
+	Query        string
+	Status       int
+	IP           string
+	UserAgent    string
+	LatencyMS    int64
 }
 
 // Sink receives audit events. Implementations must be non-blocking and safe for
@@ -84,13 +87,13 @@ func (s *PgSink) insert(e Event) {
 
 	const q = `
 		INSERT INTO public.audit_log
-			(occurred_at, request_id, user_id, user_role, method, route, path, query, status, ip, user_agent, latency_ms)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+			(occurred_at, request_id, user_id, user_role, method, route, path, query, status, ip, user_agent, latency_ms, enterprise_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 
 	if _, err := s.pool.Exec(ctx, q,
 		e.OccurredAt, nullable(e.RequestID), nullable(e.UserID), nullable(e.UserRole),
 		e.Method, e.Route, e.Path, nullable(e.Query), e.Status, nullable(e.IP),
-		nullable(e.UserAgent), e.LatencyMS,
+		nullable(e.UserAgent), e.LatencyMS, nullableID(e.EnterpriseID),
 	); err != nil {
 		s.log.Error("audit insert failed", "error", err, "route", e.Route)
 	}
@@ -102,6 +105,14 @@ func (s *PgSink) Close() {
 		close(s.events)
 		s.wg.Wait()
 	})
+}
+
+// nullableID mapeia empresa ausente para NULL: evento sem sessão não tem dono.
+func nullableID(id int64) any {
+	if id <= 0 {
+		return nil
+	}
+	return id
 }
 
 // nullable maps an empty string to a SQL NULL so optional columns stay clean.

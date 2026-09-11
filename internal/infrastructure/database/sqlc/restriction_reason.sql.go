@@ -10,18 +10,19 @@ import (
 )
 
 const createRestrictionReason = `-- name: CreateRestrictionReason :one
-INSERT INTO restriction_reasons (description, situation)
-VALUES ($1, $2)
-RETURNING id, code, description, situation, created_at, updated_at
+INSERT INTO restriction_reasons (description, situation, enterprise_id)
+VALUES ($1, $2, $3)
+RETURNING id, code, description, situation, created_at, updated_at, enterprise_id
 `
 
 type CreateRestrictionReasonParams struct {
-	Description string
-	Situation   string
+	Description  string
+	Situation    string
+	EnterpriseID int64
 }
 
 func (q *Queries) CreateRestrictionReason(ctx context.Context, arg CreateRestrictionReasonParams) (RestrictionReason, error) {
-	row := q.db.QueryRow(ctx, createRestrictionReason, arg.Description, arg.Situation)
+	row := q.db.QueryRow(ctx, createRestrictionReason, arg.Description, arg.Situation, arg.EnterpriseID)
 	var i RestrictionReason
 	err := row.Scan(
 		&i.ID,
@@ -30,25 +31,41 @@ func (q *Queries) CreateRestrictionReason(ctx context.Context, arg CreateRestric
 		&i.Situation,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
-const deleteRestrictionReason = `-- name: DeleteRestrictionReason :exec
-DELETE FROM restriction_reasons WHERE code = $1
+const deleteRestrictionReason = `-- name: DeleteRestrictionReason :execrows
+DELETE FROM restriction_reasons
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteRestrictionReason(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteRestrictionReason, code)
-	return err
+type DeleteRestrictionReasonParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteRestrictionReason(ctx context.Context, arg DeleteRestrictionReasonParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRestrictionReason, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getRestrictionReasonByCode = `-- name: GetRestrictionReasonByCode :one
-SELECT id, code, description, situation, created_at, updated_at FROM restriction_reasons WHERE code = $1
+SELECT id, code, description, situation, created_at, updated_at, enterprise_id FROM restriction_reasons
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetRestrictionReasonByCode(ctx context.Context, code int64) (RestrictionReason, error) {
-	row := q.db.QueryRow(ctx, getRestrictionReasonByCode, code)
+type GetRestrictionReasonByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetRestrictionReasonByCode(ctx context.Context, arg GetRestrictionReasonByCodeParams) (RestrictionReason, error) {
+	row := q.db.QueryRow(ctx, getRestrictionReasonByCode, arg.Code, arg.EnterpriseID)
 	var i RestrictionReason
 	err := row.Scan(
 		&i.ID,
@@ -57,16 +74,19 @@ func (q *Queries) GetRestrictionReasonByCode(ctx context.Context, code int64) (R
 		&i.Situation,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listRestrictionReasons = `-- name: ListRestrictionReasons :many
-SELECT id, code, description, situation, created_at, updated_at FROM restriction_reasons ORDER BY code
+SELECT id, code, description, situation, created_at, updated_at, enterprise_id FROM restriction_reasons
+WHERE enterprise_id = $1
+ORDER BY code
 `
 
-func (q *Queries) ListRestrictionReasons(ctx context.Context) ([]RestrictionReason, error) {
-	rows, err := q.db.Query(ctx, listRestrictionReasons)
+func (q *Queries) ListRestrictionReasons(ctx context.Context, enterpriseID int64) ([]RestrictionReason, error) {
+	rows, err := q.db.Query(ctx, listRestrictionReasons, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +101,7 @@ func (q *Queries) ListRestrictionReasons(ctx context.Context) ([]RestrictionReas
 			&i.Situation,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -97,18 +118,24 @@ UPDATE restriction_reasons
 SET description = $2,
     situation   = $3,
     updated_at  = NOW()
-WHERE code = $1
-RETURNING id, code, description, situation, created_at, updated_at
+WHERE code = $1 AND enterprise_id = $4
+RETURNING id, code, description, situation, created_at, updated_at, enterprise_id
 `
 
 type UpdateRestrictionReasonParams struct {
-	Code        int64
-	Description string
-	Situation   string
+	Code         int64
+	Description  string
+	Situation    string
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateRestrictionReason(ctx context.Context, arg UpdateRestrictionReasonParams) (RestrictionReason, error) {
-	row := q.db.QueryRow(ctx, updateRestrictionReason, arg.Code, arg.Description, arg.Situation)
+	row := q.db.QueryRow(ctx, updateRestrictionReason,
+		arg.Code,
+		arg.Description,
+		arg.Situation,
+		arg.EnterpriseID,
+	)
 	var i RestrictionReason
 	err := row.Scan(
 		&i.ID,
@@ -117,6 +144,7 @@ func (q *Queries) UpdateRestrictionReason(ctx context.Context, arg UpdateRestric
 		&i.Situation,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
