@@ -664,11 +664,25 @@ func (r *Repository) SchedulePolicyCycleCounts(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// O intervalo por item continua tendo prioridade; quando não há um, vale a
+	// política da classe ABC. É o ponto da contagem cíclica: item A conta mais
+	// vezes por ano que item C. Antes, item sem intervalo digitado simplesmente
+	// nunca era contado.
 	_, err = tx.Exec(ctx, `WITH policy AS (
 		SELECT i.enterprise_id,i.code item_code,i.warehouse_code warehouse_id,
-		COALESCE(NULLIF(i.warehouse_cyclical_count_config->>'days','')::int,NULLIF(i.warehouse_cyclical_count_config->>'days_interval','')::int,NULLIF(i.warehouse_cyclical_count_config->>'DaysInterval','')::int,0) days,
+		COALESCE(
+			NULLIF(i.warehouse_cyclical_count_config->>'days','')::int,
+			NULLIF(i.warehouse_cyclical_count_config->>'days_interval','')::int,
+			NULLIF(i.warehouse_cyclical_count_config->>'DaysInterval','')::int,
+			abc.days_interval,
+			-- Sem linha na política (empresa criada depois da migração), vale o
+			-- padrão da classe. Cair para 0 significaria "nunca contar".
+			CASE i.planning_abc_class WHEN 'A' THEN 90 WHEN 'B' THEN 180 WHEN 'C' THEN 365 END,
+			0) days,
 		i.cyclical_count_policy_activated_at activated_at
 		FROM items i JOIN warehouse w ON w.id=i.warehouse_code
+		LEFT JOIN stock_abc_count_policy abc
+		       ON abc.enterprise_id=i.enterprise_id AND abc.abc_class=i.planning_abc_class
 	), due AS (
 		SELECT p.*,COALESCE(last.approved_at,p.activated_at)+make_interval(days=>p.days) scheduled_for
 		FROM policy p LEFT JOIN LATERAL (
@@ -815,7 +829,7 @@ func (r *Repository) Cleanup(ctx context.Context) error {
 	return err
 }
 
-const cycleColumns = `id,enterprise_id,warehouse_id,warehouse_address_id,(SELECT i.business_code FROM items i WHERE i.enterprise_id=stock_cycle_counts.enterprise_id AND i.code=stock_cycle_counts.item_code),item_code,mask,lot_code,scheduled_for,state,origin,policy_days,expected_quantity::text,counted_quantity::text,divergence_quantity::text,counted_by,approved_by,started_at,completed_at,approved_at,created_at,updated_at`
+const cycleColumns = `id,enterprise_id,warehouse_id,warehouse_address_id,address,(SELECT i.business_code FROM items i WHERE i.enterprise_id=stock_cycle_counts.enterprise_id AND i.code=stock_cycle_counts.item_code),item_code,mask,lot_code,scheduled_for,state,origin,policy_days,expected_quantity::text,counted_quantity::text,divergence_quantity::text,counted_by,approved_by,started_at,completed_at,approved_at,created_at,updated_at`
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -830,7 +844,7 @@ func scanCycle(row rowScanner) (notificationentity.CycleCount, error) {
 	var c notificationentity.CycleCount
 	var state, origin string
 	var expected, counted, divergence *string
-	err := row.Scan(&c.ID, &c.EnterpriseID, &c.WarehouseID, &c.WarehouseAddressID, &c.ItemCode, &c.LegacyItemCode, &c.Mask, &c.LotCode, &c.ScheduledFor, &state, &origin, &c.PolicyDays, &expected, &counted, &divergence, &c.CountedBy, &c.ApprovedBy, &c.StartedAt, &c.CompletedAt, &c.ApprovedAt, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.EnterpriseID, &c.WarehouseID, &c.WarehouseAddressID, &c.Address, &c.ItemCode, &c.LegacyItemCode, &c.Mask, &c.LotCode, &c.ScheduledFor, &state, &origin, &c.PolicyDays, &expected, &counted, &divergence, &c.CountedBy, &c.ApprovedBy, &c.StartedAt, &c.CompletedAt, &c.ApprovedAt, &c.CreatedAt, &c.UpdatedAt)
 	c.State = notificationentity.CycleCountState(state)
 	c.Origin = notificationentity.CycleCountOrigin(origin)
 	parse := func(v *string) *decimal.Decimal {
@@ -871,7 +885,7 @@ func (r *Repository) CreateCycleCount(ctx context.Context, c notificationentity.
 		return notificationentity.CycleCount{}, fmt.Errorf("%w: almoxarifado inválido", notificationentity.ErrValidation)
 	}
 	var createdID uuid.UUID
-	err = tx.QueryRow(ctx, `INSERT INTO stock_cycle_counts(enterprise_id,warehouse_id,warehouse_address_id,item_code,mask,lot_code,scheduled_for,state) VALUES($1,$2,$3,$4,$5,$6,$7,'PROGRAMADA') RETURNING id`, c.EnterpriseID, c.WarehouseID, c.WarehouseAddressID, itemID, c.Mask, c.LotCode, c.ScheduledFor).Scan(&createdID)
+	err = tx.QueryRow(ctx, `INSERT INTO stock_cycle_counts(enterprise_id,warehouse_id,warehouse_address_id,address,item_code,mask,lot_code,scheduled_for,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'PROGRAMADA') RETURNING id`, c.EnterpriseID, c.WarehouseID, c.WarehouseAddressID, strings.TrimSpace(c.Address), itemID, c.Mask, c.LotCode, c.ScheduledFor).Scan(&createdID)
 	if err != nil {
 		return notificationentity.CycleCount{}, err
 	}
@@ -937,10 +951,12 @@ func (r *Repository) TransitionCycleCount(ctx context.Context, tenant int64, id,
 	if current.ExpectedQuantity != nil {
 		expected = *current.ExpectedQuantity
 	} else {
-		query := `SELECT COALESCE(quantity,0)::text FROM stock_balances WHERE enterprise_id=$1 AND warehouse_id=$2 AND item_code=$3 AND mask=$4`
-		args := []any{tenant, current.WarehouseID, current.LegacyItemCode, current.Mask}
+		// O endereço entra no filtro: sem ele, contar UM endereço comparava com o
+		// saldo do almoxarifado inteiro e toda contagem acusava divergência.
+		query := `SELECT COALESCE(SUM(quantity),0)::text FROM stock_balances WHERE enterprise_id=$1 AND warehouse_id=$2 AND item_code=$3 AND mask=$4 AND ($5='' OR address=$5)`
+		args := []any{tenant, current.WarehouseID, current.LegacyItemCode, current.Mask, current.Address}
 		if current.LotCode != "" {
-			query = `SELECT COALESCE(quantity,0)::text FROM stock_lot_balances WHERE enterprise_id=$1 AND warehouse_id=$2 AND item_code=$3 AND mask=$4 AND lot=$5`
+			query = `SELECT COALESCE(SUM(quantity),0)::text FROM stock_lot_balances WHERE enterprise_id=$1 AND warehouse_id=$2 AND item_code=$3 AND mask=$4 AND ($5='' OR address=$5) AND lot=$6`
 			args = append(args, current.LotCode)
 		}
 		var raw string

@@ -42,12 +42,12 @@ func (uc *CreateAppropriationTableUseCase) Execute(
 		userID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 
 	created, err := uc.Repo.CreateAppropriation(ctx, table)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	return toAppropriationTableResponse(created), nil
 }

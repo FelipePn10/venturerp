@@ -2251,7 +2251,13 @@ func (uc *CustomerUseCase) CreateCustomer(ctx context.Context, dto request.Creat
 	c.SuframaExpiry = dto.SuframaExpiry
 	c.CreditLimit = dto.CreditLimit
 	c.Website = dto.Website
-	c.PaymentCondVisibility = entity.PaymentCondVisibility(dto.PaymentCondVisibility)
+	// Sem escolha, vale "todos": a coluna é enum e string vazia derrubava a
+	// gravação com o erro cru do Postgres.
+	if dto.PaymentCondVisibility == "" {
+		c.PaymentCondVisibility = entity.PaymentCondVisibility("TODOS")
+	} else {
+		c.PaymentCondVisibility = entity.PaymentCondVisibility(dto.PaymentCondVisibility)
+	}
 
 	// Resolve FK IDs from codes
 	if err := uc.resolveCustomerFKs(ctx, c, dto); err != nil {

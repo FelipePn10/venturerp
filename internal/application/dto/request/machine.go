@@ -28,12 +28,16 @@ func (d CreateMachineTypeDTO) AtivoOuPadrao() bool {
 }
 
 type UpdateMachineTypeDTO struct {
-	Code             int64                 `json:"code"`
-	Name             string                `json:"name"`
-	Description      *string               `json:"description,omitempty"`
-	Type             types.MachineTypeEnum `json:"type"`
-	RequiresOperator bool                  `json:"requires_operator"`
-	IsActive         *bool                 `json:"is_active,omitempty"`
+	Code        int64                 `json:"code"`
+	Name        string                `json:"name"`
+	Description *string               `json:"description,omitempty"`
+	Type        types.MachineTypeEnum `json:"type"`
+	// Ponteiro pelo mesmo motivo de IsActive: com `bool` puro, omitir o campo é
+	// indistinguível de mandar false, então quem gravasse um corpo parcial
+	// desligava a flag em silêncio. Nulo = mantém o valor atual; false explícito
+	// continua desligando.
+	RequiresOperator *bool `json:"requires_operator,omitempty"`
+	IsActive         *bool `json:"is_active,omitempty"`
 }
 
 type CreateMachineDTO struct {

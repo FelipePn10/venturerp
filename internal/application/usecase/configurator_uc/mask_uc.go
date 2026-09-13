@@ -22,7 +22,7 @@ import (
 // mask value object (# join + 8-char sha256).
 func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.CfgGenerateMaskDTO) (*response.CfgGeneratedMaskResponse, error) {
 	if dto.ItemCode <= 0 {
-		return nil, errorsuc.NewValidationError("item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("informe o item")
 	}
 	itemChars, err := uc.Q.ListCfgItemCharacteristics(ctx, dto.ItemCode)
 	if err != nil {

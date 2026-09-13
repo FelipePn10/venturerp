@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -47,6 +48,16 @@ type StockRepository interface {
 	GetLot(ctx context.Context, itemCode int64, lot string) (*entity.StockLot, error)
 	ListLotBalancesByItem(ctx context.Context, itemCode int64) ([]*entity.StockLotBalance, error)
 	GetLotGenealogy(ctx context.Context, itemCode int64, lot string) (*entity.LotGenealogy, error)
+
+	// Endereçamento e separação (migração 344)
+	SugerirSeparacaoFEFO(ctx context.Context, itemCode int64, mask string, warehouseID int64, necessario float64, regra string) (*entity.ResultadoFEFO, error)
+	ListarSaldoPorEndereco(ctx context.Context, warehouseID int64, itemCode int64) ([]*entity.StockLotBalance, error)
+	TransferirEntreEnderecos(ctx context.Context, m *entity.StockMovement, origem, destino string) (*entity.StockMovement, error)
+	ApurarCurvaABC(ctx context.Context, janelaMeses int, corteA, corteB float64) (*entity.ResumoABC, error)
+	SugerirEnderecoDeGuarda(ctx context.Context, itemCode int64, mask string, warehouseID int64, quantidade float64, zona string) ([]*entity.SugestaoGuarda, error)
+	CriarOndaDeSeparacao(ctx context.Context, codigo, warehouseID int64, regra string, necessidades []entity.NecessidadeOnda, ator uuid.UUID) (*entity.OndaDeSeparacao, error)
+	ConfirmarOndaDeSeparacao(ctx context.Context, codigo int64, ator uuid.UUID) (*entity.OndaDeSeparacao, error)
+	CancelarOndaDeSeparacao(ctx context.Context, codigo int64, ator uuid.UUID) (*entity.OndaDeSeparacao, error)
 
 	// Physical inventory
 	CreateInventory(ctx context.Context, inv *entity.PhysicalInventory) (*entity.PhysicalInventory, error)

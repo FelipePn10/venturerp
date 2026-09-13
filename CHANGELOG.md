@@ -6,6 +6,32 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.24] — 2026-09-13
+
+### Estoque e almoxarifado
+- **Endereçamento de estoque.** Saldo, saldo por lote e movimento passam a guardar o endereço; uma transferência interna é um movimento só, com origem e destino. Endereço vazio significa almoxarifado sem endereçamento, então nada muda para quem não usa.
+- **Separação FEFO** (`/api/stock/separation/suggest`): ordena por validade, desconta o que já está reservado, ignora lote vencido e endereço bloqueado — contando ambos à parte — e devolve a lista na ordem da rota do galpão.
+- **Onda de separação** (`/api/stock/waves`): agrupa necessidades numa caminhada só e reserva no endereço/lote dentro da mesma transação, com o saldo travado. Confirmar baixa o estoque; cancelar devolve o reservado.
+- **Sugestão de guarda** (`/api/stock/putaway/suggest`): endereço fixo do item, consolidação, endereço vazio da zona ou qualquer um com espaço, respeitando capacidade e bloqueio.
+- **Curva ABC apurada pelo valor consumido** (`/api/stock/abc/recalc`), gravada em `items.planning_abc_class`. A frequência da contagem cíclica passa a derivar da classe quando não há intervalo por item.
+- **Contagem cíclica por endereço**: a quantidade esperada passou a filtrar o endereço.
+- **Validade do lote** (`stock_lots.expires_at`), que ordena o FEFO.
+
+### Correções
+- **A tradução do código público do item não chegava ao handler em rotas montadas.** Middleware registrado em `r.Group` roda depois do roteamento, e as rotas atrás de `r.Route("/api/stock", …)` recebiam o código cru: erro com código alfanumérico e, pior, saldo e ATP zerados em silêncio com código numérico. A tradução do caminho passou a ser middleware de raiz, com teste que cobre cada rota nova.
+- **A fórmula de perdas da estrutura divergia entre módulos.** O MRP respeitava o parâmetro (padrão: divisão) e a criação da ordem, o encerramento, o apontamento e o custo fixavam a multiplicação. Conta unificada em `QuantidadeComPerda`.
+- **Movimento de estoque aceitava qualquer tipo**, gerando registro que não alterava o saldo. Agora é validado contra os tipos que a apuração reconhece.
+- **Saída de estoque era gravada com valor zero**; passa a ser valorizada pelo custo médio.
+- **Erros que viravam "erro interno do servidor"**: mensagens de regra sem tipo na previsão de venda, texto maior que a coluna (SQLSTATE 22001) e número fora de faixa (22003).
+- **Campo de data recusado** em cabeçalho de estrutura e classificação fiscal: passam a aceitar `AAAA-MM-DD`, que é o que o navegador envia.
+- **Cadastro de máquina não devolvia a unidade de capacidade** com o nome que a gravação espera, então reenviar o que foi lido era recusado.
+- **Marcações booleanas voltavam a desligadas** numa gravação parcial (tipo de máquina, característica do configurador).
+- Mensagens com nome interno de campo, sem acentuação ou em inglês foram corrigidas.
+
+### Segurança
+- **`employees` e `cost_centers` não filtravam empresa** — inclusive na alteração e na inativação por código. `cost_centers` não tinha sequer a coluna.
+- A apuração de custo-padrão usava como autor o valor enviado pelo cliente; passa a usar o usuário autenticado.
+
 ## [v1.1.23] — 2026-09-11
 
 ### Correções

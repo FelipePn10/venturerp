@@ -1701,24 +1701,7 @@ func explode(
 // Fórmula 2: Qty = QtdPai * QtdComponente / (1 - %Perda/100)
 // Fórmula 3: Qty = QtdPai * QtdComponente (ignora perda)
 func applyLossFormula(parentQty, childQtyPer, lossPercentage float64, formula int) float64 {
-	base := parentQty * childQtyPer
-	if lossPercentage <= 0 {
-		return base
-	}
-	switch formula {
-	case 1:
-		return base * (1 + lossPercentage/100)
-	case 2:
-		denominator := 1 - lossPercentage/100
-		if denominator > 0 {
-			return base / denominator
-		}
-		return base
-	case 3:
-		return base
-	default:
-		return base * (1 + lossPercentage/100)
-	}
+	return structentity.QuantidadeComPerda(parentQty*childQtyPer, lossPercentage, formula)
 }
 
 func collectAllItemCodes(bomMap map[int64][]*structentity.ItemStructure, roots []int64) []int64 {

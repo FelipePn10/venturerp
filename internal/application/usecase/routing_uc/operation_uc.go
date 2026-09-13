@@ -37,9 +37,11 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 	if dto.Name == "" {
 		return nil, errorsuc.NewValidationError("informe o nome")
 	}
-	if !validTimeUnit(dto.TimeUnit) {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit))
+	unidade, unidadeOK := normalizaUnidadeDeTempo(dto.TimeUnit)
+	if !unidadeOK {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", dto.TimeUnit))
 	}
+	dto.TimeUnit = unidade
 	origin := entity.OperationOrigin(dto.Origin)
 	if origin == "" {
 		origin = entity.OriginInternal
@@ -86,9 +88,11 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 }
 
 func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperationDTO) (*response.OperationResponse, error) {
-	if !validTimeUnit(dto.TimeUnit) {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", dto.TimeUnit))
+	unidade, unidadeOK := normalizaUnidadeDeTempo(dto.TimeUnit)
+	if !unidadeOK {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", dto.TimeUnit))
 	}
+	dto.TimeUnit = unidade
 	op, err := uc.repo.GetOperationByID(ctx, dto.ID)
 	if err != nil {
 		return nil, fmt.Errorf("operação não encontrada: %w", err)
@@ -174,12 +178,26 @@ func (uc *OperationUseCase) Deactivate(ctx context.Context, id int64) error {
 
 // validTimeUnit reports whether u is an accepted time-unit code (empty ⇒ default).
 func validTimeUnit(u string) bool {
-	switch u {
-	case "", entity.TimeUnitMinute, entity.TimeUnitHour, entity.TimeUnitDay:
-		return true
-	default:
-		return false
+	_, ok := normalizaUnidadeDeTempo(u)
+	return ok
+}
+
+// normalizaUnidadeDeTempo aceita as grafias que circulam pelo sistema e devolve
+// a que o banco grava (MIN/HORA/DIA). A máquina usa MINUTO, o APS aceita
+// HOUR/MINUTE e o roteiro só gravava MIN — e a mensagem de erro mandava "use
+// minuto, hora ou dia", exatamente o valor recusado.
+func normalizaUnidadeDeTempo(u string) (string, bool) {
+	switch strings.ToUpper(strings.TrimSpace(u)) {
+	case "":
+		return "", true
+	case "MIN", "MINUTO", "MINUTOS", "MINUTE", "MINUTES":
+		return entity.TimeUnitMinute, true
+	case "HORA", "HORAS", "HOUR", "HOURS", "H":
+		return entity.TimeUnitHour, true
+	case "DIA", "DIAS", "DAY", "DAYS", "D":
+		return entity.TimeUnitDay, true
 	}
+	return "", false
 }
 
 // applyOperationTime fills the rich time model on an operation, applying sane

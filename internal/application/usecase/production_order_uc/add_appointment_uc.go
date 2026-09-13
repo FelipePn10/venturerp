@@ -111,12 +111,13 @@ func (uc *AddAppointmentUseCase) backflush(ctx context.Context, dto request.AddA
 	refType := stockentity.ReferenceTypeProductionOrder
 	refCode := dto.ProductionOrderID
 	for _, c := range children {
-		// Loss formula 1 (default): qty = parentQty × componentQty × (1 + loss/100).
+		// A fórmula de perdas é a mesma do MRP (structentity.QuantidadeComPerda);
+		// aqui usávamos (1 + perda/100) e o consumo divergia do planejado.
 		base := dto.ProducedQty
 		if c.fixed {
 			base = 1
 		}
-		consumed := base * c.qty * (1 + c.loss/100.0)
+		consumed := structentity.QuantidadeComPerda(base*c.qty, c.loss, structentity.FormulaPerdaPadrao)
 		if consumed <= 0 {
 			continue
 		}

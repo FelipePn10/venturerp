@@ -45,7 +45,7 @@ func (uc *ListActualDemandUseCase) Execute(ctx context.Context, year int, itemCo
 	to := time.Date(year, 12, 31, 23, 59, 59, 0, time.UTC)
 	rows, err := uc.Repo.ListHistoricalDemand(ctx, source, from, to, items)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	out := make([]ActualDemandResponse, 0, len(rows))
 	for _, row := range rows {

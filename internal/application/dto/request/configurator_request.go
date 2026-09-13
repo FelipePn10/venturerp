@@ -72,26 +72,28 @@ type CreateCfgCharacteristicDTO struct {
 }
 
 type UpdateCfgCharacteristicDTO struct {
-	ID                int64    `json:"id"`
-	Code              string   `json:"code"`
-	Description       string   `json:"description"`
-	Type              string   `json:"type"`
-	IsActive          *bool    `json:"is_active,omitempty"`
-	SetID             *int64   `json:"set_id"`
-	DefaultVariableID *int64   `json:"default_variable_id"`
-	Mask              string   `json:"mask"`
-	IsSpecial         bool     `json:"is_special"`
-	AffectsPrice      bool     `json:"affects_price"`
-	ControlsGoals     bool     `json:"controls_goals"`
-	ReceivingType     string   `json:"receiving_type"`
-	FieldSource       string   `json:"field_source"`
-	Formula           string   `json:"formula"`
-	IsRequired        bool     `json:"is_required"`
-	NumMin            *float64 `json:"num_min"`
-	NumMax            *float64 `json:"num_max"`
-	NumMultiple       *float64 `json:"num_multiple"`
-	OptionTrue        string   `json:"option_true"`
-	OptionFalse       string   `json:"option_false"`
+	ID                int64  `json:"id"`
+	Code              string `json:"code"`
+	Description       string `json:"description"`
+	Type              string `json:"type"`
+	IsActive          *bool  `json:"is_active,omitempty"`
+	SetID             *int64 `json:"set_id"`
+	DefaultVariableID *int64 `json:"default_variable_id"`
+	Mask              string `json:"mask"`
+	IsSpecial         bool   `json:"is_special"`
+	AffectsPrice      bool   `json:"affects_price"`
+	ControlsGoals     bool   `json:"controls_goals"`
+	ReceivingType     string `json:"receiving_type"`
+	FieldSource       string `json:"field_source"`
+	Formula           string `json:"formula"`
+	// Nulo mantém o valor atual; false explícito desliga. Com `bool` puro,
+	// omitir o campo desligava a obrigatoriedade da característica em silêncio.
+	IsRequired  *bool    `json:"is_required,omitempty"`
+	NumMin      *float64 `json:"num_min"`
+	NumMax      *float64 `json:"num_max"`
+	NumMultiple *float64 `json:"num_multiple"`
+	OptionTrue  string   `json:"option_true"`
+	OptionFalse string   `json:"option_false"`
 }
 
 type CfgCharacteristicLanguageDTO struct {

@@ -17,6 +17,37 @@ type CreateStockMovementDTO struct {
 	Batch          *string `json:"batch,omitempty"`
 	ExpirationDate *string `json:"expiration_date,omitempty"`
 	Notes          *string `json:"notes,omitempty"`
+	// Endereço dentro do almoxarifado. `address_to` só vale em transferência
+	// interna (TRANSFER_IN/TRANSFER_OUT) e indica para onde o material foi.
+	Address   *string `json:"address,omitempty"`
+	AddressTo *string `json:"address_to,omitempty"`
+}
+
+// TransferenciaEnderecoDTO move material entre endereços do mesmo almoxarifado.
+type TransferenciaEnderecoDTO struct {
+	ItemCode    int64   `json:"item_code"`
+	Mask        string  `json:"mask"`
+	WarehouseID int64   `json:"warehouse_id"`
+	AddressFrom string  `json:"address_from"`
+	AddressTo   string  `json:"address_to"`
+	Quantity    float64 `json:"quantity"`
+	Lot         *string `json:"lot,omitempty"`
+	Notes       *string `json:"notes,omitempty"`
+}
+
+// OndaDeSeparacaoDTO agrupa várias necessidades numa caminhada só.
+type OndaDeSeparacaoDTO struct {
+	Code        int64 `json:"code"`
+	WarehouseID int64 `json:"warehouse_id"`
+	// FEFO (padrão) ou FIFO.
+	Rule  string `json:"rule"`
+	Lines []struct {
+		ItemCode      int64   `json:"item_code"`
+		Mask          string  `json:"mask"`
+		Quantity      float64 `json:"quantity"`
+		ReferenceType *string `json:"reference_type,omitempty"`
+		ReferenceCode *int64  `json:"reference_code,omitempty"`
+	} `json:"lines"`
 }
 
 type CreateReservationDTO struct {
@@ -79,5 +110,6 @@ type RegisterLotDTO struct {
 	Certificate  *string `json:"certificate,omitempty"` // certificado de qualidade
 	SupplierCode *int64  `json:"supplier_code,omitempty"`
 	ReceivedAt   *string `json:"received_at,omitempty"` // YYYY-MM-DD
+	ExpiresAt    *string `json:"expires_at,omitempty"`  // YYYY-MM-DD — ordena o FEFO
 	Notes        *string `json:"notes,omitempty"`
 }

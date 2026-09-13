@@ -11,14 +11,14 @@ import (
 func TestToItemStructureDTOUsesPublicJSONContract(t *testing.T) {
 	warehouse := int64(7)
 	component := &entity.ItemStructure{
-		ID:             42,
-		ParentCode:     100,
-		ChildCode:      200,
-		Quantity:       1.5,
-		Sequence:       3,
-		WarehouseCode:  &warehouse,
-		CostLossType:   "PERCENTUAL",
-		IsActive:       true,
+		ID:            42,
+		ParentCode:    100,
+		ChildCode:     200,
+		Quantity:      1.5,
+		Sequence:      3,
+		WarehouseCode: &warehouse,
+		CostLossType:  "PERCENTUAL",
+		IsActive:      true,
 	}
 
 	body, err := json.Marshal(ToItemStructureDTO(component))

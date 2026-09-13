@@ -72,7 +72,7 @@ func (uc *BomHeaderUseCase) Create(ctx context.Context, dto request.CreateBomHea
 	if err != nil {
 		return nil, err
 	}
-	h, err := entity.NewBomHeader(int64(item.Code), maskPtr, bomType, version, dto.ValidFrom, actor)
+	h, err := entity.NewBomHeader(int64(item.Code), maskPtr, bomType, version, dto.ValidFrom.Ponteiro(), actor)
 	if err != nil {
 		return nil, err
 	}

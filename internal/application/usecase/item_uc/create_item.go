@@ -66,7 +66,7 @@ func (uc *CreateItemUseCase) Execute(
 	if item.BusinessCode == "" {
 		generator, ok := uc.Repo.(automaticBusinessCodeRepository)
 		if !ok {
-			return nil, fmt.Errorf("geracao automatica de codigo indisponivel")
+			return nil, fmt.Errorf("geração automática de código indisponível")
 		}
 		item.BusinessCode, err = generator.NextAutomaticBusinessCode(ctx, enterpriseID)
 		if err != nil {

@@ -141,7 +141,9 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		if !child.IsFixedQty {
 			quantity = quantity.Mul(decimal.NewFromFloat(dto.PlannedQty))
 		}
-		quantity = quantity.Mul(decimal.NewFromFloat(1 + child.LossPercentage/100))
+		quantityFloat, _ := quantity.Float64()
+		quantity = decimal.NewFromFloat(structentity.QuantidadeComPerda(
+			quantityFloat, child.LossPercentage, structentity.FormulaPerdaPadrao))
 		automatic, warehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
 		if infoErr != nil {
 			return nil, infoErr

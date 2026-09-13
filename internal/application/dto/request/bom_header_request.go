@@ -1,8 +1,6 @@
 package request
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 )
 
@@ -13,9 +11,10 @@ type CreateBomHeaderDTO struct {
 	ItemCode TextCode `json:"item_code"`
 	Mask     *string  `json:"mask,omitempty"`
 	// BomType é opcional: EBOM (engenharia) ou MBOM (fabricação, padrão).
-	BomType   string     `json:"bom_type,omitempty"`
-	ValidFrom *time.Time `json:"valid_from,omitempty"`
-	CreatedBy uuid.UUID  `json:"-"`
+	BomType string `json:"bom_type,omitempty"`
+	// Aceita "2026-09-20" (o que o campo de data do navegador envia) e RFC3339.
+	ValidFrom *DataFlexivel `json:"valid_from,omitempty"`
+	CreatedBy uuid.UUID     `json:"-"`
 }
 
 type UpdateBomHeaderStatusDTO struct {

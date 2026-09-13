@@ -28,7 +28,13 @@ type MachineResponse struct {
 	MachineTypeCode int64   `json:"machine_type_code"`
 	CostCenterCode  *int64  `json:"cost_center_code,omitempty"`
 	Capacity        float64 `json:"capacity"`
+	// A gravação aceita `capacity_per_unit` e a leitura devolvia só
+	// `capacity_unit`: reenviar o que o GET devolveu era recusado com 422
+	// "informe a unidade de capacidade". A tela só não quebrava porque fazia
+	// fallback defensivo. Devolvemos as duas grafias, com a da gravação como
+	// canônica, para que ler-e-regravar funcione sem tradução no cliente.
 	CapacityUnit    string  `json:"capacity_unit"`
+	CapacityPerUnit string  `json:"capacity_per_unit"`
 	CapacityPeriod  string  `json:"capacity_period"`
 	EfficiencyRate  float64 `json:"efficiency_rate"`
 	IsActive        bool    `json:"is_active"`

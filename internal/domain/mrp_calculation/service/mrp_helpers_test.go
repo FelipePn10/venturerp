@@ -97,7 +97,11 @@ func TestApplyLossFormula(t *testing.T) {
 		{"formula1 +10%", 2, 3, 10, 1, 6.6}, // 6 * 1.10
 		{"formula2 /(1-10%)", 2, 3, 10, 2, 6.0 / 0.9},
 		{"formula3 ignores loss", 2, 3, 10, 3, 6},
-		{"default = formula1", 2, 3, 10, 9, 6.6},
+		// Fórmula desconhecida cai no padrão do sistema, que é a 2 — o mesmo que
+		// FormulaPerdasEstrutura usa (parseInt(v, 2)). Antes caía na 1, e era
+		// essa a incoerência: o MRP planejava por uma conta e a ordem de
+		// produção, o apontamento e o custo consumiam por outra.
+		{"desconhecida cai no padrão (fórmula 2)", 2, 3, 10, 9, 6.0 / 0.9},
 		{"formula2 invalid denom falls back", 1, 1, 100, 2, 1},
 	}
 	for _, tc := range cases {

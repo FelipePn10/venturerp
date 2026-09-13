@@ -64,8 +64,8 @@ func applyFields(c *entity.FiscalClassification, f request.FiscalClassificationF
 	c.CodClasTrib = f.CodClasTrib
 	c.CodClasTribTribReg = f.CodClasTribTribReg
 	c.ObsFiscal = f.ObsFiscal
-	c.ValidFrom = f.ValidFrom
-	c.ValidUntil = f.ValidUntil
+	c.ValidFrom = f.ValidFrom.Ponteiro()
+	c.ValidUntil = f.ValidUntil.Ponteiro()
 	c.DefaultOrigin = f.DefaultOrigin
 	c.DefaultICMSRate = f.DefaultICMSRate
 	c.DefaultCalculatePISCOFINS = f.DefaultCalculatePISCOFINS

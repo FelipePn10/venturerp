@@ -12,8 +12,9 @@ import (
 )
 
 const createNewEmployee = `-- name: CreateNewEmployee :one
-INSERT INTO employees (code, name, situation, participates_budget, technical_assistant, role, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+
+INSERT INTO employees (code, name, situation, participates_budget, technical_assistant, role, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id
 `
 
@@ -25,8 +26,12 @@ type CreateNewEmployeeParams struct {
 	TechnicalAssistant bool
 	Role               string
 	CreatedBy          pgtype.UUID
+	EnterpriseID       *int64
 }
 
+// Toda consulta filtra por empresa (migração 343). Antes nenhuma filtrava, e
+// `UpdateEmployee`/`DeactivateEmployee` localizam por `code`: uma empresa
+// alterava ou inativava o funcionário da outra.
 func (q *Queries) CreateNewEmployee(ctx context.Context, arg CreateNewEmployeeParams) (EmployeeLegacy, error) {
 	row := q.db.QueryRow(ctx, createNewEmployee,
 		arg.Code,
@@ -36,6 +41,7 @@ func (q *Queries) CreateNewEmployee(ctx context.Context, arg CreateNewEmployeePa
 		arg.TechnicalAssistant,
 		arg.Role,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i EmployeeLegacy
 	err := row.Scan(
@@ -55,20 +61,31 @@ func (q *Queries) CreateNewEmployee(ctx context.Context, arg CreateNewEmployeePa
 }
 
 const deactivateEmployee = `-- name: DeactivateEmployee :exec
-UPDATE employees SET situation = 'INACTIVE', updated_at = NOW() WHERE code = $1
+UPDATE employees SET situation = 'INACTIVE', updated_at = NOW()
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeactivateEmployee(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deactivateEmployee, code)
+type DeactivateEmployeeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeactivateEmployee(ctx context.Context, arg DeactivateEmployeeParams) error {
+	_, err := q.db.Exec(ctx, deactivateEmployee, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const getEmployeeByCode = `-- name: GetEmployeeByCode :one
-SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees WHERE code = $1
+SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetEmployeeByCode(ctx context.Context, code int64) (EmployeeLegacy, error) {
-	row := q.db.QueryRow(ctx, getEmployeeByCode, code)
+type GetEmployeeByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetEmployeeByCode(ctx context.Context, arg GetEmployeeByCodeParams) (EmployeeLegacy, error) {
+	row := q.db.QueryRow(ctx, getEmployeeByCode, arg.Code, arg.EnterpriseID)
 	var i EmployeeLegacy
 	err := row.Scan(
 		&i.ID,
@@ -87,11 +104,11 @@ func (q *Queries) GetEmployeeByCode(ctx context.Context, code int64) (EmployeeLe
 }
 
 const listEmployees = `-- name: ListEmployees :many
-SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees ORDER BY code
+SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees WHERE enterprise_id = $1 ORDER BY code
 `
 
-func (q *Queries) ListEmployees(ctx context.Context) ([]EmployeeLegacy, error) {
-	rows, err := q.db.Query(ctx, listEmployees)
+func (q *Queries) ListEmployees(ctx context.Context, enterpriseID *int64) ([]EmployeeLegacy, error) {
+	rows, err := q.db.Query(ctx, listEmployees, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,11 +140,16 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]EmployeeLegacy, error) {
 }
 
 const listEmployeesByRole = `-- name: ListEmployeesByRole :many
-SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees WHERE role = $1 ORDER BY code
+SELECT id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id FROM employees WHERE role = $1 AND enterprise_id = $2 ORDER BY code
 `
 
-func (q *Queries) ListEmployeesByRole(ctx context.Context, role string) ([]EmployeeLegacy, error) {
-	rows, err := q.db.Query(ctx, listEmployeesByRole, role)
+type ListEmployeesByRoleParams struct {
+	Role         string
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListEmployeesByRole(ctx context.Context, arg ListEmployeesByRoleParams) ([]EmployeeLegacy, error) {
+	rows, err := q.db.Query(ctx, listEmployeesByRole, arg.Role, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +188,7 @@ SET name               = $2,
     technical_assistant = $5,
     role               = $6,
     updated_at         = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $7
 RETURNING id, code, name, situation, participates_budget, technical_assistant, role, created_at, updated_at, created_by, enterprise_id
 `
 
@@ -177,6 +199,7 @@ type UpdateEmployeeParams struct {
 	ParticipatesBudget bool
 	TechnicalAssistant bool
 	Role               string
+	EnterpriseID       *int64
 }
 
 func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (EmployeeLegacy, error) {
@@ -187,6 +210,7 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		arg.ParticipatesBudget,
 		arg.TechnicalAssistant,
 		arg.Role,
+		arg.EnterpriseID,
 	)
 	var i EmployeeLegacy
 	err := row.Scan(

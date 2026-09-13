@@ -23,8 +23,12 @@ type StockMovementResponse struct {
 	Batch          *string    `json:"batch,omitempty"`
 	ExpirationDate *time.Time `json:"expiration_date,omitempty"`
 	Notes          *string    `json:"notes,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	CreatedBy      uuid.UUID  `json:"created_by"`
+	// O endereço era gravado e nunca devolvido — campo só de escrita. A tela
+	// pedia onde guardar e depois não conseguia mostrar onde o material estava.
+	Address   *string   `json:"address,omitempty"`
+	AddressTo *string   `json:"address_to,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	CreatedBy uuid.UUID `json:"created_by"`
 }
 
 // StockReservationResponse is the API representation of a stock reservation.

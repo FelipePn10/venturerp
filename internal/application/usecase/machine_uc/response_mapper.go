@@ -44,6 +44,7 @@ func toMachineResponse(m *entity.Machine) *response.MachineResponse {
 		CostCenterCode:  m.CostCenterCode,
 		Capacity:        m.Capacity,
 		CapacityUnit:    string(m.CapacityUnit),
+		CapacityPerUnit: string(m.CapacityUnit),
 		CapacityPeriod:  string(m.CapacityPeriod),
 		EfficiencyRate:  m.EfficiencyRate,
 		IsActive:        m.IsActive,

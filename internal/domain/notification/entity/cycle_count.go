@@ -27,10 +27,14 @@ const (
 )
 
 type CycleCount struct {
-	ID                 uuid.UUID        `json:"id"`
-	EnterpriseID       int64            `json:"enterprise_id"`
-	WarehouseID        int64            `json:"warehouse_id"`
-	WarehouseAddressID *int64           `json:"warehouse_address_id,omitempty"`
+	ID           uuid.UUID `json:"id"`
+	EnterpriseID int64     `json:"enterprise_id"`
+	WarehouseID  int64     `json:"warehouse_id"`
+	// Obsoleto: nunca teve tabela-alvo (os endereços têm chave composta).
+	WarehouseAddressID *int64 `json:"warehouse_address_id,omitempty"`
+	// Endereço contado; vazio = almoxarifado inteiro. É por ele que a
+	// quantidade esperada é apurada.
+	Address            string           `json:"address"`
 	ItemCode           string           `json:"item_code"`
 	LegacyItemCode     int64            `json:"legacy_item_code,omitempty"`
 	Mask               string           `json:"mask"`

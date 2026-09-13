@@ -64,6 +64,18 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 		case "23503": // foreign_key_violation
 			RespondError(w, http.StatusUnprocessableEntity, "um dos vínculos informados não existe na empresa autenticada")
 			return
+		case "22P02": // invalid_text_representation (valor fora de um enum)
+			RespondError(w, http.StatusUnprocessableEntity, "um dos campos de lista recebeu um valor que o sistema não reconhece")
+			return
+		case "22001": // string_data_right_truncation
+			// Texto maior que a coluna. Virava 500 "erro interno do servidor"
+			// quando o usuário digitava além do limite — um campo de 2
+			// caracteres recebendo "TESTE", por exemplo.
+			RespondError(w, http.StatusUnprocessableEntity, "um dos campos recebeu mais caracteres do que o cadastro permite")
+			return
+		case "22003": // numeric_value_out_of_range
+			RespondError(w, http.StatusUnprocessableEntity, "um dos valores numéricos está fora da faixa que o cadastro aceita")
+			return
 		case "23502", "23514": // not_null_violation, check_violation
 			RespondError(w, http.StatusUnprocessableEntity, "há um campo obrigatório ausente ou inválido")
 			return

@@ -23,7 +23,7 @@ func (uc *ListSalesForecastsUseCase) Execute(
 	}
 	forecasts, err := uc.Repo.ListForecasts(ctx, year)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	return toSalesForecastResponses(forecasts), nil
 }

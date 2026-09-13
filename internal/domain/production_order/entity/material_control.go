@@ -14,21 +14,25 @@ const (
 	MaterialReturn MaterialKind = "RETURN"
 )
 
+// Devolvida direto pelo handler de materiais da ordem, então as tags são o
+// contrato da API. Sem elas os campos saíam em PascalCase e o middleware de
+// código de item não reconhecia `ItemCode`: a lista de materiais da ordem
+// mostrava a chave interna no lugar do código que o usuário conhece.
 type ProductionOrderMaterial struct {
-	ID                  int64
-	ProductionOrderID   int64
-	Kind                MaterialKind
-	ItemCode            int64
-	Mask                string
-	SubstitutedItemCode *int64
-	Quantity            decimal.Decimal
-	AttendedQuantity    decimal.Decimal
-	WarehouseID         int64
-	AutomaticIssue      bool
-	Notes               *string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	CreatedBy           uuid.UUID
+	ID                  int64           `json:"id"`
+	ProductionOrderID   int64           `json:"production_order_id"`
+	Kind                MaterialKind    `json:"kind"`
+	ItemCode            int64           `json:"item_code"`
+	Mask                string          `json:"mask"`
+	SubstitutedItemCode *int64          `json:"substituted_item_code"`
+	Quantity            decimal.Decimal `json:"quantity"`
+	AttendedQuantity    decimal.Decimal `json:"attended_quantity"`
+	WarehouseID         int64           `json:"warehouse_id"`
+	AutomaticIssue      bool            `json:"automatic_issue"`
+	Notes               *string         `json:"notes"`
+	CreatedAt           time.Time       `json:"created_at"`
+	UpdatedAt           time.Time       `json:"updated_at"`
+	CreatedBy           uuid.UUID       `json:"created_by"`
 }
 
 type LotAllocation struct {

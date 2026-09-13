@@ -22,7 +22,7 @@ func (uc *ListAppropriationTablesUseCase) Execute(
 	}
 	tables, err := uc.Repo.ListAppropriations(ctx)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	return toAppropriationTableResponses(tables), nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/employee/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,6 +17,10 @@ func (r *RepositoryEmployeeSQLC) Create(
 	ctx context.Context,
 	e *entity.Employee,
 ) (*entity.Employee, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateNewEmployee(ctx, sqlc.CreateNewEmployeeParams{
 		Code:               e.Code,
 		Name:               e.Name,
@@ -24,6 +29,7 @@ func (r *RepositoryEmployeeSQLC) Create(
 		TechnicalAssistant: e.TechnicalAssistant,
 		Role:               e.Role,
 		CreatedBy:          pgutil.ToPgUUID(e.CreatedBy),
+		EnterpriseID:       &empresa,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating employee: %w", err)
@@ -35,6 +41,10 @@ func (r *RepositoryEmployeeSQLC) Update(
 	ctx context.Context,
 	e *entity.Employee,
 ) (*entity.Employee, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateEmployee(ctx, sqlc.UpdateEmployeeParams{
 		Code:               e.Code,
 		Name:               e.Name,
@@ -42,6 +52,7 @@ func (r *RepositoryEmployeeSQLC) Update(
 		ParticipatesBudget: e.ParticipatesBudget,
 		TechnicalAssistant: e.TechnicalAssistant,
 		Role:               e.Role,
+		EnterpriseID:       &empresa,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -56,7 +67,11 @@ func (r *RepositoryEmployeeSQLC) GetByCode(
 	ctx context.Context,
 	code int64,
 ) (*entity.Employee, error) {
-	row, err := r.q.GetEmployeeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetEmployeeByCode(ctx, sqlc.GetEmployeeByCodeParams{Code: code, EnterpriseID: &empresa})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("funcionário %d não encontrado", code))
@@ -67,7 +82,11 @@ func (r *RepositoryEmployeeSQLC) GetByCode(
 }
 
 func (r *RepositoryEmployeeSQLC) List(ctx context.Context) ([]*entity.Employee, error) {
-	rows, err := r.q.ListEmployees(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListEmployees(ctx, &empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing employees: %w", err)
 	}
@@ -78,7 +97,11 @@ func (r *RepositoryEmployeeSQLC) ListByRole(
 	ctx context.Context,
 	role string,
 ) ([]*entity.Employee, error) {
-	rows, err := r.q.ListEmployeesByRole(ctx, role)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListEmployeesByRole(ctx, sqlc.ListEmployeesByRoleParams{Role: role, EnterpriseID: &empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing employees by role %s: %w", role, err)
 	}
@@ -86,7 +109,11 @@ func (r *RepositoryEmployeeSQLC) ListByRole(
 }
 
 func (r *RepositoryEmployeeSQLC) Deactivate(ctx context.Context, code int64) error {
-	if err := r.q.DeactivateEmployee(ctx, code); err != nil {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	if err := r.q.DeactivateEmployee(ctx, sqlc.DeactivateEmployeeParams{Code: code, EnterpriseID: &empresa}); err != nil {
 		return fmt.Errorf("deactivating employee %d: %w", code, err)
 	}
 	return nil

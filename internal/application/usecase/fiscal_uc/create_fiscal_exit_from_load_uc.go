@@ -26,7 +26,7 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		return nil, fmt.Errorf("dependências de faturamento por carga não configuradas")
 	}
 	if dto.LoadCode <= 0 {
-		return nil, errorsuc.NewValidationError("load_code é obrigatório")
+		return nil, errorsuc.NewValidationError("informe a carga")
 	}
 
 	load, err := uc.ShipmentRepo.GetLoadByCode(ctx, dto.LoadCode)

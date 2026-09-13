@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,15 +19,20 @@ func (r *CostCenterRepositorySQLC) Create(
 	cc *entity.CostCenter,
 ) (*entity.CostCenter, error) {
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateCostCenter(ctx, sqlc.CreateCostCenterParams{
-		Code:        cc.Code,
-		Description: cc.Description,
-		ParentCode:  cc.ParentCode,
-		Type:        sqlc.TypeCcEnum(cc.Type),
-		IsRatio:     cc.IsRatio,
-		StartDate:   pgutil.ToPgDate(cc.StartDate),
-		EndDate:     cc.EndDate,
-		CreatedBy:   pgutil.ToPgUUID(cc.CreatedBy),
+		Code:         cc.Code,
+		Description:  cc.Description,
+		ParentCode:   cc.ParentCode,
+		Type:         sqlc.TypeCcEnum(cc.Type),
+		IsRatio:      cc.IsRatio,
+		StartDate:    pgutil.ToPgDate(cc.StartDate),
+		EndDate:      cc.EndDate,
+		CreatedBy:    pgutil.ToPgUUID(cc.CreatedBy),
+		EnterpriseID: &empresa,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating cost center: %w", err)
@@ -40,14 +46,19 @@ func (r *CostCenterRepositorySQLC) Update(
 	cc *entity.CostCenter,
 ) (*entity.CostCenter, error) {
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateCostCenter(ctx, sqlc.UpdateCostCenterParams{
-		Description: cc.Description,
-		ParentCode:  cc.ParentCode,
-		Type:        sqlc.TypeCcEnum(cc.Type),
-		IsRatio:     cc.IsRatio,
-		StartDate:   pgutil.ToPgDate(cc.StartDate),
-		EndDate:     cc.EndDate,
-		ID:          cc.ID,
+		Description:  cc.Description,
+		ParentCode:   cc.ParentCode,
+		Type:         sqlc.TypeCcEnum(cc.Type),
+		IsRatio:      cc.IsRatio,
+		StartDate:    pgutil.ToPgDate(cc.StartDate),
+		EndDate:      cc.EndDate,
+		ID:           cc.ID,
+		EnterpriseID: &empresa,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating cost center: %w", err)
@@ -61,7 +72,11 @@ func (r *CostCenterRepositorySQLC) GetByCode(
 	code int32,
 ) (*entity.CostCenter, error) {
 
-	row, err := r.q.GetCostCenterByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetCostCenterByCode(ctx, sqlc.GetCostCenterByCodeParams{Code: code, EnterpriseID: &empresa})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("centro de custo %d não encontrado", code))
@@ -76,7 +91,11 @@ func (r *CostCenterRepositorySQLC) List(
 	ctx context.Context,
 ) ([]*entity.CostCenter, error) {
 
-	rows, err := r.q.ListCostCenters(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCostCenters(ctx, &empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing cost centers: %w", err)
 	}
@@ -89,10 +108,13 @@ func (r *CostCenterRepositorySQLC) ListByType(
 	ccType string,
 ) ([]*entity.CostCenter, error) {
 
-	rows, err := r.q.ListCostCentersByType(
-		ctx,
-		sqlc.TypeCcEnum(ccType),
-	)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCostCentersByType(ctx, sqlc.ListCostCentersByTypeParams{
+		Type: sqlc.TypeCcEnum(ccType), EnterpriseID: &empresa,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("listing cost centers by type: %w", err)
 	}
@@ -105,7 +127,11 @@ func (r *CostCenterRepositorySQLC) Delete(
 	code int32,
 ) error {
 
-	err := r.q.DeleteCostCenter(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	err = r.q.DeleteCostCenter(ctx, sqlc.DeleteCostCenterParams{Code: code, EnterpriseID: &empresa})
 	if err != nil {
 		return fmt.Errorf("deleting cost center %d: %w", code, err)
 	}

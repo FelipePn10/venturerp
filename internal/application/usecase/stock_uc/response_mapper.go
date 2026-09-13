@@ -25,6 +25,8 @@ func toStockMovementResponse(m *entity.StockMovement) *response.StockMovementRes
 		Batch:          m.Batch,
 		ExpirationDate: m.ExpirationDate,
 		Notes:          m.Notes,
+		Address:        m.Address,
+		AddressTo:      m.AddressTo,
 		CreatedAt:      m.CreatedAt,
 		CreatedBy:      m.CreatedBy,
 	}

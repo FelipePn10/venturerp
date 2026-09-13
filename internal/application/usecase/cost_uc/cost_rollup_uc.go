@@ -3,6 +3,7 @@ package cost_uc
 import (
 	"context"
 	"fmt"
+	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"sort"
 	"time"
 
@@ -154,7 +155,7 @@ func (uc *StandardCostUseCase) GetItemPurchaseCost(ctx context.Context, itemCode
 func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollupDTO) (*response.CostRollupResponse, error) {
 	calculatedBy, err := uuid.Parse(dto.CalculatedBy)
 	if err != nil {
-		return nil, fmt.Errorf("invalid calculated_by UUID: %w", err)
+		return nil, errorsuc.NewValidationError("não foi possível identificar o usuário que apurou o custo")
 	}
 
 	lotSize := dto.LotSize
@@ -256,7 +257,7 @@ func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, m
 				materialCost -= childNode.total() * child.Quantity
 				continue
 			}
-			netQty := child.Quantity * (1 + child.LossPercentage/100)
+			netQty := structentity.QuantidadeComPerda(child.Quantity, child.LossPercentage, structentity.FormulaPerdaPadrao)
 			if child.IsFixedQty && lotSize > 0 {
 				netQty /= lotSize // amortize the fixed component over the reference lot
 			}
@@ -378,7 +379,9 @@ func (uc *StandardCostUseCase) conversionCost(ctx context.Context, itemCode int6
 		if (op.OperationOrigin == routingentity.OriginExternal || op.OperationOrigin == routingentity.OriginThirdPart) && uc.thirdParty != nil {
 			serviceCost, priceErr := uc.thirdParty.StandardCostPerUnit(ctx, itemCode, mask, op.OperationID, time.Now())
 			if priceErr != nil {
-				return 0, fmt.Errorf("resolving third-party cost for item %d operation %d: %w", itemCode, op.OperationID, priceErr)
+				// Mensagem chega ao usuário: o prefixo em inglês vazava na tela
+				// de apuração de custo.
+				return 0, fmt.Errorf("custo de terceiro do item %d, operação %d: %w", itemCode, op.OperationID, priceErr)
 			}
 			total += serviceCost.InexactFloat64() * lot
 			continue

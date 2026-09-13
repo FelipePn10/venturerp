@@ -58,7 +58,7 @@ func (uc *InutilizarNumeracaoUseCase) Execute(ctx context.Context, dto Inutiliza
 		return nil, fmt.Errorf("não autorizado")
 	}
 	if dto.NumeroFinal < dto.NumeroInicial {
-		return nil, errorsuc.NewValidationError("numero_final deve ser >= numero_inicial")
+		return nil, errorsuc.NewValidationError("o número final deve ser maior ou igual ao número inicial")
 	}
 	cli, cfg, err := newFocusFromConfig(ctx, uc.Repo)
 	if err != nil {

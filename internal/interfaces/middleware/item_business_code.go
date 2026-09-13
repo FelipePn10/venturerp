@@ -69,16 +69,9 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 				next.ServeHTTP(w, r)
 				return
 			}
-			if !nativeItemBusinessCodePath(r) {
-				if err = translateKnownItemURLPath(r, pool, enterpriseID); err != nil {
-					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-					return
-				}
-				if err = translateItemPath(r, pool, enterpriseID); err != nil {
-					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-					return
-				}
-			}
+			// A tradução do CAMINHO acontece em ItemPathTranslation, que é
+			// middleware de raiz e roda antes do roteamento. Aqui ela chegaria
+			// tarde demais (e traduzir de novo converteria o código errado).
 			if !nativeItemBusinessCodeRequest(r) {
 				if err = translateItemQuery(r, pool, enterpriseID); err != nil {
 					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
@@ -128,58 +121,87 @@ func nativeItemBusinessCodePath(r *http.Request) bool {
 	return len(parts) == 3 || (len(parts) == 4 && parts[3] == "activation-readiness")
 }
 
-func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID int64) error {
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+// itemPathSegmentIndex devolve a posição do segmento do caminho que carrega o
+// código do item, ou -1 quando a rota não referencia item. Separado para que o
+// teste de guarda possa cobrar cada rota nova de api.go.
+func itemPathSegmentIndex(parts []string) int {
 	if len(parts) < 3 || parts[0] != "api" {
-		return nil
+		return -1
 	}
-	index := -1
 	if parts[1] == "items" {
-		index = 2
-		if parts[2] == "search" {
+		switch {
+		case parts[2] == "search":
 			if len(parts) < 4 {
-				return nil
+				return -1
 			}
-			index = 3
-		} else if parts[2] == "structure" {
+			return 3
+		case parts[2] == "structure":
 			if len(parts) >= 5 && parts[3] == "resolve" {
-				index = 4
-			} else {
-				return nil
+				return 4
 			}
-		} else if isStaticItemsPath(parts[2]) {
-			return nil
+			return -1
+		case isStaticItemsPath(parts[2]):
+			return -1
 		}
-	} else {
-		patterns := []struct {
-			prefix []string
-			index  int
-		}{
-			{[]string{"api", "stock", "movements", "item"}, 4},
-			{[]string{"api", "configurator", "items"}, 3},
-			{[]string{"api", "quality", "plans", "by-item"}, 4},
-			{[]string{"api", "standard-cost", "items"}, 3},
-			{[]string{"api", "mrp-calculation", "profile"}, 3},
-			{[]string{"api", "item-calendar-promise"}, 2},
-			{[]string{"api", "financial", "relatorios", "ficha-tecnica"}, 4},
+		return 2
+	}
+	for _, pattern := range itemPathPatterns {
+		if len(parts) <= pattern.index || len(parts) < len(pattern.prefix) {
+			continue
 		}
-		for _, pattern := range patterns {
-			if len(parts) <= pattern.index || len(parts) < len(pattern.prefix) {
-				continue
-			}
-			matches := true
-			for i, value := range pattern.prefix {
-				if parts[i] != value {
-					matches = false
-					break
-				}
-			}
-			if matches {
-				index = pattern.index
+		matches := true
+		for i, value := range pattern.prefix {
+			// "*" casa qualquer segmento: algumas rotas têm um código variável
+			// antes do código do item (.../sales-tables/{tableCode}/prices/…).
+			if value != "*" && parts[i] != value {
+				matches = false
 				break
 			}
 		}
+		if matches {
+			return pattern.index
+		}
 	}
+	return -1
+}
+
+var itemPathPatterns = []struct {
+	prefix []string
+	index  int
+}{
+	{[]string{"api", "stock", "movements", "item"}, 4},
+	{[]string{"api", "stock", "balances", "item"}, 4},
+	{[]string{"api", "stock", "balances", "atp"}, 4},
+	{[]string{"api", "stock", "lots", "item"}, 4},
+	{[]string{"api", "stock", "lots", "genealogy"}, 4},
+	{[]string{"api", "stock", "consumption-average"}, 3},
+	{[]string{"api", "bom-headers", "item"}, 3},
+	{[]string{"api", "restriction", "item"}, 3},
+	{[]string{"api", "sales-forecast", "item"}, 3},
+	{[]string{"api", "item-conversions", "item"}, 3},
+	{[]string{"api", "item-suppliers", "item"}, 3},
+	{[]string{"api", "drawings", "item-code"}, 3},
+	{[]string{"api", "standard-cost", "purchase-costs"}, 3},
+	{[]string{"api", "quality", "records", "by-item"}, 4},
+	{[]string{"api", "quality", "non-conformances", "by-item"}, 4},
+	{[]string{"api", "mrp-reports", "explosion"}, 3},
+	{[]string{"api", "independent-demand", "list-by-item"}, 3},
+	{[]string{"api", "configurator", "items"}, 3},
+	{[]string{"api", "quality", "plans", "by-item"}, 4},
+	{[]string{"api", "standard-cost", "items"}, 3},
+	{[]string{"api", "mrp-calculation", "profile"}, 3},
+	{[]string{"api", "item-calendar-promise"}, 2},
+	{[]string{"api", "financial", "relatorios", "ficha-tecnica"}, 4},
+	{[]string{"api", "mrp-calculation", "configured-rules"}, 3},
+	{[]string{"api", "fiscal", "support", "parametros-icms-ipi", "item"}, 5},
+	{[]string{"api", "customers", "support", "sales-tables", "*", "prices"}, 6},
+	{[]string{"api", "stock", "separation", "suggest"}, 4},
+	{[]string{"api", "stock", "putaway", "suggest"}, 4},
+}
+
+func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID int64) error {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	index := itemPathSegmentIndex(parts)
 	if index < 0 {
 		return nil
 	}
@@ -196,14 +218,43 @@ func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID
 	// URL.Path therefore leaves chi.URLParam with the public code. Keep both views
 	// consistent so the real API router (not just an isolated middleware router)
 	// hands the immutable internal ID to legacy handlers.
+	interno := strconv.FormatInt(id, 10)
 	if rc := chi.RouteContext(r.Context()); rc != nil {
 		for i, key := range rc.URLParams.Keys {
-			if (key == "code" || key == "itemCode" || key == "item_code") && rc.URLParams.Values[i] == publicCode {
-				rc.URLParams.Values[i] = strconv.FormatInt(id, 10)
+			switch key {
+			case "code", "itemCode", "item_code":
+				if rc.URLParams.Values[i] == publicCode {
+					rc.URLParams.Values[i] = interno
+				}
+			case "*":
+				// Este é o caso que quebrava o estoque. `r.Route("/api/stock", …)`
+				// monta um sub-roteador atrás de um curinga: quando este
+				// middleware roda, o chi casou apenas `/api/stock/*` e guardou o
+				// resto ("movements/item/MP-CH-3MM") neste parâmetro. É dele que
+				// o sub-roteador tira a sub-rota — reescrever só `r.URL.Path`
+				// não muda nada (embora o log passe a mostrar o código já
+				// traduzido, o que despista a investigação).
+				rc.URLParams.Values[i] = trocaSegmento(rc.URLParams.Values[i], publicCode, interno)
 			}
+		}
+		if rc.RoutePath != "" {
+			rc.RoutePath = trocaSegmento(rc.RoutePath, publicCode, interno)
 		}
 	}
 	return nil
+}
+
+// trocaSegmento troca o segmento de caminho igual a `de` por `para`, comparando
+// segmento inteiro. Um `strings.Replace` solto casaria pedaço de outro segmento
+// (o código "10" dentro de "100").
+func trocaSegmento(caminho, de, para string) string {
+	partes := strings.Split(caminho, "/")
+	for i, parte := range partes {
+		if parte == de {
+			partes[i] = para
+		}
+	}
+	return strings.Join(partes, "/")
 }
 
 func isStaticItemsPath(segment string) bool {
@@ -227,25 +278,12 @@ func bypassItemResponseTranslation(r *http.Request) bool {
 func requestHasJSON(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Content-Type"), "application/json")
 }
-func translateItemPath(r *http.Request, pool *pgxpool.Pool, e int64) error {
-	rc := chi.RouteContext(r.Context())
-	if rc == nil {
-		return nil
-	}
-	pattern := rc.RoutePattern()
-	for i, key := range rc.URLParams.Keys {
-		if !isItemReferencePath(pattern, key) {
-			continue
-		}
-		value := rc.URLParams.Values[i]
-		id, err := resolveBusinessCode(r.Context(), pool, e, value)
-		if err != nil {
-			return err
-		}
-		rc.URLParams.Values[i] = strconv.FormatInt(id, 10)
-	}
-	return nil
-}
+
+// A tradução do caminho vive em itemPathSegmentIndex/translateKnownItemURLPath,
+// chamada pelo middleware de raiz ItemPathTranslation. Não reintroduza uma
+// segunda tradução por parâmetro do chi aqui: com as duas ativas, o código
+// interno produzido na primeira era reinterpretado como código comercial na
+// segunda e o registro ia parar em OUTRO item, respondendo 201.
 
 func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 	query := r.URL.Query()
@@ -278,32 +316,6 @@ func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 	return nil
 }
 
-func isItemReferencePath(pattern, key string) bool {
-	if key == "code" {
-		return strings.HasPrefix(pattern, "/api/items/")
-	}
-	if key == "item_code" {
-		return strings.HasPrefix(pattern, "/api/mrp-calculation/") ||
-			strings.HasPrefix(pattern, "/api/item-calendar-promise/") ||
-			strings.Contains(pattern, "/ficha-tecnica/{")
-	}
-	if key != "itemCode" && key != "parentItemCode" && key != "childItemCode" && key != "rootItemCode" {
-		return false
-	}
-	// These legacy routes call a line/checklist identifier itemCode even though
-	// it is not an item master reference. Everything else named itemCode in the
-	// public API is a product/item reference and must accept the business code.
-	for _, nonItem := range []string{
-		"/api/sales-orders/items/{itemCode}",
-		"/api/sales-quotations/items/{itemCode}",
-		"/api/consumer-service/calls/checklist/{itemCode}",
-	} {
-		if strings.HasPrefix(pattern, nonItem) {
-			return false
-		}
-	}
-	return true
-}
 func translateItemBody(r *http.Request, pool *pgxpool.Pool, e int64) error {
 	const maximumJSONBody = 16 << 20
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maximumJSONBody+1))
@@ -427,13 +439,24 @@ func textualPricingItemContract(r *http.Request) bool {
 func resolveBusinessCode(ctx context.Context, pool *pgxpool.Pool, e int64, code string) (int64, error) {
 	var id int64
 	err := pool.QueryRow(ctx, `SELECT code FROM items WHERE enterprise_id=$1 AND business_code=upper(btrim($2))`, e, code).Scan(&id)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return 0, fmt.Errorf("item %q não encontrado na empresa autenticada", code)
-		}
+	if err == nil {
+		return id, nil
+	}
+	if err != pgx.ErrNoRows {
 		return 0, err
 	}
-	return id, nil
+	// Alternativa pela chave interna, na mesma ordem que itemresolution.Resolve
+	// usa no resto do backend: comercial primeiro, interna depois. Sem isto, um
+	// chamador que ainda mande a chave interna no caminho passa a levar 422 —
+	// antes ele funcionava por acidente, porque a tradução nem chegava ao
+	// handler nas rotas montadas.
+	if interno, convErr := strconv.ParseInt(strings.TrimSpace(code), 10, 64); convErr == nil {
+		var existe int64
+		if pool.QueryRow(ctx, `SELECT code FROM items WHERE enterprise_id=$1 AND code=$2`, e, interno).Scan(&existe) == nil {
+			return existe, nil
+		}
+	}
+	return 0, fmt.Errorf("item %q não encontrado na empresa autenticada", code)
 }
 
 type itemCodeResponseRecorder struct {

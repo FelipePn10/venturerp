@@ -30,7 +30,7 @@ type cartOption struct {
 // dependencies drop invalid combinations; valid masks are optionally persisted.
 func (uc *ConfiguratorUseCase) GenerateMasks(ctx context.Context, dto request.CfgGenerateMasksDTO) (*response.CfgGeneratedMasksResponse, error) {
 	if dto.ItemCode <= 0 {
-		return nil, errorsuc.NewValidationError("item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("informe o item")
 	}
 	if len(dto.Restrict) == 0 {
 		return nil, errorsuc.NewValidationError("é obrigatório restringir ao menos uma característica para reduzir o volume")

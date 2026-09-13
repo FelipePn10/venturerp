@@ -20,6 +20,10 @@ const (
 	MovementTypePlannedProductionEntry = "EPP"
 	MovementTypeProductionExcess       = "EPE"
 	MovementTypePlannedRequisition     = "REP"
+	// Transferência entre endereços do MESMO almoxarifado. O saldo total do
+	// almoxarifado não muda — muda de endereço — então SignedQuantity devolve 0
+	// de propósito: quem mexe nos dois lados é TransferirEntreEnderecos.
+	MovementTypeAddressTransfer = "TRANSF_ENDERECO"
 )
 
 // Reference type values stored in stock_movements.reference_type, identifying the
@@ -51,11 +55,34 @@ func SignedQuantity(movementType string, quantity float64) float64 {
 	}
 }
 
+// TipoMovimentoValido diz se o tipo é um dos que a apuração de saldo reconhece.
+//
+// Não é preciosismo de vocabulário: SignedQuantity devolve 0 no default, então
+// um tipo desconhecido gera um movimento que **não mexe no saldo**. O registro
+// aparece no extrato, o saldo não muda, e a diferença só é descoberta no
+// inventário. Validar na entrada é o que impede o estoque de mentir.
+func TipoMovimentoValido(tipo string) bool {
+	switch tipo {
+	case MovementTypeIn, MovementTypeOut, MovementTypeTransferIn, MovementTypeTransferOut,
+		MovementTypeAdjustment, MovementTypeProductionEntry, MovementTypePlannedProductionEntry,
+		MovementTypeProductionExcess, MovementTypePlannedRequisition, MovementTypeAddressTransfer,
+		"ENTRADA", "SAIDA":
+		return true
+	default:
+		return false
+	}
+}
+
 type StockMovement struct {
-	ID             int64
-	ItemCode       int64
-	Mask           string
-	WarehouseID    int64
+	ID          int64
+	ItemCode    int64
+	Mask        string
+	WarehouseID int64
+	// Endereço de origem e, numa transferência interna, o de destino. Vazio
+	// significa almoxarifado sem endereçamento — é como fica toda a base que
+	// existia antes da migração 344.
+	Address        *string
+	AddressTo      *string
 	MovementType   string
 	Quantity       float64
 	ExactQuantity  decimal.Decimal

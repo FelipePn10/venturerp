@@ -15,35 +15,32 @@ func TestItemCompatibilityBypassesBinaryResponses(t *testing.T) {
 	}
 }
 
-func TestItemReferencePathDoesNotConfuseOrderLineWithItem(t *testing.T) {
-	for _, pattern := range []string{
-		"/api/sales-orders/items/{itemCode}",
-		"/api/sales-quotations/items/{itemCode}/cancel",
-		"/api/consumer-service/calls/checklist/{itemCode}",
-	} {
-		if isItemReferencePath(pattern, "itemCode") {
-			t.Fatalf("identificador de linha confundido com item: %s", pattern)
-		}
+func TestRotaDeItemEhReconhecidaPelaPosicaoDoSegmento(t *testing.T) {
+	// Cada caso é um caminho concreto e a posição do segmento que carrega o
+	// código do item. -1 significa "esta rota não referencia o cadastro de item".
+	casos := []struct {
+		caminho  string
+		esperado int
+	}{
+		{"/api/sales-order/items/77", -1},
+		{"/api/consumer-service/calls/checklist/77", -1},
+		{"/api/items/classifications/masks/9", -1},
+		{"/api/items/search/MP-CH-3MM", 3},
+		{"/api/stock/movements/item/MP-CH-3MM", 4},
+		{"/api/stock/balances/atp/MP-CH-3MM", 4},
+		{"/api/items/structure/resolve/PA-CHASSI", 4},
+		{"/api/quality/plans/by-item/MP-CH-3MM", 4},
+		{"/api/standard-cost/items/MP-CH-3MM", 3},
+		{"/api/mrp-calculation/profile/MP-CH-3MM/PLAN1", 3},
+		{"/api/mrp-calculation/configured-rules/MP-CH-3MM", 3},
+		{"/api/item-calendar-promise/MP-CH-3MM/_/2026/9", 2},
+		{"/api/financial/relatorios/ficha-tecnica/MP-CH-3MM", 4},
+		{"/api/customers/support/sales-tables/5/prices/MP-CH-3MM", 6},
 	}
-	for _, pattern := range []string{
-		"/api/items/search/{code}",
-		"/api/stock/movements/item/{itemCode}",
-		"/api/configurator/items/{itemCode}/rules",
-		"/api/items/structure/resolve/{itemCode}",
-		"/api/quality/plans/by-item/{itemCode}",
-		"/api/standard-cost/items/{itemCode}",
-		"/api/mrp-calculation/profile/{item_code}/{plan_code}",
-		"/api/item-calendar-promise/{item_code}/{mask}/{year}/{month}",
-		"/api/financial/relatorios/ficha-tecnica/{item_code}",
-	} {
-		key := "itemCode"
-		if pattern == "/api/items/search/{code}" {
-			key = "code"
-		} else if strings.Contains(pattern, "{item_code}") {
-			key = "item_code"
-		}
-		if !isItemReferencePath(pattern, key) {
-			t.Fatalf("rota de item nao reconhecida: %s", pattern)
+	for _, caso := range casos {
+		partes := strings.Split(strings.Trim(caso.caminho, "/"), "/")
+		if got := itemPathSegmentIndex(partes); got != caso.esperado {
+			t.Errorf("%s: esperava posição %d, veio %d", caso.caminho, caso.esperado, got)
 		}
 	}
 }
