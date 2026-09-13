@@ -23,7 +23,7 @@ func (uc *GetForecastByItemUseCase) Execute(
 	}
 	forecasts, err := uc.Repo.GetForecastByItem(ctx, itemCode)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	return toSalesForecastResponses(forecasts), nil
 }

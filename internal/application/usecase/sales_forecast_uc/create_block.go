@@ -2,7 +2,6 @@ package sales_forecast_uc
 
 import (
 	"context"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -30,23 +29,23 @@ func (uc *CreateForecastBlockUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	startDate, err := time.Parse("2006-01-02", dto.StartDate)
+	startDate, err := dataDoBloqueio(dto.StartDate, "data inicial do bloqueio")
 	if err != nil {
 		return nil, err
 	}
-	endDate, err := time.Parse("2006-01-02", dto.EndDate)
+	endDate, err := dataDoBloqueio(dto.EndDate, "data final do bloqueio")
 	if err != nil {
 		return nil, err
 	}
 
 	block, err := entity.NewSalesForecastBlock(startDate, endDate, dto.Reason, userID)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 
 	created, err := uc.Repo.CreateBlock(ctx, block)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	return toForecastBlockResponse(created), nil
 }

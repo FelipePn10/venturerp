@@ -109,32 +109,37 @@ type MRPOutput struct {
 	PlannedOrders  []*PlannedOrderSuggestion
 }
 
+// PlannedOrderSuggestion é devolvida direto pelo handler de sugestões, então as
+// tags são o contrato da API. Sem elas os campos saíam em PascalCase e o
+// middleware de código de item não reconhecia `ItemCode` — a lista do MRP
+// mostrava a chave interna (10) no lugar do código que o usuário conhece
+// (MP-CH-3MM), e o mesmo valor ia para a ordem firmada.
 type PlannedOrderSuggestion struct {
-	Code                 int64
-	OrderNumber          *int64
-	WarehouseCode        *int64
-	InterFactory         bool
-	SourceEnterpriseCode *int64
-	AutoRelease          bool
-	PlanCode             int64
-	ItemCode             int64
-	Mask                 string
-	Quantity             float64
-	NeedDate             time.Time
-	StartDate            *time.Time
-	OrderType            string
-	DemandType           string
-	ParentItemCode       *int64
-	LLC                  int
-	MachineID            *int64
-	ProductionTime       *float64
-	Priority             *string
-	Notes                *string
-	RouteOperationID     *int64
-	OperationID          *int64
-	SupplierCode         *int64
-	ServiceItemCode      *int64
-	RemittanceType       *string
+	Code                 int64      `json:"code"`
+	OrderNumber          *int64     `json:"order_number"`
+	WarehouseCode        *int64     `json:"warehouse_code"`
+	InterFactory         bool       `json:"inter_factory"`
+	SourceEnterpriseCode *int64     `json:"source_enterprise_code"`
+	AutoRelease          bool       `json:"auto_release"`
+	PlanCode             int64      `json:"plan_code"`
+	ItemCode             int64      `json:"item_code"`
+	Mask                 string     `json:"mask"`
+	Quantity             float64    `json:"quantity"`
+	NeedDate             time.Time  `json:"need_date"`
+	StartDate            *time.Time `json:"start_date"`
+	OrderType            string     `json:"order_type"`
+	DemandType           string     `json:"demand_type"`
+	ParentItemCode       *int64     `json:"parent_item_code"`
+	LLC                  int        `json:"llc"`
+	MachineID            *int64     `json:"machine_id"`
+	ProductionTime       *float64   `json:"production_time"`
+	Priority             *string    `json:"priority"`
+	Notes                *string    `json:"notes"`
+	RouteOperationID     *int64     `json:"route_operation_id"`
+	OperationID          *int64     `json:"operation_id"`
+	SupplierCode         *int64     `json:"supplier_code"`
+	ServiceItemCode      *int64     `json:"service_item_code"`
+	RemittanceType       *string    `json:"remittance_type"`
 }
 
 // ExceptionMessageType classifies an MRP exception so planners can act

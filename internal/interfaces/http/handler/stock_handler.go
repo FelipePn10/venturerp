@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,6 +33,13 @@ type StockHandler struct {
 	getGenealogyUC    *stock_uc.GetLotGenealogyUseCase
 	recalcCMUC        *stock_uc.RecalcConsumptionAverageUseCase
 	getCMUC           *stock_uc.GetConsumptionAverageUseCase
+	separacaoUC       *stock_uc.SeparacaoUseCase
+}
+
+// WithSeparacao liga a separação por endereço e a sugestão FEFO/FIFO.
+func (h *StockHandler) WithSeparacao(uc *stock_uc.SeparacaoUseCase) *StockHandler {
+	h.separacaoUC = uc
+	return h
 }
 
 // WithConsumptionAverage attaches the consumption-average use cases (consumo médio).
@@ -514,4 +522,142 @@ func (h *StockHandler) ListInventoryItems(w http.ResponseWriter, r *http.Request
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
+}
+
+// SugerirSeparacao responde de quais lotes e endereços tirar a quantidade
+// pedida. GET /api/stock/separation/suggest/{itemCode}?qty=&warehouse_id=&mask=&rule=
+func (h *StockHandler) SugerirSeparacao(w http.ResponseWriter, r *http.Request) {
+	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
+		return
+	}
+	quantidade, err := strconv.ParseFloat(r.URL.Query().Get("qty"), 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "informe a quantidade a separar em \"qty\"")
+		return
+	}
+	almoxarifado, _ := strconv.ParseInt(r.URL.Query().Get("warehouse_id"), 10, 64)
+	resultado, err := h.separacaoUC.SugerirFEFO(
+		r.Context(), itemCode, r.URL.Query().Get("mask"), almoxarifado, quantidade, r.URL.Query().Get("rule"))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, resultado)
+}
+
+// SaldoPorEndereco lista o estoque quebrado por endereço.
+// GET /api/stock/balances/by-address?warehouse_id=&item_code=
+func (h *StockHandler) SaldoPorEndereco(w http.ResponseWriter, r *http.Request) {
+	almoxarifado, _ := strconv.ParseInt(r.URL.Query().Get("warehouse_id"), 10, 64)
+	item, _ := strconv.ParseInt(r.URL.Query().Get("item_code"), 10, 64)
+	saldos, err := h.separacaoUC.SaldoPorEndereco(r.Context(), almoxarifado, item)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, saldos)
+}
+
+// TransferirEndereco move material entre endereços do mesmo almoxarifado.
+// POST /api/stock/separation/transfer
+func (h *StockHandler) TransferirEndereco(w http.ResponseWriter, r *http.Request) {
+	var dto request.TransferenciaEnderecoDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		return
+	}
+	movimento, err := h.separacaoUC.TransferirEndereco(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, movimento)
+}
+
+// ApurarCurvaABC recalcula a classe ABC dos itens pelo valor consumido.
+// POST /api/stock/abc/recalc  {"window_months":12,"cut_a_pct":80,"cut_b_pct":95}
+func (h *StockHandler) ApurarCurvaABC(w http.ResponseWriter, r *http.Request) {
+	var corpo struct {
+		WindowMonths int     `json:"window_months"`
+		CutAPct      float64 `json:"cut_a_pct"`
+		CutBPct      float64 `json:"cut_b_pct"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&corpo)
+	}
+	resumo, err := h.separacaoUC.ApurarABC(r.Context(), corpo.WindowMonths, corpo.CutAPct, corpo.CutBPct)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, resumo)
+}
+
+// SugerirGuarda recomenda onde guardar o material recebido.
+// GET /api/stock/putaway/suggest/{itemCode}?qty=&warehouse_id=&zone=&mask=
+func (h *StockHandler) SugerirGuarda(w http.ResponseWriter, r *http.Request) {
+	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
+		return
+	}
+	quantidade, err := strconv.ParseFloat(r.URL.Query().Get("qty"), 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "informe a quantidade a guardar em \"qty\"")
+		return
+	}
+	almoxarifado, _ := strconv.ParseInt(r.URL.Query().Get("warehouse_id"), 10, 64)
+	sugestoes, err := h.separacaoUC.SugerirGuarda(
+		r.Context(), itemCode, r.URL.Query().Get("mask"), almoxarifado, quantidade, r.URL.Query().Get("zone"))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, sugestoes)
+}
+
+// CriarOnda agrupa necessidades numa caminhada só. POST /api/stock/waves
+func (h *StockHandler) CriarOnda(w http.ResponseWriter, r *http.Request) {
+	var dto request.OndaDeSeparacaoDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		return
+	}
+	onda, err := h.separacaoUC.CriarOnda(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, onda)
+}
+
+// ConfirmarOnda baixa o separado. POST /api/stock/waves/{code}/confirm
+func (h *StockHandler) ConfirmarOnda(w http.ResponseWriter, r *http.Request) {
+	h.encerrarOnda(w, r, true)
+}
+
+// CancelarOnda devolve o reservado. POST /api/stock/waves/{code}/cancel
+func (h *StockHandler) CancelarOnda(w http.ResponseWriter, r *http.Request) {
+	h.encerrarOnda(w, r, false)
+}
+
+func (h *StockHandler) encerrarOnda(w http.ResponseWriter, r *http.Request, confirmar bool) {
+	codigo, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "número da onda inválido")
+		return
+	}
+	var onda *stockentity.OndaDeSeparacao
+	if confirmar {
+		onda, err = h.separacaoUC.ConfirmarOnda(r.Context(), codigo)
+	} else {
+		onda, err = h.separacaoUC.CancelarOnda(r.Context(), codigo)
+	}
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, onda)
 }

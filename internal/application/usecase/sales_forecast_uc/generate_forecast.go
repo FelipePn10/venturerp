@@ -47,7 +47,7 @@ func (uc *CreateMonthlySalesForecastUseCase) Execute(
 	}
 	weekly, err := distributeMonthByWorkdays(ctx, uc.Calendar, dto.Year, dto.Month, dto.Quantity, dto.AcceptsFraction, "LAST", nil, nil)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	return upsertWeeklyForecasts(ctx, uc.Repo, userID, dto.ItemCode, dto.Mask, weekly, dto.UpdateExisting, "MONTHLY_MANUAL", 0)
 }
@@ -76,11 +76,11 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 
 	from, err := time.Parse("2006-01-02", dto.HistoryFrom)
 	if err != nil {
-		return nil, fmt.Errorf("início do histórico inválido: %w", err)
+		return nil, errorsuc.NewValidationError("início do histórico inválido: use o formato AAAA-MM-DD")
 	}
 	to, err := time.Parse("2006-01-02", dto.HistoryTo)
 	if err != nil {
-		return nil, fmt.Errorf("fim do histórico inválido: %w", err)
+		return nil, errorsuc.NewValidationError("fim do histórico inválido: use o formato AAAA-MM-DD")
 	}
 	if to.Before(from) {
 		return nil, errorsuc.NewValidationError("a data final do histórico deve ser igual ou posterior à inicial")
@@ -88,7 +88,7 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 
 	startDate, err := weekToDate(dto.StartYear, dto.StartWeek)
 	if err != nil {
-		return nil, fmt.Errorf("semana e ano iniciais inválidos: %w", err)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("semana e ano iniciais inválidos: %v", err))
 	}
 	endDate, err := weekToDate(dto.TargetEndYear, dto.TargetEndWeek)
 	if err != nil {
@@ -100,11 +100,11 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 
 	history, err := uc.Repo.ListHistoricalDemand(ctx, dto.HistorySource, from, to, selectedItemCodes(dto))
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	averages := averageHistoryByItemMask(history, calendarMonthCount(from, to), dto.ProjectionPct)
 	if len(averages) == 0 {
-		return nil, fmt.Errorf("nenhuma demanda histórica encontrada para os filtros escolhidos")
+		return nil, errorsuc.NewValidationError("nenhuma demanda histórica encontrada para os filtros escolhidos")
 	}
 
 	var merged *response.GenerateSalesForecastResponse
@@ -147,7 +147,7 @@ func (uc *GenerateSalesForecastUseCase) executeStatistical(
 
 	startDate, err := weekToDate(dto.StartYear, dto.StartWeek)
 	if err != nil {
-		return nil, fmt.Errorf("semana e ano iniciais inválidos: %w", err)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("semana e ano iniciais inválidos: %v", err))
 	}
 
 	statistical, err := forecast_uc.Execute(forecast_uc.StatisticalForecastDTO{
@@ -162,7 +162,7 @@ func (uc *GenerateSalesForecastUseCase) executeStatistical(
 		SeasonLen: dto.SeasonLen,
 	})
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 
 	weekly := map[forecastWeek]float64{}
@@ -187,7 +187,7 @@ func upsertWeeklyForecasts(
 ) (*response.GenerateSalesForecastResponse, error) {
 	existing, err := repo.GetForecastByItem(ctx, itemCode)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	existingByPeriod := indexForecasts(existing, mask)
 
@@ -292,7 +292,7 @@ func distributeMonthByWorkdays(
 	}
 	workdays, err := workdaysForMonth(ctx, calendar, year, month)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	filtered := make([]time.Time, 0, len(workdays))
 	for _, day := range workdays {

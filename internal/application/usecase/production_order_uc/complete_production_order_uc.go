@@ -170,7 +170,9 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 							if !child.IsFixedQty {
 								componentQty = componentQty.Mul(qty)
 							}
-							componentQty = componentQty.Mul(decimal.NewFromFloat(1 + child.LossPercentage/100))
+							componentQtyBruta, _ := componentQty.Float64()
+							componentQty = decimal.NewFromFloat(structentity.QuantidadeComPerda(
+								componentQtyBruta, child.LossPercentage, structentity.FormulaPerdaPadrao))
 							componentQtyFloat, _ := componentQty.Float64()
 							rep := &stockentity.StockMovement{ItemCode: child.ChildCode, WarehouseID: componentWarehouse,
 								MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQtyFloat, ReferenceType: &refType,

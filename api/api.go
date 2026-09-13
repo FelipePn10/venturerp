@@ -228,6 +228,9 @@ func (app *application) mount() chi.Router {
 	}
 	r.Use(httpmw.RequestLoggerMiddleware(app.logger))
 	r.Use(httpmw.NewRateLimiter(float64(app.config.RateLimitRPS), float64(app.config.RateLimitBurst)).Middleware)
+	// Precisa ser de raiz: traduz o código público do item no caminho antes de o
+	// chi escolher a rota. Ver ItemPathTranslation.
+	r.Use(httpmw.ItemPathTranslation(app.db.Pool, app.config.JWTSecret))
 
 	// Auth endpoints get a stricter, separate bucket to blunt credential
 	// stuffing / brute force, independent of the global API budget.
@@ -915,7 +918,8 @@ func (app *application) mount() chi.Router {
 		getInventoryUC,
 		listInventoriesUC,
 	).WithLot(registerLotUC, listLotBalancesUC, getLotGenealogyUC).
-		WithConsumptionAverage(recalcCMUC, getCMUC)
+		WithConsumptionAverage(recalcCMUC, getCMUC).
+		WithSeparacao(&stock_uc.SeparacaoUseCase{Repo: stockRepository, Auth: authService})
 
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
@@ -1781,7 +1785,31 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListMovementsByItem)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/warehouse/{warehouseId}", stockHandler.ListMovementsByWarehouse)
 			})
+			r.Route("/separation", func(r chi.Router) {
+				// Sugestão de separação: de qual lote e endereço tirar, na ordem
+				// FEFO (padrão) ou FIFO.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suggest/{itemCode}", stockHandler.SugerirSeparacao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transfer", stockHandler.TransferirEndereco)
+			})
+			r.Route("/putaway", func(r chi.Router) {
+				// Onde guardar o que chegou: endereço fixo → consolidação →
+				// vazio na zona → qualquer um com espaço.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suggest/{itemCode}", stockHandler.SugerirGuarda)
+			})
+			r.Route("/waves", func(r chi.Router) {
+				// Onda de separação: várias necessidades numa caminhada só, com
+				// reserva por endereço para duas ondas não prometerem a mesma peça.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", stockHandler.CriarOnda)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/confirm", stockHandler.ConfirmarOnda)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/cancel", stockHandler.CancelarOnda)
+			})
+			r.Route("/abc", func(r chi.Router) {
+				// Curva ABC pelo valor consumido; alimenta a frequência da
+				// contagem cíclica.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/recalc", stockHandler.ApurarCurvaABC)
+			})
 			r.Route("/balances", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/by-address", stockHandler.SaldoPorEndereco)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/get", stockHandler.GetBalance)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", stockHandler.ListBalances)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/warehouse/{warehouseId}", stockHandler.ListBalancesByWarehouse)

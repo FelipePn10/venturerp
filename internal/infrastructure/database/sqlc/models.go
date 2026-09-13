@@ -3911,18 +3911,19 @@ type ContributionMargin struct {
 }
 
 type CostCenter struct {
-	ID          int64
-	Code        int32
-	Description string
-	ParentCode  *int32
-	Type        TypeCcEnum
-	IsRatio     bool
-	StartDate   pgtype.Date
-	EndDate     *time.Time
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	Code         int32
+	Description  string
+	ParentCode   *int32
+	Type         TypeCcEnum
+	IsRatio      bool
+	StartDate    pgtype.Date
+	EndDate      *time.Time
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 type CostRollupLog struct {

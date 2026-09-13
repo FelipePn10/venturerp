@@ -42,10 +42,10 @@ func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSe
 		return nil, errorsuc.NewValidationError("valor_servicos deve ser maior que zero")
 	}
 	if dto.ItemListaServico == "" {
-		return nil, errorsuc.NewValidationError("item_lista_servico é obrigatório")
+		return nil, errorsuc.NewValidationError("informe o item da lista de serviços")
 	}
 	if dto.CodigoMunicipio == "" {
-		return nil, errorsuc.NewValidationError("codigo_municipio (prestação do serviço) é obrigatório")
+		return nil, errorsuc.NewValidationError("informe o código do município onde o serviço foi prestado")
 	}
 	if dto.Discriminacao == "" {
 		return nil, errorsuc.NewValidationError("discriminacao é obrigatória")

@@ -94,6 +94,12 @@ func (h *StandardCostHandler) RollUp(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
+	// Quem apurou vem do token, nunca do corpo: com `calculated_by` vindo do
+	// cliente, qualquer um podia atribuir a apuração de custo a outro usuário —
+	// e, omitindo o campo, a tela levava "invalid calculated_by UUID".
+	if id, ok := actor(r); ok {
+		dto.CalculatedBy = id.String()
+	}
 	result, err := h.uc.RollUp(r.Context(), dto)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())

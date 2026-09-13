@@ -81,15 +81,15 @@ func (uc *ProductionScannerUseCase) Scan(ctx context.Context, dto request.Produc
 	}
 	good, e := decimal.NewFromString(defaultZero(dto.GoodQuantity))
 	if e != nil {
-		return nil, errorsuc.NewValidationError("good_quantity invalida")
+		return nil, errorsuc.NewValidationError("quantidade boa inválida")
 	}
 	scrap, e := decimal.NewFromString(defaultZero(dto.ScrapQuantity))
 	if e != nil {
-		return nil, errorsuc.NewValidationError("scrap_quantity invalida")
+		return nil, errorsuc.NewValidationError("quantidade de refugo inválida")
 	}
 	hours, e := decimal.NewFromString(defaultZero(dto.Hours))
 	if e != nil {
-		return nil, errorsuc.NewValidationError("hours invalida")
+		return nil, errorsuc.NewValidationError("quantidade de horas inválida")
 	}
 	if good.IsNegative() || scrap.IsNegative() || hours.IsNegative() {
 		return nil, errorsuc.NewValidationError("quantidades e horas nao podem ser negativas")

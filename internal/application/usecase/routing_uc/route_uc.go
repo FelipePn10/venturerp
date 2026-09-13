@@ -261,8 +261,12 @@ func (uc *RouteUseCase) Deactivate(ctx context.Context, id int64) error {
 }
 
 func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOperationDTO) (*response.RouteOperationResponse, error) {
-	if dto.TimeUnit != nil && !validTimeUnit(*dto.TimeUnit) {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", *dto.TimeUnit))
+	if dto.TimeUnit != nil {
+		unidade, ok := normalizaUnidadeDeTempo(*dto.TimeUnit)
+		if !ok {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", *dto.TimeUnit))
+		}
+		dto.TimeUnit = &unidade
 	}
 	remittance, err := normalizeThirdPartyRemittancePtr(dto.ThirdPartyRemittance)
 	if err != nil {
@@ -305,8 +309,12 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 }
 
 func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateRouteOperationDTO) (*response.RouteOperationResponse, error) {
-	if dto.TimeUnit != nil && !validTimeUnit(*dto.TimeUnit) {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use minuto, hora ou dia", *dto.TimeUnit))
+	if dto.TimeUnit != nil {
+		unidade, ok := normalizaUnidadeDeTempo(*dto.TimeUnit)
+		if !ok {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", *dto.TimeUnit))
+		}
+		dto.TimeUnit = &unidade
 	}
 	remittance, err := normalizeThirdPartyRemittancePtr(dto.ThirdPartyRemittance)
 	if err != nil {

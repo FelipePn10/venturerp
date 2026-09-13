@@ -46,12 +46,19 @@ func (uc *ConfiguratorUseCase) CreateCharacteristic(ctx context.Context, dto req
 }
 
 func (uc *ConfiguratorUseCase) UpdateCharacteristic(ctx context.Context, dto request.UpdateCfgCharacteristicDTO) (*response.CfgCharacteristicResponse, error) {
+	// A entidade é remontada a partir do corpo, então sem ler o valor atual não
+	// há como distinguir "não mandou a flag" de "desligou a flag".
+	atual, err := uc.Q.GetCfgCharacteristic(ctx, dto.ID)
+	if err != nil {
+		return nil, fmt.Errorf("característica não encontrada: %w", err)
+	}
+
 	c := &entity.Characteristic{
 		Code: dto.Code, Description: dto.Description, Type: dto.Type, IsActive: ptrutil.BoolOrTrue(dto.IsActive),
 		SetID: dto.SetID, DefaultVariableID: dto.DefaultVariableID, Mask: dto.Mask,
 		IsSpecial: dto.IsSpecial, AffectsPrice: dto.AffectsPrice, ControlsGoals: dto.ControlsGoals,
 		ReceivingType: dto.ReceivingType, FieldSource: dto.FieldSource, Formula: dto.Formula,
-		IsRequired: dto.IsRequired, NumMin: dto.NumMin, NumMax: dto.NumMax, NumMultiple: dto.NumMultiple,
+		IsRequired: ptrutil.BoolOr(dto.IsRequired, atual.IsRequired), NumMin: dto.NumMin, NumMax: dto.NumMax, NumMultiple: dto.NumMultiple,
 		OptionTrue: dto.OptionTrue, OptionFalse: dto.OptionFalse,
 	}
 	if c.Code == "" || c.Description == "" {

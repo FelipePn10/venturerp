@@ -22,7 +22,7 @@ func (uc *ListForecastBlocksUseCase) Execute(
 	}
 	blocks, err := uc.Repo.ListBlocks(ctx)
 	if err != nil {
-		return nil, err
+		return nil, erroDeRegra(err)
 	}
 	return toForecastBlockResponses(blocks), nil
 }

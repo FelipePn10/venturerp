@@ -407,7 +407,7 @@ func (uc *UseCase) LinkReceivingInspectionQualityReport(ctx context.Context, ord
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 || dto.QualityReportID <= 0 {
-		return nil, errorsuc.NewValidationError("inspection_order_id e quality_report_id são obrigatórios")
+		return nil, errorsuc.NewValidationError("informe a ordem de inspeção e o laudo de qualidade")
 	}
 	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
 	if err != nil {
@@ -426,7 +426,7 @@ func (uc *UseCase) LinkReceivingInspectionQualityReport(ctx context.Context, ord
 
 func (uc *UseCase) ListReceivingInspectionQualityReports(ctx context.Context, orderID int64) ([]*response.ReceivingInspectionQualityReportResponse, error) {
 	if orderID <= 0 {
-		return nil, errorsuc.NewValidationError("inspection_order_id é obrigatório")
+		return nil, errorsuc.NewValidationError("informe a ordem de inspeção")
 	}
 	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
 	if err != nil {
@@ -448,7 +448,7 @@ func (uc *UseCase) UnlinkReceivingInspectionQualityReport(ctx context.Context, o
 		return errorsuc.ErrUnauthorized
 	}
 	if orderID <= 0 || reportID <= 0 {
-		return errorsuc.NewValidationError("inspection_order_id e quality_report_id são obrigatórios")
+		return errorsuc.NewValidationError("informe a ordem de inspeção e o laudo de qualidade")
 	}
 	enterpriseID, err := uc.Auth.EnterpriseID(ctx)
 	if err != nil {

@@ -68,7 +68,7 @@ func (uc *NotifyExceptionsUseCase) Execute(ctx context.Context, dto NotifyExcept
 
 	if dto.WebhookURL != "" {
 		if err := uc.webhook.Send(ctx, dto.WebhookURL, summary); err != nil {
-			return summary, fmt.Errorf("webhook delivery failed: %w", err)
+			return summary, fmt.Errorf("falha ao enviar a notificação: %w", err)
 		}
 	}
 

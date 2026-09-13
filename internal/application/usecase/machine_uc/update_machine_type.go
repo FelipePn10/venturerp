@@ -30,13 +30,19 @@ func (uc *UpdateMachineTypeUseCase) Execute(
 			fmt.Sprintf("classificação %q inválida para o tipo de máquina", string(dto.Type)))
 	}
 
+	// Sem o valor atual não há como distinguir "não mandou" de "desligou".
+	atual, err := uc.Repo.GetTypeByCode(ctx, dto.Code)
+	if err != nil {
+		return nil, err
+	}
+
 	mt := &entity.MachineType{
 		Code:             dto.Code,
 		Name:             dto.Name,
 		Description:      dto.Description,
 		Type:             dto.Type,
-		RequiresOperator: dto.RequiresOperator,
-		IsActive:         ptrutil.BoolOrTrue(dto.IsActive),
+		RequiresOperator: ptrutil.BoolOr(dto.RequiresOperator, atual.RequiresOperator),
+		IsActive:         ptrutil.BoolOr(dto.IsActive, atual.IsActive),
 	}
 
 	updated, err := uc.Repo.UpdateType(ctx, mt)
@@ -44,4 +50,13 @@ func (uc *UpdateMachineTypeUseCase) Execute(
 		return nil, err
 	}
 	return toMachineTypeResponse(updated), nil
+}
+
+// boolOuAtual existe para o teste exercitar a regra sem subir caso de uso
+// inteiro; é a mesma de ptrutil.BoolOr.
+func boolOuAtual(enviado *bool, atual bool) bool {
+	if enviado == nil {
+		return atual
+	}
+	return *enviado
 }

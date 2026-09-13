@@ -296,7 +296,7 @@ func (uc *DrawingUseCase) MaintainItemDrawingCode(ctx context.Context, dto reque
 		return nil, err
 	}
 	if dto.ItemCode == 0 || strings.TrimSpace(dto.DrawingCode) == "" {
-		return nil, errorsuc.NewValidationError("item_code e drawing_code são obrigatórios")
+		return nil, errorsuc.NewValidationError("informe o item e o desenho")
 	}
 	row, err := uc.Q.UpsertItemEngineeringDrawing(ctx, enterpriseID, dto.ItemCode, strings.TrimSpace(dto.Mask), strings.TrimSpace(dto.DrawingCode), pgutil.ToPgUUID(dto.UpdatedBy))
 	if err != nil {

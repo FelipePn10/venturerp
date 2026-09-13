@@ -37,7 +37,7 @@ func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.Cr
 		return nil, errorsuc.NewValidationError("valor_original deve ser maior que zero")
 	}
 	if dto.ContaBancariaID == 0 {
-		return nil, errorsuc.NewValidationError("conta_bancaria_id é obrigatória")
+		return nil, errorsuc.NewValidationError("informe a conta bancária")
 	}
 
 	data, err := time.Parse("2006-01-02", dto.DataAdiantamento)

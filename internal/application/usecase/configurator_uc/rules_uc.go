@@ -107,7 +107,7 @@ func (uc *ConfiguratorUseCase) DeactivateEquivalentRule(ctx context.Context, id 
 // the child characteristic → child variable assignment.
 func (uc *ConfiguratorUseCase) ApplyEquivalent(ctx context.Context, dto request.CfgApplyEquivalentDTO) (*response.CfgAppliedEquivalentResponse, error) {
 	if dto.ParentItemCode <= 0 {
-		return nil, errorsuc.NewValidationError("parent_item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("informe o item pai")
 	}
 	answers := uc.resolveAnswerCodes(ctx, dto.Answers)
 	rules, err := uc.Q.ListCfgEquivalentRulesByParent(ctx, dto.ParentItemCode, true)
@@ -196,7 +196,7 @@ func (uc *ConfiguratorUseCase) DeleteItemRule(ctx context.Context, id int64) err
 // conditions all match the item's configuration.
 func (uc *ConfiguratorUseCase) EvaluateItemRules(ctx context.Context, dto request.CfgEvaluateItemRulesDTO) (*response.CfgEvaluatedRulesResponse, error) {
 	if dto.ItemCode <= 0 {
-		return nil, errorsuc.NewValidationError("item_code é obrigatório")
+		return nil, errorsuc.NewValidationError("informe o item")
 	}
 	answers := uc.resolveAnswerCodes(ctx, dto.Answers)
 	rules, err := uc.Q.ListCfgItemRulesByItem(ctx, dto.ItemCode, true)

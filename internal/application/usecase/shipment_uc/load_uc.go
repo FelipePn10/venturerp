@@ -92,7 +92,7 @@ func (uc *ShipmentUseCase) AddFiscalNoteToLoad(ctx context.Context, in repositor
 		return nil, fmt.Errorf("carga %d não aceita notas no status %s", in.LoadCode, load.Status)
 	}
 	if in.FiscalExitID <= 0 {
-		return nil, errorsuc.NewValidationError("fiscal_exit_id é obrigatório")
+		return nil, errorsuc.NewValidationError("informe a saída fiscal")
 	}
 	if in.Sequence <= 0 {
 		in.Sequence = load.TotalFiscalNotes + 1

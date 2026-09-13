@@ -13,8 +13,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
 )
 
-var ErrInvalidCalendarDate = errors.New("data do calendario invalida")
-var ErrCalendarGenerationUnavailable = errors.New("geracao do calendario indisponivel")
+var ErrInvalidCalendarDate = errors.New("data do calendário inválida")
+var ErrCalendarGenerationUnavailable = errors.New("geração do calendário indisponível")
 
 type calendarMonthGenerator interface {
 	GenerateMonth(context.Context, int, int) (int, error)

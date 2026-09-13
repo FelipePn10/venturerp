@@ -13,22 +13,26 @@ import (
 )
 
 const createCostCenter = `-- name: CreateCostCenter :one
-INSERT INTO cost_centers (code, description, parent_code, type, is_ratio, start_date, end_date, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by
+
+INSERT INTO cost_centers (code, description, parent_code, type, is_ratio, start_date, end_date, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateCostCenterParams struct {
-	Code        int32
-	Description string
-	ParentCode  *int32
-	Type        TypeCcEnum
-	IsRatio     bool
-	StartDate   pgtype.Date
-	EndDate     *time.Time
-	CreatedBy   pgtype.UUID
+	Code         int32
+	Description  string
+	ParentCode   *int32
+	Type         TypeCcEnum
+	IsRatio      bool
+	StartDate    pgtype.Date
+	EndDate      *time.Time
+	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
+// Toda consulta filtra por empresa (migração 343). `cost_centers` não tinha
+// coluna de empresa: era global por construção.
 func (q *Queries) CreateCostCenter(ctx context.Context, arg CreateCostCenterParams) (CostCenter, error) {
 	row := q.db.QueryRow(ctx, createCostCenter,
 		arg.Code,
@@ -39,6 +43,7 @@ func (q *Queries) CreateCostCenter(ctx context.Context, arg CreateCostCenterPara
 		arg.StartDate,
 		arg.EndDate,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i CostCenter
 	err := row.Scan(
@@ -54,25 +59,37 @@ func (q *Queries) CreateCostCenter(ctx context.Context, arg CreateCostCenterPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteCostCenter = `-- name: DeleteCostCenter :exec
-UPDATE cost_centers SET is_active = FALSE, updated_at = NOW() WHERE code = $1
+UPDATE cost_centers SET is_active = FALSE, updated_at = NOW()
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteCostCenter(ctx context.Context, code int32) error {
-	_, err := q.db.Exec(ctx, deleteCostCenter, code)
+type DeleteCostCenterParams struct {
+	Code         int32
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteCostCenter(ctx context.Context, arg DeleteCostCenterParams) error {
+	_, err := q.db.Exec(ctx, deleteCostCenter, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const getCostCenterByCode = `-- name: GetCostCenterByCode :one
-SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by FROM cost_centers WHERE code = $1
+SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by, enterprise_id FROM cost_centers WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetCostCenterByCode(ctx context.Context, code int32) (CostCenter, error) {
-	row := q.db.QueryRow(ctx, getCostCenterByCode, code)
+type GetCostCenterByCodeParams struct {
+	Code         int32
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetCostCenterByCode(ctx context.Context, arg GetCostCenterByCodeParams) (CostCenter, error) {
+	row := q.db.QueryRow(ctx, getCostCenterByCode, arg.Code, arg.EnterpriseID)
 	var i CostCenter
 	err := row.Scan(
 		&i.ID,
@@ -87,16 +104,19 @@ func (q *Queries) GetCostCenterByCode(ctx context.Context, code int32) (CostCent
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listCostCenters = `-- name: ListCostCenters :many
-SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by FROM cost_centers WHERE is_active = TRUE ORDER BY code
+SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by, enterprise_id FROM cost_centers
+WHERE is_active = TRUE AND enterprise_id = $1
+ORDER BY code
 `
 
-func (q *Queries) ListCostCenters(ctx context.Context) ([]CostCenter, error) {
-	rows, err := q.db.Query(ctx, listCostCenters)
+func (q *Queries) ListCostCenters(ctx context.Context, enterpriseID *int64) ([]CostCenter, error) {
+	rows, err := q.db.Query(ctx, listCostCenters, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +137,7 @@ func (q *Queries) ListCostCenters(ctx context.Context) ([]CostCenter, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -129,11 +150,18 @@ func (q *Queries) ListCostCenters(ctx context.Context) ([]CostCenter, error) {
 }
 
 const listCostCentersByType = `-- name: ListCostCentersByType :many
-SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by FROM cost_centers WHERE type = $1 AND is_active = TRUE ORDER BY code
+SELECT id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by, enterprise_id FROM cost_centers
+WHERE type = $1 AND is_active = TRUE AND enterprise_id = $2
+ORDER BY code
 `
 
-func (q *Queries) ListCostCentersByType(ctx context.Context, type_ TypeCcEnum) ([]CostCenter, error) {
-	rows, err := q.db.Query(ctx, listCostCentersByType, type_)
+type ListCostCentersByTypeParams struct {
+	Type         TypeCcEnum
+	EnterpriseID *int64
+}
+
+func (q *Queries) ListCostCentersByType(ctx context.Context, arg ListCostCentersByTypeParams) ([]CostCenter, error) {
+	rows, err := q.db.Query(ctx, listCostCentersByType, arg.Type, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +182,7 @@ func (q *Queries) ListCostCentersByType(ctx context.Context, type_ TypeCcEnum) (
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -174,18 +203,19 @@ SET description = $1,
     start_date = $5,
     end_date = $6,
     updated_at = NOW()
-WHERE id = $7
-    RETURNING id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by
+WHERE id = $7 AND enterprise_id = $8
+    RETURNING id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type UpdateCostCenterParams struct {
-	Description string
-	ParentCode  *int32
-	Type        TypeCcEnum
-	IsRatio     bool
-	StartDate   pgtype.Date
-	EndDate     *time.Time
-	ID          int64
+	Description  string
+	ParentCode   *int32
+	Type         TypeCcEnum
+	IsRatio      bool
+	StartDate    pgtype.Date
+	EndDate      *time.Time
+	ID           int64
+	EnterpriseID *int64
 }
 
 func (q *Queries) UpdateCostCenter(ctx context.Context, arg UpdateCostCenterParams) (CostCenter, error) {
@@ -197,6 +227,7 @@ func (q *Queries) UpdateCostCenter(ctx context.Context, arg UpdateCostCenterPara
 		arg.StartDate,
 		arg.EndDate,
 		arg.ID,
+		arg.EnterpriseID,
 	)
 	var i CostCenter
 	err := row.Scan(
@@ -212,6 +243,7 @@ func (q *Queries) UpdateCostCenter(ctx context.Context, arg UpdateCostCenterPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

@@ -67,7 +67,7 @@ func NewEntryOperationType(code int64, description, natureOperation string, crea
 	switch natureOperation[0] {
 	case '1', '2', '3':
 	default:
-		return nil, fmt.Errorf("nature_operation deve iniciar por 1 (dentro do estado), 2 (fora do estado) ou 3 (fora do país)")
+		return nil, fmt.Errorf("a natureza da operação deve iniciar por 1 (dentro do estado), 2 (fora do estado) ou 3 (fora do país)")
 	}
 	return &EntryOperationType{
 		Code:            code,
