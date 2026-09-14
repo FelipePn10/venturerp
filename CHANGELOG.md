@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- **Estrutura de produtos: os três avisos que saíam como "erro interno do servidor".** Componente repetido, situação em branco e ciclo eram recusados pelo banco, e a tela mostrava o erro cru do PostgreSQL. Agora: componente repetido responde "este componente já está na estrutura deste item"; situação em branco assume `ATIVO`; e o item não pode mais ser componente de si mesmo.
+- **O aviso de ciclo agora diz qual é o problema.** Em vez de "o componente criaria um ciclo na estrutura", a mensagem nomeia os dois itens e aponta a causa real — *"não é possível incluir X dentro de Y: o item X já contém Y na sua estrutura (direta ou indiretamente). Verifique se a estrutura existente não está invertida."* Quase sempre é isso: a estrutura foi cadastrada no sentido contrário, e a recusa era o sintoma.
+
 ## [v1.1.25] — 2026-09-13
 
 ### Correções

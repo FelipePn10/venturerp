@@ -3,6 +3,7 @@ package structure_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -77,8 +78,14 @@ func (uc *CreateStructureComponentUseCase) Execute(
 		return nil, errorsuc.NewNotFoundError("item filho não encontrado")
 	}
 
+	// Situação vazia chegava ao banco e estourava no enum, com o erro cru do
+	// Postgres na tela ("invalid input value for enum health_enum").
+	if strings.TrimSpace(string(dto.Health)) == "" {
+		dto.Health = "ATIVO"
+	}
+
 	if parentCode == childCode {
-		return nil, fmt.Errorf("o componente criaria um ciclo na estrutura")
+		return nil, errorsuc.NewValidationError("um item não pode ser componente de si mesmo")
 	}
 
 	// Ao adicionar pai → filho, só há ciclo se o filho já alcançar o pai.
@@ -87,7 +94,13 @@ func (uc *CreateStructureComponentUseCase) Execute(
 		return nil, err
 	}
 	if hasCycle {
-		return nil, fmt.Errorf("o componente criaria um ciclo na estrutura")
+		// Dizer só "criaria um ciclo" deixa o usuário sem saída: ele não sabe
+		// QUAL relação existente está no caminho, e é comum ela estar invertida
+		// por engano. Nomeamos os dois itens para que dê para ir corrigir lá.
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"não é possível incluir %s dentro de %s: o item %s já contém %s na sua estrutura "+
+				"(direta ou indiretamente). Verifique se a estrutura existente não está invertida.",
+			dto.ChildCode, dto.ParentCode, dto.ChildCode, dto.ParentCode))
 	}
 
 	exists, err := uc.Repo.SequenceExists(ctx, parentCode, dto.Sequence)

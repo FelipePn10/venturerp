@@ -2,8 +2,10 @@ package structure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
@@ -53,7 +55,14 @@ func (r *ItemStructureRepositorySQLC) Create(
 		GeneratesInspection: s.GeneratesInspection,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating structure: %w", err)
+		// O índice único do componente é o erro mais comum aqui: o usuário
+		// inclui algo que já está na estrutura. Sem esta tradução, a tela
+		// mostrava "duplicate key value violates unique constraint" em inglês.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, errorsuc.NewConflictError("este componente já está na estrutura deste item")
+		}
+		return nil, fmt.Errorf("gravando o componente da estrutura: %w", err)
 	}
 
 	criado := rowToEntity(row)
