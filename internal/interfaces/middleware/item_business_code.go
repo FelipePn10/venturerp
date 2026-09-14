@@ -112,10 +112,25 @@ func nativeItemBusinessCodeRequest(r *http.Request) bool {
 
 func nativeItemBusinessCodePath(r *http.Request) bool {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 3 || parts[0] != "api" || parts[1] != "items" {
+		return false
+	}
+
+	// Estes handlers já recebem e resolvem o código comercial. Traduzir o
+	// caminho antes deles cria uma colisão perigosa: RN-01001 pode virar a chave
+	// interna 5 e, se existir um item cujo código comercial seja "5", o handler
+	// abre esse outro item. A VENT0210 usa exatamente search e structure/resolve.
+	if len(parts) == 4 && parts[2] == "search" {
+		return true
+	}
+	if len(parts) == 5 && parts[2] == "structure" && parts[3] == "resolve" {
+		return true
+	}
+
 	if len(parts) != 3 && len(parts) != 4 {
 		return false
 	}
-	if parts[0] != "api" || parts[1] != "items" || parts[2] == "create" || parts[2] == "with-masks" || parts[2] == "search" || parts[2] == "structure" {
+	if parts[2] == "create" || parts[2] == "with-masks" || parts[2] == "structure" {
 		return false
 	}
 	return len(parts) == 3 || (len(parts) == 4 && parts[3] == "activation-readiness")

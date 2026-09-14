@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.28] — 2026-09-14
+
+### Correções
+- **A Estrutura de Produto (VENT0210) agora abre exatamente o item selecionado.** Ao buscar um código como RN-01001, uma chave numérica interna podia ser confundida com o código comercial de outro item — por exemplo, "5" — e a tela carregava o produto errado. A busca e a consulta da estrutura passam a preservar o código escolhido de ponta a ponta.
+
 ## [v1.1.27] — 2026-09-14
 
 - fix(estrutura): tipar os erros que o handler novo transformava em 500 (`2159ed7`)
