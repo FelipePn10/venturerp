@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- **"Erro interno do servidor" ao repetir a posição de um componente.** Informar uma sequência já usada na estrutura respondia erro interno; agora responde que a posição está ocupada e pede outra. A mensagem já existia e estava em português — faltava o tipo, e o classificador de erros trabalha por tipo.
+- **Estrutura com muitos níveis avisava em inglês** (`max BOM depth reached`). Passa a explicar em português que o limite foi passado e que provavelmente há um componente voltando a si mesmo.
+- **Máscara não cadastrada para o item** também virava erro interno na consulta da estrutura.
+
 ## [v1.1.26] — 2026-09-14
 
 - fix(estrutura): avisos em português na VENT0210 e ciclo que explica a causa (`2eeecbf`)

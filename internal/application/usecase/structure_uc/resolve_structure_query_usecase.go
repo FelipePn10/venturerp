@@ -65,7 +65,7 @@ func (uc *ResolveStructureQueryUseCase) Execute(
 			return nil, fmt.Errorf("buscando respostas da máscara %q: %w", dto.Mask, err)
 		}
 		if len(rootAnswers) == 0 {
-			return nil, fmt.Errorf("máscara %q não cadastrada para o item", dto.Mask)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("máscara %q não cadastrada para o item", dto.Mask))
 		}
 		nodes, err = uc.Resolver.Resolve(ctx, itemCode, dto.Mask, rootAnswers, 1, make(map[int64]bool), createdBy)
 	}

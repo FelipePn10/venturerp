@@ -108,7 +108,10 @@ func (uc *CreateStructureComponentUseCase) Execute(
 		return nil, err
 	}
 	if exists {
-		return nil, fmt.Errorf("a posição %d já está em uso na estrutura", dto.Sequence)
+		// Sem tipo isto virava 500: a mensagem já estava em português, mas o
+		// classificador trabalha por tipo e o ramo final é "erro interno".
+		return nil, errorsuc.NewConflictError(fmt.Sprintf(
+			"a posição %d já está em uso na estrutura deste item — escolha outra sequência", dto.Sequence))
 	}
 
 	structure, err := entity.NewItemStructure(

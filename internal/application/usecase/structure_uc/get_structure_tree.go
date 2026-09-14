@@ -89,7 +89,8 @@ func (uc *GetStructureTreeUseCase) buildTree(
 ) ([]*valueobject.StructureNode, error) {
 
 	if level > maxBOMDepth {
-		return nil, fmt.Errorf("max BOM depth reached (%d)", maxBOMDepth)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"a estrutura passou de %d níveis: provavelmente há um componente que volta a si mesmo", maxBOMDepth))
 	}
 
 	if visited[parentCode] {
