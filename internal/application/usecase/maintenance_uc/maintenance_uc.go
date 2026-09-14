@@ -132,7 +132,7 @@ type AdvanceOrderDTO struct {
 func (uc *MaintenanceUseCase) AdvanceOrder(ctx context.Context, dto AdvanceOrderDTO) (*response.MaintenanceOrderResponse, error) {
 	order, err := uc.repo.GetOrderByID(ctx, dto.OrderID)
 	if err != nil {
-		return nil, fmt.Errorf("order %d not found: %w", dto.OrderID, err)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem %d não encontrada", dto.OrderID))
 	}
 
 	order.Status = entity.OrderStatus(dto.Status)

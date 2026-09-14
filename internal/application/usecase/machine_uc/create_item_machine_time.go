@@ -74,7 +74,7 @@ func (uc *CreateItemMachineTimeUseCase) validateUnitCompatibility(
 ) error {
 	machine, err := uc.Repo.GetByCode(ctx, machineCode)
 	if err != nil {
-		return fmt.Errorf("machine %d not found: %w", machineCode, err)
+		return errorsuc.NewNotFoundError(fmt.Sprintf("máquina %d não encontrada", machineCode))
 	}
 
 	_, err = machinesvc.CheckUnitCompatibility(
