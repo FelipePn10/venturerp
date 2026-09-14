@@ -38,7 +38,7 @@ func (uc *ToolUseCase) Create(ctx context.Context, dto request.CreateToolDTO) (*
 func (uc *ToolUseCase) Update(ctx context.Context, dto request.UpdateToolDTO) (*response.ToolResponse, error) {
 	t, err := uc.repo.GetTool(ctx, dto.ID)
 	if err != nil {
-		return nil, fmt.Errorf("tool not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("ferramenta não encontrada")
 	}
 	if dto.LifeType != "" {
 		t.LifeType = dto.LifeType
@@ -170,7 +170,7 @@ func (uc *ToolUseCase) ListByOperation(ctx context.Context, routeOperationID int
 
 func (uc *ToolUseCase) CreateSerial(ctx context.Context, dto request.CreateToolSerialDTO) (*response.ToolSerialResponse, error) {
 	if _, err := uc.repo.GetTool(ctx, dto.ToolID); err != nil {
-		return nil, fmt.Errorf("tool not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("ferramenta não encontrada")
 	}
 	s, err := entity.NewToolSerial(dto.ToolID, dto.SerialNumber, dto.Status, dto.Location, dto.Notes, dto.CreatedBy)
 	if err != nil {
@@ -186,7 +186,7 @@ func (uc *ToolUseCase) CreateSerial(ctx context.Context, dto request.CreateToolS
 func (uc *ToolUseCase) UpdateSerial(ctx context.Context, dto request.UpdateToolSerialDTO) (*response.ToolSerialResponse, error) {
 	s, err := uc.repo.GetToolSerial(ctx, dto.ID)
 	if err != nil {
-		return nil, fmt.Errorf("tool serial not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("série da ferramenta não encontrada")
 	}
 	if dto.SerialNumber != "" {
 		s.SerialNumber = dto.SerialNumber
@@ -206,7 +206,7 @@ func (uc *ToolUseCase) UpdateSerial(ctx context.Context, dto request.UpdateToolS
 func (uc *ToolUseCase) GetSerial(ctx context.Context, id int64) (*response.ToolSerialResponse, error) {
 	s, err := uc.repo.GetToolSerial(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("tool serial not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("série da ferramenta não encontrada")
 	}
 	return toToolSerialResponse(s), nil
 }

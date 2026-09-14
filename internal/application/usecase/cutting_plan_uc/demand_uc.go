@@ -81,7 +81,7 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 	for _, code := range dto.ProductionOrderCodes {
 		op, err := uc.prodOrders.GetByCode(ctx, code)
 		if err != nil || op == nil {
-			warnings = append(warnings, fmt.Sprintf("production order %d not found", code))
+			warnings = append(warnings, fmt.Sprintf("ordem de produção %d não encontrada", code))
 			continue
 		}
 		sources = append(sources, orderSource{
@@ -92,7 +92,7 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 	for _, code := range dto.PlannedOrderCodes {
 		po, err := uc.planned.GetByCode(ctx, code)
 		if err != nil || po == nil {
-			warnings = append(warnings, fmt.Sprintf("planned order %d not found", code))
+			warnings = append(warnings, fmt.Sprintf("ordem planejada %d não encontrada", code))
 			continue
 		}
 		if po.OrderType != types.OrderProduction {
@@ -160,7 +160,7 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 			}
 			matItem, err := uc.loadItem(ctx, itemCache, material)
 			if err != nil || matItem == nil {
-				warnings = append(warnings, fmt.Sprintf("%s: raw material %d not found", s.ref, material))
+				warnings = append(warnings, fmt.Sprintf("%s: matéria-prima %d não encontrada", s.ref, material))
 				continue
 			}
 			qty := int(math.Ceil(s.qty * st.EffectiveQuantityWith(vars)))

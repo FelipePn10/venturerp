@@ -46,7 +46,7 @@ func (uc *QualityUseCase) CreatePlan(ctx context.Context, dto request.CreateInsp
 func (uc *QualityUseCase) GetPlan(ctx context.Context, id int64) (*response.InspectionPlanResponse, error) {
 	plan, err := uc.repo.GetPlanByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("plan not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("plano de inspeção não encontrado")
 	}
 	chars, _ := uc.repo.ListCharacteristics(ctx, id)
 	return toPlanResponse(plan, chars), nil
@@ -127,7 +127,7 @@ func (uc *QualityUseCase) CreateRecord(ctx context.Context, dto request.CreateQu
 func (uc *QualityUseCase) GetRecord(ctx context.Context, id int64) (*response.QualityRecordResponse, error) {
 	rec, err := uc.repo.GetRecordByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("record not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("registro de qualidade não encontrado")
 	}
 	return toRecordResponse(rec), nil
 }
@@ -174,7 +174,7 @@ func (uc *QualityUseCase) CreateNC(ctx context.Context, dto request.CreateNCDTO)
 func (uc *QualityUseCase) GetNC(ctx context.Context, id int64) (*response.NonConformanceResponse, error) {
 	nc, err := uc.repo.GetNCByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("NC not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("não conformidade não encontrada")
 	}
 	return toNCResponse(nc), nil
 }

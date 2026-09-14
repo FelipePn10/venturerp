@@ -6,6 +6,14 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.25] — 2026-09-13
+
+### Correções
+- **Telas que respondiam "erro interno do servidor" ao salvar agora explicam o problema.** As mensagens já existiam e estavam em português — "data do calendário inválida", "produto não encontrado", "este item já existe" —, mas nasciam sem tipo, e o classificador de erros trabalha por tipo: caíam no ramo final e viravam 500. Atingia o calendário industrial e os 17 avisos do catálogo central de erros.
+- **"Não encontrado" passa a responder 404 dizendo O QUE não foi encontrado**, em vez de 500 com texto em inglês: máquina, ordem, sugestão do MRP, plano de inspeção, registro de qualidade, não conformidade, ferramenta, série de ferramenta e custo de compra/padrão.
+- **Avisos do plano de corte** ("ordem de produção não encontrada", "matéria-prima não encontrada") estavam em inglês na tela.
+- O aviso de parâmetro de busca inválido estava em inglês (`params invalid`).
+
 ## [v1.1.24] — 2026-09-13
 
 ### Estoque e almoxarifado

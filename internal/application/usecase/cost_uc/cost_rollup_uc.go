@@ -139,7 +139,7 @@ func (uc *StandardCostUseCase) UpsertItemPurchaseCost(ctx context.Context, dto r
 func (uc *StandardCostUseCase) GetItemPurchaseCost(ctx context.Context, itemCode int64) (*response.ItemPurchaseCostResponse, error) {
 	ipc, err := uc.repo.GetItemPurchaseCost(ctx, itemCode)
 	if err != nil {
-		return nil, fmt.Errorf("purchase cost not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("custo de compra não cadastrado para o item")
 	}
 	return toIPCResponse(ipc), nil
 }
@@ -202,7 +202,7 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 func (uc *StandardCostUseCase) GetStandardCost(ctx context.Context, itemCode int64, mask string) (*response.CostRollupResponse, error) {
 	cost, err := uc.repo.GetItemStandardCost(ctx, itemCode, mask)
 	if err != nil {
-		return nil, fmt.Errorf("standard cost not found: %w", err)
+		return nil, errorsuc.NewNotFoundError("custo-padrão não apurado para o item")
 	}
 	return &response.CostRollupResponse{
 		ItemCode:     cost.ItemCode,

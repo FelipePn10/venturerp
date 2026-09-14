@@ -102,7 +102,7 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 
 	sugg, err := uc.MRPRepo.GetSuggestionByCode(ctx, suggestionCode)
 	if err != nil {
-		return nil, fmt.Errorf("suggestion %d not found: %w", suggestionCode, err)
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("sugestão %d não encontrada", suggestionCode))
 	}
 	if existing, existingErr := uc.PlannedRepo.GetByMRPSuggestionCode(ctx, suggestionCode); existingErr == nil {
 		return suggestionResponse(sugg.Code, existing), nil

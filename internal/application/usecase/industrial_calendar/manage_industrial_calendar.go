@@ -13,7 +13,10 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/repository"
 )
 
-var ErrInvalidCalendarDate = errors.New("data do calendário inválida")
+// Tipado como erro de validação: `errors.New` puro não é classificado por
+// RespondUseCaseError e a tela recebia "erro interno do servidor" no lugar
+// desta mensagem, que já explicava o problema.
+var ErrInvalidCalendarDate = errorsuc.NewValidationError("data do calendário inválida")
 var ErrCalendarGenerationUnavailable = errors.New("geração do calendário indisponível")
 
 type calendarMonthGenerator interface {
