@@ -54,7 +54,6 @@ func TestItemClassificationsIsAStaticPath(t *testing.T) {
 	}
 }
 
-
 func TestVENT0210PathsPreservePublicItemCode(t *testing.T) {
 	for _, path := range []string{
 		"/api/items/search/RN-01001",
