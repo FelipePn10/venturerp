@@ -53,3 +53,23 @@ func TestItemClassificationsIsAStaticPath(t *testing.T) {
 		t.Fatal("código comercial foi tratado como segmento estático")
 	}
 }
+
+
+func TestVENT0210PathsPreservePublicItemCode(t *testing.T) {
+	for _, path := range []string{
+		"/api/items/search/RN-01001",
+		"/api/items/structure/resolve/RN-01001",
+	} {
+		req := httptest.NewRequest("GET", path, nil)
+		if !nativeItemBusinessCodePath(req) {
+			t.Errorf("%s deveria preservar o código comercial para o handler", path)
+		}
+	}
+}
+
+func TestLegacyItemPathStillRequiresTranslation(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/stock/balances/atp/RN-01001", nil)
+	if nativeItemBusinessCodePath(req) {
+		t.Fatal("rota legada de estoque não pode ignorar a tradução para a chave interna")
+	}
+}
