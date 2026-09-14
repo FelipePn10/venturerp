@@ -2,6 +2,7 @@ package structure_uc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -100,8 +101,14 @@ func TestCreateStructureBlocksActualCycle(t *testing.T) {
 	_, err := uc.Execute(context.Background(), request.CreateStructureComponentDTO{
 		ParentCode: "RN-01001", ChildCode: "TP-01001-A", Sequence: 1,
 	})
-	if err == nil || err.Error() != "o componente criaria um ciclo na estrutura" {
-		t.Fatalf("ciclo real deveria ser bloqueado, erro=%v", err)
+	// Comparar a redação exata travava a melhoria da mensagem. O que importa é
+	// que o ciclo seja bloqueado e que a mensagem NOMEIE os dois itens — sem
+	// isso o usuário não descobre qual relação existente está no caminho.
+	if err == nil {
+		t.Fatal("ciclo real deveria ser bloqueado")
+	}
+	if !strings.Contains(err.Error(), "RN-01001") || !strings.Contains(err.Error(), "TP-01001-A") {
+		t.Fatalf("a mensagem precisa nomear os itens envolvidos, veio: %v", err)
 	}
 	if repo.created != nil {
 		t.Fatal("componente com ciclo não deveria ser criado")
@@ -118,8 +125,8 @@ func TestCreateStructureBlocksSelfReference(t *testing.T) {
 	_, err := uc.Execute(context.Background(), request.CreateStructureComponentDTO{
 		ParentCode: "RN-01001", ChildCode: "RN-01001", Sequence: 1,
 	})
-	if err == nil || err.Error() != "o componente criaria um ciclo na estrutura" {
-		t.Fatalf("autorreferência deveria ser bloqueada, erro=%v", err)
+	if err == nil {
+		t.Fatal("autorreferência deveria ser bloqueada")
 	}
 	if repo.cycleStart != 0 || repo.cycleTarget != 0 {
 		t.Fatal("autorreferência deveria ser bloqueada antes de consultar a árvore")

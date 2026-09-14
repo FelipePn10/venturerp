@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,7 +23,10 @@ func (h *ItemStructureHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		// Devolver err.Error() cru jogava o erro do Postgres na tela do usuário
+		// ("duplicate key value violates unique constraint ... SQLSTATE 23505").
+		// O classificador dá o status certo e a mensagem em português.
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -44,7 +48,7 @@ func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.updateUC.Execute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
