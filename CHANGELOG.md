@@ -6,6 +6,22 @@ pipeline de release.
 
 ## Unreleased
 
+### Novidades
+- **Capacidade finita de máquina.** O MRP deixou de propor datas no vazio: ele consulta a jornada e os turnos de cada recurso, desconta paradas, manutenção e o que outros planos já reservaram, e devolve os intervalos exatos em que a ordem vai ocupar a máquina. A necessidade original é preservada — a tela mostra início, término previsto e se a capacidade empurrou a entrega para depois do prazo.
+- **Produtividade por item, máscara e máquina**, separada da jornada disponível. A mesma peça rende diferente em cada máquina, e a mesma máquina rende diferente em cada peça. Produção contínua pode continuar na janela seguinte; ciclo fechado ocupa inteiro e não atravessa turno.
+- **Turno que vira o dia.** O terceiro turno passa a ser cadastrável: informe o fim menor que o início (22:00 às 06:00) e a janela é contínua até o dia seguinte. Antes o cadastro era recusado, e a saída de partir a noite em dois pedaços fazia um ciclo longo deixar de caber em qualquer um deles.
+- **Paradas de máquina com hora exata** — quebra, manutenção corretiva, parada programada. O período deixa de existir como capacidade no planejamento, na análise de carga e no sequenciamento.
+- **Consumíveis.** Gás de corte, eletrodo, arame. A autonomia de uma carga e o tempo de troca ficam na máquina; o consumo por hora fica no item, porque um cilindro não dura um tempo fixo — dura conforme o que está sendo cortado. O planejamento conta as trocas e soma o tempo delas à ocupação, em vez de deixar a ordem caber no turno na conta e estourar no chão.
+
+### Correções
+- **Eficiência do item valia pela metade.** Quando o item declarava a própria eficiência, ela dimensionava o tempo de ciclo mas não a capacidade da máquina — a tela dizia "eficiência 50%" e calculava a capacidade a 100%. O indicador de gargalo ficava otimista justamente nos itens que rendem menos.
+- **Horário de parada dependia da configuração do servidor.** Com o banco em fuso diferente do da fábrica, uma parada das 08:00 bloqueava as 11:00 — três horas erradas do turno, sem aviso. O planejamento passa a fixar o fuso da empresa.
+- **Motivo de parada inválido** respondia "erro interno do servidor" em inglês; agora explica quais motivos existem.
+- Consulta de ocupação da máquina ficava mais lenta conforme o histórico de planejamento crescia.
+
+### Documentação
+- Treinamento prático (`docs/treinamento-pratico`): o Dia 1 acompanha as nove abas da tela de máquinas, com turno noturno, paradas e consumíveis sobre o caso real da Tecnofer. 70 páginas.
+
 ## [v1.1.28] — 2026-09-14
 
 ### Correções

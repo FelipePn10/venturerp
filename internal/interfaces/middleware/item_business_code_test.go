@@ -57,6 +57,9 @@ func TestItemClassificationsIsAStaticPath(t *testing.T) {
 func TestVENT0210PathsPreservePublicItemCode(t *testing.T) {
 	for _, path := range []string{
 		"/api/items/search/RN-01001",
+		"/api/items/search/MP%2F01-2",
+		"/api/items/structure/resolve/MP%2F01-2",
+		"/api/items/structure/resolve/%2FMP%2F01%2F",
 		"/api/items/structure/resolve/RN-01001",
 	} {
 		req := httptest.NewRequest("GET", path, nil)

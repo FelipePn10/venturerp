@@ -502,3 +502,18 @@ func fromPgDatePtr(d pgtype.Date) *time.Time {
 	v := d.Time
 	return &v
 }
+
+func (r *PlannedOrderRepositorySQLC) ResolveMachineID(ctx context.Context, code int64) (int64, error) {
+	e, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m, err := r.q.GetMachineByCode(ctx, sqlc.GetMachineByCodeParams{Code: code, EnterpriseID: e})
+	if err != nil {
+		return 0, err
+	}
+	if !m.IsActive {
+		return 0, fmt.Errorf("máquina %d está inativa", code)
+	}
+	return m.ID, nil
+}

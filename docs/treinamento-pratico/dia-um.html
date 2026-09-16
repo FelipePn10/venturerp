@@ -1505,12 +1505,25 @@ mesma coisa e para organizar relatórios de carga.</p>
 
 <h3>4.3.2 Máquinas <span class="tela">VMAQ0200</span></h3>
 <p>
-  Esta tela tem <b>quatro blocos</b>, e é importante não confundi-los: <b>Nova máquina</b> (cadastro),
-  <b>Tempo por item × máquina</b> (o cadastro central do cálculo), <b>Cálculo de tempo de produção</b>
-  (simulador) e <b>Agenda da máquina</b> (alimenta CRP e APS).
+  A tela é dividida em <b>nove abas</b>, na ordem em que a fábrica cadastra. Cada uma responde a uma
+  pergunta — não são variações do mesmo cadastro.
 </p>
+<table class="dados">
+  <thead><tr><th style="width:24%">Aba</th><th>Responde</th></tr></thead>
+  <tbody>
+    <tr><td><b>Centros de trabalho</b></td><td>Que tipos de recurso existem <span class="mudo">(o mesmo cadastro da VMAQ0101)</span></td></tr>
+    <tr><td><b>Máquinas</b></td><td>Que recursos existem e qual a jornada de cada um</td></tr>
+    <tr><td><b>Turnos</b></td><td>Quando cada recurso pode produzir</td></tr>
+    <tr><td><b>Paradas</b></td><td>Quando o recurso <i>não</i> vai estar disponível</td></tr>
+    <tr><td><b>Consumíveis</b></td><td>O que a máquina gasta e quanto demora a troca</td></tr>
+    <tr><td><b>Produtividade</b></td><td>Quanto cada item rende em cada máquina</td></tr>
+    <tr><td><b>Preparação</b></td><td>Quanto custa trocar de um item para outro</td></tr>
+    <tr><td><b>Simulador</b></td><td>Quanto tempo leva produzir esta quantidade</td></tr>
+    <tr><td><b>Agenda</b></td><td>O que está na fila desta máquina</td></tr>
+  </tbody>
+</table>
 
-<h4>Bloco 1 — Nova máquina</h4>
+<h4>Máquinas — cadastro do recurso</h4>
 <table class="dados">
   <thead><tr><th style="width:22%">Campo</th><th style="width:20%">Exemplo</th><th>O que faz</th></tr></thead>
   <tbody>
@@ -1520,13 +1533,95 @@ mesma coisa e para organizar relatórios de carga.</p>
     <tr><td><code>Capacidade</code></td><td><code>8</code></td><td>Quanto a máquina produz no período informado.</td></tr>
     <tr><td><code>Unidade de capacidade</code></td><td><code>HORA</code></td><td>Em que unidade a capacidade é expressa.</td></tr>
     <tr><td><code>Período</code></td><td><code>DIA</code></td><td>Base de tempo da capacidade — 8 horas por dia.</td></tr>
-    <tr><td><code>Eficiência</code></td><td><code>0,95</code></td><td><b>Fator de rendimento real.</b> Uma máquina de 8 h com 95 % de eficiência entrega 7,6 h úteis ao CRP. É onde entram setup não previsto, pequenas paradas e ritmo do operador.</td></tr>
+    <tr><td><code>Eficiência</code></td><td><code>0,95</code></td><td><b>Fator de rendimento real.</b> Uma máquina de 8 h com 95 % de eficiência entrega 7,6 h úteis ao CRP. É onde entram setup não previsto, pequenas paradas e ritmo do operador. <b>A eficiência informada no item substitui esta</b> — não multiplica.</td></tr>
+    <tr><td><code>Horas disponíveis por dia</code></td><td><code>16</code></td><td><b>A jornada do recurso.</b> É o tamanho da janela diária quando a máquina <i>não</i> tem calendário de turnos. Em branco, herda o centro de trabalho.</td></tr>
+    <tr><td><code>Calendário de turnos</code></td><td><code>Três turnos</code></td><td>Quando preenchido, manda no lugar da jornada: o planejamento passa a respeitar os horários cadastrados, e dia sem turno fica fechado.</td></tr>
   </tbody>
 </table>
+<div class="nota">
+  <b>Sem calendário, o dia começa à meia-noite, de segunda a sexta.</b> É uma janela plana do tamanho
+  da jornada — serve para começar, mas não descreve turno real nem trabalho no sábado. Para isso,
+  cadastre o calendário na aba <b>Turnos</b>.
+</div>
 <p>Clique em <span class="btn">Criar máquina</span>. A grade lista Código, Nome, Tipo, Capacidade,
 Unidade, Período e Efic.</p>
 
-<h4>Bloco 2 — Tempo por item × máquina <span class="mudo">(cadastro central do cálculo)</span></h4>
+<h4>Turnos — quando a máquina pode produzir</h4>
+<p>
+  O calendário diz <b>quando</b> o recurso pode produzir. Dia sem turno é dia fechado: o planejamento
+  não agenda nada nele. Um calendário vale para várias máquinas — cadastre um por regime de trabalho,
+  não um por máquina.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:20%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Código</code> · <code>Descrição</code></td><td><code>1</code> · <code>Três turnos</code></td><td>Identificação do regime.</td></tr>
+    <tr><td><code>Dia</code></td><td><code>Segunda</code></td><td>Cada linha é um turno de um dia da semana.</td></tr>
+    <tr><td><code>Início</code> · <code>Fim</code></td><td><code>22:00</code> · <code>06:00</code></td><td>Horário do turno. A tela calcula as horas e avisa quando o turno vira o dia.</td></tr>
+  </tbody>
+</table>
+<div class="dica">
+  <b>Terceiro turno: informe o fim menor que o início.</b> <code>22:00 → 06:00</code> é uma janela
+  <i>contínua</i> de oito horas que termina no dia seguinte — e um ciclo longo cabe nela inteiro.
+  Não parta a noite em <code>22:00–23:59</code> e <code>00:00–06:00</code>: assim viram duas janelas
+  curtas, e um ciclo de três horas deixa de caber em qualquer uma delas.
+  <br><b>O turno pertence ao dia em que começa.</b> Um turno de segunda às 22h conta como capacidade
+  de segunda, ainda que seis das oito horas caiam na terça.
+</div>
+
+<h4>Paradas — quando a máquina não vai estar disponível</h4>
+<p>
+  Quebra, manutenção corretiva, troca de ferramenta. O período registrado <b>deixa de existir como
+  capacidade</b>: o MRP não agenda dentro dele, o CRP não conta as horas e o APS desvia o
+  sequenciamento. É assim que a parada sai do papel e entra na conta.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:24%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Máquina</code></td><td><code>Dobradeira ERMAK 3300</code></td><td>Qual recurso para.</td></tr>
+    <tr><td><code>Início</code> · <code>Fim</code></td><td><code>21/09 08:00</code> · <code>21/09 10:30</code></td><td>Data e hora exatas. A tela mostra as horas resultantes.</td></tr>
+    <tr><td><code>Motivo</code></td><td><code>Quebra / parada não programada</code></td><td>Três opções: quebra, manutenção e parada programada.</td></tr>
+    <tr><td><code>Descrição</code></td><td><code>Quebra do servo do eixo Y</code></td><td><b>Obrigatória.</b> É o que explica a indisponibilidade para quem consultar depois.</td></tr>
+  </tbody>
+</table>
+<div class="nota">
+  <b>Manutenção preventiva é outra coisa.</b> A ordem preventiva da <span class="tela">VPRO0500</span>
+  bloqueia o <i>dia inteiro</i> da máquina, porque não carrega horário. Quando a parada tem hora
+  marcada, registre aqui — o bloqueio fica do tamanho certo.
+</div>
+
+<h4>Consumíveis — o que a máquina gasta enquanto produz</h4>
+<p>
+  A Laser Calfran não gasta só tempo: gasta gás de corte. E um cilindro não dura “N horas” — dura
+  conforme o que está sendo cortado. Chapa de 5/16" consome uma vazão; chapa fina consome outra.
+  Por isso o cadastro é partido em dois lugares, cada metade onde a informação de fato existe.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:26%">Onde</th><th style="width:26%">O que se informa</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr><td><b>Aba Consumíveis</b><br><span class="mudo">na máquina</span></td><td>Quanto rende uma carga completa e quantos minutos leva a troca</td><td>É atributo do cilindro e do posto, não do item.</td></tr>
+    <tr><td><b>Aba Produtividade</b><br><span class="mudo">no item × máquina</span></td><td>Consumo por hora de <b>usinagem</b></td><td>Depende do que está sendo cortado — que é justamente o que esse cadastro já sabe.</td></tr>
+  </tbody>
+</table>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:20%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Máquina</code></td><td><code>Laser Calfran</code></td><td>Quem gasta.</td></tr>
+    <tr><td><code>Código</code> · <code>Descrição</code></td><td><code>O2</code> · <code>Oxigênio de corte</code></td><td>Identificação do consumível.</td></tr>
+    <tr><td><code>Unidade</code></td><td><code>m³</code></td><td>Unidade em que o consumo é medido.</td></tr>
+    <tr><td><code>Rende por carga</code></td><td><code>200</code></td><td>Quanto rende um cilindro cheio.</td></tr>
+    <tr><td><code>Tempo de troca</code></td><td><code>20</code></td><td>Minutos de máquina parada para trocar o cilindro.</td></tr>
+  </tbody>
+</table>
+<div class="atencao">
+  <b>Por que isso muda o plano.</b> Suponha 5 horas de corte a 100 m³/h: são 500 m³, ou seja
+  <b>três cargas</b> — e <b>duas trocas</b> no meio da ordem, 40 minutos de máquina parada. Sem contar
+  essas paradas, a ordem cabe no turno na conta e estoura no chão. É o erro clássico de quem planeja
+  corte a laser só pelo tempo de corte.
+  <br>A primeira carga já está montada, então o número de paradas é o de cargas <i>menos uma</i>.
+</div>
+
+<h4>Produtividade — tempo por item × máquina <span class="mudo">(cadastro central do cálculo)</span></h4>
 <div class="atencao">
   <b>Este é o bloco que quase todo mundo pula — e sem ele o cálculo de tempo não funciona</b>
   Enquanto o roteiro (VENT0202) diz <b>quais operações</b> o item percorre, este bloco guarda
@@ -1543,6 +1638,9 @@ Unidade, Período e Efic.</p>
     <tr><td><code>Qtd base</code></td><td><code>1</code></td><td>A quantas peças o tempo de ciclo se refere. Se o tempo for para 10 peças, informe 10.</td></tr>
     <tr><td><code>Setup</code></td><td><code>180</code></td><td>Tempo de preparação, na mesma unidade.</td></tr>
     <tr><td><code>Prioridade (1=preferida)</code></td><td><code>1</code></td><td><b>Quando o item pode rodar em mais de uma máquina</b>, define a ordem de escolha. A lateral corta preferencialmente no laser (1); a guilhotina seria a alternativa (2).</td></tr>
+    <tr><td><code>Forma de produção</code></td><td><code>Contínua</code></td><td><b>Decide se o lote pode ser partido.</b> <i>Contínua</i> = taxa medida, a produção continua na janela seguinte. <i>Ciclos fechados</i> = o ciclo ocupa inteiro e não atravessa turno nem parada — é o caso da prensa que estampa dez chapas por golpe.</td></tr>
+    <tr><td><code>Eficiência deste item</code></td><td><code>(vazio)</code></td><td>Em branco, herda a da máquina. Preenchida, <b>substitui</b> — não multiplica. Perfis novos usam 100 %, porque a taxa informada já é produção medida.</td></tr>
+    <tr><td><code>Consumível</code> · <code>Consumo por hora</code></td><td><code>O2</code> · <code>100</code></td><td>Opcional. Preenchidos, o planejamento conta as trocas de carga e soma o tempo delas à ocupação. Os dois andam juntos: taxa sem consumível não diz o que se gasta.</td></tr>
   </tbody>
 </table>
 <p>Clique em <span class="btn">Cadastrar tempo</span>.</p>
@@ -1554,19 +1652,22 @@ Unidade, Período e Efic.</p>
   sem inventar item nem furar a fila.
 </div>
 
-<h4>Bloco 3 — Cálculo de tempo de produção <span class="mudo">(simulador)</span></h4>
+<h4>Simulador — cálculo de tempo de produção <span class="mudo">(simulador)</span></h4>
 <p>
   Informe <code>Item</code>, <code>Máscara</code>, <code>Máquina</code> e <code>Quantidade</code> e clique
   em <span class="btn">Calcular tempo</span>. A tela devolve <code>Ciclos</code>,
   <code>Setup (min)</code>, <code>Produção (min)</code>, <code>Total (min)</code>,
-  <code>Total (h)</code> e se aquele recurso é <code>Gargalo?</code>.
+  <code>Total (h)</code>, se aquele recurso é <code>Gargalo?</code> e a <code>Eficiência aplicada</code>
+  — com a origem entre parênteses, <i>item</i> ou <i>máquina</i>, para não restar dúvida sobre qual valeu.
+  Quando o item declara consumo, aparecem também o total consumido, o número de <b>trocas de carga</b>
+  e os minutos parados nelas.
 </p>
 <p class="pequeno mudo">
   Use para responder na hora “quanto tempo leva para fazer 200 laterais?” — e para conferir se o tempo
   cadastrado bate com a realidade do chão de fábrica.
 </p>
 
-<h4>Bloco 4 — Agenda da máquina <span class="mudo">(CRP / APS)</span></h4>
+<h4>Agenda da máquina <span class="mudo">(CRP / APS)</span></h4>
 <p>
   Registra <code>Data</code>, <code>Qtd planejada</code> e <code>Sequência</code> para a máquina.
   É a agenda que o CRP lê como ocupação e o APS usa como ponto de partida do sequenciamento.

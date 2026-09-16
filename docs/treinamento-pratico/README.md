@@ -7,11 +7,34 @@ da Tecnofer (RN 01001, RN 01007 e SU 02046).
 
 | Arquivo | Conteúdo | Páginas |
 |---|---|---|
-| `dia-um.pdf` | Do cadastro do produto à saída do acabado — classificação, itens em 4 níveis, estrutura (BOM) com fórmulas e histórico, máquinas, operações com modelo de tempo completo, roteiros com tempo e custo por lote, configurador de produto, orçamento → pedido de venda, MRP, CRP, APS, ordens, plano de corte, estoque, inspeção (final e de recebimento) e romaneio | 68 |
+| `dia-um.pdf` | Do cadastro do produto à saída do acabado — classificação, itens em 4 níveis, estrutura (BOM) com fórmulas e histórico, máquinas, operações com modelo de tempo completo, roteiros com tempo e custo por lote, configurador de produto, orçamento → pedido de venda, MRP, CRP, APS, ordens, plano de corte, estoque, inspeção (final e de recebimento) e romaneio | 70 |
 | `dia-dois.pdf` | Fiscal, financeiro, custos e contabilidade — configuração fiscal, CFOPs, NCM, NF-e de saída e entrada, industrialização em terceiro, contas a pagar/receber, fluxo de caixa, custo padrão, formação de preço, plano de contas, apuração e SPED | 26 |
 
 Cada dia é de **4 horas (08h00–12h00)**, com agenda cronometrada, passo a passo campo a campo,
 caixas de destaque, exercícios práticos, checklists e anexos com todos os dados de cadastro prontos.
+
+### Atualização de 16/09/2026 — capacidade de máquina
+
+A seção 4.3 do Dia 1 acompanha a reorganização da `VMAQ0200`, que passou de quatro blocos
+empilhados para **nove abas**:
+
+- **Turnos** — calendário por regime de trabalho. O terceiro turno passa a ser cadastrável:
+  informe o fim menor que o início (`22:00 → 06:00`) e a janela é contínua até o dia seguinte.
+  Antes o banco recusava, e o contorno de partir a noite em duas janelas fazia um ciclo longo
+  deixar de caber.
+- **Paradas** — quebra, manutenção corretiva e parada programada, com hora exata. O período
+  deixa de existir como capacidade no MRP, no CRP e no APS. A ordem preventiva da `VPRO0500`
+  continua bloqueando o dia inteiro, porque não carrega horário.
+- **Consumíveis** — gás de corte, eletrodo, arame. A autonomia da carga e o tempo de troca ficam
+  na máquina; a **taxa de consumo fica no item × máquina**, porque depende do que está sendo
+  cortado. O planejamento conta as trocas e soma o tempo delas à ocupação.
+- **Produtividade** ganhou *forma de produção* (contínua × ciclos fechados), *eficiência do item*
+  — que **substitui** a da máquina, não multiplica — e os campos de consumo.
+- **Cadastro da máquina** ganhou *horas disponíveis por dia* e *calendário de turnos*; a grade
+  passou a mostrar a jornada de cada recurso.
+- O **simulador** informa a eficiência aplicada e de onde ela veio, e as trocas de consumível.
+
+Detalhe técnico, com as decisões e limites: `docs/dev/maquinas-capacidade-mrp.md`.
 
 ### Atualização de setembro/2026
 

@@ -21,14 +21,23 @@ type CRPRepository interface {
 }
 
 type PlannedOrderRow struct {
-	ID          int64
-	ItemCode    int64
-	Quantity    float64
-	PlannedDate time.Time
-	RouteID     *int64
+	MachineWorkCenterID *int64
+	MachineHours        float64
+	ID                  int64
+	ItemCode            int64
+	Quantity            float64
+	PlannedDate         time.Time
+	RouteID             *int64
 }
 
 type RouteOpRow struct {
 	WorkCenterID *int64
 	EffHours     float64
+}
+
+// ScheduledLoad is an exact reservation created by finite machine planning.
+type ScheduledLoad struct {
+	WorkCenterID int64
+	Day          time.Time
+	Hours        float64
 }

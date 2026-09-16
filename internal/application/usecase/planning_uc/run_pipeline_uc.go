@@ -58,6 +58,10 @@ func (uc *RunPlanningPipelineUseCase) Execute(ctx context.Context, dto request.R
 	}
 	out.CRPEntries = crpSummary.TotalEntries
 	out.CRPOverload = crpSummary.OverloadCount
+	if len(crpSummary.WorkCentersNoCapacity) > 0 || len(crpSummary.OrdersWithoutLoad) > 0 {
+		out.Viable = false
+		out.Notes = append(out.Notes, "Há recursos sem capacidade ou ordens sem roteiro/produtividade; revise os cadastros antes de liberar o plano.")
+	}
 	if crpSummary.OverloadCount > 0 {
 		out.Viable = false
 		out.Notes = append(out.Notes, fmt.Sprintf("%d centro(s)/dia em sobrecarga de capacidade (CRP)", crpSummary.OverloadCount))

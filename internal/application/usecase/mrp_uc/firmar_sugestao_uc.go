@@ -130,6 +130,7 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 		DemandType:           mapMRPDemandType(sugg.DemandType),
 		NeedDate:             sugg.NeedDate,
 		StartDate:            sugg.StartDate,
+		EndDate:              sugg.EstimatedEndAt,
 		LLC:                  sugg.LLC,
 		WarehouseCode:        sugg.WarehouseCode,
 		InterFactory:         sugg.InterFactory,
@@ -145,6 +146,10 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 		CreatedBy: userID,
 	}
 
+	order.MachineCode = sugg.MachineCode
+	if sugg.ProductionTime != nil {
+		order.ProductionTime = *sugg.ProductionTime
+	}
 	if sugg.PlanCode != 0 {
 		pc := sugg.PlanCode
 		order.PlanCode = &pc

@@ -267,3 +267,21 @@ func TestFirmarSugestao_ParentItemCodeAddedToNotes(t *testing.T) {
 		t.Fatal("notes should not be nil when parent_item_code is set")
 	}
 }
+
+func TestFirmSuggestionPreservesMachineForecast(t *testing.T) {
+	s := baseSuggestion()
+	end := s.NeedDate.AddDate(0, 0, 2)
+	machine := int64(123)
+	minutes := 135.0
+	s.EstimatedEndAt = &end
+	s.MachineCode = &machine
+	s.ProductionTime = &minutes
+	repo := &fakePlannedRepo{nextNum: 1}
+	uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: s}, PlannedRepo: repo, Auth: &fakeAuth{canCreate: true}}
+	if _, err := uc.Execute(context.Background(), s.Code); err != nil {
+		t.Fatal(err)
+	}
+	if repo.created.EndDate == nil || !repo.created.EndDate.Equal(end) || !repo.created.NeedDate.Equal(s.NeedDate) || repo.created.MachineCode == nil || *repo.created.MachineCode != machine || repo.created.ProductionTime != minutes {
+		t.Fatalf("forecast lost: %+v", repo.created)
+	}
+}

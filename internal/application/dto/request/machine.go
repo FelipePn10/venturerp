@@ -41,14 +41,15 @@ type UpdateMachineTypeDTO struct {
 }
 
 type CreateMachineDTO struct {
-	Code            int64                     `json:"code"`
-	Name            string                    `json:"name"`
-	MachineTypeCode int64                     `json:"machine_type_code"`
-	CostCenterCode  *int64                    `json:"cost_center_code,omitempty"`
-	Capacity        float64                   `json:"capacity"`
-	CapacityUnit    types.MachineCapacityUnit `json:"capacity_per_unit"`
-	CapacityPeriod  types.CapacityPeriod      `json:"capacity_period"`
-	EfficiencyRate  float64                   `json:"efficiency_rate"`
+	AvailableHoursPerDay *float64                  `json:"available_hours_per_day,omitempty"`
+	Code                 int64                     `json:"code"`
+	Name                 string                    `json:"name"`
+	MachineTypeCode      int64                     `json:"machine_type_code"`
+	CostCenterCode       *int64                    `json:"cost_center_code,omitempty"`
+	Capacity             float64                   `json:"capacity"`
+	CapacityUnit         types.MachineCapacityUnit `json:"capacity_per_unit"`
+	CapacityPeriod       types.CapacityPeriod      `json:"capacity_period"`
+	EfficiencyRate       float64                   `json:"efficiency_rate"`
 	// Mesmo motivo do tipo de máquina: omitir passa a significar "ativa".
 	IsActive *bool `json:"is_active,omitempty"`
 
@@ -80,15 +81,17 @@ func (d CreateMachineDTO) AtivoOuPadrao() bool {
 }
 
 type UpdateMachineDTO struct {
-	Code            int64                     `json:"code"`
-	Name            string                    `json:"name"`
-	MachineTypeCode int64                     `json:"machine_type_code"`
-	CostCenterCode  *int64                    `json:"cost_center_code,omitempty"`
-	Capacity        float64                   `json:"capacity"`
-	CapacityUnit    types.MachineCapacityUnit `json:"capacity_per_unit"`
-	CapacityPeriod  types.CapacityPeriod      `json:"capacity_period"`
-	EfficiencyRate  float64                   `json:"efficiency_rate"`
-	IsActive        *bool                     `json:"is_active,omitempty"`
+	InheritWorkCenterHours bool                      `json:"inherit_work_center_hours,omitempty"`
+	AvailableHoursPerDay   *float64                  `json:"available_hours_per_day,omitempty"`
+	Code                   int64                     `json:"code"`
+	Name                   string                    `json:"name"`
+	MachineTypeCode        int64                     `json:"machine_type_code"`
+	CostCenterCode         *int64                    `json:"cost_center_code,omitempty"`
+	Capacity               float64                   `json:"capacity"`
+	CapacityUnit           types.MachineCapacityUnit `json:"capacity_per_unit"`
+	CapacityPeriod         types.CapacityPeriod      `json:"capacity_period"`
+	EfficiencyRate         float64                   `json:"efficiency_rate"`
+	IsActive               *bool                     `json:"is_active,omitempty"`
 
 	// ─── Cadastro completo do recurso (FoccoERP FENG0111) ──────────────────
 	// Grupo de recursos e calendário definem como o sequenciamento enxerga a
@@ -111,6 +114,8 @@ type UpdateMachineDTO struct {
 }
 
 type CreateItemMachineTimeDTO struct {
+	EfficiencyRate     *float64             `json:"efficiency_rate,omitempty"`
+	TimeBasis          string               `json:"time_basis,omitempty"`
 	ItemCode           TextCode             `json:"item_code"`
 	Mask               *string              `json:"mask,omitempty"`
 	MachineCode        int64                `json:"machine_code"`
@@ -119,6 +124,21 @@ type CreateItemMachineTimeDTO struct {
 	ProductionBaseQty  int                  `json:"production_base_qty"`
 	SetupTime          float64              `json:"setup_time"`
 	Priority           int                  `json:"priority"`
+	// Consumível gasto por este item nesta máquina e a taxa por hora de usinagem.
+	// Os dois andam juntos: taxa sem consumível não diz o que se gasta.
+	ConsumableID       *int64   `json:"consumable_id,omitempty"`
+	ConsumptionPerHour *float64 `json:"consumption_per_hour,omitempty"`
+}
+
+// MachineConsumableDTO é o cadastro do consumível na máquina: quanto rende uma
+// carga e quanto a máquina fica parada para trocá-la.
+type MachineConsumableDTO struct {
+	MachineCode        int64   `json:"machine_code"`
+	Code               string  `json:"code"`
+	Description        string  `json:"description"`
+	Unit               string  `json:"unit"`
+	CapacityPerRefill  float64 `json:"capacity_per_refill"`
+	ReplacementMinutes float64 `json:"replacement_minutes"`
 }
 
 type CreateMachineScheduleDTO struct {

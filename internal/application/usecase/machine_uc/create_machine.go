@@ -23,7 +23,7 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, dto request.CreateM
 	if !uc.Auth.CanCreateMachine(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if err := validateMachineFields(dto.Code, dto.Name, dto.MachineTypeCode, dto.Capacity); err != nil {
+	if err := validateMachineFields(dto.Code, dto.Name, dto.MachineTypeCode, dto.Capacity, dto.AvailableHoursPerDay); err != nil {
 		return nil, err
 	}
 	capacityUnit, err := normalizeCapacityUnit(dto.CapacityUnit)
@@ -61,17 +61,21 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, dto request.CreateM
 		return nil, errorsuc.NewConflictError(fmt.Sprintf("já existe uma máquina com o código %d", dto.Code))
 	}
 
+	if dto.AvailableHoursPerDay != nil && (!finitePositive(*dto.AvailableHoursPerDay) || *dto.AvailableHoursPerDay > 24) {
+		return nil, errorsuc.NewValidationError("informe horas disponíveis maiores que zero e no máximo 24 por dia")
+	}
 	m := &entity.Machine{
-		Code:            dto.Code,
-		Name:            strings.TrimSpace(dto.Name),
-		MachineTypeCode: dto.MachineTypeCode,
-		CostCenterCode:  dto.CostCenterCode,
-		Capacity:        dto.Capacity,
-		CapacityUnit:    capacityUnit,
-		CapacityPeriod:  capacityPeriod,
-		EfficiencyRate:  efficiency,
-		IsActive:        dto.AtivoOuPadrao(),
-		CreatedBy:       authenticatedUserID,
+		AvailableHoursPerDay: dto.AvailableHoursPerDay,
+		Code:                 dto.Code,
+		Name:                 strings.TrimSpace(dto.Name),
+		MachineTypeCode:      dto.MachineTypeCode,
+		CostCenterCode:       dto.CostCenterCode,
+		Capacity:             dto.Capacity,
+		CapacityUnit:         capacityUnit,
+		CapacityPeriod:       capacityPeriod,
+		EfficiencyRate:       efficiency,
+		IsActive:             dto.AtivoOuPadrao(),
+		CreatedBy:            authenticatedUserID,
 	}
 
 	if err := camposDeCadastro(m, camposOpcionais{

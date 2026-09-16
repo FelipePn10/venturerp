@@ -14,6 +14,7 @@ type selectionAPSRepo struct {
 	*fakeAPSRepo
 	filter  apsrepo.SequenceFilter
 	upserts []*apsentity.ProductionSequence
+	closed  bool
 }
 
 func (f *selectionAPSRepo) GetSelectedProductionOrders(_ context.Context, filter apsrepo.SequenceFilter) ([]apsrepo.OrderRow, error) {
@@ -40,10 +41,13 @@ func (f *selectionAPSRepo) ListSequencingView(context.Context, apsrepo.Sequencin
 	return []*apsentity.ProductionSequence{{ID: 9, ProductionOrderID: 11, WorkCenterID: 7, ScheduledStart: mon, ScheduledEnd: mon.Add(time.Hour), Status: apsentity.StatusScheduled}}, nil
 }
 func (f *selectionAPSRepo) ListAvailabilityWindows(context.Context, int64, []int64, time.Time, time.Time) ([]apsrepo.AvailabilityWindow, error) {
-	return nil, nil
+	if f.closed {
+		return nil, nil
+	}
+	return []apsrepo.AvailabilityWindow{{Start: mon, End: mon.Add(8 * time.Hour)}}, nil
 }
 func (f *selectionAPSRepo) ListCandidateMachines(context.Context, int64, []int64) ([]apsrepo.MachineCandidate, error) {
-	return nil, nil
+	return []apsrepo.MachineCandidate{{ID: 5, CapacityHours: 8}}, nil
 }
 func (f *selectionAPSRepo) ListMachineDowntimeWindows(context.Context, int64, time.Time, time.Time) ([]apsrepo.AvailabilityWindow, error) {
 	return nil, nil
@@ -86,5 +90,15 @@ func TestViewSequencingRequiresGroupAndValidRange(t *testing.T) {
 	rows, err := uc.ViewSequencing(context.Background(), request.SequencingViewDTO{From: mon, To: mon.Add(time.Hour), ResourceGroupID: 3, TimeUnit: "MINUTE", RefreshValue: 12})
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows=%+v err=%v", rows, err)
+	}
+}
+
+func TestSequenceOrdersRejectsClosedCalendar(t *testing.T) {
+	repo := &selectionAPSRepo{fakeAPSRepo: &fakeAPSRepo{capacity: map[int64]float64{7: 8}}, closed: true}
+	if _, err := New(repo).SequenceOrders(context.Background(), request.SequenceOrdersDTO{StartFrom: mon}); err == nil {
+		t.Fatal("calendar without windows must not invent capacity")
+	}
+	if len(repo.upserts) != 0 {
+		t.Fatal("scheduled without capacity")
 	}
 }

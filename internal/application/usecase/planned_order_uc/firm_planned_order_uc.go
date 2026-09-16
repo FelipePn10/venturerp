@@ -300,6 +300,18 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		mask = *order.Mask
 	}
 	plannedID := order.ID
+	machineID := order.MachineCode
+	if machineID != nil {
+		if resolver, ok := uc.Repo.(interface {
+			ResolveMachineID(context.Context, int64) (int64, error)
+		}); ok {
+			id, err := resolver.ResolveMachineID(ctx, *machineID)
+			if err != nil {
+				return nil, err
+			}
+			machineID = &id
+		}
+	}
 	if uc.Structure != nil {
 		var startDate, endDate *string
 		if order.StartDate != nil {
@@ -316,7 +328,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		return manual.Execute(ctx, request.CreateProductionOrderDTO{
 			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: order.Quantity,
 			StartDate: startDate, EndDate: endDate, CostCenterID: order.CostCenterCode,
-			EmployeeID: order.EmployeeCode, WarehouseID: order.WarehouseCode, MachineID: order.MachineCode,
+			EmployeeID: order.EmployeeCode, WarehouseID: order.WarehouseCode, MachineID: machineID,
 			Priority: order.Priority, Notes: order.Notes,
 		})
 	}
@@ -335,7 +347,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		CostCenterID:   order.CostCenterCode,
 		EmployeeID:     order.EmployeeCode,
 		WarehouseID:    order.WarehouseCode,
-		MachineID:      order.MachineCode,
+		MachineID:      machineID,
 		Priority:       order.Priority,
 		Notes:          order.Notes,
 		StartDate:      order.StartDate,

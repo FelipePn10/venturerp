@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	capacity "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine_capacity"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/aps/entity"
@@ -223,6 +224,9 @@ func (r *APSRepositorySQLC) GetOrderOperationEdges(ctx context.Context, orderID 
 }
 
 func (r *APSRepositorySQLC) GetWorkCenterCapacity(ctx context.Context, workCenterID int64) (float64, error) {
+	if r.pool != nil {
+		return capacity.Hours(ctx, r.pool, workCenterID, nil)
+	}
 	return r.q.GetMachineAvailableHours(ctx, workCenterID)
 }
 

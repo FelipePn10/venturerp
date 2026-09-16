@@ -42,10 +42,21 @@ type ProductionTimeResult struct {
 	// after applying efficiency_rate: capacity * efficiency_rate / periodInMinutes.
 	MachineCapacityPerMinute float64 `json:"machine_capacity_per_minute"`
 
+	// Consumível: quanto a ordem gasta e quantas trocas ela obriga. A troca para
+	// a máquina, então entra no tempo total — é isso que impede a ordem de "caber"
+	// no turno no papel e estourar no chão.
+	ConsumableDescription string  `json:"consumable_description,omitempty"`
+	ConsumableUnit        string  `json:"consumable_unit,omitempty"`
+	ConsumableUsed        float64 `json:"consumable_used"`
+	ConsumableRefills     float64 `json:"consumable_refills"`
+	ConsumableMinutes     float64 `json:"consumable_minutes"`
+
 	StandardCycleMinutes  float64  `json:"standard_cycle_minutes"`
 	EffectiveCycleMinutes float64  `json:"effective_cycle_minutes"`
 	ProductionBaseQty     int      `json:"production_base_qty"`
 	MachineEfficiencyRate float64  `json:"machine_efficiency_rate"`
+	TimeBasis             string   `json:"time_basis"`
+	EfficiencySource      string   `json:"efficiency_source"`
 	ResourceTimeFactor    float64  `json:"resource_time_factor"`
 	RequiredCapacityRate  float64  `json:"required_capacity_per_minute"`
 	WorkingMinutesPerDay  float64  `json:"working_minutes_per_day"`
@@ -75,6 +86,9 @@ func CalculateProductionTime(
 	// Normalise the item-specific production time to minutes.
 	productionTimeMinutes := imt.ProductionTime * periodToMinutes(imt.ProductionTimeUnit, workingMinsPerDay)
 	efficiency := machine.EfficiencyRate
+	if imt.EfficiencyRate != nil {
+		efficiency = *imt.EfficiencyRate
+	}
 	if efficiency <= 0 || efficiency > 1 {
 		efficiency = 1
 	}
@@ -83,18 +97,44 @@ func CalculateProductionTime(
 
 	// How many full (or partial) production cycles are needed?
 	// ceil ensures a partial last batch still reserves a full machine cycle.
-	batchCount := math.Ceil(demandQty / float64(imt.ProductionBaseQty))
+	batchCount := demandQty / float64(imt.ProductionBaseQty)
+	if imt.TimeBasis != "PROPORTIONAL" {
+		batchCount = math.Ceil(batchCount)
+	}
 
 	// Setup time comes exclusively from ItemMachineTime — it already reflects the
 	// specific mask variant (different fixtures, jigs, or program loads per size).
 	setupMinutes := imt.SetupTime
 
 	machiningMinutes := batchCount * effectiveCycleMinutes
-	totalMinutes := machiningMinutes + setupMinutes
+
+	// Trocas de consumível. A primeira carga já está montada, então o número de
+	// PARADAS é o de cargas menos uma: gastar 250 de um cilindro de 100 exige
+	// três cargas e duas trocas no meio da ordem. Gasto exatamente igual à
+	// capacidade não obriga troca nenhuma — a ordem termina com o cilindro
+	// zerado, e quem troca é a ordem seguinte.
+	var consumableUsed, refills, consumableMinutes float64
+	var consumableUnit, consumableDesc string
+	if c := imt.Consumable; c != nil && c.PerHour > 0 && c.CapacityPerRefill > 0 {
+		consumableUnit, consumableDesc = c.Unit, c.Description
+		consumableUsed = machiningMinutes / 60 * c.PerHour
+		if cargas := math.Ceil(consumableUsed / c.CapacityPerRefill); cargas > 1 {
+			refills = cargas - 1
+			consumableMinutes = refills * c.ReplacementMinutes
+		}
+	}
+
+	totalMinutes := machiningMinutes + setupMinutes + consumableMinutes
 
 	// Machine effective capacity in machine-units per minute.
+	//
+	// A eficiência usada aqui é a MESMA que dimensionou o ciclo. Antes esta linha
+	// usava machine.EfficiencyRate enquanto o ciclo já usava a do item: o
+	// resultado reportava "eficiência 50% (item)" e uma capacidade calculada a
+	// 100%, o dobro do real. O efeito visível era o indicador de gargalo ficar
+	// otimista justamente nos itens que rendem menos naquela máquina.
 	machinePeriodMinutes := periodToMinutes(machine.CapacityPeriod, workingMinsPerDay)
-	machineCapacityPerMinute := (machine.Capacity * machine.EfficiencyRate) / machinePeriodMinutes
+	machineCapacityPerMinute := (machine.Capacity * efficiency) / machinePeriodMinutes
 
 	// Bottleneck check: compare required throughput vs machine capacity.
 	// Required throughput = demand (in machine units) / total available minutes.
@@ -106,7 +146,16 @@ func CalculateProductionTime(
 		isBottleneck = requiredRate > machineCapacityPerMinute
 	}
 
+	basis := imt.TimeBasis
+	if basis == "" {
+		basis = "CYCLE"
+	}
+	source := "MACHINE"
+	if imt.EfficiencyRate != nil {
+		source = "ITEM"
+	}
 	return ProductionTimeResult{
+		TimeBasis: basis, EfficiencySource: source,
 		TotalMinutes:             totalMinutes,
 		TotalHours:               totalMinutes / 60.0,
 		TotalDays:                totalMinutes / workingMinsPerDay,
@@ -116,6 +165,11 @@ func CalculateProductionTime(
 		ConversionFactor:         conversionFactor,
 		MachineIsBottleneck:      isBottleneck,
 		MachineCapacityPerMinute: machineCapacityPerMinute,
+		ConsumableDescription:    consumableDesc,
+		ConsumableUnit:           consumableUnit,
+		ConsumableUsed:           consumableUsed,
+		ConsumableRefills:        refills,
+		ConsumableMinutes:        consumableMinutes,
 		StandardCycleMinutes:     productionTimeMinutes,
 		EffectiveCycleMinutes:    effectiveCycleMinutes,
 		ProductionBaseQty:        imt.ProductionBaseQty,
@@ -124,9 +178,10 @@ func CalculateProductionTime(
 		RequiredCapacityRate:     requiredRate,
 		WorkingMinutesPerDay:     workingMinsPerDay,
 		CalculationFactors: []string{
-			"ciclos = teto(quantidade demandada / quantidade base)",
+			"produção proporcional usa quantidade / base; ciclos fechados arredondam para cima",
 			"tempo efetivo por ciclo = tempo padrão × fator do recurso / eficiência",
-			"tempo total = setup + ciclos × tempo efetivo por ciclo",
+			"tempo total = setup + ciclos × tempo efetivo por ciclo + trocas de consumível",
+			"trocas = teto(consumo / capacidade da carga) − 1; a primeira carga já está na máquina",
 			"gargalo = capacidade requerida por minuto maior que a capacidade efetiva da máquina",
 		},
 	}

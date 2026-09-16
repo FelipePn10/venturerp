@@ -336,7 +336,9 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	}
 
 	// Pós-processamento: integração com máquinas.
-	s.processMachineIntegration(ctx, planCode, allCodeSlice)
+	if err := s.processMachineIntegration(ctx, planCode, allCodeSlice); err != nil {
+		errs["machine_integration"] = err.Error()
+	}
 
 	// Pós-processamento: geração de prioridades automáticas.
 	if params.GerarPrioridadesOrdens {
@@ -1306,52 +1308,6 @@ func (s *MRPServiceImpl) generateExceptionMessages(
 
 // processMachineIntegration assigns machines and creates machine_schedule
 // entries for FABRICACAO-type planned orders.
-func (s *MRPServiceImpl) processMachineIntegration(ctx context.Context, planCode int64, allCodes []int64) {
-	machineTimes, err := s.MRPRepo.ListItemMachineTimes(ctx, allCodes)
-	if err != nil || len(machineTimes) == 0 {
-		return
-	}
-
-	suggestions, err := s.MRPRepo.ListSuggestionsByPlan(ctx, planCode)
-	if err != nil || len(suggestions) == 0 {
-		return
-	}
-
-	for _, sug := range suggestions {
-		if sug.OrderType != "FABRICACAO" {
-			continue
-		}
-		mtList, ok := machineTimes[sug.ItemCode]
-		if !ok || len(mtList) == 0 {
-			continue
-		}
-
-		// Máquina com maior prioridade (menor número).
-		bestMT := mtList[0]
-		for _, mt := range mtList[1:] {
-			if mt.Priority < bestMT.Priority {
-				bestMT = mt
-			}
-		}
-
-		productionTime := sug.Quantity * bestMT.ProductionTime
-
-		_ = s.MRPRepo.UpdatePlannedOrderMachine(ctx, sug.Code, bestMT.MachineID, productionTime)
-
-		scheduleDate := sug.NeedDate
-		if sug.StartDate != nil {
-			scheduleDate = *sug.StartDate
-		}
-		_ = s.MRPRepo.CreateMachineSchedule(ctx, &entity.MachineScheduleInfo{
-			PlanCode:         planCode,
-			PlannedOrderCode: sug.Code,
-			MachineID:        bestMT.MachineID,
-			ScheduleDate:     scheduleDate,
-			ProductionTime:   productionTime,
-		})
-	}
-}
-
 // processAutoPriority assigns priority codes to planned orders based on
 // order_priorities rules and the DiasPrioridades window.
 func (s *MRPServiceImpl) processAutoPriority(ctx context.Context, planCode int64, params *entity.TypedPlanningParams) {

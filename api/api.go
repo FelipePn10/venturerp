@@ -501,6 +501,8 @@ func (app *application) mount() chi.Router {
 	machineCalcProductionUC := &machine_uc.CalculateProductionTimeUseCase{Repo: machineRepo, ItemRepo: itemRepo, Auth: authService}
 	// schedule
 	scheduleUC := &machine_uc.ScheduleMachineUseCase{Repo: machineRepo, Auth: authService}
+	// consumíveis (gás de corte, eletrodo, arame): autonomia e tempo de troca
+	machineConsumableHandler := handler.NewMachineConsumableHandler(&machine_uc.ConsumableUseCase{Repo: machineRepo})
 
 	machineHandler := handler.NewMachineHandler(
 		machineUC,
@@ -571,7 +573,7 @@ func (app *application) mount() chi.Router {
 	standardCostHandler := handler.NewStandardCostHandler(standardCostUC)
 
 	// CRP
-	crpRepository := crpRepo.New(queries)
+	crpRepository := crpRepo.New(queries, app.db.Pool)
 	crpUC := crp_uc.New(crpRepository).WithRouting(rRepo).WithPlanCatalog(queries)
 	crpHandler := handler.NewCRPHandler(crpUC)
 	// maintenance repo wired after it is created (see below)
@@ -654,7 +656,7 @@ func (app *application) mount() chi.Router {
 	prodOrderCloseUC.SettleUC = prodOrderSettleCostUC
 	// Scrap return (sucata valorizada). StockRepo is wired below once available.
 	prodOrderReturnScrapUC := &productionOrderUc.ReturnScrapUseCase{Repo: prodOrderRepo, Auth: authService}
-	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries}
+	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries, MachinePlanning: mrpRepo}
 	prodOrderCreateUC.Routing = rRepo
 	prodOrderCreateUC.OrderOps = orderOpsUC
 	plannedFirmUC.Routing = rRepo
@@ -1316,6 +1318,11 @@ func (app *application) mount() chi.Router {
 			// e tipo só podiam ser criados e excluídos, nunca corrigidos.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", machineHandler.UpdateMachine)
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", machineHandler.DeleteMachine)
+			r.Route("/consumables", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", machineConsumableHandler.Upsert)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", machineConsumableHandler.List)
+				r.With(httpmw.RequireRole("ADMIN")).Delete("/{id}", machineConsumableHandler.Delete)
+			})
 			r.Route("/types", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", machineHandler.CreateType)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", machineHandler.ListTypes)

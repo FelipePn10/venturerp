@@ -483,7 +483,11 @@ func (r *MRPCalculationRepositorySQLC) GetSuggestionByCode(
 	if err != nil {
 		return nil, fmt.Errorf("getting suggestion %d: %w", code, err)
 	}
-	return suggestionToEntity(row), nil
+	out := suggestionToEntity(row)
+	if err := r.loadMachineAllocations(ctx, []*entity.PlannedOrderSuggestion{out}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *MRPCalculationRepositorySQLC) ListSuggestionsByPlan(
@@ -499,7 +503,11 @@ func (r *MRPCalculationRepositorySQLC) ListSuggestionsByPlan(
 		return nil, fmt.Errorf("listing planned suggestions: %w", err)
 	}
 
-	return suggestionsToEntities(rows), nil
+	out := suggestionsToEntities(rows)
+	if err := r.loadMachineAllocations(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *MRPCalculationRepositorySQLC) DeleteSuggestionsByPlan(

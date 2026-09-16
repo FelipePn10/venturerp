@@ -6,14 +6,13 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/go-chi/chi/v5"
 )
 
 func (h *ItemHandler) FindItemByCodeHandler(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	codeStr := chi.URLParam(r, "code")
+	codeStr := itemCodePathParam(r, "code")
 	if codeStr == "" {
 		h.BadRequest(w, "path param 'code' is required")
 		return
