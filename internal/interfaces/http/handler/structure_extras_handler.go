@@ -7,7 +7,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
-	"github.com/go-chi/chi/v5"
 )
 
 // StructureExtrasHandler atende as duas conferências que a tela de estrutura
@@ -42,7 +41,7 @@ func (h *StructureExtrasHandler) SimulateFormula(w http.ResponseWriter, r *http.
 // History devolve quem alterou o quê na estrutura do item pai.
 func (h *StructureExtrasHandler) History(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	out, err := h.history.Execute(r.Context(), request.TextCode(chi.URLParam(r, "itemCode")), limit)
+	out, err := h.history.Execute(r.Context(), request.TextCode(itemCodePathParam(r, "itemCode")), limit)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return

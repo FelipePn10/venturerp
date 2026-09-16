@@ -134,6 +134,9 @@ func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (
 	if err != nil {
 		return nil, err
 	}
+	if err := r.validatePlanningReferences(ctx, m, enterpriseID); err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateMachine(ctx, sqlc.CreateMachineParams{
 		Code:                             m.Code,
 		Name:                             m.Name,
@@ -143,6 +146,7 @@ func (r *MachineRepositorySQLC) Create(ctx context.Context, m *entity.Machine) (
 		CapacityPeriod:                   sqlc.CapacityPeriodEnum(m.CapacityPeriod),
 		CapacityUnit:                     sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
 		EfficiencyRate:                   pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
+		AvailableHoursPerDay:             pgutil.ToPgNumericFromFloat64Ptr(m.AvailableHoursPerDay),
 		IsActive:                         m.IsActive,
 		ResourceGroupID:                  m.ResourceGroupID,
 		CalendarID:                       m.CalendarID,
@@ -170,7 +174,11 @@ func (r *MachineRepositorySQLC) Update(ctx context.Context, m *entity.Machine) (
 	if err != nil {
 		return nil, err
 	}
+	if err := r.validatePlanningReferences(ctx, m, enterpriseID); err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateMachine(ctx, sqlc.UpdateMachineParams{
+		InheritWorkCenterHours:           m.InheritWorkCenterHours,
 		Name:                             m.Name,
 		MachineTypeCode:                  m.MachineTypeCode,
 		CostCenterCode:                   m.CostCenterCode,
@@ -178,6 +186,7 @@ func (r *MachineRepositorySQLC) Update(ctx context.Context, m *entity.Machine) (
 		CapacityPeriod:                   sqlc.CapacityPeriodEnum(m.CapacityPeriod),
 		CapacityUnit:                     sqlc.MachineCapacityUnitEnum(m.CapacityUnit),
 		EfficiencyRate:                   pgutil.ToPgNumericFromFloat64(m.EfficiencyRate),
+		AvailableHoursPerDay:             pgutil.ToPgNumericFromFloat64Ptr(m.AvailableHoursPerDay),
 		IsActive:                         m.IsActive,
 		ResourceGroupID:                  m.ResourceGroupID,
 		CalendarID:                       m.CalendarID,
@@ -264,6 +273,8 @@ func (r *MachineRepositorySQLC) CreateItemMachineTime(ctx context.Context, imt *
 	}
 	row, err := r.q.CreateItemMachineTime(ctx, sqlc.CreateItemMachineTimeParams{
 		ItemCode:           imt.ItemCode,
+		EfficiencyRate:     pgutil.ToPgNumericFromFloat64Ptr(imt.EfficiencyRate),
+		TimeBasis:          timeBasis(imt.TimeBasis),
 		Mask:               ptrToString(imt.Mask),
 		MachineCode:        imt.MachineCode,
 		ProductionTime:     pgutil.ToPgNumericFromFloat64(imt.ProductionTime),
@@ -271,6 +282,8 @@ func (r *MachineRepositorySQLC) CreateItemMachineTime(ctx context.Context, imt *
 		ProductionBaseQty:  int32(imt.ProductionBaseQty),
 		SetupTime:          pgutil.ToPgNumericFromFloat64(imt.SetupTime),
 		Priority:           int32(imt.Priority),
+		ConsumableID:       imt.ConsumableID,
+		ConsumptionPerHour: pgutil.ToPgNumericFromFloat64Ptr(imt.ConsumptionPerHour),
 		EnterpriseID:       &enterpriseID,
 	})
 	if err != nil {
@@ -550,16 +563,17 @@ func machineTypeToEntity(row sqlc.MachineType) *entity.MachineType {
 
 func machineToEntity(row sqlc.Machine) *entity.Machine {
 	return &entity.Machine{
-		ID:              row.ID,
-		Code:            row.Code,
-		Name:            row.Name,
-		MachineTypeCode: row.MachineTypeCode,
-		CostCenterCode:  row.CostCenterCode,
-		Capacity:        pgutil.FromPgNumericToFloat64(row.Capacity),
-		CapacityPeriod:  types.CapacityPeriod(row.CapacityPeriod),
-		CapacityUnit:    types.MachineCapacityUnit(row.CapacityUnit),
-		EfficiencyRate:  pgutil.FromPgNumericToFloat64(row.EfficiencyRate),
-		IsActive:        row.IsActive,
+		ID:                   row.ID,
+		Code:                 row.Code,
+		Name:                 row.Name,
+		MachineTypeCode:      row.MachineTypeCode,
+		CostCenterCode:       row.CostCenterCode,
+		Capacity:             pgutil.FromPgNumericToFloat64(row.Capacity),
+		CapacityPeriod:       types.CapacityPeriod(row.CapacityPeriod),
+		CapacityUnit:         types.MachineCapacityUnit(row.CapacityUnit),
+		EfficiencyRate:       pgutil.FromPgNumericToFloat64(row.EfficiencyRate),
+		AvailableHoursPerDay: numericPointer(row.AvailableHoursPerDay),
+		IsActive:             row.IsActive,
 
 		ResourceGroupID:                  row.ResourceGroupID,
 		CalendarID:                       row.CalendarID,
@@ -591,17 +605,86 @@ func dataOuNil(d pgtype.Date) *time.Time {
 
 func itemMachineTimeToEntity(row sqlc.ItemMachineTime) *entity.ItemMachineTime {
 	return &entity.ItemMachineTime{
-		ItemCode:           row.ItemCode,
-		MachineCode:        row.MachineCode,
+		ItemCode:       row.ItemCode,
+		MachineCode:    row.MachineCode,
+		EfficiencyRate: numericPointer(row.EfficiencyRate), TimeBasis: row.TimeBasis, IsActive: row.IsActive,
 		Mask:               &row.Mask,
 		ProductionTime:     pgutil.FromPgNumericToFloat64(row.ProductionTime),
 		SetupTime:          pgutil.FromPgNumericToFloat64(row.SetupTime),
 		Priority:           int(row.Priority),
 		ProductionTimeUnit: types.CapacityPeriod(row.ProductionTimeUnit),
 		ProductionBaseQty:  int(row.ProductionBaseQty),
+		ConsumableID:       row.ConsumableID,
+		ConsumptionPerHour: numericPointer(row.ConsumptionPerHour),
 		CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
 	}
+}
+
+// ── Consumíveis da máquina ──────────────────────────────────────────────────
+
+func consumableToEntity(row sqlc.MachineConsumable) *entity.MachineConsumable {
+	return &entity.MachineConsumable{
+		ID:                 row.ID,
+		MachineCode:        row.MachineCode,
+		Code:               row.Code,
+		Description:        row.Description,
+		Unit:               row.Unit,
+		CapacityPerRefill:  pgutil.FromPgNumericToFloat64(row.CapacityPerRefill),
+		ReplacementMinutes: pgutil.FromPgNumericToFloat64(row.ReplacementMinutes),
+		IsActive:           row.IsActive,
+	}
+}
+
+func (r *MachineRepositorySQLC) UpsertConsumable(ctx context.Context, c *entity.MachineConsumable) (*entity.MachineConsumable, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpsertMachineConsumable(ctx, sqlc.UpsertMachineConsumableParams{
+		EnterpriseID:       enterpriseID,
+		MachineCode:        c.MachineCode,
+		Code:               c.Code,
+		Description:        c.Description,
+		Unit:               c.Unit,
+		CapacityPerRefill:  pgutil.ToPgNumericFromFloat64(c.CapacityPerRefill),
+		ReplacementMinutes: pgutil.ToPgNumericFromFloat64(c.ReplacementMinutes),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gravando consumível: %w", err)
+	}
+	return consumableToEntity(row), nil
+}
+
+func (r *MachineRepositorySQLC) ListConsumables(ctx context.Context, machineCode int64) ([]*entity.MachineConsumable, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListMachineConsumables(ctx, sqlc.ListMachineConsumablesParams{EnterpriseID: enterpriseID, MachineCode: machineCode})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*entity.MachineConsumable, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, consumableToEntity(row))
+	}
+	return out, nil
+}
+
+func (r *MachineRepositorySQLC) DeleteConsumable(ctx context.Context, id int64) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.DeleteMachineConsumable(ctx, sqlc.DeleteMachineConsumableParams{ID: id, EnterpriseID: enterpriseID})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return errorsuc.NewNotFoundError("consumível não encontrado nesta empresa")
+	}
+	return nil
 }
 
 func scheduleToEntity(row sqlc.MachineSchedule) *entity.MachineSchedule {
@@ -771,4 +854,48 @@ func fromPgTimePtr(t pgtype.Time) *time.Time {
 	)
 
 	return &tt
+}
+
+func numericPointer(v pgtype.Numeric) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	f := pgutil.FromPgNumericToFloat64(v)
+	return &f
+}
+func timeBasis(v string) string {
+	if v == "" {
+		return "CYCLE"
+	}
+	return v
+}
+
+func (r *MachineRepositorySQLC) validatePlanningReferences(ctx context.Context, m *entity.Machine, e int64) error {
+	if m.CalendarID == nil && m.ResourceGroupID == nil {
+		return nil
+	}
+	if r.pool == nil {
+		return errorsuc.NewValidationError("validação dos vínculos de planejamento não configurada")
+	}
+	var valid bool
+	err := r.pool.QueryRow(ctx, `SELECT ($2::bigint IS NULL OR EXISTS(SELECT 1 FROM machine_calendars WHERE id=$2 AND enterprise_id=$1)) AND ($3::bigint IS NULL OR EXISTS(SELECT 1 FROM production_resource_groups WHERE id=$3 AND enterprise_id=$1))`, e, m.CalendarID, m.ResourceGroupID).Scan(&valid)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return errorsuc.NewValidationError("calendário ou grupo de recursos não pertence à empresa autenticada")
+	}
+	return nil
+}
+func (r *MachineRepositorySQLC) DefaultWorkingHours(ctx context.Context, code int64) (float64, error) {
+	if r.pool == nil {
+		return 8, nil
+	}
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var h float64
+	err = r.pool.QueryRow(ctx, `SELECT COALESCE(m.available_hours_per_day,mt.capacity_hours) FROM machines m JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=m.enterprise_id WHERE m.code=$1 AND m.enterprise_id=$2`, code, e).Scan(&h)
+	return h, err
 }

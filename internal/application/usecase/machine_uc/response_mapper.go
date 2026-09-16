@@ -37,17 +37,18 @@ func toMachineResponse(m *entity.Machine) *response.MachineResponse {
 		return nil
 	}
 	return &response.MachineResponse{
-		ID:              m.ID,
-		Code:            m.Code,
-		Name:            m.Name,
-		MachineTypeCode: m.MachineTypeCode,
-		CostCenterCode:  m.CostCenterCode,
-		Capacity:        m.Capacity,
-		CapacityUnit:    string(m.CapacityUnit),
-		CapacityPerUnit: string(m.CapacityUnit),
-		CapacityPeriod:  string(m.CapacityPeriod),
-		EfficiencyRate:  m.EfficiencyRate,
-		IsActive:        m.IsActive,
+		AvailableHoursPerDay: m.AvailableHoursPerDay,
+		ID:                   m.ID,
+		Code:                 m.Code,
+		Name:                 m.Name,
+		MachineTypeCode:      m.MachineTypeCode,
+		CostCenterCode:       m.CostCenterCode,
+		Capacity:             m.Capacity,
+		CapacityUnit:         string(m.CapacityUnit),
+		CapacityPerUnit:      string(m.CapacityUnit),
+		CapacityPeriod:       string(m.CapacityPeriod),
+		EfficiencyRate:       m.EfficiencyRate,
+		IsActive:             m.IsActive,
 
 		ResourceGroupID:                  m.ResourceGroupID,
 		CalendarID:                       m.CalendarID,
@@ -81,6 +82,7 @@ func toItemMachineTimeResponse(t *entity.ItemMachineTime) *response.ItemMachineT
 		return nil
 	}
 	return &response.ItemMachineTimeResponse{
+		EfficiencyRate: t.EfficiencyRate, TimeBasis: t.TimeBasis,
 		ItemCode:           t.ItemCode,
 		Mask:               t.Mask,
 		MachineCode:        t.MachineCode,
@@ -88,6 +90,8 @@ func toItemMachineTimeResponse(t *entity.ItemMachineTime) *response.ItemMachineT
 		ProductionTimeUnit: string(t.ProductionTimeUnit),
 		ProductionBaseQty:  t.ProductionBaseQty,
 		SetupTime:          t.SetupTime,
+		ConsumableID:       t.ConsumableID,
+		ConsumptionPerHour: t.ConsumptionPerHour,
 		Priority:           t.Priority,
 		IsActive:           t.IsActive,
 		CreatedAt:          t.CreatedAt,
@@ -141,4 +145,20 @@ func dataISO(t *time.Time) *string {
 	}
 	s := t.Format("2006-01-02")
 	return &s
+}
+
+func toMachineConsumableResponse(c *entity.MachineConsumable) *response.MachineConsumableResponse {
+	if c == nil {
+		return nil
+	}
+	return &response.MachineConsumableResponse{
+		ID:                 c.ID,
+		MachineCode:        c.MachineCode,
+		Code:               c.Code,
+		Description:        c.Description,
+		Unit:               c.Unit,
+		CapacityPerRefill:  c.CapacityPerRefill,
+		ReplacementMinutes: c.ReplacementMinutes,
+		IsActive:           c.IsActive,
+	}
 }

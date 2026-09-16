@@ -67,6 +67,7 @@ func TestCreateItemMachineTimeResolvesBusinessCodeToLegacyKey(t *testing.T) {
 	uc := CreateItemMachineTimeUseCase{Repo: repo, ItemRepo: catalog, Auth: machineItemAuth{}}
 
 	_, err := uc.Execute(context.Background(), request.CreateItemMachineTimeDTO{
+		ProductionTime: 1, ProductionTimeUnit: types.Hour, ProductionBaseQty: 1,
 		ItemCode: request.TextCode("TEA452-0"), MachineCode: 7,
 	})
 	if err != nil {

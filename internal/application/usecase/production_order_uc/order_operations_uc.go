@@ -14,7 +14,10 @@ import (
 
 // OrderOperationsUseCase manages production order operations (exploding route + advancing status).
 type OrderOperationsUseCase struct {
-	Q *sqlc.Queries
+	Q               *sqlc.Queries
+	MachinePlanning interface {
+		ApplyMachinePlanToProduction(context.Context, int64) error
+	}
 }
 
 // ExplodeRoute creates production_order_operations from a manufacturing route.
@@ -40,6 +43,12 @@ func (uc *OrderOperationsUseCase) ExplodeRoute(ctx context.Context, orderID, rou
 			return nil, fmt.Errorf("creating order operation seq %d: %w", op.Sequence, err)
 		}
 		out = append(out, pooToResponse(poo))
+	}
+	if uc.MachinePlanning != nil {
+		if err := uc.MachinePlanning.ApplyMachinePlanToProduction(ctx, orderID); err != nil {
+			return nil, err
+		}
+		return uc.ListOperations(ctx, orderID)
 	}
 	return out, nil
 }

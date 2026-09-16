@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
-	"github.com/go-chi/chi/v5"
 )
 
 // ConsultStructure implements  Product Structure Consultation.
@@ -50,7 +49,7 @@ func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *h
 // WhereUsed implements implosão de estrutura — dado um componente, retorna todos os produtos que o utilizam.
 // GET /api/items/structure/where-used/{itemCode}?levels=0
 func (h *ItemQueryStructureHandler) WhereUsed(w http.ResponseWriter, r *http.Request) {
-	itemCode := request.TextCode(chi.URLParam(r, "itemCode"))
+	itemCode := request.TextCode(itemCodePathParam(r, "itemCode"))
 	if itemCode.String() == "" {
 		jsonError(w, http.StatusBadRequest, "itemCode é obrigatório")
 		return
@@ -66,7 +65,7 @@ func (h *ItemQueryStructureHandler) WhereUsed(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ItemQueryStructureHandler) ResolveStructure(w http.ResponseWriter, r *http.Request) {
-	code := request.TextCode(chi.URLParam(r, "itemCode"))
+	code := request.TextCode(itemCodePathParam(r, "itemCode"))
 	if code.String() == "" {
 		jsonError(w, http.StatusBadRequest, "itemCode é obrigatório")
 		return
@@ -87,7 +86,7 @@ func (h *ItemQueryStructureHandler) ResolveStructure(w http.ResponseWriter, r *h
 
 // CheckConfiguration lista os componentes cuja configuração não fecha.
 func (h *ItemQueryStructureHandler) CheckConfiguration(w http.ResponseWriter, r *http.Request) {
-	code := request.TextCode(chi.URLParam(r, "itemCode"))
+	code := request.TextCode(itemCodePathParam(r, "itemCode"))
 	if code.String() == "" {
 		jsonError(w, http.StatusBadRequest, "itemCode é obrigatório")
 		return

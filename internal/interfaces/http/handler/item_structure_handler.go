@@ -57,8 +57,8 @@ func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete removes a structure component identified by its public item codes.
 func (h *ItemStructureHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	parent := request.TextCode(chi.URLParam(r, "parentCode"))
-	child := request.TextCode(chi.URLParam(r, "childCode"))
+	parent := request.TextCode(itemCodePathParam(r, "parentCode"))
+	child := request.TextCode(itemCodePathParam(r, "childCode"))
 	if parent.String() == "" || child.String() == "" {
 		jsonError(w, http.StatusBadRequest, "parentCode e childCode são obrigatórios")
 		return
@@ -76,7 +76,7 @@ func (h *ItemStructureHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // GetTree returns the BOM tree for a root item.
 func (h *ItemStructureHandler) GetTree(w http.ResponseWriter, r *http.Request) {
-	rootItemCode := request.TextCode(chi.URLParam(r, "rootItemCode"))
+	rootItemCode := request.TextCode(itemCodePathParam(r, "rootItemCode"))
 	if rootItemCode.String() == "" {
 		jsonError(w, http.StatusBadRequest, "rootItemCode é obrigatório")
 		return
@@ -97,7 +97,7 @@ func (h *ItemStructureHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 
 // GetAllDirectChildren returns direct children of a structure component.
 func (h *ItemStructureHandler) GetAllDirectChildren(w http.ResponseWriter, r *http.Request) {
-	parentItemCode := request.TextCode(chi.URLParam(r, "parentItemCode"))
+	parentItemCode := request.TextCode(itemCodePathParam(r, "parentItemCode"))
 	if parentItemCode.String() == "" {
 		jsonError(w, http.StatusBadRequest, "parentItemCode é obrigatório")
 		return

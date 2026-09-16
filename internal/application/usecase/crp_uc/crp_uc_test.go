@@ -152,20 +152,20 @@ func TestCalculateCRP_RichTimeMachineHours(t *testing.T) {
 	}
 }
 
-func TestCalculateCRP_DefaultAvailabilityWhenZero(t *testing.T) {
+func TestCalculateCRP_DoesNotInventAvailability(t *testing.T) {
 	day := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
 	routeID := int64(1)
 	repo := &fakeCRPRepo{
 		orders: []repository.PlannedOrderRow{{ID: 1, Quantity: 1, PlannedDate: day, RouteID: &routeID}},
 		ops:    map[int64][]repository.RouteOpRow{1: {{WorkCenterID: wcPtr(100), EffHours: 4}}},
-		avail:  map[int64]float64{}, // no availability → defaults to 8
+		avail:  map[int64]float64{}, // no configured availability
 	}
 	uc := New(repo)
 	if _, err := uc.CalculateCRP(context.Background(), request.CalculateCRPDTO{PlanCode: 1}); err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	// 4h / default 8h = 50%.
-	if repo.upserted[0].AvailableHours != 8 || repo.upserted[0].LoadPct != 50 {
-		t.Errorf("default availability: got avail=%v load=%v, want 8 / 50", repo.upserted[0].AvailableHours, repo.upserted[0].LoadPct)
+	// Unknown capacity is preserved as zero.
+	if repo.upserted[0].AvailableHours != 0 {
+		t.Errorf("default availability: got avail=%v load=%v, want zero available hours", repo.upserted[0].AvailableHours, repo.upserted[0].LoadPct)
 	}
 }

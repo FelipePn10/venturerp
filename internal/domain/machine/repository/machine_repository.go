@@ -21,6 +21,10 @@ type MachineRepository interface {
 	ListByType(ctx context.Context, typeID int64) ([]*entity.Machine, error)
 	Delete(ctx context.Context, code int64) error
 
+	UpsertConsumable(ctx context.Context, c *entity.MachineConsumable) (*entity.MachineConsumable, error)
+	ListConsumables(ctx context.Context, machineCode int64) ([]*entity.MachineConsumable, error)
+	DeleteConsumable(ctx context.Context, id int64) error
+
 	CreateItemMachineTime(ctx context.Context, imt *entity.ItemMachineTime) (*entity.ItemMachineTime, error)
 	//GetItemMachineTime(ctx context.Context, code int64) (*entity.ItemMachineTime, error)
 	ListItemMachineTimes(ctx context.Context, itemCode int64) ([]*entity.ItemMachineTime, error)

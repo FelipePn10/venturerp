@@ -132,6 +132,10 @@ type PlannedOrderSuggestion struct {
 	ParentItemCode       *int64     `json:"parent_item_code"`
 	LLC                  int        `json:"llc"`
 	MachineID            *int64     `json:"machine_id"`
+	MachineCode          *int64     `json:"machine_code,omitempty"`
+	EstimatedEndAt       *time.Time `json:"estimated_end_at,omitempty"`
+	RequestedStartDate   *time.Time `json:"-"`
+	CapacityLate         bool       `json:"capacity_late"`
 	ProductionTime       *float64   `json:"production_time"`
 	Priority             *string    `json:"priority"`
 	Notes                *string    `json:"notes"`
@@ -188,10 +192,28 @@ type MRPExceptionMessage struct {
 // MachineTimeInfo holds the relationship between an item, a machine, and its
 // unit production time. Used for machine scheduling during MRP.
 type MachineTimeInfo struct {
-	ItemCode       int64
-	MachineID      int64
-	Priority       int // lower = higher importance
-	ProductionTime float64
+	WorkCenterID          int64
+	Mask                  string
+	MachineCode           int64
+	ProductionTimeUnit    string
+	ProductionBaseQty     int
+	SetupTime             float64
+	EfficiencyRate        *float64
+	MachineEfficiencyRate float64
+	WorkingHoursPerDay    float64
+	TimeBasis             string
+	// Consumível: taxa por hora de usinagem deste item, autonomia de uma carga e
+	// tempo de troca. Nulos quando o item não declara consumo — o caminho sem
+	// consumível continua idêntico.
+	ConsumptionPerHour    *float64
+	ConsumableCapacity    *float64
+	ConsumableSwapMinutes *float64
+	ConsumableUnit        *string
+	ConsumableName        *string
+	ItemCode              int64
+	MachineID             int64
+	Priority              int // lower = higher importance
+	ProductionTime        float64
 }
 
 // KanbanCardInfo represents an active kanban card tied to an item.

@@ -163,8 +163,8 @@ func (r *APSRepositorySQLC) ListAvailabilityWindows(ctx context.Context, workCen
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT day::date+COALESCE(i.start_time,TIME '00:00'),day::date+COALESCE(i.end_time,TIME '00:00')+CASE WHEN i.id IS NULL THEN make_interval(secs => ROUND(mt.capacity_hours*3600)::int) ELSE INTERVAL '0' END FROM generate_series($3::date,$4::date,'1 day') day
-		JOIN machines m ON m.enterprise_id=$1 AND m.is_active JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.id=$2
+	rows, err := r.pool.Query(ctx, `SELECT day::date+COALESCE(i.start_time,TIME '00:00'),day::date+COALESCE(i.end_time,TIME '00:00')+CASE WHEN i.id IS NULL THEN make_interval(secs => ROUND(COALESCE(m.available_hours_per_day,mt.capacity_hours)*3600)::int) ELSE INTERVAL '0' END+CASE WHEN i.id IS NOT NULL AND i.end_time<=i.start_time THEN INTERVAL '1 day' ELSE INTERVAL '0' END FROM generate_series($3::date,$4::date,'1 day') day
+		JOIN machines m ON m.enterprise_id=$1 AND m.is_active JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=m.enterprise_id AND mt.is_active AND mt.id=$2
 		LEFT JOIN machine_calendar_intervals i ON i.calendar_id=m.calendar_id AND i.weekday=EXTRACT(DOW FROM day)::int
 		WHERE ($5::bigint[] IS NULL OR m.id=ANY($5)) AND (i.id IS NOT NULL OR (m.calendar_id IS NULL AND EXTRACT(ISODOW FROM day)<6)) AND NOT EXISTS(SELECT 1 FROM maintenance_plans p JOIN maintenance_orders o ON o.plan_id=p.id WHERE p.machine_id=m.id AND o.is_active AND o.status IN ('PLANNED','IN_PROGRESS') AND o.scheduled_date=day::date)
 		ORDER BY 1,2`, enterpriseID, workCenterID, from, to, nullIDs(machineIDs))
@@ -188,7 +188,7 @@ func (r *APSRepositorySQLC) ListCandidateMachines(ctx context.Context, workCente
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT m.id,mt.capacity_hours FROM machines m JOIN machine_types mt ON mt.code=m.machine_type_code WHERE m.enterprise_id=$1 AND mt.id=$2 AND m.is_active AND ($3::bigint[] IS NULL OR m.id=ANY($3)) ORDER BY m.is_critical DESC,m.code`, enterpriseID, workCenterID, nullIDs(machineIDs))
+	rows, err := r.pool.Query(ctx, `SELECT m.id,COALESCE(m.available_hours_per_day,mt.capacity_hours) FROM machines m JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=m.enterprise_id AND mt.is_active WHERE m.enterprise_id=$1 AND mt.id=$2 AND m.is_active AND ($3::bigint[] IS NULL OR m.id=ANY($3)) ORDER BY m.is_critical DESC,m.code`, enterpriseID, workCenterID, nullIDs(machineIDs))
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,12 @@ func (r *APSRepositorySQLC) ListMachineDowntimeWindows(ctx context.Context, mach
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT starts_at,ends_at FROM machine_downtimes WHERE enterprise_id=$1 AND machine_id=$2 AND starts_at<$4 AND ends_at>$3 ORDER BY starts_at`, enterpriseID, machineID, from, to)
+	rows, err := r.pool.Query(ctx, `SELECT starts_at,ends_at FROM machine_downtimes WHERE enterprise_id=$1 AND machine_id=$2 AND starts_at<$4 AND ends_at>$3
+ UNION ALL SELECT sl.starts_at::timestamptz,sl.ends_at::timestamptz FROM mrp_machine_allocation_slots sl
+ JOIN mrp_machine_allocations a ON a.suggestion_code=sl.suggestion_code
+ WHERE a.enterprise_id=$1 AND sl.machine_id=$2 AND sl.starts_at<$4 AND sl.ends_at>$3
+ AND NOT EXISTS(SELECT 1 FROM planned_orders po WHERE po.mrp_suggestion_code=a.suggestion_code AND po.enterprise_id=$1 AND (NOT po.is_active OR po.status='CANCELLED'))
+ AND NOT EXISTS(SELECT 1 FROM production_orders prod JOIN planned_orders po ON po.id=prod.planned_order_id AND po.enterprise_id=prod.enterprise_id WHERE po.mrp_suggestion_code=a.suggestion_code AND prod.enterprise_id=$1 AND prod.status IN ('COMPLETED','CANCELLED')) ORDER BY 1`, enterpriseID, machineID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -232,3 +237,19 @@ func nullIDs(v []int64) any {
 }
 
 var _ = time.Time{}
+
+// Released MRP orders retain the finite reservations accepted by PCP.
+func (r *APSRepositorySQLC) MachinePlanOperationCount(ctx context.Context, orderID int64) (int, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	err = r.pool.QueryRow(ctx, `SELECT COUNT(DISTINCT op.id) FROM production_orders prod
+ JOIN planned_orders po ON po.id=prod.planned_order_id AND po.enterprise_id=prod.enterprise_id
+ JOIN mrp_machine_allocations a ON a.suggestion_code=po.mrp_suggestion_code AND a.enterprise_id=po.enterprise_id
+ JOIN mrp_machine_allocation_slots sl ON sl.suggestion_code=a.suggestion_code
+ JOIN production_order_operations op ON op.production_order_id=prod.id AND op.enterprise_id=prod.enterprise_id AND op.route_operation_id=sl.route_operation_id
+ WHERE prod.id=$1 AND prod.enterprise_id=$2`, orderID, e).Scan(&n)
+	return n, err
+}

@@ -2,18 +2,17 @@ package machine_uc
 
 import (
 	"context"
-	"fmt"
+	"math"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
-	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
-	machinesvc "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
 )
 
 type CreateItemMachineTimeUseCase struct {
@@ -29,22 +28,58 @@ func (uc *CreateItemMachineTimeUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	unit, err := normalizeCapacityPeriod(dto.ProductionTimeUnit)
+	if err != nil {
+		return nil, err
+	}
+	if !finitePositive(dto.ProductionTime) || dto.ProductionBaseQty <= 0 || dto.ProductionBaseQty > math.MaxInt32 || math.IsNaN(dto.SetupTime) || math.IsInf(dto.SetupTime, 0) || dto.SetupTime < 0 || dto.Priority < 0 {
+		return nil, errorsuc.NewValidationError("informe tempo e quantidade-base positivos, preparação e prioridade não negativas")
+	}
+	basis := strings.ToUpper(strings.TrimSpace(dto.TimeBasis))
+	if basis == "" {
+		basis = "CYCLE"
+	}
+	if basis != "CYCLE" && basis != "PROPORTIONAL" {
+		return nil, errorsuc.NewValidationError("tipo de produção deve ser CYCLE ou PROPORTIONAL")
+	}
+	if dto.EfficiencyRate != nil {
+		if !finitePositive(*dto.EfficiencyRate) {
+			return nil, errorsuc.NewValidationError("eficiência do item deve ser maior que zero")
+		}
+		rate, err := normalizeEfficiency(*dto.EfficiencyRate)
+		if err != nil {
+			return nil, err
+		}
+		dto.EfficiencyRate = &rate
+	}
 	item, err := itemresolution.Resolve(ctx, uc.ItemRepo, dto.ItemCode)
 	if err != nil {
 		return nil, err
 	}
 	itemCode := int64(item.Code)
 
-	if err := uc.validateUnitCompatibility(ctx, item, dto.MachineCode); err != nil {
+	if _, err := uc.Repo.GetByCode(ctx, dto.MachineCode); err != nil {
 		return nil, err
 	}
 
+	// Consumível e taxa andam juntos. O banco também recusa o par incompleto,
+	// mas ali a mensagem seria o texto cru do CHECK.
+	if (dto.ConsumableID == nil) != (dto.ConsumptionPerHour == nil) {
+		return nil, errorsuc.NewValidationError("informe o consumível e o consumo por hora juntos, ou deixe os dois em branco")
+	}
+	if dto.ConsumptionPerHour != nil && !finitePositive(*dto.ConsumptionPerHour) {
+		return nil, errorsuc.NewValidationError("o consumo por hora deve ser maior que zero")
+	}
+
 	imt := &entity.ItemMachineTime{
+		EfficiencyRate: dto.EfficiencyRate, TimeBasis: basis,
+		ConsumableID:       dto.ConsumableID,
+		ConsumptionPerHour: dto.ConsumptionPerHour,
 		ItemCode:           itemCode,
 		Mask:               dto.Mask,
 		MachineCode:        dto.MachineCode,
 		ProductionTime:     dto.ProductionTime,
-		ProductionTimeUnit: dto.ProductionTimeUnit,
+		ProductionTimeUnit: unit,
 		ProductionBaseQty:  dto.ProductionBaseQty,
 		SetupTime:          dto.SetupTime,
 		Priority:           dto.Priority,
@@ -67,28 +102,4 @@ func (uc *CreateItemMachineTimeUseCase) GetByCodeTime(
 	return toMachineResponse(m), nil
 }
 
-func (uc *CreateItemMachineTimeUseCase) validateUnitCompatibility(
-	ctx context.Context,
-	item *itementity.Item,
-	machineCode int64,
-) error {
-	machine, err := uc.Repo.GetByCode(ctx, machineCode)
-	if err != nil {
-		return errorsuc.NewNotFoundError(fmt.Sprintf("máquina %d não encontrada", machineCode))
-	}
-
-	_, err = machinesvc.CheckUnitCompatibility(
-		item.Warehouse.UnitOfMeasurement,
-		machine.CapacityUnit,
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"invalid configuration — item '%s' uses unit '%s' but machine '%d' operates on '%s': %w",
-			item.BusinessCode, item.Warehouse.UnitOfMeasurement,
-			machineCode, machine.CapacityUnit,
-			err,
-		)
-	}
-
-	return nil
-}
+func finitePositive(v float64) bool { return v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) }

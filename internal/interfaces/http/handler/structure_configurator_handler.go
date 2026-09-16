@@ -9,7 +9,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
-	"github.com/go-chi/chi/v5"
 )
 
 // StructureConfiguratorHandler atende o botão "Configurador" da Estrutura de
@@ -26,7 +25,7 @@ func NewStructureConfiguratorHandler(uc *structure_uc.StructureConfiguratorUseCa
 // Panel devolve perguntas, respostas possíveis, configurações já geradas e as
 // fórmulas de quantidade que a configuração alimenta.
 func (h *StructureConfiguratorHandler) Panel(w http.ResponseWriter, r *http.Request) {
-	code := strings.TrimSpace(chi.URLParam(r, "itemCode"))
+	code := strings.TrimSpace(itemCodePathParam(r, "itemCode"))
 	if code == "" {
 		jsonError(w, http.StatusBadRequest, "informe o código do item")
 		return
@@ -42,7 +41,7 @@ func (h *StructureConfiguratorHandler) Panel(w http.ResponseWriter, r *http.Requ
 // Apply valida as respostas contra as restrições, gera a máscara e devolve a
 // estrutura resolvida para a configuração.
 func (h *StructureConfiguratorHandler) Apply(w http.ResponseWriter, r *http.Request) {
-	code := strings.TrimSpace(chi.URLParam(r, "itemCode"))
+	code := strings.TrimSpace(itemCodePathParam(r, "itemCode"))
 	if code == "" {
 		jsonError(w, http.StatusBadRequest, "informe o código do item")
 		return

@@ -85,6 +85,18 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 
 	scheduledCount := 0
 	for _, order := range orders {
+		if plans, ok := uc.repo.(interface {
+			MachinePlanOperationCount(context.Context, int64) (int, error)
+		}); ok {
+			n, err := plans.MachinePlanOperationCount(ctx, order.ID)
+			if err != nil {
+				return nil, err
+			}
+			if n > 0 {
+				scheduledCount += n
+				continue
+			}
+		}
 		var ops []repository.OpRow
 		if selected {
 			ops, err = selection.GetSelectedOrderOperations(ctx, order.ID, filter)
@@ -188,12 +200,6 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 					var candidateEnd time.Time
 					if len(windows) > 0 {
 						candidateStart, candidateEnd = allocateInWindows(candidateStart, totalHours, windows)
-					} else {
-						capacity := candidate.CapacityHours
-						if capacity <= 0 {
-							capacity = avail
-						}
-						candidateEnd = advanceByWorkHours(candidateStart, totalHours, capacity)
 					}
 					if !candidateEnd.IsZero() && (bestEnd.IsZero() || candidateEnd.Before(bestEnd)) {
 						bestStart, bestEnd = candidateStart, candidateEnd
@@ -207,6 +213,9 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 				}
 			}
 			if end.IsZero() {
+				if selected {
+					return nil, fmt.Errorf("não há capacidade disponível para a operação %d no horizonte de um ano", op.ID)
+				}
 				end = advanceByWorkHours(earliest, totalHours, avail)
 			}
 
@@ -386,6 +395,13 @@ func (uc *APSUseCase) UpsertMachineCalendar(ctx context.Context, dto request.Mac
 		if v.Weekday < 0 || v.Weekday > 6 || v.Start == "" || v.End == "" {
 			return response.MachineCalendarResponse{}, errorsuc.NewValidationError("intervalo de calendário inválido")
 		}
+		// Fim MENOR que início é turno que vira o dia (22:00–06:00) e é válido.
+		// Fim IGUAL ao início não é turno nenhum: sem esta guarda o CHECK do banco
+		// recusaria com o texto cru do PostgreSQL.
+		if v.Start == v.End {
+			return response.MachineCalendarResponse{}, errorsuc.NewValidationError(
+				"o turno não pode começar e terminar no mesmo horário; para um turno que vira o dia informe o fim menor que o início, como 22:00 às 06:00")
+		}
 		intervals = append(intervals, repository.MachineCalendarInterval{Weekday: v.Weekday, Start: v.Start, End: v.End})
 	}
 	v, err := repo.UpsertMachineCalendar(ctx, dto.Code, strings.TrimSpace(dto.Description), intervals)
@@ -469,8 +485,11 @@ func (uc *APSUseCase) CreateMachineDowntime(ctx context.Context, dto request.Mac
 	if dto.MachineID <= 0 || dto.StartsAt.IsZero() || !dto.EndsAt.After(dto.StartsAt) || strings.TrimSpace(dto.Reason) == "" {
 		return response.MachineDowntimeResponse{}, errorsuc.NewValidationError("informe a máquina, um intervalo válido e o motivo da parada")
 	}
+	// Sem tipo esta recusa virava 500 com texto em inglês. O domínio fechado é o
+	// mesmo do CHECK da tabela; listar as opções evita a ida e volta.
 	if kind != "PLANNED" && kind != "UNPLANNED" && kind != "MAINTENANCE" {
-		return response.MachineDowntimeResponse{}, fmt.Errorf("invalid downtime_type")
+		return response.MachineDowntimeResponse{}, errorsuc.NewValidationError(
+			"motivo da parada inválido; use PLANNED (programada), UNPLANNED (quebra) ou MAINTENANCE (manutenção)")
 	}
 	v, err := repo.CreateMachineDowntime(ctx, repository.MachineDowntime{MachineID: dto.MachineID, StartsAt: dto.StartsAt, EndsAt: dto.EndsAt, DowntimeType: kind, Reason: strings.TrimSpace(dto.Reason), MaintenanceOrderID: dto.MaintenanceOrderID})
 	return downtimeResponse(v), err
@@ -975,6 +994,18 @@ func (uc *APSUseCase) sequenciaRegressivo(
 	paraFrente := make([]repository.OrderRow, 0)
 
 	for _, order := range orders {
+		if plans, ok := uc.repo.(interface {
+			MachinePlanOperationCount(context.Context, int64) (int, error)
+		}); ok {
+			n, err := plans.MachinePlanOperationCount(ctx, order.ID)
+			if err != nil {
+				return nil, err
+			}
+			if n > 0 {
+				agendadas += n
+				continue
+			}
+		}
 		var ops []repository.OpRow
 		var err error
 		if selected {

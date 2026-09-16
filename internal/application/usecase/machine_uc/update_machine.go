@@ -26,7 +26,7 @@ func (uc *UpdateMachineUseCase) Execute(
 	if !uc.Auth.CanUpdateMachine(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if err := validateMachineFields(dto.Code, dto.Name, dto.MachineTypeCode, dto.Capacity); err != nil {
+	if err := validateMachineFields(dto.Code, dto.Name, dto.MachineTypeCode, dto.Capacity, dto.AvailableHoursPerDay); err != nil {
 		return nil, err
 	}
 	capacityUnit, err := normalizeCapacityUnit(dto.CapacityUnit)
@@ -47,16 +47,21 @@ func (uc *UpdateMachineUseCase) Execute(
 			fmt.Sprintf("tipo de máquina %d não encontrado nesta empresa", dto.MachineTypeCode))
 	}
 
+	if dto.AvailableHoursPerDay != nil && (!finitePositive(*dto.AvailableHoursPerDay) || *dto.AvailableHoursPerDay > 24) {
+		return nil, errorsuc.NewValidationError("informe horas disponíveis maiores que zero e no máximo 24 por dia")
+	}
 	m := &entity.Machine{
-		Code:            dto.Code,
-		Name:            strings.TrimSpace(dto.Name),
-		MachineTypeCode: dto.MachineTypeCode,
-		CostCenterCode:  dto.CostCenterCode,
-		Capacity:        dto.Capacity,
-		CapacityPeriod:  capacityPeriod,
-		CapacityUnit:    capacityUnit,
-		IsActive:        ptrutil.BoolOrTrue(dto.IsActive),
-		EfficiencyRate:  efficiency,
+		AvailableHoursPerDay:   dto.AvailableHoursPerDay,
+		InheritWorkCenterHours: dto.InheritWorkCenterHours,
+		Code:                   dto.Code,
+		Name:                   strings.TrimSpace(dto.Name),
+		MachineTypeCode:        dto.MachineTypeCode,
+		CostCenterCode:         dto.CostCenterCode,
+		Capacity:               dto.Capacity,
+		CapacityPeriod:         capacityPeriod,
+		CapacityUnit:           capacityUnit,
+		IsActive:               ptrutil.BoolOrTrue(dto.IsActive),
+		EfficiencyRate:         efficiency,
 	}
 
 	if err := camposDeCadastro(m, camposOpcionais{

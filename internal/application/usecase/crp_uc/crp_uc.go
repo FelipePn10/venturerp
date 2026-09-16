@@ -17,6 +17,14 @@ import (
 
 // routeOpReader is the slice of the routing repository CRP needs to load capacity
 // using the rich, quantity-aware time model (machine hours per work center).
+type requirementWriter interface {
+	ReplaceRequirements(context.Context, int64, []*crpentity.CapacityRequirement) error
+}
+
+type dailyCapacityReader interface {
+	GetAvailableHoursOnDate(context.Context, int64, time.Time) (float64, error)
+}
+
 type routeOpReader interface {
 	GetRouteOperations(ctx context.Context, routeID int64) ([]*routingentity.RouteOperation, error)
 }
@@ -60,9 +68,6 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 	if err := uc.assertPlanTenant(ctx, dto.PlanCode); err != nil {
 		return nil, err
 	}
-	if err := uc.repo.DeleteByPlan(ctx, dto.PlanCode); err != nil {
-		return nil, fmt.Errorf("clearing CRP for plan %d: %w", dto.PlanCode, err)
-	}
 
 	orders, err := uc.repo.GetPlannedOrdersByPlan(ctx, dto.PlanCode)
 	if err != nil {
@@ -75,14 +80,31 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 	}
 	reqMap := make(map[wcDateKey]float64)
 	dateMap := make(map[wcDateKey]time.Time)
+	if reader, ok := uc.repo.(interface {
+		GetScheduledMachineLoads(context.Context, int64) ([]repository.ScheduledLoad, error)
+	}); ok {
+		loads, err := reader.GetScheduledMachineLoads(ctx, dto.PlanCode)
+		if err != nil {
+			return nil, err
+		}
+		for _, load := range loads {
+			k := wcDateKey{wcID: load.WorkCenterID, date: load.Day.Format("2006-01-02")}
+			reqMap[k] += load.Hours
+			dateMap[k] = load.Day
+		}
+	}
 	// Capacidade por centro, resolvida uma vez só: antes era uma consulta por
 	// par (centro, dia).
+	var capacityErr error
 	capacidadePorCentro := make(map[int64]float64)
 	capacidade := func(wcID int64) float64 {
 		if v, ok := capacidadePorCentro[wcID]; ok {
 			return v
 		}
-		v, _ := uc.repo.GetMachineAvailableHoursPerDay(ctx, wcID)
+		v, err := uc.repo.GetMachineAvailableHoursPerDay(ctx, wcID)
+		if err != nil {
+			capacityErr = err
+		}
 		capacidadePorCentro[wcID] = v
 		return v
 	}
@@ -97,8 +119,14 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 		}
 	}
 
+	missingOrders := []int64{}
 	for _, order := range orders {
 		if order.RouteID == nil {
+			if order.MachineWorkCenterID != nil && order.MachineHours > 0 {
+				acumula(*order.MachineWorkCenterID, order.PlannedDate, order.MachineHours)
+			} else {
+				missingOrders = append(missingOrders, order.ID)
+			}
 			continue
 		}
 		day := truncateToDay(order.PlannedDate)
@@ -107,6 +135,12 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 		// charged to each operation's EFFECTIVE work center (override or op default).
 		if uc.routing != nil {
 			rops, err := uc.routing.GetRouteOperations(ctx, *order.RouteID)
+			if err != nil {
+				return nil, fmt.Errorf("carregando roteiro %d: %w", *order.RouteID, err)
+			}
+			if len(rops) == 0 {
+				missingOrders = append(missingOrders, order.ID)
+			}
 			if err == nil {
 				// Cada operação começa quando as anteriores terminam: a carga
 				// segue o roteiro no tempo, não se amontoa num dia.
@@ -136,7 +170,10 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 		// Legacy fallback: flat EffHours × quantity (setup not separated).
 		ops, err := uc.repo.GetRouteOperationsByRoute(ctx, *order.RouteID)
 		if err != nil {
-			continue
+			return nil, err
+		}
+		if len(ops) == 0 {
+			missingOrders = append(missingOrders, order.ID)
 		}
 		for _, op := range ops {
 			if op.WorkCenterID == nil {
@@ -148,18 +185,30 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 		}
 	}
 
+	if capacityErr != nil {
+		return nil, fmt.Errorf("carregando capacidade: %w", capacityErr)
+	}
+	requirements := []*crpentity.CapacityRequirement{}
 	overloadCount := 0
 	semCapacidade := map[int64]bool{}
 	for k, reqHours := range reqMap {
 		avail := capacidade(k.wcID)
+		daily, hasDaily := uc.repo.(dailyCapacityReader)
+		if hasDaily {
+			var err error
+			avail, err = daily.GetAvailableHoursOnDate(ctx, k.wcID, dateMap[k])
+			if err != nil {
+				return nil, fmt.Errorf("consultando capacidade diária: %w", err)
+			}
+		}
 		if avail <= 0 {
 			// Sem capacidade cadastrada não há como dizer se há sobrecarga. Antes
 			// o sistema assumia 8 h em silêncio e o gráfico parecia confiável;
 			// agora o centro é reportado para o usuário cadastrar a capacidade.
 			semCapacidade[k.wcID] = true
-			avail = 8
+			avail = 0
 		}
-		if uc.maintRepo != nil {
+		if uc.maintRepo != nil && !hasDaily {
 			if blocked, err := uc.maintRepo.GetBlockedHours(ctx, k.wcID, dateMap[k]); err == nil && blocked > 0 {
 				avail -= blocked
 				if avail < 0 {
@@ -174,15 +223,27 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 			RequiredHours:  reqHours,
 			AvailableHours: avail,
 		}
-		saved, err := uc.repo.UpsertRequirement(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("upserting CRP entry: %w", err)
-		}
-		if saved.LoadPct > 100 {
+		requirements = append(requirements, req)
+		if req.RequiredHours > req.AvailableHours {
 			overloadCount++
 		}
+
 	}
 
+	if writer, ok := uc.repo.(requirementWriter); ok {
+		if err := writer.ReplaceRequirements(ctx, dto.PlanCode, requirements); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := uc.repo.DeleteByPlan(ctx, dto.PlanCode); err != nil {
+			return nil, err
+		}
+		for _, req := range requirements {
+			if _, err := uc.repo.UpsertRequirement(ctx, req); err != nil {
+				return nil, err
+			}
+		}
+	}
 	centrosSemCapacidade := make([]int64, 0, len(semCapacidade))
 	for id := range semCapacidade {
 		centrosSemCapacidade = append(centrosSemCapacidade, id)
@@ -190,6 +251,7 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 	sort.Slice(centrosSemCapacidade, func(i, j int) bool { return centrosSemCapacidade[i] < centrosSemCapacidade[j] })
 
 	return &response.CRPSummaryResponse{
+		OrdersWithoutLoad:     missingOrders,
 		PlanCode:              dto.PlanCode,
 		TotalEntries:          len(reqMap),
 		OverloadCount:         overloadCount,
@@ -212,11 +274,17 @@ func (uc *CRPUseCase) ListOverloadedByPlan(ctx context.Context, planCode int64) 
 	if err := uc.assertPlanTenant(ctx, planCode); err != nil {
 		return nil, err
 	}
-	reqs, err := uc.repo.ListOverloadedByPlan(ctx, planCode)
+	reqs, err := uc.repo.ListByPlan(ctx, planCode)
 	if err != nil {
 		return nil, err
 	}
-	return toCRPSlice(reqs), nil
+	out := []*response.CRPEntryResponse{}
+	for _, v := range toCRPSlice(reqs) {
+		if v.IsOverloaded {
+			out = append(out, v)
+		}
+	}
+	return out, nil
 }
 
 func toCRPSlice(reqs []*crpentity.CapacityRequirement) []*response.CRPEntryResponse {
@@ -230,7 +298,7 @@ func toCRPSlice(reqs []*crpentity.CapacityRequirement) []*response.CRPEntryRespo
 			RequiredHours:  r.RequiredHours,
 			AvailableHours: r.AvailableHours,
 			LoadPct:        r.LoadPct,
-			IsOverloaded:   r.LoadPct > 100,
+			IsOverloaded:   r.LoadPct > 100 || r.AvailableHours == 0 && r.RequiredHours > 0,
 		})
 	}
 	return out

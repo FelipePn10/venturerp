@@ -21,16 +21,18 @@ type MachineType struct {
 }
 
 type Machine struct {
-	ID              int64
-	Code            int64
-	Name            string
-	MachineTypeCode int64
-	CostCenterCode  *int64
-	Capacity        float64
-	CapacityUnit    types.MachineCapacityUnit
-	CapacityPeriod  types.CapacityPeriod
-	EfficiencyRate  float64
-	IsActive        bool
+	InheritWorkCenterHours bool
+	AvailableHoursPerDay   *float64
+	ID                     int64
+	Code                   int64
+	Name                   string
+	MachineTypeCode        int64
+	CostCenterCode         *int64
+	Capacity               float64
+	CapacityUnit           types.MachineCapacityUnit
+	CapacityPeriod         types.CapacityPeriod
+	EfficiencyRate         float64
+	IsActive               bool
 
 	// Cadastro completo do recurso, no nível do que o mercado pede (FoccoERP
 	// FENG0111): a que grupo e calendário a máquina pertence, onde fica, se é
@@ -55,7 +57,45 @@ type Machine struct {
 	CreatedBy uuid.UUID
 }
 
+// MachineConsumable é o que a máquina gasta enquanto produz — gás de corte,
+// eletrodo, arame, óleo. Guarda a AUTONOMIA (quanto rende uma carga) e o tempo
+// de troca; a taxa de consumo não mora aqui porque depende do que está sendo
+// feito, e por isso fica em ItemMachineTime.
+type MachineConsumable struct {
+	ID                 int64
+	MachineCode        int64
+	Code               string
+	Description        string
+	Unit               string
+	CapacityPerRefill  float64
+	ReplacementMinutes float64
+	IsActive           bool
+}
+
+// ConsumableUsage é a autonomia do consumível que este item gasta na máquina.
+// O consumo depende do que está sendo feito — uma chapa de 3 mm e uma de 12 mm
+// gastam vazões diferentes de gás na mesma máquina —, por isso a TAXA vive aqui,
+// no par item × máscara × máquina, e não no cadastro da máquina.
+type ConsumableUsage struct {
+	// PerHour é o consumo por hora de USINAGEM, na unidade do consumível.
+	// Preparação não corta, então não consome.
+	PerHour float64
+	// CapacityPerRefill é quanto rende uma carga completa (ex.: 200 m³).
+	CapacityPerRefill float64
+	// ReplacementMinutes é quanto a máquina fica parada para trocar a carga.
+	ReplacementMinutes float64
+	Unit               string
+	Description        string
+}
+
 type ItemMachineTime struct {
+	EfficiencyRate *float64
+	// Consumable é a autonomia resolvida (usada no cálculo). ConsumableID e
+	// ConsumptionPerHour são o que se grava: o vínculo e a taxa.
+	Consumable         *ConsumableUsage
+	ConsumableID       *int64
+	ConsumptionPerHour *float64
+	TimeBasis          string
 	ItemCode           int64
 	Mask               *string
 	MachineCode        int64

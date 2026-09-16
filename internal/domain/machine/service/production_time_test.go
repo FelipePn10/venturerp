@@ -95,3 +95,73 @@ func TestCalculateProductionTime_ExplainsEfficiencyAndCapacity(t *testing.T) {
 		t.Fatalf("fatores não explicados: %+v", res)
 	}
 }
+
+// A eficiência que dimensiona o ciclo tem de ser a mesma que dimensiona a
+// capacidade. Enquanto o ciclo usava a do item e a capacidade a da máquina, o
+// resultado reportava "eficiência 50%" com capacidade calculada a 100% — e o
+// indicador de gargalo ficava otimista exatamente nos itens que rendem menos.
+func TestCalculateProductionTime_CapacidadeUsaEficienciaDoItem(t *testing.T) {
+	eficienciaDoItem := 0.5
+	imt := &entity.ItemMachineTime{
+		ProductionTime: 60, ProductionTimeUnit: types.Minute, ProductionBaseQty: 120,
+		EfficiencyRate: &eficienciaDoItem, TimeBasis: "PROPORTIONAL",
+	}
+	machine := &entity.Machine{Capacity: 120, CapacityPeriod: types.Hour, EfficiencyRate: 1}
+
+	res := CalculateProductionTime(imt, machine, 120, 1, 480)
+
+	if res.MachineEfficiencyRate != eficienciaDoItem || res.EfficiencySource != "ITEM" {
+		t.Fatalf("eficiência do item não prevaleceu: %+v", res)
+	}
+	esperada := machine.Capacity * eficienciaDoItem / 60
+	if res.MachineCapacityPerMinute != esperada {
+		t.Fatalf("capacidade por minuto = %v, esperada %v (capacidade × eficiência aplicada)",
+			res.MachineCapacityPerMinute, esperada)
+	}
+	// 120 peças em 120 min exigem 1/min; a máquina, a 50%, entrega exatamente 1/min.
+	if res.RequiredCapacityRate != res.MachineCapacityPerMinute {
+		t.Fatalf("taxa exigida %v deveria igualar a capacidade %v", res.RequiredCapacityRate, res.MachineCapacityPerMinute)
+	}
+}
+
+// Corte a laser: o cilindro não dura "N horas", dura conforme o que está sendo
+// cortado. A taxa vem do item; a autonomia e o tempo de troca, da máquina. A
+// parada para trocar ocupa a máquina e precisa entrar no tempo da ordem.
+func TestCalculateProductionTime_TrocaDeConsumivelOcupaAMaquina(t *testing.T) {
+	imt := &entity.ItemMachineTime{
+		ProductionTime: 60, ProductionTimeUnit: types.Minute, ProductionBaseQty: 1,
+		TimeBasis: "PROPORTIONAL", SetupTime: 10,
+		Consumable: &entity.ConsumableUsage{
+			PerHour: 100, CapacityPerRefill: 200, ReplacementMinutes: 15,
+			Unit: "m³", Description: "Oxigênio",
+		},
+	}
+	machine := &entity.Machine{Capacity: 1, CapacityPeriod: types.Hour, EfficiencyRate: 1}
+
+	// 5 peças × 60 min = 300 min de usinagem = 5 h → 500 m³.
+	// 500 / 200 = 2,5 → 3 cargas → 2 trocas → 30 min parados.
+	res := CalculateProductionTime(imt, machine, 5, 1, 480)
+
+	if res.ConsumableUsed != 500 {
+		t.Fatalf("consumo = %v, esperado 500", res.ConsumableUsed)
+	}
+	if res.ConsumableRefills != 2 || res.ConsumableMinutes != 30 {
+		t.Fatalf("trocas = %v (%v min), esperado 2 (30 min)", res.ConsumableRefills, res.ConsumableMinutes)
+	}
+	if res.TotalMinutes != 300+10+30 {
+		t.Fatalf("total = %v, esperado 340 (300 usinagem + 10 setup + 30 de troca)", res.TotalMinutes)
+	}
+
+	// Consumo exatamente igual a uma carga não obriga troca: a ordem termina com
+	// o cilindro zerado e quem troca é a próxima.
+	res = CalculateProductionTime(imt, machine, 2, 1, 480)
+	if res.ConsumableUsed != 200 || res.ConsumableRefills != 0 || res.ConsumableMinutes != 0 {
+		t.Fatalf("carga exata não deveria obrigar troca: %v usado, %v trocas", res.ConsumableUsed, res.ConsumableRefills)
+	}
+
+	// Sem consumível cadastrado nada muda — o caminho antigo continua idêntico.
+	imt.Consumable = nil
+	if res := CalculateProductionTime(imt, machine, 5, 1, 480); res.TotalMinutes != 310 || res.ConsumableRefills != 0 {
+		t.Fatalf("sem consumível o total deveria ser 310: %+v", res.TotalMinutes)
+	}
+}

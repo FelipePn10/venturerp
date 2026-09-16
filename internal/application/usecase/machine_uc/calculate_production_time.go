@@ -83,13 +83,8 @@ func (uc *CalculateProductionTimeUseCase) Execute(
 		machine.CapacityUnit,
 	)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"item %d (unit: %s) is incompatible with machine %d (unit: %s): %w",
-			input.ItemCode, item.Warehouse.UnitOfMeasurement,
-			input.MachineCode, machine.CapacityUnit,
-			err,
-		)
-	}
+		compat.Factor = 1
+	} // Item-specific times are expressed in the item's UOM.
 
 	// --- 4. Resolve the requested mask (nil/empty → default "") ---
 	mask := ""
@@ -109,7 +104,47 @@ func (uc *CalculateProductionTimeUseCase) Execute(
 		return nil, err
 	}
 
+	if !finitePositive(imt.ProductionTime) || imt.ProductionBaseQty <= 0 {
+		return nil, errorsuc.NewValidationError("tempo de produção cadastrado inválido; revise a produtividade do item")
+	}
+
+	// A produtividade guarda o VÍNCULO e a TAXA; a autonomia da carga e o tempo
+	// de troca vivem no cadastro do consumível. Sem resolver isso aqui o
+	// simulador mostraria zero trocas enquanto o MRP — que faz o join — conta
+	// as paradas, e o usuário veria dois números diferentes para a mesma ordem.
+	if imt.ConsumableID != nil && imt.ConsumptionPerHour != nil {
+		consumiveis, err := uc.Repo.ListConsumables(ctx, input.MachineCode)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range consumiveis {
+			if c.ID == *imt.ConsumableID {
+				imt.Consumable = &entity.ConsumableUsage{
+					PerHour:            *imt.ConsumptionPerHour,
+					CapacityPerRefill:  c.CapacityPerRefill,
+					ReplacementMinutes: c.ReplacementMinutes,
+					Unit:               c.Unit,
+					Description:        c.Description,
+				}
+				break
+			}
+		}
+	}
 	workingMins := input.WorkingMinutesPerDay
+	if workingMins <= 0 && machine.AvailableHoursPerDay != nil {
+		workingMins = *machine.AvailableHoursPerDay * 60
+	}
+	if workingMins <= 0 {
+		if reader, ok := uc.Repo.(interface {
+			DefaultWorkingHours(context.Context, int64) (float64, error)
+		}); ok {
+			hours, err := reader.DefaultWorkingHours(ctx, input.MachineCode)
+			if err != nil {
+				return nil, err
+			}
+			workingMins = hours * 60
+		}
+	}
 	if workingMins <= 0 {
 		workingMins = machinesvc.DefaultWorkingMinutesPerDay
 	}

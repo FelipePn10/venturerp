@@ -58,6 +58,7 @@ INSERT INTO machines (
     capacity_unit,
     capacity_period,
     efficiency_rate,
+    available_hours_per_day,
     is_active,
     resource_group_id,
     calendar_id,
@@ -76,7 +77,7 @@ INSERT INTO machines (
 )
 VALUES (
     sqlc.arg(code), sqlc.arg(name), sqlc.arg(machine_type_code), sqlc.narg(cost_center_code),
-    sqlc.arg(capacity), sqlc.arg(capacity_unit), sqlc.arg(capacity_period), sqlc.arg(efficiency_rate),
+    sqlc.arg(capacity), sqlc.arg(capacity_unit), sqlc.arg(capacity_period), sqlc.arg(efficiency_rate), sqlc.narg(available_hours_per_day),
     sqlc.arg(is_active), sqlc.narg(resource_group_id), sqlc.narg(calendar_id), sqlc.narg(location),
     sqlc.arg(is_critical), sqlc.narg(usage_description), sqlc.narg(acquired_on),
     sqlc.arg(preparation_time), sqlc.arg(preparation_time_unit), sqlc.narg(supplier_code),
@@ -96,6 +97,7 @@ SET
     capacity_unit = sqlc.arg(capacity_unit),
     capacity_period = sqlc.arg(capacity_period),
     efficiency_rate = sqlc.arg(efficiency_rate),
+    available_hours_per_day = CASE WHEN sqlc.arg(inherit_work_center_hours)::boolean THEN NULL ELSE COALESCE(sqlc.narg(available_hours_per_day), available_hours_per_day) END,
     is_active = sqlc.arg(is_active),
     resource_group_id = sqlc.narg(resource_group_id),
     calendar_id = sqlc.narg(calendar_id),
@@ -146,16 +148,26 @@ INSERT INTO item_machine_times (
     production_time_unit,
     production_base_qty,
     setup_time,
-    priority,
+    priority, efficiency_rate, time_basis,
+    consumable_id, consumption_per_hour,
     enterprise_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, sqlc.arg(enterprise_id))
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, sqlc.narg(efficiency_rate), sqlc.arg(time_basis),
+        sqlc.narg(consumable_id), sqlc.narg(consumption_per_hour), sqlc.arg(enterprise_id))
     ON CONFLICT (item_code, mask, machine_code)
 DO UPDATE SET
     production_time = EXCLUDED.production_time,
+    production_time_unit = EXCLUDED.production_time_unit,
+    production_base_qty = EXCLUDED.production_base_qty,
+    efficiency_rate = EXCLUDED.efficiency_rate,
+    time_basis = EXCLUDED.time_basis,
+    consumable_id = EXCLUDED.consumable_id,
+    consumption_per_hour = EXCLUDED.consumption_per_hour,
+    is_active = TRUE,
            setup_time = EXCLUDED.setup_time,
            priority = EXCLUDED.priority,
            updated_at = NOW()
+           WHERE item_machine_times.enterprise_id = EXCLUDED.enterprise_id
            RETURNING *;
 
 
@@ -260,3 +272,33 @@ WHERE code = $1 AND enterprise_id = $4
 UPDATE machine_schedules
 SET is_active = FALSE, updated_at = NOW()
 WHERE code = $1 AND enterprise_id = $2;
+
+
+-- name: UpsertMachineConsumable :one
+-- Consumível da máquina: quanto rende uma carga e quanto demora a troca. A TAXA
+-- de consumo não mora aqui — ela depende do que está sendo produzido e fica em
+-- item_machine_times.consumption_per_hour.
+INSERT INTO machine_consumables (
+    enterprise_id, machine_code, code, description, unit,
+    capacity_per_refill, replacement_minutes
+) VALUES (sqlc.arg(enterprise_id), $1, $2, $3, $4, $5, $6)
+ON CONFLICT (enterprise_id, machine_code, code) DO UPDATE SET
+    description = EXCLUDED.description,
+    unit = EXCLUDED.unit,
+    capacity_per_refill = EXCLUDED.capacity_per_refill,
+    replacement_minutes = EXCLUDED.replacement_minutes,
+    is_active = TRUE,
+    updated_at = NOW()
+RETURNING *;
+
+-- name: ListMachineConsumables :many
+SELECT * FROM machine_consumables
+WHERE enterprise_id = sqlc.arg(enterprise_id)
+  AND (machine_code = $1 OR $1 = 0)
+  AND is_active = TRUE
+ORDER BY machine_code, code;
+
+-- name: DeleteMachineConsumable :execrows
+UPDATE machine_consumables
+SET is_active = FALSE, updated_at = NOW()
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);

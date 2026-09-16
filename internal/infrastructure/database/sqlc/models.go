@@ -5411,6 +5411,11 @@ type Item struct {
 	// Item de processo em terceiros.
 	IsProcessItem bool
 	SuppliesNotes pgtype.Text
+	// Valor consumido na janela da última apuração da curva ABC.
+	AbcConsumptionValue pgtype.Numeric
+	// Participação acumulada do item no valor total consumido (0-100).
+	AbcSharePct     pgtype.Numeric
+	AbcCalculatedAt pgtype.Timestamptz
 }
 
 type ItemBusinessCodeSequence struct {
@@ -5493,6 +5498,13 @@ type ItemMachineTime struct {
 	ProductionBaseQty  int32
 	IsActive           bool
 	EnterpriseID       *int64
+	// Eficiência específica; nulo herda a máquina. Taxa real medida usa 1.
+	EfficiencyRate pgtype.Numeric
+	// CYCLE arredonda ciclos; PROPORTIONAL representa taxa por quantidade (ex.: peças/h).
+	TimeBasis    string
+	ConsumableID *int64
+	// Consumo por hora de usinagem deste item nesta máquina, na unidade do consumível.
+	ConsumptionPerHour pgtype.Numeric
 }
 
 type ItemMask struct {
@@ -5733,6 +5745,8 @@ type Machine struct {
 	Brand                            pgtype.Text
 	IsPreferred                      bool
 	MaintenanceResponsibleEmployeeID *int64
+	// Horas disponíveis por dia sem calendário; nulo herda o centro de trabalho.
+	AvailableHoursPerDay pgtype.Numeric
 }
 
 type MachineCalendar struct {
@@ -5749,7 +5763,24 @@ type MachineCalendarInterval struct {
 	CalendarID int64
 	Weekday    int16
 	StartTime  pgtype.Time
-	EndTime    pgtype.Time
+	// Fim do turno. Menor ou igual ao início significa que termina no dia seguinte (turno noturno).
+	EndTime pgtype.Time
+}
+
+type MachineConsumable struct {
+	ID           int64
+	EnterpriseID int64
+	MachineCode  int64
+	Code         string
+	Description  string
+	Unit         string
+	// Quanto rende uma carga completa, na unidade do consumível.
+	CapacityPerRefill pgtype.Numeric
+	// Minutos de máquina parada para trocar a carga. Entra na ocupação do planejamento.
+	ReplacementMinutes pgtype.Numeric
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
 }
 
 type MachineDowntime struct {
@@ -5958,6 +5989,15 @@ type ManufacturingWarehouseAddress struct {
 	WarehouseID  int64
 	Address      string
 	IsActive     bool
+	Zone         string
+	// Capacidade na unidade do item; nulo = sem limite declarado.
+	Capacity    pgtype.Numeric
+	IsBlocked   bool
+	BlockReason pgtype.Text
+	// Endereço fixo de um item (o "fixed bin" do SAP): a guarda vai sempre para cá.
+	FixedItemCode *int64
+	// Ordem física do endereço na rota de separação; 0 = sem rota definida. É o que evita o separador cruzar o galpão de um lado para o outro.
+	PickSequence int32
 }
 
 // Percentuais e prazos do mês usados no cálculo da margem de contribuição.
@@ -6072,6 +6112,24 @@ type MrpItemProfile struct {
 	CreatedAt       pgtype.Timestamptz
 	Code            pgtype.Int8
 	EnterpriseID    *int64
+}
+
+type MrpMachineAllocation struct {
+	SuggestionCode    int64
+	EnterpriseID      int64
+	MachineID         int64
+	ProductionMinutes pgtype.Numeric
+	ScheduleDate      pgtype.Date
+	ScheduledStart    *time.Time
+	ScheduledEnd      *time.Time
+}
+
+type MrpMachineAllocationSlot struct {
+	MachineID        int64
+	RouteOperationID *int64
+	SuggestionCode   int64
+	StartsAt         pgtype.Timestamp
+	EndsAt           pgtype.Timestamp
 }
 
 type MrpParameter struct {
@@ -8684,6 +8742,14 @@ type Stock struct {
 	Quantity  pgtype.Numeric
 }
 
+type StockAbcCountPolicy struct {
+	EnterpriseID int64
+	AbcClass     string
+	DaysInterval int32
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
 type StockBalance struct {
 	ID             int64
 	ItemCode       int64
@@ -8701,12 +8767,14 @@ type StockBalance struct {
 	UpdatedAt      pgtype.Timestamptz
 	EnterpriseID   *int64
 	AvailableQty   pgtype.Numeric
+	Address        string
 }
 
 type StockCycleCount struct {
-	ID                 pgtype.UUID
-	EnterpriseID       int64
-	WarehouseID        int64
+	ID           pgtype.UUID
+	EnterpriseID int64
+	WarehouseID  int64
+	// Obsoleto: nunca teve tabela-alvo. Use address (migração 345).
 	WarehouseAddressID *int64
 	ItemCode           int64
 	Mask               string
@@ -8725,6 +8793,8 @@ type StockCycleCount struct {
 	UpdatedAt          pgtype.Timestamptz
 	Origin             string
 	PolicyDays         *int32
+	// Endereço contado; vazio = contagem do almoxarifado inteiro.
+	Address string
 }
 
 type StockCycleCountAudit struct {
@@ -8752,6 +8822,7 @@ type StockLot struct {
 	CreatedBy    pgtype.UUID
 	EnterpriseID int64
 	Mask         string
+	ExpiresAt    pgtype.Date
 }
 
 type StockLotBalance struct {
@@ -8765,6 +8836,8 @@ type StockLotBalance struct {
 	LastMovementAt pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	EnterpriseID   *int64
+	Address        string
+	ReservedQty    pgtype.Numeric
 }
 
 type StockMovement struct {
@@ -8786,6 +8859,8 @@ type StockMovement struct {
 	CreatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
 	EnterpriseID   *int64
+	Address        pgtype.Text
+	AddressTo      pgtype.Text
 }
 
 type StockMovementType struct {
@@ -8804,6 +8879,36 @@ type StockMovementType struct {
 	GeneratesFciMovement bool
 	IsActive             bool
 	CreatedAt            pgtype.Timestamptz
+}
+
+type StockPickingWafe struct {
+	ID           int64
+	EnterpriseID int64
+	Code         int64
+	WarehouseID  int64
+	Status       string
+	Rule         string
+	Notes        pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	ConfirmedAt  pgtype.Timestamptz
+	CancelledAt  pgtype.Timestamptz
+}
+
+type StockPickingWaveLine struct {
+	ID            int64
+	EnterpriseID  int64
+	WaveID        int64
+	ItemCode      int64
+	Mask          string
+	Lot           string
+	Address       string
+	PickSequence  int32
+	Quantity      pgtype.Numeric
+	PickedQty     pgtype.Numeric
+	ReservationID *int64
+	ReferenceType pgtype.Text
+	ReferenceCode *int64
 }
 
 type StockRemnant struct {
@@ -8843,6 +8948,9 @@ type StockReservation struct {
 	UpdatedAt         pgtype.Timestamptz
 	CreatedBy         pgtype.UUID
 	EnterpriseID      int64
+	// Endereço reservado; vazio = reserva do almoxarifado, sem endereçamento.
+	Address string
+	Lot     string
 }
 
 type StockSnapshot struct {

@@ -3,13 +3,12 @@ package response
 import "time"
 
 type CRPSummaryResponse struct {
-	PlanCode      int64 `json:"plan_code"`
-	TotalEntries  int   `json:"total_entries"`
-	OverloadCount int   `json:"overload_count"`
+	OrdersWithoutLoad []int64 `json:"orders_without_load,omitempty"`
+	PlanCode          int64   `json:"plan_code"`
+	TotalEntries      int     `json:"total_entries"`
+	OverloadCount     int     `json:"overload_count"`
 	// WorkCentersNoCapacity lista os centros de trabalho sem capacidade
-	// cadastrada. O cálculo assume 8 h para não travar, mas o número de
-	// sobrecarga desses centros não significa nada até alguém cadastrar a
-	// capacidade real — e o usuário precisa saber disso.
+	// disponível nas datas carregadas. Zero permanece zero; não se inventam horas.
 	WorkCentersNoCapacity []int64 `json:"work_centers_without_capacity,omitempty"`
 }
 

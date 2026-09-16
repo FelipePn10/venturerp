@@ -22,12 +22,13 @@ type MachineTypeResponse struct {
 
 // MachineResponse is the API representation of a machine.
 type MachineResponse struct {
-	ID              int64   `json:"id"`
-	Code            int64   `json:"code"`
-	Name            string  `json:"name"`
-	MachineTypeCode int64   `json:"machine_type_code"`
-	CostCenterCode  *int64  `json:"cost_center_code,omitempty"`
-	Capacity        float64 `json:"capacity"`
+	AvailableHoursPerDay *float64 `json:"available_hours_per_day,omitempty"`
+	ID                   int64    `json:"id"`
+	Code                 int64    `json:"code"`
+	Name                 string   `json:"name"`
+	MachineTypeCode      int64    `json:"machine_type_code"`
+	CostCenterCode       *int64   `json:"cost_center_code,omitempty"`
+	Capacity             float64  `json:"capacity"`
 	// A gravação aceita `capacity_per_unit` e a leitura devolvia só
 	// `capacity_unit`: reenviar o que o GET devolveu era recusado com 422
 	// "informe a unidade de capacidade". A tela só não quebrava porque fazia
@@ -60,6 +61,8 @@ type MachineResponse struct {
 
 // ItemMachineTimeResponse is the API representation of an item↔machine time config.
 type ItemMachineTimeResponse struct {
+	EfficiencyRate     *float64  `json:"efficiency_rate,omitempty"`
+	TimeBasis          string    `json:"time_basis"`
 	ItemCode           int64     `json:"item_code"`
 	Mask               *string   `json:"mask,omitempty"`
 	MachineCode        int64     `json:"machine_code"`
@@ -68,6 +71,8 @@ type ItemMachineTimeResponse struct {
 	ProductionBaseQty  int       `json:"production_base_qty"`
 	SetupTime          float64   `json:"setup_time"`
 	Priority           int       `json:"priority"`
+	ConsumableID       *int64    `json:"consumable_id,omitempty"`
+	ConsumptionPerHour *float64  `json:"consumption_per_hour,omitempty"`
 	IsActive           bool      `json:"is_active"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -89,4 +94,16 @@ type MachineScheduleResponse struct {
 	Notes            *string    `json:"notes,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// MachineConsumableResponse é o consumível cadastrado na máquina.
+type MachineConsumableResponse struct {
+	ID                 int64   `json:"id"`
+	MachineCode        int64   `json:"machine_code"`
+	Code               string  `json:"code"`
+	Description        string  `json:"description"`
+	Unit               string  `json:"unit"`
+	CapacityPerRefill  float64 `json:"capacity_per_refill"`
+	ReplacementMinutes float64 `json:"replacement_minutes"`
+	IsActive           bool    `json:"is_active"`
 }

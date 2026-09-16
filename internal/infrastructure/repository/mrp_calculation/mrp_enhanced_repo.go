@@ -130,10 +130,18 @@ func (r *MRPCalculationRepositorySQLC) ListItemMachineTimes(ctx context.Context,
 		return nil, err
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT item_code, machine_id, priority, production_time
-		 FROM item_machine_times
-		 WHERE item_code = ANY($1) AND enterprise_id = $2 AND is_active = true
-		 ORDER BY priority`,
+		// O LEFT JOIN do consumível é opcional de propósito: item sem consumo
+		// declarado continua planejando exatamente como antes.
+		`SELECT imt.item_code,m.id,imt.priority,imt.production_time,imt.mask,m.code,
+ imt.production_time_unit,imt.production_base_qty,imt.setup_time,imt.efficiency_rate,
+ m.efficiency_rate,COALESCE(m.available_hours_per_day,mt.capacity_hours),imt.time_basis,mt.id,
+ imt.consumption_per_hour,mc.capacity_per_refill,mc.replacement_minutes,mc.unit,mc.description
+ FROM item_machine_times imt
+ JOIN machines m ON m.code=imt.machine_code AND m.enterprise_id=imt.enterprise_id AND m.is_active
+ JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=m.enterprise_id AND mt.is_active
+ LEFT JOIN machine_consumables mc ON mc.id=imt.consumable_id AND mc.enterprise_id=imt.enterprise_id AND mc.is_active
+ WHERE imt.item_code=ANY($1) AND imt.enterprise_id=$2 AND imt.is_active
+ ORDER BY imt.priority,m.code`,
 		itemCodes, enterpriseID,
 	)
 	if err != nil {
@@ -144,7 +152,8 @@ func (r *MRPCalculationRepositorySQLC) ListItemMachineTimes(ctx context.Context,
 	m := make(map[int64][]*entity.MachineTimeInfo)
 	for rows.Next() {
 		var info entity.MachineTimeInfo
-		if err := rows.Scan(&info.ItemCode, &info.MachineID, &info.Priority, &info.ProductionTime); err != nil {
+		if err := rows.Scan(&info.ItemCode, &info.MachineID, &info.Priority, &info.ProductionTime, &info.Mask, &info.MachineCode, &info.ProductionTimeUnit, &info.ProductionBaseQty, &info.SetupTime, &info.EfficiencyRate, &info.MachineEfficiencyRate, &info.WorkingHoursPerDay, &info.TimeBasis, &info.WorkCenterID,
+			&info.ConsumptionPerHour, &info.ConsumableCapacity, &info.ConsumableSwapMinutes, &info.ConsumableUnit, &info.ConsumableName); err != nil {
 			return nil, fmt.Errorf("scanning machine time: %w", err)
 		}
 		m[info.ItemCode] = append(m[info.ItemCode], &info)
@@ -241,12 +250,15 @@ func (r *MRPCalculationRepositorySQLC) CreateMachineSchedule(ctx context.Context
 	if err != nil {
 		return err
 	}
-	_, err = r.db.Exec(ctx,
-		`INSERT INTO machine_schedules (plan_code, planned_order_code, machine_id, schedule_date, production_time, enterprise_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		schedule.PlanCode, schedule.PlannedOrderCode, schedule.MachineID,
-		schedule.ScheduleDate, schedule.ProductionTime, enterpriseID,
-	)
+	// Suggestions reserve forecast load, never the execution queue of firm orders.
+	tag, err := r.db.Exec(ctx, `UPDATE mrp_machine_allocations a SET schedule_date=$1,production_minutes=$2
+ FROM mrp_planned_suggestions s WHERE a.suggestion_code=s.code AND s.code=$3 AND s.plan_code=$4
+ AND a.enterprise_id=$5 AND s.enterprise_id=$5 AND a.machine_id=$6`,
+		schedule.ScheduleDate, schedule.ProductionTime, schedule.PlannedOrderCode, schedule.PlanCode, enterpriseID, schedule.MachineID)
+	if err == nil && tag.RowsAffected() != 1 {
+		return fmt.Errorf("alocação de máquina não encontrada nesta empresa")
+	}
+
 	return err
 }
 
@@ -319,9 +331,63 @@ func (r *MRPCalculationRepositorySQLC) UpdatePlannedOrderMachine(ctx context.Con
 	if err != nil {
 		return err
 	}
-	_, err = r.db.Exec(ctx,
-		`UPDATE mrp_planned_suggestions SET machine_id = $2, production_time = $3 WHERE code = $1 AND enterprise_id = $4`,
+	tag, err := r.db.Exec(ctx,
+		`INSERT INTO mrp_machine_allocations(suggestion_code,enterprise_id,machine_id,production_minutes,schedule_date)
+ SELECT s.code,s.enterprise_id,m.id,$3,COALESCE(s.start_date,s.need_date)
+ FROM mrp_planned_suggestions s JOIN machines m ON m.id=$2 AND m.enterprise_id=s.enterprise_id AND m.is_active
+ WHERE s.code=$1 AND s.enterprise_id=$4
+ ON CONFLICT(suggestion_code) DO UPDATE SET machine_id=EXCLUDED.machine_id,production_minutes=EXCLUDED.production_minutes,schedule_date=EXCLUDED.schedule_date
+ WHERE mrp_machine_allocations.enterprise_id=EXCLUDED.enterprise_id`,
 		suggestionCode, machineID, productionTime, enterpriseID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("sugestão ou máquina inválida para esta empresa")
+	}
+	return nil
+}
+
+func (r *MRPCalculationRepositorySQLC) loadMachineAllocations(ctx context.Context, suggestions []*entity.PlannedOrderSuggestion) error {
+	if len(suggestions) == 0 {
+		return nil
+	}
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	codes := make([]int64, 0, len(suggestions))
+	byCode := map[int64]*entity.PlannedOrderSuggestion{}
+	for _, s := range suggestions {
+		codes = append(codes, s.Code)
+		byCode[s.Code] = s
+	}
+	rows, err := r.db.Query(ctx, `SELECT a.suggestion_code,a.machine_id,m.code,a.production_minutes,a.scheduled_start,a.scheduled_end FROM mrp_machine_allocations a JOIN machines m ON m.id=a.machine_id AND m.enterprise_id=a.enterprise_id WHERE a.enterprise_id=$1 AND a.suggestion_code=ANY($2)`, e, codes)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var suggestion, id, code int64
+		var minutes float64
+		var start, end *time.Time
+		if err := rows.Scan(&suggestion, &id, &code, &minutes, &start, &end); err != nil {
+			return err
+		}
+		if s := byCode[suggestion]; s != nil {
+			s.MachineID = &id
+			s.MachineCode = &code
+			s.ProductionTime = &minutes
+			if start != nil {
+				s.RequestedStartDate = s.StartDate
+				s.StartDate = start
+			}
+			s.EstimatedEndAt = end
+			if end != nil {
+				s.CapacityLate = end.After(s.NeedDate.AddDate(0, 0, 1))
+			}
+		}
+	}
+	return rows.Err()
 }

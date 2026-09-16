@@ -111,7 +111,7 @@ func nativeItemBusinessCodeRequest(r *http.Request) bool {
 }
 
 func nativeItemBusinessCodePath(r *http.Request) bool {
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	parts := strings.Split(strings.Trim(r.URL.EscapedPath(), "/"), "/")
 	if len(parts) < 3 || parts[0] != "api" || parts[1] != "items" {
 		return false
 	}

@@ -82,7 +82,7 @@ func normalizeEfficiency(rate float64) (float64, error) {
 }
 
 // validateMachineFields aplica as validações comuns a criar e alterar máquina.
-func validateMachineFields(code int64, name string, machineTypeCode int64, capacity float64) error {
+func validateMachineFields(code int64, name string, machineTypeCode int64, capacity float64, hours ...*float64) error {
 	if code <= 0 {
 		return errorsuc.NewValidationError("informe o código da máquina")
 	}
@@ -92,7 +92,7 @@ func validateMachineFields(code int64, name string, machineTypeCode int64, capac
 	if machineTypeCode <= 0 {
 		return errorsuc.NewValidationError("informe o tipo da máquina")
 	}
-	if capacity <= 0 {
+	if capacity < 0 || capacity == 0 && (len(hours) == 0 || hours[0] == nil || *hours[0] <= 0) {
 		return errorsuc.NewValidationError("a capacidade da máquina deve ser maior que zero")
 	}
 	return nil
