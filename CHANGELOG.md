@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.29] — 2026-09-16
+
+- feat(máquinas)!: capacidade finita, turno noturno, paradas e consumíveis (`62bf84d`)
+
 ### Novidades
 - **Capacidade finita de máquina.** O MRP deixou de propor datas no vazio: ele consulta a jornada e os turnos de cada recurso, desconta paradas, manutenção e o que outros planos já reservaram, e devolve os intervalos exatos em que a ordem vai ocupar a máquina. A necessidade original é preservada — a tela mostra início, término previsto e se a capacidade empurrou a entrega para depois do prazo.
 - **Produtividade por item, máscara e máquina**, separada da jornada disponível. A mesma peça rende diferente em cada máquina, e a mesma máquina rende diferente em cada peça. Produção contínua pode continuar na janela seguinte; ciclo fechado ocupa inteiro e não atravessa turno.
