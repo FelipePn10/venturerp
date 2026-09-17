@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.30] — 2026-09-17
+
+- feat(margem): simulação antes da venda; corrige permissão e 403 em inglês (`9cd09f1`)
+
 ### Novidades
 - **Simulação de margem** (`VCUS0200`). Antes de fechar o pedido, veja o que sobra: informe preço, quantidade, custo, impostos e comissão e a tela devolve a cascata inteira — inclusive o que o prazo de pagamento custa. Informando a margem desejada, devolve também o **preço mínimo** que a atinge. A conta é a mesma do fechamento do mês, então o número que o vendedor vê é o que vai aparecer na apuração.
 - **Tempo de ciclo em segundos.** A ficha de chão de fábrica traz "85 s por peça" e agora é lançado direto, sem converter à mão.
