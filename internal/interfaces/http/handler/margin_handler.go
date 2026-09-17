@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/margin/entity"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -180,4 +181,21 @@ func (h *MarginHandler) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, linhas)
+}
+
+// Simulate responde "e se eu vender assim?" — a mesma cascata da apuração,
+// aplicada a uma venda que ainda não aconteceu. Quando a margem desejada vem
+// preenchida, devolve também o preço mínimo que a atinge.
+func (h *MarginHandler) Simulate(w http.ResponseWriter, r *http.Request) {
+	var in margin_uc.SimulacaoEntrada
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("corpo da requisição inválido"))
+		return
+	}
+	out, err := h.uc.Simular(r.Context(), in)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
 }

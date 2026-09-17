@@ -208,7 +208,7 @@ func (r *APSRepositorySQLC) ListMachineDowntimeWindows(ctx context.Context, mach
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT starts_at,ends_at FROM machine_downtimes WHERE enterprise_id=$1 AND machine_id=$2 AND starts_at<$4 AND ends_at>$3
+	rows, err := r.pool.Query(ctx, `SELECT starts_at,COALESCE(ends_at,NOW()) FROM machine_downtimes WHERE enterprise_id=$1 AND machine_id=$2 AND starts_at<$4 AND COALESCE(ends_at,NOW())>$3
  UNION ALL SELECT sl.starts_at::timestamptz,sl.ends_at::timestamptz FROM mrp_machine_allocation_slots sl
  JOIN mrp_machine_allocations a ON a.suggestion_code=sl.suggestion_code
  WHERE a.enterprise_id=$1 AND sl.machine_id=$2 AND sl.starts_at<$4 AND sl.ends_at>$3

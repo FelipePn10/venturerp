@@ -20,7 +20,7 @@ var ErrProductionTimeNotConfigured = errors.New("tempo de produção não cadast
 //uma determinada quantidade demandada de uma variante de item + máscara em uma máquina
 //específica.
 
-// Normaliza todas as diferenças de período de tempo (MINUTO / HORA / DIA),
+// Normaliza todas as diferenças de período de tempo (SEGUNDO / MINUTO / HORA / DIA),
 // aplica o fator de conversão de unidade item→máquina e seleciona a configuração
 // correta de ItemMachineTime com base no código do item, máscara e código da máquina.
 type CalculateProductionTimeUseCase struct {

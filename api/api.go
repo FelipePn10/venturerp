@@ -2292,6 +2292,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters/list", marginHandler.ListParameters)
 			r.With(httpmw.RequireRole("ADMIN")).Put("/parameters", marginHandler.SaveParameters)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/generate", marginHandler.Generate)
+			// "E se eu vender assim?" — a mesma cascata da apuração, antes de vender.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/simulate", marginHandler.Simulate)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", marginHandler.Report)
 		})
 
@@ -2306,17 +2308,28 @@ func (app *application) mount() chi.Router {
 			// sequenciamento agrupar itens parecidos em vez de tratar todo
 			// setup como se fosse igual.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/setup-matrix/{workCenterID}", apsHandler.ListSetupMatrix)
-			r.With(httpmw.RequireRole("ADMIN")).Post("/setup-matrix", apsHandler.UpsertSetupTransition)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/setup-matrix", apsHandler.UpsertSetupTransition)
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/setup-matrix/{id}", apsHandler.DeleteSetupTransition)
+			// Famílias de preparação: é o que permite cobrir muitos itens com
+			// poucas regras, em vez de um par para cada combinação.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/setup-families", apsHandler.ListSetupFamilies)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/setup-families/{family}/items", apsHandler.ListSetupFamilyItems)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/setup-families", apsHandler.AssignSetupFamily)
 			r.With(httpmw.RequireRole("ADMIN")).Post("/resource-groups", apsHandler.UpsertResourceGroup)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resource-groups", apsHandler.ListResourceGroups)
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/resource-groups/{id}", apsHandler.DeleteResourceGroup)
-			r.With(httpmw.RequireRole("ADMIN")).Post("/machine-calendars", apsHandler.UpsertMachineCalendar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/machine-calendars", apsHandler.UpsertMachineCalendar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/machine-calendars", apsHandler.ListMachineCalendars)
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/machine-calendars/{id}", apsHandler.DeleteMachineCalendar)
-			r.With(httpmw.RequireRole("ADMIN"), httpmw.RequireIdempotencyKey).Post("/machine-downtimes", apsHandler.CreateMachineDowntime)
+			r.With(httpmw.RequireRole("ADMIN", "USER"), httpmw.RequireIdempotencyKey).Post("/machine-downtimes", apsHandler.CreateMachineDowntime)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/machine-downtimes", apsHandler.ListMachineDowntimes)
 			r.With(httpmw.RequireRole("ADMIN"), httpmw.RequireIdempotencyKey).Delete("/machine-downtimes/{id}", apsHandler.DeleteMachineDowntime)
+			// Cronômetro do operador: a máquina parou agora, voltou agora. Parada
+			// de chão de fábrica dura minutos e acontece várias vezes por turno;
+			// exigir data e hora nas duas pontas garante que ninguém registre.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/machine-stops/open", apsHandler.OpenMachineStop)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/machine-stops/{machineID}/close", apsHandler.CloseMachineStop)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/machine-stops/{machineID}", apsHandler.MachineStopStatus)
 			r.With(httpmw.RequireRole("ADMIN")).Put("/employees/{id}/sequencing-profile", apsHandler.UpsertEmployeeSequencingProfile)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/employees/{id}/sequencing-profile", apsHandler.GetEmployeeSequencingProfile)
 			r.With(httpmw.RequireRole("ADMIN")).Patch("/employees/{employeeID}/contacts/{contactID}", apsHandler.UpdateEmployeeContact)

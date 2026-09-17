@@ -31,7 +31,7 @@ func machineMinutes(mt *entity.MachineTimeInfo, qty float64) (float64, error) {
 		return 0, fmt.Errorf("produtividade inválida do item %d na máquina %d", mt.ItemCode, mt.MachineCode)
 	}
 	switch mt.ProductionTimeUnit {
-	case "MINUTO", "HORA", "DIA":
+	case "SEGUNDO", "MINUTO", "HORA", "DIA":
 	default:
 		return 0, fmt.Errorf("unidade de tempo inválida do item %d", mt.ItemCode)
 	}

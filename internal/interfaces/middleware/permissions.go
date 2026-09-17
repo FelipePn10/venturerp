@@ -58,7 +58,8 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 				return
 			}
 			if !RoleHasPermission(user.Role, perm) {
-				http.Error(w, "forbidden: missing scope "+perm, http.StatusForbidden)
+				respondJSONErro(w, http.StatusForbidden, "ACESSO_NEGADO",
+					"seu perfil não tem a permissão necessária para esta operação ("+perm+")")
 				return
 			}
 			next.ServeHTTP(w, r)

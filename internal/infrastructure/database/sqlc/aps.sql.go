@@ -281,7 +281,7 @@ func (q *Queries) ListSetupMatrix(ctx context.Context, workCenterID, enterpriseI
 // A família sai da classificação comercial do item — é por ela que a fábrica
 // agrupa "mesma cor", "mesma espessura".
 const getOrderItem = `
-SELECT po.item_code, COALESCE(i.commercial_classification_code, '')
+SELECT po.item_code, COALESCE(NULLIF(i.setup_family, ''), '')
 FROM production_orders po
 LEFT JOIN items i ON i.code = po.item_code AND i.enterprise_id = po.enterprise_id
 WHERE po.id = $1`

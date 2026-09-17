@@ -165,3 +165,33 @@ func TestCalculateProductionTime_TrocaDeConsumivelOcupaAMaquina(t *testing.T) {
 		t.Fatalf("sem consumível o total deveria ser 310: %+v", res.TotalMinutes)
 	}
 }
+
+// A ficha de chão de fábrica traz o ciclo em segundos. Converter à mão coloca
+// erro de arredondamento na entrada do dado que governa toda a capacidade.
+func TestCalculateProductionTime_AceitaSegundos(t *testing.T) {
+	imt := &entity.ItemMachineTime{
+		ProductionTime: 85, ProductionTimeUnit: types.Second,
+		ProductionBaseQty: 1, SetupTime: 180, TimeBasis: "PROPORTIONAL",
+	}
+	machine := &entity.Machine{Capacity: 1, CapacityPeriod: types.Hour, EfficiencyRate: 1}
+
+	// 200 peças × 85 s = 17.000 s = 283,333 min, mais 180 min de preparação.
+	res := CalculateProductionTime(imt, machine, 200, 1, 480)
+
+	perto := func(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
+
+	if esperado := 200 * 85.0 / 60.0; !perto(res.MachiningMinutes, esperado) {
+		t.Fatalf("usinagem = %v min, esperado %v", res.MachiningMinutes, esperado)
+	}
+	if !perto(res.TotalMinutes, 200*85.0/60.0+180) {
+		t.Fatalf("total = %v, esperado %v", res.TotalMinutes, 200*85.0/60.0+180)
+	}
+	// Um ciclo em segundos tem de dar o mesmo que o equivalente em minutos.
+	emMinutos := &entity.ItemMachineTime{
+		ProductionTime: 85.0 / 60.0, ProductionTimeUnit: types.Minute,
+		ProductionBaseQty: 1, SetupTime: 180, TimeBasis: "PROPORTIONAL",
+	}
+	if outro := CalculateProductionTime(emMinutos, machine, 200, 1, 480); !perto(outro.TotalMinutes, res.TotalMinutes) {
+		t.Fatalf("segundos (%v) e minutos (%v) deveriam coincidir", res.TotalMinutes, outro.TotalMinutes)
+	}
+}

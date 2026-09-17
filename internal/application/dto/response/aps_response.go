@@ -48,13 +48,14 @@ type MachineCalendarResponse struct {
 	Intervals   []MachineCalendarIntervalResponse `json:"intervals"`
 }
 type MachineDowntimeResponse struct {
-	ID                 int64     `json:"id"`
-	MachineID          int64     `json:"machine_id"`
-	StartsAt           time.Time `json:"starts_at"`
-	EndsAt             time.Time `json:"ends_at"`
-	DowntimeType       string    `json:"downtime_type"`
-	Reason             string    `json:"reason"`
-	MaintenanceOrderID *int64    `json:"maintenance_order_id,omitempty"`
+	ID        int64     `json:"id"`
+	MachineID int64     `json:"machine_id"`
+	StartsAt  time.Time `json:"starts_at"`
+	// Nulo = parada em aberto, acontecendo agora.
+	EndsAt             *time.Time `json:"ends_at"`
+	DowntimeType       string     `json:"downtime_type"`
+	Reason             string     `json:"reason"`
+	MaintenanceOrderID *int64     `json:"maintenance_order_id,omitempty"`
 }
 
 type EmployeeContactResponse struct {

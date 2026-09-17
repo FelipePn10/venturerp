@@ -138,8 +138,11 @@ type MachineCalendar struct {
 	Intervals   []MachineCalendarInterval
 }
 type MachineDowntime struct {
-	ID, MachineID        int64
-	StartsAt, EndsAt     time.Time
+	ID, MachineID int64
+	StartsAt      time.Time
+	// EndsAt nulo significa parada EM ABERTO: a máquina parou e ainda não
+	// voltou. O planejamento a considera ocupada até o instante atual.
+	EndsAt               *time.Time
 	DowntimeType, Reason string
 	MaintenanceOrderID   *int64
 }

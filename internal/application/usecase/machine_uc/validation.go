@@ -17,7 +17,7 @@ var capacityUnits = []types.MachineCapacityUnit{
 	types.Meters, types.SquareMeters, types.CubicMeters, types.Liters,
 }
 
-var capacityPeriods = []types.CapacityPeriod{types.Minute, types.Hour, types.Day}
+var capacityPeriods = []types.CapacityPeriod{types.Second, types.Minute, types.Hour, types.Day}
 
 func joinUnits() string {
 	parts := make([]string, 0, len(capacityUnits))

@@ -161,7 +161,7 @@ func (r *APSRepositorySQLC) ListMachineDowntimes(ctx context.Context, machineID 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT id,machine_id,starts_at,ends_at,downtime_type,reason,maintenance_order_id FROM machine_downtimes WHERE enterprise_id=$1 AND ($2=0 OR machine_id=$2) AND starts_at<$4 AND ends_at>$3 ORDER BY starts_at`, enterpriseID, machineID, from, to)
+	rows, err := r.pool.Query(ctx, `SELECT id,machine_id,starts_at,ends_at,downtime_type,reason,maintenance_order_id FROM machine_downtimes WHERE enterprise_id=$1 AND ($2=0 OR machine_id=$2) AND starts_at<$4 AND COALESCE(ends_at, NOW())>$3 ORDER BY starts_at`, enterpriseID, machineID, from, to)
 	if err != nil {
 		return nil, err
 	}

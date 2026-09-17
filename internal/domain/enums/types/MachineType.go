@@ -60,6 +60,10 @@ const (
 type CapacityPeriod string
 
 const (
+	// A ficha de chão de fábrica traz tempo de ciclo em segundos ("85 s por
+	// peça"). Converter à mão coloca erro de arredondamento logo na entrada do
+	// dado que governa toda a capacidade.
+	Second CapacityPeriod = "SEGUNDO"
 	Minute CapacityPeriod = "MINUTO"
 	Hour   CapacityPeriod = "HORA"
 	Day    CapacityPeriod = "DIA"

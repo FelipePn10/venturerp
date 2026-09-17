@@ -190,6 +190,8 @@ func CalculateProductionTime(
 // periodToMinutes converts a CapacityPeriod enum value to minutes.
 func periodToMinutes(period types.CapacityPeriod, workingMinsPerDay float64) float64 {
 	switch period {
+	case types.Second:
+		return 1.0 / 60.0
 	case types.Minute:
 		return 1.0
 	case types.Hour:
