@@ -88,6 +88,51 @@ simulador e agenda. Turnos e paradas não tinham tela nenhuma — a API existia 
 só era alcançável pelo console genérico de rotas, então o usuário podia escolher
 um calendário mas não criá-lo, e não tinha como registrar uma quebra.
 
+## Segunda revisão: o que apareceu usando
+
+**403 em inglês, fora do envelope.** `RequireRole` e `RequirePermission` devolviam
+`http.Error(w, "forbidden", …)` — texto cru, enquanto todo o resto do sistema
+responde JSON em português. Era isso que chegava à tela. Agora dizem qual perfil
+o usuário tem, qual a operação exige, e que o perfil vale **por empresa**
+(`user_enterprises.role`, não `users.role` — os dois podem divergir).
+
+**Permissão invertida.** Um `USER` criava a máquina e a produtividade dela, mas
+não podia cadastrar o turno nem registrar uma parada. Cadastrar turno, parada e
+transição de setup passa a aceitar `USER`; excluir continua restrito a `ADMIN`,
+porque apagar reescreve capacidade que o planejamento já usou.
+
+**Lookup memoizado escondia o cadastro novo.** `loadMachines` guarda a lista pela
+vida da página e `resetLookups()` não era chamado em lugar nenhum: a máquina
+criada numa aba não aparecia no modal da outra. A tela invalida ao gravar
+máquina, centro de trabalho e consumível.
+
+**SEGUNDO como unidade de tempo** (migração 351). A ficha de chão de fábrica traz
+o ciclo em segundos; converter à mão coloca erro de arredondamento na entrada do
+dado que governa a capacidade.
+
+**Família de preparação** (migração 351). A matriz já aceitava regra por família
+com coringa — o que evita a explosão combinatória: quarenta chapas pedem três
+regras entre famílias, não mil e seiscentos pares. Mas a família vinha de
+`commercial_classification_code`, um agrupamento comercial. Agora vem de
+`items.setup_family`, que agrupa por processo. Quando várias regras casam, vence
+a mais específica: par de itens > família > coringa.
+
+**Parada em aberto** (migração 352). `ends_at` passa a aceitar nulo: a máquina
+parou e ainda não voltou. O planejamento trata o intervalo aberto como ocupado
+até agora — `COALESCE(ends_at, NOW())` nas três consultas de ocupação. Índice
+único parcial garante uma parada aberta por máquina, senão tocar duas vezes no
+botão bloquearia o recurso para sempre. Abrir é idempotente: a segunda chamada
+devolve a parada que já existe.
+
+A `VPRO1200` é o terminal do operador — escolhe a máquina, toca no motivo, e
+toca de novo quando volta. O horário é sempre o do servidor; o relógio da tela
+só desenha. O cadastro completo (retroativo, correção, consulta por período)
+continua na `VMAQ0200`, aba Paradas.
+
+**Papel vale por empresa.** O que `RequireRole` compara é `user_enterprises.role`,
+não `users.role` — os dois podem divergir, e o usuário aparece ADMIN no cadastro
+sendo USER no vínculo. É a causa típica de "403" em tela.
+
 ## Convenções e limites operacionais
 - Jornada sem calendário começa à meia-noite de segunda a sexta. Para horários reais e
   trabalho aos sábados/domingos, cadastre um calendário de turnos.

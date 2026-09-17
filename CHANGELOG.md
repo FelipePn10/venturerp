@@ -6,6 +6,17 @@ pipeline de release.
 
 ## Unreleased
 
+### Novidades
+- **Simulação de margem** (`VCUS0200`). Antes de fechar o pedido, veja o que sobra: informe preço, quantidade, custo, impostos e comissão e a tela devolve a cascata inteira — inclusive o que o prazo de pagamento custa. Informando a margem desejada, devolve também o **preço mínimo** que a atinge. A conta é a mesma do fechamento do mês, então o número que o vendedor vê é o que vai aparecer na apuração.
+- **Tempo de ciclo em segundos.** A ficha de chão de fábrica traz "85 s por peça" e agora é lançado direto, sem converter à mão.
+- **Família de preparação no item.** A matriz de setup já aceitava regra por família com um dos lados em branco como coringa — quarenta chapas pedem três regras, não mil e seiscentos pares. A família agora é um campo próprio, de processo, em vez da classificação comercial.
+- **Parada de máquina em aberto.** A máquina parou e ainda não voltou: o planejamento passa a tratá-la como ocupada até agora, em vez de só contar paradas já encerradas.
+
+### Correções
+- **"Forbidden" em inglês virava texto solto na tela.** Falta de permissão e sessão expirada agora respondem em português dizendo qual perfil você tem e qual a operação exige — e que o perfil vale por empresa.
+- **Cadastrar turno ou registrar parada exigia perfil de administrador**, enquanto cadastrar a máquina não. Quem opera a máquina é justamente quem vê ela parar; as três operações passam a aceitar o perfil de usuário. Excluir continua restrito.
+- **Motivo de parada inválido** respondia erro interno do servidor.
+
 ## [v1.1.29] — 2026-09-16
 
 - feat(máquinas)!: capacidade finita, turno noturno, paradas e consumíveis (`62bf84d`)

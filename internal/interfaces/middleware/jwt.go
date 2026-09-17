@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -118,16 +120,46 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, ok := r.Context().Value(contextkey.UserKey).(*security.AuthUser)
 			if !ok {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				respondJSONErro(w, http.StatusUnauthorized, "NAO_AUTENTICADO",
+					"sessão não encontrada ou expirada; entre novamente")
 				return
 			}
 
 			if _, allowed := roleSet[user.Role]; !allowed {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				respondJSONErro(w, http.StatusForbidden, "ACESSO_NEGADO", fmt.Sprintf(
+					"seu perfil (%s) não tem permissão para esta operação; ela exige %s. "+
+						"O perfil vale por empresa — peça ao administrador para revisar o seu acesso nesta empresa.",
+					perfilLegivel(user.Role), listaDePerfis(roles)))
 				return
 			}
 
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+// respondJSONErro devolve o mesmo envelope que o resto do sistema usa, para que
+// a tela consiga exibir a mensagem em vez de um texto solto.
+func respondJSONErro(w http.ResponseWriter, status int, code, mensagem string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"code": code, "error": mensagem})
+}
+
+func perfilLegivel(role string) string {
+	if strings.TrimSpace(role) == "" {
+		return "sem perfil definido"
+	}
+	return role
+}
+
+func listaDePerfis(roles []string) string {
+	switch len(roles) {
+	case 0:
+		return "outro perfil"
+	case 1:
+		return "o perfil " + roles[0]
+	default:
+		return "um destes perfis: " + strings.Join(roles, ", ")
 	}
 }

@@ -491,7 +491,7 @@ func (uc *APSUseCase) CreateMachineDowntime(ctx context.Context, dto request.Mac
 		return response.MachineDowntimeResponse{}, errorsuc.NewValidationError(
 			"motivo da parada inválido; use PLANNED (programada), UNPLANNED (quebra) ou MAINTENANCE (manutenção)")
 	}
-	v, err := repo.CreateMachineDowntime(ctx, repository.MachineDowntime{MachineID: dto.MachineID, StartsAt: dto.StartsAt, EndsAt: dto.EndsAt, DowntimeType: kind, Reason: strings.TrimSpace(dto.Reason), MaintenanceOrderID: dto.MaintenanceOrderID})
+	v, err := repo.CreateMachineDowntime(ctx, repository.MachineDowntime{MachineID: dto.MachineID, StartsAt: dto.StartsAt, EndsAt: &dto.EndsAt, DowntimeType: kind, Reason: strings.TrimSpace(dto.Reason), MaintenanceOrderID: dto.MaintenanceOrderID})
 	return downtimeResponse(v), err
 }
 func (uc *APSUseCase) ListMachineDowntimes(ctx context.Context, machineID int64, from, to time.Time) ([]response.MachineDowntimeResponse, error) {

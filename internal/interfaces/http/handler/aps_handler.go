@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -677,4 +679,98 @@ func (h *APSHandler) DeleteSetupTransition(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]string{"status": "success"})
+}
+
+// ── Famílias de preparação ──────────────────────────────────────────────────
+//
+// A matriz de setup aceita regra por família com um dos lados em branco como
+// coringa, e é isso que evita a explosão combinatória: quarenta chapas não
+// precisam de mil e seiscentas linhas, precisam de três regras entre famílias.
+// Estas rotas são o cadastro que torna as famílias utilizáveis.
+
+func (h *APSHandler) ListSetupFamilies(w http.ResponseWriter, r *http.Request) {
+	v, err := h.uc.ListarFamiliasDeSetup(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, v)
+}
+
+func (h *APSHandler) ListSetupFamilyItems(w http.ResponseWriter, r *http.Request) {
+	v, err := h.uc.ItensDaFamiliaDeSetup(r.Context(), chi.URLParam(r, "family"))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, v)
+}
+
+func (h *APSHandler) AssignSetupFamily(w http.ResponseWriter, r *http.Request) {
+	var corpo struct {
+		Family    string  `json:"family"`
+		ItemCodes []int64 `json:"item_codes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&corpo); err != nil {
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("corpo da requisição inválido"))
+		return
+	}
+	n, err := h.uc.DefinirFamiliaDeSetup(r.Context(), corpo.Family, corpo.ItemCodes)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, map[string]any{"updated": n})
+}
+
+// ── Cronômetro de parada ────────────────────────────────────────────────────
+//
+// Sem idempotency key de propósito: o botão fica num terminal de chão de fábrica
+// e tocar duas vezes é o normal. Abrir é idempotente por máquina — a segunda
+// chamada devolve a parada que já está aberta.
+
+func (h *APSHandler) OpenMachineStop(w http.ResponseWriter, r *http.Request) {
+	var corpo struct {
+		MachineID    int64  `json:"machine_id"`
+		DowntimeType string `json:"downtime_type"`
+		Reason       string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&corpo); err != nil {
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("corpo da requisição inválido"))
+		return
+	}
+	v, err := h.uc.AbrirParada(r.Context(), corpo.MachineID, corpo.DowntimeType, corpo.Reason)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, v)
+}
+
+func (h *APSHandler) CloseMachineStop(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "machineID"), 10, 64)
+	if err != nil {
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("máquina inválida"))
+		return
+	}
+	v, err := h.uc.FecharParada(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, v)
+}
+
+func (h *APSHandler) MachineStopStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "machineID"), 10, 64)
+	if err != nil {
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("máquina inválida"))
+		return
+	}
+	v, err := h.uc.ParadaEmAberto(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, v)
 }
