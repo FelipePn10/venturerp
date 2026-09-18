@@ -129,12 +129,17 @@ func precoParaMargem(in SimulacaoEntrada, p entity.Parametros) (*float64, string
 	if alto < 1 {
 		alto = 1000
 	}
-	// A margem cresce com o preço; se nem no teto o alvo é atingido, não há
-	// preço que resolva com este custo e esta carga tributária.
+	// A margem cresce com o preço, mas SATURA: tributos, comissão, incidência
+	// administrativa, frete e a despesa financeira do prazo são todos
+	// proporcionais ao preço, e a provisão de IR come um terço do que sobra.
+	// Recusar sem dizer qual é o teto deixa quem perguntou sem a informação que
+	// foi buscar — o vendedor quer saber quanto dá, não só que não dá.
 	for i := 0; i < 40 && margemEm(alto) < alvo; i++ {
 		alto *= 2
 		if math.IsInf(alto, 0) || alto > 1e12 {
-			return nil, "com este custo e esta carga tributária não há preço que atinja a margem pedida"
+			return nil, fmt.Sprintf(
+				"esta margem não é alcançável a nenhum preço: com este custo, esta carga tributária e este prazo, o máximo é %.2f%%",
+				margemEm(1e12))
 		}
 	}
 	if margemEm(baixo) >= alvo {

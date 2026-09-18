@@ -11,6 +11,60 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const abandonarCalculoTravado = `-- name: AbandonarCalculoTravado :one
+UPDATE mrp_calculation_logs
+SET status = 'FAILED',
+    finished_at = NOW(),
+    errors = jsonb_build_object(
+        'interrompido',
+        'o cálculo foi interrompido antes de terminar (o serviço reiniciou ou caiu) e foi encerrado automaticamente para liberar o plano')
+WHERE plan_code = $1
+  AND enterprise_id = $3
+  AND status = 'RUNNING'
+  AND started_at < NOW() - $2::interval
+RETURNING code, started_at
+`
+
+type AbandonarCalculoTravadoParams struct {
+	PlanCode     int64
+	Column2      pgtype.Interval
+	EnterpriseID *int64
+}
+
+type AbandonarCalculoTravadoRow struct {
+	Code      pgtype.Int8
+	StartedAt pgtype.Timestamptz
+}
+
+// Cálculo que ficou RODANDO além do razoável: o processo morreu no meio
+// (restart, deploy, queda) e o registro nunca foi encerrado. A trava de
+// concorrência continua valendo e o plano fica bloqueado para sempre.
+func (q *Queries) AbandonarCalculoTravado(ctx context.Context, arg AbandonarCalculoTravadoParams) (AbandonarCalculoTravadoRow, error) {
+	row := q.db.QueryRow(ctx, abandonarCalculoTravado, arg.PlanCode, arg.Column2, arg.EnterpriseID)
+	var i AbandonarCalculoTravadoRow
+	err := row.Scan(&i.Code, &i.StartedAt)
+	return i, err
+}
+
+const calculoEmAndamentoDesde = `-- name: CalculoEmAndamentoDesde :one
+SELECT started_at FROM mrp_calculation_logs
+WHERE plan_code = $1 AND enterprise_id = $2 AND status = 'RUNNING'
+ORDER BY started_at DESC
+LIMIT 1
+`
+
+type CalculoEmAndamentoDesdeParams struct {
+	PlanCode     int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) CalculoEmAndamentoDesde(ctx context.Context, arg CalculoEmAndamentoDesdeParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, calculoEmAndamentoDesde, arg.PlanCode, arg.EnterpriseID)
+	var started_at pgtype.Timestamptz
+	err := row.Scan(&started_at)
+	return started_at, err
+}
+
 const createConfiguredItemRule = `-- name: CreateConfiguredItemRule :one
 INSERT INTO configured_item_rules (item_code, table_type, field_name, rule_type, rule_value, sequence, created_by, enterprise_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

@@ -118,3 +118,25 @@ ORDER BY item_code, snapshot_date DESC;
 SELECT * FROM configured_item_rules
 WHERE enterprise_id = @enterprise_id AND is_active = TRUE
 ORDER BY item_code, sequence;
+
+-- Cálculo que ficou RODANDO além do razoável: o processo morreu no meio
+-- (restart, deploy, queda) e o registro nunca foi encerrado. A trava de
+-- concorrência continua valendo e o plano fica bloqueado para sempre.
+-- name: AbandonarCalculoTravado :one
+UPDATE mrp_calculation_logs
+SET status = 'FAILED',
+    finished_at = NOW(),
+    errors = jsonb_build_object(
+        'interrompido',
+        'o cálculo foi interrompido antes de terminar (o serviço reiniciou ou caiu) e foi encerrado automaticamente para liberar o plano')
+WHERE plan_code = $1
+  AND enterprise_id = @enterprise_id
+  AND status = 'RUNNING'
+  AND started_at < NOW() - $2::interval
+RETURNING code, started_at;
+
+-- name: CalculoEmAndamentoDesde :one
+SELECT started_at FROM mrp_calculation_logs
+WHERE plan_code = $1 AND enterprise_id = @enterprise_id AND status = 'RUNNING'
+ORDER BY started_at DESC
+LIMIT 1;

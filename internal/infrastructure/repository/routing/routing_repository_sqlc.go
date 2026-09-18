@@ -2,7 +2,11 @@ package routing
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -54,6 +58,7 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
+		ScrapPct:             pgutil.ToPgNumericFromFloat64(op.ScrapPct),
 		CreatedBy:            pgutil.ToPgUUID(op.CreatedBy),
 		EnterpriseID:         enterpriseID,
 	})
@@ -90,6 +95,7 @@ func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.
 		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
+		ScrapPct:             pgutil.ToPgNumericFromFloat64(op.ScrapPct),
 		EnterpriseID:         enterpriseID,
 	})
 	if err != nil {
@@ -179,6 +185,11 @@ func (r *RoutingRepositorySQLC) CreateRoute(ctx context.Context, rt *entity.Manu
 		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, errorsuc.NewConflictError(
+				"já existe um roteiro com esta alternativa para este item e máscara; use outro número de alternativa ou altere o roteiro existente")
+		}
 		return nil, fmt.Errorf("creating route: %w", err)
 	}
 	return routeRowToEntity(row), nil
@@ -313,6 +324,8 @@ func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entit
 		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
+		ScrapPct:             pgutil.ToPgNumericFromFloat64Ptr(op.ScrapPct),
+		InspectionRequired:   op.InspectionRequired,
 		Situation:            sqltypes.RouteOpSituationEnum(op.Situation),
 		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
 	})
@@ -341,6 +354,8 @@ func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *en
 		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
+		ScrapPct:             pgutil.ToPgNumericFromFloat64Ptr(op.ScrapPct),
+		InspectionRequired:   op.InspectionRequired,
 		Situation:            sqltypes.RouteOpSituationEnum(op.Situation),
 		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
 	})
@@ -566,6 +581,7 @@ func operationRowToEntity(row sqlc.Operation) *entity.Operation {
 		CostPerUnit:          numToPtr(row.CostPerUnit),
 		LeadTimeDays:         row.LeadTimeDays,
 		ThirdPartyRemittance: row.ThirdPartyRemittance,
+		ScrapPct:             pgutil.FromPgNumericToFloat64(row.ScrapPct),
 		IsActive:             row.IsActive,
 		CreatedAt:            pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:            pgutil.FromPgTimestamptz(row.UpdatedAt),
@@ -656,6 +672,8 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 	e.CostPerUnit = numToPtr(row.CostPerUnit)
 	e.LeadTimeDays = row.LeadTimeDays
 	e.ThirdPartyRemittance = textToPtr(row.ThirdPartyRemittance)
+	e.ScrapPct = numToPtr(row.ScrapPct)
+	e.InspectionRequired = row.InspectionRequired
 	if row.Notes.Valid {
 		v := row.Notes.String
 		e.Notes = &v
@@ -690,6 +708,8 @@ func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOp
 		CostPerUnit:          row.CostPerUnit,
 		LeadTimeDays:         row.LeadTimeDays,
 		ThirdPartyRemittance: row.ThirdPartyRemittance,
+		ScrapPct:             row.ScrapPct,
+		InspectionRequired:   row.InspectionRequired,
 	})
 	e.OperationName = row.OperationName
 	e.OperationOrigin = entity.OperationOrigin(row.OperationOrigin)
@@ -715,6 +735,8 @@ func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOp
 	e.EffTime = entity.ResolveOperationTime(e.Overrides(), def)
 	e.EffectiveStdTime = e.EffTime.Run
 	e.EffectiveSetup = e.EffTime.Setup
+	e.EffectiveScrap = e.EffectiveScrapPct(pgutil.FromPgNumericToFloat64(row.OpScrapPct))
+	e.EffectiveSubcontractDays = row.EffectiveLeadTimeDays
 	return e
 }
 

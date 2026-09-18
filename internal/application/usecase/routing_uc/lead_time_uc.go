@@ -48,8 +48,15 @@ func (uc *LeadTimeUseCase) Execute(ctx context.Context, routeID int64, qty float
 	return &response.RouteLeadTimeResponse{
 		RouteID:         result.RouteID,
 		TotalHours:      result.TotalHours,
+		SubcontractDays: result.SubcontractDays,
 		CriticalPath:    result.CriticalPath,
 		CycleOperations: result.CycleOperations,
+		// Quanto entra em cada etapa e quanto a ordem precisa soltar para
+		// entregar `qty` peças boas. O CPM já usa estes números para medir a
+		// duração; devolvê-los evita que a tela recalcule por conta própria e
+		// chegue a um valor diferente do que o planejamento usou.
+		InputQtyByOperation: entity.QuantidadePorOperacao(ops, edges, qty),
+		ReleaseQty:          entity.QuantidadeASoltar(ops, edges, qty),
 	}, nil
 }
 

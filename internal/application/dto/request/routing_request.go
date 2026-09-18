@@ -1,9 +1,5 @@
 package request
 
-import (
-	"time"
-)
-
 // ─── operations ──────────────────────────────────────────────────────────────
 
 type CreateOperationDTO struct {
@@ -30,6 +26,9 @@ type CreateOperationDTO struct {
 	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
 	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
 	ThirdPartyRemittance string    `json:"third_party_remittance,omitempty"`
+
+	// ScrapPct é o refugo padrão da operação, em %.
+	ScrapPct float64 `json:"scrap_pct"`
 }
 
 type UpdateOperationDTO struct {
@@ -56,27 +55,30 @@ type UpdateOperationDTO struct {
 	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
 	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
 	ThirdPartyRemittance string    `json:"third_party_remittance,omitempty"`
+
+	// ScrapPct é o refugo padrão da operação, em %.
+	ScrapPct float64 `json:"scrap_pct"`
 }
 
 // ─── routes ──────────────────────────────────────────────────────────────────
 
 type CreateRouteDTO struct {
-	ItemCode    TextCode   `json:"item_code"`
-	Mask        *string    `json:"mask,omitempty"`
-	Alternative int16      `json:"alternative"`
-	Description *string    `json:"description,omitempty"`
-	IsStandard  bool       `json:"is_standard"`
-	ValidFrom   *time.Time `json:"valid_from,omitempty"` // nil = valid from the beginning
-	ValidTo     *time.Time `json:"valid_to,omitempty"`   // nil = open-ended
+	ItemCode    TextCode      `json:"item_code"`
+	Mask        *string       `json:"mask,omitempty"`
+	Alternative int16         `json:"alternative"`
+	Description *string       `json:"description,omitempty"`
+	IsStandard  bool          `json:"is_standard"`
+	ValidFrom   *DataFlexivel `json:"valid_from,omitempty"` // nil = vale desde sempre
+	ValidTo     *DataFlexivel `json:"valid_to,omitempty"`   // nil = sem fim
 }
 
 type UpdateRouteDTO struct {
-	ID          int64      `json:"id"`
-	Description *string    `json:"description,omitempty"`
-	Situation   string     `json:"situation"` // APROVADA | INATIVA
-	IsStandard  bool       `json:"is_standard"`
-	ValidFrom   *time.Time `json:"valid_from,omitempty"`
-	ValidTo     *time.Time `json:"valid_to,omitempty"`
+	ID          int64         `json:"id"`
+	Description *string       `json:"description,omitempty"`
+	Situation   string        `json:"situation"` // APROVADA | INATIVA
+	IsStandard  bool          `json:"is_standard"`
+	ValidFrom   *DataFlexivel `json:"valid_from,omitempty"`
+	ValidTo     *DataFlexivel `json:"valid_to,omitempty"`
 }
 
 // ─── route operations ─────────────────────────────────────────────────────────
@@ -103,8 +105,12 @@ type AddRouteOperationDTO struct {
 	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
 	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
 	ThirdPartyRemittance *string   `json:"third_party_remittance,omitempty"`
-	Situation            string    `json:"situation"` // APROVADA | INATIVA | FANTASMA
-	Notes                *string   `json:"notes,omitempty"`
+	// ScrapPct sobrepõe o refugo da operação (nil ⇒ herda).
+	ScrapPct *float64 `json:"scrap_pct,omitempty"`
+	// InspectionRequired marca a etapa como ponto de inspeção.
+	InspectionRequired bool    `json:"inspection_required"`
+	Situation          string  `json:"situation"` // APROVADA | INATIVA | FANTASMA
+	Notes              *string `json:"notes,omitempty"`
 }
 
 type UpdateRouteOperationDTO struct {
@@ -125,8 +131,12 @@ type UpdateRouteOperationDTO struct {
 	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
 	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
 	ThirdPartyRemittance *string   `json:"third_party_remittance,omitempty"`
-	Situation            string    `json:"situation"`
-	Notes                *string   `json:"notes,omitempty"`
+	// ScrapPct sobrepõe o refugo da operação (nil ⇒ herda).
+	ScrapPct *float64 `json:"scrap_pct,omitempty"`
+	// InspectionRequired marca a etapa como ponto de inspeção.
+	InspectionRequired bool    `json:"inspection_required"`
+	Situation          string  `json:"situation"`
+	Notes              *string `json:"notes,omitempty"`
 }
 
 // ─── alternative resources ────────────────────────────────────────────────────
@@ -156,4 +166,42 @@ type SetNetworkEdgeDTO struct {
 type DeleteNetworkEdgeDTO struct {
 	PredecessorID int64 `json:"predecessor_id"`
 	SuccessorID   int64 `json:"successor_id"`
+}
+
+// ─── documentos de operação ───────────────────────────────────────────────────
+
+// CreateOperationDocumentDTO anexa desenho, instrução ou ficha de processo.
+// Exatamente um dos dois vínculos é preenchido: OperationID quando o documento
+// vale em todo roteiro que usa a operação, RouteOperationID quando é daquela
+// etapa (o desenho do item).
+type CreateOperationDocumentDTO struct {
+	OperationID      *int64  `json:"operation_id,omitempty"`
+	RouteOperationID *int64  `json:"route_operation_id,omitempty"`
+	Kind             string  `json:"kind"` // DESENHO | INSTRUCAO | FICHA | NORMA | FOTO | OUTRO
+	Title            string  `json:"title"`
+	Reference        *string `json:"reference,omitempty"` // caminho, URL ou código no controle de documentos
+	Revision         *string `json:"revision,omitempty"`
+	Instructions     *string `json:"instructions,omitempty"`
+}
+
+type UpdateOperationDocumentDTO struct {
+	ID           int64   `json:"id"`
+	Kind         string  `json:"kind"`
+	Title        string  `json:"title"`
+	Reference    *string `json:"reference,omitempty"`
+	Revision     *string `json:"revision,omitempty"`
+	Instructions *string `json:"instructions,omitempty"`
+}
+
+// ─── ponto de inspeção do roteiro ─────────────────────────────────────────────
+
+// CreateRouteInspectionDTO cria o plano de inspeção já amarrado a uma etapa do
+// roteiro, para quem desenha o processo não precisar sair da tela.
+type CreateRouteInspectionDTO struct {
+	RouteOperationID int64   `json:"route_operation_id"`
+	PointType        string  `json:"point_type"` // RECEBIMENTO | PROCESSO | EXPEDICAO
+	Description      string  `json:"description"`
+	SampleSize       float64 `json:"sample_size"`
+	AcceptanceLevel  float64 `json:"acceptance_level"`
+	Instructions     *string `json:"instructions,omitempty"`
 }

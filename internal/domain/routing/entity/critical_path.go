@@ -8,8 +8,13 @@ import "sort"
 //	earlyStart[op]  = max over predecessors { earlyFinish[pred] - overlap% * predDuration }
 //	earlyFinish[op] = earlyStart[op] + duration[op]
 //
-// where duration[op] = op.EffTime.LeadTimeHours(qty) (run scales with the lot;
-// setup/queue/wait/move are fixed).
+// where duration[op] = op.EffTime.LeadTimeHours(qtyIn[op]) — e qtyIn é a
+// quantidade que ENTRA naquela operação, não a quantidade boa do pedido.
+// Com refugo as duas divergem: a primeira operação processa mais peças que a
+// última, e por isso demora mais. Usar a quantidade final em todas as etapas
+// subestima o lead time exatamente nas operações do começo do roteiro, que
+// são as que mais pesam.
+// (run escala com o lote; setup/queue/wait/move são fixos.)
 //
 // When the predecessor's work center requires an operator, overlap is forced to
 // 0 — the operator will not leave the machine until that operation is 100% done.
@@ -30,6 +35,17 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 	// Linear fallback: no network defined → chain consecutive operations by sequence.
 	if len(edges) == 0 && len(ops) > 1 {
 		edges = linearEdgesBySequence(ops)
+	}
+
+	// Quantidade que entra em cada operação, já com o refugo acumulado das
+	// seguintes. Calculada sobre as MESMAS arestas usadas aqui embaixo — se a
+	// rede estiver vazia, ambos caem no encadeamento por sequência.
+	qtdePorOp := QuantidadePorOperacao(ops, edges, qty)
+	qtdeDe := func(id int64) float64 {
+		if q, ok := qtdePorOp[id]; ok && q > 0 {
+			return q
+		}
+		return qty
 	}
 
 	opByID := make(map[int64]*RouteOperation, len(ops))
@@ -66,7 +82,7 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 		queue = queue[1:]
 
 		op := opByID[cur]
-		opTime := op.EffTime.LeadTimeHours(qty)
+		opTime := op.EffTime.LeadTimeHours(qtdeDe(cur))
 
 		ef := opTime // no predecessors → earlyStart = 0
 		bestPred := int64(0)
@@ -75,7 +91,7 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 			if opByID[predID].RequiresOperator {
 				overlap = 0
 			}
-			predDuration := opByID[predID].EffTime.LeadTimeHours(qty)
+			predDuration := opByID[predID].EffTime.LeadTimeHours(qtdeDe(predID))
 			earlyStart := earlyFinish[predID] - overlap*predDuration
 			if earlyStart+opTime > ef {
 				ef = earlyStart + opTime
@@ -137,8 +153,18 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 		cur = p
 	}
 
+	// Prazo de terceiro no caminho crítico. Só as operações do caminho contam:
+	// um serviço externo num ramo paralelo mais curto não atrasa a entrega.
+	var diasEmTerceiro int32
+	for _, id := range path {
+		if op := opByID[id]; op != nil {
+			diasEmTerceiro += op.EffectiveSubcontractDays
+		}
+	}
+
 	return LeadTimeResult{
 		TotalHours:      maxEF,
+		SubcontractDays: diasEmTerceiro,
 		CriticalPath:    path,
 		CycleOperations: emCiclo,
 	}

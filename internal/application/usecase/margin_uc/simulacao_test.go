@@ -2,6 +2,7 @@ package margin_uc
 
 import (
 	"math"
+	"regexp"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/margin/entity"
@@ -85,5 +86,24 @@ func TestPercentualDeMargemIndependeDaQuantidade(t *testing.T) {
 	mb := entity.Calcular(vendaDe(b, b.PrecoUnitario), p).MargemPct
 	if math.Abs(ma-mb) > 1e-9 {
 		t.Fatalf("margem %% mudou com a quantidade: %v vs %v", ma, mb)
+	}
+}
+
+// Margem inatingível tem de dizer QUANTO dá. "Não é possível" sozinho manda o
+// vendedor adivinhar; o teto é a informação que ele foi buscar.
+func TestMargemInatingivelInformaOTeto(t *testing.T) {
+	in, p := entrada(), params()
+	in.MargemDesejadaPct = 40 // acima do teto real (~38,7%)
+
+	preco, nota := precoParaMargem(in, p)
+	if preco != nil {
+		t.Fatalf("devolveu preço %.2f para margem acima do teto", *preco)
+	}
+	if !regexp.MustCompile(`máximo é \d+[.,]\d+%`).MatchString(nota) {
+		t.Fatalf("a nota não informa o teto: %q", nota)
+	}
+	// E o teto informado precisa ser verdade: logo abaixo dele tem de haver preço.
+	if p2, _ := precoParaMargem(func() SimulacaoEntrada { i := entrada(); i.MargemDesejadaPct = 38; return i }(), p); p2 == nil {
+		t.Fatal("38% deveria ser alcançável se o teto é ~38,7%")
 	}
 }

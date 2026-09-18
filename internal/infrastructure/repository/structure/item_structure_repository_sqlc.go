@@ -53,6 +53,8 @@ func (r *ItemStructureRepositorySQLC) Create(
 		CostCenterCode:      s.CostCenterCode,
 		IsCriticalMps:       s.IsCriticalMPS,
 		GeneratesInspection: s.GeneratesInspection,
+		QuantityStockUom:    quantidadeDeEstoque(s),
+		ConversionFactor:    fatorDeConversao(s),
 	})
 	if err != nil {
 		// O índice único do componente é o erro mais comum aqui: o usuário
@@ -106,6 +108,8 @@ func (r *ItemStructureRepositorySQLC) Update(
 		CostCenterCode:      s.CostCenterCode,
 		IsCriticalMps:       s.IsCriticalMPS,
 		GeneratesInspection: s.GeneratesInspection,
+		QuantityStockUom:    quantidadeDeEstoque(s),
+		ConversionFactor:    fatorDeConversao(s),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating structure: %w", err)
@@ -254,6 +258,13 @@ func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
 			IsActive:           true,
 			StartDate:          pgutil.FromPgDateToPtr(e.StartDate),
 			EndDate:            pgutil.FromPgDateToPtr(e.EndDate),
+			ConversionFactor:   pgutil.FromPgNumericToFloat64(e.ConversionFactor),
+			QuantityRounding:   e.QuantityRounding,
+			QuantityScale:      e.QuantityScale,
+		}
+		if e.QuantityFormula.Valid && e.QuantityFormula.String != "" {
+			f := e.QuantityFormula.String
+			child.QuantityFormula = &f
 		}
 		if e.ParentMask.Valid {
 			v := e.ParentMask.String
@@ -289,6 +300,8 @@ func rowToEntity(row sqlc.ItemStructure) *entity.ItemStructure {
 		CostCenterCode:      row.CostCenterCode,
 		IsCriticalMPS:       row.IsCriticalMps,
 		GeneratesInspection: row.GeneratesInspection,
+		QuantityStockUOM:    pgutil.FromPgNumericToFloat64(row.QuantityStockUom),
+		ConversionFactor:    pgutil.FromPgNumericToFloat64(row.ConversionFactor),
 		ID:                  row.ID,
 		ParentCode:          row.ParentCode,
 		ChildCode:           row.ChildCode,
@@ -339,26 +352,29 @@ func mapDirectChildrenRows(rows []sqlc.GetAllDirectChildrenRow) []*entity.ItemSt
 
 	for _, row := range rows {
 		e := &entity.ItemStructure{
-			ID:                 row.ID,
-			ParentCode:         row.ParentCode,
-			ChildCode:          row.ChildCode,
-			ChildDescription:   row.ChildDescription,
-			Quantity:           row.Quantity,
-			LossPercentage:     row.LossPercentage,
-			UnitOfMeasurement:  types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
-			Health:             types.Health(row.Health),
-			Sequence:           int(row.Sequence),
-			IsActive:           row.IsActive,
-			Inherit:            row.Inherit,
-			CreatedBy:          pgutil.FromPgUUID(row.CreatedBy),
-			CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
-			UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
-			StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
-			EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
-			IsCoproduct:        row.IsCoproduct,
-			IsFixedQty:         row.IsFixedQty,
-			SubstituteGroup:    row.SubstituteGroup,
-			SubstitutePriority: row.SubstitutePriority,
+			ID:                     row.ID,
+			ParentCode:             row.ParentCode,
+			ChildCode:              row.ChildCode,
+			ChildDescription:       row.ChildDescription,
+			StockUnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.ChildStockUom),
+			QuantityStockUOM:       pgutil.FromPgNumericToFloat64(row.QuantityStockUom),
+			ConversionFactor:       pgutil.FromPgNumericToFloat64(row.ConversionFactor),
+			Quantity:               row.Quantity,
+			LossPercentage:         row.LossPercentage,
+			UnitOfMeasurement:      types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+			Health:                 types.Health(row.Health),
+			Sequence:               int(row.Sequence),
+			IsActive:               row.IsActive,
+			Inherit:                row.Inherit,
+			CreatedBy:              pgutil.FromPgUUID(row.CreatedBy),
+			CreatedAt:              pgutil.FromPgTimestamptz(row.CreatedAt),
+			UpdatedAt:              pgutil.FromPgTimestamptz(row.UpdatedAt),
+			StartDate:              pgutil.FromPgDateToPtr(row.StartDate),
+			EndDate:                pgutil.FromPgDateToPtr(row.EndDate),
+			IsCoproduct:            row.IsCoproduct,
+			IsFixedQty:             row.IsFixedQty,
+			SubstituteGroup:        row.SubstituteGroup,
+			SubstitutePriority:     row.SubstitutePriority,
 		}
 
 		if row.ParentMask.Valid {
@@ -393,26 +409,29 @@ func mapDirectChildrenWithMask(rows []sqlc.GetDirectChildrenForMaskRow) []*entit
 
 	for _, row := range rows {
 		e := &entity.ItemStructure{
-			ID:                 row.ID,
-			ParentCode:         row.ParentCode,
-			ChildCode:          row.ChildCode,
-			ChildDescription:   row.ChildDescription,
-			Quantity:           row.Quantity,
-			LossPercentage:     row.LossPercentage,
-			UnitOfMeasurement:  types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
-			Health:             types.Health(row.Health),
-			Sequence:           int(row.Sequence),
-			IsActive:           row.IsActive,
-			Inherit:            row.Inherit,
-			CreatedBy:          pgutil.FromPgUUID(row.CreatedBy),
-			CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
-			UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
-			StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
-			EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
-			IsCoproduct:        row.IsCoproduct,
-			IsFixedQty:         row.IsFixedQty,
-			SubstituteGroup:    row.SubstituteGroup,
-			SubstitutePriority: row.SubstitutePriority,
+			ID:                     row.ID,
+			ParentCode:             row.ParentCode,
+			ChildCode:              row.ChildCode,
+			ChildDescription:       row.ChildDescription,
+			StockUnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.ChildStockUom),
+			QuantityStockUOM:       pgutil.FromPgNumericToFloat64(row.QuantityStockUom),
+			ConversionFactor:       pgutil.FromPgNumericToFloat64(row.ConversionFactor),
+			Quantity:               row.Quantity,
+			LossPercentage:         row.LossPercentage,
+			UnitOfMeasurement:      types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
+			Health:                 types.Health(row.Health),
+			Sequence:               int(row.Sequence),
+			IsActive:               row.IsActive,
+			Inherit:                row.Inherit,
+			CreatedBy:              pgutil.FromPgUUID(row.CreatedBy),
+			CreatedAt:              pgutil.FromPgTimestamptz(row.CreatedAt),
+			UpdatedAt:              pgutil.FromPgTimestamptz(row.UpdatedAt),
+			StartDate:              pgutil.FromPgDateToPtr(row.StartDate),
+			EndDate:                pgutil.FromPgDateToPtr(row.EndDate),
+			IsCoproduct:            row.IsCoproduct,
+			IsFixedQty:             row.IsFixedQty,
+			SubstituteGroup:        row.SubstituteGroup,
+			SubstitutePriority:     row.SubstitutePriority,
 		}
 
 		if row.ParentMask.Valid {
@@ -447,4 +466,22 @@ func stringPtrToPgText(v *string) pgtype.Text {
 		return pgtype.Text{}
 	}
 	return pgutil.ToPgText(*v)
+}
+
+// A quantidade convertida e o fator entram com valor sempre definido: nulo na
+// coluna significaria "ninguém converteu", e um consumidor distraído leria
+// zero — a ordem nasceria sem componente. Quando o caso de uso não calculou
+// (unidades iguais), a própria quantidade e o fator 1 são a resposta certa.
+func quantidadeDeEstoque(s *entity.ItemStructure) pgtype.Numeric {
+	if s.QuantityStockUOM > 0 {
+		return pgutil.ToPgNumericFromFloat64(s.QuantityStockUOM)
+	}
+	return pgutil.ToPgNumericFromFloat64(s.Quantity)
+}
+
+func fatorDeConversao(s *entity.ItemStructure) pgtype.Numeric {
+	if s.ConversionFactor > 0 {
+		return pgutil.ToPgNumericFromFloat64(s.ConversionFactor)
+	}
+	return pgutil.ToPgNumericFromFloat64(1)
 }

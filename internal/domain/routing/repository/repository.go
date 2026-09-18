@@ -51,6 +51,25 @@ type RoutingRepository interface {
 	NextOperationCode(ctx context.Context) (int64, error)
 	CreatedByFromUUID(v uuid.UUID) uuid.UUID // identity helper for DI
 
+	// Documentos de processo (desenho, instrução, ficha). O vínculo é com a
+	// operação de biblioteca OU com a etapa do roteiro — nunca com os dois.
+	CreateOperationDocument(ctx context.Context, doc *entity.OperationDocument) (*entity.OperationDocument, error)
+	UpdateOperationDocument(ctx context.Context, doc *entity.OperationDocument) (*entity.OperationDocument, error)
+	DeactivateOperationDocument(ctx context.Context, id int64) error
+	ListDocumentsByOperation(ctx context.Context, operationID int64) ([]*entity.OperationDocument, error)
+	ListDocumentsForRouteOperation(ctx context.Context, routeOperationID int64) ([]*entity.OperationDocument, error)
+	ListDocumentsByRoute(ctx context.Context, routeID int64) ([]*entity.OperationDocument, error)
+
+	// RouteIDOfOperation diz a que roteiro uma etapa pertence, já filtrando por
+	// empresa: a etapa é endereçada por id e sem o filtro seria alcançável de
+	// outra empresa.
+	RouteIDOfOperation(ctx context.Context, routeOperationID int64) (int64, error)
+
+	// Pontos de inspeção amarrados às etapas do roteiro.
+	CreateRouteInspection(ctx context.Context, ins *entity.RouteInspection) (*entity.RouteInspection, error)
+	ListInspectionsByRoute(ctx context.Context, routeID int64) ([]*entity.RouteInspection, error)
+	DeactivateRouteInspection(ctx context.Context, id int64) error
+
 	// GetExternalOpsByItem returns external/third-party operations from the
 	// standard route of the given item. Returns empty slice when no route exists.
 	GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*entity.ExternalOp, error)

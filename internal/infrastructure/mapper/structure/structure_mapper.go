@@ -23,6 +23,8 @@ func MapNodeToResponse(node *valueobject.StructureNode) *response.StructureTreeN
 		IsGeneric:          comp.IsGeneric(),
 		Quantity:           comp.Quantity,
 		EffectiveQuantity:  comp.EffectiveQuantity(),
+		QuantityStockUOM:   comp.QuantidadeNaUnidadeDeEstoque(),
+		ConversionFactor:   comp.FatorParaEstoque(),
 		UnitOfMeasurement:  comp.UnitOfMeasurement,
 		Health:             comp.Health,
 		LossPercentage:     comp.LossPercentage,

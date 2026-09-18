@@ -26,6 +26,22 @@ func selectMachineTime(list []*entity.MachineTimeInfo, mask string) *entity.Mach
 	return best
 }
 
+// equivalentes devolve as máquinas que fazem o mesmo trabalho que `escolhida`:
+// mesma máscara e mesma prioridade. É o que permite distribuir uma fila entre
+// três máquinas iguais em vez de empilhar tudo na primeira.
+func equivalentes(list []*entity.MachineTimeInfo, escolhida *entity.MachineTimeInfo) []*entity.MachineTimeInfo {
+	out := []*entity.MachineTimeInfo{escolhida}
+	for _, mt := range list {
+		if mt.MachineID == escolhida.MachineID {
+			continue
+		}
+		if mt.Mask == escolhida.Mask && mt.Priority == escolhida.Priority {
+			out = append(out, mt)
+		}
+	}
+	return out
+}
+
 func machineMinutes(mt *entity.MachineTimeInfo, qty float64) (float64, error) {
 	if mt.ProductionTime <= 0 || mt.ProductionBaseQty <= 0 || mt.SetupTime < 0 {
 		return 0, fmt.Errorf("produtividade inválida do item %d na máquina %d", mt.ItemCode, mt.MachineCode)
@@ -58,6 +74,52 @@ func machineMinutes(mt *entity.MachineTimeInfo, qty float64) (float64, error) {
 		return 0, fmt.Errorf("duração inválida do item %d", mt.ItemCode)
 	}
 	return result.TotalMinutes, nil
+}
+
+// escolherMaquinaQueTerminaAntes distribui a ordem entre máquinas equivalentes.
+//
+// Três serras iguais não são uma preferida e duas reservas: são três recursos
+// que fazem o mesmo. Escolher sempre a primeira empilha a fila nela e deixa as
+// outras ociosas — o pior jeito de errar, porque o prazo estica com capacidade
+// sobrando ao lado e nada na tela denuncia isso.
+//
+// `alocar` é injetado para esta decisão poder ser testada sem banco: o laço de
+// escolha é a regra, a alocação é o detalhe.
+func escolherMaquinaQueTerminaAntes(
+	step machineStep,
+	alocar func(*entity.MachineTimeInfo) ([]machinesvc.CapacityWindow, error),
+) ([]machinesvc.CapacityWindow, *entity.MachineTimeInfo, error) {
+	candidatas := step.alternativas
+	if len(candidatas) == 0 {
+		candidatas = []*entity.MachineTimeInfo{step.profile}
+	}
+	var melhores []machinesvc.CapacityWindow
+	var escolhida *entity.MachineTimeInfo
+	var primeiroErro error
+
+	for _, cand := range candidatas {
+		slots, err := alocar(cand)
+		if err != nil {
+			// O primeiro motivo explica a recusa melhor que "nenhuma disponível".
+			if primeiroErro == nil {
+				primeiroErro = fmt.Errorf("máquina %d: %w", cand.MachineCode, err)
+			}
+			continue
+		}
+		if len(slots) == 0 {
+			continue
+		}
+		if melhores == nil || slots[len(slots)-1].End.Before(melhores[len(melhores)-1].End) {
+			melhores, escolhida = slots, cand
+		}
+	}
+	if melhores == nil {
+		if primeiroErro != nil {
+			return nil, nil, primeiroErro
+		}
+		return nil, nil, fmt.Errorf("nenhuma máquina equivalente tem janela disponível")
+	}
+	return melhores, escolhida, nil
 }
 
 type machinePlanningCalendar interface {
@@ -140,9 +202,6 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 		for _, step := range steps {
 			totalMinutes += step.minutes
 		}
-		if err = s.MRPRepo.UpdatePlannedOrderMachine(ctx, sug.Code, steps[0].profile.MachineID, totalMinutes); err != nil {
-			return err
-		}
 		day := sug.NeedDate
 		if sug.StartDate != nil {
 			day = *sug.StartDate
@@ -158,29 +217,35 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 			mt := step.profile
 			day = day.Add(step.before)
 			if finite {
-				windows, busy, err := calendar.MachinePlanningWindows(ctx, mt.MachineID, planCode, day, day.AddDate(1, 0, 0))
+				slots, escolhida, err := escolherMaquinaQueTerminaAntes(step, func(cand *entity.MachineTimeInfo) ([]machinesvc.CapacityWindow, error) {
+					windows, busy, err := calendar.MachinePlanningWindows(ctx, cand.MachineID, planCode, day, day.AddDate(1, 0, 0))
+					if err != nil {
+						return nil, err
+					}
+					busy = append(busy, reserved[cand.MachineID]...)
+					if step.cycles > 0 {
+						return machinesvc.AllocateMachineCycles(day, step.cycles, step.cycleMinutes, step.setupMinutes, windows, busy)
+					}
+					return machinesvc.AllocateMachineTime(day, step.minutes, windows, busy)
+				})
 				if err != nil {
-					return err
+					return fmt.Errorf("item %d: %w", sug.ItemCode, err)
 				}
-				busy = append(busy, reserved[mt.MachineID]...)
-				var slots []machinesvc.CapacityWindow
-				if step.cycles > 0 {
-					slots, err = machinesvc.AllocateMachineCycles(day, step.cycles, step.cycleMinutes, step.setupMinutes, windows, busy)
-				} else {
-					slots, err = machinesvc.AllocateMachineTime(day, step.minutes, windows, busy)
-				}
-				if err != nil {
-					return fmt.Errorf("item %d, máquina %d: %w", sug.ItemCode, mt.MachineCode, err)
-				}
+				mt = escolhida
 				if err = calendar.SaveMachineSlots(ctx, sug.Code, mt.MachineID, step.operationID, slots, i == 0); err != nil {
 					return err
 				}
+				steps[i].profile = mt // a etapa passa a apontar a máquina REALMENTE alocada
 				reserved[mt.MachineID] = append(reserved[mt.MachineID], slots...)
 				if i == 0 {
 					firstStart = slots[0].Start
 				}
 				day = slots[len(slots)-1].End.Add(step.after)
 			}
+		}
+		// Só agora se sabe qual máquina levou a primeira etapa.
+		if err = s.MRPRepo.UpdatePlannedOrderMachine(ctx, sug.Code, steps[0].profile.MachineID, totalMinutes); err != nil {
+			return err
 		}
 		if err = s.MRPRepo.CreateMachineSchedule(ctx, &entity.MachineScheduleInfo{PlanCode: planCode, PlannedOrderCode: sug.Code, MachineID: steps[0].profile.MachineID, ScheduleDate: firstStart, ProductionTime: totalMinutes}); err != nil {
 			return err

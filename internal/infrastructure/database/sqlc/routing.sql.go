@@ -59,6 +59,7 @@ INSERT INTO route_operations (
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
+    scrap_pct, inspection_required,
     situation, notes, is_active
 ) VALUES (
     $1, $2, $3, $4,
@@ -66,8 +67,9 @@ INSERT INTO route_operations (
     $7, $8, $9,
     $10, $11, $12, $13, $14,
     $15, $16, $17, $18, $19,
+    $22, $23,
     $20, $21, TRUE
-) RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance
+) RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required
 `
 
 type AddRouteOperationParams struct {
@@ -92,6 +94,8 @@ type AddRouteOperationParams struct {
 	ThirdPartyRemittance pgtype.Text
 	Situation            sqltypes.RouteOpSituationEnum
 	Notes                pgtype.Text
+	ScrapPct             pgtype.Numeric
+	InspectionRequired   bool
 }
 
 // ─── route_operations ────────────────────────────────────────────────────────
@@ -118,6 +122,8 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		arg.ThirdPartyRemittance,
 		arg.Situation,
 		arg.Notes,
+		arg.ScrapPct,
+		arg.InspectionRequired,
 	)
 	var i RouteOperation
 	err := row.Scan(
@@ -146,6 +152,8 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		&i.CostPerUnit,
 		&i.LeadTimeDays,
 		&i.ThirdPartyRemittance,
+		&i.ScrapPct,
+		&i.InspectionRequired,
 	)
 	return i, err
 }
@@ -168,6 +176,7 @@ INSERT INTO operations (
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
+    scrap_pct,
     is_active, created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, $5,
@@ -175,8 +184,9 @@ INSERT INTO operations (
     $9, $10, $11,
     $12, $13, $14, $15, $16,
     $17, $18, $19, $20, $21,
-    TRUE, $22, $23
-) RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id
+    $23,
+    TRUE, $22, $24
+) RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct
 `
 
 type CreateOperationParams struct {
@@ -202,6 +212,7 @@ type CreateOperationParams struct {
 	LeadTimeDays         *int32
 	ThirdPartyRemittance string
 	CreatedBy            pgtype.UUID
+	ScrapPct             pgtype.Numeric
 	EnterpriseID         int64
 }
 
@@ -230,6 +241,7 @@ func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams
 		arg.LeadTimeDays,
 		arg.ThirdPartyRemittance,
 		arg.CreatedBy,
+		arg.ScrapPct,
 		arg.EnterpriseID,
 	)
 	var i Operation
@@ -261,6 +273,60 @@ func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams
 		&i.LeadTimeDays,
 		&i.ThirdPartyRemittance,
 		&i.EnterpriseID,
+		&i.ScrapPct,
+	)
+	return i, err
+}
+
+const createOperationDocument = `-- name: CreateOperationDocument :one
+
+INSERT INTO operation_documents (
+    operation_id, route_operation_id, kind, title, reference, revision, instructions,
+    is_active, enterprise_id, created_by
+) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $9, $8)
+RETURNING id, operation_id, route_operation_id, kind, title, reference, revision, instructions, is_active, enterprise_id, created_at, updated_at, created_by
+`
+
+type CreateOperationDocumentParams struct {
+	OperationID      *int64
+	RouteOperationID *int64
+	Kind             string
+	Title            string
+	Reference        pgtype.Text
+	Revision         pgtype.Text
+	Instructions     pgtype.Text
+	CreatedBy        pgtype.UUID
+	EnterpriseID     int64
+}
+
+// ─── operation_documents (desenho / instrução / ficha de processo) ────────────
+func (q *Queries) CreateOperationDocument(ctx context.Context, arg CreateOperationDocumentParams) (OperationDocument, error) {
+	row := q.db.QueryRow(ctx, createOperationDocument,
+		arg.OperationID,
+		arg.RouteOperationID,
+		arg.Kind,
+		arg.Title,
+		arg.Reference,
+		arg.Revision,
+		arg.Instructions,
+		arg.CreatedBy,
+		arg.EnterpriseID,
+	)
+	var i OperationDocument
+	err := row.Scan(
+		&i.ID,
+		&i.OperationID,
+		&i.RouteOperationID,
+		&i.Kind,
+		&i.Title,
+		&i.Reference,
+		&i.Revision,
+		&i.Instructions,
+		&i.IsActive,
+		&i.EnterpriseID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CreatedBy,
 	)
 	return i, err
 }
@@ -337,6 +403,21 @@ type DeactivateOperationParams struct {
 
 func (q *Queries) DeactivateOperation(ctx context.Context, arg DeactivateOperationParams) error {
 	_, err := q.db.Exec(ctx, deactivateOperation, arg.ID, arg.EnterpriseID)
+	return err
+}
+
+const deactivateOperationDocument = `-- name: DeactivateOperationDocument :exec
+UPDATE operation_documents SET is_active = FALSE, updated_at = NOW()
+WHERE id = $1 AND enterprise_id = $2
+`
+
+type DeactivateOperationDocumentParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeactivateOperationDocument(ctx context.Context, arg DeactivateOperationDocumentParams) error {
+	_, err := q.db.Exec(ctx, deactivateOperationDocument, arg.ID, arg.EnterpriseID)
 	return err
 }
 
@@ -483,7 +564,7 @@ func (q *Queries) GetNetworkEdges(ctx context.Context, arg GetNetworkEdgesParams
 }
 
 const getOperationByID = `-- name: GetOperationByID :one
-SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id FROM operations WHERE id = $1 AND enterprise_id = $2
+SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct FROM operations WHERE id = $1 AND enterprise_id = $2
 `
 
 type GetOperationByIDParams struct {
@@ -522,6 +603,7 @@ func (q *Queries) GetOperationByID(ctx context.Context, arg GetOperationByIDPara
 		&i.LeadTimeDays,
 		&i.ThirdPartyRemittance,
 		&i.EnterpriseID,
+		&i.ScrapPct,
 	)
 	return i, err
 }
@@ -624,7 +706,7 @@ func (q *Queries) GetRouteOpResource(ctx context.Context, id int64) (RouteOperat
 
 const getRouteOperations = `-- name: GetRouteOperations :many
 SELECT
-    ro.id, ro.route_id, ro.sequence, ro.operation_id, ro.work_center_id, ro.standard_time, ro.setup_time, ro.situation, ro.notes, ro.is_active, ro.created_at, ro.updated_at, ro.run_time, ro.labor_time, ro.run_time_base_qty, ro.queue_time, ro.wait_time, ro.move_time, ro.crew_size, ro.time_unit, ro.supplier_id, ro.service_item_code, ro.cost_per_unit, ro.lead_time_days, ro.third_party_remittance,
+    ro.id, ro.route_id, ro.sequence, ro.operation_id, ro.work_center_id, ro.standard_time, ro.setup_time, ro.situation, ro.notes, ro.is_active, ro.created_at, ro.updated_at, ro.run_time, ro.labor_time, ro.run_time_base_qty, ro.queue_time, ro.wait_time, ro.move_time, ro.crew_size, ro.time_unit, ro.supplier_id, ro.service_item_code, ro.cost_per_unit, ro.lead_time_days, ro.third_party_remittance, ro.scrap_pct, ro.inspection_required,
     op.name AS operation_name,
     op.origin AS operation_origin,
     op.standard_time AS op_standard_time,
@@ -637,6 +719,8 @@ SELECT
     op.move_time AS op_move_time,
     op.crew_size AS op_crew_size,
     op.time_unit AS op_time_unit,
+    op.scrap_pct AS op_scrap_pct,
+    COALESCE(ro.lead_time_days, op.lead_time_days, 0)::int AS effective_lead_time_days,
     COALESCE(ro.work_center_id, op.default_work_center_id) AS effective_work_center_id,
     mt.name AS work_center_name,
     COALESCE(mt.requires_operator, TRUE) AS requires_operator
@@ -680,6 +764,8 @@ type GetRouteOperationsRow struct {
 	CostPerUnit           pgtype.Numeric
 	LeadTimeDays          *int32
 	ThirdPartyRemittance  pgtype.Text
+	ScrapPct              pgtype.Numeric
+	InspectionRequired    bool
 	OperationName         string
 	OperationOrigin       sqltypes.OperationOriginEnum
 	OpStandardTime        pgtype.Numeric
@@ -692,6 +778,8 @@ type GetRouteOperationsRow struct {
 	OpMoveTime            pgtype.Numeric
 	OpCrewSize            pgtype.Numeric
 	OpTimeUnit            string
+	OpScrapPct            pgtype.Numeric
+	EffectiveLeadTimeDays int32
 	EffectiveWorkCenterID *int64
 	WorkCenterName        pgtype.Text
 	RequiresOperator      bool
@@ -732,6 +820,8 @@ func (q *Queries) GetRouteOperations(ctx context.Context, arg GetRouteOperations
 			&i.CostPerUnit,
 			&i.LeadTimeDays,
 			&i.ThirdPartyRemittance,
+			&i.ScrapPct,
+			&i.InspectionRequired,
 			&i.OperationName,
 			&i.OperationOrigin,
 			&i.OpStandardTime,
@@ -744,6 +834,8 @@ func (q *Queries) GetRouteOperations(ctx context.Context, arg GetRouteOperations
 			&i.OpMoveTime,
 			&i.OpCrewSize,
 			&i.OpTimeUnit,
+			&i.OpScrapPct,
+			&i.EffectiveLeadTimeDays,
 			&i.EffectiveWorkCenterID,
 			&i.WorkCenterName,
 			&i.RequiresOperator,
@@ -827,8 +919,323 @@ func (q *Queries) ItemHasRoute(ctx context.Context, arg ItemHasRouteParams) (boo
 	return has_route, err
 }
 
+const listDocumentsByOperation = `-- name: ListDocumentsByOperation :many
+SELECT id, operation_id, route_operation_id, kind, title, reference, revision, instructions, is_active, enterprise_id, created_at, updated_at, created_by FROM operation_documents
+WHERE operation_id = $1 AND is_active = TRUE AND enterprise_id = $2
+ORDER BY kind, title
+`
+
+type ListDocumentsByOperationParams struct {
+	OperationID  *int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListDocumentsByOperation(ctx context.Context, arg ListDocumentsByOperationParams) ([]OperationDocument, error) {
+	rows, err := q.db.Query(ctx, listDocumentsByOperation, arg.OperationID, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OperationDocument
+	for rows.Next() {
+		var i OperationDocument
+		if err := rows.Scan(
+			&i.ID,
+			&i.OperationID,
+			&i.RouteOperationID,
+			&i.Kind,
+			&i.Title,
+			&i.Reference,
+			&i.Revision,
+			&i.Instructions,
+			&i.IsActive,
+			&i.EnterpriseID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDocumentsByRoute = `-- name: ListDocumentsByRoute :many
+SELECT d.id, d.operation_id, d.route_operation_id, d.kind, d.title, d.reference, d.revision, d.instructions, d.is_active, d.enterprise_id, d.created_at, d.updated_at, d.created_by, (d.route_operation_id IS NOT NULL) AS is_step_level, ro.id AS step_id, ro.sequence
+FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+JOIN operation_documents d
+  ON d.route_operation_id = ro.id OR d.operation_id = ro.operation_id
+WHERE ro.route_id = $1 AND ro.is_active = TRUE
+  AND d.is_active = TRUE
+  AND mr.enterprise_id = $2
+  AND d.enterprise_id = $2
+ORDER BY ro.sequence, is_step_level DESC, d.kind, d.title
+`
+
+type ListDocumentsByRouteParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
+
+type ListDocumentsByRouteRow struct {
+	ID               int64
+	OperationID      *int64
+	RouteOperationID *int64
+	Kind             string
+	Title            string
+	Reference        pgtype.Text
+	Revision         pgtype.Text
+	Instructions     pgtype.Text
+	IsActive         bool
+	EnterpriseID     int64
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	CreatedBy        pgtype.UUID
+	IsStepLevel      interface{}
+	StepID           int64
+	Sequence         int16
+}
+
+func (q *Queries) ListDocumentsByRoute(ctx context.Context, arg ListDocumentsByRouteParams) ([]ListDocumentsByRouteRow, error) {
+	rows, err := q.db.Query(ctx, listDocumentsByRoute, arg.RouteID, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDocumentsByRouteRow
+	for rows.Next() {
+		var i ListDocumentsByRouteRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OperationID,
+			&i.RouteOperationID,
+			&i.Kind,
+			&i.Title,
+			&i.Reference,
+			&i.Revision,
+			&i.Instructions,
+			&i.IsActive,
+			&i.EnterpriseID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.IsStepLevel,
+			&i.StepID,
+			&i.Sequence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDocumentsForRouteOperation = `-- name: ListDocumentsForRouteOperation :many
+SELECT d.id, d.operation_id, d.route_operation_id, d.kind, d.title, d.reference, d.revision, d.instructions, d.is_active, d.enterprise_id, d.created_at, d.updated_at, d.created_by, (d.route_operation_id IS NOT NULL) AS is_step_level
+FROM operation_documents d
+WHERE d.is_active = TRUE
+  AND d.enterprise_id = $1
+  AND (
+        d.route_operation_id = $2
+     OR d.operation_id = (SELECT ro.operation_id FROM route_operations ro
+                          WHERE ro.id = $2)
+  )
+ORDER BY is_step_level DESC, d.kind, d.title
+`
+
+type ListDocumentsForRouteOperationParams struct {
+	EnterpriseID     int64
+	RouteOperationID *int64
+}
+
+type ListDocumentsForRouteOperationRow struct {
+	ID               int64
+	OperationID      *int64
+	RouteOperationID *int64
+	Kind             string
+	Title            string
+	Reference        pgtype.Text
+	Revision         pgtype.Text
+	Instructions     pgtype.Text
+	IsActive         bool
+	EnterpriseID     int64
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	CreatedBy        pgtype.UUID
+	IsStepLevel      interface{}
+}
+
+// Documentos que o operador vê numa etapa: os da própria etapa MAIS os que a
+// operação de biblioteca carrega. A instrução genérica ("como rebarbar") vale em
+// todo roteiro; o desenho é desta etapa. Separar os dois na leitura obrigaria a
+// tela a fazer duas chamadas e juntar — e alguém esqueceria uma delas.
+func (q *Queries) ListDocumentsForRouteOperation(ctx context.Context, arg ListDocumentsForRouteOperationParams) ([]ListDocumentsForRouteOperationRow, error) {
+	rows, err := q.db.Query(ctx, listDocumentsForRouteOperation, arg.EnterpriseID, arg.RouteOperationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDocumentsForRouteOperationRow
+	for rows.Next() {
+		var i ListDocumentsForRouteOperationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OperationID,
+			&i.RouteOperationID,
+			&i.Kind,
+			&i.Title,
+			&i.Reference,
+			&i.Revision,
+			&i.Instructions,
+			&i.IsActive,
+			&i.EnterpriseID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.IsStepLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInspectionPlansByRoute = `-- name: ListInspectionPlansByRoute :many
+
+SELECT ip.id, ip.item_code, ip.route_operation_id, ip.point_type, ip.description, ip.sample_size, ip.acceptance_level, ip.instructions, ip.is_active, ip.created_at, ip.updated_at, ip.created_by, ro.sequence AS step_sequence,
+       (SELECT count(*) FROM inspection_plan_characteristics c WHERE c.plan_id = ip.id) AS characteristic_count
+FROM inspection_plans ip
+JOIN route_operations ro ON ro.id = ip.route_operation_id
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+WHERE ro.route_id = $1 AND ro.is_active = TRUE AND ip.is_active = TRUE
+  AND mr.enterprise_id = $2
+ORDER BY ro.sequence, ip.id
+`
+
+type ListInspectionPlansByRouteParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
+
+type ListInspectionPlansByRouteRow struct {
+	ID                  int64
+	ItemCode            int64
+	RouteOperationID    *int64
+	PointType           InspectionPointType
+	Description         string
+	SampleSize          pgtype.Numeric
+	AcceptanceLevel     pgtype.Numeric
+	Instructions        pgtype.Text
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+	StepSequence        int16
+	CharacteristicCount int64
+}
+
+// ─── ponto de inspeção no roteiro ────────────────────────────────────────────
+func (q *Queries) ListInspectionPlansByRoute(ctx context.Context, arg ListInspectionPlansByRouteParams) ([]ListInspectionPlansByRouteRow, error) {
+	rows, err := q.db.Query(ctx, listInspectionPlansByRoute, arg.RouteID, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListInspectionPlansByRouteRow
+	for rows.Next() {
+		var i ListInspectionPlansByRouteRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemCode,
+			&i.RouteOperationID,
+			&i.PointType,
+			&i.Description,
+			&i.SampleSize,
+			&i.AcceptanceLevel,
+			&i.Instructions,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.StepSequence,
+			&i.CharacteristicCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInspectionStepsForOrderRoute = `-- name: ListInspectionStepsForOrderRoute :many
+SELECT ro.id AS route_operation_id, ro.sequence, ip.id AS plan_id, ip.item_code
+FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+LEFT JOIN inspection_plans ip
+       ON ip.route_operation_id = ro.id AND ip.is_active = TRUE
+WHERE ro.route_id = $1
+  AND ro.is_active = TRUE
+  AND ro.inspection_required = TRUE
+  AND mr.enterprise_id = $2
+ORDER BY ro.sequence
+`
+
+type ListInspectionStepsForOrderRouteParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
+
+type ListInspectionStepsForOrderRouteRow struct {
+	RouteOperationID int64
+	Sequence         int16
+	PlanID           pgtype.Int8
+	ItemCode         *int64
+}
+
+// Etapas marcadas como inspecionadas na ordem: é daqui que nasce o registro de
+// inspeção quando a ordem de produção é criada.
+func (q *Queries) ListInspectionStepsForOrderRoute(ctx context.Context, arg ListInspectionStepsForOrderRouteParams) ([]ListInspectionStepsForOrderRouteRow, error) {
+	rows, err := q.db.Query(ctx, listInspectionStepsForOrderRoute, arg.RouteID, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListInspectionStepsForOrderRouteRow
+	for rows.Next() {
+		var i ListInspectionStepsForOrderRouteRow
+		if err := rows.Scan(
+			&i.RouteOperationID,
+			&i.Sequence,
+			&i.PlanID,
+			&i.ItemCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOperations = `-- name: ListOperations :many
-SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id FROM operations
+SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct FROM operations
 WHERE enterprise_id = $2
   AND ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
@@ -876,6 +1283,7 @@ func (q *Queries) ListOperations(ctx context.Context, arg ListOperationsParams) 
 			&i.LeadTimeDays,
 			&i.ThirdPartyRemittance,
 			&i.EnterpriseID,
+			&i.ScrapPct,
 		); err != nil {
 			return nil, err
 		}
@@ -1091,6 +1499,28 @@ func (q *Queries) RemoveRouteOperation(ctx context.Context, id int64) error {
 	return err
 }
 
+const routeIDOfOperation = `-- name: RouteIDOfOperation :one
+SELECT ro.route_id
+FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+WHERE ro.id = $1 AND mr.enterprise_id = $2
+`
+
+type RouteIDOfOperationParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+// Descobre a que roteiro uma etapa pertence. O filtro por empresa vive aqui,
+// não no chamador: a etapa é endereçada por id e sem isto seria possível
+// alcançar a etapa de outra empresa informando o número.
+func (q *Queries) RouteIDOfOperation(ctx context.Context, arg RouteIDOfOperationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, routeIDOfOperation, arg.ID, arg.EnterpriseID)
+	var route_id int64
+	err := row.Scan(&route_id)
+	return route_id, err
+}
+
 const setResourcePrimary = `-- name: SetResourcePrimary :one
 UPDATE route_operation_resources SET is_primary = TRUE, updated_at = NOW()
 WHERE id = $1
@@ -1149,9 +1579,10 @@ UPDATE operations SET
     cost_per_unit = $19,
     lead_time_days = $20,
     third_party_remittance = $21,
+    scrap_pct = $22,
     updated_at = NOW()
-WHERE id = $1 AND enterprise_id = $22
-RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id
+WHERE id = $1 AND enterprise_id = $23
+RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct
 `
 
 type UpdateOperationParams struct {
@@ -1176,6 +1607,7 @@ type UpdateOperationParams struct {
 	CostPerUnit          pgtype.Numeric
 	LeadTimeDays         *int32
 	ThirdPartyRemittance string
+	ScrapPct             pgtype.Numeric
 	EnterpriseID         int64
 }
 
@@ -1202,6 +1634,7 @@ func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams
 		arg.CostPerUnit,
 		arg.LeadTimeDays,
 		arg.ThirdPartyRemittance,
+		arg.ScrapPct,
 		arg.EnterpriseID,
 	)
 	var i Operation
@@ -1233,6 +1666,54 @@ func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams
 		&i.LeadTimeDays,
 		&i.ThirdPartyRemittance,
 		&i.EnterpriseID,
+		&i.ScrapPct,
+	)
+	return i, err
+}
+
+const updateOperationDocument = `-- name: UpdateOperationDocument :one
+UPDATE operation_documents SET
+    kind = $2, title = $3, reference = $4, revision = $5, instructions = $6,
+    updated_at = NOW()
+WHERE id = $1 AND enterprise_id = $7
+RETURNING id, operation_id, route_operation_id, kind, title, reference, revision, instructions, is_active, enterprise_id, created_at, updated_at, created_by
+`
+
+type UpdateOperationDocumentParams struct {
+	ID           int64
+	Kind         string
+	Title        string
+	Reference    pgtype.Text
+	Revision     pgtype.Text
+	Instructions pgtype.Text
+	EnterpriseID int64
+}
+
+func (q *Queries) UpdateOperationDocument(ctx context.Context, arg UpdateOperationDocumentParams) (OperationDocument, error) {
+	row := q.db.QueryRow(ctx, updateOperationDocument,
+		arg.ID,
+		arg.Kind,
+		arg.Title,
+		arg.Reference,
+		arg.Revision,
+		arg.Instructions,
+		arg.EnterpriseID,
+	)
+	var i OperationDocument
+	err := row.Scan(
+		&i.ID,
+		&i.OperationID,
+		&i.RouteOperationID,
+		&i.Kind,
+		&i.Title,
+		&i.Reference,
+		&i.Revision,
+		&i.Instructions,
+		&i.IsActive,
+		&i.EnterpriseID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CreatedBy,
 	)
 	return i, err
 }
@@ -1339,11 +1820,13 @@ UPDATE route_operations SET
     cost_per_unit = $15,
     lead_time_days = $16,
     third_party_remittance = $17,
+    scrap_pct = $20,
+    inspection_required = $21,
     situation = $18,
     notes = $19,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance
+RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required
 `
 
 type UpdateRouteOperationParams struct {
@@ -1366,6 +1849,8 @@ type UpdateRouteOperationParams struct {
 	ThirdPartyRemittance pgtype.Text
 	Situation            sqltypes.RouteOpSituationEnum
 	Notes                pgtype.Text
+	ScrapPct             pgtype.Numeric
+	InspectionRequired   bool
 }
 
 func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOperationParams) (RouteOperation, error) {
@@ -1389,6 +1874,8 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		arg.ThirdPartyRemittance,
 		arg.Situation,
 		arg.Notes,
+		arg.ScrapPct,
+		arg.InspectionRequired,
 	)
 	var i RouteOperation
 	err := row.Scan(
@@ -1417,6 +1904,8 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		&i.CostPerUnit,
 		&i.LeadTimeDays,
 		&i.ThirdPartyRemittance,
+		&i.ScrapPct,
+		&i.InspectionRequired,
 	)
 	return i, err
 }

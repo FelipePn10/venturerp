@@ -18,9 +18,17 @@ type StructureComponentResponse struct {
 	Quantity          float64                         `json:"quantity"`
 	EffectiveQuantity float64                         `json:"effective_quantity"`
 	UnitOfMeasurement types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
-	Health            types.Health                    `json:"health"`
-	LossPercentage    float64                         `json:"loss_percentage"`
-	LossFormula       *string                         `json:"loss_formula,omitempty"`
+	// A engenharia escreve na unidade que faz sentido para o desenho (m² de
+	// chapa); o estoque, a ordem e o custo trabalham na unidade em que o item é
+	// guardado (kg). QuantityStockUOM é a mesma quantidade na unidade de
+	// estoque e StockUnitOfMeasurement diz qual é ela, para a tela poder
+	// mostrar "2 m² = 31,4 kg" em vez de deixar o usuário adivinhar.
+	QuantityStockUOM       float64                         `json:"quantity_stock_uom"`
+	StockUnitOfMeasurement types.TypeUnitOfMeasurementItem `json:"stock_unit_of_measurement,omitempty"`
+	ConversionFactor       float64                         `json:"conversion_factor"`
+	Health                 types.Health                    `json:"health"`
+	LossPercentage         float64                         `json:"loss_percentage"`
+	LossFormula            *string                         `json:"loss_formula,omitempty"`
 	// QuantityFormula calcula a quantidade a partir das variáveis do
 	// configurador; NominalQuantity guarda a quantidade fixa cadastrada e
 	// FormulaApplied diz qual das duas valeu neste resultado.

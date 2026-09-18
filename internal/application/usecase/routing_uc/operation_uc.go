@@ -79,6 +79,10 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
 	op.ThirdPartyRemittance = remittance
+	if err := validaRefugo(&dto.ScrapPct); err != nil {
+		return nil, err
+	}
+	op.ScrapPct = dto.ScrapPct
 
 	created, err := uc.repo.CreateOperation(ctx, op)
 	if err != nil {
@@ -129,6 +133,10 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
 	op.ThirdPartyRemittance = remittance
+	if err := validaRefugo(&dto.ScrapPct); err != nil {
+		return nil, err
+	}
+	op.ScrapPct = dto.ScrapPct
 
 	updated, err := uc.repo.UpdateOperation(ctx, op)
 	if err != nil {
@@ -253,6 +261,7 @@ func toOperationResponse(op *entity.Operation) *response.OperationResponse {
 		CostPerUnit:          op.CostPerUnit,
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: op.ThirdPartyRemittance,
+		ScrapPct:             op.ScrapPct,
 		IsActive:             op.IsActive,
 		CreatedAt:            op.CreatedAt,
 	}

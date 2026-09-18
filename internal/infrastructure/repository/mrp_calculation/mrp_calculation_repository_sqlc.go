@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepository "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
@@ -14,6 +15,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (r *MRPCalculationRepositorySQLC) CreateProfile(
@@ -109,16 +111,44 @@ func (r *MRPCalculationRepositorySQLC) StartCalculation(
 		return nil, err
 	}
 	row, err := r.q.StartMRPCalculation(ctx, sqlc.StartMRPCalculationParams{PlanCode: planID, EnterpriseID: enterpriseID})
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.ConstraintName == "uq_mrp_single_running_calculation" {
-			return nil, mrprepository.ErrCalculationInProgress
-		}
+	if err == nil {
+		return logToEntity(row), nil
+	}
+
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.ConstraintName != "uq_mrp_single_running_calculation" {
 		return nil, fmt.Errorf("starting MRP calculation: %w", err)
 	}
 
-	return logToEntity(row), nil
+	// A trava impede dois cálculos simultâneos no mesmo plano — correto. Mas um
+	// cálculo que morreu no meio (o serviço reiniciou, o processo caiu) deixa o
+	// registro RODANDO para sempre, e a partir daí TODA tentativa de planejar
+	// devolve "já existe um cálculo em andamento". Da tela não há saída: o
+	// planejamento fica bloqueado até alguém editar o banco.
+	//
+	// Um cálculo real leva segundos. Passado o limite abaixo, o que está ali é
+	// destroço de uma execução interrompida: encerrar e seguir é o que o
+	// usuário faria se pudesse.
+	if liberado, errLiberar := r.q.AbandonarCalculoTravado(ctx, sqlc.AbandonarCalculoTravadoParams{
+		PlanCode:     planID,
+		Column2:      pgtype.Interval{Microseconds: int64(limiteDeCalculoTravado / time.Microsecond), Valid: true},
+		EnterpriseID: enterpriseID,
+	}); errLiberar == nil {
+		_ = liberado
+		row, err = r.q.StartMRPCalculation(ctx, sqlc.StartMRPCalculationParams{PlanCode: planID, EnterpriseID: enterpriseID})
+		if err == nil {
+			return logToEntity(row), nil
+		}
+	}
+
+	return nil, mrprepository.ErrCalculationInProgress
 }
+
+// limiteDeCalculoTravado é a idade a partir da qual um cálculo RODANDO é tratado
+// como interrompido. Generoso de propósito: o cálculo mais pesado observado
+// termina em segundos, e liberar cedo demais permitiria dois cálculos
+// concorrentes gravando sugestões no mesmo plano.
+const limiteDeCalculoTravado = 30 * time.Minute
 
 func (r *MRPCalculationRepositorySQLC) FinishCalculation(
 	ctx context.Context,

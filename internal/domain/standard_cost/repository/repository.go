@@ -31,11 +31,27 @@ type StandardCostRepository interface {
 
 // BOMChild is a lightweight projection of an item structure row used during rollup.
 type BOMChild struct {
-	ChildCode          int64
+	ChildCode int64
+	// Quantity é o número como a engenharia escreveu, na unidade da estrutura.
+	// ConversionFactor leva para a unidade de ESTOQUE, que é a única em que o
+	// custo do componente faz sentido — o preço é por quilo, não por metro
+	// quadrado, quando a chapa é estocada em quilo.
 	Quantity           float64
+	ConversionFactor   float64
 	LossPercentage     float64
 	IsCoproduct        bool // OUTPUT (co-produto/sucata) → credita o custo do pai
 	IsFixedQty         bool // quantidade por lote → amortizada pelo lote de referência
 	SubstituteGroup    int16
 	SubstitutePriority int16
+}
+
+// QuantidadeNaUnidadeDeEstoque aplica o fator congelado na linha da estrutura.
+// Linhas anteriores à migração 354 não têm fator; nelas a unidade da estrutura
+// era sempre a de estoque, então 1 é a resposta certa — zero zeraria o custo do
+// componente em silêncio.
+func (c BOMChild) QuantidadeNaUnidadeDeEstoque() float64 {
+	if c.ConversionFactor > 0 {
+		return c.Quantity * c.ConversionFactor
+	}
+	return c.Quantity
 }

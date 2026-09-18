@@ -162,6 +162,7 @@ func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, pare
 		out = append(out, domainrepo.BOMChild{
 			ChildCode:          row.ChildCode,
 			Quantity:           row.Quantity,
+			ConversionFactor:   pgutil.FromPgNumericToFloat64(row.ConversionFactor),
 			LossPercentage:     row.LossPercentage,
 			IsCoproduct:        row.IsCoproduct,
 			IsFixedQty:         row.IsFixedQty,
