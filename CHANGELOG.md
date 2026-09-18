@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.31] — 2026-09-18
+
+- feat(roteiro): refugo por operação, inspeção, documentos e unidade de estoque (#164) (`a6e4a01`)
+
 ## [v1.1.30] — 2026-09-17
 
 - feat(margem): simulação antes da venda; corrige permissão e 403 em inglês (`9cd09f1`)
