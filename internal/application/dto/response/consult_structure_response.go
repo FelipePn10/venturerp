@@ -66,21 +66,27 @@ type ItemStructureResponse struct {
 	// QuantityFormula calcula a quantidade a partir das variáveis do
 	// configurador (ex.: "2*(COMPRIMENTO/1000)"); quando presente, Quantity é a
 	// quantidade nominal usada como reserva.
-	QuantityFormula    *string    `json:"quantity_formula,omitempty"`
-	QuantityRounding   string     `json:"quantity_rounding,omitempty"`
-	QuantityScale      int16      `json:"quantity_scale,omitempty"`
-	FormulaVariables   []string   `json:"formula_variables,omitempty"`
-	UnitOfMeasurement  string     `json:"unit_of_measurement"`
-	Sequence           int        `json:"sequence"`
-	Notes              *string    `json:"notes,omitempty"`
-	StartDate          *time.Time `json:"start_date,omitempty"`
-	EndDate            *time.Time `json:"end_date,omitempty"`
-	IsCoproduct        bool       `json:"is_coproduct"`
-	IsFixedQty         bool       `json:"is_fixed_qty"`
-	SubstituteGroup    int16      `json:"substitute_group"`
-	SubstitutePriority int16      `json:"substitute_priority"`
-	IsActive           bool       `json:"is_active"`
-	CreatedBy          uuid.UUID  `json:"created_by"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	QuantityFormula   *string  `json:"quantity_formula,omitempty"`
+	QuantityRounding  string   `json:"quantity_rounding,omitempty"`
+	QuantityScale     int16    `json:"quantity_scale,omitempty"`
+	FormulaVariables  []string `json:"formula_variables,omitempty"`
+	UnitOfMeasurement string   `json:"unit_of_measurement"`
+	// A engenharia escreve na unidade do desenho (m² de chapa); estoque, ordem
+	// e custo trabalham na unidade em que o item é guardado (kg). Estes três
+	// campos deixam a tela mostrar "2 m² = 31,4 kg" em vez de um número solto.
+	QuantityStockUOM       float64    `json:"quantity_stock_uom"`
+	StockUnitOfMeasurement string     `json:"stock_unit_of_measurement,omitempty"`
+	ConversionFactor       float64    `json:"conversion_factor"`
+	Sequence               int        `json:"sequence"`
+	Notes                  *string    `json:"notes,omitempty"`
+	StartDate              *time.Time `json:"start_date,omitempty"`
+	EndDate                *time.Time `json:"end_date,omitempty"`
+	IsCoproduct            bool       `json:"is_coproduct"`
+	IsFixedQty             bool       `json:"is_fixed_qty"`
+	SubstituteGroup        int16      `json:"substitute_group"`
+	SubstitutePriority     int16      `json:"substitute_priority"`
+	IsActive               bool       `json:"is_active"`
+	CreatedBy              uuid.UUID  `json:"created_by"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
 }

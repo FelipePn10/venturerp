@@ -15,29 +15,40 @@ import (
 //   - Um item não pode ser componente de si mesmo
 //   - A adição de um componente não pode criar um ciclo na árvore
 type ItemStructure struct {
-	ID                 int64
-	ParentCode         int64
-	ChildCode          int64
-	ChildDescription   string
-	Inherit            bool
-	ParentMask         *string // nil = genérico
-	Quantity           float64
-	LossPercentage     float64 // 0–100 (%)
-	LossFormula        *string // expressão matemática com variáveis de perguntas; substitui LossPercentage quando avaliável
-	QuantityFormula    *string // expressão que calcula a quantidade a partir das variáveis do configurador (ex.: 2*(COMPRIMENTO/1000))
-	QuantityRounding   string  // NONE | UP | DOWN | NEAREST, aplicado ao resultado da fórmula
-	QuantityScale      int16   // casas decimais do arredondamento (0–6)
-	UnitOfMeasurement  types.TypeUnitOfMeasurementItem
-	Health             types.Health
-	Sequence           int
-	Notes              *string
-	StartDate          *time.Time // nil = sem restrição de início
-	EndDate            *time.Time // nil = sem restrição de fim
-	IsCoproduct        bool       // true = SAÍDA (co-produto/subproduto/sucata), não insumo
-	IsFixedQty         bool       // true = quantidade por OF (lote), não por unidade do pai
-	SubstituteGroup    int16      // >0 = grupo de substitutos (mesmo pai); 0 = standalone
-	SubstitutePriority int16      // menor = preferido; o mínimo do grupo é o primário
-	IsActive           bool
+	ID                int64
+	ParentCode        int64
+	ChildCode         int64
+	ChildDescription  string
+	Inherit           bool
+	ParentMask        *string // nil = genérico
+	Quantity          float64
+	LossPercentage    float64 // 0–100 (%)
+	LossFormula       *string // expressão matemática com variáveis de perguntas; substitui LossPercentage quando avaliável
+	QuantityFormula   *string // expressão que calcula a quantidade a partir das variáveis do configurador (ex.: 2*(COMPRIMENTO/1000))
+	QuantityRounding  string  // NONE | UP | DOWN | NEAREST, aplicado ao resultado da fórmula
+	QuantityScale     int16   // casas decimais do arredondamento (0–6)
+	UnitOfMeasurement types.TypeUnitOfMeasurementItem
+
+	// QuantityStockUOM é a mesma quantidade na unidade de ESTOQUE do filho, e
+	// é o número que MRP, ordem, custo e apontamento leem. ConversionFactor é o
+	// fator aplicado, congelado na gravação: corrigir a conversão amanhã não
+	// pode reescrever o consumo de uma ordem já aberta.
+	QuantityStockUOM float64
+	ConversionFactor float64
+	// StockUnitOfMeasurement é a unidade em que o FILHO é estocado. Vem do
+	// cadastro do item, não da linha — a tela precisa dela para escrever
+	// "2 m² = 31,4 kg" em vez de mostrar um número sem unidade.
+	StockUnitOfMeasurement types.TypeUnitOfMeasurementItem
+	Health                 types.Health
+	Sequence               int
+	Notes                  *string
+	StartDate              *time.Time // nil = sem restrição de início
+	EndDate                *time.Time // nil = sem restrição de fim
+	IsCoproduct            bool       // true = SAÍDA (co-produto/subproduto/sucata), não insumo
+	IsFixedQty             bool       // true = quantidade por OF (lote), não por unidade do pai
+	SubstituteGroup        int16      // >0 = grupo de substitutos (mesmo pai); 0 = standalone
+	SubstitutePriority     int16      // menor = preferido; o mínimo do grupo é o primário
+	IsActive               bool
 	// WarehouseCode define de onde o componente é baixado; sem ele vale o
 	// almoxarifado do cadastro do item.
 	WarehouseCode *int64

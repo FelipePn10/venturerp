@@ -50,6 +50,10 @@ type Operation struct {
 	CrewSize   float64 // simultaneous operators (>=1)
 	TimeUnit   string  // MIN | HORA | DIA
 
+	// ScrapPct é o refugo padrão da operação, em %: quanto do que entra não
+	// sai bom. Uma etapa de roteiro pode sobrepor.
+	ScrapPct float64
+
 	// Subcontracting defaults (EXTERNA / TERCEIROS). Nil for internal operations.
 	SupplierID           *int64
 	ServiceItemCode      *int64
@@ -196,6 +200,12 @@ type RouteOperation struct {
 	CrewSize   *float64
 	TimeUnit   *string
 
+	// ScrapPct sobrepõe o refugo da operação de biblioteca (nil ⇒ herda).
+	ScrapPct *float64
+	// InspectionRequired marca que esta etapa tem inspeção de qualidade; a
+	// ordem de produção gera o registro de inspeção ao chegar nela.
+	InspectionRequired bool
+
 	// Subcontracting overrides (nil ⇒ inherit from the operation).
 	SupplierID           *int64
 	ServiceItemCode      *int64
@@ -210,7 +220,12 @@ type RouteOperation struct {
 	EffectiveStdTime      float64       // = EffTime.Run (hours); kept for backward-compat
 	EffectiveSetup        float64       // = EffTime.Setup (hours); kept for backward-compat
 	EffTime               OperationTime // resolved, quantity-aware time model (hours)
-	RequiresOperator      bool          // herdado de machine_types; quando true o CPM ignora overlap_pct
+	EffectiveScrap        float64       // refugo aplicado (override da etapa ∘ padrão da operação), em %
+	// EffectiveSubcontractDays é o prazo do terceiro (override da etapa ∘ padrão
+	// da operação), em DIAS CORRIDOS. Não é tempo de máquina: enquanto a peça
+	// está no terceiro, nenhum recurso nosso está ocupado.
+	EffectiveSubcontractDays int32
+	RequiresOperator         bool // herdado de machine_types; quando true o CPM ignora overlap_pct
 }
 
 // Overrides returns the route-operation's time overrides for resolution.
@@ -308,6 +323,13 @@ type LeadTimeResult struct {
 	RouteID      int64
 	CriticalPath []int64 // route_operation IDs in order
 	TotalHours   float64
+	// SubcontractDays soma o prazo dos terceiros no caminho crítico, em dias
+	// CORRIDOS. Fica separado de TotalHours de propósito: são dois relógios. As
+	// horas são de trabalho nosso (8 h por dia útil); os dias do terceiro correm
+	// no calendário dele, inclusive fim de semana. Somar os dois num número só
+	// daria uma conta que não bate com nenhum dos dois.
+	SubcontractDays int32
+
 	// CycleOperations lista as operações que ficaram presas num ciclo de
 	// precedência (A→B→A). Sem isso o cálculo devolvia 0 h em silêncio: o
 	// topológico não processava esses nós e o roteiro parecia instantâneo —
@@ -318,3 +340,47 @@ type LeadTimeResult struct {
 // HasCycle diz se a rede de precedências tem ciclo. Com ciclo, TotalHours não
 // tem significado e a rede precisa ser corrigida antes de programar.
 func (r LeadTimeResult) HasCycle() bool { return len(r.CycleOperations) > 0 }
+
+// OperationDocument é o desenho, a instrução de trabalho ou a ficha de processo
+// que o operador precisa ter à mão no posto.
+//
+// Exatamente um dos dois vínculos é preenchido: OperationID quando o documento
+// vale para toda etapa que usa aquela operação ("como rebarbar"), e
+// RouteOperationID quando é daquela etapa em particular (o desenho do item).
+// O sistema guarda a REFERÊNCIA e a revisão vigente, não o arquivo — o que
+// resolve o problema real, que é o operador abrir uma revisão vencida.
+type OperationDocument struct {
+	ID               int64
+	OperationID      *int64
+	RouteOperationID *int64
+	Kind             string // DESENHO | INSTRUCAO | FICHA | NORMA | FOTO | OUTRO
+	Title            string
+	Reference        *string
+	Revision         *string
+	Instructions     *string
+	IsActive         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	CreatedBy        uuid.UUID
+
+	// IsStepLevel diz se veio da etapa (true) ou da operação de biblioteca.
+	IsStepLevel bool
+}
+
+// RouteInspection é o plano de inspeção amarrado a uma etapa do roteiro: o
+// ponto onde a peça para para ser conferida antes de seguir.
+type RouteInspection struct {
+	ID                  int64
+	RouteOperationID    int64
+	ItemCode            int64
+	StepSequence        int16
+	PointType           string // RECEBIMENTO | PROCESSO | EXPEDICAO
+	Description         string
+	SampleSize          float64
+	AcceptanceLevel     float64
+	Instructions        *string
+	CharacteristicCount int64
+	IsActive            bool
+	CreatedAt           time.Time
+	CreatedBy           uuid.UUID
+}

@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
 )
@@ -18,6 +19,7 @@ type UpdateStructureComponentUseCase struct {
 	Repo  repository.ItemStructureRepository
 	Auth  ports.AuthService
 	Items any
+	UOM   ports.UOMConverter
 }
 
 func NewUpdateStructureComponentUseCase(
@@ -29,8 +31,14 @@ func NewUpdateStructureComponentUseCase(
 		Repo: repo,
 		Auth: auth,
 	}
-	if len(items) > 0 {
-		uc.Items = items[0]
+	for _, dep := range items {
+		if conv, ok := dep.(ports.UOMConverter); ok {
+			uc.UOM = conv
+			continue
+		}
+		if uc.Items == nil {
+			uc.Items = dep
+		}
 	}
 	return uc
 }
@@ -51,10 +59,26 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	childCode, err := resolveItemCode(ctx, uc.Items, dto.ChildCode)
+	childItem, err := itemresolution.Resolve(ctx, uc.Items, dto.ChildCode)
 	if err != nil {
 		return nil, err
 	}
+	childCode := int64(childItem.Code)
+
+	// Mesma regra da criação: a unidade pode diferir da de estoque, desde que
+	// exista conversão. Alterar a quantidade sem recalcular deixaria a coluna
+	// convertida desatualizada — e é ela que o planejamento lê.
+	unidadeDaLinha := dto.UnitOfMeasurement
+	if unidadeDaLinha == "" {
+		unidadeDaLinha = childItem.Warehouse.UnitOfMeasurement
+	}
+	qtdeEmEstoque, fator, err := resolverUnidadeDeEstoque(
+		ctx, uc.UOM, childCode, string(dto.ChildCode),
+		dto.Quantity, string(unidadeDaLinha), string(childItem.Warehouse.UnitOfMeasurement))
+	if err != nil {
+		return nil, err
+	}
+
 	structure := &entity.ItemStructure{
 		ParentCode: parentCode,
 		ChildCode:  childCode,
@@ -88,6 +112,8 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	structure.CostCenterCode = dto.CostCenterCode
 	structure.IsCriticalMPS = dto.IsCriticalMPS
 	structure.GeneratesInspection = dto.GeneratesInspection
+	structure.QuantityStockUOM = qtdeEmEstoque
+	structure.ConversionFactor = fator
 
 	// Executa update direto via business key
 	updated, err := uc.Repo.Update(ctx, structure)

@@ -254,10 +254,10 @@ func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, m
 			}
 			if child.IsCoproduct {
 				// By-product / returnable scrap: CREDIT the parent by the co-product value.
-				materialCost -= childNode.total() * child.Quantity
+				materialCost -= childNode.total() * child.QuantidadeNaUnidadeDeEstoque()
 				continue
 			}
-			netQty := structentity.QuantidadeComPerda(child.Quantity, child.LossPercentage, structentity.FormulaPerdaPadrao)
+			netQty := structentity.QuantidadeComPerda(child.QuantidadeNaUnidadeDeEstoque(), child.LossPercentage, structentity.FormulaPerdaPadrao)
 			if child.IsFixedQty && lotSize > 0 {
 				netQty /= lotSize // amortize the fixed component over the reference lot
 			}

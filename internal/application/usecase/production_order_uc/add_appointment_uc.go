@@ -143,8 +143,9 @@ func structureChildrenForBackflush(raw []*structentity.ItemStructure) []*structu
 			continue
 		}
 		children = append(children, &structureChild{
-			code:  c.ChildCode,
-			qty:   c.Quantity,
+			code: c.ChildCode,
+			// Na unidade de ESTOQUE: é o que vai baixar do saldo.
+			qty:   c.QuantidadeNaUnidadeDeEstoque(),
 			loss:  c.LossPercentage,
 			fixed: c.IsFixedQty,
 		})

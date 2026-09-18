@@ -15,9 +15,12 @@ import (
 
 // CreateStructureComponentUseCase adiciona um componente (filho) à estrutura
 type CreateStructureComponentUseCase struct {
-	Repo  repository.ItemStructureRepository
-	Auth  ports.AuthService
+	Repo repository.ItemStructureRepository
+	Auth ports.AuthService
+	// Items resolve o código público do item; UOM converte a unidade da
+	// estrutura para a de estoque quando as duas diferem.
 	Items any
+	UOM   ports.UOMConverter
 }
 
 func NewCreateStructureComponentUseCase(
@@ -29,8 +32,16 @@ func NewCreateStructureComponentUseCase(
 		Repo: repo,
 		Auth: auth,
 	}
-	if len(items) > 0 {
-		uc.Items = items[0]
+	// As dependências chegam soltas: a de item e a de conversão são
+	// reconhecidas pelo tipo, o que evita quebrar as chamadas existentes.
+	for _, dep := range items {
+		if conv, ok := dep.(ports.UOMConverter); ok {
+			uc.UOM = conv
+			continue
+		}
+		if uc.Items == nil {
+			uc.Items = dep
+		}
 	}
 	return uc
 }
@@ -54,8 +65,19 @@ func (uc *CreateStructureComponentUseCase) Execute(
 		return nil, err
 	}
 	childCode := int64(childItem.Code)
+	unidadeDeEstoque := childItem.Warehouse.UnitOfMeasurement
 	if dto.UnitOfMeasurement == "" {
-		dto.UnitOfMeasurement = childItem.Warehouse.UnitOfMeasurement
+		dto.UnitOfMeasurement = unidadeDeEstoque
+	}
+	// A unidade da estrutura pode ser diferente da de estoque — desenhar em m²
+	// uma chapa estocada em kg é legítimo. O que não pode é a diferença passar
+	// sem conversão: daí em diante todo o sistema leria o número na unidade
+	// errada.
+	qtdeEmEstoque, fator, err := resolverUnidadeDeEstoque(
+		ctx, uc.UOM, childCode, string(dto.ChildCode),
+		dto.Quantity, string(dto.UnitOfMeasurement), string(unidadeDeEstoque))
+	if err != nil {
+		return nil, err
 	}
 	actor, err := uc.Auth.UserID(ctx)
 	if err != nil {
@@ -148,6 +170,8 @@ func (uc *CreateStructureComponentUseCase) Execute(
 	structure.CostCenterCode = dto.CostCenterCode
 	structure.IsCriticalMPS = dto.IsCriticalMPS
 	structure.GeneratesInspection = dto.GeneratesInspection
+	structure.QuantityStockUOM = qtdeEmEstoque
+	structure.ConversionFactor = fator
 
 	return uc.Repo.Create(ctx, structure)
 }

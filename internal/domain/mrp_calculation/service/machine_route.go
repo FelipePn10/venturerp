@@ -11,7 +11,13 @@ import (
 )
 
 type machineStep struct {
-	profile                            *entity.MachineTimeInfo
+	profile *entity.MachineTimeInfo
+	// alternativas são as máquinas EQUIVALENTES a `profile` — mesma máscara e
+	// mesma prioridade. Três serras iguais no chão de fábrica não são uma
+	// preferida e duas reservas: são três recursos que fazem o mesmo, e quem
+	// estiver livre antes deve pegar a ordem. Prioridade diferente continua
+	// mandando, então "prefira a serra 1" segue valendo.
+	alternativas                       []*entity.MachineTimeInfo
 	minutes                            float64
 	cycles, cycleMinutes, setupMinutes float64
 	operationID                        *int64
@@ -41,12 +47,27 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 		}
 		minutes, err := machineMinutes(mt, sug.Quantity)
 		step := measuredMachineStep(mt, sug.Quantity, minutes)
+		step.alternativas = equivalentes(profiles, mt)
 		return []machineStep{step}, err
 	}
 	ordered, err := orderMachineRoute(ops, edges)
 	if err != nil {
 		return nil, err
 	}
+
+	// Com refugo, cada etapa processa uma quantidade diferente: para entregar a
+	// quantidade da ordem, a primeira operação precisa rodar mais peças que a
+	// última. Reservar a capacidade pela quantidade do pedido subestimaria
+	// justamente o começo do roteiro — e a máquina apareceria livre num horário
+	// em que estará ocupada. É a mesma conta que o roteiro mostra na tela.
+	entraPorEtapa := routing.QuantidadePorOperacao(ops, edges, sug.Quantity)
+	quantidadeDa := func(op *routing.RouteOperation) float64 {
+		if q, ok := entraPorEtapa[op.ID]; ok && q > 0 {
+			return q
+		}
+		return sug.Quantity
+	}
+
 	out := []machineStep{}
 	delay := time.Duration(0)
 	for _, op := range ordered {
@@ -73,20 +94,22 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 		if mt == nil {
 			return nil, fmt.Errorf("cadastre a produtividade do item %d em uma máquina do centro %d antes de planejar", sug.ItemCode, *op.EffectiveWorkCenterID)
 		}
-		minutes, err := machineMinutes(mt, sug.Quantity)
+		qtdeDaEtapa := quantidadeDa(op)
+		minutes, err := machineMinutes(mt, qtdeDaEtapa)
 		if err != nil {
 			return nil, err
 		}
 		if op.RunTime != nil || op.StandardTime != nil {
-			minutes = op.EffTime.MachineHours(sug.Quantity) * 60
+			minutes = op.EffTime.MachineHours(qtdeDaEtapa) * 60
 		}
 		if minutes <= 0 {
 			return nil, fmt.Errorf("tempo inválido na operação %d", op.ID)
 		}
 		id := op.ID
-		step := measuredMachineStep(mt, sug.Quantity, minutes)
+		step := measuredMachineStep(mt, qtdeDaEtapa, minutes)
+		step.alternativas = equivalentes(candidates, mt)
 		if op.RunTime != nil || op.StandardTime != nil {
-			step.cycles = op.EffTime.Batches(sug.Quantity)
+			step.cycles = op.EffTime.Batches(qtdeDaEtapa)
 			step.cycleMinutes = op.EffTime.Run * 60
 			step.setupMinutes = op.EffTime.Setup * 60
 			if step.cycleMinutes <= 0 {

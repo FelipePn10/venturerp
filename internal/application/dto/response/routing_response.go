@@ -37,6 +37,7 @@ type OperationResponse struct {
 	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
 	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
 	ThirdPartyRemittance string    `json:"third_party_remittance"`
+	ScrapPct             float64   `json:"scrap_pct"`
 	IsActive             bool      `json:"is_active"`
 	CreatedAt            time.Time `json:"created_at"`
 }
@@ -76,8 +77,16 @@ type RouteOperationResponse struct {
 	CostPerUnit          *float64 `json:"cost_per_unit,omitempty"`
 	LeadTimeDays         *int32   `json:"lead_time_days,omitempty"`
 	ThirdPartyRemittance *string  `json:"third_party_remittance,omitempty"`
-	Situation            string   `json:"situation"`
-	Notes                *string  `json:"notes,omitempty"`
+	// ScrapPct é o refugo informado NESTA etapa (nil ⇒ herda da operação);
+	// EffectiveScrap é o que vale de fato, já resolvido.
+	ScrapPct       *float64 `json:"scrap_pct,omitempty"`
+	EffectiveScrap float64  `json:"effective_scrap_pct"`
+	// InputQty é quanto precisa ENTRAR nesta etapa para o roteiro entregar a
+	// quantidade de referência boa no fim. Com refugo ela cresce para trás.
+	InputQty           float64 `json:"input_qty"`
+	InspectionRequired bool    `json:"inspection_required"`
+	Situation          string  `json:"situation"`
+	Notes              *string `json:"notes,omitempty"`
 }
 
 type RouteOpResourceResponse struct {
@@ -98,10 +107,42 @@ type NetworkEdgeResponse struct {
 }
 
 type RouteDetailResponse struct {
-	Route      ManufacturingRouteResponse `json:"route"`
-	Operations []RouteOperationResponse   `json:"operations"`
-	Network    []NetworkEdgeResponse      `json:"network"`
-	Resources  []RouteOpResourceResponse  `json:"resources"`
+	Route       ManufacturingRouteResponse  `json:"route"`
+	Operations  []RouteOperationResponse    `json:"operations"`
+	Network     []NetworkEdgeResponse       `json:"network"`
+	Resources   []RouteOpResourceResponse   `json:"resources"`
+	Documents   []OperationDocumentResponse `json:"documents"`
+	Inspections []RouteInspectionResponse   `json:"inspections"`
+	// ReleaseQty é quanto a ordem precisa SOLTAR para entregar ReferenceQty
+	// peças boas. Sem refugo as duas são iguais.
+	ReferenceQty float64 `json:"reference_qty"`
+	ReleaseQty   float64 `json:"release_qty"`
+}
+
+type OperationDocumentResponse struct {
+	ID               int64   `json:"id"`
+	OperationID      *int64  `json:"operation_id,omitempty"`
+	RouteOperationID *int64  `json:"route_operation_id,omitempty"`
+	Kind             string  `json:"kind"`
+	Title            string  `json:"title"`
+	Reference        *string `json:"reference,omitempty"`
+	Revision         *string `json:"revision,omitempty"`
+	Instructions     *string `json:"instructions,omitempty"`
+	// IsStepLevel distingue o desenho desta etapa da instrução que a operação
+	// de biblioteca carrega para todo roteiro.
+	IsStepLevel bool `json:"is_step_level"`
+}
+
+type RouteInspectionResponse struct {
+	ID                  int64   `json:"id"`
+	RouteOperationID    int64   `json:"route_operation_id"`
+	StepSequence        int16   `json:"step_sequence"`
+	PointType           string  `json:"point_type"`
+	Description         string  `json:"description"`
+	SampleSize          float64 `json:"sample_size"`
+	AcceptanceLevel     float64 `json:"acceptance_level"`
+	Instructions        *string `json:"instructions,omitempty"`
+	CharacteristicCount int64   `json:"characteristic_count"`
 }
 
 type RouteLeadTimeResponse struct {
@@ -111,5 +152,12 @@ type RouteLeadTimeResponse struct {
 	CycleOperations []int64 `json:"cycle_operations,omitempty"`
 	RouteID         int64   `json:"route_id"`
 	TotalHours      float64 `json:"lead_time_hours"`
+	// SubcontractDays é o prazo dos terceiros no caminho crítico, em dias
+	// CORRIDOS — relógio diferente das horas acima, por isso vem separado.
+	SubcontractDays int32   `json:"subcontract_days"`
 	CriticalPath    []int64 `json:"critical_path"` // route_operation IDs
+	// InputQtyByOperation diz quanto entra em cada etapa para a quantidade
+	// pedida sair boa; ReleaseQty é o que a primeira operação recebe.
+	InputQtyByOperation map[int64]float64 `json:"input_qty_by_operation,omitempty"`
+	ReleaseQty          float64           `json:"release_qty"`
 }

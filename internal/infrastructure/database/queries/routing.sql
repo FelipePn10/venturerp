@@ -7,6 +7,7 @@ INSERT INTO operations (
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
+    scrap_pct,
     is_active, created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, $5,
@@ -14,6 +15,7 @@ INSERT INTO operations (
     $9, $10, $11,
     $12, $13, $14, $15, $16,
     $17, $18, $19, $20, $21,
+    $23,
     TRUE, $22, sqlc.arg(enterprise_id)
 ) RETURNING *;
 
@@ -39,6 +41,7 @@ UPDATE operations SET
     cost_per_unit = $19,
     lead_time_days = $20,
     third_party_remittance = $21,
+    scrap_pct = $22,
     updated_at = NOW()
 WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
@@ -134,6 +137,7 @@ INSERT INTO route_operations (
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
+    scrap_pct, inspection_required,
     situation, notes, is_active
 ) VALUES (
     $1, $2, $3, $4,
@@ -141,6 +145,7 @@ INSERT INTO route_operations (
     $7, $8, $9,
     $10, $11, $12, $13, $14,
     $15, $16, $17, $18, $19,
+    $22, $23,
     $20, $21, TRUE
 ) RETURNING *;
 
@@ -162,6 +167,8 @@ UPDATE route_operations SET
     cost_per_unit = $15,
     lead_time_days = $16,
     third_party_remittance = $17,
+    scrap_pct = $20,
+    inspection_required = $21,
     situation = $18,
     notes = $19,
     updated_at = NOW()
@@ -183,6 +190,8 @@ SELECT
     op.move_time AS op_move_time,
     op.crew_size AS op_crew_size,
     op.time_unit AS op_time_unit,
+    op.scrap_pct AS op_scrap_pct,
+    COALESCE(ro.lead_time_days, op.lead_time_days, 0)::int AS effective_lead_time_days,
     COALESCE(ro.work_center_id, op.default_work_center_id) AS effective_work_center_id,
     mt.name AS work_center_name,
     COALESCE(mt.requires_operator, TRUE) AS requires_operator
@@ -292,3 +301,91 @@ JOIN route_operations ro ON ro.id = r.route_operation_id
 LEFT JOIN machine_types mt ON mt.id = r.work_center_id
 WHERE ro.route_id = $1
 ORDER BY r.route_operation_id, r.is_primary DESC, r.priority, r.id;
+
+-- ─── operation_documents (desenho / instrução / ficha de processo) ────────────
+
+-- name: CreateOperationDocument :one
+INSERT INTO operation_documents (
+    operation_id, route_operation_id, kind, title, reference, revision, instructions,
+    is_active, enterprise_id, created_by
+) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, sqlc.arg(enterprise_id), $8)
+RETURNING *;
+
+-- name: UpdateOperationDocument :one
+UPDATE operation_documents SET
+    kind = $2, title = $3, reference = $4, revision = $5, instructions = $6,
+    updated_at = NOW()
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
+RETURNING *;
+
+-- name: DeactivateOperationDocument :exec
+UPDATE operation_documents SET is_active = FALSE, updated_at = NOW()
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);
+
+-- name: ListDocumentsByOperation :many
+SELECT * FROM operation_documents
+WHERE operation_id = $1 AND is_active = TRUE AND enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY kind, title;
+
+-- Documentos que o operador vê numa etapa: os da própria etapa MAIS os que a
+-- operação de biblioteca carrega. A instrução genérica ("como rebarbar") vale em
+-- todo roteiro; o desenho é desta etapa. Separar os dois na leitura obrigaria a
+-- tela a fazer duas chamadas e juntar — e alguém esqueceria uma delas.
+-- name: ListDocumentsForRouteOperation :many
+SELECT d.*, (d.route_operation_id IS NOT NULL) AS is_step_level
+FROM operation_documents d
+WHERE d.is_active = TRUE
+  AND d.enterprise_id = sqlc.arg(enterprise_id)
+  AND (
+        d.route_operation_id = sqlc.arg(route_operation_id)
+     OR d.operation_id = (SELECT ro.operation_id FROM route_operations ro
+                          WHERE ro.id = sqlc.arg(route_operation_id))
+  )
+ORDER BY is_step_level DESC, d.kind, d.title;
+
+-- name: ListDocumentsByRoute :many
+SELECT d.*, (d.route_operation_id IS NOT NULL) AS is_step_level, ro.id AS step_id, ro.sequence
+FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+JOIN operation_documents d
+  ON d.route_operation_id = ro.id OR d.operation_id = ro.operation_id
+WHERE ro.route_id = $1 AND ro.is_active = TRUE
+  AND d.is_active = TRUE
+  AND mr.enterprise_id = sqlc.arg(enterprise_id)
+  AND d.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY ro.sequence, is_step_level DESC, d.kind, d.title;
+
+-- ─── ponto de inspeção no roteiro ────────────────────────────────────────────
+
+-- name: ListInspectionPlansByRoute :many
+SELECT ip.*, ro.sequence AS step_sequence,
+       (SELECT count(*) FROM inspection_plan_characteristics c WHERE c.plan_id = ip.id) AS characteristic_count
+FROM inspection_plans ip
+JOIN route_operations ro ON ro.id = ip.route_operation_id
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+WHERE ro.route_id = $1 AND ro.is_active = TRUE AND ip.is_active = TRUE
+  AND mr.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY ro.sequence, ip.id;
+
+-- Etapas marcadas como inspecionadas na ordem: é daqui que nasce o registro de
+-- inspeção quando a ordem de produção é criada.
+-- name: ListInspectionStepsForOrderRoute :many
+SELECT ro.id AS route_operation_id, ro.sequence, ip.id AS plan_id, ip.item_code
+FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+LEFT JOIN inspection_plans ip
+       ON ip.route_operation_id = ro.id AND ip.is_active = TRUE
+WHERE ro.route_id = $1
+  AND ro.is_active = TRUE
+  AND ro.inspection_required = TRUE
+  AND mr.enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY ro.sequence;
+
+-- Descobre a que roteiro uma etapa pertence. O filtro por empresa vive aqui,
+-- não no chamador: a etapa é endereçada por id e sem isto seria possível
+-- alcançar a etapa de outra empresa informando o número.
+-- name: RouteIDOfOperation :one
+SELECT ro.route_id
+FROM route_operations ro
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+WHERE ro.id = $1 AND mr.enterprise_id = sqlc.arg(enterprise_id);

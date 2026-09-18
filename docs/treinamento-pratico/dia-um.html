@@ -1724,16 +1724,19 @@ Unidade, Período e Efic.</p>
 </p>
 
 <h4>Como a tela é organizada</h4>
-<p>Seis blocos, que se usam nesta ordem:</p>
+<p>
+  Seis <b>abas</b>, na ordem em que se desenha um processo. Cada aba responde a uma pergunta;
+  não é preciso rolar a tela procurando o bloco certo.
+</p>
 <table class="dados">
   <thead><tr><th class="cen" style="width:6%">#</th><th style="width:28%">Bloco</th><th>O que se faz nele</th></tr></thead>
   <tbody>
-    <tr><td class="cen">1</td><td><b>Operação</b> / <b>Biblioteca</b></td><td>Cadastra as operações reutilizáveis — o “verbo” do processo. Cadastra-se uma vez e usa-se em todos os roteiros.</td></tr>
-    <tr><td class="cen">2</td><td><b>Novo roteiro</b> / <b>Roteiros do item</b></td><td>Cria o roteiro do item selecionado na barra superior.</td></tr>
-    <tr><td class="cen">3</td><td><b>Operações do roteiro</b></td><td>Encadeia as operações da biblioteca no roteiro, com sequência, centro e tempos.</td></tr>
-    <tr><td class="cen">4</td><td><b>Recursos &amp; Ferramentas</b></td><td>Por operação: máquinas alternativas e ferramentas necessárias.</td></tr>
-    <tr><td class="cen">5</td><td><b>Rede de dependências</b></td><td>Define o que vem antes do quê e o overlap entre operações.</td></tr>
-    <tr><td class="cen">6</td><td><b>Tempo e custo do lote</b></td><td>Simula o roteiro para um tamanho de lote: horas e reais por operação e por peça. Não grava nada.</td></tr>
+    <tr><td class="cen">1</td><td><b>Operação / Biblioteca</b></td><td>Cadastra as operações reutilizáveis — o “verbo” do processo. Cadastra-se uma vez e usa-se em todos os roteiros. Aqui também se anexam os documentos que valem em qualquer roteiro que use a operação.</td></tr>
+    <tr><td class="cen">2</td><td><b>Roteiros do item</b></td><td>Cria o roteiro do item escolhido na barra superior e lista os que já existem. É também de onde se copia um roteiro para outro item.</td></tr>
+    <tr><td class="cen">3</td><td><b>Etapas do roteiro</b></td><td>Encadeia as operações no roteiro, com sequência, centro, tempos, refugo, ponto de inspeção e — quando a etapa sai da fábrica — fornecedor e prazo.</td></tr>
+    <tr><td class="cen">4</td><td><b>Recursos e ferramentas</b></td><td>Por etapa: centros alternativos, ferramentas, documentos daquela etapa e o plano de inspeção.</td></tr>
+    <tr><td class="cen">5</td><td><b>Rede de dependências</b></td><td>Define o que vem antes do quê e a sobreposição entre etapas.</td></tr>
+    <tr><td class="cen">6</td><td><b>Tempo e custo do lote</b></td><td>Simula o roteiro para um tamanho de lote: prazo, horas e reais por etapa e por peça. Não grava nada.</td></tr>
   </tbody>
 </table>
 
@@ -1762,6 +1765,7 @@ Unidade, Período e Efic.</p>
     <tr><td><code>Peças por ciclo</code></td><td><code>1</code> ou <code>4</code></td><td>Quantas peças saem no tempo acima. Estampo de quatro cavidades: <code>4</code>. <b>Errar aqui multiplica o custo por quatro.</b></td></tr>
     <tr><td><code>Operadores</code></td><td><code>1</code> ou <code>2</code></td><td>Quantas pessoas atendem a operação ao mesmo tempo. Multiplica só o custo de mão de obra.</td></tr>
     <tr><td><code>Fila</code> · <code>Espera</code> · <code>Movimentação</code></td><td><code>0,10</code></td><td>Fixos por lote. Entram no <b>prazo</b> (lead time) mas <b>não ocupam a máquina</b> — por isso não entram na carga do CRP.</td></tr>
+    <tr><td><code>Refugo padrão (%)</code></td><td><code>3,0</code></td><td>Quanto do que entra na operação <b>não sai bom</b>. É o que diz quantas peças soltar para o pedido fechar — ver 4.4.9.</td></tr>
   </tbody>
 </table>
 
@@ -1864,7 +1868,7 @@ Preparação, Máquina, Peças/ciclo, Equipe e Unidade, com <span class="btn">Ed
   lateral 5/16", e só o que difere é ajustado.
 </div>
 
-<h3>4.4.4 Bloco 3 — Encadear as operações</h3>
+<h3>4.4.4 Aba 3 — Etapas do roteiro</h3>
 <table class="dados">
   <thead><tr><th style="width:20%">Campo</th><th style="width:24%">Exemplo</th><th>O que faz</th></tr></thead>
   <tbody>
@@ -1873,20 +1877,55 @@ Preparação, Máquina, Peças/ciclo, Equipe e Unidade, com <span class="btn">Ed
     <tr><td><code>Centro de trabalho</code></td><td>Laser Calfran</td><td><b>Onde a operação roda.</b> É daqui que sai a tarifa do custo e a carga do CRP. Escolhido numa lista pesquisável — não se digita o número.</td></tr>
     <tr><td><code>Preparação</code></td><td class="mudo">em branco</td><td>Sobrescreve a preparação da biblioteca <b>só neste roteiro</b>.</td></tr>
     <tr><td><code>Máquina</code></td><td class="mudo">em branco</td><td>Idem para o tempo de máquina.</td></tr>
+    <tr><td><code>Refugo desta etapa (%)</code></td><td class="mudo">em branco</td><td>Sobrescreve o refugo da biblioteca. O mesmo “rebarbar” refuga diferente numa peça delicada e numa peça bruta.</td></tr>
+    <tr><td><code>Ponto de inspeção</code></td><td><code>sim</code> · <code>não</code></td><td>Marca que a peça <b>para para ser conferida</b> aqui. A ordem de produção abre o registro de inspeção ao chegar nesta etapa — ver 4.4.10.</td></tr>
   </tbody>
 </table>
+
+<h4>Terceirização na etapa — o caso da cementação</h4>
+<p>
+  Quando a operação escolhida é externa ou de terceiros, os campos de terceirização aparecem
+  <b>na própria etapa</b>, já preenchidos com o que a biblioteca traz. Ajusta-se só o que é diferente
+  neste roteiro: um fornecedor mais rápido, um preço negociado para esta peça.
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:22%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Fornecedor</code></td><td>Têmpera Sul</td><td>Vai para a ordem de serviço desta etapa.</td></tr>
+    <tr><td><code>Custo por peça</code></td><td><code>5,20</code></td><td>Entra no custo do item. Não há tarifa de máquina: a máquina é do fornecedor.</td></tr>
+    <tr><td><code>Prazo (dias)</code></td><td><code>9</code></td><td><b>Dias corridos</b> fora da fábrica. Enquanto a peça está lá, nenhuma máquina nossa fica ocupada — o planejamento só atrasa a etapa seguinte.</td></tr>
+    <tr><td><code>O que remeter</code></td><td>os componentes da demanda</td><td>Define o que sai fisicamente na remessa.</td></tr>
+  </tbody>
+</table>
+<div class="porque">
+  <b>É assim que se cadastra “a bucha vai para a cementação”</b>
+  A balança precisa da bucha — isso é <b>estrutura</b>. A bucha ser torneada aqui, cementada fora e
+  retificada aqui é o <b>roteiro da bucha</b>:
+  <br><br>
+  <code>10 Tornear (interna) · 20 Cementar (TERCEIROS, 9 dias) · 30 Retificar (interna)</code>
+  <br><br>
+  O MRP lê os dois: gera a ordem da bucha antes da balança, abre a ordem de serviço da cementação e
+  soma o prazo do fornecedor ao prazo da bucha. A etapa que sai da fábrica aparece <b>destacada em
+  âmbar</b> na grade, com o fornecedor e o prazo — não é erro, é uma etapa que corre em outro
+  relógio e em outro CNPJ.
+</div>
 <div class="nota">
   <b>Em branco herda</b>
   Deixar <code>Preparação</code> e <code>Máquina</code> vazios faz a operação usar o que está na
   biblioteca. Preencha <b>só o que é diferente neste roteiro</b> — assim, corrigir o tempo na
   biblioteca corrige todos os roteiros que não o sobrescreveram.
 </div>
-<p>A grade mostra Seq, Operação, Centro, Preparação, Máquina, Mão de obra e Peças/ciclo — já com os
-tempos <b>resolvidos</b>, ou seja, o que a operação de fato consome depois de aplicada a herança.
-Cada linha tem <span class="btn">Rec/Ferr</span> e <span class="btn">Remover</span>.</p>
+<p>A grade mostra Seq, Operação, Centro (ou fornecedor), Preparação, Máquina, Refugo e
+<b>Entra</b> — quantas peças aquela etapa precisa processar para o lote digitado no topo da aba.
+Os tempos já vêm <b>resolvidos</b>, ou seja, o que a etapa de fato consome depois da herança.
+Cada linha tem <span class="btn">Detalhar</span> e <span class="btn">Remover</span>.</p>
 
-<h3>4.4.5 Bloco 4 — Recursos e ferramentas <span class="mudo">(botão Rec/Ferr)</span></h3>
-<p>Clicando em <span class="btn">Rec/Ferr</span> numa operação abre-se o painel da operação:</p>
+<h3>4.4.5 Aba 4 — Recursos e ferramentas</h3>
+<p>
+  Clicando em <span class="btn">Detalhar</span> numa etapa, a tela abre esta aba já apontada para ela.
+  São quatro blocos: <b>centros alternativos</b>, <b>ferramentas</b>, <b>documentos</b> e
+  <b>inspeção</b>.
+</p>
 <table class="dados">
   <thead><tr><th style="width:24%">Campo</th><th style="width:20%">Exemplo</th><th>O que faz</th></tr></thead>
   <tbody>
@@ -1896,8 +1935,20 @@ Cada linha tem <span class="btn">Rec/Ferr</span> e <span class="btn">Remover</sp
     <tr><td><code>Ferramenta (ID)</code></td><td>estampo, molde, dispositivo</td><td>Ferramenta necessária. O sistema controla a vida útil e desconta a cada apontamento — ver <span class="tela-out">VPRO1000</span>.</td></tr>
   </tbody>
 </table>
-<p>Use <span class="btn">+ Recurso</span> e <span class="btn">+ Ferramenta</span>. Na lista de recursos,
-<span class="btn">Primário</span> define qual é o principal.</p>
+<p>Use <span class="btn">+ Centro</span> e <span class="btn">+ Ferramenta</span>. Na lista de centros,
+<span class="btn">Tornar principal</span> define qual é o usado por custo, CRP e lead time.</p>
+
+<h4>Documentos da etapa</h4>
+<p>
+  Desenho, instrução de trabalho, ficha de processo, norma ou foto. O sistema guarda a
+  <b>referência</b> (caminho, link ou código no controle de documentos) e a <b>revisão</b> — o
+  problema real no chão de fábrica não é achar o desenho, é o operador abrir uma revisão vencida.
+</p>
+<p>
+  A lista mostra junto os documentos que vêm da <b>operação de biblioteca</b>, marcados como
+  <i>Da operação</i>: a instrução genérica (“como rebarbar”) vale em todo roteiro, o desenho é
+  desta etapa. É exatamente o conjunto que o operador vê no posto.
+</p>
 
 <h3>4.4.6 Bloco 5 — Rede de dependências e overlap</h3>
 <table class="dados">
@@ -1933,12 +1984,12 @@ Cada linha tem <span class="btn">Rec/Ferr</span> e <span class="btn">Remover</sp
   que é o número que deveria estar no campo <code>Tempo Reposição</code> da aba Planejamento do item.
 </p>
 
-<h3>4.4.8 Bloco 6 — Tempo e custo do lote</h3>
+<h3>4.4.8 Aba 6 — Tempo e custo do lote</h3>
 <p>
-  O botão <span class="btn">Tempo e custo do lote</span> abre a pergunta que a engenharia faz o tempo
-  todo: <b>quanto custa e quanto demora fabricar 50?</b> Informe o tamanho do lote e a tela mostra,
-  operação a operação, as horas de máquina, as horas de mão de obra, as horas paradas e o custo —
-  com o total e o <b>custo por peça</b> no rodapé. Nada é gravado: é simulação.
+  A aba responde à pergunta que a engenharia faz o tempo todo: <b>quanto custa e quanto demora
+  fabricar 50?</b> Informe o tamanho do lote, clique em <span class="btn">Calcular prazo</span>, e a
+  tela mostra, etapa a etapa, as horas de máquina, as horas de mão de obra, as horas paradas e o
+  custo — com o total e o <b>custo por peça</b> no rodapé. Nada é gravado: é simulação.
 </p>
 <table class="dados">
   <thead><tr><th style="width:22%">Coluna</th><th>De onde sai</th></tr></thead>
@@ -1961,6 +2012,14 @@ Cada linha tem <span class="btn">Rec/Ferr</span> e <span class="btn">Remover</sp
   fabricação — e é ele que some quando o roteiro guarda um “tempo padrão” só.
 </div>
 
+<div class="nota">
+  <b>Dois relógios, nunca somados</b>
+  Quando o roteiro tem uma etapa em terceiro, a faixa no alto da aba mostra <b>duas</b> medidas:
+  as horas de <b>trabalho nosso</b> (8 h por dia útil) e os <b>dias corridos</b> no fornecedor,
+  fim de semana incluído. São relógios diferentes — somá-los num número só daria uma conta que não
+  bate com nenhum dos dois. O item só fica pronto depois dos dois.
+</div>
+
 <div class="atencao">
   <b>Sem tarifa cadastrada, o custo sai zero</b>
   A tarifa vem do <b>custo/hora do centro de trabalho</b>. Se alguma operação estiver sem tarifa, a
@@ -1980,6 +2039,58 @@ Cada linha tem <span class="btn">Rec/Ferr</span> e <span class="btn">Remover</sp
   costuma rodar. Um custo por peça fora do esperado quase sempre é <code>Peças por ciclo</code> errado.
 </div>
 
+<h3>4.4.9 Refugo por operação — quantas peças soltar</h3>
+<p>
+  A pergunta que o planejador faz todo dia: se o corte refuga 3 % e a solda 1 %, quantas peças
+  preciso <b>soltar</b> para entregar 100 boas?
+</p>
+<p>A conta vai de trás para frente — <code>entra = sai ÷ (1 − refugo)</code>:</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:10%">Seq</th><th style="width:26%">Operação</th><th class="cen" style="width:16%">Refugo</th><th class="cen" style="width:18%">Entram</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">30</td><td>Retificar</td><td class="cen">2,0 %</td><td class="cen"><b>102,04</b></td><td>Para sair 100 boas depois de perder 2 %.</td></tr>
+    <tr><td class="cen">20</td><td>Cementar</td><td class="cen">1,5 %</td><td class="cen"><b>103,59</b></td><td>Para entregar 102,04 à retífica.</td></tr>
+    <tr><td class="cen">10</td><td>Tornear</td><td class="cen">3,0 %</td><td class="cen"><b>106,80</b></td><td>É a <b>quantidade a soltar</b>: acumula o refugo de todas as seguintes.</td></tr>
+  </tbody>
+</table>
+<div class="porque">
+  <b>Sem isso a ordem sai curta</b>
+  O planejador solta 100, o corte entrega 97, a solda entrega 96 — e faltam quatro peças descobertas
+  só na expedição, quando não há mais tempo de refazer. A faixa verde no alto da aba
+  <b>Etapas do roteiro</b> mostra a conta pronta para o lote que se digitar, e a coluna
+  <b>Entra</b> mostra etapa a etapa.
+  <br><br>
+  Esse número não fica só na tela: o <b>prazo</b> usa a quantidade de cada etapa (a primeira demora
+  mais porque processa mais), a <b>capacidade reservada na máquina</b> também, e a <b>ordem de
+  produção</b> grava, por etapa, quanto ela precisa processar.
+</div>
+<div class="nota">
+  <b>Refugo da estrutura × refugo da operação</b>
+  Não são a mesma coisa e os dois existem. Na <b>estrutura</b>, a perda é do material consumido —
+  a sobra de chapa que não vira peça. Na <b>operação</b>, é a peça que está sendo feita que vai para
+  o lixo. Ambos entram na conta, e usam a mesma fórmula.
+</div>
+
+<h3>4.4.10 Ponto de inspeção no roteiro</h3>
+<p>
+  Marcar que depois de uma etapa a peça <b>para para ser conferida</b>. Faz-se em dois passos:
+  marcar a etapa (aba 3) e descrever o plano (aba 4).
+</p>
+<table class="dados">
+  <thead><tr><th style="width:22%">Campo</th><th style="width:26%">Exemplo</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>Onde</code></td><td><code>No processo</code></td><td>Processo, recebimento ou expedição.</td></tr>
+    <tr><td><code>O que inspecionar</code></td><td>Dureza superficial após cementação</td><td>É o que o inspetor vê na tela de qualidade.</td></tr>
+    <tr><td><code>Amostra</code></td><td><code>5</code></td><td>Quantas peças do lote são medidas.</td></tr>
+    <tr><td><code>Aceitação (%)</code></td><td><code>0</code></td><td>Percentual de defeituosas tolerado.</td></tr>
+  </tbody>
+</table>
+<p>
+  Quando a ordem de produção nasce do roteiro, cada etapa marcada <b>com plano ativo</b> abre
+  sozinha um registro de inspeção pendente, já ligado à ordem. Etapa marcada <b>sem plano</b> não
+  gera registro — não há o que conferir — e a tela avisa.
+</p>
+
 <h2>4.5 Serviços de terceiros <span class="tela">VTPS0100</span></h2>
 <p>
   A cementação e a usinagem da bucha interna são feitas fora. No ERP isso não é uma operação de máquina:
@@ -1998,6 +2109,24 @@ Cada linha tem <span class="btn">Rec/Ferr</span> e <span class="btn">Remover</sp
   <code>ALM-TERC</code> mas continua sendo seu) → registra-se o <b>retorno</b> → o material volta ao
   <code>ALM-PROC</code> já como bucha acabada.
 </p>
+
+<h4>Como a tela é organizada</h4>
+<p>Quatro abas — as quatro perguntas de quem manda peça para fora:</p>
+<table class="dados">
+  <thead><tr><th class="cen" style="width:6%">#</th><th style="width:26%">Aba</th><th>O que se faz nela</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td><b>Preços de serviço</b></td><td>Quanto custa. O preço vale por <b>item × fornecedor × operação × data</b>: vale o mais recente até a data da ordem. Frete (fixo ou percentual), imposto, fator de conversão e fórmula. O botão <span class="btn">Conferir custo final</span> mostra bruto + frete + imposto, que é o número que entra no custo da peça.</td></tr>
+    <tr><td class="cen">2</td><td><b>Ordens de serviço</b></td><td>O que está lá fora agora. Cada ordem nasce de uma etapa externa do roteiro quando a OF é criada. A grade mostra <b>enviado</b>, <b>voltou</b> e <b>está lá</b> — e destaca em âmbar as <b>vencidas</b>, que ainda têm peça no fornecedor com a data prometida já passada.</td></tr>
+    <tr><td class="cen">3</td><td><b>Remessa e retorno</b></td><td>O que fisicamente saiu e voltou, com nota fiscal e lote. O saldo <b>em poder do terceiro</b> sai daqui. Cada lançamento leva uma chave própria: clicar duas vezes não registra a mesma remessa duas vezes.</td></tr>
+    <tr><td class="cen">4</td><td><b>Conversões de unidade</b></td><td>Quando o fornecedor cobra por quilo e estocamos por peça. A conversão do item, quando existe, tem prioridade sobre a global.</td></tr>
+  </tbody>
+</table>
+<div class="nota">
+  <b>Reajuste e troca de terceirizado em lote</b>
+  Marque os preços na grade e use <b>Reajustar</b> (com o motivo, que fica no histórico junto com o
+  valor anterior) ou <b>Copiar/mover</b> para outro fornecedor — é o que se faz ao trocar de
+  terceirizado sem redigitar preço por preço.
+</div>
 
 <h2>4.6 Configurador de Produto <span class="tela">VCFG0100</span></h2>
 <p>

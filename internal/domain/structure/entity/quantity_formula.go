@@ -63,7 +63,20 @@ func applyRounding(value float64, mode string, scale int16) float64 {
 // "perguntas" do configurador, por exemplo COMPRIMENTO e PROFUNDIDADE); sem
 // fórmula, ou quando ela não puder ser avaliada, vale a quantidade fixa.
 // O segundo retorno indica se a fórmula foi de fato aplicada.
+// O resultado sai na unidade de ESTOQUE do componente: a fórmula e a quantidade
+// fixa são escritas na unidade da estrutura, e quem consome (MRP, ordem, custo)
+// precisa da unidade em que o item é estocado. Converter aqui, num lugar só,
+// evita que cada rotina aplique — ou esqueça de aplicar — o fator por conta
+// própria; foi ter duas contas de perda espalhadas que já produziu uma
+// divergência silenciosa entre o que o MRP comprava e o que a ordem consumia.
 func (s *ItemStructure) ResolvedQuantity(vars map[string]float64) (float64, bool) {
+	valor, usouFormula := s.quantidadeNaUnidadeDaEstrutura(vars)
+	return valor * s.FatorParaEstoque(), usouFormula
+}
+
+// quantidadeNaUnidadeDaEstrutura devolve o número como a engenharia escreveu,
+// antes da conversão. É o que a tela mostra e o que a fórmula calcula.
+func (s *ItemStructure) quantidadeNaUnidadeDaEstrutura(vars map[string]float64) (float64, bool) {
 	if !s.HasQuantityFormula() {
 		return s.Quantity, false
 	}

@@ -147,9 +147,10 @@ func (ns NullBaseDateEnum) Value() (driver.Value, error) {
 type CapacityPeriodEnum string
 
 const (
-	CapacityPeriodEnumMINUTO CapacityPeriodEnum = "MINUTO"
-	CapacityPeriodEnumHORA   CapacityPeriodEnum = "HORA"
-	CapacityPeriodEnumDIA    CapacityPeriodEnum = "DIA"
+	CapacityPeriodEnumMINUTO  CapacityPeriodEnum = "MINUTO"
+	CapacityPeriodEnumHORA    CapacityPeriodEnum = "HORA"
+	CapacityPeriodEnumDIA     CapacityPeriodEnum = "DIA"
+	CapacityPeriodEnumSEGUNDO CapacityPeriodEnum = "SEGUNDO"
 )
 
 func (e *CapacityPeriodEnum) Scan(src interface{}) error {
@@ -5416,6 +5417,8 @@ type Item struct {
 	// Participação acumulada do item no valor total consumido (0-100).
 	AbcSharePct     pgtype.Numeric
 	AbcCalculatedAt pgtype.Timestamptz
+	// Família de PREPARAÇÃO: agrupa itens que custam o mesmo para trocar na máquina (ex.: CHAPA-3MM). Independe da classificação comercial.
+	SetupFamily pgtype.Text
 }
 
 type ItemBusinessCodeSequence struct {
@@ -5586,9 +5589,10 @@ type ItemStandardCost struct {
 }
 
 type ItemStructure struct {
-	ID                 int64
-	ParentMask         pgtype.Text
-	Quantity           float64
+	ID         int64
+	ParentMask pgtype.Text
+	Quantity   float64
+	// Unidade em que a engenharia escreveu a quantidade. Pode diferir da unidade de estoque do item — nesse caso é obrigatória uma conversão cadastrada.
 	UnitOfMeasurement  UnitOfMeasurementEnum
 	LossPercentage     float64
 	Sequence           int32
@@ -5622,6 +5626,10 @@ type ItemStructure struct {
 	// Entra na linha crítica analisada pelo plano mestre.
 	IsCriticalMps       bool
 	GeneratesInspection bool
+	// Quantidade na unidade de ESTOQUE do item filho. É o número que MRP, ordem, custo e apontamento leem. Nulo só em linhas anteriores à migração 354.
+	QuantityStockUom pgtype.Numeric
+	// Fator aplicado (1 unidade_da_estrutura = fator × unidade_de_estoque), congelado na gravação. Não acompanha mudanças posteriores no cadastro de conversões.
+	ConversionFactor pgtype.Numeric
 }
 
 // Quem alterou o quê na estrutura de produto, com o antes e o depois.
@@ -5784,10 +5792,11 @@ type MachineConsumable struct {
 }
 
 type MachineDowntime struct {
-	ID                 int64
-	EnterpriseID       int64
-	MachineID          int64
-	StartsAt           pgtype.Timestamptz
+	ID           int64
+	EnterpriseID int64
+	MachineID    int64
+	StartsAt     pgtype.Timestamptz
+	// Fim da parada. Nulo = parada em aberto, acontecendo agora; o planejamento a considera ocupada até o instante atual.
 	EndsAt             pgtype.Timestamptz
 	DowntimeType       string
 	Reason             string
@@ -6448,6 +6457,26 @@ type Operation struct {
 	LeadTimeDays         *int32
 	ThirdPartyRemittance string
 	EnterpriseID         int64
+	// Refugo padrão da operação, em %. Quanto do que entra não sai bom. Nunca 100: a operação inteira seria perda.
+	ScrapPct pgtype.Numeric
+}
+
+// Desenho, instrução de trabalho e ficha de processo da operação. Vinculado à operação de biblioteca (vale em todo roteiro) OU a uma etapa de roteiro (é do item).
+type OperationDocument struct {
+	ID               int64
+	OperationID      *int64
+	RouteOperationID *int64
+	Kind             string
+	Title            string
+	// Onde o documento está: caminho, URL ou código no controle de documentos. O sistema não guarda o arquivo, guarda a referência e a revisão vigente.
+	Reference    pgtype.Text
+	Revision     pgtype.Text
+	Instructions pgtype.Text
+	IsActive     bool
+	EnterpriseID int64
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
 }
 
 type OperationalMutationAudit struct {
@@ -6934,6 +6963,8 @@ type ProductionOrderOperation struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	EnterpriseID      int64
+	// Quantidade que deve ENTRAR nesta operação para a ordem fechar a quantidade boa, já considerando o refugo das operações seguintes.
+	PlannedQty pgtype.Numeric
 }
 
 type ProductionOrderOperationToolSerial struct {
@@ -7905,6 +7936,10 @@ type RouteOperation struct {
 	CostPerUnit          pgtype.Numeric
 	LeadTimeDays         *int32
 	ThirdPartyRemittance pgtype.Text
+	// Refugo desta etapa, em %. Nulo = herda o refugo da operação de biblioteca.
+	ScrapPct pgtype.Numeric
+	// Etapa com inspeção de qualidade. A ordem de produção gera o registro de inspeção ao chegar nela.
+	InspectionRequired bool
 }
 
 type RouteOperationNetwork struct {

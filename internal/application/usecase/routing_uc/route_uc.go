@@ -54,7 +54,7 @@ func (uc *RouteUseCase) Create(ctx context.Context, dto request.CreateRouteDTO) 
 		return nil, fmt.Errorf("generating route code: %w", err)
 	}
 
-	rt, err := entity.NewManufacturingRoute(code, itemCode, dto.Mask, alt, dto.Description, dto.IsStandard, dto.ValidFrom, dto.ValidTo, actor)
+	rt, err := entity.NewManufacturingRoute(code, itemCode, dto.Mask, alt, dto.Description, dto.IsStandard, dto.ValidFrom.Ponteiro(), dto.ValidTo.Ponteiro(), actor)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +74,8 @@ func (uc *RouteUseCase) Update(ctx context.Context, dto request.UpdateRouteDTO) 
 	rt.Description = dto.Description
 	rt.Situation = entity.RouteSituation(dto.Situation)
 	rt.IsStandard = dto.IsStandard
-	rt.ValidFrom = dto.ValidFrom
-	rt.ValidTo = dto.ValidTo
+	rt.ValidFrom = dto.ValidFrom.Ponteiro()
+	rt.ValidTo = dto.ValidTo.Ponteiro()
 
 	updated, err := uc.repo.UpdateRoute(ctx, rt)
 	if err != nil {
@@ -100,9 +100,18 @@ func (uc *RouteUseCase) GetDetail(ctx context.Context, id int64) (*response.Rout
 		return nil, err
 	}
 
+	// Quantidade que entra em cada etapa para o roteiro entregar 1 peça boa.
+	// Com refugo essa conta é o que separa "soltei 100 e entreguei 96" de uma
+	// ordem que fecha. A referência é 1 para a tela poder escalar para qualquer
+	// lote sem outra chamada; o cálculo é linear na quantidade boa.
+	const qtdeDeReferencia = 1.0
+	entraPorEtapa := entity.QuantidadePorOperacao(ops, edges, qtdeDeReferencia)
+
 	opResps := make([]response.RouteOperationResponse, 0, len(ops))
 	for _, op := range ops {
-		opResps = append(opResps, toRouteOpResponse(op))
+		r := toRouteOpResponse(op)
+		r.InputQty = entraPorEtapa[op.ID]
+		opResps = append(opResps, r)
 	}
 
 	edgeResps := make([]response.NetworkEdgeResponse, 0, len(edges))
@@ -124,11 +133,31 @@ func (uc *RouteUseCase) GetDetail(ctx context.Context, id int64) (*response.Rout
 		resResps = append(resResps, toResourceResponse(r))
 	}
 
+	// Documento e inspeção falham em silêncio de propósito: são enriquecimento
+	// da tela, e um roteiro sem nenhum dos dois é o caso normal. Derrubar a
+	// leitura do roteiro inteiro porque a leitura de anexos falhou seria pior
+	// que mostrá-lo sem eles.
+	docResps := []response.OperationDocumentResponse{}
+	if docs, errDoc := uc.repo.ListDocumentsByRoute(ctx, id); errDoc == nil {
+		docResps = mapDocumentos(docs)
+	}
+	insResps := []response.RouteInspectionResponse{}
+	if ins, errIns := uc.repo.ListInspectionsByRoute(ctx, id); errIns == nil {
+		insResps = make([]response.RouteInspectionResponse, 0, len(ins))
+		for _, i := range ins {
+			insResps = append(insResps, toInspectionResponse(i))
+		}
+	}
+
 	return &response.RouteDetailResponse{
-		Route:      *toRouteResponse(rt),
-		Operations: opResps,
-		Network:    edgeResps,
-		Resources:  resResps,
+		Route:        *toRouteResponse(rt),
+		Operations:   opResps,
+		Network:      edgeResps,
+		Resources:    resResps,
+		Documents:    docResps,
+		Inspections:  insResps,
+		ReferenceQty: qtdeDeReferencia,
+		ReleaseQty:   entity.QuantidadeASoltar(ops, edges, qtdeDeReferencia),
 	}, nil
 }
 
@@ -299,13 +328,43 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 	op.CostPerUnit = dto.CostPerUnit
 	op.LeadTimeDays = dto.LeadTimeDays
 	op.ThirdPartyRemittance = remittance
+	if err := validaRefugo(dto.ScrapPct); err != nil {
+		return nil, err
+	}
+	op.ScrapPct = dto.ScrapPct
+	op.InspectionRequired = dto.InspectionRequired
 
 	created, err := uc.repo.AddRouteOperation(ctx, op)
 	if err != nil {
 		return nil, err
 	}
-	r := toRouteOpResponse(created)
+	r := uc.etapaEnriquecida(ctx, dto.RouteID, created)
 	return &r, nil
+}
+
+// etapaEnriquecida devolve a etapa como ela aparece ao recarregar a tela: com
+// nome da operação, nome do centro de trabalho, tempo efetivo, refugo efetivo e
+// quantidade de entrada.
+//
+// A gravação devolve só a linha crua da tabela — sem os campos que vêm do JOIN
+// com a operação de biblioteca. A tela que confiasse nessa resposta mostraria
+// uma linha em branco até alguém recarregar, e o usuário concluiria que não
+// gravou. Reler custa uma consulta e elimina a dúvida.
+func (uc *RouteUseCase) etapaEnriquecida(ctx context.Context, routeID int64, crua *entity.RouteOperation) response.RouteOperationResponse {
+	ops, err := uc.repo.GetRouteOperations(ctx, routeID)
+	if err != nil {
+		return toRouteOpResponse(crua)
+	}
+	edges, _ := uc.repo.GetNetworkEdges(ctx, routeID)
+	entra := entity.QuantidadePorOperacao(ops, edges, 1)
+	for _, op := range ops {
+		if op.ID == crua.ID {
+			r := toRouteOpResponse(op)
+			r.InputQty = entra[op.ID]
+			return r
+		}
+	}
+	return toRouteOpResponse(crua)
 }
 
 func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateRouteOperationDTO) (*response.RouteOperationResponse, error) {
@@ -342,15 +401,42 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 		CostPerUnit:          dto.CostPerUnit,
 		LeadTimeDays:         dto.LeadTimeDays,
 		ThirdPartyRemittance: remittance,
+		ScrapPct:             dto.ScrapPct,
+		InspectionRequired:   dto.InspectionRequired,
 		Situation:            entity.RouteOpSituation(dto.Situation),
 		Notes:                dto.Notes,
+	}
+	if err := validaRefugo(dto.ScrapPct); err != nil {
+		return nil, err
 	}
 	updated, err := uc.repo.UpdateRouteOperation(ctx, op)
 	if err != nil {
 		return nil, err
 	}
-	r := toRouteOpResponse(updated)
+	routeID, errRota := uc.repo.RouteIDOfOperation(ctx, dto.ID)
+	if errRota != nil {
+		r := toRouteOpResponse(updated)
+		return &r, nil
+	}
+	r := uc.etapaEnriquecida(ctx, routeID, updated)
 	return &r, nil
+}
+
+// validaRefugo recusa o que o banco também recusaria, mas com a explicação
+// que o CHECK não dá. 100% de refugo não é um caso extremo: é a operação
+// inteira jogada fora, e a conta `sai / (1 − refugo)` estouraria.
+func validaRefugo(pct *float64) error {
+	if pct == nil {
+		return nil
+	}
+	if *pct < 0 {
+		return errorsuc.NewValidationError("o refugo da operação não pode ser negativo")
+	}
+	if *pct >= 100 {
+		return errorsuc.NewValidationError(
+			"o refugo da operação precisa ser menor que 100%: com 100% nada sai bom e não existe quantidade a soltar")
+	}
+	return nil
 }
 
 func normalizeThirdPartyRemittancePtr(value *string) (*string, error) {
@@ -455,6 +541,9 @@ func toRouteOpResponse(op *entity.RouteOperation) response.RouteOperationRespons
 		CostPerUnit:          op.CostPerUnit,
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: op.ThirdPartyRemittance,
+		ScrapPct:             op.ScrapPct,
+		EffectiveScrap:       op.EffectiveScrap,
+		InspectionRequired:   op.InspectionRequired,
 		Situation:            string(op.Situation),
 		Notes:                op.Notes,
 	}

@@ -23,7 +23,12 @@ func (h *MRPCalculationHandler) Run(w http.ResponseWriter, r *http.Request) {
 	result, err := h.runUC.Execute(r.Context(), dto)
 	if err != nil {
 		if errors.Is(err, mrprepository.ErrCalculationInProgress) {
-			security.RespondErrorCode(w, http.StatusConflict, "MRP_CALCULO_EM_ANDAMENTO", "já existe um cálculo MRP em andamento para este plano")
+			// Sem dizer o que fazer, o usuário só pode tentar de novo às cegas.
+			// Um cálculo real termina em segundos; se a mensagem insistir, o que
+			// está travado é destroço de execução interrompida — e o próprio
+			// sistema o libera passado o limite.
+			security.RespondErrorCode(w, http.StatusConflict, "MRP_CALCULO_EM_ANDAMENTO",
+				"já existe um cálculo MRP em andamento para este plano — aguarde ele terminar e tente de novo")
 			return
 		}
 		if errors.Is(err, mrp_calculation_uc.ErrInvalidPlanCode) || errors.Is(err, mrp_calculation_uc.ErrInvalidInitialOrderNumber) {

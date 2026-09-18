@@ -7,9 +7,11 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	toolentity "github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 // OrderOperationsUseCase manages production order operations (exploding route + advancing status).
@@ -22,11 +24,19 @@ type OrderOperationsUseCase struct {
 
 // ExplodeRoute creates production_order_operations from a manufacturing route.
 // Called after creating a production order when route_id is provided.
+//
+// Cada etapa nasce com a quantidade que precisa PROCESSAR, não com a quantidade
+// da ordem. Com refugo as duas divergem: para entregar 100 boas, a etapa final
+// recebe 100 e a primeira recebe mais, acumulando o refugo de todas as
+// seguintes. Sem isso o apontamento cobraria 100 peças de uma operação que
+// tinha de fazer 106, e a ordem fecharia faltando peça.
 func (uc *OrderOperationsUseCase) ExplodeRoute(ctx context.Context, orderID, routeID int64) ([]*response.ProductionOrderOperationResponse, error) {
 	ops, err := uc.Q.GetRouteOpsForExplode(ctx, routeID)
 	if err != nil {
 		return nil, fmt.Errorf("fetching route operations: %w", err)
 	}
+
+	entraPorEtapa := uc.quantidadePorEtapa(ctx, orderID, routeID, ops)
 
 	out := make([]*response.ProductionOrderOperationResponse, 0, len(ops))
 	for _, op := range ops {
@@ -38,12 +48,19 @@ func (uc *OrderOperationsUseCase) ExplodeRoute(ctx context.Context, orderID, rou
 			WorkCenterID:      op.WorkCenterID,
 			PlannedHours:      pgutil.ToPgNumericFromFloat64(op.PlannedHours),
 			SetupHours:        pgutil.ToPgNumericFromFloat64(op.SetupHours),
+			PlannedQty:        pgutil.ToPgNumericFromFloat64(entraPorEtapa[op.ID]),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("creating order operation seq %d: %w", op.Sequence, err)
 		}
 		out = append(out, pooToResponse(poo))
 	}
+
+	// Etapas marcadas como ponto de inspeção abrem o registro de inspeção junto
+	// com a ordem. Falhar aqui não invalida a ordem: a ordem existe, a inspeção
+	// é um controle sobre ela — derrubar a criação da ordem por causa do plano
+	// de qualidade deixaria a fábrica sem ordem nenhuma.
+	uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops)
 	if uc.MachinePlanning != nil {
 		if err := uc.MachinePlanning.ApplyMachinePlanToProduction(ctx, orderID); err != nil {
 			return nil, err
@@ -51,6 +68,79 @@ func (uc *OrderOperationsUseCase) ExplodeRoute(ctx context.Context, orderID, rou
 		return uc.ListOperations(ctx, orderID)
 	}
 	return out, nil
+}
+
+// quantidadePorEtapa roda a cascata de refugo do roteiro sobre a quantidade boa
+// da ordem, usando a MESMA função de domínio que o roteiro e o MRP usam.
+// Se a quantidade da ordem não puder ser lida, cada etapa fica com a quantidade
+// que o roteiro entrega — nunca com zero, que faria o apontamento parecer
+// concluído antes de começar.
+func (uc *OrderOperationsUseCase) quantidadePorEtapa(
+	ctx context.Context, orderID, routeID int64, ops []sqlc.DBRouteOpForExplode,
+) map[int64]float64 {
+	boas, _, err := uc.Q.GetProductionOrderQty(ctx, orderID)
+	if err != nil || boas <= 0 {
+		boas = 1
+	}
+
+	etapas := make([]*routingentity.RouteOperation, 0, len(ops))
+	for _, op := range ops {
+		etapas = append(etapas, &routingentity.RouteOperation{
+			ID: op.ID, Sequence: op.Sequence, EffectiveScrap: op.EffectiveScrap,
+		})
+	}
+
+	var arestas []*routingentity.NetworkEdge
+	if edges, errRede := uc.Q.GetRouteNetworkForExplode(ctx, routeID); errRede == nil {
+		for _, e := range edges {
+			arestas = append(arestas, &routingentity.NetworkEdge{
+				PredecessorID: e.PredecessorID, SuccessorID: e.SuccessorID, OverlapPct: e.OverlapPct,
+			})
+		}
+	}
+	return routingentity.QuantidadePorOperacao(etapas, arestas, boas)
+}
+
+// abrirInspecoesDaOrdem cria um registro de inspeção PENDENTE para cada etapa
+// marcada no roteiro que tenha plano de inspeção ativo. Etapa marcada sem plano
+// não gera registro: o registro precisa dizer o que inspecionar.
+func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
+	ctx context.Context, orderID, routeID int64, ops []sqlc.DBRouteOpForExplode,
+) {
+	temInspecao := false
+	for _, op := range ops {
+		if op.InspectionRequired {
+			temInspecao = true
+			break
+		}
+	}
+	if !temInspecao {
+		return
+	}
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return
+	}
+	etapas, err := uc.Q.ListInspectionStepsForOrderRoute(ctx, sqlc.ListInspectionStepsForOrderRouteParams{
+		RouteID: routeID, EnterpriseID: empresa,
+	})
+	if err != nil {
+		return
+	}
+	for _, etapa := range etapas {
+		if !etapa.PlanID.Valid || etapa.ItemCode == nil {
+			continue // etapa marcada mas ainda sem plano: nada a inspecionar
+		}
+		_, _ = uc.Q.CreateQualityRecord(ctx, sqlc.CreateQualityRecordParams{
+			PlanID:            etapa.PlanID.Int64,
+			ProductionOrderID: pgutil.ToPgInt8Ptr(&orderID),
+			ItemCode:          *etapa.ItemCode,
+			// Quantidade zerada e resultado PENDENTE: o registro nasce aberto,
+			// esperando o inspetor. Quem preenche é a tela de qualidade.
+			InspectedQty: 0,
+			Result:       sqlc.InspectionResultEnum("PENDENTE"),
+		})
+	}
 }
 
 // ListOperations lists operations for a production order.

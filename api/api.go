@@ -283,9 +283,14 @@ func (app *application) mount() chi.Router {
 	itemHandler := handler.NewCreateItemHandler(createItemUc, updateItemUc, findItemByCodeUc, listItemsUC, listItemsWithMasksUC)
 
 	// Item Structure
+	// Conversões por item (Cadastro de Conversões por Item). Criado antes da
+	// estrutura porque é ela quem valida a unidade da linha contra a unidade de
+	// estoque do componente.
+	itemConversionUC := item_conversion_uc.NewItemConversionUseCase(itemConversionRepo.New(queries, app.db.Pool), authService, itemRepo)
+
 	itemRepoStructure := structure.NewItemStructureRepository(queries).WithHistory(app.db.Pool)
-	createStructureUc := structure_uc.NewCreateStructureComponentUseCase(itemRepoStructure, authService, itemRepo)
-	updateStructureUc := structure_uc.NewUpdateStructureComponentUseCase(itemRepoStructure, authService, itemRepo)
+	createStructureUc := structure_uc.NewCreateStructureComponentUseCase(itemRepoStructure, authService, itemRepo, itemConversionUC)
+	updateStructureUc := structure_uc.NewUpdateStructureComponentUseCase(itemRepoStructure, authService, itemRepo, itemConversionUC)
 	getAllStructureUc := structure_uc.NewGetAllDirectChildrenUseCase(itemRepoStructure, authService, itemRepo)
 	treeStructureUc := structure_uc.NewGetStructureTreeUseCase(itemRepoStructure, authService, itemRepo)
 	deleteStructureUc := structure_uc.NewDeleteStructureComponentUseCase(itemRepoStructure, authService, itemRepo)
@@ -687,8 +692,6 @@ func (app *application) mount() chi.Router {
 	entryOperationUC := entry_operation_uc.NewEntryOperationUseCase(entryOperationRepo.New(queries, app.db.Pool))
 	entryOperationHandler := handler.NewEntryOperationHandler(entryOperationUC)
 
-	// item unit conversions (Cadastro de Conversões por Item)
-	itemConversionUC := item_conversion_uc.NewItemConversionUseCase(itemConversionRepo.New(queries, app.db.Pool), authService, itemRepo)
 	itemConversionHandler := handler.NewItemConversionHandler(itemConversionUC)
 
 	// purchase price tables (Tabela de Preço de Compra)
@@ -2074,6 +2077,8 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", routingHandler.GetOperation)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", routingHandler.UpdateOperation)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", routingHandler.DeactivateOperation)
+				// Documentos que valem em todo roteiro que usa a operação.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/documents", routingHandler.ListOperationDocuments)
 			})
 			r.Route("/routes", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", routingHandler.CreateRoute)
@@ -2087,6 +2092,13 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/edges", routingHandler.SetNetworkEdge)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/edges", routingHandler.DeleteNetworkEdge)
 				})
+			})
+			// Documentos de processo: o vínculo (operação de biblioteca ou etapa)
+			// vem no corpo, por isso o cadastro é uma rota só.
+			r.Route("/documents", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", routingHandler.AddOperationDocument)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{docId}", routingHandler.UpdateOperationDocument)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{docId}", routingHandler.RemoveOperationDocument)
 			})
 			r.Route("/route-operations", func(r chi.Router) {
 				r.Route("/{routeId}", func(r chi.Router) {
@@ -2105,6 +2117,11 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{opId}/tools", toolHandler.AddRouteOpTool)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{opId}/tools", toolHandler.ListRouteOpTools)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{opId}/tools/{toolLinkId}", toolHandler.RemoveRouteOpTool)
+					// Documentos de processo da etapa (desenho, instrução, ficha).
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{opId}/documents", routingHandler.ListStepDocuments)
+					// Ponto de inspeção amarrado à etapa.
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{opId}/inspections", routingHandler.AddRouteInspection)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{opId}/inspections/{inspectionId}", routingHandler.RemoveRouteInspection)
 				})
 			})
 			// Tooling master with useful-life tracking (R3).
