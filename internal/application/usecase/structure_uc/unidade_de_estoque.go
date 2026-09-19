@@ -57,11 +57,18 @@ func resolverUnidadeDeEstoque(
 		return 0, 0, fmt.Errorf("consultando a conversão de unidade do item %d: %w", itemCode, errConv)
 	}
 	if !achou || f <= 0 {
+		// A conversão pode ser cadastrada em qualquer direção — o sistema usa a
+		// inversa quando só uma existe. Dizer as duas importa: "quantas UN tem
+		// 1 MM" dá 0,000167, um número que ninguém tira de um desenho; "1 UN
+		// tem 6000 MM" é o que está escrito na nota do fornecedor.
 		return 0, 0, errorsuc.NewValidationError(fmt.Sprintf(
-			"o componente %s é estocado em %s, mas a estrutura está em %s e não existe conversão cadastrada "+
-				"entre as duas. Cadastre a conversão do item (quantos %s tem 1 %s) ou use %s na estrutura — "+
-				"sem isso o sistema reservaria %s achando que são %s.",
-			itemLabel, doEstoque, daEstrutura, doEstoque, daEstrutura, doEstoque, daEstrutura, doEstoque))
+			"o componente %s é estocado em %s e a estrutura está em %s, mas não existe conversão entre as duas. "+
+				"Cadastre a conversão do item no sentido que você souber — quantos %s tem 1 %s, ou quantos %s tem 1 %s "+
+				"(o sistema usa a inversa automaticamente) — ou escreva a quantidade em %s. "+
+				"Sem a conversão o planejamento leria %.4g %s como se fossem %s.",
+			itemLabel, doEstoque, daEstrutura,
+			daEstrutura, doEstoque, doEstoque, daEstrutura,
+			doEstoque, quantidade, daEstrutura, doEstoque))
 	}
 	return quantidade * f, f, nil
 }

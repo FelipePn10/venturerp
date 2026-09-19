@@ -71,7 +71,15 @@ func applyRounding(value float64, mode string, scale int16) float64 {
 // divergência silenciosa entre o que o MRP comprava e o que a ordem consumia.
 func (s *ItemStructure) ResolvedQuantity(vars map[string]float64) (float64, bool) {
 	valor, usouFormula := s.quantidadeNaUnidadeDaEstrutura(vars)
-	return valor * s.FatorParaEstoque(), usouFormula
+	if !usouFormula {
+		// Sem fórmula, a conversão já foi feita na gravação com a precisão
+		// inteira do fator — usar a coluna evita recalcular pelo fator
+		// arredondado e chegar a outro número.
+		return s.QuantidadeNaUnidadeDeEstoque(), false
+	}
+	// Com fórmula o resultado muda a cada configuração, então a coluna gravada
+	// (que vale para a quantidade fixa) não serve: aqui o fator é aplicado.
+	return valor * s.FatorParaEstoque(), true
 }
 
 // quantidadeNaUnidadeDaEstrutura devolve o número como a engenharia escreveu,

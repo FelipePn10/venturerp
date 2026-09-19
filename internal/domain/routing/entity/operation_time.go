@@ -8,6 +8,9 @@ const DefaultWorkingHoursPerDay = 8.0
 
 // Time-unit codes stored in operations.time_unit / route_operations.time_unit.
 const (
+	// A ficha de fábrica vem em segundos; aceitar a unidade evita que o
+	// usuário converta à mão e arredonde no caminho.
+	TimeUnitSecond = "SEGUNDO"
 	TimeUnitMinute = "MIN"
 	TimeUnitHour   = "HORA"
 	TimeUnitDay    = "DIA"
@@ -16,6 +19,8 @@ const (
 // hoursMul returns the multiplier that converts a value expressed in `unit` to hours.
 func hoursMul(unit string) float64 {
 	switch unit {
+	case TimeUnitSecond:
+		return 1.0 / 3600.0
 	case TimeUnitMinute:
 		return 1.0 / 60.0
 	case TimeUnitDay:
