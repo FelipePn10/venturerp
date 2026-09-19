@@ -1746,7 +1746,7 @@ Unidade, Período e Efic.</p>
   <tbody>
     <tr><td><code>Nome</code></td><td><code>Corte a laser</code></td><td>Nome da operação.</td></tr>
     <tr><td><code>Origem</code></td><td><code>INTERNA</code> · <code>EXTERNA</code> · <code>TERCEIROS</code></td><td><b>Campo decisivo.</b> A própria tela avisa: <i>“Define o tipo de ordem no MRP: interna → OF · externa/terceiros → OS.”</i></td></tr>
-    <tr><td><code>Unidade dos tempos</code></td><td><code>Minutos</code> · <code>Horas</code> · <code>Dias</code></td><td><b>Escolha antes de digitar os tempos.</b> Com <code>Minutos</code> não é preciso converter nada da ficha.</td></tr>
+    <tr><td><code>Unidade dos tempos</code></td><td><code>Segundos</code> · <code>Minutos</code> · <code>Horas</code> · <code>Dias</code></td><td><b>Escolha antes de digitar os tempos.</b> Com <code>Segundos</code> os valores da ficha entram como estão.</td></tr>
     <tr><td><code>Centro padrão</code></td><td>Laser Calfran</td><td>Sugerido ao usar a operação num roteiro; pode ser trocado lá.</td></tr>
   </tbody>
 </table>
@@ -1833,7 +1833,18 @@ Preparação, Máquina, Peças/ciclo, Equipe e Unidade, com <span class="btn">Ed
   </tbody>
 </table>
 
-<h3>4.4.2 Converter os tempos da ficha</h3>
+<h3>4.4.2 Os tempos da ficha entram em segundos</h3>
+
+<div class="dica">
+  <b>Não é mais preciso converter nada</b>
+  Escolha <b>Segundos</b> em <i>Unidade dos tempos</i> e digite os valores da ficha como eles estão:
+  <code>300</code> de setup e <code>15</code> por peça. O sistema converte internamente.
+  <br><br>
+  A tabela abaixo continua no material porque as fichas antigas trazem os valores já convertidos, e
+  porque é útil conferir a ordem de grandeza. Mas para <b>cadastrar</b>, use segundos: a divisão à mão
+  é onde o arredondamento entrava, virando minutos perdidos num lote de 500.
+</div>
+
 <div class="nota">
   <b>A conversão deixou de ser obrigatória</b>
   O campo <code>Unidade dos tempos</code> da operação aceita <b>Minutos</b>, <b>Horas</b> ou <b>Dias</b>.

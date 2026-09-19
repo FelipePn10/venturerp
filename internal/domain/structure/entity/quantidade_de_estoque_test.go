@@ -65,3 +65,37 @@ func TestUnidadesIguaisNaoMudamNada(t *testing.T) {
 	linha := &ItemStructure{Quantity: 12.5, ConversionFactor: 1}
 	quase(t, "quantidade", linha.QuantidadeNaUnidadeDeEstoque(), 12.5)
 }
+
+// A quantidade convertida gravada é a autoridade, não o fator arredondado.
+// Caso real: 104 mm de uma barra de 6000 mm. O fator inverso é 0,000166666…;
+// arredondado a seis casas vira 0,000167 e devolve 0,017368 em vez de 0,017333
+// — meio por cento a mais, sempre para o mesmo lado.
+func TestQuantidadeGravadaVenceOFatorArredondado(t *testing.T) {
+	linha := &ItemStructure{
+		Quantity:         104,
+		QuantityStockUOM: 0.0173333, // calculado na gravação, precisão inteira
+		ConversionFactor: 0.000167,  // o mesmo fator depois do arredondamento
+	}
+	quase(t, "quantidade em estoque", linha.QuantidadeNaUnidadeDeEstoque(), 0.0173333)
+
+	resolvida, usouFormula := linha.ResolvedQuantity(nil)
+	quase(t, "quantidade resolvida", resolvida, 0.0173333)
+	if usouFormula {
+		t.Error("não havia fórmula")
+	}
+}
+
+// Com fórmula a coluna gravada vale para a quantidade FIXA e não serve; aí o
+// fator é aplicado sobre o resultado da fórmula.
+func TestComFormulaOFatorEhAplicadoSobreOResultado(t *testing.T) {
+	f := "COMPRIMENTO"
+	linha := &ItemStructure{
+		Quantity: 1, QuantityStockUOM: 15.7, ConversionFactor: 15.7,
+		QuantityFormula: &f, QuantityRounding: "NONE", QuantityScale: 4,
+	}
+	resolvida, usouFormula := linha.ResolvedQuantity(map[string]float64{"COMPRIMENTO": 3})
+	if !usouFormula {
+		t.Fatal("a fórmula deveria ter sido aplicada")
+	}
+	quase(t, "3 × 15,7", resolvida, 47.1)
+}

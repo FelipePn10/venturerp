@@ -95,3 +95,22 @@ func TestOperationTime_LeadTimeScalesWithQty(t *testing.T) {
 		t.Error("lead time must grow with quantity")
 	}
 }
+
+// A ficha de fábrica vem em segundos: "setup 180 s, 85 s por peça". Aceitar a
+// unidade evita a conversão à mão (85 ÷ 3600 = 0,0236 h), que era onde o
+// arredondamento entrava.
+func TestTemposEmSegundosViramHoras(t *testing.T) {
+	op := ResolveOperationTime(TimeOverrides{}, TimeComponents{
+		Setup: 180, Run: 85, RunBaseQty: 1, CrewSize: 1, Unit: TimeUnitSecond,
+	})
+	if math.Abs(op.Setup-0.05) > 1e-9 {
+		t.Errorf("setup: %.6f h, esperado 0,05 h (180 s)", op.Setup)
+	}
+	if math.Abs(op.Run-85.0/3600.0) > 1e-9 {
+		t.Errorf("run: %.6f h, esperado %.6f h (85 s)", op.Run, 85.0/3600.0)
+	}
+	// Um lote de 500 peças: 180 s de setup + 500 × 85 s = 42.680 s = 11,855… h
+	if got := op.MachineHours(500); math.Abs(got-(180+500*85)/3600.0) > 1e-9 {
+		t.Errorf("lote de 500: %.6f h, esperado %.6f h", got, (180+500*85)/3600.0)
+	}
+}

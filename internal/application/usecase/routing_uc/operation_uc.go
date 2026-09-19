@@ -39,7 +39,7 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 	}
 	unidade, unidadeOK := normalizaUnidadeDeTempo(dto.TimeUnit)
 	if !unidadeOK {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", dto.TimeUnit))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use SEGUNDO, MIN, HORA ou DIA", dto.TimeUnit))
 	}
 	dto.TimeUnit = unidade
 	origin := entity.OperationOrigin(dto.Origin)
@@ -94,7 +94,7 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperationDTO) (*response.OperationResponse, error) {
 	unidade, unidadeOK := normalizaUnidadeDeTempo(dto.TimeUnit)
 	if !unidadeOK {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", dto.TimeUnit))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use SEGUNDO, MIN, HORA ou DIA", dto.TimeUnit))
 	}
 	dto.TimeUnit = unidade
 	op, err := uc.repo.GetOperationByID(ctx, dto.ID)
@@ -198,6 +198,8 @@ func normalizaUnidadeDeTempo(u string) (string, bool) {
 	switch strings.ToUpper(strings.TrimSpace(u)) {
 	case "":
 		return "", true
+	case "SEGUNDO", "SEGUNDOS", "SEG", "S", "SECOND", "SECONDS":
+		return entity.TimeUnitSecond, true
 	case "MIN", "MINUTO", "MINUTOS", "MINUTE", "MINUTES":
 		return entity.TimeUnitMinute, true
 	case "HORA", "HORAS", "HOUR", "HOURS", "H":

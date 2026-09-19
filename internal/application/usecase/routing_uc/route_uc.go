@@ -293,7 +293,7 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 	if dto.TimeUnit != nil {
 		unidade, ok := normalizaUnidadeDeTempo(*dto.TimeUnit)
 		if !ok {
-			return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", *dto.TimeUnit))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use SEGUNDO, MIN, HORA ou DIA", *dto.TimeUnit))
 		}
 		dto.TimeUnit = &unidade
 	}
@@ -371,7 +371,7 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 	if dto.TimeUnit != nil {
 		unidade, ok := normalizaUnidadeDeTempo(*dto.TimeUnit)
 		if !ok {
-			return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use MIN, HORA ou DIA", *dto.TimeUnit))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade de tempo %q inválida: use SEGUNDO, MIN, HORA ou DIA", *dto.TimeUnit))
 		}
 		dto.TimeUnit = &unidade
 	}

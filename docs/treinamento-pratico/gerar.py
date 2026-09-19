@@ -38,6 +38,8 @@ DOCS = {
                "Dia 1 · Do cadastro à saída do acabado"),
     "dia-dois": ("Treinamento Prático VentureERP — Dia 2",
                  "Dia 2 · Fiscal, financeiro, custos e contabilidade"),
+    "tutorial-roteiro": ("Tutorial Prático VentureERP — Roteiro de Fabricação",
+                         "Tutorial · Roteiro de Fabricação"),
 }
 
 
