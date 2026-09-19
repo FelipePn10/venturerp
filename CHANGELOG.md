@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.32] — 2026-09-19
+
+- fix(roteiro): precisão do fator de conversão e segundos nos tempos (#166) (`b2efd4a`)
+
 ## [v1.1.31] — 2026-09-18
 
 - feat(roteiro): refugo por operação, inspeção, documentos e unidade de estoque (#164) (`a6e4a01`)
