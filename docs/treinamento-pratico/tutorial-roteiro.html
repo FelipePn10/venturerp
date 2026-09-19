@@ -2,24 +2,23 @@
   <div class="capa-faixa">
     <div class="capa-marca">VentureERP · Tutorial Prático</div>
     <h1>Roteiro de<br>Fabricação</h1>
-    <p class="capa-sub">Do primeiro cadastro ao MRP conferido</p>
+    <p class="capa-sub">Tela a tela, campo a campo</p>
   </div>
   <div class="capa-corpo">
     <table class="capa-meta">
-      <tr><td>Tela</td><td>VENT0202 — Roteiro de Fabricação por Item</td></tr>
+      <tr><td>Tela principal</td><td>VENT0202 — Roteiro de Fabricação por Item</td></tr>
+      <tr><td>Telas de apoio</td><td>VMAQ0200 · VCUS0100 · VSUP0110 · VPLA0102 · VMRP0100</td></tr>
       <tr><td>Produto-guia</td><td>RN 01001 — Balança Asa Delta Carreta Pino Ø 50 mm</td></tr>
-      <tr><td>Dados</td><td>A estrutura do RN 01001 e os centros de trabalho já estão em produção</td></tr>
-      <tr><td>Tempo estimado</td><td>90 a 120 minutos, seguindo passo a passo</td></tr>
-      <tr><td>Pré-requisito</td><td>Itens e estrutura cadastrados (Dia 1, seções 3 e 4)</td></tr>
+      <tr><td>Tempo estimado</td><td>90 a 120 minutos</td></tr>
+      <tr><td>Pré-requisito</td><td>Itens e estrutura já cadastrados (Dia 1, seções 3 e 4)</td></tr>
       <tr><td>Data</td><td>____ / ____ / ________</td></tr>
     </table>
     <div class="capa-nota">
-      <b>O que você vai montar.</b> Nove roteiros — um para cada item fabricado da balança — incluindo
-      duas operações que saem da fábrica (usinagem e cementação em terceiro). Ao terminar, o MRP vai
-      saber quanto tempo cada peça leva, em qual máquina, quanto custa e quando começar.
+      <b>Como usar este material.</b> Cada parte abre uma tela, explica <b>o que cada campo significa</b>
+      e mostra o que digitar. Siga na ordem: as partes iniciais preparam o que as seguintes precisam.
       <br><br>
-      <b>Por onde começar.</b> A <b>Parte 0</b> não é sobre roteiro: é sobre a unidade do material.
-      Sem ela o roteiro fica certo e o planejamento erra por um fator de mil. Faça primeiro.
+      Ao terminar você terá os nove roteiros da balança montados — incluindo duas operações feitas fora
+      da fábrica — e o MRP planejando em cima deles.
     </div>
   </div>
   <div class="capa-rodape">
@@ -28,481 +27,533 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 0 · Antes do roteiro: a unidade do material</h1>
+<h1>Parte 1 · Como abrir uma tela</h1>
 
 <p>
-  Esta parte existe porque a estrutura do RN 01001 tem <b>seis linhas</b> em que a engenharia mediu o
-  consumo numa unidade e o almoxarifado conta o material em outra. As duas estão certas. O que falta
-  é a ponte entre elas.
+  Todas as telas deste tutorial são abertas do mesmo jeito, pelo painel inicial.
 </p>
-
-<h2>0.1 O que está acontecendo hoje</h2>
-
-<table class="dados">
-  <thead><tr><th style="width:20%">Peça</th><th style="width:30%">Material</th><th class="cen" style="width:14%">Na estrutura</th><th class="cen" style="width:14%">No estoque</th><th>O que o sistema entende</th></tr></thead>
-  <tbody>
-    <tr><td>TP 0050-I</td><td>Tubo redondo Ø 60,3 × 6000 mm</td><td class="cen"><b>104 MM</b></td><td class="cen">UN (barra)</td><td>104 <b>barras</b> por bucha</td></tr>
-    <tr><td>TP 01001-A</td><td>Chapa aço carbono 7,94 mm</td><td class="cen"><b>7,42 KG</b></td><td class="cen">UN (chapa)</td><td>7,42 <b>chapas</b> por lateral</td></tr>
-    <tr><td>TP 01001-B</td><td>Chapa aço carbono 9,5 mm</td><td class="cen"><b>2,44 KG</b></td><td class="cen">UN (chapa)</td><td>2,44 <b>chapas</b></td></tr>
-    <tr><td>TP 01001-C</td><td>Chapa aço carbono 3 mm</td><td class="cen"><b>1,23 KG</b></td><td class="cen">UN (chapa)</td><td>1,23 <b>chapas</b></td></tr>
-    <tr><td>TP 01001-D</td><td>Chapa aço carbono 3 mm</td><td class="cen"><b>0,24 KG</b></td><td class="cen">UN (chapa)</td><td>0,24 <b>chapa</b></td></tr>
-    <tr><td>TP 0120/50-E</td><td>Chapa aço carbono 7,94 mm</td><td class="cen"><b>1,60 KG</b></td><td class="cen">UN (chapa)</td><td>1,60 <b>chapas</b></td></tr>
-  </tbody>
-</table>
-
-<div class="atencao">
-  <b>O tamanho do erro, medido</b>
-  Uma barra de tubo tem 6000 mm. A bucha consome 104 mm — <b>0,0173 de uma barra</b>.
-  Lido como “104 unidades”, o planejamento pede 104 barras por bucha.
-  <br><br>
-  <span class="centro">Para 100 buchas: <b>1,73 barras</b> é o certo &nbsp;·&nbsp; <b>10.400 barras</b> é o que o sistema pediria</span>
-  <br>
-  Quase seis mil vezes mais material. Na chapa o fator é menor — uma chapa 5/16" de 1200 × 3000 pesa
-  <b>226,08 kg</b>, então 7,42 kg são 0,0328 de chapa e o erro é de 226 vezes — mas é o mesmo
-  problema e a mesma consequência: compra a mais, estoque parado, dinheiro imobilizado.
-</div>
-
-<h2>0.2 Por que não basta “escrever a quantidade em unidades”</h2>
-
-<p>
-  A saída óbvia seria trocar <code>104 MM</code> por <code>0,0173 UN</code> na estrutura. Não faça isso,
-  por três motivos práticos:
-</p>
-
-<table class="dados">
-  <thead><tr><th style="width:26%">Quem usa o número</th><th>Precisa dele em qual unidade</th></tr></thead>
-  <tbody>
-    <tr><td><b>Engenharia</b></td><td>Na unidade do desenho. Ninguém confere “0,0173 barra” contra um desenho; confere <b>104 mm</b>. O mesmo vale para a chapa: o peso é o que o plano de corte devolve.</td></tr>
-    <tr><td><b>Almoxarifado</b></td><td>Na unidade que ele conta na prateleira. Ele conta <b>barras</b> e <b>chapas</b> — não sabe separar 0,0173 de uma barra.</td></tr>
-    <tr><td><b>Compras</b></td><td>Na unidade da nota do fornecedor. O lote econômico do tubo é <b>1 barra</b>; o da chapa é <b>1 chapa</b>. Comprar “0,0328 chapa” não existe.</td></tr>
-  </tbody>
-</table>
-
-<div class="porque">
-  <b>As três camadas, e por que são três</b>
-  É assim que SAP, Oracle e Focco resolvem, e é como o VentureERP passou a resolver:
-  <br><br>
-  <b>1. Unidade de estoque</b> — como o almoxarifado conta. Fica no <b>item</b> (VENT0200, aba Almoxarifado).
-  <br>
-  <b>2. Unidade da estrutura</b> — como a engenharia mede o consumo. Fica na <b>linha da estrutura</b>.
-  <br>
-  <b>3. Conversão</b> — quanto uma vale na outra. Fica no <b>cadastro de conversões do item</b>.
-  <br><br>
-  Cada um escreve na unidade que conhece, e a conversão faz a tradução uma vez só, no lugar certo.
-  Sem ela o sistema não tem como saber que 104 mm são 0,0173 barra — e <b>adivinhar seria pior que
-  recusar</b>.
-</div>
-
-<h2>0.3 O que fazer — quatro conversões</h2>
-
-<p>
-  Abra <span class="tela-out">Conversões por Item</span> e cadastre uma linha para cada material.
-  Cadastre <b>no sentido que você sabe de cor</b>: o sistema usa a inversa sozinho.
-</p>
-
-<table class="dados">
-  <thead><tr><th style="width:30%">Material</th><th class="cen" style="width:12%">De</th><th class="cen" style="width:12%">Para</th><th class="cen" style="width:16%">Fator</th><th>De onde sai o número</th></tr></thead>
-  <tbody>
-    <tr><td>Tubo Ø 60,3 × 4,75</td><td class="cen">UN</td><td class="cen">MM</td><td class="cen"><b>6000</b></td><td>O comprimento da barra, que está no próprio nome do item.</td></tr>
-    <tr><td>Chapa 5/16" (7,94 mm)</td><td class="cen">UN</td><td class="cen">KG</td><td class="cen"><b>226,08</b></td><td>Peso da chapa 1200 × 3000 — Anexo A.1 do Dia 1.</td></tr>
-    <tr><td>Chapa 3/8" (9,5 mm)</td><td class="cen">UN</td><td class="cen">KG</td><td class="cen"><b>268,47</b></td><td>Idem.</td></tr>
-    <tr><td>Chapa 3,00 mm</td><td class="cen">UN</td><td class="cen">KG</td><td class="cen"><b>84,78</b></td><td>Idem.</td></tr>
-  </tbody>
-</table>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Cadastrar a conversão</div>
-  <table class="campos">
-    <tr><td>Item</td><td>Tubo Redondo Ø 60,3 × 4,75</td><td class="obs">Escolhido na lista pesquisável.</td></tr>
-    <tr><td>De</td><td><code>UN</code></td><td class="obs">A unidade de estoque.</td></tr>
-    <tr><td>Para</td><td><code>MM</code></td><td class="obs">A unidade em que a estrutura mede.</td></tr>
-    <tr><td>Fator</td><td><code>6000</code></td><td class="obs">Uma barra tem 6000 mm.</td></tr>
+  <div class="passo-tit"><span class="n">1</span>Pelo menu lateral</div>
+  <p>
+    O menu à esquerda agrupa o sistema em três áreas. Clique na área para expandir e no módulo para ver
+    as telas dele:
+  </p>
+  <table class="dados">
+    <thead><tr><th style="width:30%">Área</th><th>Módulos</th></tr></thead>
+    <tbody>
+      <tr><td><b>Comercial &amp; Vendas</b></td><td>Comercial · PDV · Assistência Técnica · Garantia · Cliente · Custo</td></tr>
+      <tr><td><b>Industrial &amp; Produção</b></td><td><b>Engenharia</b> · Produção · Manutenção · <b>Planejamento</b> · <b>Suprimento</b> · Almoxarifado · Importação · Inspeção</td></tr>
+      <tr><td><b>Administrativo &amp; Financeiro</b></td><td>Financeiro · Fiscal · Contabilidade · Cadastros</td></tr>
+    </tbody>
   </table>
 </div>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">2</span>Reabrir a linha da estrutura e gravar de novo</div>
+  <div class="passo-tit"><span class="n">2</span>Pela busca — mais rápido</div>
   <p>
-    Em <span class="tela">VENT0210</span>, abra o item, clique na linha do material e grave — sem mudar nada.
-    É a gravação que aplica a conversão. Ao lado do campo de unidade a tela passa a mostrar:
+    No campo <b>Buscar código ou nome…</b>, digite o código da tela (<code>VENT0202</code>) ou parte do
+    nome (<code>roteiro</code>). A lista filtra enquanto você digita; clique no resultado para abrir.
   </p>
-  <p class="centro">
-    <code>Estocado em UN: 104 MM = <b>0,0173 UN</b> (1 UN = 6.000 MM)</code>
-  </p>
-  <p class="pequeno mudo centro">É este valor que o MRP reserva, a ordem consome e o custo rateia.</p>
-</div>
-
-<div class="nota">
-  <b>Se você tentar gravar sem a conversão</b>
-  O sistema recusa e explica: <i>“o componente é estocado em UN e a estrutura está em MM, mas não existe
-  conversão entre as duas. Cadastre a conversão do item no sentido que você souber […] Sem a conversão o
-  planejamento leria 104 MM como se fossem UN.”</i>
-  <br><br>
-  A recusa é proposital. O valor antigo continua no lugar e nada é alterado até a conversão existir —
-  por isso as seis linhas de hoje continuam funcionando exatamente como antes, e não houve surpresa
-  na atualização.
 </div>
 
 <div class="dica">
-  <b>O fator fica congelado na linha</b>
-  Se alguém corrigir a densidade da chapa no ano que vem, as estruturas já aprovadas <b>não mudam
-  sozinhas</b> — isso reescreveria o consumo de ordens em aberto. A linha guarda o fator que foi usado
-  quando ela foi gravada. Para adotar o fator novo, é só regravar a linha: a decisão é de quem desenha
-  o produto, não do banco de dados.
+  <b>Como saber em que tela você está</b>
+  A barra do topo mostra sempre o caminho e o código:
+  <span class="centro"><code>Engenharia › Roteiro de Fabricação por Item &nbsp;&nbsp;VENT0202</code></span>
+  Os códigos deste tutorial aparecem assim: <span class="tela">VENT0202</span>.
 </div>
 
-<div class="quebra"></div>
+<h2>1.1 Elementos que se repetem em todas as telas</h2>
+
+<table class="dados">
+  <thead><tr><th style="width:24%">Elemento</th><th>O que é</th></tr></thead>
+  <tbody>
+    <tr><td><b>Barra de ferramentas</b></td><td>Logo abaixo do título. Reúne o que vale para a tela inteira: o item selecionado, os botões de carregar e salvar, e a exportação.</td></tr>
+    <tr><td><b>Abas</b></td><td>Dividem a tela por assunto. Trocar de aba não perde o que foi digitado.</td></tr>
+    <tr><td><b>Campo de busca de cadastro</b></td><td>Onde aparece uma <b>lupa ou seta</b> em vez de um campo de digitar: clique, digite parte do nome e escolha na lista. <b>Nunca é preciso decorar código.</b></td></tr>
+    <tr><td><b>Campo com asterisco</b></td><td>Obrigatório. Sem ele o registro não grava.</td></tr>
+    <tr><td><b>Faixa colorida no topo do conteúdo</b></td><td>Retorno da última ação: verde deu certo, vermelho não deu, azul é informação.</td></tr>
+  </tbody>
+</table>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 1 · O mapa: nove roteiros, de baixo para cima</h1>
+<h1>Parte 2 · O que você vai montar</h1>
 
 <p>
-  O RN 01001 tem quatro níveis. Cada item <b>fabricado</b> precisa do seu próprio roteiro — o roteiro
-  descreve como <b>aquele</b> item é feito, não a árvore inteira. Quem junta tudo é o MRP.
+  O roteiro descreve como <b>um item</b> é feito: em que ordem, em qual máquina, em quanto tempo. Cada
+  item fabricado tem o seu próprio. Quem junta a árvore inteira é o MRP.
 </p>
 
 <table class="dados">
-  <thead><tr><th style="width:8%">Nível</th><th style="width:24%">Item</th><th style="width:34%">O que o roteiro dele diz</th><th>Etapas</th></tr></thead>
+  <thead><tr><th class="cen" style="width:8%">Nível</th><th style="width:22%">Item</th><th style="width:36%">O que o roteiro dele diz</th><th class="cen">Etapas</th></tr></thead>
   <tbody>
     <tr><td class="cen">0</td><td><b>RN 01001</b><br><span class="mudo">Balança</span></td><td>Montar, soldar, limpar e pintar o conjunto final.</td><td class="cen">4</td></tr>
     <tr><td class="cen">1</td><td><b>BU 0120/50</b><br><span class="mudo">Bucha da balança</span></td><td>Prensar a bucha interna dentro da externa.</td><td class="cen">1</td></tr>
-    <tr><td class="cen">2</td><td><b>BU 0120E</b><br><span class="mudo">Bucha externa</span></td><td>Cortar, repicar, enrolar, soldar e endireitar a chapa.</td><td class="cen">5</td></tr>
-    <tr><td class="cen">2</td><td><b>BU 0050I</b><br><span class="mudo">Bucha interna acabada</span></td><td>Só cementação <b>em terceiro</b>.</td><td class="cen">1</td></tr>
-    <tr><td class="cen">2</td><td><b>BU 0050IB</b><br><span class="mudo">Bucha interna semi-acabada</span></td><td>Cortar na serra e usinar <b>em terceiro</b>.</td><td class="cen">2</td></tr>
-    <tr><td class="cen">2</td><td><b>TP 01001A</b><br><span class="mudo">Lateral</span></td><td>Um corte a laser e pronto.</td><td class="cen">1</td></tr>
+    <tr><td class="cen">2</td><td><b>BU 0120E</b><br><span class="mudo">Bucha externa</span></td><td>Cortar, repicar, enrolar, soldar e endireitar.</td><td class="cen">5</td></tr>
+    <tr><td class="cen">2</td><td><b>BU 0050I</b><br><span class="mudo">Bucha interna acabada</span></td><td>Cementação <b>fora da fábrica</b>.</td><td class="cen">1</td></tr>
+    <tr><td class="cen">2</td><td><b>BU 0050IB</b><br><span class="mudo">Bucha interna semi-acabada</span></td><td>Cortar na serra e usinar <b>fora da fábrica</b>.</td><td class="cen">2</td></tr>
+    <tr><td class="cen">2</td><td><b>TP 01001A</b><br><span class="mudo">Lateral</span></td><td>Um corte a laser.</td><td class="cen">1</td></tr>
     <tr><td class="cen">2</td><td><b>TP 01001B</b><br><span class="mudo">Peito de pombo</span></td><td>Cortar, repicar, dobrar na prensa.</td><td class="cen">3</td></tr>
     <tr><td class="cen">2</td><td><b>TP 01001C</b><br><span class="mudo">Fechamento superior</span></td><td>Cortar, repicar, dobrar na dobradeira.</td><td class="cen">3</td></tr>
     <tr><td class="cen">2</td><td><b>TP 01001D</b><br><span class="mudo">Fechamento inferior</span></td><td>Igual ao C, peça menor.</td><td class="cen">3</td></tr>
   </tbody>
 </table>
 
-<div class="porque">
-  <b>Por que de baixo para cima</b>
-  Não é obrigatório, mas evita retrabalho. Ao cadastrar primeiro as peças de nível 2, quando você chegar
-  no RN 01001 as operações já existem na biblioteca e o prazo de cada componente já é calculável. Se
-  começar por cima, vai ter que voltar.
-</div>
-
-<div class="quebra"></div>
-
-<!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 2 · Conferir os centros de trabalho</h1>
-
-<p>
-  O roteiro aponta para <b>centros de trabalho</b> — não para máquinas. O centro é o que tem tarifa
-  hora-máquina e capacidade; a máquina é o equipamento físico dentro dele. Dez centros já estão
-  cadastrados:
-</p>
+<h2>2.1 A ordem do tutorial</h2>
 
 <table class="dados">
-  <thead><tr><th class="cen" style="width:10%">Código</th><th style="width:28%">Centro</th><th style="width:32%">Máquina</th><th>Usado em</th></tr></thead>
+  <thead><tr><th class="cen" style="width:8%">Parte</th><th style="width:24%">Tela</th><th>O que se faz</th></tr></thead>
   <tbody>
-    <tr><td class="cen">1</td><td>LASER</td><td>Laser Calfran 3000KWA</td><td>TP 01001A</td></tr>
-    <tr><td class="cen">4</td><td>SERRA FITA</td><td>Serra Fita</td><td>BU 0050IB</td></tr>
-    <tr><td class="cen">5</td><td>GUILHOTINA</td><td>Guilhotina Jin</td><td>B, C, D, BU 0120E</td></tr>
-    <tr><td class="cen">6</td><td>DOBRADEIRA</td><td>Dobradeira Ermak 3300</td><td>TP 01001C, TP 01001D</td></tr>
-    <tr><td class="cen">7</td><td>PRENSA DOBRA</td><td>Prensa</td><td>TP 01001B, BU 0120E, BU 0120/50</td></tr>
-    <tr><td class="cen">8</td><td>MONTAGEM MIG</td><td>Máquina de Solda Hawk 305</td><td>RN 01001 (montagem)</td></tr>
-    <tr><td class="cen">9</td><td>SOLDAGEM MIG</td><td>Máquina de Solda Hawk 405</td><td>BU 0120E, RN 01001</td></tr>
-    <tr><td class="cen">10</td><td>PINTURA</td><td class="mudo">sem máquina cadastrada</td><td>RN 01001</td></tr>
+    <tr><td class="cen">3</td><td><span class="tela">VMAQ0200</span> + <span class="tela">VCUS0100</span></td><td>Conferir os centros de trabalho e criar os dois que faltam.</td></tr>
+    <tr><td class="cen">4</td><td><span class="tela">VSUP0110</span></td><td>Cadastrar a conversão de unidade dos materiais.</td></tr>
+    <tr><td class="cen">5 a 10</td><td><span class="tela">VENT0202</span></td><td>As seis abas do roteiro, uma por parte.</td></tr>
+    <tr><td class="cen">11</td><td><span class="tela">VMAQ0200</span></td><td>Produtividade por máquina — o MRP exige.</td></tr>
+    <tr><td class="cen">12</td><td><span class="tela">VPLA0102</span> + <span class="tela">VMRP0100</span></td><td>Criar demanda e rodar o planejamento.</td></tr>
+  </tbody>
+</table>
+
+<div class="porque">
+  <b>Por que começar pelas peças e não pela balança</b>
+  Ao cadastrar primeiro as peças de nível 2, quando você chegar no RN 01001 as operações já existem na
+  biblioteca e é só escolher da lista. Começando por cima, você teria que voltar.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 3 · Centros de trabalho <span class="tela">VMAQ0200</span></h1>
+
+<p>
+  O roteiro aponta para <b>centros de trabalho</b>, não para máquinas. O centro é o agrupamento que
+  carrega a <b>tarifa por hora</b> e a <b>capacidade</b>; a máquina é o equipamento físico dentro dele.
+  Dois lasers iguais são duas máquinas num centro só.
+</p>
+
+<h2>3.1 Conferir o que já existe</h2>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Abrir a tela</div>
+  <p>Busque <code>VMAQ0200</code> e clique na aba <b>Centros de trabalho</b> (a primeira).</p>
+</div>
+
+<p>Devem aparecer dez centros:</p>
+
+<table class="dados">
+  <thead><tr><th class="cen" style="width:12%">Código</th><th style="width:28%">Nome</th><th>Usado nos roteiros de</th></tr></thead>
+  <tbody>
+    <tr><td class="cen">1</td><td>LASER</td><td>TP 01001A</td></tr>
+    <tr><td class="cen">2</td><td>POLICORTE</td><td>alternativa de corte (Parte 8)</td></tr>
+    <tr><td class="cen">3</td><td>SERRA PNEUMÁTICA</td><td class="mudo">—</td></tr>
+    <tr><td class="cen">4</td><td>SERRA FITA</td><td>BU 0050IB</td></tr>
+    <tr><td class="cen">5</td><td>GUILHOTINA</td><td>TP 01001B, C, D e BU 0120E</td></tr>
+    <tr><td class="cen">6</td><td>DOBRADEIRA</td><td>TP 01001C, TP 01001D</td></tr>
+    <tr><td class="cen">7</td><td>PRENSA DOBRA</td><td>TP 01001B, BU 0120E, BU 0120/50</td></tr>
+    <tr><td class="cen">8</td><td>MONTAGEM MIG</td><td>RN 01001</td></tr>
+    <tr><td class="cen">9</td><td>SOLDAGEM MIG</td><td>BU 0120E, RN 01001</td></tr>
+    <tr><td class="cen">10</td><td>PINTURA</td><td>RN 01001</td></tr>
+  </tbody>
+</table>
+
+<h2>3.2 Criar os dois que faltam</h2>
+
+<p>
+  A ficha usa <b>Bancada / Morsa</b> (endireitar a bucha externa) e <b>Limpeza</b> (antes da pintura), e
+  nenhum dos dois está cadastrado.
+</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Clicar em <span class="btn">Novo tipo</span></div>
+  <p>Na aba <b>Centros de trabalho</b>. O formulário limpa e fica pronto para um cadastro novo.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Preencher os campos</div>
+  <table class="campos">
+    <tr><td>Código *</td><td><code>11</code></td><td class="obs"><b>Número do centro.</b> É por ele que o roteiro e o CRP referenciam. Use o próximo livre.</td></tr>
+    <tr><td>Nome *</td><td><code>BANCADA / MORSA</code></td><td class="obs">Como aparece na lista ao montar o roteiro e nos relatórios de carga.</td></tr>
+    <tr><td>Natureza</td><td><code>Montagem</code></td><td class="obs">Classifica o tipo de processo (corte, dobra, solda, montagem…). Serve para agrupar em relatórios; não muda cálculo.</td></tr>
+    <tr><td>Descrição</td><td>Bancada com morsa para endireitamento manual</td><td class="obs">Texto livre. Ajuda quem não conhece o chão de fábrica a entender o que é.</td></tr>
+    <tr><td>Exige operador</td><td><b>marcado</b></td><td class="obs"><b>Campo com efeito no cálculo.</b> Marcado, o planejamento entende que alguém fica no posto do início ao fim — e passa a ignorar a sobreposição entre etapas (Parte 9). Desmarcado, a máquina roda sozinha depois de preparada.</td></tr>
+  </table>
+  <p>Repita para o segundo: código <code>12</code>, nome <code>LIMPEZA</code>, exige operador marcado.</p>
+</div>
+
+<h2>3.3 Dar tarifa aos centros <span class="tela">VCUS0100</span></h2>
+
+<p>
+  Centro sem tarifa entra no custo do roteiro com <b>zero</b>. A tela avisa, mas o total sai errado —
+  e é um erro fácil de não perceber, porque o roteiro parece completo.
+</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Abrir <span class="tela">VCUS0100</span>, bloco <i>Custo/hora por centro de trabalho</i></div>
+  <table class="campos">
+    <tr><td>Centro de trabalho *</td><td>BANCADA / MORSA</td><td class="obs">Escolhido na lista pesquisável.</td></tr>
+    <tr><td>Custo/hora *</td><td><code>37,09</code></td><td class="obs">Quanto custa uma hora daquele posto — máquina, energia, depreciação e rateio. É multiplicado pelas horas do roteiro.</td></tr>
+  </table>
+  <p>A grade abaixo lista o que já está cadastrado, com centro, custo/hora e moeda.</p>
+</div>
+
+<div class="dica">
+  <b>Como saber se falta tarifa</b>
+  Na Parte 10, a aba <b>Tempo e custo do lote</b> avisa: <i>“Alguma operação está sem tarifa de
+  hora-máquina cadastrada e entrou no cálculo com custo zero.”</i> Se essa mensagem aparecer, volte
+  aqui.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 4 · Conversão de unidade <span class="tela">VSUP0110</span></h1>
+
+<p>
+  Antes do roteiro, uma preparação no material. A engenharia mede o consumo na unidade do desenho —
+  <b>104 mm</b> de tubo, <b>7,42 kg</b> de chapa. O almoxarifado conta o material na unidade da
+  prateleira — <b>barras</b> e <b>chapas</b>. As duas estão certas, e a conversão é o que liga uma à
+  outra.
+</p>
+
+<div class="porque">
+  <b>Por que não escrever tudo na mesma unidade</b>
+  Escrever “0,0173 barra” na estrutura resolveria no papel e criaria outros três problemas: ninguém
+  confere esse número contra um desenho, o almoxarifado não sabe separar 0,0173 de uma barra, e compras
+  não compra fração de barra. Cada área precisa do número na sua unidade — por isso existe a conversão.
+</div>
+
+<h2>4.1 Os quatro materiais</h2>
+
+<table class="dados">
+  <thead><tr><th style="width:34%">Material</th><th class="cen" style="width:12%">De</th><th class="cen" style="width:12%">Para</th><th class="cen" style="width:14%">Fator</th><th>De onde sai</th></tr></thead>
+  <tbody>
+    <tr><td>Tubo Redondo Ø 60,3 × 4,75</td><td class="cen">UN</td><td class="cen">MM</td><td class="cen"><b>6000</b></td><td>O comprimento da barra, que está no nome do item.</td></tr>
+    <tr><td>Chapa Aço Carbono 7,94 mm</td><td class="cen">UN</td><td class="cen">KG</td><td class="cen"><b>226,08</b></td><td>Peso da chapa 1200 × 3000 — Anexo A.1.</td></tr>
+    <tr><td>Chapa Aço Carbono 9,5 mm</td><td class="cen">UN</td><td class="cen">KG</td><td class="cen"><b>268,47</b></td><td>Idem.</td></tr>
+    <tr><td>Chapa Aço Carbono 3 mm</td><td class="cen">UN</td><td class="cen">KG</td><td class="cen"><b>84,78</b></td><td>Idem.</td></tr>
   </tbody>
 </table>
 
 <div class="atencao">
-  <b>Faltam dois centros</b>
-  A ficha usa <b>Bancada / Morsa</b> (endireitar a bucha externa) e <b>Limpeza</b> (antes da pintura), e
-  nenhum dos dois existe no cadastro. Sem eles essas operações ficariam sem tarifa e entrariam no custo
-  com <b>zero</b> — a tela avisa, mas o número sai errado.
-  <br><br>
-  Crie os dois em <span class="tela-out">VMAQ0200 · aba Centros de trabalho</span> antes de continuar.
-  Não precisam de máquina associada; precisam de <b>tarifa hora-máquina</b>.
+  <b>Confira o peso antes de digitar</b>
+  Os pesos acima valem para chapa <b>1200 × 3000</b>. Se a fábrica compra outra dimensão, o peso é
+  outro e o número aqui fica errado — e o erro se propaga para a compra e para o custo.
 </div>
 
-<div class="dica">
-  <b>Centro sem máquina é legítimo</b>
-  Pintura e Limpeza são postos de trabalho, não equipamentos. O centro existe para carregar a tarifa e
-  ocupar capacidade; a máquina só é necessária quando há uma máquina de verdade para sequenciar.
-</div>
-
-<div class="quebra"></div>
-
-<!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 3 · Aba 1 — a biblioteca de operações</h1>
-
-<p>
-  A biblioteca é o <b>vocabulário</b> da fábrica. “Cortar na Guilhotina” é cadastrado uma vez e usado
-  nos quatro roteiros que precisam dele. Corrigir o tempo na biblioteca corrige todos de uma vez.
-</p>
-
-<h2>3.1 Os tempos vêm da ficha, em segundos</h2>
-
-<div class="dica">
-  <b>Não converta nada</b>
-  A ficha diz “setup 300 s, 15 s por peça”. Escolha <b>Segundos</b> em <i>Unidade dos tempos</i> e
-  digite <code>300</code> e <code>15</code>. O sistema converte para horas internamente.
-  <br><br>
-  Até a versão anterior era preciso dividir por 3600 à mão e digitar 0,0833 e 0,0042 — e era ali que o
-  arredondamento entrava, virando minutos perdidos num lote de 500.
-</div>
-
-<h2>3.2 As quinze operações do RN 01001</h2>
-
-<table class="dados">
-  <thead><tr><th style="width:26%">Nome</th><th class="cen" style="width:12%">Origem</th><th style="width:20%">Centro padrão</th><th class="cen" style="width:10%">Setup s</th><th class="cen" style="width:10%">Ciclo s</th><th>Observação</th></tr></thead>
-  <tbody>
-    <tr><td>Cortar no Laser</td><td class="cen">INTERNA</td><td>LASER</td><td class="cen">180</td><td class="cen">85</td><td>—</td></tr>
-    <tr><td>Cortar na Guilhotina</td><td class="cen">INTERNA</td><td>GUILHOTINA</td><td class="cen">300</td><td class="cen">15</td><td>Usada em 4 roteiros.</td></tr>
-    <tr><td>Repicar na Guilhotina</td><td class="cen">INTERNA</td><td>GUILHOTINA</td><td class="cen">300</td><td class="cen">15</td><td>Usada em 4 roteiros.</td></tr>
-    <tr><td>Dobrar na Prensa</td><td class="cen">INTERNA</td><td>PRENSA DOBRA</td><td class="cen">600</td><td class="cen">20</td><td>Setup maior: troca de ferramenta.</td></tr>
-    <tr><td>Dobrar na Dobradeira</td><td class="cen">INTERNA</td><td>DOBRADEIRA</td><td class="cen">300</td><td class="cen">20</td><td>—</td></tr>
-    <tr><td>Enrolar na Prensa</td><td class="cen">INTERNA</td><td>PRENSA DOBRA</td><td class="cen">300</td><td class="cen">120</td><td>—</td></tr>
-    <tr><td>Soldar na MIG</td><td class="cen">INTERNA</td><td>SOLDAGEM MIG</td><td class="cen">300</td><td class="cen">35</td><td>Tempo diferente no RN 01001 — ver 4.9.</td></tr>
-    <tr><td>Endireitar na Morsa</td><td class="cen">INTERNA</td><td>BANCADA / MORSA</td><td class="cen">300</td><td class="cen">45</td><td>Centro criado na Parte 2.</td></tr>
-    <tr><td>Cortar na Serra</td><td class="cen">INTERNA</td><td>SERRA FITA</td><td class="cen">300</td><td class="cen">60</td><td>—</td></tr>
-    <tr><td>Embuchar na Prensa</td><td class="cen">INTERNA</td><td>PRENSA DOBRA</td><td class="cen">300</td><td class="cen">60</td><td>—</td></tr>
-    <tr><td>Montagem</td><td class="cen">INTERNA</td><td>MONTAGEM MIG</td><td class="cen">300</td><td class="cen">240</td><td>—</td></tr>
-    <tr><td>Limpeza</td><td class="cen">INTERNA</td><td>LIMPEZA</td><td class="cen">300</td><td class="cen">90</td><td>Centro criado na Parte 2.</td></tr>
-    <tr><td>Pintura</td><td class="cen">INTERNA</td><td>PINTURA</td><td class="cen">300</td><td class="cen">90</td><td>—</td></tr>
-    <tr><td><b>Usinagem</b></td><td class="cen"><b>TERCEIROS</b></td><td class="mudo">—</td><td class="cen">—</td><td class="cen">—</td><td>R$ 0,70/pç · ver Parte 5.</td></tr>
-    <tr><td><b>Cementação</b></td><td class="cen"><b>TERCEIROS</b></td><td class="mudo">—</td><td class="cen">—</td><td class="cen">—</td><td>R$ 1,74/pç · ver Parte 5.</td></tr>
-  </tbody>
-</table>
+<h2>4.2 Cadastrar</h2>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Cadastrar uma operação interna</div>
-  <p>Aba <b>Operação / Biblioteca</b>, botão <span class="btn">+ Nova</span>:</p>
-  <table class="campos">
-    <tr><td>Nome</td><td>Cortar na Guilhotina</td><td class="obs">Como aparece na lista ao montar o roteiro.</td></tr>
-    <tr><td>Origem</td><td><code>INTERNA</code></td><td class="obs"><b>Campo decisivo:</b> interna gera ordem de fabricação; externa e terceiros geram ordem de serviço.</td></tr>
-    <tr><td>Unidade dos tempos</td><td><code>Segundos</code></td><td class="obs">Escolha <b>antes</b> de digitar os tempos.</td></tr>
-    <tr><td>Centro padrão</td><td>GUILHOTINA</td><td class="obs">Sugerido ao usar em qualquer roteiro; pode ser trocado lá.</td></tr>
-    <tr><td>Preparação (por lote)</td><td><code>300</code></td><td class="obs">Cobrado uma vez por lote, não por peça.</td></tr>
-    <tr><td>Máquina</td><td><code>15</code></td><td class="obs">Tempo por ciclo.</td></tr>
-    <tr><td>Peças por ciclo</td><td><code>1</code></td><td class="obs">Quantas peças saem no tempo acima. <b>Errar aqui multiplica o custo.</b></td></tr>
-    <tr><td>Operadores</td><td><code>1</code></td><td class="obs">Multiplica só o custo de mão de obra.</td></tr>
-    <tr><td>Refugo padrão</td><td><code>0</code></td><td class="obs">Deixe zero por enquanto — a Parte 6 volta nisto.</td></tr>
-  </table>
-  <p>Clique em <span class="btn">Salvar</span>. A operação aparece na grade da biblioteca logo abaixo.</p>
-</div>
-
-<div class="dica">
-  <b>Confira na grade, não na mensagem</b>
-  Depois de salvar, olhe a linha na biblioteca: nome, origem, preparação, máquina, peças/ciclo, equipe,
-  refugo e unidade. Se algum número voltou diferente do que você digitou, é ali que se vê.
-</div>
-
-<div class="quebra"></div>
-
-<!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 4 · Abas 2 e 3 — criar o roteiro e encadear as etapas</h1>
-
-<h2>4.1 Escolher o item e criar o roteiro</h2>
-
-<div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Escolher o item na barra superior</div>
+  <div class="passo-tit"><span class="n">1</span>Abrir <span class="tela">VSUP0110</span> e escolher o item</div>
   <p>
-    Comece por <b>TP 01001A</b> (o mais simples: uma etapa só). Use o campo <b>Item</b> da barra
-    superior — é uma lista pesquisável, digite “01001A”. A tela carrega os roteiros existentes.
+    Na barra de ferramentas, campo <b>Item</b>: clique, digite <code>tubo</code> e escolha
+    <i>Tubo Redondo Ø 60,3 × 4,75 × 6000MM</i>. Clique em <span class="btn">Carregar</span> — a grade
+    mostra as conversões que o item já tem.
   </p>
 </div>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">2</span>Criar o roteiro — aba <i>Roteiros do item</i></div>
+  <div class="passo-tit"><span class="n">2</span>Preencher a conversão</div>
   <table class="campos">
-    <tr><td>Descrição</td><td>Corte a laser</td><td class="obs">Livre. Ajuda a distinguir quando há alternativas.</td></tr>
-    <tr><td>Alternativa</td><td><code>1</code></td><td class="obs">Outro jeito de fazer a mesma peça seria a alternativa 2.</td></tr>
-    <tr><td>Máscara</td><td class="mudo">em branco</td><td class="obs">Só para item configurado.</td></tr>
-    <tr><td>Padrão (MRP/CRP)</td><td><code>Sim</code></td><td class="obs">É este que o planejamento usa quando ninguém escolhe.</td></tr>
-    <tr><td>Início da vigência</td><td class="mudo">em branco</td><td class="obs">Vazio = vale desde sempre.</td></tr>
+    <tr><td>De (UM) *</td><td><code>UN</code></td><td class="obs">A unidade de <b>partida</b>. Aqui é a unidade de estoque: uma barra.</td></tr>
+    <tr><td>Para (UM) *</td><td><code>MM</code></td><td class="obs">A unidade de <b>chegada</b>. É a unidade em que a estrutura mede o consumo.</td></tr>
+    <tr><td>Fator *</td><td><code>6000</code></td><td class="obs">Quantos <i>Para</i> cabem em um <i>De</i>. Leia o campo como a frase: <b>1 UN = 6000 MM</b> — é o que o topo da tela mostra enquanto você digita.</td></tr>
+    <tr><td>Arredondamento (%)</td><td><code>0</code></td><td class="obs">Só vale para item que <b>não aceita fração</b>: quanto de sobra pode ser arredondado para o inteiro mais próximo.</td></tr>
+    <tr><td>Tolerância</td><td><code>0</code></td><td class="obs">Quanto de sobra é aceito além do arredondamento.</td></tr>
+    <tr><td>Tolerância em</td><td><code>Percentual</code></td><td class="obs">Se o número acima é percentual ou valor absoluto.</td></tr>
   </table>
-  <p>Clique em <span class="btn">+ Criar roteiro</span>, depois <span class="btn">Abrir</span> na linha criada — a tela leva direto para as etapas.</p>
+  <p>Clique em <span class="btn">Salvar conversão</span>.</p>
+</div>
+
+<div class="dica">
+  <b>Cadastre no sentido que você sabe de cor</b>
+  “1 barra tem 6000 mm” é o que está na nota do fornecedor. O contrário — “1 mm é 0,000166667 barra” —
+  é o mesmo fato e ninguém confere. <b>Tanto faz qual você cadastra:</b> o sistema calcula a inversa
+  sozinho quando precisa do outro sentido.
+</div>
+
+<h2>4.3 Conferir antes de seguir</h2>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Usar o bloco <i>Resolver conversão</i></div>
+  <p>Logo abaixo, é uma calculadora que usa a conversão recém-salva. Sem gravar nada:</p>
+  <table class="campos">
+    <tr><td>De</td><td><code>MM</code></td><td class="obs">Repare: aqui está no sentido <b>inverso</b> do que você cadastrou — de propósito, para provar que funciona.</td></tr>
+    <tr><td>Para</td><td><code>UN</code></td></tr>
+    <tr><td>Qtde</td><td><code>104</code></td><td class="obs">O consumo real da bucha.</td></tr>
+  </table>
+  <p>Clique em <span class="btn">Converter</span>. O campo <b>Resultado</b> deve mostrar:</p>
+  <p class="centro"><code>104 MM = 0,0173333333 UN</code></p>
+  <p class="pequeno mudo centro">E abaixo: <i>Fator aplicado: 1 MM = 0,0001666667 UN.</i></p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">4</span>Repetir para as três chapas</div>
+  <p>Mesma sequência, trocando <i>Para</i> de <code>MM</code> para <code>KG</code> e o fator.</p>
+</div>
+
+<h2>4.4 Fazer a estrutura adotar a conversão</h2>
+
+<p>
+  Cadastrar a conversão não altera as linhas de estrutura que já existem — elas guardam o fator que
+  receberam quando foram gravadas. Para cada uma adotar o fator novo, é preciso regravá-la.
+</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">5</span>Abrir <span class="tela">VENT0210</span> e regravar</div>
+  <p>
+    Escolha o item pai (por exemplo <b>TP 0050-I</b>), clique na linha do material e grave —
+    <b>sem mudar nada</b>. É a gravação que aplica a conversão.
+  </p>
+  <p>Ao lado do campo de unidade, a tela passa a mostrar em azul:</p>
+  <p class="centro"><code>Estocado em UN: 104 MM = <b>0,0173 UN</b> (1 UN = 6.000 MM)</code></p>
+  <p class="pequeno mudo centro">É este valor que o MRP reserva, a ordem consome e o custo rateia.</p>
+</div>
+
+<div class="nota">
+  <b>Se a gravação for recusada</b>
+  Quando a unidade da linha difere da unidade de estoque e <b>não há conversão</b>, o sistema recusa e
+  explica o que fazer. É proposital: sem a conversão ele não tem como saber quantas barras são 104 mm,
+  e gravar assim mesmo seria pior. Volte ao passo 2.
+</div>
+
+<div class="dica">
+  <b>O fator fica congelado na linha</b>
+  Se alguém corrigir o peso da chapa no ano que vem, as estruturas já aprovadas <b>não mudam sozinhas</b> —
+  isso alteraria o consumo de ordens em aberto sem ninguém decidir. Para adotar o valor novo, regrave a
+  linha.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 5 · Aba 1 — Biblioteca de operações <span class="tela">VENT0202</span></h1>
+
+<p>
+  A biblioteca é o <b>vocabulário</b> da fábrica: “Cortar na Guilhotina” é cadastrado uma vez e usado
+  em todos os roteiros que precisam dele. Corrigir o tempo aqui corrige todos de uma vez.
+</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Abrir a tela e clicar em <span class="btn">+ Nova</span></div>
+  <p>
+    Busque <code>VENT0202</code>. A tela abre na aba <b>Operação / Biblioteca</b>. Na barra de
+    ferramentas, o grupo <b>Operação</b> tem os botões <span class="btn">+ Nova</span> e
+    <span class="btn">Salvar</span>.
+  </p>
+</div>
+
+<h2>5.1 Identificação</h2>
+
+<table class="campos">
+  <tr><td>Nome *</td><td><code>Cortar na Guilhotina</code></td><td class="obs">Como a operação aparece na lista ao montar qualquer roteiro. Use o verbo que o chão de fábrica usa.</td></tr>
+  <tr><td>Origem</td><td><code>Interna</code></td><td class="obs"><b>O campo mais importante da tela.</b> Define o tipo de ordem que o planejamento vai gerar: <b>Interna</b> → ordem de fabricação, roda na sua máquina. <b>Externa</b> ou <b>Terceiros</b> → ordem de serviço, vai para um fornecedor. Ao escolher uma das duas últimas, aparecem os campos de terceirização (seção 5.4).</td></tr>
+  <tr><td>Unidade dos tempos</td><td><code>Segundos</code></td><td class="obs"><b>Escolha antes de digitar os tempos.</b> Define em que unidade os campos abaixo são interpretados. A ficha de fábrica vem em segundos — escolha Segundos e digite os valores como estão, sem converter.</td></tr>
+  <tr><td>Centro padrão</td><td>GUILHOTINA</td><td class="obs">Sugerido automaticamente quando esta operação for usada num roteiro. Pode ser trocado lá. Deixar em branco é válido: aí o centro é escolhido em cada roteiro.</td></tr>
+</table>
+
+<h2>5.2 Modelo de tempo</h2>
+
+<p>
+  São seis campos porque o tempo de uma operação tem partes que se comportam de maneira diferente. É
+  isso que faz o custo de um lote de 1 peça ser diferente do de 500.
+</p>
+
+<table class="campos">
+  <tr><td>Preparação (por lote)</td><td><code>300</code></td><td class="obs">Setup da máquina: ajustar, trocar ferramenta, acertar o primeiro. Cobrado <b>uma vez por lote</b>, não por peça. É o que faz o custo unitário cair quando o lote cresce.</td></tr>
+  <tr><td>Máquina</td><td><code>15</code></td><td class="obs">Tempo em que a máquina fica <b>ocupada</b> para produzir a quantidade indicada em <i>Peças por ciclo</i>. É este número que entra na carga do CRP.</td></tr>
+  <tr><td>Mão de obra</td><td><code>0</code></td><td class="obs">Tempo do <b>operador</b>. Zero significa “igual ao tempo de máquina” — o operador fica ali o ciclo todo. Use um valor menor quando a máquina roda sozinha parte do tempo e o operador só carrega e descarrega.</td></tr>
+  <tr><td>Peças por ciclo</td><td><code>1</code></td><td class="obs">Quantas peças saem no tempo de máquina acima. Estampo de quatro cavidades: <code>4</code>. <b>Errar aqui multiplica ou divide o custo pelo mesmo número.</b></td></tr>
+  <tr><td>Operadores</td><td><code>1</code></td><td class="obs">Quantas pessoas atendem a operação ao mesmo tempo. Multiplica <b>só o custo de mão de obra</b>, não o tempo de máquina.</td></tr>
+  <tr><td>Tempo padrão (legado)</td><td><code>0</code></td><td class="obs">Campo antigo, mantido para cadastros feitos antes do modelo completo. Só é usado quando <i>Máquina</i> é zero. Deixe zero.</td></tr>
+</table>
+
+<h2>5.3 Tempos que não ocupam a máquina</h2>
+
+<table class="campos">
+  <tr><td>Fila</td><td><code>0</code></td><td class="obs">Tempo que o lote espera na frente da máquina antes de começar.</td></tr>
+  <tr><td>Espera</td><td><code>0</code></td><td class="obs">Tempo de espera depois de pronto — secagem, resfriamento, cura.</td></tr>
+  <tr><td>Movimentação</td><td><code>0</code></td><td class="obs">Transporte até o próximo posto.</td></tr>
+  <tr><td>Refugo padrão (%)</td><td><code>0</code></td><td class="obs">Quanto do que entra na operação <b>não sai bom</b>. A Parte 7 explica como usar; deixe zero por enquanto.</td></tr>
+</table>
+
+<div class="porque">
+  <b>Por que fila, espera e movimentação ficam separados</b>
+  Os três entram no <b>prazo</b> — o lote realmente demora mais para ficar pronto — mas <b>não ocupam a
+  máquina</b>. Se entrassem junto com o tempo de máquina, o CRP mostraria a guilhotina lotada enquanto
+  ela está livre, e o planejador recusaria pedidos que caberiam.
+</div>
+
+<h2>5.4 Terceirização — aparece quando a origem não é interna</h2>
+
+<table class="campos">
+  <tr><td>Fornecedor</td><td>quem executa</td><td class="obs">Vai para a ordem de serviço e para a requisição de compra. Escolhido na lista pesquisável.</td></tr>
+  <tr><td>Item de serviço</td><td>o serviço comprado</td><td class="obs">O item que representa o serviço na nota do fornecedor. É o que aparece no pedido de compra.</td></tr>
+  <tr><td>Custo por peça</td><td><code>1,74</code></td><td class="obs"><b>É daqui que sai o custo desta etapa</b> — não de tarifa hora-máquina, porque a máquina é do fornecedor.</td></tr>
+  <tr><td>Prazo (dias)</td><td><code>3</code></td><td class="obs"><b>Dias corridos</b>, fim de semana incluído. É quanto a peça fica fora. O planejamento atrasa a etapa seguinte por esse tempo.</td></tr>
+  <tr><td>O que remeter</td><td>os itens da demanda</td><td class="obs">Define o que sai fisicamente da fábrica na remessa: os componentes da demanda, o próprio item da ordem, um item genérico de serviço, ou nada.</td></tr>
+</table>
+
+<h2>5.5 As quinze operações do RN 01001</h2>
+
+<table class="dados">
+  <thead><tr><th style="width:24%">Nome</th><th class="cen" style="width:12%">Origem</th><th style="width:20%">Centro padrão</th><th class="cen" style="width:10%">Prep. s</th><th class="cen" style="width:10%">Máq. s</th><th>Observação</th></tr></thead>
+  <tbody>
+    <tr><td>Cortar no Laser</td><td class="cen">Interna</td><td>LASER</td><td class="cen">180</td><td class="cen">85</td><td>—</td></tr>
+    <tr><td>Cortar na Guilhotina</td><td class="cen">Interna</td><td>GUILHOTINA</td><td class="cen">300</td><td class="cen">15</td><td>Usada em 4 roteiros.</td></tr>
+    <tr><td>Repicar na Guilhotina</td><td class="cen">Interna</td><td>GUILHOTINA</td><td class="cen">300</td><td class="cen">15</td><td>Usada em 4 roteiros.</td></tr>
+    <tr><td>Dobrar na Prensa</td><td class="cen">Interna</td><td>PRENSA DOBRA</td><td class="cen">600</td><td class="cen">20</td><td>Setup maior: troca de ferramenta.</td></tr>
+    <tr><td>Dobrar na Dobradeira</td><td class="cen">Interna</td><td>DOBRADEIRA</td><td class="cen">300</td><td class="cen">20</td><td>—</td></tr>
+    <tr><td>Enrolar na Prensa</td><td class="cen">Interna</td><td>PRENSA DOBRA</td><td class="cen">300</td><td class="cen">120</td><td>—</td></tr>
+    <tr><td>Soldar na MIG</td><td class="cen">Interna</td><td>SOLDAGEM MIG</td><td class="cen">300</td><td class="cen">35</td><td>Tempo diferente no RN 01001 — ver 7.4.</td></tr>
+    <tr><td>Endireitar na Morsa</td><td class="cen">Interna</td><td>BANCADA / MORSA</td><td class="cen">300</td><td class="cen">45</td><td>Centro criado na Parte 3.</td></tr>
+    <tr><td>Cortar na Serra</td><td class="cen">Interna</td><td>SERRA FITA</td><td class="cen">300</td><td class="cen">60</td><td>—</td></tr>
+    <tr><td>Embuchar na Prensa</td><td class="cen">Interna</td><td>PRENSA DOBRA</td><td class="cen">300</td><td class="cen">60</td><td>—</td></tr>
+    <tr><td>Montagem</td><td class="cen">Interna</td><td>MONTAGEM MIG</td><td class="cen">300</td><td class="cen">240</td><td>—</td></tr>
+    <tr><td>Limpeza</td><td class="cen">Interna</td><td>LIMPEZA</td><td class="cen">300</td><td class="cen">90</td><td>Centro criado na Parte 3.</td></tr>
+    <tr><td>Pintura</td><td class="cen">Interna</td><td>PINTURA</td><td class="cen">300</td><td class="cen">90</td><td>—</td></tr>
+    <tr><td><b>Usinagem</b></td><td class="cen"><b>Terceiros</b></td><td class="mudo">—</td><td class="cen">—</td><td class="cen">—</td><td>R$ 0,70/pç · prazo 2 dias.</td></tr>
+    <tr><td><b>Cementação</b></td><td class="cen"><b>Terceiros</b></td><td class="mudo">—</td><td class="cen">—</td><td class="cen">—</td><td>R$ 1,74/pç · prazo 3 dias.</td></tr>
+  </tbody>
+</table>
+
+<div class="dica">
+  <b>Confira na grade, não na mensagem</b>
+  Depois de <span class="btn">Salvar</span>, a operação aparece na grade abaixo com nome, origem,
+  preparação, máquina, peças por ciclo, equipe, refugo e unidade. Se algum número voltou diferente do
+  que você digitou, é ali que se vê — antes de o erro chegar ao custo.
+</div>
+
+<h2>5.6 Documentos da operação</h2>
+
+<p>
+  Com uma operação aberta para edição, aparece o bloco <b>Documentos da operação</b>. O que for
+  vinculado aqui vale em <b>todo roteiro</b> que usar a operação — é o lugar da instrução genérica.
+</p>
+
+<table class="campos">
+  <tr><td>Tipo</td><td><code>Instrução de trabalho</code></td><td class="obs">Desenho, instrução, ficha de processo, norma, foto ou outro. Serve para o operador saber o que está abrindo.</td></tr>
+  <tr><td>Título *</td><td>Como rebarbar peça cortada</td><td class="obs">O nome que aparece na lista do posto.</td></tr>
+  <tr><td>Referência</td><td><code>IT-REB-01</code></td><td class="obs"><b>Onde o documento está:</b> código no controle de documentos, caminho de rede ou link. O sistema guarda a referência, não o arquivo.</td></tr>
+  <tr><td>Revisão</td><td><code>2</code></td><td class="obs">Qual revisão vale. É o campo que evita o operador abrir um desenho vencido.</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 6 · Aba 2 — Criar o roteiro</h1>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Escolher o item na barra de ferramentas</div>
+  <p>
+    Comece pelo <b>TP 01001A</b>, que tem uma etapa só. No campo <b>Item</b> da barra, digite
+    <code>01001A</code> e escolha na lista. A tela carrega os roteiros que o item já tem.
+  </p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Ir para a aba <i>Roteiros do item</i> e preencher</div>
+  <table class="campos">
+    <tr><td>Descrição</td><td>Corte a laser</td><td class="obs">Texto livre. Serve para distinguir quando o item tem mais de um roteiro.</td></tr>
+    <tr><td>Alternativa</td><td><code>1</code></td><td class="obs"><b>Outro jeito de fazer a mesma peça.</b> A alternativa 1 é o caminho normal; a 2 seria, por exemplo, cortar na guilhotina quando o laser está em manutenção. Cada alternativa é um roteiro completo.</td></tr>
+    <tr><td>Máscara</td><td class="mudo">em branco</td><td class="obs">Só para item configurado, quando cada variação (cor, medida) tem processo diferente. Em branco vale para todas.</td></tr>
+    <tr><td>Padrão (MRP/CRP)</td><td><code>Sim</code></td><td class="obs"><b>É este roteiro que o planejamento usa</b> quando ninguém escolhe outro. Só um por item pode ser padrão.</td></tr>
+    <tr><td>Início da vigência</td><td class="mudo">em branco</td><td class="obs">A partir de quando o roteiro vale. Em branco = desde sempre. Serve para preparar hoje uma mudança de processo que começa no mês que vem.</td></tr>
+    <tr><td>Fim da vigência</td><td class="mudo">em branco</td><td class="obs">Até quando vale. Em branco = sem prazo. Fora da vigência o MRP não usa o roteiro.</td></tr>
+  </table>
+  <p>Clique em <span class="btn">+ Criar roteiro</span>.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Abrir o roteiro criado</div>
+  <p>
+    Na grade <b>Roteiros do item</b>, clique em <span class="btn">Abrir</span> na linha. A tela troca
+    sozinha para a aba <b>Etapas do roteiro</b>, já apontada para ele.
+  </p>
 </div>
 
 <div class="nota">
   <b>Um roteiro por item + máscara + alternativa</b>
-  Tentar criar um segundo roteiro com a mesma alternativa devolve: <i>“já existe um roteiro com esta
-  alternativa para este item e máscara; use outro número de alternativa ou altere o roteiro existente”</i>.
+  Tentar criar outro com a mesma alternativa devolve: <i>“já existe um roteiro com esta alternativa para
+  este item e máscara; use outro número de alternativa ou altere o roteiro existente”</i>.
 </div>
 
-<h2>4.2 Incluir as etapas</h2>
+<h2>6.1 Copiar um roteiro pronto</h2>
 
-<div class="passo">
-  <div class="passo-tit"><span class="n">3</span>Primeira etapa do TP 01001A</div>
-  <table class="campos">
-    <tr><td>Operação</td><td>Cortar no Laser (Interna)</td><td class="obs">A lista mostra a origem entre parênteses.</td></tr>
-    <tr><td>Seq</td><td><code>10</code></td><td class="obs">De 10 em 10, para caber uma etapa no meio depois.</td></tr>
-    <tr><td>Centro de trabalho</td><td>LASER</td><td class="obs">Já vem sugerido do centro padrão da operação.</td></tr>
-    <tr><td>Máquina / Preparação</td><td class="mudo">em branco</td><td class="obs"><b>Em branco herda</b> da biblioteca. Preencha só o que é diferente neste roteiro.</td></tr>
-    <tr><td>Refugo desta etapa</td><td class="mudo">em branco</td><td class="obs">Herda também.</td></tr>
-    <tr><td>Ponto de inspeção</td><td><code>Não</code></td><td class="obs">A Parte 7 volta nisto.</td></tr>
-  </table>
-  <p>Clique em <span class="btn">+ Etapa</span>.</p>
-</div>
+<p>
+  Com um roteiro aberto, o bloco <b>Copiar roteiro para outro item</b> aparece no fim da aba. O
+  <b>TP 01001D</b> é igual ao <b>TP 01001C</b> — copie em vez de redigitar.
+</p>
 
-<h2>4.3 Os demais roteiros</h2>
-
-<p>Repita o mesmo ciclo. Todas as etapas são internas e herdam os tempos da biblioteca:</p>
-
-<table class="dados">
-  <thead><tr><th style="width:18%">Item</th><th class="cen" style="width:8%">Seq</th><th style="width:28%">Operação</th><th style="width:22%">Centro</th><th>Observação</th></tr></thead>
-  <tbody>
-    <tr><td rowspan="3"><b>TP 01001B</b></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
-    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>GUILHOTINA</td><td>Mesma máquina, sem transporte.</td></tr>
-    <tr><td class="cen">30</td><td>Dobrar na Prensa</td><td>PRENSA DOBRA</td><td>Setup de 600 s.</td></tr>
-
-    <tr><td rowspan="3"><b>TP 01001C</b></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
-    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
-    <tr><td class="cen">30</td><td>Dobrar na Dobradeira</td><td>DOBRADEIRA</td><td>Dobradeira, não prensa.</td></tr>
-
-    <tr><td rowspan="3"><b>TP 01001D</b></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>GUILHOTINA</td><td>Idêntico ao C.</td></tr>
-    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
-    <tr><td class="cen">30</td><td>Dobrar na Dobradeira</td><td>DOBRADEIRA</td><td>—</td></tr>
-
-    <tr><td rowspan="5"><b>BU 0120E</b></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
-    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
-    <tr><td class="cen">30</td><td>Enrolar na Prensa</td><td>PRENSA DOBRA</td><td>120 s por peça.</td></tr>
-    <tr><td class="cen">40</td><td>Soldar na MIG</td><td>SOLDAGEM MIG</td><td>Fecha o anel.</td></tr>
-    <tr><td class="cen">50</td><td>Endireitar na Morsa</td><td>BANCADA / MORSA</td><td>Centro criado na Parte 2.</td></tr>
-
-    <tr><td><b>BU 0120/50</b></td><td class="cen">10</td><td>Embuchar na Prensa</td><td>PRENSA DOBRA</td><td>Junta a interna na externa.</td></tr>
-
-    <tr><td rowspan="4"><b>RN 01001</b></td><td class="cen">10</td><td>Montagem</td><td>MONTAGEM MIG</td><td>240 s por peça.</td></tr>
-    <tr><td class="cen">20</td><td>Soldar na MIG</td><td>SOLDAGEM MIG</td><td><b>360 s aqui</b> — ver abaixo.</td></tr>
-    <tr><td class="cen">30</td><td>Limpeza</td><td>LIMPEZA</td><td>Antes da pintura.</td></tr>
-    <tr><td class="cen">40</td><td>Pintura</td><td>PINTURA</td><td>Última etapa.</td></tr>
-  </tbody>
+<table class="campos">
+  <tr><td>Item de destino</td><td>TP 01001D</td><td class="obs">Escolhido na lista. Não pode ser o mesmo item de origem.</td></tr>
 </table>
+
+<p>
+  Clique em <span class="btn">Copiar</span>. Vão junto as <b>etapas</b> com tempos, refugo e
+  terceirização, e a <b>rede de dependências</b>. O roteiro novo nasce como alternativa 1, <b>não
+  marcado como padrão</b> — marque depois se for o caso.
+</p>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 7 · Aba 3 — Etapas do roteiro</h1>
+
+<p>
+  Aqui as operações da biblioteca viram as etapas deste item, na ordem em que acontecem.
+</p>
+
+<h2>7.1 O bloco <i>Incluir etapa</i>, campo a campo</h2>
+
+<table class="campos">
+  <tr><td>Operação *</td><td>Cortar no Laser (Interna)</td><td class="obs">Escolhida na lista da biblioteca; a origem aparece entre parênteses. Ao escolher, o centro padrão e os dados de terceirização vêm junto.</td></tr>
+  <tr><td>Seq</td><td><code>10</code></td><td class="obs">A ordem de execução. <b>Use de 10 em 10</b> — assim cabe uma etapa nova no meio depois, sem renumerar tudo.</td></tr>
+  <tr><td>Centro de trabalho</td><td>LASER</td><td class="obs">Onde a etapa roda <b>neste roteiro</b>. Já vem preenchido com o centro padrão da operação; troque se for diferente aqui.</td></tr>
+  <tr><td>Máquina</td><td class="mudo">em branco</td><td class="obs">Tempo de máquina só desta etapa. <b>Em branco herda</b> o da biblioteca.</td></tr>
+  <tr><td>Preparação</td><td class="mudo">em branco</td><td class="obs">Idem para o setup.</td></tr>
+  <tr><td>Refugo desta etapa (%)</td><td class="mudo">em branco</td><td class="obs">Herda o da operação. Preencha quando o mesmo processo refuga diferente nesta peça (seção 7.3).</td></tr>
+  <tr><td>Ponto de inspeção</td><td><code>Não</code></td><td class="obs">Marca que a peça <b>para para ser conferida</b> depois desta etapa. O plano do que medir é definido na Parte 8.</td></tr>
+  <tr><td>Observação</td><td class="mudo">opcional</td><td class="obs">O que esta etapa tem de particular neste item. Aparece para quem for consultar o roteiro.</td></tr>
+</table>
+
+<p>Clique em <span class="btn">+ Etapa</span>. A linha aparece na grade abaixo.</p>
 
 <div class="porque">
-  <b>A solda do RN 01001 é mais lenta que a da bucha — e isso se resolve na etapa</b>
-  A operação “Soldar na MIG” está na biblioteca com 35 s, que é o tempo de fechar o anel da bucha
-  externa. Soldar a balança inteira leva 360 s.
-  <br><br>
-  Não crie uma segunda operação. Na etapa 20 do RN 01001, preencha o campo <b>Máquina</b> com
-  <code>360</code> — a etapa sobrepõe <b>só neste roteiro</b> e a biblioteca continua valendo para os
-  outros. É exatamente para isso que o campo existe.
+  <b>Em branco herda — e é isso que faz a biblioteca valer a pena</b>
+  Deixar um campo vazio faz a etapa usar o valor da operação. Preencha <b>só o que é diferente neste
+  roteiro</b>. Assim, corrigir o tempo na biblioteca corrige todos os roteiros que não o sobrescreveram
+  — e os que sobrescreveram continuam com o valor que alguém decidiu para eles.
 </div>
 
-<div class="quebra"></div>
+<h2>7.2 A grade de etapas</h2>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 5 · A peça que sai da fábrica</h1>
+<table class="dados">
+  <thead><tr><th style="width:20%">Coluna</th><th>O que mostra</th></tr></thead>
+  <tbody>
+    <tr><td><b>Seq</b></td><td>A ordem de execução.</td></tr>
+    <tr><td><b>Operação</b></td><td>O nome vindo da biblioteca.</td></tr>
+    <tr><td><b>Centro / Fornecedor</b></td><td>O centro de trabalho, ou — quando a etapa sai da fábrica — o fornecedor e o prazo.</td></tr>
+    <tr><td><b>Preparação · Máquina</b></td><td>Os tempos <b>já resolvidos</b> em horas: o que a etapa realmente consome depois de aplicada a herança.</td></tr>
+    <tr><td><b>Refugo</b></td><td>O percentual que vale de fato nesta etapa.</td></tr>
+    <tr><td><b>Entra</b></td><td>Quantas peças esta etapa precisa processar para o lote digitado no topo da aba.</td></tr>
+    <tr><td><b>Marcas</b></td><td><span class="mudo">TERCEIRO</span> quando a etapa sai da fábrica, <span class="mudo">INSP</span> quando é ponto de inspeção.</td></tr>
+  </tbody>
+</table>
+
+<div class="dica">
+  <b>A linha âmbar não é erro</b>
+  Etapa que sai da fábrica aparece destacada em âmbar, com fornecedor e prazo. É para o planejador
+  enxergar sem abrir nada: aquela etapa corre em outro relógio e em outro CNPJ.
+</div>
+
+<h2>7.3 Refugo — quantas peças soltar</h2>
 
 <p>
-  A bucha interna passa por <b>usinagem</b> e depois por <b>cementação</b>, as duas em terceiros. É o
-  caso que mais gera dúvida, porque parece que precisa de algo especial. Não precisa: é uma etapa do
-  roteiro como qualquer outra, com a origem diferente.
+  A ficha traz o percentual de perda de cada peça. Lançá-lo é o que separa uma ordem que fecha de uma
+  que falta peça na expedição.
 </p>
 
-<h2>5.1 A cadeia da bucha interna</h2>
-
-<div class="fluxo">
-  <div class="fluxo-linha">
-    <div class="fluxo-cx"><span class="t">Tubo Ø 60,3</span><span class="c">comprado, 6000 mm</span></div>
-    <div class="fluxo-seta">→</div>
-    <div class="fluxo-cx"><span class="t">BU 0050IB</span><span class="c">cortar + usinar fora</span></div>
-    <div class="fluxo-seta">→</div>
-    <div class="fluxo-cx"><span class="t">BU 0050I</span><span class="c">cementar fora</span></div>
-    <div class="fluxo-seta">→</div>
-    <div class="fluxo-cx destaque"><span class="t">BU 0120/50</span><span class="c">embuchar aqui</span></div>
-  </div>
-</div>
-
-<h2>5.2 Cadastrar a operação de terceiro</h2>
-
 <div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Na biblioteca, criar “Cementação”</div>
-  <table class="campos">
-    <tr><td>Nome</td><td>Cementação</td></tr>
-    <tr><td>Origem</td><td><code>TERCEIROS</code></td><td class="obs">É isto que faz a etapa gerar ordem de <b>serviço</b> em vez de fabricação. Ao escolher, os campos de terceirização aparecem.</td></tr>
-    <tr><td>Fornecedor</td><td>quem executa</td><td class="obs">Vai para a ordem de serviço e a requisição de compra.</td></tr>
-    <tr><td>Custo por peça</td><td><code>1,74</code></td><td class="obs"><b>É daqui que sai o custo</b> — não de tarifa de máquina. A máquina é do fornecedor.</td></tr>
-    <tr><td>Prazo (dias)</td><td><code>3</code></td><td class="obs"><b>Dias corridos</b>, fim de semana incluído.</td></tr>
-    <tr><td>O que remeter</td><td>os itens da demanda</td><td class="obs">Define o que sai fisicamente na remessa.</td></tr>
-  </table>
-</div>
-
-<div class="passo">
-  <div class="passo-tit"><span class="n">2</span>Incluir como etapa do BU 0050I</div>
+  <div class="passo-tit"><span class="n">1</span>Digitar o lote no topo da aba</div>
   <p>
-    Crie o roteiro do <b>BU 0050I</b> e inclua a operação Cementação como <b>seq 10</b>. Ao escolher a
-    operação, os campos de terceirização aparecem <b>na própria etapa</b>, já preenchidos com o que a
-    biblioteca traz. Ajuste só o que for diferente neste roteiro.
+    O campo <b>Lote de referência</b> fica na faixa verde, acima da grade. Digite <code>100</code>.
+    Nada é gravado: é só para ler a conta.
   </p>
-  <p>Faça o mesmo no <b>BU 0050IB</b>: seq 10 Cortar na Serra (interna), seq 20 Usinagem (terceiros, R$ 0,70/pç).</p>
 </div>
 
-<h2>5.3 O que o sistema faz com isso</h2>
+<p>A faixa responde direto, e a coluna <b>Entra</b> mostra etapa a etapa:</p>
 
 <table class="dados">
-  <thead><tr><th style="width:26%">Onde</th><th>O que acontece</th></tr></thead>
-  <tbody>
-    <tr><td><b>Na grade de etapas</b></td><td>A linha fica <b>destacada em âmbar</b>, com o fornecedor e o prazo. Não é erro: é uma etapa que corre em outro relógio e em outro CNPJ, e o planejador precisa enxergar sem abrir nada.</td></tr>
-    <tr><td><b>Na capacidade</b></td><td>Nenhuma máquina nossa fica ocupada. O planejamento apenas <b>atrasa a etapa seguinte</b> pelo prazo.</td></tr>
-    <tr><td><b>No MRP</b></td><td>Gera uma ordem de <b>SERVIÇO</b> além da ordem de fabricação, e ordena a bucha antes da balança.</td></tr>
-    <tr><td><b>No custo</b></td><td>Entra o custo por peça do fornecedor, não tarifa hora-máquina.</td></tr>
-    <tr><td><b>Na <span class="tela-out">VTPS0100</span></b></td><td>A ordem de serviço aparece lá, onde se registra a <b>remessa</b> e o <b>retorno</b> com nota e lote. O saldo “em poder de terceiros” sai daí.</td></tr>
-  </tbody>
-</table>
-
-<div class="atencao">
-  <b>Operação externa sem prazo trava o planejamento</b>
-  Se o campo <i>Prazo (dias)</i> ficar vazio, o MRP recusa: <i>“informe o prazo da operação externa
-  antes de planejar a capacidade”</i>. Sem prazo não há como saber quando a peça volta — e programar a
-  etapa seguinte seria chutar.
-</div>
-
-<div class="quebra"></div>
-
-<!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 6 · Refugo — quantas peças soltar</h1>
-
-<p>
-  A ficha do RN 01001 traz o percentual de perda de cada peça. Até aqui ele não foi lançado. Agora vai —
-  e é o que separa uma ordem que fecha de uma ordem que falta peça na expedição.
-</p>
-
-<table class="dados">
-  <thead><tr><th style="width:24%">Peça</th><th class="cen" style="width:16%">Perda da ficha</th><th>Onde lançar</th></tr></thead>
-  <tbody>
-    <tr><td>TP 01001A</td><td class="cen"><b>26,95 %</b></td><td>Refugo da etapa de corte a laser.</td></tr>
-    <tr><td>TP 01001B</td><td class="cen">8,20 %</td><td>Refugo da etapa de corte.</td></tr>
-    <tr><td>TP 01001C</td><td class="cen">9,76 %</td><td>Idem.</td></tr>
-    <tr><td>TP 01001D</td><td class="cen">12,50 %</td><td>Idem.</td></tr>
-    <tr><td>BU 0120E</td><td class="cen">2,00 %</td><td>Idem.</td></tr>
-    <tr><td>BU 0050I / IB</td><td class="cen">2,00 %</td><td>Idem.</td></tr>
-    <tr><td>BU 0120/50</td><td class="cen">2,00 %</td><td>Etapa de embuchar.</td></tr>
-  </tbody>
-</table>
-
-<div class="nota">
-  <b>Refugo da estrutura × refugo da operação</b>
-  Não são a mesma coisa e os dois existem.
-  <br><br>
-  Na <b>estrutura</b>, a perda é do <b>material consumido</b> — a sobra de chapa que vira sucata no
-  plano de corte. Na <b>operação</b>, é a <b>peça sendo feita</b> que vai para o lixo: a lateral que
-  empenou na dobra.
-  <br><br>
-  Os 26,95 % do TP 01001A são perda de <b>material</b> (3,710 kg líquidos contra 4,710 brutos) e já
-  estão na estrutura. Se além disso uma lateral em cada cinquenta empena, isso é <b>2 % de refugo de
-  operação</b> — outro número, outro lugar.
-</div>
-
-<h2>6.1 O que a tela mostra</h2>
-
-<p>
-  Na aba <b>Etapas do roteiro</b>, digite o tamanho do lote no campo no alto. A faixa verde responde
-  direto:
-</p>
-
-<div class="centro">
-  <code>Lote de 100 peças boas a entregar &nbsp;·&nbsp; soltar na primeira etapa: <b>106,80</b> &nbsp;·&nbsp; perda no roteiro: 6,80 peças</code>
-</div>
-
-<p>E a coluna <b>Entra</b> mostra etapa a etapa — a conta vai de trás para frente:</p>
-
-<table class="dados">
-  <thead><tr><th class="cen" style="width:10%">Seq</th><th style="width:28%">Operação</th><th class="cen" style="width:16%">Refugo</th><th class="cen" style="width:16%">Entram</th><th>Por quê</th></tr></thead>
+  <thead><tr><th class="cen" style="width:10%">Seq</th><th style="width:26%">Operação</th><th class="cen" style="width:14%">Refugo</th><th class="cen" style="width:14%">Entram</th><th>Por quê</th></tr></thead>
   <tbody>
     <tr><td class="cen">30</td><td>Dobrar</td><td class="cen">2,0 %</td><td class="cen"><b>102,04</b></td><td>Para sair 100 boas perdendo 2 %.</td></tr>
     <tr><td class="cen">20</td><td>Repicar</td><td class="cen">1,5 %</td><td class="cen"><b>103,59</b></td><td>Para entregar 102,04 à dobra.</td></tr>
@@ -510,224 +561,391 @@
   </tbody>
 </table>
 
-<div class="porque">
-  <b>Esse número não fica só na tela</b>
-  O <b>prazo</b> passa a usar a quantidade de cada etapa — a primeira demora mais porque processa mais
-  peças. A <b>capacidade reservada na máquina</b> também. E a <b>ordem de produção</b> grava, por etapa,
-  quanto ela precisa processar.
+<div class="nota">
+  <b>Refugo da estrutura × refugo da operação</b>
+  Os dois existem e não são a mesma coisa. Na <b>estrutura</b>, a perda é do <b>material consumido</b> —
+  a sobra de chapa que vira sucata no plano de corte. Na <b>operação</b>, é a <b>peça sendo feita</b>
+  que vai para o lixo — a lateral que empenou na dobra.
   <br><br>
-  Sem isso o planejador solta 100, o corte entrega 97, a dobra entrega 96, e faltam quatro peças
-  descobertas só na expedição — quando não há mais tempo de refazer.
+  Os 26,95 % do TP 01001A são perda de material e já estão na estrutura. Se além disso uma lateral em
+  cada cinquenta empena, isso é 2 % de refugo de operação — outro número, outro lugar.
 </div>
 
-<div class="quebra"></div>
-
-<!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 7 · Abas 4 e 5 — recursos, documentos, inspeção e precedências</h1>
-
-<h2>7.1 Centro alternativo — quando a máquina principal está cheia</h2>
+<h2>7.4 Sobrepor um tempo só neste roteiro</h2>
 
 <p>
-  O corte do TP 01001B roda na guilhotina. Se ela estiver lotada, a policorte também faz — mais devagar.
-  Na aba <b>Etapas</b>, botão <span class="btn">Detalhar</span> na etapa, bloco <b>Centros de trabalho
-  alternativos</b>:
+  A operação “Soldar na MIG” está na biblioteca com <b>35 s</b>, que é o tempo de fechar o anel da
+  bucha externa. Soldar a balança inteira leva <b>360 s</b>.
 </p>
 
-<table class="campos">
-  <tr><td>Centro</td><td>POLICORTE</td></tr>
-  <tr><td>Prioridade</td><td><code>2</code></td><td class="obs">1 é a primeira escolha. O APS usa a alternativa quando a primária está cheia.</td></tr>
-  <tr><td>Fator de tempo</td><td><code>1,4</code></td><td class="obs"><b>40 % mais lento ali.</b> O planejamento recalcula o tempo com este fator.</td></tr>
-  <tr><td>Principal</td><td><code>Não</code></td><td class="obs">O principal é o que custo, CRP e lead time usam.</td></tr>
-</table>
+<p>
+  <b>Não crie uma segunda operação.</b> Na etapa 20 do RN 01001, preencha o campo <b>Máquina</b> com
+  <code>360</code>. A etapa sobrepõe só aqui; a biblioteca continua valendo para a bucha.
+</p>
 
-<h2>7.2 Documentos — o desenho no posto</h2>
-
-<p>Dois lugares, e a diferença importa:</p>
+<h2>7.5 As etapas de cada roteiro</h2>
 
 <table class="dados">
-  <thead><tr><th style="width:26%">Onde vincular</th><th style="width:26%">Exemplo</th><th>Vale para</th></tr></thead>
+  <thead><tr><th style="width:16%">Item</th><th class="cen" style="width:8%">Seq</th><th style="width:28%">Operação</th><th style="width:22%">Centro</th><th>Observação</th></tr></thead>
   <tbody>
-    <tr><td><b>Operação de biblioteca</b><br><span class="mudo">aba 1</span></td><td>Instrução de trabalho “Como rebarbar”</td><td><b>Todo roteiro</b> que usar a operação.</td></tr>
-    <tr><td><b>Etapa do roteiro</b><br><span class="mudo">aba 4</span></td><td>Desenho DES-TP-01001A rev. C</td><td><b>Só este item</b> — o desenho é dele.</td></tr>
+    <tr><td><b>TP 01001A</b></td><td class="cen">10</td><td>Cortar no Laser</td><td>LASER</td><td>Roteiro de uma etapa.</td></tr>
+
+    <tr><td rowspan="3"><b>TP 01001B</b></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>GUILHOTINA</td><td>Mesma máquina, sem transporte.</td></tr>
+    <tr><td class="cen">30</td><td>Dobrar na Prensa</td><td>PRENSA DOBRA</td><td>—</td></tr>
+
+    <tr><td rowspan="3"><b>TP 01001C</b></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
+    <tr><td class="cen">30</td><td>Dobrar na Dobradeira</td><td>DOBRADEIRA</td><td>Dobradeira, não prensa.</td></tr>
+
+    <tr><td><b>TP 01001D</b></td><td class="cen">—</td><td colspan="2"><i>copiar do TP 01001C</i></td><td>Ver seção 6.1.</td></tr>
+
+    <tr><td rowspan="5"><b>BU 0120E</b></td><td class="cen">10</td><td>Cortar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
+    <tr><td class="cen">20</td><td>Repicar na Guilhotina</td><td>GUILHOTINA</td><td>—</td></tr>
+    <tr><td class="cen">30</td><td>Enrolar na Prensa</td><td>PRENSA DOBRA</td><td>120 s por peça.</td></tr>
+    <tr><td class="cen">40</td><td>Soldar na MIG</td><td>SOLDAGEM MIG</td><td>Fecha o anel.</td></tr>
+    <tr><td class="cen">50</td><td>Endireitar na Morsa</td><td>BANCADA / MORSA</td><td>Centro criado na Parte 3.</td></tr>
+
+    <tr><td rowspan="2"><b>BU 0050IB</b></td><td class="cen">10</td><td>Cortar na Serra</td><td>SERRA FITA</td><td>—</td></tr>
+    <tr><td class="cen">20</td><td><b>Usinagem</b></td><td class="mudo">fornecedor</td><td>Sai da fábrica — ver Parte 7.6.</td></tr>
+
+    <tr><td><b>BU 0050I</b></td><td class="cen">10</td><td><b>Cementação</b></td><td class="mudo">fornecedor</td><td>Sai da fábrica.</td></tr>
+
+    <tr><td><b>BU 0120/50</b></td><td class="cen">10</td><td>Embuchar na Prensa</td><td>PRENSA DOBRA</td><td>Junta a interna na externa.</td></tr>
+
+    <tr><td rowspan="4"><b>RN 01001</b></td><td class="cen">10</td><td>Montagem</td><td>MONTAGEM MIG</td><td>240 s por peça.</td></tr>
+    <tr><td class="cen">20</td><td>Soldar na MIG</td><td>SOLDAGEM MIG</td><td><b>Máquina = 360</b> (seção 7.4).</td></tr>
+    <tr><td class="cen">30</td><td>Limpeza</td><td>LIMPEZA</td><td>Antes da pintura.</td></tr>
+    <tr><td class="cen">40</td><td>Pintura</td><td>PINTURA</td><td>Última etapa.</td></tr>
   </tbody>
 </table>
 
+<h2>7.6 A etapa que sai da fábrica</h2>
+
 <p>
-  Na etapa, a lista mostra os dois juntos: os da etapa e os herdados da operação, marcados como
-  <i>Da operação</i>. É exatamente o conjunto que o operador vê no posto.
+  Quando a operação escolhida é <b>Externa</b> ou <b>Terceiros</b>, os campos de terceirização aparecem
+  no próprio bloco <i>Incluir etapa</i>, já preenchidos com o que a biblioteca traz. Ajuste só o que é
+  diferente neste roteiro — um fornecedor mais rápido, um preço negociado para esta peça.
+</p>
+
+<table class="campos">
+  <tr><td>Fornecedor</td><td>herda</td><td class="obs">Quem faz o serviço desta peça.</td></tr>
+  <tr><td>Custo por peça</td><td>herda</td><td class="obs">O que entra no custo do item.</td></tr>
+  <tr><td>Prazo (dias)</td><td>herda</td><td class="obs">Dias corridos fora da fábrica.</td></tr>
+  <tr><td>O que remeter</td><td>herda</td><td class="obs">O que sai fisicamente na remessa.</td></tr>
+</table>
+
+<div class="atencao">
+  <b>Prazo em branco trava o planejamento</b>
+  Sem o prazo, o MRP recusa: <i>“informe o prazo da operação externa antes de planejar a capacidade”</i>.
+  Sem ele não há como saber quando a peça volta, e programar a etapa seguinte seria chute.
+</div>
+
+<div class="porque">
+  <b>O que o sistema faz com uma etapa de terceiro</b>
+  Nenhuma máquina sua fica ocupada — o planejamento só atrasa a etapa seguinte pelo prazo. O MRP gera
+  uma <b>ordem de serviço</b> além da ordem de fabricação. O custo vem do custo por peça, não de
+  tarifa. E a ordem de serviço aparece na <span class="tela-out">VTPS0100</span>, onde se registra a
+  remessa e o retorno com nota e lote.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 8 · Aba 4 — Recursos e ferramentas</h1>
+
+<p>
+  Esta aba detalha <b>uma etapa</b>. Para chegar nela, clique em <span class="btn">Detalhar</span> na
+  linha da etapa, na aba anterior — a tela troca de aba já apontada para ela. São quatro blocos.
+</p>
+
+<h2>8.1 Centros de trabalho alternativos</h2>
+
+<p>
+  Onde mais a etapa pode rodar quando o centro principal está cheio. O corte do TP 01001B roda na
+  guilhotina; a policorte também faz, mais devagar.
+</p>
+
+<table class="campos">
+  <tr><td>Centro *</td><td>POLICORTE</td><td class="obs">O centro alternativo.</td></tr>
+  <tr><td>Prioridade</td><td><code>2</code></td><td class="obs">Ordem de escolha: <b>1 é a primeira</b>. O sequenciamento usa a alternativa quando a de prioridade menor está lotada.</td></tr>
+  <tr><td>Fator de tempo</td><td><code>1,4</code></td><td class="obs"><b>Quanto mais lento (ou rápido) ali.</b> 1,4 = leva 40 % mais tempo na policorte que na guilhotina. 0,8 seria 20 % mais rápido. O planejamento recalcula o tempo com este fator.</td></tr>
+  <tr><td>Principal</td><td><code>Não</code></td><td class="obs">O principal é o centro que <b>custo, CRP e prazo</b> usam. Só um por etapa. Para trocar, use o botão <span class="btn">Tornar principal</span> na grade.</td></tr>
+</table>
+
+<h2>8.2 Ferramentas</h2>
+
+<table class="campos">
+  <tr><td>Ferramenta</td><td>estampo, molde, dispositivo</td><td class="obs">Escolhida na lista. A vida útil dela é consumida quando a etapa é concluída no apontamento.</td></tr>
+  <tr><td>Quantidade</td><td><code>1</code></td><td class="obs">Quantas peças daquela ferramenta a etapa usa — um jogo de quatro insertos é <code>4</code>.</td></tr>
+</table>
+
+<p>
+  Quando a ferramenta chega ao limite de vida, o sistema avisa no apontamento. Ver
+  <span class="tela-out">VPRO1000</span>.
+</p>
+
+<h2>8.3 Documentos desta etapa</h2>
+
+<p>
+  Mesmos campos da seção 5.6, mas vinculados <b>a esta etapa</b> — é o lugar do desenho, que é do item.
 </p>
 
 <div class="dica">
-  <b>O sistema guarda a referência e a revisão, não o arquivo</b>
-  O problema real no chão de fábrica não é achar o desenho — é o operador abrir a <b>revisão vencida</b>.
-  Por isso o campo <i>Revisão</i> existe e aparece na lista.
+  <b>A lista mostra os dois juntos</b>
+  Aparecem os documentos desta etapa <b>e</b> os herdados da operação de biblioteca, estes marcados como
+  <i>Da operação</i>. É exatamente o conjunto que o operador vê no posto. Os herdados não podem ser
+  removidos aqui — edite-os na aba 1.
 </div>
 
-<h2>7.3 Ponto de inspeção</h2>
+<h2>8.4 Inspeção nesta etapa</h2>
 
-<p>
-  A bucha interna volta da cementação e a dureza precisa ser conferida antes de embuchar. Dois passos:
-</p>
+<p>São dois passos, e os dois são necessários:</p>
 
 <div class="passo">
   <div class="passo-tit"><span class="n">1</span>Marcar a etapa</div>
-  <p>Na aba <b>Etapas</b>, na etapa de cementação do BU 0050I, ligue <b>Ponto de inspeção</b>.</p>
+  <p>Na aba 3, ligue <b>Ponto de inspeção</b> na etapa de cementação do BU 0050I.</p>
 </div>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">2</span>Descrever o plano</div>
-  <p>Botão <span class="btn">Detalhar</span> → bloco <b>Inspeção nesta etapa</b>:</p>
+  <div class="passo-tit"><span class="n">2</span>Descrever o que medir</div>
   <table class="campos">
-    <tr><td>Onde</td><td><code>No processo</code></td></tr>
-    <tr><td>O que inspecionar</td><td>Dureza superficial após cementação</td></tr>
-    <tr><td>Amostra</td><td><code>5</code></td><td class="obs">Peças medidas por lote.</td></tr>
-    <tr><td>Aceitação (%)</td><td><code>0</code></td><td class="obs">Nenhuma defeituosa tolerada.</td></tr>
+    <tr><td>Onde</td><td><code>No processo</code></td><td class="obs">Processo (no meio da fabricação), recebimento (na entrada de material) ou expedição (antes de enviar).</td></tr>
+    <tr><td>O que inspecionar *</td><td>Dureza superficial após cementação</td><td class="obs">É o que o inspetor lê na tela de qualidade.</td></tr>
+    <tr><td>Amostra</td><td><code>5</code></td><td class="obs">Quantas peças do lote são medidas.</td></tr>
+    <tr><td>Aceitação (%)</td><td><code>0</code></td><td class="obs">Percentual de defeituosas tolerado. Zero = nenhuma.</td></tr>
   </table>
 </div>
 
 <div class="nota">
   <b>Marcar sem plano não gera nada</b>
-  A ordem de produção abre o registro de inspeção ao chegar na etapa — mas só se houver <b>plano ativo</b>.
-  Etapa marcada sem plano não gera registro (não há o que conferir) e a tela avisa em âmbar.
+  A ordem de produção abre o registro de inspeção ao chegar na etapa — <b>mas só se houver plano
+  ativo</b>. Etapa marcada sem plano não gera registro, porque não há o que conferir, e a tela avisa em
+  âmbar.
 </div>
 
-<h2>7.4 Rede de precedências — quando usar</h2>
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 9 · Aba 5 — Rede de dependências</h1>
 
-<p>
-  <b>Sem nenhuma dependência cadastrada, as etapas seguem a ordem das sequências</b> — 10, depois 20,
-  depois 30. Para os nove roteiros do RN 01001 isso já é o certo, e você não precisa cadastrar nada.
-</p>
+<div class="dica">
+  <b>Para os nove roteiros deste tutorial, você não precisa cadastrar nada aqui</b>
+  Sem nenhuma dependência, as etapas seguem a ordem das sequências: 10, depois 20, depois 30. Isso já
+  é o certo para todos eles. Leia esta parte para saber quando a rede é necessária.
+</div>
 
-<p>A rede serve para dois casos que a sequência sozinha não expressa:</p>
+<h2>9.1 Para que serve</h2>
 
 <table class="dados">
   <thead><tr><th style="width:26%">Caso</th><th>Como cadastrar</th></tr></thead>
   <tbody>
     <tr><td><b>Etapas em paralelo</b></td><td>Duas etapas que dependem da mesma predecessora e de mais ninguém rodam ao mesmo tempo. Cadastre 10→20 e 10→30, sem ligar 20 a 30.</td></tr>
-    <tr><td><b>Sobreposição</b></td><td>A peça vai saindo da máquina e já pode seguir. Na aresta 10→20, informe <b>Sobreposição 50 %</b>: a etapa 20 começa quando metade da 10 terminou.</td></tr>
+    <tr><td><b>Sobreposição</b></td><td>A peça vai saindo da máquina e já pode seguir. Na aresta 10→20, informe sobreposição — a etapa 20 começa antes de a 10 terminar.</td></tr>
   </tbody>
+</table>
+
+<h2>9.2 Os campos</h2>
+
+<table class="campos">
+  <tr><td>Predecessora *</td><td>seq 10 · Cortar</td><td class="obs">A etapa que vem antes.</td></tr>
+  <tr><td>Sucessora *</td><td>seq 20 · Dobrar</td><td class="obs">A que depende dela. Não pode ser a mesma.</td></tr>
+  <tr><td>Sobreposição (%)</td><td><code>50</code></td><td class="obs">Quanto da sucessora pode começar antes de a predecessora terminar. 50 % = a dobra começa quando metade do lote de corte está pronto. Zero = espera terminar tudo.</td></tr>
 </table>
 
 <div class="atencao">
   <b>A sobreposição só vale em centro automático</b>
-  Onde o centro tem <i>requer operador</i>, o cálculo <b>ignora</b> a sobreposição — o operador não
-  larga a peça no meio para começar a próxima etapa. Cadastrar 50 % num centro assim não dá erro, mas
-  não muda o prazo: é aí que a conta parece “não funcionar”.
-</div>
-
-<div class="dica">
-  <b>Um bom uso no RN 01001</b>
-  As peças cortadas <b>esperam a dobradeira</b> por fila de gargalo. Sobreposição entre corte e dobra
-  deixa a dobra começar antes de o lote de corte terminar — é o ganho real, e não custa nada além de
-  cadastrar a aresta.
+  Onde o centro tem <b>Exige operador</b> marcado (Parte 3), o cálculo <b>ignora</b> a sobreposição — o
+  operador não larga a peça no meio para começar a próxima etapa. Cadastrar 50 % num centro assim não
+  dá erro, mas também não muda o prazo. É aí que a conta parece “não funcionar”.
 </div>
 
 <div class="atencao">
-  <b>Ciclo na rede é recusado</b>
-  Ligar 10→20, 20→30 e 30→10 devolve as etapas envolvidas e o planejamento é recusado. É proposital:
-  com ciclo o prazo calculado não significa nada, e antes disso o sistema devolvia <b>0 h em silêncio</b> —
-  o MRP planejava como se o roteiro fosse instantâneo.
+  <b>Ciclo é recusado</b>
+  Ligar 10→20, 20→30 e 30→10 faz o planejamento recusar, listando as etapas envolvidas. Com ciclo o
+  prazo calculado não significa nada.
 </div>
 
-<div class="quebra"></div>
-
 <!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 8 · Aba 6 — conferir tempo e custo</h1>
+<h1>Parte 10 · Aba 6 — Tempo e custo do lote</h1>
 
 <p>
-  Esta aba não grava nada. Ela responde à pergunta que a engenharia faz o tempo todo: <b>quanto custa e
-  quanto demora fabricar 50?</b>
+  Esta aba <b>não grava nada</b>. Responde: quanto custa e quanto demora fabricar um lote deste tamanho?
 </p>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Calcular</div>
-  <p>Digite o tamanho do lote e clique em <span class="btn">Calcular prazo</span>.</p>
+  <div class="passo-tit"><span class="n">1</span>Digitar o lote e calcular</div>
+  <p>
+    Digite <code>50</code> no campo <b>Lote</b> da faixa verde e clique em
+    <span class="btn">Calcular prazo</span>.
+  </p>
 </div>
 
+<h2>10.1 O que cada número significa</h2>
+
 <table class="dados">
-  <thead><tr><th style="width:22%">O que aparece</th><th>De onde sai</th></tr></thead>
+  <thead><tr><th style="width:24%">O que aparece</th><th>De onde sai</th></tr></thead>
   <tbody>
-    <tr><td><b>Trabalho interno</b></td><td>Horas de máquina pelo caminho crítico — a sequência de etapas que define o prazo. Mexer numa etapa fora dele não adianta nada.</td></tr>
+    <tr><td><b>Trabalho interno</b></td><td>Horas pelo <b>caminho crítico</b> — a sequência de etapas que define o prazo. Mexer numa etapa fora dele não antecipa a entrega.</td></tr>
     <tr><td><b>No terceiro</b></td><td>Dias <b>corridos</b> no fornecedor, somados ao longo do caminho crítico.</td></tr>
     <tr><td><b>Máquina</b></td><td>Preparação (uma vez) + tempo de máquina × (lote ÷ peças por ciclo).</td></tr>
-    <tr><td><b>Mão de obra</b></td><td>Tempo de mão de obra × ciclos × operadores. Zero acompanha a máquina.</td></tr>
-    <tr><td><b>Paradas</b></td><td>Fila + espera + movimentação. Contam para o prazo, não para a carga da máquina.</td></tr>
-    <tr><td><b>Custo por peça</b></td><td>Horas × tarifa do centro + custo do terceiro, dividido pelo lote.</td></tr>
+    <tr><td><b>Mão de obra</b></td><td>Tempo de mão de obra × ciclos × operadores. Quando o campo é zero, acompanha a máquina.</td></tr>
+    <tr><td><b>Paradas</b></td><td>Fila + espera + movimentação. Contam para o prazo, não para a carga.</td></tr>
+    <tr><td><b>Custo</b></td><td>Horas × tarifa do centro + custo do terceiro.</td></tr>
+    <tr><td><b>Custo por peça</b></td><td>O total dividido pelo lote. É o número que orienta o lote mínimo.</td></tr>
   </tbody>
 </table>
 
 <div class="porque">
   <b>Dois relógios, nunca somados</b>
-  As horas são de <b>trabalho nosso</b> — 8 h por dia útil. Os dias do terceiro correm no <b>calendário
-  dele</b>, fim de semana incluído. Somar os dois num número só daria uma conta que não bate com nenhum
-  dos dois. O item só fica pronto depois dos dois.
+  As horas são de <b>trabalho seu</b> — 8 h por dia útil. Os dias do terceiro correm no <b>calendário
+  dele</b>, fim de semana incluído. Somar os dois num número só daria uma conta que não bate com
+  nenhum. O item fica pronto depois dos dois.
 </div>
 
 <div class="dica">
   <b>O efeito que só aparece aqui</b>
-  Com preparação de 300 s e ciclo de 15 s, o custo por peça <b>cai pela metade</b> quando o lote vai de
-  10 para 100 — a preparação se diluindo. É esse número que deveria orientar o lote mínimo de
-  fabricação, e é ele que some quando o roteiro guarda um “tempo padrão” só.
+  Calcule com lote <code>10</code> e depois com <code>100</code>. O custo por peça cai — é a preparação
+  se diluindo. É esse número que orienta o lote mínimo de fabricação.
 </div>
 
-<div class="quebra"></div>
-
 <!-- ══════════════════════════════════════════════════════════ -->
-<h1>Parte 9 · Validar com o MRP</h1>
+<h1>Parte 11 · Produtividade por máquina <span class="tela">VMAQ0200</span></h1>
 
 <p>
-  O roteiro só está certo quando o planejamento concorda. Este é o teste final.
+  O roteiro diz <b>em qual centro</b> a etapa roda. O MRP precisa saber <b>em qual máquina daquele
+  centro</b> e a que ritmo — é o que esta aba guarda. Sem ela o planejamento recusa com
+  <i>“cadastre a produtividade do item X no centro Y”</i>.
 </p>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">1</span>Criar uma demanda</div>
-  <p>Em <span class="tela-out">Demandas Independentes</span>, lance <b>20 unidades de RN 01001</b> para uma data daqui a 45 dias.</p>
+  <div class="passo-tit"><span class="n">1</span>Abrir a aba <i>Produtividade</i></div>
+  <table class="campos">
+    <tr><td>Item *</td><td>TP 01001A</td><td class="obs">A peça que será produzida.</td></tr>
+    <tr><td>Máscara</td><td class="mudo">em branco</td><td class="obs">Só para item configurado.</td></tr>
+    <tr><td>Máquina *</td><td>LASER CALFRAN 3000KWA</td><td class="obs">A máquina física, não o centro. Se o centro tem três máquinas iguais, cadastre uma linha para cada.</td></tr>
+    <tr><td>Forma de produção</td><td><code>Proporcional</code></td><td class="obs"><b>Proporcional:</b> o tempo cresce com a quantidade — corte, solda. <b>Por ciclo:</b> cada ciclo produz um número fixo independente da quantidade — estampo, injeção.</td></tr>
+    <tr><td>Eficiência deste item (%)</td><td><code>100</code></td><td class="obs">Quanto da velocidade nominal a máquina entrega <b>nesta peça</b>. Uma peça difícil pode render 85 %.</td></tr>
+    <tr><td>Tempo de produção *</td><td><code>85</code></td><td class="obs">Quanto tempo leva para produzir a quantidade do campo seguinte.</td></tr>
+    <tr><td>Unidade tempo</td><td><code>Segundo</code></td><td class="obs">Em que unidade o tempo acima foi digitado.</td></tr>
+    <tr><td>Quantidade nesse tempo *</td><td><code>1</code></td><td class="obs">Quantas peças saem no tempo acima. Junto com o campo anterior, forma o ritmo: 85 s por 1 peça.</td></tr>
+    <tr><td>Preparação por ordem (min)</td><td><code>3</code></td><td class="obs">Setup, em minutos, cobrado uma vez por ordem.</td></tr>
+    <tr><td>Prioridade (1 = preferida)</td><td><code>1</code></td><td class="obs">Quando várias máquinas fazem a peça, a de menor número é tentada primeiro.</td></tr>
+  </table>
+</div>
+
+<div class="dica">
+  <b>Cadastre pelo menos uma máquina por centro usado</b>
+  Percorra os roteiros e confira: para cada par <b>item × centro</b> que aparece, tem que existir uma
+  linha aqui. É a causa mais comum de ressalva no MRP.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Parte 12 · Validar com o MRP</h1>
+
+<p>
+  O roteiro só está certo quando o planejamento concorda com ele. Este é o teste final.
+</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar a demanda <span class="tela">VPLA0102</span></div>
+  <table class="campos">
+    <tr><td>Item</td><td>RN 01001</td></tr>
+    <tr><td>Quantidade</td><td><code>20</code></td></tr>
+    <tr><td>Data da demanda</td><td>daqui a 45 dias</td><td class="obs">Precisa caber no horizonte de planejamento, senão o MRP não vê a necessidade.</td></tr>
+  </table>
 </div>
 
 <div class="passo">
-  <div class="passo-tit"><span class="n">2</span>Rodar o MRP</div>
-  <p>Em <span class="tela-out">Cálculo MRP</span>, escolha o plano e rode.</p>
+  <div class="passo-tit"><span class="n">2</span>Rodar o MRP <span class="tela">VMRP0100</span></div>
+  <p>Escolha o plano e execute. Ao terminar, a tela devolve o resultado.</p>
 </div>
 
 <div class="passo">
   <div class="passo-tit"><span class="n">3</span>Conferir as sugestões</div>
-  <p>Devem aparecer, no mínimo:</p>
   <table class="dados">
-    <thead><tr><th style="width:24%">Item</th><th class="cen" style="width:16%">Tipo</th><th>Confira</th></tr></thead>
+    <thead><tr><th style="width:22%">Item</th><th class="cen" style="width:16%">Tipo</th><th>Confira</th></tr></thead>
     <tbody>
-      <tr><td>RN 01001</td><td class="cen">FABRICAÇÃO</td><td>20 unidades.</td></tr>
-      <tr><td>TP 01001A</td><td class="cen">FABRICAÇÃO</td><td>40 (2 por balança) <b>mais o refugo</b>, se lançado.</td></tr>
-      <tr><td>BU 0050I</td><td class="cen">FABRICAÇÃO</td><td>Começa <b>antes</b> do RN 01001 — o componente vem primeiro.</td></tr>
-      <tr><td>BU 0050I</td><td class="cen"><b>SERVIÇO</b></td><td>A cementação virou ordem de serviço sozinha.</td></tr>
-      <tr><td>Chapa / Tubo</td><td class="cen">COMPRA</td><td><b>Na unidade de estoque</b> — barras e chapas, não milímetros e quilos.</td></tr>
+      <tr><td>RN 01001</td><td class="cen">Fabricação</td><td>20 unidades.</td></tr>
+      <tr><td>TP 01001A</td><td class="cen">Fabricação</td><td>40 (2 por balança), mais o refugo se lançado.</td></tr>
+      <tr><td>BU 0050I</td><td class="cen">Fabricação</td><td>Começa <b>antes</b> do RN 01001 — o componente vem primeiro.</td></tr>
+      <tr><td>BU 0050I</td><td class="cen"><b>Serviço</b></td><td>A cementação virou ordem de serviço sozinha.</td></tr>
+      <tr><td>Chapa · Tubo</td><td class="cen">Compra</td><td><b>Na unidade de estoque</b> — chapas e barras, não quilos e milímetros.</td></tr>
     </tbody>
   </table>
 </div>
 
-<h2>9.1 Checklist de conferência</h2>
+<h2>12.1 Checklist</h2>
 
 <table class="dados">
-  <thead><tr><th class="cen" style="width:8%">✓</th><th style="width:38%">O que conferir</th><th>Se estiver errado</th></tr></thead>
+  <thead><tr><th class="cen" style="width:8%">✓</th><th style="width:38%">Conferir</th><th>Se estiver errado</th></tr></thead>
   <tbody>
     <tr><td class="cen">☐</td><td>Toda peça fabricada tem roteiro</td><td>O MRP não calcula prazo nem carga para quem não tem.</td></tr>
     <tr><td class="cen">☐</td><td>Toda etapa interna tem centro de trabalho</td><td>Ressalva: <i>“operação sem centro de trabalho”</i>.</td></tr>
-    <tr><td class="cen">☐</td><td>Todo centro usado tem tarifa hora-máquina</td><td>A etapa entra no custo com zero e a tela avisa.</td></tr>
+    <tr><td class="cen">☐</td><td>Todo centro usado tem tarifa (Parte 3.3)</td><td>A etapa entra no custo com zero.</td></tr>
     <tr><td class="cen">☐</td><td>Toda etapa externa tem prazo em dias</td><td>O MRP recusa planejar a capacidade.</td></tr>
-    <tr><td class="cen">☐</td><td>Cada item×centro tem produtividade cadastrada</td><td>Ressalva: <i>“cadastre a produtividade do item X no centro Y”</i>.</td></tr>
-    <tr><td class="cen">☐</td><td>Os materiais divergentes têm conversão</td><td>A compra sai em ordem de grandeza errada — Parte 0.</td></tr>
+    <tr><td class="cen">☐</td><td>Cada item × centro tem produtividade (Parte 11)</td><td>Ressalva nomeando o item e o centro.</td></tr>
+    <tr><td class="cen">☐</td><td>Os materiais têm conversão (Parte 4)</td><td>A compra sai na unidade errada.</td></tr>
     <tr><td class="cen">☐</td><td>O roteiro padrão está marcado</td><td>O MRP não sabe qual usar quando há alternativas.</td></tr>
-    <tr><td class="cen">☐</td><td>O MRP terminou <b>sem ressalvas</b></td><td>A resposta lista cada uma, em português, dizendo o que falta.</td></tr>
+    <tr><td class="cen">☐</td><td>O MRP terminou <b>sem ressalvas</b></td><td>O resultado lista cada uma dizendo o que falta.</td></tr>
   </tbody>
 </table>
 
 <div class="dica">
-  <b>Rodar o MRP duas vezes seguidas deve dar o mesmo resultado</b>
-  É a conferência mais rápida de todas. Se mudar entre uma rodada e outra sem nada ter mudado no
-  cadastro, há algo errado — e vale reportar.
+  <b>Rodar duas vezes seguidas deve dar o mesmo resultado</b>
+  É a conferência mais rápida. Se mudar entre uma rodada e outra sem nada ter mudado no cadastro, há
+  algo errado — vale reportar.
 </div>
 
 <div class="exercicio">
   <b>Exercício</b>
-  Cadastre o roteiro do <b>SU 02046 — Deslizante Traseiro Truck MB</b> sozinho, do zero, usando o Anexo B
-  do Dia 1. São seis etapas, uma delas em terceiro. Ao terminar, rode o MRP e confira o checklist acima.
+  Cadastre o roteiro do <b>SU 02046 — Deslizante Traseiro Truck MB</b> sozinho, do zero, usando o
+  Anexo B do Dia 1. São seis etapas, uma delas em terceiro. Ao terminar, rode o MRP e percorra o
+  checklist.
 </div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>Anexo · Todos os campos, por tela</h1>
+
+<h2>A.1 <span class="tela">VENT0202</span> — Roteiro de Fabricação</h2>
+
+<table class="dados">
+  <thead><tr><th style="width:22%">Aba</th><th style="width:26%">Campo</th><th>Significa</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="6"><b>Operação / Biblioteca</b></td><td>Nome</td><td>Como a operação aparece nas listas.</td></tr>
+    <tr><td>Origem</td><td>Interna → ordem de fabricação; Externa/Terceiros → ordem de serviço.</td></tr>
+    <tr><td>Unidade dos tempos</td><td>Em que unidade os tempos abaixo são lidos.</td></tr>
+    <tr><td>Preparação · Máquina · Mão de obra</td><td>Setup por lote; ocupação da máquina; tempo do operador.</td></tr>
+    <tr><td>Peças por ciclo · Operadores</td><td>Quantas peças por tempo de máquina; quantas pessoas no posto.</td></tr>
+    <tr><td>Refugo padrão</td><td>% do que entra que não sai bom.</td></tr>
+
+    <tr><td rowspan="4"><b>Roteiros do item</b></td><td>Alternativa</td><td>Outro jeito de fazer a mesma peça.</td></tr>
+    <tr><td>Máscara</td><td>Variação configurada do item.</td></tr>
+    <tr><td>Padrão</td><td>O roteiro que o planejamento usa por omissão.</td></tr>
+    <tr><td>Vigência</td><td>Período em que o roteiro vale.</td></tr>
+
+    <tr><td rowspan="4"><b>Etapas do roteiro</b></td><td>Seq</td><td>Ordem de execução; use de 10 em 10.</td></tr>
+    <tr><td>Centro de trabalho</td><td>Onde a etapa roda neste roteiro.</td></tr>
+    <tr><td>Máquina · Preparação · Refugo</td><td>Sobrepõem a biblioteca; em branco herdam.</td></tr>
+    <tr><td>Ponto de inspeção</td><td>A peça para para ser conferida aqui.</td></tr>
+
+    <tr><td rowspan="3"><b>Recursos e ferramentas</b></td><td>Prioridade · Fator de tempo</td><td>Ordem de escolha do centro alternativo e quanto ele é mais lento.</td></tr>
+    <tr><td>Ferramenta · Quantidade</td><td>O que a etapa usa e quantas unidades.</td></tr>
+    <tr><td>Amostra · Aceitação</td><td>Quantas peças medir e quanto de defeito tolerar.</td></tr>
+
+    <tr><td><b>Rede de dependências</b></td><td>Sobreposição (%)</td><td>Quanto da sucessora começa antes de a predecessora terminar.</td></tr>
+
+    <tr><td><b>Tempo e custo</b></td><td>Lote</td><td>Tamanho simulado; nada é gravado.</td></tr>
+  </tbody>
+</table>
+
+<h2>A.2 Telas de apoio</h2>
+
+<table class="dados">
+  <thead><tr><th style="width:18%">Tela</th><th style="width:26%">Para quê</th><th>Campos que este tutorial usa</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tela">VMAQ0200</span></td><td>Centros de trabalho e produtividade</td><td>Código · Nome · Natureza · Exige operador · Item · Máquina · Tempo de produção · Quantidade nesse tempo · Prioridade</td></tr>
+    <tr><td><span class="tela">VCUS0100</span></td><td>Tarifa hora dos centros</td><td>Centro de trabalho · Custo/hora</td></tr>
+    <tr><td><span class="tela">VSUP0110</span></td><td>Conversão de unidade por item</td><td>De (UM) · Para (UM) · Fator · Arredondamento · Tolerância</td></tr>
+    <tr><td><span class="tela">VENT0210</span></td><td>Estrutura do produto</td><td>Quantidade · Unidade de medida (regravar para aplicar a conversão)</td></tr>
+    <tr><td><span class="tela">VPLA0102</span></td><td>Demandas independentes</td><td>Item · Quantidade · Data</td></tr>
+    <tr><td><span class="tela">VMRP0100</span></td><td>Rodar o planejamento</td><td>Plano · sugestões · ressalvas</td></tr>
+    <tr><td><span class="tela">VTPS0100</span></td><td>Serviços de terceiros</td><td>Preço por peça · remessa e retorno</td></tr>
+  </tbody>
+</table>
