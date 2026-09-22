@@ -3,7 +3,6 @@
 package lot_mask_uc_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -18,9 +17,9 @@ import (
 // advances to LT0002 on the next call (sequence state persisted).
 func TestIntegration_LotMask_Generate(t *testing.T) {
 	q, pool := testutil.Queries(t)
-	uc := lot_mask_uc.New(q)
+	uc := lot_mask_uc.New(q, pool)
 	uc.Now = func() time.Time { return time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC) }
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	mask, err := uc.Create(ctx, request.LotMaskDTO{Application: "GERAL", Description: "test", CreatedBy: uid})

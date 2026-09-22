@@ -52,9 +52,47 @@ em [`visao-geral.md`](visao-geral.md) §5.1.
 | GET | `/{id}/operations` | Lista operações da OF e andamento |
 | POST | `/operations/advance` | Avança a operação (conclui etapa, libera a próxima) |
 
-Corpo de `/operations/advance`: `{ "operation_id": 123, "status": "IN_PROGRESS", "actual_hours": 0 }`.
-`status` ∈ `PENDING` · `IN_PROGRESS` · `DONE` · `SKIPPED` (422 para outros valores).
-`IN_PROGRESS` carimba `started_at`; `DONE`/`SKIPPED` carimbam `completed_at`.
+Corpo de `/operations/advance`: `{ "operation_id": 123, "status": "IN_PROGRESS", "actual_hours": 0, "reason": "Retomada" }`.
+
+Transições permitidas:
+
+- `PENDING` → `IN_PROGRESS` ou `SKIPPED` (dispensa com motivo).
+- `IN_PROGRESS` → `PAUSED`, `INTERRUPTED` ou `DONE`.
+- `PAUSED`/`INTERRUPTED` → `IN_PROGRESS`.
+- `DONE`/`SKIPPED` são terminais. Pausa e interrupção exigem motivo.
+
+O início depende das predecessoras concluídas/dispensadas. Sem rede explícita,
+valem as etapas de sequência anterior. A conclusão libera as sucessoras, mas não
+inicia máquinas automaticamente. `started_at` preserva o primeiro início;
+`completed_at` identifica a conclusão/dispensa. A lista retorna `can_start` e
+`execution_history`, incluindo autor, estado e horário de cada alteração.
+
+As dependências são copiadas para a OF na geração das etapas (migração 358).
+Alterar a rede de engenharia depois não altera a rede da OF existente. A migração
+preenche ordens anteriores usando a rede disponível no momento da atualização;
+não recupera versões históricas que não foram armazenadas.
+
+O histórico de execução é registrado por trigger na mesma transação, com fonte
+`OPERATION` ou `SCANNER` e usuário autenticado (migração 359). Atualização/exclusão
+direta desses eventos é bloqueada. Atualizações legadas sem contexto registram
+fonte `LEGACY` e não inventam um autor. Isso não substitui um sistema completo de
+estorno contábil nem identifica uma estação física não informada pelo cliente.
+
+A criação manual e a liberação de planejadas na API mantêm OF, materiais, etapas,
+inspeções e aplicação da programação de máquinas na mesma transação. Na liberação,
+a mudança de situação, requisição e ordens de serviço também participam dela.
+Bloqueios por ordem planejada impedem que duas liberações gerem duas OFs.
+Ordens planejadas que já geraram OF não retornam a PLANNED por essa ação: ajustes
+seguem na OF correspondente. A numeração da OF é reservada atomicamente por
+empresa (migração 360); falhas de criação podem deixar lacunas na numeração.
+
+A entrega final exige etapas concluídas/dispensadas, ausência de inspeção pendente
+ou rejeitada e ausência de pedido de serviço pendente. Inspeção obrigatória sem
+plano ativo impede a criação da OF. A aprovação da qualidade continua sendo uma
+ação explícita. Concluir a última etapa não equivale à entrada do acabado: o
+scanner orienta a entrega de produção. Entrega, movimentos e saldos são atômicos;
+repetir a chave da entrega com outros dados é rejeitado. Ordens concluídas ou
+canceladas não podem ser reabertas por uma entrega posterior.
 
 > ✅ **Backflush:** no apontamento com `backflush_warehouse_id`, os componentes da BOM
 > são baixados automaticamente, proporcional à qtd produzida. Respeita quantidade fixa

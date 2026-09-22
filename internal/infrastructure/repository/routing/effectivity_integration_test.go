@@ -3,7 +3,6 @@
 package routing_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -19,11 +18,11 @@ import (
 func TestIntegration_Routing_EffectivitySelection(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := routingrepo.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	itemCode := testutil.UniqueCode()
-	testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", itemCode, itemCode, uid)
+	testutil.SeedItem(t, pool, ctx, itemCode, uid)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 	defer testutil.Exec(t, pool, "DELETE FROM manufacturing_routes WHERE item_code = $1", itemCode)
 

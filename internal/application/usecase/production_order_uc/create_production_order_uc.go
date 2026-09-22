@@ -31,10 +31,13 @@ type productionRouteExploder interface {
 	ExplodeRoute(context.Context, int64, int64) ([]*response.ProductionOrderOperationResponse, error)
 }
 
+type AtomicOrderCreator func(context.Context, *entity.ProductionOrder, []*entity.ProductionOrderMaterial, int64) (*entity.ProductionOrder, error)
+
 type CreateProductionOrderUseCase struct {
-	Repo      repository.ProductionOrderRepository
-	Auth      ports.AuthService
-	Structure coproductReader
+	CreateAtomically AtomicOrderCreator
+	Repo             repository.ProductionOrderRepository
+	Auth             ports.AuthService
+	Structure        coproductReader
 	// MaskVars devolve as variáveis da configuração (item + máscara) para
 	// avaliar a fórmula de quantidade do componente. Opcional: sem ela vale a
 	// quantidade fixa cadastrada.
@@ -166,15 +169,22 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	if !ok {
 		return nil, errorsuc.NewValidationError("a criação manual de ordem em uma única transação não está disponível")
 	}
+	var route *routingentity.ManufacturingRoute
+	if uc.Routing != nil && uc.OrderOps != nil {
+		var routeErr error
+		route, routeErr = uc.Routing.GetRouteForItem(ctx, itemCode, dto.Mask)
+		if routeErr != nil {
+			return nil, errorsuc.NewValidationError("o item não possui roteiro de fabricação aprovado; cadastre o roteiro antes de criar a OF")
+		}
+	}
+	if route != nil && uc.CreateAtomically != nil {
+		return uc.CreateAtomically(ctx, order, materials, route.ID)
+	}
 	created, err := atomicRepo.CreateWithMaterials(ctx, order, materials)
 	if err != nil {
 		return nil, err
 	}
-	if uc.Routing != nil && uc.OrderOps != nil {
-		route, routeErr := uc.Routing.GetRouteForItem(ctx, itemCode, dto.Mask)
-		if routeErr != nil {
-			return nil, errorsuc.NewValidationError("o item não possui roteiro de fabricação aprovado; cadastre o roteiro antes de criar a OF")
-		}
+	if route != nil {
 		if _, explodeErr := uc.OrderOps.ExplodeRoute(ctx, created.ID, route.ID); explodeErr != nil {
 			return nil, explodeErr
 		}

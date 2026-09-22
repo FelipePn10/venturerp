@@ -267,6 +267,12 @@ func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
+	routeID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || routeID <= 0 {
+		jsonError(w, http.StatusBadRequest, "roteiro inválido")
+		return
+	}
+	dto.RouteID = routeID
 	result, err := h.routeUC.SetEdge(r.Context(), dto)
 	if err != nil {
 		jsonError(w, http.StatusUnprocessableEntity, err.Error())

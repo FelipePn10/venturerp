@@ -3,20 +3,31 @@ package response
 import "time"
 
 type ProductionOrderOperationResponse struct {
-	ID                int64      `json:"id"`
-	ProductionOrderID int64      `json:"production_order_id"`
-	RouteOperationID  *int64     `json:"route_operation_id,omitempty"`
-	Sequence          int        `json:"sequence"`
-	OperationName     string     `json:"operation_name"`
-	WorkCenterID      *int64     `json:"work_center_id,omitempty"`
-	PlannedHours      float64    `json:"planned_hours"`
-	SetupHours        float64    `json:"setup_hours"`
-	ActualHours       float64    `json:"actual_hours"`
-	Status            string     `json:"status"`
-	StartedAt         *time.Time `json:"started_at,omitempty"`
-	CompletedAt       *time.Time `json:"completed_at,omitempty"`
-	Notes             *string    `json:"notes,omitempty"`
+	ExecutionHistory  []ProductionOperationEvent `json:"execution_history,omitempty"`
+	CanStart          bool                       `json:"can_start"`
+	ID                int64                      `json:"id"`
+	ProductionOrderID int64                      `json:"production_order_id"`
+	RouteOperationID  *int64                     `json:"route_operation_id,omitempty"`
+	Sequence          int                        `json:"sequence"`
+	OperationName     string                     `json:"operation_name"`
+	WorkCenterID      *int64                     `json:"work_center_id,omitempty"`
+	PlannedHours      float64                    `json:"planned_hours"`
+	SetupHours        float64                    `json:"setup_hours"`
+	ActualHours       float64                    `json:"actual_hours"`
+	Status            string                     `json:"status"`
+	StartedAt         *time.Time                 `json:"started_at,omitempty"`
+	CompletedAt       *time.Time                 `json:"completed_at,omitempty"`
+	Notes             *string                    `json:"notes,omitempty"`
 	// ToolAlerts lists tools that reached their useful-life limit while completing
 	// this operation (populated on DONE). Empty otherwise.
 	ToolAlerts []string `json:"tool_alerts,omitempty"`
+}
+
+type ProductionOperationEvent struct {
+	ID             int64     `json:"id"`
+	PreviousStatus string    `json:"previous_status"`
+	Status         string    `json:"status"`
+	Actor          string    `json:"actor"`
+	OccurredAt     time.Time `json:"occurred_at"`
+	ActualHours    float64   `json:"actual_hours"`
 }

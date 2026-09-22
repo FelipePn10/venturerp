@@ -110,8 +110,12 @@ func (r *MRPCalculationRepositorySQLC) SaveMachineSlots(ctx context.Context, sug
 		}
 	}
 	for _, w := range slots {
-		if _, err = r.db.Exec(ctx, `INSERT INTO mrp_machine_allocation_slots(suggestion_code,starts_at,ends_at,machine_id,route_operation_id) SELECT suggestion_code,$2,$3,$5,$6 FROM mrp_machine_allocations WHERE suggestion_code=$1 AND enterprise_id=$4`, suggestion, w.Start, w.End, e, machineID, operationID); err != nil {
-			return err
+		tag, insertErr := r.db.Exec(ctx, `INSERT INTO mrp_machine_allocation_slots(suggestion_code,starts_at,ends_at,machine_id,route_operation_id) SELECT suggestion_code,$2,$3,$5,$6 FROM mrp_machine_allocations WHERE suggestion_code=$1 AND enterprise_id=$4`, suggestion, w.Start, w.End, e, machineID, operationID)
+		if insertErr != nil {
+			return insertErr
+		}
+		if tag.RowsAffected() != 1 {
+			return fmt.Errorf("alocação de máquina não encontrada nesta empresa ao reservar horário")
 		}
 	}
 	_, err = r.db.Exec(ctx, `UPDATE mrp_machine_allocations SET scheduled_start=(SELECT MIN(starts_at) FROM mrp_machine_allocation_slots WHERE suggestion_code=$1),scheduled_end=(SELECT MAX(ends_at) FROM mrp_machine_allocation_slots WHERE suggestion_code=$1),schedule_date=(SELECT MIN(starts_at)::date FROM mrp_machine_allocation_slots WHERE suggestion_code=$1) WHERE suggestion_code=$1 AND enterprise_id=$2`, suggestion, e)

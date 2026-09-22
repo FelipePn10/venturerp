@@ -208,7 +208,7 @@ func TestSequencingSubregistriesConcurrencyAndDowntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now().UTC().Truncate(time.Minute)
-	down, err := repo.CreateMachineDowntime(ctx, apsdomain.MachineDowntime{MachineID: machineID, StartsAt: start, EndsAt: start.Add(time.Hour), DowntimeType: "UNPLANNED", Reason: "Teste"})
+	down, err := repo.CreateMachineDowntime(ctx, apsdomain.MachineDowntime{MachineID: machineID, StartsAt: start, EndsAt: func() *time.Time { end := start.Add(time.Hour); return &end }(), DowntimeType: "UNPLANNED", Reason: "Teste"})
 	if err != nil {
 		t.Fatal(err)
 	}

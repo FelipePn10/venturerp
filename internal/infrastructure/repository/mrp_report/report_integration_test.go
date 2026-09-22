@@ -55,7 +55,7 @@ func TestAvailabilityExplodesManualQuantityAndAppliesLayout(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT MIN(id) FROM enterprise").Scan(&enterpriseID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT id::text FROM users WHERE $1::bigint>0 ORDER BY id LIMIT 1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
@@ -97,7 +97,7 @@ func TestProfileReturnsPersistedOriginsAndTenantDrawings(t *testing.T) {
 		t.Fatal(err)
 	}
 	var userID string
-	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT id::text FROM users WHERE $1::bigint>0 ORDER BY id LIMIT 1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
@@ -150,7 +150,7 @@ func TestReorderPointTraversesReleasedAndBlockedSalesOrderStructures(t *testing.
 	if err := pool.QueryRow(ctx, "SELECT id,code FROM enterprise ORDER BY id LIMIT 1").Scan(&enterpriseID, &enterpriseCode); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT created_by::text FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT id::text FROM users WHERE $1::bigint>0 ORDER BY id LIMIT 1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})

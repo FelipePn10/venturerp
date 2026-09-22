@@ -3,7 +3,6 @@
 package purchase_requisition_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -16,7 +15,7 @@ import (
 func TestIntegration_Requisition_AttendanceStatusRecompute(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := reqrepo.New(q, pool)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 
 	code, err := repo.NextCode(ctx)
 	if err != nil {

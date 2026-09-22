@@ -16,16 +16,23 @@ import (
 	"time"
 
 	domain "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/shopspring/decimal"
 )
 
-type Repo struct{ db *pgxpool.Pool }
+// Accept a pool or an existing transaction; nested writes use savepoints.
+type serviceDB interface {
+	sqlc.DBTX
+	Begin(context.Context) (pgx.Tx, error)
+}
 
-func New(db *pgxpool.Pool) domain.Repository { return &Repo{db: db} }
+type Repo struct{ db serviceDB }
+
+func New(db serviceDB) domain.Repository { return &Repo{db: db} }
 
 func (r *Repo) CreatePrice(ctx context.Context, p *domain.Price, reason string) (*domain.Price, error) {
 	if err := p.Validate(); err != nil {

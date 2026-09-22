@@ -139,8 +139,20 @@ func TestParameter45_BlocksOrderReportingWithIssueAtRelease(t *testing.T) {
 		(code,business_code,warehouse_code,production_reporting_type,material_issue_timing,created_by,enterprise_id)
 		VALUES ($1,($1::bigint)::text,$1,'ORDER','REGISTRATION_RELEASE',$2,$3)`, itemCode, uuid.New(), enterpriseID)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code=$1", itemCode)
-	testutil.Exec(t, pool, "UPDATE planning_params SET value='S' WHERE enterprise_id=$1 AND param_number=45", enterpriseID)
-	defer testutil.Exec(t, pool, "UPDATE planning_params SET value='N' WHERE enterprise_id=$1 AND param_number=45", enterpriseID)
+	var oldValue *string
+	if err := pool.QueryRow(ctx, "SELECT (SELECT value FROM planning_params WHERE enterprise_id=$1 AND param_number=45)", enterpriseID).Scan(&oldValue); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO planning_params(enterprise_id,param_number,param_key,value,description,updated_by) VALUES($1,45,'OBRIGAR_CONTROLE_ESTOQUE_TERCEIROS','S','Teste',$2) ON CONFLICT(enterprise_id,param_number) WHERE enterprise_id IS NOT NULL DO UPDATE SET value='S'`, enterpriseID, testutil.Actor(t, pool)); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if oldValue == nil {
+			testutil.Exec(t, pool, "DELETE FROM planning_params WHERE enterprise_id=$1 AND param_number=45", enterpriseID)
+		} else {
+			testutil.Exec(t, pool, "UPDATE planning_params SET value=$2 WHERE enterprise_id=$1 AND param_number=45", enterpriseID, *oldValue)
+		}
+	}()
 	if err := productionrepo.NewProductionOrderRepositoryPGX(pool).ValidateProductionRelease(ctx, itemCode); err == nil {
 		t.Fatal("parameter 45 must block this production release")
 	}

@@ -31,10 +31,10 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 	supplierCode := suffix%1000000000 + 7000000000
 	operationCode := supplierCode + 1
 	var supplierID, operationID int64
-	if e := pool.QueryRow(base, `INSERT INTO suppliers(code,name,document_type,document_number,created_by) VALUES($1,'Third party test','ESTRANGEIRO',$2,$3) RETURNING id`, supplierCode, fmt.Sprintf("T%d", suffix), uid).Scan(&supplierID); e != nil {
+	if e := pool.QueryRow(base, `INSERT INTO suppliers(code,name,document_type,document_number,created_by,enterprise_id) VALUES($1,'Third party test','ESTRANGEIRO',$2,$3,$4) RETURNING id`, supplierCode, fmt.Sprintf("T%d", suffix), uid, enterpriseID).Scan(&supplierID); e != nil {
 		t.Fatal(e)
 	}
-	if e := pool.QueryRow(base, `INSERT INTO operations(code,name,origin,created_by) VALUES($1,'External test','TERCEIROS',$2) RETURNING id`, operationCode, uid).Scan(&operationID); e != nil {
+	if e := pool.QueryRow(base, `INSERT INTO operations(code,name,origin,created_by,enterprise_id) VALUES($1,'External test','TERCEIROS',$2,$3) RETURNING id`, operationCode, uid, enterpriseID).Scan(&operationID); e != nil {
 		t.Fatal(e)
 	}
 	t.Cleanup(func() {
@@ -90,7 +90,7 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 	}
 	routeCode := operationCode + 100
 	var routeID, routeOpID, productionID int64
-	if e = pool.QueryRow(base, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,created_by) VALUES($1,$2,32760,FALSE,$3) RETURNING id`, routeCode, itemCode, uid).Scan(&routeID); e != nil {
+	if e = pool.QueryRow(base, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,created_by,enterprise_id) VALUES($1,$2,32760,FALSE,$3,$4) RETURNING id`, routeCode, itemCode, uid, enterpriseID).Scan(&routeID); e != nil {
 		t.Fatal(e)
 	}
 	if e = pool.QueryRow(base, `INSERT INTO route_operations(route_id,sequence,operation_id) VALUES($1,32760,$2) RETURNING id`, routeID, operationID).Scan(&routeOpID); e != nil {

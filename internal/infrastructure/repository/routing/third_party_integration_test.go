@@ -3,7 +3,6 @@
 package routing_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
@@ -15,18 +14,18 @@ import (
 
 func TestThirdPartyRoutingDetailsRoundTrip(t *testing.T) {
 	_, pool := testutil.Queries(t)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	actor := uuid.New()
 	itemCode, operationCode, routeCode := testutil.UniqueCode(), testutil.UniqueCode(), testutil.UniqueCode()
-	if _, err := pool.Exec(ctx, `INSERT INTO items(code,warehouse_code,created_by) VALUES($1,$1,$2)`, itemCode, actor); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,$1,$2,$3)`, itemCode, actor, testutil.EnterpriseID(t, ctx)); err != nil {
 		t.Fatal(err)
 	}
 	var operationID, routeID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO operations(code,name,origin,supplier_id,service_item_code,cost_per_unit,lead_time_days,third_party_remittance,created_by)
-		VALUES($1,'External details','TERCEIROS',77,$2,12.5,5,'GENERIC',$3) RETURNING id`, operationCode, itemCode, actor).Scan(&operationID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO operations(code,name,origin,supplier_id,service_item_code,cost_per_unit,lead_time_days,third_party_remittance,created_by,enterprise_id)
+		VALUES($1,'External details','TERCEIROS',77,$2,12.5,5,'GENERIC',$3,$4) RETURNING id`, operationCode, itemCode, actor, testutil.EnterpriseID(t, ctx)).Scan(&operationID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,created_by) VALUES($1,$2,1,TRUE,$3) RETURNING id`, routeCode, itemCode, actor).Scan(&routeID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,created_by,enterprise_id) VALUES($1,$2,1,TRUE,$3,$4) RETURNING id`, routeCode, itemCode, actor, testutil.EnterpriseID(t, ctx)).Scan(&routeID); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

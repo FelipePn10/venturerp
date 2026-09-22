@@ -10,13 +10,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
-	"github.com/FelipePn10/panossoerp/internal/application/security"
 	plannedentity "github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	purchasereqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
-	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 // Verifies the subcontracting hook: firming an order whose item has an external
@@ -33,7 +31,7 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), "SELECT MIN(id) FROM enterprise").Scan(&enterpriseID); err != nil || enterpriseID == 0 {
 		t.Skip("integration database has no enterprise")
 	}
-	ctx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
+	ctx := testutil.TenantContext(t, pool)
 
 	serviceItem := testutil.UniqueCode()
 	supplier := testutil.UniqueCode()

@@ -21,14 +21,15 @@ func TestPolicyCycleCountSchedulerLifecycleAndTenantIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var warehouseID, tenantA, tenantB int64
-	if err := pool.QueryRow(ctx, `INSERT INTO warehouse(code,description,created_by,location,type,disposition,reservations_allowed) VALUES($1,'Scheduler',$2,'NORMAL','INTERNO',TRUE,TRUE) RETURNING id`, fmt.Sprintf("WP-%d", testutil.UniqueCode()), actor).Scan(&warehouseID); err != nil {
-		t.Fatal(err)
-	}
+
 	base := int64(1_600_000_000 + testutil.UniqueCode()%400_000_000)
 	if err := pool.QueryRow(ctx, `INSERT INTO enterprise(code,name,created_by) VALUES($1,'Policy A',$3),($2,'Policy B',$3) RETURNING id`, base, base+1, actor).Scan(&tenantA); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `SELECT id FROM enterprise WHERE code=$1`, base+1).Scan(&tenantB); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO warehouse(code,description,created_by,location,type,disposition,reservations_allowed,enterprise_id) VALUES($1,'Scheduler',$2,'INTERNO','NORMAL',TRUE,TRUE,$3) RETURNING id`, fmt.Sprintf("WP-%d", testutil.UniqueCode()), actor, tenantA).Scan(&warehouseID); err != nil {
 		t.Fatal(err)
 	}
 	itemA, itemB := testutil.UniqueCode(), testutil.UniqueCode()

@@ -3,7 +3,6 @@
 package cost_uc_test
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -25,15 +24,15 @@ func TestIntegration_CostRollup_PerWorkCenterRichTime(t *testing.T) {
 	uc := cost_uc.New(standardCostRepo.New(q)).WithRouting(routingRepo.New(q))
 	rRepo := routingRepo.New(q)
 	scRepo := standardCostRepo.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	// Work center (machine type) + its machine/labor hourly rates.
 	wcCode := testutil.UniqueCode()
 	var wcID int64
 	if err := pool.QueryRow(ctx,
-		"INSERT INTO machine_types (code, name, type, requires_operator, created_by) VALUES ($1,'CT Custo','CUT',false,$2) RETURNING id",
-		wcCode, uid).Scan(&wcID); err != nil {
+		"INSERT INTO machine_types (code, name, type, requires_operator, created_by, enterprise_id) VALUES ($1,'CT Custo','CUT',false,$2,$3) RETURNING id",
+		wcCode, uid, testutil.EnterpriseID(t, ctx)).Scan(&wcID); err != nil {
 		t.Fatalf("seed machine_type: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM machine_types WHERE id = $1", wcID)
@@ -60,7 +59,7 @@ func TestIntegration_CostRollup_PerWorkCenterRichTime(t *testing.T) {
 
 	// Item + standard route + one (inherited) operation.
 	itemCode := testutil.UniqueCode()
-	testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", itemCode, itemCode, uid)
+	testutil.SeedItem(t, pool, ctx, itemCode, uid)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 
 	rc := testutil.UniqueCode()

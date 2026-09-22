@@ -3,7 +3,6 @@
 package configurator_uc_test
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -25,7 +24,7 @@ import (
 func TestIntegration_Configurator_Flow(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
@@ -151,7 +150,7 @@ func TestIntegration_Configurator_CartesianWithRestriction(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	oracle := &restriction_uc.EvaluateRestrictionsUseCase{Repo: restrictionrepo.NewRestrictionRepositorySQLC(q)}
 	uc := configurator_uc.New(q).WithRestrictions(oracle)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
@@ -255,7 +254,7 @@ func TestIntegration_Configurator_CartesianWithRestriction(t *testing.T) {
 func TestIntegration_Configurator_ItemDescription(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
@@ -324,7 +323,7 @@ func TestIntegration_Configurator_ItemDescription(t *testing.T) {
 func TestIntegration_Configurator_EquivalentRule(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
@@ -373,7 +372,7 @@ func TestIntegration_Configurator_EquivalentRule(t *testing.T) {
 func TestIntegration_Configurator_ItemRule(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
@@ -429,7 +428,7 @@ func TestIntegration_Configurator_ItemRule(t *testing.T) {
 func TestIntegration_Configurator_FormulaGuardAndLinkedItems(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
@@ -472,7 +471,7 @@ func TestIntegration_Configurator_FormulaGuardAndLinkedItems(t *testing.T) {
 func TestIntegration_Configurator_Formula(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
@@ -544,7 +543,7 @@ func TestIntegration_Configurator_Formula(t *testing.T) {
 func TestIntegration_Configurator_ReceivingItems(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 	code := testutil.UniqueCode()
 
@@ -586,7 +585,7 @@ func TestIntegration_Structure_CfgRouting(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	uc := configurator_uc.New(q)
 	repo := structurequery.NewStructureQueryRepository(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 	code := testutil.UniqueCode()
 	itemCode := testutil.UniqueCode()

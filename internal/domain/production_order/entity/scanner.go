@@ -38,6 +38,8 @@ type ScanCommand struct {
 }
 
 type ScanResult struct {
+	NextAction        string  `json:"next_action,omitempty"`
+	Message           string  `json:"message,omitempty"`
 	ProductionOrderID int64   `json:"production_order_id"`
 	OperationID       *int64  `json:"operation_id,omitempty"`
 	OrderNumber       int64   `json:"order_number"`

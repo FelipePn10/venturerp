@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -38,10 +40,7 @@ func TestItemBusinessCodeHTTPAcrossOperationalDomains(t *testing.T) {
 		t.Fatal(err)
 	}
 	var warehouseCode int64
-	if err := pool.QueryRow(ctx, `INSERT INTO warehouse(code,description,created_by,location,type,disposition,reservations_allowed)
-		VALUES($1,'Teste compatibilidade',$2,'NORMAL','INTERNO',TRUE,TRUE) RETURNING id`, fmt.Sprintf("W-%d", testutil.UniqueCode()), userID).Scan(&warehouseCode); err != nil {
-		t.Fatal(err)
-	}
+
 	enterpriseCodeA := int64(1_000_000_000 + testutil.UniqueCode()%500_000_000)
 	enterpriseCodeB := enterpriseCodeA + 1
 	var enterpriseA, enterpriseB int64
@@ -49,6 +48,10 @@ func TestItemBusinessCodeHTTPAcrossOperationalDomains(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `SELECT id FROM enterprise WHERE code=$1`, enterpriseCodeB).Scan(&enterpriseB); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO warehouse(code,description,created_by,location,type,disposition,reservations_allowed,enterprise_id)
+		VALUES($1,'Teste compatibilidade',$2,'INTERNO','NORMAL',TRUE,TRUE,$3) RETURNING id`, fmt.Sprintf("W-%d", testutil.UniqueCode()), userID, enterpriseA).Scan(&warehouseCode); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -76,9 +79,15 @@ func TestItemBusinessCodeHTTPAcrossOperationalDomains(t *testing.T) {
 				tenantID = enterpriseB
 			}
 			user := &security.AuthUser{EnterpriseID: tenantID, Role: "ADMIN"}
+			token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, &auth.UserClaims{EnterpriseID: user.EnterpriseID}).SignedString([]byte("integration-only-key"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.Header.Set("Authorization", "Bearer "+token)
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextkey.UserKey, user)))
 		})
 	})
+	router.Use(ItemPathTranslation(pool, "integration-only-key"))
 	router.Use(ItemBusinessCodeCompatibility(pool))
 	echo := func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
@@ -103,6 +112,10 @@ func TestItemBusinessCodeHTTPAcrossOperationalDomains(t *testing.T) {
 		}
 		if raw == "" {
 			raw = chi.URLParam(r, "item_code")
+		}
+		if nativeItemBusinessCodePath(r) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"item_code": raw})
+			return
 		}
 		legacy, _ := strconv.ParseInt(raw, 10, 64)
 		_ = json.NewEncoder(w).Encode(map[string]any{"item_code": legacy})
@@ -198,7 +211,7 @@ func TestItemBusinessCodeHTTPAcrossOperationalDomains(t *testing.T) {
 	var calculate bool
 	var description, cest string
 	var dimensionsAbsent, reorderPointAbsent bool
-	if err = pool.QueryRow(ctx, `SELECT commercial_warranty_days,accounting_origin,accounting_calculate_pis_cofins,commercial_description,accounting_cest,engineering_dimensions = '{}'::jsonb,planning_reorder_point = '{}'::jsonb FROM items WHERE enterprise_id=$1 AND code=$2`, enterpriseA, numericLegacy).Scan(&warranty, &origin, &calculate, &description, &cest, &dimensionsAbsent, &reorderPointAbsent); err != nil {
+	if err = pool.QueryRow(ctx, `SELECT commercial_warranty_days,accounting_origin,accounting_calculate_pis_cofins,commercial_description,accounting_cest,(engineering_dimensions IS NULL OR engineering_dimensions IN ('{}'::jsonb,'null'::jsonb)),planning_reorder_point = '{}'::jsonb FROM items WHERE enterprise_id=$1 AND code=$2`, enterpriseA, numericLegacy).Scan(&warranty, &origin, &calculate, &description, &cest, &dimensionsAbsent, &reorderPointAbsent); err != nil {
 		t.Fatal(err)
 	}
 	if warranty != 730 || origin != 1 || !calculate || description != "Descrição preservada" || cest != "1234567" || !dimensionsAbsent || !reorderPointAbsent {

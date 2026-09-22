@@ -3,7 +3,11 @@ package production_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	orderentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	"math"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -16,8 +20,17 @@ import (
 
 // OrderOperationsUseCase manages production order operations (exploding route + advancing status).
 type OrderOperationsUseCase struct {
-	Q               *sqlc.Queries
-	MachinePlanning interface {
+	Routing interface {
+		GetRouteForItem(context.Context, int64, string) (*routingentity.ManufacturingRoute, error)
+		GetRouteByID(context.Context, int64) (*routingentity.ManufacturingRoute, error)
+		GetRouteOperations(context.Context, int64) ([]*routingentity.RouteOperation, error)
+		GetNetworkEdges(context.Context, int64) ([]*routingentity.NetworkEdge, error)
+	}
+
+	Q                 *sqlc.Queries
+	Auth              ports.AuthService
+	WithinTransaction func(context.Context, func(*sqlc.Queries) error) error
+	MachinePlanning   interface {
 		ApplyMachinePlanToProduction(context.Context, int64) error
 	}
 }
@@ -31,12 +44,101 @@ type OrderOperationsUseCase struct {
 // seguintes. Sem isso o apontamento cobraria 100 peças de uma operação que
 // tinha de fazer 106, e a ordem fecharia faltando peça.
 func (uc *OrderOperationsUseCase) ExplodeRoute(ctx context.Context, orderID, routeID int64) ([]*response.ProductionOrderOperationResponse, error) {
+	if uc.WithinTransaction == nil {
+		return uc.explodeRoute(ctx, orderID, routeID)
+	}
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	created := false
+	err = uc.WithinTransaction(ctx, func(q *sqlc.Queries) error {
+		order, err := q.LockProductionExecution(ctx, sqlc.LockProductionExecutionParams{ID: orderID, EnterpriseID: &empresa})
+		if err != nil {
+			return errorsuc.NewValidationError("ordem não encontrada na empresa autenticada")
+		}
+		existing, err := q.ListProductionOrderOperations(ctx, orderID)
+		if err != nil {
+			return err
+		}
+		if len(existing) > 0 {
+
+			return nil
+		}
+		if order.Status != "OPEN" && order.Status != "IN_PROGRESS" {
+			return errorsuc.NewValidationError("não é possível gerar etapas para uma ordem encerrada")
+		}
+		if routeID <= 0 {
+			if uc.Routing == nil {
+				return errorsuc.NewValidationError("selecione o roteiro do item")
+			}
+			route, err := uc.Routing.GetRouteForItem(ctx, order.ItemCode, order.Mask)
+			if err != nil {
+				return errorsuc.NewValidationError("o item não possui roteiro aprovado para esta máscara")
+			}
+			routeID = route.ID
+		}
+		inner := *uc
+		inner.Q = q
+		inner.WithinTransaction = nil
+		inner.MachinePlanning = nil
+		_, err = inner.explodeRoute(ctx, orderID, routeID)
+		created = err == nil
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if created && uc.MachinePlanning != nil {
+		if err := uc.MachinePlanning.ApplyMachinePlanToProduction(ctx, orderID); err != nil {
+			return nil, err
+		}
+	}
+	return uc.ListOperations(ctx, orderID)
+}
+
+func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, routeID int64) ([]*response.ProductionOrderOperationResponse, error) {
 	ops, err := uc.Q.GetRouteOpsForExplode(ctx, routeID)
 	if err != nil {
 		return nil, fmt.Errorf("fetching route operations: %w", err)
 	}
 
 	entraPorEtapa := uc.quantidadePorEtapa(ctx, orderID, routeID, ops)
+	if uc.Routing != nil {
+		route, err := uc.Routing.GetRouteByID(ctx, routeID)
+		if err != nil {
+			return nil, err
+		}
+		qty, item, err := uc.Q.GetProductionOrderQty(ctx, orderID)
+		if err != nil {
+			return nil, err
+		}
+		if route.ItemCode != item {
+			return nil, errorsuc.NewValidationError("o roteiro deve pertencer ao item da ordem")
+		}
+		resolved, err := uc.Routing.GetRouteOperations(ctx, routeID)
+		if err != nil {
+			return nil, err
+		}
+		edges, err := uc.Routing.GetNetworkEdges(ctx, routeID)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolved) == 0 {
+			return nil, errorsuc.NewValidationError("cadastre as etapas do roteiro antes de gerar a ordem")
+		}
+		if routingentity.CriticalPath(resolved, edges, qty).HasCycle() {
+			return nil, errorsuc.NewValidationError("o roteiro contém um ciclo de dependências")
+		}
+		entraPorEtapa = routingentity.QuantidadePorOperacao(resolved, edges, qty)
+		ops = make([]sqlc.DBRouteOpForExplode, 0, len(resolved))
+		for _, op := range resolved {
+			ops = append(ops, sqlc.DBRouteOpForExplode{ID: op.ID, Sequence: op.Sequence, OperationName: op.OperationName,
+				WorkCenterID: pgutil.ToPgInt8Ptr(op.EffectiveWorkCenterID),
+				PlannedHours: op.EffTime.Run * op.EffTime.Batches(entraPorEtapa[op.ID]), SetupHours: op.EffTime.Setup,
+				EffectiveScrap: op.EffectiveScrap, InspectionRequired: op.InspectionRequired})
+		}
+	}
 
 	out := make([]*response.ProductionOrderOperationResponse, 0, len(ops))
 	for _, op := range ops {
@@ -56,11 +158,21 @@ func (uc *OrderOperationsUseCase) ExplodeRoute(ctx context.Context, orderID, rou
 		out = append(out, pooToResponse(poo))
 	}
 
-	// Etapas marcadas como ponto de inspeção abrem o registro de inspeção junto
-	// com a ordem. Falhar aqui não invalida a ordem: a ordem existe, a inspeção
-	// é um controle sobre ela — derrubar a criação da ordem por causa do plano
-	// de qualidade deixaria a fábrica sem ordem nenhuma.
-	uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.Q.FreezeProductionRoutingDependencies(ctx, sqlc.FreezeProductionRoutingDependenciesParams{ID: orderID, EnterpriseID: &enterpriseID}); err != nil {
+		return nil, err
+	}
+	if err := uc.Q.MarkProductionRoutingFrozen(ctx, sqlc.MarkProductionRoutingFrozenParams{ID: orderID, EnterpriseID: &enterpriseID}); err != nil {
+		return nil, err
+	}
+
+	// Inspection records are part of creation; failure rolls back the order.
+	if err := uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops); err != nil {
+		return nil, err
+	}
 	if uc.MachinePlanning != nil {
 		if err := uc.MachinePlanning.ApplyMachinePlanToProduction(ctx, orderID); err != nil {
 			return nil, err
@@ -102,11 +214,10 @@ func (uc *OrderOperationsUseCase) quantidadePorEtapa(
 }
 
 // abrirInspecoesDaOrdem cria um registro de inspeção PENDENTE para cada etapa
-// marcada no roteiro que tenha plano de inspeção ativo. Etapa marcada sem plano
-// não gera registro: o registro precisa dizer o que inspecionar.
+// marcada no roteiro. Sem plano ativo, a criação é rejeitada para não omitir o controle.
 func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 	ctx context.Context, orderID, routeID int64, ops []sqlc.DBRouteOpForExplode,
-) {
+) error {
 	temInspecao := false
 	for _, op := range ops {
 		if op.InspectionRequired {
@@ -115,24 +226,32 @@ func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 		}
 	}
 	if !temInspecao {
-		return
+		return nil
 	}
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
-		return
+		return err
 	}
 	etapas, err := uc.Q.ListInspectionStepsForOrderRoute(ctx, sqlc.ListInspectionStepsForOrderRouteParams{
 		RouteID: routeID, EnterpriseID: empresa,
 	})
 	if err != nil {
-		return
+		return err
+	}
+	if uc.Auth == nil {
+		return errorsuc.NewValidationError("autenticação não configurada para abrir inspeções")
+	}
+	actor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return err
 	}
 	for _, etapa := range etapas {
 		if !etapa.PlanID.Valid || etapa.ItemCode == nil {
-			continue // etapa marcada mas ainda sem plano: nada a inspecionar
+			return errorsuc.NewValidationError(fmt.Sprintf("a etapa %d exige inspeção; cadastre um plano ativo antes de gerar a ordem", etapa.Sequence))
 		}
-		_, _ = uc.Q.CreateQualityRecord(ctx, sqlc.CreateQualityRecordParams{
+		_, err = uc.Q.CreateQualityRecord(ctx, sqlc.CreateQualityRecordParams{
 			PlanID:            etapa.PlanID.Int64,
+			CreatedBy:         pgutil.ToPgUUID(actor),
 			ProductionOrderID: pgutil.ToPgInt8Ptr(&orderID),
 			ItemCode:          *etapa.ItemCode,
 			// Quantidade zerada e resultado PENDENTE: o registro nasce aberto,
@@ -140,51 +259,112 @@ func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 			InspectedQty: 0,
 			Result:       sqlc.InspectionResultEnum("PENDENTE"),
 		})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // ListOperations lists operations for a production order.
 func (uc *OrderOperationsUseCase) ListOperations(ctx context.Context, orderID int64) ([]*response.ProductionOrderOperationResponse, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := uc.Q.GetProductionExecution(ctx, sqlc.GetProductionExecutionParams{ID: orderID, EnterpriseID: &empresa}); err != nil {
+		return nil, errorsuc.NewValidationError("ordem não encontrada na empresa autenticada")
+	}
 	poos, err := uc.Q.ListProductionOrderOperations(ctx, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("listing operations: %w", err)
 	}
 	out := make([]*response.ProductionOrderOperationResponse, 0, len(poos))
 	for _, poo := range poos {
-		out = append(out, pooToResponse(poo))
+		r := pooToResponse(poo)
+		blocked, err := uc.Q.OperationPredecessorsPending(ctx, poo.ID)
+		if err != nil {
+			return nil, err
+		}
+		r.CanStart = !blocked && (poo.Status == "PENDING" || poo.Status == "PAUSED" || poo.Status == "INTERRUPTED")
+		events, err := uc.Q.ListProductionExecutionEvents(ctx, sqlc.ListProductionExecutionEventsParams{OperationID: poo.ID, EnterpriseID: empresa})
+		if err != nil {
+			return nil, err
+		}
+		for _, event := range events {
+			r.ExecutionHistory = append(r.ExecutionHistory, response.ProductionOperationEvent{ID: event.ID, PreviousStatus: event.OldStatus, Status: event.NewStatus, Actor: event.ActorName, OccurredAt: event.OccurredAt.Time, ActualHours: pgutil.FromPgNumericToFloat64(event.ActualHoursDelta)})
+		}
+		out = append(out, r)
 	}
 	return out, nil
 }
 
 // AdvanceOperation changes an operation status (PENDING → IN_PROGRESS → DONE).
 func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto request.AdvanceOperationDTO) (*response.ProductionOrderOperationResponse, error) {
-	if dto.OperationID == 0 {
+	if uc.Auth == nil || !uc.Auth.CanCreatePlannedOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if dto.OperationID <= 0 {
 		return nil, errorsuc.NewValidationError("informe a operação")
 	}
-	switch dto.Status {
-	case "PENDING", "IN_PROGRESS", "DONE", "SKIPPED":
-	default:
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida: use pendente, em andamento, concluída ou dispensada", dto.Status))
+	if math.IsNaN(dto.ActualHours) || math.IsInf(dto.ActualHours, 0) || dto.ActualHours < 0 || math.IsNaN(dto.ProducedQty) || math.IsInf(dto.ProducedQty, 0) || dto.ProducedQty < 0 {
+		return nil, errorsuc.NewValidationError("horas e quantidade devem ser finitas e não negativas")
 	}
-	// Capture the prior status so tool-life is consumed only on the real transition
-	// INTO DONE (advancing an already-DONE operation must not double-consume).
-	prior, priorErr := uc.Q.GetProductionOrderOperation(ctx, dto.OperationID)
-	wasDone := priorErr == nil && prior.Status == "DONE"
-
-	poo, err := uc.Q.AdvanceProductionOrderOperation(ctx, dto.OperationID, dto.Status)
+	empresa, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("advancing operation: %w", err)
+		return nil, err
 	}
-	if dto.ActualHours > 0 {
-		_ = uc.Q.AddActualHours(ctx, dto.OperationID, pgutil.ToPgNumericFromFloat64(dto.ActualHours))
+	if uc.WithinTransaction == nil {
+		return nil, errorsuc.NewValidationError("execução transacional de etapas não configurada")
 	}
-	resp := pooToResponse(poo)
-	// On the first completion, consume the useful life of the tools used by this
-	// operation and surface any that reached their replacement limit.
-	if dto.Status == "DONE" && !wasDone && poo.RouteOperationID.Valid {
-		resp.ToolAlerts = uc.consumeToolLife(ctx, poo.ID, poo.RouteOperationID.Int64, dto.ProducedQty, dto.ActualHours)
-	}
-	return resp, nil
+	var result *response.ProductionOrderOperationResponse
+	err = uc.WithinTransaction(ctx, func(q *sqlc.Queries) error {
+		prior, err := q.LockOperationExecution(ctx, sqlc.LockOperationExecutionParams{ID: dto.OperationID, EnterpriseID: &empresa})
+		if err != nil {
+			return errorsuc.NewValidationError("etapa não encontrada na empresa autenticada")
+		}
+		if prior.OrderStatus != "IN_PROGRESS" {
+			return errorsuc.NewValidationError("inicie a ordem antes de executar suas etapas; ordens encerradas não podem ser alteradas")
+		}
+		reason := strings.TrimSpace(dto.Reason)
+		if err := orderentity.ValidateOperationTransition(prior.Status, dto.Status, reason); err != nil {
+			return errorsuc.NewValidationError(err.Error())
+		}
+		if dto.Status == "IN_PROGRESS" || dto.Status == "SKIPPED" {
+			blocked, err := q.OperationPredecessorsPending(ctx, dto.OperationID)
+			if err != nil {
+				return err
+			}
+			if blocked {
+				return errorsuc.NewValidationError("conclua as etapas predecessoras antes de iniciar esta etapa")
+			}
+		}
+		actor, err := uc.Auth.UserID(ctx)
+		if err != nil {
+			return err
+		}
+		if err := q.SetProductionExecutionActor(ctx, sqlc.SetProductionExecutionActorParams{Actor: actor.String(), Source: "OPERATION"}); err != nil {
+			return err
+		}
+		if err := q.UpdateOperationExecution(ctx, sqlc.UpdateOperationExecutionParams{ID: dto.OperationID, Status: dto.Status, Hours: pgutil.ToPgNumericFromFloat64(dto.ActualHours), Reason: reason}); err != nil {
+			return err
+		}
+		op, err := q.GetProductionOrderOperation(ctx, dto.OperationID)
+		if err != nil {
+			return err
+		}
+		result = pooToResponse(op)
+		if dto.Status == "DONE" && op.RouteOperationID.Valid {
+			transactional := *uc
+			transactional.Q = q
+			result.ToolAlerts, err = transactional.consumeToolLife(ctx, op.ID, op.RouteOperationID.Int64, dto.ProducedQty, pgutil.FromPgNumericToFloat64(op.ActualHours))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return result, err
 }
 
 // consumeToolLife charges each tool linked to the route operation for the work just
@@ -192,10 +372,10 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 // alerts for tools that reached their useful-life limit. When the tool production
 // sheet has bound a physical serial to this operation/tool, the same amount is
 // charged to that serial too, so per-instance wear stays in sync with the master.
-func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, operationID, routeOpID int64, produced, hours float64) []string {
+func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, operationID, routeOpID int64, produced, hours float64) ([]string, error) {
 	tools, err := uc.Q.ListToolsByRouteOp(ctx, routeOpID)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	var alerts []string
 	for _, t := range tools {
@@ -211,16 +391,19 @@ func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, operation
 			LifeUsed: pgutil.ToPgNumericFromFloat64(amount),
 		})
 		if err != nil {
-			continue
+			return nil, err
 		}
 		// Charge the physical serial bound to this operation/tool, if any.
 		if binding, err := uc.Q.GetOperationToolSerial(ctx, sqlc.GetOperationToolSerialParams{
 			OperationID: operationID, ToolID: t.ToolID,
 		}); err == nil {
-			_, _ = uc.Q.ConsumeToolSerialLife(ctx, sqlc.ConsumeToolSerialLifeParams{
+			_, err = uc.Q.ConsumeToolSerialLife(ctx, sqlc.ConsumeToolSerialLifeParams{
 				ID:       binding.ToolSerialID,
 				LifeUsed: pgutil.ToPgNumericFromFloat64(amount),
 			})
+			if err != nil {
+				return nil, err
+			}
 		}
 		limit := pgutil.FromPgNumericToFloat64(updated.LifeLimit)
 		used := pgutil.FromPgNumericToFloat64(updated.LifeUsed)
@@ -230,7 +413,7 @@ func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, operation
 				updated.Code, updated.Name, used, limit, updated.LifeType))
 		}
 	}
-	return alerts
+	return alerts, nil
 }
 
 // ─── mappers ──────────────────────────────────────────────────────────────────
