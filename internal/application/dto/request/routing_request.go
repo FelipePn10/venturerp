@@ -158,6 +158,7 @@ type UpdateRouteOpResourceDTO struct {
 // ─── network ─────────────────────────────────────────────────────────────────
 
 type SetNetworkEdgeDTO struct {
+	RouteID       int64   `json:"-"`
 	PredecessorID int64   `json:"predecessor_id"`
 	SuccessorID   int64   `json:"successor_id"`
 	OverlapPct    float64 `json:"overlap_pct"`

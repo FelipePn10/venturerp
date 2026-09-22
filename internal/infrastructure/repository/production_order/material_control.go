@@ -32,6 +32,11 @@ func (r *ProductionOrderRepositoryPGX) GetManualOrderPlanner(ctx context.Context
 }
 
 func (r *ProductionOrderRepositoryPGX) CreateWithMaterials(ctx context.Context, order *entity.ProductionOrder, materials []*entity.ProductionOrderMaterial) (*entity.ProductionOrder, error) {
+	return r.CreateWithMaterialsAndCallback(ctx, order, materials, nil)
+}
+
+// CreateWithMaterialsAndCallback includes routing in the same transaction as materials.
+func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx context.Context, order *entity.ProductionOrder, materials []*entity.ProductionOrderMaterial, complete func(context.Context, pgx.Tx, *entity.ProductionOrder) error) (*entity.ProductionOrder, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
@@ -92,6 +97,11 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterials(ctx context.Context, 
 	}
 	if err = createThirdPartyOrdersTx(ctx, tx, enterpriseID, created); err != nil {
 		return nil, err
+	}
+	if complete != nil {
+		if err := complete(ctx, tx, created); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err

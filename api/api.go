@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
+	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	marginRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/margin"
+	"github.com/jackc/pgx/v5"
 	"net/http"
 	"os"
 	"os/signal"
@@ -102,6 +104,7 @@ import (
 	cnpjinfra "github.com/FelipePn10/panossoerp/internal/infrastructure/cnpj"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/nesting"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
@@ -661,9 +664,33 @@ func (app *application) mount() chi.Router {
 	prodOrderCloseUC.SettleUC = prodOrderSettleCostUC
 	// Scrap return (sucata valorizada). StockRepo is wired below once available.
 	prodOrderReturnScrapUC := &productionOrderUc.ReturnScrapUseCase{Repo: prodOrderRepo, Auth: authService}
-	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries, MachinePlanning: mrpRepo}
+	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries, MachinePlanning: mrpRepo, Auth: authService, Routing: rRepo,
+		WithinTransaction: func(ctx context.Context, fn func(*sqlc.Queries) error) error {
+			tx, err := app.db.Pool.Begin(ctx)
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback(ctx)
+			if err := fn(queries.WithTx(tx)); err != nil {
+				return err
+			}
+			return tx.Commit(ctx)
+		},
+	}
 	prodOrderCreateUC.Routing = rRepo
 	prodOrderCreateUC.OrderOps = orderOpsUC
+	prodOrderCreateUC.CreateAtomically = func(ctx context.Context, order *productionentity.ProductionOrder, materials []*productionentity.ProductionOrderMaterial, routeID int64) (*productionentity.ProductionOrder, error) {
+		return prodOrderRepo.CreateWithMaterialsAndCallback(ctx, order, materials, func(ctx context.Context, tx pgx.Tx, created *productionentity.ProductionOrder) error {
+			inner := *orderOpsUC
+			inner.Q = queries.WithTx(tx)
+			inner.Routing = routingRepo.New(inner.Q)
+			inner.WithinTransaction = nil
+			inner.MachinePlanning = mrpCalculation.NewMRPCalculationRepositorySQLC(queries.WithTx(tx), tx)
+			_, err := inner.ExplodeRoute(ctx, created.ID, routeID)
+			return err
+		})
+	}
+	plannedFirmUC.CreateAtomically = prodOrderCreateUC.CreateAtomically
 	plannedFirmUC.Routing = rRepo
 	plannedFirmUC.OrderOps = orderOpsUC
 	plannedFirmUC.Structure = itemRepoStructure
@@ -770,6 +797,7 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ReqRepo = purchaseReqRepository
 	plannedFirmUC.ExternalOps = rRepo
 	plannedFirmUC.ServiceOrders = thirdPartyServiceRepository
+	wireAtomicPlannedRelease(app.db.Pool, queries, plannedFirmUC, orderOpsUC)
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
 		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService),
 		&purchase_requisition_uc.GeneratePurchaseOrdersUseCase{

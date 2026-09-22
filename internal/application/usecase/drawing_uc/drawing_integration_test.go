@@ -74,7 +74,7 @@ func TestIntegration_Drawing_TenantItemConfigurationAndRevisionReplication(t *te
 	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise ORDER BY id LIMIT 1").Scan(&enterpriseID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT created_by FROM enterprise WHERE id=$1", enterpriseID).Scan(&userID); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT id FROM users WHERE $1::bigint>0 ORDER BY id LIMIT 1", enterpriseID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})

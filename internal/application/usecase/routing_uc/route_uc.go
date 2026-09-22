@@ -455,6 +455,34 @@ func (uc *RouteUseCase) RemoveOperation(ctx context.Context, id int64) error {
 }
 
 func (uc *RouteUseCase) SetEdge(ctx context.Context, dto request.SetNetworkEdgeDTO) (*response.NetworkEdgeResponse, error) {
+	if dto.RouteID <= 0 {
+		return nil, errorsuc.NewValidationError("abra o roteiro antes de definir suas dependências")
+	}
+	if _, err := uc.repo.GetRouteByID(ctx, dto.RouteID); err != nil {
+		return nil, errorsuc.NewValidationError("roteiro não encontrado na empresa autenticada; carregue novamente os roteiros do item")
+	}
+	ops, err := uc.repo.GetRouteOperations(ctx, dto.RouteID)
+	if err != nil {
+		return nil, err
+	}
+	found := map[int64]bool{}
+	for _, op := range ops {
+		found[op.ID] = true
+	}
+	if !found[dto.PredecessorID] || !found[dto.SuccessorID] {
+		return nil, errorsuc.NewValidationError("selecione duas etapas já cadastradas neste roteiro; atualize a lista se alguma etapa foi removida")
+	}
+	if dto.PredecessorID == dto.SuccessorID {
+		return nil, errorsuc.NewValidationError("uma etapa não pode depender de si mesma")
+	}
+	edges, err := uc.repo.GetNetworkEdges(ctx, dto.RouteID)
+	if err != nil {
+		return nil, err
+	}
+	edges = append(edges, &entity.NetworkEdge{PredecessorID: dto.PredecessorID, SuccessorID: dto.SuccessorID, OverlapPct: dto.OverlapPct})
+	if entity.CriticalPath(ops, edges, 1).HasCycle() {
+		return nil, errorsuc.NewValidationError("esta dependência cria um ciclo; a etapa não pode depender de uma etapa que já depende dela")
+	}
 	if dto.OverlapPct < 0 || dto.OverlapPct > 100 {
 		return nil, errorsuc.NewValidationError("a sobreposição deve estar entre 0 e 100")
 	}

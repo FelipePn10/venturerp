@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -67,11 +68,15 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		return nil, err
 	}
 
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	if err := sqlc.New(tx).SetProductionExecutionActor(ctx, sqlc.SetProductionExecutionActorParams{Actor: command.UserID.String(), Source: "SCANNER"}); err != nil {
+		return nil, err
+	}
+
 	var tokenID, orderID, orderNumber int64
 	var operationID *int64
 	var status string
@@ -80,6 +85,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		return nil, fmt.Errorf("token inválido, expirado ou de outra empresa")
 	}
 	operationStatus := (*string)(nil)
+	nextAction, message := "", ""
 	switch command.Action {
 	case entity.ScanResolve:
 	case entity.ScanStart:
@@ -94,23 +100,41 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		if status != "IN_PROGRESS" {
 			return nil, fmt.Errorf("OF deve estar EM_ANDAMENTO para apontar")
 		}
+		q := sqlc.New(tx)
 		if operationID != nil {
-			var blocked bool
-			err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_operations current JOIN production_order_operations prior ON prior.production_order_id=current.production_order_id AND prior.enterprise_id=current.enterprise_id AND prior.sequence<current.sequence WHERE current.id=$1 AND current.enterprise_id=$2 AND prior.status NOT IN ('DONE','SKIPPED'))`, *operationID, command.EnterpriseID).Scan(&blocked)
+			current, err := q.LockOperationExecution(ctx, sqlc.LockOperationExecutionParams{ID: *operationID, EnterpriseID: &command.EnterpriseID})
+			if err != nil {
+				return nil, err
+			}
+			if current.Status != "PENDING" && current.Status != "IN_PROGRESS" {
+				return nil, fmt.Errorf("retome a etapa pausada ou interrompida antes de apontar; etapas concluídas não aceitam novos apontamentos")
+			}
+			blocked, err := q.OperationPredecessorsPending(ctx, *operationID)
 			if err != nil {
 				return nil, err
 			}
 			if blocked {
-				return nil, fmt.Errorf("operacao anterior ainda nao concluida")
+				return nil, fmt.Errorf("conclua as etapas predecessoras antes de apontar")
 			}
 		}
+
 		_, err = tx.Exec(ctx, `INSERT INTO production_appointments(production_order_id,operation_id,employee_id,appointment_date,produced_qty,scrapped_qty,scrap_reason,created_by) VALUES($1,$2,$3,CURRENT_DATE,$4::numeric,$5::numeric,$6,$7)`, orderID, operationID, command.EmployeeID, command.GoodQuantity.String(), command.ScrapQuantity.String(), command.ScrapReason, command.UserID)
 		if err != nil {
 			return nil, err
 		}
-		_, err = tx.Exec(ctx, `UPDATE production_orders SET produced_qty=produced_qty+$2::numeric,scrapped_qty=scrapped_qty+$3::numeric,updated_at=NOW() WHERE id=$1 AND enterprise_id=$4`, orderID, command.GoodQuantity.String(), command.ScrapQuantity.String(), command.EnterpriseID)
-		if err != nil {
-			return nil, err
+		finalOperation := true
+		if operationID != nil {
+			successors, err := q.OperationHasSuccessors(ctx, *operationID)
+			if err != nil {
+				return nil, err
+			}
+			finalOperation = !successors
+		}
+		if finalOperation {
+			_, err = tx.Exec(ctx, `UPDATE production_orders SET produced_qty=produced_qty+$2::numeric,scrapped_qty=scrapped_qty+$3::numeric,updated_at=NOW() WHERE id=$1 AND enterprise_id=$4`, orderID, command.GoodQuantity.String(), command.ScrapQuantity.String(), command.EnterpriseID)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if operationID != nil {
 			dbStatus := "IN_PROGRESS"
@@ -119,7 +143,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 				dbStatus = "DONE"
 				publicStatus = "CONCLUIDA"
 			}
-			_, err = tx.Exec(ctx, `UPDATE production_order_operations SET status=$3,actual_hours=COALESCE(actual_hours,0)+$4::numeric,updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, *operationID, command.EnterpriseID, dbStatus, command.Hours.String())
+			_, err = tx.Exec(ctx, `UPDATE production_order_operations SET status=$3::text,started_at=COALESCE(started_at,NOW()),completed_at=CASE WHEN $3::text='DONE' THEN NOW() ELSE completed_at END,actual_hours=COALESCE(actual_hours,0)+$4::numeric,updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, *operationID, command.EnterpriseID, dbStatus, command.Hours.String())
 			if err != nil {
 				return nil, err
 			}
@@ -138,6 +162,15 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		if pending {
 			return nil, fmt.Errorf("existem operacoes pendentes")
 		}
+		operations, err := sqlc.New(tx).ListProductionOrderOperations(ctx, orderID)
+		if err != nil {
+			return nil, err
+		}
+		if len(operations) > 0 {
+			nextAction = "DELIVER_PRODUCTION"
+			message = "Etapas concluídas. Registre a entrega de produção com quantidade, almoxarifado e lote para concluir a ordem e atualizar o estoque."
+			break
+		}
 		_, err = tx.Exec(ctx, `UPDATE production_orders SET status='COMPLETED',end_date=CURRENT_DATE,updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, orderID, command.EnterpriseID)
 		if err != nil {
 			return nil, err
@@ -153,7 +186,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 	if status == "COMPLETED" {
 		status = "CONCLUIDA"
 	}
-	result = &entity.ScanResult{ProductionOrderID: orderID, OperationID: operationID, OrderNumber: orderNumber, Status: status, OperationStatus: operationStatus}
+	result = &entity.ScanResult{ProductionOrderID: orderID, OperationID: operationID, OrderNumber: orderNumber, Status: status, OperationStatus: operationStatus, NextAction: nextAction, Message: message}
 	responseJSON, _ := json.Marshal(result)
 	_, err = tx.Exec(ctx, `INSERT INTO production_scan_events(enterprise_id,token_id,production_order_id,operation_id,user_id,device_id,action,result,idempotency_key,request_fingerprint,response) VALUES($1,$2,$3,$4,$5,$6,$7,'SUCESSO',$8,$9,$10)`, command.EnterpriseID, tokenID, orderID, operationID, command.UserID, command.DeviceID, string(command.Action), command.IdempotencyKey, command.Fingerprint, responseJSON)
 	if err != nil {

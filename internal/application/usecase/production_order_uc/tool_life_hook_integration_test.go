@@ -4,9 +4,9 @@ package production_order_uc_test
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"testing"
-
-	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/security"
@@ -26,14 +26,24 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	rRepo := routingRepo.New(q)
 	tRepo := toolRepo.New(q)
-	uc := &production_order_uc.OrderOperationsUseCase{Q: q}
+	uc := &production_order_uc.OrderOperationsUseCase{Q: q, Auth: &auth.AuthService{}, WithinTransaction: func(ctx context.Context, fn func(*sqlc.Queries) error) error {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		if err := fn(sqlc.New(tx)); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}}
 	ctx := context.Background()
-	uid := uuid.New()
+	uid := testutil.Actor(t, pool)
 	var enterpriseID int64
 	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise WHERE code=1").Scan(&enterpriseID); err != nil {
 		t.Fatalf("load enterprise: %v", err)
 	}
-	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
+	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{ID: uid.String(), EnterpriseID: enterpriseID, Role: "ADMIN"})
 
 	// Work center + operation + item + route + route op.
 	var wcID int64
@@ -89,13 +99,39 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM production_order_operations WHERE id = $1", pooID)
 
-	// Complete producing 6 pieces → 6 strokes ≥ 5 limit → alert.
-	resp, err := uc.AdvanceOperation(ctx, request.AdvanceOperationDTO{OperationID: pooID, Status: "DONE", ProducedQty: 6})
-	if err != nil {
-		t.Fatalf("AdvanceOperation: %v", err)
+	testutil.Exec(t, pool, "UPDATE production_orders SET status='IN_PROGRESS' WHERE id=$1", poID)
+	if _, err := uc.AdvanceOperation(ctx, request.AdvanceOperationDTO{OperationID: pooID, Status: "IN_PROGRESS"}); err != nil {
+		t.Fatal(err)
 	}
-	if len(resp.ToolAlerts) == 0 {
-		t.Fatalf("expected a tool replacement alert, got none")
+	// Complete producing 6 pieces → 6 strokes ≥ 5 limit → alert.
+	type attempt struct {
+		accepted bool
+		alerts   int
+	}
+	results := make(chan attempt, 24)
+	start := make(chan struct{})
+	for i := 0; i < 24; i++ {
+		go func() {
+			<-start
+			resp, err := uc.AdvanceOperation(ctx, request.AdvanceOperationDTO{OperationID: pooID, Status: "DONE", ProducedQty: 6})
+			result := attempt{accepted: err == nil}
+			if resp != nil {
+				result.alerts = len(resp.ToolAlerts)
+			}
+			results <- result
+		}()
+	}
+	close(start)
+	accepted, alerts := 0, 0
+	for i := 0; i < 24; i++ {
+		result := <-results
+		if result.accepted {
+			accepted++
+			alerts += result.alerts
+		}
+	}
+	if accepted != 1 || alerts == 0 {
+		t.Fatalf("concurrent completion: accepted=%d alerts=%d", accepted, alerts)
 	}
 
 	// The tool's consumed life reflects the produced pieces.
@@ -108,8 +144,8 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	}
 
 	// Idempotency: completing an already-DONE operation must NOT consume life again.
-	if _, err := uc.AdvanceOperation(ctx, request.AdvanceOperationDTO{OperationID: pooID, Status: "DONE", ProducedQty: 6}); err != nil {
-		t.Fatalf("AdvanceOperation (repeat): %v", err)
+	if _, err := uc.AdvanceOperation(ctx, request.AdvanceOperationDTO{OperationID: pooID, Status: "DONE", ProducedQty: 6}); err == nil {
+		t.Fatal("repeated terminal transition was accepted")
 	}
 	got2, err := tRepo.GetTool(ctx, createdTool.ID)
 	if err != nil {

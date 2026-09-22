@@ -42,7 +42,7 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise WHERE code=1").Scan(&enterpriseID); err != nil {
 		t.Fatal(err)
 	}
-	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
+	ctx = testutil.TenantContext(t, pool)
 
 	suppRepo := supplierrepo.New(q, pool)
 	reqRepository := reqrepo.New(q, pool)

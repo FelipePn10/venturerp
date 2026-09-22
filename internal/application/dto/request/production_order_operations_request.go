@@ -6,8 +6,9 @@ type ExplodeRouteDTO struct {
 }
 
 type AdvanceOperationDTO struct {
+	Reason      string  `json:"reason"`
 	OperationID int64   `json:"operation_id"`
-	Status      string  `json:"status"` // PENDING | IN_PROGRESS | DONE | SKIPPED
+	Status      string  `json:"status"` // IN_PROGRESS | PAUSED | INTERRUPTED | DONE | SKIPPED
 	ActualHours float64 `json:"actual_hours"`
 	// ProducedQty (pieces) drives tool-life consumption for GOLPES/PECAS tools when
 	// the operation is completed (DONE). HORAS tools consume ActualHours instead.

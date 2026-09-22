@@ -3,7 +3,6 @@
 package cost_uc_test
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestIntegration_CostRollup_CoproductAndFixedQty(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	scRepo := standardCostRepo.New(q)
 	uc := cost_uc.New(scRepo)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	p := testutil.UniqueCode() // parent (manufactured)
@@ -32,7 +31,7 @@ func TestIntegration_CostRollup_CoproductAndFixedQty(t *testing.T) {
 	b := testutil.UniqueCode() // by-product (output)
 	c := testutil.UniqueCode() // fixed-qty component
 	for _, code := range []int64{p, a, b, c} {
-		testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", code, code, uid)
+		testutil.SeedItem(t, pool, ctx, code, uid)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code IN ($1,$2,$3,$4)", p, a, b, c)
 

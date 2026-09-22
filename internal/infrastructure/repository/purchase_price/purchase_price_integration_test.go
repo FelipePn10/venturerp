@@ -11,7 +11,6 @@ import (
 	priceRepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_price/repository"
 	pprepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_price"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
-	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -31,7 +30,7 @@ func TestIntegrationPurchasePriceTenantResolutionAndAdjustments(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT code FROM suppliers WHERE is_active ORDER BY code LIMIT 1").Scan(&supplier); err != nil {
 		t.Skip("integration database has no supplier")
 	}
-	tbl, err := entity.NewPurchasePriceTable(enterpriseID, code, &supplier, "Tabela integração", "BRL", uuid.New())
+	tbl, err := entity.NewPurchasePriceTable(enterpriseID, code, &supplier, "Tabela integração", "BRL", testutil.Actor(t, pool))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +73,7 @@ func TestIntegrationPurchasePriceTenantResolutionAndAdjustments(t *testing.T) {
 		t.Fatal(err)
 	}
 	var orderID, lineID int64
-	if err = pool.QueryRow(ctx, `INSERT INTO purchase_orders(order_number,enterprise_code,supplier_code,created_by) VALUES($1,$2,$3,$4) RETURNING code`, testutil.UniqueCode(), enterpriseCode, supplier, uuid.New()).Scan(&orderID); err != nil {
+	if err = pool.QueryRow(ctx, `INSERT INTO purchase_orders(order_number,enterprise_code,supplier_code,created_by) VALUES($1,$2,$3,$4) RETURNING code`, testutil.UniqueCode(), enterpriseCode, supplier, testutil.Actor(t, pool)).Scan(&orderID); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -114,7 +113,7 @@ func TestIntegrationPurchasePriceTenantResolutionAndAdjustments(t *testing.T) {
 		t.Fatalf("unexpected imported price: %+v", imported)
 	}
 	var entryID, entryItemID int64
-	if err = pool.QueryRow(ctx, `INSERT INTO fiscal_entries(numero_nf,serie,modelo,data_emissao,data_entrada,cnpj_emitente,razao_social_emitente,tipo_documento,created_by,supplier_code,enterprise_id) VALUES($1,'1','55',CURRENT_DATE,CURRENT_DATE,'00000000000000','Fornecedor','NFE',$2,$3,$4) RETURNING id`, testutil.UniqueCode(), uuid.New(), supplier, enterpriseID).Scan(&entryID); err != nil {
+	if err = pool.QueryRow(ctx, `INSERT INTO fiscal_entries(numero_nf,serie,modelo,data_emissao,data_entrada,cnpj_emitente,razao_social_emitente,tipo_documento,created_by,supplier_code,enterprise_id) VALUES($1,'1','55',CURRENT_DATE,CURRENT_DATE,'00000000000000','Fornecedor','NFE',$2,$3,$4) RETURNING id`, testutil.UniqueCode(), testutil.Actor(t, pool), supplier, enterpriseID).Scan(&entryID); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { testutil.Exec(t, pool, "DELETE FROM fiscal_entries WHERE id=$1", entryID) })

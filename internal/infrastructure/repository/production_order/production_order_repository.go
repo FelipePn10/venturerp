@@ -9,19 +9,26 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	stockrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/shopspring/decimal"
 )
 
-type ProductionOrderRepositoryPGX struct {
-	pool *pgxpool.Pool
+// Accept a pool or an existing transaction; nested writes use savepoints.
+type productionDB interface {
+	sqlc.DBTX
+	Begin(context.Context) (pgx.Tx, error)
 }
 
-func NewProductionOrderRepositoryPGX(pool *pgxpool.Pool) *ProductionOrderRepositoryPGX {
+type ProductionOrderRepositoryPGX struct {
+	pool productionDB
+}
+
+func NewProductionOrderRepositoryPGX(pool productionDB) *ProductionOrderRepositoryPGX {
 	return &ProductionOrderRepositoryPGX{pool: pool}
 }
 
@@ -137,6 +144,38 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	q := sqlc.New(tx)
+	locked, err := q.LockProductionExecution(ctx, sqlc.LockProductionExecutionParams{ID: d.ProductionOrderID, EnterpriseID: &enterpriseID})
+	if err != nil {
+		return nil, err
+	}
+	if locked.Status == "COMPLETED" || locked.Status == "CANCELLED" {
+		return nil, errorsuc.NewValidationError("não é possível entregar produção de uma ordem encerrada ou cancelada")
+	}
+	if d.IsFinal {
+		pending, err := q.ProductionOperationsPending(ctx, d.ProductionOrderID)
+		if err != nil {
+			return nil, err
+		}
+		if pending {
+			return nil, errorsuc.NewValidationError("conclua todas as etapas do roteiro antes da entrega final")
+		}
+
+		var qualityPending bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM quality_records qr JOIN production_orders ord ON ord.id=qr.production_order_id WHERE ord.id=$1 AND ord.enterprise_id=$2 AND qr.result IN('PENDENTE','REJEITADO'))`, d.ProductionOrderID, enterpriseID).Scan(&qualityPending); err != nil {
+			return nil, err
+		}
+		if qualityPending {
+			return nil, errorsuc.NewValidationError("conclua a avaliação da qualidade antes da entrega final")
+		}
+		var servicesPending bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_service_links link JOIN purchase_orders po ON po.code=link.purchase_order_code WHERE link.production_order_id=$1 AND link.enterprise_id=$2 AND po.status NOT IN('RECEIVED','CANCELLED'))`, d.ProductionOrderID, enterpriseID).Scan(&servicesPending); err != nil {
+			return nil, err
+		}
+		if servicesPending {
+			return nil, errorsuc.NewValidationError("conclua ou cancele os pedidos de serviço de terceiros antes da entrega final")
+		}
+	}
 	var deliveryID int64
 	err = tx.QueryRow(ctx, `INSERT INTO production_deliveries
 		(production_order_id, enterprise_id, idempotency_key, quantity, movement_class, warehouse_id, lot, is_final, created_by)
@@ -846,9 +885,12 @@ func (r *ProductionOrderRepositoryPGX) GetNextOrderNumber(ctx context.Context) (
 	}
 	var num int64
 	err = r.pool.QueryRow(ctx,
-		`SELECT COALESCE(MAX(order_number), 0) + 1 FROM public.production_orders WHERE enterprise_id=$1`, enterpriseID).Scan(&num)
+		`INSERT INTO production_order_number_counters(enterprise_id,last_number)
+ SELECT $1,COALESCE(MAX(order_number),0)+1 FROM production_orders WHERE enterprise_id=$1
+ ON CONFLICT(enterprise_id) DO UPDATE SET last_number=GREATEST(production_order_number_counters.last_number,EXCLUDED.last_number-1)+1
+ RETURNING last_number`, enterpriseID).Scan(&num)
 	if err != nil {
-		return 1, nil
+		return 0, err
 	}
 	return num, nil
 }
@@ -903,4 +945,14 @@ func scanProductionOrderFromRows(row pgx.Row) (*entity.ProductionOrder, error) {
 		UpdatedAt:      updatedAt,
 		CreatedBy:      createdBy,
 	}, nil
+}
+
+func (r *ProductionOrderRepositoryPGX) HasGeneratedProduction(ctx context.Context, plannedID int64) (bool, error) {
+	enterprise, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	var exists bool
+	err = r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_orders WHERE enterprise_id=$1 AND planned_order_id=$2)`, enterprise, plannedID).Scan(&exists)
+	return exists, err
 }

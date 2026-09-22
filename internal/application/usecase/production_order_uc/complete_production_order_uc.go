@@ -83,9 +83,12 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 		key = fmt.Sprintf("legacy:%d:%s:%s:%t", dto.ID, dto.EndDate, qty.String(), dto.Final)
 	}
 	if existing, existingErr := uc.Repo.GetDeliveryByIdempotencyKey(ctx, key); existingErr == nil {
+		if existing.ProductionOrderID != dto.ID || existing.WarehouseID != *warehouseID || existing.IsFinal != dto.Final || (dto.Quantity != nil && !existing.Quantity.Equal(*dto.Quantity)) || !sameDeliveryLot(existing.Lot, dto.Lot) {
+			return nil, errorsuc.NewValidationError("a chave desta entrega já foi usada com outros dados; consulte a entrega registrada antes de tentar novamente")
+		}
 		return uc.Repo.GetByCode(ctx, existing.ProductionOrderID)
 	}
-	if dto.Final && qty.IsZero() {
+	if dto.Final {
 		pending, pendingErr := uc.Repo.HasPendingServicePurchaseOrders(ctx, dto.ID)
 		if pendingErr != nil {
 			return nil, pendingErr
@@ -220,3 +223,13 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 }
 
 func stringPtr(value string) *string { return &value }
+
+func sameDeliveryLot(a, b *string) bool {
+	if a == nil {
+		return b == nil || *b == ""
+	}
+	if b == nil {
+		return *a == ""
+	}
+	return *a == *b
+}

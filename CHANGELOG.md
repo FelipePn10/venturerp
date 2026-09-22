@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.1.33] — 2026-09-22
+
+- fix(producao): tornar liberação e execução de roteiros transacionais (`1cd187d`)
+- docs: reescreve o tutorial de roteiro como tutorial (#169) (`fb1a1ca`)
+- docs: script de conversão de unidade dos materiais do RN 01001 (#168) (`beee8b3`)
+
 ## [v1.1.32] — 2026-09-19
 
 - fix(roteiro): precisão do fator de conversão e segundos nos tempos (#166) (`b2efd4a`)

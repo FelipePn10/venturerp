@@ -1,0 +1,1 @@
+DROP TABLE production_order_number_counters;

@@ -55,9 +55,11 @@ type serviceOrderGenerator interface {
 }
 
 type FirmPlannedOrderUseCase struct {
-	Repo   repository.PlannedOrderRepository
-	Auth   ports.AuthService
-	Params paramsrepo.PlanningParamRepository
+	TransitionAtomically func(context.Context, request.TransitionPlannedOrderDTO) ([]*response.PlannedOrderResponse, error)
+	CreateAtomically     productionuc.AtomicOrderCreator
+	Repo                 repository.PlannedOrderRepository
+	Auth                 ports.AuthService
+	Params               paramsrepo.PlanningParamRepository
 	// ProdOrderRepo is optional. When set, firming a PRODUCTION planned order
 	// also creates the corresponding Production Order (OF), mirroring the
 	// approve→purchase-order flow already in place on the purchasing side.
@@ -87,6 +89,9 @@ func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.Firm
 }
 
 func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto request.TransitionPlannedOrderDTO) ([]*response.PlannedOrderResponse, error) {
+	if uc.TransitionAtomically != nil {
+		return uc.TransitionAtomically(ctx, dto)
+	}
 	if !uc.Auth.CanReleaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -102,7 +107,12 @@ func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto re
 	}
 
 	orders := make([]*entity.PlannedOrder, 0, len(dto.OrderCodes))
+	seen := make(map[int64]bool, len(dto.OrderCodes))
 	for _, code := range dto.OrderCodes {
+		if seen[code] {
+			return nil, errorsuc.NewValidationError("a mesma ordem foi informada mais de uma vez")
+		}
+		seen[code] = true
 		order, err := uc.Repo.GetByCode(ctx, code)
 		if err != nil {
 			return nil, err
@@ -189,6 +199,17 @@ func (uc *FirmPlannedOrderUseCase) validateTransition(ctx context.Context, order
 		}
 	}
 	if target == "PLANNED" {
+		if generated, ok := uc.ProdOrderRepo.(interface {
+			HasGeneratedProduction(context.Context, int64) (bool, error)
+		}); ok {
+			exists, err := generated.HasGeneratedProduction(ctx, order.ID)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return errorsuc.NewValidationError("a ordem planejada já gerou uma ordem de fabricação; mantenha a liberação e ajuste a ordem de fabricação correspondente")
+			}
+		}
 		if order.Status != types.StatusReleased {
 			return ErrInvalidPlanningTransition
 		}
@@ -322,7 +343,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 			value := order.EndDate.Format("2006-01-02")
 			endDate = &value
 		}
-		manual := &productionuc.CreateProductionOrderUseCase{Repo: uc.ProdOrderRepo, Auth: uc.Auth, Structure: uc.Structure, Routing: uc.Routing, OrderOps: uc.OrderOps, Items: uc.Items}
+		manual := &productionuc.CreateProductionOrderUseCase{CreateAtomically: uc.CreateAtomically, Repo: uc.ProdOrderRepo, Auth: uc.Auth, Structure: uc.Structure, Routing: uc.Routing, OrderOps: uc.OrderOps, Items: uc.Items}
 		// A sugestão do MRP guarda a chave legada do item; o contrato do caso de
 		// uso é textual e a resolução aceita esse formato numérico.
 		return manual.Execute(ctx, request.CreateProductionOrderDTO{

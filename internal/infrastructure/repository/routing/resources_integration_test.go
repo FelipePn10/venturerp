@@ -19,15 +19,15 @@ import (
 func TestIntegration_Routing_AlternativeResources(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := routingrepo.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	// Two work centers.
 	var wc1, wc2 int64
-	if err := pool.QueryRow(ctx, "INSERT INTO machine_types (code,name,type,requires_operator,created_by) VALUES ($1,'CT-A','CUT',false,$2) RETURNING id", testutil.UniqueCode(), uid).Scan(&wc1); err != nil {
+	if err := pool.QueryRow(ctx, "INSERT INTO machine_types (code,name,type,requires_operator,created_by,enterprise_id) VALUES ($1,'CT-A','CUT',false,$2,$3) RETURNING id", testutil.UniqueCode(), uid, testutil.EnterpriseID(t, ctx)).Scan(&wc1); err != nil {
 		t.Fatalf("seed wc1: %v", err)
 	}
-	if err := pool.QueryRow(ctx, "INSERT INTO machine_types (code,name,type,requires_operator,created_by) VALUES ($1,'CT-B','CUT',false,$2) RETURNING id", testutil.UniqueCode(), uid).Scan(&wc2); err != nil {
+	if err := pool.QueryRow(ctx, "INSERT INTO machine_types (code,name,type,requires_operator,created_by,enterprise_id) VALUES ($1,'CT-B','CUT',false,$2,$3) RETURNING id", testutil.UniqueCode(), uid, testutil.EnterpriseID(t, ctx)).Scan(&wc2); err != nil {
 		t.Fatalf("seed wc2: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM machine_types WHERE id IN ($1,$2)", wc1, wc2)
@@ -42,7 +42,7 @@ func TestIntegration_Routing_AlternativeResources(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM operations WHERE id = $1", createdOp.ID)
 
 	itemCode := testutil.UniqueCode()
-	testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1,$2,$3)", itemCode, itemCode, uid)
+	testutil.SeedItem(t, pool, ctx, itemCode, uid)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 
 	rc := testutil.UniqueCode()
@@ -80,7 +80,7 @@ func TestIntegration_Routing_AlternativeResources(t *testing.T) {
 	}
 
 	// Effective work center of the operation now = WC1.
-	if wc := effectiveWC(t, repo, route.ID); wc != wc1 {
+	if wc := effectiveWC(t, ctx, repo, route.ID); wc != wc1 {
 		t.Fatalf("effective WC = %d, want wc1 %d", wc, wc1)
 	}
 
@@ -89,16 +89,16 @@ func TestIntegration_Routing_AlternativeResources(t *testing.T) {
 	if _, err := repo.SetRouteOpResourcePrimary(ctx, resB.ID, addedOp.ID, wc2); err != nil {
 		t.Fatalf("SetPrimary B: %v", err)
 	}
-	if wc := effectiveWC(t, repo, route.ID); wc != wc2 {
+	if wc := effectiveWC(t, ctx, repo, route.ID); wc != wc2 {
 		t.Fatalf("after switch, effective WC = %d, want wc2 %d", wc, wc2)
 	}
 }
 
-func effectiveWC(t *testing.T, repo interface {
+func effectiveWC(t *testing.T, ctx context.Context, repo interface {
 	GetRouteOperations(ctx context.Context, routeID int64) ([]*entity.RouteOperation, error)
 }, routeID int64) int64 {
 	t.Helper()
-	ops, err := repo.GetRouteOperations(context.Background(), routeID)
+	ops, err := repo.GetRouteOperations(ctx, routeID)
 	if err != nil || len(ops) == 0 {
 		t.Fatalf("GetRouteOperations: %v", err)
 	}

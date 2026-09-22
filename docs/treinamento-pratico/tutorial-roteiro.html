@@ -386,7 +386,15 @@
   <tr><td>O que remeter</td><td>os itens da demanda</td><td class="obs">Define o que sai fisicamente da fábrica na remessa: os componentes da demanda, o próprio item da ordem, um item genérico de serviço, ou nada.</td></tr>
 </table>
 
-<h2>5.5 As quinze operações do RN 01001</h2>
+<h2>5.5 Biblioteca: quinze operações usadas na estrutura da RN 01001</h2>
+<p>Estas são as operações compartilhadas pelos <b>itens fabricados da estrutura</b>,
+como as buchas e outros componentes, e pela montagem final. Cadastre-as uma vez na
+biblioteca e vincule cada operação ao roteiro do item que ela transforma, conforme
+os roteiros da Parte 7. Não coloque as quinze etapas diretamente na RN 01001.</p>
+<p>Por exemplo: <b>Embuchar na Prensa</b> pertence ao roteiro da <b>BU 0120/50</b>.
+O roteiro da <b>RN 01001</b> tem quatro etapas: montagem, soldagem, limpeza e pintura.
+O MRP planeja ordens para os componentes fabricados e para o conjunto final,
+cada uma com o roteiro do respectivo item.</p>
 
 <table class="dados">
   <thead><tr><th style="width:24%">Nome</th><th class="cen" style="width:12%">Origem</th><th style="width:20%">Centro padrão</th><th class="cen" style="width:10%">Prep. s</th><th class="cen" style="width:10%">Máq. s</th><th>Observação</th></tr></thead>

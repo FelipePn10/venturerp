@@ -3,7 +3,6 @@
 package supplier_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -44,7 +43,7 @@ func makeSupplier(t *testing.T, code int64, doc string) *entity.Supplier {
 
 func TestIntegration_Supplier_CRUD(t *testing.T) {
 	repo, cleanup := newSupplierRepo(t)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, testutil.Pool(t))
 	code := testutil.UniqueCode()
 	doc := fmt.Sprintf("EXT%d", code)
 	defer cleanup(code)
@@ -129,7 +128,7 @@ func TestIntegration_Supplier_CRUD(t *testing.T) {
 
 func TestIntegration_Supplier_PropagateStateRegistration(t *testing.T) {
 	repo, cleanup := newSupplierRepo(t)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, testutil.Pool(t))
 	c1 := testutil.UniqueCode()
 	c2 := testutil.UniqueCode() + 1
 	doc := fmt.Sprintf("EXT%d", c1) // shared, unique to this test

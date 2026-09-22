@@ -3,7 +3,6 @@
 package routing_test
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -22,7 +21,7 @@ func approxEq(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 func TestIntegration_Routing_RichTimeRoundTrip(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := routingrepo.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
 	// 1. Operation with a rich time model measured in MINUTES.
@@ -55,7 +54,7 @@ func TestIntegration_Routing_RichTimeRoundTrip(t *testing.T) {
 
 	// 2. Minimal item to hang the route on (items has no FKs; PK id, unique code).
 	itemCode := testutil.UniqueCode()
-	testutil.Exec(t, pool, "INSERT INTO items (code, warehouse_code, created_by) VALUES ($1, $2, $3)", itemCode, itemCode, uid)
+	testutil.SeedItem(t, pool, ctx, itemCode, uid)
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 
 	// 3. Route + a route operation that INHERITS the operation defaults.

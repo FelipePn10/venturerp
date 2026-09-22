@@ -232,6 +232,13 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 					return fmt.Errorf("item %d: %w", sug.ItemCode, err)
 				}
 				mt = escolhida
+				// Persist the parent allocation before slots: INSERT ... SELECT
+				// cannot create reservations until this row exists.
+				if i == 0 {
+					if err := s.MRPRepo.UpdatePlannedOrderMachine(ctx, sug.Code, mt.MachineID, totalMinutes); err != nil {
+						return err
+					}
+				}
 				if err = calendar.SaveMachineSlots(ctx, sug.Code, mt.MachineID, step.operationID, slots, i == 0); err != nil {
 					return err
 				}

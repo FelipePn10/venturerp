@@ -158,6 +158,10 @@ func TestMachineProductivityMRPAndCRPIntegration(t *testing.T) {
 	if err = svc.processMachineIntegration(ctx, code, []int64{code}); err != nil {
 		t.Fatal(err)
 	}
+	var reservations int
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM mrp_machine_allocation_slots WHERE suggestion_code IN ($1,$2)`, suggestion, second).Scan(&reservations); err != nil || reservations < 3 {
+		t.Fatalf("finite reservations missing: count=%d err=%v", reservations, err)
+	}
 	var overlaps int
 	if err = pool.QueryRow(ctx, `SELECT count(*) FROM mrp_machine_allocation_slots a JOIN mrp_machine_allocation_slots b ON a.suggestion_code<b.suggestion_code AND a.starts_at<b.ends_at AND a.ends_at>b.starts_at WHERE a.suggestion_code=$1 AND b.suggestion_code=$2`, suggestion, second).Scan(&overlaps); err != nil || overlaps != 0 {
 		t.Fatalf("overlap %d %v", overlaps, err)
