@@ -15,6 +15,7 @@ type scannerAuth struct{ ports.AuthService }
 
 func (scannerAuth) CanReleaseOrder(context.Context) bool        { return true }
 func (scannerAuth) CanCreatePlannedOrder(context.Context) bool  { return true }
+func (scannerAuth) CanReportProduction(context.Context) bool    { return true }
 func (scannerAuth) EnterpriseID(context.Context) (int64, error) { return 42, nil }
 func (scannerAuth) UserID(context.Context) (uuid.UUID, error) {
 	return uuid.MustParse("11111111-1111-1111-1111-111111111111"), nil

@@ -70,6 +70,10 @@ type AuthService interface {
 	CanCreateOverheadAllocation(ctx context.Context) bool
 	CanListOverheadAllocation(ctx context.Context) bool
 	CanCreatePlannedOrder(ctx context.Context) bool
+	// CanReportProduction autoriza o apontamento de chão de fábrica. Separada de
+	// CanCreatePlannedOrder de propósito: apontar o que já foi feito e decidir o
+	// que será feito são atos de pessoas diferentes.
+	CanReportProduction(ctx context.Context) bool
 	CanReleaseOrder(ctx context.Context) bool
 	CanListOrder(ctx context.Context) bool
 	CanCreateSalesDivision(ctx context.Context) bool

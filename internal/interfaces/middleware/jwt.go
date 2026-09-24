@@ -69,7 +69,7 @@ func JWTForEnvironment(secret, environment string, log *applogger.Logger, valida
 			}
 			_, userIDErr := uuid.Parse(claims.UserID)
 			if err != nil || !token.Valid || userIDErr != nil || claims.Subject != claims.UserID ||
-				claims.EnterpriseID <= 0 || tokenEnvironment != environment || (role != "ADMIN" && role != "USER") {
+				claims.EnterpriseID <= 0 || tokenEnvironment != environment || !perfilConhecido(role) {
 				// Use the per-request logger so the warning carries request_id.
 				applogger.FromContext(r.Context()).Warn(
 					"invalid token attempt",
@@ -144,6 +144,19 @@ func respondJSONErro(w http.ResponseWriter, status int, code, mensagem string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"code": code, "error": mensagem})
+}
+
+// perfilConhecido recusa token com papel que a aplicação não conhece — papel
+// desconhecido não recebe escopo nenhum, e deixá-lo entrar só adiaria a recusa
+// para dentro das rotas, com 403 em vez de 401.
+//
+// A lista vem de `rolePermissions`: adicionar um perfil ao mapa de permissões
+// passa a valer aqui automaticamente. Antes eram duas listas independentes, e
+// foi por isso que OPERATOR nasceu com escopo próprio e mesmo assim tomava 401
+// antes de chegar a qualquer rota.
+func perfilConhecido(role string) bool {
+	_, existe := rolePermissions[role]
+	return existe
 }
 
 func perfilLegivel(role string) string {

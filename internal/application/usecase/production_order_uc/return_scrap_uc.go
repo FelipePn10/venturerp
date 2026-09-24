@@ -23,7 +23,7 @@ type ReturnScrapUseCase struct {
 }
 
 func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScrapDTO) (*stockentity.StockMovement, error) {
-	if !uc.Auth.CanCreatePlannedOrder(ctx) {
+	if !uc.Auth.CanReportProduction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if uc.StockRepo == nil {

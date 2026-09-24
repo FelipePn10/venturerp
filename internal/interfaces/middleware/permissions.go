@@ -18,16 +18,27 @@ const (
 	PermFiscalAuthorize = "fiscal:authorize" // authorize/cancel NF-e
 	PermFinancialManage = "financial:manage" // accounts payable/receivable, CNAB
 	PermItemActivate    = "item:activate"    // activate items (engineering gate)
-	PermAdmin           = "admin"            // administrative configuration
+	// PermProductionReport é o apontamento de chão de fábrica: iniciar, pausar,
+	// concluir etapa, apontar produção e consumo, devolver sucata e ler código de
+	// barras. Era gate de PLANEJAMENTO (`CanCreatePlannedOrder`): o operador do
+	// posto precisava da permissão de criar ordem planejada — e ganhava junto
+	// tudo o que ela abre. São decisões diferentes, com gente diferente.
+	PermProductionReport = "production:report" // apontar produção no chão de fábrica
+	PermAdmin            = "admin"             // administrative configuration
 )
 
 // rolePermissions maps a JWT role to the scopes it is granted. ADMIN gets
 // everything; USER gets all operational scopes but not admin; VIEWER is
 // read-only. Unknown roles get nothing.
+// OPERATOR existe para o posto de trabalho: enxerga o que precisa e aponta o
+// que fez, sem poder criar ordem, aprovar compra ou mexer em cadastro. Os
+// perfis que já operavam continuam idênticos — ADMIN e USER recebem o escopo
+// novo junto com todos os que já tinham.
 var rolePermissions = map[string]map[string]struct{}{
-	"ADMIN":  asSet(PermRead, PermWrite, PermPlanningRun, PermPurchaseApprove, PermFiscalAuthorize, PermFinancialManage, PermItemActivate, PermAdmin),
-	"USER":   asSet(PermRead, PermWrite, PermPlanningRun, PermPurchaseApprove, PermFiscalAuthorize, PermFinancialManage, PermItemActivate),
-	"VIEWER": asSet(PermRead),
+	"ADMIN":    asSet(PermRead, PermWrite, PermPlanningRun, PermPurchaseApprove, PermFiscalAuthorize, PermFinancialManage, PermItemActivate, PermProductionReport, PermAdmin),
+	"USER":     asSet(PermRead, PermWrite, PermPlanningRun, PermPurchaseApprove, PermFiscalAuthorize, PermFinancialManage, PermItemActivate, PermProductionReport),
+	"OPERATOR": asSet(PermRead, PermProductionReport),
+	"VIEWER":   asSet(PermRead),
 }
 
 func asSet(perms ...string) map[string]struct{} {
