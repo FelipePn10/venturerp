@@ -31,10 +31,20 @@ type Record struct {
 type Filter struct {
 	UserID string
 	Route  string
-	From   time.Time
-	To     time.Time
-	Limit  int
-	Offset int
+	// Method recorta pelo verbo HTTP, que é o que a tela mostra como ação
+	// ("Cadastrou", "Alterou", "Excluiu"). Sem ele, procurar quem excluiu algo
+	// exigia varrer a lista inteira à mão.
+	Method string
+	// Search casa por trecho no caminho — é como se procura "aquele pedido"
+	// sem saber a rota exata do chi.
+	Search string
+	// MinStatus >= 400 devolve só o que foi recusado ou falhou: a pergunta mais
+	// comum da auditoria não é "o que aconteceu", é "o que deu errado".
+	MinStatus int
+	From      time.Time
+	To        time.Time
+	Limit     int
+	Offset    int
 }
 
 // Reader queries the audit trail. Kept separate from the write path so reads
@@ -71,6 +81,15 @@ func (r *Reader) List(ctx context.Context, f Filter) ([]Record, error) {
 	}
 	if f.Route != "" {
 		add("route = $%d", f.Route)
+	}
+	if f.Method != "" {
+		add("method = $%d", strings.ToUpper(strings.TrimSpace(f.Method)))
+	}
+	if f.Search != "" {
+		add("path ILIKE $%d", "%"+strings.TrimSpace(f.Search)+"%")
+	}
+	if f.MinStatus > 0 {
+		add("status >= $%d", f.MinStatus)
 	}
 	if !f.From.IsZero() {
 		add("occurred_at >= $%d", f.From)
