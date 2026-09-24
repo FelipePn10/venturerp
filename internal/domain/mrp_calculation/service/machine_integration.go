@@ -8,6 +8,7 @@ import (
 	machinesvc "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
+	routing "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"math"
 	"sort"
 	"time"
@@ -40,6 +41,52 @@ func equivalentes(list []*entity.MachineTimeInfo, escolhida *entity.MachineTimeI
 		}
 	}
 	return out
+}
+
+// eficienciaDe é o rendimento aplicável do item naquela máquina: o valor do
+// item (VMAQ0200 · Produtividade) sobrepõe o da máquina, e valor fora de (0,1]
+// é tratado como 100 % — a mesma regra de CalculateProductionTime.
+func eficienciaDe(mt *entity.MachineTimeInfo) float64 {
+	eff := mt.MachineEfficiencyRate
+	if mt.EfficiencyRate != nil {
+		eff = *mt.EfficiencyRate
+	}
+	if eff <= 0 || eff > 1 {
+		eff = 1
+	}
+	return eff
+}
+
+// minutosDeTroca é a parada para recarregar o consumível durante a usinagem.
+// A primeira carga já está montada, então o número de PARADAS é o de cargas
+// menos uma — idêntico a CalculateProductionTime.
+func minutosDeTroca(mt *entity.MachineTimeInfo, usinagemMin float64) float64 {
+	if mt.ConsumptionPerHour == nil || mt.ConsumableCapacity == nil || mt.ConsumableSwapMinutes == nil {
+		return 0
+	}
+	if *mt.ConsumptionPerHour <= 0 || *mt.ConsumableCapacity <= 0 {
+		return 0
+	}
+	gasto := usinagemMin / 60 * *mt.ConsumptionPerHour
+	if cargas := math.Ceil(gasto / *mt.ConsumableCapacity); cargas > 1 {
+		return (cargas - 1) * *mt.ConsumableSwapMinutes
+	}
+	return 0
+}
+
+// minutosDoRoteiro converte a ocupação prevista pelo ROTEIRO em minutos reais
+// daquela máquina.
+//
+// Roteiro e produtividade por máquina não são a mesma informação em dois
+// lugares: o roteiro diz quanto a operação leva no ritmo nominal; a VMAQ0200
+// diz o que aquele equipamento entrega — quanto o item rende nele e quantas
+// paradas para trocar consumível a ordem obriga. Até aqui, bastava a etapa ter
+// tempo para o plano jogar fora os dois, e "Eficiência deste item = 85 %" não
+// mudava um minuto sequer do planejamento. As camadas agora se somam: o tempo
+// vem do roteiro, o rendimento e as paradas vêm da máquina.
+func minutosDoRoteiro(mt *entity.MachineTimeInfo, t routing.OperationTime, qty float64) float64 {
+	usinagem := t.Run * t.Batches(qty) * 60 / eficienciaDe(mt)
+	return t.Setup*60 + usinagem + minutosDeTroca(mt, usinagem)
 }
 
 func machineMinutes(mt *entity.MachineTimeInfo, qty float64) (float64, error) {
