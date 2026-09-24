@@ -50,8 +50,9 @@ func TestIntegration_Tool_LifeCycle(t *testing.T) {
 		t.Fatalf("after 1100/1000 should need replacement, got used=%v", after.LifeUsed)
 	}
 
-	// Appears in the replacement list.
-	repl, err := repo.ListToolsNeedingReplacement(ctx)
+	// Appears in the replacement list. O limiar 1 é "só o que já estourou" —
+	// o comportamento que este teste sempre verificou.
+	repl, err := repo.ListToolsNeedingReplacement(ctx, 1)
 	if err != nil {
 		t.Fatalf("ListToolsNeedingReplacement: %v", err)
 	}

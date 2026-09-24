@@ -116,8 +116,15 @@ func (uc *ToolUseCase) ResetLife(ctx context.Context, id int64) (*response.ToolR
 	return toToolResponse(t), nil
 }
 
-func (uc *ToolUseCase) ListNeedingReplacement(ctx context.Context) ([]*response.ToolResponse, error) {
-	tools, err := uc.repo.ListToolsNeedingReplacement(ctx)
+// ListNeedingReplacement devolve o que precisa de troca. `threshold` é a fração
+// do limite a partir da qual a ferramenta entra na lista; fora de (0,1] vale
+// 0.8, que é o aviso com folga para pedir a afiação antes de a peça sair fora
+// de medida.
+func (uc *ToolUseCase) ListNeedingReplacement(ctx context.Context, threshold float64) ([]*response.ToolResponse, error) {
+	if threshold <= 0 || threshold > 1 {
+		threshold = 0.8
+	}
+	tools, err := uc.repo.ListToolsNeedingReplacement(ctx, threshold)
 	if err != nil {
 		return nil, err
 	}

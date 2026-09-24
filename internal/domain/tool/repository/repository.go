@@ -18,7 +18,9 @@ type ToolRepository interface {
 	// Life
 	ConsumeToolLife(ctx context.Context, id int64, amount float64) (*entity.Tool, error)
 	ResetToolLife(ctx context.Context, id int64) (*entity.Tool, error)
-	ListToolsNeedingReplacement(ctx context.Context) ([]*entity.Tool, error)
+	// threshold é a fração do limite a partir da qual a ferramenta entra na
+	// lista: 1 devolve só as que já estouraram; 0.8 antecipa a troca.
+	ListToolsNeedingReplacement(ctx context.Context, threshold float64) ([]*entity.Tool, error)
 
 	// Association
 	AddRouteOpTool(ctx context.Context, rt *entity.RouteOpTool) (*entity.RouteOpTool, error)
