@@ -214,8 +214,8 @@ func TestIntegration_Configurator_CartesianWithRestriction(t *testing.T) {
 	// Dependency: COR=AZ ⇒ TAMPA=RED (answer_value = variable code).
 	var rid int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO restrictions (situation, item_code, weight, created_by) VALUES ('ACTIVE',$1,16,$2) RETURNING id`,
-		itemCode, uid).Scan(&rid); err != nil {
+		`INSERT INTO restrictions (situation, item_code, weight, created_by, enterprise_id) VALUES ('ACTIVE',$1,16,$2,$3) RETURNING id`,
+		itemCode, uid, testutil.EnterpriseID(t, ctx)).Scan(&rid); err != nil {
 		t.Fatalf("insert restriction: %v", err)
 	}
 	testutil.Exec(t, pool, `INSERT INTO restriction_dominants (restriction_id, question_id, operator, condition_type, answer_value, sequence)

@@ -3,11 +3,9 @@
 package financial_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -21,8 +19,11 @@ import (
 func TestIntegration_Adiantamento_CreateAndApplyToContaPagar(t *testing.T) {
 	pool := testutil.Pool(t)
 	repo := financialrepo.NewFinancialRepositoryPG(pool)
-	ctx := context.Background()
-	user := uuid.New()
+	// Conta bancária, plano de contas e centro de custo passaram a pertencer a
+	// uma empresa (migração 361): sem sessão, o repositório recusa — que é
+	// exatamente o que se quer que aconteça fora de uma requisição autenticada.
+	ctx := testutil.TenantContext(t, pool)
+	user := testutil.Actor(t, pool)
 	now := time.Now()
 
 	// Bank account with a known starting balance.
