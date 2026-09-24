@@ -1295,6 +1295,50 @@ func (q *Queries) ListOperations(ctx context.Context, arg ListOperationsParams) 
 	return items, nil
 }
 
+const listOrderStepsMissingInspectionPlan = `-- name: ListOrderStepsMissingInspectionPlan :many
+SELECT poo.sequence
+FROM production_order_operations poo
+JOIN production_orders po ON po.id = poo.production_order_id
+JOIN route_operations ro ON ro.id = poo.route_operation_id
+LEFT JOIN inspection_plans ip ON ip.route_operation_id = ro.id AND ip.is_active = TRUE
+WHERE poo.production_order_id = $1
+  AND po.enterprise_id = $2
+  AND ro.inspection_required = TRUE
+  AND ip.id IS NULL
+ORDER BY poo.sequence
+`
+
+type ListOrderStepsMissingInspectionPlanParams struct {
+	ProductionOrderID int64
+	EnterpriseID      *int64
+}
+
+// Etapas de uma ORDEM que são ponto de inspeção e continuam sem plano ativo.
+//
+// A pendência não é do instante em que a ordem foi criada: ela dura até alguém
+// cadastrar o plano. Por isso a conferência vive na LISTAGEM das etapas, e não
+// só na explosão do roteiro — senão o aviso aparecia uma vez e sumia no primeiro
+// recarregamento da tela.
+func (q *Queries) ListOrderStepsMissingInspectionPlan(ctx context.Context, arg ListOrderStepsMissingInspectionPlanParams) ([]int16, error) {
+	rows, err := q.db.Query(ctx, listOrderStepsMissingInspectionPlan, arg.ProductionOrderID, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int16
+	for rows.Next() {
+		var sequence int16
+		if err := rows.Scan(&sequence); err != nil {
+			return nil, err
+		}
+		items = append(items, sequence)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listResourcesByRoute = `-- name: ListResourcesByRoute :many
 SELECT r.id, r.route_operation_id, r.work_center_id, r.priority, r.time_factor, r.is_primary, r.created_at, r.updated_at, mt.name AS work_center_name
 FROM route_operation_resources r

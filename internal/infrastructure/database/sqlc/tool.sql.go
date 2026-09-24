@@ -305,12 +305,20 @@ func (q *Queries) ListToolsByRouteOp(ctx context.Context, routeOperationID int64
 
 const listToolsNeedingReplacement = `-- name: ListToolsNeedingReplacement :many
 SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by FROM tools
-WHERE is_active = TRUE AND life_limit > 0 AND life_used >= life_limit
-ORDER BY code
+WHERE is_active = TRUE AND life_limit > 0
+  AND life_used >= life_limit * $1::NUMERIC
+ORDER BY (life_used / life_limit) DESC, code
 `
 
-func (q *Queries) ListToolsNeedingReplacement(ctx context.Context) ([]Tool, error) {
-	rows, err := q.db.Query(ctx, listToolsNeedingReplacement)
+// Ferramentas que já passaram do limite OU estão chegando nele.
+//
+// Avisar só depois de estourar chega tarde: quem programa a semana precisa
+// saber que a matriz vence no meio dela para pedir a afiação antes, não depois
+// de a peça sair fora de medida. `sqlc.arg(threshold)` é a fração do limite a
+// partir da qual a ferramenta entra na lista (0.8 = 80 %); 1 devolve só as que
+// já estouraram, que é o comportamento antigo.
+func (q *Queries) ListToolsNeedingReplacement(ctx context.Context, threshold pgtype.Numeric) ([]Tool, error) {
+	rows, err := q.db.Query(ctx, listToolsNeedingReplacement, threshold)
 	if err != nil {
 		return nil, err
 	}

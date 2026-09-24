@@ -538,7 +538,19 @@ func (app *application) mount() chi.Router {
 	routingOperationUC := routing_uc.NewOperationUseCase(rRepo, itemRepo, authService)
 	routingRouteUC := routing_uc.NewRouteUseCase(rRepo, itemRepo, authService)
 	routingLeadTimeUC := routing_uc.NewLeadTimeUseCase(rRepo)
-	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC)
+	// Conferência de prontidão: o roteiro é conferido contra o que o
+	// planejamento vai exigir dele (máquina apta no centro, tarifa/hora, prazo
+	// de terceiro), na tela onde isso se conserta.
+	routingReadinessAdapters := routingRepo.NewReadinessAdapters(app.db.Pool)
+	routingReadinessUC := &routing_uc.RouteReadinessUseCase{
+		Routes:     rRepo,
+		Machines:   machineRepo,
+		Rates:      routingReadinessAdapters,
+		Centers:    routingReadinessAdapters,
+		Inspection: routingReadinessAdapters,
+		Auth:       authService,
+	}
+	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC, routingReadinessUC)
 	thirdPartyServiceRepository := thirdPartyServiceRepo.New(app.db.Pool)
 	thirdPartyServiceHandler := handler.NewThirdPartyServiceHandler(thirdPartyServiceUC.New(thirdPartyServiceRepository, itemRepo))
 
@@ -1279,7 +1291,9 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/items", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemHandler.CreateItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", itemHandler.UpdateItem)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", itemHandler.ListItems)
+			// Leitura do catálogo: é o que resolve a descrição do item na tela do
+			// chão de fábrica. Criar e alterar item seguem fora do alcance dele.
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/", itemHandler.ListItems)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/with-masks", itemHandler.ListItemsWithMasks)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search/{code}", itemHandler.FindItemByCodeHandler)
 			r.With(httpmw.RequirePermission(httpmw.PermItemActivate)).Get("/{code}/activation-readiness", itemActivationHandler.ValidateActivation)
@@ -1415,17 +1429,19 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/production-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN")).Post("/scanner/tokens", prodOrderHandler.CreateScanToken)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/scanner/scan", prodOrderHandler.Scan)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/scanner/scan", prodOrderHandler.Scan)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", prodOrderHandler.Create)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", prodOrderHandler.List)
+			// O posto precisa ACHAR a ordem antes de apontar nela; sem a lista, a
+			// tela do operador abre vazia e o perfil não serve para nada.
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/list", prodOrderHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/maintenance", prodOrderHandler.Maintenance)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/delivery-candidates", prodOrderHandler.DeliveryCandidates)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", prodOrderHandler.GetByCode)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}", prodOrderHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", prodOrderHandler.Maintain)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/operational", prodOrderHandler.Operational)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/operational", prodOrderHandler.Operational)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/start", prodOrderHandler.Start)
-			r.With(httpmw.RequireRole("ADMIN", "USER"), httpmw.RequireIdempotencyKey).Post("/appointment", prodOrderHandler.AddAppointment)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consumption", prodOrderHandler.AddConsumption)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport), httpmw.RequireIdempotencyKey).Post("/appointment", prodOrderHandler.AddAppointment)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/consumption", prodOrderHandler.AddConsumption)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/complete", prodOrderHandler.Complete)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/close", prodOrderHandler.Close)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancel", prodOrderHandler.Cancel)
@@ -1433,11 +1449,11 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/consumptions", prodOrderHandler.GetConsumptions)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/settle-cost", prodOrderHandler.SettleCost)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/cost", prodOrderHandler.GetCost)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/scrap-return", prodOrderHandler.ReturnScrap)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/{id}/scrap-return", prodOrderHandler.ReturnScrap)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/explode", prodOrderHandler.ExplodeRoute)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/operations", prodOrderHandler.ListOrderOperations)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/advance", prodOrderHandler.AdvanceOperation)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/materials", prodOrderHandler.ListMaterials)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/operations", prodOrderHandler.ListOrderOperations)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/operations/advance", prodOrderHandler.AdvanceOperation)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/materials", prodOrderHandler.ListMaterials)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials", prodOrderHandler.AddMaterial)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials/replace", prodOrderHandler.ReplaceMaterial)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/materials/{materialID}", prodOrderHandler.DeleteMaterial)
@@ -2116,6 +2132,7 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", routingHandler.UpdateRoute)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/", routingHandler.DeactivateRoute)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lead-time", routingHandler.GetLeadTime)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/readiness", routingHandler.RouteReadiness)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/edges", routingHandler.GetNetworkEdges)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/edges", routingHandler.SetNetworkEdge)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/edges", routingHandler.DeleteNetworkEdge)

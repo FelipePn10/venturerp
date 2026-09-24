@@ -13,7 +13,9 @@ import (
 
 const addAllocationBaseItem = `-- name: AddAllocationBaseItem :one
 INSERT INTO allocation_base_items (allocation_base_code, cost_center_code, amount, percentage)
-VALUES ($1, $2, $3, $4)
+SELECT $1, $2, $3, $4
+FROM allocation_bases b
+WHERE b.code = $1 AND b.enterprise_id = $5
     RETURNING id, amount, percentage, created_at, allocation_base_code, cost_center_code
 `
 
@@ -22,6 +24,7 @@ type AddAllocationBaseItemParams struct {
 	CostCenterCode     int32
 	Amount             float64
 	Percentage         float64
+	EnterpriseID       *int64
 }
 
 func (q *Queries) AddAllocationBaseItem(ctx context.Context, arg AddAllocationBaseItemParams) (AllocationBaseItem, error) {
@@ -30,6 +33,7 @@ func (q *Queries) AddAllocationBaseItem(ctx context.Context, arg AddAllocationBa
 		arg.CostCenterCode,
 		arg.Amount,
 		arg.Percentage,
+		arg.EnterpriseID,
 	)
 	var i AllocationBaseItem
 	err := row.Scan(
@@ -44,17 +48,18 @@ func (q *Queries) AddAllocationBaseItem(ctx context.Context, arg AddAllocationBa
 }
 
 const createAllocationBase = `-- name: CreateAllocationBase :one
-INSERT INTO allocation_bases (code, description, period, observation, created_by)
-VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, code, description, period, observation, created_at, updated_at, created_by
+INSERT INTO allocation_bases (code, description, period, observation, created_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id, code, description, period, observation, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateAllocationBaseParams struct {
-	Code        int32
-	Description string
-	Period      string
-	Observation pgtype.Text
-	CreatedBy   pgtype.UUID
+	Code         int32
+	Description  string
+	Period       string
+	Observation  pgtype.Text
+	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 func (q *Queries) CreateAllocationBase(ctx context.Context, arg CreateAllocationBaseParams) (AllocationBasis, error) {
@@ -64,6 +69,7 @@ func (q *Queries) CreateAllocationBase(ctx context.Context, arg CreateAllocation
 		arg.Period,
 		arg.Observation,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i AllocationBasis
 	err := row.Scan(
@@ -75,34 +81,54 @@ func (q *Queries) CreateAllocationBase(ctx context.Context, arg CreateAllocation
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteAllocationBase = `-- name: DeleteAllocationBase :exec
-DELETE FROM allocation_bases WHERE code = $1
+DELETE FROM allocation_bases WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteAllocationBase(ctx context.Context, code int32) error {
-	_, err := q.db.Exec(ctx, deleteAllocationBase, code)
+type DeleteAllocationBaseParams struct {
+	Code         int32
+	EnterpriseID *int64
+}
+
+func (q *Queries) DeleteAllocationBase(ctx context.Context, arg DeleteAllocationBaseParams) error {
+	_, err := q.db.Exec(ctx, deleteAllocationBase, arg.Code, arg.EnterpriseID)
 	return err
 }
 
 const deleteAllocationBaseItems = `-- name: DeleteAllocationBaseItems :exec
-DELETE FROM allocation_base_items WHERE allocation_base_code = $1
+DELETE FROM allocation_base_items i
+USING allocation_bases b
+WHERE i.allocation_base_code = $1
+  AND b.code = i.allocation_base_code
+  AND b.enterprise_id = $2
 `
 
-func (q *Queries) DeleteAllocationBaseItems(ctx context.Context, allocationBaseCode int32) error {
-	_, err := q.db.Exec(ctx, deleteAllocationBaseItems, allocationBaseCode)
+type DeleteAllocationBaseItemsParams struct {
+	AllocationBaseCode int32
+	EnterpriseID       *int64
+}
+
+func (q *Queries) DeleteAllocationBaseItems(ctx context.Context, arg DeleteAllocationBaseItemsParams) error {
+	_, err := q.db.Exec(ctx, deleteAllocationBaseItems, arg.AllocationBaseCode, arg.EnterpriseID)
 	return err
 }
 
 const getAllocationBaseByCode = `-- name: GetAllocationBaseByCode :one
-SELECT id, code, description, period, observation, created_at, updated_at, created_by FROM allocation_bases WHERE code = $1
+SELECT id, code, description, period, observation, created_at, updated_at, created_by, enterprise_id FROM allocation_bases WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetAllocationBaseByCode(ctx context.Context, code int32) (AllocationBasis, error) {
-	row := q.db.QueryRow(ctx, getAllocationBaseByCode, code)
+type GetAllocationBaseByCodeParams struct {
+	Code         int32
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetAllocationBaseByCode(ctx context.Context, arg GetAllocationBaseByCodeParams) (AllocationBasis, error) {
+	row := q.db.QueryRow(ctx, getAllocationBaseByCode, arg.Code, arg.EnterpriseID)
 	var i AllocationBasis
 	err := row.Scan(
 		&i.ID,
@@ -113,16 +139,26 @@ func (q *Queries) GetAllocationBaseByCode(ctx context.Context, code int32) (Allo
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getAllocationBaseItems = `-- name: GetAllocationBaseItems :many
-SELECT id, amount, percentage, created_at, allocation_base_code, cost_center_code FROM allocation_base_items WHERE allocation_base_code = $1
+SELECT i.id, i.amount, i.percentage, i.created_at, i.allocation_base_code, i.cost_center_code FROM allocation_base_items i
+JOIN allocation_bases b ON b.code = i.allocation_base_code AND b.enterprise_id = $2
+WHERE i.allocation_base_code = $1
 `
 
-func (q *Queries) GetAllocationBaseItems(ctx context.Context, allocationBaseCode int32) ([]AllocationBaseItem, error) {
-	rows, err := q.db.Query(ctx, getAllocationBaseItems, allocationBaseCode)
+type GetAllocationBaseItemsParams struct {
+	AllocationBaseCode int32
+	EnterpriseID       *int64
+}
+
+// As linhas seguem a base: `allocation_base_items` não tem coluna de empresa, e
+// a posse dela é a da base de rateio referenciada.
+func (q *Queries) GetAllocationBaseItems(ctx context.Context, arg GetAllocationBaseItemsParams) ([]AllocationBaseItem, error) {
+	rows, err := q.db.Query(ctx, getAllocationBaseItems, arg.AllocationBaseCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,11 +185,11 @@ func (q *Queries) GetAllocationBaseItems(ctx context.Context, allocationBaseCode
 }
 
 const listAllocationBases = `-- name: ListAllocationBases :many
-SELECT id, code, description, period, observation, created_at, updated_at, created_by FROM allocation_bases ORDER BY created_at DESC
+SELECT id, code, description, period, observation, created_at, updated_at, created_by, enterprise_id FROM allocation_bases WHERE enterprise_id = $1 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListAllocationBases(ctx context.Context) ([]AllocationBasis, error) {
-	rows, err := q.db.Query(ctx, listAllocationBases)
+func (q *Queries) ListAllocationBases(ctx context.Context, enterpriseID *int64) ([]AllocationBasis, error) {
+	rows, err := q.db.Query(ctx, listAllocationBases, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +206,7 @@ func (q *Queries) ListAllocationBases(ctx context.Context) ([]AllocationBasis, e
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
