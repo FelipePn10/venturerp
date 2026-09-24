@@ -21,6 +21,11 @@ type ProductionOrderOperationResponse struct {
 	// ToolAlerts lists tools that reached their useful-life limit while completing
 	// this operation (populated on DONE). Empty otherwise.
 	ToolAlerts []string `json:"tool_alerts,omitempty"`
+	// Warnings são pendências que NÃO impedem a ordem de existir, mas que alguém
+	// precisa resolver — hoje, etapa marcada como ponto de inspeção sem plano
+	// ativo. Recusar a ordem por isso pararia a fábrica por uma lacuna de
+	// cadastro de outro módulo; omitir faria o controle sumir em silêncio.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type ProductionOperationEvent struct {

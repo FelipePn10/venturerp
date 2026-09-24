@@ -169,9 +169,16 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 		return nil, err
 	}
 
-	// Inspection records are part of creation; failure rolls back the order.
-	if err := uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops); err != nil {
+	// A inspeção é um controle SOBRE a ordem, não um pré-requisito dela: falta de
+	// plano vira aviso na etapa, não recusa da ordem.
+	avisos, err := uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops)
+	if err != nil {
 		return nil, err
+	}
+	for _, resp := range out {
+		if aviso, marcada := avisos[int16(resp.Sequence)]; marcada {
+			resp.Warnings = append(resp.Warnings, aviso)
+		}
 	}
 	if uc.MachinePlanning != nil {
 		if err := uc.MachinePlanning.ApplyMachinePlanToProduction(ctx, orderID); err != nil {
@@ -214,10 +221,21 @@ func (uc *OrderOperationsUseCase) quantidadePorEtapa(
 }
 
 // abrirInspecoesDaOrdem cria um registro de inspeção PENDENTE para cada etapa
-// marcada no roteiro. Sem plano ativo, a criação é rejeitada para não omitir o controle.
+// marcada no roteiro que tenha plano ativo, e devolve um AVISO por etapa marcada
+// que não tenha.
+//
+// Nem recusar nem esquecer. A versão anterior recusava a ordem inteira: uma
+// lacuna de cadastro no módulo de qualidade parava a fábrica, e o operador via
+// "cadastre um plano ativo" sem poder resolver — o plano é de outra tela e de
+// outra pessoa. A versão antes dela pulava em silêncio, e o controle de
+// qualidade simplesmente não acontecia sem ninguém notar.
+//
+// A ordem nasce, e a etapa sem plano volta marcada. Quem quiser a trava ANTES
+// tem a conferência de prontidão do roteiro (`/api/routing/routes/{id}/readiness`),
+// que acusa a mesma falta enquanto o roteiro está sendo montado.
 func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 	ctx context.Context, orderID, routeID int64, ops []sqlc.DBRouteOpForExplode,
-) error {
+) (map[int16]string, error) {
 	temInspecao := false
 	for _, op := range ops {
 		if op.InspectionRequired {
@@ -226,28 +244,32 @@ func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 		}
 	}
 	if !temInspecao {
-		return nil
+		return nil, nil
 	}
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	etapas, err := uc.Q.ListInspectionStepsForOrderRoute(ctx, sqlc.ListInspectionStepsForOrderRouteParams{
 		RouteID: routeID, EnterpriseID: empresa,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if uc.Auth == nil {
-		return errorsuc.NewValidationError("autenticação não configurada para abrir inspeções")
+		return nil, errorsuc.NewValidationError("autenticação não configurada para abrir inspeções")
 	}
 	actor, err := uc.Auth.UserID(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	avisos := map[int16]string{}
 	for _, etapa := range etapas {
 		if !etapa.PlanID.Valid || etapa.ItemCode == nil {
-			return errorsuc.NewValidationError(fmt.Sprintf("a etapa %d exige inspeção; cadastre um plano ativo antes de gerar a ordem", etapa.Sequence))
+			avisos[etapa.Sequence] = fmt.Sprintf(
+				"esta etapa é ponto de inspeção, mas não há plano de inspeção ativo para ela: a ordem foi criada e a conferência não será aberta até o plano existir (etapa %d)",
+				etapa.Sequence)
+			continue
 		}
 		_, err = uc.Q.CreateQualityRecord(ctx, sqlc.CreateQualityRecordParams{
 			PlanID:            etapa.PlanID.Int64,
@@ -260,10 +282,10 @@ func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 			Result:       sqlc.InspectionResultEnum("PENDENTE"),
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return avisos, nil
 }
 
 // ListOperations lists operations for a production order.
@@ -279,9 +301,27 @@ func (uc *OrderOperationsUseCase) ListOperations(ctx context.Context, orderID in
 	if err != nil {
 		return nil, fmt.Errorf("listing operations: %w", err)
 	}
+	// Pendência de inspeção: dura até alguém cadastrar o plano, então é lida a
+	// cada listagem. Computá-la só na explosão do roteiro fazia o aviso sumir no
+	// primeiro recarregamento da tela — e a explosão devolve esta mesma listagem,
+	// então o aviso nem chegava a aparecer uma vez.
+	semPlano := map[int]bool{}
+	pendentes, err := uc.Q.ListOrderStepsMissingInspectionPlan(ctx, sqlc.ListOrderStepsMissingInspectionPlanParams{
+		ProductionOrderID: orderID, EnterpriseID: &empresa,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, seq := range pendentes {
+		semPlano[int(seq)] = true
+	}
+
 	out := make([]*response.ProductionOrderOperationResponse, 0, len(poos))
 	for _, poo := range poos {
 		r := pooToResponse(poo)
+		if semPlano[r.Sequence] {
+			r.Warnings = append(r.Warnings, "esta etapa é ponto de inspeção e ainda não tem plano de inspeção ativo: a conferência de qualidade não será aberta até o plano existir")
+		}
 		blocked, err := uc.Q.OperationPredecessorsPending(ctx, poo.ID)
 		if err != nil {
 			return nil, err
@@ -301,7 +341,7 @@ func (uc *OrderOperationsUseCase) ListOperations(ctx context.Context, orderID in
 
 // AdvanceOperation changes an operation status (PENDING → IN_PROGRESS → DONE).
 func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto request.AdvanceOperationDTO) (*response.ProductionOrderOperationResponse, error) {
-	if uc.Auth == nil || !uc.Auth.CanCreatePlannedOrder(ctx) {
+	if uc.Auth == nil || !uc.Auth.CanReportProduction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if dto.OperationID <= 0 {
@@ -354,6 +394,14 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 			return err
 		}
 		result = pooToResponse(op)
+		// Começar a etapa é o último instante em que trocar a ferramenta ainda é
+		// barato: depois dela rodar, a peça já saiu fora de medida. O aviso não
+		// bloqueia — quem está no posto pode ter um motivo —, mas aparece.
+		if dto.Status == "IN_PROGRESS" && op.RouteOperationID.Valid {
+			transactional := *uc
+			transactional.Q = q
+			result.ToolAlerts = transactional.ferramentasVencidas(ctx, op.RouteOperationID.Int64)
+		}
 		if dto.Status == "DONE" && op.RouteOperationID.Valid {
 			transactional := *uc
 			transactional.Q = q
@@ -365,6 +413,28 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 		return nil
 	})
 	return result, err
+}
+
+// ferramentasVencidas lista as ferramentas da etapa que já passaram do limite de
+// vida. É consulta de aviso: falhar aqui não pode impedir o operador de
+// começar a etapa — a ordem existe, o alerta é um cuidado sobre ela.
+func (uc *OrderOperationsUseCase) ferramentasVencidas(ctx context.Context, routeOpID int64) []string {
+	tools, err := uc.Q.ListToolsByRouteOp(ctx, routeOpID)
+	if err != nil {
+		return nil
+	}
+	var alerts []string
+	for _, t := range tools {
+		limite := pgutil.FromPgNumericToFloat64(t.LifeLimit)
+		usado := pgutil.FromPgNumericToFloat64(t.LifeUsed)
+		if limite <= 0 || usado < limite {
+			continue
+		}
+		alerts = append(alerts, fmt.Sprintf(
+			"ferramenta %d (%s) já usou %.0f de %.0f %s de vida útil: troque antes de produzir",
+			t.ToolCode, t.ToolName, usado, limite, strings.ToLower(t.LifeType)))
+	}
+	return alerts
 }
 
 // consumeToolLife charges each tool linked to the route operation for the work just
