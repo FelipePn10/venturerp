@@ -218,6 +218,7 @@ type RoutingHandler struct {
 	operationUC *routing_uc.OperationUseCase
 	routeUC     *routing_uc.RouteUseCase
 	leadTimeUC  *routing_uc.LeadTimeUseCase
+	readinessUC *routing_uc.RouteReadinessUseCase
 }
 
 type CuttingPlanHandler struct {

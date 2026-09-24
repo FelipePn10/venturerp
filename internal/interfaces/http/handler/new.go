@@ -480,11 +480,13 @@ func NewRoutingHandler(
 	operationUC *routing_uc.OperationUseCase,
 	routeUC *routing_uc.RouteUseCase,
 	leadTimeUC *routing_uc.LeadTimeUseCase,
+	readinessUC *routing_uc.RouteReadinessUseCase,
 ) *RoutingHandler {
 	return &RoutingHandler{
 		operationUC: operationUC,
 		routeUC:     routeUC,
 		leadTimeUC:  leadTimeUC,
+		readinessUC: readinessUC,
 	}
 }
 

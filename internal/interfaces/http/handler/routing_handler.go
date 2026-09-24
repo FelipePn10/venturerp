@@ -163,6 +163,26 @@ func (h *RoutingHandler) GetRouteDetail(w http.ResponseWriter, r *http.Request) 
 	jsonResponse(w, http.StatusOK, result)
 }
 
+// RouteReadiness responde "este roteiro consegue ser planejado?" antes de o
+// MRP recusar no meio do cálculo.
+func (h *RoutingHandler) RouteReadiness(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código do roteiro inválido")
+		return
+	}
+	if h.readinessUC == nil {
+		jsonError(w, http.StatusServiceUnavailable, "conferência de prontidão do roteiro não configurada")
+		return
+	}
+	result, err := h.readinessUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
 func (h *RoutingHandler) ListRoutesByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode := request.TextCode(r.URL.Query().Get("item_code"))
 	if itemCode.String() == "" {
