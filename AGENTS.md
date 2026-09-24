@@ -153,3 +153,18 @@ A resposta final deve incluir:
 - Na migração inicial, publique primeiro o backend mantendo o mínimo atual;
   somente depois publique o desktop `1.1.10`. Clientes até `1.1.9` não enviam o
   cabeçalho e não podem ser bloqueados antes de o novo instalador existir.
+
+## Verificação contínua
+
+`ci-backend.yml` roda a cada push em `main`/`develop` e em todo PR: `gofmt`,
+`go vet`, `go test ./...` e — a parte que faltava — `go test -tags=integration
+./internal/...` contra um Postgres criado do zero (migrações + `scripts/seed-test.sql`).
+
+A suíte de integração exige dois registros que ela não cria: um usuário (toda
+linha auditável referencia `users.id` em `created_by`) e uma empresa
+(`enterprise_id` é NOT NULL desde as migrações de isolamento). É só isso que
+`seed-test.sql` semeia; o resto cada teste monta e limpa.
+
+Rodando localmente: `TEST_DATABASE_URL` aponta para `panossoerp-postgres-test`
+(:5433). **Mantenha esse banco migrado** — ele ficou 30 migrações atrás e foi
+por isso que a suíte passou meses vermelha: o erro era do banco, não do código.

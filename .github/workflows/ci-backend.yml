@@ -1,0 +1,72 @@
+# Verificação de cada mudança, antes da release.
+#
+# Até aqui o único workflow rodava no `git tag` e só executava `go test ./...`.
+# A suíte de integração — a que exercita Postgres de verdade, isolamento por
+# empresa, transações e migrações — ficava de fora, e por isso passou meses
+# vermelha sem ninguém notar: uma regressão de banco só aparecia no ambiente.
+#
+# Aqui o banco nasce do zero a cada execução: migrações + a semente mínima de
+# `scripts/seed-test.sql`. Se uma migração quebra, se um índice único novo não
+# cabe nos dados ou se uma consulta perde o filtro de empresa, o PR fica
+# vermelho — não a produção.
+name: CI backend
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+
+concurrency:
+  group: ci-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: venture
+          POSTGRES_PASSWORD: venture
+          POSTGRES_DB: venture_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U venture"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://venture:venture@localhost:5432/venture_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Formatação
+        run: |
+          arquivos="$(gofmt -l internal api cmd)"
+          if [ -n "$arquivos" ]; then
+            echo "Arquivos fora do gofmt:"; echo "$arquivos"; exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Testes de unidade
+        run: go test ./...
+
+      - name: Migrações
+        run: |
+          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
+            | tar xz -C /usr/local/bin migrate
+          migrate -path=migrations -database="$TEST_DATABASE_URL" up
+
+      - name: Semente mínima
+        run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/seed-test.sql
+
+      - name: Testes de integração
+        run: go test -tags=integration ./internal/...
