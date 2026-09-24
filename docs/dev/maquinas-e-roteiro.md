@@ -110,6 +110,26 @@ os dois módulos:
   por máquina/dia é o que o **CRP** soma e o **APS** sequencia (ver
   `manufatura-e-compras.md` §2 e §3).
 
+### 4.1 Quem decide o quê — roteiro × produtividade por máquina
+
+Os dois cadastros guardam "tempo" e parecem repetir informação. Não repetem: cada
+um responde por uma camada, e o planejamento combina as duas
+(`machine_route.go` → `minutosDoRoteiro`).
+
+| Decisão | Fonte | Observação |
+|---|---|---|
+| Quanto tempo a etapa leva | `route_operations` / `operations` (`EffTime`) | Vence sempre que a etapa (ou a operação de biblioteca) informa `run_time` ou `standard_time`. |
+| Quais máquinas podem fazer | `item_machine_times` | Sem linha para o centro da etapa, o plano é recusado. |
+| Ordem de preferência / equivalência | `item_machine_times.priority` | Mesma prioridade e máscara = máquinas equivalentes; a fila se divide entre elas. |
+| Rendimento do item naquela máquina | `item_machine_times.efficiency_rate` (ou `machines.efficiency_rate`) | **Multiplica** o tempo do roteiro; não o substitui. |
+| Paradas para trocar consumível | `item_machine_times.consumption_per_hour` + `machine_consumables` | Somadas à ocupação; o roteiro não conhece o consumível. |
+| Tempo quando a etapa **não** informa nenhum | `item_machine_times.production_time` | Caminho de item sem roteiro detalhado (`machineMinutes`). |
+
+Até a correção de 2026-09-23, ter tempo na etapa descartava eficiência e
+consumível: o campo "Eficiência deste item" da VMAQ0200 não mudava um minuto do
+plano em nenhum item com roteiro — que é a maioria. Testes em
+`tempo_do_roteiro_test.go`.
+
 ---
 
 ## 5. Migrations e referências

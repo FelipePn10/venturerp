@@ -23,7 +23,7 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 	if dto.SalesQuotationCode == 0 {
 		return nil, errorsuc.NewValidationError("informe o orçamento de venda")
 	}
-	resolvedItem, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	resolvedItem, err := itemresolution.ResolveActive(ctx, uc.Items, dto.ItemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 		return nil, err
 	}
 	if dto.ItemCode != nil {
-		resolvedItem, resolveErr := itemresolution.Resolve(ctx, uc.Items, *dto.ItemCode)
+		resolvedItem, resolveErr := itemresolution.ResolveActive(ctx, uc.Items, *dto.ItemCode)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}

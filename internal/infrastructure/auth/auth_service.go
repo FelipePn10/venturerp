@@ -112,8 +112,11 @@ func (a *AuthService) CanResolveStructure(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
 
+// FindItemByCode é leitura do cadastro de item — o que resolve a descrição do
+// que está sendo produzido na tela do posto. Criar e alterar item continuam
+// exigindo perfil de escrita.
 func (a *AuthService) FindItemByCode(ctx context.Context) bool {
-	return a.hasWriteRole(ctx)
+	return a.hasShopFloorRole(ctx)
 }
 
 func (a *AuthService) UserID(ctx context.Context) (uuid.UUID, error) {
@@ -296,12 +299,33 @@ func (a *AuthService) CanCreatePlannedOrder(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
 
+// hasShopFloorRole é ADMIN, USER **ou** OPERATOR: o conjunto que atua no chão
+// de fábrica. Apontar é só metade do trabalho — o posto também precisa ACHAR a
+// ordem e ler a descrição do item que está produzindo. Sem esses dois acessos o
+// perfil autentica, passa pelas rotas e mesmo assim encontra uma tela vazia.
+func (a *AuthService) hasShopFloorRole(ctx context.Context) bool {
+	if a.hasWriteRole(ctx) {
+		return true
+	}
+	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
+	if !ok {
+		return false
+	}
+	return strings.ToUpper(strings.TrimSpace(user.Role)) == "OPERATOR"
+}
+
+// CanReportProduction autoriza o apontamento de chão de fábrica.
+func (a *AuthService) CanReportProduction(ctx context.Context) bool {
+	return a.hasShopFloorRole(ctx)
+}
+
 func (a *AuthService) CanReleaseOrder(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
 
+// CanListOrder inclui o posto: é a lista onde ele acha a ordem para apontar.
 func (a *AuthService) CanListOrder(ctx context.Context) bool {
-	return a.hasWriteRole(ctx)
+	return a.hasShopFloorRole(ctx)
 }
 
 func (a *AuthService) CanCreateSalesDivision(ctx context.Context) bool {

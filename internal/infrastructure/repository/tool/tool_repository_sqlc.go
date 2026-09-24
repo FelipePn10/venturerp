@@ -99,8 +99,8 @@ func (r *ToolRepositorySQLC) ResetToolLife(ctx context.Context, id int64) (*enti
 	return toolRowToEntity(row), nil
 }
 
-func (r *ToolRepositorySQLC) ListToolsNeedingReplacement(ctx context.Context) ([]*entity.Tool, error) {
-	rows, err := r.q.ListToolsNeedingReplacement(ctx)
+func (r *ToolRepositorySQLC) ListToolsNeedingReplacement(ctx context.Context, threshold float64) ([]*entity.Tool, error) {
+	rows, err := r.q.ListToolsNeedingReplacement(ctx, pgutil.ToPgNumericFromFloat64(threshold))
 	if err != nil {
 		return nil, fmt.Errorf("listing tools needing replacement: %w", err)
 	}

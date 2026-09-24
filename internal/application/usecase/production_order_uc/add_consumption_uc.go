@@ -26,7 +26,7 @@ func (uc *AddConsumptionUseCase) Execute(
 	ctx context.Context,
 	dto request.AddConsumptionDTO,
 ) (*entity.ProductionConsumption, error) {
-	if !uc.Auth.CanCreatePlannedOrder(ctx) {
+	if !uc.Auth.CanReportProduction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	actor, err := uc.Auth.UserID(ctx)

@@ -353,12 +353,20 @@
 
 <table class="campos">
   <tr><td>Preparação (por lote)</td><td><code>300</code></td><td class="obs">Setup da máquina: ajustar, trocar ferramenta, acertar o primeiro. Cobrado <b>uma vez por lote</b>, não por peça. É o que faz o custo unitário cair quando o lote cresce.</td></tr>
-  <tr><td>Máquina</td><td><code>15</code></td><td class="obs">Tempo em que a máquina fica <b>ocupada</b> para produzir a quantidade indicada em <i>Peças por ciclo</i>. É este número que entra na carga do CRP.</td></tr>
-  <tr><td>Mão de obra</td><td><code>0</code></td><td class="obs">Tempo do <b>operador</b>. Zero significa “igual ao tempo de máquina” — o operador fica ali o ciclo todo. Use um valor menor quando a máquina roda sozinha parte do tempo e o operador só carrega e descarrega.</td></tr>
+  <tr><td>Tempo de máquina</td><td><code>15</code></td><td class="obs">Tempo em que o equipamento fica <b>ocupado</b> para produzir a quantidade indicada em <i>Peças por ciclo</i>. É este número que entra na carga do CRP. <b>É um tempo, não a escolha da máquina</b> — qual equipamento roda a etapa sai do centro de trabalho (seção 7.1) e da produtividade por máquina (Parte 11).</td></tr>
+  <tr><td>Tempo de mão de obra</td><td><code>0</code></td><td class="obs">Tempo do <b>operador</b>. Zero significa “igual ao tempo de máquina” — o operador fica ali o ciclo todo. Use um valor menor quando a máquina roda sozinha parte do tempo e o operador só carrega e descarrega.</td></tr>
   <tr><td>Peças por ciclo</td><td><code>1</code></td><td class="obs">Quantas peças saem no tempo de máquina acima. Estampo de quatro cavidades: <code>4</code>. <b>Errar aqui multiplica ou divide o custo pelo mesmo número.</b></td></tr>
   <tr><td>Operadores</td><td><code>1</code></td><td class="obs">Quantas pessoas atendem a operação ao mesmo tempo. Multiplica <b>só o custo de mão de obra</b>, não o tempo de máquina.</td></tr>
-  <tr><td>Tempo padrão (legado)</td><td><code>0</code></td><td class="obs">Campo antigo, mantido para cadastros feitos antes do modelo completo. Só é usado quando <i>Máquina</i> é zero. Deixe zero.</td></tr>
+  <tr><td>Tempo padrão (legado)</td><td><code>0</code></td><td class="obs">Campo antigo, mantido para cadastros feitos antes do modelo completo. Só é usado quando <i>Tempo de máquina</i> é zero. Deixe zero.</td></tr>
 </table>
+
+<div class="porque">
+  <b>“Tempo de máquina” é tempo — o equipamento se escolhe em outro lugar</b>
+  O nome curto da coluna engana quem lê a tela pela primeira vez. Nesta aba <b>nenhum campo escolhe
+  equipamento</b>: todos são tempos, na unidade selecionada em <i>Unidade dos tempos</i>. A etapa aponta
+  para um <b>centro de trabalho</b> (seção 7.1) e, dentro dele, o planejamento escolhe a máquina a partir
+  da <b>produtividade por item</b> da Parte 11.
+</div>
 
 <h2>5.3 Tempos que não ocupam a máquina</h2>
 
@@ -506,7 +514,7 @@ cada uma com o roteiro do respectivo item.</p>
   <tr><td>Operação *</td><td>Cortar no Laser (Interna)</td><td class="obs">Escolhida na lista da biblioteca; a origem aparece entre parênteses. Ao escolher, o centro padrão e os dados de terceirização vêm junto.</td></tr>
   <tr><td>Seq</td><td><code>10</code></td><td class="obs">A ordem de execução. <b>Use de 10 em 10</b> — assim cabe uma etapa nova no meio depois, sem renumerar tudo.</td></tr>
   <tr><td>Centro de trabalho</td><td>LASER</td><td class="obs">Onde a etapa roda <b>neste roteiro</b>. Já vem preenchido com o centro padrão da operação; troque se for diferente aqui.</td></tr>
-  <tr><td>Máquina</td><td class="mudo">em branco</td><td class="obs">Tempo de máquina só desta etapa. <b>Em branco herda</b> o da biblioteca.</td></tr>
+  <tr><td>Tempo de máquina</td><td class="mudo">em branco</td><td class="obs">Tempo de máquina só desta etapa. <b>Em branco herda</b> o da biblioteca.</td></tr>
   <tr><td>Preparação</td><td class="mudo">em branco</td><td class="obs">Idem para o setup.</td></tr>
   <tr><td>Refugo desta etapa (%)</td><td class="mudo">em branco</td><td class="obs">Herda o da operação. Preencha quando o mesmo processo refuga diferente nesta peça (seção 7.3).</td></tr>
   <tr><td>Ponto de inspeção</td><td><code>Não</code></td><td class="obs">Marca que a peça <b>para para ser conferida</b> depois desta etapa. O plano do que medir é definido na Parte 8.</td></tr>
@@ -530,7 +538,7 @@ cada uma com o roteiro do respectivo item.</p>
     <tr><td><b>Seq</b></td><td>A ordem de execução.</td></tr>
     <tr><td><b>Operação</b></td><td>O nome vindo da biblioteca.</td></tr>
     <tr><td><b>Centro / Fornecedor</b></td><td>O centro de trabalho, ou — quando a etapa sai da fábrica — o fornecedor e o prazo.</td></tr>
-    <tr><td><b>Preparação · Máquina</b></td><td>Os tempos <b>já resolvidos</b> em horas: o que a etapa realmente consome depois de aplicada a herança.</td></tr>
+    <tr><td><b>Preparação · T. máquina</b></td><td>Os tempos <b>já resolvidos</b> em horas: o que a etapa realmente consome depois de aplicada a herança.</td></tr>
     <tr><td><b>Refugo</b></td><td>O percentual que vale de fato nesta etapa.</td></tr>
     <tr><td><b>Entra</b></td><td>Quantas peças esta etapa precisa processar para o lote digitado no topo da aba.</td></tr>
     <tr><td><b>Marcas</b></td><td><span class="mudo">TERCEIRO</span> quando a etapa sai da fábrica, <span class="mudo">INSP</span> quando é ponto de inspeção.</td></tr>
@@ -822,6 +830,27 @@ cada uma com o roteiro do respectivo item.</p>
   <i>“cadastre a produtividade do item X no centro Y”</i>.
 </p>
 
+<div class="porque">
+  <b>Isto não repete o que você já digitou no roteiro</b>
+  A pergunta é justa: o roteiro já tem tempo de máquina, e aqui há <i>Tempo de produção</i> outra vez.
+  São camadas diferentes, e cada uma responde por uma coisa:
+  <table class="dados" style="margin-top:8px">
+    <thead><tr><th style="width:30%">O que</th><th style="width:22%">Quem manda</th><th>Por quê</th></tr></thead>
+    <tbody>
+      <tr><td>Quanto tempo a etapa leva</td><td><b>Roteiro</b> (VENT0202)</td><td>O tempo é do processo, não do equipamento: ele muda quando o processo muda, e vale para toda máquina do centro.</td></tr>
+      <tr><td>Quais máquinas podem fazer</td><td><b>Esta tela</b></td><td>Cada linha aqui é uma máquina elegível. Sem nenhuma, o centro não tem onde rodar.</td></tr>
+      <tr><td>Ordem de preferência</td><td><b>Esta tela</b> (Prioridade)</td><td>Máquinas de mesma prioridade são equivalentes e a fila se divide entre elas.</td></tr>
+      <tr><td>Rendimento naquela máquina</td><td><b>Esta tela</b> (Eficiência)</td><td>A mesma peça rende menos numa máquina mais velha. A eficiência <b>multiplica o tempo do roteiro</b>, não o substitui.</td></tr>
+      <tr><td>Paradas para trocar consumível</td><td><b>Esta tela</b></td><td>Trocar o cilindro para a máquina e o roteiro não sabe disso. O tempo da troca é somado à ocupação.</td></tr>
+      <tr><td>Tempo quando a etapa <b>não</b> informa nenhum</td><td><b>Esta tela</b> (Tempo de produção)</td><td>É o caminho de item sem roteiro detalhado — a ordem inteira é dimensionada por aqui.</td></tr>
+    </tbody>
+  </table>
+  Ou seja: preencher <i>Tempo de produção</i> diferente do tempo da etapa <b>não gera conflito</b> —
+  com roteiro, quem vale é a etapa. A tela avisa isso assim que você escolhe um item que já tem roteiro.
+  Ainda assim, mantenha os dois coerentes: o <i>Tempo de produção</i> é a medida de capacidade daquela
+  máquina e é o que sobra se um dia o roteiro for simplificado.
+</div>
+
 <div class="passo">
   <div class="passo-tit"><span class="n">1</span>Abrir a aba <i>Produtividade</i></div>
   <table class="campos">
@@ -829,8 +858,8 @@ cada uma com o roteiro do respectivo item.</p>
     <tr><td>Máscara</td><td class="mudo">em branco</td><td class="obs">Só para item configurado.</td></tr>
     <tr><td>Máquina *</td><td>LASER CALFRAN 3000KWA</td><td class="obs">A máquina física, não o centro. Se o centro tem três máquinas iguais, cadastre uma linha para cada.</td></tr>
     <tr><td>Forma de produção</td><td><code>Proporcional</code></td><td class="obs"><b>Proporcional:</b> o tempo cresce com a quantidade — corte, solda. <b>Por ciclo:</b> cada ciclo produz um número fixo independente da quantidade — estampo, injeção.</td></tr>
-    <tr><td>Eficiência deste item (%)</td><td><code>100</code></td><td class="obs">Quanto da velocidade nominal a máquina entrega <b>nesta peça</b>. Uma peça difícil pode render 85 %.</td></tr>
-    <tr><td>Tempo de produção *</td><td><code>85</code></td><td class="obs">Quanto tempo leva para produzir a quantidade do campo seguinte.</td></tr>
+    <tr><td>Eficiência deste item (%)</td><td><code>100</code></td><td class="obs">Quanto da velocidade nominal a máquina entrega <b>nesta peça</b>. Uma peça difícil pode render 85 %. <b>Vale também sobre o tempo do roteiro</b>: a 85 %, uma etapa de 1 h ocupa 1 h 10 min naquela máquina.</td></tr>
+    <tr><td>Tempo de produção *</td><td><code>85</code></td><td class="obs">Quanto tempo leva para produzir a quantidade do campo seguinte. <b>Quando a etapa do roteiro informa tempo, é o da etapa que vale</b> — este valor então é a medida de capacidade da máquina e o que sobra para itens sem roteiro.</td></tr>
     <tr><td>Unidade tempo</td><td><code>Segundo</code></td><td class="obs">Em que unidade o tempo acima foi digitado.</td></tr>
     <tr><td>Quantidade nesse tempo *</td><td><code>1</code></td><td class="obs">Quantas peças saem no tempo acima. Junto com o campo anterior, forma o ritmo: 85 s por 1 peça.</td></tr>
     <tr><td>Preparação por ordem (min)</td><td><code>3</code></td><td class="obs">Setup, em minutos, cobrado uma vez por ordem.</td></tr>
@@ -919,7 +948,7 @@ cada uma com o roteiro do respectivo item.</p>
     <tr><td rowspan="6"><b>Operação / Biblioteca</b></td><td>Nome</td><td>Como a operação aparece nas listas.</td></tr>
     <tr><td>Origem</td><td>Interna → ordem de fabricação; Externa/Terceiros → ordem de serviço.</td></tr>
     <tr><td>Unidade dos tempos</td><td>Em que unidade os tempos abaixo são lidos.</td></tr>
-    <tr><td>Preparação · Máquina · Mão de obra</td><td>Setup por lote; ocupação da máquina; tempo do operador.</td></tr>
+    <tr><td>Preparação · Tempo de máquina · Tempo de mão de obra</td><td>Setup por lote; ocupação do equipamento; tempo do operador. Os três são <b>tempos</b>.</td></tr>
     <tr><td>Peças por ciclo · Operadores</td><td>Quantas peças por tempo de máquina; quantas pessoas no posto.</td></tr>
     <tr><td>Refugo padrão</td><td>% do que entra que não sai bom.</td></tr>
 
@@ -930,7 +959,7 @@ cada uma com o roteiro do respectivo item.</p>
 
     <tr><td rowspan="4"><b>Etapas do roteiro</b></td><td>Seq</td><td>Ordem de execução; use de 10 em 10.</td></tr>
     <tr><td>Centro de trabalho</td><td>Onde a etapa roda neste roteiro.</td></tr>
-    <tr><td>Máquina · Preparação · Refugo</td><td>Sobrepõem a biblioteca; em branco herdam.</td></tr>
+    <tr><td>Tempo de máquina · Preparação · Refugo</td><td>Sobrepõem a biblioteca; em branco herdam.</td></tr>
     <tr><td>Ponto de inspeção</td><td>A peça para para ser conferida aqui.</td></tr>
 
     <tr><td rowspan="3"><b>Recursos e ferramentas</b></td><td>Prioridade · Fator de tempo</td><td>Ordem de escolha do centro alternativo e quanto ele é mais lento.</td></tr>

@@ -59,7 +59,7 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	childItem, err := itemresolution.Resolve(ctx, uc.Items, dto.ChildCode)
+	childItem, err := itemresolution.ResolveActive(ctx, uc.Items, dto.ChildCode)
 	if err != nil {
 		return nil, err
 	}

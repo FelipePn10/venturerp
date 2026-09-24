@@ -99,8 +99,9 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 		if err != nil {
 			return nil, err
 		}
-		if op.RunTime != nil || op.StandardTime != nil {
-			minutes = op.EffTime.MachineHours(qtdeDaEtapa) * 60
+		peloRoteiro := op.RunTime != nil || op.StandardTime != nil
+		if peloRoteiro {
+			minutes = minutosDoRoteiro(mt, op.EffTime, qtdeDaEtapa)
 		}
 		if minutes <= 0 {
 			return nil, fmt.Errorf("tempo inválido na operação %d", op.ID)
@@ -108,10 +109,17 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 		id := op.ID
 		step := measuredMachineStep(mt, qtdeDaEtapa, minutes)
 		step.alternativas = equivalentes(candidates, mt)
-		if op.RunTime != nil || op.StandardTime != nil {
+		if peloRoteiro {
 			step.cycles = op.EffTime.Batches(qtdeDaEtapa)
-			step.cycleMinutes = op.EffTime.Run * 60
 			step.setupMinutes = op.EffTime.Setup * 60
+			// O ciclo carrega o que sobra depois da preparação — inclusive a
+			// parada de consumível, que acontece no meio da usinagem. Dividir o
+			// total é o que mantém `ciclos × ciclo + preparação = total`, a
+			// identidade de que AllocateMachineCycles depende para não cortar
+			// uma peça no fim do turno.
+			if step.cycles > 0 {
+				step.cycleMinutes = (minutes - step.setupMinutes) / step.cycles
+			}
 			if step.cycleMinutes <= 0 {
 				step.cycles = 0
 			}

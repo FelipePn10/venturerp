@@ -34,7 +34,7 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	if dto.SalesOrderCode == 0 {
 		return nil, errorsuc.NewValidationError("o código do pedido é obrigatório")
 	}
-	resolvedItem, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	resolvedItem, err := itemresolution.ResolveActive(ctx, uc.Items, dto.ItemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 		return nil, err
 	}
 	if dto.ItemCode != nil {
-		resolvedItem, resolveErr := itemresolution.Resolve(ctx, uc.Items, *dto.ItemCode)
+		resolvedItem, resolveErr := itemresolution.ResolveActive(ctx, uc.Items, *dto.ItemCode)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}

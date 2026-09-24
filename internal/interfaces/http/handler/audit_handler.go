@@ -21,17 +21,27 @@ func NewAuditHandler(reader *audit.Reader) *AuditHandler {
 
 // List returns audit records, newest first. Query params (all optional):
 //
-//	user_id  filter by actor
-//	route    filter by chi route pattern
-//	from,to  RFC3339 timestamps bounding occurred_at
-//	limit    page size (default 100, max 500)
-//	offset   pagination offset
+//	user_id     filter by actor
+//	route       filter by chi route pattern
+//	method      HTTP verb (POST/PUT/DELETE…) — the "action" the screen shows
+//	search      substring of the request path
+//	min_status  only records with status >= n (400 = only what failed)
+//	from,to     RFC3339 timestamps bounding occurred_at
+//	limit       page size (default 100, max 500)
+//	offset      pagination offset
 func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
 	f := audit.Filter{
 		UserID: q.Get("user_id"),
 		Route:  q.Get("route"),
+		Method: q.Get("method"),
+		Search: q.Get("search"),
+	}
+	if v := q.Get("min_status"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			f.MinStatus = n
+		}
 	}
 
 	if v := q.Get("from"); v != "" {

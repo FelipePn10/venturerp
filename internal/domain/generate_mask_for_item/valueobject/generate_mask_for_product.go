@@ -33,7 +33,7 @@ func NewMaskAnswer(questionID, optionID int64, position int, value string) (Mask
 		return MaskAnswer{}, errors.New("opção inválida")
 	}
 	if position <= 0 {
-		return MaskAnswer{}, errors.New("invalid position")
+		return MaskAnswer{}, errors.New("a posição da resposta na máscara deve ser maior que zero")
 	}
 	if value == "" {
 		return MaskAnswer{}, errors.New("valor de opção inválido")

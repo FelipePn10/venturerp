@@ -389,3 +389,21 @@ SELECT ro.route_id
 FROM route_operations ro
 JOIN manufacturing_routes mr ON mr.id = ro.route_id
 WHERE ro.id = $1 AND mr.enterprise_id = sqlc.arg(enterprise_id);
+
+-- Etapas de uma ORDEM que são ponto de inspeção e continuam sem plano ativo.
+--
+-- A pendência não é do instante em que a ordem foi criada: ela dura até alguém
+-- cadastrar o plano. Por isso a conferência vive na LISTAGEM das etapas, e não
+-- só na explosão do roteiro — senão o aviso aparecia uma vez e sumia no primeiro
+-- recarregamento da tela.
+-- name: ListOrderStepsMissingInspectionPlan :many
+SELECT poo.sequence
+FROM production_order_operations poo
+JOIN production_orders po ON po.id = poo.production_order_id
+JOIN route_operations ro ON ro.id = poo.route_operation_id
+LEFT JOIN inspection_plans ip ON ip.route_operation_id = ro.id AND ip.is_active = TRUE
+WHERE poo.production_order_id = sqlc.arg(production_order_id)
+  AND po.enterprise_id = sqlc.arg(enterprise_id)
+  AND ro.inspection_required = TRUE
+  AND ip.id IS NULL
+ORDER BY poo.sequence;

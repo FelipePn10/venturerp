@@ -44,6 +44,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # A suíte de integração roda no `ci-backend.yml`, a cada push e PR, contra
+      # um Postgres criado do zero. Aqui fica a de unidade: a release não é o
+      # lugar de descobrir problema de banco.
       - name: Test
         run: go test ./...
 

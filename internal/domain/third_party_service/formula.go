@@ -93,7 +93,7 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 			continue
 		}
 		if len(stack) < 2 {
-			return decimal.Zero, fmt.Errorf("invalid formula")
+			return decimal.Zero, fmt.Errorf("fórmula inválida: confira os operadores e a ordem dos valores")
 		}
 		b, a := stack[len(stack)-1], stack[len(stack)-2]
 		stack = stack[:len(stack)-2]
@@ -107,14 +107,14 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 			v = a.Mul(b)
 		case "/":
 			if b.IsZero() {
-				return decimal.Zero, fmt.Errorf("formula division by zero")
+				return decimal.Zero, fmt.Errorf("a fórmula divide por zero: confira o valor do divisor")
 			}
 			v = a.Div(b)
 		}
 		stack = append(stack, v)
 	}
 	if len(stack) != 1 {
-		return decimal.Zero, fmt.Errorf("invalid formula")
+		return decimal.Zero, fmt.Errorf("fórmula inválida: confira os operadores e a ordem dos valores")
 	}
 	return stack[0], nil
 }

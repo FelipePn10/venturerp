@@ -67,6 +67,7 @@ type fakeAuth struct {
 }
 
 func (a *fakeAuth) CanCreatePlannedOrder(_ context.Context) bool { return a.canCreate }
+func (a *fakeAuth) CanReportProduction(_ context.Context) bool   { return a.canCreate }
 func (a *fakeAuth) UserID(_ context.Context) (uuid.UUID, error)  { return uuid.Nil, nil }
 
 func baseSuggestion() *mrpentity.PlannedOrderSuggestion {

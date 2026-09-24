@@ -9,20 +9,36 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/allocation_base/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 )
+
+// empresa devolve o identificador do tenant no formato que o sqlc espera para a
+// coluna `enterprise_id` (anulável no esquema, sempre preenchida em uso).
+func empresa(ctx context.Context) (*int64, error) {
+	id, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
 
 func (r *AllocationBaseRepositorySQLC) Create(
 	ctx context.Context,
 	ab *entity.AllocationBase,
 ) (*entity.AllocationBase, error) {
 
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateAllocationBase(ctx, sqlc.CreateAllocationBaseParams{
-		Code:        ab.Code,
-		Description: ab.Description,
-		Period:      ab.Period,
-		Observation: pgutil.ToPgTextFromPtr(ab.Observation),
-		CreatedBy:   pgutil.ToPgUUID(ab.CreatedBy),
+		Code:         ab.Code,
+		Description:  ab.Description,
+		Period:       ab.Period,
+		Observation:  pgutil.ToPgTextFromPtr(ab.Observation),
+		CreatedBy:    pgutil.ToPgUUID(ab.CreatedBy),
+		EnterpriseID: tenantID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating allocation base: %w", err)
@@ -36,13 +52,23 @@ func (r *AllocationBaseRepositorySQLC) AddItem(
 	item *entity.AllocationBaseItem,
 ) (*entity.AllocationBaseItem, error) {
 
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddAllocationBaseItem(ctx, sqlc.AddAllocationBaseItemParams{
 		AllocationBaseCode: item.AllocationBaseCode,
 		CostCenterCode:     item.CostCenterCode,
 		Amount:             item.Amount,
 		Percentage:         item.Percentage,
+		EnterpriseID:       tenantID,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// A linha só nasce se a base for da empresa: o INSERT ... SELECT não
+			// devolve nada quando a base é de outra.
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("base de rateio %d não encontrada", item.AllocationBaseCode))
+		}
 		return nil, fmt.Errorf("adding allocation base item: %w", err)
 	}
 
@@ -54,7 +80,11 @@ func (r *AllocationBaseRepositorySQLC) GetByCode(
 	code int32,
 ) (*entity.AllocationBase, error) {
 
-	row, err := r.q.GetAllocationBaseByCode(ctx, code)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetAllocationBaseByCode(ctx, sqlc.GetAllocationBaseByCodeParams{Code: code, EnterpriseID: tenantID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("base de rateio %d não encontrada", code))
@@ -70,7 +100,11 @@ func (r *AllocationBaseRepositorySQLC) GetItems(
 	baseCode int32,
 ) ([]*entity.AllocationBaseItem, error) {
 
-	rows, err := r.q.GetAllocationBaseItems(ctx, baseCode)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetAllocationBaseItems(ctx, sqlc.GetAllocationBaseItemsParams{AllocationBaseCode: baseCode, EnterpriseID: tenantID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching allocation base items: %w", err)
 	}
@@ -82,7 +116,11 @@ func (r *AllocationBaseRepositorySQLC) List(
 	ctx context.Context,
 ) ([]*entity.AllocationBase, error) {
 
-	rows, err := r.q.ListAllocationBases(ctx)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAllocationBases(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("listing allocation bases: %w", err)
 	}
@@ -100,14 +138,22 @@ func (r *AllocationBaseRepositorySQLC) Delete(
 		return err
 	}
 
-	return r.q.DeleteAllocationBase(ctx, code)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeleteAllocationBase(ctx, sqlc.DeleteAllocationBaseParams{Code: code, EnterpriseID: tenantID})
 }
 
 func (r *AllocationBaseRepositorySQLC) DeleteItems(
 	ctx context.Context,
 	baseCode int32,
 ) error {
-	return r.q.DeleteAllocationBaseItems(ctx, baseCode)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeleteAllocationBaseItems(ctx, sqlc.DeleteAllocationBaseItemsParams{AllocationBaseCode: baseCode, EnterpriseID: tenantID})
 }
 
 func rowToEntity(row sqlc.AllocationBasis) *entity.AllocationBase {

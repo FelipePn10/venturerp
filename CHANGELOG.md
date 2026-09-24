@@ -6,6 +6,20 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.2.0] — 2026-09-24
+
+- ci: rodar gofmt, vet, unidade e integração a cada PR (`5ff1240`)
+- chore(sqlc): regenerar código e montar as rotas das mudanças acima (`6061263`)
+- fix(mensagens): validações em português, com trava contra regressão (`1896318`)
+- feat(auditoria): filtrar o log por ação, caminho e situação (`fe7443d`)
+- feat(ferramentaria): limiar na lista de troca e aviso de ferramenta vencida (`46aa686`)
+- feat(item): recusar item inativo em lançamento (`658c111`)
+- fix(producao): plano de inspeção ausente vira aviso, não recusa da ordem (`ffec59e`)
+- feat(roteiro): conferência de prontidão antes de rodar o MRP (`1cd8bfa`)
+- fix(mrp): eficiência e paradas de consumível valem sobre o tempo do roteiro (`733819d`)
+- feat(seguranca): perfil OPERATOR e permissão própria de apontamento (`2f5576e`)
+- fix(tenant): isolar financeiro, restrição e rateio por empresa (`056b3a0`)
+
 ## [v1.1.33] — 2026-09-22
 
 - fix(producao): tornar liberação e execução de roteiros transacionais (`1cd187d`)

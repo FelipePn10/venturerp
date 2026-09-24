@@ -61,7 +61,7 @@ func (uc *ProductionScannerUseCase) CreateToken(ctx context.Context, dto request
 }
 
 func (uc *ProductionScannerUseCase) Scan(ctx context.Context, dto request.ProductionScanDTO) (*entity.ScanResult, error) {
-	if !uc.Auth.CanCreatePlannedOrder(ctx) {
+	if !uc.Auth.CanReportProduction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	enterpriseID, err := uc.Auth.EnterpriseID(ctx)

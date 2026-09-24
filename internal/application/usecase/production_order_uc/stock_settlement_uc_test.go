@@ -31,6 +31,7 @@ type fakeAuth struct {
 }
 
 func (f fakeAuth) CanCreatePlannedOrder(context.Context) bool { return f.canPlanned }
+func (f fakeAuth) CanReportProduction(context.Context) bool   { return f.canPlanned }
 func (f fakeAuth) CanUpdateSalesOrder(context.Context) bool   { return f.canSales }
 func (f fakeAuth) CanGetSalesOrder(context.Context) bool      { return f.canSales }
 func (f fakeAuth) UserID(context.Context) (uuid.UUID, error) {

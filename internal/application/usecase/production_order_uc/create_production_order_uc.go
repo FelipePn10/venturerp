@@ -60,7 +60,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		return nil, err
 	}
 	dto.CreatedBy = actor
-	item, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	item, err := itemresolution.ResolveActive(ctx, uc.Items, dto.ItemCode)
 	if err != nil {
 		return nil, err
 	}

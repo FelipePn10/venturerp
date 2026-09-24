@@ -761,7 +761,7 @@ INSERT INTO payment_conditions (
     code, description, carrier_id, analysis_type, parcel_start,
     expenses, average_term, is_special, is_revenue, is_at_sight
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at
+RETURNING id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id
 `
 
 type CreatePaymentConditionParams struct {
@@ -806,6 +806,7 @@ func (q *Queries) CreatePaymentCondition(ctx context.Context, arg CreatePaymentC
 		&i.IsAtSight,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -1349,7 +1350,7 @@ func (q *Queries) GetMarketSegmentByCode(ctx context.Context, code int64) (Marke
 }
 
 const getPaymentConditionByCode = `-- name: GetPaymentConditionByCode :one
-SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at FROM payment_conditions WHERE code = $1
+SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions WHERE code = $1
 `
 
 func (q *Queries) GetPaymentConditionByCode(ctx context.Context, code int64) (PaymentCondition, error) {
@@ -1369,12 +1370,13 @@ func (q *Queries) GetPaymentConditionByCode(ctx context.Context, code int64) (Pa
 		&i.IsAtSight,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getPaymentConditionByID = `-- name: GetPaymentConditionByID :one
-SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at FROM payment_conditions WHERE id = $1
+SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions WHERE id = $1
 `
 
 func (q *Queries) GetPaymentConditionByID(ctx context.Context, id int64) (PaymentCondition, error) {
@@ -1394,6 +1396,7 @@ func (q *Queries) GetPaymentConditionByID(ctx context.Context, id int64) (Paymen
 		&i.IsAtSight,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -1988,7 +1991,7 @@ func (q *Queries) ListMarketSegments(ctx context.Context, dollar_1 bool) ([]Mark
 }
 
 const listPaymentConditions = `-- name: ListPaymentConditions :many
-SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at FROM payment_conditions
+SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
@@ -2016,6 +2019,7 @@ func (q *Queries) ListPaymentConditions(ctx context.Context, dollar_1 bool) ([]P
 			&i.IsAtSight,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -2948,7 +2952,7 @@ SET description = $2, carrier_id = $3, analysis_type = $4, parcel_start = $5,
     expenses = $6, average_term = $7, is_special = $8, is_revenue = $9,
     is_at_sight = $10, is_active = $11
 WHERE id = $1
-RETURNING id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at
+RETURNING id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id
 `
 
 type UpdatePaymentConditionParams struct {
@@ -2994,6 +2998,7 @@ func (q *Queries) UpdatePaymentCondition(ctx context.Context, arg UpdatePaymentC
 		&i.IsAtSight,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

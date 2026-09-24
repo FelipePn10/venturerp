@@ -9,14 +9,31 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// empresa devolve o tenant no formato que o sqlc espera para `enterprise_id`.
+// Toda consulta de restrição passa por aqui: a restrição diz o que um cliente
+// NÃO pode comprar, e herdar a regra da empresa vizinha bloquearia uma venda
+// legítima — ou liberaria uma que deveria parar.
+func empresa(ctx context.Context) (*int64, error) {
+	id, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
 
 func (r *RestrictionRepositorySQLC) Create(
 	ctx context.Context,
 	res *entity.Restriction,
 ) (*entity.Restriction, error) {
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateRestriction(ctx, sqlc.CreateRestrictionParams{
 		Situation:            sqlc.RestrictionSituationEnum(res.Situation),
 		CustomerCode:         res.CustomerCode,
@@ -27,6 +44,7 @@ func (r *RestrictionRepositorySQLC) Create(
 		DivisionID:           res.DivisionID,
 		Weight:               int32(res.Weight),
 		CreatedBy:            pgutil.ToPgUUID(res.CreatedBy),
+		EnterpriseID:         tenantID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating restriction: %w", err)
@@ -38,7 +56,12 @@ func (r *RestrictionRepositorySQLC) Update(
 	ctx context.Context,
 	res *entity.Restriction,
 ) (*entity.Restriction, error) {
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateRestriction(ctx, sqlc.UpdateRestrictionParams{
+		EnterpriseID:         tenantID,
 		Code:                 pgtype.Int8{Int64: res.Code, Valid: true},
 		Situation:            sqlc.RestrictionSituationEnum(res.Situation),
 		CustomerCode:         res.CustomerCode,
@@ -62,7 +85,11 @@ func (r *RestrictionRepositorySQLC) GetByCode(
 	ctx context.Context,
 	code int64,
 ) (*entity.Restriction, error) {
-	row, err := r.q.GetRestrictionByCode(ctx, pgtype.Int8{Int64: code, Valid: true})
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetRestrictionByCode(ctx, sqlc.GetRestrictionByCodeParams{Code: pgtype.Int8{Int64: code, Valid: true}, EnterpriseID: tenantID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("restrição %d não encontrada", code))
@@ -76,7 +103,11 @@ func (r *RestrictionRepositorySQLC) GetByItemCode(
 	ctx context.Context,
 	itemCode int64,
 ) ([]*entity.Restriction, error) {
-	rows, err := r.q.GetRestrictionsByItemCode(ctx, &itemCode)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetRestrictionsByItemCode(ctx, sqlc.GetRestrictionsByItemCodeParams{ItemCode: &itemCode, EnterpriseID: tenantID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching restrictions for item %d: %w", itemCode, err)
 	}
@@ -117,7 +148,11 @@ func (r *RestrictionRepositorySQLC) GetByCustomerCode(
 	ctx context.Context,
 	customerCode int64,
 ) ([]*entity.Restriction, error) {
-	rows, err := r.q.GetRestrictionsByCustomerCode(ctx, &customerCode)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetRestrictionsByCustomerCode(ctx, sqlc.GetRestrictionsByCustomerCodeParams{CustomerCode: &customerCode, EnterpriseID: tenantID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching restrictions for customer %d: %w", customerCode, err)
 	}
@@ -129,7 +164,11 @@ func (r *RestrictionRepositorySQLC) GetByCustomerCode(
 }
 
 func (r *RestrictionRepositorySQLC) List(ctx context.Context) ([]*entity.Restriction, error) {
-	rows, err := r.q.ListRestrictions(ctx)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRestrictions(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("listing restrictions: %w", err)
 	}
@@ -141,7 +180,11 @@ func (r *RestrictionRepositorySQLC) List(ctx context.Context) ([]*entity.Restric
 }
 
 func (r *RestrictionRepositorySQLC) ListActive(ctx context.Context) ([]*entity.Restriction, error) {
-	rows, err := r.q.ListActiveRestrictions(ctx)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListActiveRestrictions(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("listing active restrictions: %w", err)
 	}
@@ -153,7 +196,11 @@ func (r *RestrictionRepositorySQLC) ListActive(ctx context.Context) ([]*entity.R
 }
 
 func (r *RestrictionRepositorySQLC) Deactivate(ctx context.Context, code int64) error {
-	return r.q.DeactivateRestriction(ctx, pgtype.Int8{Int64: code, Valid: true})
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeactivateRestriction(ctx, sqlc.DeactivateRestrictionParams{Code: pgtype.Int8{Int64: code, Valid: true}, EnterpriseID: tenantID})
 }
 
 func (r *RestrictionRepositorySQLC) ListRestrictedItemCodes(
@@ -163,7 +210,11 @@ func (r *RestrictionRepositorySQLC) ListRestrictedItemCodes(
 	if len(itemCodes) == 0 {
 		return make(map[int64]struct{}), nil
 	}
-	rows, err := r.q.ListActiveRestrictionsByItems(ctx, itemCodes)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListActiveRestrictionsByItems(ctx, sqlc.ListActiveRestrictionsByItemsParams{ItemCodes: itemCodes, EnterpriseID: tenantID})
 	if err != nil {
 		return nil, fmt.Errorf("listing restricted items: %w", err)
 	}
@@ -236,7 +287,11 @@ func (r *RestrictionRepositorySQLC) GetDominants(
 	ctx context.Context,
 	restrictionID int64,
 ) ([]*entity.RestrictionDominant, error) {
-	rows, err := r.q.GetRestrictionDominants(ctx, restrictionID)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetRestrictionDominants(ctx, sqlc.GetRestrictionDominantsParams{RestrictionID: restrictionID, EnterpriseID: tenantID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching dominants: %w", err)
 	}
@@ -259,7 +314,11 @@ func (r *RestrictionRepositorySQLC) GetDeterminants(
 	ctx context.Context,
 	restrictionID int64,
 ) ([]*entity.RestrictionDeterminant, error) {
-	rows, err := r.q.GetRestrictionDeterminants(ctx, restrictionID)
+	tenantID, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetRestrictionDeterminants(ctx, sqlc.GetRestrictionDeterminantsParams{RestrictionID: restrictionID, EnterpriseID: tenantID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching determinants: %w", err)
 	}

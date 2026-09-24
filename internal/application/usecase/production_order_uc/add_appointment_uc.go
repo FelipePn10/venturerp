@@ -31,7 +31,7 @@ func (uc *AddAppointmentUseCase) Execute(
 	ctx context.Context,
 	dto request.AddAppointmentDTO,
 ) (*entity.ProductionAppointment, error) {
-	if !uc.Auth.CanCreatePlannedOrder(ctx) {
+	if !uc.Auth.CanReportProduction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	actor, err := uc.Auth.UserID(ctx)

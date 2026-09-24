@@ -42,10 +42,18 @@ UPDATE tools SET life_used = 0, status = 'ATIVA', updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
+-- Ferramentas que já passaram do limite OU estão chegando nele.
+--
+-- Avisar só depois de estourar chega tarde: quem programa a semana precisa
+-- saber que a matriz vence no meio dela para pedir a afiação antes, não depois
+-- de a peça sair fora de medida. `sqlc.arg(threshold)` é a fração do limite a
+-- partir da qual a ferramenta entra na lista (0.8 = 80 %); 1 devolve só as que
+-- já estouraram, que é o comportamento antigo.
 -- name: ListToolsNeedingReplacement :many
 SELECT * FROM tools
-WHERE is_active = TRUE AND life_limit > 0 AND life_used >= life_limit
-ORDER BY code;
+WHERE is_active = TRUE AND life_limit > 0
+  AND life_used >= life_limit * sqlc.arg(threshold)::NUMERIC
+ORDER BY (life_used / life_limit) DESC, code;
 
 -- ─── route_operation_tools (association) ─────────────────────────────────────────
 

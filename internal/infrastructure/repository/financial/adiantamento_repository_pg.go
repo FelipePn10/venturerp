@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
@@ -16,6 +17,10 @@ import (
 // movement and updates the bank balance in a single transaction. A PAGAR
 // advance is cash out (SAIDA); a RECEBER advance is cash in (ENTRADA).
 func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a *entity.Adiantamento, fc entity.FluxoCaixa) (*entity.Adiantamento, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning transaction: %w", err)
@@ -37,9 +42,9 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 
 	// Cash-flow movement.
 	_, err = tx.Exec(ctx,
-		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, descricao, conciliado)
-		 VALUES ($1,$2,$3,$4,$5,false)`,
-		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.Descricao)
+		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, descricao, conciliado, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,false,$6)`,
+		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.Descricao, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("creating fluxo caixa for adiantamento: %w", err)
 	}
@@ -66,6 +71,13 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 // conta a pagar / a receber. No cash moves here — the cash already moved when
 // the advance was created; this only settles the title against the advance.
 func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, userID uuid.UUID, dataAplicacao time.Time) (*entity.AdiantamentoAplicacao, error) {
+	// O título abatido tem de ser da empresa da sessão: a aplicação recebe o id
+	// do título direto do corpo, e sem esta cláusula o adiantamento de uma
+	// empresa quitaria a conta a pagar da outra.
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning transaction: %w", err)
@@ -104,7 +116,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		var bruto, desconto, pago, abatido float64
 		err = tx.QueryRow(ctx,
 			`SELECT valor_bruto, desconto, valor_pago, COALESCE(valor_adiantamento_abatido,0)
-			   FROM contas_pagar WHERE id = $1 FOR UPDATE`, contaID,
+			   FROM contas_pagar WHERE id = $1 AND enterprise_id = $2 FOR UPDATE`, contaID, empresa,
 		).Scan(&bruto, &desconto, &pago, &abatido)
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -123,12 +135,12 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		if quita {
 			_, err = tx.Exec(ctx,
 				`UPDATE contas_pagar SET valor_adiantamento_abatido=$1, adiantamento_id=$2,
-				     status='PAGO', data_pagamento=$3, updated_at=NOW() WHERE id=$4`,
-				novoAbatido.InexactFloat64(), advID, dataAplicacao, contaID)
+				     status='PAGO', data_pagamento=$3, updated_at=NOW() WHERE id=$4 AND enterprise_id=$5`,
+				novoAbatido.InexactFloat64(), advID, dataAplicacao, contaID, empresa)
 		} else {
 			_, err = tx.Exec(ctx,
-				`UPDATE contas_pagar SET valor_adiantamento_abatido=$1, adiantamento_id=$2, updated_at=NOW() WHERE id=$3`,
-				novoAbatido.InexactFloat64(), advID, contaID)
+				`UPDATE contas_pagar SET valor_adiantamento_abatido=$1, adiantamento_id=$2, updated_at=NOW() WHERE id=$3 AND enterprise_id=$4`,
+				novoAbatido.InexactFloat64(), advID, contaID, empresa)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("abatendo conta pagar: %w", err)
@@ -138,7 +150,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		var bruto, desconto, recebido float64
 		err = tx.QueryRow(ctx,
 			`SELECT valor_bruto, desconto, valor_recebido
-			   FROM contas_receber WHERE id = $1 FOR UPDATE`, contaID,
+			   FROM contas_receber WHERE id = $1 AND enterprise_id = $2 FOR UPDATE`, contaID, empresa,
 		).Scan(&bruto, &desconto, &recebido)
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -154,12 +166,12 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		quita := novoRecebido.GreaterThanOrEqual(decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)))
 		if quita {
 			_, err = tx.Exec(ctx,
-				`UPDATE contas_receber SET valor_recebido=$1, status='RECEBIDO', data_recebimento=$2, updated_at=NOW() WHERE id=$3`,
-				novoRecebido.InexactFloat64(), dataAplicacao, contaID)
+				`UPDATE contas_receber SET valor_recebido=$1, status='RECEBIDO', data_recebimento=$2, updated_at=NOW() WHERE id=$3 AND enterprise_id=$4`,
+				novoRecebido.InexactFloat64(), dataAplicacao, contaID, empresa)
 		} else {
 			_, err = tx.Exec(ctx,
-				`UPDATE contas_receber SET valor_recebido=$1, updated_at=NOW() WHERE id=$2`,
-				novoRecebido.InexactFloat64(), contaID)
+				`UPDATE contas_receber SET valor_recebido=$1, updated_at=NOW() WHERE id=$2 AND enterprise_id=$3`,
+				novoRecebido.InexactFloat64(), contaID, empresa)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("abatendo conta receber: %w", err)

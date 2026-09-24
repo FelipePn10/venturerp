@@ -58,17 +58,22 @@ type ManufacturingRouteResponse struct {
 }
 
 type RouteOperationResponse struct {
-	ID               int64    `json:"id"`
-	RouteID          int64    `json:"route_id"`
-	Sequence         int16    `json:"sequence"`
-	OperationID      int64    `json:"operation_id"`
-	OperationName    string   `json:"operation_name"`
-	WorkCenterID     *int64   `json:"work_center_id,omitempty"`
-	WorkCenterName   string   `json:"work_center_name,omitempty"`
-	StandardTime     *float64 `json:"standard_time,omitempty"`
-	SetupTime        *float64 `json:"setup_time,omitempty"`
-	EffectiveStdTime float64  `json:"effective_std_time"`
-	EffectiveSetup   float64  `json:"effective_setup"`
+	ID            int64  `json:"id"`
+	RouteID       int64  `json:"route_id"`
+	Sequence      int16  `json:"sequence"`
+	OperationID   int64  `json:"operation_id"`
+	OperationName string `json:"operation_name"`
+	// WorkCenterID é a SOBREPOSIÇÃO desta etapa (nulo ⇒ herda o centro padrão da
+	// operação). Quem quer saber onde a etapa realmente roda lê
+	// EffectiveWorkCenterID — sem ele, toda etapa que herda o centro aparecia
+	// como "sem centro" para quem consome a resposta.
+	WorkCenterID          *int64   `json:"work_center_id,omitempty"`
+	EffectiveWorkCenterID *int64   `json:"effective_work_center_id,omitempty"`
+	WorkCenterName        string   `json:"work_center_name,omitempty"`
+	StandardTime          *float64 `json:"standard_time,omitempty"`
+	SetupTime             *float64 `json:"setup_time,omitempty"`
+	EffectiveStdTime      float64  `json:"effective_std_time"`
+	EffectiveSetup        float64  `json:"effective_setup"`
 	// EffTime is the resolved, quantity-aware time model in hours (setup/run/labor/queue/wait/move).
 	EffTime OperationTimeBreakdown `json:"eff_time"`
 	// Subcontracting overrides (nil ⇒ inherit from the operation).

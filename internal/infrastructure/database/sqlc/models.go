@@ -3112,14 +3112,15 @@ type AllocationBaseItem struct {
 }
 
 type AllocationBasis struct {
-	ID          int64
-	Code        int32
-	Description string
-	Period      string
-	Observation pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	Code         int32
+	Description  string
+	Period       string
+	Observation  pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 type AppropriationTable struct {
@@ -3222,12 +3223,13 @@ type CartaCorrecao struct {
 }
 
 type CentrosCusto struct {
-	ID        int64
-	Codigo    string
-	Descricao string
-	Tipo      string
-	IsActive  bool
-	CreatedAt pgtype.Timestamptz
+	ID           int64
+	Codigo       string
+	Descricao    string
+	Tipo         string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID *int64
 }
 
 type CfgCharacteristic struct {
@@ -3603,12 +3605,13 @@ type ComponentMask struct {
 }
 
 type CondicoesPagamento struct {
-	ID        int64
-	Nome      string
-	Parcelas  []byte
-	Ativo     bool
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID           int64
+	Nome         string
+	Parcelas     []byte
+	Ativo        bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	EnterpriseID *int64
 }
 
 type ConfiguredItemRule struct {
@@ -3802,6 +3805,7 @@ type ContasBancaria struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+	EnterpriseID *int64
 }
 
 type ContasPagar struct {
@@ -3842,6 +3846,7 @@ type ContasPagar struct {
 	CreatedAt                pgtype.Timestamptz
 	UpdatedAt                pgtype.Timestamptz
 	FornecedorCnpj           pgtype.Text
+	EnterpriseID             *int64
 }
 
 type ContasReceber struct {
@@ -3878,6 +3883,7 @@ type ContasReceber struct {
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
 	CondicaoPagamentoID *int64
+	EnterpriseID        *int64
 }
 
 // Margem apurada por linha de venda, com a cascata congelada na data do cálculo.
@@ -4770,6 +4776,7 @@ type FluxoCaixa struct {
 	Conciliado             bool
 	ExtratoHash            pgtype.Text
 	CreatedAt              pgtype.Timestamptz
+	EnterpriseID           *int64
 }
 
 type FocusNfeLog struct {
@@ -5628,7 +5635,7 @@ type ItemStructure struct {
 	GeneratesInspection bool
 	// Quantidade na unidade de ESTOQUE do item filho. É o número que MRP, ordem, custo e apontamento leem. Nulo só em linhas anteriores à migração 354.
 	QuantityStockUom pgtype.Numeric
-	// Fator aplicado (1 unidade_da_estrutura = fator × unidade_de_estoque), congelado na gravação. Não acompanha mudanças posteriores no cadastro de conversões.
+	// Fator aplicado (1 unidade_da_estrutura = fator × unidade_de_estoque), congelado na gravação. Dez casas porque a inversa de um fator grande (1/6000) não cabe em seis.
 	ConversionFactor pgtype.Numeric
 }
 
@@ -6082,10 +6089,11 @@ type MpsSchedule struct {
 }
 
 type MrpCalculationLog struct {
-	ID           int64
-	PlanCode     int64
-	StartedAt    pgtype.Timestamptz
-	FinishedAt   pgtype.Timestamptz
+	ID         int64
+	PlanCode   int64
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+	// RUNNING | COMPLETED | COMPLETED_WITH_ERRORS | FAILED. O encerramento deste registro é o que libera a trava de um cálculo por plano.
 	Status       string
 	Errors       []byte
 	TotalItems   int32
@@ -6430,26 +6438,27 @@ type NotificationProviderRateWindow struct {
 }
 
 type Operation struct {
-	ID                   int64
-	Code                 int64
-	Name                 string
-	Description          pgtype.Text
-	Origin               sqltypes.OperationOriginEnum
-	Situation            sqltypes.OperationSituationEnum
-	DefaultWorkCenterID  *int64
-	StandardTime         pgtype.Numeric
-	SetupTime            pgtype.Numeric
-	IsActive             bool
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
-	CreatedBy            pgtype.UUID
-	RunTime              pgtype.Numeric
-	LaborTime            pgtype.Numeric
-	RunTimeBaseQty       pgtype.Numeric
-	QueueTime            pgtype.Numeric
-	WaitTime             pgtype.Numeric
-	MoveTime             pgtype.Numeric
-	CrewSize             pgtype.Numeric
+	ID                  int64
+	Code                int64
+	Name                string
+	Description         pgtype.Text
+	Origin              sqltypes.OperationOriginEnum
+	Situation           sqltypes.OperationSituationEnum
+	DefaultWorkCenterID *int64
+	StandardTime        pgtype.Numeric
+	SetupTime           pgtype.Numeric
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+	RunTime             pgtype.Numeric
+	LaborTime           pgtype.Numeric
+	RunTimeBaseQty      pgtype.Numeric
+	QueueTime           pgtype.Numeric
+	WaitTime            pgtype.Numeric
+	MoveTime            pgtype.Numeric
+	CrewSize            pgtype.Numeric
+	// Unidade em que os tempos desta operação foram digitados: SEGUNDO | MIN | HORA | DIA. A ficha de fábrica costuma vir em segundos.
 	TimeUnit             string
 	SupplierID           *int64
 	ServiceItemCode      *int64
@@ -6567,6 +6576,7 @@ type PaymentCondition struct {
 	IsAtSight    bool
 	IsActive     bool
 	CreatedAt    pgtype.Timestamptz
+	EnterpriseID *int64
 }
 
 type PaymentConditionInstallment struct {
@@ -6720,15 +6730,16 @@ type PlanningRunHistory struct {
 }
 
 type PlanoConta struct {
-	ID         int64
-	Codigo     string
-	Descricao  string
-	Tipo       string
-	Natureza   string
-	ParentCode pgtype.Text
-	Nivel      int32
-	IsActive   bool
-	CreatedAt  pgtype.Timestamptz
+	ID           int64
+	Codigo       string
+	Descricao    string
+	Tipo         string
+	Natureza     string
+	ParentCode   pgtype.Text
+	Nivel        int32
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID *int64
 }
 
 type PreventiveService struct {
@@ -6858,6 +6869,20 @@ type ProductionDeliveryLine struct {
 	Quantity             pgtype.Numeric
 }
 
+type ProductionOperationExecutionEvent struct {
+	ID                int64
+	EnterpriseID      int64
+	ProductionOrderID int64
+	OperationID       int64
+	OldStatus         string
+	NewStatus         string
+	ActualHoursDelta  pgtype.Numeric
+	ActorID           pgtype.UUID
+	Source            string
+	Notes             pgtype.Text
+	OccurredAt        pgtype.Timestamptz
+}
+
 type ProductionOrder struct {
 	ID                         int64
 	OrderNumber                int64
@@ -6888,6 +6913,7 @@ type ProductionOrder struct {
 	TemporaryLotCode           pgtype.Text
 	TemporaryLotManufacturedOn pgtype.Date
 	TemporaryLotExpiresOn      pgtype.Date
+	RoutingSnapshotAt          pgtype.Timestamptz
 }
 
 type ProductionOrderCost struct {
@@ -6946,6 +6972,11 @@ type ProductionOrderMaterial struct {
 	ControlsAddress     bool
 }
 
+type ProductionOrderNumberCounter struct {
+	EnterpriseID int64
+	LastNumber   int64
+}
+
 type ProductionOrderOperation struct {
 	ID                int64
 	ProductionOrderID int64
@@ -6965,6 +6996,14 @@ type ProductionOrderOperation struct {
 	EnterpriseID      int64
 	// Quantidade que deve ENTRAR nesta operação para a ordem fechar a quantidade boa, já considerando o refugo das operações seguintes.
 	PlannedQty pgtype.Numeric
+}
+
+type ProductionOrderOperationDependency struct {
+	ProductionOrderID int64
+	EnterpriseID      int64
+	PredecessorID     int64
+	SuccessorID       int64
+	CreatedAt         pgtype.Timestamptz
 }
 
 type ProductionOrderOperationToolSerial struct {
@@ -7880,6 +7919,7 @@ type Restriction struct {
 	UpdatedAt            pgtype.Timestamptz
 	CreatedBy            pgtype.UUID
 	CustomerCode         *int64
+	EnterpriseID         *int64
 }
 
 type RestrictionDeterminant struct {
@@ -9268,6 +9308,7 @@ type TaxAssessment struct {
 	DataVencimento pgtype.Date
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	EnterpriseID   *int64
 }
 
 type TaxScenario struct {

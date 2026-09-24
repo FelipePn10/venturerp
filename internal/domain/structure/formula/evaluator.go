@@ -150,7 +150,7 @@ func (p *parser) parsePrimary() (float64, error) {
 		p.consume()
 		v, err := strconv.ParseFloat(tok.value, 64)
 		if err != nil {
-			return 0, fmt.Errorf("invalid number %q: %w", tok.value, err)
+			return 0, fmt.Errorf("número inválido na fórmula: %q", tok.value)
 		}
 		return v, nil
 	case tokIdent:
