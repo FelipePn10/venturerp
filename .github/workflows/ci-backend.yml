@@ -30,6 +30,19 @@ jobs:
           POSTGRES_USER: venture
           POSTGRES_PASSWORD: venture
           POSTGRES_DB: venture_test
+          # O banco roda no MESMO fuso da produção (`docker-compose.yml`).
+          # Um CI em UTC não espelha nada que exista: mediria um ambiente que
+          # ninguém opera e reprovaria por diferença de ambiente, não de código.
+          #
+          # ⚠️ Descoberto ao subir este workflow: com o banco em UTC,
+          # `TestMachineProductivityMRPAndCRPIntegration` reprova — o CRP soma 6 h
+          # de necessidade num dia de 5 h de capacidade. Reproduzido na v1.1.33,
+          # portanto anterior a qualquer mudança desta leva. É sensibilidade real
+          # do cálculo ao fuso do banco, e continua em aberto: não morde hoje
+          # porque produção roda America/Sao_Paulo, mas morderia numa instalação
+          # em outro fuso.
+          TZ: America/Sao_Paulo
+          PGTZ: America/Sao_Paulo
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U venture"

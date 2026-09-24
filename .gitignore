@@ -39,6 +39,9 @@ backups/*.dump
 # Test scripts with sensitive data (tokens, CNPJs, credentials)
 scripts/*
 !scripts/AGENTS.md
+# A semente da suíte de integração é versionada de propósito: o CI monta o banco
+# do zero a partir dela. Não carrega segredo — a suíte não faz login.
+!scripts/seed-test.sql
 !scripts/release.sh
 !scripts/self-update.sh
 !scripts/test-self-update.sh
