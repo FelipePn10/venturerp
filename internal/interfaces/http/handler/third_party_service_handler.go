@@ -141,7 +141,7 @@ func (h *ThirdPartyServiceHandler) ListPrices(w http.ResponseWriter, r *http.Req
 	if v := q.Get("preferred"); v != "" {
 		b, e := strconv.ParseBool(v)
 		if e != nil {
-			jsonError(w, 400, "invalid preferred")
+			jsonError(w, 400, "o filtro de fornecedor preferencial aceita apenas sim ou não")
 			return
 		}
 		f.Preferred = &b

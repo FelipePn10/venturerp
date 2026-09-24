@@ -58,7 +58,7 @@ func NewDimensions(length, width int, height float64) (*Dimensions, error) {
 	}
 
 	if !d.IsValid() {
-		return nil, errors.New("invalid dimensions")
+		return nil, errors.New("dimensões inválidas: informe comprimento, largura e altura maiores que zero")
 	}
 
 	return d, nil
@@ -90,7 +90,7 @@ func NewWeight(gross, net float64, unit string) (Weight, error) {
 	}
 
 	if !w.IsValid() {
-		return Weight{}, errors.New("invalid weight")
+		return Weight{}, errors.New("peso inválido: informe o peso líquido e o bruto maiores que zero, com o bruto não menor que o líquido")
 	}
 
 	return w, nil
@@ -125,7 +125,7 @@ func NewAttribute(name, value string) (Attribute, error) {
 	}
 
 	if !a.IsValid() {
-		return Attribute{}, errors.New("invalid attribute")
+		return Attribute{}, errors.New("atributo do PDM inválido: informe nome e valor")
 	}
 
 	return a, nil

@@ -769,7 +769,7 @@ func (p *CommercialPolicy) CommercialPolicyValue(baseValue float64, now time.Tim
 		maxValue = line.MaxValue
 	}
 	if !ValidCommercialPolicyCalcType(calcType) {
-		return 0, calcType, percentValue, fixedValue, fmt.Errorf("invalid calc_type")
+		return 0, calcType, percentValue, fixedValue, fmt.Errorf("tipo de cálculo da política comercial inválido: use percentual, valor fixo ou tabela")
 	}
 	if percentValue < 0 || fixedValue < 0 || p.MaxPercent < 0 || maxValue < 0 {
 		return 0, calcType, percentValue, fixedValue, fmt.Errorf("os valores da política comercial devem ser maiores ou iguais a zero")
@@ -838,7 +838,7 @@ func NewSalesPricePolicy(code int64, description string, source SalesCostSource)
 		source = SalesCostStandardTotal
 	}
 	if !ValidSalesCostSource(source) {
-		return nil, fmt.Errorf("invalid cost_source")
+		return nil, fmt.Errorf("origem de custo inválida para a política de preço")
 	}
 	now := time.Now()
 	return &SalesPricePolicy{

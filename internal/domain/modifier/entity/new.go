@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrInvalidDescription = errors.New("invalid description")
+	ErrInvalidDescription = errors.New("a descrição do modificador é obrigatória")
 )
 
 func NewModifier(
