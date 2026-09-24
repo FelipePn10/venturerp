@@ -3,11 +3,13 @@ package itemresolution
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
@@ -87,4 +89,28 @@ func ValidateMask(ctx context.Context, repository any, itemCode int64, mask stri
 		break
 	}
 	return errorsuc.NewValidationError("a máscara informada não está cadastrada para o item na empresa autenticada")
+}
+
+// ResolveActive resolve o item e recusa o que está INATIVO.
+//
+// A tela já não oferece item inativo nas buscas, mas a tela não é a única porta:
+// integração, importação de planilha, leitor de código de barras e uma janela
+// aberta antes da inativação chegam pelo mesmo endpoint. Um item inativo é o que
+// a empresa decidiu parar de comprar, vender ou fabricar — deixá-lo entrar em um
+// pedido ou em uma ordem transforma a decisão em uma sugestão.
+//
+// Use em lançamento (pedido, ordem, estrutura, consumo). NÃO use em cadastro de
+// apoio — conversão de unidade, restrição, ficha de ferramenta e afins precisam
+// continuar abrindo o item inativo, senão não há como mantê-lo nem reativá-lo.
+func ResolveActive(ctx context.Context, repository any, raw request.TextCode) (*itementity.Item, error) {
+	item, err := Resolve(ctx, repository, raw)
+	if err != nil {
+		return nil, err
+	}
+	if item.Health == types.INACTIVE {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"o item %s (%s) está inativo e não pode entrar em novos lançamentos; reative-o no cadastro de item se ainda for necessário",
+			item.BusinessCode, item.Name))
+	}
+	return item, nil
 }

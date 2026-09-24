@@ -251,7 +251,7 @@ func (uc *ProductionMaterialControlUseCase) ConfigureItemStock(ctx context.Conte
 	if dto.AutomaticIssueType == "TRANSFER" && dto.LineWarehouseID == nil {
 		return errorsuc.NewValidationError("informe o almoxarifado de linha para a baixa por transferência")
 	}
-	itemCode, err := itemresolution.Resolve(ctx, uc.Items, dto.ItemCode)
+	itemCode, err := itemresolution.ResolveActive(ctx, uc.Items, dto.ItemCode)
 	if err != nil {
 		return err
 	}
