@@ -86,6 +86,12 @@ Após a implementação:
 
 - Toda operação deve preservar isolamento por empresa/tenant.
 - Queries não podem omitir o identificador da empresa quando aplicável.
+- **Duas convenções de coluna de empresa convivem no banco: `enterprise_id`
+  (maioria) e `enterprise_code` (comercial/compras).** A tabela filha usa a
+  convenção do PAI, e o filtro tem de usar `tenant.ID` ou `tenant.Code` de
+  acordo — na empresa 1 os dois valem 1 e o erro não aparece em desenvolvimento.
+  Foi assim que o vínculo do representante (`representative_enterprises.enterprise_code`
+  comparado com `tenant.ID`) escondeu o representante da segunda empresa.
 - Regras de negócio não devem residir em handlers ou repositories.
 - Operações compostas devem avaliar necessidade de transação.
 - Não alterar migrations já aplicadas; criar nova migration.

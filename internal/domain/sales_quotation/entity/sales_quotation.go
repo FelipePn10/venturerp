@@ -52,46 +52,51 @@ const (
 )
 
 type SalesQuotation struct {
-	Code                    int64
-	QuotationNumber         int64
-	EnterpriseCode          int64
-	Status                  SalesQuotationStatus
-	QuotationType           SalesQuotationType
-	EmissionDate            time.Time
-	DigitDate               time.Time
-	ValidUntil              *time.Time
-	DeliveryDate            *time.Time
-	DeliveryDateFirm        bool
-	PurchaseOrderNumber     *string
-	CustomerCode            *int64
-	BillingAddressCode      *int64
-	ShippingAddressCode     *int64
-	RepresentativeCode      *int64
-	SalesDivisionCode       *int64
-	PriceTableCode          *int64
-	PaymentTermCode         *int64
-	CurrencyCode            string
-	ProbabilityPct          decimal.Decimal
-	CommissionPct           decimal.Decimal
-	IsNFCe                  bool
-	DeliveryWithReceipt     bool
-	Street                  *string
-	StreetNumber            *string
-	ForeignDocument         *string
-	ReleaseStatus           SalesQuotationReleaseStatus
-	CommercialBlocked       bool
-	CommercialBlockReason   *string
-	CarrierCode             *int64
-	FreightType             *string
-	VerifyFreight           bool
-	FreightValue            decimal.Decimal
-	RedeliveryFreightValue  decimal.Decimal
-	InsuranceValue          decimal.Decimal
-	DiscountValue           decimal.Decimal
-	SurchargeValue          decimal.Decimal
-	RetainedTaxValue        decimal.Decimal
-	TotalGross              decimal.Decimal
-	TotalNet                decimal.Decimal
+	Code                   int64
+	QuotationNumber        int64
+	EnterpriseCode         int64
+	Status                 SalesQuotationStatus
+	QuotationType          SalesQuotationType
+	EmissionDate           time.Time
+	DigitDate              time.Time
+	ValidUntil             *time.Time
+	DeliveryDate           *time.Time
+	DeliveryDateFirm       bool
+	PurchaseOrderNumber    *string
+	CustomerCode           *int64
+	BillingAddressCode     *int64
+	ShippingAddressCode    *int64
+	RepresentativeCode     *int64
+	SalesDivisionCode      *int64
+	PriceTableCode         *int64
+	PaymentTermCode        *int64
+	CurrencyCode           string
+	ProbabilityPct         decimal.Decimal
+	CommissionPct          decimal.Decimal
+	IsNFCe                 bool
+	DeliveryWithReceipt    bool
+	Street                 *string
+	StreetNumber           *string
+	ForeignDocument        *string
+	ReleaseStatus          SalesQuotationReleaseStatus
+	CommercialBlocked      bool
+	CommercialBlockReason  *string
+	CarrierCode            *int64
+	FreightType            *string
+	VerifyFreight          bool
+	FreightValue           decimal.Decimal
+	RedeliveryFreightValue decimal.Decimal
+	InsuranceValue         decimal.Decimal
+	DiscountValue          decimal.Decimal
+	SurchargeValue         decimal.Decimal
+	RetainedTaxValue       decimal.Decimal
+	TotalGross             decimal.Decimal
+	TotalNet               decimal.Decimal
+	// TotalIPI e TotalST são os impostos somados, cada um sozinho. TotalWithIPI
+	// é produto + IPI — sem ST, como o nome diz.
+	TotalIPI                decimal.Decimal
+	TotalST                 decimal.Decimal
+	TotalWithIPI            decimal.Decimal
 	DeliveryAuthorization   *string
 	Notes                   *string
 	ObsCustomer             *string
@@ -131,11 +136,17 @@ type SalesQuotationItem struct {
 	IPIPct             decimal.Decimal
 	STPct              decimal.Decimal
 	TotalGross         decimal.Decimal
-	TotalNet           decimal.Decimal
-	TotalNetWithIPI    decimal.Decimal
-	Status             SalesQuotationItemStatus
-	Notes              *string
-	IsActive           bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// TotalNet é o valor do PRODUTO na linha, já com desconto e sem imposto.
+	TotalNet decimal.Decimal
+	// TotalIPI e TotalST são os impostos da linha, cada um sozinho.
+	TotalIPI decimal.Decimal
+	TotalST  decimal.Decimal
+	// TotalNetWithIPI é produto + IPI. Somava o ST também, apesar do nome, e a
+	// distorção seguia para o pedido na conversão do orçamento.
+	TotalNetWithIPI decimal.Decimal
+	Status          SalesQuotationItemStatus
+	Notes           *string
+	IsActive        bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }

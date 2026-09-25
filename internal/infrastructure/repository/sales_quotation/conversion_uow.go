@@ -54,6 +54,18 @@ func (u *ConversionUnitOfWork) Execute(ctx context.Context, quotationCode int64,
 	if _, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events(sales_quotation_code,event_type,reason,created_by) VALUES($1,'CONVERT','Convertido em pedido de venda',$2)`, quotationCode, actor); err != nil {
 		return nil, err
 	}
+
+	// O rateio de comissão vem junto. Sem isto, a segunda comissão combinada no
+	// orçamento (o parceiro que trouxe o cliente) desaparecia na conversão e o
+	// pedido nascia só com o representante da capa.
+	if _, err = tx.Exec(ctx, `
+INSERT INTO public.sales_order_representatives (enterprise_code, sales_order_code, representative_code, role, commission_pct, commission_base, notes)
+SELECT r.enterprise_code, $3, r.representative_code, r.role, r.commission_pct, r.commission_base, r.notes
+FROM public.sales_quotation_representatives r
+WHERE r.sales_quotation_code = $1 AND r.enterprise_code = $2
+ON CONFLICT (sales_order_code, representative_code) DO NOTHING`, quotationCode, enterpriseCode, created.Code); err != nil {
+		return nil, err
+	}
 	var payload []byte
 	err = tx.QueryRow(ctx, `SELECT jsonb_build_object(
 		'empresa_id',$1,

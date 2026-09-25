@@ -6,6 +6,34 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.3.0] — 2026-09-25
+
+- feat(condicao-pagamento): percentual e evento base por parcela — "30% entrada,
+  20% entrega e o restante em 28/56 dias" passa a ser cadastrável, com listagem,
+  exclusão e simulação em dinheiro da condição
+- feat(orcamento): plano de pagamento calculado por orçamento
+  (`GET /api/sales-quotation/{code}/payment-schedule`)
+- feat(comissao): rateio de comissão com mais de um representante por pedido e
+  por orçamento, com base de incidência explícita e percentual por documento
+- feat(orcamento): produto, IPI e produto + IPI como valores distintos no item e
+  na capa
+- feat(transportadora): cadastro de transportadora (RNTRC/ANTT, modal, tabela de
+  frete, seguro, frota com motorista, regiões atendidas com prazo, ocorrências de
+  entrega) e cotação comparativa de frete aberta em componentes
+- feat(conversao-de-um): conversão de unidade liberada para o perfil USER
+- fix(orcamento): `total_net_with_ipi` somava o ST apesar do nome, e o valor
+  inflado era copiado para o pedido na conversão
+- fix(orcamento): a conversão parcial levava o total da quantidade inteira para o
+  item do pedido
+- fix(condicao-pagamento): criar condição de pagamento voltou a funcionar — a
+  coluna de empresa era NOT NULL e ninguém a preenchia desde a migração 361
+- fix(condicao-pagamento): a condição passou a ser lida com as parcelas; sem
+  isso todo plano de pagamento era calculado como "à vista"
+- fix(tenant): condição de pagamento, representante, relatório e acompanhamento
+  de representante isolados por empresa
+- fix(representante): cadastrar representante cria o vínculo com a empresa da
+  sessão — sem ele o representante nascia invisível para o pedido e o orçamento
+
 ## [v1.2.0] — 2026-09-24
 
 - ci: rodar gofmt, vet, unidade e integração a cada PR (`5ff1240`)

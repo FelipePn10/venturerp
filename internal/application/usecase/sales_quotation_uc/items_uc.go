@@ -224,11 +224,18 @@ func (uc *UseCase) CancelItem(ctx context.Context, dto request.CancelSalesQuotat
 	return uc.Repo.CancelItem(ctx, dto.Code, reason.Code, reason.Description, dto.Complement)
 }
 
+// calcItemTotals separa o que o cliente pergunta separado: o produto, o IPI e a
+// soma dos dois. O ST fica na sua própria coluna — somá-lo dentro de
+// "líquido c/ IPI" inflava o número que ia para a proposta e, na conversão,
+// para o pedido.
 func calcItemTotals(item *entity.SalesQuotationItem) {
+	cem := decimal.NewFromInt(100)
 	gross := item.UnitPrice.Mul(item.RequestedQty)
-	discount := gross.Mul(item.DiscountPct).Div(decimal.NewFromInt(100))
+	discount := gross.Mul(item.DiscountPct).Div(cem)
 	item.TotalGross = gross
 	item.TotalNet = gross.Sub(discount)
-	item.TotalNetWithIPI = item.TotalNet.Add(item.TotalNet.Mul(item.IPIPct).Div(decimal.NewFromInt(100))).Add(item.TotalNet.Mul(item.STPct).Div(decimal.NewFromInt(100)))
+	item.TotalIPI = item.TotalNet.Mul(item.IPIPct).Div(cem)
+	item.TotalST = item.TotalNet.Mul(item.STPct).Div(cem)
+	item.TotalNetWithIPI = item.TotalNet.Add(item.TotalIPI)
 	item.Balance = item.RequestedQty.Sub(item.AttendedQty).Sub(item.CancelledQty)
 }

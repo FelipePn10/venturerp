@@ -12,8 +12,16 @@ import (
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
-func representativeTenantContext(enterpriseID int64) context.Context {
-	return context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
+// O vínculo do representante com a empresa é gravado em
+// `representative_enterprises.enterprise_code` — o CÓDIGO público, não o id. O
+// contexto precisa carregar os dois, e o repositório tem de filtrar pelo código:
+// era essa a confusão que fazia o representante da segunda empresa nunca ser
+// encontrado (na empresa 1, id e código são ambos 1 e o erro não aparecia).
+func representativeTenantContext(enterpriseCode int64) context.Context {
+	return context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{
+		EnterpriseID:   enterpriseCode + 1_000_000,
+		EnterpriseCode: enterpriseCode,
+	})
 }
 
 func TestBlockUnblockAndGetAreIsolatedByEnterprise(t *testing.T) {

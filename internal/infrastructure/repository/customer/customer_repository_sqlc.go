@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
@@ -440,7 +441,14 @@ func (r *CustomerRepositorySQLC) NextCarrierGroupCode(ctx context.Context) (int6
 // ─── Payment Conditions ───────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreatePaymentCondition(ctx context.Context, pc *entity.PaymentCondition) (*entity.PaymentCondition, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreatePaymentCondition(ctx, sqlc.CreatePaymentConditionParams{
+		// sqlc ve a coluna como anulavel (o NOT NULL foi aplicado por DO block
+		// na migracao 361), por isso o ponteiro.
+		EnterpriseID: &enterpriseID,
 		Code:         pc.Code,
 		Description:  pc.Description,
 		CarrierID:    pc.CarrierID,
@@ -459,7 +467,12 @@ func (r *CustomerRepositorySQLC) CreatePaymentCondition(ctx context.Context, pc 
 }
 
 func (r *CustomerRepositorySQLC) UpdatePaymentCondition(ctx context.Context, pc *entity.PaymentCondition) (*entity.PaymentCondition, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdatePaymentCondition(ctx, sqlc.UpdatePaymentConditionParams{
+		EnterpriseID: &enterpriseID,
 		ID:           pc.ID,
 		Description:  pc.Description,
 		CarrierID:    pc.CarrierID,
@@ -479,23 +492,50 @@ func (r *CustomerRepositorySQLC) UpdatePaymentCondition(ctx context.Context, pc 
 }
 
 func (r *CustomerRepositorySQLC) GetPaymentConditionByCode(ctx context.Context, code int64) (*entity.PaymentCondition, error) {
-	row, err := r.q.GetPaymentConditionByCode(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPaymentConditionByCode(ctx, sqlc.GetPaymentConditionByCodeParams{Code: code, EnterpriseID: &enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching payment condition %d: %w", code, err)
 	}
-	return paymentCondToEntity(row), nil
+	return r.comParcelas(ctx, paymentCondToEntity(row))
+}
+
+// comParcelas anexa as parcelas da condição. Sem isto, quem lê a condição vê
+// uma condição sem parcela nenhuma — e o plano de pagamento do orçamento saía
+// como "à vista" para qualquer condição, por mais parcelada que fosse.
+func (r *CustomerRepositorySQLC) comParcelas(ctx context.Context, pc *entity.PaymentCondition) (*entity.PaymentCondition, error) {
+	if pc == nil {
+		return nil, nil
+	}
+	parcelas, err := r.ListInstallments(ctx, pc.ID)
+	if err != nil {
+		return nil, err
+	}
+	pc.Installments = parcelas
+	return pc, nil
 }
 
 func (r *CustomerRepositorySQLC) GetPaymentConditionByID(ctx context.Context, id int64) (*entity.PaymentCondition, error) {
-	row, err := r.q.GetPaymentConditionByID(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPaymentConditionByID(ctx, sqlc.GetPaymentConditionByIDParams{ID: id, EnterpriseID: &enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching payment condition id %d: %w", id, err)
 	}
-	return paymentCondToEntity(row), nil
+	return r.comParcelas(ctx, paymentCondToEntity(row))
 }
 
 func (r *CustomerRepositorySQLC) ListPaymentConditions(ctx context.Context, onlyActive bool) ([]*entity.PaymentCondition, error) {
-	rows, err := r.q.ListPaymentConditions(ctx, onlyActive)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPaymentConditions(ctx, sqlc.ListPaymentConditionsParams{EnterpriseID: &enterpriseID, OnlyActive: onlyActive})
 	if err != nil {
 		return nil, fmt.Errorf("listing payment conditions: %w", err)
 	}
@@ -515,6 +555,8 @@ func (r *CustomerRepositorySQLC) AddInstallment(ctx context.Context, inst *entit
 		DocumentType:       pgutil.ToPgTextFromPtr(inst.DocumentType),
 		MovementType:       pgutil.ToPgTextFromPtr(inst.MovementType),
 		CarrierID:          inst.CarrierID,
+		Percentage:         percentualPg(inst.Percentage),
+		BaseEvent:          sqlc.PaymentBaseEventEnum(eventoOuPadrao(inst.BaseEvent)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adding installment: %w", err)
@@ -571,8 +613,36 @@ func installmentToEntity(row sqlc.PaymentConditionInstallment) *entity.PaymentIn
 		DocumentType:       pgutil.FromPgTextPtr(row.DocumentType),
 		MovementType:       pgutil.FromPgTextPtr(row.MovementType),
 		CarrierID:          row.CarrierID,
+		Percentage:         percentualDePg(row.Percentage),
+		BaseEvent:          string(row.BaseEvent),
 		IsActive:           row.IsActive,
 	}
+}
+
+// percentualPg converte o percentual da parcela: nulo é "não informado", e não
+// zero — zero seria uma parcela que não leva nada.
+func percentualPg(v *float64) pgtype.Numeric {
+	if v == nil {
+		return pgtype.Numeric{}
+	}
+	return pgutil.ToPgNumericFromFloat64(*v)
+}
+
+func percentualDePg(v pgtype.Numeric) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	f := pgutil.FromPgNumericToFloat64(v)
+	return &f
+}
+
+// eventoOuPadrao mantém EMISSAO como o significado de "não informado" — é o que
+// toda condição cadastrada antes desta coluna significava.
+func eventoOuPadrao(evento string) string {
+	if strings.TrimSpace(evento) == "" {
+		return string(entity.BaseEmissao)
+	}
+	return strings.ToUpper(strings.TrimSpace(evento))
 }
 
 // ─── Sales Tables ─────────────────────────────────────────────────────────────
