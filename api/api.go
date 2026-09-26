@@ -274,6 +274,12 @@ func (app *application) mount() chi.Router {
 			httpmw.RequireRole("ADMIN"),
 		).Post("/register", userHandler.RegisterUserHandler)
 		r.Post("/login", userHandler.LoginHandler)
+		// Renovação da sessão: é o que faz o "manter conectado" existir. Passa
+		// pelo middleware de sempre, então o token é conferido contra o banco
+		// antes de ganhar prazo novo.
+		r.With(
+			httpmw.JWTForEnvironment(app.config.JWTSecret, app.config.DataEnvironment, app.logger, userRepo),
+		).Post("/session/renew", userHandler.RenewSessionHandler)
 	})
 
 	// Item

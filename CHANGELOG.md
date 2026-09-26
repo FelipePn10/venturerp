@@ -21,6 +21,10 @@ pipeline de release.
   frete, seguro, frota com motorista, regiões atendidas com prazo, ocorrências de
   entrega) e cotação comparativa de frete aberta em componentes
 - feat(conversao-de-um): conversão de unidade liberada para o perfil USER
+- feat(sessao): "manter conectado" de verdade — `remember_me` no login emite token
+  de 7 dias, `POST /users/session/renew` renova a sessão a cada abertura do app e
+  o teto de 30 dias (claim `session_start`) impede sessão eterna; o login passou a
+  devolver `expires_at`, então o cliente renova antes de levar 401
 - fix(orcamento): `total_net_with_ipi` somava o ST apesar do nome, e o valor
   inflado era copiado para o pedido na conversão
 - fix(orcamento): a conversão parcial levava o total da quantidade inteira para o

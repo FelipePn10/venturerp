@@ -103,6 +103,13 @@ func JWTForEnvironment(secret, environment string, log *applogger.Logger, valida
 
 			// Store user in context and propagate user_id to the logger.
 			ctx := context.WithValue(r.Context(), contextkey.UserKey, user)
+			// O início da sessão e a escolha de "manter conectado" seguem no
+			// contexto: a renovação precisa do teto contado do login de verdade e
+			// do prazo que a sessão tinha, sem reler o token.
+			ctx = context.WithValue(ctx, contextkey.SessionKey, security.SessionInfo{
+				Start:    claims.SessionStartedAt(),
+				Remember: claims.Remember,
+			})
 			ctx = applogger.WithUserID(ctx, claims.UserID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
