@@ -37,6 +37,9 @@ pipeline de release.
   de representante isolados por empresa
 - fix(representante): cadastrar representante cria o vínculo com a empresa da
   sessão — sem ele o representante nascia invisível para o pedido e o orçamento
+- test(integração): três testes dependiam do fuso (misturavam `time.Now()` do
+  processo com `CURRENT_DATE` do banco) e reprovavam no CI perto da virada do dia;
+  a suíte passou a rodar verde em UTC, America/Sao_Paulo e Asia/Tokyo
 
 ## [v1.2.0] — 2026-09-24
 

@@ -175,9 +175,21 @@ Rodando localmente: `TEST_DATABASE_URL` aponta para `panossoerp-postgres-test`
 (:5433). **Mantenha esse banco migrado** — ele ficou 30 migrações atrás e foi
 por isso que a suíte passou meses vermelha: o erro era do banco, não do código.
 
-⚠️ **O CI roda o Postgres em `America/Sao_Paulo`, como a produção.** Com o banco
-em UTC, `TestMachineProductivityMRPAndCRPIntegration` reprova: o CRP soma 6 h de
-necessidade num dia de 5 h de capacidade. Reproduzido na v1.1.33 — é anterior à
-leva atual e continua **em aberto**. Não morde hoje porque produção roda no mesmo
-fuso; morderia numa instalação em outro. Ao investigar, reproduza com
-`ALTER DATABASE <base> SET timezone TO 'UTC'`.
+⚠️ **O CI roda o Postgres em `America/Sao_Paulo`, como a produção, e o processo
+de teste em UTC.** São DOIS relógios, e teste que mistura os dois falha perto da
+virada do dia: o Go calcula a data com `time.Now()` e o banco com `CURRENT_DATE`.
+Foi assim que três testes reprovaram no CI em 26/09/2026 (período de estoque
+fechado, taxa de câmbio da consulta de compras e seleção de roteiro vigente) e
+passaram na máquina do desenvolvedor.
+
+**Regra:** num teste de integração, a data vai como PARÂMETRO (`$1::date` com o
+`time.Now()` do processo) — nunca `CURRENT_DATE` no INSERT comparado com uma data
+vinda do Go. E "expirado" se escreve com folga de dias, não com "ontem".
+Para conferir, rode a suíte em mais de um fuso:
+`TZ=UTC go test -tags=integration ./...` e `TZ=Asia/Tokyo ...` (verde nos dois
+desde a v1.3.0).
+
+⚠️ `TestMachineProductivityMRPAndCRPIntegration` continua **em aberto** com o
+BANCO em UTC (o CRP soma 6 h de necessidade num dia de 5 h de capacidade).
+Reproduzido na v1.1.33; não morde hoje porque produção roda no mesmo fuso do CI.
+Ao investigar, reproduza com `ALTER DATABASE <base> SET timezone TO 'UTC'`.
