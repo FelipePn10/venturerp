@@ -37,6 +37,23 @@ pipeline de release.
   de representante isolados por empresa
 - fix(representante): cadastrar representante cria o vínculo com a empresa da
   sessão — sem ele o representante nascia invisível para o pedido e o orçamento
+- fix(item): orçamento, pedido e OF gravavam no ITEM ERRADO quando o código
+  comercial é numérico — o código era traduzido duas vezes (middleware + caso de
+  uso) e a chave interna 5 era relida como o comercial "5"; achado simulando a
+  rotina sobre os dados reais da Tecnofer
+- fix(producao): o chão de fábrica não conseguia apontar — a tela manda o CÓDIGO
+  do funcionário e as tabelas de produção exigem a chave interna; a tradução
+  agora acontece no caso de uso (`employeeresolution`)
+- fix(financeiro): baixar título a pagar e a receber estava quebrado — o
+  lançamento no fluxo de caixa não preenchia `enterprise_id`, obrigatório desde a
+  migração 362
+- fix(crp): roteiro sem máscara ficava invisível para o cálculo de capacidade
+  (`mask = ''` não trata nulo) e todas as ordens voltavam como "sem carga"
+- fix(fiscal): recusa do provedor (Focus NF-e/SEFAZ) chega ao usuário com o
+  motivo em HTTP 502, e "token não configurado" virou aviso acionável — antes
+  eram 500 "erro interno do servidor"
+- fix(planejamento): regra de transição de ordem planejada respondia 500; agora
+  responde 422 com o motivo
 - fix(comissao): a razão de comissões passou a lançar para TODOS os
   representantes do rateio, respeitando a base de cada linha — o parceiro
   aparecia no pedido e nunca era pago (migração 368). Corrigida no caminho uma

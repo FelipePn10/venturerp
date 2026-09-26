@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	enums "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -32,6 +33,17 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 		return
 	}
 
+	// Regra de negócio que virou sentinela (`errors.New` no pacote do caso de
+	// uso) continuava caindo em 500. Quem tentava liberar uma ordem já liberada
+	// via "erro interno do servidor" no lugar do motivo. A lista é curta e
+	// explícita de propósito: cada entrada é uma regra com mensagem pronta.
+	for _, regra := range regrasDeNegocio {
+		if errors.Is(err, regra) {
+			RespondErrorCode(w, http.StatusUnprocessableEntity, "REGRA_DE_NEGOCIO", err.Error())
+			return
+		}
+	}
+
 	if v, ok := errorsuc.AsValidation(err); ok {
 		RespondErrorCode(w, http.StatusUnprocessableEntity, "VALIDACAO_DE_DOMINIO", v.Error())
 		return
@@ -42,6 +54,13 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 	}
 	if n, ok := errorsuc.AsNotFound(err); ok {
 		RespondErrorCode(w, http.StatusNotFound, "REGISTRO_NAO_ENCONTRADO", n.Error())
+		return
+	}
+	// Recusa de serviço de fora (Focus NF-e/SEFAZ, CNPJ, banco): 502 com o
+	// MOTIVO do terceiro. Como 500 genérico, quem tentava faturar não tinha como
+	// saber que o problema era "CNPJ do emitente não autorizado".
+	if e, ok := errorsuc.AsExternalService(err); ok {
+		RespondErrorCode(w, http.StatusBadGateway, "SERVICO_EXTERNO_RECUSOU", e.Error())
 		return
 	}
 
@@ -106,4 +125,11 @@ func isClassified(err error) bool {
 	}
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr)
+}
+
+// regrasDeNegocio são sentinelas de domínio que devem chegar ao usuário com o
+// texto delas, não como falha do servidor.
+var regrasDeNegocio = []error{
+	planned_order_uc.ErrInvalidPlanningTransition,
+	planned_order_uc.ErrFirmDateChange,
 }

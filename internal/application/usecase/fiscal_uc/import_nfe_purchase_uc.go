@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strconv"
 	"time"
 
@@ -55,7 +56,7 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 		return nil, fmt.Errorf("reading fiscal config: %w", err)
 	}
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais")
 	}
 	focusCli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 

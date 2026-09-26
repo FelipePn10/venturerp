@@ -40,7 +40,7 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 		return nil, err
 	}
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais")
 	}
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)

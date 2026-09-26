@@ -7,6 +7,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/employeeresolution"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
@@ -25,6 +26,10 @@ type AddAppointmentUseCase struct {
 	// automatically (OUT) in proportion to the produced quantity.
 	StructureRepo structurerepo.ItemStructureRepository
 	StockRepo     stockrepo.StockRepository
+	// Employees traduz o CÓDIGO do funcionário que a tela manda para a chave
+	// interna que `production_appointments` exige. Opcional: sem ele o valor
+	// segue como está (comportamento anterior).
+	Employees employeeresolution.Finder
 }
 
 func (uc *AddAppointmentUseCase) Execute(
@@ -45,6 +50,11 @@ func (uc *AddAppointmentUseCase) Execute(
 	if dto.EmployeeID == nil || *dto.EmployeeID <= 0 {
 		return nil, errorsuc.NewValidationError("informe o operador")
 	}
+	operador, err := employeeresolution.ResolveID(ctx, uc.Employees, *dto.EmployeeID)
+	if err != nil {
+		return nil, err
+	}
+	dto.EmployeeID = &operador
 	if dto.ProducedQty < 0 || dto.ScrappedQty < 0 || dto.ProducedQty+dto.ScrappedQty <= 0 {
 		return nil, errorsuc.NewValidationError("quantidades boas/refugadas devem ser nao negativas e possuir total maior que zero")
 	}

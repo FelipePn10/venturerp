@@ -58,3 +58,37 @@ func AsNotFound(err error) (*NotFoundError, bool) {
 	}
 	return nil, false
 }
+
+// ExternalServiceError é a recusa de um serviço de fora (Focus NF-e/SEFAZ,
+// consulta de CNPJ, banco). Mapeia para HTTP 502.
+//
+// Não é falha do nosso servidor nem erro de digitação do usuário: é o terceiro
+// dizendo não, e o MOTIVO dele é a única coisa que permite agir ("CNPJ do
+// emitente não autorizado", "certificado vencido", "nota rejeitada: CST
+// inválido"). Embrulhado com fmt.Errorf isso virava 500 "erro interno do
+// servidor" e ninguém conseguia faturar nem saber por quê.
+type ExternalServiceError struct {
+	Servico string
+	Msg     string
+}
+
+func (e *ExternalServiceError) Error() string {
+	if e.Servico == "" {
+		return e.Msg
+	}
+	return e.Servico + ": " + e.Msg
+}
+
+// NewExternalServiceError builds an ExternalServiceError.
+func NewExternalServiceError(servico, msg string) error {
+	return &ExternalServiceError{Servico: servico, Msg: msg}
+}
+
+// AsExternalService reports whether err is (or wraps) an ExternalServiceError.
+func AsExternalService(err error) (*ExternalServiceError, bool) {
+	var e *ExternalServiceError
+	if errors.As(err, &e) {
+		return e, true
+	}
+	return nil, false
+}
