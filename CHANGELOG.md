@@ -37,6 +37,11 @@ pipeline de release.
   de representante isolados por empresa
 - fix(representante): cadastrar representante cria o vínculo com a empresa da
   sessão — sem ele o representante nascia invisível para o pedido e o orçamento
+- fix(comissao): a razão de comissões passou a lançar para TODOS os
+  representantes do rateio, respeitando a base de cada linha — o parceiro
+  aparecia no pedido e nunca era pago (migração 368). Corrigida no caminho uma
+  confusão de convenção vinda da 322: o gatilho comparava `fiscal_exits.enterprise_id`
+  com `sales_orders.enterprise_code`, e só acertava na empresa em que id = código
 - test(integração): três testes dependiam do fuso (misturavam `time.Now()` do
   processo com `CURRENT_DATE` do banco) e reprovavam no CI perto da virada do dia;
   a suíte passou a rodar verde em UTC, America/Sao_Paulo e Asia/Tokyo
