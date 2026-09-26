@@ -63,7 +63,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	}
 
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado — acesse Configurações Fiscais")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais para informá-lo antes de autorizar a nota")
 	}
 
 	focusCli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
@@ -145,7 +145,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	focusResp, err := focusCli.EmitirNFe(ctx, ref, payload)
 	if err != nil {
 		_, _ = uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusRejected)
-		return nil, fmt.Errorf("Focus NF-e: %w", err)
+		return nil, errorsuc.NewExternalServiceError("Focus NF-e", err.Error())
 	}
 
 	updated, err := uc.Repo.UpdateExitAuthorization(ctx, id, focusResp.ChaveNFe, focusResp.Protocolo, ref, focusResp.PathXML, focusResp.PathDANFE)

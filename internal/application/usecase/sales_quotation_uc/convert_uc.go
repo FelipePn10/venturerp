@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -100,11 +102,14 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			InsuranceValue:      q.InsuranceValue.InexactFloat64(),
 			DiscountValue:       q.DiscountValue.InexactFloat64(),
 			SurchargeValue:      q.SurchargeValue.InexactFloat64(),
-			TotalGross:          q.TotalGross.InexactFloat64(),
-			TotalNet:            q.TotalNet.InexactFloat64(),
-			Notes:               q.Notes,
-			ObsCustomer:         q.ObsCustomer,
-			CreatedBy:           createdBy,
+			// No pedido, total_gross e o valor dos produtos JA com desconto de
+			// item (o orcamento guarda o bruto antes do desconto). Mandar o
+			// bruto do orcamento inflava o pedido convertido.
+			TotalGross:  q.TotalNet.InexactFloat64(),
+			TotalNet:    q.TotalNet.InexactFloat64(),
+			Notes:       q.Notes,
+			ObsCustomer: q.ObsCustomer,
+			CreatedBy:   createdBy,
 		}
 		created, err := orders.Create(ctx, order)
 		if err != nil {
@@ -118,6 +123,14 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			if !balance.IsPositive() {
 				continue
 			}
+			// O saldo convertido pode ser menor que o pedido original, então os
+			// totais são recalculados na proporção do saldo — copiar os totais
+			// do orçamento levaria o valor da quantidade inteira.
+			cem := decimal.NewFromInt(100)
+			precoLiquido := quoteItem.UnitPrice.Mul(cem.Sub(quoteItem.DiscountPct)).Div(cem)
+			valorProdutos := precoLiquido.Mul(balance)
+			valorIPI := valorProdutos.Mul(quoteItem.IPIPct).Div(cem)
+			valorST := valorProdutos.Mul(quoteItem.STPct).Div(cem)
 			orderItem := &orderentity.SalesOrderItem{
 				SalesOrderCode:   created.Code,
 				Sequence:         quoteItem.Sequence,
@@ -134,9 +147,11 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 				IPIPct:           quoteItem.IPIPct.InexactFloat64(),
 				STPct:            quoteItem.STPct.InexactFloat64(),
 				DiscountPct:      quoteItem.DiscountPct.InexactFloat64(),
-				TotalGross:       quoteItem.TotalGross.InexactFloat64(),
-				TotalNet:         quoteItem.TotalNet.InexactFloat64(),
-				TotalNetWithIPI:  quoteItem.TotalNetWithIPI.InexactFloat64(),
+				TotalGross:       valorProdutos.InexactFloat64(),
+				TotalNet:         valorProdutos.InexactFloat64(),
+				TotalIPI:         valorIPI.InexactFloat64(),
+				TotalST:          valorST.InexactFloat64(),
+				TotalNetWithIPI:  valorProdutos.Add(valorIPI).InexactFloat64(),
 				Status:           orderentity.SalesOrderItemStatusOpen,
 				Notes:            quoteItem.Notes,
 			}

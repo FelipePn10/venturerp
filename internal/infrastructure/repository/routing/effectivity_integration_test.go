@@ -26,8 +26,13 @@ func TestIntegration_Routing_EffectivitySelection(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 	defer testutil.Exec(t, pool, "DELETE FROM manufacturing_routes WHERE item_code = $1", itemCode)
 
+	// As datas ficam LONGE da virada do dia de propósito. A consulta compara com
+	// `CURRENT_DATE` do banco; com "ontem" calculado no fuso do processo, bastava
+	// processo em UTC e banco em America/Sao_Paulo para a revisão "expirada"
+	// ainda estar vigente para o banco — e ela ganhava a seleção por ser a
+	// alternativa 1. O teste passa a dizer "expirada", não "expirou ontem".
 	now := time.Now()
-	expiredTo := now.AddDate(0, 0, -1)  // yesterday
+	expiredTo := now.AddDate(0, 0, -3)  // expirada há dias, em qualquer fuso
 	pastFrom := now.AddDate(0, 0, -30)  // a month ago
 	futureFrom := now.AddDate(0, 0, 10) // next week+
 

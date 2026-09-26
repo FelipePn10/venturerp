@@ -344,11 +344,18 @@ type PaymentInstallment struct {
 	PaymentConditionID int64
 	InstallmentNumber  int16
 	DueDays            int16
-	Description        *string
-	DocumentType       *string
-	MovementType       *string
-	CarrierID          *int64
-	IsActive           bool
+	// Percentage é quanto do total esta parcela leva. Nulo em TODAS as parcelas
+	// da condição significa divisão em partes iguais — o comportamento que
+	// existia antes de a condição saber trabalhar com percentual.
+	Percentage *float64
+	// BaseEvent é a partir de quando os dias contam: emissão, entrada (no ato),
+	// entrega ou faturamento. Vazio equivale a emissão.
+	BaseEvent    string
+	Description  *string
+	DocumentType *string
+	MovementType *string
+	CarrierID    *int64
+	IsActive     bool
 }
 
 func NewPaymentCondition(code int64, description string, analysisType PaymentAnalysis) (*PaymentCondition, error) {

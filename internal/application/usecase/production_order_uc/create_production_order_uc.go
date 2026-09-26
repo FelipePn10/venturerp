@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/employeeresolution"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
@@ -46,6 +47,9 @@ type CreateProductionOrderUseCase struct {
 	OrderOps productionRouteExploder
 	// Items resolve o código de negócio do item (texto) para a chave legada.
 	Items any
+	// Employees traduz o código do funcionário para a chave interna que
+	// `production_orders.employee_id` exige — a tela manda o código.
+	Employees employeeresolution.Finder
 }
 
 func (uc *CreateProductionOrderUseCase) Execute(
@@ -81,6 +85,8 @@ func (uc *CreateProductionOrderUseCase) Execute(
 			nextNum = 1
 		}
 	}
+	// O planejador padrão vem do cadastro do item já como chave interna; o que
+	// chega da tela vem como CÓDIGO e precisa ser traduzido.
 	if dto.EmployeeID == nil {
 		if defaults, ok := uc.Repo.(manualOrderDefaultsReader); ok {
 			dto.EmployeeID, err = defaults.GetManualOrderPlanner(ctx, itemCode)
@@ -88,6 +94,10 @@ func (uc *CreateProductionOrderUseCase) Execute(
 				return nil, err
 			}
 		}
+	}
+	employeeResolvido, err := employeeresolution.ResolveOptionalID(ctx, uc.Employees, dto.EmployeeID)
+	if err != nil {
+		return nil, err
 	}
 
 	order := &entity.ProductionOrder{
@@ -99,7 +109,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		Status:         entity.StatusOpen,
 		MachineID:      dto.MachineID,
 		CostCenterID:   dto.CostCenterID,
-		EmployeeID:     dto.EmployeeID,
+		EmployeeID:     employeeResolvido,
 		WarehouseID:    dto.WarehouseID,
 		Priority:       dto.Priority,
 		Notes:          dto.Notes,

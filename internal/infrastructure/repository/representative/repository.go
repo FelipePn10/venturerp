@@ -61,34 +61,71 @@ func (r *Repository) ListTypes(ctx context.Context, onlyActive bool) ([]*entity.
 	return out, rows.Err()
 }
 
+// Create grava o representante E o vínculo com a empresa da sessão. Sem o
+// vínculo o representante existia mas era invisível: a própria validação do
+// pedido e do orçamento procura o representante pela tabela de vínculos e
+// respondia "representante N não encontrado na empresa autenticada" logo depois
+// de cadastrá-lo.
 func (r *Repository) Create(ctx context.Context, rep *entity.Representative) (*entity.Representative, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO public.representatives (
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	row := tx.QueryRow(ctx, `INSERT INTO public.representatives (
 is_customer,customer_code,is_supplier,supplier_code,name,trade_name,type_code,category_code,register_date,core_number,document_number,
 postal_code,city,state,full_address,street,street_number,complement,district,device_quantity,is_active
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING `+repColumns,
 		rep.IsCustomer, rep.CustomerCode, rep.IsSupplier, rep.SupplierCode, rep.Name, rep.TradeName, rep.TypeCode, rep.CategoryCode, rep.RegisterDate, rep.CoreNumber, rep.DocumentNumber,
 		rep.PostalCode, rep.City, rep.State, rep.FullAddress, rep.Street, rep.StreetNumber, rep.Complement, rep.District, rep.DeviceQuantity, rep.IsActive)
-	return scanRep(row)
+	criado, err := scanRep(row)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO public.representative_enterprises (representative_code, enterprise_code, enterprise_name, is_default, is_active)
+SELECT $1::BIGINT, $2::BIGINT, e.name, TRUE, TRUE FROM public.enterprise e WHERE e.code = $2::BIGINT
+ON CONFLICT (representative_code, enterprise_code) DO NOTHING`, criado.Code, enterpriseCode); err != nil {
+		return nil, fmt.Errorf("vincular representante %d à empresa: %w", criado.Code, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return criado, nil
 }
 
 func (r *Repository) Update(ctx context.Context, rep *entity.Representative) (*entity.Representative, error) {
+	// Sem o vínculo no WHERE, uma empresa alterava o representante da outra.
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `UPDATE public.representatives SET
 is_customer=$2,customer_code=$3,is_supplier=$4,supplier_code=$5,name=$6,trade_name=$7,type_code=$8,category_code=$9,register_date=$10,
 core_number=$11,document_number=$12,postal_code=$13,city=$14,state=$15,full_address=$16,street=$17,street_number=$18,complement=$19,
 district=$20,device_quantity=$21,is_active=$22,updated_at=NOW()
-WHERE code=$1 RETURNING `+repColumns,
+WHERE code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=representatives.code AND re.enterprise_code=$23)
+RETURNING `+repColumns,
 		rep.Code, rep.IsCustomer, rep.CustomerCode, rep.IsSupplier, rep.SupplierCode, rep.Name, rep.TradeName, rep.TypeCode, rep.CategoryCode, rep.RegisterDate,
 		rep.CoreNumber, rep.DocumentNumber, rep.PostalCode, rep.City, rep.State, rep.FullAddress, rep.Street, rep.StreetNumber, rep.Complement,
-		rep.District, rep.DeviceQuantity, rep.IsActive)
+		rep.District, rep.DeviceQuantity, rep.IsActive, enterpriseCode)
 	return scanRep(row)
 }
 
 func (r *Repository) Get(ctx context.Context, code int64) (*entity.Representative, error) {
-	enterpriseID, err := tenant.ID(ctx)
+	// `representative_enterprises.enterprise_code` guarda o CÓDIGO público da
+	// empresa, não o id. Comparar com tenant.ID só funcionava por coincidência
+	// na empresa 1 (id 1 = código 1): na segunda empresa o representante dela
+	// nunca era encontrado.
+	enterpriseCode, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
-	row := r.pool.QueryRow(ctx, `SELECT `+prefixedRepColumns("r")+` FROM public.representatives r WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseID)
+	row := r.pool.QueryRow(ctx, `SELECT `+prefixedRepColumns("r")+` FROM public.representatives r WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseCode)
 	rep, err := scanRep(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -103,7 +140,15 @@ func (r *Repository) Get(ctx context.Context, code int64) (*entity.Representativ
 }
 
 func (r *Repository) List(ctx context.Context, filter reprepo.RepresentativeFilter) ([]*entity.Representative, error) {
+	// A listagem não tinha filtro de empresa nenhum: o representante de uma
+	// empresa aparecia na lista da outra.
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	sqlText, args := listSQL(filter, `SELECT DISTINCT `+prefixedRepColumns("r")+` FROM public.representatives r`)
+	args = append(args, enterpriseCode)
+	sqlText += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$%d)`, len(args))
 	sqlText += orderSQL(filter.SortBy)
 	rows, err := r.pool.Query(ctx, sqlText, args...)
 	if err != nil {
@@ -122,11 +167,11 @@ func (r *Repository) List(ctx context.Context, filter reprepo.RepresentativeFilt
 }
 
 func (r *Repository) Block(ctx context.Context, code int64, reason string) error {
-	enterpriseID, err := tenant.ID(ctx)
+	enterpriseCode, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=TRUE, block_reason=$2, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$3)`, code, reason, enterpriseID)
+	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=TRUE, block_reason=$2, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$3)`, code, reason, enterpriseCode)
 	if err == nil && tag.RowsAffected() == 0 {
 		return errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado na empresa autenticada", code))
 	}
@@ -134,11 +179,11 @@ func (r *Repository) Block(ctx context.Context, code int64, reason string) error
 }
 
 func (r *Repository) Unblock(ctx context.Context, code int64) error {
-	enterpriseID, err := tenant.ID(ctx)
+	enterpriseCode, err := tenant.Code(ctx)
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=FALSE, block_reason=NULL, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseID)
+	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=FALSE, block_reason=NULL, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseCode)
 	if err == nil && tag.RowsAffected() == 0 {
 		return errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado na empresa autenticada", code))
 	}
@@ -179,7 +224,8 @@ func (r *Repository) AddSalesPlan(ctx context.Context, row *entity.Representativ
 }
 
 func (r *Repository) ListSalesPlanCodes(ctx context.Context) ([]int64, error) {
-	enterpriseID, err := tenant.ID(ctx)
+	// Todas as colunas desta consulta são `enterprise_code`.
+	enterpriseCode, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +240,7 @@ FROM (
     SELECT generic_sales_plan_code FROM public.recurring_sales_parameters
     WHERE enterprise_code=$1 AND generic_sales_plan_code IS NOT NULL
 ) plans
-ORDER BY sales_plan_code`, enterpriseID)
+ORDER BY sales_plan_code`, enterpriseCode)
 	if err != nil {
 		return nil, fmt.Errorf("listar planos de vendas: %w", err)
 	}
@@ -283,7 +329,13 @@ func (r *Repository) AddContact(ctx context.Context, row *entity.RepresentativeC
 }
 
 func (r *Repository) Report(ctx context.Context, filter reprepo.RepresentativeFilter) ([]reprepo.RepresentativeReportRow, error) {
-	sqlText, args := reportSQL(filter)
+	// O relatório não tinha filtro de empresa: uma empresa lia os representantes
+	// (e os percentuais de comissão) da outra.
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sqlText, args := reportSQL(filter, enterpriseCode)
 	rows, err := r.pool.Query(ctx, sqlText, args...)
 	if err != nil {
 		return nil, err
@@ -315,7 +367,7 @@ func (r *Repository) Report(ctx context.Context, filter reprepo.RepresentativeFi
 	return out, rows.Err()
 }
 
-func reportSQL(filter reprepo.RepresentativeFilter) (string, []any) {
+func reportSQL(filter reprepo.RepresentativeFilter, enterpriseCode int64) (string, []any) {
 	sqlText := `SELECT r.code,r.name,r.trade_name,r.type_code,rt.description,r.state,r.city,r.main_phone,r.main_email,
 COALESCE(array_agg(DISTINCT rr.region_code) FILTER (WHERE rr.region_code IS NOT NULL), '{}') AS region_codes,
 r.is_active,COALESCE(MAX(re.commission_pct),0),MAX(ra.debit_account_code),MAX(ra.credit_account_code),MAX(ra.history_code)
@@ -352,19 +404,31 @@ LEFT JOIN public.representative_accounting ra ON ra.representative_code=r.code A
 	default:
 		sqlText += " AND r.is_active=TRUE"
 	}
+	// Só os representantes vinculados à empresa da sessão.
+	args = append(args, enterpriseCode)
+	sqlText += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM public.representative_enterprises rev WHERE rev.representative_code=r.code AND rev.enterprise_code=$%d)", len(args))
 	sqlText += ` GROUP BY r.code,rt.description`
 	sqlText += orderSQL(filter.SortBy)
 	return sqlText, args
 }
 
 func (r *Repository) FollowUp(ctx context.Context, filter reprepo.FollowUpFilter) ([]reprepo.RepresentativeFollowUp, error) {
+	// O acompanhamento somava orçamento e pedido de TODAS as empresas e listava
+	// o representante de qualquer uma delas. Orçamento e pedido usam
+	// `enterprise_code`, e o representante é alcançado pelo vínculo de empresa.
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	where, args := followWhere(filter, "r.code")
+	args = append(args, enterpriseCode)
+	empresa := fmt.Sprintf("$%d", len(args))
 	sqlText := `WITH q AS (
  SELECT representative_code, customer_code, COUNT(*) quotation_count, COALESCE(SUM(total_net),0) total_quoted, MAX(emission_date) last_quotation_date
- FROM public.sales_quotations WHERE representative_code IS NOT NULL` + followDateWhere(filter, &args, "emission_date") + ` GROUP BY representative_code, customer_code
+ FROM public.sales_quotations WHERE representative_code IS NOT NULL AND enterprise_code=` + empresa + followDateWhere(filter, &args, "emission_date") + ` GROUP BY representative_code, customer_code
 ), o AS (
  SELECT representative_code, customer_code, COUNT(*) order_count, COALESCE(SUM(total_net),0) total_ordered, COALESCE(SUM(total_net * commission_pct / 100),0) commission_value, MAX(emission_date) last_order_date
- FROM public.sales_orders WHERE representative_code IS NOT NULL` + followDateWhere(filter, &args, "emission_date") + ` GROUP BY representative_code, customer_code
+ FROM public.sales_orders WHERE representative_code IS NOT NULL AND enterprise_code=` + empresa + followDateWhere(filter, &args, "emission_date") + ` GROUP BY representative_code, customer_code
 ), c AS (
  SELECT COALESCE(q.representative_code,o.representative_code) representative_code, COALESCE(q.customer_code,o.customer_code) customer_code,
  COALESCE(q.quotation_count,0) quotation_count, COALESCE(o.order_count,0) order_count,
@@ -376,7 +440,9 @@ SELECT r.code,r.name,COUNT(DISTINCT c.customer_code),COALESCE(SUM(c.quotation_co
 COALESCE(SUM(c.total_quoted),0),COALESCE(SUM(c.total_ordered),0),
 CASE WHEN COALESCE(SUM(c.order_count),0)=0 THEN 0 ELSE COALESCE(SUM(c.total_ordered),0)/SUM(c.order_count) END,
 COALESCE(SUM(c.total_ordered),0),COALESCE(SUM(c.commission_value),0),MAX(c.last_quotation_date),MAX(c.last_order_date)
-FROM public.representatives r LEFT JOIN c ON c.representative_code=r.code ` + where + ` GROUP BY r.code ORDER BY r.name`
+FROM public.representatives r LEFT JOIN c ON c.representative_code=r.code ` + where +
+		` AND EXISTS (SELECT 1 FROM public.representative_enterprises rev WHERE rev.representative_code=r.code AND rev.enterprise_code=` + empresa + `)` +
+		` GROUP BY r.code ORDER BY r.name`
 	rows, err := r.pool.Query(ctx, sqlText, args...)
 	if err != nil {
 		return nil, err

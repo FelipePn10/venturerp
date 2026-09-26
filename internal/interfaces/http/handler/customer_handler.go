@@ -15,6 +15,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/export"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
 )
 
 type CustomerHandler struct {
@@ -342,6 +343,74 @@ func (h *CustomerHandler) AddInstallment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
+}
+
+func (h *CustomerHandler) ListInstallments(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		jsonError(w, http.StatusBadRequest, "código da condição de pagamento inválido")
+		return
+	}
+	out, err := h.uc.ListInstallments(r.Context(), code)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, out)
+}
+
+func (h *CustomerHandler) DeleteInstallment(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	id, errID := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || errID != nil || code <= 0 || id <= 0 {
+		jsonError(w, http.StatusBadRequest, "condição ou parcela inválida")
+		return
+	}
+	if err := h.uc.DeleteInstallment(r.Context(), code, id); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"deleted": id})
+}
+
+// SimulatePaymentPlan mostra a condição em dinheiro e em datas antes de usá-la.
+func (h *CustomerHandler) SimulatePaymentPlan(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || code <= 0 {
+		jsonError(w, http.StatusBadRequest, "código da condição de pagamento inválido")
+		return
+	}
+	total := decimal.Zero
+	if v := strings.TrimSpace(r.URL.Query().Get("total")); v != "" {
+		total, err = decimal.NewFromString(v)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "valor da simulação inválido")
+			return
+		}
+	}
+	emissao := time.Now()
+	if v := strings.TrimSpace(r.URL.Query().Get("emission_date")); v != "" {
+		emissao, err = time.Parse("2006-01-02", v)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "data de emissão inválida: use AAAA-MM-DD")
+			return
+		}
+	}
+	var entrega *time.Time
+	if v := strings.TrimSpace(r.URL.Query().Get("delivery_date")); v != "" {
+		d, err := time.Parse("2006-01-02", v)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "data de entrega inválida: use AAAA-MM-DD")
+			return
+		}
+		entrega = &d
+	}
+	out, err := h.uc.SimularPlano(r.Context(), code, total, emissao, entrega)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, out)
 }
 
 // ─── Sales Tables ─────────────────────────────────────────────────────────────

@@ -97,6 +97,41 @@ type InstallmentResponse struct {
 	DocumentType      *string `json:"document_type,omitempty"`
 	MovementType      *string `json:"movement_type,omitempty"`
 	CarrierID         *int64  `json:"carrier_id,omitempty"`
+	// Percentage é quanto do total a parcela leva; nulo em todas = partes iguais.
+	Percentage *float64 `json:"percentage,omitempty"`
+	// BaseEvent: EMISSAO, ENTRADA, ENTREGA ou FATURAMENTO.
+	BaseEvent string `json:"base_event,omitempty"`
+	// Aviso é o que falta para a condição fechar 100%. Não é erro: a parcela foi
+	// gravada, e quem monta 30/20/25/25 passa por 30%, 50% e 75% antes de fechar.
+	Aviso *string `json:"warning,omitempty"`
+}
+
+// ParcelaPlanoResponse é uma linha do plano de pagamento já resolvida em
+// dinheiro e data — o que o cliente lê na proposta.
+type ParcelaPlanoResponse struct {
+	Numero       int16   `json:"numero"`
+	Percentual   float64 `json:"percentual"`
+	Valor        float64 `json:"valor"`
+	Vencimento   string  `json:"vencimento"`
+	DiasPrazo    int16   `json:"dias_prazo"`
+	Evento       string  `json:"evento"`
+	EventoRotulo string  `json:"evento_rotulo"`
+	Descricao    string  `json:"descricao"`
+	// Estimado marca o vencimento contado de um evento cuja data ainda não
+	// existe (entrega/faturamento): é projeção pela emissão, não compromisso.
+	Estimado     bool    `json:"estimado"`
+	DocumentType *string `json:"document_type,omitempty"`
+}
+
+// PlanoDePagamentoResponse é o plano inteiro de um documento.
+type PlanoDePagamentoResponse struct {
+	CondicaoCode      int64                  `json:"condicao_code"`
+	CondicaoDescricao string                 `json:"condicao_descricao"`
+	Total             float64                `json:"total"`
+	Parcelas          []ParcelaPlanoResponse `json:"parcelas"`
+	// Aviso explica por que o plano pode estar incompleto (condição sem
+	// percentual fechado, data de entrega ausente). Vazio = plano firme.
+	Aviso string `json:"aviso,omitempty"`
 }
 
 // ─── Sales Table ──────────────────────────────────────────────────────────────

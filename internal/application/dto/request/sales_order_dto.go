@@ -194,3 +194,17 @@ type UpdateSalesOrderItemDTO struct {
 	UnitWeightGross  float64   `json:"unit_weight_gross"`
 	Notes            *string   `json:"notes,omitempty"`
 }
+
+// SalvarRateioComissaoDTO substitui o rateio inteiro do documento: é assim que
+// a tela envia, e rateio pela metade é comissão paga errado.
+type SalvarRateioComissaoDTO struct {
+	Representantes []RateioComissaoLinhaDTO `json:"representatives"`
+}
+
+type RateioComissaoLinhaDTO struct {
+	RepresentativeCode int64    `json:"representative_code"`
+	Role               string   `json:"role"`
+	CommissionPct      *float64 `json:"commission_pct"`
+	CommissionBase     string   `json:"commission_base"`
+	Notes              *string  `json:"notes"`
+}

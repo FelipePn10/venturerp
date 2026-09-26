@@ -1374,10 +1374,16 @@ func (r *FinancialRepositoryPG) BaixarContaPagarAtomico(ctx context.Context, id 
 	}
 
 	// Insert fluxo de caixa
+	//
+	// ⚠️ `enterprise_id` é NOT NULL desde o isolamento do financeiro (migração
+	// 362) e este INSERT não o preenchia: baixar um título a pagar falhava com
+	// "há um campo obrigatório ausente ou inválido" e o pagamento não era
+	// registrado. Sem empresa, o lançamento também não apareceria no fluxo de
+	// caixa de ninguém.
 	_, err = tx.Exec(ctx,
-		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, contas_pagar_id, descricao, conciliado)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.ContasPagarID, fc.Descricao, false)
+		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, contas_pagar_id, descricao, conciliado, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.ContasPagarID, fc.Descricao, false, empresa)
 	if err != nil {
 		return fmt.Errorf("creating fluxo caixa: %w", err)
 	}
@@ -1449,10 +1455,12 @@ func (r *FinancialRepositoryPG) BaixarContaReceberAtomico(ctx context.Context, i
 		}
 	}
 
+	// Mesmo caso da baixa a pagar: sem `enterprise_id` o INSERT viola NOT NULL e
+	// a baixa do título a receber não acontece.
 	_, err = tx.Exec(ctx,
-		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, contas_receber_id, descricao, conciliado)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.ContasReceberID, fc.Descricao, false)
+		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, contas_receber_id, descricao, conciliado, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.ContasReceberID, fc.Descricao, false, empresa)
 	if err != nil {
 		return fmt.Errorf("creating fluxo caixa CR: %w", err)
 	}

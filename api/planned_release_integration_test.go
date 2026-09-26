@@ -59,24 +59,45 @@ func TestAtomicPlannedReleaseRollbackAndConcurrentRetry(t *testing.T) {
 	uc := &planned_order_uc.FirmPlannedOrderUseCase{Auth: authorization, Structure: structurerepo.NewItemStructureRepository(q), Items: itemrepo.NewRepositoryItemSQLC(q)}
 	wireAtomicPlannedRelease(pool, q, uc, &productionuc.OrderOperationsUseCase{Auth: authorization, Q: q})
 	dto := request.TransitionPlannedOrderDTO{OrderCodes: []int64{order.Code}, Target: "RELEASED"}
-	// Inspection is required, but its plan is absent: failure occurs after OF and
-	// operation insertion, so neither those rows nor RELEASED may survive.
-	if _, err := uc.ExecuteTransition(ctx, dto); err == nil {
-		t.Fatal("missing inspection plan accepted")
-	}
 	var status string
 	var count int
+	// A etapa exige inspeção e NÃO existe plano ativo. Isso não pode travar a
+	// liberação: o plano é cadastro de outra tela e de outra pessoa, e recusar a
+	// ordem parava a fábrica por uma lacuna que o operador não resolve. A ordem
+	// sai liberada, com aviso, e sem registro de inspeção pendente inventado.
+	if _, err := uc.ExecuteTransition(ctx, dto); err != nil {
+		t.Fatalf("etapa marcada para inspeção sem plano ativo travou a liberação: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT status FROM planned_orders WHERE id=$1", order.ID).Scan(&status); err != nil || status != "RELEASED" {
+		t.Fatalf("ordem não foi liberada: %s %v", status, err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM production_orders WHERE planned_order_id=$1", order.ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("OF não gerada: %d %v", count, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM quality_records r
+		JOIN production_orders p ON p.id=r.production_order_id WHERE p.planned_order_id=$1`, order.ID).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("conferência de qualidade criada sem plano ativo: %d %v", count, err)
+	}
+
+	// Volta ao estado planejado para exercitar a atomicidade a seguir. É reset de
+	// cenário, feito em SQL de propósito: é justamente o caminho que o caso de uso
+	// recusa (ordem com OF gerada não volta para planejada).
+	testutil.Exec(t, pool, "DELETE FROM production_order_operations WHERE production_order_id IN (SELECT id FROM production_orders WHERE planned_order_id=$1)", order.ID)
+	testutil.Exec(t, pool, "DELETE FROM production_orders WHERE planned_order_id=$1", order.ID)
+	testutil.Exec(t, pool, "UPDATE planned_orders SET status='PLANNED' WHERE id=$1", order.ID)
+	testutil.Exec(t, pool, "UPDATE route_operations SET inspection_required=false WHERE route_id=$1", route)
+
+	// Lote com a mesma ordem duas vezes é recusado e não deixa nada atrás.
+	dup := dto
+	dup.OrderCodes = []int64{order.Code, order.Code}
+	if _, err := uc.ExecuteTransition(ctx, dup); err == nil {
+		t.Fatal("duplicate batch accepted")
+	}
 	if err := pool.QueryRow(ctx, "SELECT status FROM planned_orders WHERE id=$1", order.ID).Scan(&status); err != nil || status != "PLANNED" {
 		t.Fatalf("state leaked: %s %v", status, err)
 	}
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM production_orders WHERE planned_order_id=$1", order.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("OF leaked: %d %v", count, err)
-	}
-	testutil.Exec(t, pool, "UPDATE route_operations SET inspection_required=false WHERE route_id=$1", route)
-	dup := dto
-	dup.OrderCodes = []int64{order.Code, order.Code}
-	if _, err := uc.ExecuteTransition(ctx, dup); err == nil {
-		t.Fatal("duplicate batch accepted")
 	}
 	runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -107,7 +128,7 @@ func TestAtomicPlannedReleaseRollbackAndConcurrentRetry(t *testing.T) {
 	if _, err := uc.ExecuteTransition(ctx, dto); err == nil {
 		t.Fatal("generated OF returned to planned, allowing duplicate release")
 	}
-	t.Log("Failed release rolled back; 24 simultaneous retries created exactly one OF and one operation")
+	t.Log("Inspeção sem plano libera com aviso; lote duplicado não deixa rastro; 24 liberações simultâneas geraram exatamente uma OF e uma operação")
 }
 
 func TestProductionOrderNumbersConcurrent(t *testing.T) {

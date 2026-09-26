@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // SalesOrderResponse is the API representation of a sales order. It mirrors the
@@ -139,4 +140,28 @@ type SalesOrderItemResponse struct {
 	IsActive         bool       `json:"is_active"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// RateioComissaoResponse traz o rateio já calculado: a tela mostra o valor em
+// reais sem repetir a conta, e o valor sai da base gravada em cada linha.
+type RateioComissaoResponse struct {
+	DocumentCode   int64                         `json:"document_code"`
+	TotalProdutos  decimal.Decimal               `json:"total_produtos"`
+	TotalLiquido   decimal.Decimal               `json:"total_liquido"`
+	TotalPct       decimal.Decimal               `json:"total_pct"`
+	TotalValor     decimal.Decimal               `json:"total_valor"`
+	Representantes []RateioComissaoLinhaResponse `json:"representatives"`
+}
+
+type RateioComissaoLinhaResponse struct {
+	ID                  int64           `json:"id"`
+	RepresentativeCode  int64           `json:"representative_code"`
+	RepresentativeName  string          `json:"representative_name"`
+	Role                string          `json:"role"`
+	RoleLabel           string          `json:"role_label"`
+	CommissionPct       decimal.Decimal `json:"commission_pct"`
+	CommissionBase      string          `json:"commission_base"`
+	CommissionBaseLabel string          `json:"commission_base_label"`
+	CommissionValue     decimal.Decimal `json:"commission_value"`
+	Notes               *string         `json:"notes,omitempty"`
 }

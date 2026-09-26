@@ -81,12 +81,14 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representative_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/routing_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_commission_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_division_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_forecast_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_goal_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_quotation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipping_carrier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_movement_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
@@ -164,12 +166,14 @@ import (
 	representativeRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/representative"
 	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
+	salesCommissionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_commission"
 	salesDivisionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_division"
 	salesForecastRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_forecast"
 	salesGoalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_goal"
 	salesOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
 	salesQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_quotation"
 	shipmentRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/shipment"
+	shippingCarrierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/shipping_carrier"
 	standardCostRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/standard_cost"
 	stockRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	stockMovementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock_movement"
@@ -270,6 +274,12 @@ func (app *application) mount() chi.Router {
 			httpmw.RequireRole("ADMIN"),
 		).Post("/register", userHandler.RegisterUserHandler)
 		r.Post("/login", userHandler.LoginHandler)
+		// Renovação da sessão: é o que faz o "manter conectado" existir. Passa
+		// pelo middleware de sempre, então o token é conferido contra o banco
+		// antes de ganhar prazo novo.
+		r.With(
+			httpmw.JWTForEnvironment(app.config.JWTSecret, app.config.DataEnvironment, app.logger, userRepo),
+		).Post("/session/renew", userHandler.RenewSessionHandler)
 	})
 
 	// Item
@@ -656,13 +666,13 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ProdOrderRepo = prodOrderRepo
 	plannedFirmUC.ServiceLinker = prodOrderRepo
 	plannedFirmUC.ReleaseValidator = prodOrderRepo
-	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService, Items: itemRepo}
+	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService, Items: itemRepo, Employees: employeeRepo}
 	prodOrderCreateUC.Structure = itemRepoStructure
 	prodOrderCreateUC.MaskVars = itemRepoStructureQuery
 	prodOrderGetByCodeUC := &productionOrderUc.GetProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderListUC := &productionOrderUc.ListProductionOrdersUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderStartUC := &productionOrderUc.StartProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
-	prodOrderAddAppointmentUC := &productionOrderUc.AddAppointmentUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderAddAppointmentUC := &productionOrderUc.AddAppointmentUseCase{Repo: prodOrderRepo, Auth: authService, Employees: employeeRepo}
 	prodOrderAddConsumptionUC := &productionOrderUc.AddConsumptionUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderCompleteUC := &productionOrderUc.CompleteProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderCloseUC := &productionOrderUc.CloseProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
@@ -868,6 +878,13 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.ListSalesOrderItemsUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.CancelSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
 	)
+	// Cadastro de transportadora: o perfil de transporte do fornecedor (RNTRC,
+	// modal, tabela de frete, frota, regiões) e a cotação comparativa de frete.
+	shippingCarrierHandler := handler.NewShippingCarrierHandler(&shipping_carrier_uc.UseCase{Repo: shippingCarrierRepo.New(app.db.Pool)})
+
+	// Rateio de comissão: o pedido e o orçamento usam as mesmas regras, então o
+	// mesmo caso de uso atende os dois — o documento vem da rota.
+	salesCommissionHandler := handler.NewSalesCommissionHandler(&sales_commission_uc.UseCase{Repo: salesCommissionRepo.New(app.db.Pool)})
 	salesQuotationRepository := salesQuotationRepo.New(app.db.Pool)
 	custRepo := customerRepo.New(queries, app.db.Pool)
 	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService, Customers: custRepo, Divisions: sdRepo, Items: itemRepo, Representatives: representativeRepository}
@@ -1557,6 +1574,18 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", salesDivisionHandler.Delete)
 			r.With(httpmw.RequireRole("ADMIN")).Patch("/{code}/status", salesDivisionHandler.SetStatus)
 		})
+		r.Route("/api/shipping-carriers", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", shippingCarrierHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/quote", shippingCarrierHandler.Quote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier/{supplierCode}", shippingCarrierHandler.GetBySupplier)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", shippingCarrierHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", shippingCarrierHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", shippingCarrierHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{id}/status", shippingCarrierHandler.SetStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/occurrences", shippingCarrierHandler.ListOccurrences)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/occurrences", shippingCarrierHandler.CreateOccurrence)
+		})
+
 		r.Route("/api/sales-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesOrderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesOrderHandler.List)
@@ -1573,6 +1602,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", salesOrderHandler.Block)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/unblock", salesOrderHandler.Unblock)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/status", salesOrderHandler.ChangeStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/representatives", salesCommissionHandler.ListOrder)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/representatives", salesCommissionHandler.SaveOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/customer/{customerCode}", salesOrderHandler.ListByCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/status/{status}", salesOrderHandler.ListByStatus)
 			r.Route("/items", func(r chi.Router) {
@@ -1603,6 +1634,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/status", salesQuotationHandler.ChangeStatus)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/release", salesQuotationHandler.ChangeRelease)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/events", salesQuotationHandler.ListEvents)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/payment-schedule", salesQuotationHandler.PaymentSchedule)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/representatives", salesCommissionHandler.ListQuotation)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/representatives", salesCommissionHandler.SaveQuotation)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/convert-to-order", salesQuotationHandler.Convert)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/dav", salesQuotationHandler.GenerateDAV)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/attachments", salesQuotationHandler.ListAttachments)
@@ -2626,6 +2660,9 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListPaymentConditions)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdatePaymentCondition)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/installments", customerHandler.AddInstallment)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/installments", customerHandler.ListInstallments)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/installments/{id}", customerHandler.DeleteInstallment)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/simulate", customerHandler.SimulatePaymentPlan)
 				})
 				r.Route("/sales-tables", func(r chi.Router) {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateSalesTable)
@@ -2734,11 +2771,16 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/export-attributes", fiscalClassHandler.AddExportAttribute)
 		})
 
+		// Conversão de unidade é dado mestre operacional, não configuração de
+		// sistema: quem cadastra o item ("1 barra = 6.000 mm") é quem sabe a
+		// conversão dele, e exigir ADMIN para isso obrigava a parar o cadastro e
+		// pedir para outra pessoa. O cadastro do próprio item já é ADMIN+USER —
+		// era a conversão que destoava. Toda alteração fica no log de auditoria.
 		r.Route("/api/item-conversions", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN")).Post("/", itemConversionHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemConversionHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/convert", itemConversionHandler.Convert)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemConversionHandler.ListByItem)
-			r.With(httpmw.RequireRole("ADMIN")).Delete("/{id}", itemConversionHandler.Delete)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemConversionHandler.Delete)
 		})
 
 		r.Route("/api/purchase-requisitions", func(r chi.Router) {

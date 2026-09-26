@@ -152,10 +152,12 @@ SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM carrier_groups;
 -- ─── Payment Conditions ───────────────────────────────────────────────────────
 
 -- name: CreatePaymentCondition :one
+-- A empresa entra na gravacao: a coluna e NOT NULL desde o isolamento do
+-- financeiro, e sem ela o cadastro de condicao de pagamento parava de gravar.
 INSERT INTO payment_conditions (
-    code, description, carrier_id, analysis_type, parcel_start,
+    enterprise_id, code, description, carrier_id, analysis_type, parcel_start,
     expenses, average_term, is_special, is_revenue, is_at_sight
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+) VALUES (sqlc.arg(enterprise_id), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: UpdatePaymentCondition :one
@@ -163,28 +165,41 @@ UPDATE payment_conditions
 SET description = $2, carrier_id = $3, analysis_type = $4, parcel_start = $5,
     expenses = $6, average_term = $7, is_special = $8, is_revenue = $9,
     is_at_sight = $10, is_active = $11
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetPaymentConditionByCode :one
-SELECT * FROM payment_conditions WHERE code = $1;
+SELECT * FROM payment_conditions WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: GetPaymentConditionByID :one
-SELECT * FROM payment_conditions WHERE id = $1;
+SELECT * FROM payment_conditions WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: ListPaymentConditions :many
 SELECT * FROM payment_conditions
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id = sqlc.arg(enterprise_id)
+  AND (sqlc.arg(only_active)::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextPaymentConditionCode :one
 SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM payment_conditions;
 
 -- name: AddInstallment :one
+-- Upsert pela parcela: reenviar a mesma parcela ALTERA, não duplica. Antes, o
+-- segundo POST batia na chave única e devolvia erro técnico, e a tela não tinha
+-- como corrigir um percentual digitado errado.
 INSERT INTO payment_condition_installments (
     payment_condition_id, installment_number, due_days, description,
-    document_type, movement_type, carrier_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    document_type, movement_type, carrier_id, percentage, base_event
+) VALUES ($1, $2, $3, $4, $5, $6, $7, sqlc.narg(percentage), sqlc.arg(base_event))
+ON CONFLICT (payment_condition_id, installment_number) DO UPDATE SET
+    due_days = EXCLUDED.due_days,
+    description = EXCLUDED.description,
+    document_type = EXCLUDED.document_type,
+    movement_type = EXCLUDED.movement_type,
+    carrier_id = EXCLUDED.carrier_id,
+    percentage = EXCLUDED.percentage,
+    base_event = EXCLUDED.base_event,
+    is_active = TRUE
 RETURNING *;
 
 -- name: ListInstallments :many

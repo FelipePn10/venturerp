@@ -24,6 +24,7 @@ import (
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	structureentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	thirdparty "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/google/uuid"
 )
@@ -344,8 +345,16 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 			endDate = &value
 		}
 		manual := &productionuc.CreateProductionOrderUseCase{CreateAtomically: uc.CreateAtomically, Repo: uc.ProdOrderRepo, Auth: uc.Auth, Structure: uc.Structure, Routing: uc.Routing, OrderOps: uc.OrderOps, Items: uc.Items}
-		// A sugestão do MRP guarda a chave legada do item; o contrato do caso de
-		// uso é textual e a resolução aceita esse formato numérico.
+		// ⚠️ A ordem planejada guarda a CHAVE INTERNA do item, e o contrato do
+		// caso de uso é textual. A resolução textual tenta o código de negócio
+		// PRIMEIRO: numa base onde existem códigos de negócio numéricos ("1",
+		// "5", "8" — as chapas da Tecnofer) a chave interna 5 era lida como o
+		// código de negócio "5" e a OF nascia para OUTRO item — na prática, a
+		// liberação da ordem do produto acabado respondia "o item não possui
+		// roteiro", porque o item encontrado era uma chapa.
+		//
+		// A marca no contexto diz à resolução que o valor JÁ é a chave interna.
+		ctx = context.WithValue(ctx, contextkey.ItemCodeTranslatedKey, true)
 		return manual.Execute(ctx, request.CreateProductionOrderDTO{
 			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: order.Quantity,
 			StartDate: startDate, EndDate: endDate, CostCenterID: order.CostCenterCode,
