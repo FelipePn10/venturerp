@@ -13,6 +13,7 @@ import (
 	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 type businessCodeFinder interface {
@@ -35,6 +36,20 @@ func Resolve(ctx context.Context, repository any, raw request.TextCode) (*itemen
 	code := strings.TrimSpace(raw.String())
 	if code == "" {
 		return nil, errorsuc.NewValidationError("o código do item é obrigatório")
+	}
+	// Quando o middleware de compatibilidade já trocou o código público pela
+	// chave interna, resolver "pelo comercial primeiro" acha OUTRO item: numa
+	// base onde códigos comerciais numéricos convivem com chaves internas ("1",
+	// "5", "8" ao lado dos internos 1..29), a chave 5 é lida como o comercial
+	// "5". O lançamento respondia 201 gravando no item errado — um orçamento de
+	// RN-01001 virava CHAPA AÇO CARBONO 3MM. Com a marca, a chave interna vem
+	// primeiro e o comercial fica como alternativa.
+	if traduzido, _ := ctx.Value(contextkey.ItemCodeTranslatedKey).(bool); traduzido {
+		if item, err := resolvePelaChaveInterna(ctx, repository, code); err == nil {
+			return item, nil
+		} else if !errors.Is(err, itemrepo.ErrNotFound) {
+			return nil, err
+		}
 	}
 	businessCode, err := valueobject.NewBusinessCode(code)
 	if err != nil {
@@ -62,6 +77,21 @@ func Resolve(ctx context.Context, repository any, raw request.TextCode) (*itemen
 		}
 	}
 	return nil, errorsuc.NewValidationError("item não encontrado na empresa autenticada")
+}
+
+// resolvePelaChaveInterna busca pelo código interno (numérico). Devolve
+// itemrepo.ErrNotFound quando o texto não é numérico ou o item não existe, para
+// quem chama seguir tentando pelo código comercial.
+func resolvePelaChaveInterna(ctx context.Context, repository any, code string) (*itementity.Item, error) {
+	legacy, parseErr := strconv.ParseInt(code, 10, 64)
+	if parseErr != nil || legacy <= 0 {
+		return nil, itemrepo.ErrNotFound
+	}
+	finder, ok := repository.(legacyCodeFinder)
+	if !ok {
+		return nil, itemrepo.ErrNotFound
+	}
+	return finder.FindItemByCode(ctx, valueobject.ItemCode(legacy))
 }
 
 func ValidateMask(ctx context.Context, repository any, itemCode int64, mask string) error {

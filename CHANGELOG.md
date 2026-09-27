@@ -6,6 +6,112 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(tenant): o relatório de representantes agregava as junções sem recorte de
+  empresa — um representante que atende duas empresas devolvia, para cada uma, o
+  percentual de comissão combinado com a OUTRA, as regiões das duas misturadas e
+  as contas contábeis do plano alheio
+- fix(tenant): o detalhe por cliente do acompanhamento de representantes somava
+  orçamentos e pedidos de todas as empresas; só o resumo era recortado
+- fix(orcamento): o plano de pagamento era dividido sobre o valor dos produtos,
+  sem IPI e sem ICMS-ST. Cada parcela saía menor que a devida e a proposta não
+  fechava com os títulos, que nascem do total do documento fiscal
+- fix(comissao): limpar o rateio deixava o representante antigo na capa do
+  documento, e a leitura seguinte reconstruía o rateio a partir dele — a limpeza
+  parecia desfazer a si mesma
+- fix(transportadora): a ocorrência de entrega aceitava a data de amanhã durante
+  quase todo o dia de hoje, apesar da mensagem dizer que futuro é recusado
+- fix(transportadora): região cadastrada por faixa de CEP era cotada como se
+  atendesse o estado inteiro quando a cotação vinha só com a UF
+
+- feat(nfe): prévia da nota antes de emitir
+  (`GET /api/fiscal/exits/{id}/previa`) — monta o documento exatamente como será
+  transmitido à SEFAZ e devolve a conferência do que ainda impede a emissão
+  ("Impede") e do que passa mas tem consequência ("Atenção"), cada item com a
+  tela onde se resolve. Não transmite, não grava e não muda o status da nota
+- fix(nfe): a nota não tinha onde guardar o endereço do destinatário, e o
+  documento saía sem logradouro, bairro, município e CEP — campos obrigatórios
+  no layout da NF-e. O endereço agora é gravado na nota e vem do cadastro do
+  cliente (endereço de ENTREGA, ou o de COBRANÇA na falta dele), sem sobrescrever
+  o que for digitado na própria nota para uma entrega pontual
+- fix(nfe): o número da nota digitada ficava como veio, e todas nasciam com
+  número 0; sem número informado, a nota passa a receber o próximo da sequência
+  fiscal da empresa (série vazia vira "1")
+- fix(nfe): a forma de pagamento declarada era sempre "01 — dinheiro" com o valor
+  inteiro da nota, mesmo numa venda a prazo, e nenhuma duplicata era enviada.
+  Agora a condição de pagamento vira uma forma por parcela e duplicata para cada
+  parcela cobrada depois
+- fix(financeiro): o faturamento gerava SEMPRE um único título vencendo em 30
+  dias e sem cliente. Passa a gerar um título por parcela da condição de
+  pagamento do pedido, com o cliente, o pedido e a forma de pagamento — aging,
+  extrato por cliente e limite de crédito deixam de ficar cegos
+- fix(orcamento): a conversão copiava o total do orçamento inteiro para a capa do
+  pedido; convertendo o saldo de um orçamento parcialmente atendido, o pedido
+  nascia valendo mais que a soma dos seus itens. A capa passa a fechar com as
+  linhas convertidas, incluindo IPI e ST
+- fix(condicao-pagamento): criar ou alterar a condição sem escolher o início das
+  parcelas quebrava com erro de banco; em branco passa a valer EMISSAO e um valor
+  inválido responde mensagem de validação
+- fix(orcamento): a notificação de "orçamento convertido em pedido" saía com
+  todos os itens sem descrição (a busca usava o código da empresa numa coluna que
+  guarda o identificador)
+
+## [v1.3.0] — 2026-09-25
+
+- feat(condicao-pagamento): percentual e evento base por parcela — "30% entrada,
+  20% entrega e o restante em 28/56 dias" passa a ser cadastrável, com listagem,
+  exclusão e simulação em dinheiro da condição
+- feat(orcamento): plano de pagamento calculado por orçamento
+  (`GET /api/sales-quotation/{code}/payment-schedule`)
+- feat(comissao): rateio de comissão com mais de um representante por pedido e
+  por orçamento, com base de incidência explícita e percentual por documento
+- feat(orcamento): produto, IPI e produto + IPI como valores distintos no item e
+  na capa
+- feat(transportadora): cadastro de transportadora (RNTRC/ANTT, modal, tabela de
+  frete, seguro, frota com motorista, regiões atendidas com prazo, ocorrências de
+  entrega) e cotação comparativa de frete aberta em componentes
+- feat(conversao-de-um): conversão de unidade liberada para o perfil USER
+- feat(sessao): "manter conectado" de verdade — `remember_me` no login emite token
+  de 7 dias, `POST /users/session/renew` renova a sessão a cada abertura do app e
+  o teto de 30 dias (claim `session_start`) impede sessão eterna; o login passou a
+  devolver `expires_at`, então o cliente renova antes de levar 401
+- fix(orcamento): `total_net_with_ipi` somava o ST apesar do nome, e o valor
+  inflado era copiado para o pedido na conversão
+- fix(orcamento): a conversão parcial levava o total da quantidade inteira para o
+  item do pedido
+- fix(condicao-pagamento): criar condição de pagamento voltou a funcionar — a
+  coluna de empresa era NOT NULL e ninguém a preenchia desde a migração 361
+- fix(condicao-pagamento): a condição passou a ser lida com as parcelas; sem
+  isso todo plano de pagamento era calculado como "à vista"
+- fix(tenant): condição de pagamento, representante, relatório e acompanhamento
+  de representante isolados por empresa
+- fix(representante): cadastrar representante cria o vínculo com a empresa da
+  sessão — sem ele o representante nascia invisível para o pedido e o orçamento
+- fix(item): orçamento, pedido e OF gravavam no ITEM ERRADO quando o código
+  comercial é numérico — o código era traduzido duas vezes (middleware + caso de
+  uso) e a chave interna 5 era relida como o comercial "5"; achado simulando a
+  rotina sobre os dados reais da Tecnofer
+- fix(producao): o chão de fábrica não conseguia apontar — a tela manda o CÓDIGO
+  do funcionário e as tabelas de produção exigem a chave interna; a tradução
+  agora acontece no caso de uso (`employeeresolution`)
+- fix(financeiro): baixar título a pagar e a receber estava quebrado — o
+  lançamento no fluxo de caixa não preenchia `enterprise_id`, obrigatório desde a
+  migração 362
+- fix(crp): roteiro sem máscara ficava invisível para o cálculo de capacidade
+  (`mask = ''` não trata nulo) e todas as ordens voltavam como "sem carga"
+- fix(fiscal): recusa do provedor (Focus NF-e/SEFAZ) chega ao usuário com o
+  motivo em HTTP 502, e "token não configurado" virou aviso acionável — antes
+  eram 500 "erro interno do servidor"
+- fix(planejamento): regra de transição de ordem planejada respondia 500; agora
+  responde 422 com o motivo
+- fix(comissao): a razão de comissões passou a lançar para TODOS os
+  representantes do rateio, respeitando a base de cada linha — o parceiro
+  aparecia no pedido e nunca era pago (migração 368). Corrigida no caminho uma
+  confusão de convenção vinda da 322: o gatilho comparava `fiscal_exits.enterprise_id`
+  com `sales_orders.enterprise_code`, e só acertava na empresa em que id = código
+- test(integração): três testes dependiam do fuso (misturavam `time.Now()` do
+  processo com `CURRENT_DATE` do banco) e reprovavam no CI perto da virada do dia;
+  a suíte passou a rodar verde em UTC, America/Sao_Paulo e Asia/Tokyo
+
 ## [v1.2.0] — 2026-09-24
 
 - ci: rodar gofmt, vet, unidade e integração a cada PR (`5ff1240`)

@@ -65,7 +65,7 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 			_ = uc.Repo.SaveFocusLog(ctx, params.ID, endpoint, method, reqBody, respBody, statusCode, durationMs)
 		})
 		if _, err := cli.CancelarNFe(ctx, *exit.FocusRef, params.Motivo); err != nil {
-			return nil, fmt.Errorf("Focus NF-e cancelamento: %w", err)
+			return nil, errorsuc.NewExternalServiceError("Focus NF-e (cancelamento)", err.Error())
 		}
 	}
 

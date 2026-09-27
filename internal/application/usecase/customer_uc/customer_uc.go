@@ -404,7 +404,11 @@ func (uc *CustomerUseCase) CreatePaymentCondition(ctx context.Context, dto reque
 	if err != nil {
 		return nil, err
 	}
-	pc.ParcelStart = entity.PaymentParcelStart(dto.ParcelStart)
+	parcelStart, err := entity.NormalizarParcelStart(dto.ParcelStart)
+	if err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	pc.ParcelStart = parcelStart
 	pc.Expenses = dto.Expenses
 	pc.AverageTerm = dto.AverageTerm
 	pc.IsSpecial = dto.IsSpecial
@@ -434,7 +438,11 @@ func (uc *CustomerUseCase) UpdatePaymentCondition(ctx context.Context, code int6
 		return nil, err
 	}
 	validated.ID, validated.IsActive = current.ID, ptrutil.BoolOr(dto.IsActive, current.IsActive)
-	validated.ParcelStart, validated.Expenses, validated.AverageTerm = entity.PaymentParcelStart(dto.ParcelStart), dto.Expenses, dto.AverageTerm
+	parcelStart, err := entity.NormalizarParcelStart(dto.ParcelStart)
+	if err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	validated.ParcelStart, validated.Expenses, validated.AverageTerm = parcelStart, dto.Expenses, dto.AverageTerm
 	validated.IsSpecial, validated.IsRevenue, validated.IsAtSight = dto.IsSpecial, dto.IsRevenue, dto.IsAtSight
 	if dto.CarrierCode != nil {
 		carrier, err := uc.repo.GetCarrierByCode(ctx, *dto.CarrierCode)
@@ -455,10 +463,34 @@ func (uc *CustomerUseCase) AddInstallment(ctx context.Context, dto request.AddIn
 	if err != nil {
 		return nil, fmt.Errorf("condição de pagamento não encontrada: %w", err)
 	}
+	if dto.InstallmentNumber <= 0 {
+		return nil, errorsuc.NewValidationError("o número da parcela começa em 1")
+	}
+	if dto.DueDays < 0 {
+		return nil, errorsuc.NewValidationError("o prazo da parcela não pode ser negativo")
+	}
+	evento := entity.BaseEmissao
+	if dto.BaseEvent != nil && strings.TrimSpace(*dto.BaseEvent) != "" {
+		evento = entity.PaymentBaseEvent(strings.ToUpper(strings.TrimSpace(*dto.BaseEvent)))
+		if !evento.IsValid() {
+			return nil, errorsuc.NewValidationError("o vencimento da parcela conta a partir da emissão, da entrada, da entrega ou do faturamento")
+		}
+	}
+	dias := dto.DueDays
+	if evento == entity.BaseEntrada {
+		// Entrada é pagamento no ato: prazo em dias não significa nada, e a
+		// restrição do banco recusaria a linha com uma mensagem técnica.
+		dias = 0
+	}
+	if dto.Percentage != nil && (*dto.Percentage <= 0 || *dto.Percentage > 100) {
+		return nil, errorsuc.NewValidationError("o percentual da parcela precisa ficar entre 0 e 100")
+	}
 	inst := &entity.PaymentInstallment{
 		PaymentConditionID: pc.ID,
 		InstallmentNumber:  dto.InstallmentNumber,
-		DueDays:            dto.DueDays,
+		DueDays:            dias,
+		Percentage:         dto.Percentage,
+		BaseEvent:          string(evento),
 		Description:        dto.Description,
 		DocumentType:       dto.DocumentType,
 		MovementType:       dto.MovementType,
@@ -474,7 +506,22 @@ func (uc *CustomerUseCase) AddInstallment(ctx context.Context, dto request.AddIn
 	if err != nil {
 		return nil, err
 	}
+	// A condição inteira precisa fechar 100%: a parcela sozinha não tem como
+	// saber disso, e uma condição que soma 80% gera título a menos em todo
+	// pedido que a usar. O aviso sai aqui, com a condição já gravada, para não
+	// travar o cadastro no meio — quem monta 30/20/25/25 passa por 30%, 50%,
+	// 75% até fechar.
+	var aviso *string
+	if completa, cErr := uc.repo.GetPaymentConditionByCode(ctx, dto.PaymentConditionCode); cErr == nil {
+		if vErr := entity.ValidarPercentuais(completa.Installments); vErr != nil {
+			// Aviso, não erro: devolver 422 aqui fazia a tela dizer "falhou" em
+			// cada parcela do caminho, embora todas tenham sido gravadas.
+			texto := vErr.Error() + " — a parcela foi gravada; acerte os percentuais antes de usar esta condição"
+			aviso = &texto
+		}
+	}
 	return &response.InstallmentResponse{
+		Aviso:             aviso,
 		ID:                created.ID,
 		InstallmentNumber: created.InstallmentNumber,
 		DueDays:           created.DueDays,
@@ -482,6 +529,8 @@ func (uc *CustomerUseCase) AddInstallment(ctx context.Context, dto request.AddIn
 		DocumentType:      created.DocumentType,
 		MovementType:      created.MovementType,
 		CarrierID:         created.CarrierID,
+		Percentage:        created.Percentage,
+		BaseEvent:         created.BaseEvent,
 	}, nil
 }
 

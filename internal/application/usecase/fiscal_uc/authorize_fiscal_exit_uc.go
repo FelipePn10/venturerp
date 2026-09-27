@@ -8,6 +8,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
+	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	financialEntity "github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	financialRepo "github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -32,6 +34,9 @@ type AuthorizeFiscalExitUseCase struct {
 	// authorizing the exit marks the order as invoiced and resolves the
 	// warehouse for the stock write-down, and active reservations are consumed.
 	SalesOrderRepo salesrepo.SalesOrderRepository
+	// CustomerRepo é opcional e resolve a condição de pagamento da nota: é o que
+	// faz o título nascer parcelado como foi vendido, e com o cliente dono.
+	CustomerRepo customerrepo.CustomerRepository
 }
 
 func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*response.FiscalExitResponse, error) {
@@ -63,7 +68,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	}
 
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado — acesse Configurações Fiscais")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais para informá-lo antes de autorizar a nota")
 	}
 
 	focusCli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
@@ -76,65 +81,11 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		ref = ref[:50]
 	}
 
-	cnpjDest := ""
-	if exit.CnpjDestinatario != nil {
-		cnpjDest = *exit.CnpjDestinatario
-	}
-	razaoDest := "Destinatário"
-	if exit.RazaoSocialDestinatario != nil {
-		razaoDest = *exit.RazaoSocialDestinatario
-	}
-	ufDest := "PR"
-	if exit.UFDestinatario != nil {
-		ufDest = *exit.UFDestinatario
-	}
-
-	nfeItems := buildFocusItems(items, cfg)
-
-	localDestino := 1
-	if ufDest != cfg.UFEmpresa {
-		localDestino = 2
-	}
-
-	consumidorFinal := 0
-	indicadorIE := 1
-	if exit.IEDestinatario == nil || *exit.IEDestinatario == "" || *exit.IEDestinatario == "ISENTO" {
-		consumidorFinal = 1
-		indicadorIE = 9
-	}
-
-	payload := focusnfe.NFEPayload{
-		NaturezaOperacao:  exit.NaturezaOperacao,
-		DataEmissao:       exit.DataEmissao.Format("2006-01-02T15:04:05-03:00"),
-		TipoDocumento:     1,
-		LocalDestino:      localDestino,
-		FinalidadeEmissao: 1,
-		ConsumidorFinal:   consumidorFinal,
-		PresencaComprador: 4,
-		Emitente: focusnfe.NFEEmitente{
-			CNPJ:             cfg.CnpjEmpresa,
-			Nome:             cfg.RazaoSocial,
-			Logradouro:       cfg.Logradouro,
-			Numero:           cfg.Numero,
-			Bairro:           cfg.Bairro,
-			Municipio:        cfg.Municipio,
-			UF:               cfg.UFEmpresa,
-			CEP:              cfg.CEP,
-			Telefone:         derefStr(cfg.Telefone),
-			RegimeTributario: 3,
-		},
-		Destinatario: focusnfe.NFEDestinatario{
-			CNPJCPF:     cnpjDest,
-			Nome:        razaoDest,
-			UF:          ufDest,
-			IndicadorIE: indicadorIE,
-			IE:          exit.IEDestinatario,
-		},
-		Items: nfeItems,
-		FormaPagamento: []focusnfe.NFEFormaPagamento{
-			{FormaPagamento: "01", Valor: exit.ValorTotal},
-		},
-	}
+	// A condição de pagamento resolvida aqui serve aos três: a duplicata da
+	// NF-e, a forma de pagamento declarada à SEFAZ e o título do contas a
+	// receber. Um cálculo só, um resultado só.
+	plano := resolverPlanoDaNota(ctx, exit, uc.CustomerRepo, uc.SalesOrderRepo)
+	payload := montarPayloadNFe(exit, items, cfg, plano)
 
 	if exit.Status == entity.ExitStatusDraft {
 		if _, err = uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusAwaitingAuthorization); err != nil {
@@ -145,7 +96,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	focusResp, err := focusCli.EmitirNFe(ctx, ref, payload)
 	if err != nil {
 		_, _ = uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusRejected)
-		return nil, fmt.Errorf("Focus NF-e: %w", err)
+		return nil, errorsuc.NewExternalServiceError("Focus NF-e", err.Error())
 	}
 
 	updated, err := uc.Repo.UpdateExitAuthorization(ctx, id, focusResp.ChaveNFe, focusResp.Protocolo, ref, focusResp.PathXML, focusResp.PathDANFE)
@@ -153,30 +104,14 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		return nil, err
 	}
 
-	// Auto-gerar Conta a Receber baseado no valor total
+	// Títulos do contas a receber, um por parcela da condição de pagamento.
+	//
+	// Antes a nota gerava SEMPRE um único título vencendo em 30 dias, sem
+	// cliente: uma venda em 28/56/84 entrava no financeiro como uma parcela só,
+	// a entrada de 30% não existia e o título não tinha dono — então aging,
+	// extrato por cliente e limite de crédito ficavam cegos.
 	if uc.FinancialRepo != nil {
-		numDoc := fmt.Sprintf("NF-%d", exit.NumeroNF)
-		cr := &financialEntity.ContaReceber{
-			NumeroDocumento: &numDoc,
-			FiscalExitID:    &id,
-			DataLancamento:  time.Now(),
-			DataEmissao:     exit.DataEmissao,
-			DataVencimento:  exit.DataEmissao.AddDate(0, 0, 30),
-			ValorBruto:      decimal.NewFromFloat(exit.ValorTotal),
-			Desconto:        decimal.Zero,
-			Juros:           decimal.Zero,
-			Multa:           decimal.Zero,
-			ValorRecebido:   decimal.Zero,
-			ParcelaNumero:   1,
-			ParcelaTotal:    1,
-			Status:          financialEntity.ContaReceberStatusPendente,
-			IsActive:        true,
-			CriadoPor:       userID,
-		}
-		if exit.CnpjDestinatario != nil {
-			// clienteID would be set if client lookup exists; for now leave nil
-		}
-		_, _ = uc.FinancialRepo.CreateContaReceber(ctx, cr)
+		uc.gerarTitulos(ctx, exit, id, plano, userID)
 	}
 
 	// Stock write-down + sales order settlement. Best-effort: a failure here does
@@ -367,3 +302,63 @@ func derefStr(p *string) string {
 }
 
 var _ = uuid.UUID{}
+
+// gerarTitulos grava um título do contas a receber por parcela da condição de
+// pagamento da nota.
+//
+// O valor parcelado é o TOTAL da nota (produtos + IPI + ICMS-ST + frete + seguro
+// − desconto), não o valor dos produtos: é esse o número que o cliente paga e o
+// que o boleto tem de fechar com a NF-e.
+func (uc *AuthorizeFiscalExitUseCase) gerarTitulos(
+	ctx context.Context,
+	exit *entity.FiscalExit,
+	exitID int64,
+	plano PlanoDaNota,
+	userID uuid.UUID,
+) {
+	parcelas := plano.Parcelas
+	if len(parcelas) == 0 {
+		parcelas = []customerentity.ParcelaCalculada{{
+			Numero: 1, Valor: decimal.NewFromFloat(exit.ValorTotal),
+			Vencimento: exit.DataEmissao.AddDate(0, 0, 30), Descricao: "30 dias",
+		}}
+	}
+	total := int32(len(parcelas))
+
+	var clienteID *int64
+	if uc.CustomerRepo != nil && exit.CustomerCode != nil {
+		if cliente, err := uc.CustomerRepo.GetCustomerByCode(ctx, *exit.CustomerCode); err == nil && cliente != nil {
+			id := cliente.ID
+			clienteID = &id
+		}
+	}
+
+	for _, p := range parcelas {
+		numDoc := fmt.Sprintf("NF-%d/%d", exit.NumeroNF, p.Numero)
+		if total == 1 {
+			numDoc = fmt.Sprintf("NF-%d", exit.NumeroNF)
+		}
+		forma := formaPagamentoNFe(p)
+		cr := &financialEntity.ContaReceber{
+			NumeroDocumento: &numDoc,
+			ClienteID:       clienteID,
+			FiscalExitID:    &exitID,
+			SalesOrderID:    exit.SalesOrderCode,
+			DataLancamento:  time.Now(),
+			DataEmissao:     exit.DataEmissao,
+			DataVencimento:  p.Vencimento,
+			ValorBruto:      p.Valor,
+			Desconto:        decimal.Zero,
+			Juros:           decimal.Zero,
+			Multa:           decimal.Zero,
+			ValorRecebido:   decimal.Zero,
+			ParcelaNumero:   int32(p.Numero),
+			ParcelaTotal:    total,
+			FormaPagamento:  &forma,
+			Status:          financialEntity.ContaReceberStatusPendente,
+			IsActive:        true,
+			CriadoPor:       userID,
+		}
+		_, _ = uc.FinancialRepo.CreateContaReceber(ctx, cr)
+	}
+}

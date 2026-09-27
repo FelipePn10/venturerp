@@ -184,6 +184,21 @@ func (h *SalesQuotationHandler) ListEvents(w http.ResponseWriter, r *http.Reques
 	security.RespondJSON(w, http.StatusOK, rows)
 }
 
+// PaymentSchedule resolve a condição de pagamento do orçamento em parcelas com
+// valor e data — a resposta para "quanto eu pago e quando?".
+func (h *SalesQuotationHandler) PaymentSchedule(w http.ResponseWriter, r *http.Request) {
+	code, ok := parseQuotationCode(w, r, "code")
+	if !ok {
+		return
+	}
+	plano, err := h.uc.PlanoDePagamento(r.Context(), code)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, plano)
+}
+
 func (h *SalesQuotationHandler) Report(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.Report(r.Context(), parseQuotationFilter(r))
 	if err != nil {

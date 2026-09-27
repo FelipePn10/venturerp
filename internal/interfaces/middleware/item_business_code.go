@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -78,9 +79,15 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 					return
 				}
 				if requestHasJSON(r) && r.Body != nil {
-					if err = translateItemBody(r, pool, enterpriseID); err != nil {
-						http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+					traduziu, errBody := translateItemBody(r, pool, enterpriseID)
+					if errBody != nil {
+						http.Error(w, errBody.Error(), http.StatusUnprocessableEntity)
 						return
+					}
+					if traduziu {
+						// Marca para o caso de uso NÃO resolver de novo pelo
+						// código comercial: o valor já é a chave interna.
+						r = r.WithContext(context.WithValue(r.Context(), contextkey.ItemCodeTranslatedKey, true))
 					}
 				}
 			}
@@ -331,43 +338,50 @@ func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 	return nil
 }
 
-func translateItemBody(r *http.Request, pool *pgxpool.Pool, e int64) error {
+func translateItemBody(r *http.Request, pool *pgxpool.Pool, e int64) (bool, error) {
 	const maximumJSONBody = 16 << 20
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maximumJSONBody+1))
 	if err != nil {
-		return err
+		return false, err
 	}
 	_ = r.Body.Close()
 	if len(raw) > maximumJSONBody {
-		return fmt.Errorf("corpo JSON excede o limite de 16 MiB")
+		return false, fmt.Errorf("corpo JSON excede o limite de 16 MiB")
 	}
 	if len(bytes.TrimSpace(raw)) == 0 {
 		r.Body = io.NopCloser(bytes.NewReader(raw))
-		return nil
+		return false, nil
 	}
 	var payload any
 	if err = json.Unmarshal(raw, &payload); err != nil {
 		r.Body = io.NopCloser(bytes.NewReader(raw))
-		return nil
+		return false, nil
 	}
-	if err = walkInput(r, pool, e, payload); err != nil {
-		return err
+	traduziu, err := walkInput(r, pool, e, payload)
+	if err != nil {
+		return false, err
 	}
 	translated, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return false, err
 	}
 	r.Body = io.NopCloser(bytes.NewReader(translated))
 	r.ContentLength = int64(len(translated))
-	return nil
+	return traduziu, nil
 }
-func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) error {
+
+// walkInput devolve se ALGUMA referência de item foi traduzida. Quem chama usa
+// isso para marcar a requisição — ver contextkey.ItemCodeTranslatedKey.
+func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) (bool, error) {
+	traduziu := false
 	switch node := value.(type) {
 	case []any:
 		for _, v := range node {
-			if err := walkInput(r, pool, e, v); err != nil {
-				return err
+			t, err := walkInput(r, pool, e, v)
+			if err != nil {
+				return traduziu, err
 			}
+			traduziu = traduziu || t
 		}
 	case map[string]any:
 		for key, v := range node {
@@ -377,16 +391,19 @@ func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) error {
 				}
 				translated, err := translateInputReference(r, pool, e, v)
 				if err != nil {
-					return fmt.Errorf("%s: %w", key, err)
+					return traduziu, fmt.Errorf("%s: %w", key, err)
 				}
 				node[key] = translated
+				traduziu = true
 			}
-			if err := walkInput(r, pool, e, v); err != nil {
-				return err
+			t, err := walkInput(r, pool, e, v)
+			if err != nil {
+				return traduziu, err
 			}
+			traduziu = traduziu || t
 		}
 	}
-	return nil
+	return traduziu, nil
 }
 
 func translateInputReference(r *http.Request, pool *pgxpool.Pool, e int64, value any) (any, error) {

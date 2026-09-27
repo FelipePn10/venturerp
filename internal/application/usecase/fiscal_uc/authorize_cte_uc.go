@@ -105,7 +105,7 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 	resp, err := focusCli.AutorizarCTe(ctx, ref, payload)
 	if err != nil {
 		_, _ = uc.Repo.UpdateCTeStatus(ctx, id, "REJEITADO")
-		return nil, fmt.Errorf("Focus CT-e: %w", err)
+		return nil, errorsuc.NewExternalServiceError("Focus CT-e", err.Error())
 	}
 
 	authorized, err := uc.Repo.UpdateCTeAuthorization(ctx, id, resp.ChaveCTe, resp.Protocolo, ref)

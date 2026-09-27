@@ -34,8 +34,17 @@ func TestCalcItemTotals(t *testing.T) {
 	if !item.TotalNet.Equal(decimal.NewFromInt(225)) {
 		t.Fatalf("expected net 225, got %v", item.TotalNet)
 	}
-	if !item.TotalNetWithIPI.Equal(decimal.RequireFromString("240.75")) {
-		t.Fatalf("expected net with taxes 240.75, got %v", item.TotalNetWithIPI)
+	// Produto, IPI e ST são três números distintos. Antes `total_net_with_ipi`
+	// somava o ST também (225 + 11,25 + 4,50 = 240,75), apesar do nome — e esse
+	// valor inflado era copiado para o pedido na conversão.
+	if !item.TotalIPI.Equal(decimal.RequireFromString("11.25")) {
+		t.Fatalf("expected IPI 11.25, got %v", item.TotalIPI)
+	}
+	if !item.TotalST.Equal(decimal.RequireFromString("4.5")) {
+		t.Fatalf("expected ST 4.50, got %v", item.TotalST)
+	}
+	if !item.TotalNetWithIPI.Equal(decimal.RequireFromString("236.25")) {
+		t.Fatalf("expected product + IPI 236.25, got %v", item.TotalNetWithIPI)
 	}
 	if !item.Balance.Equal(decimal.NewFromInt(6)) {
 		t.Fatalf("expected balance 6, got %v", item.Balance)

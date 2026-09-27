@@ -39,7 +39,12 @@ func TestPurchaseOrderConsultationFiltersCalculatesAndScopesTenant(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = pool.Exec(ctx, `INSERT INTO purchase_order_currency_rates(enterprise_id,currency_code,rate_date,rate_to_base) VALUES($1,'USD',CURRENT_DATE,5) ON CONFLICT(enterprise_id,currency_code,rate_date) DO UPDATE SET rate_to_base=EXCLUDED.rate_to_base`, enterpriseID)
+	// A taxa precisa existir na data que a consulta vai pedir — e ela pede
+	// `time.Now()` do processo. Com `CURRENT_DATE` a taxa nascia na data do
+	// BANCO, e bastava o processo estar em UTC e o banco em America/Sao_Paulo
+	// (ou vice-versa) para a consulta procurar a taxa no dia seguinte.
+	hoje := time.Now()
+	_, err = pool.Exec(ctx, `INSERT INTO purchase_order_currency_rates(enterprise_id,currency_code,rate_date,rate_to_base) VALUES($1,'USD',$2::date,5) ON CONFLICT(enterprise_id,currency_code,rate_date) DO UPDATE SET rate_to_base=EXCLUDED.rate_to_base`, enterpriseID, hoje)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +53,7 @@ func TestPurchaseOrderConsultationFiltersCalculatesAndScopesTenant(t *testing.T)
 		t.Fatal(err)
 	}
 	repo := &PurchaseOrderRepositorySQLC{db: pool}
-	today := time.Now()
+	today := hoje
 	rows, err := repo.Consult(ctx, purchase_order_uc.PurchaseOrderConsultationFilter{EnterpriseID: enterpriseID, OrderFrom: &orderNumber, OrderTo: &orderNumber, ItemFrom: &itemA, ItemTo: &itemA, Position: purchase_order_uc.PositionCancelled, AllItems: true, Convert: true, TargetCurrency: "BRL", BaseDate: &today, OnlyKanban: true, BuyerCode: ptr64(77), OrderType: "OCL", RequestTypeCode: ptr64(9), Limit: 10})
 	if err != nil {
 		t.Fatal(err)

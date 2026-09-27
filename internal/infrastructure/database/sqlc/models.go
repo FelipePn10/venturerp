@@ -231,6 +231,95 @@ func (ns NullCarrierBillingTypeEnum) Value() (driver.Value, error) {
 	return string(ns.CarrierBillingTypeEnum), nil
 }
 
+type CarrierModalEnum string
+
+const (
+	CarrierModalEnumRODOVIARIO  CarrierModalEnum = "RODOVIARIO"
+	CarrierModalEnumAEREO       CarrierModalEnum = "AEREO"
+	CarrierModalEnumMARITIMO    CarrierModalEnum = "MARITIMO"
+	CarrierModalEnumFERROVIARIO CarrierModalEnum = "FERROVIARIO"
+	CarrierModalEnumDUTOVIARIO  CarrierModalEnum = "DUTOVIARIO"
+	CarrierModalEnumMULTIMODAL  CarrierModalEnum = "MULTIMODAL"
+)
+
+func (e *CarrierModalEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CarrierModalEnum(s)
+	case string:
+		*e = CarrierModalEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CarrierModalEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCarrierModalEnum struct {
+	CarrierModalEnum CarrierModalEnum
+	Valid            bool // Valid is true if CarrierModalEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCarrierModalEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CarrierModalEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CarrierModalEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCarrierModalEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CarrierModalEnum), nil
+}
+
+type CarrierShipperTypeEnum string
+
+const (
+	CarrierShipperTypeEnumETC CarrierShipperTypeEnum = "ETC"
+	CarrierShipperTypeEnumCTC CarrierShipperTypeEnum = "CTC"
+	CarrierShipperTypeEnumTAC CarrierShipperTypeEnum = "TAC"
+)
+
+func (e *CarrierShipperTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CarrierShipperTypeEnum(s)
+	case string:
+		*e = CarrierShipperTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CarrierShipperTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCarrierShipperTypeEnum struct {
+	CarrierShipperTypeEnum CarrierShipperTypeEnum
+	Valid                  bool // Valid is true if CarrierShipperTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCarrierShipperTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CarrierShipperTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CarrierShipperTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCarrierShipperTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CarrierShipperTypeEnum), nil
+}
+
 type CfopIndOperacaoEnum string
 
 const (
@@ -1519,6 +1608,50 @@ func (ns NullPaymentAnalysisEnum) Value() (driver.Value, error) {
 	return string(ns.PaymentAnalysisEnum), nil
 }
 
+type PaymentBaseEventEnum string
+
+const (
+	PaymentBaseEventEnumEMISSAO     PaymentBaseEventEnum = "EMISSAO"
+	PaymentBaseEventEnumENTRADA     PaymentBaseEventEnum = "ENTRADA"
+	PaymentBaseEventEnumENTREGA     PaymentBaseEventEnum = "ENTREGA"
+	PaymentBaseEventEnumFATURAMENTO PaymentBaseEventEnum = "FATURAMENTO"
+)
+
+func (e *PaymentBaseEventEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentBaseEventEnum(s)
+	case string:
+		*e = PaymentBaseEventEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentBaseEventEnum: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentBaseEventEnum struct {
+	PaymentBaseEventEnum PaymentBaseEventEnum
+	Valid                bool // Valid is true if PaymentBaseEventEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentBaseEventEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentBaseEventEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentBaseEventEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentBaseEventEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentBaseEventEnum), nil
+}
+
 type PaymentConditionVisibilityEnum string
 
 const (
@@ -2189,6 +2322,90 @@ func (ns NullRestrictionSituationEnum) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.RestrictionSituationEnum), nil
+}
+
+type SalesCommissionBaseEnum string
+
+const (
+	SalesCommissionBaseEnumTOTALPRODUTOS SalesCommissionBaseEnum = "TOTAL_PRODUTOS"
+	SalesCommissionBaseEnumTOTALLIQUIDO  SalesCommissionBaseEnum = "TOTAL_LIQUIDO"
+)
+
+func (e *SalesCommissionBaseEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SalesCommissionBaseEnum(s)
+	case string:
+		*e = SalesCommissionBaseEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SalesCommissionBaseEnum: %T", src)
+	}
+	return nil
+}
+
+type NullSalesCommissionBaseEnum struct {
+	SalesCommissionBaseEnum SalesCommissionBaseEnum
+	Valid                   bool // Valid is true if SalesCommissionBaseEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSalesCommissionBaseEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.SalesCommissionBaseEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SalesCommissionBaseEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSalesCommissionBaseEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SalesCommissionBaseEnum), nil
+}
+
+type SalesCommissionRoleEnum string
+
+const (
+	SalesCommissionRoleEnumPRINCIPAL SalesCommissionRoleEnum = "PRINCIPAL"
+	SalesCommissionRoleEnumPARCEIRO  SalesCommissionRoleEnum = "PARCEIRO"
+)
+
+func (e *SalesCommissionRoleEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SalesCommissionRoleEnum(s)
+	case string:
+		*e = SalesCommissionRoleEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SalesCommissionRoleEnum: %T", src)
+	}
+	return nil
+}
+
+type NullSalesCommissionRoleEnum struct {
+	SalesCommissionRoleEnum SalesCommissionRoleEnum
+	Valid                   bool // Valid is true if SalesCommissionRoleEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSalesCommissionRoleEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.SalesCommissionRoleEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SalesCommissionRoleEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSalesCommissionRoleEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SalesCommissionRoleEnum), nil
 }
 
 type SalesDivisionAnalysisEnum string
@@ -6589,6 +6806,10 @@ type PaymentConditionInstallment struct {
 	MovementType       pgtype.Text
 	CarrierID          *int64
 	IsActive           bool
+	// Quanto do total esta parcela leva, em %. Nulo em todas as parcelas = divisão em partes iguais (comportamento anterior). Informado em alguma, a soma da condição precisa fechar 100.
+	Percentage pgtype.Numeric
+	// A partir de quando os dias contam: EMISSAO (padrão), ENTRADA (no ato, dias sempre 0), ENTREGA ou FATURAMENTO.
+	BaseEvent PaymentBaseEventEnum
 }
 
 type PerfisUsuario struct {
@@ -8293,6 +8514,19 @@ type SalesOrderItem struct {
 	UpdatedAt        pgtype.Timestamptz
 }
 
+type SalesOrderRepresentative struct {
+	ID                 int64
+	EnterpriseCode     int64
+	SalesOrderCode     int64
+	RepresentativeCode int64
+	Role               SalesCommissionRoleEnum
+	CommissionPct      pgtype.Numeric
+	CommissionBase     SalesCommissionBaseEnum
+	Notes              pgtype.Text
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
 type SalesOrderSequence struct {
 	EnterpriseCode int64
 	LastNumber     int64
@@ -8388,6 +8622,9 @@ type SalesQuotation struct {
 	DavGeneratedAt          pgtype.Timestamptz
 	DavReportKey            pgtype.UUID
 	ConsumerAddress         pgtype.Text
+	TotalIpi                pgtype.Numeric
+	TotalSt                 pgtype.Numeric
+	TotalWithIpi            pgtype.Numeric
 }
 
 type SalesQuotationAttachment struct {
@@ -8463,13 +8700,19 @@ type SalesQuotationItem struct {
 	IpiPct             pgtype.Numeric
 	StPct              pgtype.Numeric
 	TotalGross         pgtype.Numeric
-	TotalNet           pgtype.Numeric
-	TotalNetWithIpi    pgtype.Numeric
-	Status             string
-	Notes              pgtype.Text
-	IsActive           bool
-	CreatedAt          pgtype.Timestamptz
-	UpdatedAt          pgtype.Timestamptz
+	// Valor do PRODUTO na linha, já com o desconto e sem imposto.
+	TotalNet pgtype.Numeric
+	// Produto + IPI. Sem ST: para o total a pagar use produto + IPI + ST.
+	TotalNetWithIpi pgtype.Numeric
+	Status          string
+	Notes           pgtype.Text
+	IsActive        bool
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	// Valor do IPI da linha, sozinho.
+	TotalIpi pgtype.Numeric
+	// Valor do ST da linha, sozinho — não entra em total_net_with_ipi.
+	TotalSt pgtype.Numeric
 }
 
 type SalesQuotationParameter struct {
@@ -8483,6 +8726,19 @@ type SalesQuotationParameter struct {
 	AddRedeliveryToFreight      bool
 	CreatedAt                   pgtype.Timestamptz
 	UpdatedAt                   pgtype.Timestamptz
+}
+
+type SalesQuotationRepresentative struct {
+	ID                 int64
+	EnterpriseCode     int64
+	SalesQuotationCode int64
+	RepresentativeCode int64
+	Role               SalesCommissionRoleEnum
+	CommissionPct      pgtype.Numeric
+	CommissionBase     SalesCommissionBaseEnum
+	Notes              pgtype.Text
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
 }
 
 type SalesQuotationSequence struct {
@@ -8728,6 +8984,90 @@ type ShipmentVolume struct {
 	Marking      pgtype.Text
 	Contents     pgtype.Text
 	CreatedAt    pgtype.Timestamptz
+}
+
+// Perfil de transporte do fornecedor transportadora (RNTRC, modal, tabela de frete, seguro). Nao confundir com public.carriers, que e o portador financeiro.
+type ShippingCarrier struct {
+	ID                 int64
+	EnterpriseID       int64
+	SupplierCode       int64
+	AnttRntrc          pgtype.Text
+	AnttExpiry         pgtype.Date
+	ShipperType        NullCarrierShipperTypeEnum
+	Modal              CarrierModalEnum
+	IssuesCte          bool
+	DefaultFreightType pgtype.Text
+	FreightMinValue    pgtype.Numeric
+	FreightKgRate      pgtype.Numeric
+	FreightPctValue    pgtype.Numeric
+	GrisPct            pgtype.Numeric
+	TollPer100kg       pgtype.Numeric
+	InsuranceCompany   pgtype.Text
+	InsurancePolicy    pgtype.Text
+	InsuranceExpiry    pgtype.Date
+	InsuranceCoverage  pgtype.Numeric
+	AverageLeadDays    pgtype.Int2
+	TrackingUrl        pgtype.Text
+	ContactName        pgtype.Text
+	ContactPhone       pgtype.Text
+	ContactEmail       pgtype.Text
+	Notes              pgtype.Text
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+// Ocorrencias de entrega usadas para avaliar a transportadora.
+type ShippingCarrierOccurrence struct {
+	ID             int64
+	EnterpriseID   int64
+	CarrierID      int64
+	OccurrenceDate pgtype.Date
+	OccurrenceType string
+	SalesOrderCode *int64
+	DelayDays      int16
+	CostImpact     pgtype.Numeric
+	Description    pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+}
+
+// Regioes atendidas com prazo e tabela propria; responde prazo e custo por UF/CEP.
+type ShippingCarrierServiceArea struct {
+	ID             int64
+	EnterpriseID   int64
+	CarrierID      int64
+	State          pgtype.Text
+	City           pgtype.Text
+	PostalCodeFrom pgtype.Text
+	PostalCodeTo   pgtype.Text
+	LeadDays       int16
+	MinValue       pgtype.Numeric
+	KgRate         pgtype.Numeric
+	PctValue       pgtype.Numeric
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+// Frota e motoristas da transportadora (placa, capacidade, ANTT do proprietario).
+type ShippingCarrierVehicle struct {
+	ID             int64
+	EnterpriseID   int64
+	CarrierID      int64
+	Plate          string
+	Description    pgtype.Text
+	VehicleType    pgtype.Text
+	Axles          pgtype.Int2
+	CapacityKg     pgtype.Numeric
+	CapacityM3     pgtype.Numeric
+	AnttOwner      pgtype.Text
+	DriverName     pgtype.Text
+	DriverDocument pgtype.Text
+	DriverLicense  pgtype.Text
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type SimplesNacionalApuraco struct {

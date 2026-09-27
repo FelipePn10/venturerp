@@ -80,7 +80,7 @@ func newFocusFromConfig(ctx context.Context, repo repository.FiscalRepository) (
 		return nil, nil, fmt.Errorf("reading fiscal config: %w", err)
 	}
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, nil, fmt.Errorf("token Focus NF-e não configurado")
+		return nil, nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais")
 	}
 	return focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente), cfg, nil
 }

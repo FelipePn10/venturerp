@@ -145,6 +145,12 @@ type AddInstallmentDTO struct {
 	DocumentType         *string `json:"document_type,omitempty"`
 	MovementType         *string `json:"movement_type,omitempty"`
 	CarrierCode          *int64  `json:"carrier_code,omitempty"`
+	// Percentage é quanto do total esta parcela leva. Nulo em todas = divisão em
+	// partes iguais. Informado em parte delas, a condição é recusada: não há como
+	// adivinhar quanto vai no resto.
+	Percentage *float64 `json:"percentage,omitempty"`
+	// BaseEvent: EMISSAO (padrão), ENTRADA (no ato), ENTREGA ou FATURAMENTO.
+	BaseEvent *string `json:"base_event,omitempty"`
 }
 
 // ─── Sales Tables ─────────────────────────────────────────────────────────────

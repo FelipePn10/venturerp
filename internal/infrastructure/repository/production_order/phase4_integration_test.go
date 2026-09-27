@@ -111,8 +111,13 @@ func TestPhase4MaintenanceLotPoliciesAndScrapControls(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT MAX(quantity) FROM stock_movements WHERE enterprise_id=$1 AND reference_type='PRODUCTION_SCRAP_REVERSED' AND reference_code=$2`, enterpriseID, destination.ID).Scan(&converted); err != nil || !converted.Equal(decimal.NewFromInt(2)) {
 		t.Fatalf("converted scrap=%s err=%v", converted, err)
 	}
-	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_closed_periods(enterprise_id,period_from,period_to) VALUES($1,CURRENT_DATE,CURRENT_DATE)`, enterpriseID)
-	if _, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: 8, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.NewFromInt(1), DestinationDate: time.Now(), CreatedBy: uid}); err == nil {
+	// O período fechado tem de cobrir a data que o Go vai mandar. Com
+	// `CURRENT_DATE` o período nascia na data do BANCO: quando os dois relógios
+	// caem em dias diferentes (processo em UTC, banco em America/Sao_Paulo), o
+	// período não cobria o lançamento e a trava parecia não existir.
+	hoje := time.Now()
+	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_closed_periods(enterprise_id,period_from,period_to) VALUES($1,$2::date,$2::date)`, enterpriseID, hoje)
+	if _, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: 8, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.NewFromInt(1), DestinationDate: hoje, CreatedBy: uid}); err == nil {
 		t.Fatal("closed stock period must reject scrap destination")
 	}
 }

@@ -54,15 +54,30 @@ func (u *ConversionUnitOfWork) Execute(ctx context.Context, quotationCode int64,
 	if _, err = tx.Exec(ctx, `INSERT INTO public.sales_quotation_events(sales_quotation_code,event_type,reason,created_by) VALUES($1,'CONVERT','Convertido em pedido de venda',$2)`, quotationCode, actor); err != nil {
 		return nil, err
 	}
+
+	// O rateio de comissão vem junto. Sem isto, a segunda comissão combinada no
+	// orçamento (o parceiro que trouxe o cliente) desaparecia na conversão e o
+	// pedido nascia só com o representante da capa.
+	if _, err = tx.Exec(ctx, `
+INSERT INTO public.sales_order_representatives (enterprise_code, sales_order_code, representative_code, role, commission_pct, commission_base, notes)
+SELECT r.enterprise_code, $3, r.representative_code, r.role, r.commission_pct, r.commission_base, r.notes
+FROM public.sales_quotation_representatives r
+WHERE r.sales_quotation_code = $1 AND r.enterprise_code = $2
+ON CONFLICT (sales_order_code, representative_code) DO NOTHING`, quotationCode, enterpriseCode, created.Code); err != nil {
+		return nil, err
+	}
+	// A descricao do item vem da tabela items, que e isolada por enterprise_id
+	// (nao por enterprise_code): usar o codigo aqui nunca casava, e a notificacao
+	// de "orcamento convertido" saia com todos os itens sem descricao.
 	var payload []byte
 	err = tx.QueryRow(ctx, `SELECT jsonb_build_object(
-		'empresa_id',$1,
+		'empresa_codigo',$1,
 		'pedido',jsonb_build_object('codigo',o.code,'numero',o.order_number,'status',o.status,'emissao',o.emission_date,'entrega',o.delivery_date,'pagamento_codigo',o.payment_term_code,'moeda',o.currency_code,'transportadora_codigo',o.carrier_code,'frete',o.freight_value,'desconto',o.discount_value,'acrescimo',o.surcharge_value,'total_bruto',o.total_gross,'total_liquido',o.total_net),
 		'orcamento',jsonb_build_object('codigo',q.code,'numero',q.quotation_number,'revisao',1,'emissao',q.emission_date,'entrega',q.delivery_date),
 		'cliente_codigo',o.customer_code,'representante_codigo',o.representative_code,'responsavel_usuario_id',o.created_by,
-		'itens',COALESCE((SELECT jsonb_agg(jsonb_build_object('sequencia',i.sequence,'codigo',i.item_code::text,'descricao',COALESCE(master.name,master.pdm_description_technique,''),'mascara',i.mask,'um',i.sales_uom,'quantidade',i.requested_qty,'preco_unitario',i.unit_price,'desconto_percentual',i.discount_pct,'ipi_percentual',i.ipi_pct,'st_percentual',i.st_pct,'total_bruto',i.total_gross,'total_liquido',i.total_net) ORDER BY i.sequence) FROM sales_order_items i LEFT JOIN items master ON master.code=i.item_code AND master.enterprise_id=$1 WHERE i.sales_order_code=o.code),'[]'::jsonb),
+		'itens',COALESCE((SELECT jsonb_agg(jsonb_build_object('sequencia',i.sequence,'codigo',i.item_code::text,'descricao',COALESCE(master.name,master.pdm_description_technique,''),'mascara',i.mask,'um',i.sales_uom,'quantidade',i.requested_qty,'preco_unitario',i.unit_price,'desconto_percentual',i.discount_pct,'ipi_percentual',i.ipi_pct,'st_percentual',i.st_pct,'total_bruto',i.total_gross,'total_liquido',i.total_net) ORDER BY i.sequence) FROM sales_order_items i LEFT JOIN items master ON master.code=i.item_code AND master.enterprise_id=$4 WHERE i.sales_order_code=o.code),'[]'::jsonb),
 		'observacoes',o.notes,'link','/sales-orders/'||o.code::text)
-	FROM sales_orders o JOIN sales_quotations q ON q.code=$2 AND q.enterprise_code=$1 WHERE o.code=$3 AND o.enterprise_code=$1`, enterpriseCode, quotationCode, created.Code).Scan(&payload)
+	FROM sales_orders o JOIN sales_quotations q ON q.code=$2 AND q.enterprise_code=$1 WHERE o.code=$3 AND o.enterprise_code=$1`, enterpriseCode, quotationCode, created.Code, enterpriseID).Scan(&payload)
 	if err != nil {
 		return nil, err
 	}

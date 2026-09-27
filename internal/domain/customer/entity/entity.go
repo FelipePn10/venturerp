@@ -3,6 +3,7 @@ package entity
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -344,11 +345,35 @@ type PaymentInstallment struct {
 	PaymentConditionID int64
 	InstallmentNumber  int16
 	DueDays            int16
-	Description        *string
-	DocumentType       *string
-	MovementType       *string
-	CarrierID          *int64
-	IsActive           bool
+	// Percentage é quanto do total esta parcela leva. Nulo em TODAS as parcelas
+	// da condição significa divisão em partes iguais — o comportamento que
+	// existia antes de a condição saber trabalhar com percentual.
+	Percentage *float64
+	// BaseEvent é a partir de quando os dias contam: emissão, entrada (no ato),
+	// entrega ou faturamento. Vazio equivale a emissão.
+	BaseEvent    string
+	Description  *string
+	DocumentType *string
+	MovementType *string
+	CarrierID    *int64
+	IsActive     bool
+}
+
+// NormalizarParcelStart valida o inicio da contagem das parcelas.
+//
+// O campo e um enum no banco, e a tela deixa o select em branco quando ninguem
+// o toca: o valor vazio chegava direto ao INSERT e a criacao da condicao morria
+// com um erro de SQLSTATE que nao diz nada a quem cadastra. Em branco significa
+// "conta da emissao", que e o comportamento padrao.
+func NormalizarParcelStart(valor string) (PaymentParcelStart, error) {
+	v := PaymentParcelStart(strings.ToUpper(strings.TrimSpace(valor)))
+	switch v {
+	case "":
+		return ParcelStartEmissao, nil
+	case ParcelStartEmissao, ParcelStartProximoMes, ParcelStartProximaQuinzena:
+		return v, nil
+	}
+	return "", fmt.Errorf("início das parcelas inválido: use EMISSAO, PROXIMO_MES ou PROXIMA_QUINZENA")
 }
 
 func NewPaymentCondition(code int64, description string, analysisType PaymentAnalysis) (*PaymentCondition, error) {

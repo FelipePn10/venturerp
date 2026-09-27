@@ -402,13 +402,14 @@ INSERT INTO public.sales_quotation_items (
  sales_quotation_code, sequence, item_code, mask, sales_uom, warehouse_code,
  price_table_code, requested_qty, unit_price, attended_qty, cancelled_qty,
  delivery_date, delivery_date_firm, discount_pct, ipi_pct, st_pct,
- total_gross, total_net, total_net_with_ipi, status, notes
-) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,0,0,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
-WHERE EXISTS (SELECT 1 FROM public.sales_quotations q WHERE q.code=$1 AND q.enterprise_code=$20 AND q.is_active)
+ total_gross, total_net, total_ipi, total_st, total_net_with_ipi, status, notes
+) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,0,0,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21
+WHERE EXISTS (SELECT 1 FROM public.sales_quotations q WHERE q.code=$1 AND q.enterprise_code=$22 AND q.is_active)
 RETURNING `+itemColumns,
 			item.SalesQuotationCode, item.Sequence, item.ItemCode, item.Mask, item.SalesUOM, item.WarehouseCode,
 			item.PriceTableCode, item.RequestedQty, item.UnitPrice, item.DeliveryDate, item.DeliveryDateFirm,
-			item.DiscountPct, item.IPIPct, item.STPct, item.TotalGross, item.TotalNet, item.TotalNetWithIPI,
+			item.DiscountPct, item.IPIPct, item.STPct, item.TotalGross, item.TotalNet,
+			item.TotalIPI, item.TotalST, item.TotalNetWithIPI,
 			string(item.Status), item.Notes, tenantID,
 		)
 		created, err = scanItem(row)
@@ -435,16 +436,16 @@ func (r *Repository) UpdateItem(ctx context.Context, item *quoteentity.SalesQuot
 UPDATE public.sales_quotation_items SET
  requested_qty=$1, unit_price=$2, attended_qty=$3, cancelled_qty=$4,
  delivery_date=$5, delivery_date_firm=$6, discount_pct=$7, ipi_pct=$8,
- st_pct=$9, total_gross=$10, total_net=$11, total_net_with_ipi=$12,
- status=$13, notes=$14, updated_at=NOW()
-WHERE code=$15 AND is_active=TRUE AND EXISTS (
+ st_pct=$9, total_gross=$10, total_net=$11, total_ipi=$12, total_st=$13, total_net_with_ipi=$14,
+ status=$15, notes=$16, updated_at=NOW()
+WHERE code=$17 AND is_active=TRUE AND EXISTS (
  SELECT 1 FROM public.sales_quotations q
- WHERE q.code=public.sales_quotation_items.sales_quotation_code AND q.enterprise_code=$16
+ WHERE q.code=public.sales_quotation_items.sales_quotation_code AND q.enterprise_code=$18
 )
 RETURNING `+itemColumns,
 			item.RequestedQty, item.UnitPrice, item.AttendedQty, item.CancelledQty,
 			item.DeliveryDate, item.DeliveryDateFirm, item.DiscountPct, item.IPIPct,
-			item.STPct, item.TotalGross, item.TotalNet, item.TotalNetWithIPI,
+			item.STPct, item.TotalGross, item.TotalNet, item.TotalIPI, item.TotalST, item.TotalNetWithIPI,
 			string(item.Status), item.Notes, item.Code, tenantID,
 		)
 		updated, err = scanItem(row)
@@ -572,6 +573,14 @@ UPDATE public.sales_quotations q SET
  total_net = COALESCE((SELECT SUM(total_net) FROM public.sales_quotation_items WHERE sales_quotation_code=$1 AND is_active=TRUE),0)
    + q.freight_value + q.redelivery_freight_value + q.insurance_value + q.surcharge_value
    - q.discount_value - q.retained_tax_value,
+ -- Imposto nao entra em total_net: ele e somado por fora, e e essa separacao
+ -- que permite mostrar produto, IPI e produto + IPI como numeros distintos.
+ total_ipi = COALESCE((SELECT SUM(total_ipi) FROM public.sales_quotation_items WHERE sales_quotation_code=$1 AND is_active=TRUE),0),
+ total_st  = COALESCE((SELECT SUM(total_st)  FROM public.sales_quotation_items WHERE sales_quotation_code=$1 AND is_active=TRUE),0),
+ total_with_ipi = COALESCE((SELECT SUM(total_net) FROM public.sales_quotation_items WHERE sales_quotation_code=$1 AND is_active=TRUE),0)
+   + q.freight_value + q.redelivery_freight_value + q.insurance_value + q.surcharge_value
+   - q.discount_value - q.retained_tax_value
+   + COALESCE((SELECT SUM(total_ipi) FROM public.sales_quotation_items WHERE sales_quotation_code=$1 AND is_active=TRUE),0),
  updated_at = NOW()
 WHERE q.code=$1 AND q.enterprise_code=$2`, quotationCode, tenantID)
 	return err
@@ -596,14 +605,15 @@ price_table_code, payment_term_code, currency_code, probability_pct, commission_
 is_nfce, street, street_number, foreign_document, release_status, commercial_blocked,
 commercial_block_reason, carrier_code, freight_type, verify_freight, freight_value,
 redelivery_freight_value, insurance_value, discount_value, surcharge_value,
-retained_tax_value, total_gross, total_net, delivery_authorization, notes, obs_customer,
+retained_tax_value, total_gross, total_net, total_ipi, total_st, total_with_ipi,
+delivery_authorization, notes, obs_customer,
 cancel_reason, cancel_complement, attended_reason, attended_at,
 converted_sales_order_code, converted_at, is_active, created_at, updated_at, created_by,
 delivery_with_receipt, dav_generated_at, dav_report_key, consumer_address`
 
 const itemColumns = `code, sales_quotation_code, sequence, item_code, mask, sales_uom, warehouse_code,
 price_table_code, requested_qty, unit_price, attended_qty, cancelled_qty, delivery_date,
-delivery_date_firm, discount_pct, ipi_pct, st_pct, total_gross, total_net, total_net_with_ipi,
+delivery_date_firm, discount_pct, ipi_pct, st_pct, total_gross, total_net, total_ipi, total_st, total_net_with_ipi,
 status, notes, is_active, created_at, updated_at`
 
 type scanner interface {
@@ -615,6 +625,7 @@ func scanQuotation(s scanner) (*quoteentity.SalesQuotation, error) {
 	var validUntil, deliveryDate pgtype.Date
 	var attendedAt, convertedAt, davGeneratedAt pgtype.Timestamptz
 	var probability, commission, freight, redeliveryFreight, insurance, discount, surcharge, retained, gross, net pgtype.Numeric
+	var totalIPI, totalST, totalWithIPI pgtype.Numeric
 	err := s.Scan(
 		&q.Code, &q.QuotationNumber, &q.EnterpriseCode, &q.Status, &q.EmissionDate, &validUntil, &deliveryDate,
 		&q.QuotationType, &q.DigitDate, &q.DeliveryDateFirm, &q.PurchaseOrderNumber, &q.CustomerCode,
@@ -623,6 +634,7 @@ func scanQuotation(s scanner) (*quoteentity.SalesQuotation, error) {
 		&q.IsNFCe, &q.Street, &q.StreetNumber, &q.ForeignDocument, &q.ReleaseStatus, &q.CommercialBlocked,
 		&q.CommercialBlockReason, &q.CarrierCode, &q.FreightType, &q.VerifyFreight, &freight,
 		&redeliveryFreight, &insurance, &discount, &surcharge, &retained, &gross, &net,
+		&totalIPI, &totalST, &totalWithIPI,
 		&q.DeliveryAuthorization, &q.Notes, &q.ObsCustomer, &q.CancelReason, &q.CancelComplement,
 		&q.AttendedReason, &attendedAt, &q.ConvertedSalesOrderCode, &convertedAt, &q.IsActive,
 		&q.CreatedAt, &q.UpdatedAt, &q.CreatedBy, &q.DeliveryWithReceipt, &davGeneratedAt,
@@ -641,6 +653,9 @@ func scanQuotation(s scanner) (*quoteentity.SalesQuotation, error) {
 	q.RetainedTaxValue = numericToDecimal(retained)
 	q.TotalGross = numericToDecimal(gross)
 	q.TotalNet = numericToDecimal(net)
+	q.TotalIPI = numericToDecimal(totalIPI)
+	q.TotalST = numericToDecimal(totalST)
+	q.TotalWithIPI = numericToDecimal(totalWithIPI)
 	if validUntil.Valid {
 		t := validUntil.Time
 		q.ValidUntil = &t
@@ -667,11 +682,11 @@ func scanQuotation(s scanner) (*quoteentity.SalesQuotation, error) {
 func scanItem(s scanner) (*quoteentity.SalesQuotationItem, error) {
 	var item quoteentity.SalesQuotationItem
 	var deliveryDate pgtype.Date
-	var requested, unit, attended, cancelled, discount, ipi, st, gross, net, netIPI pgtype.Numeric
+	var requested, unit, attended, cancelled, discount, ipi, st, gross, net, totalIPI, totalST, netIPI pgtype.Numeric
 	err := s.Scan(
 		&item.Code, &item.SalesQuotationCode, &item.Sequence, &item.ItemCode, &item.Mask, &item.SalesUOM, &item.WarehouseCode,
 		&item.PriceTableCode, &requested, &unit, &attended, &cancelled, &deliveryDate,
-		&item.DeliveryDateFirm, &discount, &ipi, &st, &gross, &net, &netIPI,
+		&item.DeliveryDateFirm, &discount, &ipi, &st, &gross, &net, &totalIPI, &totalST, &netIPI,
 		&item.Status, &item.Notes, &item.IsActive, &item.CreatedAt, &item.UpdatedAt,
 	)
 	if err != nil {
@@ -689,6 +704,8 @@ func scanItem(s scanner) (*quoteentity.SalesQuotationItem, error) {
 	item.STPct = numericToDecimal(st)
 	item.TotalGross = numericToDecimal(gross)
 	item.TotalNet = numericToDecimal(net)
+	item.TotalIPI = numericToDecimal(totalIPI)
+	item.TotalST = numericToDecimal(totalST)
 	item.TotalNetWithIPI = numericToDecimal(netIPI)
 	item.Balance = item.RequestedQty.Sub(item.AttendedQty).Sub(item.CancelledQty)
 	if deliveryDate.Valid {

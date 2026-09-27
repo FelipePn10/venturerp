@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
@@ -31,7 +32,11 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateTokenForEnvironment(userID, role, enterpriseID, authVersion, h.dataEnvironment, h.jwtSecret)
+	// O vencimento vai na resposta: sem ele o cliente só descobre que a sessão
+	// caiu levando um 401 no meio do trabalho, e não tem como renovar antes.
+	token, expiraEm, err := auth.GenerateSessionToken(
+		userID, role, enterpriseID, authVersion, h.dataEnvironment, h.jwtSecret, time.Time{}, login.RememberMe,
+	)
 	if err != nil {
 		h.InternalError(w, r, err)
 		return
@@ -43,5 +48,7 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		"email":       email,
 		"role":        role,
 		"environment": h.dataEnvironment,
+		"expires_at":  expiraEm.Format(time.RFC3339),
+		"remember_me": login.RememberMe,
 	})
 }

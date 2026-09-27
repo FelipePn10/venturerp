@@ -166,7 +166,12 @@ func (r *CRPRepositorySQLC) plannedLoads(ctx context.Context, plan int64) ([]dom
  AND NOT EXISTS(SELECT 1 FROM planned_orders po WHERE po.enterprise_id=$2 AND (po.mrp_suggestion_code=s.code OR po.order_number=s.order_number) AND po.is_active AND po.status<>'CANCELLED')
  ) SELECT o.id,o.item_code,o.quantity,o.day,mr.id,mt.id,o.minutes::double precision
  FROM orders o
- LEFT JOIN LATERAL (SELECT id FROM manufacturing_routes r WHERE r.item_code=o.item_code AND r.enterprise_id=$2 AND r.is_standard AND r.is_active AND r.situation='APROVADA' AND (r.mask=o.mask OR r.mask='') AND (r.valid_from IS NULL OR r.valid_from<=o.day) AND (r.valid_to IS NULL OR r.valid_to>=o.day) ORDER BY (r.mask=o.mask) DESC,r.id DESC LIMIT 1) mr ON TRUE
+ -- COALESCE nas duas pontas: roteiro sem mascara tem a coluna NULA, e NULL = ''
+ -- nao e verdadeiro — era assim que o roteiro ficava invisivel para o CRP. Numa
+ -- base onde NENHUM roteiro tem mascara (o caso de quem nao usa item
+ -- configurado), o calculo de capacidade nao encontrava carga nenhuma e
+ -- devolvia todas as ordens como "sem carga".
+ LEFT JOIN LATERAL (SELECT id FROM manufacturing_routes r WHERE r.item_code=o.item_code AND r.enterprise_id=$2 AND r.is_standard AND r.is_active AND r.situation='APROVADA' AND (COALESCE(r.mask,'')=COALESCE(o.mask,'') OR COALESCE(r.mask,'')='') AND (r.valid_from IS NULL OR r.valid_from<=o.day) AND (r.valid_to IS NULL OR r.valid_to>=o.day) ORDER BY (COALESCE(r.mask,'')=COALESCE(o.mask,'')) DESC,r.id DESC LIMIT 1) mr ON TRUE
  LEFT JOIN machines m ON m.id=o.machine_id AND m.enterprise_id=$2 AND m.is_active
  LEFT JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=$2 AND mt.is_active
  ORDER BY o.day,o.id`, plan, e)

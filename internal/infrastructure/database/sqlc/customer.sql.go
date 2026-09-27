@@ -136,9 +136,18 @@ func (q *Queries) AddContact(ctx context.Context, arg AddContactParams) (Custome
 const addInstallment = `-- name: AddInstallment :one
 INSERT INTO payment_condition_installments (
     payment_condition_id, installment_number, due_days, description,
-    document_type, movement_type, carrier_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, payment_condition_id, installment_number, due_days, description, document_type, movement_type, carrier_id, is_active
+    document_type, movement_type, carrier_id, percentage, base_event
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (payment_condition_id, installment_number) DO UPDATE SET
+    due_days = EXCLUDED.due_days,
+    description = EXCLUDED.description,
+    document_type = EXCLUDED.document_type,
+    movement_type = EXCLUDED.movement_type,
+    carrier_id = EXCLUDED.carrier_id,
+    percentage = EXCLUDED.percentage,
+    base_event = EXCLUDED.base_event,
+    is_active = TRUE
+RETURNING id, payment_condition_id, installment_number, due_days, description, document_type, movement_type, carrier_id, is_active, percentage, base_event
 `
 
 type AddInstallmentParams struct {
@@ -149,8 +158,13 @@ type AddInstallmentParams struct {
 	DocumentType       pgtype.Text
 	MovementType       pgtype.Text
 	CarrierID          *int64
+	Percentage         pgtype.Numeric
+	BaseEvent          PaymentBaseEventEnum
 }
 
+// Upsert pela parcela: reenviar a mesma parcela ALTERA, não duplica. Antes, o
+// segundo POST batia na chave única e devolvia erro técnico, e a tela não tinha
+// como corrigir um percentual digitado errado.
 func (q *Queries) AddInstallment(ctx context.Context, arg AddInstallmentParams) (PaymentConditionInstallment, error) {
 	row := q.db.QueryRow(ctx, addInstallment,
 		arg.PaymentConditionID,
@@ -160,6 +174,8 @@ func (q *Queries) AddInstallment(ctx context.Context, arg AddInstallmentParams) 
 		arg.DocumentType,
 		arg.MovementType,
 		arg.CarrierID,
+		arg.Percentage,
+		arg.BaseEvent,
 	)
 	var i PaymentConditionInstallment
 	err := row.Scan(
@@ -172,6 +188,8 @@ func (q *Queries) AddInstallment(ctx context.Context, arg AddInstallmentParams) 
 		&i.MovementType,
 		&i.CarrierID,
 		&i.IsActive,
+		&i.Percentage,
+		&i.BaseEvent,
 	)
 	return i, err
 }
@@ -758,9 +776,9 @@ func (q *Queries) CreateMarketSegment(ctx context.Context, arg CreateMarketSegme
 const createPaymentCondition = `-- name: CreatePaymentCondition :one
 
 INSERT INTO payment_conditions (
-    code, description, carrier_id, analysis_type, parcel_start,
+    enterprise_id, code, description, carrier_id, analysis_type, parcel_start,
     expenses, average_term, is_special, is_revenue, is_at_sight
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+) VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id
 `
 
@@ -775,9 +793,12 @@ type CreatePaymentConditionParams struct {
 	IsSpecial    bool
 	IsRevenue    bool
 	IsAtSight    bool
+	EnterpriseID *int64
 }
 
 // ─── Payment Conditions ───────────────────────────────────────────────────────
+// A empresa entra na gravacao: a coluna e NOT NULL desde o isolamento do
+// financeiro, e sem ela o cadastro de condicao de pagamento parava de gravar.
 func (q *Queries) CreatePaymentCondition(ctx context.Context, arg CreatePaymentConditionParams) (PaymentCondition, error) {
 	row := q.db.QueryRow(ctx, createPaymentCondition,
 		arg.Code,
@@ -790,6 +811,7 @@ func (q *Queries) CreatePaymentCondition(ctx context.Context, arg CreatePaymentC
 		arg.IsSpecial,
 		arg.IsRevenue,
 		arg.IsAtSight,
+		arg.EnterpriseID,
 	)
 	var i PaymentCondition
 	err := row.Scan(
@@ -1350,11 +1372,16 @@ func (q *Queries) GetMarketSegmentByCode(ctx context.Context, code int64) (Marke
 }
 
 const getPaymentConditionByCode = `-- name: GetPaymentConditionByCode :one
-SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions WHERE code = $1
+SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetPaymentConditionByCode(ctx context.Context, code int64) (PaymentCondition, error) {
-	row := q.db.QueryRow(ctx, getPaymentConditionByCode, code)
+type GetPaymentConditionByCodeParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetPaymentConditionByCode(ctx context.Context, arg GetPaymentConditionByCodeParams) (PaymentCondition, error) {
+	row := q.db.QueryRow(ctx, getPaymentConditionByCode, arg.Code, arg.EnterpriseID)
 	var i PaymentCondition
 	err := row.Scan(
 		&i.ID,
@@ -1376,11 +1403,16 @@ func (q *Queries) GetPaymentConditionByCode(ctx context.Context, code int64) (Pa
 }
 
 const getPaymentConditionByID = `-- name: GetPaymentConditionByID :one
-SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions WHERE id = $1
+SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions WHERE id = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetPaymentConditionByID(ctx context.Context, id int64) (PaymentCondition, error) {
-	row := q.db.QueryRow(ctx, getPaymentConditionByID, id)
+type GetPaymentConditionByIDParams struct {
+	ID           int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetPaymentConditionByID(ctx context.Context, arg GetPaymentConditionByIDParams) (PaymentCondition, error) {
+	row := q.db.QueryRow(ctx, getPaymentConditionByID, arg.ID, arg.EnterpriseID)
 	var i PaymentCondition
 	err := row.Scan(
 		&i.ID,
@@ -1818,7 +1850,7 @@ func (q *Queries) ListEstablishments(ctx context.Context, corporateCode *int64) 
 }
 
 const listInstallments = `-- name: ListInstallments :many
-SELECT id, payment_condition_id, installment_number, due_days, description, document_type, movement_type, carrier_id, is_active FROM payment_condition_installments
+SELECT id, payment_condition_id, installment_number, due_days, description, document_type, movement_type, carrier_id, is_active, percentage, base_event FROM payment_condition_installments
 WHERE payment_condition_id = $1 AND is_active = TRUE
 ORDER BY installment_number
 `
@@ -1842,6 +1874,8 @@ func (q *Queries) ListInstallments(ctx context.Context, paymentConditionID int64
 			&i.MovementType,
 			&i.CarrierID,
 			&i.IsActive,
+			&i.Percentage,
+			&i.BaseEvent,
 		); err != nil {
 			return nil, err
 		}
@@ -1992,12 +2026,18 @@ func (q *Queries) ListMarketSegments(ctx context.Context, dollar_1 bool) ([]Mark
 
 const listPaymentConditions = `-- name: ListPaymentConditions :many
 SELECT id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id FROM payment_conditions
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id = $1
+  AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
 
-func (q *Queries) ListPaymentConditions(ctx context.Context, dollar_1 bool) ([]PaymentCondition, error) {
-	rows, err := q.db.Query(ctx, listPaymentConditions, dollar_1)
+type ListPaymentConditionsParams struct {
+	EnterpriseID *int64
+	OnlyActive   bool
+}
+
+func (q *Queries) ListPaymentConditions(ctx context.Context, arg ListPaymentConditionsParams) ([]PaymentCondition, error) {
+	rows, err := q.db.Query(ctx, listPaymentConditions, arg.EnterpriseID, arg.OnlyActive)
 	if err != nil {
 		return nil, err
 	}
@@ -2951,7 +2991,7 @@ UPDATE payment_conditions
 SET description = $2, carrier_id = $3, analysis_type = $4, parcel_start = $5,
     expenses = $6, average_term = $7, is_special = $8, is_revenue = $9,
     is_at_sight = $10, is_active = $11
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $12
 RETURNING id, code, description, carrier_id, analysis_type, parcel_start, expenses, average_term, is_special, is_revenue, is_at_sight, is_active, created_at, enterprise_id
 `
 
@@ -2967,6 +3007,7 @@ type UpdatePaymentConditionParams struct {
 	IsRevenue    bool
 	IsAtSight    bool
 	IsActive     bool
+	EnterpriseID *int64
 }
 
 func (q *Queries) UpdatePaymentCondition(ctx context.Context, arg UpdatePaymentConditionParams) (PaymentCondition, error) {
@@ -2982,6 +3023,7 @@ func (q *Queries) UpdatePaymentCondition(ctx context.Context, arg UpdatePaymentC
 		arg.IsRevenue,
 		arg.IsAtSight,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i PaymentCondition
 	err := row.Scan(

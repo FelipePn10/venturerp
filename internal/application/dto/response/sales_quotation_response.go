@@ -8,46 +8,52 @@ import (
 )
 
 type SalesQuotationResponse struct {
-	Code                    int64                        `json:"code"`
-	QuotationNumber         int64                        `json:"quotation_number"`
-	EnterpriseCode          int64                        `json:"enterprise_code"`
-	Status                  string                       `json:"status"`
-	QuotationType           string                       `json:"quotation_type"`
-	EmissionDate            time.Time                    `json:"emission_date"`
-	DigitDate               time.Time                    `json:"digit_date"`
-	ValidUntil              *time.Time                   `json:"valid_until,omitempty"`
-	DeliveryDate            *time.Time                   `json:"delivery_date,omitempty"`
-	DeliveryDateFirm        bool                         `json:"delivery_date_firm"`
-	PurchaseOrderNumber     *string                      `json:"purchase_order_number,omitempty"`
-	CustomerCode            *int64                       `json:"customer_code,omitempty"`
-	BillingAddressCode      *int64                       `json:"billing_address_code,omitempty"`
-	ShippingAddressCode     *int64                       `json:"shipping_address_code,omitempty"`
-	RepresentativeCode      *int64                       `json:"representative_code,omitempty"`
-	SalesDivisionCode       *int64                       `json:"sales_division_code,omitempty"`
-	PriceTableCode          *int64                       `json:"price_table_code,omitempty"`
-	PaymentTermCode         *int64                       `json:"payment_term_code,omitempty"`
-	CurrencyCode            string                       `json:"currency_code"`
-	ProbabilityPct          decimal.Decimal              `json:"probability_pct"`
-	CommissionPct           decimal.Decimal              `json:"commission_pct"`
-	IsNFCe                  bool                         `json:"is_nfce"`
-	DeliveryWithReceipt     bool                         `json:"delivery_with_receipt"`
-	Street                  *string                      `json:"street,omitempty"`
-	StreetNumber            *string                      `json:"street_number,omitempty"`
-	ForeignDocument         *string                      `json:"foreign_document,omitempty"`
-	ReleaseStatus           string                       `json:"release_status"`
-	CommercialBlocked       bool                         `json:"commercial_blocked"`
-	CommercialBlockReason   *string                      `json:"commercial_block_reason,omitempty"`
-	CarrierCode             *int64                       `json:"carrier_code,omitempty"`
-	FreightType             *string                      `json:"freight_type,omitempty"`
-	VerifyFreight           bool                         `json:"verify_freight"`
-	FreightValue            decimal.Decimal              `json:"freight_value"`
-	RedeliveryFreightValue  decimal.Decimal              `json:"redelivery_freight_value"`
-	InsuranceValue          decimal.Decimal              `json:"insurance_value"`
-	DiscountValue           decimal.Decimal              `json:"discount_value"`
-	SurchargeValue          decimal.Decimal              `json:"surcharge_value"`
-	RetainedTaxValue        decimal.Decimal              `json:"retained_tax_value"`
-	TotalGross              decimal.Decimal              `json:"total_gross"`
+	Code                   int64           `json:"code"`
+	QuotationNumber        int64           `json:"quotation_number"`
+	EnterpriseCode         int64           `json:"enterprise_code"`
+	Status                 string          `json:"status"`
+	QuotationType          string          `json:"quotation_type"`
+	EmissionDate           time.Time       `json:"emission_date"`
+	DigitDate              time.Time       `json:"digit_date"`
+	ValidUntil             *time.Time      `json:"valid_until,omitempty"`
+	DeliveryDate           *time.Time      `json:"delivery_date,omitempty"`
+	DeliveryDateFirm       bool            `json:"delivery_date_firm"`
+	PurchaseOrderNumber    *string         `json:"purchase_order_number,omitempty"`
+	CustomerCode           *int64          `json:"customer_code,omitempty"`
+	BillingAddressCode     *int64          `json:"billing_address_code,omitempty"`
+	ShippingAddressCode    *int64          `json:"shipping_address_code,omitempty"`
+	RepresentativeCode     *int64          `json:"representative_code,omitempty"`
+	SalesDivisionCode      *int64          `json:"sales_division_code,omitempty"`
+	PriceTableCode         *int64          `json:"price_table_code,omitempty"`
+	PaymentTermCode        *int64          `json:"payment_term_code,omitempty"`
+	CurrencyCode           string          `json:"currency_code"`
+	ProbabilityPct         decimal.Decimal `json:"probability_pct"`
+	CommissionPct          decimal.Decimal `json:"commission_pct"`
+	IsNFCe                 bool            `json:"is_nfce"`
+	DeliveryWithReceipt    bool            `json:"delivery_with_receipt"`
+	Street                 *string         `json:"street,omitempty"`
+	StreetNumber           *string         `json:"street_number,omitempty"`
+	ForeignDocument        *string         `json:"foreign_document,omitempty"`
+	ReleaseStatus          string          `json:"release_status"`
+	CommercialBlocked      bool            `json:"commercial_blocked"`
+	CommercialBlockReason  *string         `json:"commercial_block_reason,omitempty"`
+	CarrierCode            *int64          `json:"carrier_code,omitempty"`
+	FreightType            *string         `json:"freight_type,omitempty"`
+	VerifyFreight          bool            `json:"verify_freight"`
+	FreightValue           decimal.Decimal `json:"freight_value"`
+	RedeliveryFreightValue decimal.Decimal `json:"redelivery_freight_value"`
+	InsuranceValue         decimal.Decimal `json:"insurance_value"`
+	DiscountValue          decimal.Decimal `json:"discount_value"`
+	SurchargeValue         decimal.Decimal `json:"surcharge_value"`
+	RetainedTaxValue       decimal.Decimal `json:"retained_tax_value"`
+	TotalGross             decimal.Decimal `json:"total_gross"`
+	// TotalNet é o valor dos PRODUTOS já com desconto, frete e demais valores da
+	// capa — sem imposto. TotalIPI e TotalST vêm sozinhos, e TotalWithIPI é
+	// produto + IPI: são as três leituras que a proposta precisa mostrar.
 	TotalNet                decimal.Decimal              `json:"total_net"`
+	TotalIPI                decimal.Decimal              `json:"total_ipi"`
+	TotalST                 decimal.Decimal              `json:"total_st"`
+	TotalWithIPI            decimal.Decimal              `json:"total_with_ipi"`
 	DeliveryAuthorization   *string                      `json:"delivery_authorization,omitempty"`
 	Notes                   *string                      `json:"notes,omitempty"`
 	ObsCustomer             *string                      `json:"obs_customer,omitempty"`
@@ -92,12 +98,16 @@ type SalesQuotationItemResponse struct {
 	STPct              decimal.Decimal `json:"st_pct"`
 	TotalGross         decimal.Decimal `json:"total_gross"`
 	TotalNet           decimal.Decimal `json:"total_net"`
-	TotalNetWithIPI    decimal.Decimal `json:"total_net_with_ipi"`
-	Status             string          `json:"status"`
-	Notes              *string         `json:"notes,omitempty"`
-	IsActive           bool            `json:"is_active"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
+	TotalIPI           decimal.Decimal `json:"total_ipi"`
+	TotalST            decimal.Decimal `json:"total_st"`
+	// TotalNetWithIPI é produto + IPI. O ST fica em TotalST: somá-lo aqui
+	// inflava o valor apresentado como "com IPI".
+	TotalNetWithIPI decimal.Decimal `json:"total_net_with_ipi"`
+	Status          string          `json:"status"`
+	Notes           *string         `json:"notes,omitempty"`
+	IsActive        bool            `json:"is_active"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 type SalesQuotationReportResponse struct {

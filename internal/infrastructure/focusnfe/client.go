@@ -175,6 +175,17 @@ type NFEFormaPagamento struct {
 	Valor          float64 `json:"valor"`
 }
 
+// NFEDuplicata e a parcela da fatura que viaja na NF-e (grupo cobr/dup).
+//
+// Uma venda a prazo sem duplicata sai da SEFAZ como se fosse a vista: o cliente
+// recebe a nota sem saber quanto paga em cada vencimento, e o boleto emitido
+// depois nao casa com o documento fiscal.
+type NFEDuplicata struct {
+	Numero         string  `json:"numero"`
+	DataVencimento string  `json:"data_vencimento"`
+	Valor          float64 `json:"valor"`
+}
+
 type NFEPayload struct {
 	NaturezaOperacao  string              `json:"natureza_operacao"`
 	DataEmissao       string              `json:"data_emissao"`
@@ -187,6 +198,7 @@ type NFEPayload struct {
 	Destinatario      NFEDestinatario     `json:"destinatario"`
 	Items             []NFEItem           `json:"items"`
 	FormaPagamento    []NFEFormaPagamento `json:"forma_pagamento"`
+	Duplicatas        []NFEDuplicata      `json:"duplicatas,omitempty"`
 }
 
 type NFEResponse struct {

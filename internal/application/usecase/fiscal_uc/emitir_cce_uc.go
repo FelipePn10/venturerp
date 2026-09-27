@@ -47,7 +47,7 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 	}
 
 	if exit.FocusRef == nil {
-		return nil, fmt.Errorf("NF-e sem referência Focus — não é possível emitir CC-e")
+		return nil, errorsuc.NewValidationError("esta NF-e não foi autorizada pela Focus NF-e, então não há o que corrigir por carta de correção")
 	}
 
 	cfg, err := uc.Repo.GetFiscalConfig(ctx)
@@ -56,7 +56,7 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 	}
 
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais")
 	}
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
@@ -66,7 +66,7 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 
 	resp, err := cli.EmitirCCe(ctx, *exit.FocusRef, params.TextoCorrecao)
 	if err != nil {
-		return nil, fmt.Errorf("Focus CC-e: %w", err)
+		return nil, errorsuc.NewExternalServiceError("Focus CC-e", err.Error())
 	}
 
 	userID, _ := uc.Auth.UserID(ctx)
