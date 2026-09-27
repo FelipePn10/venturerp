@@ -105,6 +105,11 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			// No pedido, total_gross e o valor dos produtos JA com desconto de
 			// item (o orcamento guarda o bruto antes do desconto). Mandar o
 			// bruto do orcamento inflava o pedido convertido.
+			//
+			// O valor nasce com o total do orcamento e e corrigido depois dos
+			// itens: quando parte do orcamento ja foi atendida ou cancelada, o
+			// pedido leva so o saldo, e a capa tem de fechar com a soma das
+			// linhas.
 			TotalGross:  q.TotalNet.InexactFloat64(),
 			TotalNet:    q.TotalNet.InexactFloat64(),
 			Notes:       q.Notes,
@@ -115,6 +120,7 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 		if err != nil {
 			return nil, err
 		}
+		somaProdutos, somaIPI, somaST := decimal.Zero, decimal.Zero, decimal.Zero
 		for _, quoteItem := range items {
 			if !quoteItem.IsActive || quoteItem.Status == quoteentity.SalesQuotationItemStatusCancelled {
 				continue
@@ -158,8 +164,24 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			if _, err := orders.CreateItem(ctx, orderItem); err != nil {
 				return nil, err
 			}
+			somaProdutos = somaProdutos.Add(valorProdutos)
+			somaIPI = somaIPI.Add(valorIPI)
+			somaST = somaST.Add(valorST)
 		}
-		return created, nil
+
+		// A capa fecha com a soma das linhas convertidas. Antes ela levava o
+		// total do orcamento inteiro: convertendo o saldo de um orcamento
+		// parcialmente atendido, o pedido nascia valendo mais do que os itens
+		// que ele tem, e esse numero ia para comissao, credito e faturamento.
+		created.TotalGross = somaProdutos.InexactFloat64()
+		created.TotalNet = somaProdutos.InexactFloat64()
+		created.TotalNetNoST = somaProdutos.Add(somaIPI).InexactFloat64()
+		created.TotalWithIPIWithST = somaProdutos.Add(somaIPI).Add(somaST).InexactFloat64()
+		atualizado, err := orders.Update(ctx, created)
+		if err != nil {
+			return nil, err
+		}
+		return atualizado, nil
 	})
 	if err != nil {
 		return nil, err

@@ -28,36 +28,51 @@ type FiscalExit struct {
 	RazaoSocialDestinatario *string
 	IEDestinatario          *string
 	UFDestinatario          *string
-	Cfop                    string
-	NaturezaOperacao        string
-	ValorProdutos           float64
-	ValorFrete              float64
-	ValorSeguro             float64
-	ValorDesconto           float64
-	ValorIPI                float64
-	ValorICMS               float64
-	ValorPIS                float64
-	ValorCOFINS             float64
-	BaseICMSST              float64
-	ValorICMSST             float64
-	ValorTotal              float64
-	SalesOrderCode          *int64
-	SourceType              *string
-	ShipmentLoadCode        *int64
-	ShipmentCode            *int64
-	FiscalCouponNumber      *string
-	FiscalCouponDate        *time.Time
-	FiscalCouponECFSerial   *string
-	Status                  FiscalExitStatus
-	Protocolo               *string
-	XmlPath                 *string
-	DanfePath               *string
-	FocusRef                *string
-	IsActive                bool
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	CreatedBy               uuid.UUID
-	Itens                   []*FiscalExitItem
+	// Endereco do destinatario. O layout da NF-e exige logradouro, numero,
+	// bairro, municipio, codigo IBGE do municipio e CEP: sem eles a SEFAZ
+	// rejeita a autorizacao por campo obrigatorio ausente.
+	DestLogradouro      *string
+	DestNumero          *string
+	DestComplemento     *string
+	DestBairro          *string
+	DestMunicipio       *string
+	DestCodigoMunicipio *string
+	DestCEP             *string
+	DestEmail           *string
+	DestTelefone        *string
+	// CustomerCode e o cliente de onde o endereco e a condicao de pagamento
+	// foram resolvidos; e por ele que o titulo nasce com dono.
+	CustomerCode          *int64
+	Cfop                  string
+	NaturezaOperacao      string
+	ValorProdutos         float64
+	ValorFrete            float64
+	ValorSeguro           float64
+	ValorDesconto         float64
+	ValorIPI              float64
+	ValorICMS             float64
+	ValorPIS              float64
+	ValorCOFINS           float64
+	BaseICMSST            float64
+	ValorICMSST           float64
+	ValorTotal            float64
+	SalesOrderCode        *int64
+	SourceType            *string
+	ShipmentLoadCode      *int64
+	ShipmentCode          *int64
+	FiscalCouponNumber    *string
+	FiscalCouponDate      *time.Time
+	FiscalCouponECFSerial *string
+	Status                FiscalExitStatus
+	Protocolo             *string
+	XmlPath               *string
+	DanfePath             *string
+	FocusRef              *string
+	IsActive              bool
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	CreatedBy             uuid.UUID
+	Itens                 []*FiscalExitItem
 }
 
 type FiscalExitItem struct {

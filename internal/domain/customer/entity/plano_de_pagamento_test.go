@@ -132,3 +132,35 @@ func TestPlanoSemParcelasEhAVista(t *testing.T) {
 		t.Fatalf("esperava uma parcela à vista: %+v %v", plano, err)
 	}
 }
+
+// A tela deixa o select "Início parcelas" em branco quando ninguém o toca. Em
+// branco tem de valer EMISSAO, e não derrubar o cadastro com erro de enum.
+func TestNormalizarParcelStart(t *testing.T) {
+	casos := []struct {
+		entrada string
+		quer    PaymentParcelStart
+		erro    bool
+	}{
+		{"", ParcelStartEmissao, false},
+		{"  ", ParcelStartEmissao, false},
+		{"EMISSAO", ParcelStartEmissao, false},
+		{"proximo_mes", ParcelStartProximoMes, false},
+		{" PROXIMA_QUINZENA ", ParcelStartProximaQuinzena, false},
+		{"SEMANA_QUE_VEM", "", true},
+	}
+	for _, c := range casos {
+		got, err := NormalizarParcelStart(c.entrada)
+		if c.erro {
+			if err == nil {
+				t.Fatalf("%q deveria ser recusado", c.entrada)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q: erro inesperado %v", c.entrada, err)
+		}
+		if got != c.quer {
+			t.Fatalf("%q → %q, queria %q", c.entrada, got, c.quer)
+		}
+	}
+}

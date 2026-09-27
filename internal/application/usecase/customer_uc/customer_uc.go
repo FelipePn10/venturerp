@@ -404,7 +404,11 @@ func (uc *CustomerUseCase) CreatePaymentCondition(ctx context.Context, dto reque
 	if err != nil {
 		return nil, err
 	}
-	pc.ParcelStart = entity.PaymentParcelStart(dto.ParcelStart)
+	parcelStart, err := entity.NormalizarParcelStart(dto.ParcelStart)
+	if err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	pc.ParcelStart = parcelStart
 	pc.Expenses = dto.Expenses
 	pc.AverageTerm = dto.AverageTerm
 	pc.IsSpecial = dto.IsSpecial
@@ -434,7 +438,11 @@ func (uc *CustomerUseCase) UpdatePaymentCondition(ctx context.Context, code int6
 		return nil, err
 	}
 	validated.ID, validated.IsActive = current.ID, ptrutil.BoolOr(dto.IsActive, current.IsActive)
-	validated.ParcelStart, validated.Expenses, validated.AverageTerm = entity.PaymentParcelStart(dto.ParcelStart), dto.Expenses, dto.AverageTerm
+	parcelStart, err := entity.NormalizarParcelStart(dto.ParcelStart)
+	if err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	validated.ParcelStart, validated.Expenses, validated.AverageTerm = parcelStart, dto.Expenses, dto.AverageTerm
 	validated.IsSpecial, validated.IsRevenue, validated.IsAtSight = dto.IsSpecial, dto.IsRevenue, dto.IsAtSight
 	if dto.CarrierCode != nil {
 		carrier, err := uc.repo.GetCarrierByCode(ctx, *dto.CarrierCode)

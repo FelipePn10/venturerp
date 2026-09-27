@@ -3,6 +3,7 @@ package entity
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -356,6 +357,23 @@ type PaymentInstallment struct {
 	MovementType *string
 	CarrierID    *int64
 	IsActive     bool
+}
+
+// NormalizarParcelStart valida o inicio da contagem das parcelas.
+//
+// O campo e um enum no banco, e a tela deixa o select em branco quando ninguem
+// o toca: o valor vazio chegava direto ao INSERT e a criacao da condicao morria
+// com um erro de SQLSTATE que nao diz nada a quem cadastra. Em branco significa
+// "conta da emissao", que e o comportamento padrao.
+func NormalizarParcelStart(valor string) (PaymentParcelStart, error) {
+	v := PaymentParcelStart(strings.ToUpper(strings.TrimSpace(valor)))
+	switch v {
+	case "":
+		return ParcelStartEmissao, nil
+	case ParcelStartEmissao, ParcelStartProximoMes, ParcelStartProximaQuinzena:
+		return v, nil
+	}
+	return "", fmt.Errorf("início das parcelas inválido: use EMISSAO, PROXIMO_MES ou PROXIMA_QUINZENA")
 }
 
 func NewPaymentCondition(code int64, description string, analysisType PaymentAnalysis) (*PaymentCondition, error) {

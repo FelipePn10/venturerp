@@ -2,6 +2,7 @@ package fiscal_uc
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -11,17 +12,27 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+
+	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
+	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 )
 
 type CreateFiscalExitUseCase struct {
 	Repo repository.FiscalRepository
 	Auth ports.AuthService
+	// Customers e SalesOrders sao opcionais e servem para completar o
+	// destinatario: a NF-e exige o endereco completo e ninguem o digita a cada
+	// nota. Sem eles a nota continua sendo criada com o que foi informado.
+	Customers   customerrepo.CustomerRepository
+	SalesOrders salesrepo.SalesOrderRepository
 }
 
 func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.CreateFiscalExitDTO) (*response.FiscalExitResponse, error) {
 	if !uc.Auth.CanCreateFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+
+	resolverDestinatario(ctx, &dto, uc.Customers, uc.SalesOrders)
 
 	userID, err := uc.Auth.UserID(ctx)
 	if err != nil {
@@ -128,6 +139,23 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		return nil, err
 	}
 
+	// Numeração da nota. O número da NF-e é uma sequência fiscal: ela não pode
+	// repetir nem ser digitada a dedo. Quando a nota vem da carga, o sistema já
+	// numerava; a nota digitada aceitava o que viesse, e todas nasciam com
+	// número 0 — duas notas com o mesmo número é problema com a Receita.
+	numeroNF := dto.NumeroNF
+	if numeroNF <= 0 {
+		proximo, err := uc.Repo.GetNextNFNumber(ctx)
+		if err != nil {
+			return nil, err
+		}
+		numeroNF = proximo
+	}
+	serie := strings.TrimSpace(dto.Serie)
+	if serie == "" {
+		serie = "1"
+	}
+
 	dataEmissao, _ := time.Parse("2006-01-02", dto.DataEmissao)
 	var dataSaida *time.Time
 	if dto.DataSaida != nil {
@@ -141,14 +169,24 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 	}
 
 	exit := &entity.FiscalExit{
-		NumeroNF:                dto.NumeroNF,
-		Serie:                   dto.Serie,
+		NumeroNF:                numeroNF,
+		Serie:                   serie,
 		DataEmissao:             dataEmissao,
 		DataSaida:               dataSaida,
 		CnpjDestinatario:        dto.CnpjDestinatario,
 		RazaoSocialDestinatario: dto.RazaoSocialDestinatario,
 		IEDestinatario:          dto.IEDestinatario,
 		UFDestinatario:          dto.UFDestinatario,
+		DestLogradouro:          dto.DestLogradouro,
+		DestNumero:              dto.DestNumero,
+		DestComplemento:         dto.DestComplemento,
+		DestBairro:              dto.DestBairro,
+		DestMunicipio:           dto.DestMunicipio,
+		DestCodigoMunicipio:     dto.DestCodigoMunicipio,
+		DestCEP:                 dto.DestCEP,
+		DestEmail:               dto.DestEmail,
+		DestTelefone:            dto.DestTelefone,
+		CustomerCode:            dto.CustomerCode,
 		Cfop:                    dto.Cfop,
 		NaturezaOperacao:        dto.NaturezaOperacao,
 		ValorProdutos:           dto.ValorProdutos,

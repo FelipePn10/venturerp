@@ -18,6 +18,16 @@ type FiscalExitResponse struct {
 	RazaoSocialDestinatario *string                  `json:"razao_social_destinatario,omitempty"`
 	IEDestinatario          *string                  `json:"ie_destinatario,omitempty"`
 	UFDestinatario          *string                  `json:"uf_destinatario,omitempty"`
+	DestLogradouro          *string                  `json:"dest_logradouro,omitempty"`
+	DestNumero              *string                  `json:"dest_numero,omitempty"`
+	DestComplemento         *string                  `json:"dest_complemento,omitempty"`
+	DestBairro              *string                  `json:"dest_bairro,omitempty"`
+	DestMunicipio           *string                  `json:"dest_municipio,omitempty"`
+	DestCodigoMunicipio     *string                  `json:"dest_codigo_municipio,omitempty"`
+	DestCEP                 *string                  `json:"dest_cep,omitempty"`
+	DestEmail               *string                  `json:"dest_email,omitempty"`
+	DestTelefone            *string                  `json:"dest_telefone,omitempty"`
+	CustomerCode            *int64                   `json:"customer_code,omitempty"`
 	Cfop                    string                   `json:"cfop"`
 	NaturezaOperacao        string                   `json:"natureza_operacao"`
 	ValorProdutos           float64                  `json:"valor_produtos"`

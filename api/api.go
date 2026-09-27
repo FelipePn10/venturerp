@@ -1070,7 +1070,12 @@ func (app *application) mount() chi.Router {
 	)
 
 	// fiscal module
-	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService}
+	// Customers/SalesOrders completam o destinatário da nota (endereço exigido
+	// pela NF-e) e resolvem a condição de pagamento que vira duplicata e título.
+	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo}
+	previaNFeHandler := handler.NewPreviaNFeHandler(
+		&fiscalUC.PreviaNFeUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo},
+	)
 	fiscalHandler := handler.NewFiscalHandler(
 		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
 		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
@@ -1084,7 +1089,7 @@ func (app *application) mount() chi.Router {
 			ShipmentRepo:   shipmentRepoPG,
 			SalesOrderRepo: soRepo,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo},
+		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo},
 		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
@@ -1973,6 +1978,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/status", fiscalHandler.ConsultarNFe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/cartas-correcao", fiscalHandler.ListCartasCorrecao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/danfe", fiscalHandler.GetDANFE)
+			// Prévia da nota: monta o documento que iria para a SEFAZ e lista as
+			// pendências, sem transmitir nada.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa", previaNFeHandler.Previa)
 			// NCM tax table management
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tabelas/ncm", fiscalHandler.UpsertNcmTax)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/ncm", fiscalHandler.ListNcmTaxes)

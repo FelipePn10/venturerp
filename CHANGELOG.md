@@ -6,6 +6,38 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(nfe): prévia da nota antes de emitir
+  (`GET /api/fiscal/exits/{id}/previa`) — monta o documento exatamente como será
+  transmitido à SEFAZ e devolve a conferência do que ainda impede a emissão
+  ("Impede") e do que passa mas tem consequência ("Atenção"), cada item com a
+  tela onde se resolve. Não transmite, não grava e não muda o status da nota
+- fix(nfe): a nota não tinha onde guardar o endereço do destinatário, e o
+  documento saía sem logradouro, bairro, município e CEP — campos obrigatórios
+  no layout da NF-e. O endereço agora é gravado na nota e vem do cadastro do
+  cliente (endereço de ENTREGA, ou o de COBRANÇA na falta dele), sem sobrescrever
+  o que for digitado na própria nota para uma entrega pontual
+- fix(nfe): o número da nota digitada ficava como veio, e todas nasciam com
+  número 0; sem número informado, a nota passa a receber o próximo da sequência
+  fiscal da empresa (série vazia vira "1")
+- fix(nfe): a forma de pagamento declarada era sempre "01 — dinheiro" com o valor
+  inteiro da nota, mesmo numa venda a prazo, e nenhuma duplicata era enviada.
+  Agora a condição de pagamento vira uma forma por parcela e duplicata para cada
+  parcela cobrada depois
+- fix(financeiro): o faturamento gerava SEMPRE um único título vencendo em 30
+  dias e sem cliente. Passa a gerar um título por parcela da condição de
+  pagamento do pedido, com o cliente, o pedido e a forma de pagamento — aging,
+  extrato por cliente e limite de crédito deixam de ficar cegos
+- fix(orcamento): a conversão copiava o total do orçamento inteiro para a capa do
+  pedido; convertendo o saldo de um orçamento parcialmente atendido, o pedido
+  nascia valendo mais que a soma dos seus itens. A capa passa a fechar com as
+  linhas convertidas, incluindo IPI e ST
+- fix(condicao-pagamento): criar ou alterar a condição sem escolher o início das
+  parcelas quebrava com erro de banco; em branco passa a valer EMISSAO e um valor
+  inválido responde mensagem de validação
+- fix(orcamento): a notificação de "orçamento convertido em pedido" saía com
+  todos os itens sem descrição (a busca usava o código da empresa numa coluna que
+  guarda o identificador)
+
 ## [v1.3.0] — 2026-09-25
 
 - feat(condicao-pagamento): percentual e evento base por parcela — "30% entrada,
