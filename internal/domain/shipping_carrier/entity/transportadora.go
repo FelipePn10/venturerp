@@ -415,7 +415,14 @@ func (a *RegiaoAtendida) Atende(uf, cep string) bool {
 		}
 		return -1
 	}, cep)
-	if a.PostalCodeFrom != nil && len(cep) == 8 {
+	// Região com faixa de CEP é específica, mesmo que também traga a UF. Sem um
+	// CEP de oito dígitos não há como confirmar que o destino cai na faixa, e
+	// cair na comparação por estado fazia uma transportadora cadastrada para uma
+	// faixa estreita ser cotada como se atendesse o estado inteiro.
+	if a.PostalCodeFrom != nil {
+		if len(cep) != 8 {
+			return false
+		}
 		fim := *a.PostalCodeFrom
 		if a.PostalCodeTo != nil {
 			fim = *a.PostalCodeTo

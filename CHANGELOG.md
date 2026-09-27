@@ -6,6 +6,23 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(tenant): o relatório de representantes agregava as junções sem recorte de
+  empresa — um representante que atende duas empresas devolvia, para cada uma, o
+  percentual de comissão combinado com a OUTRA, as regiões das duas misturadas e
+  as contas contábeis do plano alheio
+- fix(tenant): o detalhe por cliente do acompanhamento de representantes somava
+  orçamentos e pedidos de todas as empresas; só o resumo era recortado
+- fix(orcamento): o plano de pagamento era dividido sobre o valor dos produtos,
+  sem IPI e sem ICMS-ST. Cada parcela saía menor que a devida e a proposta não
+  fechava com os títulos, que nascem do total do documento fiscal
+- fix(comissao): limpar o rateio deixava o representante antigo na capa do
+  documento, e a leitura seguinte reconstruía o rateio a partir dele — a limpeza
+  parecia desfazer a si mesma
+- fix(transportadora): a ocorrência de entrega aceitava a data de amanhã durante
+  quase todo o dia de hoje, apesar da mensagem dizer que futuro é recusado
+- fix(transportadora): região cadastrada por faixa de CEP era cotada como se
+  atendesse o estado inteiro quando a cotação vinha só com a UF
+
 - feat(nfe): prévia da nota antes de emitir
   (`GET /api/fiscal/exits/{id}/previa`) — monta o documento exatamente como será
   transmitido à SEFAZ e devolve a conferência do que ainda impede a emissão

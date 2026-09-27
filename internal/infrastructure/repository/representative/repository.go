@@ -368,16 +368,23 @@ func (r *Repository) Report(ctx context.Context, filter reprepo.RepresentativeFi
 }
 
 func reportSQL(filter reprepo.RepresentativeFilter, enterpriseCode int64) (string, []any) {
+	// O filtro de empresa precisa entrar em CADA junção, não só na existência do
+	// vínculo. Um representante que atende duas empresas aparece uma vez, mas as
+	// junções traziam as linhas das duas: MAX(re.commission_pct) devolvia o
+	// percentual combinado com a OUTRA empresa, o array de regiões misturava as
+	// regiões de ambas e as contas contábeis vinham do plano de contas alheio.
+	// Cada empresa tem de ver apenas o que é seu.
 	sqlText := `SELECT r.code,r.name,r.trade_name,r.type_code,rt.description,r.state,r.city,r.main_phone,r.main_email,
 COALESCE(array_agg(DISTINCT rr.region_code) FILTER (WHERE rr.region_code IS NOT NULL), '{}') AS region_codes,
 r.is_active,COALESCE(MAX(re.commission_pct),0),MAX(ra.debit_account_code),MAX(ra.credit_account_code),MAX(ra.history_code)
 FROM public.representatives r
 LEFT JOIN public.representative_types rt ON rt.code=r.type_code
-LEFT JOIN public.representative_regions rr ON rr.representative_code=r.code AND rr.is_active=TRUE
-LEFT JOIN public.representative_enterprises re ON re.representative_code=r.code AND re.is_active=TRUE
-LEFT JOIN public.representative_accounting ra ON ra.representative_code=r.code AND ra.event_type='GENERATED'`
+LEFT JOIN public.representative_regions rr ON rr.representative_code=r.code AND rr.is_active=TRUE AND rr.enterprise_code=$1
+LEFT JOIN public.representative_enterprises re ON re.representative_code=r.code AND re.is_active=TRUE AND re.enterprise_code=$1
+LEFT JOIN public.representative_accounting ra ON ra.representative_code=r.code AND ra.event_type='GENERATED' AND ra.enterprise_code=$1`
 	sqlText += ` WHERE TRUE`
-	args := []any{}
+	// $1 é a empresa da sessão, usada pelas junções acima.
+	args := []any{enterpriseCode}
 	add := func(clause string, arg any) {
 		args = append(args, arg)
 		sqlText += fmt.Sprintf(" AND "+clause, len(args))
@@ -405,8 +412,7 @@ LEFT JOIN public.representative_accounting ra ON ra.representative_code=r.code A
 		sqlText += " AND r.is_active=TRUE"
 	}
 	// Só os representantes vinculados à empresa da sessão.
-	args = append(args, enterpriseCode)
-	sqlText += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM public.representative_enterprises rev WHERE rev.representative_code=r.code AND rev.enterprise_code=$%d)", len(args))
+	sqlText += " AND EXISTS (SELECT 1 FROM public.representative_enterprises rev WHERE rev.representative_code=r.code AND rev.enterprise_code=$1)"
 	sqlText += ` GROUP BY r.code,rt.description`
 	sqlText += orderSQL(filter.SortBy)
 	return sqlText, args
@@ -457,7 +463,7 @@ FROM public.representatives r LEFT JOIN c ON c.representative_code=r.code ` + wh
 		}
 		row.LastQuotationDate = timePtr(lastQ)
 		row.LastOrderDate = timePtr(lastO)
-		row.Customers, _ = r.followCustomers(ctx, row.RepresentativeCode, filter)
+		row.Customers, _ = r.followCustomers(ctx, row.RepresentativeCode, enterpriseCode, filter)
 		out = append(out, row)
 	}
 	return out, rows.Err()
@@ -799,15 +805,21 @@ func followDateWhere(filter reprepo.FollowUpFilter, args *[]any, column string) 
 	return sqlText
 }
 
-func (r *Repository) followCustomers(ctx context.Context, representativeCode int64, filter reprepo.FollowUpFilter) ([]reprepo.RepresentativeCustomerFollowUp, error) {
-	args := []any{representativeCode}
+// followCustomers detalha, por cliente, o que o representante moveu.
+//
+// O resumo de cima já era filtrado por empresa, mas este detalhe só olhava o
+// representante: um representante que atende duas empresas fazia a empresa A ver
+// a contagem e o valor dos orçamentos e pedidos da empresa B. Orçamento e pedido
+// guardam `enterprise_code`, então o recorte entra nas duas CTEs.
+func (r *Repository) followCustomers(ctx context.Context, representativeCode, enterpriseCode int64, filter reprepo.FollowUpFilter) ([]reprepo.RepresentativeCustomerFollowUp, error) {
+	args := []any{representativeCode, enterpriseCode}
 	extra := followDateWhere(filter, &args, "emission_date")
 	rows, err := r.pool.Query(ctx, `WITH q AS (
  SELECT customer_code, COUNT(*) quotation_count, COALESCE(SUM(total_net),0) total_quoted, MAX(emission_date) last_quotation_date
- FROM public.sales_quotations WHERE representative_code=$1`+extra+` GROUP BY customer_code
+ FROM public.sales_quotations WHERE representative_code=$1 AND enterprise_code=$2`+extra+` GROUP BY customer_code
 ), o AS (
  SELECT customer_code, COUNT(*) order_count, COALESCE(SUM(total_net),0) total_ordered, MAX(emission_date) last_order_date
- FROM public.sales_orders WHERE representative_code=$1`+extra+` GROUP BY customer_code
+ FROM public.sales_orders WHERE representative_code=$1 AND enterprise_code=$2`+extra+` GROUP BY customer_code
 )
 SELECT COALESCE(q.customer_code,o.customer_code),COALESCE(q.quotation_count,0),COALESCE(o.order_count,0),COALESCE(q.total_quoted,0),COALESCE(o.total_ordered,0),q.last_quotation_date,o.last_order_date
 FROM q FULL JOIN o ON o.customer_code=q.customer_code ORDER BY 1`, args...)

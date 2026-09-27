@@ -196,14 +196,21 @@ VALUES ($1, $2, $3, $4::sales_commission_role_enum, $5, $6::sales_commission_bas
 
 	// A capa continua espelhando o principal: relatórios e integrações que leem
 	// `representative_code`/`commission_pct` seguem respondendo o mesmo.
+	//
+	// Limpar o rateio (lista vazia) também limpa a capa. Sem isso o documento
+	// ficava com o representante antigo, e a leitura seguinte reconstruía um
+	// rateio padrão a partir dele: a limpeza parecia desfazer a si mesma.
 	principal := entity.Principal(linhas)
+	var repCode any
+	var pct any = 0
 	if principal != nil {
-		if _, err := tx.Exec(ctx, fmt.Sprintf(`
+		repCode, pct = principal.RepresentativeCode, principal.CommissionPct
+	}
+	if _, err := tx.Exec(ctx, fmt.Sprintf(`
 UPDATE %s SET representative_code = $1, commission_pct = $2, updated_at = NOW()
 WHERE code = $3 AND enterprise_code = $4`, t.capa),
-			principal.RepresentativeCode, principal.CommissionPct, documentCode, tenantCode); err != nil {
-			return nil, fmt.Errorf("espelhar representante principal: %w", err)
-		}
+		repCode, pct, documentCode, tenantCode); err != nil {
+		return nil, fmt.Errorf("espelhar representante principal: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err

@@ -38,7 +38,17 @@ func (uc *UseCase) PlanoDePagamento(ctx context.Context, code int64) (*response.
 		datas.Entrega = q.DeliveryDate
 	}
 
-	parcelas, err := customerentity.CalcularPlano(cond, q.TotalNet, datas)
+	// O plano é dividido sobre o que o cliente PAGA, não sobre o valor dos
+	// produtos. TotalNet é produto (já com frete, seguro, acréscimo e desconto da
+	// capa) e não inclui imposto; quem compra paga produto + IPI + ICMS-ST.
+	//
+	// Dividindo TotalNet, toda parcela saía menor do que a devida e o plano não
+	// fechava com a nota: o faturamento gera os títulos sobre o total do
+	// documento fiscal, então a proposta prometia um valor e a cobrança chegava
+	// com outro.
+	aPagar := q.TotalNet.Add(q.TotalIPI).Add(q.TotalST)
+
+	parcelas, err := customerentity.CalcularPlano(cond, aPagar, datas)
 	if err != nil {
 		// Percentual que não fecha é problema do CADASTRO da condição, não do
 		// orçamento: dizer isso aqui evita o usuário procurar o erro na proposta.
@@ -48,7 +58,7 @@ func (uc *UseCase) PlanoDePagamento(ctx context.Context, code int64) (*response.
 	out := &response.PlanoDePagamentoResponse{
 		CondicaoCode:      cond.Code,
 		CondicaoDescricao: cond.Description,
-		Total:             q.TotalNet.InexactFloat64(),
+		Total:             aPagar.InexactFloat64(),
 		Parcelas:          make([]response.ParcelaPlanoResponse, 0, len(parcelas)),
 	}
 	estimadas := 0

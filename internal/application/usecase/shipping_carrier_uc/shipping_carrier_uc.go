@@ -176,7 +176,12 @@ func (uc *UseCase) RegistrarOcorrencia(ctx context.Context, carrierID int64, dto
 	} else if d != nil {
 		quando = *d
 	}
-	if quando.After(time.Now().AddDate(0, 0, 1)) {
+	// A comparação é por DIA de calendário. Com uma margem de 24 horas a partir
+	// do instante atual, a data de amanhã (que chega como meia-noite) passava
+	// durante quase todo o dia de hoje — o oposto do que a mensagem promete.
+	agora := time.Now()
+	fimDeHoje := time.Date(agora.Year(), agora.Month(), agora.Day(), 23, 59, 59, 0, agora.Location())
+	if quando.After(fimDeHoje) {
 		return nil, errorsuc.NewValidationError("a ocorrência não pode ser lançada no futuro")
 	}
 	o := &domrepo.Ocorrencia{
