@@ -6,6 +6,18 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.3.0] — 2026-09-27
+
+- fix: seis achados da revisão do PR, três deles vazando dados entre empresas (`5248a2e`)
+- feat(nfe): prévia da nota antes de emitir, com a conferência do que impede (`5595e19`)
+- fix: sete defeitos achados simulando a rotina da empresa sobre os dados reais (`ff6e2fa`)
+- fix(comissao): a razão de comissões passou a ver o rateio, não só a capa (`67f64cd`)
+- test(integração): tirar a dependência de fuso de três testes (`1d15271`)
+- feat(sessao): "manter conectado" com renovação e teto de 30 dias (`5d0f725`)
+- feat(comercial): condição composta, comissão dividida, IPI separado e transportadora (`4facc9a`)
+- fix(ci): rodar o banco do CI no fuso da produção (`6b97ac8`)
+- fix(ci): versionar a semente da suíte de integração (`d825956`)
+
 - fix(tenant): o relatório de representantes agregava as junções sem recorte de
   empresa — um representante que atende duas empresas devolvia, para cada uma, o
   percentual de comissão combinado com a OUTRA, as regiões das duas misturadas e
