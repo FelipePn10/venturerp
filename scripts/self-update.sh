@@ -23,12 +23,6 @@ source "${CONFIG_FILE}"
 DATABASE_PASSWORD="${DATABASE_PASSWORD:-$(printf '%s' "${DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^:]+:([^@]+)@.*#\1#p')}"
 
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5070/health/ready}"
-TRAINING_HEALTH_URL="${TRAINING_HEALTH_URL:-http://127.0.0.1:5071/health/ready}"
-COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
-if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
-  : "${TRAINING_API_ENV_FILE:?TRAINING_API_ENV_FILE is required when TRAINING_DATABASE_URL is set}"
-  COMPOSE_PROFILES="training"
-fi
 # UID/GID do appuser dentro do contêiner da API. A fila é a única ponte
 # API↔host: a API (não-root) precisa ler/escrever aqui, então root normaliza a
 # posse dos arquivos que produz para esse UID.
@@ -43,6 +37,124 @@ ACTIVE_LOCK="${UPDATE_DIR}/active.lock"
 STATE_FILE="${UPDATE_DIR}/deployed-image"
 LOCK_FILE="${LOCK_FILE:-/run/lock/venturerp-update.lock}"
 MIGRATIONS_DIR="${UPDATE_DIR}/migrations"
+
+# ── Tenants ───────────────────────────────────────────────────────────────────
+#
+# Cada empresa cliente é um contêiner de API sobre seu próprio database. Backup,
+# migration, health-check e rollback percorrem a lista abaixo, então um cliente
+# novo entra no ciclo de atualização apenas por configuração.
+#
+# O índice 0 é sempre o tenant principal, descrito por DATABASE_URL /
+# API_ENV_FILE / HEALTH_URL. Os demais vêm de:
+#
+#   VENTURERP_TENANTS="usimac treinamento"
+#   TENANT_USIMAC_DATABASE_URL=postgres://venturerp_usimac:...@127.0.0.1:5432/venturerp_usimac?sslmode=disable
+#   TENANT_USIMAC_API_ENV_FILE=/opt/venturerp/panossoerp/.env.usimac
+#   TENANT_USIMAC_HEALTH_URL=http://127.0.0.1:5075/health/ready
+#   TENANT_USIMAC_PROFILE=usimac                     # opcional; padrão: o nome
+#   TENANT_USIMAC_COMPOSE_ENV_VAR=VENTURERP_USIMAC_API_ENV   # opcional
+#
+# Usuário, base e senha são derivados do DATABASE_URL quando não informados em
+# TENANT_<NOME>_DATABASE_{USER,NAME,PASSWORD}.
+TENANT_NAMES=()
+TENANT_DB_URLS=()
+TENANT_ENV_FILES=()
+TENANT_HEALTH_URLS=()
+TENANT_PROFILES=()
+TENANT_COMPOSE_VARS=()
+TENANT_DB_USERS=()
+TENANT_DB_NAMES=()
+TENANT_DB_PASSWORDS=()
+TENANT_BACKUPS=()
+
+url_part() { # $1=url $2=user|password|database
+  case "$2" in
+    user)     printf '%s' "$1" | sed -nE 's#^[a-z0-9+]+://([^:@/]+).*#\1#p' ;;
+    password) printf '%s' "$1" | sed -nE 's#^[a-z0-9+]+://[^:]+:([^@]+)@.*#\1#p' ;;
+    database) printf '%s' "$1" | sed -nE 's#^[a-z0-9+]+://[^/]+/([^?]+).*$#\1#p' ;;
+  esac
+}
+
+# register_tenant <nome> <database_url> <api_env_file> <health_url> <profile> \
+#                 <compose_env_var> [db_user] [db_name] [db_password] [exige_senha]
+#
+# O tenant principal aceita senha vazia: instalações que autenticam por peer/trust
+# ou .pgpass não a carregam no DATABASE_URL. Todo tenant secundário exige senha,
+# porque ele só existe a partir de um role dedicado criado com senha.
+register_tenant() {
+  local name="$1" url="$2" env_file="$3" health="$4" profile="$5" compose_var="$6"
+  local db_user="${7:-}" db_name="${8:-}" db_password="${9:-}" require_password="${10:-1}"
+
+  [[ -n "${url}" ]]      || { printf 'update: tenant %s sem DATABASE_URL\n' "${name}" >&2; return 1; }
+  [[ -n "${env_file}" ]] || { printf 'update: tenant %s sem API_ENV_FILE\n' "${name}" >&2; return 1; }
+
+  db_user="${db_user:-$(url_part "${url}" user)}"
+  db_name="${db_name:-$(url_part "${url}" database)}"
+  db_password="${db_password:-$(url_part "${url}" password)}"
+  [[ -n "${db_user}" && -n "${db_name}" ]] || {
+    printf 'update: não consegui derivar usuário/base do tenant %s\n' "${name}" >&2; return 1; }
+  [[ "${require_password}" != "1" || -n "${db_password}" ]] || {
+    printf 'update: tenant %s sem senha no DATABASE_URL\n' "${name}" >&2; return 1; }
+
+  TENANT_NAMES+=("${name}")
+  TENANT_DB_URLS+=("${url}")
+  TENANT_ENV_FILES+=("${env_file}")
+  TENANT_HEALTH_URLS+=("${health}")
+  TENANT_PROFILES+=("${profile}")
+  TENANT_COMPOSE_VARS+=("${compose_var}")
+  TENANT_DB_USERS+=("${db_user}")
+  TENANT_DB_NAMES+=("${db_name}")
+  TENANT_DB_PASSWORDS+=("${db_password}")
+}
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+
+register_tenant principal "${DATABASE_URL}" "${API_ENV_FILE}" "${HEALTH_URL}" "" \
+  VENTURERP_API_ENV "${DATABASE_USER}" "${DATABASE_NAME}" "${DATABASE_PASSWORD}" 0
+
+# Compatibilidade: instalações anteriores descrevem o ambiente de treinamento em
+# TRAINING_*. Continua valendo, desde que não esteja também em VENTURERP_TENANTS.
+if [[ -n "${TRAINING_DATABASE_URL:-}" ]] && [[ " ${VENTURERP_TENANTS:-} " != *" treinamento "* ]] && [[ " ${VENTURERP_TENANTS:-} " != *" training "* ]]; then
+  : "${TRAINING_API_ENV_FILE:?TRAINING_API_ENV_FILE is required when TRAINING_DATABASE_URL is set}"
+  register_tenant training "${TRAINING_DATABASE_URL}" "${TRAINING_API_ENV_FILE}" \
+    "${TRAINING_HEALTH_URL:-http://127.0.0.1:5071/health/ready}" training VENTURERP_TRAINING_API_ENV \
+    "${TRAINING_DATABASE_USER:-}" "${TRAINING_DATABASE_NAME:-}" "${TRAINING_DATABASE_PASSWORD:-}"
+fi
+
+for tenant in ${VENTURERP_TENANTS:-}; do
+  upper="$(printf '%s' "${tenant}" | tr '[:lower:]-' '[:upper:]_')"
+  url_var="TENANT_${upper}_DATABASE_URL"
+  env_var="TENANT_${upper}_API_ENV_FILE"
+  health_var="TENANT_${upper}_HEALTH_URL"
+  profile_var="TENANT_${upper}_PROFILE"
+  compose_var_var="TENANT_${upper}_COMPOSE_ENV_VAR"
+  user_var="TENANT_${upper}_DATABASE_USER"
+  name_var="TENANT_${upper}_DATABASE_NAME"
+  pass_var="TENANT_${upper}_DATABASE_PASSWORD"
+  register_tenant "${tenant}" "${!url_var:-}" "${!env_var:-}" "${!health_var:-}" \
+    "${!profile_var:-${tenant}}" "${!compose_var_var:-VENTURERP_${upper}_API_ENV}" \
+    "${!user_var:-}" "${!name_var:-}" "${!pass_var:-}"
+done
+
+# Um tenant secundário nunca pode apontar para a base de outro: um erro de
+# copiar-e-colar no update.env faria o rollback restaurar o backup errado sobre
+# dados de produção. Falha antes de tocar em qualquer coisa.
+for ((i = 0; i < ${#TENANT_NAMES[@]}; i++)); do
+  for ((j = i + 1; j < ${#TENANT_NAMES[@]}; j++)); do
+    [[ "${TENANT_DB_NAMES[i]}" == "${TENANT_DB_NAMES[j]}" ]] && {
+      printf 'update: tenants %s e %s apontam para a mesma base (%s)\n' \
+        "${TENANT_NAMES[i]}" "${TENANT_NAMES[j]}" "${TENANT_DB_NAMES[i]}" >&2
+      exit 1
+    }
+  done
+  TENANT_BACKUPS+=("")
+done
+
+COMPOSE_PROFILES=""
+for profile in "${TENANT_PROFILES[@]}"; do
+  [[ -z "${profile}" ]] && continue
+  COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}${profile}"
+done
 
 mkdir -p "${UPDATE_DIR}" "${BACKUP_DIR}" "$(dirname "${LOCK_FILE}")"
 # A API (UID do appuser) escreve request.json/status.json aqui; garanta a posse.
@@ -63,19 +175,25 @@ LEGACY_WAS_ACTIVE=0
 systemctl is-active --quiet "${LEGACY_SERVICE}" && LEGACY_WAS_ACTIVE=1
 REQUESTED_AT="$(jq -er '.requested_at' "${REQUEST_FILE}")"
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-BACKUP_FILE="${BACKUP_DIR}/pre-update-${VERSION}-$(date -u +%Y%m%dT%H%M%SZ).dump"
-TRAINING_BACKUP_FILE=""
-TRAINING_DATABASE_USER=""
-TRAINING_DATABASE_NAME=""
-TRAINING_DATABASE_PASSWORD=""
-if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
-  TRAINING_BACKUP_FILE="${BACKUP_DIR}/pre-update-training-${VERSION}-$(date -u +%Y%m%dT%H%M%SZ).dump"
-  TRAINING_DATABASE_USER="${TRAINING_DATABASE_USER:-$(printf '%s' "${TRAINING_DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://([^:@/]+).*#\1#p')}"
-  TRAINING_DATABASE_NAME="${TRAINING_DATABASE_NAME:-$(printf '%s' "${TRAINING_DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^/]+/([^?]+).*$#\1#p')}"
-  TRAINING_DATABASE_PASSWORD="${TRAINING_DATABASE_PASSWORD:-$(printf '%s' "${TRAINING_DATABASE_URL}" | sed -nE 's#^[a-z0-9+]+://[^:]+:([^@]+)@.*#\1#p')}"
-  [[ -n "${TRAINING_DATABASE_USER}" && -n "${TRAINING_DATABASE_NAME}" && -n "${TRAINING_DATABASE_PASSWORD}" ]]
-fi
+for ((i = 0; i < ${#TENANT_NAMES[@]}; i++)); do
+  if [[ "${i}" -eq 0 ]]; then
+    TENANT_BACKUPS[i]="${BACKUP_DIR}/pre-update-${VERSION}-${STAMP}.dump"
+  else
+    TENANT_BACKUPS[i]="${BACKUP_DIR}/pre-update-${TENANT_NAMES[i]}-${VERSION}-${STAMP}.dump"
+  fi
+done
 SUCCESS=0
+
+# Toda invocação do compose precisa exportar o arquivo de env de cada tenant,
+# porque o compose.yml referencia um por serviço.
+compose() {
+  local -a env_assignments=("COMPOSE_PROFILES=${COMPOSE_PROFILES}")
+  local i
+  for ((i = 0; i < ${#TENANT_NAMES[@]}; i++)); do
+    env_assignments+=("${TENANT_COMPOSE_VARS[i]}=${TENANT_ENV_FILES[i]}")
+  done
+  env "${env_assignments[@]}" VENTURERP_IMAGE="$1" docker compose -f "${COMPOSE_FILE}" "${@:2}"
+}
 
 status() {
   local state="$1" progress="$2" message="$3" finished="${4:-}"
@@ -93,21 +211,34 @@ status() {
   chown "${UPDATE_UID}:${UPDATE_GID}" "${STATUS_FILE}" 2>/dev/null || true
 }
 
-restore_database() {
-  [[ -s "${BACKUP_FILE}" ]] || return 1
-  docker exec -e PGPASSWORD="${DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" psql -U "${DATABASE_USER}" -d postgres -v ON_ERROR_STOP=1 \
-    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DATABASE_NAME}' AND pid <> pg_backend_pid();" >/dev/null
-  docker exec -i -e PGPASSWORD="${DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_restore -U "${DATABASE_USER}" -d "${DATABASE_NAME}" \
-    --clean --if-exists --no-owner --no-acl <"${BACKUP_FILE}"
+backup_tenant() { # índice
+  local i="$1"
+  docker exec -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${DATABASE_CONTAINER}" \
+    pg_dump -U "${TENANT_DB_USERS[i]}" -d "${TENANT_DB_NAMES[i]}" \
+    --format=custom --no-owner --no-acl >"${TENANT_BACKUPS[i]}"
+  [[ -s "${TENANT_BACKUPS[i]}" ]]
+  docker exec -i "${DATABASE_CONTAINER}" pg_restore --list <"${TENANT_BACKUPS[i]}" >/dev/null
 }
 
-restore_training_database() {
-  [[ -z "${TRAINING_BACKUP_FILE}" ]] && return 0
-  [[ -s "${TRAINING_BACKUP_FILE}" ]] || return 1
-  docker exec -e PGPASSWORD="${TRAINING_DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" psql -U "${TRAINING_DATABASE_USER}" -d postgres -v ON_ERROR_STOP=1 \
-    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${TRAINING_DATABASE_NAME}' AND pid <> pg_backend_pid();" >/dev/null
-  docker exec -i -e PGPASSWORD="${TRAINING_DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_restore -U "${TRAINING_DATABASE_USER}" -d "${TRAINING_DATABASE_NAME}" \
-    --clean --if-exists --no-owner --no-acl <"${TRAINING_BACKUP_FILE}"
+restore_tenant() { # índice
+  local i="$1"
+  [[ -s "${TENANT_BACKUPS[i]}" ]] || return 1
+  docker exec -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${DATABASE_CONTAINER}" \
+    psql -U "${TENANT_DB_USERS[i]}" -d postgres -v ON_ERROR_STOP=1 \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${TENANT_DB_NAMES[i]}' AND pid <> pg_backend_pid();" >/dev/null
+  docker exec -i -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${DATABASE_CONTAINER}" \
+    pg_restore -U "${TENANT_DB_USERS[i]}" -d "${TENANT_DB_NAMES[i]}" \
+    --clean --if-exists --no-owner --no-acl <"${TENANT_BACKUPS[i]}"
+}
+
+await_health() { # url
+  local url="$1" attempt
+  [[ -n "${url}" ]] || return 0
+  for ((attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++)); do
+    if curl --fail --silent --show-error "${url}" >/dev/null; then return 0; fi
+    sleep "${HEALTH_INTERVAL_SECONDS}"
+  done
+  return 1
 }
 
 rollback() {
@@ -115,13 +246,13 @@ rollback() {
   trap - ERR
   [[ "${SUCCESS}" == "1" ]] && return 0
   status failed 90 "Falha na implantação; restaurando banco e versão anterior"
-  COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${TARGET_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
-    docker compose -f "${COMPOSE_FILE}" down --remove-orphans >/dev/null 2>&1 || true
-  restore_database || true
-  restore_training_database || true
+  compose "${TARGET_IMAGE}" down --remove-orphans >/dev/null 2>&1 || true
+  local i
+  for ((i = 0; i < ${#TENANT_NAMES[@]}; i++)); do
+    restore_tenant "${i}" || true
+  done
   if [[ -n "${PREVIOUS_IMAGE}" ]]; then
-    COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${PREVIOUS_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
-      docker compose -f "${COMPOSE_FILE}" up -d
+    compose "${PREVIOUS_IMAGE}" up -d
   elif [[ "${LEGACY_WAS_ACTIVE}" == "1" ]]; then
     systemctl start "${LEGACY_SERVICE}"
   fi
@@ -135,17 +266,10 @@ status running 5 "Validando pré-requisitos"
 for command in docker jq curl flock; do command -v "${command}" >/dev/null; done
 docker inspect "${DATABASE_CONTAINER}" >/dev/null
 
-status running 15 "Criando e verificando backup transacional"
-docker exec -e PGPASSWORD="${DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_dump -U "${DATABASE_USER}" -d "${DATABASE_NAME}" \
-  --format=custom --no-owner --no-acl >"${BACKUP_FILE}"
-[[ -s "${BACKUP_FILE}" ]]
-docker exec -i "${DATABASE_CONTAINER}" pg_restore --list <"${BACKUP_FILE}" >/dev/null
-if [[ -n "${TRAINING_BACKUP_FILE}" ]]; then
-  docker exec -e PGPASSWORD="${TRAINING_DATABASE_PASSWORD}" "${DATABASE_CONTAINER}" pg_dump -U "${TRAINING_DATABASE_USER}" -d "${TRAINING_DATABASE_NAME}" \
-    --format=custom --no-owner --no-acl >"${TRAINING_BACKUP_FILE}"
-  [[ -s "${TRAINING_BACKUP_FILE}" ]]
-  docker exec -i "${DATABASE_CONTAINER}" pg_restore --list <"${TRAINING_BACKUP_FILE}" >/dev/null
-fi
+status running 15 "Criando e verificando backup transacional de ${#TENANT_NAMES[@]} base(s)"
+for ((i = 0; i < ${#TENANT_NAMES[@]}; i++)); do
+  backup_tenant "${i}"
+done
 
 status running 30 "Baixando imagem assinada pelo pipeline"
 docker pull "${TARGET_IMAGE}"
@@ -156,38 +280,23 @@ docker cp "${container_id}:/app/migrations" "${MIGRATIONS_DIR}"
 docker rm "${container_id}" >/dev/null
 trap rollback ERR INT TERM
 
-status running 45 "Parando a API e aplicando migrations"
+status running 45 "Parando as APIs e aplicando migrations"
 systemctl stop "${LEGACY_SERVICE}" >/dev/null 2>&1 || true
 if [[ -n "${PREVIOUS_IMAGE}" ]]; then
-  COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${PREVIOUS_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
-    docker compose -f "${COMPOSE_FILE}" down --remove-orphans
+  compose "${PREVIOUS_IMAGE}" down --remove-orphans
 fi
-docker run --rm --network host -v "${MIGRATIONS_DIR}:/migrations:ro" migrate/migrate:v4.17.1 \
-  -path=/migrations -database="${DATABASE_URL}" up
-if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
+for ((i = 0; i < ${#TENANT_NAMES[@]}; i++)); do
   docker run --rm --network host -v "${MIGRATIONS_DIR}:/migrations:ro" migrate/migrate:v4.17.1 \
-    -path=/migrations -database="${TRAINING_DATABASE_URL}" up
-fi
+    -path=/migrations -database="${TENANT_DB_URLS[i]}" up
+done
 
 status running 70 "Iniciando a nova versão"
-COMPOSE_PROFILES="${COMPOSE_PROFILES}" VENTURERP_IMAGE="${TARGET_IMAGE}" VENTURERP_API_ENV="${API_ENV_FILE}" VENTURERP_TRAINING_API_ENV="${TRAINING_API_ENV_FILE:-}" \
-  docker compose -f "${COMPOSE_FILE}" up -d
+compose "${TARGET_IMAGE}" up -d
 
 status running 85 "Executando health-check de prontidão"
-healthy=0
-for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
-  if curl --fail --silent --show-error "${HEALTH_URL}" >/dev/null; then healthy=1; break; fi
-  sleep "${HEALTH_INTERVAL_SECONDS}"
+for ((i = 0; i < ${#TENANT_NAMES[@]}; i++)); do
+  await_health "${TENANT_HEALTH_URLS[i]}"
 done
-[[ "${healthy}" == "1" ]]
-if [[ -n "${TRAINING_DATABASE_URL:-}" ]]; then
-  training_healthy=0
-  for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
-    if curl --fail --silent --show-error "${TRAINING_HEALTH_URL}" >/dev/null; then training_healthy=1; break; fi
-    sleep "${HEALTH_INTERVAL_SECONDS}"
-  done
-  [[ "${training_healthy}" == "1" ]]
-fi
 
 printf '%s\n' "${TARGET_IMAGE}" >"${STATE_FILE}"
 SUCCESS=1

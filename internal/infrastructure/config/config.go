@@ -42,6 +42,19 @@ type Config struct {
 	OTELNamespace      string `mapstructure:"OTEL_SERVICE_NAMESPACE"`
 	SystemUpdateDir    string `mapstructure:"SYSTEM_UPDATE_DIR"`
 	BackendReleaseURL  string `mapstructure:"BACKEND_RELEASE_URL"`
+
+	// Pool de conexões com o banco. Existe porque o padrão do pgxpool é
+	// max(4, NumCPU): numa VPS de 3 vCPU isso dá QUATRO conexões para a empresa
+	// inteira, enquanto o PostgreSQL oferece 100. Contagem de CPU é má medida aqui
+	// — o trabalho de um ERP é de espera de I/O, não de processador, e um relatório
+	// longo segurando uma das quatro conexões enfileira as telas de todo mundo.
+	//
+	// Com mais de uma empresa no mesmo PostgreSQL, o teto de cada API precisa ser
+	// explícito para caber no max_connections compartilhado.
+	DBMaxConns        int `mapstructure:"DB_MAX_CONNS"`             // teto de conexões desta API
+	DBMinConns        int `mapstructure:"DB_MIN_CONNS"`             // conexões mantidas quentes
+	DBMaxConnLifetime int `mapstructure:"DB_MAX_CONN_LIFETIME_MIN"` // recicla conexão velha
+	DBMaxConnIdleTime int `mapstructure:"DB_MAX_CONN_IDLE_MIN"`     // devolve memória de conexão ociosa
 }
 
 // IsDevelopment reports whether the process is NOT running in production. Used
@@ -63,6 +76,7 @@ func Load() (*Config, error) {
 		"METRICS_ENABLED", "METRICS_TOKEN", "SHUTDOWN_TIMEOUT_SEC",
 		"OTEL_SERVICE_NAME", "OTEL_SERVICE_NAMESPACE",
 		"SYSTEM_UPDATE_DIR", "BACKEND_RELEASE_URL",
+		"DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME_MIN", "DB_MAX_CONN_IDLE_MIN",
 	} {
 		if err := viper.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("bind environment variable %s: %w", key, err)
@@ -97,6 +111,16 @@ func Load() (*Config, error) {
 	viper.SetDefault("OTEL_SERVICE_NAMESPACE", "venturerp")
 	viper.SetDefault("SYSTEM_UPDATE_DIR", "/tmp/venturerp-update")
 	viper.SetDefault("BACKEND_RELEASE_URL", "https://api.github.com/repos/FelipePn10/venturerp/releases/latest")
+	// 20 cabe com folga em duas empresas mais o treinamento sobre max_connections=100,
+	// e é cinco vezes o que o padrão do pgxpool daria na VPS atual.
+	viper.SetDefault("DB_MAX_CONNS", 20)
+	// Duas conexões quentes: a primeira tela após um período ocioso não paga o
+	// custo de abrir conexão e autenticar.
+	viper.SetDefault("DB_MIN_CONNS", 2)
+	viper.SetDefault("DB_MAX_CONN_LIFETIME_MIN", 60)
+	// Menor que os 30 min do pgxpool: numa máquina pequena, devolver memória de
+	// conexão ociosa mais cedo importa mais que economizar reconexões.
+	viper.SetDefault("DB_MAX_CONN_IDLE_MIN", 15)
 	if err := viper.ReadInConfig(); err != nil {
 		var configNotFound viper.ConfigFileNotFoundError
 		if !errors.As(err, &configNotFound) && !os.IsNotExist(err) {
@@ -107,6 +131,24 @@ func Load() (*Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("erro parse config: %w", err)
 	}
+	// Um teto inválido derrubaria a API na abertura do pool, com erro do driver em
+	// vez de mensagem que diga qual variável está errada.
+	if cfg.DBMaxConns < 1 {
+		return nil, fmt.Errorf("DB_MAX_CONNS deve ser no mínimo 1, recebi %d", cfg.DBMaxConns)
+	}
+	if cfg.DBMinConns < 0 {
+		return nil, fmt.Errorf("DB_MIN_CONNS não pode ser negativo, recebi %d", cfg.DBMinConns)
+	}
+	if cfg.DBMinConns > cfg.DBMaxConns {
+		return nil, fmt.Errorf("DB_MIN_CONNS (%d) não pode passar de DB_MAX_CONNS (%d)", cfg.DBMinConns, cfg.DBMaxConns)
+	}
+	if cfg.DBMaxConnLifetime < 1 {
+		return nil, fmt.Errorf("DB_MAX_CONN_LIFETIME_MIN deve ser no mínimo 1, recebi %d", cfg.DBMaxConnLifetime)
+	}
+	if cfg.DBMaxConnIdleTime < 1 {
+		return nil, fmt.Errorf("DB_MAX_CONN_IDLE_MIN deve ser no mínimo 1, recebi %d", cfg.DBMaxConnIdleTime)
+	}
+
 	cfg.DataEnvironment = strings.ToLower(strings.TrimSpace(cfg.DataEnvironment))
 	if cfg.DataEnvironment != "production" && cfg.DataEnvironment != "training" {
 		return nil, errors.New("DATA_ENVIRONMENT must be production or training")

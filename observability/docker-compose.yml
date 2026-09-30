@@ -27,6 +27,10 @@ services:
       - prometheus
       - loki
       - tempo
+    # Teto: só consulta; 85 MB medidos. A observabilidade não pode disputar memória
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 320m
+    cpus: 0.25
 
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -40,10 +44,19 @@ services:
       - prometheus_data:/prometheus
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # Um arquivo por empresa, com o METRICS_TOKEN daquela API. Fora do git:
+      # criar na VPS com o mesmo valor do .env correspondente.
+      #   install -d -m 0755 observability/prometheus/tokens
+      #   printf '%s' "<METRICS_TOKEN da empresa>" > observability/prometheus/tokens/<empresa>
+      - ./prometheus/tokens:/etc/prometheus/tokens:ro
     ports:
       - "127.0.0.1:9090:9090"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Teto: cresce com o número de séries; 135 MB medidos. A observabilidade não pode disputar memória
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 320m
+    cpus: 0.40
 
   loki:
     image: grafana/loki:3.2.1
@@ -54,6 +67,10 @@ services:
       - ./loki/local-config.yml:/etc/loki/local-config.yml:ro
     ports:
       - "127.0.0.1:3100:3100"
+    # Teto: 74 MB medidos. A observabilidade não pode disputar memória
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 256m
+    cpus: 0.30
 
   tempo:
     image: grafana/tempo:2.6.1
@@ -65,6 +82,10 @@ services:
     ports:
       - "127.0.0.1:3200:3200"
     user: root
+    # Teto: maior consumidor medido na VPS: 470 MB. A observabilidade não pode disputar memória
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 512m
+    cpus: 0.40
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.113.0
@@ -76,6 +97,10 @@ services:
       - "127.0.0.1:4317:4317"
       - "127.0.0.1:4318:4318"
       - "127.0.0.1:8889:8889"
+    # Teto: 55 MB medidos. A observabilidade não pode disputar memória
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 288m
+    cpus: 0.30
 
   alloy:
     image: grafana/alloy:v1.17.0
@@ -94,6 +119,11 @@ services:
       - /etc/machine-id:/etc/machine-id:ro
     ports:
       - "127.0.0.1:12345:12345"
+    # Teto com folga de ~2x sobre o medido em produção (217 MB). Teto encostado
+    # vira OOM na primeira variação de carga, que é pior que não ter teto.
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 384m
+    cpus: 0.30
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.16.0
@@ -105,6 +135,10 @@ services:
       - database
     ports:
       - "127.0.0.1:9187:9187"
+    # Teto: 20 MB medidos. A observabilidade não pode disputar memória
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 64m
+    cpus: 0.10
 
   postgres-exporter-development:
     image: prometheuscommunity/postgres-exporter:v0.16.0
@@ -116,6 +150,10 @@ services:
       - development
     ports:
       - "127.0.0.1:9188:9187"
+    # Teto: 16 MB medidos. A observabilidade não pode disputar memória
+    # com as APIs das empresas nem com o PostgreSQL que as duas usam.
+    mem_limit: 64m
+    cpus: 0.10
 
 volumes:
   grafana_data:

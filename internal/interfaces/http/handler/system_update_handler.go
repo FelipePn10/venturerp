@@ -42,6 +42,10 @@ func (h *SystemUpdateHandler) Request(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"uma atualização já está em andamento"}`, http.StatusConflict)
 		return
 	}
+	if errors.Is(err, system_update_uc.ErrUpdateNotAllowedHere) {
+		http.Error(w, `{"error":"a atualização da plataforma é feita pelo ambiente principal; fale com o suporte da Venture"}`, http.StatusForbidden)
+		return
+	}
 	if errors.Is(err, system_update_uc.ErrInvalidVersion) || errors.Is(err, system_update_uc.ErrNoRelease) {
 		http.Error(w, `{"error":"versão de atualização inválida ou indisponível"}`, http.StatusUnprocessableEntity)
 		return

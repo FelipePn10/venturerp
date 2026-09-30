@@ -10,13 +10,35 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
+  # /metrics da API exige Bearer quando METRICS_TOKEN está definido, e não é
+  # registrado quando está vazio — nesse caso a rota responde 404 e o alvo aparece
+  # como down. Cada empresa tem seu próprio token, em arquivo montado só-leitura,
+  # para que o segredo não fique dentro desta configuração versionada.
   - job_name: venturerp-api
     metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/tokens/tecnofer
     static_configs:
       - targets: ["host.docker.internal:5070"]
         labels:
           service: venturerp-api
           env: production
+          tenant: tecnofer
+
+  # Segunda empresa na mesma VPS. O rótulo `tenant` é o que permite separar carga,
+  # latência e erro por cliente nos painéis — sem ele as duas somam numa curva só.
+  - job_name: venturerp-api-usimac
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/tokens/usimac
+    static_configs:
+      - targets: ["host.docker.internal:5075"]
+        labels:
+          service: venturerp-api-usimac
+          env: production
+          tenant: usimac
 
   - job_name: venturerp-api-development
     metrics_path: /metrics

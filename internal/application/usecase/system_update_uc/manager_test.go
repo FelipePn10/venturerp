@@ -74,3 +74,27 @@ func TestManagerRejectsInvalidAndNonIncreasingVersions(t *testing.T) {
 		}
 	}
 }
+
+// TestManagerRefusesUpdateFromReadOnlyQueue cobre o contêiner de uma empresa que
+// não administra a VPS: a fila entra montada como somente leitura e o pedido
+// precisa recusar explicando isso, em vez de estourar um erro de escrita.
+func TestManagerRefusesUpdateFromReadOnlyQueue(t *testing.T) {
+	original := appversion.Version
+	appversion.Version = "1.0.0"
+	t.Cleanup(func() { appversion.Version = original })
+
+	// 0o500 reproduz a recusa de escrita sem exigir uma montagem real.
+	dir := filepath.Join(t.TempDir(), "queue")
+	if err := os.Mkdir(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	if os.Geteuid() == 0 {
+		t.Skip("root ignora as permissões do diretório")
+	}
+
+	manager := NewManager(dir, "https://releases.test/latest", releaseClient("v1.2.0"))
+	if _, err := manager.Request(context.Background(), "1.2.0"); !errors.Is(err, ErrUpdateNotAllowedHere) {
+		t.Fatalf("Request() error = %v, want ErrUpdateNotAllowedHere", err)
+	}
+}
