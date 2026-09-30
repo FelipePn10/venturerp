@@ -18,6 +18,17 @@ type CancelFiscalExitUseCase struct {
 	Repo          repository.FiscalRepository
 	FinancialRepo financialRepo.FinancialRepository
 	Auth          ports.AuthService
+	// Estorno do beneficiamento. Nulo em ambiente que não usa o módulo; o
+	// cancelamento segue funcionando como antes.
+	BeneficiamentoEstorno EstornoDeBeneficiamento
+}
+
+// EstornoDeBeneficiamento devolve ao saldo do cliente o que a nota cancelada
+// baixou. Interface aqui, implementação no módulo de material de terceiro: o
+// fiscal não precisa conhecer o razão do beneficiamento, só que existe algo a
+// desfazer. Tem de ser idempotente — o cancelamento pode ser repetido.
+type EstornoDeBeneficiamento interface {
+	EstornarNotaCancelada(ctx context.Context, fiscalExitID int64, usuario, motivo string) error
 }
 
 type CancelFiscalExitParams struct {
@@ -77,6 +88,22 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	// Revert associated Conta a Receber
 	if uc.FinancialRepo != nil {
 		_ = uc.FinancialRepo.CancelContasReceberByFiscalExit(ctx, params.ID)
+	}
+
+	// Estorno do material de terceiro, DEPOIS do cancelamento: cancelar na SEFAZ
+	// pode falhar, e devolver saldo de uma nota que continua válida seria inventar
+	// material no pátio. A falha aqui não é engolida — se o saldo do cliente não
+	// voltar, alguém precisa saber, porque o sistema estaria afirmando que o
+	// material voltou ao cliente. O estorno é idempotente e a mensagem diz como
+	// concluir.
+	if uc.BeneficiamentoEstorno != nil {
+		motivoEstorno := fmt.Sprintf("cancelamento da NF-e %d: %s", exit.NumeroNF, params.Motivo)
+		if err := uc.BeneficiamentoEstorno.EstornarNotaCancelada(ctx, params.ID, userID.String(), motivoEstorno); err != nil {
+			return nil, fmt.Errorf(
+				"a NF-e %d foi cancelada, mas o saldo de material de terceiro NÃO foi devolvido ao cliente: %w. "+
+					"Refaça o estorno pela tela de beneficiamento — ele não devolve duas vezes",
+				exit.NumeroNF, err)
+		}
 	}
 
 	return toFiscalExitResponse(updated), nil

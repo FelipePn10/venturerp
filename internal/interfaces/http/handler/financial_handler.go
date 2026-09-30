@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -11,6 +13,61 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 )
+
+// ── leitura de filtro de query string ────────────────────────────────────────
+//
+// Devolvem ponteiro nulo quando o parâmetro não veio ou veio vazio: no filtro,
+// "não informado" e "informado como zero" são perguntas diferentes, e um valor
+// não-ponteiro transformaria ausência em `= 0`.
+//
+// Parâmetro malformado é ignorado em vez de virar erro 400. É filtro de consulta:
+// recusar a tela inteira porque um campo de busca veio com lixo é pior para quem
+// usa do que devolver a lista sem aquele recorte.
+
+func textoDaQuery(q url.Values, chave string) *string {
+	v := strings.TrimSpace(q.Get(chave))
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func inteiroDaQuery(q url.Values, chave string) *int64 {
+	v := strings.TrimSpace(q.Get(chave))
+	if v == "" {
+		return nil
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &n
+}
+
+func valorDaQuery(q url.Values, chave string) *float64 {
+	v := strings.TrimSpace(q.Get(chave))
+	if v == "" {
+		return nil
+	}
+	// Aceita 1.234,56 e 1234.56: a tela manda ponto, mas colar de uma planilha
+	// brasileira traz vírgula, e recusar em silêncio seria filtro que não filtra.
+	v = strings.ReplaceAll(v, ".", "")
+	v = strings.ReplaceAll(v, ",", ".")
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return nil
+	}
+	return &f
+}
+
+func booleanoDaQuery(q url.Values, chave string) *bool {
+	v := strings.ToLower(strings.TrimSpace(q.Get(chave)))
+	if v == "" {
+		return nil
+	}
+	b := v == "1" || v == "true" || v == "sim" || v == "t"
+	return &b
+}
 
 type FinancialHandler struct {
 	createContaBancariaUC     *financial_uc.CreateContaBancariaUseCase
@@ -157,7 +214,7 @@ func NewFinancialHandler(
 func (h *FinancialHandler) CreateContaBancaria(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateContaBancariaDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createContaBancariaUC.Execute(r.Context(), dto)
@@ -182,7 +239,7 @@ func (h *FinancialHandler) ListContasBancarias(w http.ResponseWriter, r *http.Re
 func (h *FinancialHandler) CreateCondicaoPagamento(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCondicaoPagamentoDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createCondicaoPagamentoUC.Execute(r.Context(), dto)
@@ -207,7 +264,7 @@ func (h *FinancialHandler) ListCondicoesPagamento(w http.ResponseWriter, r *http
 func (h *FinancialHandler) CreatePlanoContas(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePlanoContasDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createPlanoContasUC.Execute(r.Context(), dto)
@@ -232,7 +289,7 @@ func (h *FinancialHandler) ListPlanoContas(w http.ResponseWriter, r *http.Reques
 func (h *FinancialHandler) CreateCentroCusto(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCentroCustoDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createCentroCustoUC.Execute(r.Context(), dto)
@@ -257,7 +314,7 @@ func (h *FinancialHandler) ListCentrosCusto(w http.ResponseWriter, r *http.Reque
 func (h *FinancialHandler) CreateContaPagar(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateContaPagarDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createContaPagarUC.Execute(r.Context(), dto)
@@ -268,9 +325,29 @@ func (h *FinancialHandler) CreateContaPagar(w http.ResponseWriter, r *http.Reque
 	security.RespondJSON(w, http.StatusCreated, result)
 }
 
+// ListContasPagar lê os filtros da QUERY STRING.
+//
+// Lia do corpo da requisição antes, e a rota é GET: nenhum cliente HTTP manda
+// corpo num GET por padrão, então o filtro nunca chegava. O sintoma não era erro
+// — era a tela mostrar a carteira inteira com o filtro marcado, e a pessoa
+// concluir que não havia título vencido quando havia.
 func (h *FinancialHandler) ListContasPagar(w http.ResponseWriter, r *http.Request) {
-	var dto request.ListContasPagarFilter
-	_ = json.NewDecoder(r.Body).Decode(&dto)
+	q := r.URL.Query()
+	dto := request.ListContasPagarFilter{
+		Status:          textoDaQuery(q, "status"),
+		StatusAprovacao: textoDaQuery(q, "status_aprovacao"),
+		FornecedorID:    inteiroDaQuery(q, "fornecedor_id"),
+		PlanoContasID:   inteiroDaQuery(q, "plano_contas_id"),
+		CentroCustoID:   inteiroDaQuery(q, "centro_custo_id"),
+		TipoDocumento:   textoDaQuery(q, "tipo_documento"),
+		Documento:       textoDaQuery(q, "documento"),
+		StartDate:       textoDaQuery(q, "start_date"),
+		EndDate:         textoDaQuery(q, "end_date"),
+		DateField:       textoDaQuery(q, "date_field"),
+		ValorMinimo:     valorDaQuery(q, "valor_minimo"),
+		ValorMaximo:     valorDaQuery(q, "valor_maximo"),
+		SomenteVencidos: booleanoDaQuery(q, "somente_vencidos"),
+	}
 	results, err := h.listContasPagarUC.Execute(r.Context(), dto)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -288,7 +365,7 @@ func (h *FinancialHandler) GetContaPagar(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.getContaPagarUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -317,7 +394,7 @@ func (h *FinancialHandler) BaixarContaPagar(w http.ResponseWriter, r *http.Reque
 	}
 	var dto request.BaixarContaPagarDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	if err := h.baixarContaPagarUC.Execute(r.Context(), id, dto); err != nil {
@@ -355,7 +432,7 @@ func (h *FinancialHandler) GetAgingPagar(w http.ResponseWriter, r *http.Request)
 func (h *FinancialHandler) CreateContaReceber(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateContaReceberDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createContaReceberUC.Execute(r.Context(), dto)
@@ -366,9 +443,23 @@ func (h *FinancialHandler) CreateContaReceber(w http.ResponseWriter, r *http.Req
 	security.RespondJSON(w, http.StatusCreated, result)
 }
 
+// ListContasReceber lê os filtros da query string, pelo mesmo motivo de
+// ListContasPagar.
 func (h *FinancialHandler) ListContasReceber(w http.ResponseWriter, r *http.Request) {
-	var dto request.ListContasReceberFilter
-	_ = json.NewDecoder(r.Body).Decode(&dto)
+	q := r.URL.Query()
+	dto := request.ListContasReceberFilter{
+		Status:          textoDaQuery(q, "status"),
+		ClienteID:       inteiroDaQuery(q, "cliente_id"),
+		SalesOrderID:    inteiroDaQuery(q, "sales_order_id"),
+		FiscalExitID:    inteiroDaQuery(q, "fiscal_exit_id"),
+		Documento:       textoDaQuery(q, "documento"),
+		StartDate:       textoDaQuery(q, "start_date"),
+		EndDate:         textoDaQuery(q, "end_date"),
+		DateField:       textoDaQuery(q, "date_field"),
+		ValorMinimo:     valorDaQuery(q, "valor_minimo"),
+		ValorMaximo:     valorDaQuery(q, "valor_maximo"),
+		SomenteVencidos: booleanoDaQuery(q, "somente_vencidos"),
+	}
 	results, err := h.listContasReceberUC.Execute(r.Context(), dto)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -386,7 +477,7 @@ func (h *FinancialHandler) GetContaReceber(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.getContaReceberUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -401,7 +492,7 @@ func (h *FinancialHandler) BaixarContaReceber(w http.ResponseWriter, r *http.Req
 	}
 	var dto request.BaixarContaReceberDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	if err := h.baixarContaReceberUC.Execute(r.Context(), id, dto); err != nil {
@@ -472,7 +563,7 @@ func (h *FinancialHandler) GetSaldoContas(w http.ResponseWriter, r *http.Request
 func (h *FinancialHandler) ApurarImpostos(w http.ResponseWriter, r *http.Request) {
 	var dto request.ApurarImpostosDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	results, err := h.apurarImpostosUC.Execute(r.Context(), dto)
@@ -748,7 +839,7 @@ func (h *FinancialHandler) ImportarOFX(w http.ResponseWriter, r *http.Request) {
 		OFXContent string `json:"ofx_content"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.importarOFXUC.Execute(r.Context(), contaID, body.OFXContent)

@@ -31,12 +31,15 @@ func NewAdiantamentoHandler(
 func (h *AdiantamentoHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateAdiantamentoDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		// RespondUseCaseError escolhe o status pelo TIPO do erro. Antes, TODA falha
+		// virava 400 com o texto cru — inclusive erro de banco, que chegava à tela
+		// em inglês e como se fosse culpa do que a pessoa digitou.
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -69,7 +72,7 @@ func (h *AdiantamentoHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -83,12 +86,12 @@ func (h *AdiantamentoHandler) Aplicar(w http.ResponseWriter, r *http.Request) {
 	}
 	var dto request.AplicarAdiantamentoDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.aplicarUC.Execute(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
