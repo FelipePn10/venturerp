@@ -21,18 +21,55 @@ type BaixaParams struct {
 	BaixadoPor      uuid.UUID `json:"baixado_por"`
 }
 
+// DateField diz sobre qual data o período filtra. Vazio significa vencimento: é a
+// pergunta da cobrança, e mudar o padrão mudaria o resultado de toda consulta que
+// já existe.
+type DateField string
+
+const (
+	DateFieldVencimento DateField = "VENCIMENTO"
+	DateFieldEmissao    DateField = "EMISSAO"
+)
+
+// Coluna devolve a coluna a filtrar. Só dois valores são aceitos, e o nome nunca
+// vem do cliente para a consulta: interpolar texto de fora em SQL é injeção.
+func (d DateField) Coluna() string {
+	if d == DateFieldEmissao {
+		return "data_emissao"
+	}
+	return "data_vencimento"
+}
+
 type CPFilter struct {
 	Status       *string    `json:"status,omitempty"`
 	FornecedorID *int64     `json:"fornecedor_id,omitempty"`
 	StartDate    *time.Time `json:"start_date,omitempty"`
 	EndDate      *time.Time `json:"end_date,omitempty"`
+	DateField    DateField  `json:"date_field,omitempty"`
+	// Documento casa por trecho, sem diferenciar maiúsculas: quem procura digita
+	// "1001", não "NF-e 1001/1".
+	Documento       *string  `json:"documento,omitempty"`
+	TipoDocumento   *string  `json:"tipo_documento,omitempty"`
+	PlanoContasID   *int64   `json:"plano_contas_id,omitempty"`
+	CentroCustoID   *int64   `json:"centro_custo_id,omitempty"`
+	ValorMinimo     *float64 `json:"valor_minimo,omitempty"`
+	ValorMaximo     *float64 `json:"valor_maximo,omitempty"`
+	SomenteVencidos bool     `json:"somente_vencidos,omitempty"`
+	StatusAprovacao *string  `json:"status_aprovacao,omitempty"`
 }
 
 type CRFilter struct {
-	Status    *string    `json:"status,omitempty"`
-	ClienteID *int64     `json:"cliente_id,omitempty"`
-	StartDate *time.Time `json:"start_date,omitempty"`
-	EndDate   *time.Time `json:"end_date,omitempty"`
+	Status          *string    `json:"status,omitempty"`
+	ClienteID       *int64     `json:"cliente_id,omitempty"`
+	StartDate       *time.Time `json:"start_date,omitempty"`
+	EndDate         *time.Time `json:"end_date,omitempty"`
+	DateField       DateField  `json:"date_field,omitempty"`
+	Documento       *string    `json:"documento,omitempty"`
+	SalesOrderID    *int64     `json:"sales_order_id,omitempty"`
+	FiscalExitID    *int64     `json:"fiscal_exit_id,omitempty"`
+	ValorMinimo     *float64   `json:"valor_minimo,omitempty"`
+	ValorMaximo     *float64   `json:"valor_maximo,omitempty"`
+	SomenteVencidos bool       `json:"somente_vencidos,omitempty"`
 }
 
 type AgingResult struct {
@@ -137,7 +174,11 @@ type FinancialRepository interface {
 	ListAplicacoesByAdiantamento(ctx context.Context, advID int64) ([]*entity.AdiantamentoAplicacao, error)
 
 	// Conciliação Bancária
-	SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) error
+	// SaveExtratoItem grava um lançamento do extrato. Devolve false quando a linha
+	// JÁ existia (mesmo hash): duplicata é resultado normal de reimportar o mesmo
+	// arquivo, e não erro. Sem esse retorno, "duplicado" e "falhou" eram contados
+	// um pelo outro — e a tela informava importação bem-sucedida de nada.
+	SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) (bool, error)
 	GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error)
 	ConciliarExtrato(ctx context.Context, extratoID, fluxoID int64) error
 	AutoMatchExtrato(ctx context.Context, contaID int64) (int, error)

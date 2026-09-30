@@ -50,11 +50,30 @@ type CreateContaPagarDTO struct {
 	Observacao      *string `json:"observacao,omitempty"`
 }
 
+// ListContasPagarFilter é a consulta da carteira a pagar.
+//
+// Os campos saem da QUERY STRING, não do corpo: a rota é GET, e um filtro no
+// corpo de um GET não chega — nenhum cliente HTTP o envia por padrão, e o efeito
+// era a tela mostrar a carteira inteira com o filtro aparentemente aplicado.
 type ListContasPagarFilter struct {
 	Status       *string `json:"status,omitempty"`
 	FornecedorID *int64  `json:"fornecedor_id,omitempty"`
 	StartDate    *string `json:"start_date,omitempty"`
 	EndDate      *string `json:"end_date,omitempty"`
+	// DateField escolhe a data do período: VENCIMENTO (padrão) ou EMISSAO.
+	// Cobrança pergunta "o que vence nesta semana"; conferência com o fornecedor
+	// pergunta "o que ele faturou no mês" — são datas diferentes.
+	DateField     *string  `json:"date_field,omitempty"`
+	Documento     *string  `json:"documento,omitempty"`
+	TipoDocumento *string  `json:"tipo_documento,omitempty"`
+	PlanoContasID *int64   `json:"plano_contas_id,omitempty"`
+	CentroCustoID *int64   `json:"centro_custo_id,omitempty"`
+	ValorMinimo   *float64 `json:"valor_minimo,omitempty"`
+	ValorMaximo   *float64 `json:"valor_maximo,omitempty"`
+	// SomenteVencidos: em aberto com vencimento anterior a hoje. É a pergunta que
+	// mais se faz na tela e a que dava mais trabalho montar à mão.
+	SomenteVencidos *bool   `json:"somente_vencidos,omitempty"`
+	StatusAprovacao *string `json:"status_aprovacao,omitempty"`
 }
 
 type ApproveContaPagarDTO struct {
@@ -85,11 +104,20 @@ type CreateContaReceberDTO struct {
 	Observacao      *string `json:"observacao,omitempty"`
 }
 
+// ListContasReceberFilter é a consulta da carteira a receber. Mesma disciplina de
+// ListContasPagarFilter: os campos vêm da query string.
 type ListContasReceberFilter struct {
-	Status    *string `json:"status,omitempty"`
-	ClienteID *int64  `json:"cliente_id,omitempty"`
-	StartDate *string `json:"start_date,omitempty"`
-	EndDate   *string `json:"end_date,omitempty"`
+	Status          *string  `json:"status,omitempty"`
+	ClienteID       *int64   `json:"cliente_id,omitempty"`
+	StartDate       *string  `json:"start_date,omitempty"`
+	EndDate         *string  `json:"end_date,omitempty"`
+	DateField       *string  `json:"date_field,omitempty"`
+	Documento       *string  `json:"documento,omitempty"`
+	SalesOrderID    *int64   `json:"sales_order_id,omitempty"`
+	FiscalExitID    *int64   `json:"fiscal_exit_id,omitempty"`
+	ValorMinimo     *float64 `json:"valor_minimo,omitempty"`
+	ValorMaximo     *float64 `json:"valor_maximo,omitempty"`
+	SomenteVencidos *bool    `json:"somente_vencidos,omitempty"`
 }
 
 type BaixarContaReceberDTO struct {
