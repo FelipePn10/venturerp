@@ -55,3 +55,26 @@ func (c BOMChild) QuantidadeNaUnidadeDeEstoque() float64 {
 	}
 	return c.Quantity
 }
+
+// ─── esquema de rateio e histórico (migração 000373) ─────────────────────────
+
+// RateioRepository é a parte do repositório que governa os indiretos e o
+// histórico. Separada da interface principal porque as tabelas são novas e
+// pertencem à empresa por coluna própria, não por derivação do item.
+type RateioRepository interface {
+	// ListarRegrasDeRateio devolve todas as regras da empresa da sessão, ativas e
+	// inativas: a tela de cadastro precisa mostrar as duas.
+	ListarRegrasDeRateio(ctx context.Context) ([]*entity.RegraDeRateio, error)
+	CriarRegraDeRateio(ctx context.Context, r *entity.RegraDeRateio) (*entity.RegraDeRateio, error)
+	AtualizarRegraDeRateio(ctx context.Context, r *entity.RegraDeRateio) (*entity.RegraDeRateio, error)
+	DesativarRegraDeRateio(ctx context.Context, id int64) error
+	// GravarHistoricoDeCusto grava a apuração. Nunca atualiza: o histórico é fato
+	// consumado e há trigger no banco impedindo alteração.
+	GravarHistoricoDeCusto(ctx context.Context, h *entity.HistoricoDeCusto) error
+	// HistoricoDeCusto devolve as apurações do item, da mais recente para a mais
+	// antiga, para a tela comparar componente a componente.
+	HistoricoDeCusto(ctx context.Context, itemCode int64, mask string, limite int) ([]*entity.HistoricoDeCusto, error)
+	// CentrosDoRoteiro devolve os centros de trabalho que o roteiro do item usa —
+	// é o que decide quais regras de escopo por centro alcançam o item.
+	CentrosDoRoteiro(ctx context.Context, itemCode int64, mask string) (map[int64]bool, error)
+}

@@ -131,6 +131,25 @@ func (t OperationTime) Batches(qty float64) float64 {
 	return math.Ceil(qty / base)
 }
 
+// SetupMachineHours é a parcela de PREPARAÇÃO dentro da ocupação de máquina.
+//
+// Existe para o custo separar preparação de produção: as duas se atacam de formas
+// opostas (setup alto pede lote maior; hora-máquina alta pede outro recurso) e no
+// mesmo número nenhuma das duas aparece. Setup não escala com a quantidade — é uma
+// vez por ordem —, e é justamente por isso que diluí-lo pelo lote muda o custo
+// unitário.
+func (t OperationTime) SetupMachineHours() float64 { return t.Setup }
+
+// SetupLaborHours é a preparação em horas-homem: a equipe inteira participa do
+// setup, então a parcela escala com o tamanho da equipe — igual a LaborHours.
+func (t OperationTime) SetupLaborHours() float64 {
+	crew := t.CrewSize
+	if crew <= 0 {
+		crew = 1
+	}
+	return t.Setup * crew
+}
+
 // MachineHours is the work-center occupancy (setup once + run per batch) in hours.
 func (t OperationTime) MachineHours(qty float64) float64 {
 	return t.Setup + t.Run*t.Batches(qty)

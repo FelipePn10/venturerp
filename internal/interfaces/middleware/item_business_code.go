@@ -211,6 +211,10 @@ var itemPathPatterns = []struct {
 	{[]string{"api", "configurator", "items"}, 3},
 	{[]string{"api", "quality", "plans", "by-item"}, 4},
 	{[]string{"api", "standard-cost", "items"}, 3},
+	// Histórico de apuração de custo (migração 000373). A tela manda o código
+	// PÚBLICO do item, como toda rota de item; sem tradução a consulta procuraria
+	// pelo código público na coluna do código interno e devolveria vazio.
+	{[]string{"api", "standard-cost", "history"}, 3},
 	{[]string{"api", "mrp-calculation", "profile"}, 3},
 	{[]string{"api", "item-calendar-promise"}, 2},
 	{[]string{"api", "financial", "relatorios", "ficha-tecnica"}, 4},
