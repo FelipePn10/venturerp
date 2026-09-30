@@ -69,10 +69,11 @@ const sampleOFX2XML = `<?xml version="1.0" encoding="UTF-8"?>
 </OFX>`
 
 func TestParseOFX_SGML_TwoTransactions(t *testing.T) {
-	txns, err := parseOFX(sampleOFX1)
+	extrato, err := parseOFX(sampleOFX1)
 	if err != nil {
 		t.Fatal(err)
 	}
+	txns := extrato.Transacoes
 	if len(txns) != 2 {
 		t.Fatalf("expected 2 transactions, got %d", len(txns))
 	}
@@ -108,10 +109,11 @@ func TestParseOFX_SGML_TwoTransactions(t *testing.T) {
 }
 
 func TestParseOFX_XML_TwoTransactions(t *testing.T) {
-	txns, err := parseOFX(sampleOFX2XML)
+	extrato, err := parseOFX(sampleOFX2XML)
 	if err != nil {
 		t.Fatal(err)
 	}
+	txns := extrato.Transacoes
 	if len(txns) != 2 {
 		t.Fatalf("expected 2 transactions, got %d", len(txns))
 	}
@@ -157,23 +159,19 @@ func TestParseOFXDate_Invalid(t *testing.T) {
 	}
 }
 
+// Antes estes dois casos exigiam "nenhum erro", e era essa expectativa que
+// sustentava o defeito: importar um arquivo qualquer respondia SUCESSO com zero
+// lançamento, e quem importava concluía que o extrato do mês estava vazio.
+// Recusar é o comportamento correto.
 func TestParseOFX_EmptyContent(t *testing.T) {
-	txns, err := parseOFX("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(txns) != 0 {
-		t.Errorf("expected 0 transactions for empty content, got %d", len(txns))
+	if _, err := parseOFX(""); err == nil {
+		t.Fatal("conteúdo vazio foi aceito como extrato")
 	}
 }
 
 func TestParseOFX_NoTransactions(t *testing.T) {
 	content := `<OFX><BANKMSGSRSV1></BANKMSGSRSV1></OFX>`
-	txns, err := parseOFX(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(txns) != 0 {
-		t.Errorf("expected 0 transactions, got %d", len(txns))
+	if _, err := parseOFX(content); err == nil {
+		t.Fatal("OFX sem nenhum lançamento foi aceito")
 	}
 }
