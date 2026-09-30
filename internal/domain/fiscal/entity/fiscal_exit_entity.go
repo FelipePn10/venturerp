@@ -42,37 +42,41 @@ type FiscalExit struct {
 	DestTelefone        *string
 	// CustomerCode e o cliente de onde o endereco e a condicao de pagamento
 	// foram resolvidos; e por ele que o titulo nasce com dono.
-	CustomerCode          *int64
-	Cfop                  string
-	NaturezaOperacao      string
-	ValorProdutos         float64
-	ValorFrete            float64
-	ValorSeguro           float64
-	ValorDesconto         float64
-	ValorIPI              float64
-	ValorICMS             float64
-	ValorPIS              float64
-	ValorCOFINS           float64
-	BaseICMSST            float64
-	ValorICMSST           float64
-	ValorTotal            float64
-	SalesOrderCode        *int64
-	SourceType            *string
-	ShipmentLoadCode      *int64
-	ShipmentCode          *int64
-	FiscalCouponNumber    *string
-	FiscalCouponDate      *time.Time
-	FiscalCouponECFSerial *string
-	Status                FiscalExitStatus
-	Protocolo             *string
-	XmlPath               *string
-	DanfePath             *string
-	FocusRef              *string
-	IsActive              bool
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	CreatedBy             uuid.UUID
-	Itens                 []*FiscalExitItem
+	CustomerCode     *int64
+	Cfop             string
+	NaturezaOperacao string
+	ValorProdutos    float64
+	ValorFrete       float64
+	ValorSeguro      float64
+	ValorDesconto    float64
+	ValorIPI         float64
+	ValorICMS        float64
+	ValorPIS         float64
+	ValorCOFINS      float64
+	BaseICMSST       float64
+	ValorICMSST      float64
+	ValorTotal       float64
+	SalesOrderCode   *int64
+	SourceType       *string
+	// CustomerMaterialRemittanceID liga a nota à remessa de beneficiamento que a
+	// originou (migração 000374). É o que permite RETOMAR um rascunho quando o
+	// faturamento falha no meio, em vez de criar outra nota ao repetir.
+	CustomerMaterialRemittanceID *int64
+	ShipmentLoadCode             *int64
+	ShipmentCode                 *int64
+	FiscalCouponNumber           *string
+	FiscalCouponDate             *time.Time
+	FiscalCouponECFSerial        *string
+	Status                       FiscalExitStatus
+	Protocolo                    *string
+	XmlPath                      *string
+	DanfePath                    *string
+	FocusRef                     *string
+	IsActive                     bool
+	CreatedAt                    time.Time
+	UpdatedAt                    time.Time
+	CreatedBy                    uuid.UUID
+	Itens                        []*FiscalExitItem
 }
 
 type FiscalExitItem struct {
@@ -106,5 +110,13 @@ type FiscalExitItem struct {
 	CstCOFINS         *string
 	OrigemMercadoria  string
 	Description       *string
-	CreatedAt         time.Time
+	// UnidadeComercial é a unidade da linha na NF-e (`uCom`). Nulo cai em "UN" no
+	// autorizador, que era o valor FIXO de antes — a nota de beneficiamento da Usimac
+	// tem linhas em KG, e sair em UN descreve outra mercadoria.
+	UnidadeComercial *string
+	// CodigoProduto é o `cProd` da linha. Texto porque pode ser o código DO CLIENTE
+	// (material de terceiro, que não existe no nosso cadastro) ou conter letras.
+	// Nulo cai em `ItemCode`.
+	CodigoProduto *string
+	CreatedAt     time.Time
 }

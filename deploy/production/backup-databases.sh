@@ -24,7 +24,9 @@
 #   BACKUP_DIR        destino          (padrão: /mnt/HC_Volume_105957343/venturerp-backups)
 #   RETENTION_DAYS    retenção         (padrão: 30)
 #   DATABASE_CONTAINER contêiner       (padrão: venturerp-postgres)
-#   SKIP_DATABASES    bases a ignorar, separadas por espaço (padrão: postgres template0 template1)
+#   SKIP_DATABASES    bases a ignorar, separadas por espaço
+#                     (padrão: postgres template0 template1 venturerp_training
+#                      venturerp_development)
 set -Eeuo pipefail
 umask 077
 
@@ -32,7 +34,12 @@ DB_DIR="${DB_DIR:-/opt/venturerp/database}"
 BACKUP_DIR="${BACKUP_DIR:-/mnt/HC_Volume_105957343/venturerp-backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
 DATABASE_CONTAINER="${DATABASE_CONTAINER:-venturerp-postgres}"
-SKIP_DATABASES="${SKIP_DATABASES:-postgres template0 template1}"
+# ⚠️ Treinamento e desenvolvimento ficam FORA do backup de produção por contrato:
+# são ambientes descartáveis, com dados de exercício, e entrar no backup os
+# colocaria também na retenção e no restore — um restore de produção não pode
+# ressuscitar base de treinamento. Descobrir as bases é o certo (empresa nova entra
+# sozinha), mas descobrir sem excluir estas duas traz o que não deveria estar lá.
+SKIP_DATABASES="${SKIP_DATABASES:-postgres template0 template1 venturerp_training venturerp_development}"
 
 if [[ -r "${DB_DIR}/.env" ]]; then
   set -a

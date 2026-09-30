@@ -301,3 +301,113 @@ func traduzirErroDeRateio(err error) error {
 	}
 	return err
 }
+
+// ─── custo-padrão com todos os componentes ───────────────────────────────────
+
+const colunasCustoPadrao = `id, item_code, mask, material_cost, setup_cost, machine_cost,
+labor_cost, subcontract_cost, overhead_cost, own_level_cost, lower_level_cost,
+lot_size, total_cost, currency, calculated_at, calculated_by::text`
+
+func scanCustoPadrao(row pgx.Row) (*entity.ItemStandardCost, error) {
+	var c entity.ItemStandardCost
+	var autor *string
+	if err := row.Scan(&c.ID, &c.ItemCode, &c.Mask, &c.MaterialCost, &c.SetupCost,
+		&c.MachineCost, &c.LaborCost, &c.SubcontractCost, &c.OverheadCost,
+		&c.OwnLevelCost, &c.LowerLevelCost, &c.LotSize, &c.TotalCost, &c.Currency,
+		&c.CalculatedAt, &autor); err != nil {
+		return nil, err
+	}
+	if autor != nil {
+		if id, err := uuid.Parse(*autor); err == nil {
+			c.CalculatedBy = id
+		}
+	}
+	return &c, nil
+}
+
+// UpsertItemStandardCost grava o custo-padrão com TODOS os componentes.
+//
+// Escrito à mão, substituindo a consulta do sqlc: a gerada cobre apenas material,
+// mão de obra e overhead. Com a conversão separada em componentes (migração
+// 000373), gravar só esses três deixava preparação, hora-máquina e serviço de
+// terceiro FORA do total gravado — e é o total gravado que a precificação lê. A
+// resposta da apuração estava certa; o valor guardado, não.
+func (r *StandardCostRepositorySQLC) UpsertItemStandardCost(ctx context.Context, cost *entity.ItemStandardCost) (*entity.ItemStandardCost, error) {
+	if err := r.ConferirItemDaEmpresa(ctx, cost.ItemCode); err != nil {
+		return nil, err
+	}
+	lote := cost.LotSize
+	if lote <= 0 {
+		lote = 1
+	}
+	moeda := cost.Currency
+	if moeda == "" {
+		moeda = "BRL"
+	}
+	saved, err := scanCustoPadrao(r.pool.QueryRow(ctx, fmt.Sprintf(`
+INSERT INTO public.item_standard_costs
+  (item_code, mask, material_cost, setup_cost, machine_cost, labor_cost,
+   subcontract_cost, overhead_cost, own_level_cost, lower_level_cost, lot_size,
+   currency, calculated_by)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::uuid)
+ON CONFLICT (item_code, mask) DO UPDATE SET
+  material_cost    = EXCLUDED.material_cost,
+  setup_cost       = EXCLUDED.setup_cost,
+  machine_cost     = EXCLUDED.machine_cost,
+  labor_cost       = EXCLUDED.labor_cost,
+  subcontract_cost = EXCLUDED.subcontract_cost,
+  overhead_cost    = EXCLUDED.overhead_cost,
+  own_level_cost   = EXCLUDED.own_level_cost,
+  lower_level_cost = EXCLUDED.lower_level_cost,
+  lot_size         = EXCLUDED.lot_size,
+  currency         = EXCLUDED.currency,
+  calculated_at    = NOW(),
+  calculated_by    = EXCLUDED.calculated_by
+RETURNING %s`, colunasCustoPadrao),
+		cost.ItemCode, cost.Mask, cost.MaterialCost, cost.SetupCost, cost.MachineCost,
+		cost.LaborCost, cost.SubcontractCost, cost.OverheadCost, cost.OwnLevelCost,
+		cost.LowerLevelCost, lote, moeda, cost.CalculatedBy.String()))
+	if err != nil {
+		return nil, fmt.Errorf("gravando o custo-padrão do item %d: %w", cost.ItemCode, err)
+	}
+	return saved, nil
+}
+
+// GetItemStandardCost lê o custo-padrão com os componentes.
+func (r *StandardCostRepositorySQLC) GetItemStandardCost(ctx context.Context, itemCode int64, mask string) (*entity.ItemStandardCost, error) {
+	if err := r.ConferirItemDaEmpresa(ctx, itemCode); err != nil {
+		return nil, err
+	}
+	c, err := scanCustoPadrao(r.pool.QueryRow(ctx, fmt.Sprintf(`
+SELECT %s FROM public.item_standard_costs WHERE item_code = $1 AND mask = $2`, colunasCustoPadrao),
+		itemCode, mask))
+	if err == pgx.ErrNoRows {
+		return nil, errorsuc.NewNotFoundError("custo-padrão não apurado para o item")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo o custo-padrão do item %d: %w", itemCode, err)
+	}
+	return c, nil
+}
+
+// ListItemStandardCosts devolve o custo-padrão do item em todas as máscaras.
+func (r *StandardCostRepositorySQLC) ListItemStandardCosts(ctx context.Context, itemCode int64) ([]*entity.ItemStandardCost, error) {
+	if err := r.ConferirItemDaEmpresa(ctx, itemCode); err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
+SELECT %s FROM public.item_standard_costs WHERE item_code = $1 ORDER BY mask`, colunasCustoPadrao), itemCode)
+	if err != nil {
+		return nil, fmt.Errorf("listando o custo-padrão do item %d: %w", itemCode, err)
+	}
+	defer rows.Close()
+	out := make([]*entity.ItemStandardCost, 0)
+	for rows.Next() {
+		c, err := scanCustoPadrao(rows)
+		if err != nil {
+			return nil, fmt.Errorf("lendo custo-padrão: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}

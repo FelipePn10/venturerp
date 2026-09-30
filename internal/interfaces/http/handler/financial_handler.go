@@ -44,15 +44,33 @@ func inteiroDaQuery(q url.Values, chave string) *int64 {
 	return &n
 }
 
+// valorDaQuery lê um valor monetário do filtro.
+//
+// ⚠️ A primeira versão apagava TODO ponto antes de converter, para aceitar o
+// formato brasileiro. Com isso `1234.56` — que é exatamente o que um
+// `<input type="number">` manda — virava `123456`, e o filtro de faixa devolvia
+// resultado errado para qualquer valor com centavo.
+//
+// A leitura agora DETECTA o formato em vez de assumir um: decide pelo separador
+// que aparece por ÚLTIMO, que é sempre o decimal nas duas convenções.
 func valorDaQuery(q url.Values, chave string) *float64 {
 	v := strings.TrimSpace(q.Get(chave))
 	if v == "" {
 		return nil
 	}
-	// Aceita 1.234,56 e 1234.56: a tela manda ponto, mas colar de uma planilha
-	// brasileira traz vírgula, e recusar em silêncio seria filtro que não filtra.
-	v = strings.ReplaceAll(v, ".", "")
-	v = strings.ReplaceAll(v, ",", ".")
+	ultimoPonto := strings.LastIndex(v, ".")
+	ultimaVirgula := strings.LastIndex(v, ",")
+	switch {
+	case ultimaVirgula > ultimoPonto:
+		// "1.234,56" ou "1234,56": vírgula decimal, ponto é milhar.
+		v = strings.ReplaceAll(v, ".", "")
+		v = strings.Replace(v, ",", ".", 1)
+	case ultimoPonto > ultimaVirgula:
+		// "1,234.56" ou "1234.56": ponto decimal, vírgula é milhar.
+		v = strings.ReplaceAll(v, ",", "")
+	default:
+		// Sem separador nenhum: número inteiro.
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return nil

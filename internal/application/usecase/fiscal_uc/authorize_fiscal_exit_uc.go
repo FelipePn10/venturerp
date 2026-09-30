@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -260,13 +261,28 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			}
 		}
 
+		// ⚠️ A unidade era FIXA em "UN" e o código do produto vinha de `item_code`,
+		// que serializa "0" quando nulo. A NF-e de retorno do beneficiamento tem
+		// linhas em KG com o código DO CLIENTE — com os valores fixos, a nota
+		// descrevia outra mercadoria. A linha agora pode trazer os dois (migração
+		// 000374); na falta deles o comportamento antigo é preservado, para não
+		// mudar nota que já era emitida assim.
+		unidade := "UN"
+		if it.UnidadeComercial != nil && strings.TrimSpace(*it.UnidadeComercial) != "" {
+			unidade = strings.ToUpper(strings.TrimSpace(*it.UnidadeComercial))
+		}
+		codigoProduto := fmt.Sprintf("%d", safeInt64(it.ItemCode))
+		if it.CodigoProduto != nil && strings.TrimSpace(*it.CodigoProduto) != "" {
+			codigoProduto = strings.TrimSpace(*it.CodigoProduto)
+		}
+
 		nfeIt := focusnfe.NFEItem{
 			NumeroItem:                     i + 1,
-			CodigoProduto:                  fmt.Sprintf("%d", safeInt64(it.ItemCode)),
+			CodigoProduto:                  codigoProduto,
 			Descricao:                      desc,
 			CodigoNCM:                      ncm,
 			CFOP:                           cfop,
-			UnidadeComercial:               "UN",
+			UnidadeComercial:               unidade,
 			QuantidadeComercial:            it.Quantity,
 			ValorUnitarioComercial:         it.UnitPrice,
 			ValorBruto:                     it.TotalPrice,

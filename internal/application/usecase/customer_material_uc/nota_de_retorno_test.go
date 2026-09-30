@@ -61,8 +61,8 @@ func TestNotaReproduzANF5911(t *testing.T) {
 	if servico.CFOP != "5124" {
 		t.Errorf("CFOP do serviço = %s, esperado 5124", servico.CFOP)
 	}
-	if servico.CSTICMS != "051" {
-		t.Errorf("CST ICMS do serviço = %s, esperado 051 (diferimento)", servico.CSTICMS)
+	if servico.CSTICMS != "51" {
+		t.Errorf("CST ICMS do serviço = %s, esperado 51 (diferimento; dois dígitos)", servico.CSTICMS)
 	}
 	if servico.NCM != "00000000" {
 		t.Errorf("NCM do serviço = %s, esperado 00000000", servico.NCM)
@@ -80,8 +80,8 @@ func TestNotaReproduzANF5911(t *testing.T) {
 		if linha.CFOP != "5902" {
 			t.Errorf("CFOP do material = %s, esperado 5902", linha.CFOP)
 		}
-		if linha.CSTICMS != "050" {
-			t.Errorf("CST ICMS do material = %s, esperado 050 (suspensão)", linha.CSTICMS)
+		if linha.CSTICMS != "50" {
+			t.Errorf("CST ICMS do material = %s, esperado 50 (suspensão; dois dígitos)", linha.CSTICMS)
 		}
 		if linha.ItemDaRemessa == nil {
 			t.Fatal("a linha de material precisa apontar para o item da remessa")
@@ -130,19 +130,30 @@ func TestPISeCOFINSDoServico(t *testing.T) {
 	if got := servico.ValorPIS.Add(servico.ValorCOFINS).String(); got != "8.4" {
 		t.Errorf("PIS+COFINS = %s, esperado 8.4", got)
 	}
-	// O material não é tributado: a suspensão cobre o que volta.
+	// O material que volta não tem VALOR de PIS/COFINS, mas TEM CST — e o CST é 49
+	// ("outras operações de saída"), não 01 nem vazio. É o que a NF-e 5.956 da Usimac
+	// declara nas linhas 5902.
+	//
+	// ⚠️ Este teste exigia CST vazio antes, e o vazio fazia o autorizador cair no
+	// padrão "01": a nota saía declarando o material do cliente como operação
+	// tributável.
 	for _, linha := range nota.Linhas[1:] {
 		if !linha.ValorPIS.IsZero() || !linha.ValorCOFINS.IsZero() {
-			t.Errorf("a linha de material saiu com PIS/COFINS: %s/%s",
+			t.Errorf("a linha de material saiu com valor de PIS/COFINS: %s/%s",
 				linha.ValorPIS, linha.ValorCOFINS)
 		}
-		if linha.CSTPIS != "" {
-			t.Errorf("a linha de material recebeu CST PIS %q", linha.CSTPIS)
+		if linha.CSTPIS != "49" || linha.CSTCOFINS != "49" {
+			t.Errorf("CST PIS/COFINS do material = %q/%q, esperado 49/49 — vazio cai no padrão 01 do autorizador",
+				linha.CSTPIS, linha.CSTCOFINS)
 		}
 	}
 }
 
-// TestSobraESucataSaemPor5903: a contadora confirmou 5903 com CST 050 para as duas.
+// TestSobraESucataSaemPor5903: a contadora confirmou 5903 com suspensão para as duas.
+//
+// ⚠️ O CST é de DOIS dígitos ("50"). "050" é a notação de conversa — origem 0 + CST
+// 50 — e a origem vai em campo separado no documento. Este teste exigia "050", e o
+// valor de três dígitos chegava ao provedor e causava rejeição na autorização.
 func TestSobraESucataSaemPor5903(t *testing.T) {
 	for _, tipo := range []entity.TipoMovimento{entity.MovimentoSobra, entity.MovimentoSucata} {
 		nota, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
@@ -154,8 +165,8 @@ func TestSobraESucataSaemPor5903(t *testing.T) {
 		if linha.CFOP != "5903" {
 			t.Errorf("%s: CFOP = %s, esperado 5903", tipo, linha.CFOP)
 		}
-		if linha.CSTICMS != "050" {
-			t.Errorf("%s: CST = %s, esperado 050", tipo, linha.CSTICMS)
+		if linha.CSTICMS != "50" {
+			t.Errorf("%s: CST = %s, esperado 50 (dois dígitos; a origem vai em campo próprio)", tipo, linha.CSTICMS)
 		}
 		if linha.Movimento != tipo {
 			t.Errorf("%s: movimento = %s; a nota precisa dizer qual baixa ela representa", tipo, linha.Movimento)

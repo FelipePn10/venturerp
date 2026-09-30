@@ -39,6 +39,14 @@ type EscritorDeNota interface {
 	GetNextNFNumber(ctx context.Context) (int64, error)
 	CreateExit(ctx context.Context, e *fiscalentity.FiscalExit) (*fiscalentity.FiscalExit, error)
 	CreateExitItem(ctx context.Context, item *fiscalentity.FiscalExitItem) (*fiscalentity.FiscalExitItem, error)
+	// RascunhoDeBeneficiamento devolve o rascunho já criado para a remessa (nulo se
+	// não houver). É o que torna a repetição do faturamento segura de verdade: sem
+	// ela, repetir pedia número novo e criava OUTRA nota em vez de concluir a
+	// original.
+	RascunhoDeBeneficiamento(ctx context.Context, remessaID int64) (*fiscalentity.FiscalExit, error)
+	// GetExitItems diz quais linhas o rascunho já tem, para a retomada criar apenas
+	// as que faltam.
+	GetExitItems(ctx context.Context, fiscalExitID int64) ([]*fiscalentity.FiscalExitItem, error)
 }
 
 // ResolvedorDeDestinatario resolve os dados fiscais do cliente. Vem de fora porque
@@ -122,19 +130,64 @@ func (uc *UseCase) Faturar(ctx context.Context, pedido PedidoDeFaturamento, usua
 		return nil, err
 	}
 
-	numero, err := uc.Notas.GetNextNFNumber(ctx)
+	// 2. RETOMA o rascunho pendente desta remessa, se houver.
+	//
+	// Este passo é a correção de um defeito real: quando a criação das linhas ou a
+	// baixa falhava, o rascunho ficava gravado e a mensagem mandava repetir — mas
+	// repetir pedia número novo e criava OUTRA nota. A repetição anunciada como
+	// segura produzia duplicata. Não há transação possível entre os dois módulos;
+	// retomar é o que resolve.
+	criada, err := uc.Notas.RascunhoDeBeneficiamento(ctx, pedido.RemittanceID)
 	if err != nil {
-		return nil, fmt.Errorf("obter o número da nota: %w", err)
+		return nil, fmt.Errorf("procurar nota em aberto desta remessa: %w", err)
 	}
-	serie := strings.TrimSpace(pedido.Serie)
-	if serie == "" {
-		serie = "1"
-	}
-	emissao := uc.agora()
-	if pedido.DataEmissao != nil {
-		emissao = *pedido.DataEmissao
+	retomada := criada != nil
+
+	if !retomada {
+		numero, err := uc.Notas.GetNextNFNumber(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("obter o número da nota: %w", err)
+		}
+		serie := strings.TrimSpace(pedido.Serie)
+		if serie == "" {
+			serie = "1"
+		}
+		emissao := uc.agora()
+		if pedido.DataEmissao != nil {
+			emissao = *pedido.DataEmissao
+		}
+		criada, err = uc.criarRascunho(ctx, pedido, remessa, nota, destinatario, numero, serie, emissao, autor)
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	// 3. Cria as linhas que ainda faltam. Numa retomada, as já gravadas ficam como
+	//    estão: recriá-las duplicaria a linha na nota.
+	jaGravadas := map[int]bool{}
+	if retomada {
+		existentes, err := uc.Notas.GetExitItems(ctx, criada.ID)
+		if err != nil {
+			return nil, fmt.Errorf("ler as linhas da nota em aberto: %w", err)
+		}
+		for _, it := range existentes {
+			jaGravadas[it.Sequence] = true
+		}
+	}
+
+	if err := uc.gravarLinhas(ctx, criada.ID, nota, jaGravadas); err != nil {
+		return nil, err
+	}
+
+	return uc.concluirFaturamento(ctx, pedido, nota, criada, usuario, retomada)
+}
+
+// criarRascunho grava a capa da nota em RASCUNHO, vinculada à remessa.
+func (uc *UseCase) criarRascunho(
+	ctx context.Context, pedido PedidoDeFaturamento, remessa *entity.Remessa,
+	nota *NotaDeRetorno, destinatario *DadosDoDestinatario,
+	numero int64, serie string, emissao time.Time, autor uuid.UUID,
+) (*fiscalentity.FiscalExit, error) {
 	// 2. Cria a nota em rascunho.
 	saida := &fiscalentity.FiscalExit{
 		NumeroNF:         numero,
@@ -154,6 +207,9 @@ func (uc *UseCase) Faturar(ctx context.Context, pedido PedidoDeFaturamento, usua
 		CustomerCode:   &remessa.CustomerCode,
 		SalesOrderCode: remessa.SalesOrderCode,
 		SourceType:     textoOuNil("BENEFICIAMENTO"),
+		// O vínculo com a remessa é o que permite RETOMAR este rascunho quando o
+		// faturamento falha depois daqui.
+		CustomerMaterialRemittanceID: &pedido.RemittanceID,
 	}
 	aplicarDestinatario(saida, *destinatario)
 
@@ -161,10 +217,17 @@ func (uc *UseCase) Faturar(ctx context.Context, pedido PedidoDeFaturamento, usua
 	if err != nil {
 		return nil, fmt.Errorf("criar a nota de beneficiamento: %w", err)
 	}
+	return criada, nil
+}
 
+// gravarLinhas cria as linhas da nota, pulando as sequências que já existem.
+func (uc *UseCase) gravarLinhas(ctx context.Context, notaID int64, nota *NotaDeRetorno, jaGravadas map[int]bool) error {
 	for _, linha := range nota.Linhas {
+		if jaGravadas[linha.Sequencia] {
+			continue // retomada: recriar duplicaria a linha na nota
+		}
 		item := &fiscalentity.FiscalExitItem{
-			FiscalExitID:     criada.ID,
+			FiscalExitID:     notaID,
 			Sequence:         linha.Sequencia,
 			Ncm:              textoOuNil(linha.NCM),
 			Cfop:             linha.CFOP,
@@ -174,12 +237,21 @@ func (uc *UseCase) Faturar(ctx context.Context, pedido PedidoDeFaturamento, usua
 			CstICMS:          textoOuNil(linha.CSTICMS),
 			Description:      textoOuNil(linha.Descricao),
 			OrigemMercadoria: "0",
+			// ⚠️ Unidade e código do produto (migração 000374). Sem eles o autorizador
+			// manda `uCom` fixo em "UN" e `cProd` "0": a nota de retorno do
+			// beneficiamento tem linhas em KG com o código DO CLIENTE, e sairia
+			// descrevendo outra mercadoria.
+			UnidadeComercial: textoOuNil(linha.Unidade),
+			CodigoProduto:    textoOuNil(linha.CodigoProduto),
 			// ICMS zero nas duas pontas: diferimento no serviço, suspensão no
 			// material. Explícito para ninguém supor que faltou calcular.
 			BaseICMS:  0,
 			AliqICMS:  0,
 			ValorICMS: 0,
 		}
+		// O CST de PIS/COFINS vai SEMPRE, mesmo com valor zero: no material que volta
+		// é o CST 49 ("outras operações de saída"), e deixar o campo vazio faria o
+		// autorizador cair no padrão "01", declarando o material como tributado.
 		if linha.CSTPIS != "" {
 			item.CstPIS = textoOuNil(linha.CSTPIS)
 			item.AliqPIS = paraFloat(linha.AliqPIS)
@@ -191,12 +263,19 @@ func (uc *UseCase) Faturar(ctx context.Context, pedido PedidoDeFaturamento, usua
 			item.ValorCOFINS = paraFloat(linha.ValorCOFINS)
 		}
 		if _, err := uc.Notas.CreateExitItem(ctx, item); err != nil {
-			return nil, fmt.Errorf("gravar a linha %d da nota: %w", linha.Sequencia, err)
+			return fmt.Errorf("gravar a linha %d da nota: %w", linha.Sequencia, err)
 		}
 	}
+	return nil
+}
 
-	// 3. Baixa o saldo, vinculado à nota. Idempotente: se esta etapa falhar, basta
-	//    repetir o faturamento da mesma nota.
+// concluirFaturamento baixa o saldo vinculado à nota e monta o resultado.
+func (uc *UseCase) concluirFaturamento(
+	ctx context.Context, pedido PedidoDeFaturamento, nota *NotaDeRetorno,
+	criada *fiscalentity.FiscalExit, usuario string, retomada bool,
+) (*ResultadoDoFaturamento, error) {
+	// 4. Baixa o saldo, vinculado à nota. Idempotente: se esta etapa falhar, basta
+	//    repetir o faturamento — a nota é RETOMADA, não recriada.
 	baixas := make([]domrepo.MovimentoDaNota, 0, len(nota.Linhas))
 	for _, linha := range nota.Linhas {
 		if linha.ItemDaRemessa == nil {
@@ -217,10 +296,12 @@ func (uc *UseCase) Faturar(ctx context.Context, pedido PedidoDeFaturamento, usua
 		// deixar o operador adivinhando é o que gera nota duplicada.
 		return nil, fmt.Errorf(
 			"a nota %d/%s foi criada, mas o saldo do cliente NÃO foi baixado: %w. "+
-				"Repita o faturamento desta nota para concluir — a baixa não duplica",
+				"Repita o faturamento desta remessa para concluir — o sistema retoma esta "+
+				"mesma nota em vez de criar outra, e a baixa não duplica",
 			criada.NumeroNF, criada.Serie, err)
 	}
 
+	_ = retomada // a retomada já foi decidida antes; aqui só o resultado importa
 	atualizada, err := uc.Repo.BuscarPorID(ctx, pedido.RemittanceID)
 	if err != nil {
 		return nil, err

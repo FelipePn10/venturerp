@@ -174,7 +174,13 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 	// As regras de rateio são lidas UMA vez para a apuração inteira: elas valem
 	// para toda a estrutura, e reler por nó faria uma consulta por item da árvore.
 	quando := time.Now()
-	regras := uc.regrasDeRateio(ctx)
+	regras, err := uc.regrasDeRateio(ctx)
+	if err != nil {
+		// ⚠️ Falha ao LER as regras não pode virar "não há regras". As duas coisas
+		// levam a overhead zero, mas uma é configuração e a outra é defeito — e o
+		// custo seria gravado (e precificado) sem indireto nenhum, em silêncio.
+		return nil, fmt.Errorf("lendo o esquema de indiretos: %w", err)
+	}
 
 	unitCache := make(map[int64]float64)
 	result, err := uc.rollupItem(ctx, dto.ItemCode, dto.Mask, 0, lotSize, unitCache, regras, quando)
@@ -190,10 +196,20 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 		// próprio da folha): é o número que o resto do sistema já lia como
 		// "material", e mudar o sentido dele quebraria precificação e relatórios.
 		MaterialCost: c.Material + c.NivelInferior,
-		LaborCost:    c.MaoDeObra,
-		OverheadCost: c.Overhead,
-		Currency:     "BRL",
-		CalculatedBy: calculatedBy,
+		// ⚠️ Preparação, máquina e terceiro PRECISAM ser gravados. `total_cost` é
+		// coluna gerada somando os seis componentes (migração 000374); gravar só
+		// material, mão de obra e overhead — como fazia a consulta do sqlc — deixava
+		// o total GUARDADO menor que o apurado, e é o guardado que a precificação lê.
+		SetupCost:       c.Setup,
+		MachineCost:     c.Maquina,
+		LaborCost:       c.MaoDeObra,
+		SubcontractCost: c.Subcontratacao,
+		OverheadCost:    c.Overhead,
+		OwnLevelCost:    c.NivelProprio,
+		LowerLevelCost:  c.NivelInferior,
+		LotSize:         lotSize,
+		Currency:        "BRL",
+		CalculatedBy:    calculatedBy,
 	}
 	saved, err := uc.repo.UpsertItemStandardCost(ctx, cost)
 	if err != nil {
@@ -248,21 +264,22 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 	}, nil
 }
 
-// regrasDeRateio lê o esquema de indiretos da empresa. Devolve vazio quando o
-// repositório não expõe o esquema: a apuração continua, sem indiretos — e é por
-// isso que a tela mostra o rastro dos rateios, para ficar visível quando não houve.
-func (uc *StandardCostUseCase) regrasDeRateio(ctx context.Context) []*entity.RegraDeRateio {
+// regrasDeRateio lê o esquema de indiretos da empresa.
+//
+// Repositório que NÃO expõe o esquema devolve vazio sem erro: é instalação sem a
+// migração 000373, e a apuração continua sem indiretos.
+//
+// Falha ao CONSULTAR, porém, é propagada. Devolver vazio nos dois casos tornava
+// erro de banco indistinguível de empresa sem regra cadastrada — e o custo era
+// gravado com indireto zero, corrompendo o resultado sem nenhum sinal.
+func (uc *StandardCostUseCase) regrasDeRateio(ctx context.Context) ([]*entity.RegraDeRateio, error) {
 	leitor, ok := uc.repo.(interface {
 		ListarRegrasDeRateio(context.Context) ([]*entity.RegraDeRateio, error)
 	})
 	if !ok {
-		return nil
+		return nil, nil
 	}
-	regras, err := leitor.ListarRegrasDeRateio(ctx)
-	if err != nil {
-		return nil
-	}
-	return regras
+	return leitor.ListarRegrasDeRateio(ctx)
 }
 
 // paraRateiosResponse converte o rastro do rateio para o contrato HTTP.

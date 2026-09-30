@@ -27,52 +27,9 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.StandardCostRepository 
 	return &StandardCostRepositorySQLC{q: q, pool: pool}
 }
 
-// ─── item_standard_costs ──────────────────────────────────────────────────────
-
-func (r *StandardCostRepositorySQLC) UpsertItemStandardCost(ctx context.Context, cost *entity.ItemStandardCost) (*entity.ItemStandardCost, error) {
-	if err := r.ConferirItemDaEmpresa(ctx, cost.ItemCode); err != nil {
-		return nil, err
-	}
-	row, err := r.q.UpsertItemStandardCost(ctx, sqlc.UpsertItemStandardCostParams{
-		ItemCode:     cost.ItemCode,
-		Mask:         cost.Mask,
-		MaterialCost: pgutil.ToPgNumericFromFloat64(cost.MaterialCost),
-		LaborCost:    pgutil.ToPgNumericFromFloat64(cost.LaborCost),
-		OverheadCost: pgutil.ToPgNumericFromFloat64(cost.OverheadCost),
-		Currency:     orDefault(cost.Currency, "BRL"),
-		CalculatedBy: pgutil.ToPgUUID(cost.CalculatedBy),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("upserting item standard cost: %w", err)
-	}
-	return isCostRowToEntity(row), nil
-}
-
-func (r *StandardCostRepositorySQLC) GetItemStandardCost(ctx context.Context, itemCode int64, mask string) (*entity.ItemStandardCost, error) {
-	if err := r.ConferirItemDaEmpresa(ctx, itemCode); err != nil {
-		return nil, err
-	}
-	row, err := r.q.GetItemStandardCost(ctx, itemCode, mask)
-	if err != nil {
-		return nil, fmt.Errorf("fetching standard cost for item %d mask %q: %w", itemCode, mask, err)
-	}
-	return isCostRowToEntity(row), nil
-}
-
-func (r *StandardCostRepositorySQLC) ListItemStandardCosts(ctx context.Context, itemCode int64) ([]*entity.ItemStandardCost, error) {
-	if err := r.ConferirItemDaEmpresa(ctx, itemCode); err != nil {
-		return nil, err
-	}
-	rows, err := r.q.ListItemStandardCosts(ctx, itemCode)
-	if err != nil {
-		return nil, fmt.Errorf("listing standard costs for item %d: %w", itemCode, err)
-	}
-	out := make([]*entity.ItemStandardCost, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, isCostRowToEntity(row))
-	}
-	return out, nil
-}
+// O custo-padrão do item (upsert, leitura e listagem) fica em
+// `rateio_repository.go`, escrito à mão: a consulta do sqlc cobre apenas material,
+// mão de obra e overhead, e a apuração passou a ter seis componentes.
 
 // ─── work_center_costs ────────────────────────────────────────────────────────
 

@@ -40,9 +40,20 @@ const (
 
 // CST confirmados pela contadora.
 const (
-	CSTICMSServico = "051" // diferimento — Portaria CAT 22/2007
-	CSTICMSRetorno = "050" // suspensão
-	CSTPISCOFINS   = "01"  // operação tributável com alíquota básica
+	// ⚠️ CST tem DOIS dígitos. A origem da mercadoria vai em campo SEPARADO
+	// (`OrigemMercadoria`), e "051"/"050" é a notação de conversa — origem 0 + CST
+	// 51/50 — que não vale no documento. A NF-e 5.956 da Usimac, anexada ao
+	// levantamento, traz `<orig>0</orig>` e `<CST>51</CST>` em campos distintos;
+	// mandar três dígitos ao provedor causa rejeição na autorização.
+	CSTICMSServico = "51" // diferimento — Portaria CAT 22/2007
+	CSTICMSRetorno = "50" // suspensão
+	// CSTPISCOFINS vale para a linha de SERVIÇO: operação tributável com alíquota
+	// básica.
+	CSTPISCOFINS = "01"
+	// O material que VOLTA não é operação tributável de saída: a nota real usa CST
+	// 49 ("outras operações de saída"). Deixar o campo vazio faria o autorizador
+	// cair no padrão "01" e declarar o material como tributado.
+	CSTPISCOFINSRetorno = "49"
 )
 
 // Alíquotas de PIS e COFINS sobre o serviço de industrialização.
@@ -76,6 +87,10 @@ type LinhaDaNota struct {
 	ValorCOFINS decimal.Decimal
 	CSTPIS      string
 	CSTCOFINS   string
+	// CodigoProduto é o `cProd` da linha na NF-e. No serviço é o código do produto
+	// beneficiado; no material que volta é o código DO CLIENTE, porque o material de
+	// terceiro não existe no nosso cadastro.
+	CodigoProduto string
 	// ItemDaRemessa é a linha de origem, quando a linha devolve material. Nulo na
 	// linha de serviço. É o que liga a nota ao saldo que ela vai baixar.
 	ItemDaRemessa *entity.ItemRemessa
@@ -238,9 +253,19 @@ func MontarNotaDeRetorno(
 			ValorTotal:    total,
 			ItemDaRemessa: item,
 			Movimento:     movimento,
-			// Sem PIS/COFINS: a suspensão cobre o material que volta.
-			CSTPIS:    "",
-			CSTCOFINS: "",
+			// Sem VALOR de PIS/COFINS — a suspensão cobre o material que volta —, mas
+			// COM o CST 49: é o que a nota real declara, e o campo vazio cairia no
+			// padrão "01" do autorizador, declarando o material como tributado.
+			CSTPIS:      CSTPISCOFINSRetorno,
+			CSTCOFINS:   CSTPISCOFINSRetorno,
+			AliqPIS:     decimal.Zero,
+			ValorPIS:    decimal.Zero,
+			AliqCOFINS:  decimal.Zero,
+			ValorCOFINS: decimal.Zero,
+			// CodigoProduto é o código DO CLIENTE: o material de terceiro não existe
+			// no nosso cadastro, e a nota tem de sair com o código que o cliente usa
+			// (10014485, 10014670 na NF-e 5.956).
+			CodigoProduto: item.CustomerItemCode,
 		})
 		nota.ValorMaterial = nota.ValorMaterial.Add(total)
 		sequencia++
@@ -275,21 +300,24 @@ func montarLinhaDeServico(servico ServicoFaturado, sequencia int) (*LinhaDaNota,
 	valorCOFINS := total.Mul(AliquotaCOFINS).Round(2)
 
 	return &LinhaDaNota{
-		Sequencia:   sequencia,
-		Descricao:   servico.Descricao,
-		NCM:         NCMServico,
-		CFOP:        CFOPServico,
-		CSTICMS:     CSTICMSServico,
-		Unidade:     unidade,
-		Quantidade:  quantidade,
-		ValorUnit:   valorUnit,
-		ValorTotal:  total,
-		AliqPIS:     AliquotaPIS,
-		ValorPIS:    valorPIS,
-		AliqCOFINS:  AliquotaCOFINS,
-		ValorCOFINS: valorCOFINS,
-		CSTPIS:      CSTPISCOFINS,
-		CSTCOFINS:   CSTPISCOFINS,
-		Movimento:   "",
+		Sequencia: sequencia,
+		Descricao: servico.Descricao,
+		NCM:       NCMServico,
+		CFOP:      CFOPServico,
+		CSTICMS:   CSTICMSServico,
+		Unidade:   unidade,
+		// `CodigoItem` já vinha no pedido e era DESCARTADO: a linha saía sem código
+		// de produto, e o autorizador serializava "0" no `cProd`.
+		CodigoProduto: strings.TrimSpace(servico.CodigoItem),
+		Quantidade:    quantidade,
+		ValorUnit:     valorUnit,
+		ValorTotal:    total,
+		AliqPIS:       AliquotaPIS,
+		ValorPIS:      valorPIS,
+		AliqCOFINS:    AliquotaCOFINS,
+		ValorCOFINS:   valorCOFINS,
+		CSTPIS:        CSTPISCOFINS,
+		CSTCOFINS:     CSTPISCOFINS,
+		Movimento:     "",
 	}, nil
 }

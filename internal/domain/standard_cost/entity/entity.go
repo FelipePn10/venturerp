@@ -6,17 +6,31 @@ import (
 	"github.com/google/uuid"
 )
 
+// ItemStandardCost é o custo-padrão GRAVADO do item.
+//
+// ⚠️ `MaterialCost` é o material CHEIO: o material próprio mais o custo total dos
+// componentes de níveis inferiores. `LaborCost` é só a mão de obra DIRETA —
+// preparação, máquina e serviço de terceiro têm colunas próprias desde a migração
+// 000373. `TotalCost` é gerado pelo banco somando os seis componentes (migração
+// 000374); `OwnLevelCost` e `LowerLevelCost` são um CORTE dos mesmos valores e
+// ficam de fora da soma.
 type ItemStandardCost struct {
-	ID           int64
-	ItemCode     int64
-	Mask         string
-	MaterialCost float64
-	LaborCost    float64
-	OverheadCost float64
-	TotalCost    float64
-	Currency     string
-	CalculatedAt time.Time
-	CalculatedBy uuid.UUID
+	ID              int64
+	ItemCode        int64
+	Mask            string
+	MaterialCost    float64
+	SetupCost       float64
+	MachineCost     float64
+	LaborCost       float64
+	SubcontractCost float64
+	OverheadCost    float64
+	OwnLevelCost    float64
+	LowerLevelCost  float64
+	LotSize         float64
+	TotalCost       float64
+	Currency        string
+	CalculatedAt    time.Time
+	CalculatedBy    uuid.UUID
 }
 
 type WorkCenterCost struct {
