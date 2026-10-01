@@ -26,7 +26,7 @@ WHERE type = $1
 ORDER BY code;
 
 -- name: NextLegalDeviceCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM legal_devices;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM legal_devices;
 
 -- ─── CFOP / Naturezas de Operação ─────────────────────────────────────────────
 

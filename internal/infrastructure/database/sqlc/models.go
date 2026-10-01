@@ -536,6 +536,139 @@ func (ns NullCustomerCategoryEnum) Value() (driver.Value, error) {
 	return string(ns.CustomerCategoryEnum), nil
 }
 
+type CustomerMaterialMovementTypeEnum string
+
+const (
+	CustomerMaterialMovementTypeEnumRECEIPT    CustomerMaterialMovementTypeEnum = "RECEIPT"
+	CustomerMaterialMovementTypeEnumRETURN     CustomerMaterialMovementTypeEnum = "RETURN"
+	CustomerMaterialMovementTypeEnumLEFTOVER   CustomerMaterialMovementTypeEnum = "LEFTOVER"
+	CustomerMaterialMovementTypeEnumSCRAP      CustomerMaterialMovementTypeEnum = "SCRAP"
+	CustomerMaterialMovementTypeEnumADJUSTMENT CustomerMaterialMovementTypeEnum = "ADJUSTMENT"
+)
+
+func (e *CustomerMaterialMovementTypeEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CustomerMaterialMovementTypeEnum(s)
+	case string:
+		*e = CustomerMaterialMovementTypeEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CustomerMaterialMovementTypeEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCustomerMaterialMovementTypeEnum struct {
+	CustomerMaterialMovementTypeEnum CustomerMaterialMovementTypeEnum
+	Valid                            bool // Valid is true if CustomerMaterialMovementTypeEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCustomerMaterialMovementTypeEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CustomerMaterialMovementTypeEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CustomerMaterialMovementTypeEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCustomerMaterialMovementTypeEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CustomerMaterialMovementTypeEnum), nil
+}
+
+type CustomerMaterialRemittanceStatusEnum string
+
+const (
+	CustomerMaterialRemittanceStatusEnumABERTA    CustomerMaterialRemittanceStatusEnum = "ABERTA"
+	CustomerMaterialRemittanceStatusEnumPARCIAL   CustomerMaterialRemittanceStatusEnum = "PARCIAL"
+	CustomerMaterialRemittanceStatusEnumENCERRADA CustomerMaterialRemittanceStatusEnum = "ENCERRADA"
+	CustomerMaterialRemittanceStatusEnumCANCELADA CustomerMaterialRemittanceStatusEnum = "CANCELADA"
+)
+
+func (e *CustomerMaterialRemittanceStatusEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CustomerMaterialRemittanceStatusEnum(s)
+	case string:
+		*e = CustomerMaterialRemittanceStatusEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CustomerMaterialRemittanceStatusEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCustomerMaterialRemittanceStatusEnum struct {
+	CustomerMaterialRemittanceStatusEnum CustomerMaterialRemittanceStatusEnum
+	Valid                                bool // Valid is true if CustomerMaterialRemittanceStatusEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCustomerMaterialRemittanceStatusEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CustomerMaterialRemittanceStatusEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CustomerMaterialRemittanceStatusEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCustomerMaterialRemittanceStatusEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CustomerMaterialRemittanceStatusEnum), nil
+}
+
+type CustomerMaterialScrapDestinationEnum string
+
+const (
+	CustomerMaterialScrapDestinationEnumCLIENTE  CustomerMaterialScrapDestinationEnum = "CLIENTE"
+	CustomerMaterialScrapDestinationEnumDESCARTE CustomerMaterialScrapDestinationEnum = "DESCARTE"
+	CustomerMaterialScrapDestinationEnumRETENCAO CustomerMaterialScrapDestinationEnum = "RETENCAO"
+	CustomerMaterialScrapDestinationEnumOUTRA    CustomerMaterialScrapDestinationEnum = "OUTRA"
+)
+
+func (e *CustomerMaterialScrapDestinationEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CustomerMaterialScrapDestinationEnum(s)
+	case string:
+		*e = CustomerMaterialScrapDestinationEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CustomerMaterialScrapDestinationEnum: %T", src)
+	}
+	return nil
+}
+
+type NullCustomerMaterialScrapDestinationEnum struct {
+	CustomerMaterialScrapDestinationEnum CustomerMaterialScrapDestinationEnum
+	Valid                                bool // Valid is true if CustomerMaterialScrapDestinationEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCustomerMaterialScrapDestinationEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.CustomerMaterialScrapDestinationEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CustomerMaterialScrapDestinationEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCustomerMaterialScrapDestinationEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CustomerMaterialScrapDestinationEnum), nil
+}
+
 type DemandTypeEnum string
 
 const (
@@ -4150,15 +4283,42 @@ type CostCenter struct {
 	EnterpriseID *int64
 }
 
+type CostOverheadRule struct {
+	ID            int64
+	EnterpriseID  int64
+	Code          string
+	Description   string
+	Base          interface{}
+	Method        interface{}
+	Rate          pgtype.Numeric
+	WorkCenterID  *int64
+	ItemCode      *int64
+	PlanoContasID *int64
+	CentroCustoID *int64
+	ValidFrom     pgtype.Date
+	ValidTo       pgtype.Date
+	IsActive      bool
+	Notes         pgtype.Text
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type CostRollupLog struct {
-	ID           int64
-	ItemCode     int64
-	Mask         string
-	BomLevel     int32
-	MaterialCost pgtype.Numeric
-	LaborCost    pgtype.Numeric
-	OverheadCost pgtype.Numeric
-	RunAt        pgtype.Timestamptz
+	ID              int64
+	ItemCode        int64
+	Mask            string
+	BomLevel        int32
+	MaterialCost    pgtype.Numeric
+	LaborCost       pgtype.Numeric
+	OverheadCost    pgtype.Numeric
+	RunAt           pgtype.Timestamptz
+	SetupCost       pgtype.Numeric
+	MachineCost     pgtype.Numeric
+	SubcontractCost pgtype.Numeric
+	LowerLevelCost  pgtype.Numeric
+	Quantity        pgtype.Numeric
+	ParentCode      *int64
 }
 
 type Country struct {
@@ -4248,6 +4408,94 @@ type CustomerContactType struct {
 	Description string
 	IsActive    bool
 	CreatedAt   pgtype.Timestamptz
+}
+
+type CustomerMaterialAudit struct {
+	ID            int64
+	EnterpriseID  int64
+	EntityType    string
+	EntityID      int64
+	RemittanceID  *int64
+	Action        string
+	ChangedFields []string
+	BeforeState   []byte
+	AfterState    []byte
+	Reason        pgtype.Text
+	ActorID       pgtype.UUID
+	OccurredAt    pgtype.Timestamptz
+}
+
+type CustomerMaterialItem struct {
+	ID                  int64
+	EnterpriseID        int64
+	RemittanceID        int64
+	LineNumber          int32
+	CustomerItemCode    string
+	ItemCode            *int64
+	Description         string
+	Ncm                 string
+	Cst                 pgtype.Text
+	Uom                 string
+	QtyInvoiced         pgtype.Numeric
+	QtyReceived         pgtype.Numeric
+	UnitValue           pgtype.Numeric
+	QtyReturned         pgtype.Numeric
+	QtyLeftover         pgtype.Numeric
+	QtyScrapped         pgtype.Numeric
+	BalanceQty          pgtype.Numeric
+	DivergenceQty       pgtype.Numeric
+	DivergenceReason    pgtype.Text
+	DivergenceSettledBy pgtype.UUID
+	DivergenceSettledAt pgtype.Timestamptz
+	WarehouseID         *int64
+	Address             pgtype.Text
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+}
+
+type CustomerMaterialMovement struct {
+	ID                int64
+	EnterpriseID      int64
+	RemittanceItemID  int64
+	MovementType      CustomerMaterialMovementTypeEnum
+	Quantity          pgtype.Numeric
+	UnitValue         pgtype.Numeric
+	Cfop              pgtype.Text
+	ProductionOrderID *int64
+	FiscalExitID      *int64
+	ScrapDestination  NullCustomerMaterialScrapDestinationEnum
+	Reason            pgtype.Text
+	IdempotencyKey    string
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	ReversedAt        pgtype.Timestamptz
+	ReversedBy        pgtype.UUID
+	ReversalReason    pgtype.Text
+}
+
+type CustomerMaterialRemittance struct {
+	ID                   int64
+	EnterpriseID         int64
+	CustomerCode         int64
+	NfeNumber            int64
+	NfeSeries            string
+	NfeKey               pgtype.Text
+	Cfop                 string
+	IssueDate            pgtype.Date
+	ReceivedAt           pgtype.Date
+	FiscalReturnDeadline pgtype.Date
+	TotalValue           pgtype.Numeric
+	Status               CustomerMaterialRemittanceStatusEnum
+	SalesOrderCode       *int64
+	Blocked              bool
+	BlockReason          pgtype.Text
+	ClosedAt             pgtype.Timestamptz
+	ClosedBy             pgtype.UUID
+	CloseReason          pgtype.Text
+	Notes                pgtype.Text
+	CreatedBy            pgtype.UUID
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
 }
 
 type CustomerType struct {
@@ -4944,6 +5192,19 @@ type FiscalExit struct {
 	FiscalCouponDate        pgtype.Date
 	FiscalCouponEcfSerial   pgtype.Text
 	EnterpriseID            int64
+	DestLogradouro          pgtype.Text
+	DestNumero              pgtype.Text
+	DestComplemento         pgtype.Text
+	DestBairro              pgtype.Text
+	DestMunicipio           pgtype.Text
+	// Código IBGE do município do destinatário (7 dígitos).
+	DestCodigoMunicipio pgtype.Text
+	DestCep             pgtype.Text
+	DestEmail           pgtype.Text
+	DestTelefone        pgtype.Text
+	// Cliente de onde o endereço e a condição de pagamento foram resolvidos.
+	CustomerCode                 *int64
+	CustomerMaterialRemittanceID *int64
 }
 
 type FiscalExitItem struct {
@@ -4978,6 +5239,8 @@ type FiscalExitItem struct {
 	AliqIcmsSt        pgtype.Numeric
 	ValorIcmsSt       pgtype.Numeric
 	Mva               pgtype.Numeric
+	UnidadeComercial  pgtype.Text
+	CodigoProduto     pgtype.Text
 }
 
 type FluxoCaixa struct {
@@ -5800,16 +6063,45 @@ type ItemPurchaseCost struct {
 }
 
 type ItemStandardCost struct {
-	ID           int64
-	ItemCode     int64
-	Mask         string
-	MaterialCost pgtype.Numeric
-	LaborCost    pgtype.Numeric
-	OverheadCost pgtype.Numeric
-	TotalCost    pgtype.Numeric
-	Currency     string
-	CalculatedAt pgtype.Timestamptz
-	CalculatedBy pgtype.UUID
+	ID              int64
+	ItemCode        int64
+	Mask            string
+	MaterialCost    pgtype.Numeric
+	LaborCost       pgtype.Numeric
+	OverheadCost    pgtype.Numeric
+	Currency        string
+	CalculatedAt    pgtype.Timestamptz
+	CalculatedBy    pgtype.UUID
+	SetupCost       pgtype.Numeric
+	MachineCost     pgtype.Numeric
+	SubcontractCost pgtype.Numeric
+	OwnLevelCost    pgtype.Numeric
+	LowerLevelCost  pgtype.Numeric
+	LotSize         pgtype.Numeric
+	OverheadDetail  []byte
+	// Custo unitário cheio. material_cost já inclui o custo dos componentes de níveis inferiores; own_level_cost e lower_level_cost são um CORTE dos mesmos valores e não entram nesta soma.
+	TotalCost pgtype.Numeric
+}
+
+type ItemStandardCostHistory struct {
+	ID              int64
+	EnterpriseID    int64
+	ItemCode        int64
+	Mask            string
+	LotSize         pgtype.Numeric
+	MaterialCost    pgtype.Numeric
+	SetupCost       pgtype.Numeric
+	MachineCost     pgtype.Numeric
+	LaborCost       pgtype.Numeric
+	SubcontractCost pgtype.Numeric
+	OverheadCost    pgtype.Numeric
+	OwnLevelCost    pgtype.Numeric
+	LowerLevelCost  pgtype.Numeric
+	TotalCost       pgtype.Numeric
+	Currency        string
+	OverheadDetail  []byte
+	CalculatedAt    pgtype.Timestamptz
+	CalculatedBy    pgtype.UUID
 }
 
 type ItemStructure struct {

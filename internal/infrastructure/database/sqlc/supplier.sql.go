@@ -1348,34 +1348,34 @@ func (q *Queries) ListSuppliers(ctx context.Context, arg ListSuppliersParams) ([
 }
 
 const nextSupplierCode = `-- name: NextSupplierCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM suppliers
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM suppliers
 `
 
-func (q *Queries) NextSupplierCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextSupplierCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextSupplierCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextSupplierContactTypeCode = `-- name: NextSupplierContactTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM supplier_contact_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_contact_types
 `
 
-func (q *Queries) NextSupplierContactTypeCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextSupplierContactTypeCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextSupplierContactTypeCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextSupplierTypeCode = `-- name: NextSupplierTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM supplier_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_types
 `
 
-func (q *Queries) NextSupplierTypeCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextSupplierTypeCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextSupplierTypeCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }

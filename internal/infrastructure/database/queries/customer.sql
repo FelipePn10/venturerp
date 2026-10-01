@@ -20,7 +20,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextRegionCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM regions;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM regions;
 
 -- ─── Market Segments ──────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextMarketSegmentCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM market_segments;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM market_segments;
 
 -- ─── Customer Contact Types ───────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextContactTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM customer_contact_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customer_contact_types;
 
 -- ─── Customer Types ───────────────────────────────────────────────────────────
 
@@ -119,7 +119,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextCarrierCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM carriers;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carriers;
 
 -- ─── Carrier Groups ───────────────────────────────────────────────────────────
 
@@ -147,7 +147,7 @@ DELETE FROM carrier_group_carriers
 WHERE carrier_group_id = $1 AND carrier_id = $2;
 
 -- name: NextCarrierGroupCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM carrier_groups;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carrier_groups;
 
 -- ─── Payment Conditions ───────────────────────────────────────────────────────
 
@@ -181,7 +181,7 @@ WHERE enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY code;
 
 -- name: NextPaymentConditionCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM payment_conditions;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM payment_conditions;
 
 -- name: AddInstallment :one
 -- Upsert pela parcela: reenviar a mesma parcela ALTERA, não duplica. Antes, o
@@ -247,7 +247,7 @@ ORDER BY code;
 -- name: NextSalesTableCode :one
 -- Enquanto sales_orders.price_table_code mantiver a FK legada para code, o
 -- proximo codigo precisa permanecer globalmente unico.
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM sales_tables;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM sales_tables;
 
 -- ─── Invoice Types ────────────────────────────────────────────────────────────
 
@@ -338,7 +338,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextInvoiceTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM invoice_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM invoice_types;
 
 -- ─── Tax Types ────────────────────────────────────────────────────────────────
 
@@ -385,7 +385,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextTaxTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM tax_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM tax_types;
 
 -- ─── Customers ────────────────────────────────────────────────────────────────
 
@@ -447,7 +447,7 @@ SET blocked = FALSE, block_reason = NULL, updated_at = NOW()
 WHERE code = $1;
 
 -- name: NextCustomerCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM customers;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customers;
 
 -- ─── Customer Addresses ───────────────────────────────────────────────────────
 

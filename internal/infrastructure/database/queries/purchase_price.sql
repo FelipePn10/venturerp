@@ -21,7 +21,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextPurchasePriceTableCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_price_tables;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM purchase_price_tables;
 
 -- ─── Items ────────────────────────────────────────────────────────────────────
 
