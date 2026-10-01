@@ -13,6 +13,7 @@ import (
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	financialEntity "github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	financialRepo "github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -215,9 +216,10 @@ func (uc *AuthorizeFiscalExitUseCase) settleStockAndOrder(
 func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) []focusnfe.NFEItem {
 	result := make([]focusnfe.NFEItem, 0, len(items))
 	for i, it := range items {
+		// O campo <NCM> do XML tem 8 dígitos: máscara faz a SEFAZ recusar a nota.
 		ncm := ""
 		if it.Ncm != nil {
-			ncm = *it.Ncm
+			ncm = engine.NormalizarNCM(*it.Ncm)
 		}
 		cfop := it.Cfop
 		desc := fmt.Sprintf("Produto %d", safeInt64(it.ItemCode))

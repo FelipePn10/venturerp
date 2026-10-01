@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -232,6 +233,12 @@ func conferirNota(
 			impede(fmt.Sprintf("itens[%d].ncm", it.Sequence),
 				fmt.Sprintf("%s está sem NCM e a SEFAZ recusa nota com item sem classificação fiscal", ref),
 				"preencha a classificação fiscal do item em VENT0200 — Cadastro de Itens, aba Contábil, campo Classif. Fiscal Venda")
+		} else if d := engine.NormalizarNCM(*it.Ncm); len(d) != 8 {
+			// Vale apontar aqui: NCM torto só apareceria na recusa da SEFAZ, depois de
+			// a nota já ter consumido numeração.
+			impede(fmt.Sprintf("itens[%d].ncm", it.Sequence),
+				fmt.Sprintf("%s tem o NCM %q, com %d dígitos — o NCM tem 8", ref, *it.Ncm, len(d)),
+				"corrija a classificação fiscal do item em VENT0200 — Cadastro de Itens, aba Contábil, conferindo o código na tabela TIPI")
 		}
 		if strings.TrimSpace(it.Cfop) == "" {
 			impede(fmt.Sprintf("itens[%d].cfop", it.Sequence), fmt.Sprintf("%s está sem CFOP", ref),

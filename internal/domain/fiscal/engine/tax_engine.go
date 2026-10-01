@@ -128,6 +128,10 @@ func CalcularImpostos(
 		Itens: make([]TaxItemResult, 0, len(params.Itens)),
 	}
 
+	// A tabela entra reindexada por NCM só-dígitos: a máscara com que cada linha
+	// foi cadastrada não pode decidir se o item é tributado. Ver NormalizarNCM.
+	ncmTable = NormalizarTabelaNCM(ncmTable)
+
 	isInterno := params.EmitenteUF == params.DestinoUF
 
 	if isInterno {
@@ -184,7 +188,7 @@ func calculateItemTax(
 	}
 
 	// IPI
-	ncmCfg, hasNcm := ncmTable[item.Ncm]
+	ncmCfg, hasNcm := ncmTable[NormalizarNCM(item.Ncm)]
 	aliqIPI := decimal.NewFromFloat(0)
 	cstIPI := "50"
 	if hasNcm {
