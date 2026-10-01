@@ -3,7 +3,6 @@ package fiscal_uc
 import (
 	"context"
 	"encoding/xml"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -113,7 +112,7 @@ func (uc *UploadNFEEntryUseCase) Execute(ctx context.Context, dto request.Upload
 
 	var nfe nfeXML
 	if err := xml.Unmarshal([]byte(dto.XmlContent), &nfe); err != nil {
-		return nil, fmt.Errorf("parsing NFe XML: %w", err)
+		return nil, errorsuc.NewValidationError("o arquivo enviado não é um XML de NF-e válido: confira se é o XML da nota, e não o DANFE em PDF")
 	}
 
 	inf := nfe.InfNFe

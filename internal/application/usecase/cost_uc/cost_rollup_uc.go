@@ -2,6 +2,7 @@ package cost_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
+	thirdpartyentity "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
@@ -83,7 +85,7 @@ func (uc *StandardCostUseCase) WithThirdPartyPrices(v thirdPartyCostReader) *Sta
 func (uc *StandardCostUseCase) UpsertWorkCenterCost(ctx context.Context, dto request.UpsertWorkCenterCostDTO) (*response.WorkCenterCostResponse, error) {
 	uid, err := uuid.Parse(dto.UpdatedBy)
 	if err != nil {
-		return nil, fmt.Errorf("invalid updated_by UUID: %w", err)
+		return nil, errorsuc.NewValidationError("não foi possível identificar o usuário que alterou a tarifa")
 	}
 	// When the machine × labor split is not provided, the machine rate defaults to the
 	// blended cost_per_hour so the stored/displayed value matches the effective rate.
@@ -121,7 +123,7 @@ func (uc *StandardCostUseCase) ListWorkCenterCosts(ctx context.Context) ([]*resp
 func (uc *StandardCostUseCase) UpsertItemPurchaseCost(ctx context.Context, dto request.UpsertItemPurchaseCostDTO) (*response.ItemPurchaseCostResponse, error) {
 	uid, err := uuid.Parse(dto.UpdatedBy)
 	if err != nil {
-		return nil, fmt.Errorf("invalid updated_by UUID: %w", err)
+		return nil, errorsuc.NewValidationError("não foi possível identificar o usuário que alterou a tarifa")
 	}
 	ipc := &entity.ItemPurchaseCost{
 		ItemCode:  dto.ItemCode,
@@ -564,8 +566,24 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 		if (op.OperationOrigin == routingentity.OriginExternal || op.OperationOrigin == routingentity.OriginThirdPart) && uc.thirdParty != nil {
 			serviceCost, priceErr := uc.thirdParty.StandardCostPerUnit(ctx, itemCode, mask, op.OperationID, time.Now())
 			if priceErr != nil {
-				// Mensagem chega ao usuário: o prefixo em inglês vazava na tela de
-				// apuração de custo.
+				// Preço de terceiro não cadastrado é PENDÊNCIA DE CADASTRO, não falha
+				// do sistema. Embrulhar com fmt.Errorf perdia o tipo e o handler
+				// devolvia 500 "erro interno do servidor": o usuário via uma falha
+				// genérica, e a frase que explica tudo ("registro de serviço
+				// terceirizado não encontrado") ficava só no log do servidor.
+				// Ver o contrato em RespondUseCaseError.
+				if errors.Is(priceErr, thirdpartyentity.ErrNotFound) {
+					// Sem número de item na mensagem: aqui `itemCode` é o código
+					// INTERNO, e mostrá-lo repetiria o problema dos campos "(ID)" —
+					// o usuário não reconhece esse número. O nome da operação é o que
+					// ele precisa para agir, e é a convenção das outras mensagens
+					// deste módulo ("custo de compra não cadastrado para o item").
+					return comp, horas, errorsuc.NewValidationError(fmt.Sprintf(
+						"o roteiro passa pela operação de terceiro %q e não há preço de serviço cadastrado para ela. "+
+							"Cadastre o preço em VTER0100 — Preços de Serviços de Terceiros, "+
+							"ou mude a operação para interna no roteiro do item",
+						op.OperationName))
+				}
 				return comp, horas, fmt.Errorf("custo de terceiro do item %d, operação %d: %w", itemCode, op.OperationID, priceErr)
 			}
 			// O preço do terceiro já é por unidade; multiplicar pelo lote e dividir

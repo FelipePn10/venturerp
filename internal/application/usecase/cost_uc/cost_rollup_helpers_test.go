@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	scentity "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/standard_cost/repository"
+	thirdpartyentity "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
@@ -131,4 +134,56 @@ func (f *fakeCostRepo) InsertRollupLog(context.Context, *scentity.CostRollupLogE
 
 func costKey(parentCode int64, mask string) string {
 	return fmt.Sprintf("%d|%s", parentCode, mask)
+}
+
+// O stub acima devolve um erro genérico, e o teste que o usa só verifica err != nil.
+// Isso passava enquanto o usuário recebia HTTP 500 "erro interno do servidor": a
+// frase que explica o problema ficava só no log do servidor. O que importa para
+// quem usa é o TIPO do erro (que decide o status) e o conteúdo da mensagem.
+type thirdPartyPrecoAusente struct{}
+
+func (thirdPartyPrecoAusente) StandardCostPerUnit(context.Context, int64, string, int64, time.Time) (decimal.Decimal, error) {
+	return decimal.Zero, thirdpartyentity.ErrNotFound
+}
+
+type costRoutingComNomeDaOperacao struct{ routingrepo.RoutingRepository }
+
+func (costRoutingComNomeDaOperacao) GetRouteForItem(context.Context, int64, string) (*routingentity.ManufacturingRoute, error) {
+	return &routingentity.ManufacturingRoute{ID: 1}, nil
+}
+func (costRoutingComNomeDaOperacao) GetRouteOperations(context.Context, int64) ([]*routingentity.RouteOperation, error) {
+	return []*routingentity.RouteOperation{{
+		OperationID: 7, OperationName: "GALVANIZAÇÃO A FRIO EXTERNA",
+		OperationOrigin: routingentity.OriginThirdPart, Situation: routingentity.RouteOpApproved,
+	}}, nil
+}
+
+func TestPrecoDeTerceiroAusenteEhPendenciaDeCadastroENaoFalhaDoSistema(t *testing.T) {
+	repo := &fakeCostRepo{childrenByMask: map[string][]domainrepo.BOMChild{"1|": {}}, purchaseCosts: map[int64]float64{1: 10}}
+	_, err := New(repo).
+		WithRouting(costRoutingComNomeDaOperacao{}).
+		WithThirdPartyPrices(thirdPartyPrecoAusente{}).
+		RollUp(context.Background(), request.CostRollupDTO{ItemCode: 1, LotSize: 1, CalculatedBy: uuid.NewString()})
+	if err == nil {
+		t.Fatal("preço de terceiro ausente não pode passar em silêncio")
+	}
+
+	// Tipado: é o que faz o handler devolver 422 em vez de 500.
+	var validacao *errorsuc.ValidationError
+	if !errors.As(err, &validacao) {
+		t.Fatalf("erro deveria ser de validação (→ 422), veio %T: %v", err, err)
+	}
+
+	msg := err.Error()
+	// A mensagem precisa dizer QUAL operação e ONDE resolver.
+	for _, esperado := range []string{"GALVANIZAÇÃO A FRIO EXTERNA", "VTER0100"} {
+		if !strings.Contains(msg, esperado) {
+			t.Errorf("mensagem não menciona %q: %s", esperado, msg)
+		}
+	}
+	// E não pode expor o código INTERNO do item, que o usuário não reconhece —
+	// é o mesmo problema dos campos "(ID)".
+	if strings.Contains(msg, "item 1 ") || strings.Contains(msg, "item 7") {
+		t.Errorf("mensagem expõe código interno: %s", msg)
+	}
 }

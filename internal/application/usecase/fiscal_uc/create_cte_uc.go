@@ -2,7 +2,6 @@ package fiscal_uc
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -30,11 +29,11 @@ func (uc *CreateCTeUseCase) Execute(ctx context.Context, dto request.CreateCTeDT
 
 	dataEmissao, err := time.Parse("2006-01-02", dto.DataEmissao)
 	if err != nil {
-		return nil, fmt.Errorf("data_emissao inválida: %w", err)
+		return nil, errorsuc.NewValidationError("data de emissão inválida: use o formato AAAA-MM-DD")
 	}
 	dataEntrada, err := time.Parse("2006-01-02", dto.DataEntrada)
 	if err != nil {
-		return nil, fmt.Errorf("data_entrada inválida: %w", err)
+		return nil, errorsuc.NewValidationError("data de entrada inválida: use o formato AAAA-MM-DD")
 	}
 
 	if dto.TipoRateio == "" {

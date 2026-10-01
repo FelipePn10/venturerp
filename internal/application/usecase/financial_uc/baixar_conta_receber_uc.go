@@ -42,7 +42,7 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 
 	dataRecebimento, err := time.Parse("2006-01-02", dto.DataRecebimento)
 	if err != nil {
-		return fmt.Errorf("data_recebimento inválida: %w", err)
+		return errorsuc.NewValidationError("data de recebimento inválida: use o formato AAAA-MM-DD")
 	}
 
 	valorRecebido := decimal.NewFromFloat(dto.ValorRecebido)

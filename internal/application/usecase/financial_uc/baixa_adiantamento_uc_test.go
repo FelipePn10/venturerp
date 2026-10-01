@@ -3,6 +3,7 @@ package financial_uc
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -250,4 +251,38 @@ func almostEqual(a, b float64) bool {
 		d = -d
 	}
 	return d < 1e-6
+}
+
+// Data em formato errado é erro de QUEM DIGITA, não falha do sistema. Antes era
+// embrulhada com fmt.Errorf, o tipo se perdia e o handler devolvia HTTP 500
+// "erro interno do servidor": a explicação ("data_pagamento inválida") ficava só
+// no log. O usuário via uma falha genérica num campo que ele mesmo preencheu.
+func TestBaixaRecusaDataMalFormatadaComoValidacaoENao500(t *testing.T) {
+	casos := []struct {
+		nome string
+		data string
+	}{
+		{"formato brasileiro", "31/12/2026"},
+		{"texto", "ontem"},
+		{"vazia", ""},
+		{"só o ano", "2026"},
+	}
+	for _, c := range casos {
+		t.Run("pagar/"+c.nome, func(t *testing.T) {
+			repo := &fakeFinRepo{cp: contaPagar(entity.ContaPagarStatusPendente, 100, time.Now())}
+			uc := BaixarContaPagarUseCase{Repo: repo, FiscalRepo: fakeFiscalRepo{}, Auth: fakeFinAuth{canPagar: true}}
+			err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{DataPagamento: c.data, ValorPago: 100})
+
+			var validacao *errorsuc.ValidationError
+			if !errors.As(err, &validacao) {
+				t.Fatalf("erro deveria ser de validação (→ 422), veio %T: %v", err, err)
+			}
+			if !strings.Contains(err.Error(), "AAAA-MM-DD") {
+				t.Errorf("mensagem deveria dizer o formato esperado: %v", err)
+			}
+			if repo.baixaParams != nil {
+				t.Error("não pode baixar o título com data inválida")
+			}
+		})
+	}
 }

@@ -42,7 +42,7 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 
 	dataPagamento, err := time.Parse("2006-01-02", dto.DataPagamento)
 	if err != nil {
-		return fmt.Errorf("data_pagamento inválida: %w", err)
+		return errorsuc.NewValidationError("data de pagamento inválida: use o formato AAAA-MM-DD")
 	}
 
 	valorPago := decimal.NewFromFloat(dto.ValorPago)
