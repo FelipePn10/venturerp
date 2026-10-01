@@ -6,6 +6,19 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.4.0] — 2026-10-01
+
+- fix(fiscal): a máscara do NCM não pode decidir se o item é tributado (`94ce2e8`)
+- fix(cadastros): próximo código como bigint nos 17 geradores de sequência (`c84b16a`)
+- fix: oito defeitos da revisão do PR, cinco deles em documento fiscal ou custo gravado (`18256d5`)
+- fix(fiscal,financeiro): erro de caso de uso deixa de virar "requisição inválida" (`436b20c`)
+- feat(custos): esquema de rateio de indiretos, componentes e histórico (`cb535e0`)
+- fix(conciliação): importar um JSON respondia sucesso com zero lançamento (`d2450ee`)
+- fix(financeiro): o filtro da carteira nunca chegava ao banco (`51892ff`)
+- feat(beneficiamento): trilha de auditoria e estorno da nota cancelada (`b778141`)
+- feat(beneficiamento): material de terceiro, do recebimento ao retorno fiscal (`ecbe218`)
+- feat(multiempresa): banco, container e subdomínio por empresa na mesma VPS (`e92013f`)
+
 - feat(multiempresa): o sistema passa a atender mais de uma empresa com banco,
   usuário de banco e serviço próprios para cada uma. Nenhuma empresa alcança o
   dado da outra nem por consulta direta ao banco — a separação foi verificada nas
