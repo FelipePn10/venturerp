@@ -6,6 +6,16 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(erros): situações que são do usuário deixaram de aparecer como "erro interno
+  do servidor". A mais séria: quando o roteiro de um item passa por uma operação
+  feita por terceiro (galvanização, têmpera, zincagem) e o preço daquele serviço
+  ainda não foi cadastrado, o cálculo de custo falhava com uma mensagem genérica —
+  agora diz qual operação está sem preço e que o preço se cadastra em VTER0100,
+  ou que a operação pode ser marcada como interna. O mesmo valia para data digitada
+  fora do formato na baixa de conta a pagar e a receber, no adiantamento e no CT-e,
+  e para arquivo que não é XML de NF-e no upload de entrada: todos diziam só "erro
+  interno", e dois ainda mostravam texto em inglês
+
 ## [v1.4.1] — 2026-10-01
 
 - fix(fornecedor): o construtor devolve a condição de ICMS que ele validou (`d899a1f`)
