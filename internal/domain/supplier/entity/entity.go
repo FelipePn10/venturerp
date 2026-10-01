@@ -3,6 +3,7 @@ package entity
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
@@ -75,6 +76,40 @@ const (
 	ICMSNaoContribuinte ICMSContributor = "NAO_CONTRIBUINTE"
 	ICMSIsento          ICMSContributor = "ISENTO"
 )
+
+// RequiresStateRegistration diz se a inscrição estadual é exigível pela condição
+// de ICMS do fornecedor.
+//
+// Contribuinte de ICMS tem inscrição estadual por definição. Não contribuinte e
+// isento legitimamente NÃO têm — prestador de serviço, pessoa física e boa parte
+// dos MEI entram aqui, e a própria NF-e prevê essa condição (indIEDest = 9).
+//
+// Antes disto a exigência olhava só o TIPO do fornecedor, e só transportadora
+// estava liberada: para cadastrar um prestador de serviço era preciso ou inventar
+// um número (que entraria na apuração de ICMS das notas de entrada dele) ou
+// declará-lo transportadora. Os 12 fornecedores não contribuintes da Usimac
+// ficaram fora da carga por causa disso.
+//
+// Vazio devolve true porque o padrão da coluna é CONTRIBUINTE: a dispensa exige
+// que alguém declare a condição, nunca o silêncio.
+func (c ICMSContributor) RequiresStateRegistration() bool {
+	switch c {
+	case ICMSNaoContribuinte, ICMSIsento:
+		return false
+	default:
+		return true
+	}
+}
+
+// IsValid aceita o vazio, que significa "manter o padrão" (CONTRIBUINTE).
+func (c ICMSContributor) IsValid() bool {
+	switch c {
+	case "", ICMSContribuinte, ICMSNaoContribuinte, ICMSIsento:
+		return true
+	default:
+		return false
+	}
+}
 
 type TrackingPlatform string
 
@@ -227,8 +262,11 @@ type SupplierInput struct {
 	DocumentNumber string
 	// TypeKind is the kind of the referenced supplier_type, used to decide
 	// whether the state registration is mandatory. Empty means NORMAL.
-	TypeKind                        SupplierKind
-	StateRegistration               *string
+	TypeKind          SupplierKind
+	StateRegistration *string
+	// ICMSContributor decide, junto com TypeKind, se a inscrição estadual é
+	// exigida. Vazio = CONTRIBUINTE, que é o padrão da coluna.
+	ICMSContributor                 ICMSContributor
 	IsMEI                           bool
 	AgricultureMinistryRegistration *string
 }
@@ -268,10 +306,18 @@ func NewSupplier(code int64, in SupplierInput, createdBy uuid.UUID) (*Supplier, 
 	if in.IsMEI && in.PersonType == PersonFisica {
 		return nil, fmt.Errorf("microempreendedor individual não pode ser marcado para pessoa física")
 	}
-	// State registration is mandatory unless the supplier is a carrier/redispatch.
-	if in.TypeKind.RequiresStateRegistration() {
-		if in.StateRegistration == nil || *in.StateRegistration == "" {
-			return nil, fmt.Errorf("inscrição estadual é obrigatória para este tipo de fornecedor")
+	if !in.ICMSContributor.IsValid() {
+		return nil, fmt.Errorf("condição de ICMS %q não existe — use CONTRIBUINTE, NAO_CONTRIBUINTE ou ISENTO", string(in.ICMSContributor))
+	}
+	// A inscrição estadual é exigida quando o TIPO do fornecedor pede (transportadora
+	// e redespacho não pedem) E quando ele é contribuinte de ICMS. Ver
+	// ICMSContributor.RequiresStateRegistration.
+	if in.TypeKind.RequiresStateRegistration() && in.ICMSContributor.RequiresStateRegistration() {
+		if in.StateRegistration == nil || strings.TrimSpace(*in.StateRegistration) == "" {
+			return nil, fmt.Errorf(
+				"informe a inscrição estadual: fornecedor contribuinte de ICMS tem inscrição. " +
+					"Se este não é contribuinte, marque a condição de ICMS como não contribuinte ou isento " +
+					"e a inscrição deixa de ser exigida")
 		}
 	}
 	if in.AgricultureMinistryRegistration != nil && *in.AgricultureMinistryRegistration != "" {

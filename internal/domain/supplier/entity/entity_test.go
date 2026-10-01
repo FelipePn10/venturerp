@@ -102,3 +102,70 @@ func TestSupplierKind_RequiresStateRegistration(t *testing.T) {
 		}
 	}
 }
+
+// Fornecedor não contribuinte de ICMS legitimamente não tem inscrição estadual:
+// prestador de serviço, pessoa física e boa parte dos MEI. Antes, a exigência
+// olhava só o tipo e só transportadora escapava — para cadastrar um prestador era
+// preciso inventar um número (que entraria na apuração de ICMS das notas dele) ou
+// declará-lo transportadora. Foi o que barrou os 12 não contribuintes da Usimac.
+func TestInscricaoEstadualSegueACondicaoDeICMS(t *testing.T) {
+	ator := uuid.New()
+	base := func(icms ICMSContributor, ie *string) SupplierInput {
+		return SupplierInput{
+			Name:              "FORNECEDOR DE TESTE LTDA",
+			PersonType:        PersonJuridica,
+			DocumentType:      DocumentCNPJ,
+			DocumentNumber:    "23208854000163",
+			TypeKind:          KindNormal,
+			ICMSContributor:   icms,
+			StateRegistration: ie,
+		}
+	}
+	numero := "653082415113"
+	vazio := ""
+
+	casos := []struct {
+		nome   string
+		icms   ICMSContributor
+		ie     *string
+		aceita bool
+	}{
+		{"contribuinte com inscrição", ICMSContribuinte, &numero, true},
+		{"contribuinte sem inscrição", ICMSContribuinte, nil, false},
+		{"contribuinte com inscrição em branco", ICMSContribuinte, &vazio, false},
+		{"contribuinte com inscrição só de espaços", ICMSContribuinte, ptr("   "), false},
+		{"não contribuinte sem inscrição", ICMSNaoContribuinte, nil, true},
+		{"isento sem inscrição", ICMSIsento, nil, true},
+		{"não contribuinte que tem inscrição", ICMSNaoContribuinte, &numero, true},
+		// Controle: silêncio NÃO dispensa. O padrão da coluna é CONTRIBUINTE, e a
+		// dispensa precisa de alguém declarando a condição.
+		{"condição em branco sem inscrição", "", nil, false},
+	}
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			_, err := NewSupplier(1, base(c.icms, c.ie), ator)
+			if c.aceita && err != nil {
+				t.Fatalf("esperava aceitar, recusou: %v", err)
+			}
+			if !c.aceita && err == nil {
+				t.Fatal("esperava recusar, aceitou")
+			}
+		})
+	}
+}
+
+// Condição inexistente tem de ser recusada com nome, não gravada para o CHECK do
+// banco barrar depois com erro cru. "Contribuinte" (como vem da planilha do
+// cliente) não é "CONTRIBUINTE".
+func TestCondicaoDeICMSInexistenteERecusada(t *testing.T) {
+	_, err := NewSupplier(1, SupplierInput{
+		Name: "X LTDA", PersonType: PersonJuridica, DocumentType: DocumentCNPJ,
+		DocumentNumber: "23208854000163", TypeKind: KindNormal,
+		ICMSContributor: "Contribuinte", StateRegistration: ptr("653082415113"),
+	}, uuid.New())
+	if err == nil {
+		t.Fatal("esperava recusar a condição \"Contribuinte\" (minúsculas), aceitou")
+	}
+}
+
+func ptr(s string) *string { return &s }
