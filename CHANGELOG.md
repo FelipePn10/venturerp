@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.4.1] — 2026-10-01
+
+- fix(fornecedor): o construtor devolve a condição de ICMS que ele validou (`d899a1f`)
+- fix(fornecedor): inscrição estadual segue a condição de ICMS, não o tipo (`2f7a20f`)
+
 - fix(fornecedor): cadastrar fornecedor que **não é contribuinte de ICMS** voltou
   a ser possível. O sistema exigia Inscrição Estadual de todo fornecedor que não
   fosse transportadora, e quem não é contribuinte legitimamente não tem inscrição
