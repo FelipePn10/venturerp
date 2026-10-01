@@ -4,7 +4,9 @@ import (
 	"context"
 	"strings"
 
+	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -157,4 +159,81 @@ func somenteDigitos(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// DadosFiscaisDoDestinatario são os campos do destinatário que a NF-e exige, já
+// resolvidos do cadastro do cliente.
+type DadosFiscaisDoDestinatario struct {
+	CNPJ            string
+	RazaoSocial     string
+	IE              string
+	UF              string
+	Logradouro      string
+	Numero          string
+	Complemento     string
+	Bairro          string
+	Municipio       string
+	CodigoMunicipio string
+	CEP             string
+	Email           string
+	Telefone        string
+}
+
+// ResolvedorDeDestinatario expõe a resolução do destinatário para quem emite nota
+// fora do módulo fiscal — hoje, o faturamento do beneficiamento.
+//
+// Existe para a regra de qual endereço vale (entrega, depois cobrança, depois
+// padrão, depois o primeiro) morar num lugar só. Duplicá-la faria a nota de
+// beneficiamento sair com endereço diferente da nota de venda do mesmo cliente.
+type ResolvedorDeDestinatario struct {
+	Customers customerrepo.CustomerRepository
+}
+
+func (r *ResolvedorDeDestinatario) DadosFiscaisDoCliente(ctx context.Context, code int64) (*DadosFiscaisDoDestinatario, error) {
+	if r.Customers == nil {
+		return nil, errorsuc.NewValidationError("cadastro de clientes indisponível para resolver o destinatário")
+	}
+	cliente, err := r.Customers.GetCustomerByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if cliente == nil {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", code))
+	}
+
+	dados := &DadosFiscaisDoDestinatario{
+		CNPJ:        cliente.DocumentNumber,
+		RazaoSocial: cliente.Name,
+		Email:       primeiroEmailDoCliente(cliente),
+	}
+	if cliente.StateRegistration != nil {
+		dados.IE = *cliente.StateRegistration
+	}
+
+	// Sem endereço a SEFAZ rejeita por campo obrigatório ausente. Recusar aqui é
+	// melhor que descobrir na transmissão, com a nota já criada.
+	end := enderecoDaNota(ctx, r.Customers, cliente)
+	if end == nil {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"o cliente %d não tem endereço cadastrado; a NF-e exige logradouro, número, bairro, município, código IBGE e CEP", code))
+	}
+	dados.Logradouro = valorOuVazio(end.Street)
+	dados.Numero = valorOuVazio(end.Number)
+	dados.Complemento = valorOuVazio(end.Complement)
+	dados.Bairro = valorOuVazio(end.Neighborhood)
+	dados.Municipio = valorOuVazio(end.City)
+	dados.UF = valorOuVazio(end.UF)
+	dados.CEP = somenteDigitos(valorOuVazio(end.ZipCode))
+
+	// O código IBGE do município NÃO vem do endereço do cliente: a tabela não tem a
+	// coluna. Fica vazio aqui, igual ao que a criação de nota de venda já faz, e a
+	// prévia da NF-e sinaliza a ausência antes da transmissão.
+	return dados, nil
+}
+
+func valorOuVazio(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
 }

@@ -120,7 +120,7 @@ func (h *FiscalHandler) GetDANFE(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) CreateEntry(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateFiscalEntryDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createEntryUC.Execute(r.Context(), dto)
@@ -134,7 +134,7 @@ func (h *FiscalHandler) CreateEntry(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) UploadNFE(w http.ResponseWriter, r *http.Request) {
 	var dto request.UploadNFEDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.uploadNFEUC.Execute(r.Context(), dto)
@@ -178,7 +178,7 @@ func (h *FiscalHandler) GetEntry(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getEntryUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -187,7 +187,7 @@ func (h *FiscalHandler) GetEntry(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) CreateExit(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateFiscalExitDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createExitUC.Execute(r.Context(), dto)
@@ -201,12 +201,12 @@ func (h *FiscalHandler) CreateExit(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) CreateExitFromLoad(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateFiscalExitFromLoadDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createExitFromLoadUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -238,7 +238,7 @@ func (h *FiscalHandler) CancelExit(w http.ResponseWriter, r *http.Request) {
 		Motivo string `json:"motivo"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.cancelExitUC.Execute(r.Context(), fiscal_uc.CancelFiscalExitParams{
@@ -270,7 +270,7 @@ func (h *FiscalHandler) GetExit(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getExitUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -288,7 +288,7 @@ func (h *FiscalHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateFiscalConfigDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.updateConfigUC.Execute(r.Context(), dto)
@@ -312,7 +312,7 @@ func (h *FiscalHandler) EmitirCCe(w http.ResponseWriter, r *http.Request) {
 		TextoCorrecao string `json:"texto_correcao"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.emitirCCeUC.Execute(r.Context(), fiscal_uc.EmitirCCeParams{
@@ -331,7 +331,7 @@ func (h *FiscalHandler) EmitirCCe(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) CreateCTe(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCTeDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.createCTeUC.Execute(r.Context(), dto)
@@ -360,7 +360,7 @@ func (h *FiscalHandler) GetCTe(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getCTeUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -371,7 +371,7 @@ func (h *FiscalHandler) GetCTe(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) UpsertNcmTax(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertNcmTaxDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	result, err := h.upsertNcmUC.Execute(r.Context(), dto)
@@ -405,7 +405,7 @@ func (h *FiscalHandler) DeleteNcmTax(w http.ResponseWriter, r *http.Request) {
 func (h *FiscalHandler) UpsertICMSInterstate(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertICMSInterstateDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	if err := h.upsertInterstateUC.Execute(r.Context(), dto); err != nil {
@@ -427,7 +427,7 @@ func (h *FiscalHandler) ListICMSInterstate(w http.ResponseWriter, r *http.Reques
 func (h *FiscalHandler) UpsertICMSInternal(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertICMSInternalDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 	if err := h.upsertInternalUC.Execute(r.Context(), dto); err != nil {

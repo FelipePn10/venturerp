@@ -313,9 +313,21 @@ func (r *FinancialRepositoryPG) ListContasPagar(ctx context.Context, filters rep
 	args := []interface{}{empresa}
 	argIdx := 2
 
+	// A coluna da data vem de DateField.Coluna(), um domínio fechado de dois
+	// valores — nunca de texto do cliente, que aqui seria injeção de SQL.
+	colunaData := filters.DateField.Coluna()
+
+	// Situação compara sem diferenciar caixa: a coluna é VARCHAR gravada em
+	// MAIÚSCULAS (default 'PENDENTE') e a tela historicamente manda minúsculas.
+	// Comparação literal aqui é um filtro que nunca casa — e não acusa nada.
 	if filters.Status != nil {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		query += fmt.Sprintf(" AND UPPER(status) = UPPER($%d)", argIdx)
 		args = append(args, *filters.Status)
+		argIdx++
+	}
+	if filters.StatusAprovacao != nil {
+		query += fmt.Sprintf(" AND UPPER(status_aprovacao) = UPPER($%d)", argIdx)
+		args = append(args, *filters.StatusAprovacao)
 		argIdx++
 	}
 	if filters.FornecedorID != nil {
@@ -323,15 +335,51 @@ func (r *FinancialRepositoryPG) ListContasPagar(ctx context.Context, filters rep
 		args = append(args, *filters.FornecedorID)
 		argIdx++
 	}
+	if filters.PlanoContasID != nil {
+		query += fmt.Sprintf(" AND plano_contas_id = $%d", argIdx)
+		args = append(args, *filters.PlanoContasID)
+		argIdx++
+	}
+	if filters.CentroCustoID != nil {
+		query += fmt.Sprintf(" AND centro_custo_id = $%d", argIdx)
+		args = append(args, *filters.CentroCustoID)
+		argIdx++
+	}
+	if filters.TipoDocumento != nil {
+		query += fmt.Sprintf(" AND tipo_documento = $%d", argIdx)
+		args = append(args, *filters.TipoDocumento)
+		argIdx++
+	}
+	if filters.Documento != nil {
+		query += fmt.Sprintf(" AND numero_documento ILIKE $%d", argIdx)
+		args = append(args, "%"+*filters.Documento+"%")
+		argIdx++
+	}
 	if filters.StartDate != nil {
-		query += fmt.Sprintf(" AND data_vencimento >= $%d", argIdx)
+		query += fmt.Sprintf(" AND %s >= $%d", colunaData, argIdx)
 		args = append(args, *filters.StartDate)
 		argIdx++
 	}
 	if filters.EndDate != nil {
-		query += fmt.Sprintf(" AND data_vencimento <= $%d", argIdx)
+		query += fmt.Sprintf(" AND %s <= $%d", colunaData, argIdx)
 		args = append(args, *filters.EndDate)
 		argIdx++
+	}
+	if filters.ValorMinimo != nil {
+		query += fmt.Sprintf(" AND COALESCE(valor_bruto,0) >= $%d", argIdx)
+		args = append(args, *filters.ValorMinimo)
+		argIdx++
+	}
+	if filters.ValorMaximo != nil {
+		query += fmt.Sprintf(" AND COALESCE(valor_bruto,0) <= $%d", argIdx)
+		args = append(args, *filters.ValorMaximo)
+		argIdx++
+	}
+	if filters.SomenteVencidos {
+		// "Vencido" é vencimento passado E título ainda em aberto. Sem a segunda
+		// metade, a lista traz tudo que já foi pago no passado — o oposto do que
+		// quem cobra procura.
+		query += " AND data_vencimento < CURRENT_DATE AND UPPER(status) NOT IN ('PAGO','CANCELADO')"
 	}
 	query += " ORDER BY data_vencimento ASC"
 
@@ -341,7 +389,7 @@ func (r *FinancialRepositoryPG) ListContasPagar(ctx context.Context, filters rep
 	}
 	defer rows.Close()
 
-	var out []*entity.ContaPagar
+	out := make([]*entity.ContaPagar, 0)
 	for rows.Next() {
 		c, err := r.scanContaPagar(rows)
 		if err != nil {
@@ -540,8 +588,10 @@ func (r *FinancialRepositoryPG) ListContasReceber(ctx context.Context, filters r
 	args := []interface{}{empresa}
 	argIdx := 2
 
+	colunaData := filters.DateField.Coluna()
+
 	if filters.Status != nil {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		query += fmt.Sprintf(" AND UPPER(status) = UPPER($%d)", argIdx)
 		args = append(args, *filters.Status)
 		argIdx++
 	}
@@ -550,15 +600,43 @@ func (r *FinancialRepositoryPG) ListContasReceber(ctx context.Context, filters r
 		args = append(args, *filters.ClienteID)
 		argIdx++
 	}
+	if filters.SalesOrderID != nil {
+		query += fmt.Sprintf(" AND sales_order_id = $%d", argIdx)
+		args = append(args, *filters.SalesOrderID)
+		argIdx++
+	}
+	if filters.FiscalExitID != nil {
+		query += fmt.Sprintf(" AND fiscal_exit_id = $%d", argIdx)
+		args = append(args, *filters.FiscalExitID)
+		argIdx++
+	}
+	if filters.Documento != nil {
+		query += fmt.Sprintf(" AND numero_documento ILIKE $%d", argIdx)
+		args = append(args, "%"+*filters.Documento+"%")
+		argIdx++
+	}
 	if filters.StartDate != nil {
-		query += fmt.Sprintf(" AND data_vencimento >= $%d", argIdx)
+		query += fmt.Sprintf(" AND %s >= $%d", colunaData, argIdx)
 		args = append(args, *filters.StartDate)
 		argIdx++
 	}
 	if filters.EndDate != nil {
-		query += fmt.Sprintf(" AND data_vencimento <= $%d", argIdx)
+		query += fmt.Sprintf(" AND %s <= $%d", colunaData, argIdx)
 		args = append(args, *filters.EndDate)
 		argIdx++
+	}
+	if filters.ValorMinimo != nil {
+		query += fmt.Sprintf(" AND COALESCE(valor_bruto,0) >= $%d", argIdx)
+		args = append(args, *filters.ValorMinimo)
+		argIdx++
+	}
+	if filters.ValorMaximo != nil {
+		query += fmt.Sprintf(" AND COALESCE(valor_bruto,0) <= $%d", argIdx)
+		args = append(args, *filters.ValorMaximo)
+		argIdx++
+	}
+	if filters.SomenteVencidos {
+		query += " AND data_vencimento < CURRENT_DATE AND UPPER(status) NOT IN ('PAGO','RECEBIDO','CANCELADO')"
 	}
 	query += " ORDER BY data_vencimento ASC"
 
@@ -568,7 +646,7 @@ func (r *FinancialRepositoryPG) ListContasReceber(ctx context.Context, filters r
 	}
 	defer rows.Close()
 
-	var out []*entity.ContaReceber
+	out := make([]*entity.ContaReceber, 0)
 	for rows.Next() {
 		c, err := r.scanContaReceber(rows)
 		if err != nil {
@@ -1704,19 +1782,21 @@ func (r *FinancialRepositoryPG) contaDaEmpresa(ctx context.Context, contaID int6
 	return nil
 }
 
-func (r *FinancialRepositoryPG) SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) error {
+func (r *FinancialRepositoryPG) SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) (bool, error) {
 	if err := r.contaDaEmpresa(ctx, contaID); err != nil {
-		return err
+		return false, err
 	}
-	_, err := r.pool.Exec(ctx,
+	tag, err := r.pool.Exec(ctx,
 		`INSERT INTO extrato_bancario (conta_bancaria_id, data_transacao, valor, tipo, descricao, fitid, extrato_hash)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 ON CONFLICT (extrato_hash) DO NOTHING`,
 		contaID, data, valor, tipo, descricao, fitid, hash)
 	if err != nil {
-		return fmt.Errorf("saving extrato item: %w", err)
+		return false, fmt.Errorf("gravando lançamento do extrato: %w", err)
 	}
-	return nil
+	// ON CONFLICT DO NOTHING não é erro: zero linha afetada significa que o
+	// lançamento já estava importado.
+	return tag.RowsAffected() > 0, nil
 }
 
 func (r *FinancialRepositoryPG) GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error) {

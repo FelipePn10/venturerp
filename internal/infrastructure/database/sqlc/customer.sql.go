@@ -2210,113 +2210,113 @@ func (q *Queries) ListTaxTypes(ctx context.Context, dollar_1 bool) ([]TaxType, e
 }
 
 const nextCarrierCode = `-- name: NextCarrierCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM carriers
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carriers
 `
 
-func (q *Queries) NextCarrierCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextCarrierCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextCarrierCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextCarrierGroupCode = `-- name: NextCarrierGroupCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM carrier_groups
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carrier_groups
 `
 
-func (q *Queries) NextCarrierGroupCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextCarrierGroupCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextCarrierGroupCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextContactTypeCode = `-- name: NextContactTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM customer_contact_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customer_contact_types
 `
 
-func (q *Queries) NextContactTypeCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextContactTypeCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextContactTypeCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextCustomerCode = `-- name: NextCustomerCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM customers
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customers
 `
 
-func (q *Queries) NextCustomerCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextCustomerCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextCustomerCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextInvoiceTypeCode = `-- name: NextInvoiceTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM invoice_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM invoice_types
 `
 
-func (q *Queries) NextInvoiceTypeCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextInvoiceTypeCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextInvoiceTypeCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextMarketSegmentCode = `-- name: NextMarketSegmentCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM market_segments
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM market_segments
 `
 
-func (q *Queries) NextMarketSegmentCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextMarketSegmentCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextMarketSegmentCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextPaymentConditionCode = `-- name: NextPaymentConditionCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM payment_conditions
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM payment_conditions
 `
 
-func (q *Queries) NextPaymentConditionCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextPaymentConditionCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextPaymentConditionCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextRegionCode = `-- name: NextRegionCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM regions
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM regions
 `
 
-func (q *Queries) NextRegionCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextRegionCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextRegionCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextSalesTableCode = `-- name: NextSalesTableCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM sales_tables
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM sales_tables
 `
 
 // Enquanto sales_orders.price_table_code mantiver a FK legada para code, o
 // proximo codigo precisa permanecer globalmente unico.
-func (q *Queries) NextSalesTableCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextSalesTableCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextSalesTableCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextTaxTypeCode = `-- name: NextTaxTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM tax_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM tax_types
 `
 
-func (q *Queries) NextTaxTypeCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextTaxTypeCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextTaxTypeCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }

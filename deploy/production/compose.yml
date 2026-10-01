@@ -1,3 +1,23 @@
+# VentureERP — produção multiempresa.
+#
+# Cada empresa cliente roda em seu próprio contêiner de API, sobre seu próprio
+# database no PostgreSQL do host. O isolamento é físico: nenhum contêiner tem
+# credencial do banco de outro cliente, e nenhuma consulta pode cruzar empresas
+# por descuido de filtro.
+#
+#   serviço        perfil      porta   database              subdomínio
+#   api            (sempre)    5070    venturerp             api.venturerp.com
+#   api-usimac     usimac      5075    venturerp_usimac      usimac.api.venturerp.com
+#   api-training   training    5071    venturerp_training    dev-api.venturerp.com
+#
+# Para adicionar um cliente, copie o bloco `api-usimac`, troque nome do
+# contêiner, perfil, SERVER_ADDR e arquivo de env, e registre o tenant em
+# /etc/venturerp/update.env (VENTURERP_TENANTS) para que ele entre no ciclo de
+# backup, migration e health-check das atualizações.
+#
+# Os limites de memória e CPU existem para que um cliente não consuma a VPS
+# inteira e derrube o outro. Ajuste-os ao crescer o hardware, nunca removendo.
+
 services:
   api:
     image: ${VENTURERP_IMAGE:?VENTURERP_IMAGE is required}
@@ -19,6 +39,37 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+    # Teto, não reserva: impede que um pico da Tecnofer consuma a VPS inteira e
+    # leve a API da Usimac (e o PostgreSQL de ambas) junto.
+    mem_limit: 1g
+    cpus: 1.50
+
+  api-usimac:
+    profiles: ["usimac"]
+    image: ${VENTURERP_IMAGE:?VENTURERP_IMAGE is required}
+    container_name: venturerp-api-usimac
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ${VENTURERP_USIMAC_API_ENV:-/opt/venturerp/panossoerp/.env.usimac}
+    environment:
+      SERVER_ADDR: "5075"
+      ENV: production
+      DATA_ENVIRONMENT: production
+      SYSTEM_UPDATE_DIR: /var/lib/venturerp-update
+    # Somente leitura: a fila de atualização é do tenant principal, que é quem
+    # dispara o update da VPS. A Usimac acompanha o status, não o solicita.
+    volumes:
+      - /var/lib/venturerp-update:/var/lib/venturerp-update:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    mem_limit: 768m
+    cpus: 1.00
 
   api-training:
     profiles: ["training"]

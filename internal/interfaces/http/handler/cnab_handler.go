@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/cnab"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
 // CNABHandler exposes bank exchange file generation (CNAB 240 remessa).
@@ -39,7 +40,7 @@ type cnabRemessaRequest struct {
 func (h *CNABHandler) GenerateRemessa240(w http.ResponseWriter, r *http.Request) {
 	var req cnabRemessaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
 
@@ -66,7 +67,9 @@ func (h *CNABHandler) GenerateRemessa240(w http.ResponseWriter, r *http.Request)
 
 	content, err := cnab.GenerateRemessa240(req.Config, titulos)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondError(w, http.StatusUnprocessableEntity,
+			"não foi possível gerar a remessa CNAB 240: "+err.Error()+
+				". Confira a configuração bancária (banco, agência, conta, convênio) e os dados dos títulos.")
 		return
 	}
 

@@ -23,6 +23,11 @@ type FiscalRepository interface {
 	CreateExitItem(ctx context.Context, item *entity.FiscalExitItem) (*entity.FiscalExitItem, error)
 	GetExitByID(ctx context.Context, id int64) (*entity.FiscalExit, error)
 	GetExitItems(ctx context.Context, fiscalExitID int64) ([]*entity.FiscalExitItem, error)
+	// RascunhoDeBeneficiamento devolve o rascunho de nota já criado para a remessa de
+	// beneficiamento (nulo quando não há). É o que permite RETOMAR um faturamento que
+	// falhou no meio, em vez de criar outra nota ao repetir — não há transação
+	// possível entre o módulo fiscal e o razão de material de terceiro.
+	RascunhoDeBeneficiamento(ctx context.Context, remessaID int64) (*entity.FiscalExit, error)
 	ListExits(ctx context.Context) ([]*entity.FiscalExit, error)
 	ListExitsByStatus(ctx context.Context, status entity.FiscalExitStatus) ([]*entity.FiscalExit, error)
 	UpdateExitStatus(ctx context.Context, id int64, status entity.FiscalExitStatus) (*entity.FiscalExit, error)

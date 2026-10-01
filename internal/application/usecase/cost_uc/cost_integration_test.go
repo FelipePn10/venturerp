@@ -21,9 +21,9 @@ import (
 // work-center rate (no naive average) using the rich, machine × labor time model.
 func TestIntegration_CostRollup_PerWorkCenterRichTime(t *testing.T) {
 	q, pool := testutil.Queries(t)
-	uc := cost_uc.New(standardCostRepo.New(q)).WithRouting(routingRepo.New(q))
+	uc := cost_uc.New(standardCostRepo.New(q, pool)).WithRouting(routingRepo.New(q))
 	rRepo := routingRepo.New(q)
-	scRepo := standardCostRepo.New(q)
+	scRepo := standardCostRepo.New(q, pool)
 	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()
 
@@ -82,28 +82,60 @@ func TestIntegration_CostRollup_PerWorkCenterRichTime(t *testing.T) {
 		t.Fatalf("RollUp: %v", err)
 	}
 
-	// Expected (qty=1, hours):
-	//   MachineHours = setup 1h + run 0.5h×ceil(1/10)=0.5 → 1.5h × R$100 = 150.00
-	//   LaborHours   = (setup 1h + labor 0.3333h×1) × crew 2 = 2.6667h × R$50 = 133.33
-	//   labor_cost   = 283.33
-	want := 1.5*100 + (1.0+20.0/60.0)*2*50
-	if math.Abs(res.LaborCost-want) > 0.05 {
-		t.Fatalf("labor_cost = %.4f, want %.4f", res.LaborCost, want)
-	}
-	t.Logf("labor_cost=%.2f (machine 150 + labor 133.33) — per-CT rich costing OK", res.LaborCost)
+	// Esperado (qtd=1, em horas):
+	//   HorasMáquina = setup 1h + run 0,5h×ceil(1/10)=0,5 → 1,5h × R$100 = 150,00
+	//   HorasHomem   = (setup 1h + labor 0,3333h×1) × equipe 2 = 2,6667h × R$50 = 133,33
+	//   conversão    = 283,33
+	//
+	// A conversão agora sai ABERTA por componente (migração 000373): antes os três
+	// números vinham somados no campo `labor_cost`, e não havia como saber quanto era
+	// preparação. A conferência aqui é dupla: cada componente no seu lugar E a soma
+	// preservada — é a soma que prova que a separação não perdeu nem inventou custo.
+	const (
+		taxaMaquina = 100.0
+		taxaHomem   = 50.0
+	)
+	setupEsperado := 1.0*taxaMaquina + (1.0*2)*taxaHomem // 1h máquina + 1h × equipe 2 homem = 200,00
+	maquinaEsperada := 0.5 * taxaMaquina                 // 0,5h de produção = 50,00
+	homemEsperado := (20.0 / 60.0 * 2) * taxaHomem       // 0,3333h × equipe 2 = 33,33
+	conversaoEsperada := 1.5*taxaMaquina + (1.0+20.0/60.0)*2*taxaHomem
 
-	// Setup amortization: a reference lot of 10 spreads the one-off setup over 10 units.
-	// run_base_qty=10 ⇒ one run cycle covers the lot, so the whole lot cost ÷ 10.
+	if math.Abs(res.SetupCost-setupEsperado) > 0.05 {
+		t.Fatalf("setup_cost = %.4f, esperado %.4f", res.SetupCost, setupEsperado)
+	}
+	if math.Abs(res.MachineCost-maquinaEsperada) > 0.05 {
+		t.Fatalf("machine_cost = %.4f, esperado %.4f", res.MachineCost, maquinaEsperada)
+	}
+	if math.Abs(res.LaborCost-homemEsperado) > 0.05 {
+		t.Fatalf("labor_cost = %.4f, esperado %.4f (só mão de obra direta)", res.LaborCost, homemEsperado)
+	}
+	// A soma dos componentes tem de reproduzir a conversão de antes, ao centavo.
+	soma := res.SetupCost + res.MachineCost + res.LaborCost
+	if math.Abs(soma-conversaoEsperada) > 0.05 {
+		t.Fatalf("setup+máquina+homem = %.4f, esperado %.4f — a separação perdeu ou inventou custo", soma, conversaoEsperada)
+	}
+	if math.Abs(res.TotalCost-conversaoEsperada) > 0.05 {
+		t.Fatalf("total_cost = %.4f, esperado %.4f (item sem material)", res.TotalCost, conversaoEsperada)
+	}
+	t.Logf("setup=%.2f máquina=%.2f homem=%.2f total=%.2f — conversão por CT aberta OK",
+		res.SetupCost, res.MachineCost, res.LaborCost, res.TotalCost)
+
+	// Diluição do setup: lote de referência 10 espalha a preparação por 10 unidades.
+	// run_base_qty=10 ⇒ um ciclo cobre o lote, então o custo do lote ÷ 10.
 	resLot, err := uc.RollUp(ctx, request.CostRollupDTO{ItemCode: itemCode, Mask: "", LotSize: 10, CalculatedBy: uid.String()})
 	if err != nil {
-		t.Fatalf("RollUp (lot): %v", err)
+		t.Fatalf("RollUp (lote): %v", err)
 	}
-	wantLot := want / 10
-	if math.Abs(resLot.LaborCost-wantLot) > 0.05 {
-		t.Fatalf("labor_cost (lot=10) = %.4f, want %.4f", resLot.LaborCost, wantLot)
+	if math.Abs(resLot.TotalCost-conversaoEsperada/10) > 0.05 {
+		t.Fatalf("total (lote=10) = %.4f, esperado %.4f", resLot.TotalCost, conversaoEsperada/10)
 	}
-	if resLot.LaborCost >= res.LaborCost {
-		t.Errorf("lot amortization should lower unit cost: lot=10 %.2f vs lot=1 %.2f", resLot.LaborCost, res.LaborCost)
+	// É o SETUP que a diluição tem de reduzir dez vezes — a produção por peça não
+	// muda com o lote. Conferir só o total esconderia um erro que trocasse os dois.
+	if math.Abs(resLot.SetupCost-setupEsperado/10) > 0.05 {
+		t.Fatalf("setup (lote=10) = %.4f, esperado %.4f", resLot.SetupCost, setupEsperado/10)
 	}
-	t.Logf("labor_cost(lot=10)=%.2f — setup amortized OK", resLot.LaborCost)
+	if resLot.TotalCost >= res.TotalCost {
+		t.Errorf("a diluição pelo lote deveria baixar o custo unitário: lote=10 %.2f contra lote=1 %.2f", resLot.TotalCost, res.TotalCost)
+	}
+	t.Logf("total(lote=10)=%.2f setup=%.2f — setup diluído OK", resLot.TotalCost, resLot.SetupCost)
 }

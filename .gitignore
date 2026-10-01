@@ -48,6 +48,9 @@ scripts/*
 !scripts/self_update_test.go
 !scripts/test-mrp-manufacturing.sh
 !scripts/audit-mrp-manufacturing.sh
+# Conferência das regras do beneficiamento contra o levantamento da Usimac. Só lê
+# arquivo do próprio repositório com grep; não tem token, CNPJ nem credencial.
+!scripts/cobertura-beneficiamento.sh
 !scripts/test-mrp-manufacturing-security.sh
 !scripts/test-product-sequencing.sh
 !scripts/test-third-party-services.sh
@@ -62,3 +65,6 @@ pdfs_test/
 /cutting-samples/
 observability/tempo/data/
 results/
+
+# Tokens de métrica por empresa, montados no Prometheus. Segredo: nunca versionar.
+observability/prometheus/tokens/

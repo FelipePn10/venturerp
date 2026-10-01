@@ -245,23 +245,23 @@ func (q *Queries) ListStateGroups(ctx context.Context) ([]StateGroup, error) {
 }
 
 const nextEntryOperationTypeCode = `-- name: NextEntryOperationTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM entry_operation_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM entry_operation_types
 `
 
-func (q *Queries) NextEntryOperationTypeCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextEntryOperationTypeCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextEntryOperationTypeCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextStateGroupCode = `-- name: NextStateGroupCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM state_groups
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM state_groups
 `
 
-func (q *Queries) NextStateGroupCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextStateGroupCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextStateGroupCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }

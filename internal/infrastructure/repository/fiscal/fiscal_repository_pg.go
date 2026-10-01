@@ -259,9 +259,10 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 			 source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 			 fiscal_coupon_date, fiscal_coupon_ecf_serial,enterprise_id,
 			 dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
-			 dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code)
+			 dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
+			 customer_material_remittance_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
-		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
+		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.DataEmissao, e.DataSaida,
 		e.CnpjDestinatario, e.RazaoSocialDestinatario, e.IEDestinatario, e.UFDestinatario,
@@ -272,6 +273,7 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 		e.FiscalCouponDate, e.FiscalCouponECFSerial, enterpriseID,
 		e.DestLogradouro, e.DestNumero, e.DestComplemento, e.DestBairro, e.DestMunicipio,
 		e.DestCodigoMunicipio, e.DestCEP, e.DestEmail, e.DestTelefone, e.CustomerCode,
+		e.CustomerMaterialRemittanceID,
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit: %w", err)
@@ -286,14 +288,16 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 			 base_icms, aliq_icms, valor_icms, valor_icms_diferido,
 			 base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 			 cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description,
-			 base_icms_st, aliq_icms_st, valor_icms_st, mva)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+			 base_icms_st, aliq_icms_st, valor_icms_st, mva,
+			 unidade_comercial, codigo_produto)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
 		 RETURNING id, created_at`,
 		item.FiscalExitID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.ValorICMSDiferido,
 		item.BaseIPI, item.AliqIPI, item.ValorIPI, item.AliqPIS, item.ValorPIS, item.AliqCOFINS, item.ValorCOFINS,
 		item.CstICMS, item.CstIPI, item.CstPIS, item.CstCOFINS, item.OrigemMercadoria, item.Description,
 		item.BaseICMSST, item.AliqICMSST, item.ValorICMSST, item.MVA,
+		item.UnidadeComercial, item.CodigoProduto,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit item: %w", err)
@@ -348,7 +352,8 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 		        base_icms, aliq_icms, valor_icms, valor_icms_diferido,
 		        base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 		        cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description,
-		        base_icms_st, aliq_icms_st, valor_icms_st, mva, created_at
+		        base_icms_st, aliq_icms_st, valor_icms_st, mva,
+		        unidade_comercial, codigo_produto, created_at
 		 FROM public.fiscal_exit_items i WHERE fiscal_exit_id = $1 AND EXISTS(SELECT 1 FROM fiscal_exits x WHERE x.id=i.fiscal_exit_id AND x.enterprise_id=$2) ORDER BY sequence`, fiscalExitID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exit items: %w", err)
@@ -512,7 +517,8 @@ func scanExitItems(rows pgx.Rows) ([]*entity.FiscalExitItem, error) {
 			&it.BaseICMS, &it.AliqICMS, &it.ValorICMS, &it.ValorICMSDiferido,
 			&it.BaseIPI, &it.AliqIPI, &it.ValorIPI, &it.AliqPIS, &it.ValorPIS, &it.AliqCOFINS, &it.ValorCOFINS,
 			&it.CstICMS, &it.CstIPI, &it.CstPIS, &it.CstCOFINS, &it.OrigemMercadoria, &it.Description,
-			&it.BaseICMSST, &it.AliqICMSST, &it.ValorICMSST, &it.MVA, &it.CreatedAt,
+			&it.BaseICMSST, &it.AliqICMSST, &it.ValorICMSST, &it.MVA,
+			&it.UnidadeComercial, &it.CodigoProduto, &it.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit item: %w", err)
 		}
@@ -1045,4 +1051,35 @@ func (r *FiscalRepositoryPG) UpsertICMSInternal(ctx context.Context, uf string, 
 		return fmt.Errorf("upserting ICMS internal: %w", err)
 	}
 	return nil
+}
+
+// RascunhoDeBeneficiamento devolve o rascunho de nota já criado para a remessa, se
+// existir.
+//
+// Existe porque o faturamento do beneficiamento não é atômico — cria a nota em
+// rascunho, grava as linhas e depois baixa o saldo, sem transação possível entre os
+// dois módulos. Quando falha no meio, a mensagem manda repetir; sem esta consulta,
+// repetir pedia número novo e criava OUTRO rascunho, produzindo duplicata em vez de
+// concluir a nota original.
+//
+// Só DRAFT: nota autorizada ou cancelada não se retoma, e a mesma remessa é
+// faturada várias vezes ao longo do tempo (retorno parcial).
+func (r *FiscalRepositoryPG) RascunhoDeBeneficiamento(ctx context.Context, remessaID int64) (*entity.FiscalExit, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var id int64
+	err = r.pool.QueryRow(ctx, `
+SELECT id FROM public.fiscal_exits
+WHERE customer_material_remittance_id = $1 AND enterprise_id = $2
+  AND status = 'DRAFT' AND is_active
+LIMIT 1`, remessaID, enterpriseID).Scan(&id)
+	if err == pgx.ErrNoRows {
+		return nil, nil // sem rascunho pendente: o faturamento cria um novo
+	}
+	if err != nil {
+		return nil, fmt.Errorf("procurando rascunho de beneficiamento da remessa %d: %w", remessaID, err)
+	}
+	return r.GetExitByID(ctx, id)
 }

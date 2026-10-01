@@ -1656,12 +1656,12 @@ func (q *Queries) NextClassificationMaskCode(ctx context.Context) (int64, error)
 }
 
 const nextLegalDeviceCode = `-- name: NextLegalDeviceCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM legal_devices
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM legal_devices
 `
 
-func (q *Queries) NextLegalDeviceCode(ctx context.Context) (int32, error) {
+func (q *Queries) NextLegalDeviceCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextLegalDeviceCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }

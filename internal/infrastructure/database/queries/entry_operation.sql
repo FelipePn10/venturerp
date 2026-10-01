@@ -12,7 +12,7 @@ SELECT * FROM state_groups WHERE code = $1;
 SELECT * FROM state_groups ORDER BY code;
 
 -- name: NextStateGroupCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM state_groups;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM state_groups;
 
 -- name: AddStateGroupUF :exec
 INSERT INTO state_group_ufs (state_group_code, uf)
@@ -54,4 +54,4 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextEntryOperationTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM entry_operation_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM entry_operation_types;

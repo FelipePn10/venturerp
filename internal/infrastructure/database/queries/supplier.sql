@@ -20,7 +20,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextSupplierTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM supplier_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_types;
 
 -- ─── Supplier Contact Types ─────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextSupplierContactTypeCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM supplier_contact_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_contact_types;
 
 -- ─── Suppliers ────────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ UPDATE suppliers SET blocked = FALSE, block_reason = NULL, updated_at = NOW()
 WHERE code = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: NextSupplierCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM suppliers;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM suppliers;
 
 -- name: PropagateStateRegistration :exec
 -- Spec: ao alterar a IE, atualiza outros cadastros com o mesmo CNPJ/CPF.

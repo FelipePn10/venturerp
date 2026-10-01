@@ -27,3 +27,29 @@ type CostRollupDTO struct {
 	LotSize      float64 `json:"lot_size"`
 	CalculatedBy string  `json:"calculated_by"`
 }
+
+// ─── esquema de rateio de indiretos (migração 000373) ────────────────────────
+
+// CostOverheadRuleDTO é uma linha do esquema de cálculo de indiretos.
+//
+// `rate` entra como FRAÇÃO no método percentual (0,12 para 12%), igual ao resto do
+// domínio (perda de estrutura, alíquota fiscal). O banco recusa acima de 10 para
+// pegar quem digitou 12 querendo 12%.
+type CostOverheadRuleDTO struct {
+	Code          string  `json:"code"`
+	Description   string  `json:"description"`
+	Base          string  `json:"base"`
+	Method        string  `json:"method"`
+	Rate          float64 `json:"rate"`
+	WorkCenterID  *int64  `json:"work_center_id,omitempty"`
+	ItemCode      *int64  `json:"item_code,omitempty"`
+	PlanoContasID *int64  `json:"plano_contas_id,omitempty"`
+	CentroCustoID *int64  `json:"centro_custo_id,omitempty"`
+	ValidFrom     string  `json:"valid_from"`
+	ValidTo       *string `json:"valid_to,omitempty"`
+	IsActive      *bool   `json:"is_active,omitempty"`
+	Notes         *string `json:"notes,omitempty"`
+	// CreatedBy vem do JWT, nunca do corpo: quem cadastrou a taxa que entra no
+	// custo de todo produto não pode ser escolhido pelo cliente.
+	CreatedBy string `json:"-"`
+}

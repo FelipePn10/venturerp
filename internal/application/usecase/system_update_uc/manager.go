@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	appversion "github.com/FelipePn10/panossoerp/internal/version"
@@ -20,7 +22,11 @@ var (
 	ErrUpdateInProgress = errors.New("uma atualização já está em andamento")
 	ErrInvalidVersion   = errors.New("versão inválida")
 	ErrNoRelease        = errors.New("nenhuma versão publicada foi encontrada")
-	semverPattern       = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
+	// A VPS hospeda várias empresas sobre uma única fila de atualização, montada
+	// como somente leitura fora do ambiente principal. Sem este erro, o pedido
+	// falharia com um 500 genérico e o administrador não saberia por quê.
+	ErrUpdateNotAllowedHere = errors.New("esta empresa não administra a atualização da plataforma")
+	semverPattern           = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
 )
 
 type State string
@@ -105,12 +111,18 @@ func (m *Manager) Request(ctx context.Context, requestedVersion string) (Status,
 		return Status{}, fmt.Errorf("%w: a versão deve ser superior a %s", ErrInvalidVersion, current)
 	}
 	if err := os.MkdirAll(m.dir, 0o750); err != nil {
+		if isReadOnlyQueue(err) {
+			return Status{}, ErrUpdateNotAllowedHere
+		}
 		return Status{}, fmt.Errorf("criar diretório de atualização: %w", err)
 	}
 	lockPath := filepath.Join(m.dir, "active.lock")
 	lock, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if errors.Is(err, os.ErrExist) {
 		return Status{}, ErrUpdateInProgress
+	}
+	if isReadOnlyQueue(err) {
+		return Status{}, ErrUpdateNotAllowedHere
 	}
 	if err != nil {
 		return Status{}, fmt.Errorf("criar trava de atualização: %w", err)
@@ -220,4 +232,15 @@ func compareSemver(a, b string) int {
 		}
 	}
 	return 0
+}
+
+// isReadOnlyQueue distingue "não posso escrever aqui" de uma falha real de
+// escrita. A fila é montada somente leitura nos contêineres das empresas que não
+// administram a VPS; nesses, o sistema de arquivos recusa a criação com EROFS, e
+// uma montagem apenas sem permissão recusa com EACCES.
+func isReadOnlyQueue(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, syscall.EROFS) || errors.Is(err, fs.ErrPermission)
 }

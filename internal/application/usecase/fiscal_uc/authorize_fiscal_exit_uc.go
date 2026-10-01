@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -12,6 +13,7 @@ import (
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	financialEntity "github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	financialRepo "github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -37,7 +39,24 @@ type AuthorizeFiscalExitUseCase struct {
 	// CustomerRepo é opcional e resolve a condição de pagamento da nota: é o que
 	// faz o título nascer parcelado como foi vendido, e com o cliente dono.
 	CustomerRepo customerrepo.CustomerRepository
+	// BeneficiamentoGuard confere, antes de transmitir, se a nota de beneficiamento
+	// já baixou o saldo de material do cliente. Opcional: sem ele a autorização
+	// segue como antes, e notas de beneficiamento passam sem essa conferência.
+	//
+	// A trava existe porque a alternativa é a pior possível: material do cliente que
+	// saiu fiscalmente pela SEFAZ e continua aparecendo como presente no estoque de
+	// terceiros. A nota é criada em rascunho e o saldo é baixado antes; aqui só se
+	// confirma que isso aconteceu.
+	BeneficiamentoGuard BeneficiamentoBaixaGuard
 }
+
+// BeneficiamentoBaixaGuard é a conferência da baixa de material de terceiro.
+type BeneficiamentoBaixaGuard interface {
+	ConferirBaixaDaNota(ctx context.Context, fiscalExitID int64) error
+}
+
+// OrigemBeneficiamento marca a saída criada pelo faturamento do beneficiamento.
+const OrigemBeneficiamento = "BENEFICIAMENTO"
 
 func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*response.FiscalExitResponse, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
@@ -55,6 +74,15 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	}
 	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e deve estar em rascunho para autorizar, status atual: %s", exit.Status))
+	}
+
+	// Beneficiamento: o material do cliente tem de estar baixado ANTES de a nota
+	// ser transmitida. Transmitir sem a baixa deixaria material que saiu
+	// fiscalmente aparecendo como presente no estoque de terceiros.
+	if uc.BeneficiamentoGuard != nil && exit.SourceType != nil && *exit.SourceType == OrigemBeneficiamento {
+		if err := uc.BeneficiamentoGuard.ConferirBaixaDaNota(ctx, id); err != nil {
+			return nil, err
+		}
 	}
 
 	items, err := uc.Repo.GetExitItems(ctx, id)
@@ -188,9 +216,10 @@ func (uc *AuthorizeFiscalExitUseCase) settleStockAndOrder(
 func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) []focusnfe.NFEItem {
 	result := make([]focusnfe.NFEItem, 0, len(items))
 	for i, it := range items {
+		// O campo <NCM> do XML tem 8 dígitos: máscara faz a SEFAZ recusar a nota.
 		ncm := ""
 		if it.Ncm != nil {
-			ncm = *it.Ncm
+			ncm = engine.NormalizarNCM(*it.Ncm)
 		}
 		cfop := it.Cfop
 		desc := fmt.Sprintf("Produto %d", safeInt64(it.ItemCode))
@@ -234,13 +263,28 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			}
 		}
 
+		// ⚠️ A unidade era FIXA em "UN" e o código do produto vinha de `item_code`,
+		// que serializa "0" quando nulo. A NF-e de retorno do beneficiamento tem
+		// linhas em KG com o código DO CLIENTE — com os valores fixos, a nota
+		// descrevia outra mercadoria. A linha agora pode trazer os dois (migração
+		// 000374); na falta deles o comportamento antigo é preservado, para não
+		// mudar nota que já era emitida assim.
+		unidade := "UN"
+		if it.UnidadeComercial != nil && strings.TrimSpace(*it.UnidadeComercial) != "" {
+			unidade = strings.ToUpper(strings.TrimSpace(*it.UnidadeComercial))
+		}
+		codigoProduto := fmt.Sprintf("%d", safeInt64(it.ItemCode))
+		if it.CodigoProduto != nil && strings.TrimSpace(*it.CodigoProduto) != "" {
+			codigoProduto = strings.TrimSpace(*it.CodigoProduto)
+		}
+
 		nfeIt := focusnfe.NFEItem{
 			NumeroItem:                     i + 1,
-			CodigoProduto:                  fmt.Sprintf("%d", safeInt64(it.ItemCode)),
+			CodigoProduto:                  codigoProduto,
 			Descricao:                      desc,
 			CodigoNCM:                      ncm,
 			CFOP:                           cfop,
-			UnidadeComercial:               "UN",
+			UnidadeComercial:               unidade,
 			QuantidadeComercial:            it.Quantity,
 			ValorUnitarioComercial:         it.UnitPrice,
 			ValorBruto:                     it.TotalPrice,

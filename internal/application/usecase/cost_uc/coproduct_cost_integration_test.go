@@ -21,7 +21,7 @@ import (
 //	material = A(10)×2  +  C(5)×(10÷lot 10)  −  B(8)×1  = 20 + 5 − 8 = 17
 func TestIntegration_CostRollup_CoproductAndFixedQty(t *testing.T) {
 	q, pool := testutil.Queries(t)
-	scRepo := standardCostRepo.New(q)
+	scRepo := standardCostRepo.New(q, pool)
 	uc := cost_uc.New(scRepo)
 	ctx := testutil.TenantContext(t, pool)
 	uid := uuid.New()

@@ -31,6 +31,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_material_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cutting_plan_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
@@ -120,6 +121,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
 	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
+	customerMaterialRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer_material"
 	cuttingPlanRepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cutting_plan"
 	deliveryPromiseRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise"
 	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
@@ -598,7 +600,7 @@ func (app *application) mount() chi.Router {
 	qualityHandler := handler.NewQualityHandler(qualityUC)
 
 	// standard cost
-	scRepo := standardCostRepo.New(queries)
+	scRepo := standardCostRepo.New(queries, app.db.Pool)
 	standardCostUC := cost_uc.New(scRepo).WithRouting(rRepo).WithThirdPartyPrices(thirdPartyServiceUC.New(thirdPartyServiceRepository, itemRepo)).WithWorkCenters(machineRepo)
 	standardCostHandler := handler.NewStandardCostHandler(standardCostUC)
 
@@ -882,6 +884,20 @@ func (app *application) mount() chi.Router {
 	// modal, tabela de frete, frota, regiões) e a cotação comparativa de frete.
 	shippingCarrierHandler := handler.NewShippingCarrierHandler(&shipping_carrier_uc.UseCase{Repo: shippingCarrierRepo.New(app.db.Pool)})
 
+	// Beneficiamento: material do cliente em poder da empresa. O razão é separado
+	// do estoque próprio de propósito — ver a migration 000370.
+	// O repositório fiscal entra como emissor da nota: é ele quem numera e grava a
+	// saída. A interface EscritorDeNota é estreita de propósito — o beneficiamento
+	// não depende do módulo fiscal inteiro.
+	customerMaterialUC := &customer_material_uc.UseCase{
+		Repo:  customerMaterialRepo.New(app.db.Pool),
+		Notas: fiscalRepo.NewFiscalRepositoryPG(app.db.Pool),
+		// Resolve o destinatário pelo mesmo caminho da nota de venda, para o mesmo
+		// cliente não sair com endereço diferente em cada tipo de nota.
+		Clientes: &fiscalUC.ResolvedorDeDestinatario{Customers: customerRepo.New(queries, app.db.Pool)},
+	}
+	customerMaterialHandler := handler.NewCustomerMaterialHandler(customerMaterialUC)
+
 	// Rateio de comissão: o pedido e o orçamento usam as mesmas regras, então o
 	// mesmo caso de uso atende os dois — o documento vem da rota.
 	salesCommissionHandler := handler.NewSalesCommissionHandler(&sales_commission_uc.UseCase{Repo: salesCommissionRepo.New(app.db.Pool)})
@@ -1089,8 +1105,10 @@ func (app *application) mount() chi.Router {
 			ShipmentRepo:   shipmentRepoPG,
 			SalesOrderRepo: soRepo,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo},
-		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
+		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC},
+		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
+		// cliente o material que ela havia baixado (documento 6 da Usimac).
+		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalConfigUseCase{Repo: fiscalRepository, Auth: authService},
@@ -1579,6 +1597,29 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", salesDivisionHandler.Delete)
 			r.With(httpmw.RequireRole("ADMIN")).Patch("/{code}/status", salesDivisionHandler.SetStatus)
 		})
+		// Beneficiamento / estoque de terceiros. Consultar é de USER; movimentar,
+		// bloquear e encerrar mexem em saldo de material que não é da empresa e
+		// ficam com ADMIN, como o cliente pediu na matriz de responsabilidades.
+		r.Route("/api/customer-material", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerMaterialHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/balance", customerMaterialHandler.Saldo)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", customerMaterialHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/items/{itemId}/movements", customerMaterialHandler.Movimentos)
+			// Histórico e auditoria da remessa (migração 000371): quem, quando, o
+			// que mudou de quê para quê, e por quê. Consulta, por isso USER também.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/audit", customerMaterialHandler.Trilha)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/", customerMaterialHandler.Receber)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/items/{itemId}/movements", customerMaterialHandler.Movimentar)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{id}/block", customerMaterialHandler.Bloquear)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{id}/unblock", customerMaterialHandler.Desbloquear)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{id}/close", customerMaterialHandler.Encerrar)
+			// Faturamento: cria a nota com 5124 + 5902/5903 e baixa o saldo do cliente.
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{id}/invoice", customerMaterialHandler.Faturar)
+			// Estorno da baixa de uma nota. O cancelamento da NF-e já dispara isto;
+			// a rota conclui o caso em que o cancelamento passou e o estorno falhou.
+			r.With(httpmw.RequireRole("ADMIN")).Post("/notes/{fiscalExitId}/reverse", customerMaterialHandler.Estornar)
+		})
+
 		r.Route("/api/shipping-carriers", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", shippingCarrierHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/quote", shippingCarrierHandler.Quote)
@@ -2527,6 +2568,18 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", standardCostHandler.UpsertItemPurchaseCost)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{itemCode}", standardCostHandler.GetItemPurchaseCost)
 			})
+			// Esquema de rateio de indiretos (migração 000373): é o que faz
+			// `overhead_cost` deixar de ser sempre zero. Cadastrar a taxa muda o
+			// custo de TODO produto, então manter é ADMIN; consultar é USER.
+			r.Route("/overhead-rules", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", standardCostHandler.ListarRegrasDeRateio)
+				r.With(httpmw.RequireRole("ADMIN")).Post("/", standardCostHandler.CriarRegraDeRateio)
+				r.With(httpmw.RequireRole("ADMIN")).Put("/{id}", standardCostHandler.AtualizarRegraDeRateio)
+				r.With(httpmw.RequireRole("ADMIN")).Delete("/{id}", standardCostHandler.DesativarRegraDeRateio)
+			})
+			// Histórico da apuração: responde "por que o custo subiu" comparando
+			// duas apurações componente a componente.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/history/{itemCode}", standardCostHandler.HistoricoDeCusto)
 		})
 		r.Route("/api/quality", func(r chi.Router) {
 			r.Route("/plans", func(r chi.Router) {

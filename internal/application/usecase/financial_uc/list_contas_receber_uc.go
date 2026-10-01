@@ -2,7 +2,6 @@ package financial_uc
 
 import (
 	"context"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -24,16 +23,33 @@ func (uc *ListContasReceberUseCase) Execute(
 	}
 
 	filters := repository.CRFilter{
-		Status:    dto.Status,
-		ClienteID: dto.ClienteID,
+		Status:       dto.Status,
+		ClienteID:    dto.ClienteID,
+		SalesOrderID: dto.SalesOrderID,
+		FiscalExitID: dto.FiscalExitID,
+		Documento:    dto.Documento,
+		ValorMinimo:  dto.ValorMinimo,
+		ValorMaximo:  dto.ValorMaximo,
+		DateField:    campoDeData(dto.DateField),
 	}
-	if dto.StartDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.StartDate)
-		filters.StartDate = &t
+	if dto.SomenteVencidos != nil {
+		filters.SomenteVencidos = *dto.SomenteVencidos
 	}
-	if dto.EndDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.EndDate)
-		filters.EndDate = &t
+	inicio, err := dataDoFiltro(dto.StartDate, "data inicial")
+	if err != nil {
+		return nil, err
+	}
+	filters.StartDate = inicio
+	fim, err := dataDoFiltro(dto.EndDate, "data final")
+	if err != nil {
+		return nil, err
+	}
+	filters.EndDate = fim
+	if inicio != nil && fim != nil && fim.Before(*inicio) {
+		return nil, errorsuc.NewValidationError("a data final do período é anterior à data inicial")
+	}
+	if filters.ValorMinimo != nil && filters.ValorMaximo != nil && *filters.ValorMaximo < *filters.ValorMinimo {
+		return nil, errorsuc.NewValidationError("o valor máximo do filtro é menor que o valor mínimo")
 	}
 
 	return uc.Repo.ListContasReceber(ctx, filters)

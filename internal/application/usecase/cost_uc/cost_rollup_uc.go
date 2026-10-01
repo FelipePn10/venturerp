@@ -146,12 +146,20 @@ func (uc *StandardCostUseCase) GetItemPurchaseCost(ctx context.Context, itemCode
 
 // ─── cost rollup ──────────────────────────────────────────────────────────────
 
-// RollUp calculates and saves the standard cost for itemCode + mask using
-// bottom-up BOM traversal:
+// RollUp apura e grava o custo-padrão de itemCode + máscara, descendo a estrutura
+// de baixo para cima:
 //
-//	material_cost = Σ (child.unit_cost × qty × (1 + loss%))
-//	labor_cost    = Σ_ops [ MachineHours(lot)×machine_rate + LaborHours(lot)×labor_rate ] ÷ lot
-//	overhead_cost = overhead_rate × (material_cost + labor_cost)   [currently 0 unless configured]
+//	material        = Σ (custo_total_do_filho × qtd × (1 + perda%))   → NivelInferior
+//	setup           = Σ_ops horas_de_setup × taxa                      ÷ lote
+//	máquina         = Σ_ops (horas_máquina − setup) × taxa_máquina     ÷ lote
+//	mão de obra     = Σ_ops (horas_homem − setup)  × taxa_homem        ÷ lote
+//	subcontratação  = Σ_ops preço do terceiro
+//	indiretos       = esquema de rateio sobre os componentes desta etapa
+//
+// O que mudou em relação à versão anterior: `overhead` era gravado SEMPRE ZERO — a
+// coluna existia e não havia como configurar —, e a conversão saía num único
+// número chamado "labor". Agora os indiretos vêm do esquema de rateio (migração
+// 000373) e cada componente é gravado e devolvido separado.
 func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollupDTO) (*response.CostRollupResponse, error) {
 	calculatedBy, err := uuid.Parse(dto.CalculatedBy)
 	if err != nil {
@@ -163,40 +171,153 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 		lotSize = 1
 	}
 
+	// As regras de rateio são lidas UMA vez para a apuração inteira: elas valem
+	// para toda a estrutura, e reler por nó faria uma consulta por item da árvore.
+	quando := time.Now()
+	regras, err := uc.regrasDeRateio(ctx)
+	if err != nil {
+		// ⚠️ Falha ao LER as regras não pode virar "não há regras". As duas coisas
+		// levam a overhead zero, mas uma é configuração e a outra é defeito — e o
+		// custo seria gravado (e precificado) sem indireto nenhum, em silêncio.
+		return nil, fmt.Errorf("lendo o esquema de indiretos: %w", err)
+	}
+
 	unitCache := make(map[int64]float64)
-	result, err := uc.rollupItem(ctx, dto.ItemCode, dto.Mask, 0, lotSize, unitCache)
+	result, err := uc.rollupItem(ctx, dto.ItemCode, dto.Mask, 0, lotSize, unitCache, regras, quando)
 	if err != nil {
 		return nil, err
 	}
+	c := result.Componentes
 
 	cost := &entity.ItemStandardCost{
-		ItemCode:     dto.ItemCode,
-		Mask:         dto.Mask,
-		MaterialCost: result.MaterialCost,
-		LaborCost:    result.LaborCost,
-		OverheadCost: result.OverheadCost,
-		Currency:     "BRL",
-		CalculatedBy: calculatedBy,
+		ItemCode: dto.ItemCode,
+		Mask:     dto.Mask,
+		// MaterialCost guarda o material CHEIO (o que veio de baixo mais o material
+		// próprio da folha): é o número que o resto do sistema já lia como
+		// "material", e mudar o sentido dele quebraria precificação e relatórios.
+		MaterialCost: c.Material + c.NivelInferior,
+		// ⚠️ Preparação, máquina e terceiro PRECISAM ser gravados. `total_cost` é
+		// coluna gerada somando os seis componentes (migração 000374); gravar só
+		// material, mão de obra e overhead — como fazia a consulta do sqlc — deixava
+		// o total GUARDADO menor que o apurado, e é o guardado que a precificação lê.
+		SetupCost:       c.Setup,
+		MachineCost:     c.Maquina,
+		LaborCost:       c.MaoDeObra,
+		SubcontractCost: c.Subcontratacao,
+		OverheadCost:    c.Overhead,
+		OwnLevelCost:    c.NivelProprio,
+		LowerLevelCost:  c.NivelInferior,
+		LotSize:         lotSize,
+		Currency:        "BRL",
+		CalculatedBy:    calculatedBy,
 	}
 	saved, err := uc.repo.UpsertItemStandardCost(ctx, cost)
 	if err != nil {
-		return nil, fmt.Errorf("saving standard cost: %w", err)
+		return nil, fmt.Errorf("gravando o custo-padrão: %w", err)
 	}
 
-	for _, entry := range result.Detail {
-		_ = uc.repo.InsertRollupLog(ctx, &entry)
+	// O log da árvore é o que a tela mostra como composição por nível. Falha aqui
+	// não invalida a apuração, mas não é engolida: sem o log a tela não explica o
+	// número, e a pessoa precisa saber disso.
+	var avisos []string
+	for i := range result.Detail {
+		if err := uc.repo.InsertRollupLog(ctx, &result.Detail[i]); err != nil {
+			avisos = append(avisos, "a composição por nível não pôde ser registrada: "+err.Error())
+			break
+		}
+	}
+
+	// Histórico da apuração, para comparar componente a componente ao longo do
+	// tempo. Só grava se o repositório suportar (migração 000373).
+	total := c.Total() + c.NivelInferior
+	if h, ok := uc.repo.(interface {
+		GravarHistoricoDeCusto(context.Context, *entity.HistoricoDeCusto) error
+	}); ok {
+		erroHist := h.GravarHistoricoDeCusto(ctx, &entity.HistoricoDeCusto{
+			ItemCode: dto.ItemCode, Mask: dto.Mask, LotSize: lotSize,
+			Componentes: c, TotalCost: total, Currency: "BRL",
+			Rateios: result.Rateios, CalculatedBy: calculatedBy,
+		})
+		if erroHist != nil {
+			avisos = append(avisos, "o histórico desta apuração não pôde ser gravado: "+erroHist.Error())
+		}
 	}
 
 	return &response.CostRollupResponse{
-		ItemCode:     saved.ItemCode,
-		Mask:         saved.Mask,
-		MaterialCost: saved.MaterialCost,
-		LaborCost:    saved.LaborCost,
-		OverheadCost: saved.OverheadCost,
-		TotalCost:    saved.TotalCost,
-		Currency:     saved.Currency,
-		CalculatedAt: saved.CalculatedAt,
+		ItemCode:        saved.ItemCode,
+		Mask:            saved.Mask,
+		MaterialCost:    saved.MaterialCost,
+		LaborCost:       c.MaoDeObra,
+		OverheadCost:    c.Overhead,
+		SetupCost:       c.Setup,
+		MachineCost:     c.Maquina,
+		SubcontractCost: c.Subcontratacao,
+		OwnLevelCost:    c.NivelProprio,
+		LowerLevelCost:  c.NivelInferior,
+		LotSize:         lotSize,
+		TotalCost:       total,
+		Currency:        "BRL",
+		CalculatedAt:    saved.CalculatedAt,
+		Overheads:       paraRateiosResponse(result.Rateios),
+		Tree:            montarArvoreDeCusto(result.Detail),
+		Avisos:          avisos,
 	}, nil
+}
+
+// regrasDeRateio lê o esquema de indiretos da empresa.
+//
+// Repositório que NÃO expõe o esquema devolve vazio sem erro: é instalação sem a
+// migração 000373, e a apuração continua sem indiretos.
+//
+// Falha ao CONSULTAR, porém, é propagada. Devolver vazio nos dois casos tornava
+// erro de banco indistinguível de empresa sem regra cadastrada — e o custo era
+// gravado com indireto zero, corrompendo o resultado sem nenhum sinal.
+func (uc *StandardCostUseCase) regrasDeRateio(ctx context.Context) ([]*entity.RegraDeRateio, error) {
+	leitor, ok := uc.repo.(interface {
+		ListarRegrasDeRateio(context.Context) ([]*entity.RegraDeRateio, error)
+	})
+	if !ok {
+		return nil, nil
+	}
+	return leitor.ListarRegrasDeRateio(ctx)
+}
+
+// paraRateiosResponse converte o rastro do rateio para o contrato HTTP.
+func paraRateiosResponse(rateios []entity.RateioAplicado) []response.CostOverheadAppliedResponse {
+	if len(rateios) == 0 {
+		return nil
+	}
+	out := make([]response.CostOverheadAppliedResponse, 0, len(rateios))
+	for _, r := range rateios {
+		out = append(out, response.CostOverheadAppliedResponse{
+			RuleID: r.RuleID, Code: r.Code, Description: r.Description,
+			Base: string(r.Base), Method: string(r.Method), Rate: r.Rate,
+			BaseValue: r.BaseValue, Applied: r.Applied,
+		})
+	}
+	return out
+}
+
+// montarArvoreDeCusto transforma o log plano da apuração na composição por nível
+// que a tela mostra. O log já vem em ordem de travessia (pai antes dos filhos).
+func montarArvoreDeCusto(detalhe []entity.CostRollupLogEntry) []response.CostRollupNodeResponse {
+	out := make([]response.CostRollupNodeResponse, 0, len(detalhe))
+	for _, d := range detalhe {
+		out = append(out, response.CostRollupNodeResponse{
+			ItemCode:        d.ItemCode,
+			Mask:            d.Mask,
+			Level:           d.BOMLevel,
+			MaterialCost:    d.MaterialCost,
+			SetupCost:       d.SetupCost,
+			MachineCost:     d.MachineCost,
+			LaborCost:       d.LaborCost,
+			SubcontractCost: d.SubcontractCost,
+			OverheadCost:    d.OverheadCost,
+			LowerLevelCost:  d.LowerLevelCost,
+			TotalCost:       d.Total(),
+		})
+	}
+	return out
 }
 
 func (uc *StandardCostUseCase) GetStandardCost(ctx context.Context, itemCode int64, mask string) (*response.CostRollupResponse, error) {
@@ -218,81 +339,138 @@ func (uc *StandardCostUseCase) GetStandardCost(ctx context.Context, itemCode int
 
 // ─── rollup algorithm ─────────────────────────────────────────────────────────
 
+// costNode é o custo de um item na travessia da estrutura, aberto por componente.
+// Antes carregava três números (material, "labor", overhead sempre zero); agora
+// carrega o que a análise de custo precisa separar, e as horas que alimentam as
+// regras de rateio por hora.
 type costNode struct {
-	MaterialCost float64
-	LaborCost    float64
-	OverheadCost float64
-	Detail       []entity.CostRollupLogEntry
+	Componentes entity.ComponentesDeCusto
+	Horas       entity.HorasDoRoteiro
+	Rateios     []entity.RateioAplicado
+	Detail      []entity.CostRollupLogEntry
 }
 
-func (uc *StandardCostUseCase) rollupItem(ctx context.Context, itemCode int64, mask string, level int, lotSize float64, unitCache map[int64]float64) (*costNode, error) {
+// total é o custo unitário do item: o que esta etapa agrega MAIS o que veio dos
+// níveis abaixo. `ComponentesDeCusto.Total()` soma apenas os componentes próprios,
+// de propósito — quem quer o custo cheio soma o nível inferior aqui.
+func (n *costNode) total() float64 { return n.Componentes.Total() + n.Componentes.NivelInferior }
+
+// rollupItem desce a estrutura e devolve o custo unitário do item, aberto por
+// componente.
+//
+// O que o nível de cima recebe de um componente é o TOTAL dele (material +
+// conversão + indiretos), porque para o pai aquele componente é material
+// comprado ou fabricado — não faz sentido somar a hora-máquina do filho na
+// hora-máquina do pai. É por isso que o pai guarda o custo dos filhos em
+// `NivelInferior` e não espalhado pelos próprios componentes: o corte "o que esta
+// etapa agrega × o que veio de baixo" é o que diz onde o custo subiu.
+func (uc *StandardCostUseCase) rollupItem(
+	ctx context.Context, itemCode int64, mask string, level int, lotSize float64,
+	unitCache map[int64]float64, regras []*entity.RegraDeRateio, quando time.Time,
+) (*costNode, error) {
 	children, err := uc.repo.GetDirectChildren(ctx, itemCode, mask)
 	if err != nil {
-		return nil, fmt.Errorf("fetching BOM for item %d: %w", itemCode, err)
+		return nil, fmt.Errorf("lendo a estrutura do item %d: %w", itemCode, err)
 	}
 
-	var materialCost float64
+	var comp entity.ComponentesDeCusto
 	var childNodes []*costNode
 
 	if len(children) == 0 {
-		// Leaf node — use purchase cost
+		// Folha: o custo é o de compra. Vai em Material — é o que o item É para
+		// quem o consome.
 		if cached, ok := unitCache[itemCode]; ok {
-			materialCost = cached
+			comp.Material = cached
 		} else {
 			ipc, err2 := uc.repo.GetItemPurchaseCost(ctx, itemCode)
 			if err2 == nil {
-				materialCost = ipc.UnitCost
+				comp.Material = ipc.UnitCost
 			}
-			unitCache[itemCode] = materialCost
+			unitCache[itemCode] = comp.Material
 		}
 	} else {
-		// Manufactured item — recurse into children
 		for _, child := range selectPrimaryCostSubstitutes(children) {
-			childNode, err2 := uc.rollupItem(ctx, child.ChildCode, mask, level+1, lotSize, unitCache)
+			childNode, err2 := uc.rollupItem(ctx, child.ChildCode, mask, level+1, lotSize, unitCache, regras, quando)
 			if err2 != nil {
 				return nil, err2
 			}
 			if child.IsCoproduct {
-				// By-product / returnable scrap: CREDIT the parent by the co-product value.
-				materialCost -= childNode.total() * child.QuantidadeNaUnidadeDeEstoque()
+				// Co-produto / sucata retornável: CREDITA o pai pelo valor do
+				// co-produto.
+				comp.NivelInferior -= childNode.total() * child.QuantidadeNaUnidadeDeEstoque()
 				continue
 			}
 			netQty := structentity.QuantidadeComPerda(child.QuantidadeNaUnidadeDeEstoque(), child.LossPercentage, structentity.FormulaPerdaPadrao)
 			if child.IsFixedQty && lotSize > 0 {
-				netQty /= lotSize // amortize the fixed component over the reference lot
+				netQty /= lotSize // componente por lote, amortizado pelo lote de referência
 			}
-			materialCost += childNode.total() * netQty
+			comp.NivelInferior += childNode.total() * netQty
 			childNodes = append(childNodes, childNode)
 		}
-		if materialCost < 0 {
-			materialCost = 0 // by-product credits never yield a negative material cost
+		if comp.NivelInferior < 0 {
+			comp.NivelInferior = 0 // crédito de co-produto nunca deixa o custo negativo
 		}
 	}
 
-	// Conversion (labor + machine) cost per unit, setup amortized over the reference lot.
-	laborCost, err := uc.conversionCost(ctx, itemCode, mask, lotSize)
+	// Conversão desta etapa: setup, máquina, mão de obra e serviço de terceiro.
+	conversao, horas, err := uc.conversaoDoRoteiro(ctx, itemCode, mask, lotSize)
 	if err != nil {
 		return nil, err
 	}
+	comp.Setup = conversao.Setup
+	comp.Maquina = conversao.Maquina
+	comp.MaoDeObra = conversao.MaoDeObra
+	comp.Subcontratacao = conversao.Subcontratacao
+
+	// Indiretos: o esquema de rateio incide sobre os componentes DESTA etapa. Não
+	// incide sobre `NivelInferior` — os indiretos do componente fabricado já foram
+	// aplicados na apuração dele, e aplicá-los de novo aqui os cobraria em cascata.
+	var rateios []entity.RateioAplicado
+	if len(regras) > 0 {
+		centros, _ := uc.centrosDoRoteiro(ctx, itemCode, mask)
+		aplicaveis := entity.RegrasVigentes(regras, itemCode, centros, quando)
+		baseDoRateio := comp
+		baseDoRateio.Material = comp.Material // material próprio (folha), não o de baixo
+		comp.Overhead, rateios = entity.AplicarRateios(baseDoRateio, horas, aplicaveis)
+	}
+
+	comp.NivelProprio = comp.Material + comp.Conversao() + comp.Subcontratacao + comp.Overhead
 
 	node := &costNode{
-		MaterialCost: materialCost,
-		LaborCost:    laborCost,
-		OverheadCost: 0,
+		Componentes: comp,
+		Horas:       horas,
+		Rateios:     rateios,
 		Detail: []entity.CostRollupLogEntry{{
-			ItemCode:     itemCode,
-			Mask:         mask,
-			BOMLevel:     level,
-			MaterialCost: materialCost,
-			LaborCost:    laborCost,
-			OverheadCost: 0,
+			ItemCode:        itemCode,
+			Mask:            mask,
+			BOMLevel:        level,
+			MaterialCost:    comp.Material,
+			LaborCost:       comp.MaoDeObra,
+			OverheadCost:    comp.Overhead,
+			SetupCost:       comp.Setup,
+			MachineCost:     comp.Maquina,
+			SubcontractCost: comp.Subcontratacao,
+			LowerLevelCost:  comp.NivelInferior,
 		}},
 	}
 	for _, cn := range childNodes {
 		node.Detail = append(node.Detail, cn.Detail...)
 	}
-
 	return node, nil
+}
+
+// centrosDoRoteiro pergunta ao repositório por quais centros de trabalho o roteiro
+// do item passa. Devolve vazio quando o repositório não expõe a consulta: nesse
+// caso só as regras de escopo geral aplicam, que é melhor que aplicar regra de
+// centro errado.
+func (uc *StandardCostUseCase) centrosDoRoteiro(ctx context.Context, itemCode int64, mask string) (map[int64]bool, error) {
+	leitor, ok := uc.repo.(interface {
+		CentrosDoRoteiro(context.Context, int64, string) (map[int64]bool, error)
+	})
+	if !ok {
+		return map[int64]bool{}, nil
+	}
+	return leitor.CentrosDoRoteiro(ctx, itemCode, mask)
 }
 
 func selectPrimaryCostSubstitutes(children []domainrepo.BOMChild) []domainrepo.BOMChild {
@@ -339,51 +517,60 @@ func costSubstitutePrecedes(a, b domainrepo.BOMChild) bool {
 	return a.ChildCode < b.ChildCode
 }
 
-func (n *costNode) total() float64 {
-	return n.MaterialCost + n.LaborCost + n.OverheadCost
-}
-
-// conversionCost is the per-unit machine + labor cost of the item's standard route.
-// Each operation is charged at ITS OWN work-center rate using the rich time model,
-// with setup amortized over the reference lot:
+// conversaoDoRoteiro devolve o custo de conversão por unidade, ABERTO por
+// componente, e as horas por unidade que alimentam as regras de rateio por hora.
 //
-//	( Σ [ MachineHours(lot) × machineRate(CT) + LaborHours(lot) × laborRate(CT) ] ) ÷ lot
+// Cada operação é cobrada na taxa do SEU centro de trabalho pelo modelo de tempo
+// completo, com o setup amortizado pelo lote de referência:
 //
-// A lot of 1 charges the full setup per unit (conservative). When the routing
-// repository is not wired, it falls back to the legacy average-rate estimate.
-func (uc *StandardCostUseCase) conversionCost(ctx context.Context, itemCode int64, mask string, lot float64) (float64, error) {
+//	( Σ [ HorasMáquina(lote) × taxaMáquina(CT) + HorasHomem(lote) × taxaHomem(CT) ] ) ÷ lote
+//
+// Lote 1 cobra o setup inteiro por peça (conservador). Sem o repositório de
+// roteiro ligado, cai na estimativa antiga por taxa média — e nela não há como
+// separar máquina de mão de obra, então o valor vai inteiro para máquina, que é a
+// leitura menos enganosa das duas.
+//
+// O setup sai separado porque é a informação que muda a decisão: setup alto pede
+// lote maior, hora-máquina alta pede outro recurso. Lançar os dois no mesmo número
+// esconde qual é o problema.
+func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode int64, mask string, lot float64) (entity.ComponentesDeCusto, entity.HorasDoRoteiro, error) {
+	var comp entity.ComponentesDeCusto
+	var horas entity.HorasDoRoteiro
 	if lot <= 0 {
 		lot = 1
 	}
 	if uc.routing == nil {
 		routeHours, _ := uc.repo.GetRouteHoursByItem(ctx, itemCode, mask)
-		return routeHours * uc.averageRate(ctx), nil
+		comp.Maquina = routeHours * uc.averageRate(ctx)
+		horas.Maquina = routeHours
+		return comp, horas, nil
 	}
 
 	route, err := uc.routing.GetRouteForItem(ctx, itemCode, mask)
 	if err != nil || route == nil {
-		return 0, nil // no route → no conversion cost
+		return comp, horas, nil // sem roteiro, não há conversão
 	}
 	ops, err := uc.routing.GetRouteOperations(ctx, route.ID)
 	if err != nil || len(ops) == 0 {
-		return 0, nil
+		return comp, horas, nil
 	}
 
-	rates := uc.workCenterRates(ctx) // wcID → cost
+	rates := uc.workCenterRates(ctx)
 
-	var total float64
 	for _, op := range ops {
 		if op.Situation == routingentity.RouteOpGhost {
-			continue // phantom operation: no cost
+			continue // operação fantasma não custa
 		}
 		if (op.OperationOrigin == routingentity.OriginExternal || op.OperationOrigin == routingentity.OriginThirdPart) && uc.thirdParty != nil {
 			serviceCost, priceErr := uc.thirdParty.StandardCostPerUnit(ctx, itemCode, mask, op.OperationID, time.Now())
 			if priceErr != nil {
-				// Mensagem chega ao usuário: o prefixo em inglês vazava na tela
-				// de apuração de custo.
-				return 0, fmt.Errorf("custo de terceiro do item %d, operação %d: %w", itemCode, op.OperationID, priceErr)
+				// Mensagem chega ao usuário: o prefixo em inglês vazava na tela de
+				// apuração de custo.
+				return comp, horas, fmt.Errorf("custo de terceiro do item %d, operação %d: %w", itemCode, op.OperationID, priceErr)
 			}
-			total += serviceCost.InexactFloat64() * lot
+			// O preço do terceiro já é por unidade; multiplicar pelo lote e dividir
+			// depois mantém a mesma unidade do resto da soma.
+			comp.Subcontratacao += serviceCost.InexactFloat64() * lot
 			continue
 		}
 		machineRate, laborRate := 0.0, 0.0
@@ -393,9 +580,37 @@ func (uc *StandardCostUseCase) conversionCost(ctx context.Context, itemCode int6
 				laborRate = wc.LaborRate()
 			}
 		}
-		total += op.EffTime.MachineHours(lot)*machineRate + op.EffTime.LaborHours(lot)*laborRate
+		// O setup está DENTRO de MachineHours e de LaborHours (ambos somam t.Setup).
+		// Subtraí-lo para formar o componente próprio é o que impede cobrar a
+		// preparação duas vezes — em máquina e em setup.
+		setupMaquina := op.EffTime.SetupMachineHours()
+		setupHomem := op.EffTime.SetupLaborHours()
+		maquinaSemSetup := op.EffTime.MachineHours(lot) - setupMaquina
+		homemSemSetup := op.EffTime.LaborHours(lot) - setupHomem
+		if maquinaSemSetup < 0 {
+			maquinaSemSetup = 0
+		}
+		if homemSemSetup < 0 {
+			homemSemSetup = 0
+		}
+
+		comp.Setup += setupMaquina*machineRate + setupHomem*laborRate
+		comp.Maquina += maquinaSemSetup * machineRate
+		comp.MaoDeObra += homemSemSetup * laborRate
+		horas.Setup += setupMaquina + setupHomem
+		horas.Maquina += maquinaSemSetup
+		horas.MaoDeObra += homemSemSetup
 	}
-	return total / lot, nil
+
+	// Tudo acumulado para o LOTE; o custo-padrão é unitário.
+	comp.Setup /= lot
+	comp.Maquina /= lot
+	comp.MaoDeObra /= lot
+	comp.Subcontratacao /= lot
+	horas.Setup /= lot
+	horas.Maquina /= lot
+	horas.MaoDeObra /= lot
+	return comp, horas, nil
 }
 
 // workCenterRates indexes the configured work-center costs by work-center id.

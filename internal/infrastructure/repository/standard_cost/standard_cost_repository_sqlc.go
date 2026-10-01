@@ -9,53 +9,27 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type StandardCostRepositorySQLC struct {
 	q *sqlc.Queries
+	// pool serve as consultas escritas à mão (esquema de rateio, histórico e a
+	// conferência de posse do item). O sqlc não expressa filtro condicional nem
+	// leitura de JSONB com clareza.
+	pool *pgxpool.Pool
 }
 
-func New(q *sqlc.Queries) domainrepo.StandardCostRepository {
-	return &StandardCostRepositorySQLC{q: q}
+// New monta o repositório. O pool é obrigatório: sem ele a conferência de posse do
+// item não roda, e é ela que impede uma empresa ler ou sobrescrever o custo de um
+// item de outra.
+func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.StandardCostRepository {
+	return &StandardCostRepositorySQLC{q: q, pool: pool}
 }
 
-// ─── item_standard_costs ──────────────────────────────────────────────────────
-
-func (r *StandardCostRepositorySQLC) UpsertItemStandardCost(ctx context.Context, cost *entity.ItemStandardCost) (*entity.ItemStandardCost, error) {
-	row, err := r.q.UpsertItemStandardCost(ctx, sqlc.UpsertItemStandardCostParams{
-		ItemCode:     cost.ItemCode,
-		Mask:         cost.Mask,
-		MaterialCost: pgutil.ToPgNumericFromFloat64(cost.MaterialCost),
-		LaborCost:    pgutil.ToPgNumericFromFloat64(cost.LaborCost),
-		OverheadCost: pgutil.ToPgNumericFromFloat64(cost.OverheadCost),
-		Currency:     orDefault(cost.Currency, "BRL"),
-		CalculatedBy: pgutil.ToPgUUID(cost.CalculatedBy),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("upserting item standard cost: %w", err)
-	}
-	return isCostRowToEntity(row), nil
-}
-
-func (r *StandardCostRepositorySQLC) GetItemStandardCost(ctx context.Context, itemCode int64, mask string) (*entity.ItemStandardCost, error) {
-	row, err := r.q.GetItemStandardCost(ctx, itemCode, mask)
-	if err != nil {
-		return nil, fmt.Errorf("fetching standard cost for item %d mask %q: %w", itemCode, mask, err)
-	}
-	return isCostRowToEntity(row), nil
-}
-
-func (r *StandardCostRepositorySQLC) ListItemStandardCosts(ctx context.Context, itemCode int64) ([]*entity.ItemStandardCost, error) {
-	rows, err := r.q.ListItemStandardCosts(ctx, itemCode)
-	if err != nil {
-		return nil, fmt.Errorf("listing standard costs for item %d: %w", itemCode, err)
-	}
-	out := make([]*entity.ItemStandardCost, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, isCostRowToEntity(row))
-	}
-	return out, nil
-}
+// O custo-padrão do item (upsert, leitura e listagem) fica em
+// `rateio_repository.go`, escrito à mão: a consulta do sqlc cobre apenas material,
+// mão de obra e overhead, e a apuração passou a ter seis componentes.
 
 // ─── work_center_costs ────────────────────────────────────────────────────────
 
@@ -110,6 +84,9 @@ func (r *StandardCostRepositorySQLC) ListWorkCenterCosts(ctx context.Context) ([
 // ─── item_purchase_costs ──────────────────────────────────────────────────────
 
 func (r *StandardCostRepositorySQLC) UpsertItemPurchaseCost(ctx context.Context, ipc *entity.ItemPurchaseCost) (*entity.ItemPurchaseCost, error) {
+	if err := r.ConferirItemDaEmpresa(ctx, ipc.ItemCode); err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpsertItemPurchaseCost(ctx, sqlc.UpsertItemPurchaseCostParams{
 		ItemCode:  ipc.ItemCode,
 		UnitCost:  pgutil.ToPgNumericFromFloat64(ipc.UnitCost),
@@ -123,6 +100,9 @@ func (r *StandardCostRepositorySQLC) UpsertItemPurchaseCost(ctx context.Context,
 }
 
 func (r *StandardCostRepositorySQLC) GetItemPurchaseCost(ctx context.Context, itemCode int64) (*entity.ItemPurchaseCost, error) {
+	if err := r.ConferirItemDaEmpresa(ctx, itemCode); err != nil {
+		return nil, err
+	}
 	row, err := r.q.GetItemPurchaseCost(ctx, itemCode)
 	if err != nil {
 		return nil, fmt.Errorf("fetching purchase cost for item %d: %w", itemCode, err)
