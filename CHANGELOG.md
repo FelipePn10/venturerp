@@ -6,6 +6,15 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(fornecedor): cadastrar fornecedor que **não é contribuinte de ICMS** voltou
+  a ser possível. O sistema exigia Inscrição Estadual de todo fornecedor que não
+  fosse transportadora, e quem não é contribuinte legitimamente não tem inscrição
+  — prestador de serviço, pessoa física e boa parte dos MEI. Restavam duas saídas
+  erradas: inventar um número, que entra na apuração de ICMS de toda nota de
+  entrada do fornecedor, ou declará-lo transportadora. Agora a inscrição é pedida
+  conforme o campo "Contrib. ICMS", que já existia na tela, e a mensagem diz o que
+  fazer em vez de só recusar
+
 ## [v1.4.0] — 2026-10-01
 
 - fix(fiscal): a máscara do NCM não pode decidir se o item é tributado (`94ce2e8`)
