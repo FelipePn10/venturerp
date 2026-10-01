@@ -148,6 +148,7 @@ func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.Creat
 		DocumentNumber:                  dto.DocumentNumber,
 		TypeKind:                        typeKind,
 		StateRegistration:               dto.StateRegistration,
+		ICMSContributor:                 entity.ICMSContributor(dto.ICMSContributor),
 		IsMEI:                           dto.IsMEI,
 		AgricultureMinistryRegistration: dto.AgricultureMinistryRegistration,
 	}, dto.CreatedBy)
@@ -171,9 +172,8 @@ func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.Creat
 	if dto.ViticolaObligation != "" {
 		s.ViticolaObligation = entity.ViticolaObligation(dto.ViticolaObligation)
 	}
-	if dto.ICMSContributor != "" {
-		s.ICMSContributor = entity.ICMSContributor(dto.ICMSContributor)
-	}
+	// A condição de ICMS já foi resolvida e validada pelo construtor, do mesmo
+	// campo — não repetir aqui, para as duas pontas não divergirem.
 	if dto.TrackingPlatform != "" {
 		s.TrackingPlatform = entity.TrackingPlatform(dto.TrackingPlatform)
 	}
@@ -203,9 +203,24 @@ func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.Updat
 	}
 
 	// Re-validate the state registration / MEI rules on update.
-	if typeKind.RequiresStateRegistration() {
-		if dto.StateRegistration == nil || *dto.StateRegistration == "" {
-			return nil, errorsuc.NewValidationError("inscrição estadual é obrigatória para este tipo de fornecedor")
+	//
+	// A condição de ICMS a valer é a do corpo quando ele a informa; omitida, vale a
+	// que está gravada. Sem isso, alterar qualquer campo de um fornecedor não
+	// contribuinte voltaria a exigir a inscrição que ele legitimamente não tem.
+	condicaoICMS := s.ICMSContributor
+	if dto.ICMSContributor != "" {
+		condicaoICMS = entity.ICMSContributor(dto.ICMSContributor)
+	}
+	if !condicaoICMS.IsValid() {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"condição de ICMS %q não existe — use CONTRIBUINTE, NAO_CONTRIBUINTE ou ISENTO", dto.ICMSContributor))
+	}
+	if typeKind.RequiresStateRegistration() && condicaoICMS.RequiresStateRegistration() {
+		if dto.StateRegistration == nil || strings.TrimSpace(*dto.StateRegistration) == "" {
+			return nil, errorsuc.NewValidationError(
+				"informe a inscrição estadual: fornecedor contribuinte de ICMS tem inscrição. " +
+					"Se este não é contribuinte, marque a condição de ICMS como não contribuinte ou isento " +
+					"e a inscrição deixa de ser exigida")
 		}
 	}
 	if dto.IsMEI && entity.PersonType(dto.PersonType) == entity.PersonFisica {
@@ -248,9 +263,7 @@ func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.Updat
 	if dto.ViticolaObligation != "" {
 		s.ViticolaObligation = entity.ViticolaObligation(dto.ViticolaObligation)
 	}
-	if dto.ICMSContributor != "" {
-		s.ICMSContributor = entity.ICMSContributor(dto.ICMSContributor)
-	}
+	s.ICMSContributor = condicaoICMS.OuPadrao()
 	if dto.TrackingPlatform != "" {
 		s.TrackingPlatform = entity.TrackingPlatform(dto.TrackingPlatform)
 	}
