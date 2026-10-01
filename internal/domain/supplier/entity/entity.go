@@ -101,6 +101,22 @@ func (c ICMSContributor) RequiresStateRegistration() bool {
 	}
 }
 
+// OuPadrao resolve o vazio para CONTRIBUINTE, que é o padrão da coluna.
+//
+// Existe para o construtor devolver a MESMA condição que ele validou. Antes ele
+// validava com a condição recebida e devolvia a entidade cravada em CONTRIBUINTE:
+// um fornecedor aceito como não contribuinte (logo, sem inscrição estadual) saía
+// do construtor declarado contribuinte. No caminho do caso de uso a atribuição
+// posterior corrigia por acidente, mas qualquer outro chamador recebia um
+// fornecedor internamente incoerente — e gravá-lo classificaria o fornecedor
+// errado no fiscal, que é exatamente o que a validação tenta impedir.
+func (c ICMSContributor) OuPadrao() ICMSContributor {
+	if c == "" {
+		return ICMSContribuinte
+	}
+	return c
+}
+
 // IsValid aceita o vazio, que significa "manter o padrão" (CONTRIBUINTE).
 func (c ICMSContributor) IsValid() bool {
 	switch c {
@@ -340,7 +356,7 @@ func NewSupplier(code int64, in SupplierInput, createdBy uuid.UUID) (*Supplier, 
 		RegisterDate:                    now,
 		ViticolaObligation:              ViticolaNunca,
 		AgricultureMinistryRegistration: in.AgricultureMinistryRegistration,
-		ICMSContributor:                 ICMSContribuinte,
+		ICMSContributor:                 in.ICMSContributor.OuPadrao(),
 		IsMEI:                           in.IsMEI,
 		TrackingPlatform:                TrackingNenhum,
 		Blocked:                         false,

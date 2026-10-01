@@ -169,3 +169,40 @@ func TestCondicaoDeICMSInexistenteERecusada(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// Achado da revisão do PR #178: o construtor validava com a condição recebida e
+// devolvia a entidade cravada em CONTRIBUINTE. Um fornecedor aceito como não
+// contribuinte (logo, sem inscrição estadual) saía declarado contribuinte — estado
+// que a própria validação existe para impedir. No caso de uso a atribuição
+// posterior corrigia por acidente; qualquer outro chamador gravaria errado.
+func TestConstrutorDevolveACondicaoQueValidou(t *testing.T) {
+	casos := map[ICMSContributor]ICMSContributor{
+		ICMSNaoContribuinte: ICMSNaoContribuinte,
+		ICMSIsento:          ICMSIsento,
+		ICMSContribuinte:    ICMSContribuinte,
+		"":                  ICMSContribuinte, // vazio = padrão da coluna
+	}
+	for entrada, esperado := range casos {
+		in := SupplierInput{
+			Name: "X LTDA", PersonType: PersonJuridica, DocumentType: DocumentCNPJ,
+			DocumentNumber: "23208854000163", TypeKind: KindNormal,
+			ICMSContributor: entrada,
+		}
+		if entrada.RequiresStateRegistration() {
+			in.StateRegistration = ptr("653082415113")
+		}
+		s, err := NewSupplier(1, in, uuid.New())
+		if err != nil {
+			t.Fatalf("entrada %q: %v", entrada, err)
+		}
+		if s.ICMSContributor != esperado {
+			t.Errorf("entrada %q devolveu %q, esperado %q", entrada, s.ICMSContributor, esperado)
+		}
+		// O estado incoerente que o achado descreve: sem inscrição E declarado
+		// contribuinte não pode sair do construtor.
+		semIE := s.StateRegistration == nil || *s.StateRegistration == ""
+		if semIE && s.ICMSContributor == ICMSContribuinte {
+			t.Errorf("entrada %q: fornecedor sem inscrição saiu declarado contribuinte", entrada)
+		}
+	}
+}

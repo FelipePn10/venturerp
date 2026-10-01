@@ -172,9 +172,8 @@ func (uc *SupplierUseCase) CreateSupplier(ctx context.Context, dto request.Creat
 	if dto.ViticolaObligation != "" {
 		s.ViticolaObligation = entity.ViticolaObligation(dto.ViticolaObligation)
 	}
-	if dto.ICMSContributor != "" {
-		s.ICMSContributor = entity.ICMSContributor(dto.ICMSContributor)
-	}
+	// A condição de ICMS já foi resolvida e validada pelo construtor, do mesmo
+	// campo — não repetir aqui, para as duas pontas não divergirem.
 	if dto.TrackingPlatform != "" {
 		s.TrackingPlatform = entity.TrackingPlatform(dto.TrackingPlatform)
 	}
@@ -264,9 +263,7 @@ func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.Updat
 	if dto.ViticolaObligation != "" {
 		s.ViticolaObligation = entity.ViticolaObligation(dto.ViticolaObligation)
 	}
-	if dto.ICMSContributor != "" {
-		s.ICMSContributor = entity.ICMSContributor(dto.ICMSContributor)
-	}
+	s.ICMSContributor = condicaoICMS.OuPadrao()
 	if dto.TrackingPlatform != "" {
 		s.TrackingPlatform = entity.TrackingPlatform(dto.TrackingPlatform)
 	}
