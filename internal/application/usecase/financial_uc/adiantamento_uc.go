@@ -2,7 +2,6 @@ package financial_uc
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -42,7 +41,7 @@ func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.Cr
 
 	data, err := time.Parse("2006-01-02", dto.DataAdiantamento)
 	if err != nil {
-		return nil, fmt.Errorf("data_adiantamento inválida (use AAAA-MM-DD): %w", err)
+		return nil, errorsuc.NewValidationError("data do adiantamento inválida: use o formato AAAA-MM-DD")
 	}
 
 	adv := &entity.Adiantamento{
@@ -160,7 +159,7 @@ func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, 
 	if dto.DataAplicacao != nil && *dto.DataAplicacao != "" {
 		data, err = time.Parse("2006-01-02", *dto.DataAplicacao)
 		if err != nil {
-			return nil, fmt.Errorf("data_aplicacao inválida (use AAAA-MM-DD): %w", err)
+			return nil, errorsuc.NewValidationError("data de aplicação inválida: use o formato AAAA-MM-DD")
 		}
 	}
 
