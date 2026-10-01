@@ -6,6 +6,37 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(multiempresa): o sistema passa a atender mais de uma empresa com banco,
+  usuário de banco e serviço próprios para cada uma. Nenhuma empresa alcança o
+  dado da outra nem por consulta direta ao banco — a separação foi verificada nas
+  duas direções, com tentativa de acesso cruzado recusada pelo próprio Postgres
+- feat(beneficiamento): remessa de material do cliente, estoque de terceiros e a
+  nota de retorno de industrialização numa só emissão, com a linha do serviço
+  (CFOP 5.124) e a do material devolvido (5.902/5.903) na mesma nota, nos CST
+  confirmados pela contabilidade. O faturamento pode ser repetido depois de uma
+  falha sem gerar nota duplicada, e a baixa pode ser estornada com motivo
+  registrado e histórico de quem fez
+- feat(custos): custo do item com os componentes separados (material, preparação,
+  máquina, mão de obra, terceiros e indiretos) e um esquema de rateio de indiretos
+  por percentual, por hora ou por unidade, com a trilha do que foi aplicado e o
+  histórico de cada apuração
+- feat(financeiro): contas a pagar e a receber com filtro por cliente,
+  fornecedor, período, situação, forma de pagamento e documento — antes o filtro
+  era desenhado na tela e não chegava ao servidor
+- fix(financeiro): a importação de extrato passou a recusar arquivo que não é OFX.
+  Antes qualquer arquivo era aceito e a importação dizia "sucesso" sem importar
+  nada
+- fix(fiscal): o NCM com máscara deixou de zerar o imposto. A tabela tributária e
+  a classificação do item eram comparadas letra por letra: "8466.20.90" num lado e
+  "84662090" no outro faziam a nota sair sem IPI, PIS e COFINS, sem erro nenhum.
+  O NCM também ia com máscara para o XML, o que a SEFAZ recusa
+- fix(cadastros): criar cliente, fornecedor e outros cadastros voltou a funcionar
+  em base cujo último código já passou de 2 bilhões. Antes a criação falhava com
+  uma mensagem técnica em inglês
+- feat(telas): VFIS0110, VFIN0200/0210/0300/0600/0620 e VCUS0100 reconstruídas, com
+  busca por lupa nos campos de item, cliente, fornecedor e conta bancária, e sem
+  nenhum campo pedindo "ID" ao usuário
+
 ## [v1.3.0] — 2026-09-27
 
 - fix: seis achados da revisão do PR, três deles vazando dados entre empresas (`5248a2e`)
