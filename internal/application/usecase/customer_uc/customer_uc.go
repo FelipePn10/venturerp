@@ -570,6 +570,15 @@ func (uc *CustomerUseCase) CreateSalesTable(ctx context.Context, dto request.Cre
 	if err != nil {
 		return nil, fmt.Errorf("generating sales table code: %w", err)
 	}
+	// A formação de preço é conferida ANTES do construtor para a recusa sair como
+	// validação (422) em vez de erro interno (500): o construtor devolve fmt.Errorf,
+	// que RespondUseCaseError trata como falha do sistema e esconde atrás de
+	// "erro interno do servidor". Ver error-status-contract.
+	if formacao := entity.PriceFormation(dto.PriceFormation); !formacao.IsValid() {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"formação de preço %q não existe — use uma destas: %s",
+			dto.PriceFormation, strings.Join(entity.FormacoesDePreco(), ", ")))
+	}
 	st, err := entity.NewSalesTable(code, dto.Description, entity.PriceFormation(dto.PriceFormation))
 	if err != nil {
 		return nil, err
