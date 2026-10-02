@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.4.2] — 2026-10-02
+
+- fix(entrada de NF-e): o XML da nota era aceito e lido como se estivesse vazio (`d2686b6`)
+- fix(erros): pendência de cadastro e data mal digitada deixam de virar 500 genérico (`843f34f`)
+
 - fix(erros): situações que são do usuário deixaram de aparecer como "erro interno
   do servidor". A mais séria: quando o roteiro de um item passa por uma operação
   feita por terceiro (galvanização, têmpera, zincagem) e o preço daquele serviço
