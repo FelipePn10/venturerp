@@ -56,6 +56,31 @@ const (
 	PriceTransferenciaUF       PriceFormation = "TRANSFERENCIA_UF"
 )
 
+// FormacoesDePreco lista as formações aceitas, na ordem em que entram na mensagem
+// de erro. Existe para a recusa dizer o que serve, em vez de deixar o CHECK do
+// banco responder com SQL cru em inglês.
+func FormacoesDePreco() []string {
+	return []string{
+		string(PriceInformado), string(PriceInformadoSemICMS), string(PriceCustoMedio),
+		string(PriceCustoStandardTotal), string(PriceCustoStandardMaterial),
+		string(PriceMatOper), string(PriceTabelaCusto),
+		string(PriceTransferenciaIPI), string(PriceTransferenciaUF),
+	}
+}
+
+// IsValid aceita o vazio, que o construtor resolve para INFORMADO.
+func (f PriceFormation) IsValid() bool {
+	if f == "" {
+		return true
+	}
+	for _, aceita := range FormacoesDePreco() {
+		if string(f) == aceita {
+			return true
+		}
+	}
+	return false
+}
+
 type TableComposition string
 
 const (
@@ -951,6 +976,15 @@ func NewSalesTable(code int64, description string, formation PriceFormation) (*S
 	}
 	if formation == "" {
 		formation = PriceInformado
+	}
+	// Sem esta conferência o valor ia inteiro para o banco e o CHECK do enum
+	// respondia com SQL cru em inglês ("invalid input value for enum
+	// price_formation_enum ... SQLSTATE 22P02"), que o front nem mostra: a
+	// humanização de erro esconde texto técnico e troca por "Dados inválidos".
+	// O usuário ficava sem saber qual campo nem o que serve.
+	if !formation.IsValid() {
+		return nil, fmt.Errorf("formação de preço %q não existe — use uma destas: %s",
+			string(formation), strings.Join(FormacoesDePreco(), ", "))
 	}
 	return &SalesTable{
 		Code:           code,
