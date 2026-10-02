@@ -15,6 +15,12 @@ pipeline de release.
   fora do formato na baixa de conta a pagar e a receber, no adiantamento e no CT-e,
   e para arquivo que não é XML de NF-e no upload de entrada: todos diziam só "erro
   interno", e dois ainda mostravam texto em inglês
+- fix(entrada de NF-e): a importação do XML da nota de compra passou a ler a nota
+  de verdade. O arquivo era aceito mas lido como se estivesse vazio, e a entrada
+  entrava com número 0, sem CNPJ do emitente e com todos os valores zerados. Além
+  disso, o arquivo que a SEFAZ devolve ao autorizar a nota (o que o contador manda)
+  era recusado com a mensagem de arquivo inválido. Agora as duas formas do arquivo
+  são aceitas, e nota sem número ou sem CNPJ do emitente é recusada dizendo o motivo
 
 ## [v1.4.1] — 2026-10-01
 
