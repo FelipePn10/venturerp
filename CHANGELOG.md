@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.4.3] — 2026-10-02
+
+- fix(tabela de preço): formação inexistente recusada com os valores aceitos (`59a468c`)
+
 - fix(tabela de preço): escolher uma formação de preço que não existe passou a
   dizer o que serve. Antes a tela respondia "Dados inválidos. Revise os campos
   destacados", sem apontar o campo — porque o erro vinha do banco em inglês e o
