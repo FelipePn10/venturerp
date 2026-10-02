@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(tabela de preço): escolher uma formação de preço que não existe passou a
+  dizer o que serve. Antes a tela respondia "Dados inválidos. Revise os campos
+  destacados", sem apontar o campo — porque o erro vinha do banco em inglês e o
+  sistema esconde texto técnico. Agora a mensagem nomeia o valor recusado e lista
+  as formações aceitas
+
 ## [v1.4.2] — 2026-10-02
 
 - fix(entrada de NF-e): o XML da nota era aceito e lido como se estivesse vazio (`d2686b6`)
