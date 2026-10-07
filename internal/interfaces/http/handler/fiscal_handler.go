@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
@@ -234,16 +235,23 @@ func (h *FiscalHandler) CancelExit(w http.ResponseWriter, r *http.Request) {
 		security.RespondError(w, http.StatusBadRequest, "código inválido")
 		return
 	}
+	// "justificativa" é o nome que a SEFAZ/Focus usam e o que a tela envia;
+	// "motivo" continua aceito.
 	var body struct {
-		Motivo string `json:"motivo"`
+		Motivo        string `json:"motivo"`
+		Justificativa string `json:"justificativa"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
+	motivo := body.Motivo
+	if strings.TrimSpace(motivo) == "" {
+		motivo = body.Justificativa
+	}
 	result, err := h.cancelExitUC.Execute(r.Context(), fiscal_uc.CancelFiscalExitParams{
 		ID:     code,
-		Motivo: body.Motivo,
+		Motivo: motivo,
 	})
 	if err != nil {
 		security.RespondUseCaseError(w, err)

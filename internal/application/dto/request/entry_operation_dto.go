@@ -22,6 +22,12 @@ type CreateEntryOperationDTO struct {
 	StateGroupCode     *int64    `json:"state_group_code,omitempty"`
 	SupplierTypeCode   *int64    `json:"supplier_type_code,omitempty"`
 	CreatedBy          uuid.UUID `json:"created_by"`
+	// Comportamento (TES). Omitidos, valem true.
+	MovimentaEstoque *bool `json:"movimenta_estoque,omitempty"`
+	GeraFinanceiro   *bool `json:"gera_financeiro,omitempty"`
+	CreditaICMS      *bool `json:"credita_icms,omitempty"`
+	CreditaIPI       *bool `json:"credita_ipi,omitempty"`
+	CreditaPISCOFINS *bool `json:"credita_pis_cofins,omitempty"`
 }
 
 type UpdateEntryOperationDTO struct {
@@ -34,4 +40,10 @@ type UpdateEntryOperationDTO struct {
 	StateGroupCode     *int64  `json:"state_group_code,omitempty"`
 	SupplierTypeCode   *int64  `json:"supplier_type_code,omitempty"`
 	IsActive           *bool   `json:"is_active,omitempty"`
+	// Comportamento (TES). Omitidos, mantêm o valor gravado.
+	MovimentaEstoque *bool `json:"movimenta_estoque,omitempty"`
+	GeraFinanceiro   *bool `json:"gera_financeiro,omitempty"`
+	CreditaICMS      *bool `json:"credita_icms,omitempty"`
+	CreditaIPI       *bool `json:"credita_ipi,omitempty"`
+	CreditaPISCOFINS *bool `json:"credita_pis_cofins,omitempty"`
 }

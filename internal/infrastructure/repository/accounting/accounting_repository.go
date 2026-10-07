@@ -3,6 +3,7 @@ package accounting
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"time"
 
 	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
@@ -252,10 +253,25 @@ func accountRefRowToEntity(row sqlc.AccountRefRow) *accountingEntity.AccountingA
 
 // ─── Journal Entries ──────────────────────────────────────────────────────────
 
+// empresaDaSessao: o lançamento é sempre da empresa autenticada. O
+// empresa_id que vinha do cliente (a tela mandava 1 fixo) deixava uma empresa
+// lançar e ler a contabilidade da outra.
+func empresaDaSessao(ctx context.Context) (int32, error) {
+	id, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int32(id), nil
+}
+
 func (r *AccountingRepositorySQLC) CreateJournalEntry(ctx context.Context, e *accountingEntity.AccountingJournalEntry) (*accountingEntity.AccountingJournalEntry, error) {
+	empresa, err := empresaDaSessao(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateJournalEntry(ctx, sqlc.CreateJournalEntryParams{
 		PlanID:          e.PlanID,
-		EmpresaID:       int32(e.EmpresaID),
+		EmpresaID:       empresa,
 		EntryDate:       pgutil.ToPgDate(e.EntryDate),
 		EntryNumber:     e.EntryNumber,
 		BatchNumber:     e.BatchNumber,
@@ -274,10 +290,16 @@ func (r *AccountingRepositorySQLC) CreateJournalEntry(ctx context.Context, e *ac
 	return journalEntryRowToEntity(row), nil
 }
 
-func (r *AccountingRepositorySQLC) ListJournalEntries(ctx context.Context, planID int64, empresaID int, from, to time.Time) ([]*accountingEntity.AccountingJournalEntry, error) {
+// ListJournalEntries ignora o empresaID recebido em favor da empresa da sessão
+// (ver empresaDaSessao).
+func (r *AccountingRepositorySQLC) ListJournalEntries(ctx context.Context, planID int64, _ int, from, to time.Time) ([]*accountingEntity.AccountingJournalEntry, error) {
+	empresa, err := empresaDaSessao(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.ListJournalEntries(ctx, sqlc.ListJournalEntriesParams{
 		PlanID:    planID,
-		EmpresaID: int32(empresaID),
+		EmpresaID: empresa,
 		From:      from,
 		To:        to,
 	})

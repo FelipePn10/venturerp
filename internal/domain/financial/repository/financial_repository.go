@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -84,7 +85,36 @@ type ProjectedFlow struct {
 	Saldo         float64   `json:"saldo"`
 }
 
+// CPPorPlanoFilter é a consulta do contas a pagar agrupado por plano de contas.
+type CPPorPlanoFilter struct {
+	StartDate    *time.Time
+	EndDate      *time.Time
+	DateField    DateField
+	Status       *string
+	FornecedorID *int64
+}
+
+// CPPorPlano é o total do contas a pagar de um plano de contas (e centro de
+// custo). Título com rateio entra pela parte de cada plano; título sem rateio
+// entra pelo plano do próprio título (ou "sem plano").
+type CPPorPlano struct {
+	PlanoContasID     *int64          `json:"plano_contas_id,omitempty"`
+	PlanoContasCodigo string          `json:"plano_contas_codigo"`
+	PlanoContasNome   string          `json:"plano_contas_nome"`
+	CentroCustoID     *int64          `json:"centro_custo_id,omitempty"`
+	CentroCustoNome   string          `json:"centro_custo_nome,omitempty"`
+	QtdTitulos        int             `json:"qtd_titulos"`
+	ValorTotal        decimal.Decimal `json:"valor_total"`
+	ValorPago         decimal.Decimal `json:"valor_pago"`
+	ValorAberto       decimal.Decimal `json:"valor_aberto"`
+	ValorVencido      decimal.Decimal `json:"valor_vencido"`
+}
+
 type FinancialRepository interface {
+	// Rateio do contas a pagar por plano de contas.
+	ListRateiosContasPagar(ctx context.Context, ids []int64) (map[int64][]entity.RateioContaPagar, error)
+	ContasPagarPorPlano(ctx context.Context, f CPPorPlanoFilter) ([]CPPorPlano, error)
+
 	// Contas Bancarias
 	CreateContaBancaria(ctx context.Context, c *entity.ContaBancaria) (*entity.ContaBancaria, error)
 	ListContasBancarias(ctx context.Context) ([]*entity.ContaBancaria, error)
@@ -110,7 +140,7 @@ type FinancialRepository interface {
 	UpdateContaPagar(ctx context.Context, c *entity.ContaPagar) (*entity.ContaPagar, error)
 	ApproveContaPagar(ctx context.Context, id int64, approvedBy uuid.UUID) error
 	BaixarContaPagar(ctx context.Context, id int64, params BaixaParams) error
-	BaixarContaPagarAtomico(ctx context.Context, id int64, params BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64) error
+	BaixarContaPagarAtomico(ctx context.Context, id int64, params BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64, lote *contabilizacao.Lote) error
 	CancelContaPagar(ctx context.Context, id int64) error
 	GetAgingContasPagar(ctx context.Context) ([]*AgingResult, error)
 
@@ -119,7 +149,7 @@ type FinancialRepository interface {
 	GetContaReceber(ctx context.Context, id int64) (*entity.ContaReceber, error)
 	ListContasReceber(ctx context.Context, filters CRFilter) ([]*entity.ContaReceber, error)
 	BaixarContaReceber(ctx context.Context, id int64, params BaixaParams) error
-	BaixarContaReceberAtomico(ctx context.Context, id int64, params BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64) error
+	BaixarContaReceberAtomico(ctx context.Context, id int64, params BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, contaBancariaID int64, lote *contabilizacao.Lote) error
 	CancelContaReceber(ctx context.Context, id int64) error
 	GetAgingContasReceber(ctx context.Context) ([]*AgingResult, error)
 
@@ -138,8 +168,8 @@ type FinancialRepository interface {
 	ListTaxAssessments(ctx context.Context, competencia string) ([]*entity.TaxAssessment, error)
 
 	// Fiscal Data for Tax Assessment
-	GetFiscalDebits(ctx context.Context, competencia string) (map[string]float64, error)
-	GetFiscalCredits(ctx context.Context, competencia string) (map[string]float64, error)
+	GetFiscalDebits(ctx context.Context, competencia string) (map[string]decimal.Decimal, error)
+	GetFiscalCredits(ctx context.Context, competencia string) (map[string]decimal.Decimal, error)
 	GetFiscalConfig(ctx context.Context) (*fiscalEntity.FiscalConfig, error)
 
 	// Contas Receber helpers

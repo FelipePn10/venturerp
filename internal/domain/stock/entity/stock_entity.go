@@ -24,6 +24,10 @@ const (
 	// almoxarifado não muda — muda de endereço — então SignedQuantity devolve 0
 	// de propósito: quem mexe nos dois lados é TransferirEntreEnderecos.
 	MovementTypeAddressTransfer = "TRANSF_ENDERECO"
+	// MovementTypeCostAdjustment complementa (ou estorna) o custo do saldo sem
+	// mexer na quantidade — o frete de compra lançado depois da nota. Não é um
+	// tipo de digitação manual: só o sistema o gera.
+	MovementTypeCostAdjustment = "AJUSTE_CUSTO"
 )
 
 // Reference type values stored in stock_movements.reference_type, identifying the

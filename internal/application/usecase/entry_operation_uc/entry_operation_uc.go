@@ -89,6 +89,11 @@ func (uc *EntryOperationUseCase) CreateEntryOperation(ctx context.Context, dto r
 	o.ClassificationCode = dto.ClassificationCode
 	o.StateGroupCode = dto.StateGroupCode
 	o.SupplierTypeCode = dto.SupplierTypeCode
+	o.MovimentaEstoque = ptrutil.BoolOr(dto.MovimentaEstoque, true)
+	o.GeraFinanceiro = ptrutil.BoolOr(dto.GeraFinanceiro, true)
+	o.CreditaICMS = ptrutil.BoolOr(dto.CreditaICMS, true)
+	o.CreditaIPI = ptrutil.BoolOr(dto.CreditaIPI, true)
+	o.CreditaPISCOFINS = ptrutil.BoolOr(dto.CreditaPISCOFINS, true)
 	created, err := uc.repo.CreateEntryOperation(ctx, o)
 	if err != nil {
 		return nil, err
@@ -111,6 +116,11 @@ func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto r
 	o.StateGroupCode = dto.StateGroupCode
 	o.SupplierTypeCode = dto.SupplierTypeCode
 	o.IsActive = ptrutil.BoolOr(dto.IsActive, o.IsActive)
+	o.MovimentaEstoque = ptrutil.BoolOr(dto.MovimentaEstoque, o.MovimentaEstoque)
+	o.GeraFinanceiro = ptrutil.BoolOr(dto.GeraFinanceiro, o.GeraFinanceiro)
+	o.CreditaICMS = ptrutil.BoolOr(dto.CreditaICMS, o.CreditaICMS)
+	o.CreditaIPI = ptrutil.BoolOr(dto.CreditaIPI, o.CreditaIPI)
+	o.CreditaPISCOFINS = ptrutil.BoolOr(dto.CreditaPISCOFINS, o.CreditaPISCOFINS)
 	updated, err := uc.repo.UpdateEntryOperation(ctx, o)
 	if err != nil {
 		return nil, err

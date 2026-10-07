@@ -22,4 +22,6 @@ type ContaBancaria struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	CreatedBy    uuid.UUID
+	// AccountingAccountID: conta contábil do banco (contabilização automática).
+	AccountingAccountID *int64
 }

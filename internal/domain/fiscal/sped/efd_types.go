@@ -10,8 +10,14 @@ type EFDParams struct {
 	Unidades          []EFDUnidade
 	Itens             []EFDItem
 	DocumentosFiscais []EFDDocumentoFiscal
-	ApuracaoICMS      *EFDApuracaoICMS
-	Inventario        []EFDInventarioItem
+	// Conhecimentos de transporte (D100/D190): o CT-e do frete de compra.
+	Conhecimentos []EFDConhecimento
+	ApuracaoICMS  *EFDApuracaoICMS
+	// ApuracaoIPI (E500/E510/E520): contribuinte do IPI (indústria).
+	ApuracaoIPI *EFDApuracaoIPI
+	Inventario  []EFDInventarioItem
+	// MotivoInventario (H005): 01 final do período, 02 mudança de tributação...
+	MotivoInventario string
 }
 
 type EFDEmpresa struct {
@@ -29,6 +35,10 @@ type EFDEmpresa struct {
 	ContabilistaCPF  string
 	ContabilistaCRC  string
 	ContabilistaCNPJ string
+	// Registro 0005 (dados complementares).
+	Fantasia, CEP, Endereco, Numero, Complemento, Bairro, Fone, Email string
+	// IndAtividade (0000/IND_ATIV): 0 industrial ou equiparado, 1 outros.
+	IndAtividade string
 }
 
 type EFDPeriodo struct {
@@ -72,6 +82,50 @@ type EFDItem struct {
 	CodGen   string
 	CodLST   string
 	AliqICMS float64
+	CEST     string
+	// Conversoes (0220): unidades dos documentos diferentes da de estoque.
+	Conversoes []EFDConversao
+}
+
+// EFDConversao — 0220: a unidade do documento e quantas unidades de estoque ela vale.
+type EFDConversao struct {
+	UnidConv string
+	FatConv  float64
+}
+
+// EFDConhecimento — D100 (CT-e) e os seus D190.
+type EFDConhecimento struct {
+	IndOper    string // 0 entrada (frete contratado pela empresa)
+	IndEmit    string // 1 terceiros
+	CodPart    string
+	CodMod     string // 57
+	CodSit     string
+	Ser        string
+	NumDoc     string
+	ChvCTe     string
+	DtDoc      time.Time
+	DtAP       time.Time
+	TpCTe      string // 0 normal
+	VlDoc      float64
+	IndFrt     string // 0 por conta do emitente, 1 do destinatário, 2 de terceiros, 9 sem frete
+	VlServ     float64
+	VlBcIcms   float64
+	VlIcms     float64
+	VlNt       float64
+	CodMunOrig string
+	CodMunDest string
+	Analiticos []EFDD190
+}
+
+// EFDD190 — registro analítico do CT-e.
+type EFDD190 struct {
+	CstIcms  string
+	Cfop     string
+	AliqIcms float64
+	VlOpr    float64
+	VlBcIcms float64
+	VlIcms   float64
+	VlRedBc  float64
 }
 
 type EFDDocumentoFiscal struct {
@@ -182,6 +236,38 @@ type EFDApuracaoICMS struct {
 	VlSaldoCredorTransp float64
 	DebEspeciais        float64
 	Ajustes             []EFDApuracaoAjuste
+	// Obrigacoes (E116): o ICMS a recolher.
+	Obrigacoes []EFDObrigacao
+}
+
+// EFDObrigacao — E116.
+type EFDObrigacao struct {
+	CodOr    string // 000 ICMS a recolher
+	VlOr     float64
+	DtVcto   time.Time
+	CodRec   string // código de receita da UF
+	TxtCompl string
+	MesRef   string // MMAAAA
+}
+
+// EFDApuracaoIPI — E500/E510/E520.
+type EFDApuracaoIPI struct {
+	IndApur string // 0 mensal
+	Linhas  []EFDE510
+	SdAnt   float64
+	Deb     float64
+	Cred    float64
+	Od      float64
+	Oc      float64
+}
+
+// EFDE510 — consolidação por CFOP e CST do IPI.
+type EFDE510 struct {
+	Cfop    string
+	CstIpi  string
+	VlCont  float64
+	VlBcIpi float64
+	VlIpi   float64
 }
 
 // EFDApuracaoAjuste — Registro E111 (ajustes de apuração).

@@ -57,8 +57,8 @@ func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.Apurar
 			continue
 		}
 
-		debito := decimal.NewFromFloat(debits[imposto])
-		credito := decimal.NewFromFloat(credits[imposto])
+		debito := debits[imposto]
+		credito := credits[imposto]
 		saldo := debito.Sub(credito)
 
 		var saldoDevedor, saldoCredor decimal.Decimal

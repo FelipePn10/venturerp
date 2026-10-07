@@ -30,6 +30,9 @@ type PreviaNFeUseCase struct {
 	Auth      ports.AuthService
 	Customers customerrepo.CustomerRepository
 	Orders    salesrepo.SalesOrderRepository
+	// Devolucao, quando presente, liga os itens da devolução de compra à nota
+	// de origem (DFeReferenciado), como na transmissão.
+	Devolucao *DevolucaoCompraUseCase
 }
 
 func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.PreviaNFeResponse, error) {
@@ -51,6 +54,11 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 
 	plano := resolverPlanoDaNota(ctx, exit, uc.Customers, uc.Orders)
 	payload := montarPayloadNFe(exit, items, cfg, plano)
+	if uc.Devolucao != nil {
+		if err := uc.Devolucao.ReferenciarItens(ctx, exit, items, &payload); err != nil {
+			return nil, err
+		}
+	}
 	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
 
 	out := &response.PreviaNFeResponse{
@@ -91,9 +99,15 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	}
 
 	for _, it := range items {
+		// Mesma unidade que a transmissão usa (buildFocusItems): a da linha,
+		// e "UN" só quando a linha não tem.
+		unidade := "UN"
+		if it.UnidadeComercial != nil && strings.TrimSpace(*it.UnidadeComercial) != "" {
+			unidade = strings.ToUpper(strings.TrimSpace(*it.UnidadeComercial))
+		}
 		out.Itens = append(out.Itens, response.PreviaItemNFe{
 			Sequence: it.Sequence, ItemCode: it.ItemCode, Descricao: derefStr(it.Description),
-			Ncm: derefStr(it.Ncm), Cfop: it.Cfop, UM: "UN",
+			Ncm: derefStr(it.Ncm), Cfop: it.Cfop, UM: unidade,
 			Quantidade: it.Quantity, ValorUnit: it.UnitPrice, ValorTotal: it.TotalPrice,
 			Origem:  it.OrigemMercadoria,
 			CstICMS: derefStr(it.CstICMS), BaseICMS: it.BaseICMS, AliqICMS: it.AliqICMS, ValorICMS: it.ValorICMS,
@@ -159,8 +173,8 @@ func conferirNota(
 	}
 
 	// ── Situação da nota
-	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization {
-		impede("status", fmt.Sprintf("a nota está em %s e só rascunho pode ser autorizado", exit.Status),
+	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization && exit.Status != entity.ExitStatusRejected {
+		impede("status", fmt.Sprintf("a nota está em %s e só rascunho ou rejeitada pode ser transmitida", exit.Status),
 			"gere uma nova nota; nota autorizada se resolve por cancelamento ou carta de correção")
 	}
 

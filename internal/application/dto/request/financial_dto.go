@@ -1,5 +1,7 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 type CreateContaBancariaDTO struct {
 	Banco        string  `json:"banco"`
 	Agencia      string  `json:"agencia"`
@@ -48,6 +50,15 @@ type CreateContaPagarDTO struct {
 	PlanoContasID   *int64  `json:"plano_contas_id,omitempty"`
 	CentroCustoID   *int64  `json:"centro_custo_id,omitempty"`
 	Observacao      *string `json:"observacao,omitempty"`
+	// Rateios distribui o título por plano de contas / centro de custo. A soma
+	// tem de fechar com o valor bruto.
+	Rateios []RateioContaPagarDTO `json:"rateios,omitempty"`
+}
+
+type RateioContaPagarDTO struct {
+	PlanoContasID int64           `json:"plano_contas_id"`
+	CentroCustoID *int64          `json:"centro_custo_id,omitempty"`
+	Valor         decimal.Decimal `json:"valor"`
 }
 
 // ListContasPagarFilter é a consulta da carteira a pagar.
@@ -83,8 +94,10 @@ type ApproveContaPagarDTO struct {
 type BaixarContaPagarDTO struct {
 	ContaBancariaID int64   `json:"conta_bancaria_id"`
 	ValorPago       float64 `json:"valor_pago"`
-	DataPagamento   string  `json:"data_pagamento"`
-	Observacao      *string `json:"observacao,omitempty"`
+	// Desconto obtido na quitação (abate a dívida sem sair do caixa).
+	Desconto      decimal.Decimal `json:"desconto"`
+	DataPagamento string          `json:"data_pagamento"`
+	Observacao    *string         `json:"observacao,omitempty"`
 }
 
 type CreateContaReceberDTO struct {
@@ -123,8 +136,10 @@ type ListContasReceberFilter struct {
 type BaixarContaReceberDTO struct {
 	ContaBancariaID int64   `json:"conta_bancaria_id"`
 	ValorRecebido   float64 `json:"valor_recebido"`
-	DataRecebimento string  `json:"data_recebimento"`
-	Observacao      *string `json:"observacao,omitempty"`
+	// Desconto concedido ao cliente na quitação.
+	Desconto        decimal.Decimal `json:"desconto"`
+	DataRecebimento string          `json:"data_recebimento"`
+	Observacao      *string         `json:"observacao,omitempty"`
 }
 
 type GetFluxoCaixaDTO struct {

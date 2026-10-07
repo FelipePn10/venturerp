@@ -145,7 +145,7 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 	}
 
 	payload := focusnfe.NFSePayload{
-		DataEmissao:            n.DataEmissao.Format("2006-01-02T15:04:05-03:00"),
+		DataEmissao:            dataHoraBrasilia(n.DataEmissao),
 		NaturezaOperacao:       n.NaturezaOperacao,
 		OptanteSimplesNacional: n.OptanteSimples,
 		IncentivadorCultural:   n.IncentivadorCultural,
@@ -289,4 +289,10 @@ func deref(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// dataHoraBrasilia: a data de emissão às 00:00 de Brasília. O layout usa o
+// marcador de fuso do Go ("-07:00"); "-03:00" literal saía como "-12:00".
+func dataHoraBrasilia(d time.Time) string {
+	return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.FixedZone("BRT", -3*60*60)).Format("2006-01-02T15:04:05-07:00")
 }

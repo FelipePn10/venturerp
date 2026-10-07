@@ -3,6 +3,8 @@ package request
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type CreateFiscalEntryDTO struct {
@@ -30,36 +32,55 @@ type CreateFiscalEntryDTO struct {
 	CteCode             *int64                     `json:"cte_code,omitempty"`
 	Notes               *string                    `json:"notes,omitempty"`
 	Itens               []CreateFiscalEntryItemDTO `json:"itens"`
+	// SupplierCode é o fornecedor do cadastro. Vazio, o sistema procura pelo
+	// CNPJ do emitente.
+	SupplierCode *int64 `json:"supplier_code,omitempty"`
+	// Parcelas da nota. Vazias, a nota nasce com uma parcela única para 30 dias.
+	Parcelas []FiscalEntryInstallmentDTO `json:"parcelas,omitempty"`
+	// Tipo de operação de entrada da nota (padrão dos itens).
+	EntryOperationCode *int64 `json:"entry_operation_code,omitempty"`
+	// Retenções na fonte (nota de serviço / prestação com retenção).
+	ValorRetPIS    decimal.Decimal `json:"valor_ret_pis"`
+	ValorRetCOFINS decimal.Decimal `json:"valor_ret_cofins"`
+	ValorRetCSLL   decimal.Decimal `json:"valor_ret_csll"`
+	ValorIRRF      decimal.Decimal `json:"valor_irrf"`
+	ValorRetPrev   decimal.Decimal `json:"valor_ret_prev"`
+	ValorISSRet    decimal.Decimal `json:"valor_iss_ret"`
 }
 
 type CreateFiscalEntryItemDTO struct {
-	Sequence          int     `json:"sequence"`
-	ItemCode          *int64  `json:"item_code,omitempty"`
-	SupplierItemCode  *string `json:"supplier_item_code,omitempty"`
-	UOM               *string `json:"uom,omitempty"`
-	Ncm               *string `json:"ncm,omitempty"`
-	Cfop              string  `json:"cfop"`
-	Quantity          float64 `json:"quantity"`
-	UnitPrice         float64 `json:"unit_price"`
-	TotalPrice        float64 `json:"total_price"`
-	BaseICMS          float64 `json:"base_icms"`
-	AliqICMS          float64 `json:"aliq_icms"`
-	ValorICMS         float64 `json:"valor_icms"`
-	BaseIPI           float64 `json:"base_ipi"`
-	AliqIPI           float64 `json:"aliq_ipi"`
-	ValorIPI          float64 `json:"valor_ipi"`
-	ValorPIS          float64 `json:"valor_pis"`
-	ValorCOFINS       float64 `json:"valor_cofins"`
-	CstICMS           *string `json:"cst_icms,omitempty"`
-	CstIPI            *string `json:"cst_ipi,omitempty"`
-	CstPIS            *string `json:"cst_pis,omitempty"`
-	CstCOFINS         *string `json:"cst_cofins,omitempty"`
-	GeraCreditoICMS   bool    `json:"gera_credito_icms"`
-	GeraCreditoIPI    bool    `json:"gera_credito_ipi"`
-	GeraCreditoPIS    bool    `json:"gera_credito_pis"`
-	GeraCreditoCOFINS bool    `json:"gera_credito_cofins"`
-	Description       *string `json:"description,omitempty"`
-	Notes             *string `json:"notes,omitempty"`
+	Sequence              int     `json:"sequence"`
+	ItemCode              *int64  `json:"item_code,omitempty"`
+	SupplierItemCode      *string `json:"supplier_item_code,omitempty"`
+	UOM                   *string `json:"uom,omitempty"`
+	Ncm                   *string `json:"ncm,omitempty"`
+	Cfop                  string  `json:"cfop"`
+	Quantity              float64 `json:"quantity"`
+	UnitPrice             float64 `json:"unit_price"`
+	TotalPrice            float64 `json:"total_price"`
+	BaseICMS              float64 `json:"base_icms"`
+	AliqICMS              float64 `json:"aliq_icms"`
+	ValorICMS             float64 `json:"valor_icms"`
+	BaseIPI               float64 `json:"base_ipi"`
+	AliqIPI               float64 `json:"aliq_ipi"`
+	ValorIPI              float64 `json:"valor_ipi"`
+	ValorPIS              float64 `json:"valor_pis"`
+	ValorCOFINS           float64 `json:"valor_cofins"`
+	CstICMS               *string `json:"cst_icms,omitempty"`
+	CstIPI                *string `json:"cst_ipi,omitempty"`
+	CstPIS                *string `json:"cst_pis,omitempty"`
+	CstCOFINS             *string `json:"cst_cofins,omitempty"`
+	GeraCreditoICMS       bool    `json:"gera_credito_icms"`
+	GeraCreditoIPI        bool    `json:"gera_credito_ipi"`
+	GeraCreditoPIS        bool    `json:"gera_credito_pis"`
+	GeraCreditoCOFINS     bool    `json:"gera_credito_cofins"`
+	Description           *string `json:"description,omitempty"`
+	Notes                 *string `json:"notes,omitempty"`
+	PlanoContasID         *int64  `json:"plano_contas_id,omitempty"`
+	CentroCustoID         *int64  `json:"centro_custo_id,omitempty"`
+	EntryOperationCode    *int64  `json:"entry_operation_code,omitempty"`
+	WarehouseID           *int64  `json:"warehouse_id,omitempty"`
+	PurchaseOrderItemCode *int64  `json:"purchase_order_item_code,omitempty"`
 }
 
 type ApproveFiscalEntryDTO struct {
@@ -69,6 +90,66 @@ type ApproveFiscalEntryDTO struct {
 type UploadNFEDTO struct {
 	XmlContent        string `json:"xml_content"`
 	PurchaseOrderCode *int64 `json:"purchase_order_code,omitempty"`
+	// DataEntrada é a data em que a mercadoria entrou (AAAA-MM-DD). Vazia, vale
+	// a data de saída/entrada do XML ou, na falta dela, a emissão.
+	DataEntrada *string `json:"data_entrada,omitempty"`
+}
+
+// SaveFiscalEntryConciliationDTO grava a conciliação dos itens da nota com o
+// cadastro, o plano de contas de cada item e, opcionalmente, as parcelas com a
+// distribuição por plano de contas.
+type SaveFiscalEntryConciliationDTO struct {
+	Itens []FiscalEntryItemConciliationDTO `json:"itens"`
+	// Tipo de operação de entrada da nota (padrão dos itens sem operação
+	// própria) e pedido de compra da nota.
+	EntryOperationCode *int64 `json:"entry_operation_code,omitempty"`
+	PurchaseOrderCode  *int64 `json:"purchase_order_code,omitempty"`
+	// Parcelas, quando enviadas, substituem as parcelas da nota. Ausentes, as
+	// parcelas são mantidas e só a distribuição é refeita quando
+	// RecalcularDistribuicao for verdadeiro (ou quando a classificação mudou).
+	Parcelas               []FiscalEntryInstallmentDTO `json:"parcelas,omitempty"`
+	RecalcularDistribuicao bool                        `json:"recalcular_distribuicao,omitempty"`
+}
+
+type FiscalEntryItemConciliationDTO struct {
+	ID            int64  `json:"id"`
+	ItemCode      *int64 `json:"item_code,omitempty"`
+	PlanoContasID *int64 `json:"plano_contas_id,omitempty"`
+	CentroCustoID *int64 `json:"centro_custo_id,omitempty"`
+	// LembrarVinculo memoriza o "de/para" código do fornecedor → item do
+	// cadastro: a próxima nota do mesmo fornecedor já vem conciliada.
+	LembrarVinculo bool `json:"lembrar_vinculo,omitempty"`
+	// FatorConversao converte a unidade da nota para a do cadastro (ex.: nota
+	// em CX com 12 unidades → 12). Vazio = 1.
+	FatorConversao *decimal.Decimal `json:"fator_conversao,omitempty"`
+	// Tipo de operação de entrada do item (o "TES"): CFOP de entrada, estoque,
+	// financeiro e créditos. Vazio = o da nota ou o do pedido.
+	EntryOperationCode *int64 `json:"entry_operation_code,omitempty"`
+	WarehouseID        *int64 `json:"warehouse_id,omitempty"`
+	// Linha do pedido de compra (3-way). Zero desfaz o vínculo.
+	PurchaseOrderItemCode *int64 `json:"purchase_order_item_code,omitempty"`
+	// CFOP de entrada informado à mão (prevalece sobre o calculado).
+	CfopEntrada *string `json:"cfop_entrada,omitempty"`
+}
+
+// CancelFiscalEntryDTO cancela a nota (aprovada: estorna tudo).
+type CancelFiscalEntryDTO struct {
+	Motivo string `json:"motivo"`
+}
+
+type FiscalEntryInstallmentDTO struct {
+	Numero         int                        `json:"numero"`
+	Documento      *string                    `json:"documento,omitempty"`
+	DataVencimento string                     `json:"data_vencimento"`
+	Valor          decimal.Decimal            `json:"valor"`
+	FormaPagamento *string                    `json:"forma_pagamento,omitempty"`
+	Distribuicao   []FiscalEntryAllocationDTO `json:"distribuicao,omitempty"`
+}
+
+type FiscalEntryAllocationDTO struct {
+	PlanoContasID int64           `json:"plano_contas_id"`
+	CentroCustoID *int64          `json:"centro_custo_id,omitempty"`
+	Valor         decimal.Decimal `json:"valor"`
 }
 
 type CreateFiscalExitDTO struct {
@@ -127,6 +208,11 @@ type CreateFiscalExitItemDTO struct {
 	MvaPct               float64 `json:"mva_pct,omitempty"`
 	AliqInternaDestinoST float64 `json:"aliq_interna_destino_st,omitempty"`
 	RedBaseSTPct         float64 `json:"red_base_st_pct,omitempty"`
+	// Linha do pedido de venda faturada, unidade comercial e código do produto
+	// impressos na nota (preenchidos quando a nota nasce do pedido).
+	SalesOrderItemCode *int64  `json:"sales_order_item_code,omitempty"`
+	UnidadeComercial   *string `json:"unidade_comercial,omitempty"`
+	CodigoProduto      *string `json:"codigo_produto,omitempty"`
 }
 
 type CreateFiscalExitFromLoadDTO struct {

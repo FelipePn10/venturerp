@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,15 @@ type AuthorizeFiscalExitUseCase struct {
 	// terceiros. A nota é criada em rascunho e o saldo é baixado antes; aqui só se
 	// confirma que isso aconteceu.
 	BeneficiamentoGuard BeneficiamentoBaixaGuard
+	// Faturamento soma ao atendido do pedido o que a nota faturou. Com ele, o
+	// pedido só vira "Faturado" quando todas as linhas foram atendidas — uma
+	// nota parcial não fecha o pedido.
+	Faturamento repository.SalesOrderInvoicingRepository
+	// Contabil, quando presente, contabiliza a venda (receita, impostos e CMV).
+	Contabil SaidaContabil
+	// Devolucao efetiva a devolução de compra autorizada (estoque, abatimento
+	// dos títulos, apuração e contabilidade) no lugar do faturamento da venda.
+	Devolucao *DevolucaoCompraUseCase
 }
 
 // BeneficiamentoBaixaGuard é a conferência da baixa de material de terceiro.
@@ -72,8 +82,10 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if err != nil {
 		return nil, err
 	}
-	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e deve estar em rascunho para autorizar, status atual: %s", exit.Status))
+	// Rejeitada pode ser retransmitida depois de corrigida: a rejeição não usa
+	// o número na SEFAZ (cada envio tem referência nova na Focus).
+	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization && exit.Status != entity.ExitStatusRejected {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e deve estar em rascunho ou rejeitada para autorizar, status atual: %s", exit.Status))
 	}
 
 	// Beneficiamento: o material do cliente tem de estar baixado ANTES de a nota
@@ -81,6 +93,12 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// fiscalmente aparecendo como presente no estoque de terceiros.
 	if uc.BeneficiamentoGuard != nil && exit.SourceType != nil && *exit.SourceType == OrigemBeneficiamento {
 		if err := uc.BeneficiamentoGuard.ConferirBaixaDaNota(ctx, id); err != nil {
+			return nil, err
+		}
+	}
+
+	if uc.Devolucao != nil {
+		if err := uc.Devolucao.PodeAutorizar(ctx, exit); err != nil {
 			return nil, err
 		}
 	}
@@ -98,6 +116,9 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
 		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais para informá-lo antes de autorizar a nota")
 	}
+	if err := validarReformaNFe(exit, cfg); err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
 
 	focusCli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	focusCli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
@@ -114,8 +135,13 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// receber. Um cálculo só, um resultado só.
 	plano := resolverPlanoDaNota(ctx, exit, uc.CustomerRepo, uc.SalesOrderRepo)
 	payload := montarPayloadNFe(exit, items, cfg, plano)
+	if uc.Devolucao != nil {
+		if err := uc.Devolucao.ReferenciarItens(ctx, exit, items, &payload); err != nil {
+			return nil, err
+		}
+	}
 
-	if exit.Status == entity.ExitStatusDraft {
+	if exit.Status == entity.ExitStatusDraft || exit.Status == entity.ExitStatusRejected {
 		if _, err = uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusAwaitingAuthorization); err != nil {
 			return nil, fmt.Errorf("registrando NF-e como aguardando autorização: %w", err)
 		}
@@ -127,6 +153,12 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		return nil, errorsuc.NewExternalServiceError("Focus NF-e", err.Error())
 	}
 
+	// O número e a série são os que a SEFAZ autorizou: a Focus numera a nota.
+	if n, convErr := strconv.ParseInt(strings.TrimSpace(focusResp.Numero), 10, 64); convErr == nil && n > 0 {
+		if err := uc.Repo.UpdateExitNumbering(ctx, id, n, focusResp.Serie); err != nil {
+			return nil, err
+		}
+	}
 	updated, err := uc.Repo.UpdateExitAuthorization(ctx, id, focusResp.ChaveNFe, focusResp.Protocolo, ref, focusResp.PathXML, focusResp.PathDANFE)
 	if err != nil {
 		return nil, err
@@ -138,6 +170,16 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// cliente: uma venda em 28/56/84 entrava no financeiro como uma parcela só,
 	// a entrada de 30% não existia e o título não tinha dono — então aging,
 	// extrato por cliente e limite de crédito ficavam cegos.
+	// Devolução de compra: não é venda — não gera título a receber do cliente
+	// nem baixa pedido; o efeito é o inverso da nota de entrada.
+	if updated.FiscalEntryID != nil {
+		resp := toFiscalExitResponse(updated)
+		if uc.Devolucao != nil {
+			resp.Warnings = append(resp.Warnings, uc.Devolucao.Efetivar(ctx, updated, userID)...)
+		}
+		return resp, nil
+	}
+
 	if uc.FinancialRepo != nil {
 		uc.gerarTitulos(ctx, exit, id, plano, userID)
 	}
@@ -147,7 +189,9 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// via the returned exit being authorized regardless.
 	uc.settleStockAndOrder(ctx, exit, items, userID)
 
-	return toFiscalExitResponse(updated), nil
+	resp := toFiscalExitResponse(updated)
+	resp.Warnings = append(resp.Warnings, contabilizarSaida(ctx, uc.Contabil, updated, uc.FinancialRepo != nil)...)
+	return resp, nil
 }
 
 // settleStockAndOrder posts the OUT movements for the exit items, consumes the
@@ -182,12 +226,15 @@ func (uc *AuthorizeFiscalExitUseCase) settleStockAndOrder(
 			refType := stockentity.ReferenceTypeNFExit
 			refCode := exit.ID
 			mov := &stockentity.StockMovement{
-				ItemCode:      *it.ItemCode,
-				WarehouseID:   wh,
-				MovementType:  stockentity.MovementTypeOut,
-				Quantity:      it.Quantity,
-				UnitPrice:     it.UnitPrice,
-				TotalPrice:    it.TotalPrice,
+				ItemCode:     *it.ItemCode,
+				WarehouseID:  wh,
+				MovementType: stockentity.MovementTypeOut,
+				Quantity:     it.Quantity,
+				// Sem preço: a saída é valorizada pelo custo médio (é o custo
+				// que sai do estoque e o CMV da venda). Gravar o preço de venda
+				// deixava o extrato e o CMV com o valor de venda.
+				UnitPrice:     0,
+				TotalPrice:    0,
 				ReferenceType: &refType,
 				ReferenceCode: &refCode,
 				CreatedBy:     userID,
@@ -207,9 +254,19 @@ func (uc *AuthorizeFiscalExitUseCase) settleStockAndOrder(
 		}
 	}
 
-	// Flag the sales order as invoiced.
+	// Flag the sales order as invoiced. A nota que nasceu do pedido (linhas
+	// ligadas às linhas do pedido) só fecha o pedido quando tudo foi atendido.
 	if uc.SalesOrderRepo != nil && exit.SalesOrderCode != nil {
-		_ = uc.SalesOrderRepo.ChangeStatus(ctx, *exit.SalesOrderCode, salesentity.SalesOrderStatusInvoiced)
+		ligada, atendido := false, false
+		if uc.Faturamento != nil {
+			var err error
+			if ligada, atendido, err = uc.Faturamento.RegistrarFaturamento(ctx, exit.ID, false); err != nil {
+				ligada = false
+			}
+		}
+		if !ligada || atendido {
+			_ = uc.SalesOrderRepo.ChangeStatus(ctx, *exit.SalesOrderCode, salesentity.SalesOrderStatusInvoiced)
+		}
 	}
 }
 
@@ -296,6 +353,7 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			CodigoSituacaoTributariaIPI:    cstIPI,
 			AliquotaIPI:                    it.AliqIPI * 100,
 			ValorIPI:                       it.ValorIPI,
+			BaseIPI:                        it.BaseIPI,
 			CodigoSituacaoTributariaPIS:    cstPIS,
 			AliquotaPIS:                    it.AliqPIS * 100,
 			ValorPIS:                       it.ValorPIS,

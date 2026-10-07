@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -260,9 +261,9 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 			 fiscal_coupon_date, fiscal_coupon_ecf_serial,enterprise_id,
 			 dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
 			 dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
-			 customer_material_remittance_id)
+			 customer_material_remittance_id, finalidade, nfe_referenciada, fiscal_entry_id, supplier_code)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
-		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)
+		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.DataEmissao, e.DataSaida,
 		e.CnpjDestinatario, e.RazaoSocialDestinatario, e.IEDestinatario, e.UFDestinatario,
@@ -273,7 +274,7 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 		e.FiscalCouponDate, e.FiscalCouponECFSerial, enterpriseID,
 		e.DestLogradouro, e.DestNumero, e.DestComplemento, e.DestBairro, e.DestMunicipio,
 		e.DestCodigoMunicipio, e.DestCEP, e.DestEmail, e.DestTelefone, e.CustomerCode,
-		e.CustomerMaterialRemittanceID,
+		e.CustomerMaterialRemittanceID, finalidadeOuVenda(e.Finalidade), e.NFeReferenciada, e.FiscalEntryID, e.SupplierCode,
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit: %w", err)
@@ -289,15 +290,15 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 			 base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 			 cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description,
 			 base_icms_st, aliq_icms_st, valor_icms_st, mva,
-			 unidade_comercial, codigo_produto)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+			 unidade_comercial, codigo_produto, sales_order_item_code, fiscal_entry_item_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
 		 RETURNING id, created_at`,
 		item.FiscalExitID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.ValorICMSDiferido,
 		item.BaseIPI, item.AliqIPI, item.ValorIPI, item.AliqPIS, item.ValorPIS, item.AliqCOFINS, item.ValorCOFINS,
 		item.CstICMS, item.CstIPI, item.CstPIS, item.CstCOFINS, item.OrigemMercadoria, item.Description,
 		item.BaseICMSST, item.AliqICMSST, item.ValorICMSST, item.MVA,
-		item.UnidadeComercial, item.CodigoProduto,
+		item.UnidadeComercial, item.CodigoProduto, item.SalesOrderItemCode, item.FiscalEntryItemID,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit item: %w", err)
@@ -321,7 +322,8 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		        fiscal_coupon_date, fiscal_coupon_ecf_serial,
 		        dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
-		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code
+		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
+		        finalidade, nfe_referenciada, fiscal_entry_id, supplier_code
 		 FROM public.fiscal_exits WHERE id = $1 AND enterprise_id=$2`, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
@@ -332,7 +334,8 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
 		&e.FiscalCouponDate, &e.FiscalCouponECFSerial,
 		&e.DestLogradouro, &e.DestNumero, &e.DestComplemento, &e.DestBairro, &e.DestMunicipio,
-		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode)
+		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode,
+		&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de saída %d não encontrada", id))
@@ -353,7 +356,7 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 		        base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 		        cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description,
 		        base_icms_st, aliq_icms_st, valor_icms_st, mva,
-		        unidade_comercial, codigo_produto, created_at
+		        unidade_comercial, codigo_produto, created_at, sales_order_item_code, fiscal_entry_item_id
 		 FROM public.fiscal_exit_items i WHERE fiscal_exit_id = $1 AND EXISTS(SELECT 1 FROM fiscal_exits x WHERE x.id=i.fiscal_exit_id AND x.enterprise_id=$2) ORDER BY sequence`, fiscalExitID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exit items: %w", err)
@@ -377,7 +380,8 @@ func (r *FiscalRepositoryPG) ListExits(ctx context.Context) ([]*entity.FiscalExi
 		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		        fiscal_coupon_date, fiscal_coupon_ecf_serial,
 		        dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
-		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code
+		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
+		        finalidade, nfe_referenciada, fiscal_entry_id, supplier_code
 		 FROM public.fiscal_exits WHERE enterprise_id=$1 ORDER BY created_at DESC`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exits: %w", err)
@@ -401,7 +405,8 @@ func (r *FiscalRepositoryPG) ListExitsByStatus(ctx context.Context, status entit
 		        source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		        fiscal_coupon_date, fiscal_coupon_ecf_serial,
 		        dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
-		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code
+		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
+		        finalidade, nfe_referenciada, fiscal_entry_id, supplier_code
 		 FROM public.fiscal_exits WHERE status = $1 AND enterprise_id=$2 ORDER BY created_at DESC`, status, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exits by status: %w", err)
@@ -427,7 +432,8 @@ func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, sta
 		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		           fiscal_coupon_date, fiscal_coupon_ecf_serial,
 		           dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
-		           dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code`,
+		           dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
+		           finalidade, nfe_referenciada, fiscal_entry_id, supplier_code`,
 		status, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
@@ -438,11 +444,26 @@ func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, sta
 		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
 		&e.FiscalCouponDate, &e.FiscalCouponECFSerial,
 		&e.DestLogradouro, &e.DestNumero, &e.DestComplemento, &e.DestBairro, &e.DestMunicipio,
-		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode)
+		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode,
+		&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode)
 	if err != nil {
 		return nil, fmt.Errorf("updating fiscal exit status: %w", err)
 	}
 	return &e, nil
+}
+
+func (r *FiscalRepositoryPG) UpdateExitNumbering(ctx context.Context, id, numero int64, serie string) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx,
+		`UPDATE public.fiscal_exits SET numero_nf = $3, serie = COALESCE(NULLIF($4,''), serie), updated_at = NOW()
+		  WHERE id = $1 AND enterprise_id = $2`, id, enterpriseID, numero, strings.TrimSpace(serie))
+	if err != nil {
+		return fmt.Errorf("gravando o número autorizado da NF-e %d: %w", id, err)
+	}
+	return nil
 }
 
 func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef, xmlPath, danfePath string) (*entity.FiscalExit, error) {
@@ -467,7 +488,8 @@ func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int
 		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		           fiscal_coupon_date, fiscal_coupon_ecf_serial,
 		           dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
-		           dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code`,
+		           dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
+		           finalidade, nfe_referenciada, fiscal_entry_id, supplier_code`,
 		chaveAcesso, protocolo, focusRef, id, xmlPath, danfePath, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
@@ -478,7 +500,8 @@ func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int
 		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
 		&e.FiscalCouponDate, &e.FiscalCouponECFSerial,
 		&e.DestLogradouro, &e.DestNumero, &e.DestComplemento, &e.DestBairro, &e.DestMunicipio,
-		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode)
+		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode,
+		&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode)
 	if err != nil {
 		return nil, fmt.Errorf("updating fiscal exit authorization: %w", err)
 	}
@@ -500,6 +523,7 @@ func scanExits(rows pgx.Rows) ([]*entity.FiscalExit, error) {
 			&e.FiscalCouponDate, &e.FiscalCouponECFSerial,
 			&e.DestLogradouro, &e.DestNumero, &e.DestComplemento, &e.DestBairro, &e.DestMunicipio,
 			&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode,
+			&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit: %w", err)
 		}
@@ -518,7 +542,7 @@ func scanExitItems(rows pgx.Rows) ([]*entity.FiscalExitItem, error) {
 			&it.BaseIPI, &it.AliqIPI, &it.ValorIPI, &it.AliqPIS, &it.ValorPIS, &it.AliqCOFINS, &it.ValorCOFINS,
 			&it.CstICMS, &it.CstIPI, &it.CstPIS, &it.CstCOFINS, &it.OrigemMercadoria, &it.Description,
 			&it.BaseICMSST, &it.AliqICMSST, &it.ValorICMSST, &it.MVA,
-			&it.UnidadeComercial, &it.CodigoProduto, &it.CreatedAt,
+			&it.UnidadeComercial, &it.CodigoProduto, &it.CreatedAt, &it.SalesOrderItemCode, &it.FiscalEntryItemID,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit item: %w", err)
 		}
@@ -828,7 +852,8 @@ func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64,
 		           source_type, shipment_load_code, shipment_code, fiscal_coupon_number,
 		           fiscal_coupon_date, fiscal_coupon_ecf_serial,
 		           dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
-		           dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code`,
+		           dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
+		           finalidade, nfe_referenciada, fiscal_entry_id, supplier_code`,
 		motivo, userID, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
@@ -839,7 +864,8 @@ func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64,
 		&e.SourceType, &e.ShipmentLoadCode, &e.ShipmentCode, &e.FiscalCouponNumber,
 		&e.FiscalCouponDate, &e.FiscalCouponECFSerial,
 		&e.DestLogradouro, &e.DestNumero, &e.DestComplemento, &e.DestBairro, &e.DestMunicipio,
-		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode)
+		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode,
+		&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode)
 	if err != nil {
 		return nil, fmt.Errorf("cancelling fiscal exit with motivo: %w", err)
 	}
@@ -899,20 +925,25 @@ func (r *FiscalRepositoryPG) ListCartasCorrecao(ctx context.Context, fiscalExitI
 // ---------- CT-e ----------
 
 func (r *FiscalRepositoryPG) CreateCTe(ctx context.Context, c *entity.FiscalCTe) (*entity.FiscalCTe, error) {
-	err := r.pool.QueryRow(ctx,
+	// fiscal_cte não tinha empresa (migração 380): todas viam os CT-e de todas.
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO public.fiscal_cte
 		     (chave_acesso, numero_cte, serie, data_emissao, data_entrada,
 		      cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		      cfop, valor_frete, valor_seguro, valor_outros, valor_total,
 		      valor_icms, base_icms, aliq_icms, cst_icms, tipo_rateio,
-		      fiscal_entry_id, status, xml_path, notes, created_by, emission_data)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+		      fiscal_entry_id, status, xml_path, notes, created_by, emission_data, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
 		 RETURNING id, is_active, created_at, updated_at`,
 		c.ChaveAcesso, c.NumeroCTe, c.Serie, c.DataEmissao, c.DataEntrada,
 		c.CnpjEmitente, c.RazaoSocialEmitente, c.IEEmitente, c.UFEmitente,
 		c.Cfop, c.ValorFrete, c.ValorSeguro, c.ValorOutros, c.ValorTotal,
 		c.ValorICMS, c.BaseICMS, c.AliqICMS, c.CstICMS, c.TipoRateio,
-		c.FiscalEntryID, c.Status, c.XmlPath, c.Notes, c.CreatedBy, c.EmissionData,
+		c.FiscalEntryID, c.Status, c.XmlPath, c.Notes, c.CreatedBy, c.EmissionData, empresa,
 	).Scan(&c.ID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating CT-e: %w", err)
@@ -922,14 +953,18 @@ func (r *FiscalRepositoryPG) CreateCTe(ctx context.Context, c *entity.FiscalCTe)
 
 func (r *FiscalRepositoryPG) GetCTeByID(ctx context.Context, id int64) (*entity.FiscalCTe, error) {
 	var c entity.FiscalCTe
-	err := r.pool.QueryRow(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`SELECT id, chave_acesso, numero_cte, serie, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		        cfop, valor_frete, valor_seguro, valor_outros, valor_total,
 		        valor_icms, base_icms, aliq_icms, cst_icms, tipo_rateio,
 		        fiscal_entry_id, status, xml_path, notes, is_active, created_at, updated_at, created_by,
 		        focus_ref, protocolo, emission_data
-		 FROM public.fiscal_cte WHERE id = $1`, id,
+		 FROM public.fiscal_cte WHERE id = $1 AND enterprise_id = $2`, id, empresa,
 	).Scan(&c.ID, &c.ChaveAcesso, &c.NumeroCTe, &c.Serie, &c.DataEmissao, &c.DataEntrada,
 		&c.CnpjEmitente, &c.RazaoSocialEmitente, &c.IEEmitente, &c.UFEmitente,
 		&c.Cfop, &c.ValorFrete, &c.ValorSeguro, &c.ValorOutros, &c.ValorTotal,
@@ -946,6 +981,10 @@ func (r *FiscalRepositoryPG) GetCTeByID(ctx context.Context, id int64) (*entity.
 }
 
 func (r *FiscalRepositoryPG) ListCTe(ctx context.Context) ([]*entity.FiscalCTe, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, chave_acesso, numero_cte, serie, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
@@ -953,7 +992,7 @@ func (r *FiscalRepositoryPG) ListCTe(ctx context.Context) ([]*entity.FiscalCTe, 
 		        valor_icms, base_icms, aliq_icms, cst_icms, tipo_rateio,
 		        fiscal_entry_id, status, xml_path, notes, is_active, created_at, updated_at, created_by,
 		        focus_ref, protocolo, emission_data
-		 FROM public.fiscal_cte WHERE is_active = true ORDER BY data_emissao DESC`)
+		 FROM public.fiscal_cte WHERE is_active = true AND enterprise_id = $1 ORDER BY data_emissao DESC`, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing CT-e: %w", err)
 	}
@@ -975,8 +1014,12 @@ func (r *FiscalRepositoryPG) ListCTe(ctx context.Context) ([]*entity.FiscalCTe, 
 }
 
 func (r *FiscalRepositoryPG) UpdateCTeStatus(ctx context.Context, id int64, status string) (*entity.FiscalCTe, error) {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE public.fiscal_cte SET status = $1, updated_at = NOW() WHERE id = $2`, status, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, err = r.pool.Exec(ctx,
+		`UPDATE public.fiscal_cte SET status = $1, updated_at = NOW() WHERE id = $2 AND enterprise_id = $3`, status, id, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("updating CT-e status: %w", err)
 	}
@@ -984,10 +1027,14 @@ func (r *FiscalRepositoryPG) UpdateCTeStatus(ctx context.Context, id int64, stat
 }
 
 func (r *FiscalRepositoryPG) UpdateCTeAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef string) (*entity.FiscalCTe, error) {
-	_, err := r.pool.Exec(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, err = r.pool.Exec(ctx,
 		`UPDATE public.fiscal_cte SET chave_acesso = $1, protocolo = $2, focus_ref = $3,
-		     status = 'AUTORIZADO', updated_at = NOW() WHERE id = $4`,
-		chaveAcesso, protocolo, focusRef, id)
+		     status = 'AUTORIZADO', updated_at = NOW() WHERE id = $4 AND enterprise_id = $5`,
+		chaveAcesso, protocolo, focusRef, id, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("updating CT-e authorization: %w", err)
 	}
@@ -1082,4 +1129,12 @@ LIMIT 1`, remessaID, enterpriseID).Scan(&id)
 		return nil, fmt.Errorf("procurando rascunho de beneficiamento da remessa %d: %w", remessaID, err)
 	}
 	return r.GetExitByID(ctx, id)
+}
+
+// finalidadeOuVenda: nota sem finalidade é venda/normal (1).
+func finalidadeOuVenda(f int) int {
+	if f == 0 {
+		return 1
+	}
+	return f
 }

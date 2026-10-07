@@ -3,10 +3,15 @@
 package financial_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+
+	"github.com/FelipePn10/panossoerp/internal/application/security"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	financialrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/financial"
@@ -171,5 +176,32 @@ func TestIntegration_Adiantamento_CreateAndApplyToContaPagar(t *testing.T) {
 	}
 	if len(aps) != 1 {
 		t.Errorf("aplicacoes = %d, want 1", len(aps))
+	}
+
+	// O adiantamento é da empresa da conta bancária: outra empresa não o lê,
+	// não lista as aplicações nem o aplica.
+	var outra int64
+	if err := pool.QueryRow(context.Background(), `INSERT INTO enterprise(code,name) VALUES($1,'Outra') RETURNING id`, 1_600_000_000+testutil.UniqueCode()%90_000_000).Scan(&outra); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM enterprise WHERE id=$1`, outra) })
+	ctxOutra := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{ID: uuid.NewString(), Role: "ADMIN", EnterpriseID: outra, EnterpriseCode: outra})
+	if _, err := repo.GetAdiantamento(ctxOutra, adv.ID); err == nil {
+		t.Error("outra empresa leu o adiantamento")
+	}
+	if aps, err := repo.ListAplicacoesByAdiantamento(ctxOutra, adv.ID); err != nil || len(aps) != 0 {
+		t.Errorf("outra empresa listou %d aplicação(ões) (%v)", len(aps), err)
+	}
+	if lista, err := repo.ListAdiantamentos(ctxOutra, &tipo, nil); err != nil {
+		t.Fatal(err)
+	} else {
+		for _, a := range lista {
+			if a.ID == adv.ID {
+				t.Error("outra empresa listou o adiantamento")
+			}
+		}
+	}
+	if _, err := repo.AplicarAdiantamentoAtomico(ctxOutra, adv.ID, "PAGAR", cp.ID, decimal.NewFromInt(1), user, now); err == nil {
+		t.Error("outra empresa aplicou o adiantamento")
 	}
 }

@@ -2,19 +2,27 @@ package fiscal_uc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entrada"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	porepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
 )
 
 type CreateFiscalEntryUseCase struct {
-	Repo           repository.FiscalRepository
+	Repo repository.FiscalRepository
+	// Docs, quando presente, grava a nota completa numa transação (itens,
+	// parcelas e a distribuição por plano de contas).
+	Docs           repository.FiscalEntryDocumentRepository
 	Auth           ports.AuthService
 	PurchaseOrders porepo.PurchaseOrderRepository
 	Tolerances     ports.PurchaseToleranceEvaluator
@@ -35,8 +43,15 @@ func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.Cre
 		return nil, err
 	}
 
-	dataEmissao, _ := time.Parse("2006-01-02", dto.DataEmissao)
-	dataEntrada, _ := time.Parse("2006-01-02", dto.DataEntrada)
+	dataEmissao, err := time.Parse("2006-01-02", strings.TrimSpace(dto.DataEmissao))
+	if err != nil {
+		return nil, errorsuc.NewValidationError("data de emissão inválida: use AAAA-MM-DD")
+	}
+	dataEntrada, err := time.Parse("2006-01-02", strings.TrimSpace(dto.DataEntrada))
+	if err != nil {
+		dataEntrada = dataEmissao
+	}
+	dto.CnpjEmitente = soDigitos(dto.CnpjEmitente)
 
 	entry := &entity.FiscalEntry{
 		EnterpriseID:        enterpriseID,
@@ -70,6 +85,9 @@ func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.Cre
 	for _, itemDTO := range dto.Itens {
 		pendingItems = append(pendingItems, entryItemFromDTO(itemDTO))
 	}
+	if uc.Docs != nil {
+		return uc.criarDocumento(ctx, dto, entry, pendingItems)
+	}
 	entry.SupplierCode, entry.Warnings, err = validatePurchaseEntryTolerances(ctx, uc.PurchaseOrders, uc.Tolerances, dto.PurchaseOrderCode, pendingItems, dto.ValorProdutos)
 	if err != nil {
 		return nil, err
@@ -98,34 +116,169 @@ func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.Cre
 
 func entryItemFromDTO(itemDTO request.CreateFiscalEntryItemDTO) *entity.FiscalEntryItem {
 	return &entity.FiscalEntryItem{
-		Sequence:          itemDTO.Sequence,
-		ItemCode:          itemDTO.ItemCode,
-		SupplierItemCode:  itemDTO.SupplierItemCode,
-		UOM:               itemDTO.UOM,
-		Ncm:               itemDTO.Ncm,
-		Cfop:              itemDTO.Cfop,
-		Quantity:          itemDTO.Quantity,
-		UnitPrice:         itemDTO.UnitPrice,
-		TotalPrice:        itemDTO.TotalPrice,
-		BaseICMS:          itemDTO.BaseICMS,
-		AliqICMS:          itemDTO.AliqICMS,
-		ValorICMS:         itemDTO.ValorICMS,
-		BaseIPI:           itemDTO.BaseIPI,
-		AliqIPI:           itemDTO.AliqIPI,
-		ValorIPI:          itemDTO.ValorIPI,
-		ValorPIS:          itemDTO.ValorPIS,
-		ValorCOFINS:       itemDTO.ValorCOFINS,
-		CstICMS:           itemDTO.CstICMS,
-		CstIPI:            itemDTO.CstIPI,
-		CstPIS:            itemDTO.CstPIS,
-		CstCOFINS:         itemDTO.CstCOFINS,
-		GeraCreditoICMS:   itemDTO.GeraCreditoICMS,
-		GeraCreditoIPI:    itemDTO.GeraCreditoIPI,
-		GeraCreditoPIS:    itemDTO.GeraCreditoPIS,
-		GeraCreditoCOFINS: itemDTO.GeraCreditoCOFINS,
-		Description:       itemDTO.Description,
-		Notes:             itemDTO.Notes,
+		Sequence:              itemDTO.Sequence,
+		ItemCode:              itemDTO.ItemCode,
+		SupplierItemCode:      itemDTO.SupplierItemCode,
+		UOM:                   itemDTO.UOM,
+		Ncm:                   itemDTO.Ncm,
+		Cfop:                  itemDTO.Cfop,
+		Quantity:              itemDTO.Quantity,
+		UnitPrice:             itemDTO.UnitPrice,
+		TotalPrice:            itemDTO.TotalPrice,
+		BaseICMS:              itemDTO.BaseICMS,
+		AliqICMS:              itemDTO.AliqICMS,
+		ValorICMS:             itemDTO.ValorICMS,
+		BaseIPI:               itemDTO.BaseIPI,
+		AliqIPI:               itemDTO.AliqIPI,
+		ValorIPI:              itemDTO.ValorIPI,
+		ValorPIS:              itemDTO.ValorPIS,
+		ValorCOFINS:           itemDTO.ValorCOFINS,
+		CstICMS:               itemDTO.CstICMS,
+		CstIPI:                itemDTO.CstIPI,
+		CstPIS:                itemDTO.CstPIS,
+		CstCOFINS:             itemDTO.CstCOFINS,
+		GeraCreditoICMS:       itemDTO.GeraCreditoICMS,
+		GeraCreditoIPI:        itemDTO.GeraCreditoIPI,
+		GeraCreditoPIS:        itemDTO.GeraCreditoPIS,
+		GeraCreditoCOFINS:     itemDTO.GeraCreditoCOFINS,
+		Description:           itemDTO.Description,
+		Notes:                 itemDTO.Notes,
+		PlanoContasID:         itemDTO.PlanoContasID,
+		CentroCustoID:         itemDTO.CentroCustoID,
+		EntryOperationCode:    itemDTO.EntryOperationCode,
+		WarehouseID:           itemDTO.WarehouseID,
+		PurchaseOrderItemCode: itemDTO.PurchaseOrderItemCode,
+		MovimentaEstoque:      true,
+		GeraFinanceiro:        true,
 	}
+}
+
+// criarDocumento é o lançamento manual completo: fornecedor pelo cadastro (ou
+// pelo CNPJ), itens com plano de contas, parcelas e distribuição, tudo numa
+// transação.
+func (uc *CreateFiscalEntryUseCase) criarDocumento(ctx context.Context, dto request.CreateFiscalEntryDTO, entry *entity.FiscalEntry, itens []*entity.FiscalEntryItem) (*response.FiscalEntryResponse, error) {
+	if dto.SupplierCode != nil {
+		entry.SupplierCode = dto.SupplierCode
+	}
+	for _, v := range []decimal.Decimal{dto.ValorRetPIS, dto.ValorRetCOFINS, dto.ValorRetCSLL, dto.ValorIRRF, dto.ValorRetPrev, dto.ValorISSRet} {
+		if v.IsNegative() {
+			return nil, errorsuc.NewValidationError("retenção não pode ser negativa")
+		}
+	}
+	entry.EntryOperationCode = dto.EntryOperationCode
+	entry.ValorRetPIS, entry.ValorRetCOFINS, entry.ValorRetCSLL = dto.ValorRetPIS.Round(2), dto.ValorRetCOFINS.Round(2), dto.ValorRetCSLL.Round(2)
+	entry.ValorIRRF, entry.ValorRetPrev, entry.ValorISSRet = dto.ValorIRRF.Round(2), dto.ValorRetPrev.Round(2), dto.ValorISSRet.Round(2)
+	if entry.TotalRetencoes().GreaterThan(decimal.NewFromFloat(dto.ValorTotal)) {
+		return nil, errorsuc.NewValidationError("as retenções passam do total da nota")
+	}
+	entry.StockStatus = entity.StockStatusPendente
+	if entry.SupplierCode == nil && dto.PurchaseOrderCode != nil && uc.PurchaseOrders != nil {
+		po, err := uc.PurchaseOrders.GetByCode(ctx, *dto.PurchaseOrderCode)
+		if err != nil {
+			return nil, err
+		}
+		entry.SupplierCode = po.SupplierCode
+	}
+	var contaFornecedor *string
+	if f, err := uc.Docs.FindSupplierByDocument(ctx, dto.CnpjEmitente); err != nil {
+		return nil, err
+	} else if f != nil {
+		if entry.SupplierCode == nil {
+			code := f.Code
+			entry.SupplierCode = &code
+		}
+		contaFornecedor = f.FinancialAccount
+	}
+	if entry.ChaveAcesso != nil {
+		chave := soDigitos(*entry.ChaveAcesso)
+		entry.ChaveAcesso = strPtr(chave)
+		if chave != "" {
+			existente, err := uc.Docs.FindEntryByChave(ctx, chave)
+			if err != nil {
+				return nil, err
+			}
+			if existente != nil {
+				return nil, errorsuc.NewConflictError(fmt.Sprintf("a NF-e de chave %s já foi lançada como entrada %d", chave, existente.ID))
+			}
+		}
+	}
+
+	// Valor contábil do item: produto + IPI + a parte do frete/seguro/desconto
+	// do cabeçalho proporcional ao valor do item.
+	somaProdutos := decimal.Zero
+	for _, it := range itens {
+		somaProdutos = somaProdutos.Add(decimal.NewFromFloat(it.TotalPrice))
+	}
+	extras := decimal.NewFromFloat(dto.ValorFrete).Add(decimal.NewFromFloat(dto.ValorSeguro)).Sub(decimal.NewFromFloat(dto.ValorDesconto))
+	for i, it := range itens {
+		if it.Sequence <= 0 {
+			it.Sequence = i + 1
+		}
+		total := decimal.NewFromFloat(it.TotalPrice)
+		it.ValorContabil = total.Add(decimal.NewFromFloat(it.ValorIPI))
+		if somaProdutos.IsPositive() {
+			it.ValorContabil = it.ValorContabil.Add(extras.Mul(total).Div(somaProdutos))
+		}
+		if it.ItemCode != nil {
+			s := "MANUAL"
+			agora := time.Now()
+			it.ResolutionStrategy, it.ResolvedAt = &s, &agora
+			aplicarConversao(it, nil, nil)
+		}
+	}
+	entrada.AjustarValorContabil(itens, decimal.NewFromFloat(dto.ValorTotal))
+	if err := conciliacaoAutomatica(ctx, uc.Docs, entry.SupplierCode, itens); err != nil {
+		return nil, err
+	}
+	entry.Itens = itens
+	servico := &EntradaServico{Docs: uc.Docs, Fiscal: uc.Repo, Tolerancias: uc.Tolerances}
+	if err := servico.Preparar(ctx, entry); err != nil {
+		return nil, err
+	}
+	if err := sugerirPlanosDeContas(ctx, uc.Docs, contaFornecedor, itens); err != nil {
+		return nil, err
+	}
+
+	if len(dto.Parcelas) > 0 {
+		parcelas, err := parcelasDoDTO(dto.Parcelas)
+		if err != nil {
+			return nil, err
+		}
+		entry.Parcelas = parcelas
+	} else if _, aPagar, _, _ := entrada.PlanoFinanceiro(entry); aPagar.IsPositive() {
+		entry.Parcelas = []*entity.FiscalEntryInstallment{{
+			Numero:         1,
+			DataVencimento: entry.DataEmissao.AddDate(0, 0, 30),
+			Valor:          aPagar,
+			Origem:         entity.ParcelaOrigemPadrao,
+		}}
+	}
+	semDistribuicao := true
+	for _, p := range entry.Parcelas {
+		if len(p.Distribuicao) > 0 {
+			semDistribuicao = false
+		}
+	}
+	if semDistribuicao {
+		if err := Distribuir(entry); err != nil {
+			return nil, errorsuc.NewValidationError(err.Error())
+		}
+	}
+	status, err := servico.Status(ctx, entry)
+	if err != nil {
+		return nil, err
+	}
+	entry.Status = status
+
+	if _, err := uc.Docs.CreateEntryDocument(ctx, entry); err != nil {
+		return nil, err
+	}
+	doc, err := uc.Docs.GetEntryDocument(ctx, entry.ID)
+	if err != nil {
+		return nil, err
+	}
+	doc.Warnings = entry.Warnings
+	return servico.Responder(ctx, doc)
 }
 
 func resolveSupplierItems(ctx context.Context, resolver ports.ItemSupplierResolver, supplier *int64, items []*entity.FiscalEntryItem) error {

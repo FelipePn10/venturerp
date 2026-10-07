@@ -3,6 +3,7 @@ package financial_uc
 import (
 	"context"
 	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"strings"
 	"testing"
 	"time"
@@ -56,7 +57,7 @@ func (f *fakeFinRepo) GetContaPagar(context.Context, int64) (*entity.ContaPagar,
 	return f.cp, f.cpErr
 }
 
-func (f *fakeFinRepo) BaixarContaPagarAtomico(_ context.Context, _ int64, params repository.BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, _ int64) error {
+func (f *fakeFinRepo) BaixarContaPagarAtomico(_ context.Context, _ int64, params repository.BaixaParams, fc entity.FluxoCaixa, valorOriginal decimal.Decimal, _ int64, _ *contabilizacao.Lote) error {
 	f.baixaParams = &params
 	f.baixaFluxo = &fc
 	f.baixaValorOriginal = valorOriginal

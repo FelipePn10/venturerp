@@ -11,6 +11,7 @@ import (
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/reforma"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 )
@@ -194,19 +195,60 @@ func montarPayloadNFe(
 	if len(formas) == 0 {
 		formas = append(formas, focusnfe.NFEFormaPagamento{FormaPagamento: "01", Valor: exit.ValorTotal})
 	}
+	finalidade := exit.Finalidade
+	if finalidade == 0 {
+		finalidade = 1
+	}
+	var refs []focusnfe.NFERef
+	if exit.NFeReferenciada != nil && *exit.NFeReferenciada != "" {
+		refs = []focusnfe.NFERef{{ChaveNFe: *exit.NFeReferenciada}}
+	}
+	// Devolução não é cobrança: a SEFAZ exige "sem pagamento" (tPag 90).
+	if finalidade == 4 {
+		formas = []focusnfe.NFEFormaPagamento{{FormaPagamento: "90", Valor: 0}}
+		aPrazo = false
+	}
 	// Duplicata só existe em venda a prazo; à vista o grupo não vai.
 	if !aPrazo {
 		duplicatas = nil
 	}
 
+	itens := buildFocusItems(items, cfg)
+	ratearAcessoriasNFe(itens, exit)
+	if !regimeSimples(cfg) {
+		ano := exit.DataEmissao.Year()
+		for i := range itens {
+			it := &itens[i]
+			op := decimal.NewFromFloat(it.ValorBruto).Add(decimal.NewFromFloat(it.ValorFrete)).Add(decimal.NewFromFloat(it.ValorSeguro)).
+				Sub(decimal.NewFromFloat(it.ValorDesconto))
+			g, err := reforma.Calcular(ano, op, decimal.NewFromFloat(it.ValorICMS), decimal.NewFromFloat(it.ValorPIS), decimal.NewFromFloat(it.ValorCOFINS))
+			if err != nil {
+				continue // validarReformaNFe recusa a autorização antes de chegar aqui
+			}
+			it.IBSCBS = &focusnfe.NFEItemIBSCBS{CST: g.CST, ClassTrib: g.ClassTrib, Base: g.Base.InexactFloat64(),
+				AliqIBSUF: g.Aliq.IBSUF.InexactFloat64(), ValorIBSUF: g.IBSUF.InexactFloat64(), AliqIBSMun: g.Aliq.IBSMun.InexactFloat64(),
+				ValorIBSMun: g.IBSMun.InexactFloat64(), ValorIBS: g.IBS.InexactFloat64(), AliqCBS: g.Aliq.CBS.InexactFloat64(), ValorCBS: g.CBS.InexactFloat64()}
+		}
+	}
+	modFrete := 9
+	if exit.ValorFrete > 0 {
+		modFrete = 0 // por conta do emitente (CIF)
+	}
+
 	return focusnfe.NFEPayload{
+		ModalidadeFrete:   modFrete,
+		ValorProdutos:     exit.ValorProdutos,
+		ValorTotal:        exit.ValorTotal,
+		ValorFrete:        exit.ValorFrete,
+		ValorSeguro:       exit.ValorSeguro,
+		ValorDesc:         exit.ValorDesconto,
 		NaturezaOperacao:  exit.NaturezaOperacao,
-		DataEmissao:       exit.DataEmissao.Format("2006-01-02T15:04:05-03:00"),
+		DataEmissao:       dataHoraEmissao(exit.DataEmissao, time.Now()),
 		TipoDocumento:     1,
 		LocalDestino:      localDestino,
-		FinalidadeEmissao: 1,
+		FinalidadeEmissao: finalidade,
 		ConsumidorFinal:   consumidorFinal,
-		PresencaComprador: 4,
+		PresencaComprador: presencaComprador(finalidade),
 		Emitente: focusnfe.NFEEmitente{
 			CNPJ:             cfg.CnpjEmpresa,
 			Nome:             cfg.RazaoSocial,
@@ -232,8 +274,85 @@ func montarPayloadNFe(
 			IndicadorIE: indicadorIE,
 			IE:          exit.IEDestinatario,
 		},
-		Items:          buildFocusItems(items, cfg),
-		FormaPagamento: formas,
-		Duplicatas:     duplicatas,
+		Items:              itens,
+		FormaPagamento:     formas,
+		Duplicatas:         duplicatas,
+		NotasReferenciadas: refs,
 	}
+}
+
+// regimeSimples: optante do Simples Nacional ("1" no cadastro fiscal). No
+// Simples o grupo IBS/CBS não é exigido em 2026.
+func regimeSimples(cfg *entity.FiscalConfig) bool {
+	r := strings.ToLower(strings.TrimSpace(cfg.RegimeTributario))
+	return r == "1" || strings.Contains(r, "simples")
+}
+
+// validarReformaNFe recusa, antes da SEFAZ, a nota do regime normal num ano
+// sem alíquotas de IBS/CBS cadastradas (a SEFAZ rejeitaria pelo grupo).
+func validarReformaNFe(exit *entity.FiscalExit, cfg *entity.FiscalConfig) error {
+	if regimeSimples(cfg) {
+		return nil
+	}
+	_, err := reforma.AliquotasDoAno(exit.DataEmissao.Year())
+	return err
+}
+
+// ratearAcessoriasNFe distribui frete, seguro e desconto da nota pelos itens,
+// na proporção do valor de cada um: a SEFAZ confere o total da nota contra a
+// soma dos itens. A sobra de arredondamento fica no último item.
+func ratearAcessoriasNFe(itens []focusnfe.NFEItem, exit *entity.FiscalExit) {
+	if len(itens) == 0 {
+		return
+	}
+	total := decimal.Zero
+	for _, it := range itens {
+		total = total.Add(decimal.NewFromFloat(it.ValorBruto))
+	}
+	if !total.IsPositive() {
+		return
+	}
+	ratear := func(valor float64, set func(i int, v float64)) {
+		v := decimal.NewFromFloat(valor).Round(2)
+		if !v.IsPositive() {
+			return
+		}
+		resto := v
+		for i, it := range itens {
+			parte := v.Mul(decimal.NewFromFloat(it.ValorBruto)).Div(total).Round(2)
+			if i == len(itens)-1 {
+				parte = resto
+			}
+			resto = resto.Sub(parte)
+			set(i, parte.InexactFloat64())
+		}
+	}
+	ratear(exit.ValorFrete, func(i int, v float64) { itens[i].ValorFrete = v })
+	ratear(exit.ValorSeguro, func(i int, v float64) { itens[i].ValorSeguro = v })
+	ratear(exit.ValorDesconto, func(i int, v float64) { itens[i].ValorDesconto = v })
+}
+
+// dataHoraEmissao: a nota do dia sai com a hora da transmissão (a SEFAZ aceita
+// até 5 minutos à frente e o DANFE mostra a hora real); data passada vai com a
+// meia-noite daquele dia, no fuso de Brasília. O layout usa "-07:00" (o marcador
+// de fuso do Go): "-03:00" literal é lido como hora de 12h e saía "-12:00",
+// recusado pelo schema da SEFAZ.
+func dataHoraEmissao(data, agora time.Time) string {
+	brt := time.FixedZone("BRT", -3*60*60)
+	a := agora.In(brt)
+	if data.Year() == a.Year() && data.YearDay() == a.YearDay() {
+		return a.Format("2006-01-02T15:04:05-07:00")
+	}
+	return time.Date(data.Year(), data.Month(), data.Day(), 0, 0, 0, 0, brt).Format("2006-01-02T15:04:05-07:00")
+}
+
+// presencaComprador (indPres): 4 é exclusivo da NFC-e (entrega a domicílio) e
+// a SEFAZ rejeita na NF-e (794). Venda faturada pelo ERP é operação não
+// presencial (9); nota complementar, de ajuste ou de devolução não tem
+// comprador (0 — não se aplica).
+func presencaComprador(finalidade int) int {
+	if finalidade != 1 {
+		return 0
+	}
+	return 9
 }

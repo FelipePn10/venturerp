@@ -31,10 +31,11 @@ const createEntryOperationType = `-- name: CreateEntryOperationType :one
 
 INSERT INTO entry_operation_types (
     code, description, invoice_type_code, nature_operation,
-    classification_type, classification_code, state_group_code, supplier_type_code, created_by
+    classification_type, classification_code, state_group_code, supplier_type_code, created_by,
+    movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
 `
 
 type CreateEntryOperationTypeParams struct {
@@ -47,6 +48,11 @@ type CreateEntryOperationTypeParams struct {
 	StateGroupCode     *int64
 	SupplierTypeCode   *int64
 	CreatedBy          pgtype.UUID
+	MovimentaEstoque   bool
+	GeraFinanceiro     bool
+	CreditaIcms        bool
+	CreditaIpi         bool
+	CreditaPisCofins   bool
 }
 
 // ─── Entry Operation Types ────────────────────────────────────────────────────
@@ -61,6 +67,11 @@ func (q *Queries) CreateEntryOperationType(ctx context.Context, arg CreateEntryO
 		arg.StateGroupCode,
 		arg.SupplierTypeCode,
 		arg.CreatedBy,
+		arg.MovimentaEstoque,
+		arg.GeraFinanceiro,
+		arg.CreditaIcms,
+		arg.CreditaIpi,
+		arg.CreditaPisCofins,
 	)
 	var i EntryOperationType
 	err := row.Scan(
@@ -76,6 +87,11 @@ func (q *Queries) CreateEntryOperationType(ctx context.Context, arg CreateEntryO
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.MovimentaEstoque,
+		&i.GeraFinanceiro,
+		&i.CreditaIcms,
+		&i.CreditaIpi,
+		&i.CreditaPisCofins,
 	)
 	return i, err
 }
@@ -109,7 +125,7 @@ func (q *Queries) CreateStateGroup(ctx context.Context, arg CreateStateGroupPara
 }
 
 const getEntryOperationTypeByCode = `-- name: GetEntryOperationTypeByCode :one
-SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by FROM entry_operation_types WHERE code = $1
+SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins FROM entry_operation_types WHERE code = $1
 `
 
 func (q *Queries) GetEntryOperationTypeByCode(ctx context.Context, code int64) (EntryOperationType, error) {
@@ -128,6 +144,11 @@ func (q *Queries) GetEntryOperationTypeByCode(ctx context.Context, code int64) (
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.MovimentaEstoque,
+		&i.GeraFinanceiro,
+		&i.CreditaIcms,
+		&i.CreditaIpi,
+		&i.CreditaPisCofins,
 	)
 	return i, err
 }
@@ -151,7 +172,7 @@ func (q *Queries) GetStateGroupByCode(ctx context.Context, code int64) (StateGro
 }
 
 const listEntryOperationTypes = `-- name: ListEntryOperationTypes :many
-SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by FROM entry_operation_types
+SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins FROM entry_operation_types
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
@@ -178,6 +199,11 @@ func (q *Queries) ListEntryOperationTypes(ctx context.Context, dollar_1 bool) ([
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.MovimentaEstoque,
+			&i.GeraFinanceiro,
+			&i.CreditaIcms,
+			&i.CreditaIpi,
+			&i.CreditaPisCofins,
 		); err != nil {
 			return nil, err
 		}
@@ -288,9 +314,11 @@ const updateEntryOperationType = `-- name: UpdateEntryOperationType :one
 UPDATE entry_operation_types SET
     description = $2, invoice_type_code = $3, nature_operation = $4,
     classification_type = $5, classification_code = $6, state_group_code = $7,
-    supplier_type_code = $8, is_active = $9
+    supplier_type_code = $8, is_active = $9,
+    movimenta_estoque = $10, gera_financeiro = $11, credita_icms = $12,
+    credita_ipi = $13, credita_pis_cofins = $14
 WHERE code = $1
-RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by
+RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
 `
 
 type UpdateEntryOperationTypeParams struct {
@@ -303,6 +331,11 @@ type UpdateEntryOperationTypeParams struct {
 	StateGroupCode     *int64
 	SupplierTypeCode   *int64
 	IsActive           bool
+	MovimentaEstoque   bool
+	GeraFinanceiro     bool
+	CreditaIcms        bool
+	CreditaIpi         bool
+	CreditaPisCofins   bool
 }
 
 func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryOperationTypeParams) (EntryOperationType, error) {
@@ -316,6 +349,11 @@ func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryO
 		arg.StateGroupCode,
 		arg.SupplierTypeCode,
 		arg.IsActive,
+		arg.MovimentaEstoque,
+		arg.GeraFinanceiro,
+		arg.CreditaIcms,
+		arg.CreditaIpi,
+		arg.CreditaPisCofins,
 	)
 	var i EntryOperationType
 	err := row.Scan(
@@ -331,6 +369,11 @@ func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryO
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.MovimentaEstoque,
+		&i.GeraFinanceiro,
+		&i.CreditaIcms,
+		&i.CreditaIpi,
+		&i.CreditaPisCofins,
 	)
 	return i, err
 }
