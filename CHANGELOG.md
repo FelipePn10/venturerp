@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.5.1] — 2026-10-07
+
+- feat(compras): pedido de compra por empresa, com documento e acompanhamento (`0136247`)
+- test(itens): resolução por empresa cria as próprias empresas (`f7696cb`)
+
 - fix(entrada de NF-e): relacionar a linha da nota a um item cadastrado dava "o
   item não existe" quando o código do item na tela era diferente do código
   interno. A tela passa a enviar o código do item como ele aparece no cadastro
