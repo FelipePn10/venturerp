@@ -25,6 +25,8 @@ var itemReferenceKeys = map[string]struct{}{
 	"material_item_code": {}, "band_item_code": {}, "scrap_item_code": {}, "service_item_code": {},
 	"reference_item_code": {}, "order_item_code": {}, "packaging_item_code": {}, "substituted_item_code": {},
 	"item_base_cod": {}, "item_codes": {}, "item_from": {}, "item_to": {},
+	// Matriz de setup do APS (VMAQ0200): transição de um item para outro.
+	"from_item_code": {}, "to_item_code": {},
 }
 
 func isItemReferenceKey(r *http.Request, key string) bool {

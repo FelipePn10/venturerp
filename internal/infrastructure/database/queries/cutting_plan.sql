@@ -1,7 +1,7 @@
 -- ─── cutting_plans ────────────────────────────────────────────────────────────
 
 -- name: NextCuttingPlanCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM cutting_plans
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM cutting_plans
 WHERE enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: CreateCuttingPlan :one

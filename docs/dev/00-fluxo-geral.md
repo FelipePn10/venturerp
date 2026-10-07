@@ -152,9 +152,12 @@ As ordens planejadas são **sugestões** que precisam de decisão humana.
 Fluxo implementado (ver `manufatura-e-compras.md` §13 e supplier):
 - Listar: `GET /api/purchase-order/suggestions`
 - **Aprovar:** `POST /api/purchase-order/suggestions/{code}/approve`
-  → gera **Pedido de Compra** (`origin = MRP`, `APPROVED`, firme) com o fornecedor
+  → gera **Pedido de Compra** (`origin = MRP`, firme) com o fornecedor
   escolhido (ou o **preferencial** do item) e os defaults do fornecedor (condição de
   pagamento, tabela de preço, tipo de NF, frete); torna a ordem planejada firme.
+  O pedido nasce em rascunho e passa **pela alçada** na hora: dentro do limite sai
+  `APPROVED`; acima, fica `REQUESTED` aguardando "Autorizar alçada". A linha sem
+  almoxarifado na ordem planejada recebe o almoxarifado de suprimentos do item.
 - **Rejeitar:** `POST /api/purchase-order/suggestions/{code}/reject`.
 
 Caminhos alternativos de compra:
@@ -190,7 +193,15 @@ Dois caminhos para firmar, dependendo de onde a sugestão está:
 
 ## Etapa 6 — Compra → Recebimento no almoxarifado
 
-1. **Pedido de Compra** enviado ao fornecedor (`/api/purchase-order`).
+1. **Pedido de Compra** enviado ao fornecedor (`/api/purchase-order`). Regras:
+   - nasce em `DRAFT` (o corpo não escolhe a situação); capa e linhas só mudam em
+     `DRAFT`/`REQUESTED` — alterar um pedido parado na alçada o devolve a rascunho;
+   - os totais saem das linhas (`entity.CalcularTotais`): mercadoria − desconto +
+     IPI + frete quando FOB. É esse valor que a alçada avalia;
+   - linha sem almoxarifado usa o almoxarifado de suprimentos do cadastro do item;
+   - `PUT /{code}/items/{lineCode}` altera a linha; `POST /{code}/items/{lineCode}/cancel`
+     remove a linha (rascunho) ou **elimina o saldo** (aprovado; motivo obrigatório);
+   - pedido com recebimento não se cancela inteiro — elimina-se o saldo das linhas.
 2. **Recebimento físico por linha do pedido:** `POST /api/purchase-order/{code}/receipts`
    registra a chegada no almoxarifado por `purchase_order_item_code`, grava lote/série/
    validade/depósito, gera movimento `IN` no estoque e atualiza o saldo recebido do

@@ -17,7 +17,7 @@ ORDER BY code DESC;
 
 -- name: NextPurchaseRequisitionCode :one
 -- Numeração por empresa, mesmo motivo da cotação.
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_requisitions
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM purchase_requisitions
 WHERE enterprise_code = sqlc.arg(enterprise_code);
 
 -- name: UpdatePurchaseRequisitionStatus :execrows

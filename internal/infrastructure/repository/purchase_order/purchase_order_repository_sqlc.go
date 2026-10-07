@@ -54,6 +54,9 @@ func (r *PurchaseOrderRepositorySQLC) CreateWithItems(ctx context.Context, o *en
 	}
 	defer tx.Rollback(ctx)
 
+	// Os totais da capa saem das linhas: quem gera o pedido (requisição,
+	// cotação, sugestão do MRP) não precisa — nem deve — somá-los.
+	o.AplicarTotais(entity.CalcularTotais(o, items))
 	created, err := insertOrder(ctx, tx, o)
 	if err != nil {
 		return nil, err
@@ -147,28 +150,46 @@ func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.Purc
 	if o.DeliveryDate != nil {
 		deliveryDate = pgtype.Date{Time: *o.DeliveryDate, Valid: true}
 	}
+	freightType := o.FreightType
+	if freightType == "" {
+		freightType = "SEM_FRETE"
+	}
+	alcada := o.AlcadaStatus
+	if alcada == "" {
+		alcada = "N"
+	}
+	emission := o.EmissionDate
+	if emission.IsZero() {
+		emission = time.Now()
+	}
 
+	// Grava a capa INTEIRA. A versão anterior só regravava parte dela e
+	// RETORNAVA menos colunas ainda: o frete, a transportadora e — o que mais
+	// doía — a situação de alçada nunca eram gravados, e a autorização de
+	// alçada não encontrava pedido bloqueado.
 	var row purchaseOrderRow
 	err = r.db.QueryRow(ctx,
 		`UPDATE public.purchase_orders SET
 			status = $2, origin = $3, delivery_date = $4, supplier_code = $5,
 			payment_term_code = $6, currency_code = $7, shipping_address_code = $8,
 			notes = $9, total_gross = $10, total_net = $11, total_discount = $12,
-			is_firm = $13, updated_at = NOW()
+			is_firm = $13, emission_date = $15,
+			price_table_code = $16, invoice_type_code = $17, financial_account = $18, request_type_code = $19, currency_date = $20,
+			freight_type = $21, freight_value_type = $22, freight_value_mode = $23, freight_value = $24, carrier_code = $25,
+			redispatch_carrier_code = $26, redispatch_freight_type = $27, redispatch_freight_value = $28,
+			advance_date = $29, advance_value = $30, incoterm_code = $31, shipment_date = $32, talao_number = $33,
+			alcada_status = $34, updated_at = NOW()
 		WHERE code = $1 AND enterprise_code = $14 AND is_active = true
-		RETURNING code, order_number, enterprise_code, status, origin, emission_date,
-			delivery_date, supplier_code, payment_term_code, currency_code,
-			shipping_address_code, notes, total_gross, total_net, total_discount,
-			is_active, is_firm, created_at, updated_at, created_by`,
+		RETURNING `+orderColumns,
 		o.Code, string(o.Status), string(o.Origin), deliveryDate, o.SupplierCode,
 		o.PaymentTermCode, o.CurrencyCode, o.ShippingAddressCode,
-		o.Notes, o.TotalGross, o.TotalNet, o.TotalDiscount, o.IsFirm, enterpriseCode,
-	).Scan(
-		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
-		&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
-		&row.ShippingAddressCode, &row.Notes, &row.TotalGross, &row.TotalNet, &row.TotalDiscount,
-		&row.IsActive, &row.IsFirm, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy,
-	)
+		o.Notes, o.TotalGross, o.TotalNet, o.TotalDiscount, o.IsFirm, enterpriseCode, emission,
+		o.PriceTableCode, o.InvoiceTypeCode, pgutil.ToPgTextFromPtr(o.FinancialAccount), o.RequestTypeCode, pgutil.ToPgDateFromPtr(o.CurrencyDate),
+		freightType, pgutil.ToPgTextFromPtr(o.FreightValueType), pgutil.ToPgTextFromPtr(o.FreightValueMode), o.FreightValue, o.CarrierCode,
+		o.RedispatchCarrierCode, pgutil.ToPgTextFromPtr(o.RedispatchFreightType), o.RedispatchFreightValue,
+		pgutil.ToPgDateFromPtr(o.AdvanceDate), o.AdvanceValue, pgutil.ToPgTextFromPtr(o.IncotermCode), pgutil.ToPgDateFromPtr(o.ShipmentDate), pgutil.ToPgTextFromPtr(o.TalaoNumber),
+		alcada,
+	).Scan(row.dest()...)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("pedido de compra %d não encontrado ou inativo", o.Code))
@@ -178,6 +199,29 @@ func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.Purc
 	result := rowToEntity(row)
 	r.resolveResponsibleUser(ctx, result)
 	return result, nil
+}
+
+// orderColumns é a capa completa, na ordem de purchaseOrderRow.dest.
+const orderColumns = `code, order_number, enterprise_code, status, origin, emission_date,
+			delivery_date, supplier_code, payment_term_code, currency_code,
+			shipping_address_code, notes, total_gross, total_net, total_discount,
+			is_active, is_firm, created_at, updated_at, created_by,
+			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
+			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
+			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status`
+
+func (row *purchaseOrderRow) dest() []any {
+	return []any{
+		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
+		&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
+		&row.ShippingAddressCode, &row.Notes, &row.TotalGross, &row.TotalNet, &row.TotalDiscount,
+		&row.IsActive, &row.IsFirm, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy,
+		&row.PriceTableCode, &row.InvoiceTypeCode, &row.FinancialAccount, &row.RequestTypeCode, &row.CurrencyDate,
+		&row.FreightType, &row.FreightValueType, &row.FreightValueMode, &row.FreightValue, &row.CarrierCode,
+		&row.RedispatchCarrierCode, &row.RedispatchFreightType, &row.RedispatchFreightValue,
+		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus,
+	}
 }
 
 func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64) (*entity.PurchaseOrder, error) {
@@ -223,10 +267,7 @@ func (r *PurchaseOrderRepositorySQLC) List(ctx context.Context) ([]*entity.Purch
 		return nil, err
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
-			delivery_date, supplier_code, payment_term_code, currency_code,
-			shipping_address_code, notes, total_gross, total_net, total_discount,
-			is_active, is_firm, created_at, updated_at, created_by
+		`SELECT `+orderColumns+`
 		FROM public.purchase_orders WHERE enterprise_code = $1 AND is_active = true ORDER BY code DESC`, enterpriseCode)
 	if err != nil {
 		return nil, fmt.Errorf("listing purchase orders: %w", err)
@@ -236,12 +277,7 @@ func (r *PurchaseOrderRepositorySQLC) List(ctx context.Context) ([]*entity.Purch
 	var result []*entity.PurchaseOrder
 	for rows.Next() {
 		var row purchaseOrderRow
-		if err := rows.Scan(
-			&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
-			&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
-			&row.ShippingAddressCode, &row.Notes, &row.TotalGross, &row.TotalNet, &row.TotalDiscount,
-			&row.IsActive, &row.IsFirm, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy,
-		); err != nil {
+		if err := rows.Scan(row.dest()...); err != nil {
 			return nil, fmt.Errorf("scanning purchase order: %w", err)
 		}
 		order := rowToEntity(row)
@@ -256,7 +292,12 @@ func (r *PurchaseOrderRepositorySQLC) Cancel(ctx context.Context, code int64) er
 	if err != nil {
 		return err
 	}
-	tag, err := r.db.Exec(ctx,
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin cancel tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx,
 		`UPDATE public.purchase_orders SET status = 'CANCELLED', is_active = false, updated_at = NOW()
 		 WHERE code = $1 AND enterprise_code = $2`, code, enterpriseCode)
 	if err != nil {
@@ -265,7 +306,38 @@ func (r *PurchaseOrderRepositorySQLC) Cancel(ctx context.Context, code int64) er
 	if tag.RowsAffected() == 0 {
 		return pgx.ErrNoRows
 	}
-	return nil
+	// As linhas caem junto. Sem isto uma nota de entrada ainda ligada a uma
+	// linha "aberta" do pedido cancelado dava baixa nela ao ser aprovada e
+	// ressuscitava o pedido como recebido em parte.
+	if _, err := tx.Exec(ctx,
+		`UPDATE public.purchase_order_items SET status = 'CANCELLED', updated_at = NOW()
+		 WHERE purchase_order_code = $1 AND status <> 'CANCELLED'`, code); err != nil {
+		return fmt.Errorf("cancelling purchase order %d lines: %w", code, err)
+	}
+	return tx.Commit(ctx)
+}
+
+// AlmoxarifadoPadraoDoItem é o almoxarifado de suprimentos do cadastro do
+// item (ou, sem ele, o de estoque). Itens são da convenção enterprise_id.
+func (r *PurchaseOrderRepositorySQLC) AlmoxarifadoPadraoDoItem(ctx context.Context, itemCode int64) (*int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var id *int64
+	err = r.db.QueryRow(ctx,
+		`SELECT COALESCE(it.supplies_warehouse_code, it.warehouse_code)
+		   FROM items it
+		  WHERE it.enterprise_id = $1 AND it.code = $2
+		    AND EXISTS (SELECT 1 FROM warehouse w WHERE w.id = COALESCE(it.supplies_warehouse_code, it.warehouse_code) AND w.enterprise_id = $1)`,
+		enterpriseID, itemCode).Scan(&id)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("almoxarifado padrão do item %d: %w", itemCode, err)
+	}
+	return id, nil
 }
 
 func (r *PurchaseOrderRepositorySQLC) ListBySupplier(ctx context.Context, supplierCode int64) ([]*entity.PurchaseOrder, error) {
@@ -274,10 +346,7 @@ func (r *PurchaseOrderRepositorySQLC) ListBySupplier(ctx context.Context, suppli
 		return nil, err
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
-			delivery_date, supplier_code, payment_term_code, currency_code,
-			shipping_address_code, notes, total_gross, total_net, total_discount,
-			is_active, is_firm, created_at, updated_at, created_by
+		`SELECT `+orderColumns+`
 		FROM public.purchase_orders WHERE supplier_code = $1 AND enterprise_code = $2 AND is_active = true ORDER BY code DESC`,
 		supplierCode, enterpriseCode)
 	if err != nil {
@@ -288,12 +357,7 @@ func (r *PurchaseOrderRepositorySQLC) ListBySupplier(ctx context.Context, suppli
 	var result []*entity.PurchaseOrder
 	for rows.Next() {
 		var row purchaseOrderRow
-		if err := rows.Scan(
-			&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
-			&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
-			&row.ShippingAddressCode, &row.Notes, &row.TotalGross, &row.TotalNet, &row.TotalDiscount,
-			&row.IsActive, &row.IsFirm, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy,
-		); err != nil {
+		if err := rows.Scan(row.dest()...); err != nil {
 			return nil, fmt.Errorf("scanning purchase order: %w", err)
 		}
 		order := rowToEntity(row)
@@ -309,10 +373,7 @@ func (r *PurchaseOrderRepositorySQLC) ListByStatus(ctx context.Context, status e
 		return nil, err
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT code, order_number, enterprise_code, status, origin, emission_date,
-			delivery_date, supplier_code, payment_term_code, currency_code,
-			shipping_address_code, notes, total_gross, total_net, total_discount,
-			is_active, is_firm, created_at, updated_at, created_by
+		`SELECT `+orderColumns+`
 		FROM public.purchase_orders WHERE status = $1 AND enterprise_code = $2 AND is_active = true ORDER BY code DESC`,
 		string(status), enterpriseCode)
 	if err != nil {
@@ -323,12 +384,7 @@ func (r *PurchaseOrderRepositorySQLC) ListByStatus(ctx context.Context, status e
 	var result []*entity.PurchaseOrder
 	for rows.Next() {
 		var row purchaseOrderRow
-		if err := rows.Scan(
-			&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
-			&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
-			&row.ShippingAddressCode, &row.Notes, &row.TotalGross, &row.TotalNet, &row.TotalDiscount,
-			&row.IsActive, &row.IsFirm, &row.CreatedAt, &row.UpdatedAt, &row.CreatedBy,
-		); err != nil {
+		if err := rows.Scan(row.dest()...); err != nil {
 			return nil, fmt.Errorf("scanning purchase order: %w", err)
 		}
 		order := rowToEntity(row)
@@ -376,16 +432,7 @@ func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
 			$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
 			$33,$34,$35,$36,$37,$38,$39,$40)
-		RETURNING code, purchase_order_code, sequence, item_code, mask,
-			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
-			discount_pct, ipi_pct, icms_pct, status, delivery_date, notes,
-			is_active, created_at, updated_at,
-			icms_st_pct, promised_date, purchase_uom, internal_uom, internal_qty, internal_price,
-			tolerance_pct, cancelled_tolerance_qty, operation_type_code, invoice_type_code,
-			accounting_account, cost_center_code, requester_employee_code, contract_code,
-			quotation_code, utilization_type, fiscal_classification_code,
-			warehouse_id, planned_order_code, demand_type, demand_code, sales_order_code,
-			production_order_id, purchase_requisition_code, purchase_requisition_item_id`,
+		RETURNING `+itemColumns,
 		item.PurchaseOrderCode, item.Sequence, item.ItemCode, item.Mask,
 		item.RequestedQty, item.ReceivedQty, item.CancelledQty,
 		item.UnitPrice, item.TotalPrice, item.DiscountPct,
@@ -396,19 +443,7 @@ func insertItem(ctx context.Context, q pgQuerier, item *entity.PurchaseOrderItem
 		item.QuotationCode, pgutil.ToPgTextFromPtr(item.UtilizationType), item.FiscalClassificationCode,
 		item.WarehouseID, item.PlannedOrderCode, pgutil.ToPgTextFromPtr(item.DemandType), item.DemandCode, item.SalesOrderCode,
 		item.ProductionOrderID, item.PurchaseRequisitionCode, item.PurchaseRequisitionItemID,
-	).Scan(
-		&result.Code, &result.PurchaseOrderCode, &result.Sequence, &result.ItemCode, &result.Mask,
-		&result.RequestedQty, &result.ReceivedQty, &result.CancelledQty,
-		&result.UnitPrice, &result.TotalPrice, &result.DiscountPct,
-		&result.IPIPct, &result.ICMSPct, &result.Status, &result.DeliveryDate,
-		&result.Notes, &result.IsActive, &result.CreatedAt, &result.UpdatedAt,
-		&result.ICMSSTPct, &result.PromisedDate, &result.PurchaseUOM, &result.InternalUOM, &result.InternalQty, &result.InternalPrice,
-		&result.TolerancePct, &result.CancelledToleranceQty, &result.OperationTypeCode, &result.InvoiceTypeCode,
-		&result.AccountingAccount, &result.CostCenterCode, &result.RequesterEmployeeCode, &result.ContractCode,
-		&result.QuotationCode, &result.UtilizationType, &result.FiscalClassificationCode,
-		&result.WarehouseID, &result.PlannedOrderCode, &result.DemandType, &result.DemandCode, &result.SalesOrderCode,
-		&result.ProductionOrderID, &result.PurchaseRequisitionCode, &result.PurchaseRequisitionItemID,
-	)
+	).Scan(result.dest()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating purchase order item: %w", err)
 	}
@@ -436,24 +471,23 @@ func (r *PurchaseOrderRepositorySQLC) UpdateItem(ctx context.Context, item *enti
 			sequence = $2, item_code = $3, mask = $4, requested_qty = $5,
 			received_qty = $6, cancelled_qty = $7, unit_price = $8, total_price = $9,
 			discount_pct = $10, ipi_pct = $11, icms_pct = $12, status = $13,
-			delivery_date = $14, notes = $15, updated_at = NOW()
+			delivery_date = $14, notes = $15,
+			icms_st_pct = $17, promised_date = $18, purchase_uom = $19, internal_qty = $20, internal_price = $21,
+			tolerance_pct = $22, invoice_type_code = $23, cost_center_code = $24, requester_employee_code = $25,
+			utilization_type = $26, fiscal_classification_code = $27, warehouse_id = $28,
+			is_active = $29, updated_at = NOW()
 		WHERE code = $1 AND is_active = true
 		  AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code=purchase_order_items.purchase_order_code AND po.enterprise_code=$16)
-		RETURNING code, purchase_order_code, sequence, item_code, mask,
-			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
-			discount_pct, ipi_pct, icms_pct, status, delivery_date, notes,
-			is_active, created_at, updated_at`,
+		RETURNING `+itemColumns,
 		item.Code, item.Sequence, item.ItemCode, item.Mask,
 		item.RequestedQty, item.ReceivedQty, item.CancelledQty,
 		item.UnitPrice, item.TotalPrice, item.DiscountPct,
 		item.IPIPct, item.ICMSPct, string(item.Status), deliveryDate, notes, enterpriseCode,
-	).Scan(
-		&result.Code, &result.PurchaseOrderCode, &result.Sequence, &result.ItemCode, &result.Mask,
-		&result.RequestedQty, &result.ReceivedQty, &result.CancelledQty,
-		&result.UnitPrice, &result.TotalPrice, &result.DiscountPct,
-		&result.IPIPct, &result.ICMSPct, &result.Status, &result.DeliveryDate,
-		&result.Notes, &result.IsActive, &result.CreatedAt, &result.UpdatedAt,
-	)
+		item.ICMSSTPct, pgutil.ToPgDateFromPtr(item.PromisedDate), pgutil.ToPgTextFromPtr(item.PurchaseUOM), item.InternalQty, item.InternalPrice,
+		item.TolerancePct, item.InvoiceTypeCode, item.CostCenterCode, item.RequesterEmployeeCode,
+		pgutil.ToPgTextFromPtr(item.UtilizationType), item.FiscalClassificationCode, item.WarehouseID,
+		item.IsActive,
+	).Scan(result.dest()...)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d do pedido de compra não encontrado", item.Code))
@@ -463,13 +497,8 @@ func (r *PurchaseOrderRepositorySQLC) UpdateItem(ctx context.Context, item *enti
 	return rowItemToEntity(result), nil
 }
 
-func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrderCode int64) ([]*entity.PurchaseOrderItem, error) {
-	enterpriseCode, err := tenant.Code(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := r.db.Query(ctx,
-		`SELECT code, purchase_order_code, sequence, item_code, mask,
+// itemColumns é a linha completa, na ordem de purchaseOrderItemRow.dest.
+const itemColumns = `code, purchase_order_code, sequence, item_code, mask,
 			requested_qty, received_qty, cancelled_qty, unit_price, total_price,
 			discount_pct, ipi_pct, icms_pct, status, delivery_date, notes,
 			is_active, created_at, updated_at,
@@ -478,7 +507,31 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 			accounting_account, cost_center_code, requester_employee_code, contract_code,
 			quotation_code, utilization_type, fiscal_classification_code,
 			warehouse_id, planned_order_code, demand_type, demand_code, sales_order_code,
-			production_order_id, purchase_requisition_code, purchase_requisition_item_id
+			production_order_id, purchase_requisition_code, purchase_requisition_item_id, invoiced_qty`
+
+func (row *purchaseOrderItemRow) dest() []any {
+	return []any{
+		&row.Code, &row.PurchaseOrderCode, &row.Sequence, &row.ItemCode, &row.Mask,
+		&row.RequestedQty, &row.ReceivedQty, &row.CancelledQty,
+		&row.UnitPrice, &row.TotalPrice, &row.DiscountPct,
+		&row.IPIPct, &row.ICMSPct, &row.Status, &row.DeliveryDate,
+		&row.Notes, &row.IsActive, &row.CreatedAt, &row.UpdatedAt,
+		&row.ICMSSTPct, &row.PromisedDate, &row.PurchaseUOM, &row.InternalUOM, &row.InternalQty, &row.InternalPrice,
+		&row.TolerancePct, &row.CancelledToleranceQty, &row.OperationTypeCode, &row.InvoiceTypeCode,
+		&row.AccountingAccount, &row.CostCenterCode, &row.RequesterEmployeeCode, &row.ContractCode,
+		&row.QuotationCode, &row.UtilizationType, &row.FiscalClassificationCode,
+		&row.WarehouseID, &row.PlannedOrderCode, &row.DemandType, &row.DemandCode, &row.SalesOrderCode,
+		&row.ProductionOrderID, &row.PurchaseRequisitionCode, &row.PurchaseRequisitionItemID, &row.InvoicedQty,
+	}
+}
+
+func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrderCode int64) ([]*entity.PurchaseOrderItem, error) {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx,
+		`SELECT `+itemColumns+`
 		FROM public.purchase_order_items
 		WHERE purchase_order_code = $1 AND is_active = true
 		  AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code=purchase_order_items.purchase_order_code AND po.enterprise_code=$2)
@@ -491,19 +544,7 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 	var result []*entity.PurchaseOrderItem
 	for rows.Next() {
 		var row purchaseOrderItemRow
-		if err := rows.Scan(
-			&row.Code, &row.PurchaseOrderCode, &row.Sequence, &row.ItemCode, &row.Mask,
-			&row.RequestedQty, &row.ReceivedQty, &row.CancelledQty,
-			&row.UnitPrice, &row.TotalPrice, &row.DiscountPct,
-			&row.IPIPct, &row.ICMSPct, &row.Status, &row.DeliveryDate,
-			&row.Notes, &row.IsActive, &row.CreatedAt, &row.UpdatedAt,
-			&row.ICMSSTPct, &row.PromisedDate, &row.PurchaseUOM, &row.InternalUOM, &row.InternalQty, &row.InternalPrice,
-			&row.TolerancePct, &row.CancelledToleranceQty, &row.OperationTypeCode, &row.InvoiceTypeCode,
-			&row.AccountingAccount, &row.CostCenterCode, &row.RequesterEmployeeCode, &row.ContractCode,
-			&row.QuotationCode, &row.UtilizationType, &row.FiscalClassificationCode,
-			&row.WarehouseID, &row.PlannedOrderCode, &row.DemandType, &row.DemandCode, &row.SalesOrderCode,
-			&row.ProductionOrderID, &row.PurchaseRequisitionCode, &row.PurchaseRequisitionItemID,
-		); err != nil {
+		if err := rows.Scan(row.dest()...); err != nil {
 			return nil, fmt.Errorf("scanning purchase order item: %w", err)
 		}
 		result = append(result, rowItemToEntity(row))
@@ -551,6 +592,19 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 		return 0, fmt.Errorf("begin receipt tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	// Guarda da invariante "só pedido aprovado recebe", com a capa travada.
+	var situacao string
+	if err := tx.QueryRow(ctx, `SELECT status FROM purchase_orders WHERE code=$1 AND enterprise_code=$2 FOR UPDATE`,
+		purchaseOrderCode, enterpriseCode).Scan(&situacao); err != nil {
+		if err == pgx.ErrNoRows {
+			return 0, errorsuc.NewNotFoundError(fmt.Sprintf("pedido de compra %d não encontrado", purchaseOrderCode))
+		}
+		return 0, fmt.Errorf("travando pedido de compra: %w", err)
+	}
+	if err := entity.SituacaoAceitaRecebimento(purchaseOrderCode, entity.PurchaseOrderStatus(situacao)); err != nil {
+		return 0, errorsuc.NewValidationError(err.Error())
+	}
 
 	rows, err := tx.Query(ctx,
 		`SELECT code, item_code, requested_qty, received_qty, cancelled_qty
@@ -753,6 +807,7 @@ type purchaseOrderItemRow struct {
 	ProductionOrderID         *int64
 	PurchaseRequisitionCode   *int64
 	PurchaseRequisitionItemID *int64
+	InvoicedQty               float64
 }
 
 func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {
@@ -872,6 +927,7 @@ func rowItemToEntity(row purchaseOrderItemRow) *entity.PurchaseOrderItem {
 	item.ProductionOrderID = row.ProductionOrderID
 	item.PurchaseRequisitionCode = row.PurchaseRequisitionCode
 	item.PurchaseRequisitionItemID = row.PurchaseRequisitionItemID
+	item.InvoicedQty = row.InvoicedQty
 
 	return item
 }

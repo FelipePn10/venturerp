@@ -268,14 +268,14 @@ func (q *Queries) ListPurchaseRequisitions(ctx context.Context, arg ListPurchase
 }
 
 const nextPurchaseRequisitionCode = `-- name: NextPurchaseRequisitionCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_requisitions
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM purchase_requisitions
 WHERE enterprise_code = $1
 `
 
 // Numeração por empresa, mesmo motivo da cotação.
-func (q *Queries) NextPurchaseRequisitionCode(ctx context.Context, enterpriseCode int64) (int32, error) {
+func (q *Queries) NextPurchaseRequisitionCode(ctx context.Context, enterpriseCode int64) (int64, error) {
 	row := q.db.QueryRow(ctx, nextPurchaseRequisitionCode, enterpriseCode)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }

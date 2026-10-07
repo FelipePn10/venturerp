@@ -98,16 +98,18 @@ type PurchaseOrderItem struct {
 	RequestedQty      float64
 	ReceivedQty       float64
 	CancelledQty      float64
-	UnitPrice         float64
-	TotalPrice        float64
-	DiscountPct       float64
-	IPIPct            float64
-	ICMSPct           float64
-	ICMSSTPct         float64
-	Status            PurchaseOrderItemStatus
-	DeliveryDate      *time.Time
-	PromisedDate      *time.Time
-	Notes             *string
+	// InvoicedQty é o que já chegou com nota (e virou título a pagar).
+	InvoicedQty  float64
+	UnitPrice    float64
+	TotalPrice   float64
+	DiscountPct  float64
+	IPIPct       float64
+	ICMSPct      float64
+	ICMSSTPct    float64
+	Status       PurchaseOrderItemStatus
+	DeliveryDate *time.Time
+	PromisedDate *time.Time
+	Notes        *string
 	// UM / conversão (compra ↔ estoque)
 	PurchaseUOM   *string
 	InternalUOM   *string

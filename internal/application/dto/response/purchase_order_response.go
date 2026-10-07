@@ -70,6 +70,7 @@ type PurchaseOrderItemResponse struct {
 	RequestedQty      float64    `json:"requested_qty"`
 	ReceivedQty       float64    `json:"received_qty"`
 	CancelledQty      float64    `json:"cancelled_qty"`
+	InvoicedQty       float64    `json:"invoiced_qty"`
 	UnitPrice         float64    `json:"unit_price"`
 	TotalPrice        float64    `json:"total_price"`
 	DiscountPct       float64    `json:"discount_pct"`

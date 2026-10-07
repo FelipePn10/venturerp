@@ -34,7 +34,7 @@ func (h *PurchaseSuggestionHandler) List(w http.ResponseWriter, r *http.Request)
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, purchase_order_uc.ParaSugestoes(result))
 }
 
 func (h *PurchaseSuggestionHandler) Approve(w http.ResponseWriter, r *http.Request) {
@@ -51,10 +51,10 @@ func (h *PurchaseSuggestionHandler) Approve(w http.ResponseWriter, r *http.Reque
 	dto.PlannedOrderCode = code
 	result, err := h.approveUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusCreated, result)
+	security.RespondJSON(w, http.StatusCreated, purchase_order_uc.ParaPedidoResponse(result))
 }
 
 func (h *PurchaseSuggestionHandler) Reject(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +65,7 @@ func (h *PurchaseSuggestionHandler) Reject(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.rejectUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

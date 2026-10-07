@@ -1,0 +1,462 @@
+<!-- Fonte do PDF novidades-fiscal-financeiro.pdf — reconstruir com: python3 gerar.py novidades-fiscal-financeiro -->
+<div class="capa">
+  <div class="capa-faixa">
+    <div class="capa-marca">VentureERP · Capacitação Operacional</div>
+    <h1>O que mudou<br>no Fiscal e no Financeiro</h1>
+    <p class="capa-sub">Compras, fretes, devoluções, notas de venda, financeiro, contabilidade e SPED — versão 1.5.0</p>
+  </div>
+  <div class="capa-corpo">
+    <table class="capa-meta">
+      <tr><td>Público</td><td>Equipe Tecnofer — Compras, Recebimento, Fiscal, Financeiro e Contabilidade</td></tr>
+      <tr><td>Versão do sistema</td><td>1.5.0 (aplicativo e servidor)</td></tr>
+      <tr><td>Pré-requisito</td><td>Treinamento do Dia 2 — Fiscal, financeiro, custos e contabilidade</td></tr>
+      <tr><td>Formato</td><td>Material de consulta: cada tela que mudou, como funciona agora e o passo a passo</td></tr>
+      <tr><td>Data</td><td>____ / ____ / ________</td></tr>
+      <tr><td>Responsável</td><td>______________________________________________</td></tr>
+    </table>
+    <div class="capa-nota">
+      <b>Para que serve este material.</b> Ele não repete o Dia 2: mostra apenas o que <b>mudou</b> —
+      telas novas, botões novos e rotinas que passaram a ser feitas pelo sistema. A ideia é que cada
+      pessoa leia a parte da sua área e saiba, no dia seguinte, o que fazer diferente.
+      <br><br>
+      <b>Em uma frase:</b> a nota de compra, o frete, a devolução, a nota de venda, o pagamento, o
+      recebimento, a contabilidade e o arquivo do SPED agora fazem parte de um <b>mesmo fluxo</b> — o que
+      é lançado numa ponta aparece sozinho nas outras, sem digitar duas vezes.
+    </div>
+  </div>
+  <div class="capa-rodape">
+    Complemento do Treinamento Prático — Dia 2.
+    Documento de uso interno — não distribuir.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1 class="sem-quebra">Visão geral</h1>
+
+<h2>O caminho de uma compra, do fornecedor ao SPED</h2>
+<p>Antes, cada etapa era feita numa tela, por uma pessoa, e conferida à mão na seguinte. Agora o
+sistema leva a informação adiante sozinho:</p>
+
+<div class="fluxo">
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Nota do fornecedor</span><span class="c">chega pela Receita ou pelo arquivo</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx destaque"><span class="t">Conferência</span><span class="c">itens, contas e parcelas</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Aprovação</span><span class="c">estoque, contas a pagar e contabilidade</span></div>
+  </div>
+  <div class="fluxo-linha">
+    <div class="fluxo-cx"><span class="t">Frete da transportadora</span><span class="c">entra no custo do produto</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx"><span class="t">Pagamento</span><span class="c">baixa e contabiliza</span></div>
+    <div class="fluxo-seta">→</div>
+    <div class="fluxo-cx destaque"><span class="t">SPED Fiscal</span><span class="c">arquivo do mês montado</span></div>
+  </div>
+</div>
+
+<h2>O que mudou, por área</h2>
+<table class="dados">
+  <tr><th>Área</th><th>O que mudou</th><th>Onde</th></tr>
+  <tr><td><b>Compras e recebimento</b></td><td>Nota de compra conferida item a item, com sugestão do item certo; fornecedor e item novos cadastrados a partir da própria nota; parcelas separadas por plano de contas</td><td><span class="tela">VFIS0210</span></td></tr>
+  <tr><td><b>Compras e recebimento</b></td><td>Notas que fornecedores emitem para a Tecnofer chegam sozinhas, com aviso de prazo</td><td><span class="tela">VFIS0210</span> — aba <i>Recebidas na SEFAZ</i></td></tr>
+  <tr><td><b>Compras e custos</b></td><td>Frete da transportadora lançado e distribuído no custo dos produtos comprados</td><td><span class="tela">VFIS0210</span> — aba <i>Fretes (CT-e)</i></td></tr>
+  <tr><td><b>Compras e fiscal</b></td><td>Devolução ao fornecedor feita a partir da nota de compra</td><td><span class="tela">VFIS0210</span> e <span class="tela">VFIS0200</span></td></tr>
+  <tr><td><b>Fiscal (vendas)</b></td><td>Nota de venda ajustada ao padrão atual da Receita (reforma tributária); nota recusada pode ser corrigida e reenviada</td><td><span class="tela">VFIS0200</span></td></tr>
+  <tr><td><b>Financeiro</b></td><td>Desconto na hora de pagar ou receber; saldo do título mostra o que realmente falta; crédito a receber de fornecedor</td><td><span class="tela">VFIN0200</span> e <span class="tela">VFIN0210</span></td></tr>
+  <tr><td><b>Contabilidade</b></td><td>Pagamentos, recebimentos e vendas geram os lançamentos sozinhos</td><td><span class="tela">VCTB0200</span></td></tr>
+  <tr><td><b>Fiscal (apuração)</b></td><td>Arquivo do SPED Fiscal montado a partir das notas, com inventário quando precisar</td><td><span class="tela">VFIS0600</span></td></tr>
+</table>
+
+<div class="dica">
+  <b>Dica — como ler este material</b>
+  Cada capítulo traz: <b>como era</b>, <b>como ficou</b>, o <b>passo a passo</b> e os <b>cuidados</b>.
+  Quem é do recebimento lê os capítulos 1 a 4; o fiscal, 1 a 5 e 8; o financeiro, 6; a contabilidade, 7 e 8.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>1. Nota fiscal de compra <span class="tela">VFIS0210</span></h1>
+
+<p class="porque"><b>Como era:</b> a nota era digitada ou importada, mas a conferência com o cadastro, o
+plano de contas e as parcelas ficavam por conta de quem lançava, e o contas a pagar saía com uma
+parcela só. <b>Como ficou:</b> o sistema lê a nota inteira, compara cada item com o cadastro, aponta o que
+falta e só deixa aprovar quando tudo fecha.</p>
+
+<h2>1.1 Trazer a nota para o sistema</h2>
+<p>Há três caminhos, e todos chegam no mesmo lugar — a nota aberta para conferência:</p>
+<table class="campos">
+  <tr><td><b>Arquivo XML</b></td><td>Botão <span class="btn">Arquivo(s) XML…</span> ou arraste os arquivos para a tela</td><td class="obs">Pode enviar várias notas de uma vez. O PDF (DANFE) não serve: precisa ser o XML.</td></tr>
+  <tr><td><b>Pela chave</b></td><td>Botão <span class="btn">Pela chave</span> e digite os 44 números</td><td class="obs">O sistema baixa a nota da Receita.</td></tr>
+  <tr><td><b>Recebidas na SEFAZ</b></td><td>Aba <i>Recebidas na SEFAZ</i> → <span class="btn">Importar</span></td><td class="obs">Veja o capítulo 2.</td></tr>
+</table>
+
+<div class="atencao">
+  <b>A mesma nota não entra duas vezes</b>
+  Se duas pessoas tentarem importar a mesma nota ao mesmo tempo, só uma consegue; a outra recebe a
+  mensagem de que a nota está sendo importada por outro usuário. Nota já importada também é recusada,
+  com o número da entrada existente.
+</div>
+
+<h2>1.2 Conferir a nota — aba <i>Itens e conciliação</i></h2>
+<p>Cada linha da nota precisa estar ligada a um item do cadastro da Tecnofer. O sistema já tenta
+fazer isso sozinho (pelo código que o fornecedor usa, pelo código de barras ou pelo histórico de
+compras). O que não encontrar fica destacado.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Item que o sistema não reconheceu</div>
+  <table class="campos">
+    <tr><td>Botão <span class="btn">Sugestões</span></td><td>mostra os itens parecidos do cadastro, com o motivo da sugestão</td><td class="obs">Clique <span class="btn">Usar</span> no item certo.</td></tr>
+    <tr><td>Campo <i>Item do cadastro</i></td><td>procure pelo nome ou código e escolha</td><td></td></tr>
+    <tr><td><i>Memorizar vínculo</i></td><td>marque para que as próximas notas do mesmo fornecedor já venham conciliadas</td><td class="obs">Vale a pena sempre que o item for comprado de novo.</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Item que ainda não existe no cadastro — <b>novo</b></div>
+  <p>Em <span class="btn">Sugestões</span>, clique <span class="btn">Cadastrar este item a partir da nota</span>:</p>
+  <table class="campos">
+    <tr><td>Nome</td><td>já vem com a descrição da nota</td><td class="obs">Ajuste se quiser o nome do jeito da Tecnofer.</td></tr>
+    <tr><td>Unidade de estoque</td><td>já vem traduzida da nota (KG, UN, CX…)</td><td class="obs">Se a unidade da nota não existir no cadastro, escolha a certa.</td></tr>
+    <tr><td>Almoxarifado</td><td>onde o item vai ficar guardado</td><td></td></tr>
+    <tr><td>Uso</td><td>Industrialização, Uso e consumo ou Imobilizado</td><td class="obs">O sistema sugere pelo tipo da compra.</td></tr>
+  </table>
+  <p>Clique <span class="btn">Cadastrar e conciliar</span>: o item é criado e a linha já fica ligada a ele.
+  Depois, a engenharia completa o restante do cadastro do item (grupo, classificação fiscal) na
+  tela de itens.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Fornecedor que não está cadastrado — <b>novo</b></div>
+  <p>No topo da nota, o quadro <i>Fornecedor no cadastro</i> mostra <b>não cadastrado</b>. Clique
+  <span class="btn">Cadastrar da nota</span>: o fornecedor é criado com CNPJ, razão social, nome
+  fantasia, inscrição estadual e endereço que vieram na própria nota, e todas as notas desse
+  fornecedor que estiverem esperando passam a ser dele.</p>
+  <p class="pequeno mudo">Se preferir cadastrar pela tela de fornecedores, tudo bem: ao abrir a nota de
+  novo, ela se liga sozinha ao fornecedor pelo CNPJ.</p>
+</div>
+
+<div class="atencao">
+  <b>Atenção — sem fornecedor, a nota não é aprovada</b>
+  Antes a nota podia ser aprovada sem fornecedor, e a conta a pagar nascia sem dono. Agora isso
+  <b>impede a aprovação</b>. Fornecedor <b>bloqueado</b> ou <b>inativo</b> também impede — desbloqueie ou
+  reative na tela de fornecedores antes de aprovar.
+</div>
+
+<h2>1.3 Plano de contas e parcelas — aba <i>Parcelas e plano de contas</i></h2>
+<p>Cada item recebe o <b>plano de contas</b> (matéria-prima, uso e consumo, serviço…). As parcelas que
+vieram no XML aparecem prontas, e o sistema divide cada parcela entre os planos na mesma proporção
+dos itens. Se a nota tem 50 mil de matéria-prima e 50 mil de EPI em três parcelas, cada parcela leva
+metade em cada plano.</p>
+<ul class="check">
+  <li>Use <span class="btn">Aplicar</span> para dar o mesmo plano a todos os itens de uma vez</li>
+  <li>Use <span class="btn">Distribuir proporcionalmente</span> se mudar algum plano depois</li>
+  <li>Se a nota tem imposto retido (IR, INSS, ISS…), o fornecedor recebe o valor líquido e o sistema cria os títulos do imposto a recolher</li>
+</ul>
+
+<h2>1.4 Conferência fiscal e pedido</h2>
+<p>A aba <i>Conferência fiscal e pedido</i> compara a nota com as tabelas fiscais e com o pedido de
+compra: preço acima do combinado, quantidade a mais, imposto diferente do esperado. O que passa da
+tolerância cadastrada em compras <b>impede</b> a aprovação; o resto aparece só como atenção.</p>
+
+<h2>1.5 Aprovar — o que acontece sozinho</h2>
+<p>Com tudo verde, clique <span class="btn">Aprovar e gerar contas a pagar</span>. Numa única operação o sistema:</p>
+<table class="dados">
+  <tr><th>O quê</th><th>Onde aparece</th></tr>
+  <tr><td>Dá entrada no estoque (descontando o que o pedido já tinha recebido)</td><td>Estoque</td></tr>
+  <tr><td>Cria uma conta a pagar por parcela, já dividida por plano de contas</td><td><span class="tela">VFIN0200</span></td></tr>
+  <tr><td>Cria os títulos dos impostos retidos</td><td><span class="tela">VFIN0200</span></td></tr>
+  <tr><td>Baixa o saldo do pedido de compra</td><td>Pedido de compra</td></tr>
+  <tr><td>Faz os lançamentos contábeis (se a contabilidade automática estiver ligada)</td><td><span class="tela">VCTB0200</span></td></tr>
+</table>
+
+<h2>1.6 Cancelar uma nota de compra</h2>
+<p>O botão <span class="btn">Cancelar nota</span> desfaz tudo o que a aprovação fez — estoque, títulos,
+pedido e contabilidade —, com motivo de pelo menos 10 caracteres. O sistema recusa quando:</p>
+<ul class="check">
+  <li>algum título da nota já foi pago</li>
+  <li>o material já foi consumido (aí o caminho é a <b>devolução</b>, capítulo 4)</li>
+  <li><b>novo:</b> a nota tem um frete lançado ou uma devolução — cancele primeiro o frete ou a devolução</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>2. Notas recebidas na SEFAZ <span class="tela">VFIS0210</span></h1>
+
+<p class="porque"><b>Como era:</b> a Tecnofer só sabia de uma nota quando o fornecedor mandava o arquivo.
+<b>Como ficou:</b> o sistema consulta a Receita e traz todas as notas emitidas contra o CNPJ da Tecnofer —
+inclusive as que ninguém mandou.</p>
+
+<h2>2.1 Busca automática</h2>
+<p>Na aba <i>Recebidas na SEFAZ</i>, ligue a <b>busca automática</b>: a Receita passa a ser consultada
+<b>a cada hora</b>, sem ninguém clicar. A tela mostra quando foi a última consulta e, se der algum erro,
+a mensagem. Também dá para buscar na hora com <span class="btn">Buscar</span>.</p>
+
+<h2>2.2 Manifestar e importar</h2>
+<table class="campos">
+  <tr><td><span class="btn">Manifestar</span></td><td>Ciência, Confirmação, Desconhecimento ou Operação não realizada</td><td class="obs">Desconhecimento e Não realizada pedem justificativa de pelo menos 15 caracteres.</td></tr>
+  <tr><td><span class="btn">Importar</span></td><td>traz a nota para a conferência do capítulo 1</td><td class="obs">Se ainda não houver manifestação, o sistema registra a ciência sozinho (a Receita só libera o arquivo completo depois dela).</td></tr>
+  <tr><td><span class="btn">Abrir entrada</span></td><td>abre a nota de compra já importada</td><td></td></tr>
+</table>
+
+<div class="atencao">
+  <b>Prazo de 180 dias</b>
+  A Receita dá <b>180 dias</b> a partir da emissão para confirmar ou recusar uma nota. A tela mostra o
+  prazo de cada uma e um <b>alerta vermelho</b> no nome da aba quando há notas vencendo em até 30 dias ou
+  já vencidas. Nota de mercadoria que não chegou deve ser recusada (Desconhecimento ou Não realizada)
+  dentro do prazo.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>3. Frete sobre compras <span class="tela">VFIS0210</span> — aba <i>Fretes (CT-e)</i></h1>
+
+<p class="porque"><b>Como era:</b> o frete pago à transportadora não entrava no custo do material
+comprado. <b>Como ficou:</b> o conhecimento de transporte (CT-e) é lançado, ligado às notas que ele
+transportou, e o valor do frete é distribuído entre os itens — o custo do estoque fica correto.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Lançar o CT-e</div>
+  <table class="campos">
+    <tr><td>Vencimento do título</td><td>quando a transportadora será paga</td><td></td></tr>
+    <tr><td>Rateio entre os itens</td><td>pelo valor, pela quantidade ou pelo peso</td><td class="obs">Em geral, pelo valor.</td></tr>
+    <tr><td><span class="btn">Importar XML do CT-e…</span></td><td>lê o arquivo da transportadora</td><td class="obs">As notas citadas no CT-e já vêm ligadas, se estiverem aprovadas.</td></tr>
+    <tr><td><span class="btn">+ CT-e manual</span></td><td>quando não há o arquivo</td><td class="obs">Informe número, transportadora, valor, ICMS e ligue as notas.</td></tr>
+  </table>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Conferir e lançar</div>
+  <p>Confira se a Tecnofer <b>aproveita o crédito de ICMS</b> do frete — sem crédito, o imposto vai para o
+  custo. O campo <i>Vai ao custo</i> mostra o valor que será distribuído. Clique <span class="btn">Lançar frete</span>:</p>
+  <ul class="check">
+    <li>a parte do frete dos produtos que <b>ainda estão no estoque</b> aumenta o custo médio deles</li>
+    <li>a parte dos produtos <b>já consumidos</b> vai para despesa</li>
+    <li>é criada a conta a pagar da transportadora</li>
+    <li>a contabilidade é lançada</li>
+  </ul>
+  <p>Depois de lançado, o frete mostra o rateio item a item.</p>
+</div>
+
+<div class="dica">
+  <b>Cancelar um frete</b>
+  Abra o CT-e, informe o motivo (pelo menos 10 caracteres) e clique <span class="btn">Cancelar CT-e</span>:
+  o custo do estoque, o título e a contabilidade voltam ao que eram. Só não é possível se o título da
+  transportadora já foi pago.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>4. Devolução ao fornecedor</h1>
+
+<p class="porque"><b>Como era:</b> a devolução era uma nota de saída digitada à mão, sem ligação com a
+compra; estoque e contas a pagar eram acertados por fora. <b>Como ficou:</b> ela nasce da própria nota de
+compra e acerta tudo sozinha quando é autorizada.</p>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Criar a devolução — <span class="tela">VFIS0210</span></div>
+  <p>Abra a nota de compra <b>aprovada</b> e clique <span class="btn">Devolver ao fornecedor</span>. A tela mostra,
+  para cada item, quanto foi comprado, quanto já foi devolvido e quanto ainda pode voltar.</p>
+  <table class="campos">
+    <tr><td>Devolver</td><td>a quantidade de cada item que vai voltar</td><td class="obs">Ou <span class="btn">Devolver tudo o que resta</span>.</td></tr>
+    <tr><td>Endereço do fornecedor</td><td>vem da nota de compra</td><td class="obs">Se a nota não trouxe bairro, CEP ou código do município, a tela pede para completar.</td></tr>
+  </table>
+  <p>Clique <span class="btn">Criar NF-e de devolução</span>. A nota é criada como rascunho, já com a
+  natureza de devolução e a nota de compra referenciada.</p>
+</div>
+
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Autorizar</div>
+  <p>Clique <span class="btn">Autorizar na SEFAZ</span> na própria tela, ou depois em <span class="tela">VFIS0200</span>,
+  onde ela aparece com a etiqueta <b>Devolução</b>. Assim que a Receita autoriza:</p>
+  <ul class="check">
+    <li>a mercadoria sai do estoque pelo custo médio</li>
+    <li>o valor devolvido é abatido das contas a pagar <b>ainda em aberto</b> daquela nota</li>
+    <li>se a nota já estava paga (ou o valor passar do que falta pagar), a diferença vira um <b>crédito a receber do fornecedor</b>, que aparece em <span class="tela">VFIN0210</span> com a etiqueta <b>Fornecedor</b></li>
+    <li>a contabilidade é lançada</li>
+  </ul>
+</div>
+
+<div class="atencao">
+  <b>Cuidados</b>
+  A devolução é sempre para quem vendeu: o sistema confere que o destinatário é o mesmo emitente da
+  nota de compra. Cancelar a devolução (em <span class="tela">VFIS0200</span>) desfaz estoque, títulos e
+  contabilidade — enquanto o crédito do fornecedor ainda não foi recebido.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>5. Nota fiscal de venda <span class="tela">VFIS0200</span></h1>
+
+<p class="porque"><b>O que mudou:</b> a comunicação com a Receita foi refeita e conferida no ambiente de
+testes da Receita — venda, devolução e cancelamento autorizados. A rotina na tela continua a mesma
+(Prévia → Autorizar), com três diferenças.</p>
+
+<h2>5.1 Reforma tributária</h2>
+<p>Desde 2026 a Receita exige, em cada item da nota, as informações dos novos impostos (IBS e CBS).
+Em 2026 eles são apenas <b>informativos</b>: aparecem na nota com as alíquotas de teste, mas <b>não são
+cobrados</b>. O sistema preenche sozinho; não há nada para digitar.</p>
+
+<h2>5.2 Nota recusada pela Receita — <b>novo: Reenviar</b></h2>
+<p>Quando a Receita recusa uma nota (cadastro do cliente incompleto, inscrição estadual errada…), ela
+fica <b>Rejeitada</b>. Antes não havia como tentar de novo. Agora:</p>
+<ol>
+  <li>Clique <span class="btn">Status</span> e leia o motivo da recusa</li>
+  <li>Corrija a causa (normalmente no cadastro do cliente ou nos dados da nota)</li>
+  <li>Confira na <span class="btn">Prévia</span> e clique <span class="btn">Reenviar</span></li>
+</ol>
+<p class="pequeno mudo">O número definitivo da nota é o que a Receita autoriza; ele aparece na lista depois da autorização.</p>
+
+<h2>5.3 Cancelamento</h2>
+<p>A justificativa precisa ter <b>de 15 a 255 caracteres</b>. Se a Receita recusar o cancelamento (por
+exemplo, fora do prazo), a nota <b>continua autorizada</b> no sistema e a mensagem da Receita aparece
+na tela — nada é desfeito por engano. Cancelando uma venda, o estoque volta e a contabilidade é estornada.</p>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>6. Financeiro <span class="tela">VFIN0200</span> e <span class="tela">VFIN0210</span></h1>
+
+<h2>6.1 Desconto na hora de pagar ou receber</h2>
+<p>A baixa (<span class="btn">Pagar</span> em Contas a Pagar, <span class="btn">Baixar</span> em Contas a
+Receber) ganhou o campo de desconto:</p>
+<table class="campos">
+  <tr><td>Desconto obtido</td><td>Contas a Pagar</td><td class="obs">O fornecedor abateu da dívida; não sai do caixa.</td></tr>
+  <tr><td>Desconto concedido</td><td>Contas a Receber</td><td class="obs">Abate o que o cliente deve; não entra no caixa.</td></tr>
+</table>
+<p><b>Exemplo:</b> título de R$ 33.333,33, o fornecedor dá R$ 100,00 de desconto. Informe <i>Valor pago</i>
+R$ 33.233,33 e <i>Desconto</i> R$ 100,00 — o título fica quitado.</p>
+
+<div class="dica">
+  <b>Saldo do título</b>
+  O saldo mostrado agora desconta o que já foi pago, os descontos já dados e os adiantamentos
+  abatidos. O sistema não deixa baixar mais do que o saldo.
+</div>
+
+<h2>6.2 Juros e multa</h2>
+<p>Em pagamento parcial atrasado, juros e multa passam a ser calculados <b>só sobre o valor que está
+sendo pago</b> — antes eram cobrados sobre o saldo inteiro a cada parcela paga.</p>
+
+<h2>6.3 Crédito a receber de fornecedor</h2>
+<p>Em <span class="tela">VFIN0210</span>, títulos com a etiqueta <b>Fornecedor</b> são créditos que nasceram de
+uma devolução. Recebem-se como qualquer título (o fornecedor deposita ou abate de uma compra futura).</p>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>7. Contabilidade automática <span class="tela">VCTB0200</span></h1>
+
+<p class="porque"><b>Como era:</b> só a aprovação da nota de compra gerava lançamento contábil. <b>Como
+ficou:</b> pagamentos, recebimentos e notas de venda também — e cada cancelamento lança o estorno.</p>
+
+<h2>7.1 Configurar uma vez — aba <i>Contabilização automática</i></h2>
+<p>Esta parte é para a <b>contabilidade</b>. Escolha o plano contábil e marque o que deve ser
+contabilizado sozinho:</p>
+<table class="dados">
+  <tr><th>Interruptor</th><th>O que lança</th></tr>
+  <tr><td>Aprovação da NF de entrada (e frete)</td><td>Custo/estoque contra Fornecedores, créditos de imposto, retenções</td></tr>
+  <tr><td>Pagamento de fornecedor e recolhimento de retenções</td><td>Fornecedores contra Banco; juros e multa em despesa; desconto obtido em receita</td></tr>
+  <tr><td>Recebimento de cliente</td><td>Banco contra Clientes; juros recebidos; desconto concedido</td></tr>
+  <tr><td>NF-e de saída</td><td>Clientes contra Receita; impostos sobre a venda; custo da mercadoria vendida contra Estoque</td></tr>
+</table>
+<p>Para cada interruptor, preencha as contas do grupo correspondente (o sistema avisa quais faltam).
+No fim da aba há duas tabelas de ligação:</p>
+<ul class="check">
+  <li><b>Plano de contas financeiro × conta contábil</b> — para onde vai cada tipo de compra</li>
+  <li><b>Conta bancária × conta contábil — novo</b> — cada banco com a sua conta; sem ligação, vale o banco padrão</li>
+</ul>
+
+<div class="atencao">
+  <b>Atenção</b>
+  Os lançamentos são feitos no momento da operação, não no fim do mês. Ligue cada interruptor só
+  depois que a contabilidade conferir as contas do grupo.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>8. SPED Fiscal <span class="tela">VFIS0600</span></h1>
+
+<p class="porque"><b>Como era:</b> a tela pedia que os dados fossem colados num formulário técnico.
+<b>Como ficou:</b> o arquivo do mês é montado com as notas que já estão no sistema.</p>
+
+<h2>8.1 O que entra no arquivo</h2>
+<ul class="check">
+  <li>Notas de compra aprovadas, pela data de entrada — com o crédito de ICMS que a Tecnofer realmente aproveita</li>
+  <li>Notas de venda autorizadas e as canceladas do mês</li>
+  <li>Fretes (CT-e) lançados</li>
+  <li>A apuração do ICMS e do IPI do mês, com o valor a recolher ou o saldo credor para o mês seguinte</li>
+  <li>Os ajustes da apuração lançados em <span class="tela">VFIS0560</span> (Notas Especiais de Ajuste)</li>
+  <li>O inventário do estoque, quando pedido</li>
+</ul>
+
+<h2>8.2 Passo a passo</h2>
+<div class="passo">
+  <div class="passo-tit"><span class="n">1</span>Preencher</div>
+  <table class="campos">
+    <tr><td>Competência</td><td>mês e ano (já vem com o mês anterior)</td><td></td></tr>
+    <tr><td>Finalidade, Perfil, Atividade</td><td>conforme a contabilidade</td><td class="obs">O sistema lembra para os próximos meses.</td></tr>
+    <tr><td>Contabilista</td><td>nome e CPF (obrigatórios), CRC</td><td class="obs">Também ficam lembrados.</td></tr>
+    <tr><td>Saldo credor anterior</td><td>o saldo a transportar do arquivo do mês passado</td><td></td></tr>
+    <tr><td>Código de receita do ICMS</td><td>código da guia do Paraná</td><td class="obs">Obrigatório quando há ICMS a recolher.</td></tr>
+  </table>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">2</span>Inventário — <b>em fevereiro</b></div>
+  <p>Marque <i>Incluir o inventário do estoque</i> (já vem marcado em fevereiro, com a data de 31/12).
+  O sistema soma quantidade e custo de cada item até a data. A conta contábil do estoque vem da
+  configuração do capítulo 7.</p>
+</div>
+<div class="passo">
+  <div class="passo-tit"><span class="n">3</span>Gerar, conferir e baixar</div>
+  <p>Clique <span class="btn">Gerar EFD</span>. O resumo mostra quantas notas entraram e a apuração
+  (débitos, créditos, ICMS a recolher ou saldo credor). Abaixo vêm os <b>avisos</b> — o que o programa
+  da Receita vai cobrar e só o cadastro resolve (fornecedor sem município, item sem classificação
+  fiscal…). Corrija e gere de novo. Por fim, <span class="btn">Baixar arquivo</span> e valide no programa
+  da Receita (PVA).</p>
+</div>
+
+<div class="dica">
+  <b>Os números batem</b>
+  A apuração de impostos do financeiro passou a usar a mesma regra do SPED: só conta o crédito dos
+  itens que dão direito a crédito, pela data de entrada, mais o ICMS do frete. Os dois relatórios
+  agora mostram o mesmo valor.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>9. Rotina sugerida</h1>
+
+<h2>Todo dia</h2>
+<ul class="check">
+  <li><b>Recebimento:</b> conferir a aba <i>Recebidas na SEFAZ</i>; importar as notas que chegaram e manifestar as que não são da Tecnofer</li>
+  <li><b>Recebimento:</b> conferir e aprovar as notas de compra pendentes (itens, plano de contas, parcelas)</li>
+  <li><b>Recebimento:</b> lançar os CT-e de frete das compras do dia</li>
+  <li><b>Financeiro:</b> pagar e receber pela tela, informando os descontos negociados</li>
+</ul>
+
+<h2>Toda semana</h2>
+<ul class="check">
+  <li>Olhar o alerta de prazo de manifestação (notas vencendo em até 30 dias)</li>
+  <li>Conferir notas de venda rejeitadas e reenviar depois de corrigidas</li>
+</ul>
+
+<h2>Todo mês</h2>
+<ul class="check">
+  <li>Conferir que não sobrou nota de compra pendente do mês</li>
+  <li>Lançar os ajustes da apuração em <span class="tela">VFIS0560</span>, se houver</li>
+  <li>Gerar o SPED em <span class="tela">VFIS0600</span>, corrigir os avisos e validar no PVA</li>
+  <li>Em <b>fevereiro</b>: incluir o inventário de 31/12</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<h1>10. Perguntas frequentes</h1>
+
+<table class="dados">
+  <tr><th>Pergunta</th><th>Resposta</th></tr>
+  <tr><td>A nota de compra não deixa aprovar e não sei por quê.</td><td>Leia as <b>pendências</b> no topo da nota: cada uma diz o que falta (item sem cadastro, sem plano de contas, fornecedor não cadastrado ou bloqueado, parcelas que não fecham).</td></tr>
+  <tr><td>Cadastrei o fornecedor, mas a nota ainda diz "não cadastrado".</td><td>Feche e abra a nota de novo: ela procura o fornecedor pelo CNPJ e se liga sozinha.</td></tr>
+  <tr><td>Comprei algo que vai ser usado na fábrica, não revendido nem transformado.</td><td>Ao cadastrar o item a partir da nota, escolha <b>Uso e consumo</b>. O crédito de ICMS também segue a operação de entrada.</td></tr>
+  <tr><td>O frete chegou antes da nota da mercadoria.</td><td>Lance o CT-e quando a nota da mercadoria estiver aprovada; o rateio precisa dos itens.</td></tr>
+  <tr><td>Devolvi uma mercadoria que já tinha pago.</td><td>O valor vira crédito a receber do fornecedor em <span class="tela">VFIN0210</span>.</td></tr>
+  <tr><td>Não consigo cancelar a nota de compra.</td><td>Veja a mensagem: título já pago, material consumido (use devolução), ou existe frete ou devolução ligados a ela — cancele estes antes.</td></tr>
+  <tr><td>A nota de venda foi rejeitada.</td><td>Clique <span class="btn">Status</span>, corrija o motivo e use <span class="btn">Reenviar</span>.</td></tr>
+  <tr><td>O SPED mostrou avisos.</td><td>São dados de cadastro que o programa da Receita cobra. Corrija o cadastro indicado e gere de novo; o arquivo não fica guardado, sempre reflete as notas do momento.</td></tr>
+</table>
+
+<div class="exercicio">
+  <div class="ex-tit">Para praticar no ambiente de treinamento</div>
+  <b>1.</b> Importe uma nota de um fornecedor que não existe, cadastre o fornecedor e um item a partir
+  da nota, distribua as parcelas e aprove.<br>
+  <b>2.</b> Lance um CT-e de frete para essa nota e veja o custo do item mudar no estoque.<br>
+  <b>3.</b> Devolva parte da mercadoria e confira o que aconteceu com o estoque e com o contas a pagar.<br>
+  <b>4.</b> Pague uma parcela com desconto e veja o título quitado.<br>
+  <b>5.</b> Gere o SPED do mês e leia o resumo da apuração.
+</div>

@@ -9,6 +9,7 @@ da Tecnofer (RN 01001, RN 01007 e SU 02046).
 |---|---|---|
 | `dia-um.pdf` | Do cadastro do produto à saída do acabado — classificação, itens em 4 níveis, estrutura (BOM) com fórmulas e histórico, máquinas, operações com modelo de tempo completo, roteiros com tempo e custo por lote, configurador de produto, orçamento → pedido de venda, MRP, CRP, APS, ordens, plano de corte, estoque, inspeção (final e de recebimento) e romaneio | 70 |
 | `dia-dois.pdf` | Fiscal, financeiro, custos e contabilidade — configuração fiscal, CFOPs, NCM, NF-e de saída e entrada, industrialização em terceiro, contas a pagar/receber, fluxo de caixa, custo padrão, formação de preço, plano de contas, apuração e SPED | 26 |
+| `novidades-fiscal-financeiro.pdf` | O que mudou na versão 1.5.0, em linguagem para o usuário — nota de compra (conferência, cadastro de fornecedor e item a partir da nota, plano de contas e parcelas), notas recebidas na SEFAZ, frete sobre compras, devolução ao fornecedor, nota de venda (reenvio, cancelamento, reforma tributária), desconto na baixa, contabilidade automática, SPED Fiscal, rotina sugerida e perguntas frequentes | 13 |
 
 Cada dia é de **4 horas (08h00–12h00)**, com agenda cronometrada, passo a passo campo a campo,
 caixas de destaque, exercícios práticos, checklists e anexos com todos os dados de cadastro prontos.

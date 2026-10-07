@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Gera dia-um.pdf e dia-dois.pdf a partir dos fontes HTML + estilo.css.
+Gera os PDFs do treinamento (dia-um, dia-dois, tutorial-roteiro e novidades)
+a partir dos fontes HTML + estilo.css.
 
 Uso:
     pip install weasyprint
@@ -40,6 +41,8 @@ DOCS = {
                  "Dia 2 · Fiscal, financeiro, custos e contabilidade"),
     "tutorial-roteiro": ("Tutorial Prático VentureERP — Roteiro de Fabricação",
                          "Tutorial · Roteiro de Fabricação"),
+    "novidades-fiscal-financeiro": ("VentureERP — O que mudou no Fiscal e no Financeiro (1.5.0)",
+                                    "Novidades 1.5.0 · Fiscal e Financeiro"),
 }
 
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -106,7 +107,8 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 		var escolhida *repository.PurchaseOrderLine
 		for i := range linhas {
 			l := linhas[i]
-			if l.ItemCode != *it.ItemCode || usadas[l.Code] || l.Status == "CANCELLED" {
+			if l.ItemCode != *it.ItemCode || usadas[l.Code] || l.Status == "CANCELLED" ||
+				poentity.SituacaoAceitaRecebimento(l.PurchaseOrderCode, poentity.PurchaseOrderStatus(l.OrderStatus)) != nil {
 				continue
 			}
 			saldo := l.RequestedQty.Sub(l.InvoicedQty).Sub(l.CancelledQty)
@@ -375,7 +377,9 @@ func (s *EntradaServico) Divergencias(ctx context.Context, e *entity.FiscalEntry
 			p.LinhasPedido[l.Code] = entrada.LinhaPedido{
 				Codigo: l.Code, PedidoCodigo: l.PurchaseOrderCode, ItemCode: l.ItemCode,
 				PrecoUnitario: preco.Round(6), SaldoAFaturar: saldo, TolerancePct: l.TolerancePct,
-				Cancelada: l.Status == "CANCELLED",
+				Cancelada:         l.Status == "CANCELLED",
+				PedidoNaoAprovado: poentity.SituacaoAceitaRecebimento(l.PurchaseOrderCode, poentity.PurchaseOrderStatus(l.OrderStatus)) != nil,
+				SituacaoPedido:    poentity.RotuloSituacao(poentity.PurchaseOrderStatus(l.OrderStatus)),
 			}
 		}
 	}

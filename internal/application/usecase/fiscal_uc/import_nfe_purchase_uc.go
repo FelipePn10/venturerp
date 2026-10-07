@@ -161,7 +161,13 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 	// order reflects what has actually arrived (status PARTIAL/RECEIVED).
 	linesDown := 0
 	if uc.PurchaseOrderRepo != nil && dto.PurchaseOrderCode != nil && len(receivedByItem) > 0 {
-		if n, recErr := uc.PurchaseOrderRepo.RegisterReceipts(ctx, *dto.PurchaseOrderCode, receivedByItem); recErr == nil {
+		po, poErr := uc.PurchaseOrderRepo.GetByCode(ctx, *dto.PurchaseOrderCode)
+		if poErr != nil {
+			return nil, poErr
+		}
+		if err := po.AceitaRecebimento(); err != nil {
+			skipped = append(skipped, err.Error())
+		} else if n, recErr := uc.PurchaseOrderRepo.RegisterReceipts(ctx, *dto.PurchaseOrderCode, receivedByItem); recErr == nil {
 			linesDown = n
 		} else {
 			skipped = append(skipped, fmt.Sprintf("purchase order write-down failed: %v", recErr))

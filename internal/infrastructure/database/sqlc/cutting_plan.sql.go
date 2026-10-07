@@ -1128,14 +1128,14 @@ func (q *Queries) MarkRemnantConsumed(ctx context.Context, arg MarkRemnantConsum
 
 const nextCuttingPlanCode = `-- name: NextCuttingPlanCode :one
 
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM cutting_plans
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM cutting_plans
 WHERE enterprise_id = $1
 `
 
 // ─── cutting_plans ────────────────────────────────────────────────────────────
-func (q *Queries) NextCuttingPlanCode(ctx context.Context, enterpriseID int64) (int32, error) {
+func (q *Queries) NextCuttingPlanCode(ctx context.Context, enterpriseID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, nextCuttingPlanCode, enterpriseID)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }

@@ -526,12 +526,12 @@ func (q *Queries) ListFiscalClassifications(ctx context.Context, arg ListFiscalC
 }
 
 const nextFiscalClassificationCode = `-- name: NextFiscalClassificationCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM fiscal_classifications WHERE enterprise_id = $1
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM fiscal_classifications WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextFiscalClassificationCode(ctx context.Context, enterpriseID int64) (int32, error) {
+func (q *Queries) NextFiscalClassificationCode(ctx context.Context, enterpriseID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, nextFiscalClassificationCode, enterpriseID)
-	var next_code int32
+	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }

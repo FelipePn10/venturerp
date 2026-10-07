@@ -22,6 +22,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
@@ -32,19 +33,19 @@ var epsQtd = decimal.NewFromFloat(0.0001)
 type linhaPedidoTx struct {
 	code, pedido                                      int64
 	requested, received, invoiced, cancelled, interno decimal.Decimal
-	status                                            string
+	status, situacaoPedido                            string
 }
 
 func lockLinhaPedido(ctx context.Context, tx pgx.Tx, empresaCode, lineCode int64) (*linhaPedidoTx, error) {
 	var l linhaPedidoTx
 	err := tx.QueryRow(ctx,
 		`SELECT poi.code, poi.purchase_order_code, poi.requested_qty, poi.received_qty, poi.invoiced_qty, poi.cancelled_qty,
-		        COALESCE(poi.internal_qty,0), poi.status
+		        COALESCE(poi.internal_qty,0), poi.status, po.status
 		   FROM purchase_order_items poi
 		   JOIN purchase_orders po ON po.code = poi.purchase_order_code AND po.enterprise_code = $2
 		  WHERE poi.code = $1
 		  FOR UPDATE OF poi`, lineCode, empresaCode).Scan(
-		&l.code, &l.pedido, &l.requested, &l.received, &l.invoiced, &l.cancelled, &l.interno, &l.status)
+		&l.code, &l.pedido, &l.requested, &l.received, &l.invoiced, &l.cancelled, &l.interno, &l.status, &l.situacaoPedido)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d do pedido de compra não existe nesta empresa", lineCode))
 	}
@@ -81,7 +82,9 @@ func gravarLinhaPedido(ctx context.Context, tx pgx.Tx, empresaCode int64, l *lin
 		   FROM purchase_order_items WHERE purchase_order_code=$1 AND is_active`, l.pedido).Scan(&todas, &alguma); err != nil {
 		return err
 	}
-	cab := "OPEN"
+	// Sem nada recebido (estorno da nota) o pedido volta a aprovado — "OPEN"
+	// não é situação de capa de pedido de compra.
+	cab := "APPROVED"
 	switch {
 	case todas && alguma:
 		cab = "RECEIVED"
@@ -188,6 +191,9 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 			}
 			if l.status == "CANCELLED" {
 				return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d do pedido de compra está cancelada", l.code))
+			}
+			if err := poentity.SituacaoAceitaRecebimento(l.pedido, poentity.PurchaseOrderStatus(l.situacaoPedido)); err != nil {
+				return nil, errorsuc.NewValidationError(err.Error())
 			}
 			pedido = &l.pedido
 			fator := m.FatorPedido
@@ -541,7 +547,7 @@ func (r *FiscalRepositoryPG) EntryOperations(ctx context.Context, codes []int64)
 const linhaPedidoCols = `poi.code, po.code, po.order_number, poi.sequence, poi.item_code, poi.status,
 		        poi.requested_qty, poi.received_qty, poi.invoiced_qty, poi.cancelled_qty,
 		        COALESCE(poi.internal_qty,0), poi.unit_price, COALESCE(poi.internal_price,0), COALESCE(poi.tolerance_pct,0),
-		        poi.warehouse_id, poi.accounting_account, poi.operation_type_code`
+		        poi.warehouse_id, poi.accounting_account, poi.operation_type_code, po.status`
 
 func (r *FiscalRepositoryPG) OpenPurchaseOrderLines(ctx context.Context, supplierCode, itemCode int64) ([]repository.PurchaseOrderLine, error) {
 	empresaCode, err := tenant.Code(ctx)
@@ -553,7 +559,7 @@ func (r *FiscalRepositoryPG) OpenPurchaseOrderLines(ctx context.Context, supplie
 		   FROM purchase_order_items poi
 		   JOIN purchase_orders po ON po.code = poi.purchase_order_code
 		  WHERE po.enterprise_code = $1 AND po.supplier_code = $2 AND poi.item_code = $3 AND poi.is_active
-		    AND poi.status <> 'CANCELLED' AND po.status NOT IN ('CANCELLED')
+		    AND poi.status <> 'CANCELLED' AND po.status IN ('APPROVED','PARTIAL')
 		    AND poi.requested_qty - poi.invoiced_qty - poi.cancelled_qty > 0
 		  ORDER BY po.emission_date, po.code, poi.sequence LIMIT 100`, empresaCode, supplierCode, itemCode)
 	if err != nil {
@@ -570,7 +576,7 @@ func scanLinhasPedido(rows pgx.Rows) ([]repository.PurchaseOrderLine, error) {
 		if err := rows.Scan(&l.Code, &l.PurchaseOrderCode, &l.OrderNumber, &l.Sequence, &l.ItemCode, &l.Status,
 			&l.RequestedQty, &l.ReceivedQty, &l.InvoicedQty, &l.CancelledQty,
 			&l.InternalQty, &l.UnitPrice, &l.InternalPrice, &l.TolerancePct,
-			&l.WarehouseID, &l.AccountingAccount, &l.OperationCode); err != nil {
+			&l.WarehouseID, &l.AccountingAccount, &l.OperationCode, &l.OrderStatus); err != nil {
 			return nil, err
 		}
 		out = append(out, l)
@@ -597,7 +603,7 @@ func (r *FiscalRepositoryPG) PurchaseOrderLines(ctx context.Context, supplierCod
 		`SELECT poi.code, po.code, po.order_number, poi.sequence, poi.item_code, poi.status,
 		        poi.requested_qty, poi.received_qty, poi.invoiced_qty, poi.cancelled_qty,
 		        COALESCE(poi.internal_qty,0), poi.unit_price, COALESCE(poi.internal_price,0), COALESCE(poi.tolerance_pct,0),
-		        poi.warehouse_id, poi.accounting_account, poi.operation_type_code
+		        poi.warehouse_id, poi.accounting_account, poi.operation_type_code, po.status
 		   FROM purchase_order_items poi
 		   JOIN purchase_orders po ON po.code = poi.purchase_order_code
 		  WHERE po.enterprise_code = $1 AND po.supplier_code = $2 AND poi.is_active
@@ -613,7 +619,7 @@ func (r *FiscalRepositoryPG) PurchaseOrderLines(ctx context.Context, supplierCod
 		if err := rows.Scan(&l.Code, &l.PurchaseOrderCode, &l.OrderNumber, &l.Sequence, &l.ItemCode, &l.Status,
 			&l.RequestedQty, &l.ReceivedQty, &l.InvoicedQty, &l.CancelledQty,
 			&l.InternalQty, &l.UnitPrice, &l.InternalPrice, &l.TolerancePct,
-			&l.WarehouseID, &l.AccountingAccount, &l.OperationCode); err != nil {
+			&l.WarehouseID, &l.AccountingAccount, &l.OperationCode, &l.OrderStatus); err != nil {
 			return nil, err
 		}
 		out = append(out, l)

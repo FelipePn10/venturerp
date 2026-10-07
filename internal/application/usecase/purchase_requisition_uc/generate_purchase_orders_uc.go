@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
 	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	porepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
 	reqrepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
@@ -25,6 +26,8 @@ type GeneratePurchaseOrdersUseCase struct {
 	SupplierDefaults ports.SupplierPurchasingDefaultsProvider
 	PriceProvider    ports.PurchasePriceProvider
 	ServiceLinker    ports.ProductionServiceLinker
+	// Geracao completa o almoxarifado e passa o pedido pela alçada.
+	Geracao *purchase_order_uc.Geracao
 }
 
 type GeneratePurchaseOrdersResult struct {
@@ -34,6 +37,7 @@ type GeneratePurchaseOrdersResult struct {
 
 type genLine struct {
 	reqItemID int64
+	reqCode   int64
 	itemCode  int64
 	qty       float64
 	balance   float64
@@ -48,6 +52,15 @@ type genLine struct {
 func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto request.GeneratePurchaseOrdersDTO) (*GeneratePurchaseOrdersResult, error) {
 	if !uc.Auth.CanCreatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	// Empresa e autor vêm da sessão. O handler não os preenchia, e o pedido
+	// era recusado com "empresa do pedido diverge do tenant autenticado".
+	var err error
+	if dto.EnterpriseCode, err = uc.Auth.EnterpriseCode(ctx); err != nil {
+		return nil, err
+	}
+	if dto.CreatedBy, err = uc.Auth.UserID(ctx); err != nil {
+		return nil, err
 	}
 
 	result := &GeneratePurchaseOrdersResult{}
@@ -84,6 +97,7 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		}
 		grouped[supplierCode] = append(grouped[supplierCode], genLine{
 			reqItemID: reqItem.ID,
+			reqCode:   reqItem.RequisitionCode,
 			itemCode:  reqItem.ItemCode,
 			qty:       sel.QtyToAttend,
 			balance:   reqItem.Balance(),
@@ -104,13 +118,23 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		var financialAccount *string
 		freightType := ""
 		if uc.SupplierDefaults != nil {
-			if def, derr := uc.SupplierDefaults.GetPurchasingDefaults(ctx, supplierCode, dto.EnterpriseCode); derr == nil && def != nil {
-				priceTable = def.PurchasePriceTableID
-				paymentTerm = def.PaymentConditionID
-				invoiceType = def.DefaultInvoiceTypeID
-				financialAccount = def.FinancialAccount
-				freightType = def.FreightType
+			// Também é aqui que se confere que o fornecedor é desta empresa e
+			// está ativo. Um fornecedor imprestável não derruba a geração
+			// inteira: só as linhas dele ficam de fora, com o motivo.
+			def, derr := uc.SupplierDefaults.GetPurchasingDefaults(ctx, supplierCode, dto.EnterpriseCode)
+			if derr != nil || def == nil {
+				result.Skipped = append(result.Skipped, fmt.Sprintf("fornecedor %d: não encontrado no cadastro desta empresa", supplierCode))
+				continue
 			}
+			if !def.IsActive {
+				result.Skipped = append(result.Skipped, fmt.Sprintf("fornecedor %d (%s): cadastro inativo", supplierCode, def.SupplierName))
+				continue
+			}
+			priceTable = def.PurchasePriceTableID
+			paymentTerm = def.PaymentConditionID
+			invoiceType = def.DefaultInvoiceTypeID
+			financialAccount = def.FinancialAccount
+			freightType = def.FreightType
 		}
 		if freightType == "" {
 			freightType = "SEM_FRETE"
@@ -124,7 +148,6 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		po := &poentity.PurchaseOrder{
 			OrderNumber:      orderNum,
 			EnterpriseCode:   dto.EnterpriseCode,
-			Status:           poentity.PurchaseOrderStatusAPPROVED,
 			Origin:           poentity.PurchaseOrderOriginNORMAL,
 			EmissionDate:     time.Now(),
 			SupplierCode:     &sc,
@@ -135,9 +158,9 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 			FreightType:      freightType,
 			CurrencyCode:     "BRL",
 			IsFirm:           true,
-			AlcadaStatus:     "A",
 			CreatedBy:        dto.CreatedBy,
 		}
+		uc.Geracao.NovaCapa(po)
 
 		items := make([]*poentity.PurchaseOrderItem, 0, len(lines))
 		for i, ln := range lines {
@@ -147,25 +170,39 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 					unitPrice = p
 				}
 			}
+			reqItemID, reqCode := ln.reqItemID, ln.reqCode
 			items = append(items, &poentity.PurchaseOrderItem{
-				Sequence:          i + 1,
-				ItemCode:          ln.itemCode,
-				RequestedQty:      ln.qty,
-				UnitPrice:         unitPrice,
-				TotalPrice:        ln.qty * unitPrice,
-				Status:            poentity.PurchaseOrderItemStatusOPEN,
-				PurchaseUOM:       ln.uom,
-				DeliveryDate:      ln.delivery,
-				AccountingAccount: ln.acct,
-				CostCenterCode:    ln.costCtr,
-				UtilizationType:   ln.utiliz,
-				IsActive:          true,
+				PurchaseRequisitionItemID: &reqItemID,
+				PurchaseRequisitionCode:   &reqCode,
+				Sequence:                  i + 1,
+				ItemCode:                  ln.itemCode,
+				RequestedQty:              ln.qty,
+				UnitPrice:                 unitPrice,
+				Status:                    poentity.PurchaseOrderItemStatusOPEN,
+				PurchaseUOM:               ln.uom,
+				DeliveryDate:              ln.delivery,
+				AccountingAccount:         ln.acct,
+				CostCenterCode:            ln.costCtr,
+				UtilizationType:           ln.utiliz,
+				IsActive:                  true,
 			})
 		}
 
+		avisos, err := uc.Geracao.CompletarLinhas(ctx, items)
+		if err != nil {
+			return nil, err
+		}
+		result.Skipped = append(result.Skipped, avisos...)
 		created, err := uc.POs.CreateWithItems(ctx, po, items)
 		if err != nil {
 			return nil, fmt.Errorf("creating purchase order for supplier %d: %w", supplierCode, err)
+		}
+		created, aviso, err := uc.Geracao.Aprovar(ctx, created)
+		if err != nil {
+			return nil, err
+		}
+		if aviso != "" {
+			result.Skipped = append(result.Skipped, aviso)
 		}
 		result.Orders = append(result.Orders, created)
 		if uc.ServiceLinker != nil {
@@ -183,7 +220,9 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 				attend = ln.balance
 			}
 			if attend > 0 {
-				_, _ = uc.Reqs.RegisterAttendance(ctx, ln.reqItemID, attend)
+				if _, aerr := uc.Reqs.RegisterAttendance(ctx, ln.reqItemID, attend); aerr != nil {
+					result.Skipped = append(result.Skipped, fmt.Sprintf("pedido %d gerado, mas o atendimento do item %d da requisição não foi registrado: %v", created.Code, ln.reqItemID, aerr))
+				}
 			}
 		}
 	}

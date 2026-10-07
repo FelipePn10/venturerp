@@ -60,6 +60,9 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 	if order.Status == poentity.PurchaseOrderStatusCANCELLED || order.Status == poentity.PurchaseOrderStatusRECEIVED {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("pedido de compra %d não pode ser recebido no status %s", order.Code, order.Status))
 	}
+	if err := order.AceitaRecebimento(); err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
 	lines, err := uc.Repo.ListItems(ctx, dto.PurchaseOrderCode)
 	if err != nil {
 		return nil, err
