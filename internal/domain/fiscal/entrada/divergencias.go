@@ -33,6 +33,9 @@ type LinhaPedido struct {
 	SaldoAFaturar decimal.Decimal // em unidade de estoque
 	TolerancePct  decimal.Decimal
 	Cancelada     bool
+	// PedidoNaoAprovado: a capa ainda não passou pela aprovação (alçada).
+	PedidoNaoAprovado bool
+	SituacaoPedido    string
 }
 
 // Divergencia é uma diferença entre a nota e o que o ERP esperava.
@@ -135,6 +138,9 @@ func Divergencias(e *entity.FiscalEntry, p ParametrosConferencia) []Divergencia 
 			case l.Cancelada:
 				add(NivelImpede, it.Sequence, "PEDIDO", "", fmt.Sprint(l.Codigo),
 					"item %d: a linha do pedido %d está cancelada", it.Sequence, l.PedidoCodigo)
+			case l.PedidoNaoAprovado:
+				add(NivelImpede, it.Sequence, "PEDIDO", "", fmt.Sprint(l.Codigo),
+					"item %d: o pedido %d ainda não foi aprovado (%s); aprove o pedido em VPDC0200 antes de receber", it.Sequence, l.PedidoCodigo, l.SituacaoPedido)
 			default:
 				if it.ItemCode != nil && *it.ItemCode != l.ItemCode {
 					add(NivelImpede, it.Sequence, "PEDIDO_ITEM", fmt.Sprint(l.ItemCode), fmt.Sprint(*it.ItemCode),

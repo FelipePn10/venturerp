@@ -64,7 +64,7 @@ WHERE enterprise_id = $1 AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: NextFiscalClassificationCode :one
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM fiscal_classifications WHERE enterprise_id = $1;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM fiscal_classifications WHERE enterprise_id = $1;
 
 -- ─── Languages ────────────────────────────────────────────────────────────────
 

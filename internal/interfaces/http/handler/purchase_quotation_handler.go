@@ -123,7 +123,7 @@ func (h *PurchaseQuotationHandler) GenerateOrders(w http.ResponseWriter, r *http
 	dto.QuotationCode = code
 	res, err := h.generate.Execute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)

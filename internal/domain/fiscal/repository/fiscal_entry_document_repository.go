@@ -284,6 +284,8 @@ type PurchaseOrderLine struct {
 	WarehouseID       *int64
 	AccountingAccount *string
 	OperationCode     *int64
+	// OrderStatus é a situação da capa: só pedido aprovado recebe material.
+	OrderStatus string
 }
 
 // FatorEstoque é quantas unidades de estoque há em uma unidade do pedido.

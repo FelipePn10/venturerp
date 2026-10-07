@@ -2,7 +2,7 @@ package purchase_order_uc
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -22,17 +22,34 @@ type AddPurchaseOrderItemUseCase struct {
 	PriceProvider ports.PurchasePriceProvider
 	UOMConverter  ports.UOMConverter
 	FiscalClass   ports.FiscalClassificationProvider
+	Almoxarifados AlmoxarifadoPadrao
 }
 
 func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.CreatePurchaseOrderItemDTO) (*response.PurchaseOrderItemResponse, error) {
 	if !uc.Auth.CanCreatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.WarehouseID == nil || *dto.WarehouseID <= 0 {
-		return nil, errorsuc.NewValidationError("depósito é obrigatório")
+	if dto.ItemCode <= 0 {
+		return nil, errorsuc.NewValidationError("escolha o item")
+	}
+	if dto.RequestedQty <= 0 {
+		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
+	}
+	if dto.UnitPrice < 0 || dto.DiscountPct < 0 || dto.DiscountPct > 100 {
+		return nil, errorsuc.NewValidationError("preço ou desconto inválido")
 	}
 
 	po, err := uc.Repo.GetByCode(ctx, dto.PurchaseOrderCode)
+	if err != nil {
+		return nil, err
+	}
+	if !po.IsActive {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está cancelado", po.Code))
+	}
+	if err := po.Editavel(); err != nil {
+		return nil, errorsuc.NewValidationError(err.Error())
+	}
+	dto.WarehouseID, err = completarAlmoxarifado(ctx, uc.Almoxarifados, dto.ItemCode, dto.WarehouseID, "da linha")
 	if err != nil {
 		return nil, err
 	}
@@ -72,14 +89,19 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		}
 	}
 
-	// Total = (qty × price) − desconto.
-	gross := dto.RequestedQty * unitPrice
-	total := gross - gross*dto.DiscountPct/100
+	total := entity.TotalDaLinha(dto.RequestedQty, unitPrice, dto.DiscountPct)
 
-	// Next sequence.
+	// Próxima sequência: a maior + 1 (contar as linhas repetia o número de
+	// uma linha depois que outra era removida).
+	existing, err := uc.Repo.ListItems(ctx, po.Code)
+	if err != nil {
+		return nil, err
+	}
 	seq := 1
-	if existing, lerr := uc.Repo.ListItems(ctx, po.Code); lerr == nil {
-		seq = len(existing) + 1
+	for _, l := range existing {
+		if l.Sequence >= seq {
+			seq = l.Sequence + 1
+		}
 	}
 
 	item := &entity.PurchaseOrderItem{
@@ -120,19 +142,18 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		Notes:                     dto.Notes,
 		IsActive:                  true,
 	}
-	if dto.DeliveryDate != nil {
-		if t, perr := time.Parse("2006-01-02", *dto.DeliveryDate); perr == nil {
-			item.DeliveryDate = &t
-		}
+	if item.DeliveryDate, err = dataOpcional(dto.DeliveryDate, "entrega"); err != nil {
+		return nil, err
 	}
-	if dto.PromisedDate != nil {
-		if t, perr := time.Parse("2006-01-02", *dto.PromisedDate); perr == nil {
-			item.PromisedDate = &t
-		}
+	if item.PromisedDate, err = dataOpcional(dto.PromisedDate, "prometida"); err != nil {
+		return nil, err
 	}
 
 	created, err := uc.Repo.CreateItem(ctx, item)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := regravarComTotais(ctx, uc.Repo, po); err != nil {
 		return nil, err
 	}
 	return toPurchaseOrderItemResponse(created), nil

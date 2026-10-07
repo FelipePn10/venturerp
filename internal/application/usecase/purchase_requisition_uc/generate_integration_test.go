@@ -33,6 +33,12 @@ func (allowAuth) CanCreatePurchaseOrder(context.Context) bool { return true }
 func (allowAuth) EnterpriseID(ctx context.Context) (int64, error) {
 	return ctx.Value(contextkey.UserKey).(*security.AuthUser).EnterpriseID, nil
 }
+
+// A geração resolve a empresa pela sessão (o handler não a preenchia e o
+// pedido era recusado com "empresa do pedido diverge do tenant autenticado").
+func (allowAuth) EnterpriseCode(ctx context.Context) (int64, error) {
+	return ctx.Value(contextkey.UserKey).(*security.AuthUser).EnterpriseCode, nil
+}
 func (allowAuth) UserID(context.Context) (uuid.UUID, error) { return uuid.New(), nil }
 
 func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
@@ -48,7 +54,7 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	reqRepository := reqrepo.New(q, pool)
 	poRepository := porepo.NewPurchaseOrderRepositorySQLC(pool)
 	itemSupplierUC := item_supplier_uc.NewItemSupplierUseCase(itemsupplierrepo.New(q, pool), allowAuth{})
-	supplierUC := supplier_uc.NewSupplierUseCase(suppRepo)
+	supplierUC := supplier_uc.NewSupplierUseCase(suppRepo, allowAuth{})
 
 	// 1) A registered supplier (PO.supplier_code FK requires it to exist).
 	supplierCode := testutil.UniqueCode()

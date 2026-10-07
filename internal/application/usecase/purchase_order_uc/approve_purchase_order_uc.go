@@ -49,10 +49,27 @@ func (uc *ApprovePurchaseOrderUseCase) Execute(ctx context.Context, code int64) 
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("pedido de compra %d não pode ser aprovado no status %s", code, order.Status))
 	}
 
-	amount := order.TotalNet
-	if amount <= 0 {
-		amount = order.TotalGross
+	// O valor avaliado sai das linhas AGORA. Antes vinha da capa, cujos totais
+	// nunca eram somados: todo pedido chegava com 0 e passava pela alçada.
+	items, err := uc.Repo.ListItems(ctx, code)
+	if err != nil {
+		return nil, err
 	}
+	validas := 0
+	for _, it := range items {
+		if !it.ConsideradaNosTotais() {
+			continue
+		}
+		validas++
+		if it.WarehouseID == nil || *it.WarehouseID <= 0 {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d não tem almoxarifado de entrada", it.Sequence))
+		}
+	}
+	if validas == 0 {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d não tem itens", code))
+	}
+	order.AplicarTotais(poentity.CalcularTotais(order, items))
+	amount := order.TotalNet
 
 	out := &response.ApprovePurchaseOrderResponse{AppliedAmount: amount}
 	if uc.Policy == nil {
@@ -96,7 +113,7 @@ func (uc *ApprovePurchaseOrderUseCase) Authorize(ctx context.Context, code int64
 		return nil, err
 	}
 	if order.AlcadaStatus != alcadaBlocked {
-		return nil, fmt.Errorf("purchase order %d is not pending alçada authorization (alcada_status=%s)", code, order.AlcadaStatus)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d não está aguardando autorização de alçada", code))
 	}
 	out := &response.ApprovePurchaseOrderResponse{Message: "pedido autorizado e aprovado"}
 	return uc.finishApproval(ctx, order, out)

@@ -75,6 +75,7 @@ func toPurchaseOrderItemResponse(it *entity.PurchaseOrderItem) *response.Purchas
 		RequestedQty:              it.RequestedQty,
 		ReceivedQty:               it.ReceivedQty,
 		CancelledQty:              it.CancelledQty,
+		InvoicedQty:               it.InvoicedQty,
 		UnitPrice:                 it.UnitPrice,
 		TotalPrice:                it.TotalPrice,
 		DiscountPct:               it.DiscountPct,

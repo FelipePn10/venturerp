@@ -208,6 +208,19 @@ func TestDivergencias(t *testing.T) {
 	if !impede {
 		t.Error("linha de pedido de outro item deveria impedir")
 	}
+
+	// Pedido ainda em rascunho: a nota não pode dar entrada contra ele.
+	p.LinhasPedido[500] = LinhaPedido{Codigo: 500, PedidoCodigo: 9, ItemCode: 77, PrecoUnitario: d("100"), SaldoAFaturar: d("100"),
+		PedidoNaoAprovado: true, SituacaoPedido: "em rascunho"}
+	naoAprovado := false
+	for _, dv := range Divergencias(e, p) {
+		if dv.Tipo == "PEDIDO" && dv.Nivel == NivelImpede && strings.Contains(dv.Mensagem, "não foi aprovado") {
+			naoAprovado = true
+		}
+	}
+	if !naoAprovado {
+		t.Error("linha de pedido não aprovado deveria impedir a aprovação da nota")
+	}
 }
 
 func TestConferirEntrada_SemFornecedorImpede(t *testing.T) {

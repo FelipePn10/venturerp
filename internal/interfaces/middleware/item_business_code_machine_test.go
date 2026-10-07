@@ -35,3 +35,15 @@ func TestAmbiguousItemReferenceKeysAreScopedByRoute(t *testing.T) {
 		}
 	}
 }
+
+// A matriz de setup (VMAQ0200) grava a transição entre dois itens. Sem estas
+// chaves na tradução, o código comercial escolhido na tela era gravado como se
+// fosse a chave interna — e o APS nunca casava a transição com a ordem.
+func TestSetupMatrixItemKeysAreTranslated(t *testing.T) {
+	r := httptest.NewRequest("POST", "/api/aps/setup-matrix", nil)
+	for _, key := range []string{"from_item_code", "to_item_code"} {
+		if !isItemInputReferenceKey(r, key) || !isItemReferenceKey(r, key) {
+			t.Fatalf("%s deveria ser traduzido na entrada e na saída", key)
+		}
+	}
+}

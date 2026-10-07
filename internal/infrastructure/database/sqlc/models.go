@@ -7985,6 +7985,18 @@ type PurchaseOrderCurrencyRate struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type PurchaseOrderEnvio struct {
+	ID                int64
+	EnterpriseCode    int64
+	PurchaseOrderCode int64
+	EnviadoEm         pgtype.Timestamptz
+	EnviadoPor        pgtype.UUID
+	Destinatarios     string
+	Assunto           string
+	Situacao          string
+	Erro              pgtype.Text
+}
+
 type PurchaseOrderItem struct {
 	Code                      int64
 	PurchaseOrderCode         int64
@@ -8038,6 +8050,18 @@ type PurchaseOrderItem struct {
 	PurchaseRequisitionCode   *int64
 	PurchaseRequisitionItemID *int64
 	InvoicedQty               pgtype.Numeric
+}
+
+type PurchaseOrderItemFollowup struct {
+	ID                    int64
+	EnterpriseCode        int64
+	PurchaseOrderCode     int64
+	PurchaseOrderItemCode int64
+	DataPrometida         pgtype.Date
+	Contato               pgtype.Text
+	Observacao            pgtype.Text
+	RegistradoEm          pgtype.Timestamptz
+	RegistradoPor         pgtype.UUID
 }
 
 type PurchaseOrderSequence struct {

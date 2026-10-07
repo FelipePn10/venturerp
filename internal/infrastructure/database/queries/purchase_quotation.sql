@@ -18,7 +18,7 @@ ORDER BY code DESC;
 -- name: NextPurchaseQuotationCode :one
 -- A numeração é por empresa. Global, o próximo código de uma empresa saltava
 -- conforme o volume da outra — além de revelar esse volume.
-SELECT COALESCE(MAX(code), 0) + 1 AS next_code FROM purchase_quotations
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM purchase_quotations
 WHERE enterprise_code = sqlc.arg(enterprise_code);
 
 -- name: UpdatePurchaseQuotationStatus :execrows

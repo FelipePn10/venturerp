@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -22,6 +23,7 @@ import (
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	financialpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/financial"
 	fiscalpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
+	purchaseOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_order"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
@@ -247,9 +249,52 @@ func TestIntegration_NotaDeEntradaEnterprise(t *testing.T) {
 	}
 
 	aprovar := &fiscal_uc.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepo, Docs: docs, FinancialRepo: finRepo, Auth: auth}
+
+	// Pedido que voltou a rascunho: a nota não dá entrada contra ele.
+	if _, err := pool.Exec(bg, `UPDATE purchase_orders SET status='DRAFT' WHERE code=$1`, pedido); err != nil {
+		t.Fatal(err)
+	}
+	conf, err := conciliar.Execute(ctx, nota.ID, request.SaveFiscalEntryConciliationDTO{Itens: []request.FiscalEntryItemConciliationDTO{
+		{ID: nota.Itens[0].ID, ItemCode: &chapa, PlanoContasID: &planoMP, PurchaseOrderItemCode: &linhaChapa},
+		{ID: nota.Itens[1].ID, ItemCode: &luva, PlanoContasID: &planoEPI},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	apontou := false
+	for _, dv := range conf.Divergencias {
+		apontou = apontou || (dv.Nivel == "IMPEDE" && strings.Contains(dv.Mensagem, "não foi aprovado"))
+	}
+	if conf.PodeAprovar || !apontou {
+		t.Fatalf("pedido em rascunho deveria impedir a nota: pode=%v divergências=%+v", conf.PodeAprovar, conf.Divergencias)
+	}
+	if _, err := aprovar.Execute(ctx, request.ApproveFiscalEntryDTO{ID: nota.ID}); err == nil {
+		t.Fatal("aprovar nota ligada a pedido em rascunho deveria falhar")
+	}
+	if ls, _ := (&fiscal_uc.PedidosDoItemUseCase{Docs: docs, Auth: auth}).Execute(ctx, nota.ID, ch.ID, nil); len(ls) != 0 {
+		t.Fatalf("pedido em rascunho não deveria ser oferecido para ligar: %+v", ls)
+	}
+	if _, err := pool.Exec(bg, `UPDATE purchase_orders SET status='PARTIAL' WHERE code=$1`, pedido); err != nil {
+		t.Fatal(err)
+	}
+
 	nota, err = aprovar.Execute(ctx, request.ApproveFiscalEntryDTO{ID: nota.ID})
 	if err != nil {
 		t.Fatalf("aprovando: %v", err)
+	}
+
+	// Consultas de compras sobre a nota aprovada: notas por linha e histórico de preço.
+	consultas := purchaseOrderRepo.NewConsultasPG(pool, fiscalRepo)
+	notas, err := consultas.NotasDoPedido(ctx, pedido)
+	if err != nil || len(notas) != 1 || notas[0].LineCode != linhaChapa || notas[0].NumeroNF != 880001 || notas[0].Status != "APPROVED" {
+		t.Fatalf("notas do pedido: %+v (%v)", notas, err)
+	}
+	compras, err := consultas.ComprasDoItem(ctx, chapa, time.Now().AddDate(-1, 0, 0), 10)
+	if err != nil || len(compras) != 1 || compras[0].NumeroNF != 880001 || compras[0].QtdEstoque <= 0 || compras[0].CustoEstoque <= 0 {
+		t.Fatalf("histórico de compras da chapa: %+v (%v)", compras, err)
+	}
+	if outras, _ := consultas.NotasDoPedido(outra, pedido); len(outras) != 0 {
+		t.Fatalf("notas do pedido vazaram para outra empresa: %+v", outras)
 	}
 
 	saldo := func(item int64) decimal.Decimal {
@@ -316,6 +361,13 @@ func TestIntegration_NotaDeEntradaEnterprise(t *testing.T) {
 	}
 	if !recebido.Equal(decimal.NewFromInt(4000)) || !faturado.IsZero() {
 		t.Fatalf("pedido após cancelar: recebido %s (esperado os 4.000 físicos), faturado %s", recebido, faturado)
+	}
+	var situacao string
+	if err := pool.QueryRow(bg, `SELECT status FROM purchase_orders WHERE code=$1`, pedido).Scan(&situacao); err != nil {
+		t.Fatal(err)
+	}
+	if situacao != "PARTIAL" {
+		t.Fatalf("situação do pedido após o estorno = %q (os 4.000 físicos continuam recebidos)", situacao)
 	}
 	if v := fornecedoresLiquido("NFE_ENTRADA").Add(fornecedoresLiquido("NFE_ENTRADA_ESTORNO")); !v.IsZero() {
 		t.Fatalf("contabilidade não zerou após o estorno: %s", v)

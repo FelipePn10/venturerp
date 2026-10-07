@@ -6,6 +6,41 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(entrada de NF-e): relacionar a linha da nota a um item cadastrado dava "o
+  item não existe" quando o código do item na tela era diferente do código
+  interno. A tela passa a enviar o código do item como ele aparece no cadastro
+  (o mesmo vale para o lançamento manual de nota)
+- fix(pedido de compra): incluir item sem escolher o almoxarifado dava "depósito é
+  obrigatório" — e na VSUP0200 nem havia o campo. O campo existe nas duas telas e,
+  em branco, vale o almoxarifado de suprimentos do cadastro do item
+- fix(pedido de compra): os totais do pedido passam a ser calculados (estavam
+  sempre em zero), e por isso a alçada de valores volta a funcionar: o pedido
+  acima do limite fica aguardando autorização e a autorização o encontra
+- fix(pedido de compra): a alteração da capa grava frete, transportadora,
+  adiantamento e importação, não apaga mais a origem e não aceita mudar a situação
+  por fora da aprovação. Pedido não nasce mais "aprovado" pelo corpo da requisição
+- feat(pedido de compra): editar e remover linhas antes da aprovação; depois de
+  aprovado, eliminar o saldo que falta receber (com motivo); pedido com material
+  recebido não é cancelado inteiro. A grade mostra almoxarifado, nome do item e a
+  situação de cada linha
+- fix(itens): plano de corte, ordem de produção (item substituído), regras de
+  custo indireto, relatório de margem e matriz de setup gravavam o código do item
+  da tela como se fosse o código interno
+- fix(pedido de compra): o fornecedor do pedido passa a ser conferido contra o
+  cadastro da empresa autenticada e tem de estar ativo. `suppliers.code` é único
+  no banco inteiro e a FK do pedido não olha a empresa: informar o código de um
+  fornecedor de OUTRA empresa gravava o pedido, que depois saía sem fornecedor no
+  documento (o leitor filtra por empresa) e sem destinatário para envio — e ainda
+  podia receber material. A conferência vale para criar, alterar a capa e aprovar
+  sugestão do MRP; na geração em lote (requisição e cotação) o fornecedor
+  imprestável não derruba o lote: só as linhas dele ficam de fora, com o motivo
+- fix(numeração): `NextPurchaseRequisitionCode`, `NextPurchaseQuotationCode`,
+  `NextCuttingPlanCode` e `NextFiscalClassificationCode` devolviam `int32` para
+  uma coluna `bigint` (faltava o `::bigint` que as outras consultas já têm), e a
+  leitura estourava com código acima de 2^31 — o que deixava a suíte de
+  integração intermitente. Os modelos de `purchase_order_envios` e
+  `purchase_order_item_followups` (migração 383) também foram gerados
+
 ## [v1.5.0] — 2026-10-07
 
 - feat(fiscal): ciclo fiscal completo da NF-e de entrada à EFD (`bc4be66`)

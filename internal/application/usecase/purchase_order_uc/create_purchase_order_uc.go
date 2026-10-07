@@ -19,6 +19,33 @@ type CreatePurchaseOrderUseCase struct {
 	// SupplierDefaults is optional. When set, missing header fields (payment
 	// term) are defaulted from the supplier's registration. Nil disables it.
 	SupplierDefaults ports.SupplierPurchasingDefaultsProvider
+	// Almoxarifados completa a linha sem almoxarifado com o do cadastro do item.
+	Almoxarifados AlmoxarifadoPadrao
+}
+
+// AlmoxarifadoPadrao devolve o almoxarifado de suprimentos do cadastro do item
+// (nil quando o cadastro não tem).
+type AlmoxarifadoPadrao interface {
+	AlmoxarifadoPadraoDoItem(ctx context.Context, itemCode int64) (*int64, error)
+}
+
+// completarAlmoxarifado preenche o almoxarifado da linha com o do cadastro do
+// item e só recusa quando nem o cadastro tem um — com uma mensagem que diz o
+// que fazer, não apenas "depósito é obrigatório".
+func completarAlmoxarifado(ctx context.Context, fonte AlmoxarifadoPadrao, itemCode int64, atual *int64, linha string) (*int64, error) {
+	if atual != nil && *atual > 0 {
+		return atual, nil
+	}
+	if fonte != nil {
+		padrao, err := fonte.AlmoxarifadoPadraoDoItem(ctx, itemCode)
+		if err != nil {
+			return nil, err
+		}
+		if padrao != nil && *padrao > 0 {
+			return padrao, nil
+		}
+	}
+	return nil, errorsuc.NewValidationError(fmt.Sprintf("informe o almoxarifado de entrada %s: o cadastro do item não tem almoxarifado de suprimentos (VENT0200, pasta Suprimentos)", linha))
 }
 
 func (uc *CreatePurchaseOrderUseCase) Execute(
@@ -54,9 +81,11 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 		}
 	}
 
+	// Pedido nasce em rascunho: aprovado só pela aprovação, que avalia a
+	// alçada. Aceitar a situação do corpo deixava criar um pedido já aprovado.
 	status := entity.PurchaseOrderStatusDRAFT
-	if dto.Status != "" {
-		status = entity.PurchaseOrderStatus(dto.Status)
+	if dto.Status != "" && entity.PurchaseOrderStatus(dto.Status) != entity.PurchaseOrderStatusDRAFT {
+		return nil, errorsuc.NewValidationError("o pedido nasce em rascunho; a aprovação avalia a alçada")
 	}
 	origin := entity.PurchaseOrderOriginNORMAL
 	if dto.Origin != "" {
@@ -74,22 +103,24 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 	financialAccount := dto.FinancialAccount
 	freightType := dto.FreightType
 	if uc.SupplierDefaults != nil && dto.SupplierCode != nil {
-		if def, derr := uc.SupplierDefaults.GetPurchasingDefaults(ctx, *dto.SupplierCode, dto.EnterpriseCode); derr == nil && def != nil {
-			if paymentTerm == nil {
-				paymentTerm = def.PaymentConditionID
-			}
-			if priceTable == nil {
-				priceTable = def.PurchasePriceTableID
-			}
-			if invoiceType == nil {
-				invoiceType = def.DefaultInvoiceTypeID
-			}
-			if financialAccount == nil {
-				financialAccount = def.FinancialAccount
-			}
-			if freightType == "" {
-				freightType = def.FreightType
-			}
+		def, derr := resolverFornecedorDoTenant(ctx, uc.SupplierDefaults, *dto.SupplierCode, dto.EnterpriseCode)
+		if derr != nil {
+			return nil, derr
+		}
+		if paymentTerm == nil {
+			paymentTerm = def.PaymentConditionID
+		}
+		if priceTable == nil {
+			priceTable = def.PurchasePriceTableID
+		}
+		if invoiceType == nil {
+			invoiceType = def.DefaultInvoiceTypeID
+		}
+		if financialAccount == nil {
+			financialAccount = def.FinancialAccount
+		}
+		if freightType == "" {
+			freightType = def.FreightType
 		}
 	}
 
@@ -138,10 +169,18 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 	o.AdvanceDate = parsePODate(dto.AdvanceDate)
 	o.ShipmentDate = parsePODate(dto.ShipmentDate)
 
+	for i := range dto.Items {
+		wh, werr := completarAlmoxarifado(ctx, uc.Almoxarifados, dto.Items[i].ItemCode, dto.Items[i].WarehouseID, fmt.Sprintf("na linha %d", i+1))
+		if werr != nil && dto.Items[i].ItemCode > 0 {
+			return nil, werr
+		}
+		dto.Items[i].WarehouseID = wh
+	}
 	items, err := canonicalPurchaseOrderItems(dto.Items)
 	if err != nil {
 		return nil, err
 	}
+	o.AplicarTotais(entity.CalcularTotais(o, items))
 	var created *entity.PurchaseOrder
 	if len(items) > 0 {
 		created, err = uc.Repo.CreateWithItems(ctx, o, items)
@@ -166,11 +205,10 @@ func canonicalPurchaseOrderItems(inputs []request.CreatePurchaseOrderItemDTO) ([
 		if input.UnitPrice < 0 || input.DiscountPct < 0 || input.DiscountPct > 100 {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("preço ou desconto inválido na linha %d", i+1))
 		}
-		gross := input.RequestedQty * input.UnitPrice
 		line := &entity.PurchaseOrderItem{
 			Sequence: i + 1, ItemCode: input.ItemCode, Mask: input.Mask,
 			RequestedQty: input.RequestedQty, UnitPrice: input.UnitPrice,
-			TotalPrice:  gross - gross*input.DiscountPct/100,
+			TotalPrice:  entity.TotalDaLinha(input.RequestedQty, input.UnitPrice, input.DiscountPct),
 			DiscountPct: input.DiscountPct, ICMSPct: input.ICMSPct, ICMSSTPct: input.ICMSSTPct,
 			TolerancePct: input.TolerancePct, Status: entity.PurchaseOrderItemStatusOPEN,
 			PurchaseUOM: input.PurchaseUOM, InternalUOM: input.InternalUOM,

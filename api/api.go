@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	pedidocompraExport "github.com/FelipePn10/panossoerp/internal/infrastructure/export/pedidocompra"
 	marginRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/margin"
 	"github.com/jackc/pgx/v5"
 	"net/http"
@@ -781,9 +782,11 @@ func (app *application) mount() chi.Router {
 
 	// purchase order
 	poRepo := purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(app.db.Pool)
+	poApproveUC := &purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC}
+	poGeracao := &purchase_order_uc.Geracao{Repo: poRepo, Almoxarifados: poRepo, Aprovacao: poApproveUC}
 	purchaseOrderHandler := handler.NewPurchaseOrderHandler(
-		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC},
-		&purchase_order_uc.UpdatePurchaseOrderUseCase{Repo: poRepo, Auth: authService},
+		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo},
+		&purchase_order_uc.UpdatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC},
 		&purchase_order_uc.GetPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersBySupplierUseCase{Repo: poRepo, Auth: authService},
@@ -793,7 +796,7 @@ func (app *application) mount() chi.Router {
 		// received into the inspection warehouse and an inspection order is opened.
 		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC, Tolerances: purchaseToleranceUC},
 		// Alçada de valores: procurementUC resolves the approval limit rule.
-		&purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC},
+		poApproveUC,
 		&purchase_order_uc.ConsultPurchaseOrdersUseCase{Reader: poRepo, Auth: authService},
 	)
 
@@ -806,13 +809,16 @@ func (app *application) mount() chi.Router {
 			PriceProvider: purchasePriceUC,
 			UOMConverter:  itemConversionUC,
 			FiscalClass:   fiscalClassUC,
+			Almoxarifados: poRepo,
 		},
+		&purchase_order_uc.UpdatePurchaseOrderItemUseCase{Repo: poRepo, Auth: authService},
+		&purchase_order_uc.CancelPurchaseOrderItemUseCase{Repo: poRepo, Auth: authService},
 	)
 
 	// MRP purchase suggestions (PURCHASE planned orders → purchase order)
 	purchaseSuggestionHandler := handler.NewPurchaseSuggestionHandler(
 		&purchase_order_uc.ListPurchaseSuggestionsUseCase{Planned: plannedRepo, Auth: authService},
-		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC},
+		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC},
 		&purchase_order_uc.RejectPurchaseSuggestionUseCase{Planned: plannedRepo, Auth: authService},
 	)
 
@@ -827,6 +833,7 @@ func (app *application) mount() chi.Router {
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
 		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService),
 		&purchase_requisition_uc.GeneratePurchaseOrdersUseCase{
+			Geracao:          poGeracao,
 			Reqs:             purchaseReqRepository,
 			POs:              poRepo,
 			Auth:             authService,
@@ -842,6 +849,7 @@ func (app *application) mount() chi.Router {
 	purchaseQuotationHandler := handler.NewPurchaseQuotationHandler(
 		purchase_quotation_uc.NewPurchaseQuotationUseCase(purchaseQuotationRepository, purchaseReqRepository, plannedRepo, authService),
 		&purchase_quotation_uc.GenerateOrdersFromQuotationUseCase{
+			Geracao:          poGeracao,
 			Quotations:       purchaseQuotationRepository,
 			Reqs:             purchaseReqRepository,
 			POs:              poRepo,
@@ -1225,6 +1233,19 @@ func (app *application) mount() chi.Router {
 	})
 	notifyExcUC := mrp_uc.NewNotifyExceptionsUseCase(mrpRepo, emailSvc).WithOutbox(notificationRepository)
 	mrpExcHandler := handler.NewMRPExceptionsHandler(notifyExcUC)
+
+	// Pedido de compra: documento (PDF/e-mail), acompanhamento de entregas,
+	// histórico de preço, notas por linha e previsão de pagamentos.
+	poConsultas := purchaseOrderRepo.NewConsultasPG(app.db.Pool, fiscalRepository)
+	poPrevisaoUC := &purchase_order_uc.PrevisaoPagamentosUseCase{Repo: poRepo, Condicoes: custRepo, Auth: authService}
+	poComprasHandler := &handler.PurchaseOrderComprasHandler{
+		Documento: &purchase_order_uc.DocumentoPedidoUseCase{Repo: poRepo, Consultas: poConsultas, Previsao: poPrevisaoUC,
+			Gerador: pedidocompraExport.Gerador{}, Email: notification.NewCentralEmailProvider(emailSvc), Auth: authService},
+		AcompanhamentoUC: &purchase_order_uc.AcompanhamentoUseCase{Repo: poRepo, Consultas: poConsultas, Auth: authService},
+		Historico:        &purchase_order_uc.HistoricoPrecoUseCase{Consultas: poConsultas, Auth: authService},
+		NotasUC:          &purchase_order_uc.NotasDoPedidoUseCase{Repo: poRepo, Consultas: poConsultas, Auth: authService},
+		Previsao:         poPrevisaoUC,
+	}
 
 	// NF-e purchase import
 	importNFeUC := &fiscalUC.ImportNFePurchaseUseCase{
@@ -1892,6 +1913,17 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", purchaseOrderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", purchaseOrderHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consultation", purchaseOrderHandler.Consult)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/acompanhamento", poComprasHandler.Acompanhamento)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/historico-preco", poComprasHandler.HistoricoPreco)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/previsao-pagamentos", poComprasHandler.PrevisaoGeral)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/pdf", poComprasHandler.PDF)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/destinatarios", poComprasHandler.Destinatarios)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/envios", poComprasHandler.Envios)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/enviar", poComprasHandler.Enviar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/notas", poComprasHandler.Notas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/previsao-pagamentos", poComprasHandler.PrevisaoDoPedido)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/items/{lineCode}/followups", poComprasHandler.Followups)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items/{lineCode}/followups", poComprasHandler.RegistrarFollowup)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/attachments/{attachmentID}/download", purchaseOrderHandler.DownloadAttachment)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", purchaseOrderHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", purchaseOrderHandler.Update)
@@ -1903,6 +1935,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/approve", purchaseSuggestionHandler.Approve)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/reject", purchaseSuggestionHandler.Reject)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items", purchaseOrderItemHandler.AddItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/items/{lineCode}", purchaseOrderItemHandler.UpdateItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/items/{lineCode}/cancel", purchaseOrderItemHandler.CancelItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/receipts", purchaseOrderHandler.Receive)
 			// Alçada de valores: approve evaluates the limit; authorize releases a
 			// blocked order and is restricted to a higher authority (ADMIN).
