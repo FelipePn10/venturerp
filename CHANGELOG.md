@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.5.0] — 2026-10-07
+
+- feat(fiscal): ciclo fiscal completo da NF-e de entrada à EFD (`bc4be66`)
+
 - feat(entrada de NF-e): importar a mesma nota duas vezes ao mesmo tempo não
   duplica mais a entrada. Quem chega em segundo recebe "a nota está sendo
   importada por outro usuário" na hora, em vez de esperar ou criar outra entrada
