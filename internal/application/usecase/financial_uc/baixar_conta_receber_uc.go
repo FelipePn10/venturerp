@@ -19,6 +19,8 @@ type BaixarContaReceberUseCase struct {
 	Repo       repository.FinancialRepository
 	Auth       ports.AuthService
 	FiscalRepo fiscalrepo.FiscalRepository
+	// Contabil, quando presente, contabiliza o recebimento na mesma transação.
+	Contabil Contabil
 }
 
 func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto request.BaixarContaReceberDTO) error {
@@ -45,8 +47,18 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		return errorsuc.NewValidationError("data de recebimento inválida: use o formato AAAA-MM-DD")
 	}
 
-	valorRecebido := decimal.NewFromFloat(dto.ValorRecebido)
-	valorOriginal := cr.ValorBruto.Sub(cr.ValorRecebido)
+	valorRecebido := decimal.NewFromFloat(dto.ValorRecebido).Round(2)
+	desconto := dto.Desconto.Round(2)
+	valorOriginal := cr.ValorBruto.Sub(cr.ValorRecebido).Sub(cr.Desconto)
+	if !valorRecebido.IsPositive() {
+		return errorsuc.NewValidationError("informe o valor recebido")
+	}
+	if desconto.IsNegative() {
+		return errorsuc.NewValidationError("o desconto não pode ser negativo")
+	}
+	if valorRecebido.Add(desconto).GreaterThan(valorOriginal.Add(decimal.NewFromFloat(0.005))) {
+		return errorsuc.NewValidationError(fmt.Sprintf("valor recebido + desconto (%s) passa do saldo do título (%s)", valorRecebido.Add(desconto).StringFixed(2), valorOriginal.StringFixed(2)))
+	}
 
 	jurosMes := 0.01
 	multaAtraso := 0.02
@@ -63,8 +75,12 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 	if dataRecebimento.After(cr.DataVencimento) {
 		daysLate := int(math.Ceil(dataRecebimento.Sub(cr.DataVencimento).Hours() / 24))
 		monthsLate := float64(daysLate) / 30.0
-		jurosDec = valorOriginal.Mul(decimal.NewFromFloat(jurosMes)).Mul(decimal.NewFromFloat(monthsLate))
-		multaDec = valorOriginal.Mul(decimal.NewFromFloat(multaAtraso))
+		// Juros e multa sobre o que está sendo quitado agora: na baixa parcial o
+		// saldo vira outro título e paga os seus quando for quitado. Calcular
+		// sobre o saldo inteiro cobrava a multa duas vezes sobre o mesmo valor.
+		base := valorRecebido.Add(desconto)
+		jurosDec = base.Mul(decimal.NewFromFloat(jurosMes)).Mul(decimal.NewFromFloat(monthsLate))
+		multaDec = base.Mul(decimal.NewFromFloat(multaAtraso))
 	}
 
 	params := repository.BaixaParams{
@@ -72,13 +88,20 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		ValorPago:       valorRecebido.InexactFloat64(),
 		Juros:           jurosDec.InexactFloat64(),
 		Multa:           multaDec.InexactFloat64(),
-		Desconto:        0,
+		Desconto:        desconto.InexactFloat64(),
 		DataPagamento:   dataRecebimento,
 		Observacao:      dto.Observacao,
 		BaixadoPor:      userID,
 	}
 
+	jurosDec, multaDec = jurosDec.Round(2), multaDec.Round(2)
+	params.Juros, params.Multa = jurosDec.InexactFloat64(), multaDec.InexactFloat64()
 	totalFluxo := valorRecebido.Add(jurosDec).Add(multaDec)
+
+	lote, err := loteRecebimento(ctx, uc.Contabil, cr, dto.ContaBancariaID, valorRecebido, jurosDec.Add(multaDec), desconto, dataRecebimento)
+	if err != nil {
+		return err
+	}
 
 	return uc.Repo.BaixarContaReceberAtomico(ctx, id, params, entity.FluxoCaixa{
 		Data:            dataRecebimento,
@@ -88,5 +111,5 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		ContasReceberID: &id,
 		Descricao:       dto.Observacao,
 		Conciliado:      false,
-	}, valorOriginal, dto.ContaBancariaID)
+	}, valorOriginal, dto.ContaBancariaID, lote)
 }

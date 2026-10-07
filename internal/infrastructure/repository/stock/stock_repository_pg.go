@@ -1859,3 +1859,66 @@ func (r *StockRepositorySQLC) encerrarOnda(ctx context.Context, codigo int64, at
 		Linhas: []entity.LinhaOnda{}, EmFalta: []entity.FaltaNaOnda{},
 	}, nil
 }
+
+// AjustarCustoTx soma `valor` ao custo do saldo do item no almoxarifado (valor
+// negativo estorna), recalculando o custo médio, e registra o movimento
+// AJUSTE_CUSTO de quantidade zero. Com o saldo em vários endereços, o valor é
+// repartido pela quantidade de cada um. Sem saldo, nada é aplicado. O estorno
+// nunca leva o custo total abaixo de zero. Devolve o id do movimento e o
+// valor efetivamente aplicado.
+func AjustarCustoTx(ctx context.Context, tx pgx.Tx, enterpriseID, itemCode int64, mask string, warehouseID int64,
+	valor decimal.Decimal, refType string, refCode int64, notes string, createdBy uuid.UUID) (int64, decimal.Decimal, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT id, quantity, total_cost FROM public.stock_balances
+		  WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4 AND quantity > 0 ORDER BY id FOR UPDATE`,
+		itemCode, mask, warehouseID, enterpriseID)
+	if err != nil {
+		return 0, decimal.Zero, fmt.Errorf("lendo o saldo para o ajuste de custo: %w", err)
+	}
+	type saldo struct {
+		id         int64
+		qtd, custo decimal.Decimal
+	}
+	var ss []saldo
+	total := decimal.Zero
+	for rows.Next() {
+		var s saldo
+		if err := rows.Scan(&s.id, &s.qtd, &s.custo); err != nil {
+			rows.Close()
+			return 0, decimal.Zero, err
+		}
+		ss = append(ss, s)
+		total = total.Add(s.qtd)
+	}
+	rows.Close()
+	if len(ss) == 0 || !total.IsPositive() || valor.IsZero() {
+		return 0, decimal.Zero, nil
+	}
+	aplicado := decimal.Zero
+	restante := valor
+	for i, s := range ss {
+		parte := valor.Mul(s.qtd).Div(total).Round(4)
+		if i == len(ss)-1 {
+			parte = restante
+		}
+		if s.custo.Add(parte).IsNegative() {
+			parte = s.custo.Neg()
+		}
+		restante = restante.Sub(parte)
+		novo := s.custo.Add(parte)
+		if _, err := tx.Exec(ctx,
+			`UPDATE public.stock_balances SET total_cost=$2, avg_cost=$2/quantity, updated_at=NOW() WHERE id=$1`, s.id, novo); err != nil {
+			return 0, decimal.Zero, fmt.Errorf("aplicando o ajuste de custo: %w", err)
+		}
+		aplicado = aplicado.Add(parte)
+	}
+	var movID int64
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO public.stock_movements (item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
+		     reference_type, reference_code, notes, created_by, enterprise_id)
+		 VALUES ($1,$2,$3,$4,0,0,$5,$6,$7,$8,$9,$10) RETURNING id`,
+		itemCode, mask, warehouseID, entity.MovementTypeCostAdjustment, aplicado, refType, refCode, notes, createdBy, enterpriseID).Scan(&movID); err != nil {
+		return 0, decimal.Zero, fmt.Errorf("registrando o ajuste de custo: %w", err)
+	}
+	return movID, aplicado, nil
+}

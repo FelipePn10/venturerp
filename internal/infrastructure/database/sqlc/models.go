@@ -3402,6 +3402,8 @@ type AccountingJournalEntry struct {
 	Description     string
 	EntryType       string
 	CreatedAt       pgtype.Timestamptz
+	SourceType      pgtype.Text
+	SourceID        *int64
 }
 
 type AccountingPlan struct {
@@ -3412,6 +3414,46 @@ type AccountingPlan struct {
 	ValidTo     pgtype.Date
 	Status      string
 	CreatedAt   pgtype.Timestamptz
+}
+
+type AccountingPostingParam struct {
+	EnterpriseID                 int64
+	PlanID                       int64
+	FornecedoresAccountID        int64
+	IcmsRecuperarAccountID       *int64
+	IpiRecuperarAccountID        *int64
+	PisRecuperarAccountID        *int64
+	CofinsRecuperarAccountID     *int64
+	IbsRecuperarAccountID        *int64
+	CbsRecuperarAccountID        *int64
+	IrrfRecolherAccountID        *int64
+	PccRecolherAccountID         *int64
+	InssRecolherAccountID        *int64
+	IssRecolherAccountID         *int64
+	DespesaPadraoAccountID       *int64
+	ContabilizarEntrada          bool
+	UpdatedAt                    pgtype.Timestamptz
+	UpdatedBy                    pgtype.UUID
+	ContabilizarPagamentos       bool
+	ContabilizarRecebimentos     bool
+	ContabilizarSaidas           bool
+	BancoPadraoAccountID         *int64
+	JurosPagosAccountID          *int64
+	DescontosObtidosAccountID    *int64
+	ClientesAccountID            *int64
+	JurosRecebidosAccountID      *int64
+	DescontosConcedidosAccountID *int64
+	ReceitaVendasAccountID       *int64
+	IcmsVendasAccountID          *int64
+	IcmsRecolherAccountID        *int64
+	IcmsStRecolherAccountID      *int64
+	IpiRecolherAccountID         *int64
+	PisVendasAccountID           *int64
+	PisRecolherAccountID         *int64
+	CofinsVendasAccountID        *int64
+	CofinsRecolherAccountID      *int64
+	CmvAccountID                 *int64
+	EstoqueAccountID             *int64
 }
 
 type AccountingReferenceAccount struct {
@@ -4141,21 +4183,22 @@ type ConsumerServiceKnowledgeSource struct {
 }
 
 type ContasBancaria struct {
-	ID           int64
-	Banco        string
-	Agencia      string
-	Conta        string
-	Digito       pgtype.Text
-	Descricao    string
-	Titular      pgtype.Text
-	SaldoInicial pgtype.Numeric
-	ChavePix     pgtype.Text
-	TipoChavePix pgtype.Text
-	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
-	CreatedBy    pgtype.UUID
-	EnterpriseID *int64
+	ID                  int64
+	Banco               string
+	Agencia             string
+	Conta               string
+	Digito              pgtype.Text
+	Descricao           string
+	Titular             pgtype.Text
+	SaldoInicial        pgtype.Numeric
+	ChavePix            pgtype.Text
+	TipoChavePix        pgtype.Text
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+	EnterpriseID        *int64
+	AccountingAccountID *int64
 }
 
 type ContasPagar struct {
@@ -4197,6 +4240,18 @@ type ContasPagar struct {
 	UpdatedAt                pgtype.Timestamptz
 	FornecedorCnpj           pgtype.Text
 	EnterpriseID             *int64
+	RetencaoTipo             pgtype.Text
+	FreightDocumentID        *int64
+}
+
+type ContasPagarRateio struct {
+	ID            int64
+	EnterpriseID  int64
+	ContaPagarID  int64
+	PlanoContasID int64
+	CentroCustoID *int64
+	Valor         pgtype.Numeric
+	CreatedAt     pgtype.Timestamptz
 }
 
 type ContasReceber struct {
@@ -4234,6 +4289,7 @@ type ContasReceber struct {
 	UpdatedAt           pgtype.Timestamptz
 	CondicaoPagamentoID *int64
 	EnterpriseID        *int64
+	FornecedorID        *int64
 }
 
 // Margem apurada por linha de venda, com a cascata congelada na data do cálculo.
@@ -4899,6 +4955,11 @@ type EntryOperationType struct {
 	IsActive           bool
 	CreatedAt          pgtype.Timestamptz
 	CreatedBy          pgtype.UUID
+	MovimentaEstoque   bool
+	GeraFinanceiro     bool
+	CreditaIcms        bool
+	CreditaIpi         bool
+	CreditaPisCofins   bool
 }
 
 type ExtratoBancario struct {
@@ -5024,6 +5085,11 @@ type FiscalConfig struct {
 	EnterpriseID              int64
 	TradeName                 pgtype.Text
 	Email                     pgtype.Text
+	DfeUltimaVersao           int64
+	DfeSincronizadoEm         pgtype.Timestamptz
+	DfeSyncAutomatico         bool
+	DfeUltimaTentativa        pgtype.Timestamptz
+	DfeUltimoErro             pgtype.Text
 }
 
 type FiscalCte struct {
@@ -5058,41 +5124,70 @@ type FiscalCte struct {
 	FocusRef            pgtype.Text
 	Protocolo           pgtype.Text
 	EmissionData        []byte
+	EnterpriseID        int64
 }
 
 type FiscalEntry struct {
-	ID                  int64
-	ChaveAcesso         pgtype.Text
-	NumeroNf            int64
-	Serie               string
-	Modelo              string
-	DataEmissao         pgtype.Date
-	DataEntrada         pgtype.Date
-	CnpjEmitente        string
-	RazaoSocialEmitente string
-	IeEmitente          pgtype.Text
-	UfEmitente          pgtype.Text
-	ValorProdutos       pgtype.Numeric
-	ValorFrete          pgtype.Numeric
-	ValorSeguro         pgtype.Numeric
-	ValorDesconto       pgtype.Numeric
-	ValorIpi            pgtype.Numeric
-	ValorIcms           pgtype.Numeric
-	ValorPis            pgtype.Numeric
-	ValorCofins         pgtype.Numeric
-	ValorTotal          pgtype.Numeric
-	TipoDocumento       string
-	PurchaseOrderCode   *int64
-	CteCode             *int64
-	Status              string
-	XmlPath             pgtype.Text
-	Notes               pgtype.Text
-	IsActive            bool
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	CreatedBy           pgtype.UUID
-	SupplierCode        *int64
-	EnterpriseID        *int64
+	ID                        int64
+	ChaveAcesso               pgtype.Text
+	NumeroNf                  int64
+	Serie                     string
+	Modelo                    string
+	DataEmissao               pgtype.Date
+	DataEntrada               pgtype.Date
+	CnpjEmitente              string
+	RazaoSocialEmitente       string
+	IeEmitente                pgtype.Text
+	UfEmitente                pgtype.Text
+	ValorProdutos             pgtype.Numeric
+	ValorFrete                pgtype.Numeric
+	ValorSeguro               pgtype.Numeric
+	ValorDesconto             pgtype.Numeric
+	ValorIpi                  pgtype.Numeric
+	ValorIcms                 pgtype.Numeric
+	ValorPis                  pgtype.Numeric
+	ValorCofins               pgtype.Numeric
+	ValorTotal                pgtype.Numeric
+	TipoDocumento             string
+	PurchaseOrderCode         *int64
+	CteCode                   *int64
+	Status                    string
+	XmlPath                   pgtype.Text
+	Notes                     pgtype.Text
+	IsActive                  bool
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
+	CreatedBy                 pgtype.UUID
+	SupplierCode              *int64
+	EnterpriseID              *int64
+	NaturezaOperacao          pgtype.Text
+	CnpjDestinatario          pgtype.Text
+	Protocolo                 pgtype.Text
+	ValorIcmsSt               pgtype.Numeric
+	ValorOutras               pgtype.Numeric
+	ModalidadeFrete           pgtype.Text
+	InformacoesComplementares pgtype.Text
+	XmlContent                pgtype.Text
+	SemPagamento              bool
+	ApprovedAt                pgtype.Timestamptz
+	ApprovedBy                pgtype.UUID
+	EntryOperationCode        *int64
+	BaseIbscbs                pgtype.Numeric
+	ValorIbs                  pgtype.Numeric
+	ValorCbs                  pgtype.Numeric
+	ValorIs                   pgtype.Numeric
+	ValorRetPis               pgtype.Numeric
+	ValorRetCofins            pgtype.Numeric
+	ValorRetCsll              pgtype.Numeric
+	BaseIrrf                  pgtype.Numeric
+	ValorIrrf                 pgtype.Numeric
+	BaseRetPrev               pgtype.Numeric
+	ValorRetPrev              pgtype.Numeric
+	ValorIssRet               pgtype.Numeric
+	StockStatus               string
+	CancelledAt               pgtype.Timestamptz
+	CancelledBy               pgtype.UUID
+	CancelReason              pgtype.Text
 }
 
 type FiscalEntryDivergence struct {
@@ -5107,6 +5202,29 @@ type FiscalEntryDivergence struct {
 	State             string
 	CreatedAt         pgtype.Timestamptz
 	ResolvedAt        pgtype.Timestamptz
+}
+
+type FiscalEntryInstallment struct {
+	ID             int64
+	EnterpriseID   int64
+	FiscalEntryID  int64
+	Numero         int32
+	Documento      pgtype.Text
+	DataVencimento pgtype.Date
+	Valor          pgtype.Numeric
+	FormaPagamento pgtype.Text
+	Origem         string
+	ContaPagarID   *int64
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type FiscalEntryInstallmentAllocation struct {
+	ID            int64
+	InstallmentID int64
+	PlanoContasID int64
+	CentroCustoID *int64
+	Valor         pgtype.Numeric
 }
 
 type FiscalEntryItem struct {
@@ -5143,6 +5261,44 @@ type FiscalEntryItem struct {
 	SupplierItemIdentifier pgtype.Text
 	ResolutionStrategy     pgtype.Text
 	ResolvedAt             pgtype.Timestamptz
+	Ean                    pgtype.Text
+	Cest                   pgtype.Text
+	OrigemMercadoria       pgtype.Text
+	ValorFrete             pgtype.Numeric
+	ValorSeguro            pgtype.Numeric
+	ValorDesconto          pgtype.Numeric
+	ValorOutras            pgtype.Numeric
+	BaseIcmsSt             pgtype.Numeric
+	ValorIcmsSt            pgtype.Numeric
+	ValorContabil          pgtype.Numeric
+	FatorConversao         pgtype.Numeric
+	QuantidadeEstoque      pgtype.Numeric
+	PedidoCompraXml        pgtype.Text
+	ItemPedidoXml          pgtype.Text
+	PlanoContasID          *int64
+	CentroCustoID          *int64
+	CfopEntrada            pgtype.Text
+	EntryOperationCode     *int64
+	MovimentaEstoque       bool
+	GeraFinanceiro         bool
+	WarehouseID            *int64
+	PurchaseOrderCode      *int64
+	PurchaseOrderItemCode  *int64
+	QtdRecebidaAntes       pgtype.Numeric
+	StockMovementID        *int64
+	CustoAquisicao         pgtype.Numeric
+	CstIbscbs              pgtype.Text
+	CclassTrib             pgtype.Text
+	BaseIbscbs             pgtype.Numeric
+	AliqIbsUf              pgtype.Numeric
+	ValorIbsUf             pgtype.Numeric
+	AliqIbsMun             pgtype.Numeric
+	ValorIbsMun            pgtype.Numeric
+	ValorIbs               pgtype.Numeric
+	AliqCbs                pgtype.Numeric
+	ValorCbs               pgtype.Numeric
+	ValorIs                pgtype.Numeric
+	GeraCreditoIbscbs      bool
 }
 
 type FiscalExit struct {
@@ -5205,42 +5361,132 @@ type FiscalExit struct {
 	// Cliente de onde o endereço e a condição de pagamento foram resolvidos.
 	CustomerCode                 *int64
 	CustomerMaterialRemittanceID *int64
+	Finalidade                   int16
+	NfeReferenciada              pgtype.Text
+	FiscalEntryID                *int64
+	SupplierCode                 *int64
 }
 
 type FiscalExitItem struct {
+	ID                 int64
+	FiscalExitID       int64
+	Sequence           int32
+	ItemCode           *int64
+	Ncm                pgtype.Text
+	Cfop               string
+	Quantity           pgtype.Numeric
+	UnitPrice          pgtype.Numeric
+	TotalPrice         pgtype.Numeric
+	BaseIcms           pgtype.Numeric
+	AliqIcms           pgtype.Numeric
+	ValorIcms          pgtype.Numeric
+	ValorIcmsDiferido  pgtype.Numeric
+	BaseIpi            pgtype.Numeric
+	AliqIpi            pgtype.Numeric
+	ValorIpi           pgtype.Numeric
+	ValorPis           pgtype.Numeric
+	ValorCofins        pgtype.Numeric
+	CstIcms            pgtype.Text
+	CstIpi             pgtype.Text
+	CstPis             pgtype.Text
+	CstCofins          pgtype.Text
+	OrigemMercadoria   string
+	Description        pgtype.Text
+	CreatedAt          pgtype.Timestamptz
+	AliqPis            pgtype.Numeric
+	AliqCofins         pgtype.Numeric
+	BaseIcmsSt         pgtype.Numeric
+	AliqIcmsSt         pgtype.Numeric
+	ValorIcmsSt        pgtype.Numeric
+	Mva                pgtype.Numeric
+	UnidadeComercial   pgtype.Text
+	CodigoProduto      pgtype.Text
+	SalesOrderItemCode *int64
+	FiscalEntryItemID  *int64
+}
+
+type FiscalFreightAllocation struct {
 	ID                int64
-	FiscalExitID      int64
-	Sequence          int32
+	EnterpriseID      int64
+	FreightID         int64
+	FiscalEntryID     int64
+	FiscalEntryItemID int64
 	ItemCode          *int64
-	Ncm               pgtype.Text
-	Cfop              string
-	Quantity          pgtype.Numeric
-	UnitPrice         pgtype.Numeric
-	TotalPrice        pgtype.Numeric
-	BaseIcms          pgtype.Numeric
-	AliqIcms          pgtype.Numeric
-	ValorIcms         pgtype.Numeric
-	ValorIcmsDiferido pgtype.Numeric
-	BaseIpi           pgtype.Numeric
-	AliqIpi           pgtype.Numeric
-	ValorIpi          pgtype.Numeric
-	ValorPis          pgtype.Numeric
-	ValorCofins       pgtype.Numeric
-	CstIcms           pgtype.Text
-	CstIpi            pgtype.Text
-	CstPis            pgtype.Text
-	CstCofins         pgtype.Text
-	OrigemMercadoria  string
-	Description       pgtype.Text
-	CreatedAt         pgtype.Timestamptz
-	AliqPis           pgtype.Numeric
-	AliqCofins        pgtype.Numeric
-	BaseIcmsSt        pgtype.Numeric
-	AliqIcmsSt        pgtype.Numeric
-	ValorIcmsSt       pgtype.Numeric
-	Mva               pgtype.Numeric
-	UnidadeComercial  pgtype.Text
-	CodigoProduto     pgtype.Text
+	WarehouseID       *int64
+	PlanoContasID     *int64
+	CentroCustoID     *int64
+	Valor             pgtype.Numeric
+	ValorEstoque      pgtype.Numeric
+	ValorDespesa      pgtype.Numeric
+	StockMovementID   *int64
+}
+
+type FiscalFreightDocument struct {
+	ID                 int64
+	EnterpriseID       int64
+	ChaveCte           pgtype.Text
+	Numero             int64
+	Serie              string
+	DataEmissao        pgtype.Date
+	CnpjTransportadora string
+	NomeTransportadora string
+	UfTransportadora   pgtype.Text
+	SupplierCode       *int64
+	Cfop               pgtype.Text
+	ValorFrete         pgtype.Numeric
+	BaseIcms           pgtype.Numeric
+	AliqIcms           pgtype.Numeric
+	ValorIcms          pgtype.Numeric
+	CreditaIcms        bool
+	TipoRateio         string
+	DataVencimento     pgtype.Date
+	Status             string
+	ContaPagarID       *int64
+	XmlContent         pgtype.Text
+	Observacao         pgtype.Text
+	CreatedBy          pgtype.UUID
+	CreatedAt          pgtype.Timestamptz
+	LancadoEm          pgtype.Timestamptz
+	LancadoPor         pgtype.UUID
+	CanceladoEm        pgtype.Timestamptz
+	CancelReason       pgtype.Text
+}
+
+type FiscalFreightDocumentEntry struct {
+	FreightID     int64
+	FiscalEntryID int64
+	EnterpriseID  int64
+}
+
+type FiscalReceivedDocument struct {
+	ID            int64
+	EnterpriseID  int64
+	ChaveAcesso   string
+	CnpjEmitente  pgtype.Text
+	NomeEmitente  pgtype.Text
+	NumeroNf      *int64
+	Serie         pgtype.Text
+	DataEmissao   pgtype.Date
+	ValorTotal    pgtype.Numeric
+	Situacao      pgtype.Text
+	Manifestacao  pgtype.Text
+	XmlCompleto   bool
+	Versao        *int64
+	FiscalEntryID *int64
+	SyncedAt      pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
+type FiscalReturnSettlement struct {
+	ID             int64
+	EnterpriseID   int64
+	FiscalExitID   int64
+	ContaPagarID   *int64
+	ContaReceberID *int64
+	Valor          pgtype.Numeric
+	QuitouTitulo   bool
+	CreatedAt      pgtype.Timestamptz
+	EstornadoEm    pgtype.Timestamptz
 }
 
 type FluxoCaixa struct {
@@ -7243,16 +7489,17 @@ type PlanningRunHistory struct {
 }
 
 type PlanoConta struct {
-	ID           int64
-	Codigo       string
-	Descricao    string
-	Tipo         string
-	Natureza     string
-	ParentCode   pgtype.Text
-	Nivel        int32
-	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
-	EnterpriseID *int64
+	ID                  int64
+	Codigo              string
+	Descricao           string
+	Tipo                string
+	Natureza            string
+	ParentCode          pgtype.Text
+	Nivel               int32
+	IsActive            bool
+	CreatedAt           pgtype.Timestamptz
+	EnterpriseID        *int64
+	AccountingAccountID *int64
 }
 
 type PreventiveService struct {
@@ -7790,6 +8037,7 @@ type PurchaseOrderItem struct {
 	ProductionOrderID         *int64
 	PurchaseRequisitionCode   *int64
 	PurchaseRequisitionItemID *int64
+	InvoicedQty               pgtype.Numeric
 }
 
 type PurchaseOrderSequence struct {

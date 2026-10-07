@@ -52,6 +52,13 @@ Natureza fiscal aplicada nas compras (CFOP, tributação, destino), com grupos d
 
 A `validate` confere a consistência da operação antes do uso no recebimento.
 
+**Comportamento na nota de entrada (TES, migração 000377):** `movimenta_estoque`,
+`gera_financeiro`, `credita_icms`, `credita_ipi` e `credita_pis_cofins`
+(booleanos; omitidos na criação valem `true`, no `PUT` mantêm o gravado). A
+operação do item (ou da nota, ou da linha do pedido) aplica esses flags e a
+natureza vira o CFOP de entrada ajustado à UF. Ver
+[`fiscal-financeiro.md` §5](fiscal-financeiro.md#5-módulo-fiscal--nf-e-de-entrada).
+
 ---
 
 > Demais módulos fiscais (NF-e saída/entrada, CT-e, IBPT, apuração ICMS/IPI/PIS/COFINS,

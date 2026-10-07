@@ -40,7 +40,8 @@ func NewAccountingHandler(
 }
 
 // Balancete returns the trial balance (per-account debits/credits/balance) for a
-// plan and period. Query: plan_id, empresa_id, from, to (YYYY-MM-DD).
+// plan and period. Query: plan_id, from, to (YYYY-MM-DD). A empresa é sempre a
+// da sessão: empresa_id, se vier, é ignorado.
 func (h *AccountingHandler) Balancete(w http.ResponseWriter, r *http.Request) {
 	planID, _ := strconv.ParseInt(r.URL.Query().Get("plan_id"), 10, 64)
 	empresaID, _ := strconv.Atoi(r.URL.Query().Get("empresa_id"))

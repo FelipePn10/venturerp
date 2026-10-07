@@ -62,21 +62,29 @@ type FiscalExit struct {
 	// originou (migração 000374). É o que permite RETOMAR um rascunho quando o
 	// faturamento falha no meio, em vez de criar outra nota ao repetir.
 	CustomerMaterialRemittanceID *int64
-	ShipmentLoadCode             *int64
-	ShipmentCode                 *int64
-	FiscalCouponNumber           *string
-	FiscalCouponDate             *time.Time
-	FiscalCouponECFSerial        *string
-	Status                       FiscalExitStatus
-	Protocolo                    *string
-	XmlPath                      *string
-	DanfePath                    *string
-	FocusRef                     *string
-	IsActive                     bool
-	CreatedAt                    time.Time
-	UpdatedAt                    time.Time
-	CreatedBy                    uuid.UUID
-	Itens                        []*FiscalExitItem
+	// Finalidade da NF-e: 1 normal, 2 complementar, 3 ajuste, 4 devolução.
+	Finalidade int
+	// NFeReferenciada é a chave da nota de origem (devolução de compra).
+	NFeReferenciada *string
+	// FiscalEntryID: a nota de entrada devolvida (devolução de compra).
+	FiscalEntryID *int64
+	// SupplierCode: o fornecedor destinatário da devolução.
+	SupplierCode          *int64
+	ShipmentLoadCode      *int64
+	ShipmentCode          *int64
+	FiscalCouponNumber    *string
+	FiscalCouponDate      *time.Time
+	FiscalCouponECFSerial *string
+	Status                FiscalExitStatus
+	Protocolo             *string
+	XmlPath               *string
+	DanfePath             *string
+	FocusRef              *string
+	IsActive              bool
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	CreatedBy             uuid.UUID
+	Itens                 []*FiscalExitItem
 }
 
 type FiscalExitItem struct {
@@ -118,5 +126,10 @@ type FiscalExitItem struct {
 	// (material de terceiro, que não existe no nosso cadastro) ou conter letras.
 	// Nulo cai em `ItemCode`.
 	CodigoProduto *string
-	CreatedAt     time.Time
+	// SalesOrderItemCode é a linha do pedido de venda faturada por esta linha
+	// (faturamento a partir do pedido, total ou parcial).
+	SalesOrderItemCode *int64
+	// FiscalEntryItemID: a linha da nota de entrada devolvida por esta linha.
+	FiscalEntryItemID *int64
+	CreatedAt         time.Time
 }

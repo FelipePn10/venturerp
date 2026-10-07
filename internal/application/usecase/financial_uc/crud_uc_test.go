@@ -3,6 +3,7 @@ package financial_uc
 import (
 	"context"
 	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"testing"
 	"time"
 
@@ -48,7 +49,7 @@ type crudRepo struct {
 func (f *crudRepo) GetContaReceber(context.Context, int64) (*entity.ContaReceber, error) {
 	return f.cr, nil
 }
-func (f *crudRepo) BaixarContaReceberAtomico(_ context.Context, _ int64, p repository.BaixaParams, fc entity.FluxoCaixa, _ decimal.Decimal, _ int64) error {
+func (f *crudRepo) BaixarContaReceberAtomico(_ context.Context, _ int64, p repository.BaixaParams, fc entity.FluxoCaixa, _ decimal.Decimal, _ int64, _ *contabilizacao.Lote) error {
 	f.brParams = &p
 	f.brFluxo = &fc
 	return nil

@@ -11,7 +11,11 @@ import (
 
 type GetFiscalEntryUseCase struct {
 	Repo repository.FiscalRepository
-	Auth ports.AuthService
+	// Docs, quando presente, devolve a nota completa: itens com o cadastro
+	// conciliado, parcelas, totais por plano de contas e pendências.
+	Docs        repository.FiscalEntryDocumentRepository
+	Tolerancias ports.PurchaseToleranceEvaluator
+	Auth        ports.AuthService
 }
 
 func (uc *GetFiscalEntryUseCase) Execute(ctx context.Context, id int64) (*response.FiscalEntryResponse, error) {
@@ -19,12 +23,24 @@ func (uc *GetFiscalEntryUseCase) Execute(ctx context.Context, id int64) (*respon
 		return nil, errorsuc.ErrUnauthorized
 	}
 
+	if uc.Docs != nil {
+		doc, err := uc.Docs.GetEntryDocument(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		servico := &EntradaServico{Docs: uc.Docs, Fiscal: uc.Repo, Tolerancias: uc.Tolerancias}
+		return servico.Responder(ctx, doc)
+	}
+
 	entry, err := uc.Repo.GetEntryByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	items, _ := uc.Repo.GetEntryItems(ctx, id)
+	items, err := uc.Repo.GetEntryItems(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	entry.Itens = items
 
 	return toFiscalEntryResponse(entry), nil

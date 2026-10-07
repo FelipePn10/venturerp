@@ -11,7 +11,15 @@ func toFiscalExitResponse(e *entity.FiscalExit) *response.FiscalExitResponse {
 	if e == nil {
 		return nil
 	}
+	finalidade := e.Finalidade
+	if finalidade == 0 {
+		finalidade = 1
+	}
 	return &response.FiscalExitResponse{
+		Finalidade:              finalidade,
+		NFeReferenciada:         e.NFeReferenciada,
+		FiscalEntryID:           e.FiscalEntryID,
+		SupplierCode:            e.SupplierCode,
 		ID:                      e.ID,
 		ChaveAcesso:             e.ChaveAcesso,
 		NumeroNF:                e.NumeroNF,

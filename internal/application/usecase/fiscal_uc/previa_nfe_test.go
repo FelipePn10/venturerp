@@ -308,3 +308,14 @@ func TestNumeroInformadoEhRespeitado(t *testing.T) {
 		t.Fatal("não deveria consultar a sequência quando o número foi informado")
 	}
 }
+
+func TestDataHoraEmissaoNoFusoDeBrasilia(t *testing.T) {
+	// 03:11 UTC = 00:11 em Brasília do mesmo dia: hora da transmissão.
+	agora := time.Date(2026, 10, 7, 3, 11, 49, 0, time.UTC)
+	if got := dataHoraEmissao(time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC), agora); got != "2026-10-07T00:11:49-03:00" {
+		t.Errorf("hoje = %s", got)
+	}
+	if got := dataHoraEmissao(time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), agora); got != "2026-10-05T00:00:00-03:00" {
+		t.Errorf("data passada = %s", got)
+	}
+}

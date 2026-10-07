@@ -116,7 +116,11 @@ func TestIntegration_FiscalExit_STPersistence(t *testing.T) {
 func TestIntegration_CTe_AuthorizationPersistence(t *testing.T) {
 	pool := testutil.Pool(t)
 	repo := fiscalrepo.NewFiscalRepositoryPG(pool)
-	ctx := context.Background()
+	// O CT-e é da empresa da sessão (migração 380); sem empresa é recusado.
+	if _, err := repo.CreateCTe(context.Background(), &entity.FiscalCTe{}); err == nil {
+		t.Fatal("CT-e sem empresa na sessão deveria ser recusado")
+	}
+	ctx := testutil.TenantContext(t, pool)
 
 	emission := `{"natureza_operacao":"Prestação de serviço de transporte","tipo_cte":0,"modal":"01"}`
 	cte := &entity.FiscalCTe{
@@ -143,6 +147,9 @@ func TestIntegration_CTe_AuthorizationPersistence(t *testing.T) {
 		t.Fatalf("CreateCTe: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM fiscal_cte WHERE id=$1", created.ID)
+	if _, err := repo.GetCTeByID(context.WithValue(context.Background(), contextkey.UserKey, &appsecurity.AuthUser{ID: uuid.NewString(), Role: "ADMIN", EnterpriseID: 999999999, EnterpriseCode: 999999999}), created.ID); err == nil {
+		t.Fatal("outra empresa leu o CT-e")
+	}
 
 	got, err := repo.GetCTeByID(ctx, created.ID)
 	if err != nil {

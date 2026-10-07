@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -11,6 +12,8 @@ import (
 	financialRepo "github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
+	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 )
 
@@ -21,6 +24,14 @@ type CancelFiscalExitUseCase struct {
 	// Estorno do beneficiamento. Nulo em ambiente que não usa o módulo; o
 	// cancelamento segue funcionando como antes.
 	BeneficiamentoEstorno EstornoDeBeneficiamento
+	// Faturamento devolve ao pedido de venda o que a nota cancelada havia
+	// atendido; o pedido faturado volta a ficar em aberto para refaturar.
+	Faturamento repository.SalesOrderInvoicingRepository
+	Pedidos     salesrepo.SalesOrderRepository
+	// Contabil devolve o estoque baixado e estorna a contabilização da venda.
+	Contabil SaidaContabil
+	// Devolucao desfaz a devolução de compra cancelada.
+	Devolucao *DevolucaoCompraUseCase
 }
 
 // EstornoDeBeneficiamento devolve ao saldo do cliente o que a nota cancelada
@@ -41,8 +52,9 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	if len(params.Motivo) < 15 {
-		return nil, fmt.Errorf("motivo do cancelamento deve ter pelo menos 15 caracteres")
+	params.Motivo = strings.TrimSpace(params.Motivo)
+	if n := len([]rune(params.Motivo)); n < 15 || n > 255 {
+		return nil, errorsuc.NewValidationError("a justificativa do cancelamento deve ter de 15 a 255 caracteres (exigência da SEFAZ)")
 	}
 
 	userID, err := uc.Auth.UserID(ctx)
@@ -62,6 +74,15 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	// 24-hour window check
 	if time.Since(exit.DataEmissao) > 24*time.Hour {
 		return nil, fmt.Errorf("prazo de cancelamento expirado: NF-e emitida há mais de 24 horas")
+	}
+
+	// Devolução que já mexeu em título pago depois não pode ser cancelada na
+	// SEFAZ: a checagem vem antes, para a nota não ficar cancelada lá com o
+	// financeiro valendo aqui.
+	if uc.Devolucao != nil {
+		if err := uc.Devolucao.PodeDesfazer(ctx, exit); err != nil {
+			return nil, err
+		}
 	}
 
 	// Call Focus NF-e API
@@ -89,6 +110,30 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	if uc.FinancialRepo != nil {
 		_ = uc.FinancialRepo.CancelContasReceberByFiscalExit(ctx, params.ID)
 	}
+	// A mercadoria não saiu: o estoque volta pelo mesmo custo e a venda é
+	// estornada na contabilidade.
+	var avisos []string
+	if exit.FiscalEntryID != nil && uc.Devolucao != nil {
+		avisos = uc.Devolucao.Desfazer(ctx, exit, userID)
+	} else {
+		avisos = desfazerSaida(ctx, uc.Contabil, exit, userID)
+	}
+
+	// O que a nota atendeu do pedido volta a ficar pendente. Sem isso o pedido
+	// continuaria "faturado" com a nota cancelada e não daria para refaturar.
+	if uc.Faturamento != nil && exit.SalesOrderCode != nil {
+		ligada, _, err := uc.Faturamento.RegistrarFaturamento(ctx, params.ID, true)
+		if err != nil {
+			return nil, fmt.Errorf("a NF-e %d foi cancelada, mas o pedido %d não voltou a ficar pendente: %w",
+				exit.NumeroNF, *exit.SalesOrderCode, err)
+		}
+		if ligada && uc.Pedidos != nil {
+			if pedido, err := uc.Pedidos.GetByCode(ctx, *exit.SalesOrderCode); err == nil && pedido != nil &&
+				pedido.Status == salesentity.SalesOrderStatusInvoiced {
+				_ = uc.Pedidos.ChangeStatus(ctx, *exit.SalesOrderCode, salesentity.SalesOrderStatusOrder)
+			}
+		}
+	}
 
 	// Estorno do material de terceiro, DEPOIS do cancelamento: cancelar na SEFAZ
 	// pode falhar, e devolver saldo de uma nota que continua válida seria inventar
@@ -106,5 +151,7 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 		}
 	}
 
-	return toFiscalExitResponse(updated), nil
+	resp := toFiscalExitResponse(updated)
+	resp.Warnings = append(resp.Warnings, avisos...)
+	return resp, nil
 }

@@ -71,4 +71,19 @@ type ContaPagar struct {
 	BaixadoPor *uuid.UUID
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+
+	// Rateios distribui o título por plano de contas / centro de custo. O
+	// título continua sendo um só (o boleto que o banco paga inteiro); o rateio
+	// diz para onde vai cada parte do custo — o "múltiplas naturezas".
+	Rateios []RateioContaPagar `json:"rateios,omitempty"`
+}
+
+type RateioContaPagar struct {
+	ID                int64           `json:"id"`
+	PlanoContasID     int64           `json:"plano_contas_id"`
+	CentroCustoID     *int64          `json:"centro_custo_id,omitempty"`
+	Valor             decimal.Decimal `json:"valor"`
+	PlanoContasCodigo *string         `json:"plano_contas_codigo,omitempty"`
+	PlanoContasNome   *string         `json:"plano_contas_nome,omitempty"`
+	CentroCustoNome   *string         `json:"centro_custo_nome,omitempty"`
 }

@@ -55,7 +55,7 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 		payload.Modal = "01" // rodoviário
 	}
 	if payload.DataEmissao == "" {
-		payload.DataEmissao = cte.DataEmissao.Format("2006-01-02T15:04:05-03:00")
+		payload.DataEmissao = dataHoraEmissao(cte.DataEmissao, time.Now())
 	}
 	if payload.NaturezaOperacao == "" {
 		payload.NaturezaOperacao = "Prestação de serviço de transporte"

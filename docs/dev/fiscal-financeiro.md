@@ -48,6 +48,7 @@
 33. [Cadastro de Fornecedores (integração fiscal)](#33-cadastro-de-fornecedores-integração-fiscal)
 34. [Cadastro de Classificações Fiscais](#34-cadastro-de-classificações-fiscais)
 35. [Tipos de Operação de Entrada](#35-tipos-de-operação-de-entrada)
+42. [SPED Fiscal — EFD ICMS/IPI automática](#42-sped-fiscal--efd-icmsipi-automática)
 
 ---
 
@@ -516,6 +517,47 @@ Depois de criada, a autorização continua pelo fluxo normal:
 
 ---
 
+### NF-e de saída a partir do pedido de venda
+
+O pedido não vira nota ao ser registrado. Quando chega a hora de faturar:
+
+#### `GET /api/fiscal/exits/sales-order/{code}/previa`
+
+Mostra o que a nota vai herdar do pedido: cliente e endereço (entrega →
+cobrança → padrão), representante e rateio de comissão, condição de pagamento,
+frete/seguro/desconto, CFOP sugerido (5101/6101 pela UF) e, por linha:
+`quantidade_pedida`, `quantidade_faturada` (atendido), `quantidade_em_nota`
+(rascunho/aguardando SEFAZ), `quantidade_pendente`, preço líquido (com o
+desconto do item) e NCM da classificação fiscal do item. `impedimentos` lista o
+que bloqueia (pedido não confirmado, bloqueado, sem liberação de crédito, sem
+cliente, endereço incompleto, item sem preço ou sem NCM).
+
+#### `POST /api/fiscal/exits/from-sales-order`
+
+```json
+{
+  "sales_order_code": 13,
+  "data_emissao": "2026-10-05",
+  "serie": "1",
+  "cfop": "6101",
+  "natureza_operacao": "Venda de produção do estabelecimento",
+  "itens": [ { "sales_order_item_code": 41, "quantidade": 4 } ]
+}
+```
+
+Sem `itens`, fatura tudo o que está pendente. Frete, seguro e desconto do
+pedido entram na proporção do que está sendo faturado, salvo valor informado.
+A nota nasce em `DRAFT` com `sales_order_code` (de onde vem a comissão, no
+regime configurado) e cada linha com `sales_order_item_code`. Faturar mais que o
+pendente é recusado. O faturamento do mesmo pedido é serializado por empresa
+(advisory lock que não espera): um segundo faturamento simultâneo recebe
+conflito na hora, em vez de ler o mesmo saldo e faturar em dobro.
+
+Na **autorização**, o atendido das linhas é somado e o pedido só vira `F`
+(faturado) quando todas as linhas foram atendidas; no **cancelamento**, a
+quantidade volta a ficar pendente e o pedido faturado volta para `P`. Notas sem
+linhas ligadas ao pedido mantêm o comportamento anterior.
+
 ### DANFE a partir de cupom fiscal, NFC-e ou CF-e
 
 O cadastro manual de NF-e (`/api/fiscal/exits/create`) agora aceita metadados de
@@ -543,6 +585,31 @@ cálculo/autorização segue o fluxo fiscal já existente; os campos de origem
 servem para consulta, auditoria, SPED/livros e impressão/observações.
 
 ---
+
+### Integração com a Focus (API v2) — conferida em homologação
+
+- O payload vai no **formato plano** da Focus (`cnpj_emitente`,
+  `nome_destinatario`, `formas_pagamento`…), gerado por `NFEPayload.MarshalJSON`;
+  o emitente vai só pelo CNPJ (nome, endereço, IE e CRT vêm do cadastro da empresa
+  na Focus). O formato aninhado anterior era recusado ("CNPJ do emitente não
+  autorizado").
+- Cada item leva o grupo **IBS/CBS** (obrigatório desde 2026 no regime normal):
+  CST 000, cClassTrib 000001, CBS 0,9% e IBS UF 0,1% sobre o valor da operação sem
+  ICMS/PIS/COFINS (`internal/domain/fiscal/reforma`). Ano sem alíquota cadastrada
+  é recusado antes da SEFAZ. Simples Nacional não leva o grupo.
+- Frete, seguro e desconto da nota são rateados nos itens; `presenca_comprador`
+  é 9 (0 em nota complementar/ajuste/devolução); `data_emissao` no fuso de
+  Brasília com a hora da transmissão.
+- A resposta é lida como a Focus devolve: `autorizado`, `numero`, `serie`,
+  `chave_nfe` (sem o prefixo "NFe"), `caminho_xml_nota_fiscal`, `caminho_danfe`.
+  O número e a série gravados são os autorizados (a Focus numera a nota).
+- Cancelamento só vale com `cancelado` (`erro_cancelamento` é erro); CC-e envia
+  `correcao`. A tela manda `justificativa` (15 a 255 caracteres).
+- Nota **rejeitada** pode ser corrigida e retransmitida (nova referência na Focus).
+- Devolução: cada item leva o DFeReferenciado (chave da nota de compra + número do
+  item) e o grupo de referência da nota não vai (rejeição 1010); o CST do ICMS é o
+  da empresa (CSOSN do fornecedor do Simples vira 90); o destinatário tem de ser o
+  emitente da chave referenciada, conferido antes da SEFAZ.
 
 ### `POST /api/fiscal/exits/{code}/authorize`
 
@@ -748,163 +815,379 @@ diretamente do CDN do Focus.
 
 ---
 
+### Devolução de compra (migração 000381)
+
+NF-e de saída com `finalidade` 4, a nota de entrada em `nfe_referenciada` /
+`fiscal_entry_id`, o CFOP de devolução da compra (1101→5201, 1102→5202, 2102→6202,
+1556→5556...; sem correspondência, x949) e o fornecedor como
+destinatário. Total ou parcial, por linha da nota de entrada.
+
+- `GET /api/fiscal/entries/{id}/devolucao` — prévia: por item, quantidade
+  comprada, já devolvida (devoluções não canceladas/rejeitadas), disponível,
+  valor unitário e CFOP de devolução. Só nota **aprovada**.
+- `POST /api/fiscal/devolucoes` — `{"fiscal_entry_id": 10, "data_emissao":
+  "2026-10-06", "itens": [{"fiscal_entry_item_id": 55, "quantidade": 2}]}`
+  (opcionais `serie`, `natureza_operacao`, endereço `dest_*`). Cria a NF-e em
+  rascunho com os impostos destacados proporcionais à nota original.
+- Autorização: a normal (`POST /api/fiscal/exits/{code}/authorize`). Autorizada,
+  numa transação: a mercadoria sai do estoque pelo custo médio; o valor abate os
+  títulos em aberto da nota (do último vencimento para o primeiro; o zerado fica
+  pago); o que sobrar vira título **a receber do fornecedor**
+  (`contas_receber.fornecedor_id`); a contabilização (`NFE_DEVOLUCAO`) inverte a
+  da entrada. Uma vez só por nota.
+- `POST /api/fiscal/devolucoes/{id}/efetivar` — refaz essa efetivação quando a
+  SEFAZ autorizou mas o pós-autorização falhou.
+- Cancelamento: o normal da NF-e de saída. Antes de chamar a SEFAZ confere que
+  dá para desfazer (crédito do fornecedor ainda não recebido); depois devolve o
+  estoque, restaura os títulos e estorna (`NFE_DEVOL_ESTORNO`).
+
 ## 5. Módulo Fiscal — NF-e de Entrada
 
-NF-e de entrada representa compras/recebimento de mercadorias. Os impostos são informados pelo emitente (não calculados pelo sistema).
+NF-e de entrada representa compras/recebimento de mercadorias. Os impostos são
+**lidos da nota do emitente** (não calculados pelo sistema).
 
-> **Vínculo com o fornecedor.** Na importação de NF-e de compra por chave de acesso, o
-> sistema casa o **CNPJ/CPF do emitente** a um fornecedor cadastrado e grava o vínculo
-> em `fiscal_entries.supplier_code` (campo `supplier_matched` no retorno indica se
-> houve correspondência). Esse vínculo habilita a geração de Conta a Pagar por
-> fornecedor e o uso de `icms_contributor` e do Tipo de NF default do fornecedor.
-> Ver seção 33 e [`cadastros-fornecedor.md`](cadastros-fornecedor.md).
+### Fluxo (migração 000376)
 
-### `POST /api/fiscal/entries/create`
+O desenho segue o dos ERPs de mercado (Importador XML do Protheus — tabelas
+SDS/SDT + amarração Produto × Fornecedor SA5; IntegraNF-e do Focco; Fiscal
+Document Capture da Oracle; múltiplas naturezas SEV/SEZ do Protheus para o
+financeiro):
 
-Lançamento manual de NF-e de entrada.
+1. **Importação do arquivo XML** (um ou vários de uma vez). O XML é lido por
+   inteiro: chave, protocolo, natureza da operação, emitente, destinatário, cada
+   item com ICMS (qualquer grupo `ICMS00…ICMS90`, `ICMSSN101…900`), IPI
+   (`IPITrib`/`IPINT`), PIS/COFINS, frete/seguro/desconto/outras por item,
+   pedido de compra do item (`xPed`), totais, modalidade do frete, **duplicatas**
+   (`<cobr><dup>`) e forma de pagamento (`<pag>`). O XML original fica guardado
+   em `fiscal_entries.xml_content`.
+2. **Fornecedor** casado pelo CNPJ do emitente (com ou sem máscara no cadastro).
+3. **Conciliação automática** pelo vínculo produto × fornecedor
+   (`item_preferred_suppliers`): código do fornecedor (`cProd`) → código de barras
+   (`cEAN`). O `cProd` **nunca** é tomado como código do nosso item. Descrição
+   parecida só vira **sugestão** — item conciliado errado entra no custo errado.
+   O fator de conversão do vínculo calcula a quantidade na unidade do cadastro.
+4. **Plano de contas por item** sugerido pelo último uso do item, ou pela conta
+   financeira do fornecedor na empresa (`supplier_enterprises.financial_account`).
+5. **Valor contábil do item** = produto + frete + seguro + outras − desconto +
+   IPI + ICMS-ST. A soma dos itens fecha com o total da nota (diferença de
+   arredondamento vai para o maior item).
+6. **Parcelas** = duplicatas do XML; sem duplicata, uma parcela à vista; nota
+   com `tPag=90` (bonificação/remessa) não gera parcela (`sem_pagamento`).
+   Cada parcela é **distribuída por plano de contas**, por padrão na proporção
+   dos itens; o usuário pode mudar por parcela (ex.: 1ª toda EPI, 2ª toda MP).
+7. **Aprovação** só com todos os itens conciliados e classificados, parcelas
+   somando o **valor a pagar** e cada plano recebendo exatamente a sua parte,
+   todo item que movimenta estoque com almoxarifado e nenhuma divergência que
+   bloqueie (seção "Conferência"). Gera, **numa transação**: um título do contas
+   a pagar **por parcela** (o boleto que o banco paga inteiro) com o rateio em
+   `contas_pagar_rateios`; um título `RETENCAO` por imposto retido; a entrada no
+   estoque; a baixa do pedido de compra; e, se configurada, a contabilização.
+   Aprovar duas vezes é recusado.
 
-**Request:**
+Situações: `PENDING` (com pendências) → `CONFERRED` (pronta para aprovar) →
+`APPROVED` → (`CANCELLED`, com estorno). `stock_status`: `PENDENTE` →
+`CONCLUIDO` / `NAO_APLICA` → `ESTORNADO`.
+
+### Operação de entrada (TES) — migração 000377
+
+O tipo de operação de entrada (VFIS0360, `entry_operation_types`) é o
+equivalente à TES: além da natureza (CFOP de entrada), diz se a nota
+`movimenta_estoque`, `gera_financeiro` e se `credita_icms`, `credita_ipi` e
+`credita_pis_cofins` (o imposto sem crédito vai para o custo). A operação vem do
+item, senão da nota (`entry_operation_code` no cabeçalho), senão da linha do
+pedido. Sem operação, tudo vale verdadeiro e o crédito acompanha o imposto
+destacado. Bonificação/remessa/comodato: operação sem financeiro.
+
+**CFOP de entrada** (`cfop_entrada`): a natureza da operação, ajustada à UF
+(1 = mesmo estado, 2 = outro, 3 = exterior); sem operação, o CFOP do fornecedor
+convertido (5→1, 6→2, 7→3; venda com ST x401/x403/x405 → x403; combustível
+x655/x656 → x652). A UF do emitente e a da empresa decidem o primeiro dígito —
+6xxx entre empresas do mesmo estado vira 1xxx. Pode ser corrigido à mão na
+conciliação.
+
+**Custo de aquisição** (`custo_aquisicao`): valor contábil menos os créditos
+efetivamente aproveitados (ICMS, IPI, PIS, COFINS, IBS/CBS conforme a operação).
+
+### Pedido de compra (3-way match)
+
+O item é ligado à linha do pedido de compra (`purchase_order_item_code`) pelo
+`xPed`/`nItemPed` do XML, pelo pedido informado na nota ou à mão
+(`GET .../itens/{itemId}/pedidos`). Na aprovação, a linha é travada e:
+
+- a parte da nota já **recebida fisicamente** (FINS0212) e ainda não faturada
+  **não entra de novo** no estoque (`qtd_recebida_antes`);
+- `invoiced_qty` soma a quantidade da nota; `received_qty` soma só o que entrou
+  agora; o status da linha e do pedido é recalculado;
+- preço e quantidade acima do pedido passam pela **tolerância de compras** do
+  fornecedor: `BLOCK` impede a aprovação, `WARN` só avisa.
+
+O almoxarifado vem do item da nota, da linha do pedido ou do cadastro do item
+(`supplies_warehouse_code`, `warehouse_code`). Material com roteiro de inspeção
+ativo entra no depósito de inspeção e abre a ordem de inspeção, como no
+recebimento físico.
+
+### Retenções e reforma tributária
+
+Lidos do XML: `retTrib` (PIS/COFINS/CSLL retidos, IRRF, INSS) e
+`ISSQNtot/vISSRet`; IBS/CBS/IS por item (`IBSCBS`, `IS`) e nos totais
+(`IBSCBSTot`, `ISTot` — sem eles, a soma dos itens). `valor_a_pagar` = total da
+nota − retenções: as parcelas fecham no líquido e cada plano encolhe na
+proporção (o resto vai para os títulos de retenção). Vencimento das retenções:
+PIS/COFINS/CSLL, IRRF e INSS no dia 20 do mês seguinte; ISS no dia 10 (ambos
+antecipados se cair em fim de semana — confira a regra do seu município).
+
+### Conferência (divergências)
+
+`divergencias[]` (`nivel`, `item`, `tipo`, `mensagem`, `esperado`, `informado`):
+cálculo do item e do ICMS/IPI, alíquota de IPI pela tabela NCM, alíquota
+interestadual de ICMS (4% para importados — origem 1/2/3/8), NCM da nota × do
+cadastro, item sem a linha do pedido citado (`PEDIDO`/`PEDIDO_ITEM`, bloqueiam),
+preço e quantidade × pedido e totais da nota. Só as de nível `IMPEDE` bloqueiam.
+
+### Contabilização automática
+
+Com `contabilizar_entrada` nos parâmetros (`/api/fiscal/contabilizacao/parametros`)
+a aprovação lança em `accounting_journal_entries` (`source_type` `NFE_ENTRADA`,
+`entry_number` `NFE{id}-{n}`):
+
+| Débito | Crédito | Valor |
+|---|---|---|
+| conta do plano de contas do item (`plano_contas.accounting_account_id`) ou a despesa padrão | Fornecedores | custo de aquisição |
+| ICMS/IPI/PIS/COFINS/IBS/CBS a recuperar | Fornecedores | crédito aproveitado (sem conta configurada, o crédito vai ao custo) |
+| Fornecedores | imposto retido a recolher | cada retenção |
+
+O saldo de Fornecedores fecha no valor a pagar. Toda conta precisa ser
+**analítica do plano configurado**; faltando conta, a aprovação é recusada com a
+lista do que configurar. O cancelamento lança o estorno (`NFE_ENTRADA_ESTORNO`).
+
+### Fornecedor e itens sem cadastro
+
+- Emitente sem fornecedor no cadastro **impede** a aprovação (pendência
+  `supplier_code`): sem ele o título nasce sem dono e pedido, devolução e
+  vínculos de itens não funcionam. Fornecedor bloqueado ou inativo também impede.
+- Fornecedor cadastrado depois da importação (VSUP0500) liga-se sozinho: ao abrir,
+  conciliar ou aprovar, a nota procura o CNPJ do emitente e grava o fornecedor
+  (só em nota pendente/conferida).
+- `POST /api/fiscal/entries/{id}/fornecedor` — cadastra o emitente com o que o XML
+  declara (razão social, fantasia, CNPJ/CPF, IE → condição de ICMS, endereço) e
+  liga as notas pendentes do mesmo CNPJ. Opcionais: `supplier_type_code`,
+  `payment_condition_id`, `icms_contributor`, `state_registration`.
+- `POST /api/fiscal/entries/{id}/itens/{itemId}/cadastrar-item` —
+  `{"warehouse_id": 3, "unidade": "KG", "tipo_uso": "CONSUMO", "nome": "..."}`
+  (tudo opcional menos o almoxarifado quando a linha não tem): cria o item com a
+  descrição, unidade (traduzida para a do cadastro), origem e CEST da nota,
+  tipo de uso pelo CFOP de entrada, e devolve `item_code` para a conciliação.
+  Grupo PDM, classificação fiscal e engenharia se completam em VENT0200.
+
+### `POST /api/fiscal/entries/upload-xml` — importação pelo arquivo
+
+`multipart/form-data`, campo `files` (repetível; até 50 por requisição) ou
+`file`. Opcionais: `data_entrada` (AAAA-MM-DD), `purchase_order_code`.
+
+Cada arquivo é independente: um XML inválido não impede os outros.
+
 ```json
 {
-  "numero_nf": 5500,
-  "serie": "001",
-  "modelo": "55",
-  "data_emissao": "2024-05-10",
-  "data_entrada": "2024-05-12",
-  "cnpj_emitente": "11222333000181",
-  "razao_social_emitente": "Fornecedor XYZ LTDA",
-  "ie_emitente": "9876543210",
-  "uf_emitente": "SP",
-  "valor_produtos": 5000.00,
-  "valor_frete": 200.00,
-  "valor_seguro": 0.00,
-  "valor_desconto": 0.00,
-  "valor_ipi": 250.00,
-  "valor_icms": 600.00,
-  "valor_pis": 82.50,
-  "valor_cofins": 380.00,
-  "valor_total": 5450.00,
-  "tipo_documento": "NF-e",
-  "purchase_order_code": 15,
-  "itens": [
-    {
-      "sequence": 1,
-      "item_code": 20,
-      "ncm": "84714900",
-      "cfop": "1101",
-      "quantity": 5,
-      "unit_price": 1000.00,
-      "total_price": 5000.00,
-      "base_icms": 5000.00,
-      "aliq_icms": 0.12,
-      "valor_icms": 600.00,
-      "base_ipi": 5000.00,
-      "aliq_ipi": 0.05,
-      "valor_ipi": 250.00,
-      "valor_pis": 82.50,
-      "valor_cofins": 380.00,
-      "cst_icms": "00",
-      "cst_ipi": "50",
-      "cst_pis": "01",
-      "cst_cofins": "01",
-      "gera_credito_icms": true,
-      "gera_credito_ipi": true,
-      "gera_credito_pis": true,
-      "gera_credito_cofins": true
-    }
+  "importadas": 1,
+  "com_erro": 1,
+  "resultados": [
+    { "arquivo": "nfe-12345.xml", "entrada": { "id": 10, "status": "PENDING", "itens": [...], "parcelas": [...], "pendencias": [...] } },
+    { "arquivo": "danfe.pdf", "erro": "o arquivo não é .xml — envie o XML da nota (o DANFE em PDF não serve para importar)" }
   ]
 }
 ```
 
-**Resposta esperada (`201 Created`):** objeto completo da entrada com `"status": "pendente"`.
+A mesma chave já importada (e não cancelada) é recusada com conflito. Duas
+importações **simultâneas** da mesma chave também: a criação tenta um advisory
+lock por empresa + chave (`pg_try_advisory_xact_lock`, sem esperar — não prende
+conexão do pool) e quem chega em segundo recebe `409` "a nota está sendo
+importada por outro usuário".
+`POST /api/fiscal/entries/upload-nfe` (`{"xml_content": "..."}`) continua
+aceito e segue o mesmo fluxo.
 
----
+### `POST /api/fiscal/entries/import-key` — importação pela chave
 
-### `POST /api/fiscal/entries/upload-nfe`
+`{"chave_acesso": "41261012345678000190550010000123451000123459"}`. Baixa o XML
+da nota recebida na Focus NF-e (`GET /nfes_recebidas/{chave}.xml`, exige
+manifestação do destinatário) e segue exatamente o fluxo do arquivo. A nota fica
+pendente para conferência.
 
-Importa NF-e a partir do XML da SEFAZ.
+> O endpoint antigo `POST /api/fiscal/entries/import-nfe` (aprova e movimenta o
+> estoque na hora, tomando `cProd` como código do item) foi mantido por
+> compatibilidade, mas a tela usa `import-key`.
 
-**Request:**
+### `GET /api/fiscal/entries/{id}`
+
+Nota completa: cabeçalho (com `entry_operation_code`, IBS/CBS/IS, retenções,
+`total_retencoes`, `valor_a_pagar`, `stock_status`, `cancelled_at`,
+`cancel_reason`, `retencoes[]`, `divergencias[]`), `itens` (com `item_name`,
+`plano_contas_*`, `centro_custo_nome`, `valor_contabil`, `fator_conversao`,
+`quantidade_estoque`, `resolution_strategy`, `cfop_entrada`,
+`entry_operation_*`, `movimenta_estoque`, `gera_financeiro`, `warehouse_*`,
+`purchase_order_code`, `purchase_order_item_code`, `qtd_recebida_antes`,
+`stock_movement_id`, `custo_aquisicao`, `item_ncm`, créditos e IBS/CBS),
+`parcelas[].distribuicao`, `totais_por_conta`, `pendencias`
+(`IMPEDE`/`ATENCAO`), `pode_aprovar`, `itens_conciliados`, `itens_classificados`.
+
+### `GET /api/fiscal/entries/{id}/itens/{itemId}/pedidos?item_code=`
+
+Linhas de pedido de compra em aberto do fornecedor para o item (do cadastro
+informado ou o já conciliado): pedido, linha, quantidades pedida/recebida/
+faturada, `saldo_a_faturar`, preço, `fator_estoque` e almoxarifado.
+
+### `GET /api/fiscal/entries/{id}/itens/{itemId}/sugestoes?q=`
+
+Itens do cadastro sugeridos para a linha: vínculo do fornecedor (código e
+código de barras), descrição parecida (sem acento, sem palavras vazias) + mesmo
+NCM + mesma unidade. `q` busca por nome ou código. Cada sugestão traz `score` e
+`motivo`.
+
+### `PUT /api/fiscal/entries/{id}/conciliacao`
+
 ```json
 {
-  "xml_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><nfeProc>...</nfeProc>"
+  "itens": [
+    { "id": 31, "item_code": 77101, "plano_contas_id": 11, "lembrar_vinculo": true, "fator_conversao": 1 },
+    { "id": 32, "item_code": 77102, "plano_contas_id": 12, "centro_custo_id": 3 }
+  ],
+  "parcelas": [
+    { "numero": 1, "documento": "001", "data_vencimento": "2026-10-31", "valor": 33333.33,
+      "distribuicao": [ { "plano_contas_id": 12, "centro_custo_id": 3, "valor": 33333.33 } ] },
+    { "numero": 2, "documento": "002", "data_vencimento": "2026-11-30", "valor": 33333.33,
+      "distribuicao": [ { "plano_contas_id": 11, "valor": 33333.33 } ] },
+    { "numero": 3, "documento": "003", "data_vencimento": "2026-12-30", "valor": 33333.34,
+      "distribuicao": [ { "plano_contas_id": 11, "valor": 16666.67 }, { "plano_contas_id": 12, "centro_custo_id": 3, "valor": 16666.67 } ] }
+  ],
+  "recalcular_distribuicao": false
 }
 ```
 
-O sistema extrai automaticamente todos os campos do XML e cria a entrada.
-
----
-
-### `POST /api/fiscal/entries/import-nfe`
-
-Importa uma NF-e de entrada diretamente pela **chave de acesso**, consultando a Focus NF-e. Não é necessário ter o XML em mãos — o sistema baixa, processa e já movimenta o estoque automaticamente.
-
-**Pré-requisito:** token Focus NF-e configurado em `PUT /api/fiscal/config` e ambiente correto.
-
-**Request:**
-```json
-{
-  "access_key": "35260512345678000100550010000012341123456789"
-}
-```
-
-**O que acontece internamente:**
-1. Consulta a Focus NF-e com a chave de acesso
-2. Baixa o XML e extrai todos os dados da NF-e (emitente, itens, impostos)
-3. Casa o **CNPJ do emitente** com um fornecedor cadastrado (quando habilitado)
-4. Cria a nota de entrada com status `"aprovada"` (entrada direta, sem etapa de aprovação manual)
-5. Movimenta o estoque de cada item da nota com tipo **`IN`** — o movimento
-   **atualiza o saldo** (`stock_balances`: quantidade + custo médio ponderado) na
-   mesma transação
-6. Quando informado `purchase_order_code`, **baixa o pedido de compra**: soma as
-   quantidades recebidas em cada item (`received_qty`) e recalcula o status da linha
-   e do cabeçalho (`PARTIAL`/`RECEIVED`) — via `PurchaseOrderRepository.RegisterReceipts`.
-   O resultado traz `purchase_order_lines_written_down`.
-
-**Resposta esperada (`201 Created`):**
-```json
-{
-  "id": 42,
-  "numero_nf": 12341,
-  "status": "aprovada",
-  "cnpj_emitente": "12345678000100",
-  "razao_social_emitente": "Fornecedor XYZ LTDA",
-  "valor_total": 5450.00
-}
-```
-
-**Erros comuns:**
-- `"token Focus NF-e não configurado"` → execute `PUT /api/fiscal/config` primeiro
-- `"chave de acesso inválida"` → a chave deve ter exatamente 44 dígitos
-- `"NF-e não encontrada"` → chave não existe na base Focus para o ambiente configurado
-
-> **Diferença em relação ao `upload-nfe`:** o `upload-nfe` recebe o XML bruto; o `import-nfe` recebe só a chave de 44 dígitos e busca o XML automaticamente via API Focus. Ambos criam a entrada, mas o `import-nfe` já aprova e movimenta o estoque na mesma operação.
-
----
+- Cabeçalho: `entry_operation_code` (operação padrão dos itens) e
+  `purchase_order_code`. Por item: `entry_operation_code`, `warehouse_id`,
+  `purchase_order_item_code` (0 desfaz o vínculo) e `cfop_entrada` (correção
+  manual; prevalece sobre o calculado).
+- `lembrar_vinculo` memoriza o código do fornecedor → item (e o EAN e o fator);
+  se o código apontava para outro item, o vínculo antigo perde o código.
+- Sem `parcelas`, as parcelas são mantidas; a distribuição é refeita
+  proporcionalmente quando a classificação mudou ou com `recalcular_distribuicao`.
+- Item, plano e centro de custo são conferidos na empresa da sessão.
 
 ### `POST /api/fiscal/entries/{id}/approve`
 
-Aprova uma NF-e de entrada (confirma o recebimento). Muda o status de `"pendente"` para `"aprovada"`. Cria automaticamente uma **Conta a Pagar** vinculada.
+Recusa com `VALIDACAO_DE_DOMINIO` listando as pendências e divergências que
+impedem. Aprovada, a nota tem `parcelas[].conta_pagar_id`, `stock_status`
+`CONCLUIDO` (ou `NAO_APLICA`) e, por item, `stock_movement_id`. Nota antiga sem
+parcela recebe uma parcela única para 30 dias da emissão pelo valor a pagar. Os
+créditos de ICMS/IPI/PIS/COFINS/IBS/CBS da competência são lançados; falha nesse
+lançamento volta como aviso.
 
-**Request:** `{}`
+### `POST /api/fiscal/entries/{id}/cancelar`
 
-**Resposta esperada (`200 OK`):**
-```json
-{
-  "id": 1,
-  "status": "aprovada"
-}
-```
+`{"motivo": "mercadoria devolvida integralmente"}` (mínimo 10 caracteres). Nota
+pendente só deixa de valer. Nota aprovada é **estornada numa transação**:
+títulos cancelados (recusado se algum tiver pagamento ou abatimento de
+adiantamento), estoque devolvido (recusado se o material já foi consumido),
+pedido de compra reaberto, créditos fiscais e contabilidade estornados,
+`stock_status` `ESTORNADO`. A chave volta a poder ser importada.
 
----
+### `GET /api/fiscal/entries/{id}/xml`
+
+Devolve o XML original (`application/xml`, anexo `nfe-entrada-{numero}.xml`).
+
+### `POST /api/fiscal/entries/create` — lançamento manual
+
+Mesmo corpo de antes, mais: `supplier_code` (opcional — sem ele o fornecedor é
+procurado pelo CNPJ), `itens[].plano_contas_id`, `itens[].centro_custo_id` e
+`parcelas` (`[{numero, data_vencimento, valor, documento?}]`; vazio = uma
+parcela para 30 dias). A nota nasce com a mesma conferência da importação.
 
 ### `GET /api/fiscal/entries/list`
 
 Lista todas as NF-e de entrada.
 
-### `GET /api/fiscal/entries/{id}`
+### Notas recebidas na SEFAZ (distribuição DF-e)
 
-Retorna uma NF-e de entrada por ID com todos os itens.
+Caixa de entrada com as NF-e emitidas contra o CNPJ da empresa
+(`fiscal_received_documents`), via Focus NF-e (`/v2/nfes_recebidas`). Exige o
+token da Focus e o CNPJ na configuração fiscal.
+
+- `POST /api/fiscal/recebidas/sincronizar` — busca as notas novas desde a
+  última versão (`fiscal_configs.dfe_ultima_versao`; até 50 páginas de 100);
+  devolve `{recebidas, novas, versao}`.
+- `GET /api/fiscal/recebidas?pendentes=1&q=` — lista (pendentes = ainda não
+  lançadas); `q` busca emitente, CNPJ, número ou chave.
+- `POST /api/fiscal/recebidas/{chave}/manifestar` —
+  `{"tipo": "ciencia|confirmacao|desconhecimento|nao_realizada", "justificativa": "..."}`
+  (justificativa ≥ 15 caracteres para desconhecimento e não realizada).
+- `POST /api/fiscal/recebidas/{chave}/importar` — registra a ciência quando
+  ainda não há manifestação (a SEFAZ só libera o XML completo depois dela) e
+  importa como nota de entrada; nota cancelada pelo emitente é recusada.
+
+- `GET /api/fiscal/recebidas/status` — `{automatico, sincronizado_em,
+  ultima_tentativa, ultimo_erro, prazo_proximo, prazo_vencido,
+  intervalo_minutos, alerta_prazo_dias}`.
+- `PUT /api/fiscal/recebidas/automatico` (ADMIN) — `{"ativo": true}` liga a
+  sincronização automática da empresa (`fiscal_configs.dfe_sync_automatico`).
+
+**Sincronização automática.** Um agendador no processo da API
+(`internal/infrastructure/dfe`) roda a cada hora (`IntervaloSincronizacaoDFe`)
+para cada empresa com o automático ligado, com o contexto da própria empresa.
+Cada tentativa grava `dfe_ultima_tentativa` e, em falha, `dfe_ultimo_erro`; um
+erro de uma empresa não interrompe as outras.
+
+**Prazo de manifestação.** A conclusiva (confirmação, desconhecimento ou não
+realizada) tem de sair em até 180 dias da emissão (`PrazoManifestacaoDias`).
+A listagem traz `prazo_manifestacao`, `dias_para_prazo` e `alerta_prazo`; `?prazo=1` filtra as
+notas sem manifestação conclusiva que vencem em até 30 dias (`AlertaPrazoDias`)
+ou já venceram. Ciência não conta como conclusiva.
+
+`POST /api/fiscal/manifestacao` (VFIS0620) aceita a grafia antiga (`CIENCIA`,
+`OPERACAO_NAO_REALIZADA`) e envia a que a Focus espera.
+
+### Parâmetros da contabilização
+
+- `GET/PUT /api/fiscal/contabilizacao/parametros` — `plan_id`,
+  `fornecedores_account_id` (obrigatória), `*_recuperar_account_id` (ICMS, IPI,
+  PIS, COFINS, IBS, CBS), `irrf_recolher_account_id`, `pcc_recolher_account_id`,
+  `inss_recolher_account_id`, `iss_recolher_account_id`,
+  `despesa_padrao_account_id`, `contabilizar_entrada`. Contas conferidas como
+  analíticas do plano. Gravar exige ADMIN.
+- Restante do ciclo (migração 000379): `contabilizar_pagamentos`,
+  `contabilizar_recebimentos`, `contabilizar_saidas` e as contas
+  `banco_padrao_account_id`, `juros_pagos_account_id`,
+  `descontos_obtidos_account_id`, `clientes_account_id`,
+  `juros_recebidos_account_id`, `descontos_concedidos_account_id`,
+  `receita_vendas_account_id`, `icms_vendas_account_id`,
+  `icms_recolher_account_id`, `icms_st_recolher_account_id`,
+  `ipi_recolher_account_id`, `pis_vendas_account_id`, `pis_recolher_account_id`,
+  `cofins_vendas_account_id`, `cofins_recolher_account_id`, `cmv_account_id`,
+  `estoque_account_id`. Ligar um interruptor exige as contas que ele usa; a
+  gravação é recusada listando as que faltam.
+- `PUT /api/financial/plano-contas/{id}/conta-contabil` —
+  `{"accounting_account_id": 51}` (ou `null` para desligar).
+- `PUT /api/financial/contas-bancarias/{id}/conta-contabil` — o "Banco" de cada
+  conta bancária na contabilização da baixa; sem vínculo, vale
+  `banco_padrao_account_id`.
+
+### Contabilização do ciclo (pagamento, recebimento, saída)
+
+Gravada na **mesma transação** da operação (`journal.Gravar`); o cancelamento
+grava o estorno (`journal.Estornar`, partidas invertidas).
+
+| Operação (`source_type`) | Débito | Crédito |
+|---|---|---|
+| Pagamento de título (`PAGAMENTO_CP`) | Fornecedores — ou o imposto retido a recolher, quando o título é a guia da retenção (`contas_pagar.retencao_tipo`); título sem nota usa a conta do plano de contas do rateio | Banco (valor pago) e Descontos obtidos |
+| Juros/multa do pagamento | Juros e multas pagos | Banco |
+| Recebimento (`RECEBIMENTO_CR`) | Banco e Descontos concedidos | Clientes — ou Fornecedores, quando é o crédito de uma devolução de compra |
+| Juros do recebimento | Banco | Juros recebidos |
+| NF-e de saída autorizada (`NFE_SAIDA`) | Clientes | Receita de vendas |
+| Impostos da venda | ICMS/PIS/COFINS sobre vendas | ICMS, ICMS-ST, IPI, PIS, COFINS a recolher |
+| Custo da venda | CMV | Estoque (custo médio da baixa) |
+| Cancelamento da saída (`NFE_SAIDA_ESTORNO`) | estorno de tudo acima | |
+
+Juros e multa do atraso incidem sobre **o que está sendo quitado agora**
+(valor pago + desconto), não sobre o saldo inteiro — na baixa parcial a multa
+não é cobrada duas vezes.
 
 ---
 
@@ -997,6 +1280,31 @@ herdados do CT-e registrado.
 - `"Focus CT-e: ..."` → rejeição da SEFAZ (mensagem encaminhada)
 
 ---
+
+
+### Frete sobre compras (migração 000380)
+
+O CT-e da transportadora que trouxe a mercadoria (`fiscal_freight_documents`),
+ligado a uma ou mais NF-e de entrada **aprovadas**. A migração também deu
+empresa ao `fiscal_cte` (antes cada empresa via os CT-e das outras).
+
+- `POST /api/fiscal/fretes/upload-xml` — multipart `file` (XML do CT-e) e
+  opcionais `data_vencimento`, `tipo_rateio`; as NF-e citadas em `infDoc`
+  que existem aprovadas na empresa já vêm ligadas.
+- `POST /api/fiscal/fretes` / `PUT /api/fiscal/fretes/{id}` — manual:
+  `numero`, `serie`, `data_emissao`, `cnpj_transportadora`,
+  `nome_transportadora`, `valor_frete`, `base_icms`, `aliq_icms`, `valor_icms`,
+  `credita_icms`, `tipo_rateio` (`VALOR`, `QUANTIDADE`, `PESO`),
+  `data_vencimento`, `notas_ids`. Só frete pendente se edita.
+- `GET /api/fiscal/fretes?status=` · `GET /api/fiscal/fretes/{id}`.
+- `POST /api/fiscal/fretes/{id}/lancar` — numa transação: rateia o custo
+  (frete − ICMS creditado) entre os itens das notas; a parte do que **ainda está
+  no estoque** vira movimento `AJUSTE_CUSTO` (só valor, recalcula o custo
+  médio) e a do que já foi consumido vai para despesa; gera o título da
+  transportadora; contabiliza (`FRETE_COMPRA`).
+- `POST /api/fiscal/fretes/{id}/cancelar` — `{"motivo": "..."}` (≥ 10
+  caracteres). Desfaz custo, título e contabilização (`FRETE_COMPRA_ESTORNO`);
+  recusado se o título já foi pago.
 
 ## 7. Módulo Financeiro — Cadastros Base
 
@@ -1133,6 +1441,11 @@ Registra o pagamento (baixa). Operação **atômica**: atualiza a conta, lança 
 
 **Pagamento parcial:** informe `valor_pago` menor que o saldo. O sistema mantém o registro com o restante a pagar.
 
+**Desconto obtido:** `"desconto": 50.00` (decimal) abate a dívida sem sair do
+caixa. `valor_pago + desconto` não pode passar do saldo (bruto − pago − desconto
+já dado − adiantamento abatido). Com `contabilizar_pagamentos`, o desconto é
+creditado em Descontos obtidos.
+
 **Resposta esperada (`200 OK`):** objeto atualizado com `"status": "pago"` (ou `"parcial"` se pagamento parcial).
 
 ---
@@ -1178,6 +1491,24 @@ Relatório de aging (vencimento) para contas a pagar. Agrupa por faixa de atraso
 
 ---
 
+### Rateio do título por plano de contas (múltiplas naturezas)
+
+Um título do contas a pagar pode ser distribuído entre vários planos de contas /
+centros de custo (`contas_pagar_rateios`). O título continua sendo um só — o
+boleto que o banco paga inteiro —, e o rateio diz para onde vai cada parte.
+
+- `POST /api/financial/contas-pagar/create` aceita
+  `"rateios": [{"plano_contas_id": 11, "centro_custo_id": 3, "valor": 600}, ...]`;
+  a soma tem de fechar com `valor_bruto`. Com um plano só, ele vai também para a
+  capa (`plano_contas_id`).
+- `GET /api/financial/contas-pagar/list` devolve `rateios` em cada título; o
+  filtro `plano_contas_id`/`centro_custo_id` casa pela capa **ou** pelo rateio.
+- `GET /api/financial/contas-pagar/por-plano-contas?start_date&end_date&date_field&status&fornecedor_id`
+  agrupa por plano/centro de custo: `qtd_titulos`, `valor_total`, `valor_pago`
+  (proporcional ao pagamento do título), `valor_aberto`, `valor_vencido`.
+
+---
+
 ## 9. Contas a Receber
 
 Criada automaticamente ao autorizar uma NF-e de saída, ou manualmente.
@@ -1216,6 +1547,10 @@ Baixa uma conta a receber. Operação **atômica**: atualiza o saldo da conta ba
 ```
 
 **Recebimento parcial:** informe `valor_recebido` menor que o saldo. Um novo registro com o restante é criado automaticamente.
+
+**Desconto concedido:** `"desconto": 50.00` (decimal), na mesma regra do pagamento.
+O título a receber pode ser de **fornecedor** (`fornecedor_id`, crédito de uma
+devolução de compra) em vez de cliente.
 
 ---
 
@@ -1341,6 +1676,12 @@ Retorna uma apuração já realizada. Ex: `GET /api/financial/apuracao-impostos/
 ## 12. Relatórios
 
 Todos os relatórios exigem query params `?start=YYYY-MM-DD&end=YYYY-MM-DD` (exceto aging e ficha técnica).
+
+Todos são **da empresa da sessão** (livros, apuração de créditos/débitos,
+produtos vendidos/produzidos, histórico de custos, curvas ABC, compras do
+período, DRE). Custo médio de um item = custo total ÷ quantidade somados nos
+almoxarifados da empresa — antes, o JOIN com um saldo por almoxarifado
+multiplicava a quantidade vendida e misturava o custo de outras empresas.
 
 ### R01 — Livro de Entradas
 `GET /api/financial/relatorios/livro-entradas?start=2024-01-01&end=2024-12-31`
@@ -1475,7 +1816,10 @@ Evolução do custo médio ponderado de cada item ao longo do tempo.
 ### R16 — Ficha Técnica com Custo
 `GET /api/financial/relatorios/ficha-tecnica/{item_code}`
 
-Estrutura de BOM do item com custo unitário de cada componente (do `stock_balances.avg_cost`) e custo total calculado.
+Estrutura do item (`item_structures`, linhas ativas e vigentes hoje) com o custo
+unitário de cada componente (custo médio ponderado dos almoxarifados da empresa)
+e o custo total. Antes consultava tabelas que não existem (`boms`/`bom_items`) e
+sempre falhava.
 
 **Resposta esperada:**
 ```json
@@ -2247,15 +2591,16 @@ Módulo de escrituração contábil com geração do arquivo SPED ECD (Blocos 0,
 | Endpoint | Descrição |
 |----------|-----------|
 | `POST /api/accounting/plans/` | Criar plano de contas |
-| `GET /api/accounting/plans/` | Listar planos (`?empresa_id=1`) |
+| `GET /api/accounting/plans/` | Listar planos |
 
-**Payload:**
+**Payload:** (`status`: `I` em montagem, `A` ativo, `X` inativo)
 ```json
 {
-  "empresa_id": 1,
-  "name": "Plano de Contas 2024",
-  "year": 2024,
-  "is_active": true
+  "plan_number": 1,
+  "description": "Plano de Contas 2026",
+  "valid_from": "2026-01-01",
+  "valid_to": "",
+  "status": "A"
 }
 ```
 
@@ -2266,15 +2611,18 @@ Módulo de escrituração contábil com geração do arquivo SPED ECD (Blocos 0,
 | `POST /api/accounting/accounts/` | Criar conta |
 | `GET /api/accounting/accounts/` | Listar contas (`?plan_id=1`) |
 
-**Payload:**
+**Payload:** (`nature_code`: `D` devedora, `C` credora; só conta analítica recebe lançamento)
 ```json
 {
   "plan_id": 1,
-  "code": "1.1.1.01",
-  "name": "Caixa",
-  "account_type": "ANALITICA",
-  "nature": "DEVEDORA",
-  "parent_id": null
+  "parent_id": null,
+  "account_number": "1.1.1.01",
+  "description": "Caixa",
+  "nature_code": "D",
+  "reduced_code": null,
+  "requires_cost_center": false,
+  "valid_from": "2026-01-01",
+  "is_analytic": true
 }
 ```
 
@@ -2282,19 +2630,26 @@ Módulo de escrituração contábil com geração do arquivo SPED ECD (Blocos 0,
 
 | Endpoint | Descrição |
 |----------|-----------|
-| `POST /api/accounting/journal-entries/` | Criar lançamento |
-| `GET /api/accounting/journal-entries/` | Listar (`?empresa_id=1&period=2024-01`) |
+| `POST /api/accounting/journal-entries/` | Criar lançamento (partida simples débito × crédito) |
+| `GET /api/accounting/journal-entries/` | Listar (`?plan_id=1&from=2026-01-01&to=2026-01-31`) |
+
+A empresa do lançamento é **sempre a da sessão**: `empresa_id` enviado pelo
+cliente é ignorado (antes, a tela mandava 1 fixo e uma empresa lia/lançava na
+contabilidade da outra).
 
 **Payload:**
 ```json
 {
-  "empresa_id": 1,
-  "entry_date": "2024-01-31T00:00:00Z",
-  "period": "2024-01",
-  "history": "Venda de mercadorias ref. NF 1234",
+  "plan_id": 1,
+  "entry_date": "2026-01-31",
+  "entry_number": "M1738281600000",
+  "batch_number": "",
   "debit_account_id": 10,
   "credit_account_id": 25,
-  "value": 5000.00
+  "value": 5000.00,
+  "history_code": "",
+  "description": "Venda de mercadorias ref. NF 1234",
+  "entry_type": "MANUAL"
 }
 ```
 
@@ -2504,8 +2859,8 @@ perfil padrão. Qualquer campo pode ser sobreposto explicitamente em `RemessaCon
 
 ## 39. Balancete (Contábil)
 
-`GET /api/accounting/balancete?plan_id=&empresa_id=&from=YYYY-MM-DD&to=YYYY-MM-DD`
-agrega os **lançamentos contábeis** do período por conta (débitos e créditos),
+`GET /api/accounting/balancete?plan_id=&from=YYYY-MM-DD&to=YYYY-MM-DD`
+agrega os **lançamentos contábeis** da empresa da sessão no período, por conta (débitos e créditos),
 devolvendo saldo por conta, totais e o indicador `balanced` (partidas dobradas:
 total de débitos = total de créditos). Implementado em
 `accounting_uc.BalanceteUseCase`.
@@ -2522,6 +2877,10 @@ Controle de **adiantamentos** a fornecedores (PAGAR) e de clientes (RECEBER), co
 aplicação do saldo sobre contas a pagar/receber. Tabelas: `adiantamentos` (saldo) e
 `adiantamento_aplicacoes` (auditoria de cada aplicação). Use case:
 `financial_uc` (`CreateAdiantamentoUseCase`, `AplicarAdiantamentoUseCase`, etc.).
+
+`adiantamentos` não tem coluna de empresa: o adiantamento é da empresa dona da
+**conta bancária**. Criar exige conta da empresa da sessão; consultar, listar,
+listar aplicações e aplicar só enxergam adiantamentos de contas da empresa.
 
 ### `POST /api/financial/adiantamentos/create`
 
@@ -2629,3 +2988,53 @@ Lista as NFS-e e retorna uma por ID.
 > **Observação:** o layout da NFS-e **varia por município**. Os campos
 > `item_lista_servico`, `codigo_tributario_municipio` e `codigo_municipio` devem
 > seguir a tabela da prefeitura; homologue com o município antes de produção.
+
+---
+
+## 42. SPED Fiscal — EFD ICMS/IPI automática
+
+`POST /api/fiscal/sped/efd/automatico` monta a EFD do mês a partir das notas da
+empresa do contexto (`internal/domain/fiscal/sped/efd_montagem.go`, função pura;
+leitura em `repository/fiscal/sped_pg.go`).
+
+```json
+{
+  "ano": 2026, "mes": 9, "finalidade": "0", "perfil": "A", "ind_atividade": "0",
+  "contabilista_nome": "Fulano", "contabilista_cpf": "11122233344",
+  "saldo_credor_anterior_icms": 0, "saldo_credor_anterior_ipi": 0,
+  "cod_receita_icms": "1015", "vencimento_icms": "2026-10-12"
+}
+```
+
+Resposta: `{arquivo, nome_arquivo, resumo, avisos}` — o resumo traz as
+contagens e a apuração; `avisos` lista o que o PVA vai cobrar e só o cadastro
+resolve (participante sem município, item sem NCM, CT-e sem municípios, ICMS a
+recolher sem código de receita). O arquivo é texto com CRLF; a tela converte
+para ISO-8859-1 ao baixar.
+
+| Origem | Registros | Regra |
+|---|---|---|
+| NF-e de entrada `APPROVED`/`WRITTEN_OFF`, modelo 01/1B/04/55, pela `data_entrada` | C100, C170, C190 | CFOP de entrada (`cfop_entrada`, ou o do emitente convertido 5→1, 6→2, 7→3); ICMS só do item com crédito; CST = origem + tributação (CSOSN vira origem + 90); item sem cadastro usa `NFE{id da linha}` |
+| NF-e própria autorizada, pela `data_emissao` | C100, C190 | sem C170; frete, seguro e desconto rateados no `VL_OPR` para o C190 fechar no `VL_DOC` |
+| NF-e própria cancelada | C100 | só identificação, `COD_SIT` 02 |
+| Frete lançado, pela data do lançamento | D100, D190 | CFOP de entrada; município de origem/destino do XML do CT-e |
+| Apuração | E110, E116, E500/E510/E520 | E110 soma os C190/D190 (débito de CFOP 5/6/7, crédito do resto) menos o saldo credor anterior; saldo devedor gera E116; IPI só para o contribuinte (padrão: atividade industrial) |
+| Cadastros | 0150, 0190, 0200, 0220 | só os referenciados; 0220 quando a unidade da nota difere da de estoque (fator da conferência) |
+
+- **E111** — as notas especiais de ajuste (VFIS0560) com finalidade AJUSTE,
+  emitidas no mês: o código (tabela 5.1.1, da nota ou da linha de apuração) define
+  o campo do E110 pelo 4º caractere (0 outros débitos, 1 estorno de créditos, 2
+  outros créditos, 3 estorno de débitos, 4 deduções, 5 débitos especiais — este
+  vira E116 090). Código de ST/DIFAL fica fora, com aviso.
+- **Bloco H** a pedido (`inventario_data`, `inventario_motivo`): estoque próprio
+  na data, por item — quantidade e valor somados dos movimentos até o fim do dia
+  (custo médio do momento de cada saída; AJUSTE_CUSTO só valor); item de terceiro
+  fica fora; COD_CTA é a conta de Estoque dos parâmetros contábeis.
+- **TIPO_ITEM (0200)** vem do cadastro: uso e consumo/imobilizado (tipo de uso) →
+  07/08; CFOP conclusivo; embalagem 02; serviço 09; fabricado 04; comprado para
+  revenda 00; comprado 01.
+- Alíquotas das notas (fração) saem em % no arquivo.
+
+Valores somam em `decimal` e viram texto com 2 casas. Datas do período vão à
+consulta como `AAAA-MM-DD`, para o fuso do banco não deslocar o dia. Inventário
+O `POST /api/fiscal/sped/efd` antigo, com os registros no corpo, continua aceito.

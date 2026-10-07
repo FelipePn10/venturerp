@@ -12,4 +12,7 @@ type PlanoContas struct {
 	Nivel      int32
 	IsActive   bool
 	CreatedAt  time.Time
+	// Conta contábil em que o plano gerencial é contabilizado (contabilização
+	// automática da nota de entrada).
+	AccountingAccountID *int64
 }

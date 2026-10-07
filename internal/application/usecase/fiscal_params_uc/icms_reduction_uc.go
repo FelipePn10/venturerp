@@ -100,9 +100,7 @@ type ICMSSTRestitutionUseCase struct {
 }
 
 func (uc *ICMSSTRestitutionUseCase) Create(ctx context.Context, r *entity.ICMSSTRestitution) (*response.ICMSSTRestitutionResponse, error) {
-	if r.EmpresaID == 0 {
-		return nil, errors.New("informe a empresa")
-	}
+	// A empresa é a do usuário autenticado (o repositório a aplica).
 	if err := validatePeriod(r.Period); err != nil {
 		return nil, err
 	}
@@ -157,9 +155,7 @@ type SpecialAdjustmentNoteUseCase struct {
 }
 
 func (uc *SpecialAdjustmentNoteUseCase) Create(ctx context.Context, n *entity.SpecialAdjustmentNote) (*response.SpecialAdjustmentNoteResponse, error) {
-	if n.EmpresaID == 0 {
-		return nil, errors.New("informe a empresa")
-	}
+	// A empresa é a do usuário autenticado (o repositório a aplica).
 	if n.Purpose == "" {
 		return nil, errors.New("informe a finalidade")
 	}

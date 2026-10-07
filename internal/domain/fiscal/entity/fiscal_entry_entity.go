@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type FiscalEntryStatus string
@@ -51,6 +52,58 @@ type FiscalEntry struct {
 	CreatedBy           uuid.UUID
 	Itens               []*FiscalEntryItem
 	Warnings            []string
+
+	// Dados completos do XML (migração 000376).
+	NaturezaOperacao          *string
+	CnpjDestinatario          *string
+	Protocolo                 *string
+	ValorICMSST               decimal.Decimal
+	ValorOutras               decimal.Decimal
+	ModalidadeFrete           *string
+	InformacoesComplementares *string
+	XMLContent                *string
+	SemPagamento              bool
+	ApprovedAt                *time.Time
+	ApprovedBy                *uuid.UUID
+	// SupplierName é o nome do fornecedor do cadastro (leitura).
+	SupplierName *string
+	Parcelas     []*FiscalEntryInstallment
+
+	// Migração 000377.
+	EntryOperationCode *int64
+	BaseIBSCBS         decimal.Decimal
+	ValorIBS           decimal.Decimal
+	ValorCBS           decimal.Decimal
+	ValorIS            decimal.Decimal
+	ValorRetPIS        decimal.Decimal
+	ValorRetCOFINS     decimal.Decimal
+	ValorRetCSLL       decimal.Decimal
+	BaseIRRF           decimal.Decimal
+	ValorIRRF          decimal.Decimal
+	BaseRetPrev        decimal.Decimal
+	ValorRetPrev       decimal.Decimal
+	ValorISSRet        decimal.Decimal
+	StockStatus        string
+	CancelledAt        *time.Time
+	CancelReason       *string
+}
+
+// Situação do lançamento da nota no estoque.
+const (
+	StockStatusNaoAplica = "NAO_APLICA"
+	StockStatusPendente  = "PENDENTE"
+	StockStatusConcluido = "CONCLUIDO"
+	StockStatusEstornado = "ESTORNADO" // nota cancelada depois de movimentar
+)
+
+// TotalRetencoes é o que a empresa retém do fornecedor e recolhe ao fisco.
+func (e *FiscalEntry) TotalRetencoes() decimal.Decimal {
+	return e.ValorRetPIS.Add(e.ValorRetCOFINS).Add(e.ValorRetCSLL).Add(e.ValorIRRF).Add(e.ValorRetPrev).Add(e.ValorISSRet)
+}
+
+// ValorAPagar é o que vai ao fornecedor: o total da nota menos as retenções.
+func (e *FiscalEntry) ValorAPagar() decimal.Decimal {
+	return decimal.NewFromFloat(e.ValorTotal).Round(2).Sub(e.TotalRetencoes())
 }
 
 type FiscalEntryItem struct {
@@ -87,4 +140,69 @@ type FiscalEntryItem struct {
 	Description        *string
 	Notes              *string
 	CreatedAt          time.Time
+
+	EAN               *string
+	CEST              *string
+	Origem            *string
+	ValorFrete        decimal.Decimal
+	ValorSeguro       decimal.Decimal
+	ValorDesconto     decimal.Decimal
+	ValorOutras       decimal.Decimal
+	BaseICMSST        decimal.Decimal
+	ValorICMSST       decimal.Decimal
+	ValorContabil     decimal.Decimal
+	FatorConversao    *decimal.Decimal
+	QuantidadeEstoque *decimal.Decimal
+	PedidoCompraXML   *string
+	ItemPedidoXML     *string
+	PlanoContasID     *int64
+	CentroCustoID     *int64
+	// Migração 000377: operação (TES), pedido de compra, estoque e Reforma.
+	CfopEntrada           *string
+	EntryOperationCode    *int64
+	MovimentaEstoque      bool
+	GeraFinanceiro        bool
+	WarehouseID           *int64
+	PurchaseOrderCode     *int64
+	PurchaseOrderItemCode *int64
+	QtdRecebidaAntes      decimal.Decimal
+	StockMovementID       *int64
+	CustoAquisicao        decimal.Decimal
+	CSTIBSCBS             *string
+	ClassTrib             *string
+	BaseIBSCBS            decimal.Decimal
+	AliqIBSUF             decimal.Decimal
+	ValorIBSUF            decimal.Decimal
+	AliqIBSMun            decimal.Decimal
+	ValorIBSMun           decimal.Decimal
+	ValorIBS              decimal.Decimal
+	AliqCBS               decimal.Decimal
+	ValorCBS              decimal.Decimal
+	ValorIS               decimal.Decimal
+	GeraCreditoIBSCBS     bool
+	// Leitura: nomes para a tela de conciliação.
+	WarehouseName      *string
+	EntryOperationName *string
+	ItemNCM            *string
+	// Número do pedido de compra e sequência da linha (o que o comprador
+	// reconhece; purchase_order_code é a chave interna).
+	PurchaseOrderNumber   *int64
+	PurchaseOrderSequence *int32
+	ItemName              *string
+	ItemUOM               *string
+	PlanoContasCodigo     *string
+	PlanoContasNome       *string
+	CentroCustoNome       *string
+}
+
+// ChaveConta é o destino financeiro do item (nulo quando não classificado).
+func (i *FiscalEntryItem) ChaveConta() *ChaveConta {
+	if i.PlanoContasID == nil {
+		return nil
+	}
+	k := ChaveConta{PlanoContasID: *i.PlanoContasID}
+	if i.CentroCustoID != nil {
+		k.CentroCustoID = *i.CentroCustoID
+	}
+	return &k
 }

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -168,6 +169,26 @@ type NFEItem struct {
 	AliquotaCOFINS                 float64  `json:"aliquota_cofins"`
 	ValorCOFINS                    float64  `json:"valor_cofins"`
 	OrigemMercadoria               int      `json:"origem_mercadoria"`
+	CEST                           string   `json:"cest,omitempty"`
+	// Rateio do frete, seguro e desconto da nota (a SEFAZ soma os itens).
+	ValorFrete    float64 `json:"valor_frete,omitempty"`
+	ValorSeguro   float64 `json:"valor_seguro,omitempty"`
+	ValorDesconto float64 `json:"valor_desconto,omitempty"`
+	BaseIPI       float64 `json:"ipi_base_calculo,omitempty"`
+	// Reforma tributária (grupo IBSCBS, obrigatório desde 2026).
+	IBSCBS *NFEItemIBSCBS `json:"-"`
+	// DFeReferenciado (por item): na devolução, a chave da nota de origem e o
+	// número do item nela — a SEFAZ rejeita a devolução sem ele (321).
+	DFeRefChave string `json:"-"`
+	DFeRefItem  int    `json:"-"`
+}
+
+// NFEItemIBSCBS é o grupo IBS/CBS do item (NT 2025.002).
+type NFEItemIBSCBS struct {
+	CST, ClassTrib                           string
+	Base                                     float64
+	AliqIBSUF, ValorIBSUF, AliqIBSMun        float64
+	ValorIBSMun, ValorIBS, AliqCBS, ValorCBS float64
 }
 
 type NFEFormaPagamento struct {
@@ -199,21 +220,245 @@ type NFEPayload struct {
 	Items             []NFEItem           `json:"items"`
 	FormaPagamento    []NFEFormaPagamento `json:"forma_pagamento"`
 	Duplicatas        []NFEDuplicata      `json:"duplicatas,omitempty"`
+	// NotasReferenciadas: a nota de origem (devolução, complementar, ajuste).
+	NotasReferenciadas []NFERef `json:"notas_referenciadas,omitempty"`
+	// Totais e frete da nota.
+	ModalidadeFrete                    int     `json:"modalidade_frete"`
+	ValorProdutos, ValorTotal          float64 `json:"-"`
+	ValorFrete, ValorSeguro, ValorDesc float64 `json:"-"`
+	InformacoesAdicionais              string  `json:"-"`
 }
 
+// MarshalJSON escreve a nota no formato da API v2 da Focus: campos planos
+// (cnpj_emitente, nome_destinatario, formas_pagamento...), não objetos
+// aninhados. O emitente vai só pelo CNPJ — nome, endereço, IE e regime vêm do
+// cadastro da empresa no painel da Focus, que é o mesmo da SEFAZ.
+func (p NFEPayload) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"natureza_operacao":  p.NaturezaOperacao,
+		"data_emissao":       p.DataEmissao,
+		"tipo_documento":     p.TipoDocumento,
+		"local_destino":      p.LocalDestino,
+		"finalidade_emissao": p.FinalidadeEmissao,
+		"consumidor_final":   p.ConsumidorFinal,
+		"presenca_comprador": p.PresencaComprador,
+		"modalidade_frete":   p.ModalidadeFrete,
+		"cnpj_emitente":      soDigitos(p.Emitente.CNPJ),
+	}
+	if p.ModalidadeFrete == 0 && p.ValorFrete == 0 {
+		m["modalidade_frete"] = 9 // sem ocorrência de transporte
+	}
+	d := p.Destinatario
+	doc := soDigitos(d.CNPJCPF)
+	if len(doc) == 11 {
+		m["cpf_destinatario"] = doc
+	} else {
+		m["cnpj_destinatario"] = doc
+	}
+	m["nome_destinatario"] = d.Nome
+	m["indicador_inscricao_estadual_destinatario"] = d.IndicadorIE
+	if d.IndicadorIE == 1 && d.IE != nil {
+		m["inscricao_estadual_destinatario"] = soDigitos(*d.IE)
+	}
+	for k, v := range map[string]string{"logradouro_destinatario": d.Logradouro, "numero_destinatario": d.Numero,
+		"bairro_destinatario": d.Bairro, "municipio_destinatario": d.Municipio, "uf_destinatario": d.UF,
+		"cep_destinatario": soDigitos(d.CEP), "email_destinatario": d.Email} {
+		if strings.TrimSpace(v) != "" {
+			m[k] = strings.TrimSpace(v)
+		}
+	}
+	if p.ValorProdutos > 0 {
+		m["valor_produtos"] = p.ValorProdutos
+	}
+	if p.ValorTotal > 0 {
+		m["valor_total"] = p.ValorTotal
+	}
+	if p.ValorFrete > 0 {
+		m["valor_frete"] = p.ValorFrete
+	}
+	if p.ValorSeguro > 0 {
+		m["valor_seguro"] = p.ValorSeguro
+	}
+	if p.ValorDesc > 0 {
+		m["valor_desconto"] = p.ValorDesc
+	}
+	if strings.TrimSpace(p.InformacoesAdicionais) != "" {
+		m["informacoes_adicionais_contribuinte"] = p.InformacoesAdicionais
+	}
+	itens := make([]map[string]any, 0, len(p.Items))
+	for _, it := range p.Items {
+		itens = append(itens, it.campos())
+	}
+	m["items"] = itens
+	formas := make([]map[string]any, 0, len(p.FormaPagamento))
+	for _, f := range p.FormaPagamento {
+		formas = append(formas, map[string]any{"forma_pagamento": f.FormaPagamento, "valor_pagamento": f.Valor})
+	}
+	m["formas_pagamento"] = formas
+	if len(p.Duplicatas) > 0 {
+		m["duplicatas"] = p.Duplicatas
+	}
+	// A referência vai num nível só (rejeição 1010): com o DFeReferenciado nos
+	// itens (devolução, desde a reforma), o grupo da nota não vai.
+	refPorItem := false
+	for _, it := range p.Items {
+		if it.DFeRefChave != "" {
+			refPorItem = true
+		}
+	}
+	if len(p.NotasReferenciadas) > 0 && !refPorItem {
+		m["notas_referenciadas"] = p.NotasReferenciadas
+	}
+	return json.Marshal(m)
+}
+
+// cstComICMS: CSTs (e CSOSN) que destacam base, alíquota e valor do ICMS.
+var cstComICMS = map[string]bool{"00": true, "10": true, "20": true, "51": true, "70": true, "90": true, "900": true}
+
+func (it NFEItem) campos() map[string]any {
+	m := map[string]any{
+		"numero_item": it.NumeroItem, "codigo_produto": it.CodigoProduto, "descricao": it.Descricao, "cfop": it.CFOP,
+		"codigo_ncm": it.CodigoNCM, "unidade_comercial": it.UnidadeComercial, "quantidade_comercial": it.QuantidadeComercial,
+		"valor_unitario_comercial": it.ValorUnitarioComercial, "valor_bruto": it.ValorBruto,
+		"unidade_tributavel": it.UnidadeComercial, "quantidade_tributavel": it.QuantidadeComercial,
+		"valor_unitario_tributavel": it.ValorUnitarioComercial, "inclui_no_total": 1,
+		"icms_origem": it.OrigemMercadoria, "icms_situacao_tributaria": it.CodigoSituacaoTributariaICMS,
+		"pis_situacao_tributaria": it.CodigoSituacaoTributariaPIS, "cofins_situacao_tributaria": it.CodigoSituacaoTributariaCOFINS,
+	}
+	if it.CEST != "" {
+		m["cest"] = it.CEST
+	}
+	for k, v := range map[string]float64{"valor_frete": it.ValorFrete, "valor_seguro": it.ValorSeguro, "valor_desconto": it.ValorDesconto} {
+		if v > 0 {
+			m[k] = v
+		}
+	}
+	if cstComICMS[it.CodigoSituacaoTributariaICMS] {
+		m["icms_modalidade_base_calculo"] = it.ModalidadeBaseCalculoICMS
+		m["icms_base_calculo"] = it.ValorBaseCalculoICMS
+		m["icms_aliquota"] = it.AliquotaICMS
+		m["icms_valor"] = it.ValorICMS
+	}
+	if it.PercentualDiferimento != nil {
+		m["icms_percentual_diferimento"] = *it.PercentualDiferimento
+	}
+	if it.ValorICMSDiferido != nil {
+		m["icms_valor_diferido"] = *it.ValorICMSDiferido
+	}
+	if it.ValorICMSST != nil {
+		if it.ModalidadeBaseCalculoICMSST != nil {
+			m["icms_modalidade_base_calculo_st"] = *it.ModalidadeBaseCalculoICMSST
+		}
+		if it.PercentualMVAICMSST != nil {
+			m["icms_margem_valor_adicionado_st"] = *it.PercentualMVAICMSST
+		}
+		if it.BaseCalculoICMSST != nil {
+			m["icms_base_calculo_st"] = *it.BaseCalculoICMSST
+		}
+		if it.AliquotaICMSST != nil {
+			m["icms_aliquota_st"] = *it.AliquotaICMSST
+		}
+		m["icms_valor_st"] = *it.ValorICMSST
+	}
+	if it.CodigoSituacaoTributariaIPI != "" {
+		m["ipi_situacao_tributaria"] = it.CodigoSituacaoTributariaIPI
+		m["ipi_codigo_enquadramento_legal"] = "999"
+		if it.ValorIPI > 0 {
+			base := it.BaseIPI
+			if base == 0 {
+				base = it.ValorBruto
+			}
+			m["ipi_base_calculo"] = base
+			m["ipi_aliquota"] = it.AliquotaIPI
+			m["ipi_valor"] = it.ValorIPI
+		}
+	}
+	baseContrib := it.ValorBruto - it.ValorDesconto
+	if it.ValorPIS > 0 {
+		m["pis_base_calculo"] = baseContrib
+		m["pis_aliquota_porcentual"] = it.AliquotaPIS
+		m["pis_valor"] = it.ValorPIS
+	}
+	if it.ValorCOFINS > 0 {
+		m["cofins_base_calculo"] = baseContrib
+		m["cofins_aliquota_porcentual"] = it.AliquotaCOFINS
+		m["cofins_valor"] = it.ValorCOFINS
+	}
+	if it.DFeRefChave != "" && it.DFeRefItem > 0 {
+		m["chave_acesso_dfe_referenciado"] = it.DFeRefChave
+		m["numero_item_dfe_referenciado"] = fmt.Sprint(it.DFeRefItem)
+	}
+	if g := it.IBSCBS; g != nil {
+		m["ibs_cbs_situacao_tributaria"] = g.CST
+		m["ibs_cbs_classificacao_tributaria"] = g.ClassTrib
+		m["ibs_cbs_base_calculo"] = g.Base
+		m["ibs_uf_aliquota"] = g.AliqIBSUF
+		m["ibs_uf_valor"] = g.ValorIBSUF
+		m["ibs_mun_aliquota"] = g.AliqIBSMun
+		m["ibs_mun_valor"] = g.ValorIBSMun
+		m["ibs_valor_total"] = g.ValorIBS
+		m["cbs_aliquota"] = g.AliqCBS
+		m["cbs_valor"] = g.ValorCBS
+	}
+	return m
+}
+
+func soDigitos(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// NFERef referencia uma NF-e pela chave (grupo NFref do XML).
+type NFERef struct {
+	ChaveNFe string `json:"chave_nfe"`
+}
+
+// NFEResponse é a resposta da Focus (emissão, consulta e cancelamento). A API
+// v2 responde "autorizado", "erro_autorizacao", "denegado", "cancelado",
+// "erro_cancelamento" e "processando_autorizacao"; a chave vem com o prefixo
+// "NFe" (use Chave()).
 type NFEResponse struct {
 	Status        string `json:"status"`
 	Ref           string `json:"ref"`
 	ChaveNFe      string `json:"chave_nfe,omitempty"`
+	Numero        string `json:"numero,omitempty"`
+	Serie         string `json:"serie,omitempty"`
 	Protocolo     string `json:"protocolo,omitempty"`
-	PathXML       string `json:"path_xml_nota_fiscal,omitempty"`
-	PathDANFE     string `json:"path_danfe,omitempty"`
+	PathXML       string `json:"caminho_xml_nota_fiscal,omitempty"`
+	PathDANFE     string `json:"caminho_danfe,omitempty"`
+	PathXMLCancel string `json:"caminho_xml_cancelamento,omitempty"`
 	MensagemSEFAZ string `json:"mensagem_sefaz,omitempty"`
-	CodigoSEFAZ   string `json:"codigo_sefaz,omitempty"`
+	CodigoSEFAZ   string `json:"status_sefaz,omitempty"`
+	Mensagem      string `json:"mensagem,omitempty"`
 	Erros         []struct {
 		Code    string `json:"codigo"`
 		Message string `json:"mensagem"`
 	} `json:"erros,omitempty"`
+}
+
+// Chave devolve a chave de acesso só com os 44 dígitos.
+func (r *NFEResponse) Chave() string { return strings.TrimPrefix(strings.TrimSpace(r.ChaveNFe), "NFe") }
+
+// Autorizada diz se a SEFAZ autorizou o uso (a API v2 diz "autorizado").
+func (r *NFEResponse) Autorizada() bool { return r.Status == "autorizado" || r.Status == "autorizada" }
+
+func (r *NFEResponse) motivo() string {
+	msg := r.MensagemSEFAZ
+	if msg == "" {
+		msg = r.Mensagem
+	}
+	if msg == "" && len(r.Erros) > 0 {
+		msg = r.Erros[0].Message
+	}
+	if r.CodigoSEFAZ != "" {
+		msg = r.CodigoSEFAZ + " — " + msg
+	}
+	return msg
 }
 
 // EmitirNFe sends POST /nfe?ref={ref} and polls until authorized or error.
@@ -231,7 +476,8 @@ func (c *Client) EmitirNFe(ctx context.Context, ref string, payload NFEPayload) 
 
 	// Poll until terminal state
 	for i := 0; i < 30; i++ {
-		if resp.Status == "autorizada" || resp.Status == "denegada" || resp.Status == "erro_autorizacao" || resp.Status == "cancelada" {
+		if resp.Autorizada() || strings.HasPrefix(resp.Status, "erro") || resp.Status == "denegado" || resp.Status == "denegada" ||
+			resp.Status == "cancelado" || resp.Status == "cancelada" {
 			break
 		}
 		time.Sleep(2 * time.Second)
@@ -241,14 +487,10 @@ func (c *Client) EmitirNFe(ctx context.Context, ref string, payload NFEPayload) 
 		}
 	}
 
-	if resp.Status != "autorizada" {
-		msg := resp.MensagemSEFAZ
-		if msg == "" && len(resp.Erros) > 0 {
-			msg = resp.Erros[0].Message
-		}
-		return &resp, fmt.Errorf("NF-e não autorizada: status=%s, msg=%s", resp.Status, msg)
+	if !resp.Autorizada() {
+		return &resp, fmt.Errorf("NF-e não autorizada (%s): %s", resp.Status, resp.motivo())
 	}
-
+	resp.ChaveNFe = resp.Chave()
 	return &resp, nil
 }
 
@@ -280,6 +522,7 @@ func (c *Client) ConsultarNFe(ctx context.Context, ref string) (*NFEResponse, er
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshaling consult response: %w", err)
 	}
+	resp.ChaveNFe = resp.Chave()
 	return &resp, nil
 }
 
@@ -293,6 +536,11 @@ func (c *Client) CancelarNFe(ctx context.Context, ref, justificativa string) (*N
 	var resp NFEResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshaling cancel response: %w", err)
+	}
+	// A Focus responde 200 também quando a SEFAZ recusa o cancelamento
+	// ("erro_cancelamento", por exemplo fora do prazo): só "cancelado" vale.
+	if resp.Status != "cancelado" && resp.Status != "cancelada" {
+		return &resp, fmt.Errorf("cancelamento não aceito pela SEFAZ (%s): %s", resp.Status, resp.motivo())
 	}
 	return &resp, nil
 }
@@ -343,6 +591,28 @@ func (c *Client) ConsultarNFePorChave(ctx context.Context, chaveAcesso string) (
 	return &resp, nil
 }
 
+// BaixarXMLNFeRecebida baixa o XML de uma NF-e emitida CONTRA a empresa
+// (GET /nfes_recebidas/{chave}.xml). É o mesmo arquivo que o fornecedor
+// mandaria: a importação por chave segue o mesmo caminho da importação do
+// arquivo. Requer a manifestação do destinatário habilitada na Focus.
+func (c *Client) BaixarXMLNFeRecebida(ctx context.Context, chaveAcesso string) ([]byte, error) {
+	chave := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, chaveAcesso)
+	body, statusCode, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/nfes_recebidas/%s.xml", chave), nil)
+	if statusCode == http.StatusNotFound {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf(
+			"a NF-e de chave %s não foi encontrada entre as notas recebidas na Focus NF-e: confira a chave ou importe o arquivo XML", chave))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("baixando XML da NF-e recebida: %w", err)
+	}
+	return body, nil
+}
+
 // CadastroResponse holds the relevant fields of Focus's registration query.
 type CadastroResponse struct {
 	CNPJ              string `json:"cnpj"`
@@ -386,10 +656,23 @@ type ManifestacaoPayload struct {
 	Justificativa string `json:"justificativa,omitempty"`
 }
 
-// ManifestarDestinatario sends POST /nfe/manifesto to register the recipient's
-// manifestation about an incoming NF-e.
+// ManifestarDestinatario registra a manifestação do destinatário sobre uma
+// NF-e recebida: POST /nfes_recebidas/{chave}/manifesto com o tipo
+// (ciencia, confirmacao, desconhecimento, nao_realizada) e, nos dois
+// últimos, a justificativa. (Antes chamava /nfe/manifesto, que não existe
+// na API da Focus — a manifestação nunca chegava à SEFAZ.)
 func (c *Client) ManifestarDestinatario(ctx context.Context, p ManifestacaoPayload) (map[string]interface{}, error) {
-	body, statusCode, err := c.do(ctx, http.MethodPost, "/nfe/manifesto", p)
+	chave := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, p.ChaveNFe)
+	corpo := map[string]string{"tipo": p.Tipo}
+	if strings.TrimSpace(p.Justificativa) != "" {
+		corpo["justificativa"] = p.Justificativa
+	}
+	body, statusCode, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/nfes_recebidas/%s/manifesto", chave), corpo)
 	if err != nil {
 		return nil, fmt.Errorf("manifestação destinatário: %w", err)
 	}
@@ -398,6 +681,79 @@ func (c *Client) ManifestarDestinatario(ctx context.Context, p ManifestacaoPaylo
 		return nil, fmt.Errorf("unmarshaling manifestação response (status %d): %w", statusCode, err)
 	}
 	return resp, nil
+}
+
+// NFeRecebida é uma NF-e emitida contra o CNPJ da empresa, como a Focus
+// devolve na distribuição DF-e.
+type NFeRecebida struct {
+	ChaveNFe                 string      `json:"chave_nfe"`
+	NomeEmitente             string      `json:"nome_emitente"`
+	DocumentoEmitente        string      `json:"documento_emitente"`
+	ValorTotal               json.Number `json:"valor_total"`
+	DataEmissao              string      `json:"data_emissao"`
+	Situacao                 string      `json:"situacao"`
+	ManifestacaoDestinatario *string     `json:"manifestacao_destinatario"`
+	NFeCompleta              bool        `json:"nfe_completa"`
+	Versao                   json.Number `json:"versao"`
+}
+
+// ListarNFesRecebidas devolve as NF-e recebidas com versão maior que a
+// informada (até 100 por chamada) e a maior versão devolvida (cabeçalho
+// X-Max-Version), para a próxima busca continuar de onde parou.
+func (c *Client) ListarNFesRecebidas(ctx context.Context, cnpj string, versao int64) ([]NFeRecebida, int64, error) {
+	if c.configErr != nil {
+		return nil, 0, c.configErr
+	}
+	digitos := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, cnpj)
+	path := fmt.Sprintf("/nfes_recebidas?cnpj=%s&versao=%d", digitos, versao)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.SetBasicAuth(c.token, "")
+	start := time.Now()
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("consultando NF-e recebidas: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, err
+	}
+	if c.onRequest != nil {
+		c.onRequest(path, http.MethodGet, "", string(body), resp.StatusCode, int(time.Since(start).Milliseconds()))
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var apiErr struct {
+			Mensagem string `json:"mensagem"`
+		}
+		if json.Unmarshal(body, &apiErr) == nil && apiErr.Mensagem != "" {
+			return nil, 0, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, apiErr.Mensagem)
+		}
+		return nil, 0, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var lista []NFeRecebida
+	if err := json.Unmarshal(body, &lista); err != nil {
+		return nil, 0, fmt.Errorf("lendo NF-e recebidas: %w", err)
+	}
+	maxVersao := versao
+	if v := resp.Header.Get("X-Max-Version"); v != "" {
+		if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && n > maxVersao {
+			maxVersao = n
+		}
+	}
+	for _, n := range lista {
+		if v, err := n.Versao.Int64(); err == nil && v > maxVersao {
+			maxVersao = v
+		}
+	}
+	return lista, maxVersao, nil
 }
 
 // InutilizacaoPayload is the body for an NF-e numbering inutilization.
@@ -654,7 +1010,7 @@ func (c *Client) ConsultarCTe(ctx context.Context, ref string) (*CTeResponse, er
 
 // EmitirCCe sends POST /nfe/{ref}/carta_correcao.
 func (c *Client) EmitirCCe(ctx context.Context, ref, textoCorrecao string) (map[string]interface{}, error) {
-	payload := map[string]string{"descricao_correcao": textoCorrecao}
+	payload := map[string]string{"correcao": textoCorrecao}
 	body, _, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/nfe/%s/carta_correcao", ref), payload)
 	if err != nil {
 		return nil, err
@@ -662,6 +1018,11 @@ func (c *Client) EmitirCCe(ctx context.Context, ref, textoCorrecao string) (map[
 	var resp map[string]interface{}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshaling CCe response: %w", err)
+	}
+	// A SEFAZ pode recusar a carta com HTTP 200: só "autorizado" vale.
+	if st, _ := resp["status"].(string); st != "" && st != "autorizado" {
+		msg, _ := resp["mensagem_sefaz"].(string)
+		return resp, fmt.Errorf("carta de correção não aceita pela SEFAZ (%s): %s", st, msg)
 	}
 	return resp, nil
 }

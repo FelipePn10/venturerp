@@ -88,6 +88,11 @@ func (r *EntryOperationRepositorySQLC) CreateEntryOperation(ctx context.Context,
 		StateGroupCode:     o.StateGroupCode,
 		SupplierTypeCode:   o.SupplierTypeCode,
 		CreatedBy:          pgutil.ToPgUUID(o.CreatedBy),
+		MovimentaEstoque:   o.MovimentaEstoque,
+		GeraFinanceiro:     o.GeraFinanceiro,
+		CreditaIcms:        o.CreditaICMS,
+		CreditaIpi:         o.CreditaIPI,
+		CreditaPisCofins:   o.CreditaPISCOFINS,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating entry operation type: %w", err)
@@ -106,6 +111,11 @@ func (r *EntryOperationRepositorySQLC) UpdateEntryOperation(ctx context.Context,
 		StateGroupCode:     o.StateGroupCode,
 		SupplierTypeCode:   o.SupplierTypeCode,
 		IsActive:           o.IsActive,
+		MovimentaEstoque:   o.MovimentaEstoque,
+		GeraFinanceiro:     o.GeraFinanceiro,
+		CreditaIcms:        o.CreditaICMS,
+		CreditaIpi:         o.CreditaIPI,
+		CreditaPisCofins:   o.CreditaPISCOFINS,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating entry operation type: %w", err)
@@ -162,6 +172,11 @@ func entryOpToEntity(row sqlc.EntryOperationType) *entity.EntryOperationType {
 		ClassificationCode: pgutil.FromPgTextPtr(row.ClassificationCode),
 		StateGroupCode:     row.StateGroupCode,
 		SupplierTypeCode:   row.SupplierTypeCode,
+		MovimentaEstoque:   row.MovimentaEstoque,
+		GeraFinanceiro:     row.GeraFinanceiro,
+		CreditaICMS:        row.CreditaIcms,
+		CreditaIPI:         row.CreditaIpi,
+		CreditaPISCOFINS:   row.CreditaPisCofins,
 		IsActive:           row.IsActive,
 		CreatedAt:          pgutil.FromPgTimestamptz(row.CreatedAt),
 		CreatedBy:          pgutil.FromPgUUID(row.CreatedBy),

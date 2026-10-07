@@ -48,9 +48,16 @@ type EntryOperationType struct {
 	ClassificationCode *string
 	StateGroupCode     *int64
 	SupplierTypeCode   *int64
-	IsActive           bool
-	CreatedAt          time.Time
-	CreatedBy          uuid.UUID
+	// Comportamento da nota (equivalente à TES): movimenta estoque, gera
+	// contas a pagar e quais impostos viram crédito em vez de custo.
+	MovimentaEstoque bool
+	GeraFinanceiro   bool
+	CreditaICMS      bool
+	CreditaIPI       bool
+	CreditaPISCOFINS bool
+	IsActive         bool
+	CreatedAt        time.Time
+	CreatedBy        uuid.UUID
 }
 
 func NewEntryOperationType(code int64, description, natureOperation string, createdBy uuid.UUID) (*EntryOperationType, error) {
@@ -70,12 +77,17 @@ func NewEntryOperationType(code int64, description, natureOperation string, crea
 		return nil, fmt.Errorf("a natureza da operação deve iniciar por 1 (dentro do estado), 2 (fora do estado) ou 3 (fora do país)")
 	}
 	return &EntryOperationType{
-		Code:            code,
-		Description:     description,
-		NatureOperation: natureOperation,
-		IsActive:        true,
-		CreatedAt:       time.Now(),
-		CreatedBy:       createdBy,
+		Code:             code,
+		Description:      description,
+		NatureOperation:  natureOperation,
+		MovimentaEstoque: true,
+		GeraFinanceiro:   true,
+		CreditaICMS:      true,
+		CreditaIPI:       true,
+		CreditaPISCOFINS: true,
+		IsActive:         true,
+		CreatedAt:        time.Now(),
+		CreatedBy:        createdBy,
 	}, nil
 }
 

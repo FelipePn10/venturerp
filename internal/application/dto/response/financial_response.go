@@ -29,6 +29,8 @@ type PlanoContasResponse struct {
 	Nivel      int32     `json:"nivel"`
 	IsActive   bool      `json:"is_active"`
 	CreatedAt  time.Time `json:"created_at"`
+	// Conta contábil do plano gerencial (contabilização automática).
+	AccountingAccountID *int64 `json:"accounting_account_id,omitempty"`
 }
 
 // CentroCustoResponse is the API representation of a cost center (financial).
@@ -54,9 +56,11 @@ type ContaBancariaResponse struct {
 	ChavePix     *string         `json:"chave_pix,omitempty"`
 	TipoChavePix *string         `json:"tipo_chave_pix,omitempty"`
 	IsActive     bool            `json:"is_active"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
-	CreatedBy    uuid.UUID       `json:"created_by"`
+	// Conta contábil do banco (contabilização automática).
+	AccountingAccountID *int64    `json:"accounting_account_id,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	CreatedBy           uuid.UUID `json:"created_by"`
 }
 
 // ContaPagarResponse is the API representation of an account payable.
@@ -87,6 +91,8 @@ type ContaPagarResponse struct {
 	PlanoContasID   *int64  `json:"plano_contas_id,omitempty"`
 	CentroCustoID   *int64  `json:"centro_custo_id,omitempty"`
 
+	Rateios []RateioContaPagarResponse `json:"rateios,omitempty"`
+
 	StatusAprovacao string     `json:"status_aprovacao"`
 	AprovadoPor     *uuid.UUID `json:"aprovado_por,omitempty"`
 	DataAprovacao   *time.Time `json:"data_aprovacao,omitempty"`
@@ -106,11 +112,22 @@ type ContaPagarResponse struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
+// RateioContaPagarResponse é a parte do título que vai para um plano de contas.
+type RateioContaPagarResponse struct {
+	PlanoContasID     int64           `json:"plano_contas_id"`
+	PlanoContasCodigo *string         `json:"plano_contas_codigo,omitempty"`
+	PlanoContasNome   *string         `json:"plano_contas_nome,omitempty"`
+	CentroCustoID     *int64          `json:"centro_custo_id,omitempty"`
+	CentroCustoNome   *string         `json:"centro_custo_nome,omitempty"`
+	Valor             decimal.Decimal `json:"valor"`
+}
+
 // ContaReceberResponse is the API representation of an account receivable.
 type ContaReceberResponse struct {
 	ID              int64      `json:"id"`
 	NumeroDocumento *string    `json:"numero_documento,omitempty"`
 	ClienteID       *int64     `json:"cliente_id,omitempty"`
+	FornecedorID    *int64     `json:"fornecedor_id,omitempty"`
 	FiscalExitID    *int64     `json:"fiscal_exit_id,omitempty"`
 	SalesOrderID    *int64     `json:"sales_order_id,omitempty"`
 	DataLancamento  time.Time  `json:"data_lancamento"`

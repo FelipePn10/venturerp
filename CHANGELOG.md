@@ -6,6 +6,62 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(entrada de NF-e): importar a mesma nota duas vezes ao mesmo tempo não
+  duplica mais a entrada. Quem chega em segundo recebe "a nota está sendo
+  importada por outro usuário" na hora, em vez de esperar ou criar outra entrada
+- feat(notas recebidas): a busca das notas emitidas contra a empresa na SEFAZ
+  pode rodar sozinha, a cada hora, ligada por empresa. A tela mostra quando foi a
+  última consulta e o último erro, e destaca as notas cujo prazo de manifestação
+  (180 dias da emissão) vence em até 30 dias
+- feat(contabilidade): o ciclo inteiro passa a ser contabilizado, não só a
+  entrada. Pagamento de fornecedor (com juros, multa e desconto), recolhimento das
+  retenções, recebimento de cliente, NF-e de saída (receita, impostos sobre a
+  venda e custo da mercadoria vendida pelo custo médio) e o estorno de cada um no
+  cancelamento. Cada conta bancária pode ser ligada à sua conta contábil
+- feat(frete sobre compras): o CT-e da transportadora entra pelo XML, é ligado
+  às notas que transportou e rateado entre os itens por valor, quantidade ou peso.
+  O frete complementa o custo do que ainda está no estoque (o que já foi consumido
+  vai para despesa), gera o título da transportadora e é contabilizado
+- feat(devolução de compra): devolver ao fornecedor, total ou parcialmente, a
+  partir da nota de entrada. A NF-e de devolução sai com o CFOP de devolução da compra (5201/5202,
+  6201/6202...) e a nota
+  original referenciada; ao ser autorizada, a mercadoria sai do estoque pelo custo
+  médio, o valor abate os títulos em aberto da nota e o que sobrar vira crédito a
+  receber do fornecedor. Cancelar a devolução desfaz tudo
+- feat(SPED): a EFD ICMS/IPI do mês é gerada a partir das próprias notas, sem
+  digitação: entradas aprovadas (C100/C170/C190, com o CFOP de entrada e só o ICMS
+  que a empresa credita), NF-e emitidas e canceladas, CT-e de frete (D100/D190),
+  apuração do ICMS (E110/E116) e do IPI (E500/E510/E520). Antes de baixar, a tela
+  mostra o resumo da apuração e o que falta no cadastro para o PVA aceitar
+- feat(entrada de NF-e): nota de emitente que não está no cadastro deixa de ser
+  aprovada sem fornecedor (o título nascia sem dono). O fornecedor e os itens que
+  faltam se cadastram a partir da própria nota, com os dados do XML; fornecedor
+  cadastrado depois se liga sozinho; fornecedor bloqueado ou inativo impede a
+  aprovação. Nota com frete ou devolução lançados não se cancela antes deles
+- fix(NF-e de saída): a transmissão à Focus usava um formato que a API não aceita
+  e lia a resposta com nomes errados — nenhuma nota seria autorizada. Conferido
+  na homologação da SEFAZ: venda, devolução e cancelamento autorizados. A nota
+  passa a levar o grupo IBS/CBS (obrigatório em 2026), o rateio de frete e
+  desconto nos itens, a hora certa no fuso de Brasília e o número que a SEFAZ
+  autorizou. Nota rejeitada pode ser corrigida e reenviada; cancelar pela tela
+  voltou a funcionar; carta de correção e cancelamento recusados pela SEFAZ não
+  são mais registrados como feitos. A data/hora de CT-e e NFS-e tinha o mesmo
+  erro de fuso
+- feat(SPED): ajustes da apuração (E111) a partir das notas especiais de ajuste,
+  inventário (bloco H) a pedido e tipo do item (0200) pelo cadastro
+- fix(apuração de impostos): os créditos passam a seguir a mesma regra da EFD —
+  só o imposto dos itens com crédito, pela data de entrada, mais o ICMS do frete
+- fix(notas especiais de ajuste): a empresa vinha da tela (fixa em 1) e a consulta
+  por código não filtrava empresa; agora é sempre a do usuário
+- fix(SPED): o arquivo gerado seguia um leiaute que o PVA recusava (versão,
+  quantidade de campos por registro, blocos sem abertura e encerramento)
+- fix(NF-e de saída): cancelar uma nota autorizada não devolvia a mercadoria ao
+  estoque
+- fix(CT-e): os conhecimentos de transporte não tinham empresa; cada empresa via
+  os CT-e das outras
+- fix(financeiro): a baixa parcial de título gravava o lançamento sem a empresa,
+  e os juros e a multa eram cobrados sobre o saldo inteiro em vez do valor pago
+
 ## [v1.4.3] — 2026-10-02
 
 - fix(tabela de preço): formação inexistente recusada com os valores aceitos (`59a468c`)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
@@ -1326,7 +1327,13 @@ func (r *FiscalParamsRepositorySQLC) ListICMSSummaryEntryAdditionals(ctx context
 // ─── ICMS ST Restitution ──────────────────────────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateICMSSTRestitution(ctx context.Context, rs *fiscalEntity.ICMSSTRestitution) (*fiscalEntity.ICMSSTRestitution, error) {
-	err := r.pool.QueryRow(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// A empresa é a do usuário autenticado, nunca a que o corpo informa.
+	rs.EmpresaID = int(empresa)
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO icms_st_restitutions
 		 (empresa_id, period, restitution_type, uf, orig_doc_model, orig_doc_series, orig_doc_number, orig_doc_date,
 		  orig_emitter_cnpj, orig_emitter_ie, item_id, item_code, cfop, motivo_code, cst_icms,
@@ -1352,34 +1359,45 @@ func (r *FiscalParamsRepositorySQLC) CreateICMSSTRestitution(ctx context.Context
 }
 
 func (r *FiscalParamsRepositorySQLC) UpdateICMSSTRestitution(ctx context.Context, rs *fiscalEntity.ICMSSTRestitution) (*fiscalEntity.ICMSSTRestitution, error) {
-	_, err := r.pool.Exec(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx,
 		`UPDATE icms_st_restitutions SET
 		 restitution_type=$1, uf=$2, motivo_code=$3, cst_icms=$4,
 		 icms_st_base=$5, icms_st_aliq=$6, icms_st_value=$7,
 		 icms_st_base_restitution=$8, icms_st_value_restitution=$9,
 		 icms_st_consolidated_base=$10, icms_st_consolidated_value=$11,
 		 sped_block=$12, is_active=$13
-		 WHERE id=$14`,
+		 WHERE id=$14 AND empresa_id=$15`,
 		string(rs.RestitutionType), rs.UF, pgutil.ToPgTextFromPtr(rs.MotivoCode), pgutil.ToPgTextFromPtr(rs.CSTICMS),
 		rs.ICMSSTBase, rs.ICMSSTAliq, rs.ICMSSTValue,
 		rs.ICMSSTBaseRestitution, rs.ICMSSTValueRestitution,
 		rs.ICMSSTConsolidatedBase, rs.ICMSSTConsolidatedValue,
-		pgutil.ToPgTextFromPtr(rs.SpedBlock), rs.IsActive, rs.ID)
+		pgutil.ToPgTextFromPtr(rs.SpedBlock), rs.IsActive, rs.ID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("updating icms st restitution %d: %w", rs.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("restituição de ICMS-ST %d não encontrada", rs.ID))
 	}
 	return rs, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) GetICMSSTRestitution(ctx context.Context, id int64) (*fiscalEntity.ICMSSTRestitution, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var rs fiscalEntity.ICMSSTRestitution
 	var restType string
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`SELECT id, empresa_id, period, restitution_type, uf, orig_doc_model, orig_doc_series, orig_doc_number,
 		 orig_doc_date, orig_emitter_cnpj, orig_emitter_ie, item_id, item_code, cfop, motivo_code, cst_icms,
 		 icms_st_base, icms_st_aliq, icms_st_value, icms_st_base_restitution, icms_st_value_restitution,
 		 icms_st_consolidated_base, icms_st_consolidated_value, h030_ind_estoque, sped_block, is_active, created_at
-		 FROM icms_st_restitutions WHERE id=$1`, id).
+		 FROM icms_st_restitutions WHERE id=$1 AND empresa_id=$2`, id, empresa).
 		Scan(&rs.ID, &rs.EmpresaID, &rs.Period, &restType, &rs.UF,
 			pgutil.ScanPgTextPtr(&rs.OrigDocModel), pgutil.ScanPgTextPtr(&rs.OrigDocSeries),
 			pgutil.ScanPgTextPtr(&rs.OrigDocNumber), &rs.OrigDocDate,
@@ -1401,12 +1419,16 @@ func (r *FiscalParamsRepositorySQLC) GetICMSSTRestitution(ctx context.Context, i
 	return &rs, nil
 }
 
-func (r *FiscalParamsRepositorySQLC) ListICMSSTRestitutions(ctx context.Context, empresaID int, period string, uf string) ([]*fiscalEntity.ICMSSTRestitution, error) {
+func (r *FiscalParamsRepositorySQLC) ListICMSSTRestitutions(ctx context.Context, _ int, period string, uf string) ([]*fiscalEntity.ICMSSTRestitution, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	q := `SELECT id, empresa_id, period, restitution_type, uf, orig_doc_number, item_code, cfop, motivo_code, cst_icms,
 		  icms_st_base, icms_st_aliq, icms_st_value, icms_st_base_restitution, icms_st_value_restitution,
 		  icms_st_consolidated_base, icms_st_consolidated_value, sped_block, is_active, created_at
 		  FROM icms_st_restitutions WHERE empresa_id=$1 AND is_active=TRUE`
-	args := []any{empresaID}
+	args := []any{empresa}
 	if period != "" {
 		args = append(args, period)
 		q += fmt.Sprintf(" AND period=$%d", len(args))
@@ -1443,7 +1465,12 @@ func (r *FiscalParamsRepositorySQLC) ListICMSSTRestitutions(ctx context.Context,
 // ─── Special Adjustment Notes ─────────────────────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateSpecialAdjustmentNote(ctx context.Context, n *fiscalEntity.SpecialAdjustmentNote) (*fiscalEntity.SpecialAdjustmentNote, error) {
-	err := r.pool.QueryRow(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	n.EmpresaID = int(empresa)
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO special_adjustment_notes
 		 (empresa_id, purpose, status, number, series, issue_date, period, invoice_type_id, cfop_id,
 		  icms_apuracao_line_id, adjustment_code_id, adjustment_doc_code_id, history, auto_generate_summary,
@@ -1465,28 +1492,39 @@ func (r *FiscalParamsRepositorySQLC) CreateSpecialAdjustmentNote(ctx context.Con
 }
 
 func (r *FiscalParamsRepositorySQLC) UpdateSpecialAdjustmentNote(ctx context.Context, n *fiscalEntity.SpecialAdjustmentNote) (*fiscalEntity.SpecialAdjustmentNote, error) {
-	_, err := r.pool.Exec(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx,
 		`UPDATE special_adjustment_notes SET
 		 status=$1, number=$2, series=$3, history=$4, total_value=$5, total_icms=$6, total_ipi=$7,
 		 generated_summary_entry_id=$8, observation=$9
-		 WHERE id=$10`,
+		 WHERE id=$10 AND empresa_id=$11`,
 		string(n.Status), pgutil.ToPgTextFromPtr(n.Number), pgutil.ToPgTextFromPtr(n.Series),
 		pgutil.ToPgTextFromPtr(n.History), n.TotalValue, n.TotalICMS, n.TotalIPI,
-		pgutil.ToPgInt8Ptr(n.GeneratedSummaryEntryID), pgutil.ToPgTextFromPtr(n.Observation), n.ID)
+		pgutil.ToPgInt8Ptr(n.GeneratedSummaryEntryID), pgutil.ToPgTextFromPtr(n.Observation), n.ID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("updating special adjustment note %d: %w", n.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota de ajuste especial %d não encontrada", n.ID))
 	}
 	return n, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) GetSpecialAdjustmentNote(ctx context.Context, id int64) (*fiscalEntity.SpecialAdjustmentNote, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var n fiscalEntity.SpecialAdjustmentNote
 	var purpose, status string
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`SELECT id, empresa_id, purpose, status, number, series, issue_date, period, invoice_type_id, cfop_id,
 		 icms_apuracao_line_id, adjustment_code_id, adjustment_doc_code_id, history, auto_generate_summary,
 		 generated_summary_entry_id, total_value, total_icms, total_ipi, observation, created_at
-		 FROM special_adjustment_notes WHERE id=$1`, id).
+		 FROM special_adjustment_notes WHERE id=$1 AND empresa_id=$2`, id, empresa).
 		Scan(&n.ID, &n.EmpresaID, &purpose, &status,
 			pgutil.ScanPgTextPtr(&n.Number), pgutil.ScanPgTextPtr(&n.Series),
 			&n.IssueDate, &n.Period,
@@ -1506,11 +1544,15 @@ func (r *FiscalParamsRepositorySQLC) GetSpecialAdjustmentNote(ctx context.Contex
 	return &n, nil
 }
 
-func (r *FiscalParamsRepositorySQLC) ListSpecialAdjustmentNotes(ctx context.Context, empresaID int, period string) ([]*fiscalEntity.SpecialAdjustmentNote, error) {
+func (r *FiscalParamsRepositorySQLC) ListSpecialAdjustmentNotes(ctx context.Context, _ int, period string) ([]*fiscalEntity.SpecialAdjustmentNote, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	q := `SELECT id, empresa_id, purpose, status, number, series, issue_date, period,
 		  total_value, total_icms, total_ipi, observation, created_at
 		  FROM special_adjustment_notes WHERE empresa_id=$1`
-	args := []any{empresaID}
+	args := []any{empresa}
 	if period != "" {
 		args = append(args, period)
 		q += fmt.Sprintf(" AND period=$%d", len(args))
@@ -1539,6 +1581,10 @@ func (r *FiscalParamsRepositorySQLC) ListSpecialAdjustmentNotes(ctx context.Cont
 }
 
 func (r *FiscalParamsRepositorySQLC) AddSpecialAdjustmentNoteItem(ctx context.Context, item *fiscalEntity.SpecialAdjustmentNoteItem) (*fiscalEntity.SpecialAdjustmentNoteItem, error) {
+	// A nota precisa ser da empresa do usuário.
+	if _, err := r.GetSpecialAdjustmentNote(ctx, item.NoteID); err != nil {
+		return nil, err
+	}
 	err := r.pool.QueryRow(ctx,
 		`INSERT INTO special_adjustment_note_items
 		 (note_id, sequence, item_id, item_code, description, quantity, unit, unit_value, total_value,
@@ -1561,6 +1607,9 @@ func (r *FiscalParamsRepositorySQLC) AddSpecialAdjustmentNoteItem(ctx context.Co
 }
 
 func (r *FiscalParamsRepositorySQLC) ListSpecialAdjustmentNoteItems(ctx context.Context, noteID int64) ([]*fiscalEntity.SpecialAdjustmentNoteItem, error) {
+	if _, err := r.GetSpecialAdjustmentNote(ctx, noteID); err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, note_id, sequence, item_id, item_code, description, quantity, unit, unit_value, total_value,
 		 icms_base, icms_pct, icms_deferral_pct, icms_value, icms_deferred_value,

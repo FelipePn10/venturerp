@@ -43,6 +43,8 @@ func toPlanoContasResponse(p *entity.PlanoContas) *response.PlanoContasResponse 
 		Nivel:      p.Nivel,
 		IsActive:   p.IsActive,
 		CreatedAt:  p.CreatedAt,
+
+		AccountingAccountID: p.AccountingAccountID,
 	}
 }
 
@@ -81,20 +83,21 @@ func toContaBancariaResponse(c *entity.ContaBancaria) *response.ContaBancariaRes
 		return nil
 	}
 	return &response.ContaBancariaResponse{
-		ID:           c.ID,
-		Banco:        c.Banco,
-		Agencia:      c.Agencia,
-		Conta:        c.Conta,
-		Digito:       c.Digito,
-		Descricao:    c.Descricao,
-		Titular:      c.Titular,
-		SaldoInicial: c.SaldoInicial,
-		ChavePix:     c.ChavePix,
-		TipoChavePix: c.TipoChavePix,
-		IsActive:     c.IsActive,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
-		CreatedBy:    c.CreatedBy,
+		ID:                  c.ID,
+		Banco:               c.Banco,
+		Agencia:             c.Agencia,
+		Conta:               c.Conta,
+		Digito:              c.Digito,
+		Descricao:           c.Descricao,
+		Titular:             c.Titular,
+		SaldoInicial:        c.SaldoInicial,
+		ChavePix:            c.ChavePix,
+		TipoChavePix:        c.TipoChavePix,
+		IsActive:            c.IsActive,
+		CreatedAt:           c.CreatedAt,
+		UpdatedAt:           c.UpdatedAt,
+		CreatedBy:           c.CreatedBy,
+		AccountingAccountID: c.AccountingAccountID,
 	}
 }
 
@@ -147,7 +150,22 @@ func toContaPagarResponse(c *entity.ContaPagar) *response.ContaPagarResponse {
 		BaixadoPor:               c.BaixadoPor,
 		CreatedAt:                c.CreatedAt,
 		UpdatedAt:                c.UpdatedAt,
+		Rateios:                  toRateiosResponse(c.Rateios),
 	}
+}
+
+func toRateiosResponse(in []entity.RateioContaPagar) []response.RateioContaPagarResponse {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]response.RateioContaPagarResponse, 0, len(in))
+	for _, r := range in {
+		out = append(out, response.RateioContaPagarResponse{
+			PlanoContasID: r.PlanoContasID, PlanoContasCodigo: r.PlanoContasCodigo, PlanoContasNome: r.PlanoContasNome,
+			CentroCustoID: r.CentroCustoID, CentroCustoNome: r.CentroCustoNome, Valor: r.Valor,
+		})
+	}
+	return out
 }
 
 func toContaReceberResponse(c *entity.ContaReceber) *response.ContaReceberResponse {
@@ -158,6 +176,7 @@ func toContaReceberResponse(c *entity.ContaReceber) *response.ContaReceberRespon
 		ID:              c.ID,
 		NumeroDocumento: c.NumeroDocumento,
 		ClienteID:       c.ClienteID,
+		FornecedorID:    c.FornecedorID,
 		FiscalExitID:    c.FiscalExitID,
 		SalesOrderID:    c.SalesOrderID,
 		DataLancamento:  c.DataLancamento,

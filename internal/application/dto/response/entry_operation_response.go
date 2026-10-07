@@ -28,6 +28,11 @@ type EntryOperationTypeResponse struct {
 	ClassificationCode *string   `json:"classification_code,omitempty"`
 	StateGroupCode     *int64    `json:"state_group_code,omitempty"`
 	SupplierTypeCode   *int64    `json:"supplier_type_code,omitempty"`
+	MovimentaEstoque   bool      `json:"movimenta_estoque"`
+	GeraFinanceiro     bool      `json:"gera_financeiro"`
+	CreditaICMS        bool      `json:"credita_icms"`
+	CreditaIPI         bool      `json:"credita_ipi"`
+	CreditaPISCOFINS   bool      `json:"credita_pis_cofins"`
 	IsActive           bool      `json:"is_active"`
 	CreatedAt          time.Time `json:"created_at"`
 	CreatedBy          uuid.UUID `json:"created_by"`

@@ -108,6 +108,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	dfesched "github.com/FelipePn10/panossoerp/internal/infrastructure/dfe"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/nesting"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
@@ -203,6 +204,7 @@ type application struct {
 	auditSink          *audit.PgSink
 	notificationWorker *notification.Worker
 	planningScheduler  *planningsched.Scheduler
+	dfeScheduler       *dfesched.Scheduler
 }
 
 func (app *application) mount() chi.Router {
@@ -1002,6 +1004,11 @@ func (app *application) mount() chi.Router {
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
 	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
+	// Parâmetros e vínculos da contabilização automática (entrada, pagamentos,
+	// recebimentos e saídas leem do mesmo lugar).
+	contabilRepo := fiscalRepo.NewFiscalEntryDocumentRepositoryPG(fiscalRepository)
+	// Venda: receita, impostos, CMV, e o estorno de estoque e contabilidade no cancelamento.
+	saidaContabil := fiscalRepository.(*fiscalRepo.FiscalRepositoryPG)
 
 	// Brand the PDF cutting map with the company letterhead from fiscal config.
 	cuttingPlanUC.WithBranding(fiscalRepository)
@@ -1043,13 +1050,13 @@ func (app *application) mount() chi.Router {
 		&financial_uc.ListContasPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetContaPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ApproveContaPagarUseCase{Repo: fRepo, Auth: authService},
-		&financial_uc.BaixarContaPagarUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository},
+		&financial_uc.BaixarContaPagarUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository, Contabil: saidaContabil},
 		&financial_uc.CancelContaPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetAgingPagarUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.CreateContaReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetContaReceberUseCase{Repo: fRepo, Auth: authService},
-		&financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository},
+		&financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository, Contabil: saidaContabil},
 		&financial_uc.CancelContaReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetAgingReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetFluxoCaixaUseCase{Repo: fRepo, Auth: authService},
@@ -1085,19 +1092,81 @@ func (app *application) mount() chi.Router {
 		&financial_uc.AplicarAdiantamentoUseCase{Repo: fRepo, Auth: authService},
 	)
 
+	cpPorPlanoHandler := handler.NewContasPagarPorPlanoHandler(&financial_uc.ContasPagarPorPlanoUseCase{Repo: fRepo, Auth: authService})
+
 	// fiscal module
 	// Customers/SalesOrders completam o destinatário da nota (endereço exigido
 	// pela NF-e) e resolvem a condição de pagamento que vira duplicata e título.
 	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo}
-	previaNFeHandler := handler.NewPreviaNFeHandler(
-		&fiscalUC.PreviaNFeUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo},
+	previaNFeUC := &fiscalUC.PreviaNFeUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo}
+	previaNFeHandler := handler.NewPreviaNFeHandler(previaNFeUC)
+	// Nota de entrada completa: XML lido por inteiro, conciliação dos itens com
+	// o cadastro, plano de contas por item e parcelas distribuídas por plano —
+	// que viram, na aprovação, um título do contas a pagar por parcela com rateio.
+	fiscalEntryDocs := contabilRepo
+	uploadNFeEntryUC := &fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Docs: fiscalEntryDocs, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC}
+	fiscalEntryHandler := handler.NewFiscalEntryHandler(
+		uploadNFeEntryUC,
+		&fiscalUC.ImportNFeByKeyUseCase{Upload: uploadNFeEntryUC},
+		&fiscalUC.SaveFiscalEntryConciliationUseCase{Docs: fiscalEntryDocs, Fiscal: fiscalRepository, Tolerancias: purchaseToleranceUC, Auth: authService},
+		&fiscalUC.SuggestFiscalEntryItemUseCase{Docs: fiscalEntryDocs, Auth: authService},
+		fiscalEntryDocs,
+		authService,
 	)
+	// Cancelamento com estorno (financeiro, estoque, pedido e contabilidade),
+	// pedidos em aberto do item, parâmetros da contabilização automática e a
+	// caixa de entrada DF-e (notas emitidas contra o CNPJ da empresa).
+	recebidasRepo := fiscalRepo.NewReceivedDocumentsRepositoryPG(fiscalRepository)
+	dfeUC := &fiscalUC.DFeUseCase{
+		Repo:     fiscalRepository,
+		Recebida: recebidasRepo,
+		ByKey:    &fiscalUC.ImportNFeByKeyUseCase{Upload: uploadNFeEntryUC},
+		Auth:     authService,
+	}
+	fiscalEntryEnterpriseHandler := handler.NewFiscalEntryEnterpriseHandler(
+		&fiscalUC.CancelFiscalEntryUseCase{Docs: fiscalEntryDocs, Fiscal: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
+		&fiscalUC.PedidosDoItemUseCase{Docs: fiscalEntryDocs, Auth: authService},
+		&fiscalUC.AccountingParamsUseCase{Docs: fiscalEntryDocs, Auth: authService},
+		dfeUC,
+	)
+	itemDaNotaHandler := handler.NewItemDaNotaHandler(&fiscalUC.ItemDaNotaUseCase{Docs: fiscalEntryDocs, Cadastro: createItemUc, Auth: authService})
+	fornecedorDaNotaHandler := handler.NewFornecedorDaNotaHandler(&fiscalUC.FornecedorDaNotaUseCase{
+		Docs: fiscalEntryDocs, Fiscal: fiscalRepository, Cadastro: supplierUC, Auth: authService})
+	// Devolução de compra: NF-e de saída (finalidade 4) referenciando a entrada.
+	devolucaoUC := &fiscalUC.DevolucaoCompraUseCase{
+		Repo: fiscalRepository, Docs: fiscalEntryDocs, Devolucoes: fiscalRepo.NewDevolucaoRepositoryPG(fiscalRepository),
+		Estoque: saidaContabil, FinancialRepo: fRepo, Auth: authService,
+	}
+	// A prévia mostra o mesmo payload da transmissão (com as referências por item da devolução).
+	previaNFeUC.Devolucao = devolucaoUC
+	devolucaoHandler := handler.NewDevolucaoCompraHandler(devolucaoUC)
+	// Frete sobre compras: CT-e da transportadora rateado no custo das notas.
+	freteHandler := handler.NewFreteHandler(&fiscalUC.FreteUseCase{
+		Repo: fiscalRepo.NewFreightRepositoryPG(fiscalRepository), Docs: fiscalEntryDocs, Fiscal: fiscalRepository, FinancialRepo: fRepo, Auth: authService,
+	})
+	// Sincronização agendada das NF-e recebidas (uma vez por hora por empresa).
+	app.dfeScheduler = dfesched.NewScheduler(dfeUC, recebidasRepo, app.logger)
+	// NF-e de saída a partir do pedido de venda (total ou parcial): cliente,
+	// itens, preços, frete, condição de pagamento e representante vêm do pedido.
+	faturamentoDoPedido := fiscalRepo.NewSalesOrderInvoicingRepositoryPG(fiscalRepository)
+	faturarPedidoHandler := handler.NewFaturarPedidoHandler(&fiscalUC.FaturarPedidoUseCase{
+		Create:      createFiscalExitUC,
+		Fiscal:      fiscalRepository,
+		Faturamento: faturamentoDoPedido,
+		Itens:       fiscalEntryDocs,
+		Pedidos:     soRepo,
+		Clientes:    custRepo,
+		Comissoes:   salesCommissionRepo.New(app.db.Pool),
+		Auth:        authService,
+	})
 	fiscalHandler := handler.NewFiscalHandler(
-		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
-		&fiscalUC.UploadNFEEntryUseCase{Repo: fiscalRepository, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
-		&fiscalUC.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
+		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Docs: fiscalEntryDocs, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
+		uploadNFeEntryUC,
+		// Inspecao: o mesmo portão do recebimento físico (FINS0212) — material com
+		// roteiro de inspeção ativo entra no depósito de inspeção e abre a ordem.
+		&fiscalUC.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepository, Docs: fiscalEntryDocs, FinancialRepo: fRepo, Tolerancias: purchaseToleranceUC, Inspecao: procurementUC, Auth: authService},
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Docs: fiscalEntryDocs, Tolerancias: purchaseToleranceUC, Auth: authService},
 		createFiscalExitUC,
 		&fiscalUC.CreateFiscalExitFromLoadUseCase{
 			CreateUC:       createFiscalExitUC,
@@ -1105,10 +1174,10 @@ func (app *application) mount() chi.Router {
 			ShipmentRepo:   shipmentRepoPG,
 			SalesOrderRepo: soRepo,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC},
+		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
-		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC},
+		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalConfigUseCase{Repo: fiscalRepository, Auth: authService},
@@ -1243,6 +1312,8 @@ func (app *application) mount() chi.Router {
 
 	spedUC := &fiscalUC.SPEDUseCase{FiscalParamsRepo: fpRepo}
 	spedHandler := handler.NewSPEDHandler(spedUC)
+	spedAutomaticoHandler := handler.NewSpedAutomaticoHandler(&fiscalUC.SpedAutomaticoUseCase{
+		Periodo: fiscalRepo.NewSpedRepositoryPG(fiscalRepository), Config: fiscalRepository})
 
 	// accounting / SPED ECD
 	acctRepo := accountingRepo.New(queries, app.db.Pool)
@@ -1991,11 +2062,40 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/ibpt/lookup", ibptHandler.Lookup)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/create", fiscalHandler.CreateEntry)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/upload-nfe", fiscalHandler.UploadNFE)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/upload-xml", fiscalEntryHandler.UploadXML)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/import-key", fiscalEntryHandler.ImportByKey)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/entries/{code}/conciliacao", fiscalEntryHandler.SaveConciliation)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/itens/{itemId}/sugestoes", fiscalEntryHandler.SuggestItems)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/xml", fiscalEntryHandler.DownloadXML)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/approve", fiscalHandler.ApproveEntry)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/cancelar", fiscalEntryEnterpriseHandler.Cancelar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/fornecedor", fornecedorDaNotaHandler.Cadastrar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/itens/{itemId}/cadastrar-item", itemDaNotaHandler.Cadastrar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/itens/{itemId}/pedidos", fiscalEntryEnterpriseHandler.PedidosDoItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contabilizacao/parametros", fiscalEntryEnterpriseHandler.GetParametrosContabeis)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/contabilizacao/parametros", fiscalEntryEnterpriseHandler.SaveParametrosContabeis)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/devolucao", devolucaoHandler.Previa)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/devolucoes", devolucaoHandler.Criar)
+			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/devolucoes/{id}/efetivar", devolucaoHandler.Reprocessar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/fretes", freteHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/fretes", freteHandler.Criar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/fretes/upload-xml", freteHandler.UploadXML)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/fretes/{id}", freteHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/fretes/{id}", freteHandler.Atualizar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/fretes/{id}/lancar", freteHandler.Lancar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/fretes/{id}/cancelar", freteHandler.Cancelar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/recebidas", fiscalEntryEnterpriseHandler.ListarRecebidas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/recebidas/status", fiscalEntryEnterpriseHandler.StatusRecebidas)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/recebidas/automatico", fiscalEntryEnterpriseHandler.AutomaticoRecebidas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/recebidas/sincronizar", fiscalEntryEnterpriseHandler.SincronizarRecebidas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/recebidas/{chave}/manifestar", fiscalEntryEnterpriseHandler.ManifestarRecebida)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/recebidas/{chave}/importar", fiscalEntryEnterpriseHandler.ImportarRecebida)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/list", fiscalHandler.ListEntries)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}", fiscalHandler.GetEntry)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/create", fiscalHandler.CreateExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/from-load", fiscalHandler.CreateExitFromLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/sales-order/{code}/previa", faturarPedidoHandler.Previa)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/from-sales-order", faturarPedidoHandler.Faturar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/authorize", fiscalHandler.AuthorizeExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/cancel", fiscalHandler.CancelExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/carta-correcao", fiscalHandler.EmitirCCe)
@@ -2134,6 +2234,7 @@ func (app *application) mount() chi.Router {
 		// SPED EFD
 		r.Route("/api/fiscal/sped", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/efd", spedHandler.GenerateEFD)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/efd/automatico", spedAutomaticoHandler.Gerar)
 		})
 		// Stock Movement Types
 		r.Route("/api/estoque/tipos-movimento", func(r chi.Router) {
@@ -2156,6 +2257,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/condicoes-pagamento/list", financialHandler.ListCondicoesPagamento)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/plano-contas/create", financialHandler.CreatePlanoContas)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plano-contas/list", financialHandler.ListPlanoContas)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/plano-contas/{id}/conta-contabil", fiscalEntryEnterpriseHandler.VincularPlanoContabil)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/contas-bancarias/{id}/conta-contabil", fiscalEntryEnterpriseHandler.VincularContaBancariaContabil)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/centros-custo/create", financialHandler.CreateCentroCusto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/centros-custo/list", financialHandler.ListCentrosCusto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/create", financialHandler.CreateContaPagar)
@@ -2165,6 +2268,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/{id}/baixar", financialHandler.BaixarContaPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/{id}/cancel", financialHandler.CancelContaPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/aging", financialHandler.GetAgingPagar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/por-plano-contas", cpPorPlanoHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-receber/create", financialHandler.CreateContaReceber)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-receber/list", financialHandler.ListContasReceber)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-receber/{id}", financialHandler.GetContaReceber)
@@ -3022,6 +3126,9 @@ func (app *application) run(r chi.Router) error {
 	defer stop()
 
 	serverErr := make(chan error, 1)
+	if app.dfeScheduler != nil {
+		go app.dfeScheduler.Run(ctx)
+	}
 	if app.planningScheduler != nil {
 		go app.planningScheduler.Run(ctx)
 	}

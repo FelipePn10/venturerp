@@ -25,6 +25,9 @@ type ContaReceber struct {
 	ClienteID       *int64
 	FiscalExitID    *int64
 	SalesOrderID    *int64
+	// FornecedorID: crédito a receber de fornecedor (devolução de compra que
+	// passou do que havia em aberto), em vez de cliente.
+	FornecedorID *int64
 
 	DataLancamento  time.Time
 	DataEmissao     time.Time
