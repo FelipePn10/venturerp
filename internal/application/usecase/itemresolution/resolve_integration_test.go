@@ -23,14 +23,18 @@ func TestResolveBusinessCodeIsIsolatedByTenant(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	var enterpriseA, enterpriseB int64
-	if err = tx.QueryRow(context.Background(), `SELECT id FROM enterprise ORDER BY id LIMIT 1`).Scan(&enterpriseA); err != nil {
-		t.Fatal(err)
-	}
-	if err = tx.QueryRow(context.Background(), `SELECT id FROM enterprise WHERE id<>$1 ORDER BY id LIMIT 1`, enterpriseA).Scan(&enterpriseB); err != nil {
-		t.Skip("o banco de integração precisa de duas empresas")
-	}
+	// As duas empresas nascem dentro da transação do teste (desfeita no fim).
+	// Pegar "a segunda empresa que existir" dava corrida no CI: outro pacote,
+	// rodando em paralelo, criava e apagava a própria empresa entre o SELECT e o
+	// INSERT, e o item falhava na FK de enterprise.
 	base := testutil.UniqueCode()
+	var enterpriseA, enterpriseB int64
+	for i, dst := range []*int64{&enterpriseA, &enterpriseB} {
+		if err = tx.QueryRow(context.Background(), `INSERT INTO enterprise(code,name) VALUES($1,'Resolução por empresa') RETURNING id`,
+			1_900_000_000+base%90_000_000+int64(i)).Scan(dst); err != nil {
+			t.Fatal(err)
+		}
+	}
 	businessCode := fmt.Sprintf("TENANT-%d", base)
 	var actor string
 	if err = tx.QueryRow(context.Background(), `SELECT id::text FROM users ORDER BY created_at LIMIT 1`).Scan(&actor); err != nil {
