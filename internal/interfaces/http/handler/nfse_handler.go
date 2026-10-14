@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -32,8 +31,7 @@ func NewNFSeHandler(
 
 func (h *NFSeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateNFSeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -65,8 +63,7 @@ func (h *NFSeHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.CancelNFSeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.cancelUC.Execute(r.Context(), id, dto)
@@ -94,7 +91,7 @@ func (h *NFSeHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

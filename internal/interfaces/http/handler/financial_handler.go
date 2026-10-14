@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -546,7 +547,10 @@ func (h *FinancialHandler) GetAgingReceber(w http.ResponseWriter, r *http.Reques
 // Fluxo de Caixa
 
 func (h *FinancialHandler) GetFluxoCaixa(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getFluxoCaixaUC.Execute(r.Context(),
 		parseTime(start, "2000-01-01"),
 		parseTime(end, "2099-12-31"))
@@ -558,7 +562,10 @@ func (h *FinancialHandler) GetFluxoCaixa(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *FinancialHandler) GetFluxoProjetado(w http.ResponseWriter, r *http.Request) {
-	start, _ := parseDateRange(r)
+	start, _, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getFluxoProjetadoUC.Execute(r.Context(), parseTime(start, "2000-01-01"))
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -604,10 +611,27 @@ func (h *FinancialHandler) GetTaxAssessment(w http.ResponseWriter, r *http.Reque
 
 // ─── Reports helper ───────────────────────────────────────────────────────────
 
-func parseDateRange(r *http.Request) (start, end string) {
-	start = r.URL.Query().Get("start")
-	end = r.URL.Query().Get("end")
-	return
+// periodo lê ?start= e ?end= dos relatórios financeiros. Vazio vale o padrão de
+// cada relatório; data mal digitada é recusada — antes virava 0001-01-01 em
+// mustParseDate e o relatório saía vazio (ou com tudo) sem explicar por quê.
+// Devolve as datas em AAAA-MM-DD (aceita também DD/MM/AAAA).
+func periodo(w http.ResponseWriter, r *http.Request) (start, end string, ok bool) {
+	q := r.URL.Query()
+	for _, c := range []struct {
+		nome, valor string
+		destino     *string
+	}{{"data inicial", q.Get("start"), &start}, {"data final", q.Get("end"), &end}} {
+		v := c.valor
+		d, msg := datetime.Opcional(c.nome, &v)
+		if msg != "" {
+			security.RespondError(w, http.StatusUnprocessableEntity, msg)
+			return "", "", false
+		}
+		if d != nil {
+			*c.destino = d.Format("2006-01-02")
+		}
+	}
+	return start, end, true
 }
 
 func parseTime(s, fallback string) string {
@@ -620,7 +644,10 @@ func parseTime(s, fallback string) string {
 // ─── R01 Livro de Entradas ────────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetLivroEntradas(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getLivroEntradasUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -634,7 +661,10 @@ func (h *FinancialHandler) GetLivroEntradas(w http.ResponseWriter, r *http.Reque
 // ─── R02 Livro de Saídas ─────────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetLivroSaidas(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getLivroSaidasUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -648,7 +678,10 @@ func (h *FinancialHandler) GetLivroSaidas(w http.ResponseWriter, r *http.Request
 // ─── R03 Impostos Saídas ─────────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetImpostosSaidas(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getImpostosSaidasUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -662,7 +695,10 @@ func (h *FinancialHandler) GetImpostosSaidas(w http.ResponseWriter, r *http.Requ
 // ─── R04 Impostos Entradas ───────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetImpostosEntradas(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getImpostosEntradasUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -676,7 +712,10 @@ func (h *FinancialHandler) GetImpostosEntradas(w http.ResponseWriter, r *http.Re
 // ─── R06 DRE ─────────────────────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetDRE(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	result, err := h.getDREUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -746,7 +785,10 @@ func (h *FinancialHandler) GetExtratoPorCliente(w http.ResponseWriter, r *http.R
 // ─── R13 Produtos Vendidos ───────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetProdutosVendidos(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getProdutosVendidosUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -760,7 +802,10 @@ func (h *FinancialHandler) GetProdutosVendidos(w http.ResponseWriter, r *http.Re
 // ─── R14 Produtos Produzidos ─────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetProdutosProduzidos(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getProdutosProduzidosUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -774,7 +819,10 @@ func (h *FinancialHandler) GetProdutosProduzidos(w http.ResponseWriter, r *http.
 // ─── R15 Histórico de Custos ─────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetHistoricoCustos(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getHistoricoCustosUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -805,7 +853,10 @@ func (h *FinancialHandler) GetFichaTecnicaCusto(w http.ResponseWriter, r *http.R
 // ─── R17 Curva ABC Clientes ──────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetCurvaABCClientes(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getCurvaABCClientesUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -819,7 +870,10 @@ func (h *FinancialHandler) GetCurvaABCClientes(w http.ResponseWriter, r *http.Re
 // ─── R18 Curva ABC Produtos ──────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetCurvaABCProdutos(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getCurvaABCProdutosUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))
@@ -833,7 +887,10 @@ func (h *FinancialHandler) GetCurvaABCProdutos(w http.ResponseWriter, r *http.Re
 // ─── R19 Compras no Período ──────────────────────────────────────────────────
 
 func (h *FinancialHandler) GetComprasPeriodo(w http.ResponseWriter, r *http.Request) {
-	start, end := parseDateRange(r)
+	start, end, ok := periodo(w, r)
+	if !ok {
+		return
+	}
 	results, err := h.getComprasPeriodoUC.Execute(r.Context(),
 		mustParseDate(parseTime(start, "2000-01-01")),
 		mustParseDate(parseTime(end, "2099-12-31")))

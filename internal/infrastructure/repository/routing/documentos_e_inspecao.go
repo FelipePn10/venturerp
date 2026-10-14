@@ -154,6 +154,10 @@ func documentoParaEntidade(row sqlc.OperationDocument, daEtapa bool) *entity.Ope
 // ─── pontos de inspeção do roteiro ────────────────────────────────────────────
 
 func (r *RoutingRepositorySQLC) CreateRouteInspection(ctx context.Context, ins *entity.RouteInspection) (*entity.RouteInspection, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateInspectionPlan(ctx, sqlc.CreateInspectionPlanParams{
 		ItemCode:         ins.ItemCode,
 		RouteOperationID: pgutil.ToPgInt8Ptr(&ins.RouteOperationID),
@@ -163,6 +167,7 @@ func (r *RoutingRepositorySQLC) CreateRouteInspection(ctx context.Context, ins *
 		AcceptanceLevel:  ins.AcceptanceLevel,
 		Instructions:     pgutil.ToPgTextFromPtr(ins.Instructions),
 		CreatedBy:        pgutil.ToPgUUID(ins.CreatedBy),
+		EnterpriseID:     empresa,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gravando o ponto de inspeção: %w", err)
@@ -208,7 +213,11 @@ func (r *RoutingRepositorySQLC) ListInspectionsByRoute(ctx context.Context, rout
 }
 
 func (r *RoutingRepositorySQLC) DeactivateRouteInspection(ctx context.Context, id int64) error {
-	return r.q.DeactivateInspectionPlan(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeactivateInspectionPlan(ctx, id, empresa)
 }
 
 func (r *RoutingRepositorySQLC) RouteIDOfOperation(ctx context.Context, routeOperationID int64) (int64, error) {

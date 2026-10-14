@@ -129,18 +129,22 @@ func (r *MRPCalculationRepositorySQLC) StartCalculation(
 	// Um cálculo real leva segundos. Passado o limite abaixo, o que está ali é
 	// destroço de uma execução interrompida: encerrar e seguir é o que o
 	// usuário faria se pudesse.
-	if liberado, errLiberar := r.q.AbandonarCalculoTravado(ctx, sqlc.AbandonarCalculoTravadoParams{
+	if _, errLiberar := r.q.AbandonarCalculoTravado(ctx, sqlc.AbandonarCalculoTravadoParams{
 		PlanCode:     planID,
 		Column2:      pgtype.Interval{Microseconds: int64(limiteDeCalculoTravado / time.Microsecond), Valid: true},
 		EnterpriseID: enterpriseID,
-	}); errLiberar == nil {
-		_ = liberado
-		row, err = r.q.StartMRPCalculation(ctx, sqlc.StartMRPCalculationParams{PlanCode: planID, EnterpriseID: enterpriseID})
-		if err == nil {
-			return logToEntity(row), nil
-		}
+	}); errLiberar != nil {
+		return nil, fmt.Errorf("liberando cálculo do MRP interrompido: %w", errLiberar)
 	}
-
+	row, err = r.q.StartMRPCalculation(ctx, sqlc.StartMRPCalculationParams{PlanCode: planID, EnterpriseID: enterpriseID})
+	if err == nil {
+		return logToEntity(row), nil
+	}
+	// Só a mesma trava significa "em andamento" (o cálculo ainda é recente);
+	// qualquer outra falha é do banco e tem de aparecer como tal.
+	if !errors.As(err, &pgErr) || pgErr.ConstraintName != "uq_mrp_single_running_calculation" {
+		return nil, fmt.Errorf("starting MRP calculation: %w", err)
+	}
 	return nil, mrprepository.ErrCalculationInProgress
 }
 
@@ -484,6 +488,9 @@ func (r *MRPCalculationRepositorySQLC) CreatePlannedOrderSuggestion(
 		RemittanceType:       pgutil.ToPgTextFromPtr(s.RemittanceType),
 		EnterpriseID:         enterpriseID,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, mrprepository.ErrOrderNumberInUse
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating planned suggestion: %w", err)
 	}
@@ -537,6 +544,9 @@ func (r *MRPCalculationRepositorySQLC) ListSuggestionsByPlan(
 	if err := r.loadMachineAllocations(ctx, out); err != nil {
 		return nil, err
 	}
+	if err := r.loadFirmedOrders(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -576,13 +586,14 @@ func (r *MRPCalculationRepositorySQLC) CreateExceptionMessage(
 		return err
 	}
 	_, err = r.q.CreateMRPExceptionMessage(ctx, sqlc.CreateMRPExceptionMessageParams{
-		PlanCode:     msg.PlanCode,
-		ItemCode:     msg.ItemCode,
-		MessageType:  string(msg.MessageType),
-		SourceCode:   msg.SourceCode,
-		SourceType:   pgutil.ToPgTextFromPtr(msg.SourceType),
-		Description:  msg.Description,
-		EnterpriseID: enterpriseID,
+		PlanCode:      msg.PlanCode,
+		ItemCode:      msg.ItemCode,
+		MessageType:   string(msg.MessageType),
+		SourceCode:    msg.SourceCode,
+		SourceType:    pgutil.ToPgTextFromPtr(msg.SourceType),
+		Description:   msg.Description,
+		EnterpriseID:  enterpriseID,
+		SuggestedDate: optionalPgDate(msg.SuggestedDate),
 	})
 	return err
 }
@@ -602,21 +613,17 @@ func (r *MRPCalculationRepositorySQLC) ListExceptionsByPlan(
 
 	out := make([]*entity.MRPExceptionMessage, 0, len(rows))
 	for _, row := range rows {
-		m := &entity.MRPExceptionMessage{
-			Code:        row.Code,
-			PlanCode:    row.PlanCode,
-			ItemCode:    row.ItemCode,
-			MessageType: entity.ExceptionMessageType(row.MessageType),
-			Description: row.Description,
-			CreatedAt:   pgutil.FromPgTimestamptz(row.CreatedAt),
-		}
-		if row.SourceCode != nil {
-			v := *row.SourceCode
-			m.SourceCode = &v
-		}
-		if row.SourceType.Valid {
-			v := row.SourceType.String
-			m.SourceType = &v
+		m := exceptionFromRow(sqlc.MrpExceptionMessage{
+			Code: row.Code, PlanCode: row.PlanCode, ItemCode: row.ItemCode, MessageType: row.MessageType,
+			SourceCode: row.SourceCode, SourceType: row.SourceType, Description: row.Description, CreatedAt: row.CreatedAt,
+			SuggestedDate: row.SuggestedDate, HandledAt: row.HandledAt, HandledBy: row.HandledBy,
+			HandlingAction: row.HandlingAction, HandlingNote: row.HandlingNote,
+		})
+		m.HandledByName = row.HandledByName
+		m.SourceOrderNumber = row.SourceOrderNumber
+		if row.SourceNeedDate.Valid {
+			d := row.SourceNeedDate.Time
+			m.SourceNeedDate = &d
 		}
 		out = append(out, m)
 	}

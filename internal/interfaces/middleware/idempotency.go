@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -62,7 +63,10 @@ func (s *IdempotencyStore) claimPersistent(r *http.Request, scope, fingerprint s
 	if s.pool == nil {
 		return true, 0, nil, nil
 	}
-	_, _ = s.pool.Exec(r.Context(), `DELETE FROM http_idempotency_records WHERE expires_at<NOW()`)
+	// Limpeza oportunista: se falhar, os vencidos saem na próxima.
+	if _, err := s.pool.Exec(r.Context(), `DELETE FROM http_idempotency_records WHERE expires_at<NOW()`); err != nil {
+		slog.Warn("falha ao limpar chaves de idempotência vencidas", "erro", err)
+	}
 	tag, err := s.pool.Exec(r.Context(), `INSERT INTO http_idempotency_records(scope_key,request_fingerprint,expires_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, scope, fingerprint, time.Now().Add(s.ttl))
 	if err != nil {
 		return false, 0, nil, err
@@ -183,9 +187,13 @@ func Idempotency(store *IdempotencyStore) func(http.Handler) http.Handler {
 				rec := &idemRecorder{ResponseWriter: w, status: http.StatusOK, buf: &bytes.Buffer{}}
 				next.ServeHTTP(rec, r)
 				if rec.status >= 200 && rec.status < 300 {
-					_, _ = store.pool.Exec(r.Context(), `UPDATE http_idempotency_records SET status_code=$2,response_body=$3,completed=TRUE WHERE scope_key=$1`, fullKey, rec.status, rec.buf.Bytes())
-				} else {
-					_, _ = store.pool.Exec(r.Context(), `DELETE FROM http_idempotency_records WHERE scope_key=$1`, fullKey)
+					// A resposta já foi enviada; sem o registro, a repetição da mesma
+					// chave fica recusada como "em andamento" até vencer.
+					if _, err := store.pool.Exec(r.Context(), `UPDATE http_idempotency_records SET status_code=$2,response_body=$3,completed=TRUE WHERE scope_key=$1`, fullKey, rec.status, rec.buf.Bytes()); err != nil {
+						slog.Error("falha ao concluir a chave de idempotência", "rota", r.URL.Path, "erro", err)
+					}
+				} else if _, err := store.pool.Exec(r.Context(), `DELETE FROM http_idempotency_records WHERE scope_key=$1`, fullKey); err != nil {
+					slog.Error("falha ao liberar a chave de idempotência após erro", "rota", r.URL.Path, "erro", err)
 				}
 				return
 			}

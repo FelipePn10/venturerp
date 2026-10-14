@@ -366,7 +366,7 @@ SELECT r.customer_code,
        MIN(r.fiscal_return_deadline)
 FROM public.customer_material_items i
 JOIN public.customer_material_remittances r ON r.id = i.remittance_id
-LEFT JOIN public.customers c ON c.code = r.customer_code
+LEFT JOIN public.customers c ON c.code = r.customer_code AND c.enterprise_id = r.enterprise_id
 WHERE %s
 GROUP BY r.customer_code, c.name, i.customer_item_code
 ORDER BY MIN(r.fiscal_return_deadline), r.customer_code, i.customer_item_code`,

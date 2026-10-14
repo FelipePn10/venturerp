@@ -98,8 +98,7 @@ func NewStockHandler(
 
 func (h *StockHandler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateStockMovementDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createMovementUC.Execute(r.Context(), dto)
@@ -169,7 +168,7 @@ func (h *StockHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.getBalanceUC.Execute(r.Context(), itemCode, mask, warehouseID)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -287,7 +286,9 @@ func (h *StockHandler) RecalcConsumptionAverage(w http.ResponseWriter, r *http.R
 	}
 	var dto request.RecalcConsumptionAverageDTO
 	// Body is optional: an empty body recalculates all items with the default window.
-	_ = json.NewDecoder(r.Body).Decode(&dto)
+	if !security.DecodeBodyOptional(w, r, &dto) {
+		return
+	}
 	result, err := h.recalcCMUC.Execute(r.Context(), dto)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -308,7 +309,7 @@ func (h *StockHandler) GetConsumptionAverage(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.getCMUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -322,8 +323,7 @@ func (h *StockHandler) RegisterLot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.RegisterLotDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.registerLotUC.Execute(r.Context(), dto)
@@ -375,14 +375,13 @@ func (h *StockHandler) GetLotGenealogy(w http.ResponseWriter, r *http.Request) {
 
 func (h *StockHandler) ReserveStock(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateReservationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.reserveStockUC.Execute(r.Context(), dto)
 	if err != nil {
 		if errors.Is(err, stockrepo.ErrInsufficientStock) {
-			security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+			respondErr(w, err)
 			return
 		}
 		security.RespondUseCaseError(w, err)
@@ -423,8 +422,7 @@ func (h *StockHandler) ConsumeReservation(w http.ResponseWriter, r *http.Request
 
 func (h *StockHandler) CreateInventory(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateInventoryDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createInventoryUC.Execute(r.Context(), dto)
@@ -444,7 +442,7 @@ func (h *StockHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getInventoryUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -471,8 +469,7 @@ func (h *StockHandler) ListInventories(w http.ResponseWriter, r *http.Request) {
 
 func (h *StockHandler) CountInventoryItem(w http.ResponseWriter, r *http.Request) {
 	var dto request.CountInventoryItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.countInventoryUC.Execute(r.Context(), dto); err != nil {
@@ -484,8 +481,7 @@ func (h *StockHandler) CountInventoryItem(w http.ResponseWriter, r *http.Request
 
 func (h *StockHandler) AdjustInventoryItem(w http.ResponseWriter, r *http.Request) {
 	var dto request.AdjustInventoryItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.adjustInventoryUC.Execute(r.Context(), dto); err != nil {
@@ -518,7 +514,7 @@ func (h *StockHandler) ListInventoryItems(w http.ResponseWriter, r *http.Request
 	}
 	results, err := h.getInventoryUC.ListItems(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, results)
@@ -584,8 +580,8 @@ func (h *StockHandler) ApurarCurvaABC(w http.ResponseWriter, r *http.Request) {
 		CutAPct      float64 `json:"cut_a_pct"`
 		CutBPct      float64 `json:"cut_b_pct"`
 	}
-	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&corpo)
+	if !security.DecodeBodyOptional(w, r, &corpo) {
+		return
 	}
 	resumo, err := h.separacaoUC.ApurarABC(r.Context(), corpo.WindowMonths, corpo.CutAPct, corpo.CutBPct)
 	if err != nil {

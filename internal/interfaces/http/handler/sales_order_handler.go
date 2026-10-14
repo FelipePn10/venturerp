@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -43,8 +42,7 @@ type SalesOrderHandler struct {
 
 func (h *SalesOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -63,8 +61,7 @@ func (h *SalesOrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateSalesOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -85,7 +82,7 @@ func (h *SalesOrderHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -103,7 +100,7 @@ func (h *SalesOrderHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *SalesOrderHandler) Search(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseSalesOrderFilter(r, true)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	results, err := h.listAdvancedUC.Execute(r.Context(), filter)
@@ -117,7 +114,7 @@ func (h *SalesOrderHandler) Search(w http.ResponseWriter, r *http.Request) {
 func (h *SalesOrderHandler) Report(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseSalesOrderFilter(r, false)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	result, err := h.reportUC.Execute(r.Context(), filter)
@@ -161,7 +158,9 @@ func (h *SalesOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.CancelSalesOrderDTO
-	_ = json.NewDecoder(r.Body).Decode(&dto)
+	if !security.DecodeBodyOptional(w, r, &dto) {
+		return
+	}
 	dto.Code = code
 	if err := h.cancelUC.Execute(r.Context(), dto); err != nil {
 		security.RespondUseCaseError(w, err)
@@ -176,8 +175,7 @@ func (h *SalesOrderHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.AnalyzeSalesOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -194,8 +192,7 @@ func (h *SalesOrderHandler) Release(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.ReleaseSalesOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -212,7 +209,9 @@ func (h *SalesOrderHandler) Attend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.AttendSalesOrderDTO
-	_ = json.NewDecoder(r.Body).Decode(&dto)
+	if !security.DecodeBodyOptional(w, r, &dto) {
+		return
+	}
 	dto.Code = code
 	if err := h.attendUC.Execute(r.Context(), dto); err != nil {
 		security.RespondUseCaseError(w, err)
@@ -227,8 +226,7 @@ func (h *SalesOrderHandler) Confer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.ConferSalesOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -245,8 +243,7 @@ func (h *SalesOrderHandler) SaveDelayReason(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var dto request.SaveSalesOrderDelayReasonDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -265,8 +262,7 @@ func (h *SalesOrderHandler) Block(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.BlockSalesOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -299,8 +295,7 @@ func (h *SalesOrderHandler) ChangeStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var dto request.ChangeStatusDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -315,8 +310,7 @@ func (h *SalesOrderHandler) ChangeStatus(w http.ResponseWriter, r *http.Request)
 
 func (h *SalesOrderHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesOrderItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createItemUC.Execute(r.Context(), dto)
@@ -335,8 +329,7 @@ func (h *SalesOrderHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateSalesOrderItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code

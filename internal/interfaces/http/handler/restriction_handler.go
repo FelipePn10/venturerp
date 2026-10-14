@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -13,8 +12,7 @@ import (
 
 func (h *RestrictionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateRestrictionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -42,7 +40,7 @@ func (h *RestrictionHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -69,8 +67,7 @@ func (h *RestrictionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateRestrictionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -117,8 +114,7 @@ func (h *RestrictionHandler) GetByCustomer(w http.ResponseWriter, r *http.Reques
 // visible question set and locked values in sync, regardless of answer order.
 func (h *RestrictionHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	var dto request.EvaluateRestrictionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if dto.Answers == nil {

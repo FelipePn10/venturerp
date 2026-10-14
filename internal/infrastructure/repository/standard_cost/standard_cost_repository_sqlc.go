@@ -127,9 +127,14 @@ func (r *StandardCostRepositorySQLC) InsertRollupLog(ctx context.Context, entry 
 // ─── BOM helpers ──────────────────────────────────────────────────────────────
 
 func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, parentCode int64, mask string) ([]domainrepo.BOMChild, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.GetDirectChildrenForMask(ctx, sqlc.GetDirectChildrenForMaskParams{
-		ParentCode: parentCode,
-		ParentMask: pgutil.ToPgTextFromString(mask),
+		EnterpriseID: empresa,
+		ParentCode:   parentCode,
+		ParentMask:   pgutil.ToPgTextFromString(mask),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching BOM children for item %d: %w", parentCode, err)

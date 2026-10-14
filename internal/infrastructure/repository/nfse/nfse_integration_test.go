@@ -3,7 +3,6 @@
 package nfse_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -21,7 +20,7 @@ func sp(s string) *string { return &s }
 func TestIntegration_NFSe_CRUDAndAuthorization(t *testing.T) {
 	pool := testutil.Pool(t)
 	repo := nfserepo.NewNFSeRepositoryPG(pool)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool) // a NFS-e é da empresa da sessão
 	user := uuid.New()
 
 	n := &entity.NFSe{

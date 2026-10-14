@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/mail"
 	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	notificationentity "github.com/FelipePn10/panossoerp/internal/domain/notification/entity"
@@ -58,34 +60,79 @@ type ExceptionItem struct {
 	Description string `json:"description"`
 }
 
+// maxDestinatarios limita o envio por chamada: a lista vem da tela.
+const maxDestinatarios = 20
+
+// validar confere a entrada antes de ler ou enviar qualquer coisa: plano,
+// endereço do webhook (HTTPS e público) e e-mails.
+func (dto *NotifyExceptionsDTO) validar() error {
+	if dto.PlanCode <= 0 {
+		return errorsuc.NewValidationError("informe o plano")
+	}
+	dto.WebhookURL = strings.TrimSpace(dto.WebhookURL)
+	if dto.WebhookURL != "" {
+		if err := notification.ValidateWebhookURL(dto.WebhookURL); err != nil {
+			return errorsuc.NewValidationError(err.Error())
+		}
+	}
+	emails := make([]string, 0, len(dto.EmailTo))
+	for _, e := range dto.EmailTo {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		addr, err := mail.ParseAddress(e)
+		if err != nil || addr.Address != e || !strings.Contains(e[strings.LastIndex(e, "@")+1:], ".") {
+			return errorsuc.NewValidationError(fmt.Sprintf("e-mail inválido: %s", e))
+		}
+		emails = append(emails, e)
+	}
+	if len(emails) > maxDestinatarios {
+		return errorsuc.NewValidationError(fmt.Sprintf("informe no máximo %d e-mails", maxDestinatarios))
+	}
+	dto.EmailTo = emails
+	return nil
+}
+
 func (uc *NotifyExceptionsUseCase) Execute(ctx context.Context, dto NotifyExceptionsDTO) (*ExceptionSummary, error) {
+	if err := dto.validar(); err != nil {
+		return nil, err
+	}
 	exceptions, err := uc.repo.ListExceptionsByPlan(ctx, dto.PlanCode)
 	if err != nil {
-		return nil, fmt.Errorf("listing exceptions for plan %d: %w", dto.PlanCode, err)
+		return nil, fmt.Errorf("lendo as exceções do plano %d: %w", dto.PlanCode, err)
 	}
 
 	summary := buildSummary(dto.PlanCode, exceptions)
 
 	if dto.WebhookURL != "" {
 		if err := uc.webhook.Send(ctx, dto.WebhookURL, summary); err != nil {
-			return summary, fmt.Errorf("falha ao enviar a notificação: %w", err)
+			// Falha no destino informado pelo usuário: ele precisa da causa.
+			return summary, errorsuc.NewValidationError(err.Error())
 		}
 	}
 
 	if len(dto.EmailTo) > 0 && uc.outbox != nil {
-		enterpriseID, tenantErr := tenant.ID(ctx)
-		payload, marshalErr := json.Marshal(summary)
-		if tenantErr == nil && marshalErr == nil {
-			digest := sha256.Sum256(payload)
-			enqueueErr := uc.outbox.Enqueue(ctx, notificationentity.OutboxEvent{EnterpriseID: enterpriseID, EventKey: "MRP_EXCECAO", EventVersion: 1, AggregateType: "PLANO_MRP", AggregateInternalID: fmt.Sprint(dto.PlanCode), Payload: payload, DeduplicationKey: "plano:" + fmt.Sprint(dto.PlanCode) + ":" + hex.EncodeToString(digest[:12]), OccurredAt: summary.GeneratedAt})
-			if enqueueErr != nil {
-				slog.Warn("não foi possível registrar alerta MRP", "plano", dto.PlanCode, "erro", enqueueErr)
-			}
+		enterpriseID, err := tenant.ID(ctx)
+		if err != nil {
+			return summary, err
+		}
+		payload, err := json.Marshal(summary)
+		if err != nil {
+			return summary, fmt.Errorf("montando o alerta MRP: %w", err)
+		}
+		digest := sha256.Sum256(payload)
+		// Antes a falha ao registrar só ia para o log e a tela dizia que o
+		// alerta foi enviado.
+		if err := uc.outbox.Enqueue(ctx, notificationentity.OutboxEvent{EnterpriseID: enterpriseID, EventKey: "MRP_EXCECAO", EventVersion: 1, AggregateType: "PLANO_MRP", AggregateInternalID: fmt.Sprint(dto.PlanCode), Payload: payload, DeduplicationKey: "plano:" + fmt.Sprint(dto.PlanCode) + ":" + hex.EncodeToString(digest[:12]), OccurredAt: summary.GeneratedAt}); err != nil {
+			slog.Warn("não foi possível registrar alerta MRP", "plano", dto.PlanCode, "erro", err)
+			return summary, fmt.Errorf("registrando o alerta MRP por e-mail: %w", err)
 		}
 	} else if len(dto.EmailTo) > 0 && uc.emailSvc != nil {
 		subject := fmt.Sprintf("[MRP] Exceções no Plano %d — %d ocorrência(s)", dto.PlanCode, summary.Total)
 		if err := uc.emailSvc.Send(dto.EmailTo, subject, summary.FormatText()); err != nil {
-			return summary, fmt.Errorf("email delivery failed: %w", err)
+			slog.Warn("falha ao enviar alerta MRP por e-mail", "plano", dto.PlanCode, "erro", err)
+			return summary, errorsuc.NewValidationError("não foi possível enviar o e-mail de alerta; confira os endereços e a configuração de e-mail da empresa")
 		}
 	}
 

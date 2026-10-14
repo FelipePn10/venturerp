@@ -211,6 +211,19 @@ parâmetro 45 bloqueia liberação com apontamento por ordem + baixa no
 cadastro/liberação, roteiro misto com terceiros ou remessa de terceiros que não
 utilize itens da demanda.
 
+### Faltas de material antes de liberar
+
+`GET /api/production-order/{id}/material-availability` devolve, por material
+de demanda da OF: quanto falta baixar (`remaining`), o saldo livre do depósito
+do material (saldo − reservado), o que as **OFs abertas que estão na frente**
+vão consumir do mesmo item (`committed_earlier` — início anterior, ou mesmo dia
+e criada antes), o disponível para esta OF e a falta. Situação por linha e da
+OF: `COMPLETA`, `PARCIAL`, `SEM_SALDO` ou `SEM_LISTA`.
+
+`GET /api/production-order/material-availability?ids=1,2,3` (até 500) devolve
+só o resumo por OF, para o selo da lista. A checagem é aviso: iniciar a
+produção com falta continua permitido (a tela pede confirmação).
+
 ## 7. Atomicidade e serviços de terceiros
 
 Entrega, linhas EPP/EPE, REP, co-produtos, movimentos e saldos são gravados em

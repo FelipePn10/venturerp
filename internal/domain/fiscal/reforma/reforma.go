@@ -9,6 +9,7 @@ package reforma
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/shopspring/decimal"
 )
@@ -24,7 +25,7 @@ func AliquotasDoAno(ano int) (Aliquotas, error) {
 	case 2026:
 		return Aliquotas{IBSUF: decimal.RequireFromString("0.1"), IBSMun: decimal.Zero, CBS: decimal.RequireFromString("0.9")}, nil
 	}
-	return Aliquotas{}, fmt.Errorf("alíquotas de IBS/CBS de %d não cadastradas: atualize o pacote fiscal/reforma", ano)
+	return Aliquotas{}, domainerr.NewValidation(fmt.Sprintf("alíquotas de IBS/CBS de %d não cadastradas: atualize o pacote fiscal/reforma", ano))
 }
 
 // Grupo é o IBS/CBS calculado de um item.

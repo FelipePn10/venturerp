@@ -92,6 +92,30 @@ Após a implementação:
   acordo — na empresa 1 os dois valem 1 e o erro não aparece em desenvolvimento.
   Foi assim que o vínculo do representante (`representative_enterprises.enterprise_code`
   comparado com `tenant.ID`) escondeu o representante da segunda empresa.
+- `customers` é por empresa (`enterprise_id`) e o código do cliente é único por
+  **(empresa, código)**, não no banco inteiro. Junção por `customer_code` precisa
+  da empresa, senão multiplica linhas e mistura cadastros de empresas diferentes.
+- Todo módulo novo ou alterado que guarda dado de empresa precisa de um teste de
+  integração com DUAS empresas (`testutil.DuasEmpresas`, códigos ≠ ids): a
+  empresa B não lê, não lista, não altera e não apaga nada da A — inclusive
+  filhos (contato, linha, item) acessados pelo id. O id da linha filha não basta:
+  a escrita vai por `INSERT ... SELECT`/`EXISTS` que confere a empresa do pai.
+- Dado pendurado no item (estrutura/BOM, máscara, conversão, calendário de
+  promessa, custos) é da empresa do ITEM: `items.code` é único no banco e
+  `items.enterprise_id` é a verdade — confira por `EXISTS (... items ...
+  enterprise_id = ...)`, não copie a empresa para uma coluna que pode divergir.
+- **Catálogos são por empresa** (`enterprise_id`): regiões, segmentos, tipos,
+  portadores, tipos de nota, tributação, TES, grupos de UF, tipos de movimento,
+  tipos de representante/chamado, defeitos. O CÓDIGO se repete entre empresas —
+  toda busca e toda junção por código precisa de `enterprise_id`, senão
+  multiplica linhas ou traz o cadastro de outra empresa. Referência por id é
+  garantida no banco por FK composta (empresa, id) e, onde não cabe, por gatilho
+  `erp_confere_catalogo_*` (erro 23503). Globais de verdade: CFOP, NCM, IBPT,
+  alíquotas de ICMS por UF, dispositivos legais, códigos de ajuste, UF/país.
+- Representante (`representatives.enterprise_code`), ferramenta
+  (`tools.enterprise_id`), responsável de garantia, metas, reservas de tanque e
+  parâmetros da promessa de entrega são por empresa; código continua único no
+  banco.
 - Regras de negócio não devem residir em handlers ou repositories.
 - Operações compostas devem avaliar necessidade de transação.
 - Não alterar migrations já aplicadas; criar nova migration.

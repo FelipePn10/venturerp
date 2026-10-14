@@ -211,7 +211,7 @@ func (h *RecurringSalesHandler) respond(w http.ResponseWriter, result any, err e
 		case errors.Is(err, errorsuc.ErrUnauthorized):
 			security.RespondError(w, http.StatusUnauthorized, err.Error())
 		default:
-			security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+			respondErr(w, err)
 		}
 		return
 	}

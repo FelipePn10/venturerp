@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/overhead_allocation/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,6 +17,11 @@ func (r *OverheadAllocationRepositorySQLC) Create(
 	ctx context.Context,
 	oa *entity.OverheadAllocation,
 ) (*entity.OverheadAllocation, error) {
+
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var costCenterCode *int32
 	if oa.CostCenterCode != 0 {
@@ -40,9 +46,13 @@ func (r *OverheadAllocationRepositorySQLC) Create(
 			AllocationType:  oa.AllocationType,
 			BaseCode:        oa.BaseCode,
 			CreatedBy:       pgutil.ToPgUUID(oa.CreatedBy),
+			EnterpriseID:    emp,
 		},
 	)
 
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("centro de custo ou base de rateio não encontrados nesta empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating overhead allocation: %w", err)
 	}
@@ -54,6 +64,11 @@ func (r *OverheadAllocationRepositorySQLC) AddTarget(
 	ctx context.Context,
 	target *entity.AllocationTarget,
 ) (*entity.AllocationTarget, error) {
+
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var overheadCode *int64
 	overheadCode = &target.OverheadCode
@@ -69,9 +84,13 @@ func (r *OverheadAllocationRepositorySQLC) AddTarget(
 			CostCenterCode: costCenterCode,
 			Percentage:     pgutil.ToPgNumericFromFloat64(target.Percentage),
 			Amount:         pgutil.ToPgNumericFromFloat64(target.Amount),
+			EnterpriseID:   emp,
 		},
 	)
 
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("rateio ou centro de custo de destino não encontrados nesta empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding allocation target: %w", err)
 	}
@@ -84,7 +103,11 @@ func (r *OverheadAllocationRepositorySQLC) GetByCode(
 	code int64,
 ) (*entity.OverheadAllocation, error) {
 
-	row, err := r.q.GetOverheadAllocationByCode(ctx, code)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetOverheadAllocationByCode(ctx, sqlc.GetOverheadAllocationByCodeParams{Code: code, EnterpriseID: emp})
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -102,10 +125,11 @@ func (r *OverheadAllocationRepositorySQLC) GetTargets(
 	overheadCode int64,
 ) ([]*entity.AllocationTarget, error) {
 
-	rows, err := r.q.GetAllocationTargets(
-		ctx,
-		&overheadCode,
-	)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetAllocationTargets(ctx, sqlc.GetAllocationTargetsParams{OverheadCode: &overheadCode, EnterpriseID: emp})
 
 	if err != nil {
 		return nil, fmt.Errorf("fetching allocation targets: %w", err)
@@ -118,7 +142,11 @@ func (r *OverheadAllocationRepositorySQLC) List(
 	ctx context.Context,
 ) ([]*entity.OverheadAllocation, error) {
 
-	rows, err := r.q.ListOverheadAllocations(ctx)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListOverheadAllocations(ctx, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing overhead allocations: %w", err)
 	}
@@ -133,7 +161,11 @@ func (r *OverheadAllocationRepositorySQLC) ListByCostCenter(
 
 	v := int32(ccCode)
 
-	rows, err := r.q.ListOverheadAllocationsByCostCenter(ctx, &v)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListOverheadAllocationsByCostCenter(ctx, sqlc.ListOverheadAllocationsByCostCenterParams{CostCenterCode: &v, EnterpriseID: emp})
 	if err != nil {
 		return nil, fmt.Errorf("listing overhead allocations by cost center: %w", err)
 	}
@@ -146,11 +178,21 @@ func (r *OverheadAllocationRepositorySQLC) Delete(
 	id int64,
 ) error {
 
-	if err := r.q.DeleteAllocationTargets(ctx, &id); err != nil {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	if err := r.q.DeleteAllocationTargets(ctx, sqlc.DeleteAllocationTargetsParams{OverheadCode: &id, EnterpriseID: emp}); err != nil {
 		return fmt.Errorf("deleting targets: %w", err)
 	}
-
-	return r.q.DeleteOverheadAllocation(ctx, id)
+	n, err := r.q.DeleteOverheadAllocation(ctx, sqlc.DeleteOverheadAllocationParams{Code: id, EnterpriseID: emp})
+	if err != nil {
+		return fmt.Errorf("deleting overhead allocation: %w", err)
+	}
+	if n == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("rateio de despesas indiretas %d não encontrado", id))
+	}
+	return nil
 }
 
 func (r *OverheadAllocationRepositorySQLC) DeleteTargets(
@@ -158,7 +200,11 @@ func (r *OverheadAllocationRepositorySQLC) DeleteTargets(
 	overheadCode int64,
 ) error {
 
-	return r.q.DeleteAllocationTargets(ctx, &overheadCode)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeleteAllocationTargets(ctx, sqlc.DeleteAllocationTargetsParams{OverheadCode: &overheadCode, EnterpriseID: emp})
 }
 
 func rowToEntity(

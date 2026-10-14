@@ -106,7 +106,7 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 	if err != nil {
 		return nil, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +297,7 @@ func (r *FiscalRepositoryPG) CancelarEntrada(ctx context.Context, c repository.C
 	if err != nil {
 		return nil, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +504,7 @@ func (r *FiscalRepositoryPG) ExistingWarehouses(ctx context.Context, ids []int64
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := r.pool.Query(ctx, `SELECT id, code || ' — ' || description FROM warehouse WHERE enterprise_id=$1 AND id = ANY($2)`, empresa, ids)
+	rows, err := r.db.Query(ctx, `SELECT id, code || ' — ' || description FROM warehouse WHERE enterprise_id=$1 AND id = ANY($2)`, empresa, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -520,16 +520,20 @@ func (r *FiscalRepositoryPG) ExistingWarehouses(ctx context.Context, ids []int64
 	return out, rows.Err()
 }
 
-// EntryOperations lê os tipos de operação de entrada. O cadastro é comum às
-// empresas (é a natureza fiscal da operação, não um dado da empresa).
+// EntryOperations lê os tipos de operação de entrada (TES) da empresa da
+// sessão: cada empresa tem as suas, com os códigos que ela mesma usa.
 func (r *FiscalRepositoryPG) EntryOperations(ctx context.Context, codes []int64) (map[int64]repository.EntryOperation, error) {
 	out := map[int64]repository.EntryOperation{}
 	if len(codes) == 0 {
 		return out, nil
 	}
-	rows, err := r.pool.Query(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx,
 		`SELECT code, description, nature_operation, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, is_active
-		   FROM entry_operation_types WHERE code = ANY($1)`, codes)
+		   FROM entry_operation_types WHERE code = ANY($1) AND enterprise_id = $2`, codes, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +558,7 @@ func (r *FiscalRepositoryPG) OpenPurchaseOrderLines(ctx context.Context, supplie
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT `+linhaPedidoCols+`
 		   FROM purchase_order_items poi
 		   JOIN purchase_orders po ON po.code = poi.purchase_order_code
@@ -599,7 +603,7 @@ func (r *FiscalRepositoryPG) PurchaseOrderLines(ctx context.Context, supplierCod
 	if len(numeros) == 0 && len(lineCodes) == 0 {
 		return nil, nil
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT poi.code, po.code, po.order_number, poi.sequence, poi.item_code, poi.status,
 		        poi.requested_qty, poi.received_qty, poi.invoiced_qty, poi.cancelled_qty,
 		        COALESCE(poi.internal_qty,0), poi.unit_price, COALESCE(poi.internal_price,0), COALESCE(poi.tolerance_pct,0),
@@ -632,7 +636,7 @@ func (r *FiscalRepositoryPG) NCMIPIRates(ctx context.Context, ncms []string) (ma
 	if len(ncms) == 0 {
 		return out, nil
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT regexp_replace(ncm,'\D','','g'), aliq_ipi FROM ncm_tax_table WHERE is_active AND regexp_replace(ncm,'\D','','g') = ANY($1)`, ncms)
 	if err != nil {
 		return nil, err
@@ -658,7 +662,7 @@ func (r *FiscalRepositoryPG) AccountingParams(ctx context.Context) (*repository.
 		return nil, err
 	}
 	var p repository.AccountingPostingParams
-	err = r.pool.QueryRow(ctx, `SELECT `+colunasParametrosContabeis+` FROM accounting_posting_params WHERE enterprise_id=$1`, empresa).Scan(
+	err = r.db.QueryRow(ctx, `SELECT `+colunasParametrosContabeis+` FROM accounting_posting_params WHERE enterprise_id=$1`, empresa).Scan(
 		&p.PlanID, &p.FornecedoresAccountID, &p.ICMSRecuperarAccountID, &p.IPIRecuperarAccountID, &p.PISRecuperarAccountID, &p.COFINSRecuperarAccountID, &p.IBSRecuperarAccountID, &p.CBSRecuperarAccountID, &p.IRRFRecolherAccountID, &p.PCCRecolherAccountID, &p.INSSRecolherAccountID, &p.ISSRecolherAccountID, &p.DespesaPadraoAccountID, &p.ContabilizarEntrada, &p.ContabilizarPagamentos, &p.ContabilizarRecebimentos, &p.ContabilizarSaidas, &p.BancoPadraoAccountID, &p.JurosPagosAccountID, &p.DescontosObtidosAccountID, &p.ClientesAccountID, &p.JurosRecebidosAccountID, &p.DescontosConcedidosAccountID, &p.ReceitaVendasAccountID, &p.ICMSVendasAccountID, &p.ICMSRecolherAccountID, &p.ICMSSTRecolherAccountID, &p.IPIRecolherAccountID, &p.PISVendasAccountID, &p.PISRecolherAccountID, &p.COFINSVendasAccountID, &p.COFINSRecolherAccountID, &p.CMVAccountID, &p.EstoqueAccountID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -674,7 +678,7 @@ func (r *FiscalRepositoryPG) SaveAccountingParams(ctx context.Context, p *reposi
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx,
+	_, err = r.db.Exec(ctx,
 		`INSERT INTO accounting_posting_params (enterprise_id, `+colunasParametrosContabeis+`, updated_by, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,NOW())
 		 ON CONFLICT (enterprise_id) DO UPDATE SET fornecedores_account_id=EXCLUDED.fornecedores_account_id, icms_recuperar_account_id=EXCLUDED.icms_recuperar_account_id, ipi_recuperar_account_id=EXCLUDED.ipi_recuperar_account_id, pis_recuperar_account_id=EXCLUDED.pis_recuperar_account_id, cofins_recuperar_account_id=EXCLUDED.cofins_recuperar_account_id, ibs_recuperar_account_id=EXCLUDED.ibs_recuperar_account_id, cbs_recuperar_account_id=EXCLUDED.cbs_recuperar_account_id, irrf_recolher_account_id=EXCLUDED.irrf_recolher_account_id, pcc_recolher_account_id=EXCLUDED.pcc_recolher_account_id, inss_recolher_account_id=EXCLUDED.inss_recolher_account_id, iss_recolher_account_id=EXCLUDED.iss_recolher_account_id, despesa_padrao_account_id=EXCLUDED.despesa_padrao_account_id, contabilizar_entrada=EXCLUDED.contabilizar_entrada, contabilizar_pagamentos=EXCLUDED.contabilizar_pagamentos, contabilizar_recebimentos=EXCLUDED.contabilizar_recebimentos, contabilizar_saidas=EXCLUDED.contabilizar_saidas, banco_padrao_account_id=EXCLUDED.banco_padrao_account_id, juros_pagos_account_id=EXCLUDED.juros_pagos_account_id, descontos_obtidos_account_id=EXCLUDED.descontos_obtidos_account_id, clientes_account_id=EXCLUDED.clientes_account_id, juros_recebidos_account_id=EXCLUDED.juros_recebidos_account_id, descontos_concedidos_account_id=EXCLUDED.descontos_concedidos_account_id, receita_vendas_account_id=EXCLUDED.receita_vendas_account_id, icms_vendas_account_id=EXCLUDED.icms_vendas_account_id, icms_recolher_account_id=EXCLUDED.icms_recolher_account_id, icms_st_recolher_account_id=EXCLUDED.icms_st_recolher_account_id, ipi_recolher_account_id=EXCLUDED.ipi_recolher_account_id, pis_vendas_account_id=EXCLUDED.pis_vendas_account_id, pis_recolher_account_id=EXCLUDED.pis_recolher_account_id, cofins_vendas_account_id=EXCLUDED.cofins_vendas_account_id, cofins_recolher_account_id=EXCLUDED.cofins_recolher_account_id, cmv_account_id=EXCLUDED.cmv_account_id, estoque_account_id=EXCLUDED.estoque_account_id,
@@ -695,7 +699,7 @@ func (r *FiscalRepositoryPG) PlanoContasAccounts(ctx context.Context, planoIDs [
 	if len(planoIDs) == 0 {
 		return out, nil
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, accounting_account_id FROM plano_contas WHERE enterprise_id=$1 AND id = ANY($2) AND accounting_account_id IS NOT NULL`, empresa, planoIDs)
 	if err != nil {
 		return nil, err
@@ -718,7 +722,12 @@ func (r *FiscalRepositoryPG) ValidAccountingAccounts(ctx context.Context, planID
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := r.pool.Query(ctx, `SELECT id FROM accounting_accounts WHERE plan_id=$1 AND is_analytic AND id = ANY($2)`, planID, ids)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx, `SELECT a.id FROM accounting_accounts a JOIN accounting_plans pl ON pl.id = a.plan_id
+		WHERE a.plan_id=$1 AND a.is_analytic AND a.id = ANY($2) AND pl.enterprise_id=$3`, planID, ids, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -733,24 +742,32 @@ func (r *FiscalRepositoryPG) ValidAccountingAccounts(ctx context.Context, planID
 	return out, rows.Err()
 }
 
+// contaDaEmpresa: a conta contábil ($3) é de um plano da empresa ($2).
+const contaDaEmpresa = `(SELECT 1 FROM accounting_accounts a JOIN accounting_plans pl ON pl.id = a.plan_id WHERE a.id = $3 AND pl.enterprise_id = $2)`
+
 func (r *FiscalRepositoryPG) VincularPlanoContaContabil(ctx context.Context, planoID int64, contaID *int64) error {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE plano_contas SET accounting_account_id=$3 WHERE id=$1 AND enterprise_id=$2`, planoID, empresa, contaID)
+	tag, err := r.db.Exec(ctx, `UPDATE plano_contas SET accounting_account_id=$3 WHERE id=$1 AND enterprise_id=$2
+		AND ($3::bigint IS NULL OR EXISTS `+contaDaEmpresa+`)`, planoID, empresa, contaID)
 	if err != nil {
 		return fmt.Errorf("vinculando plano de contas à conta contábil: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return errorsuc.NewNotFoundError(fmt.Sprintf("plano de contas %d não encontrado nesta empresa", planoID))
+		return errorsuc.NewNotFoundError(fmt.Sprintf("plano de contas %d ou a conta contábil não encontrados nesta empresa", planoID))
 	}
 	return nil
 }
 
 func (r *FiscalRepositoryPG) AccountingPlanExists(ctx context.Context, planID int64) (bool, error) {
 	var ok bool
-	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounting_plans WHERE id=$1)`, planID).Scan(&ok)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	err = r.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounting_plans WHERE id=$1 AND enterprise_id=$2)`, planID, empresa).Scan(&ok)
 	return ok, err
 }
 
@@ -760,7 +777,7 @@ func (r *FiscalRepositoryPG) ContaContabilDoBanco(ctx context.Context, contaBanc
 		return nil, err
 	}
 	var conta *int64
-	err = r.pool.QueryRow(ctx, `SELECT accounting_account_id FROM contas_bancarias WHERE id=$1 AND enterprise_id=$2`, contaBancariaID, empresa).Scan(&conta)
+	err = r.db.QueryRow(ctx, `SELECT accounting_account_id FROM contas_bancarias WHERE id=$1 AND enterprise_id=$2`, contaBancariaID, empresa).Scan(&conta)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("conta bancária %d não encontrada", contaBancariaID))
 	}
@@ -772,12 +789,13 @@ func (r *FiscalRepositoryPG) VincularContaBancariaContabil(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE contas_bancarias SET accounting_account_id=$3, updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, contaBancariaID, empresa, contaID)
+	tag, err := r.db.Exec(ctx, `UPDATE contas_bancarias SET accounting_account_id=$3, updated_at=NOW() WHERE id=$1 AND enterprise_id=$2
+		AND ($3::bigint IS NULL OR EXISTS `+contaDaEmpresa+`)`, contaBancariaID, empresa, contaID)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errorsuc.NewNotFoundError(fmt.Sprintf("conta bancária %d não encontrada", contaBancariaID))
+		return errorsuc.NewNotFoundError(fmt.Sprintf("conta bancária %d ou a conta contábil não encontradas nesta empresa", contaBancariaID))
 	}
 	return nil
 }
@@ -796,7 +814,7 @@ func (r *FiscalRepositoryPG) RetencaoTipo(ctx context.Context, contaPagarID int6
 		return "", err
 	}
 	var tipo *string
-	err = r.pool.QueryRow(ctx, `SELECT retencao_tipo FROM contas_pagar WHERE id=$1 AND enterprise_id=$2`, contaPagarID, empresa).Scan(&tipo)
+	err = r.db.QueryRow(ctx, `SELECT retencao_tipo FROM contas_pagar WHERE id=$1 AND enterprise_id=$2`, contaPagarID, empresa).Scan(&tipo)
 	if err != nil || tipo == nil {
 		return "", err
 	}

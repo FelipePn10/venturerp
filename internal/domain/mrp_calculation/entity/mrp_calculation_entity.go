@@ -97,6 +97,11 @@ type MRPInput struct {
 	InterFactory         bool
 	SourceEnterpriseCode *int64
 	AutoRelease          bool
+	// PegKind/PegCode identificam a origem da necessidade para o pegging
+	// quando DemandType/SourceCode não bastam: SUGESTAO (sugestão do pai que
+	// gerou esta necessidade), MPS, ESTOQUE_SEGURANCA, SIMULADA.
+	PegKind string
+	PegCode *int64
 }
 
 // MRPOutput holds the result of MRP calculation for one item
@@ -144,6 +149,10 @@ type PlannedOrderSuggestion struct {
 	SupplierCode         *int64     `json:"supplier_code"`
 	ServiceItemCode      *int64     `json:"service_item_code"`
 	RemittanceType       *string    `json:"remittance_type"`
+	// PlannedOrderCode é a ordem planejada que a sugestão gerou ao ser firmada.
+	// Firmar de novo devolve a mesma ordem; sem este campo a tela não sabia o
+	// que já tinha sido firmado e contava tudo como pendente.
+	PlannedOrderCode *int64 `json:"planned_order_code,omitempty"`
 }
 
 // ExceptionMessageType classifies an MRP exception so planners can act
@@ -185,7 +194,27 @@ type MRPExceptionMessage struct {
 	SourceType  *string // e.g. "PLANNED_ORDER", "PURCHASE_ORDER"
 	Description string  // human-readable explanation in Brazilian Portuguese
 	CreatedAt   time.Time
+	// SuggestedDate é a data em que o cálculo precisa do suprimento: reprogramar
+	// a ordem a partir da exceção leva a ela.
+	SuggestedDate *time.Time
+	// Tratamento registrado pelo planejador (nil = pendente).
+	HandledAt      *time.Time
+	HandledBy      *string
+	HandledByName  string
+	HandlingAction string
+	HandlingNote   string
+	// Ordem planejada de origem, quando a exceção vem de uma: número e
+	// necessidade atual.
+	SourceOrderNumber *int64
+	SourceNeedDate    *time.Time
 }
+
+// Como o planejador tratou uma exceção do MRP.
+const (
+	ExceptionHandledRescheduled  = "REPROGRAMADA"
+	ExceptionHandledCancelled    = "CANCELADA"
+	ExceptionHandledAcknowledged = "TRATADA"
+)
 
 // ---------- New entity types for enhanced MRP features ----------
 
@@ -257,4 +286,121 @@ type MachineScheduleInfo struct {
 	MachineID        int64
 	ScheduleDate     time.Time
 	ProductionTime   float64
+}
+
+// ── Pegging ─────────────────────────────────────────────────────────────────
+
+// Origem de uma necessidade no pegging.
+const (
+	PegDemandSalesOrder  = "PEDIDO_VENDA"
+	PegDemandIndependent = "DEMANDA_INDEPENDENTE"
+	PegDemandForecast    = "PREVISAO"
+	PegDemandMPS         = "MPS"
+	PegDemandSafetyStock = "ESTOQUE_SEGURANCA"
+	PegDemandSuggestion  = "SUGESTAO"
+	PegDemandSimulated   = "SIMULADA"
+	PegDemandOther       = "OUTRA"
+)
+
+// Suprimento que cobriu a necessidade.
+const (
+	PegSupplyStock      = "ESTOQUE"
+	PegSupplyFirmOrder  = "ORDEM_FIRME"
+	PegSupplySuggestion = "SUGESTAO"
+	PegSupplyShortage   = "FALTA"
+)
+
+// PeggingRecord diz que parte de uma necessidade foi coberta por qual
+// suprimento no cálculo do plano.
+type PeggingRecord struct {
+	ItemCode   int64
+	DemandKind string
+	DemandCode *int64
+	NeedDate   time.Time
+	SupplyKind string
+	SupplyCode *int64
+	SupplyDate *time.Time
+	Quantity   float64
+}
+
+// ── Cenários de simulação ───────────────────────────────────────────────────
+
+// Referência de um ajuste de demanda do cenário.
+const (
+	ScenarioDemandNew         = "NOVA"
+	ScenarioDemandIndependent = "DEMANDA_INDEPENDENTE"
+	ScenarioDemandSalesOrder  = "PEDIDO_VENDA"
+)
+
+// ScenarioDemandChange altera, retira (quantidade 0) ou cria uma demanda no
+// cálculo do cenário.
+type ScenarioDemandChange struct {
+	ID       int64
+	RefKind  string
+	RefCode  *int64
+	ItemCode int64
+	Mask     string
+	Quantity *float64
+	NeedDate *time.Time
+}
+
+// ScenarioAdjustments são os ajustes que o motor do MRP aplica em memória ao
+// calcular um plano de cenário. A capacidade de máquina não está aqui: ela
+// entra nas consultas de janela e de capacidade, que leem o cenário do plano.
+type ScenarioAdjustments struct {
+	Demands []ScenarioDemandChange
+	// StockDelta é a entrada (+) ou baixa (−) simulada por item.
+	StockDelta map[int64]float64
+	// LeadTimeDays substitui o prazo do item.
+	LeadTimeDays map[int64]int
+}
+
+// PeggingRefs são os códigos cujo rótulo a consulta do pegging precisa.
+type PeggingRefs struct {
+	Suggestions     []int64
+	FirmOrders      []int64
+	SalesOrderItems []int64
+	Items           []int64
+}
+
+type PeggingOrderLabel struct {
+	OrderNumber *int64
+	OrderType   string
+	Quantity    float64
+	ItemCode    int64
+	StartDate   *time.Time
+	NeedDate    *time.Time
+	// EstimatedEnd é o fim programado na máquina (sugestão de fabricação com
+	// capacidade finita); nil quando não passou pela programação.
+	EstimatedEnd *time.Time
+	// EstimatedEndDay é o dia desse fim no fuso do banco (o da fábrica) —
+	// para exibir sem que a conversão de horário troque o dia.
+	EstimatedEndDay *time.Time
+}
+
+type PeggingSalesLabel struct {
+	OrderNumber *int64
+	Customer    string
+}
+
+type PeggingItemLabel struct {
+	BusinessCode string
+	Description  string
+	UOM          string
+}
+
+type PeggingLabels struct {
+	Suggestions     map[int64]PeggingOrderLabel
+	FirmOrders      map[int64]PeggingOrderLabel
+	SalesOrderItems map[int64]PeggingSalesLabel
+	Items           map[int64]PeggingItemLabel
+}
+
+// SalesOrderPlan é um plano cujo último cálculo considerou itens do pedido de
+// venda — o ponto de partida do "atendimento" do pedido.
+type SalesOrderPlan struct {
+	PlanCode     int64      `json:"plan_code"`
+	PlanName     string     `json:"plan_name"`
+	CalculatedAt *time.Time `json:"calculated_at,omitempty"`
+	ItemCodes    []int64    `json:"-"`
 }

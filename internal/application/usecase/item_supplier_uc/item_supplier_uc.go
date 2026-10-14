@@ -74,7 +74,7 @@ func (uc *ItemSupplierUseCase) Upsert(ctx context.Context, d request.UpsertItemP
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("o fator de conversão só vale para itens genéricos de importação de XML")
+			return nil, errorsuc.NewValidationError("o fator de conversão só vale para itens genéricos de importação de XML")
 		}
 	}
 	if err = s.Validate(); err != nil {
@@ -145,7 +145,7 @@ func (uc *ItemSupplierUseCase) ResolveExternal(ctx context.Context, supplier int
 		return nil, nil
 	}
 	if len(matches) > 1 {
-		return nil, fmt.Errorf("identificacao externa ambigua para o fornecedor")
+		return nil, errorsuc.NewValidationError("identificacao externa ambigua para o fornecedor")
 	}
 	return &ports.SupplierItemResolution{LinkID: matches[0].ID, ItemCode: matches[0].ItemCode, Strategy: strategy}, nil
 }
@@ -188,7 +188,7 @@ func (uc *ItemSupplierUseCase) CreateQualityReport(ctx context.Context, link int
 	q.ContentType = d.ContentType
 	q.Content = d.Content
 	if len(q.Content) > 10*1024*1024 {
-		return nil, fmt.Errorf("quality report attachment exceeds 10 MiB")
+		return nil, errorsuc.NewValidationError("o anexo do laudo passa de 10 MiB")
 	}
 	q.Notes = d.Notes
 	saved, err := uc.repo.CreateQualityReport(ctx, q)

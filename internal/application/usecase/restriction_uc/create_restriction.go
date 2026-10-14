@@ -71,8 +71,7 @@ func (uc *CreateRestrictionUseCase) Execute(
 		if err != nil {
 			// Sem as condições a restrição não significa nada e ainda bloquearia
 			// combinações por engano: desfaz para não deixar meia regra no banco.
-			uc.descartar(ctx, created.Code)
-			return nil, fmt.Errorf("gravando a condição (SE) da restrição: %w", err)
+			return nil, uc.descartar(ctx, created.Code, fmt.Errorf("gravando a condição (SE) da restrição: %w", err))
 		}
 		created.Dominants = append(created.Dominants, d)
 	}
@@ -86,8 +85,7 @@ func (uc *CreateRestrictionUseCase) Execute(
 		}
 		d, err := uc.Repo.AddDeterminant(ctx, determinant)
 		if err != nil {
-			uc.descartar(ctx, created.Code)
-			return nil, fmt.Errorf("gravando a consequência (ENTÃO) da restrição: %w", err)
+			return nil, uc.descartar(ctx, created.Code, fmt.Errorf("gravando a consequência (ENTÃO) da restrição: %w", err))
 		}
 		created.Determinants = append(created.Determinants, d)
 	}
@@ -98,7 +96,12 @@ func (uc *CreateRestrictionUseCase) Execute(
 // descartar inativa a restrição recém-criada quando suas cláusulas não puderam
 // ser gravadas. Uma restrição sem condições bloquearia combinações sem motivo;
 // inativa, fica visível para conserto sem atrapalhar o configurador. Melhor
-// esforço: se a inativação também falhar, o erro original é o que interessa.
-func (uc *CreateRestrictionUseCase) descartar(ctx context.Context, code int64) {
-	_ = uc.Repo.Deactivate(ctx, code)
+// esforço no sentido de que o erro original continua sendo o principal; se a
+// inativação também falhar, isso vai junto — a meia regra ficou ATIVA e alguém
+// precisa saber para inativá-la à mão.
+func (uc *CreateRestrictionUseCase) descartar(ctx context.Context, code int64, original error) error {
+	if err := uc.Repo.Deactivate(ctx, code); err != nil {
+		return fmt.Errorf("%w; a restrição %d ficou incompleta e ATIVA porque não pôde ser inativada: %v", original, code, err)
+	}
+	return original
 }

@@ -2,7 +2,6 @@ package planned_order_uc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,10 +29,10 @@ import (
 )
 
 var (
-	ErrInvalidPlanningTransition = errors.New("mudança de situação da ordem planejada não permitida")
-	ErrFirmDateChange            = errors.New("as datas de uma ordem planejada firme não podem ser alteradas")
-	ErrKanbanReleaseDisabled     = errors.New("o parâmetro de planejamento 25 não permite liberar itens de Kanban")
-	ErrOrderHasMovements         = errors.New("ordem liberada com movimentos de produção não volta para planejada")
+	ErrInvalidPlanningTransition = errorsuc.NewValidationError("mudança de situação da ordem planejada não permitida")
+	ErrFirmDateChange            = errorsuc.NewValidationError("as datas de uma ordem planejada firme não podem ser alteradas")
+	ErrKanbanReleaseDisabled     = errorsuc.NewValidationError("o parâmetro de planejamento 25 não permite liberar itens de Kanban")
+	ErrOrderHasMovements         = errorsuc.NewValidationError("ordem liberada com movimentos de produção não volta para planejada")
 )
 
 // externalOpsReader is the slice of the routing repository needed to raise service
@@ -90,6 +89,9 @@ func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.Firm
 }
 
 func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto request.TransitionPlannedOrderDTO) ([]*response.PlannedOrderResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de início", dto.StartDate), datetime.Campo("data de fim", dto.EndDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if uc.TransitionAtomically != nil {
 		return uc.TransitionAtomically(ctx, dto)
 	}
@@ -235,7 +237,11 @@ func (uc *FirmPlannedOrderUseCase) validateTransition(ctx context.Context, order
 	}
 	allowed := false
 	if uc.Params != nil {
-		if param, err := uc.Params.GetByNumber(ctx, 25); err == nil {
+		param, err := uc.Params.GetByNumber(ctx, 25)
+		if err != nil && !errorsuc.EhNaoEncontrado(err) {
+			return fmt.Errorf("lendo o parâmetro de planejamento 25: %w", err)
+		}
+		if err == nil && param != nil {
 			v := strings.ToUpper(strings.TrimSpace(param.Value))
 			allowed = v == "S" || v == "SIM" || v == "1" || v == "TRUE" || v == "YES"
 		}

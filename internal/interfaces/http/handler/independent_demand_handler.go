@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,8 +12,7 @@ import (
 
 func (h *IndependentDemandHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateIndependentDemandDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -36,8 +34,7 @@ func (h *IndependentDemandHandler) Update(w http.ResponseWriter, r *http.Request
 
 	var dto request.UpdateIndependentDemandDTO
 
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 
@@ -90,7 +87,7 @@ func (h *IndependentDemandHandler) GetByCode(w http.ResponseWriter, r *http.Requ
 
 	result, err := h.getByCodeUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 

@@ -2,8 +2,10 @@ package sales_order_uc
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -19,20 +21,25 @@ type OrderStockReserver struct {
 	StockRepo stockrepo.StockRepository
 }
 
-// Reserve is best-effort: failures on individual lines never block the order
-// confirmation flow.
-func (r *OrderStockReserver) Reserve(ctx context.Context, code int64) {
-	if already, err := r.StockRepo.HasActiveReservationByReference(ctx, stockentity.ReferenceTypeSalesOrder, code); err == nil && already {
-		return
+// Reserve reserva o disponível de cada linha, com os repositórios da transação
+// da confirmação. Qualquer falha desfaz a confirmação — antes era ignorada e o
+// pedido ficava confirmado sem a reserva.
+func (r *OrderStockReserver) Reserve(ctx context.Context, code int64, pedidos repository.SalesOrderRepository, estoque stockrepo.StockRepository) error {
+	already, err := estoque.HasActiveReservationByReference(ctx, stockentity.ReferenceTypeSalesOrder, code)
+	if err != nil {
+		return fmt.Errorf("conferindo as reservas do pedido: %w", err)
+	}
+	if already {
+		return nil
 	}
 
-	order, err := r.SalesRepo.GetByCode(ctx, code)
+	order, err := pedidos.GetByCode(ctx, code)
 	if err != nil {
-		return
+		return fmt.Errorf("lendo o pedido: %w", err)
 	}
-	items, err := r.SalesRepo.ListItems(ctx, code)
+	items, err := pedidos.ListItems(ctx, code)
 	if err != nil {
-		return
+		return fmt.Errorf("lendo os itens do pedido: %w", err)
 	}
 
 	for _, it := range items {
@@ -44,8 +51,13 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64) {
 			continue
 		}
 
+		// Sem saldo cadastrado no depósito o disponível é zero; falha de leitura é erro.
 		available := 0.0
-		if bal, balErr := r.StockRepo.GetBalance(ctx, it.ItemCode, it.Mask, *it.WarehouseCode); balErr == nil {
+		bal, balErr := estoque.GetBalance(ctx, it.ItemCode, it.Mask, *it.WarehouseCode)
+		if balErr != nil && !errorsuc.EhNaoEncontrado(balErr) {
+			return fmt.Errorf("lendo o saldo do item %d: %w", it.ItemCode, balErr)
+		}
+		if balErr == nil {
 			available = bal.AvailableQty
 		}
 		reserveQty := wanted
@@ -69,6 +81,9 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64) {
 			Status:            "ACTIVE",
 			CreatedBy:         order.CreatedBy,
 		}
-		_, _ = r.StockRepo.CreateReservation(ctx, res)
+		if _, err := estoque.CreateReservation(ctx, res); err != nil {
+			return fmt.Errorf("reservando o item %d: %w", it.ItemCode, err)
+		}
 	}
+	return nil
 }

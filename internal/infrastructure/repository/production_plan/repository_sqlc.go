@@ -159,6 +159,7 @@ func rowToEntity(row sqlc.ProductionPlan) *entity.ProductionPlan {
 		OrderItemCode:       row.OrderItemCode,
 		Parameters:          params,
 		IsActive:            row.IsActive,
+		IsScenario:          row.IsScenario,
 		CreatedAt:           pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:           pgutil.FromPgTimestamptz(row.UpdatedAt),
 		CreatedBy:           pgutil.FromPgUUID(row.CreatedBy),

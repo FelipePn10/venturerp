@@ -25,7 +25,7 @@ func (r *FiscalRepositoryPG) CustoDaSaida(ctx context.Context, exitID int64) (de
 		return decimal.Zero, err
 	}
 	var v decimal.Decimal
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT COALESCE(SUM(total_price),0) FROM stock_movements
 		  WHERE enterprise_id=$1 AND reference_type=$2 AND reference_code=$3 AND movement_type=$4`,
 		empresa, stockentity.ReferenceTypeNFExit, exitID, stockentity.MovementTypeOut).Scan(&v)
@@ -39,7 +39,7 @@ func (r *FiscalRepositoryPG) EstornarEstoqueDaSaida(ctx context.Context, exitID 
 	if err != nil {
 		return 0, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -102,7 +102,7 @@ func (r *FiscalRepositoryPG) GravarLoteContabil(ctx context.Context, lote contab
 	if err != nil {
 		return err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}

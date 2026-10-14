@@ -61,6 +61,16 @@ func (f *fakeDemandRepo) Create(_ context.Context, d *demandentity.IndependentDe
 	return d, nil
 }
 
+// GetByCode: como o repositório real — "não encontrado" até a demanda existir.
+func (f *fakeDemandRepo) GetByCode(_ context.Context, code int64) (*demandentity.IndependentDemand, error) {
+	for _, d := range f.created {
+		if d.CodeDemand == code {
+			return d, nil
+		}
+	}
+	return nil, errorsuc.NewNotFoundError("demanda não encontrada")
+}
+
 func activeItem(seq int, item int64, qty float64) *entity.SalesOrderItem {
 	return &entity.SalesOrderItem{
 		Sequence: seq, ItemCode: item, RequestedQty: qty,

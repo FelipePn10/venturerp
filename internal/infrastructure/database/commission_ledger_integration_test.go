@@ -111,7 +111,7 @@ func TestCommissionLedgerAccruesForEveryRepresentativeInTheSplit(t *testing.T) {
 	}
 	for _, code := range []int64{principal, parceiro} {
 		documento := strconv.FormatInt(code, 10)
-		if _, err := pool.Exec(ctx, `INSERT INTO representatives(code,name,document_number,is_active,blocked) VALUES($1,'Rep '||$2,$2,TRUE,FALSE)`, code, documento); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO representatives(code,name,document_number,is_active,blocked,enterprise_code) VALUES($1,'Rep '||$2,$2,TRUE,FALSE,$3)`, code, documento, enterpriseCode); err != nil {
 			t.Fatal(err)
 		}
 	}

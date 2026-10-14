@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
@@ -92,13 +92,13 @@ func NewOperation(
 	createdBy uuid.UUID,
 ) (*Operation, error) {
 	if code <= 0 {
-		return nil, errors.New("o código da operação deve ser maior que zero")
+		return nil, domainerr.NewValidation("o código da operação deve ser maior que zero")
 	}
 	if name == "" {
-		return nil, errors.New("informe o nome da operação")
+		return nil, domainerr.NewValidation("informe o nome da operação")
 	}
 	if standardTime < 0 {
-		return nil, errors.New("o tempo padrão não pode ser negativo")
+		return nil, domainerr.NewValidation("o tempo padrão não pode ser negativo")
 	}
 	return &Operation{
 		Code:                code,
@@ -148,16 +148,16 @@ func NewManufacturingRoute(
 	createdBy uuid.UUID,
 ) (*ManufacturingRoute, error) {
 	if code <= 0 {
-		return nil, errors.New("o código do roteiro deve ser maior que zero")
+		return nil, domainerr.NewValidation("o código do roteiro deve ser maior que zero")
 	}
 	if itemCode <= 0 {
-		return nil, errors.New("o item deve ser um código maior que zero")
+		return nil, domainerr.NewValidation("o item deve ser um código maior que zero")
 	}
 	if alternative <= 0 {
 		alternative = 1
 	}
 	if validFrom != nil && validTo != nil && validTo.Before(*validFrom) {
-		return nil, errors.New("o fim da vigência não pode ser anterior ao início")
+		return nil, domainerr.NewValidation("o fim da vigência não pode ser anterior ao início")
 	}
 	return &ManufacturingRoute{
 		Code:        code,
@@ -271,13 +271,13 @@ func NewRouteOperation(
 	notes *string,
 ) (*RouteOperation, error) {
 	if routeID <= 0 {
-		return nil, errors.New("o roteiro deve ser um código maior que zero")
+		return nil, domainerr.NewValidation("o roteiro deve ser um código maior que zero")
 	}
 	if sequence <= 0 {
-		return nil, errors.New("a sequência deve ser maior que zero")
+		return nil, domainerr.NewValidation("a sequência deve ser maior que zero")
 	}
 	if operationID <= 0 {
-		return nil, errors.New("a operação deve ser um código maior que zero")
+		return nil, domainerr.NewValidation("a operação deve ser um código maior que zero")
 	}
 	return &RouteOperation{
 		RouteID:      routeID,

@@ -46,14 +46,14 @@ func (uc *APSUseCase) RescheduleSequence(ctx context.Context, dto request.Resche
 	if dto.NewMachineID != nil {
 		selection, ok := uc.repo.(repository.SelectionRepository)
 		if !ok {
-			return nil, fmt.Errorf("a reprogramação de máquina não está disponível")
+			return nil, errorsuc.NewValidationError("a reprogramação de máquina não está disponível")
 		}
 		candidates, loadErr := selection.ListCandidateMachines(ctx, target.WorkCenterID, []int64{*dto.NewMachineID})
 		if loadErr != nil {
 			return nil, loadErr
 		}
 		if len(candidates) != 1 {
-			return nil, fmt.Errorf("a máquina não pertence ao centro de trabalho selecionado nem à empresa autenticada")
+			return nil, errorsuc.NewValidationError("a máquina não pertence ao centro de trabalho selecionado nem à empresa autenticada")
 		}
 		target.MachineID = dto.NewMachineID
 	} else if dto.NewWorkCenterID != nil {
@@ -74,10 +74,14 @@ func (uc *APSUseCase) RescheduleSequence(ctx context.Context, dto request.Resche
 		}
 	}
 
+	warnings, errCap := uc.capacityWarnings(ctx, moved, shifted)
 	out := &response.RescheduleResultResponse{
 		Moved:          rescheduledBar(moved),
 		CascadeApplied: cascade,
-		Warnings:       uc.capacityWarnings(ctx, moved, shifted),
+		Warnings:       warnings,
+	}
+	if errCap != nil {
+		out.CapacityCheckError = "o remanejamento foi gravado, mas não foi possível conferir a capacidade dos centros: " + errCap.Error()
 	}
 	for _, s := range shifted {
 		out.Shifted = append(out.Shifted, rescheduledBar(s))
@@ -185,7 +189,7 @@ func (uc *APSUseCase) orderEdges(ctx context.Context, orderID int64, seqs []*ent
 // capacityWarnings flags every day on which a touched work center is now scheduled
 // beyond its available hours. It aggregates the per-day overlap hours of all
 // sequences on the affected work centers within the days the move actually touched.
-func (uc *APSUseCase) capacityWarnings(ctx context.Context, moved *entity.ProductionSequence, shifted []*entity.ProductionSequence) []response.CapacityWarningResponse {
+func (uc *APSUseCase) capacityWarnings(ctx context.Context, moved *entity.ProductionSequence, shifted []*entity.ProductionSequence) ([]response.CapacityWarningResponse, error) {
 	touched := append([]*entity.ProductionSequence{moved}, shifted...)
 
 	wcSet := map[int64]bool{}
@@ -215,13 +219,16 @@ func (uc *APSUseCase) capacityWarnings(ctx context.Context, moved *entity.Produc
 
 	var warnings []response.CapacityWarningResponse
 	for wc := range wcSet {
-		capHours, _ := uc.repo.GetWorkCenterCapacity(ctx, wc)
+		capHours, err := uc.repo.GetWorkCenterCapacity(ctx, wc)
+		if err != nil {
+			return warnings, fmt.Errorf("capacidade do centro %d: %w", wc, err)
+		}
 		if capHours <= 0 {
 			capHours = 8
 		}
 		seqs, err := uc.repo.ListByWorkCenter(ctx, wc, from, to)
 		if err != nil {
-			continue
+			return warnings, fmt.Errorf("programação do centro %d: %w", wc, err)
 		}
 		perDay := map[string]float64{}
 		for _, s := range seqs {
@@ -252,7 +259,7 @@ func (uc *APSUseCase) capacityWarnings(ctx context.Context, moved *entity.Produc
 		}
 		return warnings[i].WorkCenterID < warnings[j].WorkCenterID
 	})
-	return warnings
+	return warnings, nil
 }
 
 // dayOverlapHours is the number of hours the interval [start, end) spends inside the

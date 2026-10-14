@@ -74,7 +74,7 @@ func (uc *ConfiguratorUseCase) GenerateMasks(ctx context.Context, dto request.Cf
 			})
 		}
 		if len(opts) == 0 {
-			return nil, fmt.Errorf("característica %s não possui variáveis ativas válidas", ic.CharCode)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s não possui variáveis ativas válidas", ic.CharCode))
 		}
 		dims = append(dims, opts)
 	}
@@ -86,7 +86,7 @@ func (uc *ConfiguratorUseCase) GenerateMasks(ctx context.Context, dto request.Cf
 	for _, d := range dims {
 		total *= len(d)
 		if total > maxCombinations {
-			return nil, fmt.Errorf("produto cartesiano excede %d combinações — restrinja mais características", maxCombinations)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("produto cartesiano excede %d combinações — restrinja mais características", maxCombinations))
 		}
 	}
 
@@ -165,7 +165,9 @@ func (uc *ConfiguratorUseCase) persistMask(ctx context.Context, dto request.CfgG
 		return fmt.Errorf("persistindo máscara: %w", err)
 	}
 	for _, a := range answers {
-		_ = uc.Q.InsertCfgItemMaskAnswer(ctx, maskID, a.CharacteristicID, pgutil.ToPgInt8Ptr(a.VariableID), a.Value, int32(a.Position))
+		if err := uc.Q.InsertCfgItemMaskAnswer(ctx, maskID, a.CharacteristicID, pgutil.ToPgInt8Ptr(a.VariableID), a.Value, int32(a.Position)); err != nil {
+			return fmt.Errorf("gravando a resposta da máscara: %w", err)
+		}
 	}
 	return nil
 }

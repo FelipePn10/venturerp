@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,10 +34,10 @@ type PurchaseRequisition struct {
 
 func NewPurchaseRequisition(code, enterpriseCode int64, createdBy uuid.UUID) (*PurchaseRequisition, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if enterpriseCode == 0 {
-		return nil, fmt.Errorf("informe a empresa")
+		return nil, domainerr.NewValidation("informe a empresa")
 	}
 	now := time.Now()
 	return &PurchaseRequisition{

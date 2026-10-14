@@ -9,6 +9,8 @@ import (
 
 // ProductionOrderResponse is the API representation of a production order (OF).
 type ProductionOrderResponse struct {
+	// CostPending: OF encerrada sem custo real apurado (motivo).
+	CostPending    *string    `json:"cost_pending,omitempty"`
 	ID             int64      `json:"id"`
 	OrderNumber    int64      `json:"order_number"`
 	PlannedOrderID *int64     `json:"planned_order_id,omitempty"`

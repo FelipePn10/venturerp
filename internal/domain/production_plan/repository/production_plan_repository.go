@@ -2,13 +2,13 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_plan/entity"
 )
 
-var ErrAlreadyExists = errors.New("já existe um plano de produção com este código")
-var ErrNotFound = errors.New("plano de produção não encontrado")
+var ErrAlreadyExists = domainerr.NewConflict("já existe um plano de produção com este código")
+var ErrNotFound = domainerr.NewNotFound("plano de produção não encontrado")
 
 type ProductionPlanRepository interface {
 	Create(ctx context.Context, plan *entity.ProductionPlan) (*entity.ProductionPlan, error)

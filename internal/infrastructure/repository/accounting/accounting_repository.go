@@ -2,8 +2,12 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 	"time"
 
 	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
@@ -24,15 +28,29 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) *AccountingRepositorySQLC {
 	return &AccountingRepositorySQLC{q: q, pool: pool}
 }
 
+// Plano, contas e demonstrativos são da empresa da sessão; conta é da empresa
+// do seu plano. Registro de outra empresa responde como inexistente.
+func naoAchou(err error, msg string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(msg)
+	}
+	return err
+}
+
 // ─── Accounting Plans ─────────────────────────────────────────────────────────
 
 func (r *AccountingRepositorySQLC) CreateAccountingPlan(ctx context.Context, p *accountingEntity.AccountingPlan) (*accountingEntity.AccountingPlan, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateAccountingPlan(ctx, sqlc.CreateAccountingPlanParams{
-		PlanNumber:  int32(p.PlanNumber),
-		Description: p.Description,
-		ValidFrom:   pgutil.ToPgDate(p.ValidFrom),
-		ValidTo:     pgutil.ToPgDateFromPtr(p.ValidTo),
-		Status:      string(p.Status),
+		EnterpriseID: emp,
+		PlanNumber:   int32(p.PlanNumber),
+		Description:  p.Description,
+		ValidFrom:    pgutil.ToPgDate(p.ValidFrom),
+		ValidTo:      pgutil.ToPgDateFromPtr(p.ValidTo),
+		Status:       string(p.Status),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating accounting plan: %w", err)
@@ -41,15 +59,23 @@ func (r *AccountingRepositorySQLC) CreateAccountingPlan(ctx context.Context, p *
 }
 
 func (r *AccountingRepositorySQLC) GetAccountingPlan(ctx context.Context, id int64) (*accountingEntity.AccountingPlan, error) {
-	row, err := r.q.GetAccountingPlan(ctx, id)
+	emp, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting accounting plan %d: %w", id, err)
+		return nil, err
+	}
+	row, err := r.q.GetAccountingPlan(ctx, id, emp)
+	if err != nil {
+		return nil, naoAchou(fmt.Errorf("getting accounting plan %d: %w", id, err), fmt.Sprintf("plano de contas %d não encontrado", id))
 	}
 	return planRowToEntity(row), nil
 }
 
 func (r *AccountingRepositorySQLC) ListAccountingPlans(ctx context.Context) ([]*accountingEntity.AccountingPlan, error) {
-	rows, err := r.q.ListAccountingPlans(ctx)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAccountingPlans(ctx, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing accounting plans: %w", err)
 	}
@@ -61,16 +87,21 @@ func (r *AccountingRepositorySQLC) ListAccountingPlans(ctx context.Context) ([]*
 }
 
 func (r *AccountingRepositorySQLC) UpdateAccountingPlan(ctx context.Context, p *accountingEntity.AccountingPlan) (*accountingEntity.AccountingPlan, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateAccountingPlan(ctx, sqlc.UpdateAccountingPlanParams{
-		ID:          p.ID,
-		PlanNumber:  int32(p.PlanNumber),
-		Description: p.Description,
-		ValidFrom:   pgutil.ToPgDate(p.ValidFrom),
-		ValidTo:     pgutil.ToPgDateFromPtr(p.ValidTo),
-		Status:      string(p.Status),
+		EnterpriseID: emp,
+		ID:           p.ID,
+		PlanNumber:   int32(p.PlanNumber),
+		Description:  p.Description,
+		ValidFrom:    pgutil.ToPgDate(p.ValidFrom),
+		ValidTo:      pgutil.ToPgDateFromPtr(p.ValidTo),
+		Status:       string(p.Status),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("updating accounting plan %d: %w", p.ID, err)
+		return nil, naoAchou(fmt.Errorf("updating accounting plan %d: %w", p.ID, err), fmt.Sprintf("plano de contas %d não encontrado", p.ID))
 	}
 	return planRowToEntity(row), nil
 }
@@ -90,7 +121,12 @@ func planRowToEntity(row sqlc.AccountingPlanRow) *accountingEntity.AccountingPla
 // ─── Accounting Accounts ──────────────────────────────────────────────────────
 
 func (r *AccountingRepositorySQLC) CreateAccountingAccount(ctx context.Context, a *accountingEntity.AccountingAccount) (*accountingEntity.AccountingAccount, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateAccountingAccount(ctx, sqlc.CreateAccountingAccountParams{
+		EnterpriseID:       emp,
 		PlanID:             a.PlanID,
 		ParentID:           a.ParentID,
 		AccountNumber:      a.AccountNumber,
@@ -103,21 +139,29 @@ func (r *AccountingRepositorySQLC) CreateAccountingAccount(ctx context.Context, 
 		IsAnalytic:         a.IsAnalytic,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating accounting account: %w", err)
+		return nil, naoAchou(fmt.Errorf("creating accounting account: %w", err), "plano de contas ou conta superior não encontrados nesta empresa")
 	}
 	return accountRowToEntity(row), nil
 }
 
 func (r *AccountingRepositorySQLC) GetAccountingAccount(ctx context.Context, id int64) (*accountingEntity.AccountingAccount, error) {
-	row, err := r.q.GetAccountingAccount(ctx, id)
+	emp, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting accounting account %d: %w", id, err)
+		return nil, err
+	}
+	row, err := r.q.GetAccountingAccount(ctx, id, emp)
+	if err != nil {
+		return nil, naoAchou(fmt.Errorf("getting accounting account %d: %w", id, err), fmt.Sprintf("conta contábil %d não encontrada", id))
 	}
 	return accountRowToEntity(row), nil
 }
 
 func (r *AccountingRepositorySQLC) ListAccountingAccountsByPlan(ctx context.Context, planID int64) ([]*accountingEntity.AccountingAccount, error) {
-	rows, err := r.q.ListAccountingAccountsByPlan(ctx, planID)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAccountingAccountsByPlan(ctx, planID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing accounting accounts for plan %d: %w", planID, err)
 	}
@@ -129,7 +173,12 @@ func (r *AccountingRepositorySQLC) ListAccountingAccountsByPlan(ctx context.Cont
 }
 
 func (r *AccountingRepositorySQLC) UpdateAccountingAccount(ctx context.Context, a *accountingEntity.AccountingAccount) (*accountingEntity.AccountingAccount, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateAccountingAccount(ctx, sqlc.UpdateAccountingAccountParams{
+		EnterpriseID:       emp,
 		ID:                 a.ID,
 		PlanID:             a.PlanID,
 		ParentID:           a.ParentID,
@@ -143,7 +192,7 @@ func (r *AccountingRepositorySQLC) UpdateAccountingAccount(ctx context.Context, 
 		IsAnalytic:         a.IsAnalytic,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("updating accounting account %d: %w", a.ID, err)
+		return nil, naoAchou(fmt.Errorf("updating accounting account %d: %w", a.ID, err), fmt.Sprintf("conta contábil %d não encontrada", a.ID))
 	}
 	return accountRowToEntity(row), nil
 }
@@ -216,20 +265,29 @@ func refAccountRowToEntity(row sqlc.ReferenceAccountRow) *accountingEntity.Accou
 // ─── Account Refs ─────────────────────────────────────────────────────────────
 
 func (r *AccountingRepositorySQLC) CreateAccountRef(ctx context.Context, ref *accountingEntity.AccountingAccountRef) (*accountingEntity.AccountingAccountRef, error) {
+	empresa, err := empresaDaSessao(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateAccountRef(ctx, sqlc.CreateAccountRefParams{
 		AccountID:    ref.AccountID,
 		RefAccountID: ref.RefAccountID,
-		EmpresaID:    int32(ref.EmpresaID),
+		EmpresaID:    empresa,
 		CostCenterID: ref.CostCenterID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating account ref: %w", err)
+		return nil, naoAchou(fmt.Errorf("creating account ref: %w", err), fmt.Sprintf("conta contábil %d não encontrada", ref.AccountID))
 	}
 	return accountRefRowToEntity(row), nil
 }
 
-func (r *AccountingRepositorySQLC) ListAccountRefs(ctx context.Context, empresaID int) ([]*accountingEntity.AccountingAccountRef, error) {
-	rows, err := r.q.ListAccountRefs(ctx, int32(empresaID))
+// ListAccountRefs ignora o empresaID recebido em favor da empresa da sessão.
+func (r *AccountingRepositorySQLC) ListAccountRefs(ctx context.Context, _ int) ([]*accountingEntity.AccountingAccountRef, error) {
+	empresa, err := empresaDaSessao(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAccountRefs(ctx, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing account refs: %w", err)
 	}
@@ -285,7 +343,7 @@ func (r *AccountingRepositorySQLC) CreateJournalEntry(ctx context.Context, e *ac
 		EntryType:       e.EntryType,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating journal entry: %w", err)
+		return nil, naoAchou(fmt.Errorf("creating journal entry: %w", err), "plano ou conta do lançamento não encontrados nesta empresa")
 	}
 	return journalEntryRowToEntity(row), nil
 }
@@ -336,10 +394,15 @@ func journalEntryRowToEntity(row sqlc.JournalEntryRow) *accountingEntity.Account
 // ─── Demonstratives ───────────────────────────────────────────────────────────
 
 func (r *AccountingRepositorySQLC) CreateDemonstrative(ctx context.Context, d *accountingEntity.AccountingDemonstrative) (*accountingEntity.AccountingDemonstrative, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateDemonstrative(ctx, sqlc.CreateDemonstrativeParams{
-		Code:        d.Code,
-		Description: d.Description,
-		TermText:    d.TermText,
+		EnterpriseID: emp,
+		Code:         d.Code,
+		Description:  d.Description,
+		TermText:     d.TermText,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating demonstrative: %w", err)
@@ -348,15 +411,23 @@ func (r *AccountingRepositorySQLC) CreateDemonstrative(ctx context.Context, d *a
 }
 
 func (r *AccountingRepositorySQLC) GetDemonstrative(ctx context.Context, id int64) (*accountingEntity.AccountingDemonstrative, error) {
-	row, err := r.q.GetDemonstrative(ctx, id)
+	emp, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting demonstrative %d: %w", id, err)
+		return nil, err
+	}
+	row, err := r.q.GetDemonstrative(ctx, id, emp)
+	if err != nil {
+		return nil, naoAchou(fmt.Errorf("getting demonstrative %d: %w", id, err), fmt.Sprintf("demonstrativo %d não encontrado", id))
 	}
 	return demonstrativeRowToEntity(row), nil
 }
 
 func (r *AccountingRepositorySQLC) ListDemonstratives(ctx context.Context) ([]*accountingEntity.AccountingDemonstrative, error) {
-	rows, err := r.q.ListDemonstratives(ctx)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListDemonstratives(ctx, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing demonstratives: %w", err)
 	}
@@ -380,7 +451,12 @@ func demonstrativeRowToEntity(row sqlc.DemonstrativeRow) *accountingEntity.Accou
 // ─── Demonstrative Items ──────────────────────────────────────────────────────
 
 func (r *AccountingRepositorySQLC) CreateDemonstrativeItem(ctx context.Context, item *accountingEntity.AccountingDemonstrativeItem) (*accountingEntity.AccountingDemonstrativeItem, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateDemonstrativeItem(ctx, sqlc.CreateDemonstrativeItemParams{
+		EnterpriseID:    emp,
 		DemonstrativeID: item.DemonstrativeID,
 		ItemCode:        int32(item.ItemCode),
 		Description:     item.Description,
@@ -394,13 +470,17 @@ func (r *AccountingRepositorySQLC) CreateDemonstrativeItem(ctx context.Context, 
 		SpedEcfType:     item.SpedEcfType,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating demonstrative item: %w", err)
+		return nil, naoAchou(fmt.Errorf("creating demonstrative item: %w", err), fmt.Sprintf("demonstrativo %d não encontrado", item.DemonstrativeID))
 	}
 	return demonstrativeItemRowToEntity(row), nil
 }
 
 func (r *AccountingRepositorySQLC) ListDemonstrativeItems(ctx context.Context, demonstrativeID int64) ([]*accountingEntity.AccountingDemonstrativeItem, error) {
-	rows, err := r.q.ListDemonstrativeItems(ctx, demonstrativeID)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListDemonstrativeItems(ctx, demonstrativeID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing demonstrative items: %w", err)
 	}

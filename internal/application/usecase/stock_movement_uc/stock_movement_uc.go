@@ -2,7 +2,7 @@ package stock_movement_uc
 
 import (
 	"context"
-	"errors"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock_movement/entity"
@@ -19,10 +19,10 @@ func New(repo repository.StockMovementTypeRepository) *StockMovementTypeUseCase 
 
 func (uc *StockMovementTypeUseCase) Create(ctx context.Context, s *entity.StockMovementType) (*response.StockMovementTypeResponse, error) {
 	if s.Sigla == "" {
-		return nil, errors.New("sigla é obrigatória")
+		return nil, errorsuc.NewValidationError("sigla é obrigatória")
 	}
 	if s.Description == "" {
-		return nil, errors.New("descrição é obrigatória")
+		return nil, errorsuc.NewValidationError("descrição é obrigatória")
 	}
 	if s.UsageType == "" {
 		s.UsageType = entity.UsageGeral
@@ -41,7 +41,7 @@ func (uc *StockMovementTypeUseCase) Create(ctx context.Context, s *entity.StockM
 
 func (uc *StockMovementTypeUseCase) Update(ctx context.Context, s *entity.StockMovementType) (*response.StockMovementTypeResponse, error) {
 	if s.ID == 0 {
-		return nil, errors.New("identificador é obrigatório")
+		return nil, errorsuc.NewValidationError("identificador é obrigatório")
 	}
 	updated, err := uc.Repo.Update(ctx, s)
 	if err != nil {

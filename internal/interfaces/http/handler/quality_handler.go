@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -14,13 +13,12 @@ import (
 
 func (h *QualityHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateInspectionPlanDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreatePlan(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -48,7 +46,7 @@ func (h *QualityHandler) ListPlansByItem(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.uc.ListPlansByItem(r.Context(), itemCode)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -61,7 +59,7 @@ func (h *QualityHandler) DeactivatePlan(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := h.uc.DeactivatePlan(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -71,13 +69,12 @@ func (h *QualityHandler) DeactivatePlan(w http.ResponseWriter, r *http.Request) 
 
 func (h *QualityHandler) AddCharacteristic(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddCharacteristicDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.AddCharacteristic(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -87,13 +84,12 @@ func (h *QualityHandler) AddCharacteristic(w http.ResponseWriter, r *http.Reques
 
 func (h *QualityHandler) CreateRecord(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateQualityRecordDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateRecord(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -121,7 +117,7 @@ func (h *QualityHandler) ListRecordsByOrder(w http.ResponseWriter, r *http.Reque
 	}
 	result, err := h.uc.ListRecordsByOrder(r.Context(), orderID)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -135,7 +131,7 @@ func (h *QualityHandler) ListRecordsByItem(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.uc.ListRecordsByItem(r.Context(), itemCode)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -145,13 +141,12 @@ func (h *QualityHandler) ListRecordsByItem(w http.ResponseWriter, r *http.Reques
 
 func (h *QualityHandler) CreateNC(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateNCDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateNC(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -174,7 +169,7 @@ func (h *QualityHandler) GetNC(w http.ResponseWriter, r *http.Request) {
 func (h *QualityHandler) ListOpenNCs(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListOpenNCs(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -188,7 +183,7 @@ func (h *QualityHandler) ListNCsByItem(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.ListNCsByItem(r.Context(), itemCode)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -201,12 +196,11 @@ func (h *QualityHandler) DispositionNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.DispositionNCDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.uc.DispositionNC(r.Context(), id, dto); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

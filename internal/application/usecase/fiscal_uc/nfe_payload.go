@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
 
@@ -43,10 +44,10 @@ func resolverPlanoDaNota(
 	exit *entity.FiscalExit,
 	customers customerrepo.CustomerRepository,
 	orders salesrepo.SalesOrderRepository,
-) PlanoDaNota {
+) (PlanoDaNota, error) {
 	plano := PlanoDaNota{Origem: "SEM_CONDICAO"}
 	if exit == nil {
-		return plano
+		return plano, nil
 	}
 
 	total := decimal.NewFromFloat(exit.ValorTotal)
@@ -56,18 +57,38 @@ func resolverPlanoDaNota(
 		datas.Entrega = exit.DataSaida
 	}
 
+	// Pedido, cliente ou condição inexistente seguem para a próxima fonte; falha
+	// de leitura é erro. Antes qualquer falha virava "à vista" em silêncio, e a
+	// nota ia para a SEFAZ com as duplicatas erradas.
+	ausente := func(err error) bool { return err != nil && errorsuc.EhNaoEncontrado(err) }
 	var cond *customerentity.PaymentCondition
 	if customers != nil {
 		if exit.SalesOrderCode != nil && orders != nil {
-			if order, err := orders.GetByCode(ctx, *exit.SalesOrderCode); err == nil && order != nil && order.PaymentTermCode != nil {
-				if c, err := customers.GetPaymentConditionByCode(ctx, *order.PaymentTermCode); err == nil && c != nil {
+			order, err := orders.GetByCode(ctx, *exit.SalesOrderCode)
+			if err != nil && !ausente(err) {
+				return plano, fmt.Errorf("lendo o pedido da nota para a condição de pagamento: %w", err)
+			}
+			if err == nil && order != nil && order.PaymentTermCode != nil {
+				c, err := customers.GetPaymentConditionByCode(ctx, *order.PaymentTermCode)
+				if err != nil && !ausente(err) {
+					return plano, fmt.Errorf("lendo a condição de pagamento do pedido: %w", err)
+				}
+				if err == nil && c != nil {
 					cond, plano.Origem = c, "PEDIDO_DE_VENDA"
 				}
 			}
 		}
 		if cond == nil && exit.CustomerCode != nil {
-			if cliente, err := customers.GetCustomerByCode(ctx, *exit.CustomerCode); err == nil && cliente != nil && cliente.PaymentConditionID != nil {
-				if c, err := customers.GetPaymentConditionByID(ctx, *cliente.PaymentConditionID); err == nil && c != nil {
+			cliente, err := customers.GetCustomerByCode(ctx, *exit.CustomerCode)
+			if err != nil && !ausente(err) {
+				return plano, fmt.Errorf("lendo o cliente da nota para a condição de pagamento: %w", err)
+			}
+			if err == nil && cliente != nil && cliente.PaymentConditionID != nil {
+				c, err := customers.GetPaymentConditionByID(ctx, *cliente.PaymentConditionID)
+				if err != nil && !ausente(err) {
+					return plano, fmt.Errorf("lendo a condição de pagamento do cliente: %w", err)
+				}
+				if err == nil && c != nil {
 					cond, plano.Origem = c, "CADASTRO_DO_CLIENTE"
 				}
 			}
@@ -82,7 +103,7 @@ func resolverPlanoDaNota(
 			Numero: 1, Percentual: decimal.NewFromInt(100), Valor: total.Round(2),
 			Vencimento: exit.DataEmissao, Evento: customerentity.BaseEmissao, Descricao: "à vista",
 		}}
-		return plano
+		return plano, nil
 	}
 
 	plano.CondicaoCode = &cond.Code
@@ -96,10 +117,10 @@ func resolverPlanoDaNota(
 			Numero: 1, Percentual: decimal.NewFromInt(100), Valor: total.Round(2),
 			Vencimento: exit.DataEmissao, Evento: customerentity.BaseEmissao, Descricao: "à vista",
 		}}
-		return plano
+		return plano, nil
 	}
 	plano.Parcelas = parcelas
-	return plano
+	return plano, nil
 }
 
 // formaPagamentoNFe traduz a parcela para o código da SEFAZ (tabela tPag).

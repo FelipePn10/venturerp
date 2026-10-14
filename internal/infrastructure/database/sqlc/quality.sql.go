@@ -3,14 +3,21 @@ package sqlc
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// Isolamento por empresa: planos, registros e não conformidades não têm
+// coluna de empresa — a empresa é a do item (código único no banco). Toda
+// consulta filtra pelo item da empresa da sessão, e a gravação recusa item ou
+// plano de outra empresa (volta "nenhuma linha", traduzido para 404).
 
 // ─── inspection plans ────────────────────────────────────────────────────────
 
 const createInspectionPlan = `INSERT INTO inspection_plans
 (item_code, route_operation_id, point_type, description, sample_size, acceptance_level, instructions, is_active, created_by)
-VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8)
+SELECT $1,$2,$3,$4,$5,$6,$7,TRUE,$8
+WHERE EXISTS (SELECT 1 FROM items it WHERE it.code = $1 AND it.enterprise_id = $9)
 RETURNING id, item_code, route_operation_id, point_type, description, sample_size, acceptance_level, instructions, is_active, created_at, updated_at, created_by`
 
 type CreateInspectionPlanParams struct {
@@ -22,12 +29,13 @@ type CreateInspectionPlanParams struct {
 	AcceptanceLevel  float64
 	Instructions     pgtype.Text
 	CreatedBy        pgtype.UUID
+	EnterpriseID     int64
 }
 
 func (q *Queries) CreateInspectionPlan(ctx context.Context, arg CreateInspectionPlanParams) (InspectionPlan, error) {
 	row := q.db.QueryRow(ctx, createInspectionPlan,
 		arg.ItemCode, arg.RouteOperationID, arg.PointType, arg.Description,
-		arg.SampleSize, arg.AcceptanceLevel, arg.Instructions, arg.CreatedBy,
+		arg.SampleSize, arg.AcceptanceLevel, arg.Instructions, arg.CreatedBy, arg.EnterpriseID,
 	)
 	var i InspectionPlan
 	err := row.Scan(&i.ID, &i.ItemCode, &i.RouteOperationID, &i.PointType,
@@ -36,10 +44,10 @@ func (q *Queries) CreateInspectionPlan(ctx context.Context, arg CreateInspection
 	return i, err
 }
 
-const getInspectionPlanByID = `SELECT id, item_code, route_operation_id, point_type, description, sample_size, acceptance_level, instructions, is_active, created_at, updated_at, created_by FROM inspection_plans WHERE id = $1`
+const getInspectionPlanByID = `SELECT id, item_code, route_operation_id, point_type, description, sample_size, acceptance_level, instructions, is_active, created_at, updated_at, created_by FROM inspection_plans p WHERE id = $1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = p.item_code AND it.enterprise_id = $2)`
 
-func (q *Queries) GetInspectionPlanByID(ctx context.Context, id int64) (InspectionPlan, error) {
-	row := q.db.QueryRow(ctx, getInspectionPlanByID, id)
+func (q *Queries) GetInspectionPlanByID(ctx context.Context, id, enterpriseID int64) (InspectionPlan, error) {
+	row := q.db.QueryRow(ctx, getInspectionPlanByID, id, enterpriseID)
 	var i InspectionPlan
 	err := row.Scan(&i.ID, &i.ItemCode, &i.RouteOperationID, &i.PointType,
 		&i.Description, &i.SampleSize, &i.AcceptanceLevel, &i.Instructions,
@@ -47,10 +55,10 @@ func (q *Queries) GetInspectionPlanByID(ctx context.Context, id int64) (Inspecti
 	return i, err
 }
 
-const listPlansByItem = `SELECT id, item_code, route_operation_id, point_type, description, sample_size, acceptance_level, instructions, is_active, created_at, updated_at, created_by FROM inspection_plans WHERE item_code = $1 AND is_active = TRUE ORDER BY point_type, id`
+const listPlansByItem = `SELECT id, item_code, route_operation_id, point_type, description, sample_size, acceptance_level, instructions, is_active, created_at, updated_at, created_by FROM inspection_plans p WHERE item_code = $1 AND is_active = TRUE AND EXISTS (SELECT 1 FROM items it WHERE it.code = p.item_code AND it.enterprise_id = $2) ORDER BY point_type, id`
 
-func (q *Queries) ListPlansByItem(ctx context.Context, itemCode int64) ([]InspectionPlan, error) {
-	rows, err := q.db.Query(ctx, listPlansByItem, itemCode)
+func (q *Queries) ListPlansByItem(ctx context.Context, itemCode, enterpriseID int64) ([]InspectionPlan, error) {
+	rows, err := q.db.Query(ctx, listPlansByItem, itemCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,17 +76,22 @@ func (q *Queries) ListPlansByItem(ctx context.Context, itemCode int64) ([]Inspec
 	return items, rows.Err()
 }
 
-const deactivateInspectionPlan = `UPDATE inspection_plans SET is_active=FALSE, updated_at=NOW() WHERE id=$1`
+const deactivateInspectionPlan = `UPDATE inspection_plans p SET is_active=FALSE, updated_at=NOW() WHERE id=$1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = p.item_code AND it.enterprise_id = $2)`
 
-func (q *Queries) DeactivateInspectionPlan(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deactivateInspectionPlan, id)
+func (q *Queries) DeactivateInspectionPlan(ctx context.Context, id, enterpriseID int64) error {
+	tag, err := q.db.Exec(ctx, deactivateInspectionPlan, id, enterpriseID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 
 // ─── characteristics ─────────────────────────────────────────────────────────
 
 const addCharacteristic = `INSERT INTO inspection_plan_characteristics (plan_id,name,nominal,tolerance_upper,tolerance_lower,unit,is_critical)
-VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,plan_id,name,nominal,tolerance_upper,tolerance_lower,unit,is_critical`
+SELECT $1,$2,$3,$4,$5,$6,$7
+WHERE EXISTS (SELECT 1 FROM inspection_plans p WHERE p.id = $1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = p.item_code AND it.enterprise_id = $8))
+RETURNING id,plan_id,name,nominal,tolerance_upper,tolerance_lower,unit,is_critical`
 
 type AddCharacteristicParams struct {
 	PlanID         int64
@@ -88,20 +101,22 @@ type AddCharacteristicParams struct {
 	ToleranceLower pgtype.Float8
 	Unit           pgtype.Text
 	IsCritical     bool
+	EnterpriseID   int64
 }
 
 func (q *Queries) AddCharacteristic(ctx context.Context, arg AddCharacteristicParams) (InspectionPlanCharacteristic, error) {
 	row := q.db.QueryRow(ctx, addCharacteristic,
-		arg.PlanID, arg.Name, arg.Nominal, arg.ToleranceUpper, arg.ToleranceLower, arg.Unit, arg.IsCritical)
+		arg.PlanID, arg.Name, arg.Nominal, arg.ToleranceUpper, arg.ToleranceLower, arg.Unit, arg.IsCritical, arg.EnterpriseID)
 	var i InspectionPlanCharacteristic
 	err := row.Scan(&i.ID, &i.PlanID, &i.Name, &i.Nominal, &i.ToleranceUpper, &i.ToleranceLower, &i.Unit, &i.IsCritical)
 	return i, err
 }
 
-const listCharacteristics = `SELECT id,plan_id,name,nominal,tolerance_upper,tolerance_lower,unit,is_critical FROM inspection_plan_characteristics WHERE plan_id=$1`
+const listCharacteristics = `SELECT id,plan_id,name,nominal,tolerance_upper,tolerance_lower,unit,is_critical FROM inspection_plan_characteristics c WHERE plan_id=$1
+AND EXISTS (SELECT 1 FROM inspection_plans p WHERE p.id = c.plan_id AND EXISTS (SELECT 1 FROM items it WHERE it.code = p.item_code AND it.enterprise_id = $2))`
 
-func (q *Queries) ListCharacteristics(ctx context.Context, planID int64) ([]InspectionPlanCharacteristic, error) {
-	rows, err := q.db.Query(ctx, listCharacteristics, planID)
+func (q *Queries) ListCharacteristics(ctx context.Context, planID, enterpriseID int64) ([]InspectionPlanCharacteristic, error) {
+	rows, err := q.db.Query(ctx, listCharacteristics, planID, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +136,9 @@ func (q *Queries) ListCharacteristics(ctx context.Context, planID int64) ([]Insp
 
 const createQualityRecord = `INSERT INTO quality_records
 (plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_by)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),$10,$11)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),$10,$11
+WHERE EXISTS (SELECT 1 FROM items it WHERE it.code = $4 AND it.enterprise_id = $12)
+  AND EXISTS (SELECT 1 FROM inspection_plans p WHERE p.id = $1 AND p.item_code = $4)
 RETURNING id,plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_at,created_by`
 
 type CreateQualityRecordParams struct {
@@ -136,13 +153,14 @@ type CreateQualityRecordParams struct {
 	InspectorID       pgtype.Int8
 	Notes             pgtype.Text
 	CreatedBy         pgtype.UUID
+	EnterpriseID      int64
 }
 
 func (q *Queries) CreateQualityRecord(ctx context.Context, arg CreateQualityRecordParams) (QualityRecord, error) {
 	row := q.db.QueryRow(ctx, createQualityRecord,
 		arg.PlanID, arg.ProductionOrderID, arg.Lot, arg.ItemCode,
 		arg.InspectedQty, arg.ApprovedQty, arg.RejectedQty,
-		arg.Result, arg.InspectorID, arg.Notes, arg.CreatedBy,
+		arg.Result, arg.InspectorID, arg.Notes, arg.CreatedBy, arg.EnterpriseID,
 	)
 	var i QualityRecord
 	err := row.Scan(&i.ID, &i.PlanID, &i.ProductionOrderID, &i.Lot, &i.ItemCode,
@@ -151,24 +169,31 @@ func (q *Queries) CreateQualityRecord(ctx context.Context, arg CreateQualityReco
 	return i, err
 }
 
-const addMeasurement = `INSERT INTO quality_measurements (record_id,characteristic_id,measured_value,is_conformant) VALUES ($1,$2,$3,$4)`
+const addMeasurement = `INSERT INTO quality_measurements (record_id,characteristic_id,measured_value,is_conformant)
+SELECT $1,$2,$3,$4
+WHERE EXISTS (SELECT 1 FROM quality_records r WHERE r.id = $1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = r.item_code AND it.enterprise_id = $5))
+  AND EXISTS (SELECT 1 FROM inspection_plan_characteristics c JOIN quality_records r ON r.plan_id = c.plan_id WHERE c.id = $2 AND r.id = $1)`
 
 type AddMeasurementParams struct {
 	RecordID         int64
 	CharacteristicID int64
 	MeasuredValue    float64
 	IsConformant     bool
+	EnterpriseID     int64
 }
 
 func (q *Queries) AddMeasurement(ctx context.Context, arg AddMeasurementParams) error {
-	_, err := q.db.Exec(ctx, addMeasurement, arg.RecordID, arg.CharacteristicID, arg.MeasuredValue, arg.IsConformant)
+	tag, err := q.db.Exec(ctx, addMeasurement, arg.RecordID, arg.CharacteristicID, arg.MeasuredValue, arg.IsConformant, arg.EnterpriseID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 
-const getQualityRecordByID = `SELECT id,plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_at,created_by FROM quality_records WHERE id=$1`
+const getQualityRecordByID = `SELECT id,plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_at,created_by FROM quality_records r WHERE id=$1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = r.item_code AND it.enterprise_id = $2)`
 
-func (q *Queries) GetQualityRecordByID(ctx context.Context, id int64) (QualityRecord, error) {
-	row := q.db.QueryRow(ctx, getQualityRecordByID, id)
+func (q *Queries) GetQualityRecordByID(ctx context.Context, id, enterpriseID int64) (QualityRecord, error) {
+	row := q.db.QueryRow(ctx, getQualityRecordByID, id, enterpriseID)
 	var i QualityRecord
 	err := row.Scan(&i.ID, &i.PlanID, &i.ProductionOrderID, &i.Lot, &i.ItemCode,
 		&i.InspectedQty, &i.ApprovedQty, &i.RejectedQty, &i.Result,
@@ -176,10 +201,10 @@ func (q *Queries) GetQualityRecordByID(ctx context.Context, id int64) (QualityRe
 	return i, err
 }
 
-const listRecordsByOrder = `SELECT id,plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_at,created_by FROM quality_records WHERE production_order_id=$1 ORDER BY created_at DESC`
+const listRecordsByOrder = `SELECT id,plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_at,created_by FROM quality_records r WHERE production_order_id=$1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = r.item_code AND it.enterprise_id = $2) ORDER BY created_at DESC`
 
-func (q *Queries) ListRecordsByOrder(ctx context.Context, orderID int64) ([]QualityRecord, error) {
-	rows, err := q.db.Query(ctx, listRecordsByOrder, orderID)
+func (q *Queries) ListRecordsByOrder(ctx context.Context, orderID, enterpriseID int64) ([]QualityRecord, error) {
+	rows, err := q.db.Query(ctx, listRecordsByOrder, orderID, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -197,10 +222,10 @@ func (q *Queries) ListRecordsByOrder(ctx context.Context, orderID int64) ([]Qual
 	return items, rows.Err()
 }
 
-const listRecordsByItem = `SELECT id,plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_at,created_by FROM quality_records WHERE item_code=$1 ORDER BY created_at DESC LIMIT 100`
+const listRecordsByItem = `SELECT id,plan_id,production_order_id,lot,item_code,inspected_qty,approved_qty,rejected_qty,result,inspector_id,inspected_at,notes,created_at,created_by FROM quality_records r WHERE item_code=$1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = r.item_code AND it.enterprise_id = $2) ORDER BY created_at DESC LIMIT 100`
 
-func (q *Queries) ListRecordsByItem(ctx context.Context, itemCode int64) ([]QualityRecord, error) {
-	rows, err := q.db.Query(ctx, listRecordsByItem, itemCode)
+func (q *Queries) ListRecordsByItem(ctx context.Context, itemCode, enterpriseID int64) ([]QualityRecord, error) {
+	rows, err := q.db.Query(ctx, listRecordsByItem, itemCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +247,8 @@ func (q *Queries) ListRecordsByItem(ctx context.Context, itemCode int64) ([]Qual
 
 const createNC = `INSERT INTO non_conformances
 (code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,is_open,created_by)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9
+WHERE EXISTS (SELECT 1 FROM items it WHERE it.code = $4 AND it.enterprise_id = $10)
 RETURNING id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by`
 
 type CreateNCParams struct {
@@ -235,12 +261,13 @@ type CreateNCParams struct {
 	Description       string
 	Severity          NcSeverityEnum
 	CreatedBy         pgtype.UUID
+	EnterpriseID      int64
 }
 
 func (q *Queries) CreateNC(ctx context.Context, arg CreateNCParams) (NonConformance, error) {
 	row := q.db.QueryRow(ctx, createNC,
 		arg.Code, arg.QualityRecordID, arg.ProductionOrderID,
-		arg.ItemCode, arg.Lot, arg.NonConformQty, arg.Description, arg.Severity, arg.CreatedBy,
+		arg.ItemCode, arg.Lot, arg.NonConformQty, arg.Description, arg.Severity, arg.CreatedBy, arg.EnterpriseID,
 	)
 	var i NonConformance
 	err := row.Scan(&i.ID, &i.Code, &i.QualityRecordID, &i.ProductionOrderID, &i.ItemCode,
@@ -250,10 +277,10 @@ func (q *Queries) CreateNC(ctx context.Context, arg CreateNCParams) (NonConforma
 	return i, err
 }
 
-const getNCByID = `SELECT id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by FROM non_conformances WHERE id=$1`
+const getNCByID = `SELECT id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by FROM non_conformances n WHERE id=$1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = n.item_code AND it.enterprise_id = $2)`
 
-func (q *Queries) GetNCByID(ctx context.Context, id int64) (NonConformance, error) {
-	row := q.db.QueryRow(ctx, getNCByID, id)
+func (q *Queries) GetNCByID(ctx context.Context, id, enterpriseID int64) (NonConformance, error) {
+	row := q.db.QueryRow(ctx, getNCByID, id, enterpriseID)
 	var i NonConformance
 	err := row.Scan(&i.ID, &i.Code, &i.QualityRecordID, &i.ProductionOrderID, &i.ItemCode,
 		&i.Lot, &i.NonconformQty, &i.Description, &i.Severity,
@@ -262,10 +289,10 @@ func (q *Queries) GetNCByID(ctx context.Context, id int64) (NonConformance, erro
 	return i, err
 }
 
-const listOpenNCs = `SELECT id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by FROM non_conformances WHERE is_open=TRUE ORDER BY severity,created_at`
+const listOpenNCs = `SELECT id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by FROM non_conformances n WHERE is_open=TRUE AND EXISTS (SELECT 1 FROM items it WHERE it.code = n.item_code AND it.enterprise_id = $1) ORDER BY severity,created_at`
 
-func (q *Queries) ListOpenNCs(ctx context.Context) ([]NonConformance, error) {
-	rows, err := q.db.Query(ctx, listOpenNCs)
+func (q *Queries) ListOpenNCs(ctx context.Context, enterpriseID int64) ([]NonConformance, error) {
+	rows, err := q.db.Query(ctx, listOpenNCs, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -273,10 +300,10 @@ func (q *Queries) ListOpenNCs(ctx context.Context) ([]NonConformance, error) {
 	return scanNCs(rows)
 }
 
-const listNCsByItem = `SELECT id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by FROM non_conformances WHERE item_code=$1 ORDER BY created_at DESC`
+const listNCsByItem = `SELECT id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by FROM non_conformances n WHERE item_code=$1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = n.item_code AND it.enterprise_id = $2) ORDER BY created_at DESC`
 
-func (q *Queries) ListNCsByItem(ctx context.Context, itemCode int64) ([]NonConformance, error) {
-	rows, err := q.db.Query(ctx, listNCsByItem, itemCode)
+func (q *Queries) ListNCsByItem(ctx context.Context, itemCode, enterpriseID int64) ([]NonConformance, error) {
+	rows, err := q.db.Query(ctx, listNCsByItem, itemCode, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -284,16 +311,20 @@ func (q *Queries) ListNCsByItem(ctx context.Context, itemCode int64) ([]NonConfo
 	return scanNCs(rows)
 }
 
-const dispositionNC = `UPDATE non_conformances SET disposition=$2, disposed_at=NOW(), disposed_by=$3, is_open=FALSE, updated_at=NOW() WHERE id=$1`
+const dispositionNC = `UPDATE non_conformances n SET disposition=$2, disposed_at=NOW(), disposed_by=$3, is_open=FALSE, updated_at=NOW() WHERE id=$1 AND EXISTS (SELECT 1 FROM items it WHERE it.code = n.item_code AND it.enterprise_id = $4)`
 
 type DispositionNCParams struct {
-	ID          int64
-	Disposition NcDispositionEnum
-	DisposedBy  pgtype.UUID
+	ID           int64
+	Disposition  NcDispositionEnum
+	DisposedBy   pgtype.UUID
+	EnterpriseID int64
 }
 
 func (q *Queries) DispositionNC(ctx context.Context, arg DispositionNCParams) error {
-	_, err := q.db.Exec(ctx, dispositionNC, arg.ID, arg.Disposition, arg.DisposedBy)
+	tag, err := q.db.Exec(ctx, dispositionNC, arg.ID, arg.Disposition, arg.DisposedBy, arg.EnterpriseID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 

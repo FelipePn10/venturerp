@@ -11,6 +11,7 @@ func toProductionOrderResponse(o *entity.ProductionOrder) *response.ProductionOr
 		return nil
 	}
 	return &response.ProductionOrderResponse{
+		CostPending:    o.CostPending,
 		ID:             o.ID,
 		OrderNumber:    o.OrderNumber,
 		PlannedOrderID: o.PlannedOrderID,

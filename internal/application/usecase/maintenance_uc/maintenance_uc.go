@@ -187,18 +187,24 @@ func (uc *MaintenanceUseCase) GenerateOrders(ctx context.Context, horizonDays in
 		}
 		scheduled := *plan.NextScheduledAt
 		exists, err := uc.repo.ExistsOrderForPlanAndDate(ctx, plan.ID, scheduled)
-		if err != nil || exists {
+		if err != nil {
+			return created, fmt.Errorf("conferindo a ordem do plano %d: %w", plan.ID, err)
+		}
+		if exists {
 			continue
 		}
+		// Plano com dado inválido ou falha ao gravar param a geração dizendo qual
+		// plano: antes ele só não gerava ordem, e a manutenção não acontecia.
 		order, err := entity.NewMaintenanceOrder(
 			plan.ID, &plan.MachineID, plan.WorkCenterID, scheduled, plan.EstimatedHours,
 		)
 		if err != nil {
-			continue
+			return created, errorsuc.NewValidationError(fmt.Sprintf("plano de manutenção %d: %s", plan.ID, err.Error()))
 		}
-		if _, err := uc.repo.CreateOrder(ctx, order); err == nil {
-			created++
+		if _, err := uc.repo.CreateOrder(ctx, order); err != nil {
+			return created, fmt.Errorf("gerando a ordem do plano %d: %w", plan.ID, err)
 		}
+		created++
 	}
 	return created, nil
 }

@@ -89,10 +89,10 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		}
 		line := byCode[item.PurchaseOrderItemCode]
 		if line == nil {
-			return nil, fmt.Errorf("o item %d não pertence ao pedido de compra %d", item.PurchaseOrderItemCode, dto.PurchaseOrderCode)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d não pertence ao pedido de compra %d", item.PurchaseOrderItemCode, dto.PurchaseOrderCode))
 		}
 		if line.Status == poentity.PurchaseOrderItemStatusCANCELLED {
-			return nil, fmt.Errorf("o item %d do pedido de compra está cancelado", item.PurchaseOrderItemCode)
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d do pedido de compra está cancelado", item.PurchaseOrderItemCode))
 		}
 		remaining := line.RequestedQty - line.ReceivedQty - line.CancelledQty
 		toleranceHandled := false
@@ -105,7 +105,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 				toleranceHandled = true
 			}
 			if exceeded && action == "BLOCK" {
-				return nil, fmt.Errorf("purchase tolerance blocked item %d: %s", item.PurchaseOrderItemCode, message)
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("purchase tolerance blocked item %d: %s", item.PurchaseOrderItemCode, message))
 			}
 			if exceeded && action == "WARN" {
 				warnings = append(warnings, fmt.Sprintf("item %d: %s", item.PurchaseOrderItemCode, message))
@@ -114,7 +114,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		if !toleranceHandled {
 			toleranceRemaining := line.TolerancePct/100*line.RequestedQty + line.CancelledToleranceQty
 			if item.Quantity > remaining+toleranceRemaining+0.0001 {
-				return nil, fmt.Errorf("a quantidade recebida %.4f passa do saldo de %.4f do item %d do pedido de compra", item.Quantity, remaining, item.PurchaseOrderItemCode)
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("a quantidade recebida %.4f passa do saldo de %.4f do item %d do pedido de compra", item.Quantity, remaining, item.PurchaseOrderItemCode))
 			}
 		}
 
@@ -203,7 +203,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		return nil, err
 	}
 	if matched != len(receivedByLine) {
-		return nil, fmt.Errorf("foram gravadas %d linhas de recebimento, mas eram esperadas %d", matched, len(receivedByLine))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("foram gravadas %d linhas de recebimento, mas eram esperadas %d", matched, len(receivedByLine)))
 	}
 	updated, err := uc.Repo.GetByCode(ctx, dto.PurchaseOrderCode)
 	if err != nil {

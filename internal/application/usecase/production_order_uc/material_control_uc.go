@@ -202,6 +202,9 @@ func (uc *ProductionMaterialControlUseCase) ConfigureWMS(ctx context.Context, dt
 }
 
 func (uc *ProductionMaterialControlUseCase) ConfigureStock(ctx context.Context, dto request.ConfigureManufacturingStockDTO) error {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data inicial dos movimentos", dto.MovementFrom), datetime.Campo("data final dos movimentos", dto.MovementTo)); msg != "" {
+		return errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}

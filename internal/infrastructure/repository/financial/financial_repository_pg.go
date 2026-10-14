@@ -2124,7 +2124,9 @@ func (r *FinancialRepositoryPG) AutoMatchExtrato(ctx context.Context, contaID in
 		}
 		entries = append(entries, e)
 	}
-	_ = rows.Err()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
 
 	matched := 0
 	for _, e := range entries {
@@ -2143,12 +2145,16 @@ func (r *FinancialRepositoryPG) AutoMatchExtrato(ctx context.Context, contaID in
 			 LIMIT 1`,
 			contaID, fcTipo, e.valor, e.data.AddDate(0, 0, -3), e.data.AddDate(0, 0, 3), empresaAuto,
 		).Scan(&fluxoID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue // sem lançamento correspondente: fica para conciliar à mão
+		}
 		if err != nil {
-			continue
+			return matched, fmt.Errorf("procurando lançamento para o extrato %d: %w", e.id, err)
 		}
-		if err := r.ConciliarExtrato(ctx, e.id, fluxoID); err == nil {
-			matched++
+		if err := r.ConciliarExtrato(ctx, e.id, fluxoID); err != nil {
+			return matched, fmt.Errorf("conciliando o extrato %d: %w", e.id, err)
 		}
+		matched++
 	}
 	return matched, nil
 }

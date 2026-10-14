@@ -2,7 +2,6 @@ package production_order_uc
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -27,7 +26,7 @@ func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScr
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if uc.StockRepo == nil {
-		return nil, fmt.Errorf("a devolução de refugo não está configurada")
+		return nil, errorsuc.NewValidationError("a devolução de refugo não está configurada")
 	}
 	if dto.Quantity <= 0 {
 		return nil, errorsuc.NewValidationError("a quantidade de refugo deve ser maior que zero")

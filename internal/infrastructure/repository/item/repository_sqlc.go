@@ -692,7 +692,7 @@ func (r *RepositoryItemSQLC) ListAllWithMasks(ctx context.Context) ([]entity.Ite
 		return nil, fmt.Errorf("list items: %w", err)
 	}
 
-	dbMasks, err := r.q.ListAllItemMasks(ctx)
+	dbMasks, err := r.q.ListAllItemMasks(ctx, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("list masks: %w", err)
 	}

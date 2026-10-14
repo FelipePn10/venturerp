@@ -54,11 +54,10 @@ func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.Crea
 		return nil, err
 	}
 	q.Notes = dto.Notes
-	created, err := uc.repo.Create(ctx, q)
-	if err != nil {
-		return nil, err
-	}
 
+	// As origens são lidas antes de gravar qualquer coisa; a gravação da
+	// cotação com itens e fornecedores é uma transação só.
+	var items []*entity.PurchaseQuotationItem
 	seq := int32(0)
 	for _, reqItemID := range dto.RequisitionItemIDs {
 		ri, gerr := uc.reqs.GetItem(ctx, reqItemID)
@@ -68,8 +67,8 @@ func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.Crea
 		seq++
 		srcCode := ri.RequisitionCode
 		srcItem := ri.ID
-		item := &entity.PurchaseQuotationItem{
-			QuotationCode: created.Code,
+		items = append(items, &entity.PurchaseQuotationItem{
+			QuotationCode: code,
 			Sequence:      seq,
 			ItemCode:      ri.ItemCode,
 			Quantity:      ri.Balance(),
@@ -78,12 +77,7 @@ func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.Crea
 			SourceType:    entity.SourceRequisition,
 			SourceCode:    &srcCode,
 			SourceItemID:  &srcItem,
-		}
-		ci, aerr := uc.repo.AddItem(ctx, item)
-		if aerr != nil {
-			return nil, aerr
-		}
-		created.Items = append(created.Items, ci)
+		})
 	}
 
 	for _, poCode := range dto.PlannedOrderCodes {
@@ -98,28 +92,20 @@ func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.Crea
 		seq++
 		src := po.Code
 		need := po.NeedDate
-		item := &entity.PurchaseQuotationItem{
-			QuotationCode: created.Code,
+		items = append(items, &entity.PurchaseQuotationItem{
+			QuotationCode: code,
 			Sequence:      seq,
 			ItemCode:      po.ItemCode,
 			Quantity:      qty,
 			DeliveryDate:  &need,
 			SourceType:    entity.SourcePlannedOrder,
 			SourceCode:    &src,
-		}
-		ci, aerr := uc.repo.AddItem(ctx, item)
-		if aerr != nil {
-			return nil, aerr
-		}
-		created.Items = append(created.Items, ci)
+		})
 	}
 
-	for _, sc := range dto.SupplierCodes {
-		s, serr := uc.repo.AddSupplier(ctx, &entity.PurchaseQuotationSupplier{QuotationCode: created.Code, SupplierCode: sc})
-		if serr != nil {
-			return nil, serr
-		}
-		created.Suppliers = append(created.Suppliers, s)
+	created, err := uc.repo.CreateWithChildren(ctx, q, items, dto.SupplierCodes)
+	if err != nil {
+		return nil, err
 	}
 
 	return toQuotationResponse(created), nil
@@ -178,7 +164,9 @@ func (uc *PurchaseQuotationUseCase) RecordPrice(ctx context.Context, dto request
 	if err != nil {
 		return nil, err
 	}
-	_ = uc.repo.UpdateStatus(ctx, item.QuotationCode, string(entity.QuotationQuoted))
+	if err := uc.repo.UpdateStatus(ctx, item.QuotationCode, string(entity.QuotationQuoted)); err != nil {
+		return nil, fmt.Errorf("marcando cotação %d como cotada: %w", item.QuotationCode, err)
+	}
 	return toQuotationPriceResponse(price), nil
 }
 

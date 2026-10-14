@@ -3,7 +3,6 @@
 package item_conversion_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -16,9 +15,12 @@ import (
 func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := icrepo.New(q, pool)
-	ctx := context.Background()
+	// A conversão é da empresa do item: o teste roda numa empresa e cria o item nela.
+	ctx := testutil.TenantContext(t, pool)
 
 	itemCode := testutil.UniqueCode()
+	testutil.SeedItem(t, pool, ctx, itemCode, testutil.Actor(t, pool))
+	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 	defer testutil.Exec(t, pool, "DELETE FROM item_unit_conversions WHERE item_code = $1", itemCode)
 
 	c, err := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", 12, 0, 0, "VALUE", uuid.New())

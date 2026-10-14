@@ -40,18 +40,20 @@ func int4ToPtr(v pgtype.Int4) *int {
 // resolveAnswerCodes maps each answer to the chosen variable's CODE (the canonical
 // value the rule engines compare against). Free/numeric/option answers use the
 // literal value.
-func (uc *ConfiguratorUseCase) resolveAnswerCodes(ctx context.Context, answers []request.CfgMaskAnswerInput) map[int64]string {
+func (uc *ConfiguratorUseCase) resolveAnswerCodes(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[int64]string, error) {
 	out := map[int64]string{}
 	for _, a := range answers {
-		if a.VariableID != nil {
-			if v, err := uc.Q.GetCfgVariable(ctx, *a.VariableID); err == nil {
-				out[a.CharacteristicID] = v.Code
-				continue
-			}
+		v, err := uc.variavelDaResposta(ctx, a)
+		if err != nil {
+			return nil, err
+		}
+		if v != nil {
+			out[a.CharacteristicID] = v.Code
+			continue
 		}
 		out[a.CharacteristicID] = a.Value
 	}
-	return out
+	return out, nil
 }
 
 // ─── Regras de Variáveis Equivalentes ─────────────────────────────────────────
@@ -109,7 +111,10 @@ func (uc *ConfiguratorUseCase) ApplyEquivalent(ctx context.Context, dto request.
 	if dto.ParentItemCode <= 0 {
 		return nil, errorsuc.NewValidationError("informe o item pai")
 	}
-	answers := uc.resolveAnswerCodes(ctx, dto.Answers)
+	answers, err := uc.resolveAnswerCodes(ctx, dto.Answers)
+	if err != nil {
+		return nil, err
+	}
 	rules, err := uc.Q.ListCfgEquivalentRulesByParent(ctx, dto.ParentItemCode, true)
 	if err != nil {
 		return nil, fmt.Errorf("carregando regras: %w", err)
@@ -198,7 +203,10 @@ func (uc *ConfiguratorUseCase) EvaluateItemRules(ctx context.Context, dto reques
 	if dto.ItemCode <= 0 {
 		return nil, errorsuc.NewValidationError("informe o item")
 	}
-	answers := uc.resolveAnswerCodes(ctx, dto.Answers)
+	answers, err := uc.resolveAnswerCodes(ctx, dto.Answers)
+	if err != nil {
+		return nil, err
+	}
 	rules, err := uc.Q.ListCfgItemRulesByItem(ctx, dto.ItemCode, true)
 	if err != nil {
 		return nil, fmt.Errorf("carregando regras: %w", err)
@@ -218,7 +226,9 @@ func (uc *ConfiguratorUseCase) EvaluateItemRules(ctx context.Context, dto reques
 		// Botão F: when a formula is set, the content is the computed result.
 		if expr := pgutil.FromPgText(r.Formula); expr != "" {
 			if vars == nil {
-				vars = uc.formulaVars(ctx, dto.Answers)
+				if vars, err = uc.formulaVars(ctx, dto.Answers); err != nil {
+					return nil, err
+				}
 			}
 			if v, ok := formula.EvaluateSafe(expr, vars); ok {
 				content = formatNum(v)
@@ -352,7 +362,7 @@ func (uc *ConfiguratorUseCase) AddReceivingItem(ctx context.Context, charID int6
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("característica %d não encontrada", charID))
 	}
 	if char.ReceivingType == entity.RecebNenhum {
-		return nil, fmt.Errorf("a característica não possui tipo de recebimento")
+		return nil, errorsuc.NewValidationError("a característica não possui tipo de recebimento")
 	}
 	rt := dto.ReceivingType
 	if rt != entity.RecebRecebimento && rt != entity.RecebVinculo {

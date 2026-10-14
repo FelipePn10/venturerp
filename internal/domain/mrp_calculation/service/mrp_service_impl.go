@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"math"
 	"sort"
 	"strconv"
@@ -51,7 +53,9 @@ type MRPServiceImpl struct {
 	ForecastRepo    forecastrepo.SalesForecastRepository
 	RestrictionRepo restrictionrepo.RestrictionRepository
 	SupplyPort      ports.PlannedOrderSupplyPort
-	RoutingRepo     routingrepo.RoutingRepository // nil = fallback to configured lead time
+	RoutingRepo     routingrepo.RoutingRepository
+	// Scenarios lê os ajustes do cenário quando o plano é de simulação.
+	Scenarios ScenarioReader // nil = fallback to configured lead time
 	// MaskVars resolve as variáveis da configuração (as "perguntas" respondidas)
 	// para avaliar fórmulas de quantidade na explosão. Opcional: sem ela, vale a
 	// quantidade fixa cadastrada no componente.
@@ -157,10 +161,19 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 
 	errs := make(map[string]interface{})
 
-	_ = s.MRPRepo.DeleteSuggestionsByPlan(ctx, planCode)
-	_ = s.MRPRepo.DeleteProfilesByPlan(ctx, planCode)
-	_ = s.MRPRepo.DeleteProfileDetailsByPlan(ctx, planCode)
-	_ = s.MRPRepo.DeleteExceptionsByPlan(ctx, planCode)
+	// Sobra do cálculo anterior que não sai fica somada ao novo: a falha vai
+	// para o log (COMPLETED_WITH_ERRORS) em vez de sumir.
+	registrarErro(errs, "limpar_sugestoes", s.MRPRepo.DeleteSuggestionsByPlan(ctx, planCode))
+	registrarErro(errs, "limpar_perfis", s.MRPRepo.DeleteProfilesByPlan(ctx, planCode))
+	registrarErro(errs, "limpar_detalhes_perfil", s.MRPRepo.DeleteProfileDetailsByPlan(ctx, planCode))
+	registrarErro(errs, "limpar_excecoes", s.MRPRepo.DeleteExceptionsByPlan(ctx, planCode))
+	// O pegging aponta sugestões que acabaram de ser apagadas: sai junto, para
+	// um cálculo que pare no meio não deixar vínculo com sugestão inexistente.
+	if w, ok := s.MRPRepo.(peggingWriter); ok {
+		if err := w.ReplacePegging(ctx, planCode, nil); err != nil {
+			errs["pegging"] = err.Error()
+		}
+	}
 
 	// Carrega parâmetros de planejamento tipados.
 	params, err := s.MRPRepo.LoadTypedPlanningParams(ctx)
@@ -208,7 +221,24 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 			return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
 		}
 		demandInputs = append(demandInputs, salesInputs...)
-		demandInputs = append(demandInputs, s.loadForecastDemands(ctx, planCode)...)
+		previsao, errPrevisao := s.loadForecastDemands(ctx, planCode)
+		registrarErro(errs, "load_forecasts", errPrevisao)
+		demandInputs = append(demandInputs, previsao...)
+	}
+
+	// Plano de cenário: ajustes de demanda, estoque e prazo entram em memória.
+	var ajustes *entity.ScenarioAdjustments
+	if plan.IsScenario {
+		if s.Scenarios == nil {
+			errs["scenario"] = "cálculo de cenário indisponível nesta instalação"
+			return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+		}
+		ajustes, err = s.Scenarios.ScenarioAdjustments(ctx, planCode)
+		if err != nil {
+			errs["scenario"] = err.Error()
+			return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
+		}
+		demands, demandInputs = applyScenarioDemands(ajustes, demands, demandInputs, planCode)
 	}
 
 	allowedItems, err := s.resolveAllowedItemSet(ctx, plan)
@@ -258,6 +288,8 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	if err != nil {
 		rulesMap = make(map[int64][]*entity.ConfiguredItemRule)
 	}
+	applyScenarioStock(ajustes, snapshotMap)
+	applyScenarioLeadTimes(ajustes, rulesMap)
 
 	// Expande allCodes para incluir itens de todas as fontes.
 	allCodesFromBOM := collectAllItemCodes(bomMap, rootItems)
@@ -279,7 +311,9 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	// Bulk load 4: firm supply.
 	var supplyMap map[int64][]ports.SupplyEntry
 	if s.SupplyPort != nil {
-		supplyMap, _ = s.SupplyPort.ListFirmSupplyForItems(ctx, allCodeSlice)
+		var errSuprimento error
+		supplyMap, errSuprimento = s.SupplyPort.ListFirmSupplyForItems(ctx, allCodeSlice)
+		registrarErro(errs, "load_firm_supply", errSuprimento)
 	}
 	if supplyMap == nil {
 		supplyMap = make(map[int64][]ports.SupplyEntry)
@@ -288,18 +322,29 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	// Bulk load 5: restricted items.
 	restrictedItems := make(map[int64]struct{})
 	if s.RestrictionRepo != nil {
-		restrictedItems, _ = s.RestrictionRepo.ListRestrictedItemCodes(ctx, allCodeSlice)
+		lidos, errRestricao := s.RestrictionRepo.ListRestrictedItemCodes(ctx, allCodeSlice)
+		registrarErro(errs, "load_restrictions", errRestricao)
+		if lidos != nil {
+			restrictedItems = lidos
+		}
 	}
 
 	// Item cache — lazy load from DB.
 	itemCache := make(map[int64]*cachedItemMRP)
 
-	// Accumuladores pós-loop.
-	netReqByItem := make(map[int64]float64)
-	needDateByItem := make(map[int64]time.Time)
+	// Base das mensagens de exceção: o netting consome o estoque e o
+	// suprimento firme (advanceNettingState), então a análise precisa da
+	// posição ANTES do cálculo e de cada necessidade bruta registrada.
+	excecoes := newExceptionBasis(snapshotMap, supplyMap)
 	totalItems := 0
 	totalOrders := 0
 	nextOrderNumber := initialOrderNumber
+	// Sugestão de cenário não recebe número de ordem: o número é único na
+	// empresa e a simulação não pode ocupar o que o plano real vai usar.
+	numeracao := &nextOrderNumber
+	if plan.IsScenario {
+		numeracao = nil
+	}
 
 	// Dispara modos conforme PlanningTypes do plano.
 	if len(plan.PlanningTypes) == 0 {
@@ -309,26 +354,26 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	for _, pt := range plan.PlanningTypes {
 		switch strings.ToUpper(strings.TrimSpace(pt)) {
 		case "MIN_MAX":
-			tItems, tOrders := s.calculateMinMax(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, &nextOrderNumber, errs)
+			tItems, tOrders := s.calculateMinMax(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, numeracao, errs)
 			totalItems += tItems
 			totalOrders += tOrders
 		case "REORDER_POINT":
-			tItems, tOrders := s.calculateReorderPoint(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, &nextOrderNumber, errs)
+			tItems, tOrders := s.calculateReorderPoint(ctx, planCode, params, snapshotMap, supplyMap, rulesMap, llcMap, itemCache, allowedItems, restrictedItems, numeracao, errs)
 			totalItems += tItems
 			totalOrders += tOrders
 		case "KANBAN":
-			tItems, tOrders := s.calculateKanban(ctx, planCode, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems, &nextOrderNumber, errs)
+			tItems, tOrders := s.calculateKanban(ctx, planCode, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems, numeracao, errs)
 			totalItems += tItems
 			totalOrders += tOrders
 		case "MPS":
 			if !noMRPDemand {
-				tItems, tOrders := s.calculateMPS(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, demandInputs, &nextOrderNumber, &netReqByItem, &needDateByItem, errs)
+				tItems, tOrders := s.calculateMPS(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, demandInputs, numeracao, excecoes, errs)
 				totalItems += tItems
 				totalOrders += tOrders
 			}
 		default: // MRP
 			if !noMRPDemand {
-				tItems, tOrders := s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, demandInputs, &nextOrderNumber, &netReqByItem, &needDateByItem, errs)
+				tItems, tOrders := s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap, llcMap, bomMap, itemCache, allowedItems, restrictedItems, demands, demandInputs, numeracao, excecoes, errs)
 				totalItems += tItems
 				totalOrders += tOrders
 			}
@@ -342,14 +387,22 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 
 	// Pós-processamento: geração de prioridades automáticas.
 	if params.GerarPrioridadesOrdens {
-		s.processAutoPriority(ctx, planCode, params)
+		registrarErro(errs, "prioridades", s.processAutoPriority(ctx, planCode, params))
 	}
 
 	// Geração de mensagens de exceção.
 	if s.SupplyPort != nil {
-		s.generateExceptionMessages(ctx, planCode, supplyMap, netReqByItem, needDateByItem)
+		if err := s.generateExceptionMessages(ctx, planCode, excecoes); err != nil {
+			errs["exception_messages"] = err.Error()
+		}
 	}
-	if generateLLC {
+	// Pegging fixo: de onde vem cada necessidade e o que a cobriu.
+	if w, ok := s.MRPRepo.(peggingWriter); ok {
+		if err := w.ReplacePegging(ctx, planCode, excecoes.pegging()); err != nil {
+			errs["pegging"] = err.Error()
+		}
+	}
+	if generateLLC && !plan.IsScenario {
 		if err := s.MRPRepo.UpdateItemLLCs(ctx, llcMap); err != nil {
 			errs["update_item_llc"] = err.Error()
 		}
@@ -372,18 +425,27 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 // =============================================================================
 
 func (s *MRPServiceImpl) CalculateNetRequirements(ctx context.Context, input *entity.MRPInput) (*entity.MRPOutput, error) {
-	params, _ := s.MRPRepo.LoadTypedPlanningParams(ctx)
+	params, err := s.MRPRepo.LoadTypedPlanningParams(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os parâmetros de planejamento: %w", err)
+	}
 	if params == nil {
 		params = entity.DefaultTypedPlanningParams()
 	}
 	snapshotMap := make(map[int64]*entity.StockSnapshot)
-	if snapshot, err := s.MRPRepo.GetStockSnapshot(ctx, input.ItemCode); err == nil && snapshot != nil {
+	snapshot, err := s.MRPRepo.GetStockSnapshot(ctx, input.ItemCode)
+	if err != nil && !domainerr.EhNaoEncontrado(err) {
+		return nil, fmt.Errorf("lendo o estoque do item %d: %w", input.ItemCode, err)
+	}
+	if snapshot != nil {
 		snapshotMap[input.ItemCode] = snapshot
 	}
 	rulesMap := make(map[int64][]*entity.ConfiguredItemRule)
-	if rules, err := s.MRPRepo.GetConfiguredItemRules(ctx, input.ItemCode); err == nil {
-		rulesMap[input.ItemCode] = rules
+	rules, err := s.MRPRepo.GetConfiguredItemRules(ctx, input.ItemCode)
+	if err != nil {
+		return nil, fmt.Errorf("lendo as regras de item configurado %d: %w", input.ItemCode, err)
 	}
+	rulesMap[input.ItemCode] = rules
 	return s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, nil, make(map[int64]*cachedItemMRP), params)
 }
 
@@ -395,7 +457,10 @@ func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64,
 	if err != nil {
 		return nil, fmt.Errorf("exploding structure for item %d: %w", parentCode, err)
 	}
-	params, _ := s.MRPRepo.LoadTypedPlanningParams(ctx)
+	params, err := s.MRPRepo.LoadTypedPlanningParams(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os parâmetros de planejamento: %w", err)
+	}
 	if params == nil {
 		params = entity.DefaultTypedPlanningParams()
 	}
@@ -473,8 +538,7 @@ func (s *MRPServiceImpl) calculateMRP(
 	demands []*inddemandentity.IndependentDemand,
 	forecastInputs []*entity.MRPInput,
 	nextOrderNumber *int64,
-	netReqByItem *map[int64]float64,
-	needDateByItem *map[int64]time.Time,
+	excecoes *exceptionBasis,
 	errs map[string]interface{},
 ) (int, int) {
 	totalItems := 0
@@ -486,7 +550,9 @@ func (s *MRPServiceImpl) calculateMRP(
 	// An order-item calculation must not introduce any additional independent source.
 	var safetyInputs []*entity.MRPInput
 	if plan.OrderItemCode == nil {
-		safetyInputs = s.generateSafetyStockDemands(ctx, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems)
+		var errSeguranca error
+		safetyInputs, errSeguranca = s.generateSafetyStockDemands(ctx, params, snapshotMap, supplyMap, llcMap, itemCache, allowedItems, restrictedItems)
+		registrarErro(errs, "estoque_seguranca", errSeguranca)
 	}
 	for _, si := range safetyInputs {
 		if params.AgrupaDemandaEstoque {
@@ -579,6 +645,10 @@ func (s *MRPServiceImpl) calculateMRP(
 			if detailType == "" {
 				detailType = "DEMAND"
 			}
+			// Cada necessidade bruta, com a origem, antes de agrupar por data:
+			// é a base do pegging e das mensagens de exceção.
+			pegKind, pegCode := pegOrigin(detailInput)
+			excecoes.addRequirement(detailInput.ItemCode, detailInput.NeedDate, detailInput.Quantity, pegKind, pegCode)
 			if err := s.MRPRepo.CreateProfileDetail(ctx, &entity.MRPProfileDetail{PlanCode: planCode, ItemCode: detailInput.ItemCode,
 				NeedDate: detailInput.NeedDate, DetailType: detailType, SourceCode: detailInput.SourceCode,
 				ParentItemCode: detailInput.ParentItemCode, Quantity: detailInput.Quantity}); err != nil {
@@ -602,28 +672,29 @@ func (s *MRPServiceImpl) calculateMRP(
 			firmSupplyUsed := firmSupplyForItem(supplyMap, input.ItemCode, input.NeedDate)
 			advanceNettingState(input, output, snapshotMap, supplyMap)
 
-			(*netReqByItem)[input.ItemCode] += output.NetRequirement
-			if existing, ok := (*needDateByItem)[input.ItemCode]; !ok || input.NeedDate.Before(existing) {
-				(*needDateByItem)[input.ItemCode] = input.NeedDate
-			}
-
-			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
+			if _, errPerfil := s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        input.ItemCode,
 				PlanCode:        planCode,
 				CalculationDate: today(),
 				Demand:          output.Demand,
-				OrdersPlanned:   output.NetRequirement,
-				OrdersFirm:      firmSupplyUsed,
-				StockProjected:  output.StockProjected,
-				LLC:             level,
-				NeedDate:        input.NeedDate,
-			})
+				// Necessidade líquida negativa = o estoque/firmes sobram: não há
+				// ordem planejada. Antes o perfil gravava o negativo e o
+				// "planejado" do item aparecia como −400.
+				OrdersPlanned:  math.Max(0, output.NetRequirement),
+				OrdersFirm:     firmSupplyUsed,
+				StockProjected: output.StockProjected,
+				LLC:            level,
+				NeedDate:       input.NeedDate,
+			}); errPerfil != nil {
+				registrarErro(errs, "perfil", errPerfil)
+			}
 			totalItems++
 
 			for _, suggestion := range output.PlannedOrders {
 				suggestion.PlanCode = planCode
 
-				cached := s.ensureItemCache(ctx, itemCache, input.ItemCode)
+				cached, errItem := s.ensureItemCache(ctx, itemCache, input.ItemCode)
+				registrarErro(errs, "cadastro_item", errItem)
 
 				if !cached.ghost || params.ItensFantasmasGravar {
 					created, createErr := s.createNumberedSuggestion(ctx, suggestion, nextOrderNumber)
@@ -635,28 +706,38 @@ func (s *MRPServiceImpl) calculateMRP(
 					if created != nil {
 						suggestion.Code = created.Code
 					}
+					excecoes.addSuggestion(suggestion)
 				}
 
-				if suggestion.StartDate == nil {
+				if suggestion.StartDate == nil || !suppliesItem(suggestion) {
 					continue
 				}
 
 				if cached.ghost && !params.ItensFantasmasGravar {
+					// Fantasma não gravado: a necessidade passa direto aos
+					// filhos, que herdam a origem do pai no pegging.
+					excecoes.skip[input.ItemCode] = true
+					origemKind, origemCode := pegOrigin(input)
 					children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask), *suggestion.StartDate)
 					for _, child := range children {
 						child.PlanCode = planCode
 						child.NeedDate = *suggestion.StartDate
 						child.ParentItemCode = &input.ItemCode
+						child.PegKind, child.PegCode = origemKind, origemCode
 						levelQueues[level+1] = append(levelQueues[level+1], child)
 					}
 					continue
 				}
 
 				children := explodeFromBOMWithVars(bomMap, input.ItemCode, input.Mask, suggestion.Quantity, level+1, params.FormulaPerdasEstrutura, maskVars.vars(ctx, input.ItemCode, input.Mask), *suggestion.StartDate)
+				pai := suggestion.Code
 				for _, child := range children {
 					child.PlanCode = planCode
 					child.NeedDate = *suggestion.StartDate
 					child.ParentItemCode = &input.ItemCode
+					// A necessidade do componente nasce desta sugestão: é a
+					// ponte do pegging entre os níveis.
+					child.PegKind, child.PegCode = entity.PegDemandSuggestion, &pai
 					levelQueues[level+1] = append(levelQueues[level+1], child)
 				}
 			}
@@ -684,7 +765,8 @@ func (s *MRPServiceImpl) calculateMinMax(
 	totalItems := 0
 	totalOrders := 0
 
-	planningExtras, _ := s.MRPRepo.ListItemPlanningExtras(ctx)
+	planningExtras, errExtras := s.MRPRepo.ListItemPlanningExtras(ctx)
+	registrarErro(errs, "load_planning_extras", errExtras)
 	if planningExtras == nil {
 		planningExtras = make(map[int64]*entity.ItemPlanningExtra)
 	}
@@ -726,14 +808,17 @@ func (s *MRPServiceImpl) calculateMinMax(
 				continue
 			}
 
-			cached := s.ensureItemCache(ctx, itemCache, itemCode)
+			cached, errItem := s.ensureItemCache(ctx, itemCache, itemCode)
+			registrarErro(errs, "cadastro_item", errItem)
 			if cached == nil || cached.engineeringType == 2 { // DE_TERCEIRO
 				continue
 			}
 
-			leadTimeDays := s.getLeadTimeDays(rulesMap, itemCode)
+			leadTimeDays, errPrazo := s.getLeadTimeDays(ctx, rulesMap, itemCode)
+			registrarErro(errs, "prazo", errPrazo)
 			needDate := today().AddDate(0, 0, leadTimeDays)
-			startDate, _ := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			startDate, errCalendario := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			registrarErro(errs, "calendario", errCalendario)
 			if startDate.IsZero() {
 				startDate = needDate.AddDate(0, 0, -leadTimeDays)
 			}
@@ -755,7 +840,7 @@ func (s *MRPServiceImpl) calculateMinMax(
 				totalOrders++
 			}
 
-			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
+			if _, errPerfil := s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        itemCode,
 				PlanCode:        planCode,
 				CalculationDate: today(),
@@ -765,7 +850,9 @@ func (s *MRPServiceImpl) calculateMinMax(
 				StockProjected:  qtdeTotal - qtc,
 				LLC:             llc,
 				NeedDate:        needDate,
-			})
+			}); errPerfil != nil {
+				registrarErro(errs, "perfil", errPerfil)
+			}
 			totalItems++
 		}
 	}
@@ -799,7 +886,8 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 			continue
 		}
 
-		cached := s.ensureItemCache(ctx, itemCache, itemCode)
+		cached, errItem := s.ensureItemCache(ctx, itemCache, itemCode)
+		registrarErro(errs, "cadastro_item", errItem)
 		if cached == nil || cached.engineeringType == 2 {
 			continue
 		}
@@ -819,9 +907,11 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 
 		if qtde <= float64(pr) {
 			loteEconomico := float64(pr * 2)
-			leadTimeDays := s.getLeadTimeDays(rulesMap, itemCode)
+			leadTimeDays, errPrazo := s.getLeadTimeDays(ctx, rulesMap, itemCode)
+			registrarErro(errs, "prazo", errPrazo)
 			needDate := today().AddDate(0, 0, leadTimeDays)
-			startDate, _ := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			startDate, errCalendario := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			registrarErro(errs, "calendario", errCalendario)
 			if startDate.IsZero() {
 				startDate = needDate.AddDate(0, 0, -leadTimeDays)
 			}
@@ -843,7 +933,7 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 				totalOrders++
 			}
 
-			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
+			if _, errPerfil := s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        itemCode,
 				PlanCode:        planCode,
 				CalculationDate: today(),
@@ -853,7 +943,9 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 				StockProjected:  qtde - loteEconomico,
 				LLC:             llc,
 				NeedDate:        needDate,
-			})
+			}); errPerfil != nil {
+				registrarErro(errs, "perfil", errPerfil)
+			}
 			totalItems++
 		}
 	}
@@ -917,15 +1009,18 @@ func (s *MRPServiceImpl) calculateKanban(
 				continue
 			}
 
-			cached := s.ensureItemCache(ctx, itemCache, itemCode)
+			cached, errItem := s.ensureItemCache(ctx, itemCache, itemCode)
+			registrarErro(errs, "cadastro_item", errItem)
 			if cached == nil || cached.engineeringType == 2 {
 				continue
 			}
 
 			qtc := card.QuantityPerCard * float64(card.CardCount)
-			leadTimeDays := s.getLeadTimeDays(nil, itemCode)
+			leadTimeDays, errPrazo := s.getLeadTimeDays(ctx, nil, itemCode)
+			registrarErro(errs, "prazo", errPrazo)
 			needDate := today().AddDate(0, 0, leadTimeDays)
-			startDate, _ := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			startDate, errCalendario := s.subtractWorkdays(ctx, needDate, leadTimeDays)
+			registrarErro(errs, "calendario", errCalendario)
 			if startDate.IsZero() {
 				startDate = needDate.AddDate(0, 0, -leadTimeDays)
 			}
@@ -947,7 +1042,7 @@ func (s *MRPServiceImpl) calculateKanban(
 				totalOrders++
 			}
 
-			_, _ = s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
+			if _, errPerfil := s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
 				ItemCode:        itemCode,
 				PlanCode:        planCode,
 				CalculationDate: today(),
@@ -957,7 +1052,9 @@ func (s *MRPServiceImpl) calculateKanban(
 				StockProjected:  qtde - qtc,
 				LLC:             llc,
 				NeedDate:        needDate,
-			})
+			}); errPerfil != nil {
+				registrarErro(errs, "perfil", errPerfil)
+			}
 			totalItems++
 			qtde -= qtc
 		}
@@ -983,8 +1080,7 @@ func (s *MRPServiceImpl) calculateMPS(
 	demands []*inddemandentity.IndependentDemand,
 	forecastInputs []*entity.MRPInput,
 	nextOrderNumber *int64,
-	netReqByItem *map[int64]float64,
-	needDateByItem *map[int64]time.Time,
+	excecoes *exceptionBasis,
 	errs map[string]interface{},
 ) (int, int) {
 	mpsItems, err := s.MRPRepo.ListMPSItems(ctx, planCode)
@@ -1004,12 +1100,13 @@ func (s *MRPServiceImpl) calculateMPS(
 			Mask:     mi.Mask,
 			Quantity: mi.Quantity,
 			NeedDate: needDate,
+			PegKind:  entity.PegDemandMPS,
 		})
 	}
 
 	return s.calculateMRP(ctx, planCode, params, plan, snapshotMap, rulesMap, supplyMap,
 		llcMap, bomMap, itemCache, allowedItems, restrictedItems,
-		demands, forecastInputs, nextOrderNumber, netReqByItem, needDateByItem, errs)
+		demands, forecastInputs, nextOrderNumber, excecoes, errs)
 }
 
 // =============================================================================
@@ -1085,7 +1182,10 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	}
 
 	// 5. Item-type lookup — cached (também traz a política de lote do item).
-	cachedItem := s.ensureItemCache(ctx, itemCache, input.ItemCode)
+	cachedItem, err := s.ensureItemCache(ctx, itemCache, input.ItemCode)
+	if err != nil {
+		return nil, err
+	}
 	if cachedItem == nil {
 		cachedItem = &cachedItemMRP{}
 	}
@@ -1152,7 +1252,12 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	// route operations, generate a SERVICO order for each external op so the
 	// planner knows a purchase order for the service is required.
 	if orderType == "FABRICACAO" && s.RoutingRepo != nil {
-		extOps, _ := s.RoutingRepo.GetExternalOpsByItem(ctx, input.ItemCode)
+		// Falha ao ler as operações externas não pode virar "não há operação
+		// externa": o MRP deixaria de sugerir a ordem de serviço em silêncio.
+		extOps, err := s.RoutingRepo.GetExternalOpsByItem(ctx, input.ItemCode)
+		if err != nil {
+			return nil, fmt.Errorf("lendo as operações externas do item %d: %w", input.ItemCode, err)
+		}
 		for _, op := range extOps {
 			note := fmt.Sprintf("Op. externa: %s (%.2fh)", op.OperationName, op.EffectiveHours)
 			remittance := op.RemittanceType
@@ -1184,122 +1289,35 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	return output, nil
 }
 
-// generateExceptionMessages analyses existing firm supply versus what the MRP
-// actually computed and persists actionable exception messages.
-// RescheduleIn is split into EXPEDITE (<=5 days late) and RESCHEDULE_IN (>5 days).
-func (s *MRPServiceImpl) generateExceptionMessages(
-	ctx context.Context,
-	planCode int64,
-	supplyMap map[int64][]ports.SupplyEntry,
-	netReqByItem map[int64]float64,
-	needDateByItem map[int64]time.Time,
-) {
-	for itemCode, entries := range supplyMap {
-		if len(entries) == 0 {
-			continue
+// itemLabeler devolve o código de negócio dos itens da empresa da sessão, para
+// o texto das mensagens de exceção.
+type itemLabeler interface {
+	ItemBusinessCodes(ctx context.Context, codes []int64) (map[int64]string, error)
+}
+
+// generateExceptionMessages compara cada ordem firme com a necessidade que ela
+// de fato cobre (pegging) e grava as mensagens de ação. Ver exceptions.go.
+// Devolve o primeiro erro de gravação (as demais mensagens seguem gravando).
+func (s *MRPServiceImpl) generateExceptionMessages(ctx context.Context, planCode int64, basis *exceptionBasis) error {
+	var primeiro error
+	if l, ok := s.MRPRepo.(itemLabeler); ok {
+		codes := make([]int64, 0, len(basis.supply))
+		for item := range basis.supply {
+			codes = append(codes, item)
 		}
-
-		totalFirmSupply := 0.0
-		for _, e := range entries {
-			totalFirmSupply += e.Quantity
-		}
-
-		netReq := netReqByItem[itemCode]
-		needDate, hasNeedDate := needDateByItem[itemCode]
-
-		// CANCEL: firm order exists but the item has no demand in this plan.
-		if !hasNeedDate || netReq <= 0 {
-			for _, e := range entries {
-				eCode := e.SourceCode
-				eType := string(e.SourceType)
-				desc := fmt.Sprintf(
-					"Item %d possui ordem firme de %.2f unidades (código %d) sem demanda neste plano. Considere cancelar.",
-					itemCode, e.Quantity, e.SourceCode,
-				)
-				_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
-					PlanCode:    planCode,
-					ItemCode:    itemCode,
-					MessageType: entity.ExceptionCancel,
-					SourceCode:  &eCode,
-					SourceType:  &eType,
-					Description: desc,
-				})
-			}
-			continue
-		}
-
-		// EXCESS_PROJECTED: total firm supply significantly exceeds net requirement.
-		if totalFirmSupply > netReq*(1+excessThreshold) {
-			excess := totalFirmSupply - netReq
-			desc := fmt.Sprintf(
-				"Item %d: suprimento firme total (%.2f un.) excede a necessidade líquida (%.2f un.) em %.2f unidades. Estoque excedente projetado.",
-				itemCode, totalFirmSupply, netReq, excess,
-			)
-			_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
-				PlanCode:    planCode,
-				ItemCode:    itemCode,
-				MessageType: entity.ExceptionExcess,
-				Description: desc,
-			})
-		}
-
-		// Per-order: EXPEDITE (<= 5 days) / RESCHEDULE_IN (> 5 days) or RESCHEDULE_OUT.
-		for _, e := range entries {
-			eCode := e.SourceCode
-			eType := string(e.SourceType)
-
-			if e.ArrivalDate.After(needDate) {
-				days := int(math.Ceil(e.ArrivalDate.Sub(needDate).Hours() / 24))
-				if days <= expediteThreshold {
-					desc := fmt.Sprintf(
-						"Item %d: ordem %d (%.2f un.) chega em %s, %d dia(s) após necessidade %s. ACELERAR urgentemente.",
-						itemCode, e.SourceCode, e.Quantity,
-						e.ArrivalDate.Format("02/01/2006"), days, needDate.Format("02/01/2006"),
-					)
-					_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
-						PlanCode:    planCode,
-						ItemCode:    itemCode,
-						MessageType: entity.ExceptionExpedite,
-						SourceCode:  &eCode,
-						SourceType:  &eType,
-						Description: desc,
-					})
-				} else {
-					desc := fmt.Sprintf(
-						"Item %d: ordem %d (%.2f un.) chega em %s, mas a necessidade é %s (%d dia(s) de atraso). Antecipar.",
-						itemCode, e.SourceCode, e.Quantity,
-						e.ArrivalDate.Format("02/01/2006"), needDate.Format("02/01/2006"), days,
-					)
-					_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
-						PlanCode:    planCode,
-						ItemCode:    itemCode,
-						MessageType: entity.ExceptionRescheduleIn,
-						SourceCode:  &eCode,
-						SourceType:  &eType,
-						Description: desc,
-					})
-				}
-				continue
-			}
-
-			earlyDays := int(math.Ceil(needDate.Sub(e.ArrivalDate).Hours() / 24))
-			if earlyDays > tooEarlyDays {
-				desc := fmt.Sprintf(
-					"Item %d: ordem %d (%.2f un.) chega em %s, %d dia(s) antes da necessidade (%s). Atrasar para liberar capital.",
-					itemCode, e.SourceCode, e.Quantity,
-					e.ArrivalDate.Format("02/01/2006"), earlyDays, needDate.Format("02/01/2006"),
-				)
-				_ = s.MRPRepo.CreateExceptionMessage(ctx, &entity.MRPExceptionMessage{
-					PlanCode:    planCode,
-					ItemCode:    itemCode,
-					MessageType: entity.ExceptionRescheduleOut,
-					SourceCode:  &eCode,
-					SourceType:  &eType,
-					Description: desc,
-				})
-			}
+		// Sem o rótulo a mensagem sai com o código interno; o erro é devolvido
+		// mesmo assim, como os de gravação.
+		if basis.labels, primeiro = l.ItemBusinessCodes(ctx, codes); primeiro != nil {
+			primeiro = fmt.Errorf("lendo os códigos dos itens das exceções: %w", primeiro)
 		}
 	}
+	for _, m := range basis.messages() {
+		m.PlanCode = planCode
+		if err := s.MRPRepo.CreateExceptionMessage(ctx, m); err != nil && primeiro == nil {
+			primeiro = err
+		}
+	}
+	return primeiro
 }
 
 // =============================================================================
@@ -1310,15 +1328,21 @@ func (s *MRPServiceImpl) generateExceptionMessages(
 // entries for FABRICACAO-type planned orders.
 // processAutoPriority assigns priority codes to planned orders based on
 // order_priorities rules and the DiasPrioridades window.
-func (s *MRPServiceImpl) processAutoPriority(ctx context.Context, planCode int64, params *entity.TypedPlanningParams) {
+func (s *MRPServiceImpl) processAutoPriority(ctx context.Context, planCode int64, params *entity.TypedPlanningParams) error {
 	priorities, err := s.MRPRepo.ListAllOrderPriorities(ctx)
-	if err != nil || len(priorities) == 0 {
-		return
+	if err != nil {
+		return fmt.Errorf("lendo as prioridades de ordem: %w", err)
+	}
+	if len(priorities) == 0 {
+		return nil
 	}
 
 	suggestions, err := s.MRPRepo.ListSuggestionsByPlan(ctx, planCode)
-	if err != nil || len(suggestions) == 0 {
-		return
+	if err != nil {
+		return fmt.Errorf("lendo as sugestões para priorizar: %w", err)
+	}
+	if len(suggestions) == 0 {
+		return nil
 	}
 
 	cutoffDate := today().AddDate(0, 0, params.DiasPrioridades)
@@ -1333,9 +1357,12 @@ func (s *MRPServiceImpl) processAutoPriority(ctx context.Context, planCode int64
 		priority := findPriorityForQuantity(priorities, sug.Quantity)
 		if priority != "" {
 			sug.Priority = &priority
-			_ = s.MRPRepo.UpdatePlannedOrderPriority(ctx, sug.Code, priority)
+			if err := s.MRPRepo.UpdatePlannedOrderPriority(ctx, sug.Code, priority); err != nil {
+				return fmt.Errorf("gravando a prioridade da sugestão %d: %w", sug.Code, err)
+			}
 		}
 	}
+	return nil
 }
 
 func findPriorityForQuantity(priorities []*orderpriority.OrderPriority, quantity float64) string {
@@ -1381,21 +1408,40 @@ func (s *MRPServiceImpl) ruleMatchesMask(rule *entity.ConfiguredItemRule, mask s
 
 // getLeadTimeDays returns the lead time for an item in working days.
 // Priority: routing critical-path (hours → days at 8h/day) > configured rule > 0.
-func (s *MRPServiceImpl) getLeadTimeDays(rulesMap map[int64][]*entity.ConfiguredItemRule, itemCode int64) int {
+func (s *MRPServiceImpl) getLeadTimeDays(ctx context.Context, rulesMap map[int64][]*entity.ConfiguredItemRule, itemCode int64) (int, error) {
+	// 0. Prazo do cenário de simulação substitui roteiro e regras.
+	for _, rule := range rulesMap[itemCode] {
+		if rule.TableType == scenarioRuleTable && rule.FieldName == "lead_time" {
+			if v, err := strconv.Atoi(rule.RuleValue); err == nil {
+				return v, nil
+			}
+		}
+	}
 	// 1. Try routing lead time (critical-path through operation network).
 	if s.RoutingRepo != nil {
-		route, err := s.RoutingRepo.GetRouteForItem(context.Background(), itemCode, "")
+		// Item sem roteiro cai na regra; falha de leitura é erro (antes caía
+		// na regra em silêncio e o prazo saía errado).
+		route, err := s.RoutingRepo.GetRouteForItem(ctx, itemCode, "")
+		if err != nil && !domainerr.EhNaoEncontrado(err) {
+			return 0, fmt.Errorf("lendo o roteiro do item %d: %w", itemCode, err)
+		}
 		if err == nil && route != nil {
-			ops, err := s.RoutingRepo.GetRouteOperations(context.Background(), route.ID)
-			if err == nil && len(ops) > 0 {
-				edges, _ := s.RoutingRepo.GetNetworkEdges(context.Background(), route.ID)
+			ops, err := s.RoutingRepo.GetRouteOperations(ctx, route.ID)
+			if err != nil {
+				return 0, fmt.Errorf("lendo as etapas do roteiro do item %d: %w", itemCode, err)
+			}
+			if len(ops) > 0 {
+				edges, err := s.RoutingRepo.GetNetworkEdges(ctx, route.ID)
+				if err != nil {
+					return 0, fmt.Errorf("lendo a rede do roteiro do item %d: %w", itemCode, err)
+				}
 				// qty=1: item-level planning lead time (per unit / per base batch).
 				// Shared CPM implementation with the routing lead-time use case.
 				totalHours := routingentity.CriticalPath(ops, edges, 1.0).TotalHours
 				if totalHours > 0 {
 					days := int(math.Ceil(totalHours / 8.0)) // 8h = 1 dia útil
 					if days > 0 {
-						return days
+						return days, nil
 					}
 				}
 			}
@@ -1410,7 +1456,7 @@ func (s *MRPServiceImpl) getLeadTimeDays(rulesMap map[int64][]*entity.Configured
 			}
 		}
 	}
-	return maxLead
+	return maxLead, nil
 }
 
 // =============================================================================
@@ -1428,7 +1474,7 @@ func (s *MRPServiceImpl) generateSafetyStockDemands(
 	itemCache map[int64]*cachedItemMRP,
 	allowedItems map[int64]struct{},
 	restrictedItems map[int64]struct{},
-) []*entity.MRPInput {
+) ([]*entity.MRPInput, error) {
 	var result []*entity.MRPInput
 	baseDate := today()
 
@@ -1445,14 +1491,20 @@ func (s *MRPServiceImpl) generateSafetyStockDemands(
 
 		if !params.GerarDemandaSegurancaTodos {
 			// Only for items with movimentação: verifica consumo médio mensal.
-			cached := s.ensureItemCache(ctx, itemCache, itemCode)
+			cached, errItem := s.ensureItemCache(ctx, itemCache, itemCode)
+			if errItem != nil {
+				return nil, errItem
+			}
 			if cached == nil {
 				continue
 			}
 		}
 
 		// Calcula data da necessidade.
-		cached := s.ensureItemCache(ctx, itemCache, itemCode)
+		cached, errItem := s.ensureItemCache(ctx, itemCache, itemCode)
+		if errItem != nil {
+			return nil, errItem
+		}
 		leadTimeDays := 0
 		needDate := baseDate
 		if params.DataNecessidadeEstoqueFuturo {
@@ -1469,10 +1521,11 @@ func (s *MRPServiceImpl) generateSafetyStockDemands(
 			Quantity: snapshot.SafetyStock,
 			NeedDate: needDate,
 			LLC:      llc,
+			PegKind:  entity.PegDemandSafetyStock,
 		})
 	}
 
-	return result
+	return result, nil
 }
 
 // =============================================================================
@@ -1480,14 +1533,19 @@ func (s *MRPServiceImpl) generateSafetyStockDemands(
 // =============================================================================
 
 // ensureItemCache garante que o item esteja no cache, carregando do DB se necessário.
-func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int64]*cachedItemMRP, itemCode int64) *cachedItemMRP {
+func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int64]*cachedItemMRP, itemCode int64) (*cachedItemMRP, error) {
 	if cached, ok := itemCache[itemCode]; ok {
-		return cached
+		return cached, nil
 	}
 
+	// Item inexistente planeja com os padrões; falha de leitura é erro — antes
+	// o item era planejado sem lote mínimo, fantasma nem ponto de pedido.
 	var item *itementity.Item
 	if code, err := valueobject.NewItemCode(itemCode); err == nil {
-		item, _ = s.ItemRepo.FindItemByCode(ctx, code)
+		item, err = s.ItemRepo.FindItemByCode(ctx, code)
+		if err != nil && !domainerr.EhNaoEncontrado(err) {
+			return &cachedItemMRP{}, fmt.Errorf("lendo o cadastro do item %d: %w", itemCode, err)
+		}
 	}
 
 	cached := &cachedItemMRP{}
@@ -1500,7 +1558,7 @@ func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int6
 		cached.multipleLot = float64(item.Planning.MultipleLot)
 	}
 	itemCache[itemCode] = cached
-	return cached
+	return cached, nil
 }
 
 // salesDivisionRef é uma versão leve de SalesDivision para uso no MRP.
@@ -1696,17 +1754,42 @@ func shouldPlanTechnicalAssistance(input *entity.MRPInput, params *entity.TypedP
 }
 
 func (s *MRPServiceImpl) createNumberedSuggestion(ctx context.Context, suggestion *entity.PlannedOrderSuggestion, nextOrderNumber *int64) (*entity.PlannedOrderSuggestion, error) {
-	if nextOrderNumber == nil || *nextOrderNumber <= 0 {
-		return nil, fmt.Errorf("próximo número de ordem inválido")
+	if nextOrderNumber == nil {
+		// Cálculo de cenário: sugestão sem número de ordem.
+		suggestion.OrderNumber = nil
+		return s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
 	}
-	number := *nextOrderNumber
-	suggestion.OrderNumber = &number
-	*nextOrderNumber++
-	created, err := s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
-	if err != nil {
-		return nil, err
+	if *nextOrderNumber <= 0 {
+		return nil, domainerr.NewValidation("próximo número de ordem inválido")
 	}
-	return created, nil
+	// Número ocupado (ordem planejada ativa ou sugestão de outro plano) não é
+	// erro do cálculo: a sugestão pega o próximo livre. Antes ela se perdia e o
+	// plano terminava "com erros" sem nenhuma ordem quando o número inicial
+	// repetia o de uma rodada anterior.
+	const tentativas = 10000
+	for i := 0; i < tentativas; i++ {
+		number := *nextOrderNumber
+		suggestion.OrderNumber = &number
+		*nextOrderNumber++
+		created, err := s.MRPRepo.CreatePlannedOrderSuggestion(ctx, suggestion)
+		if errors.Is(err, mrprepo.ErrOrderNumberInUse) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return created, nil
+	}
+	return nil, domainerr.NewValidation(fmt.Sprintf("nenhum número de ordem livre em %d tentativas a partir de %d", tentativas, *nextOrderNumber-tentativas))
+}
+
+// suppliesItem diz se a sugestão traz o item para o estoque. A ordem de
+// SERVIÇO é a compra da operação externa do MESMO item que a ordem de
+// fabricação já cobre: não é item novo nem consome componentes. Antes ela era
+// somada como suprimento (a necessidade seguinte do item saía menor) e
+// explodia a estrutura de novo (os componentes eram pedidos em dobro).
+func suppliesItem(s *entity.PlannedOrderSuggestion) bool {
+	return s != nil && s.OrderType != "SERVICO"
 }
 
 // advanceNettingState prevents stock and firm receipts already consumed by an
@@ -1714,7 +1797,9 @@ func (s *MRPServiceImpl) createNumberedSuggestion(ctx context.Context, suggestio
 func advanceNettingState(input *entity.MRPInput, output *entity.MRPOutput, snapshotMap map[int64]*entity.StockSnapshot, supplyMap map[int64][]ports.SupplyEntry) {
 	planned := 0.0
 	for _, order := range output.PlannedOrders {
-		planned += order.Quantity
+		if suppliesItem(order) {
+			planned += order.Quantity
+		}
 	}
 	snapshotMap[input.ItemCode] = &entity.StockSnapshot{
 		ItemCode: input.ItemCode, Quantity: math.Max(0, output.StockProjected+planned), SnapshotDate: input.NeedDate,
@@ -1846,16 +1931,19 @@ func (s *MRPServiceImpl) itemAllowed(allowed map[int64]struct{}, itemCode int64)
 
 // ---------- Sales Forecast → MRP demand ----------
 
-func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64) []*entity.MRPInput {
+func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64) ([]*entity.MRPInput, error) {
 	if s.ForecastRepo == nil {
-		return nil
+		return nil, nil
 	}
 	year := time.Now().Year()
 	forecasts, err := s.ForecastRepo.ListForecasts(ctx, year)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("lendo a previsão de vendas de %d: %w", year, err)
 	}
-	nextYear, _ := s.ForecastRepo.ListForecasts(ctx, year+1)
+	nextYear, err := s.ForecastRepo.ListForecasts(ctx, year+1)
+	if err != nil {
+		return nil, fmt.Errorf("lendo a previsão de vendas de %d: %w", year+1, err)
+	}
 	forecasts = append(forecasts, nextYear...)
 
 	result := make([]*entity.MRPInput, 0, len(forecasts))
@@ -1874,7 +1962,7 @@ func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64
 			DemandType: "FORECAST",
 		})
 	}
-	return result
+	return result, nil
 }
 
 func mrpWeekToDate(year, week int) time.Time {
@@ -1915,4 +2003,18 @@ func aplicaPoliticaDeLote(necessidade, loteMinimo, loteMultiplo float64) float64
 		necessidade = math.Ceil(necessidade/loteMultiplo) * loteMultiplo
 	}
 	return necessidade
+}
+
+// registrarErro guarda a falha no log do cálculo — a primeira mensagem de cada
+// tipo e quantas vezes ocorreu. O cálculo segue e termina COMPLETED_WITH_ERRORS:
+// a falha aparece em vez de sumir.
+func registrarErro(errs map[string]interface{}, chave string, err error) {
+	if err == nil {
+		return
+	}
+	if _, ja := errs[chave]; !ja {
+		errs[chave] = err.Error()
+	}
+	n, _ := errs[chave+"_ocorrencias"].(int)
+	errs[chave+"_ocorrencias"] = n + 1
 }

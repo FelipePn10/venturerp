@@ -8,8 +8,8 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"regexp"
 	"strings"
 	"time"
@@ -168,30 +168,30 @@ func limparTexto(v *string) *string {
 
 func (t *Transportadora) Validar() error {
 	if t.SupplierCode <= 0 {
-		return errors.New("informe o fornecedor da transportadora")
+		return domainerr.NewValidation("informe o fornecedor da transportadora")
 	}
 	if !t.Modal.Valido() {
-		return fmt.Errorf("modal de transporte inválido: %s", t.Modal)
+		return domainerr.NewValidation(fmt.Sprintf("modal de transporte inválido: %s", t.Modal))
 	}
 	if t.ShipperType != nil && !t.ShipperType.Valido() {
-		return fmt.Errorf("tipo de transportador inválido: %s", *t.ShipperType)
+		return domainerr.NewValidation(fmt.Sprintf("tipo de transportador inválido: %s", *t.ShipperType))
 	}
 	// RNTRC tem 8 dígitos. Com número errado o CT-e é rejeitado na SEFAZ, e o
 	// erro aparece na expedição, não no cadastro.
 	if t.ANTTRNTRC != nil {
 		if !somenteDigitos.MatchString(*t.ANTTRNTRC) || len(*t.ANTTRNTRC) != 8 {
-			return errors.New("o RNTRC deve ter 8 dígitos")
+			return domainerr.NewValidation("o RNTRC deve ter 8 dígitos")
 		}
 	}
 	// Modal rodoviário emitindo CT-e sem RNTRC não passa na SEFAZ.
 	if t.Modal == ModalRodoviario && t.IssuesCTe && t.ANTTRNTRC == nil {
-		return errors.New("transportadora rodoviária que emite CT-e precisa do RNTRC")
+		return domainerr.NewValidation("transportadora rodoviária que emite CT-e precisa do RNTRC")
 	}
 	if t.DefaultFreightType != nil {
 		switch *t.DefaultFreightType {
 		case "CIF", "FOB", "TERCEIROS", "SEM_FRETE":
 		default:
-			return fmt.Errorf("tipo de frete padrão inválido: %s", *t.DefaultFreightType)
+			return domainerr.NewValidation(fmt.Sprintf("tipo de frete padrão inválido: %s", *t.DefaultFreightType))
 		}
 	}
 	for _, d := range []struct {
@@ -204,21 +204,21 @@ func (t *Transportadora) Validar() error {
 		{"cobertura do seguro", t.InsuranceCoverage},
 	} {
 		if d.valor.IsNegative() {
-			return fmt.Errorf("o %s não pode ser negativo", d.nome)
+			return domainerr.NewValidation(fmt.Sprintf("o %s não pode ser negativo", d.nome))
 		}
 	}
 	cem := decimal.NewFromInt(100)
 	if t.FreightPctValue.IsNegative() || t.FreightPctValue.GreaterThan(cem) {
-		return errors.New("o percentual de frete sobre o valor deve estar entre 0 e 100")
+		return domainerr.NewValidation("o percentual de frete sobre o valor deve estar entre 0 e 100")
 	}
 	if t.GrisPct.IsNegative() || t.GrisPct.GreaterThan(cem) {
-		return errors.New("o percentual de GRIS deve estar entre 0 e 100")
+		return domainerr.NewValidation("o percentual de GRIS deve estar entre 0 e 100")
 	}
 	if t.AverageLeadDays != nil && *t.AverageLeadDays < 0 {
-		return errors.New("o prazo médio não pode ser negativo")
+		return domainerr.NewValidation("o prazo médio não pode ser negativo")
 	}
 	if t.InsurancePolicy != nil && t.InsuranceCompany == nil {
-		return errors.New("informe a seguradora da apólice")
+		return domainerr.NewValidation("informe a seguradora da apólice")
 	}
 	for _, v := range t.Vehicles {
 		if err := v.Validar(); err != nil {
@@ -302,18 +302,18 @@ func (v *Veiculo) Normalizar() {
 
 func (v *Veiculo) Validar() error {
 	if v.Plate == "" {
-		return errors.New("informe a placa do veículo")
+		return domainerr.NewValidation("informe a placa do veículo")
 	}
 	// Aceita o padrão antigo (AAA9999) e o Mercosul (AAA9A99): a frota real tem
 	// os dois, e recusar um dos formatos é travar o cadastro sem motivo.
 	if !placaAntiga.MatchString(v.Plate) && !placaMercosul.MatchString(v.Plate) {
-		return fmt.Errorf("placa inválida: %s (use AAA9999 ou AAA9A99)", v.Plate)
+		return domainerr.NewValidation(fmt.Sprintf("placa inválida: %s (use AAA9999 ou AAA9A99)", v.Plate))
 	}
 	if v.CapacityKg.IsNegative() || v.CapacityM3.IsNegative() {
-		return errors.New("a capacidade do veículo não pode ser negativa")
+		return domainerr.NewValidation("a capacidade do veículo não pode ser negativa")
 	}
 	if v.Axles != nil && (*v.Axles < 2 || *v.Axles > 12) {
-		return errors.New("o número de eixos deve estar entre 2 e 12")
+		return domainerr.NewValidation("o número de eixos deve estar entre 2 e 12")
 	}
 	return nil
 }
@@ -378,27 +378,27 @@ func limparCEP(v *string) *string {
 
 func (a *RegiaoAtendida) Validar() error {
 	if a.State == nil && a.PostalCodeFrom == nil {
-		return errors.New("informe a UF ou a faixa de CEP da região atendida")
+		return domainerr.NewValidation("informe a UF ou a faixa de CEP da região atendida")
 	}
 	if a.State != nil && len(*a.State) != 2 {
-		return fmt.Errorf("UF inválida: %s", *a.State)
+		return domainerr.NewValidation(fmt.Sprintf("UF inválida: %s", *a.State))
 	}
 	for _, cep := range []*string{a.PostalCodeFrom, a.PostalCodeTo} {
 		if cep != nil && !cepFormatoValido.MatchString(*cep) {
-			return fmt.Errorf("CEP inválido: %s (use 8 dígitos)", *cep)
+			return domainerr.NewValidation(fmt.Sprintf("CEP inválido: %s (use 8 dígitos)", *cep))
 		}
 	}
 	if a.PostalCodeFrom != nil && a.PostalCodeTo != nil && *a.PostalCodeFrom > *a.PostalCodeTo {
-		return errors.New("a faixa de CEP começa depois de terminar")
+		return domainerr.NewValidation("a faixa de CEP começa depois de terminar")
 	}
 	if a.LeadDays < 0 {
-		return errors.New("o prazo da região não pode ser negativo")
+		return domainerr.NewValidation("o prazo da região não pode ser negativo")
 	}
 	if a.MinValue.IsNegative() || a.KgRate.IsNegative() {
-		return errors.New("os valores da região não podem ser negativos")
+		return domainerr.NewValidation("os valores da região não podem ser negativos")
 	}
 	if a.PctValue.IsNegative() || a.PctValue.GreaterThan(decimal.NewFromInt(100)) {
-		return errors.New("o percentual da região deve estar entre 0 e 100")
+		return domainerr.NewValidation("o percentual da região deve estar entre 0 e 100")
 	}
 	return nil
 }

@@ -2,8 +2,6 @@ package purchase_order_uc
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -18,7 +16,7 @@ const (
 	PositionCancelled = "CANCELLED"
 )
 
-var ErrAttachmentNotFound = errors.New("anexo do pedido de compra não encontrado")
+var ErrAttachmentNotFound = errorsuc.NewNotFoundError("anexo do pedido de compra não encontrado")
 
 type PurchaseOrderConsultationFilter struct {
 	OrderFrom, OrderTo       *int64
@@ -160,7 +158,7 @@ func validateConsultationFilter(f *PurchaseOrderConsultationFilter) error {
 		return errorsuc.NewValidationError("moeda de destino e data-base são obrigatórias para conversão")
 	}
 	if !f.Convert && (f.TargetCurrency != "" || f.BaseDate != nil) {
-		return fmt.Errorf("conversion parameters require convert=true")
+		return errorsuc.NewValidationError("os parâmetros de conversão exigem a opção converter ativada")
 	}
 	for _, pair := range [][2]*int64{{f.OrderFrom, f.OrderTo}, {f.SupplierFrom, f.SupplierTo}, {f.ItemFrom, f.ItemTo}, {f.ImportFrom, f.ImportTo}} {
 		if pair[0] != nil && pair[1] != nil && *pair[0] > *pair[1] {

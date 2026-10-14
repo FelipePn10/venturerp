@@ -14,7 +14,11 @@ import (
 const addRouteOpTool = `-- name: AddRouteOpTool :one
 
 INSERT INTO route_operation_tools (route_operation_id, tool_id, qty_required)
-VALUES ($1, $2, $3)
+SELECT $1, $2, $3
+WHERE EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = $4)
+  AND EXISTS (SELECT 1 FROM tools t WHERE t.id = $2 AND t.enterprise_id = $4)
 RETURNING id, route_operation_id, tool_id, qty_required, created_at
 `
 
@@ -22,11 +26,18 @@ type AddRouteOpToolParams struct {
 	RouteOperationID int64
 	ToolID           int64
 	QtyRequired      pgtype.Numeric
+	EnterpriseID     int64
 }
 
 // ─── route_operation_tools (association) ─────────────────────────────────────────
+// Etapa e ferramenta da empresa da sessão; senão, nada é gravado.
 func (q *Queries) AddRouteOpTool(ctx context.Context, arg AddRouteOpToolParams) (RouteOperationTool, error) {
-	row := q.db.QueryRow(ctx, addRouteOpTool, arg.RouteOperationID, arg.ToolID, arg.QtyRequired)
+	row := q.db.QueryRow(ctx, addRouteOpTool,
+		arg.RouteOperationID,
+		arg.ToolID,
+		arg.QtyRequired,
+		arg.EnterpriseID,
+	)
 	var i RouteOperationTool
 	err := row.Scan(
 		&i.ID,
@@ -41,7 +52,7 @@ func (q *Queries) AddRouteOpTool(ctx context.Context, arg AddRouteOpToolParams) 
 const consumeToolLife = `-- name: ConsumeToolLife :one
 UPDATE tools SET life_used = life_used + $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type ConsumeToolLifeParams struct {
@@ -66,29 +77,35 @@ func (q *Queries) ConsumeToolLife(ctx context.Context, arg ConsumeToolLifeParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createTool = `-- name: CreateTool :one
 
+
 INSERT INTO tools (
-    code, name, tool_type, life_type, life_limit, cost, status, created_by
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by
+    code, name, tool_type, life_type, life_limit, cost, status, created_by, enterprise_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type CreateToolParams struct {
-	Code      int64
-	Name      string
-	ToolType  string
-	LifeType  string
-	LifeLimit pgtype.Numeric
-	Cost      pgtype.Numeric
-	Status    string
-	CreatedBy pgtype.UUID
+	Code         int64
+	Name         string
+	ToolType     string
+	LifeType     string
+	LifeLimit    pgtype.Numeric
+	Cost         pgtype.Numeric
+	Status       string
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
+// Ferramenta é da empresa (enterprise_id). As consultas por id sem empresa são
+// usadas a partir de operação/roteiro já conferidos; o repositório confere a
+// posse antes (ver tool_serials.sql.go: ToolBelongsToEnterprise etc.).
 // ─── tools (master) ────────────────────────────────────────────────────────────
 func (q *Queries) CreateTool(ctx context.Context, arg CreateToolParams) (Tool, error) {
 	row := q.db.QueryRow(ctx, createTool,
@@ -100,6 +117,7 @@ func (q *Queries) CreateTool(ctx context.Context, arg CreateToolParams) (Tool, e
 		arg.Cost,
 		arg.Status,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i Tool
 	err := row.Scan(
@@ -116,6 +134,7 @@ func (q *Queries) CreateTool(ctx context.Context, arg CreateToolParams) (Tool, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -130,7 +149,7 @@ func (q *Queries) DeactivateTool(ctx context.Context, id int64) error {
 }
 
 const getTool = `-- name: GetTool :one
-SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by FROM tools WHERE id = $1
+SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id FROM tools WHERE id = $1
 `
 
 func (q *Queries) GetTool(ctx context.Context, id int64) (Tool, error) {
@@ -150,18 +169,24 @@ func (q *Queries) GetTool(ctx context.Context, id int64) (Tool, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listTools = `-- name: ListTools :many
-SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by FROM tools
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id FROM tools
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListTools(ctx context.Context, dollar_1 bool) ([]Tool, error) {
-	rows, err := q.db.Query(ctx, listTools, dollar_1)
+type ListToolsParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListTools(ctx context.Context, arg ListToolsParams) ([]Tool, error) {
+	rows, err := q.db.Query(ctx, listTools, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +208,7 @@ func (q *Queries) ListTools(ctx context.Context, dollar_1 bool) ([]Tool, error) 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -200,10 +226,16 @@ SELECT rot.id, rot.route_operation_id, rot.tool_id, rot.qty_required,
        t.life_used, t.status
 FROM route_operation_tools rot
 JOIN route_operations ro ON ro.id = rot.route_operation_id
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
 JOIN tools t ON t.id = rot.tool_id
-WHERE ro.route_id = $1
+WHERE ro.route_id = $1 AND mr.enterprise_id = $2
 ORDER BY rot.route_operation_id, rot.id
 `
+
+type ListToolsByRouteParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
 
 type ListToolsByRouteRow struct {
 	ID               int64
@@ -218,8 +250,8 @@ type ListToolsByRouteRow struct {
 	Status           string
 }
 
-func (q *Queries) ListToolsByRoute(ctx context.Context, routeID int64) ([]ListToolsByRouteRow, error) {
-	rows, err := q.db.Query(ctx, listToolsByRoute, routeID)
+func (q *Queries) ListToolsByRoute(ctx context.Context, arg ListToolsByRouteParams) ([]ListToolsByRouteRow, error) {
+	rows, err := q.db.Query(ctx, listToolsByRoute, arg.RouteID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -255,9 +287,14 @@ SELECT rot.id, rot.route_operation_id, rot.tool_id, rot.qty_required,
        t.life_used, t.status
 FROM route_operation_tools rot
 JOIN tools t ON t.id = rot.tool_id
-WHERE rot.route_operation_id = $1
+WHERE rot.route_operation_id = $1 AND t.enterprise_id = $2
 ORDER BY rot.id
 `
+
+type ListToolsByRouteOpParams struct {
+	RouteOperationID int64
+	EnterpriseID     int64
+}
 
 type ListToolsByRouteOpRow struct {
 	ID               int64
@@ -272,8 +309,8 @@ type ListToolsByRouteOpRow struct {
 	Status           string
 }
 
-func (q *Queries) ListToolsByRouteOp(ctx context.Context, routeOperationID int64) ([]ListToolsByRouteOpRow, error) {
-	rows, err := q.db.Query(ctx, listToolsByRouteOp, routeOperationID)
+func (q *Queries) ListToolsByRouteOp(ctx context.Context, arg ListToolsByRouteOpParams) ([]ListToolsByRouteOpRow, error) {
+	rows, err := q.db.Query(ctx, listToolsByRouteOp, arg.RouteOperationID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -304,11 +341,16 @@ func (q *Queries) ListToolsByRouteOp(ctx context.Context, routeOperationID int64
 }
 
 const listToolsNeedingReplacement = `-- name: ListToolsNeedingReplacement :many
-SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by FROM tools
-WHERE is_active = TRUE AND life_limit > 0
-  AND life_used >= life_limit * $1::NUMERIC
+SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id FROM tools
+WHERE is_active = TRUE AND life_limit > 0 AND enterprise_id = $1
+  AND life_used >= life_limit * $2::NUMERIC
 ORDER BY (life_used / life_limit) DESC, code
 `
+
+type ListToolsNeedingReplacementParams struct {
+	EnterpriseID int64
+	Threshold    pgtype.Numeric
+}
 
 // Ferramentas que já passaram do limite OU estão chegando nele.
 //
@@ -317,8 +359,8 @@ ORDER BY (life_used / life_limit) DESC, code
 // de a peça sair fora de medida. `sqlc.arg(threshold)` é a fração do limite a
 // partir da qual a ferramenta entra na lista (0.8 = 80 %); 1 devolve só as que
 // já estouraram, que é o comportamento antigo.
-func (q *Queries) ListToolsNeedingReplacement(ctx context.Context, threshold pgtype.Numeric) ([]Tool, error) {
-	rows, err := q.db.Query(ctx, listToolsNeedingReplacement, threshold)
+func (q *Queries) ListToolsNeedingReplacement(ctx context.Context, arg ListToolsNeedingReplacementParams) ([]Tool, error) {
+	rows, err := q.db.Query(ctx, listToolsNeedingReplacement, arg.EnterpriseID, arg.Threshold)
 	if err != nil {
 		return nil, err
 	}
@@ -340,6 +382,7 @@ func (q *Queries) ListToolsNeedingReplacement(ctx context.Context, threshold pgt
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -362,19 +405,30 @@ func (q *Queries) NextToolCode(ctx context.Context) (int64, error) {
 	return next_code, err
 }
 
-const removeRouteOpTool = `-- name: RemoveRouteOpTool :exec
-DELETE FROM route_operation_tools WHERE id = $1
+const removeRouteOpTool = `-- name: RemoveRouteOpTool :execrows
+DELETE FROM route_operation_tools
+WHERE route_operation_tools.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_tools.route_operation_id AND emr.enterprise_id = $2)
 `
 
-func (q *Queries) RemoveRouteOpTool(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, removeRouteOpTool, id)
-	return err
+type RemoveRouteOpToolParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) RemoveRouteOpTool(ctx context.Context, arg RemoveRouteOpToolParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeRouteOpTool, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const resetToolLife = `-- name: ResetToolLife :one
 UPDATE tools SET life_used = 0, status = 'ATIVA', updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 func (q *Queries) ResetToolLife(ctx context.Context, id int64) (Tool, error) {
@@ -394,6 +448,7 @@ func (q *Queries) ResetToolLife(ctx context.Context, id int64) (Tool, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -408,7 +463,7 @@ UPDATE tools SET
     status     = $7,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
 `
 
 type UpdateToolParams struct {
@@ -446,6 +501,7 @@ func (q *Queries) UpdateTool(ctx context.Context, arg UpdateToolParams) (Tool, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

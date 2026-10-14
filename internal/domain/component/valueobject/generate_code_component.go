@@ -1,8 +1,8 @@
 package valueobject
 
 import (
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"math/rand"
 )
 
@@ -12,7 +12,7 @@ type ComponentCode struct {
 
 func NewComponentCode(groupCode string) (ComponentCode, error) {
 	if len(groupCode) < 2 {
-		return ComponentCode{}, errors.New("o código do grupo precisa de ao menos 2 caracteres")
+		return ComponentCode{}, domainerr.NewValidation("o código do grupo precisa de ao menos 2 caracteres")
 	}
 
 	group := groupCode[:2]

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -23,13 +22,12 @@ func NewEntryOperationHandler(uc *entry_operation_uc.EntryOperationUseCase) *Ent
 
 func (h *EntryOperationHandler) CreateStateGroup(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateStateGroupDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.CreateStateGroup(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -65,13 +63,12 @@ func (h *EntryOperationHandler) AddStateGroupUF(w http.ResponseWriter, r *http.R
 		return
 	}
 	var dto request.AddStateGroupUFDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.StateGroupCode = code
 	if err := h.uc.AddStateGroupUF(r.Context(), dto); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -81,13 +78,12 @@ func (h *EntryOperationHandler) AddStateGroupUF(w http.ResponseWriter, r *http.R
 
 func (h *EntryOperationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateEntryOperationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.CreateEntryOperation(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -95,13 +91,12 @@ func (h *EntryOperationHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *EntryOperationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateEntryOperationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.UpdateEntryOperation(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

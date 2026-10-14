@@ -72,8 +72,7 @@ func (h *IndustrialCalendarHandler) GenerateMonth(w http.ResponseWriter, r *http
 
 func (h *IndustrialCalendarHandler) CreateDay(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCalendarDayDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateDay(r.Context(), dto)

@@ -18,7 +18,7 @@ type configuratorPort interface {
 	StructurePanel(ctx context.Context, itemCode int64, itemName string) (*response.StructureConfiguratorPanelResponse, error)
 	ValidateCombination(ctx context.Context, itemCode int64, answers []request.CfgMaskAnswerInput) ([]response.StructureConfiguratorViolation, error)
 	GenerateMask(ctx context.Context, dto request.CfgGenerateMaskDTO) (*response.CfgGeneratedMaskResponse, error)
-	FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) map[string]float64
+	FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]float64, error)
 }
 
 // structureResolver resolve a árvore da estrutura para uma configuração.
@@ -105,6 +105,10 @@ func (uc *StructureConfiguratorUseCase) Apply(
 		return nil, errorsuc.NewValidationError(err.Error())
 	}
 
+	variables, err := uc.Configurator.FormulaVariables(ctx, dto.Answers)
+	if err != nil {
+		return nil, err
+	}
 	out := &response.StructureConfiguratorApplyResponse{
 		ItemCode:  string(item.BusinessCode),
 		Mask:      generated.Mask,
@@ -112,7 +116,7 @@ func (uc *StructureConfiguratorUseCase) Apply(
 		Persisted: generated.Persisted,
 		MaskID:    generated.MaskID,
 		Answers:   generated.Answers,
-		Variables: uc.Configurator.FormulaVariables(ctx, dto.Answers),
+		Variables: variables,
 		Warnings:  []string{},
 	}
 

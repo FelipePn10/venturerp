@@ -37,10 +37,10 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d não pode ser faturada no status %s", dto.LoadCode, load.Status))
 	}
 	if len(load.Shipments) == 0 {
-		return nil, fmt.Errorf("carga %d não possui romaneios para faturar", dto.LoadCode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d não possui romaneios para faturar", dto.LoadCode))
 	}
 	if len(load.FiscalNotes) > 0 {
-		return nil, fmt.Errorf("carga %d já possui nota fiscal vinculada", dto.LoadCode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d já possui nota fiscal vinculada", dto.LoadCode))
 	}
 
 	overrides := fiscalLoadOverrides(dto.ItemOverrides)
@@ -125,13 +125,16 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não pode ser faturado no status %s", ship.Code, ship.Status))
 		}
 		if len(ship.Items) == 0 {
-			return nil, nil, fmt.Errorf("romaneio %d não possui itens para faturar", ship.Code)
+			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não possui itens para faturar", ship.Code))
 		}
 
 		orderItems := map[int64]*salesentity.SalesOrderItem{}
 		orderItemsByCode := map[int64]*salesentity.SalesOrderItem{}
 		if uc.SalesOrderRepo != nil && ship.SalesOrderCode != nil {
-			items, _ := uc.SalesOrderRepo.ListItems(ctx, *ship.SalesOrderCode)
+			items, errItens := uc.SalesOrderRepo.ListItems(ctx, *ship.SalesOrderCode)
+			if errItens != nil {
+				return nil, nil, fmt.Errorf("lendo os itens do pedido do romaneio %d: %w", ship.Code, errItens)
+			}
 			for _, it := range items {
 				orderItems[it.ItemCode] = it
 				orderItemsByCode[it.Code] = it

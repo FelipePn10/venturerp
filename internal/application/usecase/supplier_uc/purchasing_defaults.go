@@ -37,28 +37,32 @@ func (uc *SupplierUseCase) GetPurchasingDefaults(ctx context.Context, supplierCo
 
 	// Fallback for payment condition: lowest-ranking "vencimento" carrying one.
 	if out.PaymentConditionID == nil {
-		if dueDates, err := uc.repo.ListDueDates(ctx, s.ID); err == nil {
-			best := int32(1 << 30)
-			for _, d := range dueDates {
-				if d.PaymentConditionID != nil && d.Ranking <= best {
-					best = d.Ranking
-					out.PaymentConditionID = d.PaymentConditionID
-				}
+		dueDates, err := uc.repo.ListDueDates(ctx, s.ID)
+		if err != nil {
+			return nil, fmt.Errorf("lendo os vencimentos do fornecedor: %w", err)
+		}
+		best := int32(1 << 30)
+		for _, d := range dueDates {
+			if d.PaymentConditionID != nil && d.Ranking <= best {
+				best = d.Ranking
+				out.PaymentConditionID = d.PaymentConditionID
 			}
 		}
 	}
 
 	// Per-enterprise binding (pasta Empresas).
 	if enterpriseCode != 0 {
-		if links, err := uc.repo.ListEnterprises(ctx, s.ID); err == nil {
-			for _, l := range links {
-				if l.EnterpriseCode == enterpriseCode && l.IsActive {
-					out.FinancialAccount = l.FinancialAccount
-					out.DefaultInvoiceTypeID = l.DefaultInvoiceTypeID
-					out.PurchasePriceTableID = l.PurchasePriceTableID
-					out.AppliesIPI = l.AppliesIPI
-					break
-				}
+		links, err := uc.repo.ListEnterprises(ctx, s.ID)
+		if err != nil {
+			return nil, fmt.Errorf("lendo o vínculo do fornecedor com a empresa: %w", err)
+		}
+		for _, l := range links {
+			if l.EnterpriseCode == enterpriseCode && l.IsActive {
+				out.FinancialAccount = l.FinancialAccount
+				out.DefaultInvoiceTypeID = l.DefaultInvoiceTypeID
+				out.PurchasePriceTableID = l.PurchasePriceTableID
+				out.AppliesIPI = l.AppliesIPI
+				break
 			}
 		}
 	}

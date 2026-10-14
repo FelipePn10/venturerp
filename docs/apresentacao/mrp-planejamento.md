@@ -27,6 +27,12 @@ E vai além: verifica se a fábrica **tem capacidade** para cumprir os prazos e 
 11. [APS — em que ordem produzir?](#11-aps--em-que-ordem-produzir)
 12. [Tudo num clique: o pipeline de planejamento](#12-tudo-num-clique-o-pipeline-de-planejamento)
 13. [Glossário rápido](#13-glossário-rápido)
+14. [Da sugestão à entrega na fábrica](#14-da-sugestão-à-entrega-na-fábrica)
+15. [Cobertura: o que vai faltar primeiro](#15-cobertura-o-que-vai-faltar-primeiro)
+16. [Exceções: agir direto na mensagem](#16-exceções-agir-direto-na-mensagem)
+17. [Rastreamento: esta compra serve a quem?](#17-rastreamento-esta-compra-serve-a-quem)
+18. [Cenários: e se…?](#18-cenários-e-se)
+19. [Execução automática](#19-execução-automática)
 
 ---
 
@@ -267,6 +273,10 @@ Em vez de rodar MRP, CRP e APS separadamente, o sistema oferece o **pipeline**: 
 | **CRP** | Verificação de capacidade das máquinas |
 | **APS** | Sequenciamento — a fila/agenda de produção |
 | **Firmar** | Confirmar uma sugestão, transformando-a em ordem real |
+| **Cobertura** | Por quantos dias o estoque (e as ordens firmes) seguram o consumo previsto |
+| **Rastreamento (pegging)** | O vínculo entre cada necessidade e o suprimento que a atende |
+| **Cadeia atrasada** | Alguma ordem que atende o pedido termina depois da data de que ele precisa |
+| **Cenário** | Uma cópia do plano onde se testa uma mudança sem mexer no plano real |
 
 > A versão técnica detalhada está em `../dev/mrp-calculo.md`, `../dev/visao-geral.md` (§3) e `../dev/manufatura-e-compras.md` (CRP/APS/pipeline).
 
@@ -285,3 +295,105 @@ serviço necessário ainda estiver pendente.
 Os relatórios de perfil, disponibilidade, necessidades agrupadas, explosão e
 ponto de reposição ajudam o planejador a responder o que falta, quando faltará e
 qual quantidade comprar ou fabricar.
+
+---
+
+## 15. Cobertura: o que vai faltar primeiro
+
+A aba **Cobertura** do MRP (VMRP0100) mostra, para cada item do plano, **por
+quantos dias** o estoque segura o consumo previsto — sozinho e somando as ordens
+firmes — e se há **falta ainda sem ordem planejada**. Cada item recebe um farol:
+
+| Farol | Significa |
+|---|---|
+| **Crítico** | Estoque e ordens firmes não cobrem uma necessidade que já venceu, ou a ordem planejada que cobriria já devia ter começado |
+| **Atenção** | A falta só está coberta por ordem planejada (ainda não firmada), ou o estoque projetado fica abaixo do estoque de segurança |
+| **Coberto** | Estoque e ordens firmes cobrem todo o horizonte do plano |
+
+O planejador filtra por planejador e tipo de item e firma a sugestão dali mesmo.
+É a lista de "o que olhar primeiro de manhã".
+
+---
+
+## 16. Exceções: agir direto na mensagem
+
+As mensagens de exceção comparam cada ordem firme com a necessidade que **ela de
+fato cobre** — antecipar, adiar, cancelar ou atrasada. Na aba **Exceções** o
+planejador resolve a mensagem sem sair da tela:
+
+- **Reprogramar**: leva a ordem planejada para a data sugerida pelo cálculo;
+- **Cancelar ordem**: quando a ordem não tem mais necessidade;
+- **Marcar tratada**: com uma observação, quando a decisão foi outra.
+
+Cada exceção guarda **quem tratou, quando e como**. Se duas pessoas tratam a
+mesma mensagem ao mesmo tempo, a segunda é avisada — nada é sobrescrito.
+
+A mensagem também diz **a quem a ordem atende**: "Afeta: Pedido 1234 · Previsão
+de maio". Assim o planejador sabe, antes de adiar uma ordem, qual cliente sente a
+mudança. O botão **Para quem é** abre a cadeia completa.
+
+As exceções podem ser enviadas por e-mail ou para um endereço de integração
+(webhook). O endereço precisa ser HTTPS e de internet pública — o sistema recusa
+endereços da rede interna, para que a notificação não sirva de porta para dentro
+da empresa.
+
+---
+
+## 17. Rastreamento: esta compra serve a quem?
+
+A cada cálculo, o MRP grava **o vínculo de cada necessidade com o suprimento que
+a atende**: estoque, ordem firme, sugestão ou falta. Isso responde, nos dois
+sentidos:
+
+- **De cima para baixo** — "o que falta para este pedido sair?": do pedido de
+  venda (ou previsão, ou demanda) até as compras dos componentes;
+- **De baixo para cima** — "esta compra serve a quem?": de uma sugestão ou ordem
+  planejada até os pedidos que dependem dela (botão **Para quem é** nas abas
+  Sugestões, Ordens planejadas e Exceções).
+
+Na aba **Rastreamento**, cada necessidade de origem aparece como **Coberta**,
+**Falta na cadeia** ou **Atrasada**. "Atrasada" quer dizer que alguma ordem da
+cadeia termina **depois** da data de que o pedido precisa — pela fila das
+máquinas — ou já deveria ter começado. O elo atrasado fica destacado na árvore e
+o motivo aparece por extenso (ex.: "Chapa 3 mm: a fabricação termina em 14/11/2026,
+depois da necessidade (falta de capacidade)").
+
+O **comercial** vê a mesma informação no pedido de venda (VVND0200), na aba
+**Atendimento (MRP)**: linha a linha, quanto sai do estoque, de ordens e de
+sugestões, o que falta e quando fica pronto — sem precisar abrir o MRP.
+
+> O rastreamento é o retrato do **último cálculo**: o que mudou depois (estoque,
+> ordem firmada, compra recebida) aparece no próximo cálculo.
+
+---
+
+## 18. Cenários: e se…?
+
+Na tela de Pipeline de Planejamento (VPLN0100), aba **Cenários**, o planejador
+testa uma mudança **sem tocar no plano real**:
+
+| Ajuste | Exemplo |
+|---|---|
+| **Demanda** | "E se o cliente dobrar o pedido de dezembro?" |
+| **Capacidade de máquina** | "E se a dobradeira parar uma semana?" |
+| **Prazo (lead time)** | "E se o fornecedor de chapa atrasar 10 dias?" |
+| **Estoque inicial** | "E se o inventário mostrar 200 peças a menos?" |
+
+O sistema calcula o cenário (MRP + capacidade) num plano oculto e compara lado a
+lado com o plano real: ordens sugeridas, quantidades a comprar e fabricar, itens
+críticos, exceções, sobrecarga das máquinas, **pedidos com falta** e **pedidos
+com cadeia atrasada**, além da diferença item a item e máquina a máquina.
+
+Se o cenário de demanda for o que vai acontecer, o planejador **aplica a
+demanda** ao plano real. Os demais ajustes (capacidade, prazo, estoque) servem
+para decidir — são mudados nos cadastros de origem, não pelo cenário.
+
+---
+
+## 19. Execução automática
+
+O MRP pode rodar sozinho todas as noites, na hora escolhida pela empresa (no
+fuso da empresa), em nome de quem salvou a configuração. A aba **Execução
+automática** do VPLN0100 mostra a configuração, o botão **Rodar agora** e o
+histórico de execuções, com as que falharam em destaque. Assim o planejador
+começa o dia com o plano e as exceções já atualizados.

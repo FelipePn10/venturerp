@@ -9,6 +9,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/enterprise/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -35,19 +37,22 @@ func (r *repositoryEnterpriseSQLC) Create(
 		return nil, fmt.Errorf("create enterprise: %w", err)
 	}
 
-	return toEnterpriseEntity(dbEnterprise), nil
+	return toEnterpriseEntity(sqlc.Enterprise(dbEnterprise)), nil
 }
 
-func (r *repositoryEnterpriseSQLC) GetByCode(ctx context.Context, code int) (*entity.Enterprise, error) {
-	row, err := r.q.GetEnterpriseByCode(ctx, int32(code))
+func (r *repositoryEnterpriseSQLC) GetByCodeForUser(ctx context.Context, code int, userID uuid.UUID) (*entity.Enterprise, error) {
+	row, err := r.q.GetEnterpriseByCodeForUser(ctx, sqlc.GetEnterpriseByCodeForUserParams{Code: int32(code), UserID: pgutil.ToPgUUID(userID)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("empresa %d não encontrada", code))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get enterprise by code %d: %w", code, err)
 	}
 	return toEnterpriseEntity(row), nil
 }
 
-func (r *repositoryEnterpriseSQLC) List(ctx context.Context) ([]*entity.Enterprise, error) {
-	rows, err := r.q.ListEnterprises(ctx)
+func (r *repositoryEnterpriseSQLC) ListForUser(ctx context.Context, userID uuid.UUID) ([]*entity.Enterprise, error) {
+	rows, err := r.q.ListEnterprisesForUser(ctx, pgutil.ToPgUUID(userID))
 	if err != nil {
 		return nil, fmt.Errorf("list enterprises: %w", err)
 	}

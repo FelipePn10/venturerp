@@ -23,6 +23,11 @@ func (uc *GetProductionOrderUseCase) Execute(ctx context.Context, id int64) (*re
 	if err != nil {
 		return nil, err
 	}
+	if m, ok := uc.Repo.(custoPendenteRepo); ok {
+		if o.CostPending, err = m.CustoPendente(ctx, id); err != nil {
+			return nil, err
+		}
+	}
 	return toProductionOrderResponse(o), nil
 }
 

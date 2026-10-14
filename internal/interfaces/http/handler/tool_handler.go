@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -24,8 +23,7 @@ func NewToolHandler(uc *tool_uc.ToolUseCase) *ToolHandler {
 
 func (h *ToolHandler) CreateTool(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateToolDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.Create(r.Context(), dto)
@@ -43,8 +41,7 @@ func (h *ToolHandler) UpdateTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateToolDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
@@ -131,8 +128,7 @@ func (h *ToolHandler) CreateSerial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.CreateToolSerialDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ToolID = toolID
@@ -183,8 +179,7 @@ func (h *ToolHandler) UpdateSerial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateToolSerialDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
@@ -218,8 +213,7 @@ func (h *ToolHandler) AddRouteOpTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.AddRouteOpToolDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.RouteOperationID = opID

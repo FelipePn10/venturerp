@@ -2,6 +2,7 @@ package fiscal_uc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -24,7 +25,10 @@ func (uc *GetFiscalExitUseCase) Execute(ctx context.Context, id int64) (*respons
 		return nil, err
 	}
 
-	items, _ := uc.Repo.GetExitItems(ctx, id)
+	items, errItens := uc.Repo.GetExitItems(ctx, id)
+	if errItens != nil {
+		return nil, fmt.Errorf("lendo os itens da nota: %w", errItens)
+	}
 	exit.Itens = items
 
 	return toFiscalExitResponse(exit), nil

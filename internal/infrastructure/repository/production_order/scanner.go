@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
@@ -39,9 +40,13 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		if retErr == nil {
 			return
 		}
-		_, _ = r.pool.Exec(ctx, `INSERT INTO production_scan_events(enterprise_id,user_id,device_id,action,result,idempotency_key,request_fingerprint,message)
+		// A rejeição já volta para o coletor; a falha em registrá-la só some do
+		// histórico — vai para o log, sem trocar o erro que o operador precisa ver.
+		if _, err := r.pool.Exec(ctx, `INSERT INTO production_scan_events(enterprise_id,user_id,device_id,action,result,idempotency_key,request_fingerprint,message)
 		 VALUES($1,$2,$3,$4,'REJEITADO',$5,$6,$7) ON CONFLICT(enterprise_id,user_id,action,idempotency_key) DO NOTHING`,
-			command.EnterpriseID, command.UserID, command.DeviceID, string(command.Action), command.IdempotencyKey, command.Fingerprint, retErr.Error())
+			command.EnterpriseID, command.UserID, command.DeviceID, string(command.Action), command.IdempotencyKey, command.Fingerprint, retErr.Error()); err != nil {
+			slog.Error("falha ao registrar a leitura rejeitada do coletor", "enterprise_id", command.EnterpriseID, "acao", command.Action, "erro", err)
+		}
 	}()
 	var priorFingerprint, priorResponse []byte
 	var priorMessage *string

@@ -93,7 +93,7 @@ func (uc *ToolUseCase) Deactivate(ctx context.Context, id int64) error {
 	}
 	updated, err := uc.repo.GetTool(ctx, id)
 	if err != nil || updated == nil || updated.IsActive {
-		return fmt.Errorf("não foi possível inativar a ferramenta %d", id)
+		return errorsuc.NewValidationError(fmt.Sprintf("não foi possível inativar a ferramenta %d", id))
 	}
 	return nil
 }
@@ -111,7 +111,7 @@ func (uc *ToolUseCase) ResetLife(ctx context.Context, id int64) (*response.ToolR
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ferramenta %d não encontrada", id))
 	}
 	if t.LifeUsed != 0 {
-		return nil, fmt.Errorf("não foi possível zerar a vida útil da ferramenta %d", id)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("não foi possível zerar a vida útil da ferramenta %d", id))
 	}
 	return toToolResponse(t), nil
 }
@@ -244,7 +244,7 @@ func (uc *ToolUseCase) DeactivateSerial(ctx context.Context, id int64) error {
 	}
 	updated, err := uc.repo.GetToolSerial(ctx, id)
 	if err != nil || updated == nil || updated.IsActive {
-		return fmt.Errorf("não foi possível inativar a série de ferramenta %d", id)
+		return errorsuc.NewValidationError(fmt.Sprintf("não foi possível inativar a série de ferramenta %d", id))
 	}
 	return nil
 }

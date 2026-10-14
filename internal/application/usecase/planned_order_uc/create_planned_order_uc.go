@@ -2,7 +2,8 @@ package planned_order_uc
 
 import (
 	"context"
-	"time"
+	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -46,11 +47,15 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 		}
 	}
 
-	needDate, _ := time.Parse("2006-01-02", dto.NeedDate)
+	needDate, msg := datetime.Obrigatoria("data de necessidade", dto.NeedDate)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 
+	// Falha ao numerar é erro: o "1" de antes colidia com a ordem 1 existente.
 	nextNum, err := uc.Repo.GetNextOrderNumber(ctx)
 	if err != nil {
-		nextNum = 1
+		return nil, fmt.Errorf("numerando a ordem planejada: %w", err)
 	}
 
 	order := &entity.PlannedOrder{

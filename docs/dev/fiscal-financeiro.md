@@ -623,16 +623,24 @@ Envia a NF-e para a SEFAZ via API Focus NF-e. Só funciona se o status for `"ras
 3. Monta o payload conforme layout Focus NF-e v2
 4. Chama `POST https://homologacao.focusnfe.com.br/v2/nfe/{ref}?substituicao=true`
 5. Salva a chave de acesso, protocolo e ref retornados pelo Focus
-6. Cria automaticamente uma **Conta a Receber** vinculada à NF-e (vencimento em 30 dias)
-7. **Baixa o estoque**: posta um movimento **`OUT`** por item (depósito resolvido a
-   partir do item do **pedido de venda** vinculado), reduzindo o saldo de acabados
-8. **Consome as reservas** ativas do pedido de venda (`SALES_ORDER`)
-9. Marca o **pedido de venda como Faturado** (`status = "F"`)
-10. Registra o log da requisição/resposta no banco
+6. Abre a **pendência de efeitos** da nota (`fiscal_exit_pendencias`, etapa
+   `AUTORIZACAO`) e aplica, **numa transação só**:
+   - os títulos de **Contas a Receber** (parcelas da condição de pagamento);
+   - a **baixa de estoque** (`OUT`) por item, no depósito da linha do pedido ou, sem
+     ele, no depósito padrão do item;
+   - o **consumo das reservas** ativas do pedido (`SALES_ORDER`);
+   - o **faturamento do pedido** (atendido por linha; `status = "F"` quando tudo foi
+     atendido) e a resolução da pendência.
+7. Registra o log da requisição/resposta no banco
 
-> Os passos 7–9 são *best-effort* e **não desfazem** uma NF-e já autorizada na SEFAZ;
-> exigem `sales_order_code` na NF-e e `warehouse_code` no item do pedido. A
-> **expedição/romaneio** (logística) é tratada à parte (ver `manufatura-e-compras.md` §19).
+> A nota autorizada na SEFAZ não volta. Por isso os efeitos são uma pendência
+> registrada ANTES de rodar: ou entram todos, ou nenhum, e a falha fica guardada na
+> pendência com o motivo (a resposta traz o aviso em `warnings`). O agendador
+> `internal/infrastructure/fiscalefeitos` reprocessa as vencidas a cada minuto
+> (espera 1, 2, 4… até 60 min entre tentativas), na sessão da empresa dona; a tela
+> tem "Reprocessar agora". O depósito é conferido antes de transmitir: item sem
+> depósito na linha do pedido nem no cadastro recusa a autorização.
+> A **expedição/romaneio** (logística) é tratada à parte (ver `manufatura-e-compras.md` §19).
 
 **Resposta esperada (`200 OK`):**
 ```json
@@ -649,6 +657,26 @@ Envia a NF-e para a SEFAZ via API Focus NF-e. Só funciona se o status for `"ras
 - `"NF-e deve estar em rascunho para autorizar"` → status já é `autorizada` ou `cancelada`
 - `"token Focus NF-e não configurado"` → execute `PUT /api/fiscal/config` primeiro
 - `"Focus NF-e: ..."` → rejeição da SEFAZ, o erro da SEFAZ é encaminhado
+
+---
+
+### Pendências de efeitos da NF-e
+
+`GET /api/fiscal/exits/{id}/pendencias` lista as pendências da nota (abertas e
+resolvidas) da empresa autenticada:
+
+```json
+[{ "fiscal_exit_id": 12, "etapa": "AUTORIZACAO", "situacao": "PENDENTE", "tentativas": 2,
+   "ultimo_erro": "baixando o estoque do item 1001: …", "proxima_tentativa": "2026-10-14T10:04:00-03:00",
+   "criado_em": "2026-10-14T10:00:00-03:00", "resolvido_em": null }]
+```
+
+`POST /api/fiscal/exits/{id}/reprocessar-efeitos` tenta de novo as pendências abertas
+e devolve a lista atualizada; se continuarem falhando, responde `422` com o motivo.
+Etapas: `AUTORIZACAO` (títulos, baixa, reservas, pedido) e `CANCELAMENTO` (cancela os
+títulos, devolve ao pedido o que a nota atendeu e volta o pedido para "pedido").
+Reprocessar nunca aplica duas vezes: a pendência resolvida sai da fila na mesma
+transação dos efeitos.
 
 ---
 

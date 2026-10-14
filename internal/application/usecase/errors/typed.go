@@ -1,36 +1,37 @@
 package errorsuc
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+)
 
 // Typed application errors let the HTTP layer map use-case failures to the
 // correct status code (400/404/409/422) instead of collapsing everything to
 // 500. Use errors.As/errors.Is at the boundary (see security.RespondUseCaseError).
 
+// Os três tipos vêm do domínio (domainerr): o mesmo erro pode nascer numa
+// entidade ou num caso de uso e a borda HTTP o reconhece igual.
+
 // ValidationError signals a client-side problem with the request payload
 // (missing/invalid fields). Maps to HTTP 422.
-type ValidationError struct{ Msg string }
-
-func (e *ValidationError) Error() string { return e.Msg }
+type ValidationError = domainerr.ValidationError
 
 // NewValidationError builds a ValidationError with the given message.
-func NewValidationError(msg string) error { return &ValidationError{Msg: msg} }
+func NewValidationError(msg string) error { return domainerr.NewValidation(msg) }
 
 // ConflictError signals that the request conflicts with existing state, most
 // commonly a duplicate unique key. Maps to HTTP 409.
-type ConflictError struct{ Msg string }
-
-func (e *ConflictError) Error() string { return e.Msg }
+type ConflictError = domainerr.ConflictError
 
 // NewConflictError builds a ConflictError with the given message.
-func NewConflictError(msg string) error { return &ConflictError{Msg: msg} }
+func NewConflictError(msg string) error { return domainerr.NewConflict(msg) }
 
 // NotFoundError signals that the requested resource does not exist. Maps to 404.
-type NotFoundError struct{ Msg string }
-
-func (e *NotFoundError) Error() string { return e.Msg }
+type NotFoundError = domainerr.NotFoundError
 
 // NewNotFoundError builds a NotFoundError with the given message.
-func NewNotFoundError(msg string) error { return &NotFoundError{Msg: msg} }
+func NewNotFoundError(msg string) error { return domainerr.NewNotFound(msg) }
 
 // AsValidation reports whether err is (or wraps) a ValidationError.
 func AsValidation(err error) (*ValidationError, bool) {
@@ -92,3 +93,7 @@ func AsExternalService(err error) (*ExternalServiceError, bool) {
 	}
 	return nil, false
 }
+
+// EhNaoEncontrado: o erro quer dizer "registro não existe" (tipado ou "nenhuma
+// linha" do banco) — ausência legítima, não falha.
+func EhNaoEncontrado(err error) bool { return domainerr.EhNaoEncontrado(err) }

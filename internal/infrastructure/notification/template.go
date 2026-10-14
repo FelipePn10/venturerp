@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,7 +58,11 @@ func RenderDelivery(enterprise, color, logoDataURI, recipient, title, publicURL 
 	_ = publicURL
 	data := buildTemplateData(enterprise, logoDataURI, recipient, title, payload)
 	var html bytes.Buffer
-	_ = emailTemplate.Execute(&html, data)
+	if err := emailTemplate.Execute(&html, data); err != nil {
+		// Sai só a versão em texto: um HTML pela metade é pior que nenhum.
+		slog.Error("falha ao montar o HTML da notificação; enviando só o texto", "titulo", title, "erro", err)
+		html.Reset()
+	}
 	var text strings.Builder
 	fmt.Fprintf(&text, "%s\n%s\n\nRESUMO\n%s\n\nIMPACTO OPERACIONAL\n%s\n\nAÇÃO RECOMENDADA\n%s\n\nONDE CONSULTAR\nAbra o VentureERP Desktop e acesse: %s\n", data.EnterpriseName, data.Title, data.Summary, data.Impact, data.Action, data.DesktopPath)
 	for _, section := range data.Sections {

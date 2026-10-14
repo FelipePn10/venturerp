@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -19,8 +18,7 @@ type CostCenterHandler struct {
 
 func (h *CostCenterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCostCenterDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -44,7 +42,7 @@ func (h *CostCenterHandler) Get(w http.ResponseWriter, r *http.Request) {
 	costCenterCode, _ := strconv.ParseInt(chi.URLParam(r, "costCenterCode"), 10, 64)
 	result, err := h.getUC.Execute(r.Context(), int32(costCenterCode))
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

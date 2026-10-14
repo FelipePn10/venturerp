@@ -17,12 +17,15 @@ const addAddress = `-- name: AddAddress :one
 INSERT INTO customer_addresses (
     customer_id, address_type, zip_code, street, number,
     complement, neighborhood, city, uf, country, is_default
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+)
+SELECT c.id, $1, $2, $3, $4,
+       $5, $6, $7, $8, $9, $10
+  FROM customers c
+ WHERE c.id = $11 AND c.enterprise_id = $12
 RETURNING id, customer_id, address_type, zip_code, street, number, complement, neighborhood, city, uf, country, is_default, created_at
 `
 
 type AddAddressParams struct {
-	CustomerID   int64
 	AddressType  sqltypes.CustomerAddressTypeEnum
 	ZipCode      pgtype.Text
 	Street       pgtype.Text
@@ -33,12 +36,14 @@ type AddAddressParams struct {
 	Uf           pgtype.Text
 	Country      string
 	IsDefault    bool
+	CustomerID   int64
+	EnterpriseID int64
 }
 
 // ─── Customer Addresses ───────────────────────────────────────────────────────
+// Só grava se o cliente for da empresa autenticada (sem linha = não achou).
 func (q *Queries) AddAddress(ctx context.Context, arg AddAddressParams) (CustomerAddress, error) {
 	row := q.db.QueryRow(ctx, addAddress,
-		arg.CustomerID,
 		arg.AddressType,
 		arg.ZipCode,
 		arg.Street,
@@ -49,6 +54,8 @@ func (q *Queries) AddAddress(ctx context.Context, arg AddAddressParams) (Custome
 		arg.Uf,
 		arg.Country,
 		arg.IsDefault,
+		arg.CustomerID,
+		arg.EnterpriseID,
 	)
 	var i CustomerAddress
 	err := row.Scan(
@@ -69,32 +76,41 @@ func (q *Queries) AddAddress(ctx context.Context, arg AddAddressParams) (Custome
 	return i, err
 }
 
-const addCarrierToGroup = `-- name: AddCarrierToGroup :exec
+const addCarrierToGroup = `-- name: AddCarrierToGroup :execrows
 INSERT INTO carrier_group_carriers (carrier_group_id, carrier_id)
-VALUES ($1, $2)
+SELECT $1, $2
+ WHERE EXISTS (SELECT 1 FROM carrier_groups g WHERE g.id = $1 AND g.enterprise_id = $3)
+   AND EXISTS (SELECT 1 FROM carriers c WHERE c.id = $2 AND c.enterprise_id = $3)
 ON CONFLICT DO NOTHING
 `
 
 type AddCarrierToGroupParams struct {
 	CarrierGroupID int64
 	CarrierID      int64
+	EnterpriseID   int64
 }
 
-func (q *Queries) AddCarrierToGroup(ctx context.Context, arg AddCarrierToGroupParams) error {
-	_, err := q.db.Exec(ctx, addCarrierToGroup, arg.CarrierGroupID, arg.CarrierID)
-	return err
+// Grupo e portador têm de ser da empresa.
+func (q *Queries) AddCarrierToGroup(ctx context.Context, arg AddCarrierToGroupParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addCarrierToGroup, arg.CarrierGroupID, arg.CarrierID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const addContact = `-- name: AddContact :one
 
 INSERT INTO customer_contacts (
     customer_id, contact_type_id, name, email, phone, mobile, position, is_primary
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+)
+SELECT c.id, $1, $2, $3, $4, $5, $6, $7
+  FROM customers c
+ WHERE c.id = $8 AND c.enterprise_id = $9
 RETURNING id, customer_id, contact_type_id, name, email, phone, mobile, position, is_primary, is_active, created_at
 `
 
 type AddContactParams struct {
-	CustomerID    int64
 	ContactTypeID *int64
 	Name          string
 	Email         pgtype.Text
@@ -102,12 +118,13 @@ type AddContactParams struct {
 	Mobile        pgtype.Text
 	Position      pgtype.Text
 	IsPrimary     bool
+	CustomerID    int64
+	EnterpriseID  int64
 }
 
 // ─── Customer Contacts ────────────────────────────────────────────────────────
 func (q *Queries) AddContact(ctx context.Context, arg AddContactParams) (CustomerContact, error) {
 	row := q.db.QueryRow(ctx, addContact,
-		arg.CustomerID,
 		arg.ContactTypeID,
 		arg.Name,
 		arg.Email,
@@ -115,6 +132,8 @@ func (q *Queries) AddContact(ctx context.Context, arg AddContactParams) (Custome
 		arg.Mobile,
 		arg.Position,
 		arg.IsPrimary,
+		arg.CustomerID,
+		arg.EnterpriseID,
 	)
 	var i CustomerContact
 	err := row.Scan(
@@ -194,28 +213,32 @@ func (q *Queries) AddInstallment(ctx context.Context, arg AddInstallmentParams) 
 	return i, err
 }
 
-const blockCustomer = `-- name: BlockCustomer :exec
+const blockCustomer = `-- name: BlockCustomer :execrows
 UPDATE customers
 SET blocked = TRUE, block_reason = $2, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $3
 `
 
 type BlockCustomerParams struct {
-	Code        int64
-	BlockReason pgtype.Text
+	Code         int64
+	BlockReason  pgtype.Text
+	EnterpriseID int64
 }
 
-func (q *Queries) BlockCustomer(ctx context.Context, arg BlockCustomerParams) error {
-	_, err := q.db.Exec(ctx, blockCustomer, arg.Code, arg.BlockReason)
-	return err
+func (q *Queries) BlockCustomer(ctx context.Context, arg BlockCustomerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, blockCustomer, arg.Code, arg.BlockReason, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createCarrier = `-- name: CreateCarrier :one
 
-INSERT INTO carriers (code, description, billing_type, uses_credit_limit, consider_available,
+INSERT INTO carriers (enterprise_id, code, description, billing_type, uses_credit_limit, consider_available,
                       postpone_due_date, receipt_days, payment_days)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at
+VALUES ($9, $1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id
 `
 
 type CreateCarrierParams struct {
@@ -227,6 +250,7 @@ type CreateCarrierParams struct {
 	PostponeDueDate   bool
 	ReceiptDays       int16
 	PaymentDays       int16
+	EnterpriseID      int64
 }
 
 // ─── Carriers ─────────────────────────────────────────────────────────────────
@@ -240,6 +264,7 @@ func (q *Queries) CreateCarrier(ctx context.Context, arg CreateCarrierParams) (C
 		arg.PostponeDueDate,
 		arg.ReceiptDays,
 		arg.PaymentDays,
+		arg.EnterpriseID,
 	)
 	var i Carrier
 	err := row.Scan(
@@ -254,50 +279,54 @@ func (q *Queries) CreateCarrier(ctx context.Context, arg CreateCarrierParams) (C
 		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createCarrierGroup = `-- name: CreateCarrierGroup :one
 
-INSERT INTO carrier_groups (code, description)
-VALUES ($1, $2)
-RETURNING id, code, description, created_at
+INSERT INTO carrier_groups (enterprise_id, code, description)
+VALUES ($3, $1, $2)
+RETURNING id, code, description, created_at, enterprise_id
 `
 
 type CreateCarrierGroupParams struct {
-	Code        int64
-	Description string
+	Code         int64
+	Description  string
+	EnterpriseID int64
 }
 
 // ─── Carrier Groups ───────────────────────────────────────────────────────────
 func (q *Queries) CreateCarrierGroup(ctx context.Context, arg CreateCarrierGroupParams) (CarrierGroup, error) {
-	row := q.db.QueryRow(ctx, createCarrierGroup, arg.Code, arg.Description)
+	row := q.db.QueryRow(ctx, createCarrierGroup, arg.Code, arg.Description, arg.EnterpriseID)
 	var i CarrierGroup
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
 		&i.Description,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createContactType = `-- name: CreateContactType :one
 
-INSERT INTO customer_contact_types (code, description)
-VALUES ($1, $2)
-RETURNING id, code, description, is_active, created_at
+INSERT INTO customer_contact_types (enterprise_id, code, description)
+VALUES ($3, $1, $2)
+RETURNING id, code, description, is_active, created_at, enterprise_id
 `
 
 type CreateContactTypeParams struct {
-	Code        int64
-	Description string
+	Code         int64
+	Description  string
+	EnterpriseID int64
 }
 
 // ─── Customer Contact Types ───────────────────────────────────────────────────
 func (q *Queries) CreateContactType(ctx context.Context, arg CreateContactTypeParams) (CustomerContactType, error) {
-	row := q.db.QueryRow(ctx, createContactType, arg.Code, arg.Description)
+	row := q.db.QueryRow(ctx, createContactType, arg.Code, arg.Description, arg.EnterpriseID)
 	var i CustomerContactType
 	err := row.Scan(
 		&i.ID,
@@ -305,6 +334,7 @@ func (q *Queries) CreateContactType(ctx context.Context, arg CreateContactTypePa
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -318,7 +348,7 @@ INSERT INTO customers (
     region_id, market_segment_id, customer_type_id,
     payment_condition_id, sales_table_id, carrier_id, carrier_group_id,
     invoice_type_id, tax_type_id, payment_cond_visibility,
-    credit_limit, website, created_by
+    credit_limit, website, created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
@@ -326,8 +356,8 @@ INSERT INTO customers (
     $12, $13, $14,
     $15, $16, $17, $18,
     $19, $20, $21,
-    $22, $23, $24
-) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at
+    $22, $23, $24, $25
+) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id
 `
 
 type CreateCustomerParams struct {
@@ -355,9 +385,11 @@ type CreateCustomerParams struct {
 	CreditLimit           pgtype.Numeric
 	Website               pgtype.Text
 	CreatedBy             pgtype.UUID
+	EnterpriseID          int64
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────
+// O cliente pertence à empresa que o cadastrou (convenção enterprise_id).
 func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, createCustomer,
 		arg.Code,
@@ -384,6 +416,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		arg.CreditLimit,
 		arg.Website,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i Customer
 	err := row.Scan(
@@ -417,15 +450,16 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createCustomerType = `-- name: CreateCustomerType :one
 
-INSERT INTO customer_types (code, description, category, delivery_days)
-VALUES ($1, $2, $3, $4)
-RETURNING id, code, description, category, delivery_days, is_active, created_at
+INSERT INTO customer_types (enterprise_id, code, description, category, delivery_days)
+VALUES ($5, $1, $2, $3, $4)
+RETURNING id, code, description, category, delivery_days, is_active, created_at, enterprise_id
 `
 
 type CreateCustomerTypeParams struct {
@@ -433,6 +467,7 @@ type CreateCustomerTypeParams struct {
 	Description  string
 	Category     sqltypes.CustomerCategoryEnum
 	DeliveryDays int16
+	EnterpriseID int64
 }
 
 // ─── Customer Types ───────────────────────────────────────────────────────────
@@ -442,6 +477,7 @@ func (q *Queries) CreateCustomerType(ctx context.Context, arg CreateCustomerType
 		arg.Description,
 		arg.Category,
 		arg.DeliveryDays,
+		arg.EnterpriseID,
 	)
 	var i CustomerType
 	err := row.Scan(
@@ -452,13 +488,14 @@ func (q *Queries) CreateCustomerType(ctx context.Context, arg CreateCustomerType
 		&i.DeliveryDays,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createInvoiceType = `-- name: CreateInvoiceType :one
 
-INSERT INTO invoice_types (
+INSERT INTO invoice_types (enterprise_id, 
     code, description, type, stock_movement, icms_type,
     icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct,
     issqn_pct, ir_pct, csll_pct, inss_pct,
@@ -480,7 +517,7 @@ INSERT INTO invoice_types (
     desc_icms_licitacoes, sisdeclara,
     cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal
 ) VALUES (
-    $1, $2, $3, $4, $5,
+    $73, $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
     $11, $12, $13, $14,
     $15, $16, $17,
@@ -500,7 +537,7 @@ INSERT INTO invoice_types (
     $63, $64, $65, $66,
     $67, $68,
     $69, $70, $71, $72
-) RETURNING id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal
+) RETURNING id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id
 `
 
 type CreateInvoiceTypeParams struct {
@@ -576,6 +613,7 @@ type CreateInvoiceTypeParams struct {
 	CodClasTribTribReg       pgtype.Text
 	CodMotivoRestCompIcmsSt  pgtype.Text
 	CodBeneficioFiscal       pgtype.Text
+	EnterpriseID             int64
 }
 
 // ─── Invoice Types ────────────────────────────────────────────────────────────
@@ -653,6 +691,7 @@ func (q *Queries) CreateInvoiceType(ctx context.Context, arg CreateInvoiceTypePa
 		arg.CodClasTribTribReg,
 		arg.CodMotivoRestCompIcmsSt,
 		arg.CodBeneficioFiscal,
+		arg.EnterpriseID,
 	)
 	var i InvoiceType
 	err := row.Scan(
@@ -731,15 +770,16 @@ func (q *Queries) CreateInvoiceType(ctx context.Context, arg CreateInvoiceTypePa
 		&i.CodClasTribTribReg,
 		&i.CodMotivoRestCompIcmsSt,
 		&i.CodBeneficioFiscal,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createMarketSegment = `-- name: CreateMarketSegment :one
 
-INSERT INTO market_segments (code, description, parent_id, has_pis_cofins_retention, retention_indicator)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at
+INSERT INTO market_segments (enterprise_id, code, description, parent_id, has_pis_cofins_retention, retention_indicator)
+VALUES ($6, $1, $2, $3, $4, $5)
+RETURNING id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at, enterprise_id
 `
 
 type CreateMarketSegmentParams struct {
@@ -748,6 +788,7 @@ type CreateMarketSegmentParams struct {
 	ParentID              *int64
 	HasPisCofinsRetention bool
 	RetentionIndicator    pgtype.Int2
+	EnterpriseID          int64
 }
 
 // ─── Market Segments ──────────────────────────────────────────────────────────
@@ -758,6 +799,7 @@ func (q *Queries) CreateMarketSegment(ctx context.Context, arg CreateMarketSegme
 		arg.ParentID,
 		arg.HasPisCofinsRetention,
 		arg.RetentionIndicator,
+		arg.EnterpriseID,
 	)
 	var i MarketSegment
 	err := row.Scan(
@@ -769,6 +811,7 @@ func (q *Queries) CreateMarketSegment(ctx context.Context, arg CreateMarketSegme
 		&i.RetentionIndicator,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -835,17 +878,18 @@ func (q *Queries) CreatePaymentCondition(ctx context.Context, arg CreatePaymentC
 
 const createRegion = `-- name: CreateRegion :one
 
-INSERT INTO regions (code, description, uf, city, created_by)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, code, description, uf, city, is_active, created_at, created_by
+INSERT INTO regions (enterprise_id, code, description, uf, city, created_by)
+VALUES ($6, $1, $2, $3, $4, $5)
+RETURNING id, code, description, uf, city, is_active, created_at, created_by, enterprise_id
 `
 
 type CreateRegionParams struct {
-	Code        int64
-	Description string
-	Uf          string
-	City        string
-	CreatedBy   pgtype.UUID
+	Code         int64
+	Description  string
+	Uf           string
+	City         string
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 // ─── Regions ─────────────────────────────────────────────────────────────────
@@ -856,6 +900,7 @@ func (q *Queries) CreateRegion(ctx context.Context, arg CreateRegionParams) (Reg
 		arg.Uf,
 		arg.City,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i Region
 	err := row.Scan(
@@ -867,6 +912,7 @@ func (q *Queries) CreateRegion(ctx context.Context, arg CreateRegionParams) (Reg
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -949,7 +995,7 @@ func (q *Queries) CreateSalesTable(ctx context.Context, arg CreateSalesTablePara
 
 const createTaxType = `-- name: CreateTaxType :one
 
-INSERT INTO tax_types (
+INSERT INTO tax_types (enterprise_id, 
     code, description,
     ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses,
     icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses,
@@ -959,7 +1005,7 @@ INSERT INTO tax_types (
     ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight,
     is_consumer
 ) VALUES (
-    $1, $2,
+    $24, $1, $2,
     $3, $4, $5, $6,
     $7, $8, $9, $10, $11,
     $12, $13, $14,
@@ -967,7 +1013,7 @@ INSERT INTO tax_types (
     $17, $18, $19,
     $20, $21, $22,
     $23
-) RETURNING id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at
+) RETURNING id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id
 `
 
 type CreateTaxTypeParams struct {
@@ -994,6 +1040,7 @@ type CreateTaxTypeParams struct {
 	IrBaseSubtractDiscount        bool
 	IrBaseAddFreight              bool
 	IsConsumer                    bool
+	EnterpriseID                  int64
 }
 
 // ─── Tax Types ────────────────────────────────────────────────────────────────
@@ -1022,6 +1069,7 @@ func (q *Queries) CreateTaxType(ctx context.Context, arg CreateTaxTypeParams) (T
 		arg.IrBaseSubtractDiscount,
 		arg.IrBaseAddFreight,
 		arg.IsConsumer,
+		arg.EnterpriseID,
 	)
 	var i TaxType
 	err := row.Scan(
@@ -1051,26 +1099,47 @@ func (q *Queries) CreateTaxType(ctx context.Context, arg CreateTaxTypeParams) (T
 		&i.IsConsumer,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
-const deleteAddress = `-- name: DeleteAddress :exec
-DELETE FROM customer_addresses WHERE id = $1
+const deleteAddress = `-- name: DeleteAddress :execrows
+DELETE FROM customer_addresses
+ WHERE customer_addresses.id = $1
+   AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_addresses.customer_id AND c.enterprise_id = $2)
 `
 
-func (q *Queries) DeleteAddress(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteAddress, id)
-	return err
+type DeleteAddressParams struct {
+	ID           int64
+	EnterpriseID int64
 }
 
-const deleteContact = `-- name: DeleteContact :exec
-UPDATE customer_contacts SET is_active = FALSE WHERE id = $1
+func (q *Queries) DeleteAddress(ctx context.Context, arg DeleteAddressParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAddress, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteContact = `-- name: DeleteContact :execrows
+UPDATE customer_contacts SET is_active = FALSE
+ WHERE customer_contacts.id = $1
+   AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_contacts.customer_id AND c.enterprise_id = $2)
 `
 
-func (q *Queries) DeleteContact(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteContact, id)
-	return err
+type DeleteContactParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteContact, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteInstallment = `-- name: DeleteInstallment :exec
@@ -1083,11 +1152,16 @@ func (q *Queries) DeleteInstallment(ctx context.Context, id int64) error {
 }
 
 const getCarrierByCode = `-- name: GetCarrierByCode :one
-SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at FROM carriers WHERE code = $1
+SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id FROM carriers WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetCarrierByCode(ctx context.Context, code int64) (Carrier, error) {
-	row := q.db.QueryRow(ctx, getCarrierByCode, code)
+type GetCarrierByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetCarrierByCode(ctx context.Context, arg GetCarrierByCodeParams) (Carrier, error) {
+	row := q.db.QueryRow(ctx, getCarrierByCode, arg.Code, arg.EnterpriseID)
 	var i Carrier
 	err := row.Scan(
 		&i.ID,
@@ -1101,16 +1175,22 @@ func (q *Queries) GetCarrierByCode(ctx context.Context, code int64) (Carrier, er
 		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getCarrierByID = `-- name: GetCarrierByID :one
-SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at FROM carriers WHERE id = $1
+SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id FROM carriers WHERE id = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetCarrierByID(ctx context.Context, id int64) (Carrier, error) {
-	row := q.db.QueryRow(ctx, getCarrierByID, id)
+type GetCarrierByIDParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetCarrierByID(ctx context.Context, arg GetCarrierByIDParams) (Carrier, error) {
+	row := q.db.QueryRow(ctx, getCarrierByID, arg.ID, arg.EnterpriseID)
 	var i Carrier
 	err := row.Scan(
 		&i.ID,
@@ -1124,32 +1204,44 @@ func (q *Queries) GetCarrierByID(ctx context.Context, id int64) (Carrier, error)
 		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getCarrierGroupByCode = `-- name: GetCarrierGroupByCode :one
-SELECT id, code, description, created_at FROM carrier_groups WHERE code = $1
+SELECT id, code, description, created_at, enterprise_id FROM carrier_groups WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetCarrierGroupByCode(ctx context.Context, code int64) (CarrierGroup, error) {
-	row := q.db.QueryRow(ctx, getCarrierGroupByCode, code)
+type GetCarrierGroupByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetCarrierGroupByCode(ctx context.Context, arg GetCarrierGroupByCodeParams) (CarrierGroup, error) {
+	row := q.db.QueryRow(ctx, getCarrierGroupByCode, arg.Code, arg.EnterpriseID)
 	var i CarrierGroup
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
 		&i.Description,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getContactTypeByCode = `-- name: GetContactTypeByCode :one
-SELECT id, code, description, is_active, created_at FROM customer_contact_types WHERE code = $1
+SELECT id, code, description, is_active, created_at, enterprise_id FROM customer_contact_types WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetContactTypeByCode(ctx context.Context, code int64) (CustomerContactType, error) {
-	row := q.db.QueryRow(ctx, getContactTypeByCode, code)
+type GetContactTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetContactTypeByCode(ctx context.Context, arg GetContactTypeByCodeParams) (CustomerContactType, error) {
+	row := q.db.QueryRow(ctx, getContactTypeByCode, arg.Code, arg.EnterpriseID)
 	var i CustomerContactType
 	err := row.Scan(
 		&i.ID,
@@ -1157,16 +1249,22 @@ func (q *Queries) GetContactTypeByCode(ctx context.Context, code int64) (Custome
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getCustomerByCode = `-- name: GetCustomerByCode :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at FROM customers WHERE code = $1
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetCustomerByCode(ctx context.Context, code int64) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomerByCode, code)
+type GetCustomerByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetCustomerByCode(ctx context.Context, arg GetCustomerByCodeParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByCode, arg.Code, arg.EnterpriseID)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
@@ -1199,16 +1297,22 @@ func (q *Queries) GetCustomerByCode(ctx context.Context, code int64) (Customer, 
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getCustomerByDocument = `-- name: GetCustomerByDocument :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at FROM customers WHERE document_number = $1 LIMIT 1
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers WHERE document_number = $1 AND enterprise_id = $2 LIMIT 1
 `
 
-func (q *Queries) GetCustomerByDocument(ctx context.Context, documentNumber string) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomerByDocument, documentNumber)
+type GetCustomerByDocumentParams struct {
+	DocumentNumber string
+	EnterpriseID   int64
+}
+
+func (q *Queries) GetCustomerByDocument(ctx context.Context, arg GetCustomerByDocumentParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByDocument, arg.DocumentNumber, arg.EnterpriseID)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
@@ -1241,16 +1345,22 @@ func (q *Queries) GetCustomerByDocument(ctx context.Context, documentNumber stri
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getCustomerTypeByCode = `-- name: GetCustomerTypeByCode :one
-SELECT id, code, description, category, delivery_days, is_active, created_at FROM customer_types WHERE code = $1
+SELECT id, code, description, category, delivery_days, is_active, created_at, enterprise_id FROM customer_types WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetCustomerTypeByCode(ctx context.Context, code int64) (CustomerType, error) {
-	row := q.db.QueryRow(ctx, getCustomerTypeByCode, code)
+type GetCustomerTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetCustomerTypeByCode(ctx context.Context, arg GetCustomerTypeByCodeParams) (CustomerType, error) {
+	row := q.db.QueryRow(ctx, getCustomerTypeByCode, arg.Code, arg.EnterpriseID)
 	var i CustomerType
 	err := row.Scan(
 		&i.ID,
@@ -1260,16 +1370,22 @@ func (q *Queries) GetCustomerTypeByCode(ctx context.Context, code int64) (Custom
 		&i.DeliveryDays,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getInvoiceTypeByCode = `-- name: GetInvoiceTypeByCode :one
-SELECT id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal FROM invoice_types WHERE code = $1
+SELECT id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id FROM invoice_types WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetInvoiceTypeByCode(ctx context.Context, code int64) (InvoiceType, error) {
-	row := q.db.QueryRow(ctx, getInvoiceTypeByCode, code)
+type GetInvoiceTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetInvoiceTypeByCode(ctx context.Context, arg GetInvoiceTypeByCodeParams) (InvoiceType, error) {
+	row := q.db.QueryRow(ctx, getInvoiceTypeByCode, arg.Code, arg.EnterpriseID)
 	var i InvoiceType
 	err := row.Scan(
 		&i.ID,
@@ -1347,16 +1463,22 @@ func (q *Queries) GetInvoiceTypeByCode(ctx context.Context, code int64) (Invoice
 		&i.CodClasTribTribReg,
 		&i.CodMotivoRestCompIcmsSt,
 		&i.CodBeneficioFiscal,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getMarketSegmentByCode = `-- name: GetMarketSegmentByCode :one
-SELECT id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at FROM market_segments WHERE code = $1
+SELECT id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at, enterprise_id FROM market_segments WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetMarketSegmentByCode(ctx context.Context, code int64) (MarketSegment, error) {
-	row := q.db.QueryRow(ctx, getMarketSegmentByCode, code)
+type GetMarketSegmentByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetMarketSegmentByCode(ctx context.Context, arg GetMarketSegmentByCodeParams) (MarketSegment, error) {
+	row := q.db.QueryRow(ctx, getMarketSegmentByCode, arg.Code, arg.EnterpriseID)
 	var i MarketSegment
 	err := row.Scan(
 		&i.ID,
@@ -1367,6 +1489,7 @@ func (q *Queries) GetMarketSegmentByCode(ctx context.Context, code int64) (Marke
 		&i.RetentionIndicator,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -1434,11 +1557,16 @@ func (q *Queries) GetPaymentConditionByID(ctx context.Context, arg GetPaymentCon
 }
 
 const getRegionByCode = `-- name: GetRegionByCode :one
-SELECT id, code, description, uf, city, is_active, created_at, created_by FROM regions WHERE code = $1
+SELECT id, code, description, uf, city, is_active, created_at, created_by, enterprise_id FROM regions WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetRegionByCode(ctx context.Context, code int64) (Region, error) {
-	row := q.db.QueryRow(ctx, getRegionByCode, code)
+type GetRegionByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetRegionByCode(ctx context.Context, arg GetRegionByCodeParams) (Region, error) {
+	row := q.db.QueryRow(ctx, getRegionByCode, arg.Code, arg.EnterpriseID)
 	var i Region
 	err := row.Scan(
 		&i.ID,
@@ -1449,6 +1577,7 @@ func (q *Queries) GetRegionByCode(ctx context.Context, code int64) (Region, erro
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -1489,11 +1618,16 @@ func (q *Queries) GetSalesTableByCode(ctx context.Context, arg GetSalesTableByCo
 }
 
 const getTaxTypeByCode = `-- name: GetTaxTypeByCode :one
-SELECT id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at FROM tax_types WHERE code = $1
+SELECT id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id FROM tax_types WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetTaxTypeByCode(ctx context.Context, code int64) (TaxType, error) {
-	row := q.db.QueryRow(ctx, getTaxTypeByCode, code)
+type GetTaxTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetTaxTypeByCode(ctx context.Context, arg GetTaxTypeByCodeParams) (TaxType, error) {
+	row := q.db.QueryRow(ctx, getTaxTypeByCode, arg.Code, arg.EnterpriseID)
 	var i TaxType
 	err := row.Scan(
 		&i.ID,
@@ -1522,16 +1656,25 @@ func (q *Queries) GetTaxTypeByCode(ctx context.Context, code int64) (TaxType, er
 		&i.IsConsumer,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listAddresses = `-- name: ListAddresses :many
-SELECT id, customer_id, address_type, zip_code, street, number, complement, neighborhood, city, uf, country, is_default, created_at FROM customer_addresses WHERE customer_id = $1 ORDER BY address_type, is_default DESC
+SELECT a.id, a.customer_id, a.address_type, a.zip_code, a.street, a.number, a.complement, a.neighborhood, a.city, a.uf, a.country, a.is_default, a.created_at FROM customer_addresses a
+  JOIN customers c ON c.id = a.customer_id AND c.enterprise_id = $2
+ WHERE a.customer_id = $1
+ ORDER BY a.address_type, a.is_default DESC
 `
 
-func (q *Queries) ListAddresses(ctx context.Context, customerID int64) ([]CustomerAddress, error) {
-	rows, err := q.db.Query(ctx, listAddresses, customerID)
+type ListAddressesParams struct {
+	CustomerID   int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListAddresses(ctx context.Context, arg ListAddressesParams) ([]CustomerAddress, error) {
+	rows, err := q.db.Query(ctx, listAddresses, arg.CustomerID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1565,11 +1708,11 @@ func (q *Queries) ListAddresses(ctx context.Context, customerID int64) ([]Custom
 }
 
 const listCarrierGroups = `-- name: ListCarrierGroups :many
-SELECT id, code, description, created_at FROM carrier_groups ORDER BY code
+SELECT id, code, description, created_at, enterprise_id FROM carrier_groups WHERE enterprise_id = $1 ORDER BY code
 `
 
-func (q *Queries) ListCarrierGroups(ctx context.Context) ([]CarrierGroup, error) {
-	rows, err := q.db.Query(ctx, listCarrierGroups)
+func (q *Queries) ListCarrierGroups(ctx context.Context, enterpriseID int64) ([]CarrierGroup, error) {
+	rows, err := q.db.Query(ctx, listCarrierGroups, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1582,6 +1725,7 @@ func (q *Queries) ListCarrierGroups(ctx context.Context) ([]CarrierGroup, error)
 			&i.Code,
 			&i.Description,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1594,13 +1738,18 @@ func (q *Queries) ListCarrierGroups(ctx context.Context) ([]CarrierGroup, error)
 }
 
 const listCarriers = `-- name: ListCarriers :many
-SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at FROM carriers
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id FROM carriers
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListCarriers(ctx context.Context, dollar_1 bool) ([]Carrier, error) {
-	rows, err := q.db.Query(ctx, listCarriers, dollar_1)
+type ListCarriersParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListCarriers(ctx context.Context, arg ListCarriersParams) ([]Carrier, error) {
+	rows, err := q.db.Query(ctx, listCarriers, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1620,6 +1769,7 @@ func (q *Queries) ListCarriers(ctx context.Context, dollar_1 bool) ([]Carrier, e
 			&i.PaymentDays,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1632,13 +1782,18 @@ func (q *Queries) ListCarriers(ctx context.Context, dollar_1 bool) ([]Carrier, e
 }
 
 const listContactTypes = `-- name: ListContactTypes :many
-SELECT id, code, description, is_active, created_at FROM customer_contact_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, is_active, created_at, enterprise_id FROM customer_contact_types
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListContactTypes(ctx context.Context, dollar_1 bool) ([]CustomerContactType, error) {
-	rows, err := q.db.Query(ctx, listContactTypes, dollar_1)
+type ListContactTypesParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListContactTypes(ctx context.Context, arg ListContactTypesParams) ([]CustomerContactType, error) {
+	rows, err := q.db.Query(ctx, listContactTypes, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1652,6 +1807,7 @@ func (q *Queries) ListContactTypes(ctx context.Context, dollar_1 bool) ([]Custom
 			&i.Description,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1664,13 +1820,19 @@ func (q *Queries) ListContactTypes(ctx context.Context, dollar_1 bool) ([]Custom
 }
 
 const listContacts = `-- name: ListContacts :many
-SELECT id, customer_id, contact_type_id, name, email, phone, mobile, position, is_primary, is_active, created_at FROM customer_contacts
-WHERE customer_id = $1 AND is_active = TRUE
-ORDER BY is_primary DESC, name
+SELECT ct.id, ct.customer_id, ct.contact_type_id, ct.name, ct.email, ct.phone, ct.mobile, ct.position, ct.is_primary, ct.is_active, ct.created_at FROM customer_contacts ct
+  JOIN customers c ON c.id = ct.customer_id AND c.enterprise_id = $2
+ WHERE ct.customer_id = $1 AND ct.is_active = TRUE
+ ORDER BY ct.is_primary DESC, ct.name
 `
 
-func (q *Queries) ListContacts(ctx context.Context, customerID int64) ([]CustomerContact, error) {
-	rows, err := q.db.Query(ctx, listContacts, customerID)
+type ListContactsParams struct {
+	CustomerID   int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]CustomerContact, error) {
+	rows, err := q.db.Query(ctx, listContacts, arg.CustomerID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1702,13 +1864,18 @@ func (q *Queries) ListContacts(ctx context.Context, customerID int64) ([]Custome
 }
 
 const listCustomerTypes = `-- name: ListCustomerTypes :many
-SELECT id, code, description, category, delivery_days, is_active, created_at FROM customer_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, category, delivery_days, is_active, created_at, enterprise_id FROM customer_types
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListCustomerTypes(ctx context.Context, dollar_1 bool) ([]CustomerType, error) {
-	rows, err := q.db.Query(ctx, listCustomerTypes, dollar_1)
+type ListCustomerTypesParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListCustomerTypes(ctx context.Context, arg ListCustomerTypesParams) ([]CustomerType, error) {
+	rows, err := q.db.Query(ctx, listCustomerTypes, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1724,6 +1891,7 @@ func (q *Queries) ListCustomerTypes(ctx context.Context, dollar_1 bool) ([]Custo
 			&i.DeliveryDays,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1736,13 +1904,19 @@ func (q *Queries) ListCustomerTypes(ctx context.Context, dollar_1 bool) ([]Custo
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at FROM customers
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers
+WHERE enterprise_id = $1
+  AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
 `
 
-func (q *Queries) ListCustomers(ctx context.Context, dollar_1 bool) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listCustomers, dollar_1)
+type ListCustomersParams struct {
+	EnterpriseID int64
+	OnlyActive   bool
+}
+
+func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, listCustomers, arg.EnterpriseID, arg.OnlyActive)
 	if err != nil {
 		return nil, err
 	}
@@ -1781,6 +1955,7 @@ func (q *Queries) ListCustomers(ctx context.Context, dollar_1 bool) ([]Customer,
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1793,13 +1968,18 @@ func (q *Queries) ListCustomers(ctx context.Context, dollar_1 bool) ([]Customer,
 }
 
 const listEstablishments = `-- name: ListEstablishments :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at FROM customers
-WHERE corporate_code = $1 AND is_active = TRUE
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers
+WHERE corporate_code = $1 AND enterprise_id = $2 AND is_active = TRUE
 ORDER BY code
 `
 
-func (q *Queries) ListEstablishments(ctx context.Context, corporateCode *int64) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listEstablishments, corporateCode)
+type ListEstablishmentsParams struct {
+	CorporateCode *int64
+	EnterpriseID  int64
+}
+
+func (q *Queries) ListEstablishments(ctx context.Context, arg ListEstablishmentsParams) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, listEstablishments, arg.CorporateCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1838,6 +2018,7 @@ func (q *Queries) ListEstablishments(ctx context.Context, corporateCode *int64) 
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.UpdatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1888,13 +2069,18 @@ func (q *Queries) ListInstallments(ctx context.Context, paymentConditionID int64
 }
 
 const listInvoiceTypes = `-- name: ListInvoiceTypes :many
-SELECT id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal FROM invoice_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id FROM invoice_types
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListInvoiceTypes(ctx context.Context, dollar_1 bool) ([]InvoiceType, error) {
-	rows, err := q.db.Query(ctx, listInvoiceTypes, dollar_1)
+type ListInvoiceTypesParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListInvoiceTypes(ctx context.Context, arg ListInvoiceTypesParams) ([]InvoiceType, error) {
+	rows, err := q.db.Query(ctx, listInvoiceTypes, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1978,6 +2164,7 @@ func (q *Queries) ListInvoiceTypes(ctx context.Context, dollar_1 bool) ([]Invoic
 			&i.CodClasTribTribReg,
 			&i.CodMotivoRestCompIcmsSt,
 			&i.CodBeneficioFiscal,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1990,13 +2177,18 @@ func (q *Queries) ListInvoiceTypes(ctx context.Context, dollar_1 bool) ([]Invoic
 }
 
 const listMarketSegments = `-- name: ListMarketSegments :many
-SELECT id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at FROM market_segments
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at, enterprise_id FROM market_segments
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListMarketSegments(ctx context.Context, dollar_1 bool) ([]MarketSegment, error) {
-	rows, err := q.db.Query(ctx, listMarketSegments, dollar_1)
+type ListMarketSegmentsParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListMarketSegments(ctx context.Context, arg ListMarketSegmentsParams) ([]MarketSegment, error) {
+	rows, err := q.db.Query(ctx, listMarketSegments, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -2013,6 +2205,7 @@ func (q *Queries) ListMarketSegments(ctx context.Context, dollar_1 bool) ([]Mark
 			&i.RetentionIndicator,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -2072,13 +2265,18 @@ func (q *Queries) ListPaymentConditions(ctx context.Context, arg ListPaymentCond
 }
 
 const listRegions = `-- name: ListRegions :many
-SELECT id, code, description, uf, city, is_active, created_at, created_by FROM regions
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, uf, city, is_active, created_at, created_by, enterprise_id FROM regions
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListRegions(ctx context.Context, dollar_1 bool) ([]Region, error) {
-	rows, err := q.db.Query(ctx, listRegions, dollar_1)
+type ListRegionsParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListRegions(ctx context.Context, arg ListRegionsParams) ([]Region, error) {
+	rows, err := q.db.Query(ctx, listRegions, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -2095,6 +2293,7 @@ func (q *Queries) ListRegions(ctx context.Context, dollar_1 bool) ([]Region, err
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -2157,13 +2356,18 @@ func (q *Queries) ListSalesTables(ctx context.Context, arg ListSalesTablesParams
 }
 
 const listTaxTypes = `-- name: ListTaxTypes :many
-SELECT id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at FROM tax_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id FROM tax_types
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListTaxTypes(ctx context.Context, dollar_1 bool) ([]TaxType, error) {
-	rows, err := q.db.Query(ctx, listTaxTypes, dollar_1)
+type ListTaxTypesParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListTaxTypes(ctx context.Context, arg ListTaxTypesParams) ([]TaxType, error) {
+	rows, err := q.db.Query(ctx, listTaxTypes, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -2198,6 +2402,7 @@ func (q *Queries) ListTaxTypes(ctx context.Context, dollar_1 bool) ([]TaxType, e
 			&i.IsConsumer,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -2210,33 +2415,33 @@ func (q *Queries) ListTaxTypes(ctx context.Context, dollar_1 bool) ([]TaxType, e
 }
 
 const nextCarrierCode = `-- name: NextCarrierCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carriers
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carriers WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextCarrierCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextCarrierCode)
+func (q *Queries) NextCarrierCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextCarrierCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextCarrierGroupCode = `-- name: NextCarrierGroupCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carrier_groups
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carrier_groups WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextCarrierGroupCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextCarrierGroupCode)
+func (q *Queries) NextCarrierGroupCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextCarrierGroupCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextContactTypeCode = `-- name: NextContactTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customer_contact_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customer_contact_types WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextContactTypeCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextContactTypeCode)
+func (q *Queries) NextContactTypeCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextContactTypeCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -2246,6 +2451,9 @@ const nextCustomerCode = `-- name: NextCustomerCode :one
 SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customers
 `
 
+// O código continua crescendo no banco inteiro (não por empresa): um código
+// novo nunca coincide com o de outra empresa, o que evita confusão em relatório
+// e integração. A unicidade garantida pelo banco é (empresa, código).
 func (q *Queries) NextCustomerCode(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextCustomerCode)
 	var next_code int64
@@ -2254,22 +2462,22 @@ func (q *Queries) NextCustomerCode(ctx context.Context) (int64, error) {
 }
 
 const nextInvoiceTypeCode = `-- name: NextInvoiceTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM invoice_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM invoice_types WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextInvoiceTypeCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextInvoiceTypeCode)
+func (q *Queries) NextInvoiceTypeCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextInvoiceTypeCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextMarketSegmentCode = `-- name: NextMarketSegmentCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM market_segments
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM market_segments WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextMarketSegmentCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextMarketSegmentCode)
+func (q *Queries) NextMarketSegmentCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextMarketSegmentCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -2287,11 +2495,11 @@ func (q *Queries) NextPaymentConditionCode(ctx context.Context) (int64, error) {
 }
 
 const nextRegionCode = `-- name: NextRegionCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM regions
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM regions WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextRegionCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextRegionCode)
+func (q *Queries) NextRegionCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextRegionCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -2311,11 +2519,11 @@ func (q *Queries) NextSalesTableCode(ctx context.Context) (int64, error) {
 }
 
 const nextTaxTypeCode = `-- name: NextTaxTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM tax_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM tax_types WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextTaxTypeCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextTaxTypeCode)
+func (q *Queries) NextTaxTypeCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextTaxTypeCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -2324,27 +2532,37 @@ func (q *Queries) NextTaxTypeCode(ctx context.Context) (int64, error) {
 const removeCarrierFromGroup = `-- name: RemoveCarrierFromGroup :exec
 DELETE FROM carrier_group_carriers
 WHERE carrier_group_id = $1 AND carrier_id = $2
+  AND EXISTS (SELECT 1 FROM carrier_groups g WHERE g.id = $1 AND g.enterprise_id = $3)
 `
 
 type RemoveCarrierFromGroupParams struct {
 	CarrierGroupID int64
 	CarrierID      int64
+	EnterpriseID   int64
 }
 
 func (q *Queries) RemoveCarrierFromGroup(ctx context.Context, arg RemoveCarrierFromGroupParams) error {
-	_, err := q.db.Exec(ctx, removeCarrierFromGroup, arg.CarrierGroupID, arg.CarrierID)
+	_, err := q.db.Exec(ctx, removeCarrierFromGroup, arg.CarrierGroupID, arg.CarrierID, arg.EnterpriseID)
 	return err
 }
 
-const unblockCustomer = `-- name: UnblockCustomer :exec
+const unblockCustomer = `-- name: UnblockCustomer :execrows
 UPDATE customers
 SET blocked = FALSE, block_reason = NULL, updated_at = NOW()
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) UnblockCustomer(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, unblockCustomer, code)
-	return err
+type UnblockCustomerParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) UnblockCustomer(ctx context.Context, arg UnblockCustomerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, unblockCustomer, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateAddress = `-- name: UpdateAddress :one
@@ -2352,7 +2570,8 @@ UPDATE customer_addresses
 SET address_type = $2, zip_code = $3, street = $4, number = $5,
     complement = $6, neighborhood = $7, city = $8, uf = $9,
     country = $10, is_default = $11
-WHERE id = $1
+WHERE customer_addresses.id = $1
+  AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_addresses.customer_id AND c.enterprise_id = $12)
 RETURNING id, customer_id, address_type, zip_code, street, number, complement, neighborhood, city, uf, country, is_default, created_at
 `
 
@@ -2368,6 +2587,7 @@ type UpdateAddressParams struct {
 	Uf           pgtype.Text
 	Country      string
 	IsDefault    bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateAddress(ctx context.Context, arg UpdateAddressParams) (CustomerAddress, error) {
@@ -2383,6 +2603,7 @@ func (q *Queries) UpdateAddress(ctx context.Context, arg UpdateAddressParams) (C
 		arg.Uf,
 		arg.Country,
 		arg.IsDefault,
+		arg.EnterpriseID,
 	)
 	var i CustomerAddress
 	err := row.Scan(
@@ -2407,8 +2628,8 @@ const updateCarrier = `-- name: UpdateCarrier :one
 UPDATE carriers
 SET description = $2, billing_type = $3, uses_credit_limit = $4, consider_available = $5,
     postpone_due_date = $6, receipt_days = $7, payment_days = $8, is_active = $9
-WHERE id = $1
-RETURNING id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at
+WHERE id = $1 AND enterprise_id = $10
+RETURNING id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id
 `
 
 type UpdateCarrierParams struct {
@@ -2421,6 +2642,7 @@ type UpdateCarrierParams struct {
 	ReceiptDays       int16
 	PaymentDays       int16
 	IsActive          bool
+	EnterpriseID      int64
 }
 
 func (q *Queries) UpdateCarrier(ctx context.Context, arg UpdateCarrierParams) (Carrier, error) {
@@ -2434,6 +2656,7 @@ func (q *Queries) UpdateCarrier(ctx context.Context, arg UpdateCarrierParams) (C
 		arg.ReceiptDays,
 		arg.PaymentDays,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i Carrier
 	err := row.Scan(
@@ -2448,27 +2671,30 @@ func (q *Queries) UpdateCarrier(ctx context.Context, arg UpdateCarrierParams) (C
 		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const updateCarrierGroup = `-- name: UpdateCarrierGroup :one
-UPDATE carrier_groups SET description=$2 WHERE id=$1 RETURNING id, code, description, created_at
+UPDATE carrier_groups SET description=$2 WHERE id=$1 AND enterprise_id = $3 RETURNING id, code, description, created_at, enterprise_id
 `
 
 type UpdateCarrierGroupParams struct {
-	ID          int64
-	Description string
+	ID           int64
+	Description  string
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateCarrierGroup(ctx context.Context, arg UpdateCarrierGroupParams) (CarrierGroup, error) {
-	row := q.db.QueryRow(ctx, updateCarrierGroup, arg.ID, arg.Description)
+	row := q.db.QueryRow(ctx, updateCarrierGroup, arg.ID, arg.Description, arg.EnterpriseID)
 	var i CarrierGroup
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
 		&i.Description,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -2477,7 +2703,8 @@ const updateContact = `-- name: UpdateContact :one
 UPDATE customer_contacts
 SET contact_type_id = $2, name = $3, email = $4, phone = $5,
     mobile = $6, position = $7, is_primary = $8, is_active = $9
-WHERE id = $1
+WHERE customer_contacts.id = $1
+  AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_contacts.customer_id AND c.enterprise_id = $10)
 RETURNING id, customer_id, contact_type_id, name, email, phone, mobile, position, is_primary, is_active, created_at
 `
 
@@ -2491,6 +2718,7 @@ type UpdateContactParams struct {
 	Position      pgtype.Text
 	IsPrimary     bool
 	IsActive      bool
+	EnterpriseID  int64
 }
 
 func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (CustomerContact, error) {
@@ -2504,6 +2732,7 @@ func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (C
 		arg.Position,
 		arg.IsPrimary,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i CustomerContact
 	err := row.Scan(
@@ -2525,18 +2754,24 @@ func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (C
 const updateContactType = `-- name: UpdateContactType :one
 UPDATE customer_contact_types
 SET description = $2, is_active = $3
-WHERE id = $1
-RETURNING id, code, description, is_active, created_at
+WHERE id = $1 AND enterprise_id = $4
+RETURNING id, code, description, is_active, created_at, enterprise_id
 `
 
 type UpdateContactTypeParams struct {
-	ID          int64
-	Description string
-	IsActive    bool
+	ID           int64
+	Description  string
+	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateContactType(ctx context.Context, arg UpdateContactTypeParams) (CustomerContactType, error) {
-	row := q.db.QueryRow(ctx, updateContactType, arg.ID, arg.Description, arg.IsActive)
+	row := q.db.QueryRow(ctx, updateContactType,
+		arg.ID,
+		arg.Description,
+		arg.IsActive,
+		arg.EnterpriseID,
+	)
 	var i CustomerContactType
 	err := row.Scan(
 		&i.ID,
@@ -2544,6 +2779,7 @@ func (q *Queries) UpdateContactType(ctx context.Context, arg UpdateContactTypePa
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -2557,8 +2793,8 @@ SET name = $2, trade_name = $3, state_registration = $4, municipal_registration 
     carrier_group_id = $14, invoice_type_id = $15, tax_type_id = $16,
     payment_cond_visibility = $17, credit_limit = $18, website = $19,
     is_active = $20, updated_at = NOW()
-WHERE id = $1
-RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at
+WHERE id = $1 AND enterprise_id = $21
+RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id
 `
 
 type UpdateCustomerParams struct {
@@ -2582,6 +2818,7 @@ type UpdateCustomerParams struct {
 	CreditLimit           pgtype.Numeric
 	Website               pgtype.Text
 	IsActive              bool
+	EnterpriseID          int64
 }
 
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
@@ -2606,6 +2843,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		arg.CreditLimit,
 		arg.Website,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i Customer
 	err := row.Scan(
@@ -2639,6 +2877,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.UpdatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -2646,8 +2885,8 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 const updateCustomerType = `-- name: UpdateCustomerType :one
 UPDATE customer_types
 SET description = $2, category = $3, delivery_days = $4, is_active = $5
-WHERE id = $1
-RETURNING id, code, description, category, delivery_days, is_active, created_at
+WHERE id = $1 AND enterprise_id = $6
+RETURNING id, code, description, category, delivery_days, is_active, created_at, enterprise_id
 `
 
 type UpdateCustomerTypeParams struct {
@@ -2656,6 +2895,7 @@ type UpdateCustomerTypeParams struct {
 	Category     sqltypes.CustomerCategoryEnum
 	DeliveryDays int16
 	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateCustomerType(ctx context.Context, arg UpdateCustomerTypeParams) (CustomerType, error) {
@@ -2665,6 +2905,7 @@ func (q *Queries) UpdateCustomerType(ctx context.Context, arg UpdateCustomerType
 		arg.Category,
 		arg.DeliveryDays,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i CustomerType
 	err := row.Scan(
@@ -2675,6 +2916,7 @@ func (q *Queries) UpdateCustomerType(ctx context.Context, arg UpdateCustomerType
 		&i.DeliveryDays,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -2709,8 +2951,8 @@ SET description = $2, type = $3, stock_movement = $4, icms_type = $5,
     desc_icms_licitacoes = $68, sisdeclara = $69,
     cod_clas_trib = $70, cod_clas_trib_trib_reg = $71,
     cod_motivo_rest_comp_icms_st = $72, cod_beneficio_fiscal = $73
-WHERE id = $1
-RETURNING id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal
+WHERE id = $1 AND enterprise_id = $74
+RETURNING id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id
 `
 
 type UpdateInvoiceTypeParams struct {
@@ -2787,6 +3029,7 @@ type UpdateInvoiceTypeParams struct {
 	CodClasTribTribReg       pgtype.Text
 	CodMotivoRestCompIcmsSt  pgtype.Text
 	CodBeneficioFiscal       pgtype.Text
+	EnterpriseID             int64
 }
 
 func (q *Queries) UpdateInvoiceType(ctx context.Context, arg UpdateInvoiceTypeParams) (InvoiceType, error) {
@@ -2864,6 +3107,7 @@ func (q *Queries) UpdateInvoiceType(ctx context.Context, arg UpdateInvoiceTypePa
 		arg.CodClasTribTribReg,
 		arg.CodMotivoRestCompIcmsSt,
 		arg.CodBeneficioFiscal,
+		arg.EnterpriseID,
 	)
 	var i InvoiceType
 	err := row.Scan(
@@ -2942,6 +3186,7 @@ func (q *Queries) UpdateInvoiceType(ctx context.Context, arg UpdateInvoiceTypePa
 		&i.CodClasTribTribReg,
 		&i.CodMotivoRestCompIcmsSt,
 		&i.CodBeneficioFiscal,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -2950,8 +3195,8 @@ const updateMarketSegment = `-- name: UpdateMarketSegment :one
 UPDATE market_segments
 SET description = $2, parent_id = $3, has_pis_cofins_retention = $4,
     retention_indicator = $5, is_active = $6
-WHERE id = $1
-RETURNING id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at
+WHERE id = $1 AND enterprise_id = $7
+RETURNING id, code, description, parent_id, has_pis_cofins_retention, retention_indicator, is_active, created_at, enterprise_id
 `
 
 type UpdateMarketSegmentParams struct {
@@ -2961,6 +3206,7 @@ type UpdateMarketSegmentParams struct {
 	HasPisCofinsRetention bool
 	RetentionIndicator    pgtype.Int2
 	IsActive              bool
+	EnterpriseID          int64
 }
 
 func (q *Queries) UpdateMarketSegment(ctx context.Context, arg UpdateMarketSegmentParams) (MarketSegment, error) {
@@ -2971,6 +3217,7 @@ func (q *Queries) UpdateMarketSegment(ctx context.Context, arg UpdateMarketSegme
 		arg.HasPisCofinsRetention,
 		arg.RetentionIndicator,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i MarketSegment
 	err := row.Scan(
@@ -2982,6 +3229,7 @@ func (q *Queries) UpdateMarketSegment(ctx context.Context, arg UpdateMarketSegme
 		&i.RetentionIndicator,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -3048,16 +3296,17 @@ func (q *Queries) UpdatePaymentCondition(ctx context.Context, arg UpdatePaymentC
 const updateRegion = `-- name: UpdateRegion :one
 UPDATE regions
 SET description = $2, uf = $3, city = $4, is_active = $5
-WHERE id = $1
-RETURNING id, code, description, uf, city, is_active, created_at, created_by
+WHERE id = $1 AND enterprise_id = $6
+RETURNING id, code, description, uf, city, is_active, created_at, created_by, enterprise_id
 `
 
 type UpdateRegionParams struct {
-	ID          int64
-	Description string
-	Uf          string
-	City        string
-	IsActive    bool
+	ID           int64
+	Description  string
+	Uf           string
+	City         string
+	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateRegion(ctx context.Context, arg UpdateRegionParams) (Region, error) {
@@ -3067,6 +3316,7 @@ func (q *Queries) UpdateRegion(ctx context.Context, arg UpdateRegionParams) (Reg
 		arg.Uf,
 		arg.City,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i Region
 	err := row.Scan(
@@ -3078,6 +3328,7 @@ func (q *Queries) UpdateRegion(ctx context.Context, arg UpdateRegionParams) (Reg
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -3166,8 +3417,8 @@ SET description = $2,
     csll_base_total_items = $17, csll_base_subtract_discount = $18, csll_base_add_freight = $19,
     ir_base_total_items = $20, ir_base_subtract_discount = $21, ir_base_add_freight = $22,
     is_consumer = $23, is_active = $24
-WHERE id = $1
-RETURNING id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at
+WHERE id = $1 AND enterprise_id = $25
+RETURNING id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id
 `
 
 type UpdateTaxTypeParams struct {
@@ -3195,6 +3446,7 @@ type UpdateTaxTypeParams struct {
 	IrBaseAddFreight              bool
 	IsConsumer                    bool
 	IsActive                      bool
+	EnterpriseID                  int64
 }
 
 func (q *Queries) UpdateTaxType(ctx context.Context, arg UpdateTaxTypeParams) (TaxType, error) {
@@ -3223,6 +3475,7 @@ func (q *Queries) UpdateTaxType(ctx context.Context, arg UpdateTaxTypeParams) (T
 		arg.IrBaseAddFreight,
 		arg.IsConsumer,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i TaxType
 	err := row.Scan(
@@ -3252,6 +3505,7 @@ func (q *Queries) UpdateTaxType(ctx context.Context, arg UpdateTaxTypeParams) (T
 		&i.IsConsumer,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

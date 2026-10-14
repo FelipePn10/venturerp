@@ -12,20 +12,25 @@ import (
 )
 
 const createDeliveryReschedule = `-- name: CreateDeliveryReschedule :one
+
 INSERT INTO delivery_reschedules (
  sales_order_code,
  item_code,
  old_date,
  new_date,
  reason,
- created_by)
-VALUES ($1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6)
-    RETURNING id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id
+ created_by,
+ enterprise_code)
+SELECT $1,
+       $2,
+       $3,
+       $4,
+       $5,
+       $6,
+       $7
+ WHERE EXISTS (SELECT 1 FROM sales_orders so
+                WHERE so.code = $1 AND so.enterprise_code = $7)
+RETURNING id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id
 `
 
 type CreateDeliveryRescheduleParams struct {
@@ -35,8 +40,11 @@ type CreateDeliveryRescheduleParams struct {
 	NewDate        pgtype.Date
 	Reason         pgtype.Text
 	CreatedBy      pgtype.UUID
+	EnterpriseCode int64
 }
 
+// Reprogramações pertencem à empresa do pedido de venda (convenção
+// enterprise_code, a mesma de sales_orders).
 func (q *Queries) CreateDeliveryReschedule(ctx context.Context, arg CreateDeliveryRescheduleParams) (DeliveryReschedule, error) {
 	row := q.db.QueryRow(ctx, createDeliveryReschedule,
 		arg.SalesOrderCode,
@@ -45,6 +53,7 @@ func (q *Queries) CreateDeliveryReschedule(ctx context.Context, arg CreateDelive
 		arg.NewDate,
 		arg.Reason,
 		arg.CreatedBy,
+		arg.EnterpriseCode,
 	)
 	var i DeliveryReschedule
 	err := row.Scan(
@@ -63,21 +72,34 @@ func (q *Queries) CreateDeliveryReschedule(ctx context.Context, arg CreateDelive
 	return i, err
 }
 
-const deleteDeliveryReschedule = `-- name: DeleteDeliveryReschedule :exec
-DELETE FROM delivery_reschedules WHERE code = $1
+const deleteDeliveryReschedule = `-- name: DeleteDeliveryReschedule :execrows
+DELETE FROM delivery_reschedules WHERE code = $1 AND enterprise_code = $2
 `
 
-func (q *Queries) DeleteDeliveryReschedule(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteDeliveryReschedule, code)
-	return err
+type DeleteDeliveryRescheduleParams struct {
+	Code           int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) DeleteDeliveryReschedule(ctx context.Context, arg DeleteDeliveryRescheduleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDeliveryReschedule, arg.Code, arg.EnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getDeliveryRescheduleByCode = `-- name: GetDeliveryRescheduleByCode :one
-SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE code = $1
+SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE code = $1 AND enterprise_code = $2
 `
 
-func (q *Queries) GetDeliveryRescheduleByCode(ctx context.Context, code int64) (DeliveryReschedule, error) {
-	row := q.db.QueryRow(ctx, getDeliveryRescheduleByCode, code)
+type GetDeliveryRescheduleByCodeParams struct {
+	Code           int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) GetDeliveryRescheduleByCode(ctx context.Context, arg GetDeliveryRescheduleByCodeParams) (DeliveryReschedule, error) {
+	row := q.db.QueryRow(ctx, getDeliveryRescheduleByCode, arg.Code, arg.EnterpriseCode)
 	var i DeliveryReschedule
 	err := row.Scan(
 		&i.ID,
@@ -96,11 +118,16 @@ func (q *Queries) GetDeliveryRescheduleByCode(ctx context.Context, code int64) (
 }
 
 const listReschedulesByItem = `-- name: ListReschedulesByItem :many
-SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE item_code = $1 ORDER BY created_at DESC
+SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE item_code = $1 AND enterprise_code = $2 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListReschedulesByItem(ctx context.Context, itemCode int64) ([]DeliveryReschedule, error) {
-	rows, err := q.db.Query(ctx, listReschedulesByItem, itemCode)
+type ListReschedulesByItemParams struct {
+	ItemCode       int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) ListReschedulesByItem(ctx context.Context, arg ListReschedulesByItemParams) ([]DeliveryReschedule, error) {
+	rows, err := q.db.Query(ctx, listReschedulesByItem, arg.ItemCode, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -132,11 +159,16 @@ func (q *Queries) ListReschedulesByItem(ctx context.Context, itemCode int64) ([]
 }
 
 const listReschedulesByOrder = `-- name: ListReschedulesByOrder :many
-SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE sales_order_code = $1 ORDER BY created_at DESC
+SELECT id, code, sales_order_code, item_code, old_date, new_date, reason, created_at, created_by, enterprise_code, batch_id FROM delivery_reschedules WHERE sales_order_code = $1 AND enterprise_code = $2 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListReschedulesByOrder(ctx context.Context, salesOrderCode int64) ([]DeliveryReschedule, error) {
-	rows, err := q.db.Query(ctx, listReschedulesByOrder, salesOrderCode)
+type ListReschedulesByOrderParams struct {
+	SalesOrderCode int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) ListReschedulesByOrder(ctx context.Context, arg ListReschedulesByOrderParams) ([]DeliveryReschedule, error) {
+	rows, err := q.db.Query(ctx, listReschedulesByOrder, arg.SalesOrderCode, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}

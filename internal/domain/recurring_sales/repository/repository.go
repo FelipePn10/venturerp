@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/entity"
@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	ErrInvalidLifecycleState = errors.New("estado da recorrência não permite a operação")
-	ErrOperationInProgress   = errors.New("operação já está em processamento")
-	ErrOperationConflict     = errors.New("competência ou chave de idempotência reutilizada com outro conteúdo")
+	ErrInvalidLifecycleState = domainerr.NewValidation("estado da recorrência não permite a operação")
+	ErrOperationInProgress   = domainerr.NewConflict("operação já está em processamento")
+	ErrOperationConflict     = domainerr.NewConflict("competência ou chave de idempotência reutilizada com outro conteúdo")
 )
 
 type Filter struct {

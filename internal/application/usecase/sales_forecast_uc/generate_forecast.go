@@ -126,7 +126,7 @@ func (uc *GenerateSalesForecastUseCase) executeFromERPHistory(
 		}
 	}
 	if merged == nil {
-		return nil, fmt.Errorf("nenhum período de previsão foi gerado")
+		return nil, errorsuc.NewValidationError("nenhum período de previsão foi gerado")
 	}
 	merged.Model = "ERP_HISTORY_AVERAGE"
 	return merged, nil
@@ -213,7 +213,10 @@ func upsertWeeklyForecasts(
 	})
 
 	for _, period := range weeks {
-		checkDate, _ := weekToDate(period.Year, period.Week)
+		checkDate, err := weekToDate(period.Year, period.Week)
+		if err != nil {
+			return nil, err
+		}
 		blocked, err := repo.IsBlocked(ctx, checkDate)
 		if err != nil {
 			return nil, fmt.Errorf("checking forecast period %d/%d: %w", period.Week, period.Year, err)
@@ -305,7 +308,7 @@ func distributeMonthByWorkdays(
 		filtered = append(filtered, day)
 	}
 	if len(filtered) == 0 {
-		return nil, fmt.Errorf("nenhum dia útil industrial em %04d-%02d dentro do intervalo escolhido", year, month)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("nenhum dia útil industrial em %04d-%02d dentro do intervalo escolhido", year, month))
 	}
 
 	workdaysByWeek := map[forecastWeek]int{}

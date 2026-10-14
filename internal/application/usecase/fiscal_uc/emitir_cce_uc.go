@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -34,7 +35,7 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 	}
 
 	if len(params.TextoCorrecao) < 15 {
-		return nil, fmt.Errorf("texto de correção deve ter pelo menos 15 caracteres")
+		return nil, errorsuc.NewValidationError("texto de correção deve ter pelo menos 15 caracteres")
 	}
 
 	exit, err := uc.Repo.GetExitByID(ctx, params.FiscalExitID)
@@ -43,7 +44,7 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 	}
 
 	if exit.Status != entity.ExitStatusAuthorized {
-		return nil, fmt.Errorf("CC-e só pode ser emitida para NF-e autorizada, status: %s", exit.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("CC-e só pode ser emitida para NF-e autorizada, status: %s", exit.Status))
 	}
 
 	if exit.FocusRef == nil {
@@ -61,7 +62,11 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-		_ = uc.Repo.SaveFocusLog(ctx, params.FiscalExitID, endpoint, method, reqBody, respBody, statusCode, durationMs)
+		if errLog := uc.Repo.SaveFocusLog(ctx, params.FiscalExitID, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+			// de registrar a comunicação não pode sumir.
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "documento", params.FiscalExitID, "endpoint", endpoint, "erro", errLog)
+		}
 	})
 
 	resp, err := cli.EmitirCCe(ctx, *exit.FocusRef, params.TextoCorrecao)
@@ -69,7 +74,10 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 		return nil, errorsuc.NewExternalServiceError("Focus CC-e", err.Error())
 	}
 
-	userID, _ := uc.Auth.UserID(ctx)
+	userID, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	seq, err := uc.Repo.SaveCartaCorrecao(ctx, params.FiscalExitID, params.TextoCorrecao, *exit.FocusRef, userID)
 	if err != nil {
 		return nil, err

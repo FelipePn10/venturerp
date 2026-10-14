@@ -2,6 +2,8 @@ package fiscal_uc
 
 import (
 	"context"
+	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"strings"
 	"time"
 
@@ -32,7 +34,9 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	resolverDestinatario(ctx, &dto, uc.Customers, uc.SalesOrders)
+	if err := resolverDestinatario(ctx, &dto, uc.Customers, uc.SalesOrders); err != nil {
+		return nil, err
+	}
 
 	userID, err := uc.Auth.UserID(ctx)
 	if err != nil {
@@ -156,15 +160,24 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		serie = "1"
 	}
 
-	dataEmissao, _ := time.Parse("2006-01-02", dto.DataEmissao)
+	dataEmissao, msg := datetime.Obrigatoria("data de emissão", dto.DataEmissao)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	var dataSaida *time.Time
 	if dto.DataSaida != nil {
-		t, _ := time.Parse("2006-01-02", *dto.DataSaida)
+		t, msg := datetime.Obrigatoria("data de saída", *dto.DataSaida)
+		if msg != "" {
+			return nil, errorsuc.NewValidationError(msg)
+		}
 		dataSaida = &t
 	}
 	var fiscalCouponDate *time.Time
 	if dto.FiscalCouponDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.FiscalCouponDate)
+		t, msg := datetime.Obrigatoria("data do cupom fiscal", *dto.FiscalCouponDate)
+		if msg != "" {
+			return nil, errorsuc.NewValidationError(msg)
+		}
 		fiscalCouponDate = &t
 	}
 
@@ -263,7 +276,10 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		}
 	}
 
-	items, _ := uc.Repo.GetExitItems(ctx, created.ID)
+	items, errItens := uc.Repo.GetExitItems(ctx, created.ID)
+	if errItens != nil {
+		return nil, fmt.Errorf("relendo os itens da nota criada: %w", errItens)
+	}
 	created.Itens = items
 
 	return toFiscalExitResponse(created), nil

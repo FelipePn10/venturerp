@@ -3,6 +3,7 @@ package mrp_uc
 import (
 	"context"
 	"errors"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"testing"
 	"time"
 
@@ -46,7 +47,7 @@ func (r *fakePlannedRepo) GetByMRPSuggestionCode(_ context.Context, _ int64) (*p
 	if r.existing != nil {
 		return r.existing, nil
 	}
-	return nil, errors.New("not found")
+	return nil, errorsuc.NewNotFoundError("not found")
 }
 
 func (r *fakePlannedRepo) GetNextOrderNumber(_ context.Context) (int64, error) {

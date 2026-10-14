@@ -84,6 +84,8 @@ func (uc *ConfiguratorUseCase) CreateItemDescription(ctx context.Context, dto re
 	// idempotent: reuse an existing header
 	if existing, err := uc.Q.GetCfgItemDescriptionByItemType(ctx, dto.ItemCode, dto.DescriptionTypeID); err == nil {
 		return uc.itemDescriptionView(ctx, existing)
+	} else if !errorsuc.EhNaoEncontrado(err) {
+		return nil, fmt.Errorf("conferindo a descrição existente do item: %w", err)
 	}
 	header, err := uc.Q.CreateCfgItemDescription(ctx, dto.ItemCode, dto.DescriptionTypeID, pgutil.ToPgUUID(dto.CreatedBy))
 	if err != nil {
@@ -167,7 +169,10 @@ func (uc *ConfiguratorUseCase) RenderItemDescription(ctx context.Context, id int
 	if err != nil {
 		return nil, err
 	}
-	answers := uc.resolveAnswerValues(ctx, dto.Answers)
+	answers, err := uc.resolveAnswerValues(ctx, dto.Answers)
+	if err != nil {
+		return nil, err
+	}
 
 	var b strings.Builder
 	var segments []string
@@ -226,18 +231,20 @@ func (uc *ConfiguratorUseCase) loadLines(ctx context.Context, headerID, itemCode
 	return nil
 }
 
-func (uc *ConfiguratorUseCase) resolveAnswerValues(ctx context.Context, answers []request.CfgMaskAnswerInput) map[int64]string {
+func (uc *ConfiguratorUseCase) resolveAnswerValues(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[int64]string, error) {
 	out := map[int64]string{}
 	for _, a := range answers {
-		if a.VariableID != nil {
-			if v, err := uc.Q.GetCfgVariable(ctx, *a.VariableID); err == nil {
-				out[a.CharacteristicID] = v.MaskComposition
-				continue
-			}
+		v, err := uc.variavelDaResposta(ctx, a)
+		if err != nil {
+			return nil, err
+		}
+		if v != nil {
+			out[a.CharacteristicID] = v.MaskComposition
+			continue
 		}
 		out[a.CharacteristicID] = a.Value
 	}
-	return out
+	return out, nil
 }
 
 func (uc *ConfiguratorUseCase) itemDescriptionView(ctx context.Context, h sqlc.DBCfgItemDescription) (*response.CfgItemDescriptionResponse, error) {

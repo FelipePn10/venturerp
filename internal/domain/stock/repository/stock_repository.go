@@ -2,14 +2,14 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/google/uuid"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 )
 
-var ErrInsufficientStock = errors.New("estoque disponível insuficiente para a reserva")
+var ErrInsufficientStock = domainerr.NewValidation("estoque disponível insuficiente para a reserva")
 
 type StockRepository interface {
 	// Stock movements

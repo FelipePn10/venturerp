@@ -2,6 +2,7 @@ package financial_uc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -40,7 +41,10 @@ func (uc *GetSaldoContasUseCase) Execute(ctx context.Context) (*SaldoContasRespo
 
 	items := make([]SaldoContaItem, 0, len(contas))
 	for _, c := range contas {
-		saldo, _ := uc.Repo.GetSaldoConta(ctx, c.ID)
+		saldo, errSaldo := uc.Repo.GetSaldoConta(ctx, c.ID)
+		if errSaldo != nil {
+			return nil, fmt.Errorf("lendo o saldo da conta: %w", errSaldo)
+		}
 		items = append(items, SaldoContaItem{
 			ContaID: c.ID,
 			Saldo:   saldo,

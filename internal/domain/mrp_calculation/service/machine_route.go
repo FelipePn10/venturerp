@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	routing "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"math"
@@ -76,13 +77,13 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 		}
 		if op.OperationOrigin == routing.OriginExternal || op.OperationOrigin == routing.OriginThirdPart {
 			if op.LeadTimeDays == nil || *op.LeadTimeDays <= 0 {
-				return nil, fmt.Errorf("informe o prazo da operação externa %d antes de planejar a capacidade", op.ID)
+				return nil, domainerr.NewValidation(fmt.Sprintf("informe o prazo da operação externa %d antes de planejar a capacidade", op.ID))
 			}
 			delay += time.Duration(*op.LeadTimeDays) * 24 * time.Hour
 			continue
 		}
 		if op.EffectiveWorkCenterID == nil {
-			return nil, fmt.Errorf("operação %d do item %d sem centro de trabalho", op.ID, sug.ItemCode)
+			return nil, domainerr.NewValidation(fmt.Sprintf("operação %d do item %d sem centro de trabalho", op.ID, sug.ItemCode))
 		}
 		candidates := []*entity.MachineTimeInfo{}
 		for _, profile := range profiles {
@@ -92,7 +93,7 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 		}
 		mt := selectMachineTime(candidates, sug.Mask)
 		if mt == nil {
-			return nil, fmt.Errorf("cadastre a produtividade do item %d em uma máquina do centro %d antes de planejar", sug.ItemCode, *op.EffectiveWorkCenterID)
+			return nil, domainerr.NewValidation(fmt.Sprintf("cadastre a produtividade do item %d em uma máquina do centro %d antes de planejar", sug.ItemCode, *op.EffectiveWorkCenterID))
 		}
 		qtdeDaEtapa := quantidadeDa(op)
 		minutes, err := machineMinutes(mt, qtdeDaEtapa)
@@ -104,7 +105,7 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 			minutes = minutosDoRoteiro(mt, op.EffTime, qtdeDaEtapa)
 		}
 		if minutes <= 0 {
-			return nil, fmt.Errorf("tempo inválido na operação %d", op.ID)
+			return nil, domainerr.NewValidation(fmt.Sprintf("tempo inválido na operação %d", op.ID))
 		}
 		id := op.ID
 		step := measuredMachineStep(mt, qtdeDaEtapa, minutes)
@@ -166,7 +167,7 @@ func orderMachineRoute(ops []*routing.RouteOperation, edges []*routing.NetworkEd
 			}
 		}
 		if !progress {
-			return nil, fmt.Errorf("roteiro com ciclo ou precedência inválida")
+			return nil, domainerr.NewValidation("roteiro com ciclo ou precedência inválida")
 		}
 	}
 	return out, nil

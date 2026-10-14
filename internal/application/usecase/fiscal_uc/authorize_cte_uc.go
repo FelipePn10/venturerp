@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -94,7 +95,11 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 
 	focusCli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	focusCli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-		_ = uc.Repo.SaveFocusLog(ctx, id, endpoint, method, reqBody, respBody, statusCode, durationMs)
+		if errLog := uc.Repo.SaveFocusLog(ctx, id, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+			// de registrar a comunicação não pode sumir.
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "documento", id, "endpoint", endpoint, "erro", errLog)
+		}
 	})
 
 	ref := fmt.Sprintf("cte%d%d", id, time.Now().UnixNano()%1000000)
@@ -104,8 +109,11 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 
 	resp, err := focusCli.AutorizarCTe(ctx, ref, payload)
 	if err != nil {
-		_, _ = uc.Repo.UpdateCTeStatus(ctx, id, "REJEITADO")
-		return nil, errorsuc.NewExternalServiceError("Focus CT-e", err.Error())
+		msg := err.Error()
+		if _, errSit := uc.Repo.UpdateCTeStatus(ctx, id, "REJEITADO"); errSit != nil {
+			msg += "; o CT-e não pôde ser marcado como rejeitado (" + errSit.Error() + ")"
+		}
+		return nil, errorsuc.NewExternalServiceError("Focus CT-e", msg)
 	}
 
 	authorized, err := uc.Repo.UpdateCTeAuthorization(ctx, id, resp.ChaveCTe, resp.Protocolo, ref)

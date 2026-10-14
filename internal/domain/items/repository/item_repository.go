@@ -2,15 +2,15 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
 
-var ErrNotFound = errors.New("item não encontrado")
-var ErrInvalidReference = errors.New("a pasta do item contém uma referência desconhecida")
-var ErrConflict = errors.New("já existe um item com este código na empresa")
+var ErrNotFound = domainerr.NewNotFound("item não encontrado")
+var ErrInvalidReference = domainerr.NewValidation("a pasta do item contém uma referência desconhecida")
+var ErrConflict = domainerr.NewConflict("já existe um item com este código na empresa")
 
 type ItemRepository interface {
 	Create(ctx context.Context, item *entity.Item) (*entity.Item, error)

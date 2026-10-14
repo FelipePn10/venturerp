@@ -103,7 +103,9 @@ func TestFillReferenceBusinessCodes_TranslatesBack(t *testing.T) {
 	item.Engineering.ItemBaseCod = &base
 	item.Commercial.PackagingItemCode = &packaging
 
-	fillReferenceBusinessCodes(context.Background(), newRefItems(), item)
+	if err := fillReferenceBusinessCodes(context.Background(), newRefItems(), item); err != nil {
+		t.Fatal(err)
+	}
 	if item.Engineering.ItemBaseBusinessCode != "MOD-BASE" {
 		t.Fatalf("item-base = %q, quer MOD-BASE", item.Engineering.ItemBaseBusinessCode)
 	}
@@ -116,7 +118,9 @@ func TestFillReferenceBusinessCodes_MissingReferenceIsTolerated(t *testing.T) {
 	orphan := 999
 	item := &entity.Item{Code: 300, BusinessCode: "PROD-01"}
 	item.Engineering.ItemBaseCod = &orphan
-	fillReferenceBusinessCodes(context.Background(), newRefItems(), item)
+	if err := fillReferenceBusinessCodes(context.Background(), newRefItems(), item); err != nil {
+		t.Fatal(err)
+	}
 	if item.Engineering.ItemBaseBusinessCode != "" {
 		t.Fatalf("referência órfã preenchida: %q", item.Engineering.ItemBaseBusinessCode)
 	}

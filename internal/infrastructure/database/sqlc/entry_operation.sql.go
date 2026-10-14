@@ -11,31 +11,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addStateGroupUF = `-- name: AddStateGroupUF :exec
-INSERT INTO state_group_ufs (state_group_code, uf)
-VALUES ($1, $2)
-ON CONFLICT (state_group_code, uf) DO NOTHING
+const addStateGroupUF = `-- name: AddStateGroupUF :execrows
+INSERT INTO state_group_ufs (enterprise_id, state_group_code, uf)
+SELECT $3, $1, $2
+ WHERE EXISTS (SELECT 1 FROM state_groups g WHERE g.code = $1 AND g.enterprise_id = $3)
+ON CONFLICT (enterprise_id, state_group_code, uf) DO NOTHING
 `
 
 type AddStateGroupUFParams struct {
 	StateGroupCode int64
 	Uf             string
+	EnterpriseID   int64
 }
 
-func (q *Queries) AddStateGroupUF(ctx context.Context, arg AddStateGroupUFParams) error {
-	_, err := q.db.Exec(ctx, addStateGroupUF, arg.StateGroupCode, arg.Uf)
-	return err
+func (q *Queries) AddStateGroupUF(ctx context.Context, arg AddStateGroupUFParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addStateGroupUF, arg.StateGroupCode, arg.Uf, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createEntryOperationType = `-- name: CreateEntryOperationType :one
 
 INSERT INTO entry_operation_types (
-    code, description, invoice_type_code, nature_operation,
+    enterprise_id, code, description, invoice_type_code, nature_operation,
     classification_type, classification_code, state_group_code, supplier_type_code, created_by,
     movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
+VALUES ($15, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id
 `
 
 type CreateEntryOperationTypeParams struct {
@@ -53,6 +58,7 @@ type CreateEntryOperationTypeParams struct {
 	CreditaIcms        bool
 	CreditaIpi         bool
 	CreditaPisCofins   bool
+	EnterpriseID       int64
 }
 
 // ─── Entry Operation Types ────────────────────────────────────────────────────
@@ -72,6 +78,7 @@ func (q *Queries) CreateEntryOperationType(ctx context.Context, arg CreateEntryO
 		arg.CreditaIcms,
 		arg.CreditaIpi,
 		arg.CreditaPisCofins,
+		arg.EnterpriseID,
 	)
 	var i EntryOperationType
 	err := row.Scan(
@@ -92,26 +99,36 @@ func (q *Queries) CreateEntryOperationType(ctx context.Context, arg CreateEntryO
 		&i.CreditaIcms,
 		&i.CreditaIpi,
 		&i.CreditaPisCofins,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const createStateGroup = `-- name: CreateStateGroup :one
 
-INSERT INTO state_groups (code, description, created_by)
-VALUES ($1, $2, $3)
-RETURNING id, code, description, is_active, created_at, created_by
+
+INSERT INTO state_groups (enterprise_id, code, description, created_by)
+VALUES ($4, $1, $2, $3)
+RETURNING id, code, description, is_active, created_at, created_by, enterprise_id
 `
 
 type CreateStateGroupParams struct {
-	Code        int64
-	Description string
-	CreatedBy   pgtype.UUID
+	Code         int64
+	Description  string
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
+// Grupos de UF e TES são catálogos da empresa (enterprise_id). O código se
+// repete entre empresas; a busca é sempre (empresa, código).
 // ─── State Groups ─────────────────────────────────────────────────────────────
 func (q *Queries) CreateStateGroup(ctx context.Context, arg CreateStateGroupParams) (StateGroup, error) {
-	row := q.db.QueryRow(ctx, createStateGroup, arg.Code, arg.Description, arg.CreatedBy)
+	row := q.db.QueryRow(ctx, createStateGroup,
+		arg.Code,
+		arg.Description,
+		arg.CreatedBy,
+		arg.EnterpriseID,
+	)
 	var i StateGroup
 	err := row.Scan(
 		&i.ID,
@@ -120,16 +137,22 @@ func (q *Queries) CreateStateGroup(ctx context.Context, arg CreateStateGroupPara
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getEntryOperationTypeByCode = `-- name: GetEntryOperationTypeByCode :one
-SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins FROM entry_operation_types WHERE code = $1
+SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id FROM entry_operation_types WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetEntryOperationTypeByCode(ctx context.Context, code int64) (EntryOperationType, error) {
-	row := q.db.QueryRow(ctx, getEntryOperationTypeByCode, code)
+type GetEntryOperationTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetEntryOperationTypeByCode(ctx context.Context, arg GetEntryOperationTypeByCodeParams) (EntryOperationType, error) {
+	row := q.db.QueryRow(ctx, getEntryOperationTypeByCode, arg.Code, arg.EnterpriseID)
 	var i EntryOperationType
 	err := row.Scan(
 		&i.ID,
@@ -149,16 +172,22 @@ func (q *Queries) GetEntryOperationTypeByCode(ctx context.Context, code int64) (
 		&i.CreditaIcms,
 		&i.CreditaIpi,
 		&i.CreditaPisCofins,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const getStateGroupByCode = `-- name: GetStateGroupByCode :one
-SELECT id, code, description, is_active, created_at, created_by FROM state_groups WHERE code = $1
+SELECT id, code, description, is_active, created_at, created_by, enterprise_id FROM state_groups WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetStateGroupByCode(ctx context.Context, code int64) (StateGroup, error) {
-	row := q.db.QueryRow(ctx, getStateGroupByCode, code)
+type GetStateGroupByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetStateGroupByCode(ctx context.Context, arg GetStateGroupByCodeParams) (StateGroup, error) {
+	row := q.db.QueryRow(ctx, getStateGroupByCode, arg.Code, arg.EnterpriseID)
 	var i StateGroup
 	err := row.Scan(
 		&i.ID,
@@ -167,18 +196,24 @@ func (q *Queries) GetStateGroupByCode(ctx context.Context, code int64) (StateGro
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listEntryOperationTypes = `-- name: ListEntryOperationTypes :many
-SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins FROM entry_operation_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id FROM entry_operation_types
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListEntryOperationTypes(ctx context.Context, dollar_1 bool) ([]EntryOperationType, error) {
-	rows, err := q.db.Query(ctx, listEntryOperationTypes, dollar_1)
+type ListEntryOperationTypesParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListEntryOperationTypes(ctx context.Context, arg ListEntryOperationTypesParams) ([]EntryOperationType, error) {
+	rows, err := q.db.Query(ctx, listEntryOperationTypes, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -204,6 +239,7 @@ func (q *Queries) ListEntryOperationTypes(ctx context.Context, dollar_1 bool) ([
 			&i.CreditaIcms,
 			&i.CreditaIpi,
 			&i.CreditaPisCofins,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -216,11 +252,16 @@ func (q *Queries) ListEntryOperationTypes(ctx context.Context, dollar_1 bool) ([
 }
 
 const listStateGroupUFs = `-- name: ListStateGroupUFs :many
-SELECT uf FROM state_group_ufs WHERE state_group_code = $1 ORDER BY uf
+SELECT uf FROM state_group_ufs WHERE state_group_code = $1 AND enterprise_id = $2 ORDER BY uf
 `
 
-func (q *Queries) ListStateGroupUFs(ctx context.Context, stateGroupCode int64) ([]string, error) {
-	rows, err := q.db.Query(ctx, listStateGroupUFs, stateGroupCode)
+type ListStateGroupUFsParams struct {
+	StateGroupCode int64
+	EnterpriseID   int64
+}
+
+func (q *Queries) ListStateGroupUFs(ctx context.Context, arg ListStateGroupUFsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listStateGroupUFs, arg.StateGroupCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -240,11 +281,11 @@ func (q *Queries) ListStateGroupUFs(ctx context.Context, stateGroupCode int64) (
 }
 
 const listStateGroups = `-- name: ListStateGroups :many
-SELECT id, code, description, is_active, created_at, created_by FROM state_groups ORDER BY code
+SELECT id, code, description, is_active, created_at, created_by, enterprise_id FROM state_groups WHERE enterprise_id = $1 ORDER BY code
 `
 
-func (q *Queries) ListStateGroups(ctx context.Context) ([]StateGroup, error) {
-	rows, err := q.db.Query(ctx, listStateGroups)
+func (q *Queries) ListStateGroups(ctx context.Context, enterpriseID int64) ([]StateGroup, error) {
+	rows, err := q.db.Query(ctx, listStateGroups, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +300,7 @@ func (q *Queries) ListStateGroups(ctx context.Context) ([]StateGroup, error) {
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -271,22 +313,22 @@ func (q *Queries) ListStateGroups(ctx context.Context) ([]StateGroup, error) {
 }
 
 const nextEntryOperationTypeCode = `-- name: NextEntryOperationTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM entry_operation_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM entry_operation_types WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextEntryOperationTypeCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextEntryOperationTypeCode)
+func (q *Queries) NextEntryOperationTypeCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextEntryOperationTypeCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextStateGroupCode = `-- name: NextStateGroupCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM state_groups
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM state_groups WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextStateGroupCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextStateGroupCode)
+func (q *Queries) NextStateGroupCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextStateGroupCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -294,17 +336,18 @@ func (q *Queries) NextStateGroupCode(ctx context.Context) (int64, error) {
 
 const uFInStateGroup = `-- name: UFInStateGroup :one
 SELECT EXISTS (
-    SELECT 1 FROM state_group_ufs WHERE state_group_code = $1 AND uf = $2
+    SELECT 1 FROM state_group_ufs WHERE state_group_code = $1 AND uf = $2 AND enterprise_id = $3
 ) AS in_group
 `
 
 type UFInStateGroupParams struct {
 	StateGroupCode int64
 	Uf             string
+	EnterpriseID   int64
 }
 
 func (q *Queries) UFInStateGroup(ctx context.Context, arg UFInStateGroupParams) (bool, error) {
-	row := q.db.QueryRow(ctx, uFInStateGroup, arg.StateGroupCode, arg.Uf)
+	row := q.db.QueryRow(ctx, uFInStateGroup, arg.StateGroupCode, arg.Uf, arg.EnterpriseID)
 	var in_group bool
 	err := row.Scan(&in_group)
 	return in_group, err
@@ -317,8 +360,8 @@ UPDATE entry_operation_types SET
     supplier_type_code = $8, is_active = $9,
     movimenta_estoque = $10, gera_financeiro = $11, credita_icms = $12,
     credita_ipi = $13, credita_pis_cofins = $14
-WHERE code = $1
-RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
+WHERE code = $1 AND enterprise_id = $15
+RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id
 `
 
 type UpdateEntryOperationTypeParams struct {
@@ -336,6 +379,7 @@ type UpdateEntryOperationTypeParams struct {
 	CreditaIcms        bool
 	CreditaIpi         bool
 	CreditaPisCofins   bool
+	EnterpriseID       int64
 }
 
 func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryOperationTypeParams) (EntryOperationType, error) {
@@ -354,6 +398,7 @@ func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryO
 		arg.CreditaIcms,
 		arg.CreditaIpi,
 		arg.CreditaPisCofins,
+		arg.EnterpriseID,
 	)
 	var i EntryOperationType
 	err := row.Scan(
@@ -374,6 +419,7 @@ func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryO
 		&i.CreditaIcms,
 		&i.CreditaIpi,
 		&i.CreditaPisCofins,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

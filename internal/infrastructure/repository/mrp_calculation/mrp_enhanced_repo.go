@@ -349,6 +349,39 @@ func (r *MRPCalculationRepositorySQLC) UpdatePlannedOrderMachine(ctx context.Con
 	return nil
 }
 
+// loadFirmedOrders marca as sugestões que já viraram ordem planejada ativa.
+func (r *MRPCalculationRepositorySQLC) loadFirmedOrders(ctx context.Context, suggestions []*entity.PlannedOrderSuggestion) error {
+	if len(suggestions) == 0 {
+		return nil
+	}
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	codes := make([]int64, 0, len(suggestions))
+	byCode := map[int64]*entity.PlannedOrderSuggestion{}
+	for _, s := range suggestions {
+		codes = append(codes, s.Code)
+		byCode[s.Code] = s
+	}
+	rows, err := r.db.Query(ctx, `SELECT mrp_suggestion_code, code FROM planned_orders
+		WHERE enterprise_id=$1 AND mrp_suggestion_code=ANY($2) AND is_active AND status<>'CANCELLED'`, e, codes)
+	if err != nil {
+		return fmt.Errorf("carregando ordens planejadas das sugestões: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var suggestion, planned int64
+		if err := rows.Scan(&suggestion, &planned); err != nil {
+			return err
+		}
+		if s := byCode[suggestion]; s != nil {
+			s.PlannedOrderCode = &planned
+		}
+	}
+	return rows.Err()
+}
+
 func (r *MRPCalculationRepositorySQLC) loadMachineAllocations(ctx context.Context, suggestions []*entity.PlannedOrderSuggestion) error {
 	if len(suggestions) == 0 {
 		return nil

@@ -6,7 +6,7 @@ package entity
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 	"strings"
 	"time"
@@ -85,7 +85,7 @@ type Set struct {
 
 func NewSet(description string, createdBy uuid.UUID) (*Set, error) {
 	if strings.TrimSpace(description) == "" {
-		return nil, errors.New("descrição do conjunto é obrigatória")
+		return nil, domainerr.NewValidation("descrição do conjunto é obrigatória")
 	}
 	return &Set{Description: description, IsActive: true, CreatedBy: createdBy}, nil
 }
@@ -119,13 +119,13 @@ type VariableLanguage struct {
 
 func NewVariable(setID int64, code, description, maskComposition string, createdBy uuid.UUID) (*Variable, error) {
 	if setID <= 0 {
-		return nil, errors.New("set_id é obrigatório")
+		return nil, domainerr.NewValidation("set_id é obrigatório")
 	}
 	if strings.TrimSpace(code) == "" {
-		return nil, errors.New("código da variável é obrigatório")
+		return nil, domainerr.NewValidation("código da variável é obrigatório")
 	}
 	if strings.TrimSpace(description) == "" {
-		return nil, errors.New("descrição da variável é obrigatória")
+		return nil, domainerr.NewValidation("descrição da variável é obrigatória")
 	}
 	if strings.TrimSpace(maskComposition) == "" {
 		// default the mask composition to the code when omitted
@@ -183,13 +183,13 @@ type CharacteristicLanguage struct {
 
 func NewCharacteristic(code, description, charType string, createdBy uuid.UUID) (*Characteristic, error) {
 	if strings.TrimSpace(code) == "" {
-		return nil, errors.New("código da característica é obrigatório")
+		return nil, domainerr.NewValidation("código da característica é obrigatório")
 	}
 	if strings.TrimSpace(description) == "" {
-		return nil, errors.New("descrição da característica é obrigatória")
+		return nil, domainerr.NewValidation("descrição da característica é obrigatória")
 	}
 	if !ValidCharType(charType) {
-		return nil, errors.New("tipo de característica inválido")
+		return nil, domainerr.NewValidation("tipo de característica inválido")
 	}
 	return &Characteristic{
 		Code:          code,
@@ -203,19 +203,19 @@ func NewCharacteristic(code, description, charType string, createdBy uuid.UUID) 
 // Validate checks the type-specific invariants of a characteristic.
 func (c *Characteristic) Validate() error {
 	if !ValidCharType(c.Type) {
-		return errors.New("tipo de característica inválido")
+		return domainerr.NewValidation("tipo de característica inválido")
 	}
 	if c.ReceivingType == "" {
 		c.ReceivingType = RecebNenhum
 	}
 	if !ValidReceivingType(c.ReceivingType) {
-		return errors.New("tipo de recebimento inválido")
+		return domainerr.NewValidation("tipo de recebimento inválido")
 	}
 	if !validFieldSource(c.FieldSource) {
-		return errors.New("campo de origem inválido")
+		return domainerr.NewValidation("campo de origem inválido")
 	}
 	if usesSet(c.Type) && (c.SetID == nil || *c.SetID <= 0) {
-		return errors.New("características do tipo Escolha exigem um conjunto")
+		return domainerr.NewValidation("características do tipo Escolha exigem um conjunto")
 	}
 	if c.Type == TypeOpcao {
 		if strings.TrimSpace(c.OptionTrue) == "" {
@@ -226,10 +226,10 @@ func (c *Characteristic) Validate() error {
 		}
 	}
 	if c.Type == TypeInfNumerica && c.NumMin != nil && c.NumMax != nil && *c.NumMax < *c.NumMin {
-		return errors.New("num_max não pode ser menor que num_min")
+		return domainerr.NewValidation("num_max não pode ser menor que num_min")
 	}
 	if c.Type == TypeCampo && c.FieldSource == "" {
-		return errors.New("características do tipo Campo exigem um campo de origem")
+		return domainerr.NewValidation("características do tipo Campo exigem um campo de origem")
 	}
 	return nil
 }
@@ -261,13 +261,13 @@ type ItemCharacteristic struct {
 
 func NewItemCharacteristic(itemCode, characteristicID int64, sequence int) (*ItemCharacteristic, error) {
 	if itemCode <= 0 {
-		return nil, errors.New("item_code é obrigatório")
+		return nil, domainerr.NewValidation("item_code é obrigatório")
 	}
 	if characteristicID <= 0 {
-		return nil, errors.New("characteristic_id é obrigatório")
+		return nil, domainerr.NewValidation("characteristic_id é obrigatório")
 	}
 	if sequence <= 0 {
-		return nil, errors.New("sequência deve ser positiva")
+		return nil, domainerr.NewValidation("sequência deve ser positiva")
 	}
 	return &ItemCharacteristic{
 		ItemCode:         itemCode,

@@ -112,8 +112,20 @@ func (r *ItemClassificationRepositorySQLC) CreateItemClassification(ctx context.
 		return nil, err
 	}
 	ok, err := r.q.ClassificationMaskBelongsToEnterprise(ctx, sqlc.ClassificationMaskBelongsToEnterpriseParams{ID: c.MaskID, EnterpriseID: e})
-	if err != nil || !ok {
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, errorsuc.NewNotFoundError("máscara de classificação não encontrada nesta empresa")
+	}
+	if c.ParentID != nil {
+		pai, err := r.q.ItemClassificationBelongsToEnterprise(ctx, sqlc.ItemClassificationBelongsToEnterpriseParams{ID: *c.ParentID, EnterpriseID: e})
+		if err != nil {
+			return nil, err
+		}
+		if !pai {
+			return nil, errorsuc.NewNotFoundError("classificação superior não encontrada nesta empresa")
+		}
 	}
 	row, err := r.q.CreateItemClassification(ctx, sqlc.CreateItemClassificationParams{
 		Code:        c.Code,
@@ -134,7 +146,10 @@ func (r *ItemClassificationRepositorySQLC) UpdateItemClassification(ctx context.
 		return nil, err
 	}
 	ok, err := r.q.ItemClassificationBelongsToEnterprise(ctx, sqlc.ItemClassificationBelongsToEnterpriseParams{ID: c.ID, EnterpriseID: e})
-	if err != nil || !ok {
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, errorsuc.NewNotFoundError("classificação não encontrada nesta empresa")
 	}
 	row, err := r.q.UpdateItemClassification(ctx, sqlc.UpdateItemClassificationParams{
@@ -170,7 +185,10 @@ func (r *ItemClassificationRepositorySQLC) ListItemClassificationsByMask(ctx con
 		return nil, err
 	}
 	ok, err := r.q.ClassificationMaskBelongsToEnterprise(ctx, sqlc.ClassificationMaskBelongsToEnterpriseParams{ID: maskID, EnterpriseID: e})
-	if err != nil || !ok {
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, errorsuc.NewNotFoundError("máscara de classificação não encontrada nesta empresa")
 	}
 	rows, err := r.q.ListItemClassificationsByMask(ctx, sqlc.ListItemClassificationsByMaskParams{
@@ -193,7 +211,10 @@ func (r *ItemClassificationRepositorySQLC) ListItemClassificationChildren(ctx co
 		return nil, err
 	}
 	ok, err := r.q.ItemClassificationBelongsToEnterprise(ctx, sqlc.ItemClassificationBelongsToEnterpriseParams{ID: parentID, EnterpriseID: e})
-	if err != nil || !ok {
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, errorsuc.NewNotFoundError("classificação pai não pertence a esta empresa")
 	}
 	rows, err := r.q.ListItemClassificationChildren(ctx, sqlc.ListItemClassificationChildrenParams{

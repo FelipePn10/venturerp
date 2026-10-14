@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 	"strings"
 	"time"
@@ -21,7 +22,7 @@ func (o *PurchaseOrder) Editavel() error {
 	case PurchaseOrderStatusDRAFT, PurchaseOrderStatusREQUESTED, "":
 		return nil
 	}
-	return fmt.Errorf("o pedido %d está %s e não pode mais ser alterado; para deixar de receber o que falta, elimine o saldo da linha", o.Code, RotuloSituacao(o.Status))
+	return domainerr.NewValidation(fmt.Sprintf("o pedido %d está %s e não pode mais ser alterado; para deixar de receber o que falta, elimine o saldo da linha", o.Code, RotuloSituacao(o.Status)))
 }
 
 // AceitaRecebimento: material só entra contra pedido aprovado. Receber um
@@ -37,7 +38,7 @@ func SituacaoAceitaRecebimento(code int64, s PurchaseOrderStatus) error {
 	case PurchaseOrderStatusAPPROVED, PurchaseOrderStatusPARTIAL, PurchaseOrderStatusRECEIVED:
 		return nil
 	}
-	return fmt.Errorf("o pedido de compra %d está %s: aprove o pedido antes de receber o material", code, RotuloSituacao(s))
+	return domainerr.NewValidation(fmt.Sprintf("o pedido de compra %d está %s: aprove o pedido antes de receber o material", code, RotuloSituacao(s)))
 }
 
 // VoltarParaRascunho desfaz a avaliação de alçada: o valor mudou, então a

@@ -144,7 +144,10 @@ func (uc *ConfiguratorUseCase) UpdateVariable(ctx context.Context, dto request.U
 	if err != nil {
 		return nil, fmt.Errorf("atualizando variável: %w", err)
 	}
-	langs, _ := uc.Q.ListCfgVariableLanguages(ctx, dto.ID)
+	langs, errIdiomas := uc.Q.ListCfgVariableLanguages(ctx, dto.ID)
+	if errIdiomas != nil {
+		return nil, fmt.Errorf("lendo os idiomas da variável: %w", errIdiomas)
+	}
 	return variableToResponse(row, langs), nil
 }
 
@@ -153,7 +156,10 @@ func (uc *ConfiguratorUseCase) GetVariable(ctx context.Context, id int64) (*resp
 	if err != nil {
 		return nil, fmt.Errorf("variável não encontrada: %w", err)
 	}
-	langs, _ := uc.Q.ListCfgVariableLanguages(ctx, id)
+	langs, errIdiomas := uc.Q.ListCfgVariableLanguages(ctx, id)
+	if errIdiomas != nil {
+		return nil, fmt.Errorf("lendo os idiomas da variável: %w", errIdiomas)
+	}
 	return variableToResponse(row, langs), nil
 }
 

@@ -2,6 +2,7 @@ package cost_center_uc
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -24,10 +25,16 @@ func (uc *CreateCostCenterUseCase) Execute(
 	if !uc.Auth.CanCreateCostCenter(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	start, _ := time.Parse("2006-01-02", dto.StartDate)
+	start, msg := datetime.Obrigatoria("data de início", dto.StartDate)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	var end *time.Time
 	if dto.EndDate != nil {
-		e, _ := time.Parse("2006-01-02", *dto.EndDate)
+		e, msg := datetime.Obrigatoria("data de fim", *dto.EndDate)
+		if msg != "" {
+			return nil, errorsuc.NewValidationError(msg)
+		}
 		end = &e
 	}
 	cc := &entity.CostCenter{

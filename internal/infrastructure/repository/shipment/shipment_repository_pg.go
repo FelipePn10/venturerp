@@ -12,15 +12,44 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// conexao: o pool ou uma transação aberta — dentro de uma transação, o Begin
+// interno vira savepoint e tudo entra no tudo-ou-nada de quem chamou.
+type conexao interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 type ShipmentRepositoryPG struct {
-	pool *pgxpool.Pool
+	pool conexao
 }
 
 func NewShipmentRepositoryPG(pool *pgxpool.Pool) *ShipmentRepositoryPG {
 	return &ShipmentRepositoryPG{pool: pool}
+}
+
+// NewShipmentRepositoryTx devolve o repositório ligado a uma transação aberta.
+func NewShipmentRepositoryTx(tx pgx.Tx) *ShipmentRepositoryPG {
+	return &ShipmentRepositoryPG{pool: tx}
+}
+
+// atomico roda fn numa transação (um savepoint, quando o repositório já está
+// dentro de uma).
+func (r *ShipmentRepositoryPG) atomico(ctx context.Context, fn func(*ShipmentRepositoryPG) error) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(&ShipmentRepositoryPG{pool: tx}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 var _ repository.ShipmentRepository = (*ShipmentRepositoryPG)(nil)
@@ -78,7 +107,19 @@ func (r *ShipmentRepositoryPG) NextCode(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
+// Create grava o romaneio e o evento de criação juntos: um sem o outro deixava
+// romaneio sem histórico (o evento falhava em silêncio).
 func (r *ShipmentRepositoryPG) Create(ctx context.Context, s *entity.Shipment) (*entity.Shipment, error) {
+	var out *entity.Shipment
+	err := r.atomico(ctx, func(t *ShipmentRepositoryPG) error {
+		var e error
+		out, e = t.criar(ctx, s)
+		return e
+	})
+	return out, err
+}
+
+func (r *ShipmentRepositoryPG) criar(ctx context.Context, s *entity.Shipment) (*entity.Shipment, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
@@ -97,7 +138,9 @@ func (r *ShipmentRepositoryPG) Create(ctx context.Context, s *entity.Shipment) (
 	if err != nil {
 		return nil, fmt.Errorf("creating shipment: %w", err)
 	}
-	_ = r.AddEvent(ctx, &entity.ShipmentEvent{ShipmentID: s.ID, Event: "CREATED", CreatedBy: ptrUUID(s.CreatedBy)})
+	if err := r.AddEvent(ctx, &entity.ShipmentEvent{ShipmentID: s.ID, Event: "CREATED", CreatedBy: ptrUUID(s.CreatedBy)}); err != nil {
+		return nil, fmt.Errorf("registrando a criação do romaneio: %w", err)
+	}
 	return s, nil
 }
 
@@ -580,7 +623,19 @@ func (r *ShipmentRepositoryPG) NextLoadCode(ctx context.Context) (int64, error) 
 	return n, nil
 }
 
+// CreateLoad grava a carga e o vínculo com a caixa de expedição juntos: antes a
+// carga ficava criada sem a caixa quando o vínculo falhava, sem aviso.
 func (r *ShipmentRepositoryPG) CreateLoad(ctx context.Context, in repository.CreateLoadInput) (*entity.ShipmentLoad, error) {
+	var out *entity.ShipmentLoad
+	err := r.atomico(ctx, func(t *ShipmentRepositoryPG) error {
+		var e error
+		out, e = t.criarCarga(ctx, in)
+		return e
+	})
+	return out, err
+}
+
+func (r *ShipmentRepositoryPG) criarCarga(ctx context.Context, in repository.CreateLoadInput) (*entity.ShipmentLoad, error) {
 	enterpriseID, tenantErr := tenant.ID(ctx)
 	if tenantErr != nil {
 		return nil, tenantErr
@@ -604,7 +659,9 @@ func (r *ShipmentRepositoryPG) CreateLoad(ctx context.Context, in repository.Cre
 		return nil, fmt.Errorf("creating shipment load: %w", err)
 	}
 	if in.DispatchBoxCode != nil && *in.DispatchBoxCode != "" {
-		_ = r.AssignBoxToLoad(ctx, code, *in.DispatchBoxCode, &in.CreatedBy)
+		if err := r.AssignBoxToLoad(ctx, code, *in.DispatchBoxCode, &in.CreatedBy); err != nil {
+			return nil, err
+		}
 	}
 	return load, nil
 }

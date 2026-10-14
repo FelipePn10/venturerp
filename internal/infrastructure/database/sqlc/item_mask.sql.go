@@ -11,24 +11,38 @@ import (
 
 const deleteItemMask = `-- name: DeleteItemMask :exec
 DELETE FROM item_masks
-WHERE id = $1
+WHERE item_masks.id = $1
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_masks.item_code AND i.enterprise_id = $2)
 `
 
-func (q *Queries) DeleteItemMask(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteItemMask, id)
+type DeleteItemMaskParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteItemMask(ctx context.Context, arg DeleteItemMaskParams) error {
+	_, err := q.db.Exec(ctx, deleteItemMask, arg.ID, arg.EnterpriseID)
 	return err
 }
 
 const getProductMaskByItemCode = `-- name: GetProductMaskByItemCode :one
+
 SELECT id, item_code, mask, mask_hash, created_by, created_at
 FROM item_masks
 WHERE item_code = $1
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_masks.item_code AND i.enterprise_id = $2)
 ORDER BY created_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetProductMaskByItemCode(ctx context.Context, itemCode int64) (ItemMask, error) {
-	row := q.db.QueryRow(ctx, getProductMaskByItemCode, itemCode)
+type GetProductMaskByItemCodeParams struct {
+	ItemCode     int64
+	EnterpriseID int64
+}
+
+// Registros do item são da empresa do item (items.enterprise_id).
+func (q *Queries) GetProductMaskByItemCode(ctx context.Context, arg GetProductMaskByItemCodeParams) (ItemMask, error) {
+	row := q.db.QueryRow(ctx, getProductMaskByItemCode, arg.ItemCode, arg.EnterpriseID)
 	var i ItemMask
 	err := row.Scan(
 		&i.ID,
@@ -44,11 +58,12 @@ func (q *Queries) GetProductMaskByItemCode(ctx context.Context, itemCode int64) 
 const listAllItemMasks = `-- name: ListAllItemMasks :many
 SELECT id, item_code, mask, mask_hash, created_by, created_at
 FROM item_masks
+WHERE EXISTS (SELECT 1 FROM items i WHERE i.code = item_masks.item_code AND i.enterprise_id = $1)
 ORDER BY item_code, created_at DESC
 `
 
-func (q *Queries) ListAllItemMasks(ctx context.Context) ([]ItemMask, error) {
-	rows, err := q.db.Query(ctx, listAllItemMasks)
+func (q *Queries) ListAllItemMasks(ctx context.Context, enterpriseID int64) ([]ItemMask, error) {
+	rows, err := q.db.Query(ctx, listAllItemMasks, enterpriseID)
 	if err != nil {
 		return nil, err
 	}

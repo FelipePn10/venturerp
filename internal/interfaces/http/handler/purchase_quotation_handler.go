@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -25,13 +24,12 @@ func NewPurchaseQuotationHandler(
 
 func (h *PurchaseQuotationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePurchaseQuotationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -68,14 +66,13 @@ func (h *PurchaseQuotationHandler) AddSupplier(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var dto request.AddQuotationSupplierDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.QuotationCode = code
 	res, err := h.uc.AddSupplier(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -83,13 +80,12 @@ func (h *PurchaseQuotationHandler) AddSupplier(w http.ResponseWriter, r *http.Re
 
 func (h *PurchaseQuotationHandler) RecordPrice(w http.ResponseWriter, r *http.Request) {
 	var dto request.RecordQuotationPriceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.RecordPrice(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -103,7 +99,7 @@ func (h *PurchaseQuotationHandler) SelectPrice(w http.ResponseWriter, r *http.Re
 	}
 	res, err := h.uc.SelectPrice(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -116,8 +112,7 @@ func (h *PurchaseQuotationHandler) GenerateOrders(w http.ResponseWriter, r *http
 		return
 	}
 	var dto request.GenerateOrdersFromQuotationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.QuotationCode = code

@@ -2,8 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"net/http"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/cnab"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -45,9 +46,19 @@ func (h *CNABHandler) GenerateRemessa240(w http.ResponseWriter, r *http.Request)
 	}
 
 	titulos := make([]cnab.Titulo, 0, len(req.Titulos))
-	for _, t := range req.Titulos {
-		venc, _ := time.Parse("2006-01-02", t.Vencimento)
-		emis, _ := time.Parse("2006-01-02", t.Emissao)
+	for i, t := range req.Titulos {
+		// Data errada num título vira remessa recusada pelo banco (ou cobrança
+		// com vencimento 0001-01-01): recusa aqui, dizendo qual título.
+		venc, msg := datetime.Obrigatoria("data de vencimento", t.Vencimento)
+		if msg != "" {
+			jsonError(w, http.StatusUnprocessableEntity, fmt.Sprintf("título %d (%s): %s", i+1, t.NumeroDoc, msg))
+			return
+		}
+		emis, msg := datetime.Obrigatoria("data de emissão", t.Emissao)
+		if msg != "" {
+			jsonError(w, http.StatusUnprocessableEntity, fmt.Sprintf("título %d (%s): %s", i+1, t.NumeroDoc, msg))
+			return
+		}
 		titulos = append(titulos, cnab.Titulo{
 			NossoNumero:  t.NossoNumero,
 			NumeroDoc:    t.NumeroDoc,

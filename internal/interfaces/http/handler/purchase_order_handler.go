@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -63,7 +62,7 @@ func (h *PurchaseOrderHandler) Consult(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.consultUC.Execute(r.Context(), f)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -82,11 +81,11 @@ func (h *PurchaseOrderHandler) DownloadAttachment(w http.ResponseWriter, r *http
 	}
 	file, err := h.consultUC.DownloadAttachment(r.Context(), orderCode, attachmentID)
 	if errors.Is(err, purchase_order_uc.ErrAttachmentNotFound) {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	name := strings.ReplaceAll(filepath.Base(file.FileName), `"`, "")
@@ -170,7 +169,7 @@ func (h *PurchaseOrderHandler) Approve(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.approveUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -184,7 +183,7 @@ func (h *PurchaseOrderHandler) Authorize(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.approveUC.Authorize(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -192,8 +191,7 @@ func (h *PurchaseOrderHandler) Authorize(w http.ResponseWriter, r *http.Request)
 
 func (h *PurchaseOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePurchaseOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -212,8 +210,7 @@ func (h *PurchaseOrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdatePurchaseOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -234,7 +231,7 @@ func (h *PurchaseOrderHandler) GetByCode(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -296,14 +293,13 @@ func (h *PurchaseOrderHandler) Receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.ReceivePurchaseOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.PurchaseOrderCode = code
 	result, err := h.receiveUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

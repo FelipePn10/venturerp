@@ -40,7 +40,7 @@ func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *h
 
 	result, err := h.consultUC.Execute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -58,7 +58,7 @@ func (h *ItemQueryStructureHandler) WhereUsed(w http.ResponseWriter, r *http.Req
 
 	result, err := h.whereUsedUC.Execute(r.Context(), itemCode, levels)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -78,7 +78,7 @@ func (h *ItemQueryStructureHandler) ResolveStructure(w http.ResponseWriter, r *h
 
 	result, err := h.resolveUC.Execute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -93,7 +93,7 @@ func (h *ItemQueryStructureHandler) CheckConfiguration(w http.ResponseWriter, r 
 	}
 	result, err := h.resolveUC.VerificarConfiguracao(r.Context(), code, r.URL.Query().Get("mask"))
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 )
 
@@ -36,7 +37,7 @@ func (t *MachineTypeEnum) UnmarshalJSON(data []byte) error {
 	}
 	parsed := MachineTypeEnum(strings.ToUpper(strings.TrimSpace(value)))
 	if !parsed.IsValid() {
-		return fmt.Errorf("classificação de máquina %q inválida: use uma destas — %s", value, MachineTypeValues())
+		return domainerr.NewValidation(fmt.Sprintf("classificação de máquina %q inválida: use uma destas — %s", value, MachineTypeValues()))
 	}
 	*t = parsed
 	return nil

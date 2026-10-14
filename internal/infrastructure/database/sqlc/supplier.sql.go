@@ -266,18 +266,28 @@ func (q *Queries) CreateSupplierContact(ctx context.Context, arg CreateSupplierC
 
 const createSupplierContactEmail = `-- name: CreateSupplierContactEmail :one
 INSERT INTO supplier_contact_emails (contact_id, value, ranking)
-VALUES ($1, $2, $3)
+SELECT c.id, $1, $2
+  FROM supplier_contacts c
+  JOIN suppliers s ON s.id = c.supplier_id
+ WHERE c.id = $3 AND s.enterprise_id = $4
 RETURNING id, contact_id, value, ranking
 `
 
 type CreateSupplierContactEmailParams struct {
-	ContactID int64
-	Value     string
-	Ranking   int32
+	Value        string
+	Ranking      int32
+	ContactID    int64
+	EnterpriseID int64
 }
 
+// Só grava em contato de fornecedor da empresa autenticada (sem linha = não achou).
 func (q *Queries) CreateSupplierContactEmail(ctx context.Context, arg CreateSupplierContactEmailParams) (SupplierContactEmail, error) {
-	row := q.db.QueryRow(ctx, createSupplierContactEmail, arg.ContactID, arg.Value, arg.Ranking)
+	row := q.db.QueryRow(ctx, createSupplierContactEmail,
+		arg.Value,
+		arg.Ranking,
+		arg.ContactID,
+		arg.EnterpriseID,
+	)
 	var i SupplierContactEmail
 	err := row.Scan(
 		&i.ID,
@@ -290,18 +300,28 @@ func (q *Queries) CreateSupplierContactEmail(ctx context.Context, arg CreateSupp
 
 const createSupplierContactPhone = `-- name: CreateSupplierContactPhone :one
 INSERT INTO supplier_contact_phones (contact_id, value, ranking)
-VALUES ($1, $2, $3)
+SELECT c.id, $1, $2
+  FROM supplier_contacts c
+  JOIN suppliers s ON s.id = c.supplier_id
+ WHERE c.id = $3 AND s.enterprise_id = $4
 RETURNING id, contact_id, value, ranking
 `
 
 type CreateSupplierContactPhoneParams struct {
-	ContactID int64
-	Value     string
-	Ranking   int32
+	Value        string
+	Ranking      int32
+	ContactID    int64
+	EnterpriseID int64
 }
 
+// Só grava em contato de fornecedor da empresa autenticada (sem linha = não achou).
 func (q *Queries) CreateSupplierContactPhone(ctx context.Context, arg CreateSupplierContactPhoneParams) (SupplierContactPhone, error) {
-	row := q.db.QueryRow(ctx, createSupplierContactPhone, arg.ContactID, arg.Value, arg.Ranking)
+	row := q.db.QueryRow(ctx, createSupplierContactPhone,
+		arg.Value,
+		arg.Ranking,
+		arg.ContactID,
+		arg.EnterpriseID,
+	)
 	var i SupplierContactPhone
 	err := row.Scan(
 		&i.ID,
@@ -314,19 +334,20 @@ func (q *Queries) CreateSupplierContactPhone(ctx context.Context, arg CreateSupp
 
 const createSupplierContactType = `-- name: CreateSupplierContactType :one
 
-INSERT INTO supplier_contact_types (code, description)
-VALUES ($1, $2)
-RETURNING id, code, description, is_active, created_at
+INSERT INTO supplier_contact_types (enterprise_id, code, description)
+VALUES ($3, $1, $2)
+RETURNING id, code, description, is_active, created_at, enterprise_id
 `
 
 type CreateSupplierContactTypeParams struct {
-	Code        int64
-	Description string
+	Code         int64
+	Description  string
+	EnterpriseID int64
 }
 
 // ─── Supplier Contact Types ─────────────────────────────────────────────────────
 func (q *Queries) CreateSupplierContactType(ctx context.Context, arg CreateSupplierContactTypeParams) (SupplierContactType, error) {
-	row := q.db.QueryRow(ctx, createSupplierContactType, arg.Code, arg.Description)
+	row := q.db.QueryRow(ctx, createSupplierContactType, arg.Code, arg.Description, arg.EnterpriseID)
 	var i SupplierContactType
 	err := row.Scan(
 		&i.ID,
@@ -334,6 +355,7 @@ func (q *Queries) CreateSupplierContactType(ctx context.Context, arg CreateSuppl
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -345,7 +367,9 @@ INSERT INTO supplier_due_dates (
     payment_type, subsequent_month, rounding, receipt_start_time,
     receipt_end_time, avg_unload_minutes
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+WHERE EXISTS (SELECT 1 FROM suppliers s WHERE s.id = $1 AND s.enterprise_id = $12)
+  AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM payment_conditions pc WHERE pc.id = $5 AND pc.enterprise_id = $12))
 RETURNING id, supplier_id, description, ranking, base_date, payment_condition_id, payment_type, subsequent_month, rounding, receipt_start_time, receipt_end_time, avg_unload_minutes, created_at
 `
 
@@ -361,9 +385,11 @@ type CreateSupplierDueDateParams struct {
 	ReceiptStartTime   pgtype.Text
 	ReceiptEndTime     pgtype.Text
 	AvgUnloadMinutes   *int32
+	EnterpriseID       int64
 }
 
 // ─── Supplier Due Dates ─────────────────────────────────────────────────────────
+// Fornecedor e condição de pagamento da empresa autenticada (sem linha = não achou).
 func (q *Queries) CreateSupplierDueDate(ctx context.Context, arg CreateSupplierDueDateParams) (SupplierDueDate, error) {
 	row := q.db.QueryRow(ctx, createSupplierDueDate,
 		arg.SupplierID,
@@ -377,6 +403,7 @@ func (q *Queries) CreateSupplierDueDate(ctx context.Context, arg CreateSupplierD
 		arg.ReceiptStartTime,
 		arg.ReceiptEndTime,
 		arg.AvgUnloadMinutes,
+		arg.EnterpriseID,
 	)
 	var i SupplierDueDate
 	err := row.Scan(
@@ -431,7 +458,14 @@ INSERT INTO supplier_enterprises (
     supplier_id, enterprise_code, financial_account, applies_ipi,
     default_invoice_type_id, purchase_price_table_id
 )
-VALUES ($1, $2, $3, $4, $5, $6)
+SELECT $1::BIGINT, $2::BIGINT,
+       $3::TEXT, $4::BOOLEAN,
+       $5::BIGINT, $6::BIGINT
+ WHERE EXISTS (SELECT 1 FROM suppliers s JOIN enterprise e ON e.id = s.enterprise_id
+                WHERE s.id = $1::BIGINT AND e.code = $2::BIGINT)
+   AND ($6::BIGINT IS NULL OR EXISTS (
+        SELECT 1 FROM purchase_price_tables t JOIN enterprise e ON e.id = t.enterprise_id
+         WHERE t.id = $6::BIGINT AND e.code = $2::BIGINT))
 RETURNING id, supplier_id, enterprise_code, financial_account, applies_ipi, default_invoice_type_id, purchase_price_table_id, is_active, created_at
 `
 
@@ -445,6 +479,8 @@ type CreateSupplierEnterpriseParams struct {
 }
 
 // ─── Supplier Enterprises ─────────────────────────────────────────────────────
+// O vínculo é da empresa autenticada: o fornecedor e a tabela de preço de
+// compra têm de ser dela (o tipo de nota é conferido pelo trigger da 000395).
 func (q *Queries) CreateSupplierEnterprise(ctx context.Context, arg CreateSupplierEnterpriseParams) (SupplierEnterprise, error) {
 	row := q.db.QueryRow(ctx, createSupplierEnterprise,
 		arg.SupplierID,
@@ -499,20 +535,28 @@ func (q *Queries) CreateSupplierPhone(ctx context.Context, arg CreateSupplierPho
 
 const createSupplierType = `-- name: CreateSupplierType :one
 
-INSERT INTO supplier_types (code, description, kind)
-VALUES ($1, $2, $3)
-RETURNING id, code, description, kind, is_active, created_at
+
+INSERT INTO supplier_types (enterprise_id, code, description, kind)
+VALUES ($4, $1, $2, $3)
+RETURNING id, code, description, kind, is_active, created_at, enterprise_id
 `
 
 type CreateSupplierTypeParams struct {
-	Code        int64
-	Description string
-	Kind        string
+	Code         int64
+	Description  string
+	Kind         string
+	EnterpriseID int64
 }
 
+// Tipos de fornecedor e de contato são catálogos da empresa (enterprise_id).
 // ─── Supplier Types ───────────────────────────────────────────────────────────
 func (q *Queries) CreateSupplierType(ctx context.Context, arg CreateSupplierTypeParams) (SupplierType, error) {
-	row := q.db.QueryRow(ctx, createSupplierType, arg.Code, arg.Description, arg.Kind)
+	row := q.db.QueryRow(ctx, createSupplierType,
+		arg.Code,
+		arg.Description,
+		arg.Kind,
+		arg.EnterpriseID,
+	)
 	var i SupplierType
 	err := row.Scan(
 		&i.ID,
@@ -521,6 +565,7 @@ func (q *Queries) CreateSupplierType(ctx context.Context, arg CreateSupplierType
 		&i.Kind,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -620,13 +665,21 @@ func (q *Queries) DeleteSupplierEmail(ctx context.Context, arg DeleteSupplierEma
 	return result.RowsAffected(), nil
 }
 
-const deleteSupplierEnterprise = `-- name: DeleteSupplierEnterprise :exec
-DELETE FROM supplier_enterprises WHERE id = $1
+const deleteSupplierEnterprise = `-- name: DeleteSupplierEnterprise :execrows
+DELETE FROM supplier_enterprises WHERE id = $1 AND enterprise_code = $2
 `
 
-func (q *Queries) DeleteSupplierEnterprise(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSupplierEnterprise, id)
-	return err
+type DeleteSupplierEnterpriseParams struct {
+	ID             int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) DeleteSupplierEnterprise(ctx context.Context, arg DeleteSupplierEnterpriseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSupplierEnterprise, arg.ID, arg.EnterpriseCode)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteSupplierPhone = `-- name: DeleteSupplierPhone :execrows
@@ -759,11 +812,16 @@ func (q *Queries) GetSupplierByDocument(ctx context.Context, arg GetSupplierByDo
 }
 
 const getSupplierContactTypeByCode = `-- name: GetSupplierContactTypeByCode :one
-SELECT id, code, description, is_active, created_at FROM supplier_contact_types WHERE code = $1
+SELECT id, code, description, is_active, created_at, enterprise_id FROM supplier_contact_types WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetSupplierContactTypeByCode(ctx context.Context, code int64) (SupplierContactType, error) {
-	row := q.db.QueryRow(ctx, getSupplierContactTypeByCode, code)
+type GetSupplierContactTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetSupplierContactTypeByCode(ctx context.Context, arg GetSupplierContactTypeByCodeParams) (SupplierContactType, error) {
+	row := q.db.QueryRow(ctx, getSupplierContactTypeByCode, arg.Code, arg.EnterpriseID)
 	var i SupplierContactType
 	err := row.Scan(
 		&i.ID,
@@ -771,6 +829,7 @@ func (q *Queries) GetSupplierContactTypeByCode(ctx context.Context, code int64) 
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -804,11 +863,16 @@ func (q *Queries) GetSupplierParameters(ctx context.Context, enterpriseCode int6
 }
 
 const getSupplierTypeByCode = `-- name: GetSupplierTypeByCode :one
-SELECT id, code, description, kind, is_active, created_at FROM supplier_types WHERE code = $1
+SELECT id, code, description, kind, is_active, created_at, enterprise_id FROM supplier_types WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetSupplierTypeByCode(ctx context.Context, code int64) (SupplierType, error) {
-	row := q.db.QueryRow(ctx, getSupplierTypeByCode, code)
+type GetSupplierTypeByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetSupplierTypeByCode(ctx context.Context, arg GetSupplierTypeByCodeParams) (SupplierType, error) {
+	row := q.db.QueryRow(ctx, getSupplierTypeByCode, arg.Code, arg.EnterpriseID)
 	var i SupplierType
 	err := row.Scan(
 		&i.ID,
@@ -817,6 +881,7 @@ func (q *Queries) GetSupplierTypeByCode(ctx context.Context, code int64) (Suppli
 		&i.Kind,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -944,13 +1009,18 @@ func (q *Queries) ListSupplierContactPhones(ctx context.Context, arg ListSupplie
 }
 
 const listSupplierContactTypes = `-- name: ListSupplierContactTypes :many
-SELECT id, code, description, is_active, created_at FROM supplier_contact_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, is_active, created_at, enterprise_id FROM supplier_contact_types
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListSupplierContactTypes(ctx context.Context, dollar_1 bool) ([]SupplierContactType, error) {
-	rows, err := q.db.Query(ctx, listSupplierContactTypes, dollar_1)
+type ListSupplierContactTypesParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierContactTypes(ctx context.Context, arg ListSupplierContactTypesParams) ([]SupplierContactType, error) {
+	rows, err := q.db.Query(ctx, listSupplierContactTypes, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -964,6 +1034,7 @@ func (q *Queries) ListSupplierContactTypes(ctx context.Context, dollar_1 bool) (
 			&i.Description,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1246,13 +1317,18 @@ func (q *Queries) ListSupplierPhones(ctx context.Context, arg ListSupplierPhones
 }
 
 const listSupplierTypes = `-- name: ListSupplierTypes :many
-SELECT id, code, description, kind, is_active, created_at FROM supplier_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+SELECT id, code, description, kind, is_active, created_at, enterprise_id FROM supplier_types
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
 
-func (q *Queries) ListSupplierTypes(ctx context.Context, dollar_1 bool) ([]SupplierType, error) {
-	rows, err := q.db.Query(ctx, listSupplierTypes, dollar_1)
+type ListSupplierTypesParams struct {
+	Column1      bool
+	EnterpriseID int64
+}
+
+func (q *Queries) ListSupplierTypes(ctx context.Context, arg ListSupplierTypesParams) ([]SupplierType, error) {
+	rows, err := q.db.Query(ctx, listSupplierTypes, arg.Column1, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1267,6 +1343,7 @@ func (q *Queries) ListSupplierTypes(ctx context.Context, dollar_1 bool) ([]Suppl
 			&i.Kind,
 			&i.IsActive,
 			&i.CreatedAt,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -1359,22 +1436,22 @@ func (q *Queries) NextSupplierCode(ctx context.Context) (int64, error) {
 }
 
 const nextSupplierContactTypeCode = `-- name: NextSupplierContactTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_contact_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_contact_types WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextSupplierContactTypeCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextSupplierContactTypeCode)
+func (q *Queries) NextSupplierContactTypeCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextSupplierContactTypeCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
 }
 
 const nextSupplierTypeCode = `-- name: NextSupplierTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_types
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_types WHERE enterprise_id = $1
 `
 
-func (q *Queries) NextSupplierTypeCode(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, nextSupplierTypeCode)
+func (q *Queries) NextSupplierTypeCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextSupplierTypeCode, enterpriseID)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -1596,18 +1673,24 @@ func (q *Queries) UpdateSupplierAddress(ctx context.Context, arg UpdateSupplierA
 const updateSupplierContactType = `-- name: UpdateSupplierContactType :one
 UPDATE supplier_contact_types
 SET description = $2, is_active = $3
-WHERE code = $1
-RETURNING id, code, description, is_active, created_at
+WHERE code = $1 AND enterprise_id = $4
+RETURNING id, code, description, is_active, created_at, enterprise_id
 `
 
 type UpdateSupplierContactTypeParams struct {
-	Code        int64
-	Description string
-	IsActive    bool
+	Code         int64
+	Description  string
+	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateSupplierContactType(ctx context.Context, arg UpdateSupplierContactTypeParams) (SupplierContactType, error) {
-	row := q.db.QueryRow(ctx, updateSupplierContactType, arg.Code, arg.Description, arg.IsActive)
+	row := q.db.QueryRow(ctx, updateSupplierContactType,
+		arg.Code,
+		arg.Description,
+		arg.IsActive,
+		arg.EnterpriseID,
+	)
 	var i SupplierContactType
 	err := row.Scan(
 		&i.ID,
@@ -1615,6 +1698,7 @@ func (q *Queries) UpdateSupplierContactType(ctx context.Context, arg UpdateSuppl
 		&i.Description,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
@@ -1623,7 +1707,10 @@ const updateSupplierEnterprise = `-- name: UpdateSupplierEnterprise :one
 UPDATE supplier_enterprises
 SET financial_account = $2, applies_ipi = $3, default_invoice_type_id = $4,
     purchase_price_table_id = $5, is_active = $6
-WHERE id = $1
+WHERE supplier_enterprises.id = $1 AND supplier_enterprises.enterprise_code = $7
+  AND ($5::BIGINT IS NULL OR EXISTS (
+       SELECT 1 FROM purchase_price_tables t JOIN enterprise e ON e.id = t.enterprise_id
+        WHERE t.id = $5 AND e.code = $7))
 RETURNING id, supplier_id, enterprise_code, financial_account, applies_ipi, default_invoice_type_id, purchase_price_table_id, is_active, created_at
 `
 
@@ -1634,6 +1721,7 @@ type UpdateSupplierEnterpriseParams struct {
 	DefaultInvoiceTypeID *int64
 	PurchasePriceTableID *int64
 	IsActive             bool
+	EnterpriseCode       int64
 }
 
 func (q *Queries) UpdateSupplierEnterprise(ctx context.Context, arg UpdateSupplierEnterpriseParams) (SupplierEnterprise, error) {
@@ -1644,6 +1732,7 @@ func (q *Queries) UpdateSupplierEnterprise(ctx context.Context, arg UpdateSuppli
 		arg.DefaultInvoiceTypeID,
 		arg.PurchasePriceTableID,
 		arg.IsActive,
+		arg.EnterpriseCode,
 	)
 	var i SupplierEnterprise
 	err := row.Scan(
@@ -1694,15 +1783,16 @@ func (q *Queries) UpdateSupplierSefaz(ctx context.Context, arg UpdateSupplierSef
 const updateSupplierType = `-- name: UpdateSupplierType :one
 UPDATE supplier_types
 SET description = $2, kind = $3, is_active = $4
-WHERE code = $1
-RETURNING id, code, description, kind, is_active, created_at
+WHERE code = $1 AND enterprise_id = $5
+RETURNING id, code, description, kind, is_active, created_at, enterprise_id
 `
 
 type UpdateSupplierTypeParams struct {
-	Code        int64
-	Description string
-	Kind        string
-	IsActive    bool
+	Code         int64
+	Description  string
+	Kind         string
+	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateSupplierType(ctx context.Context, arg UpdateSupplierTypeParams) (SupplierType, error) {
@@ -1711,6 +1801,7 @@ func (q *Queries) UpdateSupplierType(ctx context.Context, arg UpdateSupplierType
 		arg.Description,
 		arg.Kind,
 		arg.IsActive,
+		arg.EnterpriseID,
 	)
 	var i SupplierType
 	err := row.Scan(
@@ -1720,6 +1811,7 @@ func (q *Queries) UpdateSupplierType(ctx context.Context, arg UpdateSupplierType
 		&i.Kind,
 		&i.IsActive,
 		&i.CreatedAt,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

@@ -5,7 +5,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_uc"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
 // registrador é o mínimo que o agendador precisa de um log; aceitar a interface
@@ -62,4 +64,18 @@ func (s *Scheduler) tick(ctx context.Context) {
 	if executadas > 0 {
 		s.logger.Info("planejamento executado na janela noturna", "empresas", executadas)
 	}
+}
+
+// SessaoDaEmpresa monta a sessão em que a execução automática roda: a empresa
+// da parametrização e o usuário que a salvou, como se ele tivesse clicado em
+// "Calcular". É o mesmo desenho da sincronização das NF-e recebidas e o que
+// mantém o isolamento — o MRP lê a empresa da sessão, nunca de um parâmetro.
+func SessaoDaEmpresa(ctx context.Context, s planning_uc.AutoRunSettings) context.Context {
+	ator := ""
+	if s.UpdatedBy != nil {
+		ator = s.UpdatedBy.String()
+	}
+	return context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{
+		ID: ator, Role: "ADMIN", EnterpriseID: s.EnterpriseID, EnterpriseCode: s.EnterpriseCode,
+	})
 }

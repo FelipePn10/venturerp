@@ -6,6 +6,7 @@ package devolucao
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -89,14 +90,13 @@ func (o Origem) Disponivel() decimal.Decimal {
 // centavos); devolver a quantidade inteira da nota leva o total exato.
 func Montar(o Origem, qtd decimal.Decimal) (Linha, error) {
 	if !qtd.IsPositive() {
-		return Linha{}, fmt.Errorf("item %q: informe a quantidade devolvida", o.Descricao)
+		return Linha{}, domainerr.NewValidation(fmt.Sprintf("item %q: informe a quantidade devolvida", o.Descricao))
 	}
 	if qtd.GreaterThan(o.Disponivel()) {
-		return Linha{}, fmt.Errorf("item %q: quer devolver %s, mas só restam %s (da nota: %s, já devolvido: %s)",
-			o.Descricao, qtd.String(), o.Disponivel().String(), o.Quantidade.String(), o.Devolvida.String())
+		return Linha{}, domainerr.NewValidation(fmt.Sprintf("item %q: quer devolver %s, mas só restam %s (da nota: %s, já devolvido: %s)", o.Descricao, qtd.String(), o.Disponivel().String(), o.Quantidade.String(), o.Devolvida.String()))
 	}
 	if !o.Quantidade.IsPositive() {
-		return Linha{}, fmt.Errorf("item %q sem quantidade na nota", o.Descricao)
+		return Linha{}, domainerr.NewValidation(fmt.Sprintf("item %q sem quantidade na nota", o.Descricao))
 	}
 	f := qtd.Div(o.Quantidade)
 	p := func(v decimal.Decimal) decimal.Decimal { return v.Mul(f).Round(2) }

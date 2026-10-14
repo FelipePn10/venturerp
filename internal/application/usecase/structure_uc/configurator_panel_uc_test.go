@@ -57,8 +57,8 @@ func (f *fakeConfigurator) GenerateMask(_ context.Context, dto request.CfgGenera
 	out.Persisted = dto.Persist
 	return &out, nil
 }
-func (f *fakeConfigurator) FormulaVariables(context.Context, []request.CfgMaskAnswerInput) map[string]float64 {
-	return f.vars
+func (f *fakeConfigurator) FormulaVariables(context.Context, []request.CfgMaskAnswerInput) (map[string]float64, error) {
+	return f.vars, nil
 }
 
 type fakeResolver struct {

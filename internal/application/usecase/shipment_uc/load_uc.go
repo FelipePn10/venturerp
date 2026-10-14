@@ -46,7 +46,7 @@ func (uc *ShipmentUseCase) AddShipmentToLoad(ctx context.Context, loadCode, ship
 		return nil, err
 	}
 	if load.Status == entity.LoadStatusShipped || load.Status == entity.LoadStatusCancelled {
-		return nil, fmt.Errorf("carga %d não aceita romaneios no status %s", loadCode, load.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d não aceita romaneios no status %s", loadCode, load.Status))
 	}
 	ship, err := uc.Repo.GetByCode(ctx, shipmentCode)
 	if err != nil {
@@ -62,7 +62,9 @@ func (uc *ShipmentUseCase) AddShipmentToLoad(ctx context.Context, loadCode, ship
 	if err != nil {
 		return nil, err
 	}
-	_ = uc.Repo.RecalcLoadTotals(ctx, loadCode)
+	if err := uc.Repo.RecalcLoadTotals(ctx, loadCode); err != nil {
+		return nil, fmt.Errorf("recalculando os totais da carga: %w", err)
+	}
 	return toShipmentLoadShipmentResponse(linked), nil
 }
 
@@ -72,7 +74,7 @@ func (uc *ShipmentUseCase) RemoveShipmentFromLoad(ctx context.Context, loadCode,
 		return err
 	}
 	if load.Status != entity.LoadStatusPlanned {
-		return fmt.Errorf("só é possível remover romaneio de carga planejada")
+		return errorsuc.NewValidationError("só é possível remover romaneio de carga planejada")
 	}
 	if _, err := uc.Repo.GetByCode(ctx, shipmentCode); err != nil {
 		return err
@@ -89,7 +91,7 @@ func (uc *ShipmentUseCase) AddFiscalNoteToLoad(ctx context.Context, in repositor
 		return nil, err
 	}
 	if load.Status == entity.LoadStatusShipped || load.Status == entity.LoadStatusCancelled {
-		return nil, fmt.Errorf("carga %d não aceita notas no status %s", in.LoadCode, load.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d não aceita notas no status %s", in.LoadCode, load.Status))
 	}
 	if in.FiscalExitID <= 0 {
 		return nil, errorsuc.NewValidationError("informe a saída fiscal")
@@ -101,7 +103,9 @@ func (uc *ShipmentUseCase) AddFiscalNoteToLoad(ctx context.Context, in repositor
 	if err != nil {
 		return nil, err
 	}
-	_ = uc.Repo.RecalcLoadTotals(ctx, in.LoadCode)
+	if err := uc.Repo.RecalcLoadTotals(ctx, in.LoadCode); err != nil {
+		return nil, fmt.Errorf("recalculando os totais da carga: %w", err)
+	}
 	return toShipmentLoadFiscalNoteResponse(note), nil
 }
 
@@ -114,7 +118,7 @@ func (uc *ShipmentUseCase) TransitionLoad(ctx context.Context, code int64, next 
 		return errorsuc.NewValidationError(fmt.Sprintf("transição inválida: carga %d está %s e não pode ir para %s", code, load.Status, next))
 	}
 	if next == entity.LoadStatusReleased && load.TotalShipments == 0 && len(load.Shipments) == 0 {
-		return fmt.Errorf("carga %d não possui romaneios para liberar", code)
+		return errorsuc.NewValidationError(fmt.Sprintf("carga %d não possui romaneios para liberar", code))
 	}
 	return uc.Repo.UpdateLoadStatus(ctx, code, next, &actor, note)
 }

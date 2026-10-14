@@ -2,16 +2,16 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
 	"github.com/shopspring/decimal"
 )
 
-var ErrCancellationReasonNotFound = errors.New("motivo de cancelamento não encontrado")
-var ErrConfigurationReferenced = errors.New("esta configuração de orçamento está em uso")
-var ErrConfigurationNotFound = errors.New("configuração de orçamento de venda não encontrada")
+var ErrCancellationReasonNotFound = domainerr.NewNotFound("motivo de cancelamento não encontrado")
+var ErrConfigurationReferenced = domainerr.NewConflict("esta configuração de orçamento está em uso")
+var ErrConfigurationNotFound = domainerr.NewNotFound("configuração de orçamento de venda não encontrada")
 
 type ConfigurationMaintenanceRepository interface {
 	ResetParameters(ctx context.Context) (*entity.Parameters, error)

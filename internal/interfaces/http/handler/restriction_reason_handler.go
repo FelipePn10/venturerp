@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -13,8 +12,7 @@ import (
 
 func (h *RestrictionReasonHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateRestrictionReasonDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto.Description, dto.Situation)
@@ -42,7 +40,7 @@ func (h *RestrictionReasonHandler) GetByCode(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -55,8 +53,7 @@ func (h *RestrictionReasonHandler) Update(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var dto request.UpdateRestrictionReasonDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code

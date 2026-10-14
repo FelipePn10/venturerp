@@ -28,8 +28,7 @@ func NewSalesQuotationHandler(uc *sales_quotation_uc.UseCase, convertUC *sales_q
 
 func (h *SalesQuotationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesQuotationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.Create(r.Context(), dto)
@@ -46,8 +45,7 @@ func (h *SalesQuotationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateSalesQuotationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -73,6 +71,9 @@ func (h *SalesQuotationHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SalesQuotationHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !filtroValido(w, r, "quotation_number", "customer_code", "sales_division_code") {
+		return
+	}
 	filter := parseQuotationFilter(r)
 	result, err := h.uc.List(r.Context(), filter)
 	if err != nil {
@@ -88,8 +89,7 @@ func (h *SalesQuotationHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.CancelSalesQuotationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -106,8 +106,7 @@ func (h *SalesQuotationHandler) Attend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.AttendSalesQuotationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -124,8 +123,7 @@ func (h *SalesQuotationHandler) Uncancel(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var dto request.UncancelSalesQuotationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -142,8 +140,7 @@ func (h *SalesQuotationHandler) ChangeStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var dto request.ChangeSalesQuotationStatusDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -160,8 +157,7 @@ func (h *SalesQuotationHandler) ChangeRelease(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var dto request.ChangeSalesQuotationReleaseDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -200,6 +196,9 @@ func (h *SalesQuotationHandler) PaymentSchedule(w http.ResponseWriter, r *http.R
 }
 
 func (h *SalesQuotationHandler) Report(w http.ResponseWriter, r *http.Request) {
+	if !filtroValido(w, r, "quotation_number", "customer_code", "sales_division_code") {
+		return
+	}
 	result, err := h.uc.Report(r.Context(), parseQuotationFilter(r))
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -230,8 +229,7 @@ func (h *SalesQuotationHandler) Convert(w http.ResponseWriter, r *http.Request) 
 
 func (h *SalesQuotationHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesQuotationItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateItem(r.Context(), dto)
@@ -248,8 +246,7 @@ func (h *SalesQuotationHandler) UpdateItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var dto request.UpdateSalesQuotationItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -280,8 +277,7 @@ func (h *SalesQuotationHandler) CancelItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var dto request.CancelSalesQuotationItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -302,8 +298,7 @@ func (h *SalesQuotationHandler) GetParameters(w http.ResponseWriter, r *http.Req
 }
 func (h *SalesQuotationHandler) SaveParameters(w http.ResponseWriter, r *http.Request) {
 	var dto request.SaveSalesQuotationParametersDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.SaveParameters(r.Context(), dto)
@@ -359,8 +354,7 @@ func (h *SalesQuotationHandler) SetCancellationReasonStatus(w http.ResponseWrite
 }
 func (h *SalesQuotationHandler) SaveCommissionPattern(w http.ResponseWriter, r *http.Request) {
 	var dto request.SaveCommissionPatternDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.SaveCommissionPattern(r.Context(), dto)
@@ -380,8 +374,7 @@ func (h *SalesQuotationHandler) ListCommissionPatterns(w http.ResponseWriter, r 
 }
 func (h *SalesQuotationHandler) SaveCancellationReason(w http.ResponseWriter, r *http.Request) {
 	var dto request.SaveCancellationReasonDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.SaveCancellationReason(r.Context(), dto)

@@ -24,6 +24,9 @@ func (uc *CreateSalesOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateSalesOrderDTO,
 ) (*response.SalesOrderResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de entrega", dto.DeliveryDate), datetime.Campo("data da venda", dto.SaleDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}

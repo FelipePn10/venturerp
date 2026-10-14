@@ -29,7 +29,10 @@ func (uc *UseCase) CreateRecord(ctx context.Context, dto request.CreateProcureme
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	recordType := entity.RecordType(dto.RecordType)
 	if !validRecordType(recordType) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("tipo de registro %q inválido", dto.RecordType))
@@ -108,22 +111,25 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 	if dto.ApprovedQty < 0 || dto.RejectedQty < 0 || dto.ApprovedQty+dto.RejectedQty <= 0 {
 		return nil, errorsuc.NewValidationError("informe a quantidade aprovada ou a rejeitada, maior que zero")
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	rec, err := uc.Repo.GetRecord(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if rec.RecordType != entity.RecordReceivingInspection {
-		return nil, fmt.Errorf("o registro %d não é uma inspeção de recebimento", id)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o registro %d não é uma inspeção de recebimento", id))
 	}
 	if rec.ItemCode == nil || rec.WarehouseID == nil {
-		return nil, fmt.Errorf("inspeção exige código do item e depósito")
+		return nil, errorsuc.NewValidationError("inspeção exige código do item e depósito")
 	}
 	if dto.ApprovedQty > 0 && dto.DestinationWarehouseID == nil {
 		return nil, errorsuc.NewValidationError("depósito de destino é obrigatório quando a quantidade aprovada for positiva")
 	}
 	if dto.ApprovedQty+dto.RejectedQty > rec.Quantity+0.0001 {
-		return nil, fmt.Errorf("disposition quantity exceeds inspected quantity")
+		return nil, errorsuc.NewValidationError("a quantidade destinada passa da quantidade inspecionada")
 	}
 
 	disp := &entity.InspectionDisposition{
@@ -187,7 +193,10 @@ func (uc *UseCase) CreateSupplierScorecard(ctx context.Context, dto request.Crea
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	start, err := time.Parse("2006-01-02", dto.PeriodStart)
 	if err != nil {
 		return nil, fmt.Errorf("início do período inválido: %w", err)
@@ -261,7 +270,10 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 	if err != nil {
 		return nil, fmt.Errorf("fim da vigência inválido: %w", err)
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	route := &entity.ReceivingInspectionRoute{
 		EnterpriseCode:        dto.EnterpriseCode,
 		Basis:                 dto.Basis,
@@ -362,7 +374,10 @@ func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto req
 	if err == nil {
 		routeID = &route.ID
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	order := &entity.ReceivingInspectionOrder{
 		RouteID:               routeID,
 		Source:                dto.Source,
@@ -467,7 +482,10 @@ func (uc *UseCase) RecordReceivingInspectionResult(ctx context.Context, orderID 
 	if dto.SampleIndex <= 0 {
 		dto.SampleIndex = 1
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	result := &entity.ReceivingInspectionResult{
 		OrderID:              orderID,
 		StepID:               dto.StepID,
@@ -521,7 +539,10 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 			return nil, errorsuc.NewValidationError("a quantidade analisada é maior que a quantidade da ordem inspecionada")
 		}
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	analysis := &entity.ReceivingInspectionAnalysis{
 		OrderID:              orderID,
 		ConformQty:           dto.ConformQty,

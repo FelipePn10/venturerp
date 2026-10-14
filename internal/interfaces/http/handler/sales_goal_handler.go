@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -125,8 +124,7 @@ func (h *SalesGoalHandler) Report(w http.ResponseWriter, r *http.Request) {
 }
 
 func decodeSalesGoal(w http.ResponseWriter, r *http.Request, dest any) bool {
-	if err := json.NewDecoder(r.Body).Decode(dest); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, dest) {
 		return false
 	}
 	return true

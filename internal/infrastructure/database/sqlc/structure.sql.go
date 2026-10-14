@@ -12,6 +12,7 @@ import (
 )
 
 const createStructureComponent = `-- name: CreateStructureComponent :one
+
 INSERT INTO item_structures (
     parent_code,
     child_code,
@@ -44,10 +45,11 @@ INSERT INTO item_structures (
     generates_inspection,
     quantity_stock_uom,
     conversion_factor
-) VALUES (
+) SELECT
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
              $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
-         )
+      WHERE EXISTS (SELECT 1 FROM items pi WHERE pi.code = $1 AND pi.enterprise_id = $32)
+        AND EXISTS (SELECT 1 FROM items ci WHERE ci.code = $2 AND ci.enterprise_id = $32)
     RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor
 `
 
@@ -83,8 +85,11 @@ type CreateStructureComponentParams struct {
 	GeneratesInspection bool
 	QuantityStockUom    pgtype.Numeric
 	ConversionFactor    pgtype.Numeric
+	EnterpriseID        int64
 }
 
+// A estrutura (BOM) é da empresa do item PAI; o filho tem de ser da mesma
+// empresa. Toda leitura e escrita confere items.enterprise_id.
 func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStructureComponentParams) (ItemStructure, error) {
 	row := q.db.QueryRow(ctx, createStructureComponent,
 		arg.ParentCode,
@@ -118,6 +123,7 @@ func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStruct
 		arg.GeneratesInspection,
 		arg.QuantityStockUom,
 		arg.ConversionFactor,
+		arg.EnterpriseID,
 	)
 	var i ItemStructure
 	err := row.Scan(
@@ -160,17 +166,26 @@ func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStruct
 	return i, err
 }
 
-const deactivateStructureComponent = `-- name: DeactivateStructureComponent :exec
+const deactivateStructureComponent = `-- name: DeactivateStructureComponent :execrows
 UPDATE item_structures
 SET
     is_active  = FALSE,
     updated_at = NOW()
-WHERE id = $1
+WHERE item_structures.id = $1
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2)
 `
 
-func (q *Queries) DeactivateStructureComponent(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deactivateStructureComponent, id)
-	return err
+type DeactivateStructureComponentParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeactivateStructureComponent(ctx context.Context, arg DeactivateStructureComponentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateStructureComponent, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deactivateStructureComponentByCodes = `-- name: DeactivateStructureComponentByCodes :execrows
@@ -244,8 +259,14 @@ FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
   AND s.is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = s.parent_code AND pi.enterprise_id = $2)
 ORDER BY s.sequence, s.id
 `
+
+type GetAllDirectChildrenParams struct {
+	ParentCode   int64
+	EnterpriseID int64
+}
 
 type GetAllDirectChildrenRow struct {
 	ID                  int64
@@ -287,8 +308,8 @@ type GetAllDirectChildrenRow struct {
 	ConversionFactor    pgtype.Numeric
 }
 
-func (q *Queries) GetAllDirectChildren(ctx context.Context, parentCode int64) ([]GetAllDirectChildrenRow, error) {
-	rows, err := q.db.Query(ctx, getAllDirectChildren, parentCode)
+func (q *Queries) GetAllDirectChildren(ctx context.Context, arg GetAllDirectChildrenParams) ([]GetAllDirectChildrenRow, error) {
+	rows, err := q.db.Query(ctx, getAllDirectChildren, arg.ParentCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -384,6 +405,7 @@ WHERE s.parent_code = $1
     s.parent_mask IS NULL
         OR s.parent_mask = $2
     )
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = s.parent_code AND pi.enterprise_id = $3)
 ORDER BY
     CASE WHEN s.parent_mask IS NOT NULL THEN 0 ELSE 1 END,
     s.sequence,
@@ -391,8 +413,9 @@ ORDER BY
 `
 
 type GetDirectChildrenForMaskParams struct {
-	ParentCode int64
-	ParentMask pgtype.Text
+	ParentCode   int64
+	ParentMask   pgtype.Text
+	EnterpriseID int64
 }
 
 type GetDirectChildrenForMaskRow struct {
@@ -436,7 +459,7 @@ type GetDirectChildrenForMaskRow struct {
 }
 
 func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChildrenForMaskParams) ([]GetDirectChildrenForMaskRow, error) {
-	rows, err := q.db.Query(ctx, getDirectChildrenForMask, arg.ParentCode, arg.ParentMask)
+	rows, err := q.db.Query(ctx, getDirectChildrenForMask, arg.ParentCode, arg.ParentMask, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -499,8 +522,14 @@ FROM item_structures
 WHERE parent_code = $1
   AND parent_mask IS NULL
   AND is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2)
 ORDER BY sequence, id
 `
+
+type GetGenericChildrenParams struct {
+	ParentCode   int64
+	EnterpriseID int64
+}
 
 type GetGenericChildrenRow struct {
 	ID                int64
@@ -526,8 +555,8 @@ type GetGenericChildrenRow struct {
 	QuantityScale     int16
 }
 
-func (q *Queries) GetGenericChildren(ctx context.Context, parentCode int64) ([]GetGenericChildrenRow, error) {
-	rows, err := q.db.Query(ctx, getGenericChildren, parentCode)
+func (q *Queries) GetGenericChildren(ctx context.Context, arg GetGenericChildrenParams) ([]GetGenericChildrenRow, error) {
+	rows, err := q.db.Query(ctx, getGenericChildren, arg.ParentCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -573,17 +602,22 @@ SELECT
     i.code::BIGINT AS code,
     i.pdm_description_technique AS description
 FROM items i
-WHERE i.code = $1
+WHERE i.code = $1 AND i.enterprise_id = $2
     LIMIT 1
 `
+
+type GetItemCodeAndDescriptionParams struct {
+	Code         int64
+	EnterpriseID int64
+}
 
 type GetItemCodeAndDescriptionRow struct {
 	Code        int64
 	Description string
 }
 
-func (q *Queries) GetItemCodeAndDescription(ctx context.Context, code int64) (GetItemCodeAndDescriptionRow, error) {
-	row := q.db.QueryRow(ctx, getItemCodeAndDescription, code)
+func (q *Queries) GetItemCodeAndDescription(ctx context.Context, arg GetItemCodeAndDescriptionParams) (GetItemCodeAndDescriptionRow, error) {
+	row := q.db.QueryRow(ctx, getItemCodeAndDescription, arg.Code, arg.EnterpriseID)
 	var i GetItemCodeAndDescriptionRow
 	err := row.Scan(&i.Code, &i.Description)
 	return i, err
@@ -592,11 +626,17 @@ func (q *Queries) GetItemCodeAndDescription(ctx context.Context, code int64) (Ge
 const getStructureComponentByID = `-- name: GetStructureComponentByID :one
 SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor
 FROM item_structures
-WHERE id = $1
+WHERE item_structures.id = $1
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2)
 `
 
-func (q *Queries) GetStructureComponentByID(ctx context.Context, id int64) (ItemStructure, error) {
-	row := q.db.QueryRow(ctx, getStructureComponentByID, id)
+type GetStructureComponentByIDParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetStructureComponentByID(ctx context.Context, arg GetStructureComponentByIDParams) (ItemStructure, error) {
+	row := q.db.QueryRow(ctx, getStructureComponentByID, arg.ID, arg.EnterpriseID)
 	var i ItemStructure
 	err := row.Scan(
 		&i.ID,
@@ -658,12 +698,17 @@ const itemExists = `-- name: ItemExists :one
 SELECT EXISTS (
     SELECT 1
     FROM items
-    WHERE code = $1
+    WHERE code = $1 AND enterprise_id = $2
 ) AS "exists"
 `
 
-func (q *Queries) ItemExists(ctx context.Context, code int64) (bool, error) {
-	row := q.db.QueryRow(ctx, itemExists, code)
+type ItemExistsParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ItemExists(ctx context.Context, arg ItemExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, itemExists, arg.Code, arg.EnterpriseID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -676,16 +721,18 @@ SELECT EXISTS (
     WHERE parent_code = $1
       AND sequence    = $2
       AND is_active   = TRUE
+      AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $3)
 ) AS "exists"
 `
 
 type SequenceExistsParams struct {
-	ParentCode int64
-	Sequence   int32
+	ParentCode   int64
+	Sequence     int32
+	EnterpriseID int64
 }
 
 func (q *Queries) SequenceExists(ctx context.Context, arg SequenceExistsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, sequenceExists, arg.ParentCode, arg.Sequence)
+	row := q.db.QueryRow(ctx, sequenceExists, arg.ParentCode, arg.Sequence, arg.EnterpriseID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -728,6 +775,7 @@ WHERE parent_code = $1
         OR (parent_mask IS NULL AND $3 IS NULL)
     )
   AND is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $30)
     RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor
 `
 
@@ -761,6 +809,7 @@ type UpdateStructureComponentParams struct {
 	GeneratesInspection bool
 	QuantityStockUom    pgtype.Numeric
 	ConversionFactor    pgtype.Numeric
+	EnterpriseID        int64
 }
 
 func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStructureComponentParams) (ItemStructure, error) {
@@ -794,6 +843,7 @@ func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStruct
 		arg.GeneratesInspection,
 		arg.QuantityStockUom,
 		arg.ConversionFactor,
+		arg.EnterpriseID,
 	)
 	var i ItemStructure
 	err := row.Scan(

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -21,13 +20,12 @@ func NewProcurementHandler(uc *procurement_uc.UseCase) *ProcurementHandler {
 
 func (h *ProcurementHandler) CreateRecord(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateProcurementRecordDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateRecord(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -41,7 +39,7 @@ func (h *ProcurementHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetRecord(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -50,7 +48,7 @@ func (h *ProcurementHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 func (h *ProcurementHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListRecords(r.Context(), r.URL.Query().Get("type"), r.URL.Query().Get("status"))
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -63,13 +61,12 @@ func (h *ProcurementHandler) UpdateStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var dto request.UpdateProcurementRecordStatusDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateStatus(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -82,13 +79,12 @@ func (h *ProcurementHandler) DisposeInspection(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var dto request.DisposeReceivingInspectionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.DisposeInspection(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -96,13 +92,12 @@ func (h *ProcurementHandler) DisposeInspection(w http.ResponseWriter, r *http.Re
 
 func (h *ProcurementHandler) CreateSupplierScorecard(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierScorecardDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateSupplierScorecard(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -116,7 +111,7 @@ func (h *ProcurementHandler) ListSupplierScorecards(w http.ResponseWriter, r *ht
 	}
 	result, err := h.uc.ListSupplierScorecards(r.Context(), supplierCode)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -124,13 +119,12 @@ func (h *ProcurementHandler) ListSupplierScorecards(w http.ResponseWriter, r *ht
 
 func (h *ProcurementHandler) CreateReceivingInspectionRoute(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateReceivingInspectionRouteDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateReceivingInspectionRoute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -144,7 +138,7 @@ func (h *ProcurementHandler) GetReceivingInspectionRoute(w http.ResponseWriter, 
 	}
 	result, err := h.uc.GetReceivingInspectionRoute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -152,13 +146,12 @@ func (h *ProcurementHandler) GetReceivingInspectionRoute(w http.ResponseWriter, 
 
 func (h *ProcurementHandler) GenerateReceivingInspectionOrder(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateReceivingInspectionOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.GenerateReceivingInspectionOrder(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -167,7 +160,7 @@ func (h *ProcurementHandler) GenerateReceivingInspectionOrder(w http.ResponseWri
 func (h *ProcurementHandler) ListReceivingInspectionOrders(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListReceivingInspectionOrders(r.Context(), r.URL.Query().Get("status"))
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -180,13 +173,12 @@ func (h *ProcurementHandler) LinkReceivingInspectionQualityReport(w http.Respons
 		return
 	}
 	var dto request.LinkReceivingInspectionQualityReportDTO
-	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.LinkReceivingInspectionQualityReport(r.Context(), orderID, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -200,7 +192,7 @@ func (h *ProcurementHandler) ListReceivingInspectionQualityReports(w http.Respon
 	}
 	result, err := h.uc.ListReceivingInspectionQualityReports(r.Context(), orderID)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -218,7 +210,7 @@ func (h *ProcurementHandler) UnlinkReceivingInspectionQualityReport(w http.Respo
 		return
 	}
 	if err = h.uc.UnlinkReceivingInspectionQualityReport(r.Context(), orderID, reportID); err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -231,13 +223,12 @@ func (h *ProcurementHandler) RecordReceivingInspectionResult(w http.ResponseWrit
 		return
 	}
 	var dto request.RecordReceivingInspectionResultDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.RecordReceivingInspectionResult(r.Context(), orderID, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -250,13 +241,12 @@ func (h *ProcurementHandler) AnalyzeReceivingInspectionOrder(w http.ResponseWrit
 		return
 	}
 	var dto request.AnalyzeReceivingInspectionOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.AnalyzeReceivingInspectionOrder(r.Context(), orderID, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -264,13 +254,12 @@ func (h *ProcurementHandler) AnalyzeReceivingInspectionOrder(w http.ResponseWrit
 
 func (h *ProcurementHandler) ComputeSupplierScorecard(w http.ResponseWriter, r *http.Request) {
 	var dto request.ComputeSupplierScorecardDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.ComputeSupplierScorecard(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -278,13 +267,12 @@ func (h *ProcurementHandler) ComputeSupplierScorecard(w http.ResponseWriter, r *
 
 func (h *ProcurementHandler) CreateApprovalLimit(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateApprovalLimitDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateApprovalLimit(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -294,7 +282,7 @@ func (h *ProcurementHandler) ListApprovalLimits(w http.ResponseWriter, r *http.R
 	enterpriseCode, _ := strconv.ParseInt(r.URL.Query().Get("enterprise_code"), 10, 64)
 	result, err := h.uc.ListApprovalLimits(r.Context(), enterpriseCode)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -302,13 +290,12 @@ func (h *ProcurementHandler) ListApprovalLimits(w http.ResponseWriter, r *http.R
 
 func (h *ProcurementHandler) CreateSupplierContract(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierContractDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateSupplierContract(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -322,7 +309,7 @@ func (h *ProcurementHandler) GetSupplierContract(w http.ResponseWriter, r *http.
 	}
 	result, err := h.uc.GetSupplierContract(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -332,7 +319,7 @@ func (h *ProcurementHandler) ListSupplierContracts(w http.ResponseWriter, r *htt
 	supplierCode, _ := strconv.ParseInt(r.URL.Query().Get("supplier_code"), 10, 64)
 	result, err := h.uc.ListSupplierContracts(r.Context(), supplierCode, r.URL.Query().Get("status"))
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -345,13 +332,12 @@ func (h *ProcurementHandler) UpdateSupplierContractStatus(w http.ResponseWriter,
 		return
 	}
 	var dto request.UpdateSupplierContractStatusDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateSupplierContractStatus(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -364,13 +350,12 @@ func (h *ProcurementHandler) ConsumeSupplierContract(w http.ResponseWriter, r *h
 		return
 	}
 	var dto request.ConsumeSupplierContractDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.ConsumeSupplierContract(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -380,13 +365,12 @@ func (h *ProcurementHandler) ConsumeSupplierContract(w http.ResponseWriter, r *h
 
 func (h *ProcurementHandler) CreateReceivingNotice(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateReceivingNoticeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateReceivingNotice(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -400,7 +384,7 @@ func (h *ProcurementHandler) GetReceivingNotice(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.uc.GetReceivingNotice(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -409,7 +393,7 @@ func (h *ProcurementHandler) GetReceivingNotice(w http.ResponseWriter, r *http.R
 func (h *ProcurementHandler) ListReceivingNotices(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListReceivingNotices(r.Context(), r.URL.Query().Get("status"))
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -422,13 +406,12 @@ func (h *ProcurementHandler) UpdateReceivingNoticeStatus(w http.ResponseWriter, 
 		return
 	}
 	var dto request.UpdateReceivingNoticeStatusDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateReceivingNoticeStatus(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -436,13 +419,12 @@ func (h *ProcurementHandler) UpdateReceivingNoticeStatus(w http.ResponseWriter, 
 
 func (h *ProcurementHandler) CreateReceivingDivergence(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateReceivingDivergenceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateReceivingDivergence(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -457,7 +439,7 @@ func (h *ProcurementHandler) ListReceivingDivergences(w http.ResponseWriter, r *
 	}
 	result, err := h.uc.ListReceivingDivergences(r.Context(), supplierCode, r.URL.Query().Get("resolution"))
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -470,13 +452,12 @@ func (h *ProcurementHandler) ResolveReceivingDivergence(w http.ResponseWriter, r
 		return
 	}
 	var dto request.ResolveReceivingDivergenceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.ResolveReceivingDivergence(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -486,13 +467,12 @@ func (h *ProcurementHandler) ResolveReceivingDivergence(w http.ResponseWriter, r
 
 func (h *ProcurementHandler) CreateEDIMessage(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateEDIMessageDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateEDIMessage(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -506,7 +486,7 @@ func (h *ProcurementHandler) GetEDIMessage(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.uc.GetEDIMessage(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -521,7 +501,7 @@ func (h *ProcurementHandler) ListEDIMessages(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.uc.ListEDIMessages(r.Context(), supplierCode)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -531,13 +511,12 @@ func (h *ProcurementHandler) ListEDIMessages(w http.ResponseWriter, r *http.Requ
 
 func (h *ProcurementHandler) CreateImportProcess(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateImportProcessDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateImportProcess(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -551,7 +530,7 @@ func (h *ProcurementHandler) GetImportProcess(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.uc.GetImportProcess(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -560,7 +539,7 @@ func (h *ProcurementHandler) GetImportProcess(w http.ResponseWriter, r *http.Req
 func (h *ProcurementHandler) ListImportProcesses(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListImportProcesses(r.Context(), r.URL.Query().Get("status"))
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -574,7 +553,7 @@ func (h *ProcurementHandler) RecomputeImportProcess(w http.ResponseWriter, r *ht
 	}
 	result, err := h.uc.RecomputeImportProcess(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -587,13 +566,12 @@ func (h *ProcurementHandler) UpdateImportProcessStatus(w http.ResponseWriter, r 
 		return
 	}
 	var dto request.UpdateImportProcessStatusDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateImportProcessStatus(r.Context(), id, dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -603,13 +581,12 @@ func (h *ProcurementHandler) UpdateImportProcessStatus(w http.ResponseWriter, r 
 
 func (h *ProcurementHandler) UpsertParameter(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertProcurementParameterDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpsertParameter(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -619,7 +596,7 @@ func (h *ProcurementHandler) ListParameters(w http.ResponseWriter, r *http.Reque
 	enterpriseCode, _ := strconv.ParseInt(r.URL.Query().Get("enterprise_code"), 10, 64)
 	result, err := h.uc.ListParameters(r.Context(), enterpriseCode, r.URL.Query().Get("domain"))
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -629,13 +606,12 @@ func (h *ProcurementHandler) ListParameters(w http.ResponseWriter, r *http.Reque
 
 func (h *ProcurementHandler) CreateSupplierHomologation(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierHomologationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateSupplierHomologation(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -649,7 +625,7 @@ func (h *ProcurementHandler) GenerateItemSuppliers(w http.ResponseWriter, r *htt
 	}
 	created, err := h.uc.GenerateItemSuppliers(r.Context(), supplierCode)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, map[string]int{"created": created})
@@ -663,7 +639,7 @@ func (h *ProcurementHandler) ListSupplierHomologations(w http.ResponseWriter, r 
 	}
 	result, err := h.uc.ListSupplierHomologations(r.Context(), supplierCode)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -684,7 +660,7 @@ func (h *ProcurementHandler) ListPurchaseMovementHistory(w http.ResponseWriter, 
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	result, err := h.uc.ListPurchaseMovementHistory(r.Context(), supplierCode, itemCode, limit)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

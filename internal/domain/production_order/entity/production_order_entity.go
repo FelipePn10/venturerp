@@ -39,6 +39,9 @@ type ProductionOrder struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	CreatedBy      uuid.UUID
+	// CostPending: a OF foi encerrada, mas a apuração do custo real falhou
+	// (motivo). Vazio quando o custo foi apurado.
+	CostPending *string
 }
 
 type ProductionAppointment struct {

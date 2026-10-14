@@ -175,6 +175,9 @@ func (uc *UseCase) Create(ctx context.Context, dto request.CreateRecurringSaleDT
 }
 
 func (uc *UseCase) Update(ctx context.Context, code int64, dto request.UpdateRecurringSaleDTO) (*response.RecurringSaleResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data do próximo reajuste", &dto.NextAdjustmentDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if err := uc.ensureAllowed(ctx); err != nil {
 		return nil, err
 	}
@@ -460,7 +463,9 @@ func (uc *UseCase) CalculateAdjustment(ctx context.Context, dto request.Calculat
 			created, err := uc.Repo.Create(ctx, adjustment)
 			if err != nil {
 				for _, operation := range operations {
-					_ = operationRepo.FailOperation(ctx, operation)
+					if errFalha := operationRepo.FailOperation(ctx, operation); errFalha != nil {
+						err = fmt.Errorf("%w; a operação %v não pôde ser marcada como falha: %v", err, operation, errFalha)
+					}
 				}
 				return nil, err
 			}
@@ -568,6 +573,9 @@ func (uc *UseCase) CommissionProjection(ctx context.Context, filter rsrepo.Proje
 }
 
 func (uc *UseCase) dtoToRecurringSale(dto request.CreateRecurringSaleDTO) (*entity.RecurringSale, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data do próximo reajuste", &dto.NextAdjustmentDate), datetime.Campo("início da vigência", &dto.EffectiveFrom), datetime.Campo("fim da vigência", &dto.EffectiveUntil)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	saleDate, err := requiredDate(dto.SaleDate, "sale_date")
 	if err != nil {
 		return nil, err

@@ -2,8 +2,8 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strconv"
 	"strings"
 	"time"
@@ -68,10 +68,10 @@ func NewLotMask(application string, createdBy uuid.UUID) (*LotMask, error) {
 		application = "GERAL"
 	}
 	if !ValidApplication(application) {
-		return nil, errors.New("aplicação deve ser SUPRIMENTOS, PRODUCAO, VENDAS, EXPEDICAO ou GERAL")
+		return nil, domainerr.NewValidation("aplicação deve ser SUPRIMENTOS, PRODUCAO, VENDAS, EXPEDICAO ou GERAL")
 	}
 	if createdBy == uuid.Nil {
-		return nil, errors.New("usuário responsável é obrigatório")
+		return nil, domainerr.NewValidation("usuário responsável é obrigatório")
 	}
 	return &LotMask{Application: application, IsActive: true, CreatedBy: createdBy}, nil
 }
@@ -87,19 +87,19 @@ func ValidApplication(application string) bool {
 
 func (p *LotMaskPart) Validate() error {
 	if !validPartType(p.PartType) {
-		return errors.New("tipo de partição inválido")
+		return domainerr.NewValidation("tipo de partição inválido")
 	}
 	if p.Sequence <= 0 {
-		return errors.New("sequência da partição deve ser positiva")
+		return domainerr.NewValidation("sequência da partição deve ser positiva")
 	}
 	if p.PartType == PartData && p.DateFormat == "" {
 		p.DateFormat = "DDMMYYYY"
 	}
 	if p.PartType == PartData && !validDateFormat(p.DateFormat) {
-		return errors.New("formato de data inválido; use tokens DD, MM, YYYY, YY, HH, MI e SS")
+		return domainerr.NewValidation("formato de data inválido; use tokens DD, MM, YYYY, YY, HH, MI e SS")
 	}
 	if p.Size < 0 {
-		return errors.New("tamanho não pode ser negativo")
+		return domainerr.NewValidation("tamanho não pode ser negativo")
 	}
 	return nil
 }
@@ -161,13 +161,13 @@ func Generate(parts []LotMaskPart, now time.Time) (GenerateResult, error) {
 			sb.WriteString(out)
 			updates = append(updates, PartUpdate{PartID: p.ID, NewCurrent: cur, NewYear: year})
 		default:
-			return GenerateResult{}, fmt.Errorf("tipo de partição inválido: %s", p.PartType)
+			return GenerateResult{}, domainerr.NewValidation(fmt.Sprintf("tipo de partição inválido: %s", p.PartType))
 		}
 	}
 
 	code := sb.String()
 	if len(code) > MaxLotLength {
-		return GenerateResult{}, fmt.Errorf("código de lote gerado excede %d caracteres: %q", MaxLotLength, code)
+		return GenerateResult{}, domainerr.NewValidation(fmt.Sprintf("código de lote gerado excede %d caracteres: %q", MaxLotLength, code))
 	}
 	return GenerateResult{Code: code, Updates: updates}, nil
 }

@@ -2,6 +2,7 @@ package sales_order_uc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	demandrepo "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
@@ -65,6 +67,10 @@ type ChangeStatusSalesOrderUseCase struct {
 	// credit-limit check; an order that exceeds the customer's limit is blocked
 	// (and does not feed the MRP) instead of flowing through unchecked.
 	CreditChecker *CreditChecker
+	// Transacao roda a confirmação inteira (status, crédito, demandas e
+	// reservas) numa transação só: ou tudo grava, ou nada — o pedido nunca fica
+	// confirmado sem a demanda do MRP ou sem a reserva.
+	Transacao EmTransacao
 	// Reserver is optional. When set, confirming an order reserves available
 	// stock per line (ATP) so the promise is backed by real availability.
 	Reserver *OrderStockReserver
@@ -75,33 +81,58 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 		return errorsuc.ErrUnauthorized
 	}
 	newStatus := entity.SalesOrderStatus(dto.Status)
-	if err := uc.Repo.ChangeStatus(ctx, dto.Code, newStatus); err != nil {
-		return err
-	}
-
 	if newStatus != entity.SalesOrderStatusOrder {
+		return uc.Repo.ChangeStatus(ctx, dto.Code, newStatus)
+	}
+	emTransacao := uc.Transacao
+	if emTransacao == nil {
+		// Sem transação configurada (testes), roda direto nos repositórios.
+		emTransacao = func(ctx context.Context, fn func(ConfirmacaoRepos) error) error {
+			r := ConfirmacaoRepos{Pedidos: uc.Repo, Demandas: uc.DemandRepo}
+			if uc.Reserver != nil {
+				r.Estoque = uc.Reserver.StockRepo
+			}
+			return fn(r)
+		}
+	}
+	return emTransacao(ctx, func(r ConfirmacaoRepos) error {
+		if err := r.Pedidos.ChangeStatus(ctx, dto.Code, newStatus); err != nil {
+			return err
+		}
+		// Crédito primeiro: pedido bloqueado não alimenta o MRP nem reserva estoque.
+		if uc.CreditChecker != nil {
+			aprovado, err := uc.CreditChecker.Check(ctx, dto.Code, r.Pedidos)
+			if err != nil {
+				return errorsuc.NewValidationError("não foi possível conferir o crédito do cliente agora — o pedido não foi confirmado; tente de novo (" + err.Error() + ")")
+			}
+			if !aprovado {
+				return nil
+			}
+		}
+		if uc.DemandRepo != nil {
+			if err := generateDemands(ctx, dto.Code, r.Pedidos, r.Demandas); err != nil {
+				return err
+			}
+		}
+		if uc.Reserver != nil {
+			if err := uc.Reserver.Reserve(ctx, dto.Code, r.Pedidos, r.Estoque); err != nil {
+				return err
+			}
+		}
 		return nil
-	}
-
-	// On confirmation: run the credit check first. A blocked order must not feed
-	// the MRP nor reserve stock.
-	approved := true
-	if uc.CreditChecker != nil {
-		approved = uc.CreditChecker.Check(ctx, dto.Code)
-	}
-	if !approved {
-		return nil
-	}
-
-	// Project each open order line as MRP demand and reserve available stock.
-	if uc.DemandRepo != nil {
-		uc.generateDemands(ctx, dto.Code)
-	}
-	if uc.Reserver != nil {
-		uc.Reserver.Reserve(ctx, dto.Code)
-	}
-	return nil
+	})
 }
+
+// ConfirmacaoRepos são os repositórios ligados à transação da confirmação.
+type ConfirmacaoRepos struct {
+	Pedidos  repository.SalesOrderRepository
+	Demandas demandrepo.IndependentDemandRepository
+	Estoque  stockrepo.StockRepository
+}
+
+// EmTransacao roda fn numa transação com os repositórios ligados a ela; erro
+// devolvido por fn desfaz tudo.
+type EmTransacao func(ctx context.Context, fn func(ConfirmacaoRepos) error) error
 
 type AnalyzeSalesOrderUseCase struct {
 	Repo repository.SalesOrderRepository
@@ -159,6 +190,9 @@ type AttendSalesOrderUseCase struct {
 }
 
 func (uc *AttendSalesOrderUseCase) Execute(ctx context.Context, dto request.AttendSalesOrderDTO) error {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data do atendimento", &dto.EventDate)); msg != "" {
+		return errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
@@ -221,18 +255,18 @@ func (uc *SaveSalesOrderDelayReasonUseCase) Execute(ctx context.Context, dto req
 	return uc.Repo.SaveDelayReason(ctx, dto.Code, strings.TrimSpace(dto.Reason), strings.TrimSpace(dto.Action), actor)
 }
 
-// generateDemands creates one independent demand per open order line. It is
-// best-effort: failures (including re-confirmation duplicates, since the demand
-// code is derived deterministically from the order line) are ignored so they
-// never block the status change itself.
-func (uc *ChangeStatusSalesOrderUseCase) generateDemands(ctx context.Context, code int64) {
-	order, err := uc.Repo.GetByCode(ctx, code)
+// generateDemands cria uma demanda independente por linha aberta do pedido.
+// O código da demanda deriva da linha, então reconfirmar mantém a que já
+// existe; qualquer outra falha desfaz a confirmação (antes era ignorada e o
+// pedido ficava confirmado sem alimentar o MRP).
+func generateDemands(ctx context.Context, code int64, pedidos repository.SalesOrderRepository, demandas demandrepo.IndependentDemandRepository) error {
+	order, err := pedidos.GetByCode(ctx, code)
 	if err != nil {
-		return
+		return fmt.Errorf("lendo o pedido: %w", err)
 	}
-	items, err := uc.Repo.ListItems(ctx, code)
+	items, err := pedidos.ListItems(ctx, code)
 	if err != nil {
-		return
+		return fmt.Errorf("lendo os itens do pedido: %w", err)
 	}
 	for _, it := range items {
 		if !it.IsActive || it.Status == entity.SalesOrderItemStatusCancelled {
@@ -267,6 +301,14 @@ func (uc *ChangeStatusSalesOrderUseCase) generateDemands(ctx context.Context, co
 			DemandDate: demandDate,
 			CreatedBy:  order.CreatedBy,
 		}
-		_, _ = uc.DemandRepo.Create(ctx, demand)
+		if _, err := demandas.GetByCode(ctx, demandCode); err == nil {
+			continue // reconfirmação: a demanda desta linha já existe
+		} else if !errorsuc.EhNaoEncontrado(err) {
+			return fmt.Errorf("conferindo a demanda da linha %d: %w", it.Sequence, err)
+		}
+		if _, err := demandas.Create(ctx, demand); err != nil {
+			return fmt.Errorf("gerando a demanda do MRP da linha %d: %w", it.Sequence, err)
+		}
 	}
+	return nil
 }

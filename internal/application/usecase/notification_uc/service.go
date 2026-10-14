@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
@@ -12,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrUnauthorized = errors.New("operação restrita ao administrador")
+var ErrUnauthorized = errorsuc.NewValidationError("operação restrita ao administrador")
 
 type Repository interface {
 	ListEvents(context.Context) ([]notificationentity.Event, error)

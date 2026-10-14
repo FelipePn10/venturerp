@@ -3,9 +3,13 @@ package procurement
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/procurement/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -13,6 +17,11 @@ import (
 // ---- Receiving notices + divergences (FAVR) ----
 
 func (r *Repository) CreateReceivingNotice(ctx context.Context, n *entity.ReceivingNotice) (*entity.ReceivingNotice, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	n.EnterpriseCode = emp
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning receiving notice tx: %w", err)
@@ -51,15 +60,19 @@ func (r *Repository) CreateReceivingNotice(ctx context.Context, n *entity.Receiv
 }
 
 func (r *Repository) GetReceivingNotice(ctx context.Context, id int64) (*entity.ReceivingNotice, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var n entity.ReceivingNotice
-	err := r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT id, enterprise_code, notice_number, supplier_code, purchase_order_code, carrier_code, status,
 		       dock, scheduled_at, arrived_at, invoice_number, blocked, notes, created_by, created_at, updated_at
-		FROM receiving_notices WHERE id=$1`, id).Scan(
+		FROM receiving_notices WHERE id=$1 AND enterprise_code=$2`, id, emp).Scan(
 		&n.ID, &n.EnterpriseCode, &n.NoticeNumber, &n.SupplierCode, &n.PurchaseOrderCode, &n.CarrierCode, &n.Status,
 		&n.Dock, &n.ScheduledAt, &n.ArrivedAt, &n.InvoiceNumber, &n.Blocked, &n.Notes, &n.CreatedBy, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("fetching receiving notice: %w", err)
+		return nil, naoEncontrado(fmt.Errorf("fetching receiving notice: %w", err), fmt.Sprintf("aviso de recebimento %d não encontrado", id))
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, notice_id, purchase_order_item_code, item_code, mask, expected_qty, received_qty, unit, notes
@@ -83,10 +96,14 @@ func (r *Repository) ListReceivingNotices(ctx context.Context, status string) ([
 	query := `
 		SELECT id, enterprise_code, notice_number, supplier_code, purchase_order_code, carrier_code, status,
 		       dock, scheduled_at, arrived_at, invoice_number, blocked, notes, created_by, created_at, updated_at
-		FROM receiving_notices`
-	args := []any{}
+		FROM receiving_notices WHERE enterprise_code=$1`
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	args := []any{emp}
 	if status != "" {
-		query += ` WHERE status=$1`
+		query += ` AND status=$2`
 		args = append(args, status)
 	}
 	query += ` ORDER BY COALESCE(scheduled_at, created_at) DESC, id DESC LIMIT 200`
@@ -109,30 +126,46 @@ func (r *Repository) ListReceivingNotices(ctx context.Context, status string) ([
 }
 
 func (r *Repository) UpdateReceivingNoticeStatus(ctx context.Context, id int64, status string, blocked bool) (*entity.ReceivingNotice, error) {
-	_, err := r.pool.Exec(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx, `
 		UPDATE receiving_notices
 		SET status=$2, blocked=$3,
 		    arrived_at = CASE WHEN $2='ARRIVED' AND arrived_at IS NULL THEN NOW() ELSE arrived_at END,
 		    updated_at=NOW()
-		WHERE id=$1`, id, status, blocked)
+		WHERE id=$1 AND enterprise_code=$4`, id, status, blocked, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating receiving notice status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("aviso de recebimento %d não encontrado", id))
 	}
 	return r.GetReceivingNotice(ctx, id)
 }
 
 func (r *Repository) CreateReceivingDivergence(ctx context.Context, d *entity.ReceivingDivergence) (*entity.ReceivingDivergence, error) {
-	err := r.pool.QueryRow(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Aviso informado tem de ser da mesma empresa.
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO receiving_divergences
 			(notice_id, purchase_order_code, purchase_order_item_code, supplier_code, item_code, mask,
 			 divergence_type, expected_qty, actual_qty, expected_price, actual_price, resolution,
-			 affects_supplier_score, notes, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+			 affects_supplier_score, notes, created_by, enterprise_code)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16
+		 WHERE $1::bigint IS NULL OR EXISTS (SELECT 1 FROM receiving_notices n WHERE n.id=$1 AND n.enterprise_code=$16)
 		RETURNING id, resolution, created_at`,
 		d.NoticeID, d.PurchaseOrderCode, d.PurchaseOrderItemCode, d.SupplierCode, d.ItemCode, d.Mask,
 		d.DivergenceType, d.ExpectedQty, d.ActualQty, d.ExpectedPrice, d.ActualPrice, d.Resolution,
-		d.AffectsSupplierScore, d.Notes, d.CreatedBy,
+		d.AffectsSupplierScore, d.Notes, d.CreatedBy, emp,
 	).Scan(&d.ID, &d.Resolution, &d.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("aviso de recebimento não encontrado")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating receiving divergence: %w", err)
 	}
@@ -140,9 +173,13 @@ func (r *Repository) CreateReceivingDivergence(ctx context.Context, d *entity.Re
 }
 
 func (r *Repository) ListReceivingDivergences(ctx context.Context, supplierCode *int64, resolution string) ([]*entity.ReceivingDivergence, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	query := baseDivergenceSelect()
-	args := []any{}
-	conds := []string{}
+	args := []any{emp}
+	conds := []string{"enterprise_code=$1"}
 	if supplierCode != nil {
 		args = append(args, *supplierCode)
 		conds = append(conds, fmt.Sprintf("supplier_code=$%d", len(args)))
@@ -167,11 +204,15 @@ func (r *Repository) ListReceivingDivergences(ctx context.Context, supplierCode 
 }
 
 func (r *Repository) ResolveReceivingDivergence(ctx context.Context, id int64, resolution string) (*entity.ReceivingDivergence, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		UPDATE receiving_divergences
 		SET resolution=$2, resolved_at = CASE WHEN $2='PENDING' THEN NULL ELSE NOW() END
-		WHERE id=$1
-		RETURNING `+divergenceColumns(), id, resolution)
+		WHERE id=$1 AND enterprise_code=$3
+		RETURNING `+divergenceColumns(), id, resolution, emp)
 	if err != nil {
 		return nil, fmt.Errorf("resolving receiving divergence: %w", err)
 	}
@@ -181,7 +222,7 @@ func (r *Repository) ResolveReceivingDivergence(ctx context.Context, id int64, r
 		return nil, err
 	}
 	if len(list) == 0 {
-		return nil, pgx.ErrNoRows
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("divergência %d não encontrada", id))
 	}
 	return list[0], nil
 }
@@ -213,6 +254,11 @@ func scanDivergences(rows pgx.Rows) ([]*entity.ReceivingDivergence, error) {
 // ---- Supplier EDI (FEDS) ----
 
 func (r *Repository) CreateEDIMessage(ctx context.Context, m *entity.SupplierEDIMessage) (*entity.SupplierEDIMessage, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m.EnterpriseCode = emp
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning edi tx: %w", err)
@@ -255,15 +301,19 @@ func (r *Repository) CreateEDIMessage(ctx context.Context, m *entity.SupplierEDI
 }
 
 func (r *Repository) GetEDIMessage(ctx context.Context, id int64) (*entity.SupplierEDIMessage, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var m entity.SupplierEDIMessage
-	err := r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT id, enterprise_code, supplier_code, direction, message_type, purchase_order_code, external_reference,
 		       status, divergence_count, payload, notes, created_by, created_at, processed_at
-		FROM supplier_edi_messages WHERE id=$1`, id).Scan(
+		FROM supplier_edi_messages WHERE id=$1 AND enterprise_code=$2`, id, emp).Scan(
 		&m.ID, &m.EnterpriseCode, &m.SupplierCode, &m.Direction, &m.MessageType, &m.PurchaseOrderCode, &m.ExternalReference,
 		&m.Status, &m.DivergenceCount, &m.Payload, &m.Notes, &m.CreatedBy, &m.CreatedAt, &m.ProcessedAt)
 	if err != nil {
-		return nil, fmt.Errorf("fetching edi message: %w", err)
+		return nil, naoEncontrado(fmt.Errorf("fetching edi message: %w", err), fmt.Sprintf("mensagem EDI %d não encontrada", id))
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, message_id, purchase_order_item_code, item_code, mask, confirmed_qty, confirmed_price, confirmed_date, divergence, notes
@@ -287,10 +337,14 @@ func (r *Repository) ListEDIMessages(ctx context.Context, supplierCode *int64) (
 	query := `
 		SELECT id, enterprise_code, supplier_code, direction, message_type, purchase_order_code, external_reference,
 		       status, divergence_count, payload, notes, created_by, created_at, processed_at
-		FROM supplier_edi_messages`
-	args := []any{}
+		FROM supplier_edi_messages WHERE enterprise_code=$1`
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	args := []any{emp}
 	if supplierCode != nil {
-		query += ` WHERE supplier_code=$1`
+		query += ` AND supplier_code=$2`
 		args = append(args, *supplierCode)
 	}
 	query += ` ORDER BY created_at DESC, id DESC LIMIT 200`
@@ -315,6 +369,11 @@ func (r *Repository) ListEDIMessages(ctx context.Context, supplierCode *int64) (
 // ---- Import processes (FREC0203 / FIMP) ----
 
 func (r *Repository) CreateImportProcess(ctx context.Context, p *entity.ImportProcess) (*entity.ImportProcess, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p.EnterpriseCode = emp
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning import tx: %w", err)
@@ -363,15 +422,19 @@ func (r *Repository) CreateImportProcess(ctx context.Context, p *entity.ImportPr
 }
 
 func (r *Repository) GetImportProcess(ctx context.Context, id int64) (*entity.ImportProcess, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var p entity.ImportProcess
-	err := r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT id, enterprise_code, process_number, supplier_code, purchase_order_code, reference, incoterm,
 		       currency, exchange_rate, apportion_basis, status, notes, created_by, created_at, updated_at, nationalized_at
-		FROM import_processes WHERE id=$1`, id).Scan(
+		FROM import_processes WHERE id=$1 AND enterprise_code=$2`, id, emp).Scan(
 		&p.ID, &p.EnterpriseCode, &p.ProcessNumber, &p.SupplierCode, &p.PurchaseOrderCode, &p.Reference, &p.Incoterm,
 		&p.Currency, &p.ExchangeRate, &p.ApportionBasis, &p.Status, &p.Notes, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.NationalizedAt)
 	if err != nil {
-		return nil, fmt.Errorf("fetching import process: %w", err)
+		return nil, naoEncontrado(fmt.Errorf("fetching import process: %w", err), fmt.Sprintf("processo de importação %d não encontrado", id))
 	}
 	items, err := r.pool.Query(ctx, `
 		SELECT id, process_id, item_code, mask, quantity, weight, fob_unit_price, apportioned_expenses, landed_unit_cost, notes
@@ -412,10 +475,14 @@ func (r *Repository) ListImportProcesses(ctx context.Context, status string) ([]
 	query := `
 		SELECT id, enterprise_code, process_number, supplier_code, purchase_order_code, reference, incoterm,
 		       currency, exchange_rate, apportion_basis, status, notes, created_by, created_at, updated_at, nationalized_at
-		FROM import_processes`
-	args := []any{}
+		FROM import_processes WHERE enterprise_code=$1`
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	args := []any{emp}
 	if status != "" {
-		query += ` WHERE status=$1`
+		query += ` AND status=$2`
 		args = append(args, status)
 	}
 	query += ` ORDER BY created_at DESC, id DESC LIMIT 200`
@@ -439,32 +506,48 @@ func (r *Repository) ListImportProcesses(ctx context.Context, status string) ([]
 
 // UpdateImportItemCosts persists recomputed landed costs for the given items.
 func (r *Repository) UpdateImportItemCosts(ctx context.Context, items []*entity.ImportProcessItem) error {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning import cost tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 	for _, it := range items {
-		_, err = tx.Exec(ctx, `
+		tag, err := tx.Exec(ctx, `
 			UPDATE import_process_items
 			SET apportioned_expenses=$2, landed_unit_cost=$3
-			WHERE id=$1`, it.ID, it.ApportionedExpenses, it.LandedUnitCost)
+			WHERE id=$1
+			  AND EXISTS (SELECT 1 FROM import_processes p WHERE p.id = import_process_items.process_id AND p.enterprise_code = $4)`,
+			it.ID, it.ApportionedExpenses, it.LandedUnitCost, emp)
 		if err != nil {
 			return fmt.Errorf("updating import item cost: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return errorsuc.NewNotFoundError(fmt.Sprintf("item %d do processo de importação não encontrado", it.ID))
 		}
 	}
 	return tx.Commit(ctx)
 }
 
 func (r *Repository) UpdateImportProcessStatus(ctx context.Context, id int64, status string) (*entity.ImportProcess, error) {
-	_, err := r.pool.Exec(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx, `
 		UPDATE import_processes
 		SET status=$2,
 		    nationalized_at = CASE WHEN $2='NATIONALIZED' AND nationalized_at IS NULL THEN NOW() ELSE nationalized_at END,
 		    updated_at=NOW()
-		WHERE id=$1`, id, status)
+		WHERE id=$1 AND enterprise_code=$3`, id, status, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating import process status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("processo de importação %d não encontrado", id))
 	}
 	return r.GetImportProcess(ctx, id)
 }
@@ -472,7 +555,12 @@ func (r *Repository) UpdateImportProcessStatus(ctx context.Context, id int64, st
 // ---- Procurement parameters (FUTL0125) ----
 
 func (r *Repository) UpsertParameter(ctx context.Context, p *entity.ProcurementParameter) (*entity.ProcurementParameter, error) {
-	err := r.pool.QueryRow(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p.EnterpriseCode = emp
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO procurement_parameters (enterprise_code, domain, param_key, param_value, value_type, description, updated_by)
 		VALUES ($1,$2,$3,$4,$5,$6,$7)
 		ON CONFLICT (enterprise_code, domain, param_key)
@@ -518,13 +606,26 @@ func (r *Repository) ListParameters(ctx context.Context, enterpriseCode int64, d
 // links for every item purchased from the supplier that is not linked yet, in one
 // statement. Returns how many links were created.
 func (r *Repository) GenerateItemSuppliersFromHistory(ctx context.Context, supplierCode int64, actor uuid.UUID) (int, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return 0, err
+	}
+	empresaID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	// Só o histórico desta empresa, gravado nesta empresa. O ON CONFLICT antigo
+	// apontava para uma unicidade (item, fornecedor) que não existe — a rotina
+	// falhava sempre. E o ator precisa do tipo explícito: no SELECT DISTINCT o
+	// parâmetro sem tipo vira texto e a coluna created_by é uuid.
 	tag, err := r.pool.Exec(ctx, `
-		INSERT INTO item_preferred_suppliers (item_code, supplier_code, ranking, is_active, created_by)
-		SELECT DISTINCT i.item_code, o.supplier_code, 99, TRUE, $2
+		INSERT INTO item_preferred_suppliers (enterprise_id, item_code, supplier_code, mask, ranking, is_active, created_by)
+		SELECT DISTINCT $3::bigint, i.item_code, o.supplier_code, COALESCE(i.mask, ''), 99, TRUE, $2::uuid
 		FROM purchase_order_items i
-		JOIN purchase_orders o ON o.code = i.purchase_order_code
-		WHERE o.supplier_code = $1
-		ON CONFLICT (item_code, supplier_code) DO NOTHING`, supplierCode, actor)
+		JOIN purchase_orders o ON o.code = i.purchase_order_code AND o.enterprise_code = $4
+		WHERE o.supplier_code = $1 AND i.is_active
+		ON CONFLICT (enterprise_id, item_code, supplier_code, mask) WHERE enterprise_id IS NOT NULL DO NOTHING`,
+		supplierCode, actor, empresaID, emp)
 	if err != nil {
 		return 0, fmt.Errorf("generating item suppliers from history: %w", err)
 	}
@@ -534,11 +635,15 @@ func (r *Repository) GenerateItemSuppliersFromHistory(ctx context.Context, suppl
 // ---- Supplier homologation (FAVF0203) ----
 
 func (r *Repository) CreateHomologation(ctx context.Context, h *entity.SupplierHomologation) (*entity.SupplierHomologation, error) {
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO supplier_homologations (supplier_code, status, iqf_score, category, valid_until, notes, decided_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx, `
+		INSERT INTO supplier_homologations (supplier_code, status, iqf_score, category, valid_until, notes, decided_by, enterprise_code)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		RETURNING id, decided_at`,
-		h.SupplierCode, h.Status, h.IQFScore, h.Category, h.ValidUntil, h.Notes, h.DecidedBy,
+		h.SupplierCode, h.Status, h.IQFScore, h.Category, h.ValidUntil, h.Notes, h.DecidedBy, emp,
 	).Scan(&h.ID, &h.DecidedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating supplier homologation: %w", err)
@@ -547,9 +652,13 @@ func (r *Repository) CreateHomologation(ctx context.Context, h *entity.SupplierH
 }
 
 func (r *Repository) ListHomologations(ctx context.Context, supplierCode int64) ([]*entity.SupplierHomologation, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, supplier_code, status, iqf_score, category, valid_until, notes, decided_by, decided_at
-		FROM supplier_homologations WHERE supplier_code=$1 ORDER BY decided_at DESC`, supplierCode)
+		FROM supplier_homologations WHERE supplier_code=$1 AND enterprise_code=$2 ORDER BY decided_at DESC`, supplierCode, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing supplier homologations: %w", err)
 	}

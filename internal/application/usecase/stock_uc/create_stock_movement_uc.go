@@ -2,7 +2,7 @@ package stock_uc
 
 import (
 	"context"
-	"time"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -57,9 +57,10 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 		CreatedBy:     userID,
 	}
 
-	if dto.ExpirationDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.ExpirationDate)
-		m.ExpirationDate = &t
+	if t, msg := datetime.Opcional("data de validade", dto.ExpirationDate); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	} else {
+		m.ExpirationDate = t
 	}
 
 	created, err := uc.Repo.CreateMovement(ctx, m)

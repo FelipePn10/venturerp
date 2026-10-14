@@ -3,6 +3,7 @@ package structure
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
@@ -90,12 +91,16 @@ func (r *ItemStructureRepositorySQLC) registrarHistorico(
 	if ref == nil {
 		return
 	}
-	_, _ = r.pool.Exec(ctx, `
+	if _, err := r.pool.Exec(ctx, `
 		INSERT INTO item_structure_history
 		    (structure_id, parent_code, child_code, action, changed_by, before_state, after_state)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		ref.ID, ref.ParentCode, ref.ChildCode, acao, atorDoContexto(ctx),
-		instantaneo(antes), instantaneo(depois))
+		instantaneo(antes), instantaneo(depois)); err != nil {
+		// Não derruba a operação (ver acima), mas a lacuna na trilha tem de
+		// aparecer em algum lugar.
+		slog.Error("falha ao gravar o histórico da estrutura", "acao", acao, "pai", ref.ParentCode, "filho", ref.ChildCode, "erro", err)
+	}
 }
 
 // componenteAtual lê o componente como ele está agora, para o histórico

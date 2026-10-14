@@ -29,6 +29,9 @@ type UseCase struct {
 }
 
 func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationDTO) (*response.SalesQuotationResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("validade", dto.ValidUntil), datetime.Campo("data de entrega", dto.DeliveryDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -141,6 +144,9 @@ func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationD
 }
 
 func (uc *UseCase) Update(ctx context.Context, dto request.UpdateSalesQuotationDTO) (*response.SalesQuotationResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("validade", dto.ValidUntil), datetime.Campo("data de entrega", dto.DeliveryDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}

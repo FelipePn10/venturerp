@@ -46,3 +46,13 @@ type CreateConfiguredItemRuleDTO struct {
 	Sequence  int       `json:"sequence"`
 	CreatedBy uuid.UUID `json:"created_by"`
 }
+
+// HandleMRPExceptionDTO é a ação do planejador sobre uma exceção do MRP:
+// REPROGRAMAR (leva a ordem planejada à data sugerida ou a NewDate), CANCELAR
+// (cancela a ordem planejada sem demanda) ou TRATAR (registra o tratamento sem
+// mexer na ordem; exige Note).
+type HandleMRPExceptionDTO struct {
+	Action  string  `json:"action"`
+	NewDate *string `json:"new_date,omitempty"`
+	Note    *string `json:"note,omitempty"`
+}

@@ -23,6 +23,9 @@ func (uc *UpdateSalesOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdateSalesOrderDTO,
 ) (*response.SalesOrderResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de entrega", dto.DeliveryDate), datetime.Campo("data da venda", dto.SaleDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}

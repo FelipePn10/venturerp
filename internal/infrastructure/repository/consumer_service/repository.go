@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"strings"
 	"time"
 
@@ -35,21 +37,31 @@ func (r *RepositoryPGX) NextCallNumber(ctx context.Context, enterpriseID int64) 
 	return n, err
 }
 
+// Tipos de chamado e fontes de conhecimento são catálogos da empresa da sessão.
+
 func (r *RepositoryPGX) CreateCallType(ctx context.Context, v *entity.CallType) (*entity.CallType, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_call_types (description, is_complaint, is_active, created_by)
-		VALUES ($1,$2,$3,$4)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_call_types (description, is_complaint, is_active, created_by, enterprise_id)
+		VALUES ($1,$2,$3,$4,$5)
 		RETURNING code, description, is_complaint, is_active, created_at, updated_at, created_by`,
-		v.Description, v.IsComplaint, trueOrDefault(v.IsActive), pgutil.ToPgUUID(v.CreatedBy))
+		v.Description, v.IsComplaint, trueOrDefault(v.IsActive), pgutil.ToPgUUID(v.CreatedBy), empresa)
 	return scanCallType(row)
 }
 
 func (r *RepositoryPGX) ListCallTypes(ctx context.Context, onlyActive bool) ([]*entity.CallType, error) {
-	q := `SELECT code, description, is_complaint, is_active, created_at, updated_at, created_by FROM consumer_service_call_types`
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT code, description, is_complaint, is_active, created_at, updated_at, created_by FROM consumer_service_call_types WHERE enterprise_id = $1`
 	if onlyActive {
-		q += ` WHERE is_active`
+		q += ` AND is_active`
 	}
 	q += ` ORDER BY description`
-	rows, err := r.pool.Query(ctx, q)
+	rows, err := r.pool.Query(ctx, q, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -66,25 +78,41 @@ func (r *RepositoryPGX) ListCallTypes(ctx context.Context, onlyActive bool) ([]*
 }
 
 func (r *RepositoryPGX) GetCallType(ctx context.Context, code int64) (*entity.CallType, error) {
-	row := r.pool.QueryRow(ctx, `SELECT code, description, is_complaint, is_active, created_at, updated_at, created_by FROM consumer_service_call_types WHERE code=$1`, code)
-	return scanCallType(row)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `SELECT code, description, is_complaint, is_active, created_at, updated_at, created_by FROM consumer_service_call_types WHERE code=$1 AND enterprise_id=$2`, code, empresa)
+	v, err := scanCallType(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tipo de chamado %d não encontrado", code))
+	}
+	return v, err
 }
 
 func (r *RepositoryPGX) CreateKnowledgeSource(ctx context.Context, v *entity.KnowledgeSource) (*entity.KnowledgeSource, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_knowledge_sources (description, is_active, created_by)
-		VALUES ($1,$2,$3)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_knowledge_sources (description, is_active, created_by, enterprise_id)
+		VALUES ($1,$2,$3,$4)
 		RETURNING code, description, is_active, created_at, updated_at, created_by`,
-		v.Description, trueOrDefault(v.IsActive), pgutil.ToPgUUID(v.CreatedBy))
+		v.Description, trueOrDefault(v.IsActive), pgutil.ToPgUUID(v.CreatedBy), empresa)
 	return scanKnowledgeSource(row)
 }
 
 func (r *RepositoryPGX) ListKnowledgeSources(ctx context.Context, onlyActive bool) ([]*entity.KnowledgeSource, error) {
-	q := `SELECT code, description, is_active, created_at, updated_at, created_by FROM consumer_service_knowledge_sources`
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT code, description, is_active, created_at, updated_at, created_by FROM consumer_service_knowledge_sources WHERE enterprise_id = $1`
 	if onlyActive {
-		q += ` WHERE is_active`
+		q += ` AND is_active`
 	}
 	q += ` ORDER BY description`
-	rows, err := r.pool.Query(ctx, q)
+	rows, err := r.pool.Query(ctx, q, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -216,10 +244,15 @@ func (r *RepositoryPGX) AddConsumerContact(ctx context.Context, enterpriseID int
 func (r *RepositoryPGX) CreateCustomerContact(ctx context.Context, enterpriseID int64, v *entity.CustomerContactHistory) (*entity.CustomerContactHistory, error) {
 	row := r.pool.QueryRow(ctx, `INSERT INTO consumer_service_customer_contacts
 		(customer_code, opened_at, scheduled_at, user_code, contact_type, description, created_by, enterprise_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8
+		 WHERE EXISTS (SELECT 1 FROM customers c WHERE c.code = $1 AND c.enterprise_id = $8)
 		RETURNING code, customer_code, opened_at, scheduled_at, user_code, contact_type, description, created_at, created_by`,
 		v.CustomerCode, v.OpenedAt, v.ScheduledAt, v.UserCode, v.ContactType, v.Description, pgutil.ToPgUUID(v.CreatedBy), enterpriseID)
-	return scanCustomerContact(row)
+	contato, err := scanCustomerContact(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", v.CustomerCode))
+	}
+	return contato, err
 }
 
 func (r *RepositoryPGX) ListCustomerContacts(ctx context.Context, enterpriseID int64, filter repository.CustomerContactFilter) ([]*entity.CustomerContactHistory, error) {
@@ -265,6 +298,20 @@ func (r *RepositoryPGX) ListCustomerContacts(ctx context.Context, enterpriseID i
 func (r *RepositoryPGX) CreateCall(ctx context.Context, enterpriseID int64, v *entity.Call) (*entity.Call, error) {
 	if err := r.pool.QueryRow(ctx, `SELECT code FROM enterprise WHERE id=$1`, enterpriseID).Scan(&v.EnterpriseCode); err != nil {
 		return nil, err
+	}
+	// Consumidor e cliente do atendimento têm de ser da empresa.
+	var consumidorOK, clienteOK bool
+	if err := r.pool.QueryRow(ctx, `SELECT
+		EXISTS (SELECT 1 FROM consumer_service_consumer_enterprises WHERE consumer_code=$1 AND enterprise_id=$3),
+		($2::bigint IS NULL OR EXISTS (SELECT 1 FROM customers WHERE code=$2 AND enterprise_id=$3))`,
+		v.ConsumerCode, v.CustomerCode, enterpriseID).Scan(&consumidorOK, &clienteOK); err != nil {
+		return nil, err
+	}
+	if !consumidorOK {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("consumidor %d não encontrado", v.ConsumerCode))
+	}
+	if !clienteOK {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", *v.CustomerCode))
 	}
 	row := r.pool.QueryRow(ctx, callInsertSQL(), callArgs(v)...)
 	return scanCall(row)

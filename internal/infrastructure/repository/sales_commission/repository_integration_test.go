@@ -32,8 +32,8 @@ func TestRateioSubstituiEspelhaEIsolaEmpresa(t *testing.T) {
 
 	repA, repB := testutil.UniqueCode(), testutil.UniqueCode()
 	for _, code := range []int64{repA, repB} {
-		if _, err := pool.Exec(ctx, `INSERT INTO representatives(code,name,document_number,is_active,blocked)
-			VALUES($1,'Representante '||$2,$2,TRUE,FALSE)`, code, strconv.FormatInt(code, 10)); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO representatives(code,name,document_number,is_active,blocked,enterprise_code)
+			VALUES($1,'Representante '||$2,$2,TRUE,FALSE,$3)`, code, strconv.FormatInt(code, 10), enterpriseCode); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := pool.Exec(ctx, `INSERT INTO representative_enterprises(representative_code,enterprise_code,is_active)

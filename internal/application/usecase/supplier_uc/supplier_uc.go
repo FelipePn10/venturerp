@@ -385,7 +385,7 @@ func (uc *SupplierUseCase) confirmBlockState(ctx context.Context, code int64, bl
 		if !blocked {
 			action = "desbloquear"
 		}
-		return fmt.Errorf("não foi possível %s o fornecedor %d", action, code)
+		return errorsuc.NewValidationError(fmt.Sprintf("não foi possível %s o fornecedor %d", action, code))
 	}
 	return nil
 }

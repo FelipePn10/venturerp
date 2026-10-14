@@ -12,11 +12,11 @@ import (
 )
 
 const getDeliveryPromiseParams = `-- name: GetDeliveryPromiseParams :one
-SELECT id, use_delivery_promise, blocked_orders_in_promise, default_order_sort, show_order_values, blocked_export_in_promise, break_tank_occupation, recalculate_after_release, reprogram_loaded_orders, allow_delivery_date_change, created_at, updated_at, updated_by FROM delivery_promise_params ORDER BY id DESC LIMIT 1
+SELECT id, use_delivery_promise, blocked_orders_in_promise, default_order_sort, show_order_values, blocked_export_in_promise, break_tank_occupation, recalculate_after_release, reprogram_loaded_orders, allow_delivery_date_change, created_at, updated_at, updated_by, enterprise_id FROM delivery_promise_params WHERE enterprise_id = $1
 `
 
-func (q *Queries) GetDeliveryPromiseParams(ctx context.Context) (DeliveryPromiseParam, error) {
-	row := q.db.QueryRow(ctx, getDeliveryPromiseParams)
+func (q *Queries) GetDeliveryPromiseParams(ctx context.Context, enterpriseID int64) (DeliveryPromiseParam, error) {
+	row := q.db.QueryRow(ctx, getDeliveryPromiseParams, enterpriseID)
 	var i DeliveryPromiseParam
 	err := row.Scan(
 		&i.ID,
@@ -32,81 +32,30 @@ func (q *Queries) GetDeliveryPromiseParams(ctx context.Context) (DeliveryPromise
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
-	)
-	return i, err
-}
-
-const updateDeliveryPromiseParams = `-- name: UpdateDeliveryPromiseParams :one
-UPDATE delivery_promise_params
-SET use_delivery_promise = $1,
-    blocked_orders_in_promise = $2,
-    default_order_sort = $3,
-    show_order_values = $4,
-    blocked_export_in_promise = $5,
-    break_tank_occupation = $6,
-    recalculate_after_release = $7,
-    reprogram_loaded_orders = $8,
-    allow_delivery_date_change = $9,
-    updated_at = NOW(),
-    updated_by = $10
-WHERE id = $11
-    RETURNING id, use_delivery_promise, blocked_orders_in_promise, default_order_sort, show_order_values, blocked_export_in_promise, break_tank_occupation, recalculate_after_release, reprogram_loaded_orders, allow_delivery_date_change, created_at, updated_at, updated_by
-`
-
-type UpdateDeliveryPromiseParamsParams struct {
-	UseDeliveryPromise      bool
-	BlockedOrdersInPromise  bool
-	DefaultOrderSort        string
-	ShowOrderValues         int32
-	BlockedExportInPromise  bool
-	BreakTankOccupation     bool
-	RecalculateAfterRelease bool
-	ReprogramLoadedOrders   bool
-	AllowDeliveryDateChange bool
-	UpdatedBy               pgtype.UUID
-	ID                      int64
-}
-
-func (q *Queries) UpdateDeliveryPromiseParams(ctx context.Context, arg UpdateDeliveryPromiseParamsParams) (DeliveryPromiseParam, error) {
-	row := q.db.QueryRow(ctx, updateDeliveryPromiseParams,
-		arg.UseDeliveryPromise,
-		arg.BlockedOrdersInPromise,
-		arg.DefaultOrderSort,
-		arg.ShowOrderValues,
-		arg.BlockedExportInPromise,
-		arg.BreakTankOccupation,
-		arg.RecalculateAfterRelease,
-		arg.ReprogramLoadedOrders,
-		arg.AllowDeliveryDateChange,
-		arg.UpdatedBy,
-		arg.ID,
-	)
-	var i DeliveryPromiseParam
-	err := row.Scan(
-		&i.ID,
-		&i.UseDeliveryPromise,
-		&i.BlockedOrdersInPromise,
-		&i.DefaultOrderSort,
-		&i.ShowOrderValues,
-		&i.BlockedExportInPromise,
-		&i.BreakTankOccupation,
-		&i.RecalculateAfterRelease,
-		&i.ReprogramLoadedOrders,
-		&i.AllowDeliveryDateChange,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.UpdatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const upsertDeliveryPromiseParams = `-- name: UpsertDeliveryPromiseParams :one
+
 INSERT INTO delivery_promise_params (use_delivery_promise, blocked_orders_in_promise, default_order_sort,
                                      show_order_values, blocked_export_in_promise, break_tank_occupation, recalculate_after_release,
-                                     reprogram_loaded_orders, allow_delivery_date_change, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT DO NOTHING
-RETURNING id, use_delivery_promise, blocked_orders_in_promise, default_order_sort, show_order_values, blocked_export_in_promise, break_tank_occupation, recalculate_after_release, reprogram_loaded_orders, allow_delivery_date_change, created_at, updated_at, updated_by
+                                     reprogram_loaded_orders, allow_delivery_date_change, updated_by, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    ON CONFLICT (enterprise_id) DO UPDATE SET
+    use_delivery_promise = EXCLUDED.use_delivery_promise,
+    blocked_orders_in_promise = EXCLUDED.blocked_orders_in_promise,
+    default_order_sort = EXCLUDED.default_order_sort,
+    show_order_values = EXCLUDED.show_order_values,
+    blocked_export_in_promise = EXCLUDED.blocked_export_in_promise,
+    break_tank_occupation = EXCLUDED.break_tank_occupation,
+    recalculate_after_release = EXCLUDED.recalculate_after_release,
+    reprogram_loaded_orders = EXCLUDED.reprogram_loaded_orders,
+    allow_delivery_date_change = EXCLUDED.allow_delivery_date_change,
+    updated_at = NOW(),
+    updated_by = EXCLUDED.updated_by
+RETURNING id, use_delivery_promise, blocked_orders_in_promise, default_order_sort, show_order_values, blocked_export_in_promise, break_tank_occupation, recalculate_after_release, reprogram_loaded_orders, allow_delivery_date_change, created_at, updated_at, updated_by, enterprise_id
 `
 
 type UpsertDeliveryPromiseParamsParams struct {
@@ -120,8 +69,10 @@ type UpsertDeliveryPromiseParamsParams struct {
 	ReprogramLoadedOrders   bool
 	AllowDeliveryDateChange bool
 	UpdatedBy               pgtype.UUID
+	EnterpriseID            int64
 }
 
+// Parâmetros da promessa de entrega: uma configuração por empresa.
 func (q *Queries) UpsertDeliveryPromiseParams(ctx context.Context, arg UpsertDeliveryPromiseParamsParams) (DeliveryPromiseParam, error) {
 	row := q.db.QueryRow(ctx, upsertDeliveryPromiseParams,
 		arg.UseDeliveryPromise,
@@ -134,6 +85,7 @@ func (q *Queries) UpsertDeliveryPromiseParams(ctx context.Context, arg UpsertDel
 		arg.ReprogramLoadedOrders,
 		arg.AllowDeliveryDateChange,
 		arg.UpdatedBy,
+		arg.EnterpriseID,
 	)
 	var i DeliveryPromiseParam
 	err := row.Scan(
@@ -150,6 +102,7 @@ func (q *Queries) UpsertDeliveryPromiseParams(ctx context.Context, arg UpsertDel
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.EnterpriseID,
 	)
 	return i, err
 }

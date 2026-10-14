@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
@@ -17,6 +18,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+)
+
+// semLinha traduz "nenhuma linha" — o filtro de empresa não achou o registro
+// (ou ele é de outra empresa) — para "não encontrado".
+func semLinha(err error, msg string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(msg)
+	}
+	return err
+}
+
+// afetou: gravação que não pegou linha nenhuma é registro de outra empresa
+// ou inexistente.
+func afetou(n int64, err error, msg string) error {
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return errorsuc.NewNotFoundError(msg)
+	}
+	return nil
+}
+
+const (
+	msgEtapa   = "etapa do roteiro não encontrada"
+	msgRecurso = "recurso da etapa do roteiro não encontrado"
 )
 
 type RoutingRepositorySQLC struct {
@@ -304,7 +331,12 @@ func (r *RoutingRepositorySQLC) GetRouteForItem(ctx context.Context, itemCode in
 // ─── route_operations ────────────────────────────────────────────────────────
 
 func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entity.RouteOperation) (*entity.RouteOperation, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddRouteOperation(ctx, sqlc.AddRouteOperationParams{
+		EnterpriseID:         empresa,
 		RouteID:              op.RouteID,
 		Sequence:             op.Sequence,
 		OperationID:          op.OperationID,
@@ -330,13 +362,18 @@ func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entit
 		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("adding route operation: %w", err)
+		return nil, fmt.Errorf("adding route operation: %w", semLinha(err, "roteiro, operação ou centro de trabalho não encontrado"))
 	}
 	return routeOpRowToEntity(row), nil
 }
 
 func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *entity.RouteOperation) (*entity.RouteOperation, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateRouteOperation(ctx, sqlc.UpdateRouteOperationParams{
+		EnterpriseID:         empresa,
 		ID:                   op.ID,
 		WorkCenterID:         op.WorkCenterID,
 		StandardTime:         pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
@@ -360,7 +397,7 @@ func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *en
 		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("updating route operation: %w", err)
+		return nil, fmt.Errorf("updating route operation: %w", semLinha(err, "etapa do roteiro ou centro de trabalho não encontrado"))
 	}
 	return routeOpRowToEntity(row), nil
 }
@@ -382,19 +419,29 @@ func (r *RoutingRepositorySQLC) GetRouteOperations(ctx context.Context, routeID 
 }
 
 func (r *RoutingRepositorySQLC) RemoveRouteOperation(ctx context.Context, id int64) error {
-	return r.q.RemoveRouteOperation(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.RemoveRouteOperation(ctx, sqlc.RemoveRouteOperationParams{ID: id, EnterpriseID: empresa})
+	return afetou(n, err, msgEtapa)
 }
 
 // ─── network edges ────────────────────────────────────────────────────────────
 
 func (r *RoutingRepositorySQLC) SetNetworkEdge(ctx context.Context, edge *entity.NetworkEdge) (*entity.NetworkEdge, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpsertNetworkEdge(ctx, sqlc.UpsertNetworkEdgeParams{
+		EnterpriseID:  empresa,
 		PredecessorID: edge.PredecessorID,
 		SuccessorID:   edge.SuccessorID,
 		OverlapPct:    pgutil.ToPgNumericFromFloat64(edge.OverlapPct),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("upserting network edge: %w", err)
+		return nil, fmt.Errorf("upserting network edge: %w", semLinha(err, "as duas etapas precisam ser do mesmo roteiro da empresa"))
 	}
 	return &entity.NetworkEdge{
 		ID:            row.ID,
@@ -406,10 +453,16 @@ func (r *RoutingRepositorySQLC) SetNetworkEdge(ctx context.Context, edge *entity
 }
 
 func (r *RoutingRepositorySQLC) DeleteNetworkEdge(ctx context.Context, predecessorID, successorID int64) error {
-	return r.q.DeleteNetworkEdge(ctx, sqlc.DeleteNetworkEdgeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.DeleteNetworkEdge(ctx, sqlc.DeleteNetworkEdgeParams{
 		PredecessorID: predecessorID,
 		SuccessorID:   successorID,
+		EnterpriseID:  empresa,
 	})
+	return afetou(n, err, "precedência do roteiro não encontrada")
 }
 
 func (r *RoutingRepositorySQLC) GetNetworkEdges(ctx context.Context, routeID int64) ([]*entity.NetworkEdge, error) {
@@ -437,7 +490,12 @@ func (r *RoutingRepositorySQLC) GetNetworkEdges(ctx context.Context, routeID int
 // ─── route operation resources (alternatives) ─────────────────────────────────
 
 func (r *RoutingRepositorySQLC) AddRouteOpResource(ctx context.Context, res *entity.RouteOpResource) (*entity.RouteOpResource, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddRouteOpResource(ctx, sqlc.AddRouteOpResourceParams{
+		EnterpriseID:     empresa,
 		RouteOperationID: res.RouteOperationID,
 		WorkCenterID:     res.WorkCenterID,
 		Priority:         res.Priority,
@@ -445,57 +503,93 @@ func (r *RoutingRepositorySQLC) AddRouteOpResource(ctx context.Context, res *ent
 		IsPrimary:        res.IsPrimary,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("adding route op resource: %w", err)
+		return nil, fmt.Errorf("adding route op resource: %w", semLinha(err, "etapa do roteiro ou centro de trabalho não encontrado"))
 	}
 	return resourceRowToEntity(row), nil
 }
 
 func (r *RoutingRepositorySQLC) UpdateRouteOpResource(ctx context.Context, res *entity.RouteOpResource) (*entity.RouteOpResource, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateRouteOpResource(ctx, sqlc.UpdateRouteOpResourceParams{
-		ID:         res.ID,
-		Priority:   res.Priority,
-		TimeFactor: pgutil.ToPgNumericFromFloat64(res.TimeFactor),
+		EnterpriseID: empresa,
+		ID:           res.ID,
+		Priority:     res.Priority,
+		TimeFactor:   pgutil.ToPgNumericFromFloat64(res.TimeFactor),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("updating route op resource: %w", err)
+		return nil, fmt.Errorf("updating route op resource: %w", semLinha(err, msgRecurso))
 	}
 	return resourceRowToEntity(row), nil
 }
 
 func (r *RoutingRepositorySQLC) GetRouteOpResource(ctx context.Context, id int64) (*entity.RouteOpResource, error) {
-	row, err := r.q.GetRouteOpResource(ctx, id)
+	empresa, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("fetching route op resource %d: %w", id, err)
+		return nil, err
+	}
+	row, err := r.q.GetRouteOpResource(ctx, sqlc.GetRouteOpResourceParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return nil, fmt.Errorf("fetching route op resource %d: %w", id, semLinha(err, msgRecurso))
 	}
 	return resourceRowToEntity(row), nil
 }
 
 func (r *RoutingRepositorySQLC) RemoveRouteOpResource(ctx context.Context, id int64) error {
-	return r.q.RemoveRouteOpResource(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.RemoveRouteOpResource(ctx, sqlc.RemoveRouteOpResourceParams{ID: id, EnterpriseID: empresa})
+	return afetou(n, err, msgRecurso)
 }
 
 // SetRouteOpResourcePrimary makes one resource the primary for its operation:
 // it clears any other primary, flags this one, and mirrors the choice onto
 // route_operations.work_center_id (so cost/CRP/lead-time use it).
 func (r *RoutingRepositorySQLC) SetRouteOpResourcePrimary(ctx context.Context, id, routeOperationID, workCenterID int64) (*entity.RouteOpResource, error) {
-	if err := r.q.ClearPrimaryResources(ctx, routeOperationID); err != nil {
-		return nil, fmt.Errorf("clearing primary resources: %w", err)
-	}
-	row, err := r.q.SetResourcePrimary(ctx, id)
+	empresa, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("setting resource primary: %w", err)
+		return nil, err
 	}
-	if err := r.q.SetRouteOpWorkCenter(ctx, sqlc.SetRouteOpWorkCenterParams{
-		ID:           routeOperationID,
-		WorkCenterID: &workCenterID,
-	}); err != nil {
-		return nil, fmt.Errorf("syncing route op work center: %w", err)
+	// Três gravações que só fazem sentido juntas: sem a transação, uma falha no
+	// meio deixava a etapa sem recurso principal (ou com o centro desatualizado).
+	var row sqlc.RouteOperationResource
+	err = r.q.InTx(ctx, func(q *sqlc.Queries) error {
+		if err := q.ClearPrimaryResources(ctx, sqlc.ClearPrimaryResourcesParams{RouteOperationID: routeOperationID, EnterpriseID: empresa}); err != nil {
+			return fmt.Errorf("clearing primary resources: %w", err)
+		}
+		var err error
+		row, err = q.SetResourcePrimary(ctx, sqlc.SetResourcePrimaryParams{ID: id, EnterpriseID: empresa})
+		if err != nil {
+			return fmt.Errorf("setting resource primary: %w", semLinha(err, msgRecurso))
+		}
+		if row.RouteOperationID != routeOperationID {
+			return errorsuc.NewValidationError("o recurso não pertence a esta etapa do roteiro")
+		}
+		if err := q.SetRouteOpWorkCenter(ctx, sqlc.SetRouteOpWorkCenterParams{
+			ID:           routeOperationID,
+			WorkCenterID: &workCenterID,
+			EnterpriseID: empresa,
+		}); err != nil {
+			return fmt.Errorf("syncing route op work center: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return resourceRowToEntity(row), nil
 }
 
 func (r *RoutingRepositorySQLC) ListResourcesByRouteOp(ctx context.Context, routeOperationID int64) ([]*entity.RouteOpResource, error) {
-	rows, err := r.q.ListResourcesByRouteOp(ctx, routeOperationID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListResourcesByRouteOp(ctx, sqlc.ListResourcesByRouteOpParams{RouteOperationID: routeOperationID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os recursos da operação %d do roteiro: %w", routeOperationID, err)
 	}
@@ -520,7 +614,11 @@ func (r *RoutingRepositorySQLC) ListResourcesByRouteOp(ctx context.Context, rout
 }
 
 func (r *RoutingRepositorySQLC) ListResourcesByRoute(ctx context.Context, routeID int64) ([]*entity.RouteOpResource, error) {
-	rows, err := r.q.ListResourcesByRoute(ctx, routeID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListResourcesByRoute(ctx, sqlc.ListResourcesByRouteParams{RouteID: routeID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os recursos do roteiro %d: %w", routeID, err)
 	}

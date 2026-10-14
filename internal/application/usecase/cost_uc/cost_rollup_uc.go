@@ -429,7 +429,10 @@ func (uc *StandardCostUseCase) rollupItem(
 	// aplicados na apuração dele, e aplicá-los de novo aqui os cobraria em cascata.
 	var rateios []entity.RateioAplicado
 	if len(regras) > 0 {
-		centros, _ := uc.centrosDoRoteiro(ctx, itemCode, mask)
+		centros, errCentros := uc.centrosDoRoteiro(ctx, itemCode, mask)
+		if errCentros != nil {
+			return nil, fmt.Errorf("lendo os centros do roteiro: %w", errCentros)
+		}
 		aplicaveis := entity.RegrasVigentes(regras, itemCode, centros, quando)
 		baseDoRateio := comp
 		baseDoRateio.Material = comp.Material // material próprio (folha), não o de baixo
@@ -542,7 +545,10 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 		lot = 1
 	}
 	if uc.routing == nil {
-		routeHours, _ := uc.repo.GetRouteHoursByItem(ctx, itemCode, mask)
+		routeHours, errHoras := uc.repo.GetRouteHoursByItem(ctx, itemCode, mask)
+		if errHoras != nil {
+			return comp, horas, fmt.Errorf("lendo as horas do roteiro do item %d: %w", itemCode, errHoras)
+		}
 		comp.Maquina = routeHours * uc.averageRate(ctx)
 		horas.Maquina = routeHours
 		return comp, horas, nil

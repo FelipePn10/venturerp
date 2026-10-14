@@ -20,8 +20,7 @@ import (
 
 func (h *APSHandler) ExportSequencingEvents(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequenceOrdersDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	rows, err := h.uc.ExportSequencingEvents(r.Context(), dto)
@@ -54,8 +53,7 @@ func (h *APSHandler) ListSequencingResources(w http.ResponseWriter, r *http.Requ
 
 func (h *APSHandler) ViewSequencing(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequencingViewDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	rows, err := h.uc.ViewSequencing(r.Context(), dto)
@@ -428,8 +426,7 @@ func (h *APSHandler) DeleteMachineSpecialValue(w http.ResponseWriter, r *http.Re
 
 func (h *APSHandler) SequenceOrders(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequenceOrdersDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.SequenceOrders(r.Context(), dto)
@@ -456,8 +453,7 @@ func (h *APSHandler) GetGanttByOrder(w http.ResponseWriter, r *http.Request) {
 
 func (h *APSHandler) GetGanttByWorkCenter(w http.ResponseWriter, r *http.Request) {
 	var dto request.GanttByWorkCenterDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.GetGanttByWorkCenter(r.Context(), dto)
@@ -536,8 +532,7 @@ func (h *APSHandler) ExportGanttBoard(w http.ResponseWriter, r *http.Request) {
 // POST /api/aps/gantt/reschedule
 func (h *APSHandler) RescheduleSequence(w http.ResponseWriter, r *http.Request) {
 	var dto request.RescheduleSequenceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.RescheduleSequence(r.Context(), dto)

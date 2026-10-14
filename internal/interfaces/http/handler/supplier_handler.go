@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,13 +25,12 @@ func NewSupplierHandler(uc *supplier_uc.SupplierUseCase) *SupplierHandler {
 
 func (h *SupplierHandler) CreateSupplierType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.CreateSupplierType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -39,13 +38,12 @@ func (h *SupplierHandler) CreateSupplierType(w http.ResponseWriter, r *http.Requ
 
 func (h *SupplierHandler) UpdateSupplierType(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSupplierTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.UpdateSupplierType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -64,13 +62,12 @@ func (h *SupplierHandler) ListSupplierTypes(w http.ResponseWriter, r *http.Reque
 
 func (h *SupplierHandler) CreateContactType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierContactTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.CreateContactType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -89,18 +86,17 @@ func (h *SupplierHandler) ListContactTypes(w http.ResponseWriter, r *http.Reques
 
 func (h *SupplierHandler) CreateSupplier(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSupplierDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.CreateSupplier(r.Context(), dto)
 	if err != nil {
 		// Duplicate-document conflict surfaces as 409.
 		if strings.Contains(err.Error(), "já existe um fornecedor") {
-			jsonError(w, http.StatusConflict, err.Error())
+			respondErrStatus(w, http.StatusConflict, err)
 			return
 		}
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -108,13 +104,12 @@ func (h *SupplierHandler) CreateSupplier(w http.ResponseWriter, r *http.Request)
 
 func (h *SupplierHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSupplierDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.UpdateSupplier(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -140,7 +135,10 @@ func (h *SupplierHandler) ListSuppliers(w http.ResponseWriter, r *http.Request) 
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	if done, _ := export.WriteSlice(w, r, "Fornecedores", "fornecedores", res); done {
+	if done, err := export.WriteSlice(w, r, "Fornecedores", "fornecedores", res); done {
+		if err != nil {
+			slog.Error("falha ao exportar a lista", "lista", "Fornecedores", "erro", err)
+		}
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -167,8 +165,7 @@ func (h *SupplierHandler) BlockSupplier(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var dto request.BlockSupplierDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "payload inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -203,7 +200,7 @@ func (h *SupplierHandler) DeleteSupplier(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.uc.DeleteSupplier(r.Context(), code); err != nil {
-		jsonError(w, http.StatusConflict, err.Error())
+		respondErrStatus(w, http.StatusConflict, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -213,13 +210,12 @@ func (h *SupplierHandler) DeleteSupplier(w http.ResponseWriter, r *http.Request)
 
 func (h *SupplierHandler) AddAddress(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierAddressDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddAddress(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -227,13 +223,12 @@ func (h *SupplierHandler) AddAddress(w http.ResponseWriter, r *http.Request) {
 
 func (h *SupplierHandler) AddPhone(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierPhoneDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddPhone(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -241,13 +236,12 @@ func (h *SupplierHandler) AddPhone(w http.ResponseWriter, r *http.Request) {
 
 func (h *SupplierHandler) AddEmail(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierEmailDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddEmail(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -255,13 +249,12 @@ func (h *SupplierHandler) AddEmail(w http.ResponseWriter, r *http.Request) {
 
 func (h *SupplierHandler) AddDueDate(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierDueDateDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddDueDate(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -269,13 +262,12 @@ func (h *SupplierHandler) AddDueDate(w http.ResponseWriter, r *http.Request) {
 
 func (h *SupplierHandler) AddContact(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierContactDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddContact(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -283,13 +275,12 @@ func (h *SupplierHandler) AddContact(w http.ResponseWriter, r *http.Request) {
 
 func (h *SupplierHandler) AddContactPhone(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierContactPhoneDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddContactPhone(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -297,13 +288,12 @@ func (h *SupplierHandler) AddContactPhone(w http.ResponseWriter, r *http.Request
 
 func (h *SupplierHandler) AddContactEmail(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierContactEmailDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddContactEmail(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -313,13 +303,12 @@ func (h *SupplierHandler) AddContactEmail(w http.ResponseWriter, r *http.Request
 
 func (h *SupplierHandler) AddEnterprise(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddSupplierEnterpriseDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddEnterprise(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -327,13 +316,12 @@ func (h *SupplierHandler) AddEnterprise(w http.ResponseWriter, r *http.Request) 
 
 func (h *SupplierHandler) UpdateEnterprise(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSupplierEnterpriseDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.UpdateEnterprise(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -384,13 +372,12 @@ func (h *SupplierHandler) GetParameters(w http.ResponseWriter, r *http.Request) 
 
 func (h *SupplierHandler) UpsertParameters(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertSupplierParametersDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.UpsertParameters(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

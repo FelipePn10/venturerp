@@ -65,7 +65,7 @@ func TestIntegration_FreteSobreCompras(t *testing.T) {
 		t.Fatal(err)
 	}
 	var plano int64
-	if err := pool.QueryRow(bg, `INSERT INTO accounting_plans(plan_number,description,valid_from,status) VALUES($1,'Frete','2020-01-01','A') RETURNING id`, u%1_000_000+700_000).Scan(&plano); err != nil {
+	if err := pool.QueryRow(bg, `INSERT INTO accounting_plans(plan_number,description,valid_from,status,enterprise_id) VALUES($1,'Frete','2020-01-01','A',$2) RETURNING id`, u%1_000_000+700_000, empresa).Scan(&plano); err != nil {
 		t.Fatal(err)
 	}
 	conta := func(numero string) int64 {

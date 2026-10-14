@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_tolerance_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -19,13 +18,12 @@ func NewPurchaseToleranceHandler(uc *purchase_tolerance_uc.UseCase) *PurchaseTol
 }
 func (h *PurchaseToleranceHandler) Save(w http.ResponseWriter, r *http.Request) {
 	var d request.UpsertPurchaseToleranceDTO
-	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &d) {
 		return
 	}
 	x, err := h.uc.Save(r.Context(), d)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	status := http.StatusCreated
@@ -65,13 +63,12 @@ func (h *PurchaseToleranceHandler) Delete(w http.ResponseWriter, r *http.Request
 }
 func (h *PurchaseToleranceHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	var d request.EvaluatePurchaseToleranceDTO
-	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &d) {
 		return
 	}
 	x, err := h.uc.Evaluate(r.Context(), d)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, x)

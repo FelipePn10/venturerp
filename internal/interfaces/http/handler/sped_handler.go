@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"time"
 
@@ -45,8 +45,7 @@ type generateEFDRequest struct {
 // GenerateEFD handles POST /api/fiscal/sped/efd — generates the EFD ICMS/IPI text file.
 func (h *SPEDHandler) GenerateEFD(w http.ResponseWriter, r *http.Request) {
 	var req generateEFDRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 
@@ -77,7 +76,7 @@ func (h *SPEDHandler) GenerateEFD(w http.ResponseWriter, r *http.Request) {
 
 	content, err := h.uc.GenerateEFD(r.Context(), spedReq)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 

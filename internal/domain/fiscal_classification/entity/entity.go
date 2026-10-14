@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
@@ -90,10 +90,10 @@ type FiscalClassification struct {
 
 func NewFiscalClassification(code int64, description string, createdBy uuid.UUID) (*FiscalClassification, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	now := time.Now()
 	return &FiscalClassification{

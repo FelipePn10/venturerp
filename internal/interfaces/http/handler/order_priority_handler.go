@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -20,8 +19,7 @@ func (h *OrderPriorityHandler) Routes() chi.Router {
 
 func (h *OrderPriorityHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateOrderPriorityDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -45,7 +43,7 @@ func (h *OrderPriorityHandler) FindByValue(w http.ResponseWriter, r *http.Reques
 	value, _ := strconv.ParseFloat(chi.URLParam(r, "value"), 64)
 	result, err := h.findUC.Execute(r.Context(), value)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

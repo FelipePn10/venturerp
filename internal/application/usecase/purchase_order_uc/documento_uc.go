@@ -161,7 +161,10 @@ func (uc *DocumentoPedidoUseCase) Enviar(ctx context.Context, code int64, dto En
 	if msg == "" {
 		msg = fmt.Sprintf("Prezados,\n\nSegue em anexo o pedido de compra nº %d. Pedimos a gentileza de confirmar o recebimento e a data de entrega.\n\nAtenciosamente,\n%s", po.OrderNumber, empresa)
 	}
-	enterpriseID, _ := uc.Auth.EnterpriseID(ctx)
+	enterpriseID, errEmpresa := uc.Auth.EnterpriseID(ctx)
+	if errEmpresa != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	por, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return nil, err

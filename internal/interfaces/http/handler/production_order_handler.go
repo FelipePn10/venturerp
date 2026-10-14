@@ -37,8 +37,7 @@ type ProductionOrderHandler struct {
 
 func (h *ProductionOrderHandler) CreateScanToken(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateProductionScanTokenDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.scannerUC.CreateToken(r.Context(), dto)
@@ -51,8 +50,7 @@ func (h *ProductionOrderHandler) CreateScanToken(w http.ResponseWriter, r *http.
 
 func (h *ProductionOrderHandler) Scan(w http.ResponseWriter, r *http.Request) {
 	var dto request.ProductionScanDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.scannerUC.Scan(r.Context(), dto)
@@ -80,8 +78,7 @@ func (h *ProductionOrderHandler) Maintain(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var dto request.MaintainProductionOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
@@ -109,8 +106,7 @@ func (h *ProductionOrderHandler) ListMaterials(w http.ResponseWriter, r *http.Re
 
 func (h *ProductionOrderHandler) AddMaterial(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddProductionMaterialDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.Add(r.Context(), dto)
@@ -123,8 +119,7 @@ func (h *ProductionOrderHandler) AddMaterial(w http.ResponseWriter, r *http.Requ
 
 func (h *ProductionOrderHandler) ReplaceMaterial(w http.ResponseWriter, r *http.Request) {
 	var dto request.ReplaceProductionMaterialDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.Replace(r.Context(), dto)
@@ -150,8 +145,7 @@ func (h *ProductionOrderHandler) DeleteMaterial(w http.ResponseWriter, r *http.R
 
 func (h *ProductionOrderHandler) AllocateLots(w http.ResponseWriter, r *http.Request) {
 	var dto request.AllocateProductionLotsDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.AllocateLots(r.Context(), dto)
@@ -164,8 +158,7 @@ func (h *ProductionOrderHandler) AllocateLots(w http.ResponseWriter, r *http.Req
 
 func (h *ProductionOrderHandler) AllocateLotsBatch(w http.ResponseWriter, r *http.Request) {
 	var dto request.BatchAllocateProductionLotsDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.AllocateLotsBatch(r.Context(), dto)
@@ -178,8 +171,7 @@ func (h *ProductionOrderHandler) AllocateLotsBatch(w http.ResponseWriter, r *htt
 
 func (h *ProductionOrderHandler) AddScrapDestination(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddScrapDestinationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.AddScrap(r.Context(), dto)
@@ -209,8 +201,7 @@ func (h *ProductionOrderHandler) UpdateScrapDestination(w http.ResponseWriter, r
 		return
 	}
 	var dto request.AddScrapDestinationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.UpdateScrap(r.Context(), id, dto)
@@ -239,8 +230,7 @@ func (h *ProductionOrderHandler) Maintenance(w http.ResponseWriter, r *http.Requ
 }
 func (h *ProductionOrderHandler) ConfigureManufacturingStock(w http.ResponseWriter, r *http.Request) {
 	var dto request.ConfigureManufacturingStockDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.materialControlUC.ConfigureStock(r.Context(), dto); err != nil {
@@ -251,8 +241,7 @@ func (h *ProductionOrderHandler) ConfigureManufacturingStock(w http.ResponseWrit
 }
 func (h *ProductionOrderHandler) ConfigureManufacturingItemStock(w http.ResponseWriter, r *http.Request) {
 	var dto request.ConfigureManufacturingItemStockDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.materialControlUC.ConfigureItemStock(r.Context(), dto); err != nil {
@@ -263,8 +252,7 @@ func (h *ProductionOrderHandler) ConfigureManufacturingItemStock(w http.Response
 }
 func (h *ProductionOrderHandler) ConfigureWarehouseAddress(w http.ResponseWriter, r *http.Request) {
 	var dto request.ConfigureWarehouseAddressDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.materialControlUC.ConfigureAddress(r.Context(), dto); err != nil {
@@ -293,8 +281,7 @@ func (h *ProductionOrderHandler) ListWarehouseAddresses(w http.ResponseWriter, r
 }
 func (h *ProductionOrderHandler) ConfigureTemporaryLot(w http.ResponseWriter, r *http.Request) {
 	var dto request.ConfigureTemporaryProductionLotDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.ConfigureTemporaryLot(r.Context(), dto)
@@ -307,8 +294,7 @@ func (h *ProductionOrderHandler) ConfigureTemporaryLot(w http.ResponseWriter, r 
 
 func (h *ProductionOrderHandler) ConfigureWMS(w http.ResponseWriter, r *http.Request) {
 	var dto request.ConfigureWMSWarehouseDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.materialControlUC.ConfigureWMS(r.Context(), dto)
@@ -335,10 +321,7 @@ func (h *ProductionOrderHandler) Operational(w http.ResponseWriter, r *http.Requ
 
 func (h *ProductionOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateProductionOrderDTO
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBodyStrict(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -358,7 +341,7 @@ func (h *ProductionOrderHandler) GetByCode(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.getByCodeUC.Execute(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -381,8 +364,7 @@ func (h *ProductionOrderHandler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.StartProductionOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
@@ -434,8 +416,7 @@ func (h *ProductionOrderHandler) Complete(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var dto request.CompleteProductionOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
@@ -558,14 +539,13 @@ func (h *ProductionOrderHandler) ReturnScrap(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var dto request.ReturnScrapDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ProductionOrderID = id
 	result, err := h.returnScrapUC.Execute(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -579,13 +559,12 @@ func (h *ProductionOrderHandler) ExplodeRoute(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var dto request.ExplodeRouteDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.orderOpsUC.ExplodeRoute(r.Context(), dto.OrderID, dto.RouteID)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -615,13 +594,43 @@ func (h *ProductionOrderHandler) AdvanceOperation(w http.ResponseWriter, r *http
 		return
 	}
 	var dto request.AdvanceOperationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.orderOpsUC.AdvanceOperation(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// MaterialAvailability é a checagem de faltas de material da OF {id}.
+func (h *ProductionOrderHandler) MaterialAvailability(w http.ResponseWriter, r *http.Request) {
+	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	result, err := h.materialControlUC.Availability(r.Context(), orderID)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// MaterialAvailabilitySummary resume as faltas de várias OFs (?ids=1,2,3) — o
+// selo da lista.
+func (h *ProductionOrderHandler) MaterialAvailabilitySummary(w http.ResponseWriter, r *http.Request) {
+	ids, err := reportInt64List(r.URL.Query().Get("ids"))
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.materialControlUC.AvailabilitySummary(r.Context(), ids, false)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

@@ -1,50 +1,52 @@
+-- Tipos de fornecedor e de contato são catálogos da empresa (enterprise_id).
+
 -- ─── Supplier Types ───────────────────────────────────────────────────────────
 
 -- name: CreateSupplierType :one
-INSERT INTO supplier_types (code, description, kind)
-VALUES ($1, $2, $3)
+INSERT INTO supplier_types (enterprise_id, code, description, kind)
+VALUES ($4, $1, $2, $3)
 RETURNING *;
 
 -- name: UpdateSupplierType :one
 UPDATE supplier_types
 SET description = $2, kind = $3, is_active = $4
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $5
 RETURNING *;
 
 -- name: GetSupplierTypeByCode :one
-SELECT * FROM supplier_types WHERE code = $1;
+SELECT * FROM supplier_types WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListSupplierTypes :many
 SELECT * FROM supplier_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextSupplierTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_types WHERE enterprise_id = $1;
 
 -- ─── Supplier Contact Types ─────────────────────────────────────────────────────
 
 -- name: CreateSupplierContactType :one
-INSERT INTO supplier_contact_types (code, description)
-VALUES ($1, $2)
+INSERT INTO supplier_contact_types (enterprise_id, code, description)
+VALUES ($3, $1, $2)
 RETURNING *;
 
 -- name: UpdateSupplierContactType :one
 UPDATE supplier_contact_types
 SET description = $2, is_active = $3
-WHERE code = $1
+WHERE code = $1 AND enterprise_id = $4
 RETURNING *;
 
 -- name: GetSupplierContactTypeByCode :one
-SELECT * FROM supplier_contact_types WHERE code = $1;
+SELECT * FROM supplier_contact_types WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListSupplierContactTypes :many
 SELECT * FROM supplier_contact_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextSupplierContactTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_contact_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM supplier_contact_types WHERE enterprise_id = $1;
 
 -- ─── Suppliers ────────────────────────────────────────────────────────────────
 
@@ -200,12 +202,15 @@ WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = sqlc.arg(enterpri
 -- ─── Supplier Due Dates ─────────────────────────────────────────────────────────
 
 -- name: CreateSupplierDueDate :one
+-- Fornecedor e condição de pagamento da empresa autenticada (sem linha = não achou).
 INSERT INTO supplier_due_dates (
     supplier_id, description, ranking, base_date, payment_condition_id,
     payment_type, subsequent_month, rounding, receipt_start_time,
     receipt_end_time, avg_unload_minutes
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+WHERE EXISTS (SELECT 1 FROM suppliers s WHERE s.id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id))
+  AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM payment_conditions pc WHERE pc.id = $5 AND pc.enterprise_id = sqlc.arg(enterprise_id)))
 RETURNING *;
 
 -- name: ListSupplierDueDates :many
@@ -241,8 +246,12 @@ USING suppliers s
 WHERE c.id = $1 AND s.id = c.supplier_id AND s.enterprise_id = sqlc.arg(enterprise_id);
 
 -- name: CreateSupplierContactPhone :one
+-- Só grava em contato de fornecedor da empresa autenticada (sem linha = não achou).
 INSERT INTO supplier_contact_phones (contact_id, value, ranking)
-VALUES ($1, $2, $3)
+SELECT c.id, sqlc.arg(value), sqlc.arg(ranking)
+  FROM supplier_contacts c
+  JOIN suppliers s ON s.id = c.supplier_id
+ WHERE c.id = sqlc.arg(contact_id) AND s.enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: ListSupplierContactPhones :many
@@ -253,8 +262,12 @@ WHERE p.contact_id = $1 AND s.enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY p.ranking, p.id;
 
 -- name: CreateSupplierContactEmail :one
+-- Só grava em contato de fornecedor da empresa autenticada (sem linha = não achou).
 INSERT INTO supplier_contact_emails (contact_id, value, ranking)
-VALUES ($1, $2, $3)
+SELECT c.id, sqlc.arg(value), sqlc.arg(ranking)
+  FROM supplier_contacts c
+  JOIN suppliers s ON s.id = c.supplier_id
+ WHERE c.id = sqlc.arg(contact_id) AND s.enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: ListSupplierContactEmails :many
@@ -267,25 +280,37 @@ ORDER BY e.ranking, e.id;
 -- ─── Supplier Enterprises ─────────────────────────────────────────────────────
 
 -- name: CreateSupplierEnterprise :one
+-- O vínculo é da empresa autenticada: o fornecedor e a tabela de preço de
+-- compra têm de ser dela (o tipo de nota é conferido pelo trigger da 000395).
 INSERT INTO supplier_enterprises (
     supplier_id, enterprise_code, financial_account, applies_ipi,
     default_invoice_type_id, purchase_price_table_id
 )
-VALUES ($1, $2, $3, $4, $5, $6)
+SELECT sqlc.arg(supplier_id)::BIGINT, sqlc.arg(enterprise_code)::BIGINT,
+       sqlc.narg(financial_account)::TEXT, sqlc.arg(applies_ipi)::BOOLEAN,
+       sqlc.narg(default_invoice_type_id)::BIGINT, sqlc.narg(purchase_price_table_id)::BIGINT
+ WHERE EXISTS (SELECT 1 FROM suppliers s JOIN enterprise e ON e.id = s.enterprise_id
+                WHERE s.id = sqlc.arg(supplier_id)::BIGINT AND e.code = sqlc.arg(enterprise_code)::BIGINT)
+   AND (sqlc.narg(purchase_price_table_id)::BIGINT IS NULL OR EXISTS (
+        SELECT 1 FROM purchase_price_tables t JOIN enterprise e ON e.id = t.enterprise_id
+         WHERE t.id = sqlc.narg(purchase_price_table_id)::BIGINT AND e.code = sqlc.arg(enterprise_code)::BIGINT))
 RETURNING *;
 
 -- name: UpdateSupplierEnterprise :one
 UPDATE supplier_enterprises
 SET financial_account = $2, applies_ipi = $3, default_invoice_type_id = $4,
     purchase_price_table_id = $5, is_active = $6
-WHERE id = $1
+WHERE supplier_enterprises.id = $1 AND supplier_enterprises.enterprise_code = sqlc.arg(enterprise_code)
+  AND ($5::BIGINT IS NULL OR EXISTS (
+       SELECT 1 FROM purchase_price_tables t JOIN enterprise e ON e.id = t.enterprise_id
+        WHERE t.id = $5 AND e.code = sqlc.arg(enterprise_code)))
 RETURNING *;
 
 -- name: ListSupplierEnterprises :many
 SELECT * FROM supplier_enterprises WHERE supplier_id = $1 ORDER BY enterprise_code;
 
--- name: DeleteSupplierEnterprise :exec
-DELETE FROM supplier_enterprises WHERE id = $1;
+-- name: DeleteSupplierEnterprise :execrows
+DELETE FROM supplier_enterprises WHERE id = $1 AND enterprise_code = sqlc.arg(enterprise_code);
 
 -- ─── Supplier Parameters ────────────────────────────────────────────────────────
 

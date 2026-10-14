@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/google/uuid"
 )
@@ -16,7 +16,7 @@ func NewRestriction(
 	createdBy uuid.UUID,
 ) (*Restriction, error) {
 	if situation != RestrictionActive && situation != RestrictionInactive {
-		return nil, errors.New("situação de restrição inválida")
+		return nil, domainerr.NewValidation("situação de restrição inválida")
 	}
 
 	return &Restriction{

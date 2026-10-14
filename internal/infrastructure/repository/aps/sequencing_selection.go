@@ -163,7 +163,15 @@ func (r *APSRepositorySQLC) ListAvailabilityWindows(ctx context.Context, workCen
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT day::date+COALESCE(i.start_time,TIME '00:00'),day::date+COALESCE(i.end_time,TIME '00:00')+CASE WHEN i.id IS NULL THEN make_interval(secs => ROUND(COALESCE(m.available_hours_per_day,mt.capacity_hours)*3600)::int) ELSE INTERVAL '0' END+CASE WHEN i.id IS NOT NULL AND i.end_time<=i.start_time THEN INTERVAL '1 day' ELSE INTERVAL '0' END FROM generate_series($3::date,$4::date,'1 day') day
+	// O turno do calendário é hora de relógio da fábrica. Sem o AT TIME ZONE a
+	// soma "dia + hora" saía sem fuso e o driver a lia como UTC: o turno das
+	// 07:00 virava 04:00 em Brasília e o APS programava três horas antes do
+	// expediente. O fuso é o mesmo que o MRP usa ao reservar as máquinas. Sem
+	// calendário, a máquina trabalha as horas do dia a partir das 08:00.
+	rows, err := r.pool.Query(ctx, `SELECT (day::date+COALESCE(i.start_time,TIME '08:00')) AT TIME ZONE fuso.tz,
+		(day::date+COALESCE(i.end_time,TIME '08:00')+CASE WHEN i.id IS NULL THEN make_interval(secs => ROUND(COALESCE(m.available_hours_per_day,mt.capacity_hours)*3600)::int) ELSE INTERVAL '0' END+CASE WHEN i.id IS NOT NULL AND i.end_time<=i.start_time THEN INTERVAL '1 day' ELSE INTERVAL '0' END) AT TIME ZONE fuso.tz
+		FROM generate_series($3::date,$4::date,'1 day') day
+		CROSS JOIN (SELECT COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo') AS tz) fuso
 		JOIN machines m ON m.enterprise_id=$1 AND m.is_active JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=m.enterprise_id AND mt.is_active AND mt.id=$2
 		LEFT JOIN machine_calendar_intervals i ON i.calendar_id=m.calendar_id AND i.weekday=EXTRACT(DOW FROM day)::int
 		WHERE ($5::bigint[] IS NULL OR m.id=ANY($5)) AND (i.id IS NOT NULL OR (m.calendar_id IS NULL AND EXTRACT(ISODOW FROM day)<6)) AND NOT EXISTS(SELECT 1 FROM maintenance_plans p JOIN maintenance_orders o ON o.plan_id=p.id WHERE p.machine_id=m.id AND o.is_active AND o.status IN ('PLANNED','IN_PROGRESS') AND o.scheduled_date=day::date)
@@ -212,6 +220,8 @@ func (r *APSRepositorySQLC) ListMachineDowntimeWindows(ctx context.Context, mach
  UNION ALL SELECT sl.starts_at::timestamptz,sl.ends_at::timestamptz FROM mrp_machine_allocation_slots sl
  JOIN mrp_machine_allocations a ON a.suggestion_code=sl.suggestion_code
  WHERE a.enterprise_id=$1 AND sl.machine_id=$2 AND sl.starts_at<$4 AND sl.ends_at>$3
+ -- Reserva de cenário de simulação não ocupa máquina da programação real.
+ AND NOT EXISTS(SELECT 1 FROM mrp_planned_suggestions ms JOIN production_plans pp ON pp.code=ms.plan_code AND pp.is_scenario WHERE ms.code=a.suggestion_code)
  AND NOT EXISTS(SELECT 1 FROM planned_orders po WHERE po.mrp_suggestion_code=a.suggestion_code AND po.enterprise_id=$1 AND (NOT po.is_active OR po.status='CANCELLED'))
  AND NOT EXISTS(SELECT 1 FROM production_orders prod JOIN planned_orders po ON po.id=prod.planned_order_id AND po.enterprise_id=prod.enterprise_id WHERE po.mrp_suggestion_code=a.suggestion_code AND prod.enterprise_id=$1 AND prod.status IN ('COMPLETED','CANCELLED')) ORDER BY 1`, enterpriseID, machineID, from, to)
 	if err != nil {

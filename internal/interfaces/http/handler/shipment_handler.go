@@ -2,9 +2,10 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -66,8 +67,7 @@ type createShipmentRequest struct {
 
 func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createShipmentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	input := shipment_uc.CreateShipmentInput{
@@ -88,7 +88,7 @@ func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.Create(r.Context(), input)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -112,8 +112,7 @@ func (h *ShipmentHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req addShipmentItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.uc.AddItem(r.Context(), shipment_uc.AddShipmentItemInput{
@@ -128,7 +127,7 @@ func (h *ShipmentHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		Notes:              req.Notes,
 	})
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -156,25 +155,11 @@ func (h *ShipmentHandler) List(w http.ResponseWriter, r *http.Request) {
 		st := shipentity.ShipmentStatus(s)
 		f.Status = &st
 	}
-	if c := q.Get("carrier_code"); c != "" {
-		if v, err := strconv.ParseInt(c, 10, 64); err == nil {
-			f.CarrierCode = &v
-		}
+	var msg string
+	if f.CarrierCode, f.From, f.To, f.Limit, f.Offset, msg = filtroDeLista(q); msg != "" {
+		jsonError(w, http.StatusBadRequest, msg)
+		return
 	}
-	if d := q.Get("from"); d != "" {
-		if t, err := time.Parse("2006-01-02", d); err == nil {
-			f.From = &t
-		}
-	}
-	if d := q.Get("to"); d != "" {
-		if t, err := time.Parse("2006-01-02", d); err == nil {
-			t = t.AddDate(0, 0, 1) // inclusive end-of-day
-			f.To = &t
-		}
-	}
-	f.Limit, _ = strconv.Atoi(q.Get("limit"))
-	f.Offset, _ = strconv.Atoi(q.Get("offset"))
-	normalizeCatalogPage(&f.Limit, &f.Offset)
 
 	result, err := h.uc.List(r.Context(), f)
 	if err != nil {
@@ -201,8 +186,7 @@ type createLoadRequest struct {
 
 func (h *ShipmentHandler) CreateLoad(w http.ResponseWriter, r *http.Request) {
 	var req createLoadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.uc.CreateLoad(r.Context(), shipment_uc.CreateLoadInput{
@@ -221,14 +205,19 @@ func (h *ShipmentHandler) CreateLoad(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:         actingUser(r),
 	})
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
 }
 
 func (h *ShipmentHandler) ListLoads(w http.ResponseWriter, r *http.Request) {
-	result, err := h.uc.ListLoads(r.Context(), loadFilterFromQuery(r))
+	filtro, msg := loadFilterFromQuery(r)
+	if msg != "" {
+		jsonError(w, http.StatusBadRequest, msg)
+		return
+	}
+	result, err := h.uc.ListLoads(r.Context(), filtro)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -262,8 +251,7 @@ func (h *ShipmentHandler) AddShipmentToLoad(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req addShipmentToLoadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.uc.AddShipmentToLoad(r.Context(), code, req.ShipmentCode, req.Sequence)
@@ -272,7 +260,7 @@ func (h *ShipmentHandler) AddShipmentToLoad(w http.ResponseWriter, r *http.Reque
 			security.RespondErrorCode(w, http.StatusNotFound, "ROMANEIO_OU_CARGA_NAO_ENCONTRADO", err.Error())
 			return
 		}
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -294,7 +282,7 @@ func (h *ShipmentHandler) RemoveShipmentFromLoad(w http.ResponseWriter, r *http.
 			security.RespondErrorCode(w, http.StatusNotFound, "VINCULO_ROMANEIO_CARGA_NAO_ENCONTRADO", err.Error())
 			return
 		}
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{
@@ -320,8 +308,7 @@ func (h *ShipmentHandler) AddFiscalNoteToLoad(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var req addFiscalNoteToLoadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.uc.AddFiscalNoteToLoad(r.Context(), shiprepo.AddFiscalNoteToLoadInput{
@@ -333,7 +320,7 @@ func (h *ShipmentHandler) AddFiscalNoteToLoad(w http.ResponseWriter, r *http.Req
 		Sequence:     req.Sequence,
 	})
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -369,8 +356,7 @@ type createDeliveryInstructionRequest struct {
 
 func (h *ShipmentHandler) CreateDeliveryInstruction(w http.ResponseWriter, r *http.Request) {
 	var req createDeliveryInstructionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.uc.CreateDeliveryInstruction(r.Context(), &shipentity.DeliveryInstruction{
@@ -381,7 +367,7 @@ func (h *ShipmentHandler) CreateDeliveryInstruction(w http.ResponseWriter, r *ht
 		Priority:    req.Priority,
 	})
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -412,8 +398,7 @@ type createDispatchBoxRequest struct {
 
 func (h *ShipmentHandler) CreateDispatchBox(w http.ResponseWriter, r *http.Request) {
 	var req createDispatchBoxRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.uc.CreateDispatchBox(r.Context(), &shipentity.DispatchBox{
@@ -423,7 +408,7 @@ func (h *ShipmentHandler) CreateDispatchBox(w http.ResponseWriter, r *http.Reque
 		Zone:        req.Zone,
 	})
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -450,19 +435,23 @@ func (h *ShipmentHandler) AssignBoxToLoad(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var req assignBoxRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	if err := h.uc.AssignBoxToLoad(r.Context(), code, req.BoxCode, actingUser(r)); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "assigned"})
 }
 
 func (h *ShipmentHandler) LoadMonitor(w http.ResponseWriter, r *http.Request) {
-	result, err := h.uc.LoadMonitor(r.Context(), loadFilterFromQuery(r))
+	filtro, msg := loadFilterFromQuery(r)
+	if msg != "" {
+		jsonError(w, http.StatusBadRequest, msg)
+		return
+	}
+	result, err := h.uc.LoadMonitor(r.Context(), filtro)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -471,7 +460,12 @@ func (h *ShipmentHandler) LoadMonitor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ShipmentHandler) SeparationMonitor(w http.ResponseWriter, r *http.Request) {
-	result, err := h.uc.SeparationMonitor(r.Context(), loadFilterFromQuery(r))
+	filtro, msg := loadFilterFromQuery(r)
+	if msg != "" {
+		jsonError(w, http.StatusBadRequest, msg)
+		return
+	}
+	result, err := h.uc.SeparationMonitor(r.Context(), filtro)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -526,12 +520,11 @@ func (h *ShipmentHandler) ConferItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req conferItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	if err := h.uc.ConferItem(r.Context(), code, req.ItemID, req.ConferredQty); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "conferred"})
@@ -555,7 +548,9 @@ type shipRequest struct {
 
 func (h *ShipmentHandler) Ship(w http.ResponseWriter, r *http.Request) {
 	var req shipRequest
-	_ = json.NewDecoder(r.Body).Decode(&req) // body optional
+	if !security.DecodeBodyOptional(w, r, &req) {
+		return
+	}
 	h.transition(w, r, func(ctx context.Context, code int64) error {
 		return h.uc.Ship(ctx, code, actingUser(r), req.AcceptDivergences)
 	}, "shipped")
@@ -567,7 +562,9 @@ type cancelRequest struct {
 
 func (h *ShipmentHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	var req cancelRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if !security.DecodeBodyOptional(w, r, &req) {
+		return
+	}
 	h.transition(w, r, func(ctx context.Context, code int64) error {
 		return h.uc.Cancel(ctx, code, actingUser(r), req.Reason)
 	}, "cancelled")
@@ -593,8 +590,7 @@ func (h *ShipmentHandler) UpdateTransport(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var req updateTransportRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	t := shiprepo.TransportInput{
@@ -608,14 +604,15 @@ func (h *ShipmentHandler) UpdateTransport(w http.ResponseWriter, r *http.Request
 		ANTTCode:        req.ANTTCode,
 		Seals:           req.Seals,
 	}
-	if req.EstimatedDelivery != nil && *req.EstimatedDelivery != "" {
-		if d, err := time.Parse("2006-01-02", *req.EstimatedDelivery); err == nil {
-			t.EstimatedDelivery = &d
-		}
+	if d, msg := datetime.Opcional("previsão de entrega", req.EstimatedDelivery); msg != "" {
+		jsonError(w, http.StatusUnprocessableEntity, msg)
+		return
+	} else if d != nil {
+		t.EstimatedDelivery = d
 	}
 	result, err := h.uc.UpdateTransport(r.Context(), code, t, actingUser(r))
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -640,8 +637,7 @@ func (h *ShipmentHandler) AddVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req addVolumeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.uc.AddVolume(r.Context(), shipment_uc.AddVolumeInput{
@@ -657,7 +653,7 @@ func (h *ShipmentHandler) AddVolume(w http.ResponseWriter, r *http.Request) {
 		Contents:     req.Contents,
 	})
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -689,7 +685,7 @@ func (h *ShipmentHandler) DeleteVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.uc.DeleteVolume(r.Context(), code, volumeID); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
@@ -708,12 +704,11 @@ func (h *ShipmentHandler) LinkFiscalExit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var req linkFiscalExitRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	if err := h.uc.LinkFiscalExit(r.Context(), code, req.FiscalExitID, req.NFeNumber, req.NFeKey, actingUser(r)); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "linked"})
@@ -743,13 +738,12 @@ func (h *ShipmentHandler) AutoFillFromSalesOrder(w http.ResponseWriter, r *http.
 		return
 	}
 	var req autoFillSalesOrderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.autoFillUC.AutoFillFromSalesOrder(r.Context(), req.SalesOrderCode, actingUser(r))
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -765,13 +759,12 @@ func (h *ShipmentHandler) AutoFillFromPurchaseOrder(w http.ResponseWriter, r *ht
 		return
 	}
 	var req autoFillPurchaseOrderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.autoFillUC.AutoFillFromPurchaseOrder(r.Context(), req.PurchaseOrderCode, actingUser(r))
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -787,13 +780,12 @@ func (h *ShipmentHandler) AutoFillFromProductionOrder(w http.ResponseWriter, r *
 		return
 	}
 	var req autoFillProductionOrderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	result, err := h.autoFillUC.AutoFillFromProductionOrder(r.Context(), req.ProductionOrderCode, actingUser(r))
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -846,7 +838,7 @@ func (h *ShipmentHandler) transition(w http.ResponseWriter, r *http.Request, fn 
 		return
 	}
 	if err := fn(r.Context(), code); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": ok})
@@ -859,9 +851,11 @@ func (h *ShipmentHandler) transitionLoad(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	var req cancelRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if !security.DecodeBodyOptional(w, r, &req) {
+		return
+	}
 	if err := h.uc.TransitionLoad(r.Context(), code, next, actingUser(r), req.Reason); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": ok})
@@ -886,36 +880,55 @@ func parseDatePtr(v *string) *time.Time {
 	return &t
 }
 
-func loadFilterFromQuery(r *http.Request) shiprepo.LoadFilter {
+func loadFilterFromQuery(r *http.Request) (shiprepo.LoadFilter, string) {
 	q := r.URL.Query()
 	var f shiprepo.LoadFilter
 	if s := q.Get("status"); s != "" {
 		st := shipentity.LoadStatus(s)
 		f.Status = &st
 	}
-	if c := q.Get("carrier_code"); c != "" {
-		if v, err := strconv.ParseInt(c, 10, 64); err == nil {
-			f.CarrierCode = &v
-		}
-	}
 	if b := q.Get("box_code"); b != "" {
 		f.BoxCode = &b
 	}
-	if d := q.Get("from"); d != "" {
-		if t, err := time.Parse("2006-01-02", d); err == nil {
-			f.From = &t
+	var msg string
+	f.CarrierCode, f.From, f.To, f.Limit, f.Offset, msg = filtroDeLista(q)
+	return f, msg
+}
+
+// filtroDeLista lê os filtros comuns das listas de romaneio e de carga. Valor
+// mal digitado é recusado com o motivo — antes era ignorado e a lista vinha
+// sem o filtro, como se o usuário não tivesse pedido nada.
+func filtroDeLista(q url.Values) (transportadora *int64, de, ate *time.Time, limit, offset int, msg string) {
+	if c := strings.TrimSpace(q.Get("carrier_code")); c != "" {
+		v, err := strconv.ParseInt(c, 10, 64)
+		if err != nil {
+			return nil, nil, nil, 0, 0, fmt.Sprintf("transportadora inválida (%q)", c)
+		}
+		transportadora = &v
+	}
+	d := q.Get("from")
+	if de, msg = datetime.Opcional("data inicial", &d); msg != "" {
+		return nil, nil, nil, 0, 0, msg
+	}
+	d = q.Get("to")
+	if ate, msg = datetime.Opcional("data final", &d); msg != "" {
+		return nil, nil, nil, 0, 0, msg
+	}
+	if ate != nil {
+		fim := ate.AddDate(0, 0, 1) // fim do dia, inclusive
+		ate = &fim
+	}
+	for nome, alvo := range map[string]*int{"limit": &limit, "offset": &offset} {
+		if v := strings.TrimSpace(q.Get(nome)); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, nil, nil, 0, 0, fmt.Sprintf("%s inválido (%q)", nome, v)
+			}
+			*alvo = n
 		}
 	}
-	if d := q.Get("to"); d != "" {
-		if t, err := time.Parse("2006-01-02", d); err == nil {
-			t = t.AddDate(0, 0, 1)
-			f.To = &t
-		}
-	}
-	f.Limit, _ = strconv.Atoi(q.Get("limit"))
-	f.Offset, _ = strconv.Atoi(q.Get("offset"))
-	normalizeCatalogPage(&f.Limit, &f.Offset)
-	return f
+	normalizeCatalogPage(&limit, &offset)
+	return transportadora, de, ate, limit, offset, ""
 }
 
 func normalizeCatalogPage(limit, offset *int) {

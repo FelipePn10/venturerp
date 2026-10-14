@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 )
 
 type Health string
@@ -40,14 +41,14 @@ func (s *Health) UnmarshalJSON(data []byte) error {
 
 func (s Health) Value() (driver.Value, error) {
 	if !s.IsValid() {
-		return nil, fmt.Errorf("situação do componente inválida: %s", s)
+		return nil, domainerr.NewValidation(fmt.Sprintf("situação do componente inválida: %s", s))
 	}
 	return string(s), nil
 }
 
 func (s *Health) Scan(value interface{}) error {
 	if value == nil {
-		return fmt.Errorf("a situação do componente não pode ficar vazia")
+		return domainerr.NewValidation("a situação do componente não pode ficar vazia")
 	}
 
 	var str string
@@ -58,13 +59,13 @@ func (s *Health) Scan(value interface{}) error {
 	case []byte:
 		str = string(v)
 	default:
-		return fmt.Errorf("não foi possível interpretar %T como situação do componente", value)
+		return domainerr.NewValidation(fmt.Sprintf("não foi possível interpretar %T como situação do componente", value))
 	}
 
 	tmp := Health(str)
 
 	if !tmp.IsValid() {
-		return fmt.Errorf("situação do componente inválida no banco: %s", str)
+		return domainerr.NewValidation(fmt.Sprintf("situação do componente inválida no banco: %s", str))
 	}
 
 	*s = tmp

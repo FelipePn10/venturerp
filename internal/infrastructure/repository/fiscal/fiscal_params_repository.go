@@ -2,6 +2,7 @@ package fiscal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
@@ -26,6 +27,15 @@ var _ domainrepo.FiscalParamsRepository = (*FiscalParamsRepositorySQLC)(nil)
 
 func NewFiscalParamsRepository(q *sqlc.Queries, pool *pgxpool.Pool) *FiscalParamsRepositorySQLC {
 	return &FiscalParamsRepositorySQLC{q: q, pool: pool}
+}
+
+// Documentos, apurações e parametrização fiscal são da empresa da sessão
+// (enterprise_id). Registro de outra empresa responde como inexistente.
+func semLinha(err error, msg string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(msg)
+	}
+	return err
 }
 
 // ─── Legal Devices ────────────────────────────────────────────────────────────
@@ -210,31 +220,61 @@ func cfopToEntity(row sqlc.Cfop) *fiscalEntity.CFOP {
 // ─── ICMS/IPI Tax Params ──────────────────────────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateTaxParam(ctx context.Context, p *fiscalEntity.ICMSIPITaxParam) (*fiscalEntity.ICMSIPITaxParam, error) {
-	row, err := r.q.CreateTaxParam(ctx, taxParamToCreateParams(p))
+	emp, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	arg := taxParamToCreateParams(p)
+	arg.EnterpriseID = emp
+	row, err := r.q.CreateTaxParam(ctx, arg)
+	if err != nil {
+		return nil, semLinha(err, "item ou cliente da regra não encontrado nesta empresa")
 	}
 	return taxParamToEntity(row), nil
 }
 
 func (r *FiscalParamsRepositorySQLC) UpdateTaxParam(ctx context.Context, p *fiscalEntity.ICMSIPITaxParam) (*fiscalEntity.ICMSIPITaxParam, error) {
-	row, err := r.q.UpdateTaxParam(ctx, taxParamToUpdateParams(p))
+	emp, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// Item e cliente citados na regra têm de ser da empresa.
+	var ok bool
+	if err := r.pool.QueryRow(ctx, `SELECT ($1::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $1 AND i.enterprise_id = $3))
+		AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $2 AND c.enterprise_id = $3))`,
+		p.ItemCode, p.CustomerCode, emp).Scan(&ok); err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errorsuc.NewNotFoundError("item ou cliente da regra não encontrado nesta empresa")
+	}
+	arg := taxParamToUpdateParams(p)
+	arg.EnterpriseID = emp
+	row, err := r.q.UpdateTaxParam(ctx, arg)
+	if err != nil {
+		return nil, semLinha(err, fmt.Sprintf("parâmetro fiscal %d não encontrado", p.ID))
 	}
 	return taxParamToEntity(row), nil
 }
 
 func (r *FiscalParamsRepositorySQLC) GetTaxParamByID(ctx context.Context, id int64) (*fiscalEntity.ICMSIPITaxParam, error) {
-	row, err := r.q.GetTaxParamByID(ctx, id)
+	emp, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	row, err := r.q.GetTaxParamByID(ctx, sqlc.GetTaxParamByIDParams{ID: id, EnterpriseID: emp})
+	if err != nil {
+		return nil, semLinha(err, fmt.Sprintf("parâmetro fiscal %d não encontrado", id))
 	}
 	return taxParamToEntity(row), nil
 }
 
 func (r *FiscalParamsRepositorySQLC) ListTaxParams(ctx context.Context, onlyActive bool) ([]*fiscalEntity.ICMSIPITaxParam, error) {
-	rows, err := r.q.ListTaxParams(ctx, onlyActive)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListTaxParams(ctx, sqlc.ListTaxParamsParams{Column1: onlyActive, EnterpriseID: emp})
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +282,11 @@ func (r *FiscalParamsRepositorySQLC) ListTaxParams(ctx context.Context, onlyActi
 }
 
 func (r *FiscalParamsRepositorySQLC) ListTaxParamsByUF(ctx context.Context, uf string, onlyActive bool) ([]*fiscalEntity.ICMSIPITaxParam, error) {
-	rows, err := r.q.ListTaxParamsByUF(ctx, sqlc.ListTaxParamsByUFParams{Uf: uf, Column2: onlyActive})
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListTaxParamsByUF(ctx, sqlc.ListTaxParamsByUFParams{Uf: uf, Column2: onlyActive, EnterpriseID: emp})
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +294,11 @@ func (r *FiscalParamsRepositorySQLC) ListTaxParamsByUF(ctx context.Context, uf s
 }
 
 func (r *FiscalParamsRepositorySQLC) ListTaxParamsByItem(ctx context.Context, itemCode int64, onlyActive bool) ([]*fiscalEntity.ICMSIPITaxParam, error) {
-	rows, err := r.q.ListTaxParamsByItem(ctx, sqlc.ListTaxParamsByItemParams{ItemCode: &itemCode, Column2: onlyActive})
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListTaxParamsByItem(ctx, sqlc.ListTaxParamsByItemParams{ItemCode: &itemCode, Column2: onlyActive, EnterpriseID: emp})
 	if err != nil {
 		return nil, err
 	}
@@ -258,9 +306,14 @@ func (r *FiscalParamsRepositorySQLC) ListTaxParamsByItem(ctx context.Context, it
 }
 
 func (r *FiscalParamsRepositorySQLC) ListTaxParamsByNCM(ctx context.Context, ncmCode string, onlyActive bool) ([]*fiscalEntity.ICMSIPITaxParam, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.ListTaxParamsByNCM(ctx, sqlc.ListTaxParamsByNCMParams{
-		NcmCode: pgutil.ToPgTextFromString(ncmCode),
-		Column2: onlyActive,
+		NcmCode:      pgutil.ToPgTextFromString(ncmCode),
+		Column2:      onlyActive,
+		EnterpriseID: emp,
 	})
 	if err != nil {
 		return nil, err
@@ -787,10 +840,14 @@ func (r *FiscalParamsRepositorySQLC) ListICMSAdjustmentCodes(ctx context.Context
 // ─── ICMS Apuração Lines ──────────────────────────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateICMSApuracaoLine(ctx context.Context, l *fiscalEntity.ICMSApuracaoLine) (*fiscalEntity.ICMSApuracaoLine, error) {
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO icms_apuracao_lines (code, description, line_type, accepts_entries, nature, apuracao_adjustment_code_id, is_active)
-		 VALUES ($1,$2,$3,$4,$5,$6,TRUE) RETURNING id, created_at`,
-		l.Code, l.Description, string(l.LineType), l.AcceptsEntries, l.Nature, l.ApuracaoAdjCodeID,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
+		`INSERT INTO icms_apuracao_lines (code, description, line_type, accepts_entries, nature, apuracao_adjustment_code_id, is_active, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7) RETURNING id, created_at`,
+		l.Code, l.Description, string(l.LineType), l.AcceptsEntries, l.Nature, l.ApuracaoAdjCodeID, emp,
 	).Scan(&l.ID, &l.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating icms apuracao line: %w", err)
@@ -799,21 +856,32 @@ func (r *FiscalParamsRepositorySQLC) CreateICMSApuracaoLine(ctx context.Context,
 }
 
 func (r *FiscalParamsRepositorySQLC) UpdateICMSApuracaoLine(ctx context.Context, l *fiscalEntity.ICMSApuracaoLine) (*fiscalEntity.ICMSApuracaoLine, error) {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE icms_apuracao_lines SET description=$1, line_type=$2, accepts_entries=$3, nature=$4, apuracao_adjustment_code_id=$5, is_active=$6 WHERE id=$7`,
-		l.Description, string(l.LineType), l.AcceptsEntries, l.Nature, l.ApuracaoAdjCodeID, l.IsActive, l.ID)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE icms_apuracao_lines SET description=$1, line_type=$2, accepts_entries=$3, nature=$4, apuracao_adjustment_code_id=$5, is_active=$6 WHERE id=$7 AND enterprise_id=$8`,
+		l.Description, string(l.LineType), l.AcceptsEntries, l.Nature, l.ApuracaoAdjCodeID, l.IsActive, l.ID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating icms apuracao line %d: %w", l.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("linha %d da apuração de ICMS não encontrada", l.ID))
 	}
 	return l, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) GetICMSApuracaoLine(ctx context.Context, code string) (*fiscalEntity.ICMSApuracaoLine, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var l fiscalEntity.ICMSApuracaoLine
 	var lt string
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, code, description, line_type, accepts_entries, nature, apuracao_adjustment_code_id, is_active, created_at FROM icms_apuracao_lines WHERE code=$1`,
-		code).Scan(&l.ID, &l.Code, &l.Description, &lt, &l.AcceptsEntries, &l.Nature, &l.ApuracaoAdjCodeID, &l.IsActive, &l.CreatedAt)
+	err = r.pool.QueryRow(ctx,
+		`SELECT id, code, description, line_type, accepts_entries, nature, apuracao_adjustment_code_id, is_active, created_at FROM icms_apuracao_lines WHERE code=$1 AND enterprise_id=$2`,
+		code, emp).Scan(&l.ID, &l.Code, &l.Description, &lt, &l.AcceptsEntries, &l.Nature, &l.ApuracaoAdjCodeID, &l.IsActive, &l.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("linha %s da apuração de ICMS não encontrada", code))
@@ -825,12 +893,16 @@ func (r *FiscalParamsRepositorySQLC) GetICMSApuracaoLine(ctx context.Context, co
 }
 
 func (r *FiscalParamsRepositorySQLC) ListICMSApuracaoLines(ctx context.Context, onlyActive bool) ([]*fiscalEntity.ICMSApuracaoLine, error) {
-	q := `SELECT id, code, description, line_type, accepts_entries, nature, apuracao_adjustment_code_id, is_active, created_at FROM icms_apuracao_lines`
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT id, code, description, line_type, accepts_entries, nature, apuracao_adjustment_code_id, is_active, created_at FROM icms_apuracao_lines WHERE enterprise_id=$1`
 	if onlyActive {
-		q += ` WHERE is_active = TRUE`
+		q += ` AND is_active = TRUE`
 	}
 	q += ` ORDER BY code`
-	rows, err := r.pool.Query(ctx, q)
+	rows, err := r.pool.Query(ctx, q, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing icms apuracao lines: %w", err)
 	}
@@ -851,10 +923,14 @@ func (r *FiscalParamsRepositorySQLC) ListICMSApuracaoLines(ctx context.Context, 
 // ─── ICMS Summary Entries ─────────────────────────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateICMSSummaryEntry(ctx context.Context, e *fiscalEntity.ICMSSummaryEntry) (*fiscalEntity.ICMSSummaryEntry, error) {
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO icms_summary_entries (period, uf, cfop_id, icms_base, icms_value, icms_base_other, icms_value_other, is_active)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE) RETURNING id, created_at`,
-		e.Period, e.UF, e.CFOPID, e.ICMSBase, e.ICMSValue, e.ICMSBaseOther, e.ICMSValueOther,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
+		`INSERT INTO icms_summary_entries (period, uf, cfop_id, icms_base, icms_value, icms_base_other, icms_value_other, is_active, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8) RETURNING id, created_at`,
+		e.Period, e.UF, e.CFOPID, e.ICMSBase, e.ICMSValue, e.ICMSBaseOther, e.ICMSValueOther, emp,
 	).Scan(&e.ID, &e.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating icms summary entry: %w", err)
@@ -863,19 +939,30 @@ func (r *FiscalParamsRepositorySQLC) CreateICMSSummaryEntry(ctx context.Context,
 }
 
 func (r *FiscalParamsRepositorySQLC) UpdateICMSSummaryEntry(ctx context.Context, e *fiscalEntity.ICMSSummaryEntry) (*fiscalEntity.ICMSSummaryEntry, error) {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE icms_summary_entries SET icms_base=$1, icms_value=$2, icms_base_other=$3, icms_value_other=$4, is_active=$5 WHERE id=$6`,
-		e.ICMSBase, e.ICMSValue, e.ICMSBaseOther, e.ICMSValueOther, e.IsActive, e.ID)
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE icms_summary_entries SET icms_base=$1, icms_value=$2, icms_base_other=$3, icms_value_other=$4, is_active=$5 WHERE id=$6 AND enterprise_id=$7`,
+		e.ICMSBase, e.ICMSValue, e.ICMSBaseOther, e.ICMSValueOther, e.IsActive, e.ID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating icms summary entry %d: %w", e.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("totalizador de ICMS %d não encontrado", e.ID))
 	}
 	return e, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) GetICMSSummaryEntry(ctx context.Context, id int64) (*fiscalEntity.ICMSSummaryEntry, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var e fiscalEntity.ICMSSummaryEntry
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, period, uf, cfop_id, icms_base, icms_value, icms_base_other, icms_value_other, is_active, created_at FROM icms_summary_entries WHERE id=$1`, id).
+	err = r.pool.QueryRow(ctx,
+		`SELECT id, period, uf, cfop_id, icms_base, icms_value, icms_base_other, icms_value_other, is_active, created_at FROM icms_summary_entries WHERE id=$1 AND enterprise_id=$2`, id, emp).
 		Scan(&e.ID, &e.Period, &e.UF, &e.CFOPID, &e.ICMSBase, &e.ICMSValue, &e.ICMSBaseOther, &e.ICMSValueOther, &e.IsActive, &e.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -887,8 +974,12 @@ func (r *FiscalParamsRepositorySQLC) GetICMSSummaryEntry(ctx context.Context, id
 }
 
 func (r *FiscalParamsRepositorySQLC) ListICMSSummaryEntries(ctx context.Context, period string, uf string) ([]*fiscalEntity.ICMSSummaryEntry, error) {
-	q := `SELECT id, period, uf, cfop_id, icms_base, icms_value, icms_base_other, icms_value_other, is_active, created_at FROM icms_summary_entries WHERE 1=1`
-	args := []any{}
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT id, period, uf, cfop_id, icms_base, icms_value, icms_base_other, icms_value_other, is_active, created_at FROM icms_summary_entries WHERE enterprise_id=$1`
+	args := []any{emp}
 	if period != "" {
 		args = append(args, period)
 		q += fmt.Sprintf(" AND period=$%d", len(args))
@@ -915,21 +1006,32 @@ func (r *FiscalParamsRepositorySQLC) ListICMSSummaryEntries(ctx context.Context,
 }
 
 func (r *FiscalParamsRepositorySQLC) AddICMSSummaryEntryNote(ctx context.Context, n *fiscalEntity.ICMSSummaryEntryNote) (*fiscalEntity.ICMSSummaryEntryNote, error) {
-	err := r.pool.QueryRow(ctx,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO icms_summary_entry_notes (summary_entry_id, note_number, note_series, emitter_cnpj, issue_date, item_value, icms_base, icms_value, observation)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, created_at`,
-		n.SummaryEntryID, n.NoteNumber, n.NoteSeries, n.EmitterCNPJ, n.IssueDate, n.ItemValue, n.ICMSBase, n.ICMSValue, n.Observation,
+		 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9 WHERE EXISTS (SELECT 1 FROM icms_summary_entries s WHERE s.id = $1 AND s.enterprise_id = $10) RETURNING id, created_at`,
+		n.SummaryEntryID, n.NoteNumber, n.NoteSeries, n.EmitterCNPJ, n.IssueDate, n.ItemValue, n.ICMSBase, n.ICMSValue, n.Observation, emp,
 	).Scan(&n.ID, &n.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("totalizador de ICMS %d não encontrado", n.SummaryEntryID))
+		}
 		return nil, fmt.Errorf("adding icms summary entry note: %w", err)
 	}
 	return n, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) ListICMSSummaryEntryNotes(ctx context.Context, summaryEntryID int64) ([]*fiscalEntity.ICMSSummaryEntryNote, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, summary_entry_id, note_number, note_series, emitter_cnpj, issue_date, item_value, icms_base, icms_value, observation, created_at
-		 FROM icms_summary_entry_notes WHERE summary_entry_id=$1 ORDER BY issue_date`, summaryEntryID)
+		 FROM icms_summary_entry_notes WHERE summary_entry_id=$1 AND EXISTS (SELECT 1 FROM icms_summary_entries s WHERE s.id = $1 AND s.enterprise_id = $2) ORDER BY issue_date`, summaryEntryID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing icms summary entry notes: %w", err)
 	}
@@ -948,13 +1050,17 @@ func (r *FiscalParamsRepositorySQLC) ListICMSSummaryEntryNotes(ctx context.Conte
 // ─── Simples Nacional Apuração ────────────────────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateSimplesNacionalApuracao(ctx context.Context, s *fiscalEntity.SimplesNacionalApuracao) (*fiscalEntity.SimplesNacionalApuracao, error) {
-	err := r.pool.QueryRow(ctx,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO simples_nacional_apuracoes
-		 (period, annex, receita_interna, receita_externa, folha_pagamento, receita_bruta_12m, simples_recolhido, aliquota_nominal, aliquota_efetiva, aliquota_efetiva_icms, parcela_deduzir, observation, is_active)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE) RETURNING id, created_at`,
+		 (period, annex, receita_interna, receita_externa, folha_pagamento, receita_bruta_12m, simples_recolhido, aliquota_nominal, aliquota_efetiva, aliquota_efetiva_icms, parcela_deduzir, observation, is_active, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13) RETURNING id, created_at`,
 		s.Period, string(s.Annex), s.ReceitaInterna, s.ReceitaExterna, s.FolhaPagamento,
 		s.ReceitaBruta12M, s.SimplesRecolhido, s.AliquotaNominal, s.AliquotaEfetiva,
-		s.AliquotaEfetivaICMS, s.ParcelaDeduzir, s.Observation,
+		s.AliquotaEfetivaICMS, s.ParcelaDeduzir, s.Observation, emp,
 	).Scan(&s.ID, &s.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating simples nacional apuracao: %w", err)
@@ -963,25 +1069,36 @@ func (r *FiscalParamsRepositorySQLC) CreateSimplesNacionalApuracao(ctx context.C
 }
 
 func (r *FiscalParamsRepositorySQLC) UpdateSimplesNacionalApuracao(ctx context.Context, s *fiscalEntity.SimplesNacionalApuracao) (*fiscalEntity.SimplesNacionalApuracao, error) {
-	_, err := r.pool.Exec(ctx,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx,
 		`UPDATE simples_nacional_apuracoes
 		 SET receita_interna=$1, receita_externa=$2, folha_pagamento=$3, receita_bruta_12m=$4, simples_recolhido=$5,
 		     aliquota_nominal=$6, aliquota_efetiva=$7, aliquota_efetiva_icms=$8, parcela_deduzir=$9, observation=$10, is_active=$11
-		 WHERE id=$12`,
+		 WHERE id=$12 AND enterprise_id=$13`,
 		s.ReceitaInterna, s.ReceitaExterna, s.FolhaPagamento, s.ReceitaBruta12M, s.SimplesRecolhido,
-		s.AliquotaNominal, s.AliquotaEfetiva, s.AliquotaEfetivaICMS, s.ParcelaDeduzir, s.Observation, s.IsActive, s.ID)
+		s.AliquotaNominal, s.AliquotaEfetiva, s.AliquotaEfetivaICMS, s.ParcelaDeduzir, s.Observation, s.IsActive, s.ID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating simples nacional apuracao %d: %w", s.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("apuração do Simples Nacional %d não encontrada", s.ID))
 	}
 	return s, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) GetSimplesNacionalApuracao(ctx context.Context, period string, annex fiscalEntity.SimplesNacionalAnnex) (*fiscalEntity.SimplesNacionalApuracao, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var s fiscalEntity.SimplesNacionalApuracao
 	var ann string
-	err := r.pool.QueryRow(ctx,
+	err = r.pool.QueryRow(ctx,
 		`SELECT id, period, annex, receita_interna, receita_externa, folha_pagamento, receita_bruta_12m, simples_recolhido, aliquota_nominal, aliquota_efetiva, aliquota_efetiva_icms, parcela_deduzir, observation, is_active, created_at
-		 FROM simples_nacional_apuracoes WHERE period=$1 AND annex=$2`, period, string(annex)).
+		 FROM simples_nacional_apuracoes WHERE period=$1 AND annex=$2 AND enterprise_id=$3`, period, string(annex), emp).
 		Scan(&s.ID, &s.Period, &ann, &s.ReceitaInterna, &s.ReceitaExterna, &s.FolhaPagamento,
 			&s.ReceitaBruta12M, &s.SimplesRecolhido, &s.AliquotaNominal, &s.AliquotaEfetiva,
 			&s.AliquotaEfetivaICMS, &s.ParcelaDeduzir, &s.Observation, &s.IsActive, &s.CreatedAt)
@@ -996,11 +1113,15 @@ func (r *FiscalParamsRepositorySQLC) GetSimplesNacionalApuracao(ctx context.Cont
 }
 
 func (r *FiscalParamsRepositorySQLC) ListSimplesNacionalApuracoes(ctx context.Context, period string) ([]*fiscalEntity.SimplesNacionalApuracao, error) {
-	q := `SELECT id, period, annex, receita_interna, receita_externa, folha_pagamento, receita_bruta_12m, simples_recolhido, aliquota_nominal, aliquota_efetiva, aliquota_efetiva_icms, parcela_deduzir, observation, is_active, created_at FROM simples_nacional_apuracoes`
-	args := []any{}
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT id, period, annex, receita_interna, receita_externa, folha_pagamento, receita_bruta_12m, simples_recolhido, aliquota_nominal, aliquota_efetiva, aliquota_efetiva_icms, parcela_deduzir, observation, is_active, created_at FROM simples_nacional_apuracoes WHERE enterprise_id=$1`
+	args := []any{emp}
 	if period != "" {
 		args = append(args, period)
-		q += fmt.Sprintf(" WHERE period=$%d", len(args))
+		q += fmt.Sprintf(" AND period=$%d", len(args))
 	}
 	q += ` ORDER BY period, annex`
 	rows, err := r.pool.Query(ctx, q, args...)
@@ -1026,7 +1147,11 @@ func (r *FiscalParamsRepositorySQLC) ListSimplesNacionalApuracoes(ctx context.Co
 // ─── ICMS Reduction / Substitution / Deferral ────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) CreateICMSReductionSubstitution(ctx context.Context, rs *fiscalEntity.ICMSReductionSubstitution) (*fiscalEntity.ICMSReductionSubstitution, error) {
-	err := r.pool.QueryRow(ctx,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO icms_reduction_substitutions
 		 (item_id, item_mask, ncm_code, uf, operation_type, customer_id, establishment_id, supplier_id,
 		  invoice_type_out_id, invoice_type_in_id, market_segment_id, is_preferential,
@@ -1046,11 +1171,14 @@ func (r *FiscalParamsRepositorySQLC) CreateICMSReductionSubstitution(ctx context
 		  icms_add_pct_non_contrib, icms_add_type_non_contrib, icms_add_sum_aliq_non_contrib,
 		  icms_st_add_pct_contrib, icms_st_add_type_contrib, icms_st_add_pct_non_contrib, icms_st_add_type_non_contrib,
 		  fcp_partition_pct, difal_icms_red_pct, difal_icms_type, difal_purchase_red_pct,
-		  is_simples_optante, is_active)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+		  is_simples_optante, is_active, enterprise_id)
+		 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
 		         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,
 		         $38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,
-		         $55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66,$67,$68,$69,$70,$71,$72,TRUE)
+		         $55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66,$67,$68,$69,$70,$71,$72,$73,$74,TRUE,$75
+		  WHERE ($1::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.id = $1 AND i.enterprise_id = $75))
+		    AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.id = $6 AND c.enterprise_id = $75))
+		    AND ($8::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.id = $8 AND f.enterprise_id = $75))
 		 RETURNING id, created_at`,
 		pgutil.ToPgInt8Ptr(rs.ItemID), pgutil.ToPgTextFromPtr(rs.ItemMask), pgutil.ToPgTextFromPtr(rs.NCMCode),
 		rs.UF, string(rs.OperationType), pgutil.ToPgInt8Ptr(rs.CustomerID), pgutil.ToPgInt8Ptr(rs.EstablishmentID),
@@ -1085,16 +1213,23 @@ func (r *FiscalParamsRepositorySQLC) CreateICMSReductionSubstitution(ctx context
 		pgutil.ToPgNumericFromFloat64Ptr(rs.ICMSSTAddPctNonContrib), pgutil.ToPgTextFromPtr(rs.ICMSSTAddTypeNonContrib),
 		pgutil.ToPgNumericFromFloat64Ptr(rs.FCPPartitionPct),
 		pgutil.ToPgNumericFromFloat64Ptr(rs.DIFALICMSRedPct), pgutil.ToPgTextFromPtr(rs.DIFALICMSType),
-		pgutil.ToPgNumericFromFloat64Ptr(rs.DIFALPurchaseRedPct), rs.IsSimplesOptante,
+		pgutil.ToPgNumericFromFloat64Ptr(rs.DIFALPurchaseRedPct), rs.IsSimplesOptante, emp,
 	).Scan(&rs.ID, &rs.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError("item, cliente ou fornecedor da regra não encontrado nesta empresa")
+		}
 		return nil, fmt.Errorf("creating icms reduction substitution: %w", err)
 	}
 	return rs, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) UpdateICMSReductionSubstitution(ctx context.Context, rs *fiscalEntity.ICMSReductionSubstitution) (*fiscalEntity.ICMSReductionSubstitution, error) {
-	_, err := r.pool.Exec(ctx,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx,
 		`UPDATE icms_reduction_substitutions SET
 		  uf=$1, operation_type=$2, is_preferential=$3,
 		  icms_pct_contrib=$4, icms_pct_non_contrib=$5,
@@ -1106,7 +1241,7 @@ func (r *FiscalParamsRepositorySQLC) UpdateICMSReductionSubstitution(ctx context
 		  cst_ipi_out=$22, cst_ipi_in=$23, fiscal_benefit_code=$24,
 		  difal_icms_red_pct=$25, difal_icms_type=$26, difal_purchase_red_pct=$27,
 		  is_simples_optante=$28, is_active=$29
-		 WHERE id=$30`,
+		 WHERE id=$30 AND enterprise_id=$31`,
 		rs.UF, string(rs.OperationType), rs.IsPreferential,
 		pgutil.ToPgNumericFromFloat64Ptr(rs.ICMSPctContrib), pgutil.ToPgNumericFromFloat64Ptr(rs.ICMSPctNonContrib),
 		pgutil.ToPgNumericFromFloat64Ptr(rs.ICMSRedPctContrib), string(rs.ICMSRedTargetContrib),
@@ -1120,9 +1255,12 @@ func (r *FiscalParamsRepositorySQLC) UpdateICMSReductionSubstitution(ctx context
 		pgutil.ToPgTextFromPtr(rs.CSTIPIOut), pgutil.ToPgTextFromPtr(rs.CSTIPIIn),
 		pgutil.ToPgTextFromPtr(rs.FiscalBenefitCode),
 		pgutil.ToPgNumericFromFloat64Ptr(rs.DIFALICMSRedPct), pgutil.ToPgTextFromPtr(rs.DIFALICMSType),
-		pgutil.ToPgNumericFromFloat64Ptr(rs.DIFALPurchaseRedPct), rs.IsSimplesOptante, rs.IsActive, rs.ID)
+		pgutil.ToPgNumericFromFloat64Ptr(rs.DIFALPurchaseRedPct), rs.IsSimplesOptante, rs.IsActive, rs.ID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating icms reduction substitution %d: %w", rs.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("redução de ICMS por substituição %d não encontrada", rs.ID))
 	}
 	return rs, nil
 }
@@ -1130,7 +1268,11 @@ func (r *FiscalParamsRepositorySQLC) UpdateICMSReductionSubstitution(ctx context
 func (r *FiscalParamsRepositorySQLC) GetICMSReductionSubstitution(ctx context.Context, id int64) (*fiscalEntity.ICMSReductionSubstitution, error) {
 	var rs fiscalEntity.ICMSReductionSubstitution
 	var opType, redTargCtrib, redTargNonCtrib, defTarget, ipiRedTargCtrib, ipiRedTargNonCtrib string
-	err := r.pool.QueryRow(ctx,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`SELECT id, item_id, item_mask, ncm_code, uf, operation_type, customer_id, establishment_id, supplier_id,
 		 invoice_type_out_id, invoice_type_in_id, market_segment_id, is_preferential,
 		 icms_pct_contrib, icms_pct_non_contrib, icms_red_pct_contrib, icms_red_target_contrib,
@@ -1144,7 +1286,7 @@ func (r *FiscalParamsRepositorySQLC) GetICMSReductionSubstitution(ctx context.Co
 		 icms_add_pct_non_contrib, icms_add_type_non_contrib, icms_add_sum_aliq_non_contrib,
 		 fcp_partition_pct, difal_icms_red_pct, difal_icms_type, difal_purchase_red_pct,
 		 is_simples_optante, is_active, created_at
-		 FROM icms_reduction_substitutions WHERE id=$1`, id).
+		 FROM icms_reduction_substitutions WHERE id=$1 AND enterprise_id=$2`, id, emp).
 		Scan(&rs.ID, pgutil.ScanPgInt8Ptr(&rs.ItemID), pgutil.ScanPgTextPtr(&rs.ItemMask),
 			pgutil.ScanPgTextPtr(&rs.NCMCode), &rs.UF, &opType,
 			pgutil.ScanPgInt8Ptr(&rs.CustomerID), pgutil.ScanPgInt8Ptr(&rs.EstablishmentID),
@@ -1186,13 +1328,17 @@ func (r *FiscalParamsRepositorySQLC) GetICMSReductionSubstitution(ctx context.Co
 }
 
 func (r *FiscalParamsRepositorySQLC) ListICMSReductionSubstitutions(ctx context.Context, uf string, itemID *int64, onlyActive bool) ([]*fiscalEntity.ICMSReductionSubstitution, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	q := `SELECT id, uf, operation_type, item_id, item_mask, ncm_code, customer_id, is_preferential,
 		  icms_pct_contrib, icms_pct_non_contrib, icms_red_pct_contrib, icms_red_target_contrib,
 		  icms_red_pct_non_contrib, icms_red_target_non_contrib, icms_deferral_pct, icms_deferral_target,
 		  cst_icms_contrib, cst_icms_non_contrib, csosn_icms, cst_ipi_out, cst_ipi_in,
 		  fiscal_benefit_code, difal_icms_type, is_simples_optante, is_active, created_at
-		  FROM icms_reduction_substitutions WHERE uf=$1`
-	args := []any{uf}
+		  FROM icms_reduction_substitutions WHERE uf=$1 AND enterprise_id=$2`
+	args := []any{uf, emp}
 	if itemID != nil {
 		args = append(args, *itemID)
 		q += fmt.Sprintf(" AND item_id=$%d", len(args))
@@ -1235,6 +1381,10 @@ func (r *FiscalParamsRepositorySQLC) ListICMSReductionSubstitutions(ctx context.
 }
 
 func (r *FiscalParamsRepositorySQLC) FindICMSReductionSubstitution(ctx context.Context, uf string, itemID *int64, customerID *int64, opType fiscalEntity.ICMSOperationType) (*fiscalEntity.ICMSReductionSubstitution, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Priority: preferential > item+customer > item only > classification
 	q := `SELECT id, uf, operation_type, item_id, item_mask, ncm_code, customer_id, is_preferential,
 		  icms_pct_contrib, icms_pct_non_contrib, icms_red_pct_contrib, icms_red_target_contrib,
@@ -1242,8 +1392,8 @@ func (r *FiscalParamsRepositorySQLC) FindICMSReductionSubstitution(ctx context.C
 		  cst_icms_contrib, cst_icms_non_contrib, csosn_icms, cst_ipi_out, cst_ipi_in,
 		  fiscal_benefit_code, difal_icms_type, is_simples_optante, is_active, created_at
 		  FROM icms_reduction_substitutions
-		  WHERE uf=$1 AND (operation_type=$2 OR operation_type='AMBAS') AND is_active=TRUE`
-	args := []any{uf, string(opType)}
+		  WHERE uf=$1 AND (operation_type=$2 OR operation_type='AMBAS') AND is_active=TRUE AND enterprise_id=$3`
+	args := []any{uf, string(opType), emp}
 	if itemID != nil {
 		args = append(args, *itemID)
 		q += fmt.Sprintf(" AND (item_id=$%d OR item_id IS NULL)", len(args))
@@ -1255,7 +1405,7 @@ func (r *FiscalParamsRepositorySQLC) FindICMSReductionSubstitution(ctx context.C
 	q += " ORDER BY is_preferential DESC, (item_id IS NOT NULL) DESC, (customer_id IS NOT NULL) DESC LIMIT 1"
 	var rs fiscalEntity.ICMSReductionSubstitution
 	var opT, redTC, redTNC, defT, ipiTC, ipiTNC string
-	err := r.pool.QueryRow(ctx, q, args...).Scan(
+	err = r.pool.QueryRow(ctx, q, args...).Scan(
 		&rs.ID, &rs.UF, &opT, pgutil.ScanPgInt8Ptr(&rs.ItemID),
 		pgutil.ScanPgTextPtr(&rs.ItemMask), pgutil.ScanPgTextPtr(&rs.NCMCode),
 		pgutil.ScanPgInt8Ptr(&rs.CustomerID), &rs.IsPreferential,
@@ -1285,25 +1435,39 @@ func (r *FiscalParamsRepositorySQLC) FindICMSReductionSubstitution(ctx context.C
 // ─── ICMS Summary Entry Additionals ──────────────────────────────────────────
 
 func (r *FiscalParamsRepositorySQLC) AddICMSSummaryEntryAdditional(ctx context.Context, a *fiscalEntity.ICMSSummaryEntryAdditional) (*fiscalEntity.ICMSSummaryEntryAdditional, error) {
-	err := r.pool.QueryRow(ctx,
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx,
 		`INSERT INTO icms_summary_entry_additionals
 		 (summary_entry_id, sequence, arrecadacao_indicator, processo, arrecadacao, description, dief_table, dief_code)
-		 VALUES ($1, COALESCE((SELECT MAX(sequence)+1 FROM icms_summary_entry_additionals WHERE summary_entry_id=$1), 1), $2,$3,$4,$5,$6,$7)
+		 SELECT $1, COALESCE((SELECT MAX(sequence)+1 FROM icms_summary_entry_additionals WHERE summary_entry_id=$1), 1), $2,$3,$4,$5,$6,$7
+		  WHERE EXISTS (SELECT 1 FROM icms_summary_entries s WHERE s.id = $1 AND s.enterprise_id = $8)
 		 RETURNING id, sequence, created_at`,
 		a.SummaryEntryID, string(a.ArrecadacaoIndicator),
 		pgutil.ToPgTextFromPtr(a.Processo), pgutil.ToPgTextFromPtr(a.Arrecadacao),
-		pgutil.ToPgTextFromPtr(a.Description), pgutil.ToPgTextFromPtr(a.DIEFTable), pgutil.ToPgTextFromPtr(a.DIEFCode),
+		pgutil.ToPgTextFromPtr(a.Description), pgutil.ToPgTextFromPtr(a.DIEFTable), pgutil.ToPgTextFromPtr(a.DIEFCode), emp,
 	).Scan(&a.ID, &a.Sequence, &a.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("totalizador de ICMS %d não encontrado", a.SummaryEntryID))
+		}
 		return nil, fmt.Errorf("adding icms summary entry additional: %w", err)
 	}
 	return a, nil
 }
 
 func (r *FiscalParamsRepositorySQLC) ListICMSSummaryEntryAdditionals(ctx context.Context, summaryEntryID int64) ([]*fiscalEntity.ICMSSummaryEntryAdditional, error) {
+	emp, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, summary_entry_id, sequence, arrecadacao_indicator, processo, arrecadacao, description, dief_table, dief_code, created_at
-		 FROM icms_summary_entry_additionals WHERE summary_entry_id=$1 ORDER BY sequence`, summaryEntryID)
+		 FROM icms_summary_entry_additionals WHERE summary_entry_id=$1
+		  AND EXISTS (SELECT 1 FROM icms_summary_entries s WHERE s.id = $1 AND s.enterprise_id = $2)
+		 ORDER BY sequence`, summaryEntryID, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing icms summary entry additionals: %w", err)
 	}
@@ -1475,7 +1639,8 @@ func (r *FiscalParamsRepositorySQLC) CreateSpecialAdjustmentNote(ctx context.Con
 		 (empresa_id, purpose, status, number, series, issue_date, period, invoice_type_id, cfop_id,
 		  icms_apuracao_line_id, adjustment_code_id, adjustment_doc_code_id, history, auto_generate_summary,
 		  total_value, total_icms, total_ipi, observation)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+		 SELECT $1::integer,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
+		  WHERE ($10::bigint IS NULL OR EXISTS (SELECT 1 FROM icms_apuracao_lines l WHERE l.id = $10 AND l.enterprise_id = $1::integer))
 		 RETURNING id, created_at`,
 		n.EmpresaID, string(n.Purpose), string(n.Status),
 		pgutil.ToPgTextFromPtr(n.Number), pgutil.ToPgTextFromPtr(n.Series),
@@ -1486,6 +1651,9 @@ func (r *FiscalParamsRepositorySQLC) CreateSpecialAdjustmentNote(ctx context.Con
 		n.TotalValue, n.TotalICMS, n.TotalIPI, pgutil.ToPgTextFromPtr(n.Observation),
 	).Scan(&n.ID, &n.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError("linha da apuração de ICMS não encontrada nesta empresa")
+		}
 		return nil, fmt.Errorf("creating special adjustment note: %w", err)
 	}
 	return n, nil
@@ -1500,7 +1668,8 @@ func (r *FiscalParamsRepositorySQLC) UpdateSpecialAdjustmentNote(ctx context.Con
 		`UPDATE special_adjustment_notes SET
 		 status=$1, number=$2, series=$3, history=$4, total_value=$5, total_icms=$6, total_ipi=$7,
 		 generated_summary_entry_id=$8, observation=$9
-		 WHERE id=$10 AND empresa_id=$11`,
+		 WHERE id=$10 AND empresa_id=$11
+		   AND ($8::bigint IS NULL OR EXISTS (SELECT 1 FROM icms_summary_entries s WHERE s.id = $8 AND s.enterprise_id = $11))`,
 		string(n.Status), pgutil.ToPgTextFromPtr(n.Number), pgutil.ToPgTextFromPtr(n.Series),
 		pgutil.ToPgTextFromPtr(n.History), n.TotalValue, n.TotalICMS, n.TotalIPI,
 		pgutil.ToPgInt8Ptr(n.GeneratedSummaryEntryID), pgutil.ToPgTextFromPtr(n.Observation), n.ID, empresa)
@@ -1508,7 +1677,7 @@ func (r *FiscalParamsRepositorySQLC) UpdateSpecialAdjustmentNote(ctx context.Con
 		return nil, fmt.Errorf("updating special adjustment note %d: %w", n.ID, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota de ajuste especial %d não encontrada", n.ID))
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota de ajuste especial %d (ou o totalizador informado) não encontrada nesta empresa", n.ID))
 	}
 	return n, nil
 }

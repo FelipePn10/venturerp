@@ -9,8 +9,8 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -116,16 +116,16 @@ func (r *Rateio) Normalizar() {
 
 func (r *Rateio) Validar() error {
 	if r.RepresentativeCode <= 0 {
-		return errors.New("informe o representante da comissão")
+		return domainerr.NewValidation("informe o representante da comissão")
 	}
 	if !r.Role.Valido() {
-		return fmt.Errorf("papel de comissão inválido: %s", r.Role)
+		return domainerr.NewValidation(fmt.Sprintf("papel de comissão inválido: %s", r.Role))
 	}
 	if !r.CommissionBase.Valido() {
-		return fmt.Errorf("base de comissão inválida: %s", r.CommissionBase)
+		return domainerr.NewValidation(fmt.Sprintf("base de comissão inválida: %s", r.CommissionBase))
 	}
 	if r.CommissionPct.IsNegative() || r.CommissionPct.GreaterThan(decimal.NewFromInt(100)) {
-		return errors.New("o percentual de comissão deve estar entre 0 e 100")
+		return domainerr.NewValidation("o percentual de comissão deve estar entre 0 e 100")
 	}
 	return nil
 }
@@ -138,7 +138,7 @@ func ValidarRateio(linhas []*Rateio) error {
 		return nil
 	}
 	if len(linhas) > MaxRepresentantesPorDocumento {
-		return fmt.Errorf("são permitidos no máximo %d representantes por documento", MaxRepresentantesPorDocumento)
+		return domainerr.NewValidation(fmt.Sprintf("são permitidos no máximo %d representantes por documento", MaxRepresentantesPorDocumento))
 	}
 	principais := 0
 	vistos := map[int64]bool{}
@@ -148,7 +148,7 @@ func ValidarRateio(linhas []*Rateio) error {
 			return err
 		}
 		if vistos[l.RepresentativeCode] {
-			return fmt.Errorf("o representante %d aparece mais de uma vez no rateio", l.RepresentativeCode)
+			return domainerr.NewValidation(fmt.Sprintf("o representante %d aparece mais de uma vez no rateio", l.RepresentativeCode))
 		}
 		vistos[l.RepresentativeCode] = true
 		if l.Role == PapelPrincipal {
@@ -157,13 +157,13 @@ func ValidarRateio(linhas []*Rateio) error {
 		soma = soma.Add(l.CommissionPct)
 	}
 	if principais == 0 {
-		return errors.New("marque um representante como principal")
+		return domainerr.NewValidation("marque um representante como principal")
 	}
 	if principais > 1 {
-		return errors.New("só pode haver um representante principal no documento")
+		return domainerr.NewValidation("só pode haver um representante principal no documento")
 	}
 	if soma.GreaterThan(decimal.NewFromInt(100)) {
-		return fmt.Errorf("a soma das comissões (%s%%) passa de 100%%", soma.StringFixed(4))
+		return domainerr.NewValidation(fmt.Sprintf("a soma das comissões (%s%%) passa de 100%%", soma.StringFixed(4)))
 	}
 	return nil
 }

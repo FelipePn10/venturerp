@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -18,8 +17,7 @@ func (h *OverheadAllocationHandler) Routes() chi.Router {
 
 func (h *OverheadAllocationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateOverheadAllocationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)

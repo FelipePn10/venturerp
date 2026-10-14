@@ -1,3 +1,6 @@
+-- A estrutura (BOM) é da empresa do item PAI; o filho tem de ser da mesma
+-- empresa. Toda leitura e escrita confere items.enterprise_id.
+
 -- name: CreateStructureComponent :one
 INSERT INTO item_structures (
     parent_code,
@@ -31,17 +34,19 @@ INSERT INTO item_structures (
     generates_inspection,
     quantity_stock_uom,
     conversion_factor
-) VALUES (
+) SELECT
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
              $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
-         )
+      WHERE EXISTS (SELECT 1 FROM items pi WHERE pi.code = $1 AND pi.enterprise_id = $32)
+        AND EXISTS (SELECT 1 FROM items ci WHERE ci.code = $2 AND ci.enterprise_id = $32)
     RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor;
 
 
 -- name: GetStructureComponentByID :one
 SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor
 FROM item_structures
-WHERE id = $1;
+WHERE item_structures.id = $1
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2);
 
 
 -- name: GetAllDirectChildren :many
@@ -78,6 +83,7 @@ FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
   AND s.is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = s.parent_code AND pi.enterprise_id = $2)
 ORDER BY s.sequence, s.id;
 
 
@@ -87,6 +93,7 @@ FROM item_structures
 WHERE parent_code = $1
   AND parent_mask IS NULL
   AND is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2)
 ORDER BY sequence, id;
 
 
@@ -129,6 +136,7 @@ WHERE s.parent_code = $1
     s.parent_mask IS NULL
         OR s.parent_mask = $2
     )
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = s.parent_code AND pi.enterprise_id = $3)
 ORDER BY
     CASE WHEN s.parent_mask IS NOT NULL THEN 0 ELSE 1 END,
     s.sequence,
@@ -171,14 +179,16 @@ WHERE parent_code = $1
         OR (parent_mask IS NULL AND $3 IS NULL)
     )
   AND is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $30)
     RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor;
 
--- name: DeactivateStructureComponent :exec
+-- name: DeactivateStructureComponent :execrows
 UPDATE item_structures
 SET
     is_active  = FALSE,
     updated_at = NOW()
-WHERE id = $1;
+WHERE item_structures.id = $1
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2);
 
 -- name: DeactivateStructureComponentByCodes :execrows
 UPDATE item_structures AS structure
@@ -202,14 +212,14 @@ SELECT
     i.code::BIGINT AS code,
     i.pdm_description_technique AS description
 FROM items i
-WHERE i.code = $1
+WHERE i.code = $1 AND i.enterprise_id = $2
     LIMIT 1;
 
 -- name: ItemExists :one
 SELECT EXISTS (
     SELECT 1
     FROM items
-    WHERE code = $1
+    WHERE code = $1 AND enterprise_id = $2
 ) AS "exists";
 
 -- name: HasCyclicReference :one
@@ -222,4 +232,5 @@ SELECT EXISTS (
     WHERE parent_code = $1
       AND sequence    = $2
       AND is_active   = TRUE
+      AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $3)
 ) AS "exists";

@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,10 +41,10 @@ type PurchaseQuotation struct {
 
 func NewPurchaseQuotation(code, enterpriseCode int64, createdBy uuid.UUID) (*PurchaseQuotation, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if enterpriseCode == 0 {
-		return nil, fmt.Errorf("informe a empresa")
+		return nil, domainerr.NewValidation("informe a empresa")
 	}
 	now := time.Now()
 	return &PurchaseQuotation{

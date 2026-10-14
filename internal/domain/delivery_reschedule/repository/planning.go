@@ -2,16 +2,16 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/google/uuid"
 )
 
-var ErrOrderNotFound = errors.New("pedido de venda não encontrado")
-var ErrBatchConflict = errors.New("esta chave de controle de duplicidade já foi usada com outros dados")
-var ErrLinePrecondition = errors.New("a linha da reprogramação de entrega não atende às condições necessárias")
+var ErrOrderNotFound = domainerr.NewNotFound("pedido de venda não encontrado")
+var ErrBatchConflict = domainerr.NewConflict("esta chave de controle de duplicidade já foi usada com outros dados")
+var ErrLinePrecondition = domainerr.NewValidation("a linha da reprogramação de entrega não atende às condições necessárias")
 
 type PlanningItem struct {
 	SalesOrderItemCode   int64                `json:"sales_order_item_code"`

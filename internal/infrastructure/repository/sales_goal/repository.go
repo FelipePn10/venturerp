@@ -9,8 +9,19 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/entity"
 	goalrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_goal/repository"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Período, meta, meta de grupo e saldo são da empresa da sessão
+// (enterprise_code, convenção comercial). Itens da meta e clientes da meta de
+// grupo seguem o pai. Representante, período e cliente citados têm de ser da
+// mesma empresa.
+const (
+	periodoDaEmpresa       = `EXISTS (SELECT 1 FROM public.sales_goal_periods sp WHERE sp.code = %s AND sp.enterprise_code = %s)`
+	representanteDaEmpresa = `EXISTS (SELECT 1 FROM public.representatives sr WHERE sr.code = %s AND sr.enterprise_code = %s)`
+	clienteDaEmpresa       = `EXISTS (SELECT 1 FROM public.customers sc JOIN public.enterprise se ON se.id = sc.enterprise_id WHERE sc.code = %s AND se.code = %s)`
 )
 
 type Repository struct {
@@ -22,15 +33,23 @@ func New(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) CreatePeriod(ctx context.Context, p *entity.Period) (*entity.Period, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_periods (description,period_type,start_date,end_date,is_active)
-VALUES ($1,$2,$3,$4,$5)
-RETURNING code,description,period_type,start_date,end_date,is_active,created_at,updated_at`, p.Description, p.PeriodType, p.StartDate, p.EndDate, p.IsActive)
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_periods (description,period_type,start_date,end_date,is_active,enterprise_code)
+VALUES ($1,$2,$3,$4,$5,$6)
+RETURNING code,description,period_type,start_date,end_date,is_active,created_at,updated_at`, p.Description, p.PeriodType, p.StartDate, p.EndDate, p.IsActive, emp)
 	return scanPeriod(row)
 }
 
 func (r *Repository) ListPeriods(ctx context.Context, filter goalrepo.PeriodFilter) ([]*entity.Period, error) {
-	sqlText := `SELECT code,description,period_type,start_date,end_date,is_active,created_at,updated_at FROM public.sales_goal_periods WHERE TRUE`
-	args := []any{}
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sqlText := `SELECT code,description,period_type,start_date,end_date,is_active,created_at,updated_at FROM public.sales_goal_periods WHERE enterprise_code=$1`
+	args := []any{emp}
 	add := func(clause string, arg any) {
 		args = append(args, arg)
 		sqlText += fmt.Sprintf(" AND "+clause, len(args))
@@ -62,26 +81,53 @@ func (r *Repository) ListPeriods(ctx context.Context, filter goalrepo.PeriodFilt
 }
 
 func (r *Repository) GetPeriod(ctx context.Context, code int64) (*entity.Period, error) {
-	row := r.pool.QueryRow(ctx, `SELECT code,description,period_type,start_date,end_date,is_active,created_at,updated_at FROM public.sales_goal_periods WHERE code=$1`, code)
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `SELECT code,description,period_type,start_date,end_date,is_active,created_at,updated_at FROM public.sales_goal_periods WHERE code=$1 AND enterprise_code=$2`, code, emp)
 	return scanPeriod(row)
 }
 
 func (r *Repository) CreateGoal(ctx context.Context, g *entity.Goal) (*entity.Goal, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goals (representative_code,period_code,analysis_base,award_pct,notes,is_active)
-VALUES ($1,$2,$3,$4,$5,$6)
-RETURNING code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at`, g.RepresentativeCode, g.PeriodCode, g.AnalysisBase, g.AwardPct, g.Notes, g.IsActive)
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goals (representative_code,period_code,analysis_base,award_pct,notes,is_active,enterprise_code)
+SELECT $1,$2,$3,$4,$5,$6,$7::bigint
+ WHERE `+fmt.Sprintf(representanteDaEmpresa, "$1", "$7::bigint")+` AND `+fmt.Sprintf(periodoDaEmpresa, "$2", "$7::bigint")+`
+RETURNING code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at`, g.RepresentativeCode, g.PeriodCode, g.AnalysisBase, g.AwardPct, g.Notes, g.IsActive, emp)
 	return scanGoal(row)
 }
 
 func (r *Repository) UpdateGoal(ctx context.Context, g *entity.Goal) (*entity.Goal, error) {
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Representante e período novos são conferidos antes (o UPDATE não pode
+	// reaproveitar no WHERE os parâmetros do SET).
+	var ok bool
+	if err := r.pool.QueryRow(ctx, `SELECT `+fmt.Sprintf(representanteDaEmpresa, "$1::bigint", "$3::bigint")+` AND `+fmt.Sprintf(periodoDaEmpresa, "$2::bigint", "$3::bigint"),
+		g.RepresentativeCode, g.PeriodCode, emp).Scan(&ok); err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errorsuc.NewNotFoundError("representante ou período não encontrado nesta empresa")
+	}
 	row := r.pool.QueryRow(ctx, `UPDATE public.sales_goals SET representative_code=$2,period_code=$3,analysis_base=$4,award_pct=$5,notes=$6,is_active=$7,updated_at=NOW()
-WHERE code=$1
-RETURNING code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at`, g.Code, g.RepresentativeCode, g.PeriodCode, g.AnalysisBase, g.AwardPct, g.Notes, g.IsActive)
+WHERE code=$1 AND enterprise_code=$8
+RETURNING code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at`, g.Code, g.RepresentativeCode, g.PeriodCode, g.AnalysisBase, g.AwardPct, g.Notes, g.IsActive, emp)
 	return scanGoal(row)
 }
 
 func (r *Repository) GetGoal(ctx context.Context, code int64) (*entity.Goal, error) {
-	row := r.pool.QueryRow(ctx, `SELECT code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at FROM public.sales_goals WHERE code=$1`, code)
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `SELECT code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at FROM public.sales_goals WHERE code=$1 AND enterprise_code=$2`, code, emp)
 	g, err := scanGoal(row)
 	if err != nil {
 		return nil, err
@@ -91,8 +137,12 @@ func (r *Repository) GetGoal(ctx context.Context, code int64) (*entity.Goal, err
 }
 
 func (r *Repository) ListGoals(ctx context.Context, filter goalrepo.GoalFilter) ([]*entity.Goal, error) {
-	sqlText := `SELECT code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at FROM public.sales_goals WHERE TRUE`
-	args := []any{}
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sqlText := `SELECT code,representative_code,period_code,analysis_base,award_pct,notes,is_active,created_at,updated_at FROM public.sales_goals WHERE enterprise_code=$1`
+	args := []any{emp}
 	add := func(clause string, arg any) {
 		args = append(args, arg)
 		sqlText += fmt.Sprintf(" AND "+clause, len(args))
@@ -127,41 +177,70 @@ func (r *Repository) ListGoals(ctx context.Context, filter goalrepo.GoalFilter) 
 }
 
 func (r *Repository) AddGoalItem(ctx context.Context, item *entity.GoalItem) (*entity.GoalItem, error) {
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_items (goal_code,target_type,item_code,item_classification_code,item_group_code,sales_uom,target_quantity,target_value,bonus_pct,is_active)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+ WHERE EXISTS (SELECT 1 FROM public.sales_goals g WHERE g.code = $1 AND g.enterprise_code = $11)
 RETURNING id,goal_code,target_type,item_code,item_classification_code,item_group_code,sales_uom,target_quantity,target_value,bonus_pct,is_active,created_at,updated_at`,
-		item.GoalCode, item.TargetType, item.ItemCode, item.ItemClassificationCode, item.ItemGroupCode, item.SalesUOM, item.TargetQuantity, item.TargetValue, item.BonusPct, item.IsActive)
+		item.GoalCode, item.TargetType, item.ItemCode, item.ItemClassificationCode, item.ItemGroupCode, item.SalesUOM, item.TargetQuantity, item.TargetValue, item.BonusPct, item.IsActive, emp)
 	return scanItem(row)
 }
 
 func (r *Repository) UpsertGroupTarget(ctx context.Context, target *entity.GroupTarget) (*entity.GroupTarget, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_group_targets (period_code,commercial_group_code,goal_type,minimum_value,minimum_bonus_pct,probable_value,probable_bonus_pct,ideal_value,ideal_bonus_pct,is_active)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-ON CONFLICT (period_code,commercial_group_code,goal_type) DO UPDATE SET minimum_value=$4,minimum_bonus_pct=$5,probable_value=$6,probable_bonus_pct=$7,ideal_value=$8,ideal_bonus_pct=$9,is_active=$10,updated_at=NOW()
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_group_targets (period_code,commercial_group_code,goal_type,minimum_value,minimum_bonus_pct,probable_value,probable_bonus_pct,ideal_value,ideal_bonus_pct,is_active,enterprise_code)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::bigint
+ WHERE `+fmt.Sprintf(periodoDaEmpresa, "$1", "$11::bigint")+`
+ON CONFLICT (enterprise_code,period_code,commercial_group_code,goal_type) DO UPDATE SET minimum_value=$4,minimum_bonus_pct=$5,probable_value=$6,probable_bonus_pct=$7,ideal_value=$8,ideal_bonus_pct=$9,is_active=$10,updated_at=NOW()
 RETURNING id,period_code,commercial_group_code,goal_type,minimum_value,minimum_bonus_pct,probable_value,probable_bonus_pct,ideal_value,ideal_bonus_pct,is_active,created_at,updated_at`,
-		target.PeriodCode, target.CommercialGroupCode, target.GoalType, target.MinimumValue, target.MinimumBonusPct, target.ProbableValue, target.ProbableBonusPct, target.IdealValue, target.IdealBonusPct, target.IsActive)
+		target.PeriodCode, target.CommercialGroupCode, target.GoalType, target.MinimumValue, target.MinimumBonusPct, target.ProbableValue, target.ProbableBonusPct, target.IdealValue, target.IdealBonusPct, target.IsActive, emp)
 	return scanGroupTarget(row)
 }
 
 func (r *Repository) AddGroupCustomer(ctx context.Context, customer *entity.GroupCustomer) (*entity.GroupCustomer, error) {
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_group_customers (group_goal_id,customer_code,representative_code,minimum_value,minimum_bonus_pct,probable_value,probable_bonus_pct,ideal_value,ideal_bonus_pct,is_active)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+ WHERE EXISTS (SELECT 1 FROM public.sales_goal_group_targets t WHERE t.id = $1 AND t.enterprise_code = $11::bigint)
+   AND `+fmt.Sprintf(clienteDaEmpresa, "$2", "$11::bigint")+`
+   AND ($3::bigint IS NULL OR `+fmt.Sprintf(representanteDaEmpresa, "$3", "$11::bigint")+`)
 ON CONFLICT (group_goal_id,customer_code) DO UPDATE SET representative_code=$3,minimum_value=$4,minimum_bonus_pct=$5,probable_value=$6,probable_bonus_pct=$7,ideal_value=$8,ideal_bonus_pct=$9,is_active=$10,updated_at=NOW()
 RETURNING id,group_goal_id,customer_code,representative_code,minimum_value,minimum_bonus_pct,probable_value,probable_bonus_pct,ideal_value,ideal_bonus_pct,is_active,created_at,updated_at`,
-		customer.GroupGoalID, customer.CustomerCode, customer.RepresentativeCode, customer.MinimumValue, customer.MinimumBonusPct, customer.ProbableValue, customer.ProbableBonusPct, customer.IdealValue, customer.IdealBonusPct, customer.IsActive)
+		customer.GroupGoalID, customer.CustomerCode, customer.RepresentativeCode, customer.MinimumValue, customer.MinimumBonusPct, customer.ProbableValue, customer.ProbableBonusPct, customer.IdealValue, customer.IdealBonusPct, customer.IsActive, emp)
 	return scanGroupCustomer(row)
 }
 
 func (r *Repository) UpsertBalance(ctx context.Context, balance *entity.Balance) (*entity.Balance, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_balances (period_code,next_period_code,balance_scope,representative_code,commercial_group_code,customer_code,goal_type,realized_value,ideal_value,balance_value,notes)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO public.sales_goal_balances (period_code,next_period_code,balance_scope,representative_code,commercial_group_code,customer_code,goal_type,realized_value,ideal_value,balance_value,notes,enterprise_code)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::bigint
+ WHERE `+fmt.Sprintf(periodoDaEmpresa, "$1", "$12::bigint")+`
+   AND ($2::bigint IS NULL OR `+fmt.Sprintf(periodoDaEmpresa, "$2", "$12::bigint")+`)
+   AND ($4::bigint IS NULL OR `+fmt.Sprintf(representanteDaEmpresa, "$4", "$12::bigint")+`)
+   AND ($6::bigint IS NULL OR `+fmt.Sprintf(clienteDaEmpresa, "$6", "$12::bigint")+`)
 RETURNING id,period_code,next_period_code,balance_scope,representative_code,commercial_group_code,customer_code,goal_type,realized_value,ideal_value,balance_value,notes,created_at,updated_at`,
-		balance.PeriodCode, balance.NextPeriodCode, balance.BalanceScope, balance.RepresentativeCode, balance.CommercialGroupCode, balance.CustomerCode, balance.GoalType, balance.RealizedValue, balance.IdealValue, balance.BalanceValue, balance.Notes)
+		balance.PeriodCode, balance.NextPeriodCode, balance.BalanceScope, balance.RepresentativeCode, balance.CommercialGroupCode, balance.CustomerCode, balance.GoalType, balance.RealizedValue, balance.IdealValue, balance.BalanceValue, balance.Notes, emp)
 	return scanBalance(row)
 }
 
 func (r *Repository) Report(ctx context.Context, filter goalrepo.ReportFilter) ([]goalrepo.ReportRow, error) {
-	sqlText, args := reportSQL(filter)
+	emp, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sqlText, args := reportSQL(filter, emp)
 	rows, err := r.pool.Query(ctx, sqlText, args...)
 	if err != nil {
 		return nil, err
@@ -184,6 +263,7 @@ func (r *Repository) Report(ctx context.Context, filter goalrepo.ReportFilter) (
 }
 
 func (r *Repository) listItems(ctx context.Context, goalCode int64) ([]*entity.GoalItem, error) {
+	// Só é chamado depois de GetGoal ter achado a meta na empresa da sessão.
 	rows, err := r.pool.Query(ctx, `SELECT id,goal_code,target_type,item_code,item_classification_code,item_group_code,sales_uom,target_quantity,target_value,bonus_pct,is_active,created_at,updated_at FROM public.sales_goal_items WHERE goal_code=$1 ORDER BY id`, goalCode)
 	if err != nil {
 		return nil, err
@@ -200,15 +280,16 @@ func (r *Repository) listItems(ctx context.Context, goalCode int64) ([]*entity.G
 	return out, rows.Err()
 }
 
-func reportSQL(filter goalrepo.ReportFilter) (string, []any) {
-	args := []any{}
+func reportSQL(filter goalrepo.ReportFilter, empresa int64) (string, []any) {
+	// $1 é a empresa: metas, saldos E os pedidos que contam como realizado.
+	args := []any{empresa}
 	add := func(where *string, clause string, arg any) {
 		args = append(args, arg)
 		*where += fmt.Sprintf(" AND "+clause, len(args))
 	}
-	goalWhere := "WHERE g.is_active=TRUE"
-	groupWhere := "WHERE gt.is_active=TRUE"
-	orderWhere := "WHERE so.is_active=TRUE AND so.status <> 'C'"
+	goalWhere := "WHERE g.is_active=TRUE AND g.enterprise_code=$1"
+	groupWhere := "WHERE gt.is_active=TRUE AND gt.enterprise_code=$1"
+	orderWhere := "WHERE so.is_active=TRUE AND so.status <> 'C' AND so.enterprise_code=$1"
 	if filter.RepresentativeCode != nil {
 		add(&goalWhere, "g.representative_code=$%d", *filter.RepresentativeCode)
 		add(&orderWhere, "so.representative_code=$%d", *filter.RepresentativeCode)
@@ -218,12 +299,12 @@ func reportSQL(filter goalrepo.ReportFilter) (string, []any) {
 		add(&groupWhere, "EXISTS (SELECT 1 FROM public.sales_goal_group_customers gc_filter WHERE gc_filter.group_goal_id=gt.id AND gc_filter.customer_code=$%d)", *filter.CustomerCode)
 	}
 	if filter.RegionCode != nil {
-		add(&goalWhere, "EXISTS (SELECT 1 FROM public.representative_regions rr_filter WHERE rr_filter.representative_code=g.representative_code AND rr_filter.is_active=TRUE AND rr_filter.region_code=$%d)", *filter.RegionCode)
-		add(&groupWhere, "EXISTS (SELECT 1 FROM public.sales_goal_group_customers gc_filter JOIN public.representative_regions rr_filter ON rr_filter.representative_code=gc_filter.representative_code WHERE gc_filter.group_goal_id=gt.id AND rr_filter.is_active=TRUE AND rr_filter.region_code=$%d)", *filter.RegionCode)
+		add(&goalWhere, "EXISTS (SELECT 1 FROM public.representative_regions rr_filter WHERE rr_filter.representative_code=g.representative_code AND rr_filter.is_active=TRUE AND rr_filter.enterprise_code=$1 AND rr_filter.region_code=$%d)", *filter.RegionCode)
+		add(&groupWhere, "EXISTS (SELECT 1 FROM public.sales_goal_group_customers gc_filter JOIN public.representative_regions rr_filter ON rr_filter.representative_code=gc_filter.representative_code WHERE gc_filter.group_goal_id=gt.id AND rr_filter.is_active=TRUE AND rr_filter.enterprise_code=$1 AND rr_filter.region_code=$%d)", *filter.RegionCode)
 	}
 	if filter.MicroregionCode != nil {
-		add(&goalWhere, "EXISTS (SELECT 1 FROM public.representative_regions rr_filter WHERE rr_filter.representative_code=g.representative_code AND rr_filter.is_active=TRUE AND rr_filter.microregion_code=$%d)", *filter.MicroregionCode)
-		add(&groupWhere, "EXISTS (SELECT 1 FROM public.sales_goal_group_customers gc_filter JOIN public.representative_regions rr_filter ON rr_filter.representative_code=gc_filter.representative_code WHERE gc_filter.group_goal_id=gt.id AND rr_filter.is_active=TRUE AND rr_filter.microregion_code=$%d)", *filter.MicroregionCode)
+		add(&goalWhere, "EXISTS (SELECT 1 FROM public.representative_regions rr_filter WHERE rr_filter.representative_code=g.representative_code AND rr_filter.is_active=TRUE AND rr_filter.enterprise_code=$1 AND rr_filter.microregion_code=$%d)", *filter.MicroregionCode)
+		add(&groupWhere, "EXISTS (SELECT 1 FROM public.sales_goal_group_customers gc_filter JOIN public.representative_regions rr_filter ON rr_filter.representative_code=gc_filter.representative_code WHERE gc_filter.group_goal_id=gt.id AND rr_filter.is_active=TRUE AND rr_filter.enterprise_code=$1 AND rr_filter.microregion_code=$%d)", *filter.MicroregionCode)
 	}
 	if filter.PeriodCode != nil {
 		add(&goalWhere, "g.period_code=$%d", *filter.PeriodCode)
@@ -260,7 +341,7 @@ SELECT 'REPRESENTATIVE'::text AS scope, g.representative_code, NULL::bigint AS c
        COALESCE(SUM(gi.target_quantity),0) AS target_quantity,
        COALESCE((SELECT SUM(o.realized_value) FROM orders o WHERE o.representative_code=g.representative_code AND o.ref_date BETWEEN p.start_date AND p.end_date),0) AS realized_value,
        COALESCE((SELECT SUM(o.realized_quantity) FROM orders o WHERE o.representative_code=g.representative_code AND o.ref_date BETWEEN p.start_date AND p.end_date),0) AS realized_quantity,
-       COALESCE((SELECT SUM(b.balance_value) FROM public.sales_goal_balances b WHERE b.period_code=p.code AND b.representative_code=g.representative_code AND b.goal_type=g.analysis_base),0) AS balance_value,
+       COALESCE((SELECT SUM(b.balance_value) FROM public.sales_goal_balances b WHERE b.enterprise_code=$1 AND b.period_code=p.code AND b.representative_code=g.representative_code AND b.goal_type=g.analysis_base),0) AS balance_value,
        GREATEST(g.award_pct, COALESCE(MAX(gi.bonus_pct),0)) AS bonus_pct
 FROM public.sales_goals g
 JOIN public.sales_goal_periods p ON p.code=g.period_code
@@ -273,7 +354,7 @@ SELECT 'GROUP'::text AS scope, NULL::bigint AS representative_code, gt.commercia
        pg.code AS period_code, pg.description AS period_description, gt.goal_type AS analysis_base,
        gt.ideal_value AS target_value, 0::numeric AS target_quantity,
        COALESCE(SUM(o.realized_value),0) AS realized_value, COALESCE(SUM(o.realized_quantity),0) AS realized_quantity,
-       COALESCE((SELECT SUM(b.balance_value) FROM public.sales_goal_balances b WHERE b.period_code=pg.code AND b.commercial_group_code=gt.commercial_group_code AND b.goal_type=gt.goal_type),0) AS balance_value,
+       COALESCE((SELECT SUM(b.balance_value) FROM public.sales_goal_balances b WHERE b.enterprise_code=$1 AND b.period_code=pg.code AND b.commercial_group_code=gt.commercial_group_code AND b.goal_type=gt.goal_type),0) AS balance_value,
        CASE WHEN COALESCE(SUM(o.realized_value),0) >= gt.ideal_value THEN gt.ideal_bonus_pct WHEN COALESCE(SUM(o.realized_value),0) >= gt.probable_value THEN gt.probable_bonus_pct WHEN COALESCE(SUM(o.realized_value),0) >= gt.minimum_value THEN gt.minimum_bonus_pct ELSE 0 END AS bonus_pct
 FROM public.sales_goal_group_targets gt
 JOIN public.sales_goal_periods pg ON pg.code=gt.period_code

@@ -103,7 +103,10 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 		return nil, fmt.Errorf("fetching route operations: %w", err)
 	}
 
-	entraPorEtapa := uc.quantidadePorEtapa(ctx, orderID, routeID, ops)
+	entraPorEtapa, err := uc.quantidadePorEtapa(ctx, orderID, routeID, ops)
+	if err != nil {
+		return nil, err
+	}
 	if uc.Routing != nil {
 		route, err := uc.Routing.GetRouteByID(ctx, routeID)
 		if err != nil {
@@ -196,9 +199,14 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 // concluído antes de começar.
 func (uc *OrderOperationsUseCase) quantidadePorEtapa(
 	ctx context.Context, orderID, routeID int64, ops []sqlc.DBRouteOpForExplode,
-) map[int64]float64 {
+) (map[int64]float64, error) {
+	// Sem quantidade apontada ainda, a proporção parte de 1 (o roteiro só
+	// distribui); falha de leitura é erro, não "1".
 	boas, _, err := uc.Q.GetProductionOrderQty(ctx, orderID)
-	if err != nil || boas <= 0 {
+	if err != nil {
+		return nil, fmt.Errorf("lendo a quantidade da ordem: %w", err)
+	}
+	if boas <= 0 {
 		boas = 1
 	}
 
@@ -210,14 +218,16 @@ func (uc *OrderOperationsUseCase) quantidadePorEtapa(
 	}
 
 	var arestas []*routingentity.NetworkEdge
-	if edges, errRede := uc.Q.GetRouteNetworkForExplode(ctx, routeID); errRede == nil {
-		for _, e := range edges {
-			arestas = append(arestas, &routingentity.NetworkEdge{
-				PredecessorID: e.PredecessorID, SuccessorID: e.SuccessorID, OverlapPct: e.OverlapPct,
-			})
-		}
+	edges, err := uc.Q.GetRouteNetworkForExplode(ctx, routeID)
+	if err != nil {
+		return nil, fmt.Errorf("lendo a rede do roteiro: %w", err)
 	}
-	return routingentity.QuantidadePorOperacao(etapas, arestas, boas)
+	for _, e := range edges {
+		arestas = append(arestas, &routingentity.NetworkEdge{
+			PredecessorID: e.PredecessorID, SuccessorID: e.SuccessorID, OverlapPct: e.OverlapPct,
+		})
+	}
+	return routingentity.QuantidadePorOperacao(etapas, arestas, boas), nil
 }
 
 // abrirInspecoesDaOrdem cria um registro de inspeção PENDENTE para cada etapa
@@ -280,6 +290,7 @@ func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 			// esperando o inspetor. Quem preenche é a tela de qualidade.
 			InspectedQty: 0,
 			Result:       sqlc.InspectionResultEnum("PENDENTE"),
+			EnterpriseID: empresa,
 		})
 		if err != nil {
 			return nil, err
@@ -419,7 +430,11 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 // vida. É consulta de aviso: falhar aqui não pode impedir o operador de
 // começar a etapa — a ordem existe, o alerta é um cuidado sobre ela.
 func (uc *OrderOperationsUseCase) ferramentasVencidas(ctx context.Context, routeOpID int64) []string {
-	tools, err := uc.Q.ListToolsByRouteOp(ctx, routeOpID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil
+	}
+	tools, err := uc.Q.ListToolsByRouteOp(ctx, sqlc.ListToolsByRouteOpParams{RouteOperationID: routeOpID, EnterpriseID: empresa})
 	if err != nil {
 		return nil
 	}
@@ -443,7 +458,11 @@ func (uc *OrderOperationsUseCase) ferramentasVencidas(ctx context.Context, route
 // sheet has bound a physical serial to this operation/tool, the same amount is
 // charged to that serial too, so per-instance wear stays in sync with the master.
 func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, operationID, routeOpID int64, produced, hours float64) ([]string, error) {
-	tools, err := uc.Q.ListToolsByRouteOp(ctx, routeOpID)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tools, err := uc.Q.ListToolsByRouteOp(ctx, sqlc.ListToolsByRouteOpParams{RouteOperationID: routeOpID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +485,9 @@ func (uc *OrderOperationsUseCase) consumeToolLife(ctx context.Context, operation
 		// Charge the physical serial bound to this operation/tool, if any.
 		if binding, err := uc.Q.GetOperationToolSerial(ctx, sqlc.GetOperationToolSerialParams{
 			OperationID: operationID, ToolID: t.ToolID,
-		}); err == nil {
+		}); err != nil && !errorsuc.EhNaoEncontrado(err) {
+			return nil, fmt.Errorf("lendo o número de série da ferramenta %d: %w", t.ToolID, err)
+		} else if err == nil {
 			_, err = uc.Q.ConsumeToolSerialLife(ctx, sqlc.ConsumeToolSerialLifeParams{
 				ID:       binding.ToolSerialID,
 				LifeUsed: pgutil.ToPgNumericFromFloat64(amount),

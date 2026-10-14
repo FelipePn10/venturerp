@@ -158,10 +158,11 @@ const getToolSheetOrder = `SELECT po.id, po.order_number, pl.order_type::text, p
 FROM production_orders po
 LEFT JOIN planned_orders pl ON pl.id = po.planned_order_id
 LEFT JOIN items i ON i.code = po.item_code
-WHERE po.id = $1`
+WHERE po.id = $1 AND po.enterprise_id = $2`
 
-func (q *Queries) GetToolSheetOrder(ctx context.Context, orderID int64) (DBToolSheetOrder, error) {
-	row := q.db.QueryRow(ctx, getToolSheetOrder, orderID)
+// GetToolSheetOrder lê a ordem só se for da empresa informada.
+func (q *Queries) GetToolSheetOrder(ctx context.Context, orderID, enterpriseID int64) (DBToolSheetOrder, error) {
+	row := q.db.QueryRow(ctx, getToolSheetOrder, orderID, enterpriseID)
 	return scanToolSheetOrder(row)
 }
 
@@ -173,7 +174,7 @@ const listEligibleSheetOrders = `SELECT po.id, po.order_number, pl.order_type::t
 FROM production_orders po
 LEFT JOIN planned_orders pl ON pl.id = po.planned_order_id
 LEFT JOIN items i ON i.code = po.item_code
-WHERE po.is_active = TRUE
+WHERE po.is_active = TRUE AND po.enterprise_id = $2
   AND (pl.order_type IS NULL OR pl.order_type <> 'OUTSOURCING')
   AND ($1::text = '' OR po.order_number::text ILIKE '%' || $1 || '%'
         OR po.item_code::text ILIKE '%' || $1 || '%'
@@ -181,8 +182,8 @@ WHERE po.is_active = TRUE
 ORDER BY po.order_number DESC
 LIMIT 200`
 
-func (q *Queries) ListEligibleSheetOrders(ctx context.Context, search string) ([]DBToolSheetOrder, error) {
-	rows, err := q.db.Query(ctx, listEligibleSheetOrders, search)
+func (q *Queries) ListEligibleSheetOrders(ctx context.Context, search string, enterpriseID int64) ([]DBToolSheetOrder, error) {
+	rows, err := q.db.Query(ctx, listEligibleSheetOrders, search, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -398,4 +399,71 @@ func (q *Queries) ListToolSerialSubstitutions(ctx context.Context, arg ListToolS
 		items = append(items, i)
 	}
 	return items, rows.Err()
+}
+
+const operationBelongsToEnterprise = `SELECT EXISTS (
+  SELECT 1 FROM production_order_operations poo
+  JOIN production_orders po ON po.id = poo.production_order_id
+  WHERE poo.id = $1 AND po.enterprise_id = $2)`
+
+// OperationBelongsToEnterprise diz se a etapa é de uma ordem da empresa.
+func (q *Queries) OperationBelongsToEnterprise(ctx context.Context, operationID, enterpriseID int64) (bool, error) {
+	var ok bool
+	err := q.db.QueryRow(ctx, operationBelongsToEnterprise, operationID, enterpriseID).Scan(&ok)
+	return ok, err
+}
+
+// ─── posse por empresa (ferramentas, séries, roteiros) ─────────────────────────
+
+const toolBelongsToEnterprise = `SELECT EXISTS (SELECT 1 FROM tools WHERE id = $1 AND enterprise_id = $2)`
+
+// ToolBelongsToEnterprise diz se a ferramenta é da empresa.
+func (q *Queries) ToolBelongsToEnterprise(ctx context.Context, toolID, enterpriseID int64) (bool, error) {
+	var ok bool
+	err := q.db.QueryRow(ctx, toolBelongsToEnterprise, toolID, enterpriseID).Scan(&ok)
+	return ok, err
+}
+
+const toolSerialBelongsToEnterprise = `SELECT EXISTS (
+  SELECT 1 FROM tool_serials s JOIN tools t ON t.id = s.tool_id
+  WHERE s.id = $1 AND t.enterprise_id = $2)`
+
+// ToolSerialBelongsToEnterprise diz se a série é de ferramenta da empresa.
+func (q *Queries) ToolSerialBelongsToEnterprise(ctx context.Context, serialID, enterpriseID int64) (bool, error) {
+	var ok bool
+	err := q.db.QueryRow(ctx, toolSerialBelongsToEnterprise, serialID, enterpriseID).Scan(&ok)
+	return ok, err
+}
+
+const routeOperationBelongsToEnterprise = `SELECT EXISTS (
+  SELECT 1 FROM route_operations ro JOIN manufacturing_routes mr ON mr.id = ro.route_id
+  WHERE ro.id = $1 AND mr.enterprise_id = $2)`
+
+// RouteOperationBelongsToEnterprise diz se a operação de roteiro é da empresa.
+func (q *Queries) RouteOperationBelongsToEnterprise(ctx context.Context, routeOperationID, enterpriseID int64) (bool, error) {
+	var ok bool
+	err := q.db.QueryRow(ctx, routeOperationBelongsToEnterprise, routeOperationID, enterpriseID).Scan(&ok)
+	return ok, err
+}
+
+const routeBelongsToEnterprise = `SELECT EXISTS (SELECT 1 FROM manufacturing_routes WHERE id = $1 AND enterprise_id = $2)`
+
+// RouteBelongsToEnterprise diz se o roteiro é da empresa.
+func (q *Queries) RouteBelongsToEnterprise(ctx context.Context, routeID, enterpriseID int64) (bool, error) {
+	var ok bool
+	err := q.db.QueryRow(ctx, routeBelongsToEnterprise, routeID, enterpriseID).Scan(&ok)
+	return ok, err
+}
+
+const routeOpToolBelongsToEnterprise = `SELECT EXISTS (
+  SELECT 1 FROM route_operation_tools rot
+  JOIN route_operations ro ON ro.id = rot.route_operation_id
+  JOIN manufacturing_routes mr ON mr.id = ro.route_id
+  WHERE rot.id = $1 AND mr.enterprise_id = $2)`
+
+// RouteOpToolBelongsToEnterprise diz se o vínculo ferramenta×operação é da empresa.
+func (q *Queries) RouteOpToolBelongsToEnterprise(ctx context.Context, id, enterpriseID int64) (bool, error) {
+	var ok bool
+	err := q.db.QueryRow(ctx, routeOpToolBelongsToEnterprise, id, enterpriseID).Scan(&ok)
+	return ok, err
 }

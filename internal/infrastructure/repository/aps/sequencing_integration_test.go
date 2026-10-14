@@ -132,7 +132,7 @@ func TestSequencingSubregistriesConcurrencyAndDowntime(t *testing.T) {
 	uid := uuid.New()
 	mtCode := testutil.UniqueCode()
 	var mtID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO machine_types(code,name,type,created_by,enterprise_id) SELECT $1,'APS WC',type,$2,$3 FROM machine_types LIMIT 1 RETURNING id`, mtCode, uid, enterpriseID).Scan(&mtID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO machine_types(code,name,type,created_by,enterprise_id) VALUES($1,'APS WC',(enum_range(NULL::machine_type_enum))[1],$2,$3) RETURNING id`, mtCode, uid, enterpriseID).Scan(&mtID); err != nil {
 		t.Fatal(err)
 	}
 	machineCode := testutil.UniqueCode()
@@ -249,5 +249,81 @@ func TestSequencingSubregistriesConcurrencyAndDowntime(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("concurrent group count=%d", count)
+	}
+}
+
+// O turno do calendário é hora local da fábrica. A janela saía sem fuso e o
+// driver a lia como UTC: turno das 07:00 começava às 04:00 em Brasília.
+func TestJanelaDoCalendarioUsaOFusoDaEmpresa(t *testing.T) {
+	_, pool := testutil.Queries(t)
+	base := context.Background()
+	actor := testutil.Actor(t, pool)
+	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		ids := []int64{a.ID, b.ID}
+		pool.Exec(base, "DELETE FROM machines WHERE enterprise_id = ANY($1)", ids)
+		pool.Exec(base, "DELETE FROM machine_types WHERE enterprise_id = ANY($1)", ids)
+		pool.Exec(base, "DELETE FROM machine_calendars WHERE enterprise_id = ANY($1)", ids)
+	})
+	code := testutil.UniqueCode()
+	var calendario, tipo int64
+	if err := pool.QueryRow(base, `INSERT INTO machine_calendars(enterprise_id,code,description) VALUES($1,$2,'Turno') RETURNING id`, a.ID, code).Scan(&calendario); err != nil {
+		t.Fatal(err)
+	}
+	testutil.Exec(t, pool, `INSERT INTO machine_calendar_intervals(calendar_id,weekday,start_time,end_time) VALUES($1,1,'07:00','17:00')`, calendario)
+	if err := pool.QueryRow(base, `INSERT INTO machine_types(code,name,type,created_by,enterprise_id,capacity_hours,is_active) VALUES($1,'Corte','CUT',$2,$3,8,true) RETURNING id`, code, actor, a.ID).Scan(&tipo); err != nil {
+		t.Fatal(err)
+	}
+	testutil.Exec(t, pool, `INSERT INTO machines(code,name,machine_type_code,created_by,enterprise_id,calendar_id,is_active,efficiency_rate) VALUES($1,'Serra',$1,$2,$3,$4,true,1)`, code, actor, a.ID, calendario)
+
+	brt, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	segunda := time.Date(2026, 10, 19, 0, 0, 0, 0, brt)
+	selection := apsrepo.New(sqlc.New(pool), pool).(apsdomain.SelectionRepository)
+	janelas, err := selection.ListAvailabilityWindows(a.Ctx, tipo, nil, segunda, segunda.AddDate(0, 0, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(janelas) != 1 {
+		t.Fatalf("%d janela(s), esperado 1 (segunda 07:00–17:00)", len(janelas))
+	}
+	inicio, fim := janelas[0].Start.In(brt), janelas[0].End.In(brt)
+	if inicio.Hour() != 7 || fim.Hour() != 17 || inicio.Day() != 19 {
+		t.Fatalf("turno em Brasília %s–%s, esperado 19/10 07:00–17:00", inicio.Format("02/01 15:04"), fim.Format("02/01 15:04"))
+	}
+}
+
+// Máquina sem calendário trabalha as horas do dia a partir das 08:00; antes a
+// janela começava à meia-noite e as ordens saíam programadas de madrugada.
+func TestMaquinaSemCalendarioTrabalhaAPartirDasOito(t *testing.T) {
+	_, pool := testutil.Queries(t)
+	base := context.Background()
+	actor := testutil.Actor(t, pool)
+	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		ids := []int64{a.ID, b.ID}
+		pool.Exec(base, "DELETE FROM machines WHERE enterprise_id = ANY($1)", ids)
+		pool.Exec(base, "DELETE FROM machine_types WHERE enterprise_id = ANY($1)", ids)
+	})
+	code := testutil.UniqueCode()
+	var tipo int64
+	if err := pool.QueryRow(base, `INSERT INTO machine_types(code,name,type,created_by,enterprise_id,capacity_hours,is_active) VALUES($1,'Corte','CUT',$2,$3,8,true) RETURNING id`, code, actor, a.ID).Scan(&tipo); err != nil {
+		t.Fatal(err)
+	}
+	testutil.Exec(t, pool, `INSERT INTO machines(code,name,machine_type_code,created_by,enterprise_id,is_active,efficiency_rate,available_hours_per_day) VALUES($1,'Serra',$1,$2,$3,true,1,8)`, code, actor, a.ID)
+	brt, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	segunda := time.Date(2026, 10, 19, 0, 0, 0, 0, brt)
+	janelas, err := apsrepo.New(sqlc.New(pool), pool).(apsdomain.SelectionRepository).ListAvailabilityWindows(a.Ctx, tipo, nil, segunda, segunda)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(janelas) != 1 {
+		t.Fatalf("%d janela(s), esperado 1", len(janelas))
+	}
+	if i, f := janelas[0].Start.In(brt), janelas[0].End.In(brt); i.Hour() != 8 || f.Hour() != 16 {
+		t.Fatalf("janela %s–%s, esperado 08:00–16:00", i.Format("15:04"), f.Format("15:04"))
 	}
 }

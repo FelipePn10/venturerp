@@ -2,7 +2,6 @@ package machine_uc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -14,7 +13,7 @@ import (
 	machinesvc "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
 )
 
-var ErrProductionTimeNotConfigured = errors.New("tempo de produção não cadastrado")
+var ErrProductionTimeNotConfigured = errorsuc.NewValidationError("tempo de produção não cadastrado")
 
 // O caso de uso CalculateProductionTime calcula quanto tempo leva para produzir
 //uma determinada quantidade demandada de uma variante de item + máscara em uma máquina

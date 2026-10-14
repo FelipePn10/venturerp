@@ -42,11 +42,12 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 		pool.Exec(base, `DELETE FROM suppliers WHERE id=$1`, supplierID)
 	})
 	repo := repoimpl.New(pool)
-	var itemCode int64
+	// O item do preço é da empresa do teste. Antes pegava o MENOR código do
+	// banco, de qualquer empresa — referência cruzada que o banco hoje recusa.
+	itemCode := testutil.UniqueCode()
+	testutil.SeedItem(t, pool, ctx, itemCode, testutil.Actor(t, pool))
+	t.Cleanup(func() { pool.Exec(base, `DELETE FROM items WHERE code=$1`, itemCode) })
 	var e error
-	if e = pool.QueryRow(base, `SELECT MIN(code) FROM items`).Scan(&itemCode); e != nil || itemCode == 0 {
-		t.Fatalf("test item: %v", e)
-	}
 	var oldAttributes []byte
 	if e = pool.QueryRow(base, `SELECT pdm_attributes FROM items WHERE code=$1`, itemCode).Scan(&oldAttributes); e != nil {
 		t.Fatal(e)

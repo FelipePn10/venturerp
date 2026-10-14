@@ -41,7 +41,7 @@ func (r *FiscalRepositoryPG) CreateFreight(ctx context.Context, f *repository.Fr
 	if err != nil {
 		return nil, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (r *FiscalRepositoryPG) UpdateFreight(ctx context.Context, f *repository.Fr
 	if err != nil {
 		return err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func (r *FiscalRepositoryPG) GetFreight(ctx context.Context, id int64) (*reposit
 	if err != nil {
 		return nil, err
 	}
-	f, err := scanFrete(r.pool.QueryRow(ctx, `SELECT `+freteCols+`
+	f, err := scanFrete(r.db.QueryRow(ctx, `SELECT `+freteCols+`
 		   FROM fiscal_freight_documents f
 		   LEFT JOIN suppliers s ON s.code = f.supplier_code AND s.enterprise_id = f.enterprise_id
 		  WHERE f.id=$1 AND f.enterprise_id=$2`, id, empresa))
@@ -165,7 +165,7 @@ func (r *FiscalRepositoryPG) GetFreight(ctx context.Context, id int64) (*reposit
 	if err := r.carregarNotasDosFretes(ctx, empresa, []*repository.FreightDocument{f}); err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT a.fiscal_entry_id, a.fiscal_entry_item_id, a.item_code, a.warehouse_id, a.plano_contas_id, a.centro_custo_id,
 		        COALESCE(i.description,''), a.valor, a.valor_estoque, a.valor_despesa, a.stock_movement_id
 		   FROM fiscal_freight_allocations a LEFT JOIN fiscal_entry_items i ON i.id = a.fiscal_entry_item_id
@@ -190,7 +190,7 @@ func (r *FiscalRepositoryPG) ListFreights(ctx context.Context, status string) ([
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT `+freteCols+`
+	rows, err := r.db.Query(ctx, `SELECT `+freteCols+`
 		   FROM fiscal_freight_documents f
 		   LEFT JOIN suppliers s ON s.code = f.supplier_code AND s.enterprise_id = f.enterprise_id
 		  WHERE f.enterprise_id=$1 AND ($2 = '' OR f.status = $2)
@@ -229,7 +229,7 @@ func (r *FiscalRepositoryPG) carregarNotasDosFretes(ctx context.Context, empresa
 		ids[i] = f.ID
 		porID[f.ID] = f
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT fe.freight_id, e.id, e.numero_nf, e.serie, e.razao_social_emitente, e.valor_total, e.status, e.chave_acesso
 		   FROM fiscal_freight_document_entries fe JOIN fiscal_entries e ON e.id = fe.fiscal_entry_id AND e.enterprise_id = fe.enterprise_id
 		  WHERE fe.freight_id = ANY($1) AND fe.enterprise_id=$2 ORDER BY fe.freight_id, e.id`, ids, empresa)
@@ -258,7 +258,7 @@ func (r *FiscalRepositoryPG) EntriesByChaves(ctx context.Context, chaves []strin
 	if len(chaves) == 0 {
 		return nil, nil
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id FROM fiscal_entries WHERE enterprise_id=$1 AND chave_acesso = ANY($2) AND is_active AND status <> 'CANCELLED' ORDER BY id`, empresa, chaves)
 	if err != nil {
 		return nil, err
@@ -331,7 +331,7 @@ func (r *FiscalRepositoryPG) LancarFrete(ctx context.Context, l repository.Lanca
 	if err != nil {
 		return err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -468,7 +468,7 @@ func (r *FiscalRepositoryPG) CancelarFrete(ctx context.Context, c repository.Can
 	if err != nil {
 		return err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -544,7 +544,7 @@ func (r *FiscalRepositoryPG) FreteDoTitulo(ctx context.Context, contaPagarID int
 		return nil, err
 	}
 	var id *int64
-	err = r.pool.QueryRow(ctx, `SELECT freight_document_id FROM contas_pagar WHERE id=$1 AND enterprise_id=$2`, contaPagarID, empresa).Scan(&id)
+	err = r.db.QueryRow(ctx, `SELECT freight_document_id FROM contas_pagar WHERE id=$1 AND enterprise_id=$2`, contaPagarID, empresa).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

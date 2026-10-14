@@ -94,7 +94,9 @@ func TestRateioEntraNoCustoDoProduto(t *testing.T) {
 	regra, err := uc.CriarRegraDeRateio(ctx, request.CostOverheadRuleDTO{
 		Code: "CIF-MAT", Description: "Indiretos de armazenagem sobre material",
 		Base: "MATERIAL", Method: "PERCENTUAL", Rate: 0.12,
-		ValidFrom: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+		// Folga de dias, não "ontem": o processo e o banco podem estar em
+		// fusos com datas diferentes (AGENTS.md, verificação contínua).
+		ValidFrom: time.Now().AddDate(0, 0, -5).Format("2006-01-02"),
 		CreatedBy: uid.String(),
 	})
 	if err != nil {
@@ -124,7 +126,7 @@ func TestRateioEntraNoCustoDoProduto(t *testing.T) {
 
 	// Regra fora de vigência não pode aplicar: custo errado que sai plausível é o
 	// que ninguém questiona.
-	fim := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	fim := time.Now().AddDate(0, 0, -5).Format("2006-01-02")
 	if _, err := uc.AtualizarRegraDeRateio(ctx, regra.ID, request.CostOverheadRuleDTO{
 		Code: "CIF-MAT", Description: "Indiretos de armazenagem sobre material",
 		Base: "MATERIAL", Method: "PERCENTUAL", Rate: 0.12,
@@ -138,7 +140,7 @@ func TestRateioEntraNoCustoDoProduto(t *testing.T) {
 		t.Fatalf("apuração com regra expirada: %v", err)
 	}
 	if expirada.OverheadCost != 0 {
-		t.Fatalf("regra vencida ontem aplicou %.4f de indireto", expirada.OverheadCost)
+		t.Fatalf("regra vencida há 5 dias aplicou %.4f de indireto", expirada.OverheadCost)
 	}
 
 	// Desativar não apaga: o histórico aponta para a regra, e apagá-la deixaria a

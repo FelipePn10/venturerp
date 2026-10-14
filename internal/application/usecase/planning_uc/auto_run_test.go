@@ -8,6 +8,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/google/uuid"
 )
@@ -20,12 +21,25 @@ type repoFalso struct {
 	cortes       []time.Time
 	statusCorte  []string
 	mudaram      int
+	pendentes    []AutoRunSettings
+	salvos       []AutoRunSettings
+	planos       map[int64]bool
 }
 
 func (r *repoFalso) DueSettings(context.Context, time.Time) ([]AutoRunSettings, error) {
-	return nil, nil
+	return r.pendentes, nil
 }
-func (r *repoFalso) Settings(context.Context, int64) (*AutoRunSettings, error) { return nil, nil }
+func (r *repoFalso) SaveSettings(_ context.Context, s AutoRunSettings) error {
+	r.salvos = append(r.salvos, s)
+	return nil
+}
+func (r *repoFalso) ListRuns(context.Context, int64, int) ([]RunRecord, error) { return nil, nil }
+func (r *repoFalso) PlanExists(_ context.Context, _ int64, plano int64) (bool, error) {
+	return r.planos[plano], nil
+}
+func (r *repoFalso) Settings(_ context.Context, id int64) (*AutoRunSettings, error) {
+	return &AutoRunSettings{EnterpriseID: id, RunHour: 2, InitialOrderNumber: 1}, nil
+}
 func (r *repoFalso) TryLock(context.Context, int64) (bool, error) {
 	r.tentouTravar++
 	if r.travado {
@@ -55,11 +69,15 @@ func (r *repoFalso) SaveSnapshot(_ context.Context, _ int64, at time.Time, statu
 // pipelineFalso devolve um resultado fixo, para o teste focar no agendamento.
 type pipelineFalso struct {
 	chamadas []request.RunPlanningPipelineDTO
+	sessoes  []any
 	erro     error
 }
 
-func (p *pipelineFalso) Execute(_ context.Context, dto request.RunPlanningPipelineDTO) (*response.PlanningPipelineResponse, error) {
+type chaveSessao struct{}
+
+func (p *pipelineFalso) Execute(ctx context.Context, dto request.RunPlanningPipelineDTO) (*response.PlanningPipelineResponse, error) {
 	p.chamadas = append(p.chamadas, dto)
+	p.sessoes = append(p.sessoes, ctx.Value(chaveSessao{}))
 	if p.erro != nil {
 		return nil, p.erro
 	}
@@ -136,5 +154,84 @@ func TestRunRegistraCorteEItensAlterados(t *testing.T) {
 	}
 	if repo.travado {
 		t.Fatal("o cadeado ficou preso após a execução")
+	}
+}
+
+// A janela noturna roda sem ninguém logado: cada empresa precisa da própria
+// sessão (empresa e responsável), senão o MRP não enxerga os dados dela nem tem
+// em nome de quem gravar as ordens. Antes o pipeline recebia o contexto cru do
+// agendador e toda execução automática falhava.
+func TestRunDueRodaNaSessaoDeCadaEmpresa(t *testing.T) {
+	quem := uuid.New()
+	a, b := settings(), settings()
+	b.EnterpriseID = 2
+	a.UpdatedBy, b.UpdatedBy = &quem, &quem
+	repo := &repoFalso{pendentes: []AutoRunSettings{a, b}}
+	pipe := &pipelineFalso{}
+	uc := &AutoRunPlanningUseCase{
+		Pipeline: pipe, Repo: repo,
+		Session: func(ctx context.Context, s AutoRunSettings) context.Context {
+			return context.WithValue(ctx, chaveSessao{}, s.EnterpriseID)
+		},
+	}
+	n, err := uc.RunDue(context.Background())
+	if err != nil || n != 2 {
+		t.Fatalf("executadas = %d (%v), esperado 2", n, err)
+	}
+	if len(pipe.sessoes) != 2 || pipe.sessoes[0] != int64(1) || pipe.sessoes[1] != int64(2) {
+		t.Fatalf("pipeline sem a sessão da empresa: %+v", pipe.sessoes)
+	}
+	if repo.iniciou[0].TriggeredBy == nil || *repo.iniciou[0].TriggeredBy != quem || repo.iniciou[0].Trigger != TriggerAutomatico {
+		t.Fatalf("execução automática sem responsável: %+v", repo.iniciou[0])
+	}
+}
+
+type authFalsa struct {
+	ports.AuthService
+	empresa int64
+	ator    uuid.UUID
+	pode    bool
+}
+
+func (a *authFalsa) EnterpriseID(context.Context) (int64, error) { return a.empresa, nil }
+func (a *authFalsa) UserID(context.Context) (uuid.UUID, error)   { return a.ator, nil }
+func (a *authFalsa) CanRunMRPCalculation(context.Context) bool   { return a.pode }
+
+// Ligar exige plano da própria empresa e horário válido; quem salva vira o
+// responsável pela execução automática.
+func TestUpdateSettingsValidaEGravaResponsavel(t *testing.T) {
+	ator := uuid.New()
+	repo := &repoFalso{planos: map[int64]bool{10: true}}
+	uc := &AutoRunPlanningUseCase{Repo: repo, Auth: &authFalsa{empresa: 7, ator: ator, pode: true}}
+
+	casos := []struct {
+		nome string
+		dto  request.UpdateAutoRunSettingsDTO
+	}{
+		{"hora fora do dia", request.UpdateAutoRunSettingsDTO{IsEnabled: true, RunHour: 24, PlanCode: 10}},
+		{"minuto inválido", request.UpdateAutoRunSettingsDTO{IsEnabled: true, RunMinute: 60, PlanCode: 10}},
+		{"ligada sem plano", request.UpdateAutoRunSettingsDTO{IsEnabled: true, RunHour: 2}},
+		{"plano de outra empresa", request.UpdateAutoRunSettingsDTO{IsEnabled: true, RunHour: 2, PlanCode: 99}},
+	}
+	for _, c := range casos {
+		if _, err := uc.UpdateSettings(context.Background(), c.dto); err == nil {
+			t.Fatalf("%s: aceito", c.nome)
+		}
+	}
+	if len(repo.salvos) != 0 {
+		t.Fatalf("gravou parametrização inválida: %+v", repo.salvos)
+	}
+
+	if _, err := uc.UpdateSettings(context.Background(), request.UpdateAutoRunSettingsDTO{IsEnabled: true, RunHour: 3, RunMinute: 30, PlanCode: 10}); err != nil {
+		t.Fatal(err)
+	}
+	s := repo.salvos[0]
+	if s.EnterpriseID != 7 || s.UpdatedBy == nil || *s.UpdatedBy != ator || s.InitialOrderNumber != 1 {
+		t.Fatalf("parametrização salva errada: %+v", s)
+	}
+
+	sem := &AutoRunPlanningUseCase{Repo: repo, Auth: &authFalsa{empresa: 7, pode: false}}
+	if _, err := sem.UpdateSettings(context.Background(), request.UpdateAutoRunSettingsDTO{RunHour: 2}); !errors.Is(err, errorsuc.ErrUnauthorized) {
+		t.Fatalf("sem permissão: %v", err)
 	}
 }

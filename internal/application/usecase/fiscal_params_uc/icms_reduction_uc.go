@@ -2,7 +2,7 @@ package fiscal_params_uc
 
 import (
 	"context"
-	"errors"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -17,11 +17,12 @@ type ICMSReductionSubstitutionUseCase struct {
 
 func (uc *ICMSReductionSubstitutionUseCase) Create(ctx context.Context, r *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
 	if r.UF == "" {
-		return nil, errors.New("informe a UF")
+		return nil, errorsuc.NewValidationError("informe a UF")
 	}
 	if r.OperationType == "" {
 		r.OperationType = entity.ICMSOpAmbas
 	}
+	padraoDosAlvos(r)
 	r.IsActive = true
 	created, err := uc.Repo.CreateICMSReductionSubstitution(ctx, r)
 	if err != nil {
@@ -32,8 +33,9 @@ func (uc *ICMSReductionSubstitutionUseCase) Create(ctx context.Context, r *entit
 
 func (uc *ICMSReductionSubstitutionUseCase) Update(ctx context.Context, r *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
 	if r.ID == 0 {
-		return nil, errors.New("informe o identificador")
+		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
+	padraoDosAlvos(r)
 	updated, err := uc.Repo.UpdateICMSReductionSubstitution(ctx, r)
 	if err != nil {
 		return nil, err
@@ -73,10 +75,10 @@ type ICMSSummaryAdditionalUseCase struct {
 
 func (uc *ICMSSummaryAdditionalUseCase) Add(ctx context.Context, a *entity.ICMSSummaryEntryAdditional) (*response.ICMSSummaryEntryAdditionalResponse, error) {
 	if a.SummaryEntryID == 0 {
-		return nil, errors.New("informe o totalizador")
+		return nil, errorsuc.NewValidationError("informe o totalizador")
 	}
 	if a.ArrecadacaoIndicator == "" {
-		return nil, errors.New("informe o indicador de arrecadação")
+		return nil, errorsuc.NewValidationError("informe o indicador de arrecadação")
 	}
 	created, err := uc.Repo.AddICMSSummaryEntryAdditional(ctx, a)
 	if err != nil {
@@ -105,10 +107,10 @@ func (uc *ICMSSTRestitutionUseCase) Create(ctx context.Context, r *entity.ICMSST
 		return nil, err
 	}
 	if r.UF == "" {
-		return nil, errors.New("informe a UF")
+		return nil, errorsuc.NewValidationError("informe a UF")
 	}
 	if r.RestitutionType == "" {
-		return nil, errors.New("informe o tipo de restituição")
+		return nil, errorsuc.NewValidationError("informe o tipo de restituição")
 	}
 	r.IsActive = true
 	created, err := uc.Repo.CreateICMSSTRestitution(ctx, r)
@@ -120,7 +122,7 @@ func (uc *ICMSSTRestitutionUseCase) Create(ctx context.Context, r *entity.ICMSST
 
 func (uc *ICMSSTRestitutionUseCase) Update(ctx context.Context, r *entity.ICMSSTRestitution) (*response.ICMSSTRestitutionResponse, error) {
 	if r.ID == 0 {
-		return nil, errors.New("informe o identificador")
+		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateICMSSTRestitution(ctx, r)
 	if err != nil {
@@ -157,13 +159,13 @@ type SpecialAdjustmentNoteUseCase struct {
 func (uc *SpecialAdjustmentNoteUseCase) Create(ctx context.Context, n *entity.SpecialAdjustmentNote) (*response.SpecialAdjustmentNoteResponse, error) {
 	// A empresa é a do usuário autenticado (o repositório a aplica).
 	if n.Purpose == "" {
-		return nil, errors.New("informe a finalidade")
+		return nil, errorsuc.NewValidationError("informe a finalidade")
 	}
 	if err := validatePeriod(n.Period); err != nil {
 		return nil, err
 	}
 	if n.IssueDate.IsZero() {
-		return nil, errors.New("informe a data de emissão")
+		return nil, errorsuc.NewValidationError("informe a data de emissão")
 	}
 	n.Status = entity.SpecialNoteRascunho
 	created, err := uc.Repo.CreateSpecialAdjustmentNote(ctx, n)
@@ -175,7 +177,7 @@ func (uc *SpecialAdjustmentNoteUseCase) Create(ctx context.Context, n *entity.Sp
 
 func (uc *SpecialAdjustmentNoteUseCase) Update(ctx context.Context, n *entity.SpecialAdjustmentNote) (*response.SpecialAdjustmentNoteResponse, error) {
 	if n.ID == 0 {
-		return nil, errors.New("informe o identificador")
+		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
 	updated, err := uc.Repo.UpdateSpecialAdjustmentNote(ctx, n)
 	if err != nil {
@@ -205,7 +207,7 @@ func (uc *SpecialAdjustmentNoteUseCase) List(ctx context.Context, empresaID int,
 
 func (uc *SpecialAdjustmentNoteUseCase) AddItem(ctx context.Context, item *entity.SpecialAdjustmentNoteItem) (*response.SpecialAdjustmentNoteItemResponse, error) {
 	if item.NoteID == 0 {
-		return nil, errors.New("informe a nota")
+		return nil, errorsuc.NewValidationError("informe a nota")
 	}
 	created, err := uc.Repo.AddSpecialAdjustmentNoteItem(ctx, item)
 	if err != nil {
@@ -220,4 +222,18 @@ func (uc *SpecialAdjustmentNoteUseCase) ListItems(ctx context.Context, noteID in
 		return nil, err
 	}
 	return toSpecialAdjustmentNoteItemResponses(list), nil
+}
+
+// padraoDosAlvos: alvo da redução/diferimento não informado é a base, como o
+// padrão da coluna. Sem isto o texto vazio ia para a coluna enum e o Postgres
+// recusava a regra inteira — nenhuma regra de ICMS era gravada pela tela.
+func padraoDosAlvos(r *entity.ICMSReductionSubstitution) {
+	for _, alvo := range []*entity.ICMSReductionTarget{
+		&r.ICMSRedTargetContrib, &r.ICMSRedTargetNonContrib, &r.ICMSDeferralTarget,
+		&r.IPIRedTargetContrib, &r.IPIRedTargetNonContrib,
+	} {
+		if *alvo == "" {
+			*alvo = entity.ICMSRedBase
+		}
+	}
 }

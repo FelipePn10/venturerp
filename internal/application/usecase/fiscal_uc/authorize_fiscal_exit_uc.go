@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -10,23 +11,21 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
-	financialEntity "github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	financialRepo "github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
-	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
-	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 )
 
 type AuthorizeFiscalExitUseCase struct {
+	// Efeitos aplica estoque, reservas, títulos e pedido como pendência
+	// reprocessável (ver EfeitosNFe).
+	Efeitos       *EfeitosNFe
 	Repo          repository.FiscalRepository
 	FinancialRepo financialRepo.FinancialRepository
 	Auth          ports.AuthService
@@ -122,7 +121,11 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 
 	focusCli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	focusCli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-		_ = uc.Repo.SaveFocusLog(ctx, id, endpoint, method, reqBody, respBody, statusCode, durationMs)
+		if errLog := uc.Repo.SaveFocusLog(ctx, id, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+			// de registrar a comunicação não pode sumir.
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "documento", id, "endpoint", endpoint, "erro", errLog)
+		}
 	})
 
 	ref := fmt.Sprintf("%d%d", id, time.Now().UnixNano()%1000000)
@@ -133,10 +136,21 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// A condição de pagamento resolvida aqui serve aos três: a duplicata da
 	// NF-e, a forma de pagamento declarada à SEFAZ e o título do contas a
 	// receber. Um cálculo só, um resultado só.
-	plano := resolverPlanoDaNota(ctx, exit, uc.CustomerRepo, uc.SalesOrderRepo)
+	plano, err := resolverPlanoDaNota(ctx, exit, uc.CustomerRepo, uc.SalesOrderRepo)
+	if err != nil {
+		return nil, err
+	}
 	payload := montarPayloadNFe(exit, items, cfg, plano)
 	if uc.Devolucao != nil {
 		if err := uc.Devolucao.ReferenciarItens(ctx, exit, items, &payload); err != nil {
+			return nil, err
+		}
+	}
+
+	// Depósito de saída de cada item conferido ANTES de transmitir: autorizada,
+	// a nota não volta, e a baixa de estoque precisa de depósito.
+	if uc.Efeitos != nil && exit.FiscalEntryID == nil {
+		if err := uc.Efeitos.PreConferirDepositos(ctx, exit, items); err != nil {
 			return nil, err
 		}
 	}
@@ -149,8 +163,11 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 
 	focusResp, err := focusCli.EmitirNFe(ctx, ref, payload)
 	if err != nil {
-		_, _ = uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusRejected)
-		return nil, errorsuc.NewExternalServiceError("Focus NF-e", err.Error())
+		msg := err.Error()
+		if _, errSit := uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusRejected); errSit != nil {
+			msg += "; a nota não pôde ser marcada como rejeitada e continua aguardando autorização (" + errSit.Error() + ")"
+		}
+		return nil, errorsuc.NewExternalServiceError("Focus NF-e", msg)
 	}
 
 	// O número e a série são os que a SEFAZ autorizou: a Focus numera a nota.
@@ -180,94 +197,24 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		return resp, nil
 	}
 
-	if uc.FinancialRepo != nil {
-		uc.gerarTitulos(ctx, exit, id, plano, userID)
-	}
-
-	// Stock write-down + sales order settlement. Best-effort: a failure here does
-	// not undo an already-authorized NF-e (which lives at SEFAZ), but is surfaced
-	// via the returned exit being authorized regardless.
-	uc.settleStockAndOrder(ctx, exit, items, userID)
-
+	// Estoque, reservas, títulos e pedido: a nota já está autorizada na SEFAZ e
+	// não volta, então os efeitos viram uma pendência registrada ANTES de rodar.
+	// Se falharem, nada deles fica gravado, a pendência guarda o motivo e é
+	// reprocessada (automático e pelo botão da nota). Antes cada falha era
+	// ignorada e o estoque/financeiro ficava errado sem ninguém saber.
 	resp := toFiscalExitResponse(updated)
+	if uc.Efeitos != nil {
+		if err := uc.Efeitos.Registrar(ctx, id, entity.PendenciaAutorizacao, userID); err != nil {
+			resp.Warnings = append(resp.Warnings, "a nota foi autorizada, mas a pendência dos efeitos não pôde ser registrada — estoque e financeiro NÃO foram atualizados: "+err.Error())
+			slog.Error("NF-e autorizada sem pendência de efeitos registrada", "nota", id, "erro", err)
+			return resp, nil
+		}
+		if err := uc.Efeitos.Executar(ctx, id, entity.PendenciaAutorizacao, userID); err != nil {
+			resp.Warnings = append(resp.Warnings, "nota autorizada; estoque, títulos e pedido ficaram PENDENTES e serão reprocessados automaticamente (há também o botão Reprocessar na nota): "+err.Error())
+		}
+	}
 	resp.Warnings = append(resp.Warnings, contabilizarSaida(ctx, uc.Contabil, updated, uc.FinancialRepo != nil)...)
 	return resp, nil
-}
-
-// settleStockAndOrder posts the OUT movements for the exit items, consumes the
-// sales order reservations and flags the linked order as invoiced.
-func (uc *AuthorizeFiscalExitUseCase) settleStockAndOrder(
-	ctx context.Context,
-	exit *entity.FiscalExit,
-	items []*entity.FiscalExitItem,
-	userID uuid.UUID,
-) {
-	// Build item_code -> warehouse from the linked sales order lines.
-	warehouseByItem := map[int64]int64{}
-	if uc.SalesOrderRepo != nil && exit.SalesOrderCode != nil {
-		if soItems, err := uc.SalesOrderRepo.ListItems(ctx, *exit.SalesOrderCode); err == nil {
-			for _, si := range soItems {
-				if si.WarehouseCode != nil {
-					warehouseByItem[si.ItemCode] = *si.WarehouseCode
-				}
-			}
-		}
-	}
-
-	if uc.StockRepo != nil {
-		for _, it := range items {
-			if it.ItemCode == nil {
-				continue
-			}
-			wh, ok := warehouseByItem[*it.ItemCode]
-			if !ok {
-				continue // no resolvable warehouse; skip silently
-			}
-			refType := stockentity.ReferenceTypeNFExit
-			refCode := exit.ID
-			mov := &stockentity.StockMovement{
-				ItemCode:     *it.ItemCode,
-				WarehouseID:  wh,
-				MovementType: stockentity.MovementTypeOut,
-				Quantity:     it.Quantity,
-				// Sem preço: a saída é valorizada pelo custo médio (é o custo
-				// que sai do estoque e o CMV da venda). Gravar o preço de venda
-				// deixava o extrato e o CMV com o valor de venda.
-				UnitPrice:     0,
-				TotalPrice:    0,
-				ReferenceType: &refType,
-				ReferenceCode: &refCode,
-				CreatedBy:     userID,
-			}
-			_, _ = uc.StockRepo.CreateMovement(ctx, mov)
-		}
-
-		// Consume any active reservations tied to the sales order.
-		if exit.SalesOrderCode != nil {
-			if reservations, err := uc.StockRepo.ListActiveReservations(ctx); err == nil {
-				for _, r := range reservations {
-					if r.ReferenceType == stockentity.ReferenceTypeSalesOrder && r.ReferenceCode == *exit.SalesOrderCode {
-						_ = uc.StockRepo.ConsumeReservation(ctx, r.ID)
-					}
-				}
-			}
-		}
-	}
-
-	// Flag the sales order as invoiced. A nota que nasceu do pedido (linhas
-	// ligadas às linhas do pedido) só fecha o pedido quando tudo foi atendido.
-	if uc.SalesOrderRepo != nil && exit.SalesOrderCode != nil {
-		ligada, atendido := false, false
-		if uc.Faturamento != nil {
-			var err error
-			if ligada, atendido, err = uc.Faturamento.RegistrarFaturamento(ctx, exit.ID, false); err != nil {
-				ligada = false
-			}
-		}
-		if !ligada || atendido {
-			_ = uc.SalesOrderRepo.ChangeStatus(ctx, *exit.SalesOrderCode, salesentity.SalesOrderStatusInvoiced)
-		}
-	}
 }
 
 func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) []focusnfe.NFEItem {
@@ -404,63 +351,3 @@ func derefStr(p *string) string {
 }
 
 var _ = uuid.UUID{}
-
-// gerarTitulos grava um título do contas a receber por parcela da condição de
-// pagamento da nota.
-//
-// O valor parcelado é o TOTAL da nota (produtos + IPI + ICMS-ST + frete + seguro
-// − desconto), não o valor dos produtos: é esse o número que o cliente paga e o
-// que o boleto tem de fechar com a NF-e.
-func (uc *AuthorizeFiscalExitUseCase) gerarTitulos(
-	ctx context.Context,
-	exit *entity.FiscalExit,
-	exitID int64,
-	plano PlanoDaNota,
-	userID uuid.UUID,
-) {
-	parcelas := plano.Parcelas
-	if len(parcelas) == 0 {
-		parcelas = []customerentity.ParcelaCalculada{{
-			Numero: 1, Valor: decimal.NewFromFloat(exit.ValorTotal),
-			Vencimento: exit.DataEmissao.AddDate(0, 0, 30), Descricao: "30 dias",
-		}}
-	}
-	total := int32(len(parcelas))
-
-	var clienteID *int64
-	if uc.CustomerRepo != nil && exit.CustomerCode != nil {
-		if cliente, err := uc.CustomerRepo.GetCustomerByCode(ctx, *exit.CustomerCode); err == nil && cliente != nil {
-			id := cliente.ID
-			clienteID = &id
-		}
-	}
-
-	for _, p := range parcelas {
-		numDoc := fmt.Sprintf("NF-%d/%d", exit.NumeroNF, p.Numero)
-		if total == 1 {
-			numDoc = fmt.Sprintf("NF-%d", exit.NumeroNF)
-		}
-		forma := formaPagamentoNFe(p)
-		cr := &financialEntity.ContaReceber{
-			NumeroDocumento: &numDoc,
-			ClienteID:       clienteID,
-			FiscalExitID:    &exitID,
-			SalesOrderID:    exit.SalesOrderCode,
-			DataLancamento:  time.Now(),
-			DataEmissao:     exit.DataEmissao,
-			DataVencimento:  p.Vencimento,
-			ValorBruto:      p.Valor,
-			Desconto:        decimal.Zero,
-			Juros:           decimal.Zero,
-			Multa:           decimal.Zero,
-			ValorRecebido:   decimal.Zero,
-			ParcelaNumero:   int32(p.Numero),
-			ParcelaTotal:    total,
-			FormaPagamento:  &forma,
-			Status:          financialEntity.ContaReceberStatusPendente,
-			IsActive:        true,
-			CriadoPor:       userID,
-		}
-		_, _ = uc.FinancialRepo.CreateContaReceber(ctx, cr)
-	}
-}

@@ -2,7 +2,11 @@ package entry_operation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/entry_operation/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/entry_operation/repository"
@@ -23,7 +27,11 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.EntryOperationRepositor
 // ─── State Groups ─────────────────────────────────────────────────────────────
 
 func (r *EntryOperationRepositorySQLC) CreateStateGroup(ctx context.Context, g *entity.StateGroup) (*entity.StateGroup, error) {
-	row, err := r.q.CreateStateGroup(ctx, sqlc.CreateStateGroupParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateStateGroup(ctx, sqlc.CreateStateGroupParams{EnterpriseID: empresa,
 		Code:        g.Code,
 		Description: g.Description,
 		CreatedBy:   pgutil.ToPgUUID(g.CreatedBy),
@@ -35,7 +43,11 @@ func (r *EntryOperationRepositorySQLC) CreateStateGroup(ctx context.Context, g *
 }
 
 func (r *EntryOperationRepositorySQLC) GetStateGroupByCode(ctx context.Context, code int64) (*entity.StateGroup, error) {
-	row, err := r.q.GetStateGroupByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetStateGroupByCode(ctx, sqlc.GetStateGroupByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("state group %d not found: %w", code, err)
 	}
@@ -47,7 +59,11 @@ func (r *EntryOperationRepositorySQLC) GetStateGroupByCode(ctx context.Context, 
 }
 
 func (r *EntryOperationRepositorySQLC) ListStateGroups(ctx context.Context) ([]*entity.StateGroup, error) {
-	rows, err := r.q.ListStateGroups(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListStateGroups(ctx, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -59,26 +75,54 @@ func (r *EntryOperationRepositorySQLC) ListStateGroups(ctx context.Context) ([]*
 }
 
 func (r *EntryOperationRepositorySQLC) NextStateGroupCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextStateGroupCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextStateGroupCode(ctx, empresa)
 	return int64(v), err
 }
 
 func (r *EntryOperationRepositorySQLC) AddStateGroupUF(ctx context.Context, stateGroupCode int64, uf string) error {
-	return r.q.AddStateGroupUF(ctx, sqlc.AddStateGroupUFParams{StateGroupCode: stateGroupCode, Uf: uf})
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := r.q.AddStateGroupUF(ctx, sqlc.AddStateGroupUFParams{StateGroupCode: stateGroupCode, Uf: uf, EnterpriseID: empresa}); err != nil {
+		return err
+	}
+	// Zero linhas: já estava no grupo, ou o grupo não é desta empresa.
+	_, err = r.q.GetStateGroupByCode(ctx, sqlc.GetStateGroupByCodeParams{Code: stateGroupCode, EnterpriseID: empresa})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("grupo de UF %d não encontrado", stateGroupCode))
+	}
+	return err
 }
 
 func (r *EntryOperationRepositorySQLC) ListStateGroupUFs(ctx context.Context, stateGroupCode int64) ([]string, error) {
-	return r.q.ListStateGroupUFs(ctx, stateGroupCode)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return r.q.ListStateGroupUFs(ctx, sqlc.ListStateGroupUFsParams{StateGroupCode: stateGroupCode, EnterpriseID: empresa})
 }
 
 func (r *EntryOperationRepositorySQLC) UFInGroup(ctx context.Context, stateGroupCode int64, uf string) (bool, error) {
-	return r.q.UFInStateGroup(ctx, sqlc.UFInStateGroupParams{StateGroupCode: stateGroupCode, Uf: uf})
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	return r.q.UFInStateGroup(ctx, sqlc.UFInStateGroupParams{EnterpriseID: empresa, StateGroupCode: stateGroupCode, Uf: uf})
 }
 
 // ─── Entry Operation Types ────────────────────────────────────────────────────
 
 func (r *EntryOperationRepositorySQLC) CreateEntryOperation(ctx context.Context, o *entity.EntryOperationType) (*entity.EntryOperationType, error) {
-	row, err := r.q.CreateEntryOperationType(ctx, sqlc.CreateEntryOperationTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateEntryOperationType(ctx, sqlc.CreateEntryOperationTypeParams{EnterpriseID: empresa,
 		Code:               o.Code,
 		Description:        o.Description,
 		InvoiceTypeCode:    o.InvoiceTypeCode,
@@ -101,7 +145,11 @@ func (r *EntryOperationRepositorySQLC) CreateEntryOperation(ctx context.Context,
 }
 
 func (r *EntryOperationRepositorySQLC) UpdateEntryOperation(ctx context.Context, o *entity.EntryOperationType) (*entity.EntryOperationType, error) {
-	row, err := r.q.UpdateEntryOperationType(ctx, sqlc.UpdateEntryOperationTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateEntryOperationType(ctx, sqlc.UpdateEntryOperationTypeParams{EnterpriseID: empresa,
 		Code:               o.Code,
 		Description:        o.Description,
 		InvoiceTypeCode:    o.InvoiceTypeCode,
@@ -124,7 +172,11 @@ func (r *EntryOperationRepositorySQLC) UpdateEntryOperation(ctx context.Context,
 }
 
 func (r *EntryOperationRepositorySQLC) GetEntryOperationByCode(ctx context.Context, code int64) (*entity.EntryOperationType, error) {
-	row, err := r.q.GetEntryOperationTypeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetEntryOperationTypeByCode(ctx, sqlc.GetEntryOperationTypeByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("entry operation type %d not found: %w", code, err)
 	}
@@ -132,7 +184,11 @@ func (r *EntryOperationRepositorySQLC) GetEntryOperationByCode(ctx context.Conte
 }
 
 func (r *EntryOperationRepositorySQLC) ListEntryOperations(ctx context.Context, onlyActive bool) ([]*entity.EntryOperationType, error) {
-	rows, err := r.q.ListEntryOperationTypes(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListEntryOperationTypes(ctx, sqlc.ListEntryOperationTypesParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +200,11 @@ func (r *EntryOperationRepositorySQLC) ListEntryOperations(ctx context.Context, 
 }
 
 func (r *EntryOperationRepositorySQLC) NextEntryOperationCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextEntryOperationTypeCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextEntryOperationTypeCode(ctx, empresa)
 	return int64(v), err
 }
 

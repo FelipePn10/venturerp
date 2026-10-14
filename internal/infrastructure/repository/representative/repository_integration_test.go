@@ -29,10 +29,10 @@ func TestBlockUnblockAndGetAreIsolatedByEnterprise(t *testing.T) {
 	repo := representativepg.New(pool)
 	tenantA, tenantB := testutil.UniqueCode(), testutil.UniqueCode()
 	var representativeA, representativeB int64
-	if err := pool.QueryRow(context.Background(), `INSERT INTO representatives(name,document_number) VALUES('Representante A',$1) RETURNING code`, "REP-A").Scan(&representativeA); err != nil {
+	if err := pool.QueryRow(context.Background(), `INSERT INTO representatives(name,document_number,enterprise_code) VALUES('Representante A',$1,$2) RETURNING code`, "REP-A", tenantA).Scan(&representativeA); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(context.Background(), `INSERT INTO representatives(name,document_number) VALUES('Representante B',$1) RETURNING code`, "REP-B").Scan(&representativeB); err != nil {
+	if err := pool.QueryRow(context.Background(), `INSERT INTO representatives(name,document_number,enterprise_code) VALUES('Representante B',$1,$2) RETURNING code`, "REP-B", tenantB).Scan(&representativeB); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

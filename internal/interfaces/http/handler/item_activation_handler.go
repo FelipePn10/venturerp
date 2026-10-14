@@ -26,7 +26,7 @@ func (h *ItemActivationHandler) ValidateActivation(w http.ResponseWriter, r *htt
 	}
 	report, err := h.uc.ExecuteBusinessCode(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, report)

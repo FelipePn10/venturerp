@@ -28,6 +28,16 @@ func (a *AuthService) hasWriteRole(ctx context.Context) bool {
 	return role == "ADMIN" || role == "USER"
 }
 
+// CanManageGlobalCatalogs: CFOP e dispositivo legal são um cadastro só para
+// todas as empresas do banco — quem altera muda para todas. Só ADMIN.
+func (a *AuthService) CanManageGlobalCatalogs(ctx context.Context) bool {
+	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
+	if !ok {
+		return false
+	}
+	return strings.ToUpper(strings.TrimSpace(user.Role)) == "ADMIN"
+}
+
 func (a *AuthService) CanCreateComponent(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }

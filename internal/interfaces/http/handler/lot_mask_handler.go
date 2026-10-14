@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -22,14 +21,13 @@ func NewLotMaskHandler(uc *lot_mask_uc.LotMaskUseCase) *LotMaskHandler {
 
 func (h *LotMaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.LotMaskDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.CreatedBy = actingUser(r)
 	res, err := h.uc.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -38,7 +36,7 @@ func (h *LotMaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *LotMaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	res, err := h.uc.List(r.Context(), r.URL.Query().Get("only_active") == "true")
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -65,14 +63,13 @@ func (h *LotMaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.LotMaskDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
 	res, err := h.uc.Update(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -85,7 +82,7 @@ func (h *LotMaskHandler) Deactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.uc.Deactivate(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -98,13 +95,12 @@ func (h *LotMaskHandler) AddPart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.LotMaskPartDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddPart(r.Context(), id, dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -117,13 +113,12 @@ func (h *LotMaskHandler) UpdatePart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.LotMaskPartDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.UpdatePart(r.Context(), id, dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -136,7 +131,7 @@ func (h *LotMaskHandler) DeletePart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.uc.DeletePart(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -145,13 +140,12 @@ func (h *LotMaskHandler) DeletePart(w http.ResponseWriter, r *http.Request) {
 // Generate produces a lot code from the resolved mask.
 func (h *LotMaskHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateLotDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.Generate(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

@@ -52,7 +52,10 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 		return nil, err
 	}
 
-	plano := resolverPlanoDaNota(ctx, exit, uc.Customers, uc.Orders)
+	plano, err := resolverPlanoDaNota(ctx, exit, uc.Customers, uc.Orders)
+	if err != nil {
+		return nil, err
+	}
 	payload := montarPayloadNFe(exit, items, cfg, plano)
 	if uc.Devolucao != nil {
 		if err := uc.Devolucao.ReferenciarItens(ctx, exit, items, &payload); err != nil {

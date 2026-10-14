@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 	"time"
 
@@ -96,7 +97,7 @@ type ParcelaCalculada struct {
 //     fechamento do mês.
 func CalcularPlano(cond *PaymentCondition, total decimal.Decimal, datas DatasBase) ([]ParcelaCalculada, error) {
 	if cond == nil {
-		return nil, fmt.Errorf("informe a condição de pagamento")
+		return nil, domainerr.NewValidation("informe a condição de pagamento")
 	}
 	ativas := make([]*PaymentInstallment, 0, len(cond.Installments))
 	for _, p := range cond.Installments {
@@ -195,10 +196,10 @@ func ValidarPercentuais(parcelas []*PaymentInstallment) error {
 		return nil
 	}
 	if informadas != len(parcelas) {
-		return fmt.Errorf("informe o percentual de todas as %d parcelas ou de nenhuma: com parte delas em branco não há como saber quanto cada uma leva", len(parcelas))
+		return domainerr.NewValidation(fmt.Sprintf("informe o percentual de todas as %d parcelas ou de nenhuma: com parte delas em branco não há como saber quanto cada uma leva", len(parcelas)))
 	}
 	if !soma.Round(4).Equal(decimal.NewFromInt(100)) {
-		return fmt.Errorf("os percentuais das parcelas somam %s%%; precisam somar 100%%", soma.Round(4).String())
+		return domainerr.NewValidation(fmt.Sprintf("os percentuais das parcelas somam %s%%; precisam somar 100%%", soma.Round(4).String()))
 	}
 	return nil
 }

@@ -31,25 +31,35 @@ func resolverDestinatario(
 	dto *request.CreateFiscalExitDTO,
 	customers customerrepo.CustomerRepository,
 	orders salesrepo.SalesOrderRepository,
-) {
+) error {
 	if dto == nil || customers == nil {
-		return
+		return nil
 	}
 
+	// Pedido ou cliente inexistente só deixa os campos em branco (a nota diz o
+	// que falta); falha de leitura é erro — antes sumia e a nota saía sem
+	// destinatário sem ninguém saber por quê.
 	customerCode := dto.CustomerCode
 	if customerCode == nil && dto.SalesOrderCode != nil && orders != nil {
-		if order, err := orders.GetByCode(ctx, *dto.SalesOrderCode); err == nil && order != nil && order.CustomerCode != nil {
+		order, err := orders.GetByCode(ctx, *dto.SalesOrderCode)
+		if err != nil && !errorsuc.EhNaoEncontrado(err) {
+			return fmt.Errorf("lendo o pedido da nota: %w", err)
+		}
+		if err == nil && order != nil && order.CustomerCode != nil {
 			c := *order.CustomerCode
 			customerCode = &c
 		}
 	}
 	if customerCode == nil {
-		return
+		return nil
 	}
 
 	cliente, err := customers.GetCustomerByCode(ctx, *customerCode)
+	if err != nil && !errorsuc.EhNaoEncontrado(err) {
+		return fmt.Errorf("lendo o cliente da nota: %w", err)
+	}
 	if err != nil || cliente == nil {
-		return
+		return nil
 	}
 	dto.CustomerCode = customerCode
 
@@ -64,9 +74,12 @@ func resolverDestinatario(
 	}
 	preencher(&dto.DestEmail, primeiroEmailDoCliente(cliente))
 
-	end := enderecoDaNota(ctx, customers, cliente)
+	end, err := enderecoDaNota(ctx, customers, cliente)
+	if err != nil {
+		return err
+	}
 	if end == nil {
-		return
+		return nil
 	}
 	if end.Street != nil {
 		preencher(&dto.DestLogradouro, *end.Street)
@@ -89,16 +102,20 @@ func resolverDestinatario(
 	if end.UF != nil {
 		preencher(&dto.UFDestinatario, *end.UF)
 	}
+	return nil
 }
 
 // enderecoDaNota escolhe o endereço na ordem ENTREGA → COBRANÇA → padrão → primeiro.
-func enderecoDaNota(ctx context.Context, customers customerrepo.CustomerRepository, cliente *customerentity.Customer) *customerentity.CustomerAddress {
+func enderecoDaNota(ctx context.Context, customers customerrepo.CustomerRepository, cliente *customerentity.Customer) (*customerentity.CustomerAddress, error) {
 	enderecos := cliente.Addresses
 	if len(enderecos) == 0 {
-		enderecos, _ = customers.ListAddresses(ctx, cliente.ID)
+		var err error
+		if enderecos, err = customers.ListAddresses(ctx, cliente.ID); err != nil {
+			return nil, fmt.Errorf("lendo os endereços do cliente: %w", err)
+		}
 	}
 	if len(enderecos) == 0 {
-		return nil
+		return nil, nil
 	}
 	var cobranca, padrao, primeiro *customerentity.CustomerAddress
 	for _, e := range enderecos {
@@ -110,7 +127,7 @@ func enderecoDaNota(ctx context.Context, customers customerrepo.CustomerReposito
 		}
 		switch e.AddressType {
 		case customerentity.AddressEntrega:
-			return e
+			return e, nil
 		case customerentity.AddressCobranca:
 			if cobranca == nil {
 				cobranca = e
@@ -121,12 +138,12 @@ func enderecoDaNota(ctx context.Context, customers customerrepo.CustomerReposito
 		}
 	}
 	if cobranca != nil {
-		return cobranca
+		return cobranca, nil
 	}
 	if padrao != nil {
-		return padrao
+		return padrao, nil
 	}
-	return primeiro
+	return primeiro, nil
 }
 
 func primeiroEmailDoCliente(cliente *customerentity.Customer) string {
@@ -212,7 +229,10 @@ func (r *ResolvedorDeDestinatario) DadosFiscaisDoCliente(ctx context.Context, co
 
 	// Sem endereço a SEFAZ rejeita por campo obrigatório ausente. Recusar aqui é
 	// melhor que descobrir na transmissão, com a nota já criada.
-	end := enderecoDaNota(ctx, r.Customers, cliente)
+	end, err := enderecoDaNota(ctx, r.Customers, cliente)
+	if err != nil {
+		return nil, err
+	}
 	if end == nil {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf(
 			"o cliente %d não tem endereço cadastrado; a NF-e exige logradouro, número, bairro, município, código IBGE e CEP", code))

@@ -133,7 +133,7 @@ func (f *fakePORepo) GetDeliveredQuantity(context.Context, int64) (decimal.Decim
 	return f.delivered, nil
 }
 func (f *fakePORepo) GetDeliveryByIdempotencyKey(context.Context, string) (*poentity.ProductionDelivery, error) {
-	return nil, errors.New("not found")
+	return nil, errorsuc.NewNotFoundError("not found")
 }
 func (f *fakePORepo) HasPendingServicePurchaseOrders(context.Context, int64) (bool, error) {
 	return f.pendingOCS, nil

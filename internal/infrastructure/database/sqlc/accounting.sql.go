@@ -7,20 +7,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// Plano, contas e demonstrativos são da empresa (accounting_plans.enterprise_id,
+// accounting_demonstratives.enterprise_id); conta é da empresa do plano.
+
 // ─── Accounting Plans ─────────────────────────────────────────────────────────
 
 const createAccountingPlan = `
-INSERT INTO accounting_plans (plan_number, description, valid_from, valid_to, status)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO accounting_plans (plan_number, description, valid_from, valid_to, status, enterprise_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, plan_number, description, valid_from, valid_to, status, created_at
 `
 
 type CreateAccountingPlanParams struct {
-	PlanNumber  int32
-	Description string
-	ValidFrom   pgtype.Date
-	ValidTo     pgtype.Date
-	Status      string
+	PlanNumber   int32
+	Description  string
+	ValidFrom    pgtype.Date
+	ValidTo      pgtype.Date
+	Status       string
+	EnterpriseID int64
 }
 
 type AccountingPlanRow struct {
@@ -35,7 +39,7 @@ type AccountingPlanRow struct {
 
 func (q *Queries) CreateAccountingPlan(ctx context.Context, arg CreateAccountingPlanParams) (AccountingPlanRow, error) {
 	row := q.db.QueryRow(ctx, createAccountingPlan,
-		arg.PlanNumber, arg.Description, arg.ValidFrom, arg.ValidTo, arg.Status,
+		arg.PlanNumber, arg.Description, arg.ValidFrom, arg.ValidTo, arg.Status, arg.EnterpriseID,
 	)
 	var i AccountingPlanRow
 	err := row.Scan(&i.ID, &i.PlanNumber, &i.Description, &i.ValidFrom, &i.ValidTo, &i.Status, &i.CreatedAt)
@@ -44,11 +48,11 @@ func (q *Queries) CreateAccountingPlan(ctx context.Context, arg CreateAccounting
 
 const getAccountingPlan = `
 SELECT id, plan_number, description, valid_from, valid_to, status, created_at
-FROM accounting_plans WHERE id = $1
+FROM accounting_plans WHERE id = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetAccountingPlan(ctx context.Context, id int64) (AccountingPlanRow, error) {
-	row := q.db.QueryRow(ctx, getAccountingPlan, id)
+func (q *Queries) GetAccountingPlan(ctx context.Context, id, enterpriseID int64) (AccountingPlanRow, error) {
+	row := q.db.QueryRow(ctx, getAccountingPlan, id, enterpriseID)
 	var i AccountingPlanRow
 	err := row.Scan(&i.ID, &i.PlanNumber, &i.Description, &i.ValidFrom, &i.ValidTo, &i.Status, &i.CreatedAt)
 	return i, err
@@ -56,11 +60,11 @@ func (q *Queries) GetAccountingPlan(ctx context.Context, id int64) (AccountingPl
 
 const listAccountingPlans = `
 SELECT id, plan_number, description, valid_from, valid_to, status, created_at
-FROM accounting_plans ORDER BY plan_number
+FROM accounting_plans WHERE enterprise_id = $1 ORDER BY plan_number
 `
 
-func (q *Queries) ListAccountingPlans(ctx context.Context) ([]AccountingPlanRow, error) {
-	rows, err := q.db.Query(ctx, listAccountingPlans)
+func (q *Queries) ListAccountingPlans(ctx context.Context, enterpriseID int64) ([]AccountingPlanRow, error) {
+	rows, err := q.db.Query(ctx, listAccountingPlans, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -78,22 +82,23 @@ func (q *Queries) ListAccountingPlans(ctx context.Context) ([]AccountingPlanRow,
 
 const updateAccountingPlan = `
 UPDATE accounting_plans SET plan_number=$1, description=$2, valid_from=$3, valid_to=$4, status=$5
-WHERE id=$6
+WHERE id=$6 AND enterprise_id=$7
 RETURNING id, plan_number, description, valid_from, valid_to, status, created_at
 `
 
 type UpdateAccountingPlanParams struct {
-	PlanNumber  int32
-	Description string
-	ValidFrom   pgtype.Date
-	ValidTo     pgtype.Date
-	Status      string
-	ID          int64
+	PlanNumber   int32
+	Description  string
+	ValidFrom    pgtype.Date
+	ValidTo      pgtype.Date
+	Status       string
+	ID           int64
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateAccountingPlan(ctx context.Context, arg UpdateAccountingPlanParams) (AccountingPlanRow, error) {
 	row := q.db.QueryRow(ctx, updateAccountingPlan,
-		arg.PlanNumber, arg.Description, arg.ValidFrom, arg.ValidTo, arg.Status, arg.ID,
+		arg.PlanNumber, arg.Description, arg.ValidFrom, arg.ValidTo, arg.Status, arg.ID, arg.EnterpriseID,
 	)
 	var i AccountingPlanRow
 	err := row.Scan(&i.ID, &i.PlanNumber, &i.Description, &i.ValidFrom, &i.ValidTo, &i.Status, &i.CreatedAt)
@@ -104,7 +109,9 @@ func (q *Queries) UpdateAccountingPlan(ctx context.Context, arg UpdateAccounting
 
 const createAccountingAccount = `
 INSERT INTO accounting_accounts (plan_id, parent_id, account_number, description, nature_code, reduced_code, requires_cost_center, valid_from, valid_to, is_analytic)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+ WHERE EXISTS (SELECT 1 FROM accounting_plans p WHERE p.id = $1 AND p.enterprise_id = $11)
+   AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM accounting_accounts pai WHERE pai.id = $2 AND pai.plan_id = $1))
 RETURNING id, plan_id, parent_id, account_number, description, nature_code, reduced_code, requires_cost_center, valid_from, valid_to, is_analytic, created_at
 `
 
@@ -119,6 +126,7 @@ type CreateAccountingAccountParams struct {
 	ValidFrom          pgtype.Date
 	ValidTo            pgtype.Date
 	IsAnalytic         bool
+	EnterpriseID       int64
 }
 
 type AccountingAccountRow struct {
@@ -139,7 +147,7 @@ type AccountingAccountRow struct {
 func (q *Queries) CreateAccountingAccount(ctx context.Context, arg CreateAccountingAccountParams) (AccountingAccountRow, error) {
 	row := q.db.QueryRow(ctx, createAccountingAccount,
 		arg.PlanID, arg.ParentID, arg.AccountNumber, arg.Description, arg.NatureCode,
-		arg.ReducedCode, arg.RequiresCostCenter, arg.ValidFrom, arg.ValidTo, arg.IsAnalytic,
+		arg.ReducedCode, arg.RequiresCostCenter, arg.ValidFrom, arg.ValidTo, arg.IsAnalytic, arg.EnterpriseID,
 	)
 	var i AccountingAccountRow
 	err := row.Scan(
@@ -153,10 +161,11 @@ func (q *Queries) CreateAccountingAccount(ctx context.Context, arg CreateAccount
 const getAccountingAccount = `
 SELECT id, plan_id, parent_id, account_number, description, nature_code, reduced_code, requires_cost_center, valid_from, valid_to, is_analytic, created_at
 FROM accounting_accounts WHERE id = $1
+  AND plan_id IN (SELECT p.id FROM accounting_plans p WHERE p.enterprise_id = $2)
 `
 
-func (q *Queries) GetAccountingAccount(ctx context.Context, id int64) (AccountingAccountRow, error) {
-	row := q.db.QueryRow(ctx, getAccountingAccount, id)
+func (q *Queries) GetAccountingAccount(ctx context.Context, id, enterpriseID int64) (AccountingAccountRow, error) {
+	row := q.db.QueryRow(ctx, getAccountingAccount, id, enterpriseID)
 	var i AccountingAccountRow
 	err := row.Scan(
 		&i.ID, &i.PlanID, &i.ParentID, &i.AccountNumber, &i.Description,
@@ -168,11 +177,13 @@ func (q *Queries) GetAccountingAccount(ctx context.Context, id int64) (Accountin
 
 const listAccountingAccountsByPlan = `
 SELECT id, plan_id, parent_id, account_number, description, nature_code, reduced_code, requires_cost_center, valid_from, valid_to, is_analytic, created_at
-FROM accounting_accounts WHERE plan_id = $1 ORDER BY account_number
+FROM accounting_accounts WHERE plan_id = $1
+  AND EXISTS (SELECT 1 FROM accounting_plans p WHERE p.id = $1 AND p.enterprise_id = $2)
+ORDER BY account_number
 `
 
-func (q *Queries) ListAccountingAccountsByPlan(ctx context.Context, planID int64) ([]AccountingAccountRow, error) {
-	rows, err := q.db.Query(ctx, listAccountingAccountsByPlan, planID)
+func (q *Queries) ListAccountingAccountsByPlan(ctx context.Context, planID, enterpriseID int64) ([]AccountingAccountRow, error) {
+	rows, err := q.db.Query(ctx, listAccountingAccountsByPlan, planID, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +207,9 @@ const updateAccountingAccount = `
 UPDATE accounting_accounts SET plan_id=$1, parent_id=$2, account_number=$3, description=$4, nature_code=$5,
     reduced_code=$6, requires_cost_center=$7, valid_from=$8, valid_to=$9, is_analytic=$10
 WHERE id=$11
+  AND plan_id IN (SELECT p.id FROM accounting_plans p WHERE p.enterprise_id = $12)
+  AND EXISTS (SELECT 1 FROM accounting_plans p WHERE p.id = $1 AND p.enterprise_id = $12)
+  AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM accounting_accounts pai WHERE pai.id = $2 AND pai.plan_id = $1 AND pai.id <> $11))
 RETURNING id, plan_id, parent_id, account_number, description, nature_code, reduced_code, requires_cost_center, valid_from, valid_to, is_analytic, created_at
 `
 
@@ -211,12 +225,13 @@ type UpdateAccountingAccountParams struct {
 	ValidTo            pgtype.Date
 	IsAnalytic         bool
 	ID                 int64
+	EnterpriseID       int64
 }
 
 func (q *Queries) UpdateAccountingAccount(ctx context.Context, arg UpdateAccountingAccountParams) (AccountingAccountRow, error) {
 	row := q.db.QueryRow(ctx, updateAccountingAccount,
 		arg.PlanID, arg.ParentID, arg.AccountNumber, arg.Description, arg.NatureCode,
-		arg.ReducedCode, arg.RequiresCostCenter, arg.ValidFrom, arg.ValidTo, arg.IsAnalytic, arg.ID,
+		arg.ReducedCode, arg.RequiresCostCenter, arg.ValidFrom, arg.ValidTo, arg.IsAnalytic, arg.ID, arg.EnterpriseID,
 	)
 	var i AccountingAccountRow
 	err := row.Scan(
@@ -300,7 +315,9 @@ func (q *Queries) ListReferenceAccounts(ctx context.Context, institutionCode int
 
 const createAccountRef = `
 INSERT INTO accounting_account_refs (account_id, ref_account_id, empresa_id, cost_center_id)
-VALUES ($1, $2, $3, $4)
+SELECT $1, $2, $3::integer, $4
+ WHERE EXISTS (SELECT 1 FROM accounting_accounts a JOIN accounting_plans p ON p.id = a.plan_id
+                WHERE a.id = $1 AND p.enterprise_id = $3::integer)
 RETURNING id, account_id, ref_account_id, empresa_id, cost_center_id, created_at
 `
 
@@ -355,7 +372,10 @@ func (q *Queries) ListAccountRefs(ctx context.Context, empresaID int32) ([]Accou
 
 const createJournalEntry = `
 INSERT INTO accounting_journal_entries (plan_id, empresa_id, entry_date, entry_number, batch_number, debit_account_id, credit_account_id, debit_cc_id, credit_cc_id, value, history_code, description, entry_type)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+SELECT $1, $2::integer, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+ WHERE EXISTS (SELECT 1 FROM accounting_plans p WHERE p.id = $1 AND p.enterprise_id = $2::integer)
+   AND EXISTS (SELECT 1 FROM accounting_accounts a WHERE a.id = $6 AND a.plan_id = $1)
+   AND EXISTS (SELECT 1 FROM accounting_accounts a WHERE a.id = $7 AND a.plan_id = $1)
 RETURNING id, plan_id, empresa_id, entry_date, entry_number, batch_number, debit_account_id, credit_account_id, debit_cc_id, credit_cc_id, value, history_code, description, entry_type, created_at
 `
 
@@ -448,15 +468,16 @@ func (q *Queries) ListJournalEntries(ctx context.Context, arg ListJournalEntries
 // ─── Demonstratives ───────────────────────────────────────────────────────────
 
 const createDemonstrative = `
-INSERT INTO accounting_demonstratives (code, description, term_text)
-VALUES ($1, $2, $3)
+INSERT INTO accounting_demonstratives (code, description, term_text, enterprise_id)
+VALUES ($1, $2, $3, $4)
 RETURNING id, code, description, term_text, created_at
 `
 
 type CreateDemonstrativeParams struct {
-	Code        string
-	Description string
-	TermText    string
+	Code         string
+	Description  string
+	TermText     string
+	EnterpriseID int64
 }
 
 type DemonstrativeRow struct {
@@ -468,29 +489,29 @@ type DemonstrativeRow struct {
 }
 
 func (q *Queries) CreateDemonstrative(ctx context.Context, arg CreateDemonstrativeParams) (DemonstrativeRow, error) {
-	row := q.db.QueryRow(ctx, createDemonstrative, arg.Code, arg.Description, arg.TermText)
+	row := q.db.QueryRow(ctx, createDemonstrative, arg.Code, arg.Description, arg.TermText, arg.EnterpriseID)
 	var i DemonstrativeRow
 	err := row.Scan(&i.ID, &i.Code, &i.Description, &i.TermText, &i.CreatedAt)
 	return i, err
 }
 
 const getDemonstrative = `
-SELECT id, code, description, term_text, created_at FROM accounting_demonstratives WHERE id = $1
+SELECT id, code, description, term_text, created_at FROM accounting_demonstratives WHERE id = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetDemonstrative(ctx context.Context, id int64) (DemonstrativeRow, error) {
-	row := q.db.QueryRow(ctx, getDemonstrative, id)
+func (q *Queries) GetDemonstrative(ctx context.Context, id, enterpriseID int64) (DemonstrativeRow, error) {
+	row := q.db.QueryRow(ctx, getDemonstrative, id, enterpriseID)
 	var i DemonstrativeRow
 	err := row.Scan(&i.ID, &i.Code, &i.Description, &i.TermText, &i.CreatedAt)
 	return i, err
 }
 
 const listDemonstratives = `
-SELECT id, code, description, term_text, created_at FROM accounting_demonstratives ORDER BY code
+SELECT id, code, description, term_text, created_at FROM accounting_demonstratives WHERE enterprise_id = $1 ORDER BY code
 `
 
-func (q *Queries) ListDemonstratives(ctx context.Context) ([]DemonstrativeRow, error) {
-	rows, err := q.db.Query(ctx, listDemonstratives)
+func (q *Queries) ListDemonstratives(ctx context.Context, enterpriseID int64) ([]DemonstrativeRow, error) {
+	rows, err := q.db.Query(ctx, listDemonstratives, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +531,8 @@ func (q *Queries) ListDemonstratives(ctx context.Context) ([]DemonstrativeRow, e
 
 const createDemonstrativeItem = `
 INSERT INTO accounting_demonstrative_items (demonstrative_id, item_code, description, formula, indicator_group, show_in_report, show_bold, is_result, is_100pct, sped_ecf_digit, sped_ecf_type)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+ WHERE EXISTS (SELECT 1 FROM accounting_demonstratives d WHERE d.id = $1 AND d.enterprise_id = $12)
 RETURNING id, demonstrative_id, item_code, description, formula, indicator_group, show_in_report, show_bold, is_result, is_100pct, sped_ecf_digit, sped_ecf_type, created_at
 `
 
@@ -526,6 +548,7 @@ type CreateDemonstrativeItemParams struct {
 	Is100Pct        bool
 	SpedEcfDigit    string
 	SpedEcfType     string
+	EnterpriseID    int64
 }
 
 type DemonstrativeItemRow struct {
@@ -547,7 +570,7 @@ type DemonstrativeItemRow struct {
 func (q *Queries) CreateDemonstrativeItem(ctx context.Context, arg CreateDemonstrativeItemParams) (DemonstrativeItemRow, error) {
 	row := q.db.QueryRow(ctx, createDemonstrativeItem,
 		arg.DemonstrativeID, arg.ItemCode, arg.Description, arg.Formula, arg.IndicatorGroup,
-		arg.ShowInReport, arg.ShowBold, arg.IsResult, arg.Is100Pct, arg.SpedEcfDigit, arg.SpedEcfType,
+		arg.ShowInReport, arg.ShowBold, arg.IsResult, arg.Is100Pct, arg.SpedEcfDigit, arg.SpedEcfType, arg.EnterpriseID,
 	)
 	var i DemonstrativeItemRow
 	err := row.Scan(
@@ -560,11 +583,13 @@ func (q *Queries) CreateDemonstrativeItem(ctx context.Context, arg CreateDemonst
 
 const listDemonstrativeItems = `
 SELECT id, demonstrative_id, item_code, description, formula, indicator_group, show_in_report, show_bold, is_result, is_100pct, sped_ecf_digit, sped_ecf_type, created_at
-FROM accounting_demonstrative_items WHERE demonstrative_id = $1 ORDER BY item_code
+FROM accounting_demonstrative_items WHERE demonstrative_id = $1
+  AND EXISTS (SELECT 1 FROM accounting_demonstratives d WHERE d.id = $1 AND d.enterprise_id = $2)
+ORDER BY item_code
 `
 
-func (q *Queries) ListDemonstrativeItems(ctx context.Context, demonstrativeID int64) ([]DemonstrativeItemRow, error) {
-	rows, err := q.db.Query(ctx, listDemonstrativeItems, demonstrativeID)
+func (q *Queries) ListDemonstrativeItems(ctx context.Context, demonstrativeID, enterpriseID int64) ([]DemonstrativeItemRow, error) {
+	rows, err := q.db.Query(ctx, listDemonstrativeItems, demonstrativeID, enterpriseID)
 	if err != nil {
 		return nil, err
 	}

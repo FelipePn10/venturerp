@@ -202,3 +202,20 @@ func (h *MRPReportHandler) Explosion(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.Explosion(r.Context(), item, quantity, reportDate(r.URL.Query().Get("at")), filter)
 	reportResult(w, result, err)
 }
+
+// Coverage é o monitor de cobertura de materiais do plano (?plan_code=,
+// planner=, item_type=, warehouse_id=, only_with_message=true para só os itens
+// com problema).
+func (h *MRPReportHandler) Coverage(w http.ResponseWriter, r *http.Request) {
+	filter, err := reportFilter(r)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.uc.Coverage(r.Context(), filter, time.Now())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}

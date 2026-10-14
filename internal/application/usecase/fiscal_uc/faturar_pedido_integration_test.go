@@ -55,7 +55,7 @@ func TestIntegration_FaturarPedidoParcialmente(t *testing.T) {
 		testutil.Exec(t, pool, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id,name,accounting_sale_fiscal_classification_code)
 			VALUES($1,($1::bigint)::text,$1,$2,$3,'PRODUTO '||$1::text,$4)`, code, actor, enterpriseID, fmt.Sprint(u%1_000_000_000))
 	}
-	if err := pool.QueryRow(bg, `INSERT INTO customers(code,name,document_number,created_by) VALUES($1,'CLIENTE DO PEDIDO','12345678000195',$2) RETURNING id`, customerCode, actor).Scan(&customerID); err != nil {
+	if err := pool.QueryRow(bg, `INSERT INTO customers(code,name,document_number,created_by,enterprise_id) VALUES($1,'CLIENTE DO PEDIDO','12345678000195',$2,$3) RETURNING id`, customerCode, actor, enterpriseID).Scan(&customerID); err != nil {
 		t.Fatal(err)
 	}
 	testutil.Exec(t, pool, `INSERT INTO customer_addresses(customer_id,address_type,zip_code,street,number,neighborhood,city,uf,is_default)

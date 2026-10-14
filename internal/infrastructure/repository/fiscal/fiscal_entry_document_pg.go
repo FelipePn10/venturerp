@@ -72,7 +72,7 @@ func (r *FiscalRepositoryPG) FindEntryByChave(ctx context.Context, chave string)
 	if chave == "" {
 		return nil, nil
 	}
-	e, err := scanEntryHeader(r.pool.QueryRow(ctx,
+	e, err := scanEntryHeader(r.db.QueryRow(ctx,
 		`SELECT `+entryHeaderCols+` FROM fiscal_entries e
 		  WHERE e.enterprise_id = $1 AND e.chave_acesso = $2 AND e.is_active AND e.status <> 'CANCELLED'
 		  ORDER BY e.id LIMIT 1`, empresa, chave))
@@ -90,7 +90,7 @@ func (r *FiscalRepositoryPG) CreateEntryDocument(ctx context.Context, e *entity.
 	if err != nil {
 		return nil, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (r *FiscalRepositoryPG) GetEntryXML(ctx context.Context, id int64) (int64, 
 	}
 	var numero int64
 	var conteudo *string
-	err = r.pool.QueryRow(ctx, `SELECT numero_nf, xml_content FROM fiscal_entries WHERE id=$1 AND enterprise_id=$2`, id, empresa).Scan(&numero, &conteudo)
+	err = r.db.QueryRow(ctx, `SELECT numero_nf, xml_content FROM fiscal_entries WHERE id=$1 AND enterprise_id=$2`, id, empresa).Scan(&numero, &conteudo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, "", errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de entrada %d não encontrada", id))
 	}
@@ -252,7 +252,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 	if err != nil {
 		return nil, err
 	}
-	e, err := scanEntryHeader(r.pool.QueryRow(ctx,
+	e, err := scanEntryHeader(r.db.QueryRow(ctx,
 		`SELECT `+entryHeaderCols+` FROM fiscal_entries e WHERE e.id = $1 AND e.enterprise_id = $2`, id, empresa))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de entrada %d não encontrada", id))
@@ -267,7 +267,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 		return nil, err
 	}
 
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT i.id, i.fiscal_entry_id, i.sequence, i.item_code, i.ncm, i.cfop, i.quantity, i.unit_price, i.total_price,
 		        i.base_icms, i.aliq_icms, i.valor_icms, i.base_ipi, i.aliq_ipi, i.valor_ipi, i.valor_pis, i.valor_cofins,
 		        i.cst_icms, i.cst_ipi, i.cst_pis, i.cst_cofins,
@@ -289,7 +289,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 		   LEFT JOIN plano_contas pc ON pc.id = i.plano_contas_id AND pc.enterprise_id = $2
 		   LEFT JOIN centros_custo cc ON cc.id = i.centro_custo_id AND cc.enterprise_id = $2
 		   LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.enterprise_id = $2
-		   LEFT JOIN entry_operation_types op ON op.code = i.entry_operation_code
+		   LEFT JOIN entry_operation_types op ON op.code = i.entry_operation_code AND op.enterprise_id = $2
 		   LEFT JOIN purchase_order_items poi ON poi.code = i.purchase_order_item_code
 		   LEFT JOIN purchase_orders po ON po.code = COALESCE(poi.purchase_order_code, i.purchase_order_code) AND po.enterprise_code = $3
 		  WHERE i.fiscal_entry_id = $1
@@ -332,7 +332,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 }
 
 func (r *FiscalRepositoryPG) loadParcelas(ctx context.Context, empresa, entryID int64) ([]*entity.FiscalEntryInstallment, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT p.id, p.fiscal_entry_id, p.numero, p.documento, p.data_vencimento, p.valor, p.forma_pagamento, p.origem, p.conta_pagar_id,
 		        a.id, a.plano_contas_id, a.centro_custo_id, a.valor
 		   FROM fiscal_entry_installments p
@@ -372,7 +372,7 @@ func (r *FiscalRepositoryPG) SaveConciliation(ctx context.Context, entryID int64
 	if err != nil {
 		return err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func (r *FiscalRepositoryPG) SupplierByCode(ctx context.Context, code int64) (*r
 		return nil, err
 	}
 	var s repository.SupplierRef
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT s.code, s.name, s.is_active, s.blocked
 		   FROM suppliers s WHERE s.enterprise_id = $1 AND s.code = $2`, empresa, code).Scan(&s.Code, &s.Name, &s.IsActive, &s.Blocked)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -523,7 +523,7 @@ func (r *FiscalRepositoryPG) LinkSupplierToPendingEntries(ctx context.Context, c
 	if digitos == "" {
 		return 0, nil
 	}
-	tag, err := r.pool.Exec(ctx,
+	tag, err := r.db.Exec(ctx,
 		`UPDATE fiscal_entries SET supplier_code = $3, updated_at = NOW()
 		  WHERE enterprise_id = $1 AND regexp_replace(cnpj_emitente, '\D', '', 'g') = $2
 		    AND supplier_code IS NULL AND status IN ('PENDING','CONFERRED') AND is_active`, empresa, digitos, code)
@@ -544,7 +544,7 @@ func (r *FiscalRepositoryPG) FindSupplierByDocument(ctx context.Context, documen
 	}
 	// O documento pode ter sido cadastrado com máscara: compara só os dígitos.
 	var s repository.SupplierRef
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT s.code, s.name, s.is_active, s.blocked,
 		        (SELECT se.financial_account FROM supplier_enterprises se
 		          WHERE se.supplier_id = s.id AND se.is_active
@@ -571,7 +571,7 @@ func (r *FiscalRepositoryPG) ResolveByEAN(ctx context.Context, supplierCode *int
 	if ean == "" {
 		return nil, nil
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT DISTINCT s.item_code, CASE WHEN s.supplier_code = $3 THEN s.id END
 		   FROM item_preferred_suppliers s
 		   JOIN items it ON it.code = s.item_code AND it.enterprise_id = s.enterprise_id
@@ -605,7 +605,7 @@ func (r *FiscalRepositoryPG) LastAccountForItem(ctx context.Context, itemCode in
 		return nil, err
 	}
 	var a repository.ItemAccount
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT i.plano_contas_id, i.centro_custo_id
 		   FROM fiscal_entry_items i
 		   JOIN fiscal_entries e ON e.id = i.fiscal_entry_id AND e.enterprise_id = $1
@@ -631,7 +631,7 @@ func (r *FiscalRepositoryPG) PlanoContasByCodigo(ctx context.Context, codigo str
 		return nil, nil
 	}
 	var id int64
-	err = r.pool.QueryRow(ctx, `SELECT id FROM plano_contas WHERE enterprise_id=$1 AND codigo=$2 AND is_active LIMIT 1`, empresa, codigo).Scan(&id)
+	err = r.db.QueryRow(ctx, `SELECT id FROM plano_contas WHERE enterprise_id=$1 AND codigo=$2 AND is_active LIMIT 1`, empresa, codigo).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -697,7 +697,7 @@ func (r *FiscalRepositoryPG) SupplierLinksForEntry(ctx context.Context, supplier
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT it.code, it.name, it.warehouse_unit_of_measurement::text, `+ncmDoItemSQL+`, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
 		        COALESCE(s.supplier_item_code,''), s.id, COALESCE(s.supplier_description,''), s.xml_uom, s.conversion_factor, COALESCE(s.barcode,'')
 		   FROM item_preferred_suppliers s
@@ -724,7 +724,7 @@ func (r *FiscalRepositoryPG) SupplierLinksForEntry(ctx context.Context, supplier
 }
 
 func (r *FiscalRepositoryPG) queryCandidatos(ctx context.Context, q string, args ...any) ([]repository.ItemCandidate, error) {
-	rows, err := r.pool.Query(ctx, q, args...)
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("buscando itens do cadastro: %w", err)
 	}
@@ -757,7 +757,7 @@ func (r *FiscalRepositoryPG) existentes(ctx context.Context, q string, ids []int
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := r.pool.Query(ctx, q, empresa, ids)
+	rows, err := r.db.Query(ctx, q, empresa, ids)
 	if err != nil {
 		return nil, err
 	}

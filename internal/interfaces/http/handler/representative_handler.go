@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,8 +23,7 @@ func NewRepresentativeHandler(uc *representative_uc.UseCase) *RepresentativeHand
 
 func (h *RepresentativeHandler) CreateType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateRepresentativeTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateType(r.Context(), dto)
@@ -42,8 +40,7 @@ func (h *RepresentativeHandler) UpdateType(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var dto request.UpdateRepresentativeTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -80,8 +77,7 @@ func (h *RepresentativeHandler) ListTypes(w http.ResponseWriter, r *http.Request
 
 func (h *RepresentativeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateRepresentativeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.Create(r.Context(), dto)
@@ -98,8 +94,7 @@ func (h *RepresentativeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateRepresentativeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.Code = code
@@ -139,7 +134,9 @@ func (h *RepresentativeHandler) Block(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.BlockRepresentativeDTO
-	_ = json.NewDecoder(r.Body).Decode(&dto)
+	if !security.DecodeBodyOptional(w, r, &dto) {
+		return
+	}
 	if err := h.uc.Block(r.Context(), code, dto); err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -267,6 +264,9 @@ func (h *RepresentativeHandler) Report(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RepresentativeHandler) FollowUp(w http.ResponseWriter, r *http.Request) {
+	if !filtroValido(w, r) {
+		return
+	}
 	result, err := h.uc.FollowUp(r.Context(), parseFollowUpFilter(r))
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -342,8 +342,7 @@ func parseIntList(raw string) []int64 {
 }
 
 func decodeRepresentative(w http.ResponseWriter, r *http.Request, dto any) bool {
-	if err := json.NewDecoder(r.Body).Decode(dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, dto) {
 		return false
 	}
 	return true

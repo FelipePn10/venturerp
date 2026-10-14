@@ -33,6 +33,25 @@ const reservationRefShipment = "SHIPMENT"
 type ShipmentUseCase struct {
 	Repo  repository.ShipmentRepository
 	Stock StockReserver // optional; when nil, separation skips stock reservation
+	// Transacao roda status + reservas do romaneio numa transação só: separar,
+	// despachar ou cancelar grava tudo ou nada. Sem ela (testes), roda direto.
+	Transacao EmTransacaoRomaneio
+}
+
+// RomaneioRepos são os repositórios ligados à transação do romaneio.
+type RomaneioRepos struct {
+	Romaneios repository.ShipmentRepository
+	Estoque   StockReserver
+}
+
+// EmTransacaoRomaneio roda fn numa transação; erro devolvido desfaz tudo.
+type EmTransacaoRomaneio func(ctx context.Context, fn func(RomaneioRepos) error) error
+
+func (uc *ShipmentUseCase) emTransacao(ctx context.Context, fn func(RomaneioRepos) error) error {
+	if uc.Transacao == nil {
+		return fn(RomaneioRepos{Romaneios: uc.Repo, Estoque: uc.Stock})
+	}
+	return uc.Transacao(ctx, fn)
 }
 
 type CreateShipmentInput struct {
@@ -94,7 +113,7 @@ func (uc *ShipmentUseCase) AddItem(ctx context.Context, in AddShipmentItemInput)
 		return nil, err
 	}
 	if ship.Status != entity.ShipmentStatusOpen && ship.Status != entity.ShipmentStatusSeparated {
-		return nil, fmt.Errorf("romaneio %d não aceita itens no status %s", in.ShipmentCode, ship.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não aceita itens no status %s", in.ShipmentCode, ship.Status))
 	}
 	item := &entity.ShipmentItem{
 		ShipmentID:         ship.ID,
@@ -111,7 +130,9 @@ func (uc *ShipmentUseCase) AddItem(ctx context.Context, in AddShipmentItemInput)
 	if err != nil {
 		return nil, err
 	}
-	_ = uc.Repo.RecalcTotals(ctx, in.ShipmentCode)
+	if err := uc.Repo.RecalcTotals(ctx, in.ShipmentCode); err != nil {
+		return nil, fmt.Errorf("recalculando os totais do romaneio: %w", err)
+	}
 	return toShipmentItemResponse(created), nil
 }
 
@@ -182,10 +203,14 @@ func (uc *ShipmentUseCase) Separate(ctx context.Context, code int64, actor uuid.
 		return err
 	}
 	if len(ship.Items) == 0 {
-		return fmt.Errorf("romaneio %d não possui itens para separar", code)
+		return errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não possui itens para separar", code))
 	}
-	uc.reserveStock(ctx, ship, actor)
-	return uc.Repo.UpdateStatus(ctx, code, entity.ShipmentStatusSeparated, &actor, "separação")
+	return uc.emTransacao(ctx, func(r RomaneioRepos) error {
+		if err := reserveStock(ctx, r.Estoque, ship, actor); err != nil {
+			return err
+		}
+		return r.Romaneios.UpdateStatus(ctx, code, entity.ShipmentStatusSeparated, &actor, "separação")
+	})
 }
 
 // Confer moves SEPARATED → CONFERRED. Every line must already be conferred.
@@ -199,7 +224,7 @@ func (uc *ShipmentUseCase) Confer(ctx context.Context, code int64, actor uuid.UU
 	}
 	for _, it := range ship.Items {
 		if !it.IsConferred {
-			return fmt.Errorf("item %d (seq %d) ainda não conferido", it.ItemCode, it.Sequence)
+			return errorsuc.NewValidationError(fmt.Sprintf("item %d (seq %d) ainda não conferido", it.ItemCode, it.Sequence))
 		}
 	}
 	return uc.Repo.UpdateStatus(ctx, code, entity.ShipmentStatusConferred, &actor, "conferência")
@@ -219,8 +244,12 @@ func (uc *ShipmentUseCase) Ship(ctx context.Context, code int64, actor uuid.UUID
 	if err := ship.ValidateForShipping(acceptDivergences); err != nil {
 		return err
 	}
-	uc.releaseReservations(ctx, ship.Code, true)
-	return uc.Repo.UpdateStatus(ctx, code, entity.ShipmentStatusShipped, &actor, "despacho")
+	return uc.emTransacao(ctx, func(r RomaneioRepos) error {
+		if err := releaseReservations(ctx, r.Estoque, ship.Code, true); err != nil {
+			return err
+		}
+		return r.Romaneios.UpdateStatus(ctx, code, entity.ShipmentStatusShipped, &actor, "despacho")
+	})
 }
 
 // Cancel cancels a non-shipped romaneio and releases its stock reservations.
@@ -232,8 +261,12 @@ func (uc *ShipmentUseCase) Cancel(ctx context.Context, code int64, actor uuid.UU
 	if err := guardTransition(ship, entity.ShipmentStatusCancelled); err != nil {
 		return err
 	}
-	uc.releaseReservations(ctx, ship.Code, false)
-	return uc.Repo.UpdateStatus(ctx, code, entity.ShipmentStatusCancelled, &actor, reason)
+	return uc.emTransacao(ctx, func(r RomaneioRepos) error {
+		if err := releaseReservations(ctx, r.Estoque, ship.Code, false); err != nil {
+			return err
+		}
+		return r.Romaneios.UpdateStatus(ctx, code, entity.ShipmentStatusCancelled, &actor, reason)
+	})
 }
 
 // UpdateTransport sets the trip/transport data (carrier, freight, vehicle,
@@ -288,7 +321,9 @@ func (uc *ShipmentUseCase) AddVolume(ctx context.Context, in AddVolumeInput) (*r
 	if err != nil {
 		return nil, err
 	}
-	_ = uc.Repo.RecalcTotals(ctx, in.ShipmentCode)
+	if err := uc.Repo.RecalcTotals(ctx, in.ShipmentCode); err != nil {
+		return nil, fmt.Errorf("recalculando os totais do romaneio: %w", err)
+	}
 	return toShipmentVolumeResponse(created), nil
 }
 
@@ -329,9 +364,9 @@ func guardTransition(ship *entity.Shipment, next entity.ShipmentStatus) error {
 	return nil
 }
 
-func (uc *ShipmentUseCase) reserveStock(ctx context.Context, ship *entity.Shipment, actor uuid.UUID) {
-	if uc.Stock == nil {
-		return
+func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipment, actor uuid.UUID) error {
+	if estoque == nil {
+		return nil
 	}
 	for _, it := range ship.Items {
 		wh := int64(0)
@@ -342,7 +377,7 @@ func (uc *ShipmentUseCase) reserveStock(ctx context.Context, ship *entity.Shipme
 		if qty <= 0 {
 			continue
 		}
-		_, _ = uc.Stock.CreateReservation(ctx, &stockentity.StockReservation{
+		if _, err := estoque.CreateReservation(ctx, &stockentity.StockReservation{
 			ItemCode:          it.ItemCode,
 			WarehouseID:       wh,
 			Quantity:          qty,
@@ -352,29 +387,35 @@ func (uc *ShipmentUseCase) reserveStock(ctx context.Context, ship *entity.Shipme
 			ReservationDate:   time.Now(),
 			Status:            "ACTIVE",
 			CreatedBy:         actor,
-		})
+		}); err != nil {
+			return fmt.Errorf("reservando o item %d do romaneio: %w", it.ItemCode, err)
+		}
 	}
+	return nil
 }
 
-// releaseReservations consumes (on ship) or cancels (on cancel) every active
-// reservation that this romaneio created. Best-effort: stock hiccups never block
-// the romaneio transition.
-func (uc *ShipmentUseCase) releaseReservations(ctx context.Context, shipmentCode int64, consume bool) {
-	if uc.Stock == nil {
-		return
+// releaseReservations baixa (no despacho) ou cancela (no cancelamento) as
+// reservas ativas do romaneio. Falha desfaz a transição — antes era ignorada e
+// o romaneio despachava com o estoque ainda reservado.
+func releaseReservations(ctx context.Context, estoque StockReserver, shipmentCode int64, consume bool) error {
+	if estoque == nil {
+		return nil
 	}
-	active, err := uc.Stock.ListActiveReservations(ctx)
+	active, err := estoque.ListActiveReservations(ctx)
 	if err != nil {
-		return
+		return fmt.Errorf("lendo as reservas do romaneio: %w", err)
 	}
 	for _, res := range active {
 		if res.ReferenceType != reservationRefShipment || res.ReferenceCode != shipmentCode {
 			continue
 		}
 		if consume {
-			_ = uc.Stock.ConsumeReservation(ctx, res.ID)
-		} else {
-			_ = uc.Stock.CancelReservation(ctx, res.ID)
+			if err := estoque.ConsumeReservation(ctx, res.ID); err != nil {
+				return fmt.Errorf("baixando a reserva %d: %w", res.ID, err)
+			}
+		} else if err := estoque.CancelReservation(ctx, res.ID); err != nil {
+			return fmt.Errorf("cancelando a reserva %d: %w", res.ID, err)
 		}
 	}
+	return nil
 }

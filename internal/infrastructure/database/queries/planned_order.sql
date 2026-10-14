@@ -85,8 +85,8 @@ SELECT EXISTS (
 SELECT EXISTS (
     SELECT 1
     FROM production_orders po
-    JOIN planned_orders planned ON planned.code = po.planned_order_id
-    WHERE po.planned_order_id = $1
+    JOIN planned_orders planned ON planned.id = po.planned_order_id
+    WHERE planned.code = $1
       AND planned.enterprise_id = @enterprise_id
       AND (
           EXISTS (SELECT 1 FROM production_appointments pa WHERE pa.production_order_id = po.id)
@@ -118,3 +118,31 @@ WHERE item_code = ANY(@item_codes::bigint[])
   AND is_firm = TRUE
   AND is_active = TRUE
 ORDER BY item_code, need_date;
+
+-- name: ReschedulePlannedOrder :one
+-- Move a necessidade da ordem e desloca início e fim pelo mesmo intervalo, para
+-- preservar o prazo de fabricação/compra.
+UPDATE planned_orders
+   SET start_date = start_date + (sqlc.arg(need_date)::date - need_date),
+       end_date   = end_date + (sqlc.arg(need_date)::date - need_date),
+       need_date  = sqlc.arg(need_date)::date,
+       updated_at = NOW()
+ WHERE code = @code AND enterprise_id = @enterprise_id AND is_active
+RETURNING *;
+
+-- name: CancelPlannedOrder :one
+UPDATE planned_orders
+   SET status = 'CANCELLED', is_firm = FALSE, is_active = FALSE, updated_at = NOW()
+ WHERE code = $1 AND enterprise_id = @enterprise_id AND is_active
+RETURNING *;
+
+-- name: GetPlannedOrderActiveProductionOrder :one
+-- OF ainda viva gerada pela ordem planejada. O vínculo é pelo ID interno da
+-- ordem planejada (production_orders.planned_order_id → planned_orders.id).
+SELECT po.order_number
+  FROM production_orders po
+  JOIN planned_orders planned ON planned.id = po.planned_order_id
+ WHERE planned.code = $1 AND planned.enterprise_id = @enterprise_id
+   AND po.status NOT IN ('CANCELLED')
+ ORDER BY po.id DESC
+ LIMIT 1;

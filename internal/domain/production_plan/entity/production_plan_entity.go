@@ -25,9 +25,13 @@ type ProductionPlan struct {
 	LastCalculatedAt    *time.Time
 	Parameters          map[string]interface{}
 	IsActive            bool
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	CreatedBy           uuid.UUID
+	// IsScenario: plano oculto de um cenário de simulação. Calcula como
+	// qualquer plano, mas não aparece nas listas, não é alterado pelo cadastro
+	// e nada dele vira ordem real.
+	IsScenario bool
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	CreatedBy  uuid.UUID
 }
 
 type InterFactoryEnterprise struct {

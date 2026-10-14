@@ -3,9 +3,13 @@ package procurement
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"strings"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/procurement/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/procurement/repository"
@@ -22,18 +26,37 @@ func New(pool *pgxpool.Pool) domainrepo.Repository {
 	return &Repository{pool: pool}
 }
 
+// empresa é o código da empresa da sessão — a convenção do módulo de compras.
+// TODA consulta deste repositório filtra por ela: o módulo nasceu supondo uma
+// empresa por banco e a sonda cruzada leu registros de uma empresa a partir de
+// outra.
+func empresa(ctx context.Context) (int64, error) {
+	return tenant.Code(ctx)
+}
+
+func naoEncontrado(err error, msg string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(msg)
+	}
+	return err
+}
+
 func (r *Repository) CreateRecord(ctx context.Context, rec *entity.Record) (*entity.Record, error) {
 	if len(rec.Payload) == 0 {
 		rec.Payload = json.RawMessage(`{}`)
 	}
-	err := r.pool.QueryRow(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO procurement_records
 			(record_type, status, supplier_code, purchase_order_code, purchase_order_item_code,
-			 item_code, mask, warehouse_id, quantity, reference, payload, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			 item_code, mask, warehouse_id, quantity, reference, payload, created_by, enterprise_code)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		RETURNING id, opened_at, closed_at, updated_at`,
 		rec.RecordType, rec.Status, rec.SupplierCode, rec.PurchaseOrderCode, rec.PurchaseOrderItemCode,
-		rec.ItemCode, rec.Mask, rec.WarehouseID, rec.Quantity, rec.Reference, rec.Payload, rec.CreatedBy,
+		rec.ItemCode, rec.Mask, rec.WarehouseID, rec.Quantity, rec.Reference, rec.Payload, rec.CreatedBy, emp,
 	).Scan(&rec.ID, &rec.OpenedAt, &rec.ClosedAt, &rec.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating procurement record: %w", err)
@@ -42,7 +65,11 @@ func (r *Repository) CreateRecord(ctx context.Context, rec *entity.Record) (*ent
 }
 
 func (r *Repository) GetRecord(ctx context.Context, id int64) (*entity.Record, error) {
-	rows, err := r.pool.Query(ctx, baseRecordSelect()+` WHERE id=$1`, id)
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, baseRecordSelect()+` WHERE id=$1 AND enterprise_code=$2`, id, emp)
 	if err != nil {
 		return nil, fmt.Errorf("fetching procurement record: %w", err)
 	}
@@ -52,25 +79,27 @@ func (r *Repository) GetRecord(ctx context.Context, id int64) (*entity.Record, e
 		return nil, err
 	}
 	if len(records) == 0 {
-		return nil, pgx.ErrNoRows
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("registro de suprimentos %d não encontrado", id))
 	}
 	return records[0], nil
 }
 
 func (r *Repository) ListRecords(ctx context.Context, recordType, status string) ([]*entity.Record, error) {
-	query := baseRecordSelect()
-	args := []any{}
-	if recordType != "" && status != "" {
-		query += ` WHERE record_type=$1 AND status=$2`
-		args = append(args, recordType, status)
-	} else if recordType != "" {
-		query += ` WHERE record_type=$1`
-		args = append(args, recordType)
-	} else if status != "" {
-		query += ` WHERE status=$1`
-		args = append(args, status)
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
 	}
-	query += ` ORDER BY opened_at DESC, id DESC`
+	args := []any{emp}
+	conds := []string{"enterprise_code=$1"}
+	if recordType != "" {
+		args = append(args, recordType)
+		conds = append(conds, fmt.Sprintf("record_type=$%d", len(args)))
+	}
+	if status != "" {
+		args = append(args, status)
+		conds = append(conds, fmt.Sprintf("status=$%d", len(args)))
+	}
+	query := baseRecordSelect() + " WHERE " + strings.Join(conds, " AND ") + ` ORDER BY opened_at DESC, id DESC`
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing procurement records: %w", err)
@@ -80,26 +109,40 @@ func (r *Repository) ListRecords(ctx context.Context, recordType, status string)
 }
 
 func (r *Repository) UpdateRecordStatus(ctx context.Context, id int64, status entity.RecordStatus) (*entity.Record, error) {
-	_, err := r.pool.Exec(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx, `
 		UPDATE procurement_records
 		SET status=$2,
 		    closed_at = CASE WHEN $2 IN ('APPROVED','REJECTED','CLOSED','CANCELLED') THEN COALESCE(closed_at, NOW()) ELSE closed_at END,
 		    updated_at=NOW()
-		WHERE id=$1`, id, status)
+		WHERE id=$1 AND enterprise_code=$3`, id, status, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating procurement record status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("registro de suprimentos %d não encontrado", id))
 	}
 	return r.GetRecord(ctx, id)
 }
 
 func (r *Repository) CreateInspectionDisposition(ctx context.Context, d *entity.InspectionDisposition) (*entity.InspectionDisposition, error) {
-	err := r.pool.QueryRow(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO procurement_inspection_dispositions
 			(record_id, approved_qty, rejected_qty, quarantine_warehouse_id, destination_warehouse_id, reason, disposed_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		SELECT r.id, $2,$3,$4,$5,$6,$7 FROM procurement_records r WHERE r.id=$1 AND r.enterprise_code=$8
 		RETURNING id, disposed_at`,
-		d.RecordID, d.ApprovedQty, d.RejectedQty, d.QuarantineWarehouseID, d.DestinationWarehouseID, d.Reason, d.DisposedBy,
+		d.RecordID, d.ApprovedQty, d.RejectedQty, d.QuarantineWarehouseID, d.DestinationWarehouseID, d.Reason, d.DisposedBy, emp,
 	).Scan(&d.ID, &d.DisposedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("registro de suprimentos %d não encontrado", d.RecordID))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating inspection disposition: %w", err)
 	}
@@ -108,14 +151,18 @@ func (r *Repository) CreateInspectionDisposition(ctx context.Context, d *entity.
 
 func (r *Repository) CreateSupplierScorecard(ctx context.Context, s *entity.SupplierScorecard) (*entity.SupplierScorecard, error) {
 	s.OverallScore = (s.QualityScore * 0.40) + (s.DeliveryScore * 0.30) + (s.CommercialScore * 0.20) + (s.ServiceScore * 0.10)
-	err := r.pool.QueryRow(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO supplier_scorecard_snapshots
 			(supplier_code, period_start, period_end, quality_score, delivery_score, commercial_score,
-			 service_score, overall_score, total_receipts, rejected_receipts, late_receipts, notes, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			 service_score, overall_score, total_receipts, rejected_receipts, late_receipts, notes, created_by, enterprise_code)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 		RETURNING id, created_at`,
 		s.SupplierCode, s.PeriodStart, s.PeriodEnd, s.QualityScore, s.DeliveryScore, s.CommercialScore,
-		s.ServiceScore, s.OverallScore, s.TotalReceipts, s.RejectedReceipts, s.LateReceipts, s.Notes, s.CreatedBy,
+		s.ServiceScore, s.OverallScore, s.TotalReceipts, s.RejectedReceipts, s.LateReceipts, s.Notes, s.CreatedBy, emp,
 	).Scan(&s.ID, &s.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating supplier scorecard: %w", err)
@@ -124,12 +171,16 @@ func (r *Repository) CreateSupplierScorecard(ctx context.Context, s *entity.Supp
 }
 
 func (r *Repository) ListSupplierScorecards(ctx context.Context, supplierCode int64) ([]*entity.SupplierScorecard, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, supplier_code, period_start, period_end, quality_score, delivery_score, commercial_score,
 		       service_score, overall_score, total_receipts, rejected_receipts, late_receipts, notes, created_at, created_by
 		FROM supplier_scorecard_snapshots
-		WHERE supplier_code=$1
-		ORDER BY period_end DESC`, supplierCode)
+		WHERE supplier_code=$1 AND enterprise_code=$2
+		ORDER BY period_end DESC`, supplierCode, emp)
 	if err != nil {
 		return nil, fmt.Errorf("listing supplier scorecards: %w", err)
 	}
@@ -149,6 +200,11 @@ func (r *Repository) ListSupplierScorecards(ctx context.Context, supplierCode in
 }
 
 func (r *Repository) CreateReceivingInspectionRoute(ctx context.Context, route *entity.ReceivingInspectionRoute) (*entity.ReceivingInspectionRoute, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	route.EnterpriseCode = emp
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning inspection route tx: %w", err)
@@ -205,9 +261,13 @@ func (r *Repository) CreateReceivingInspectionRoute(ctx context.Context, route *
 }
 
 func (r *Repository) GetReceivingInspectionRoute(ctx context.Context, id int64) (*entity.ReceivingInspectionRoute, error) {
-	route, err := r.getRoute(ctx, `WHERE id=$1`, id)
+	emp, err := empresa(ctx)
 	if err != nil {
 		return nil, err
+	}
+	route, err := r.getRoute(ctx, `WHERE id=$1 AND enterprise_code=$2`, id, emp)
+	if err != nil {
+		return nil, naoEncontrado(err, fmt.Sprintf("roteiro de inspeção %d não encontrado", id))
 	}
 	return route, nil
 }
@@ -241,16 +301,20 @@ func (r *Repository) FindReceivingInspectionRoute(ctx context.Context, enterpris
 }
 
 func (r *Repository) CreateReceivingInspectionOrder(ctx context.Context, order *entity.ReceivingInspectionOrder) (*entity.ReceivingInspectionOrder, error) {
-	err := r.pool.QueryRow(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO receiving_inspection_orders
 			(route_id, procurement_record_id, source, supplier_code, purchase_order_code, purchase_order_item_code,
 			 fiscal_entry_code, receiving_notice_code, item_code, mask, lot, serial_number, warehouse_id,
-			 quantity, certificate, supplier_note, model, notes, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+			 quantity, certificate, supplier_note, model, notes, created_by, enterprise_code)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 		RETURNING id, order_number, status, inspected_qty, approved_qty, rejected_qty, rework_qty, restricted_qty, created_at, updated_at`,
 		order.RouteID, order.ProcurementRecordID, order.Source, order.SupplierCode, order.PurchaseOrderCode, order.PurchaseOrderItemCode,
 		order.FiscalEntryCode, order.ReceivingNoticeCode, order.ItemCode, order.Mask, order.Lot, order.SerialNumber, order.WarehouseID,
-		order.Quantity, order.Certificate, order.SupplierNote, order.Model, order.Notes, order.CreatedBy,
+		order.Quantity, order.Certificate, order.SupplierNote, order.Model, order.Notes, order.CreatedBy, emp,
 	).Scan(&order.ID, &order.OrderNumber, &order.Status, &order.InspectedQty, &order.ApprovedQty, &order.RejectedQty, &order.ReworkQty, &order.RestrictedQty, &order.CreatedAt, &order.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating receiving inspection order: %w", err)
@@ -259,7 +323,11 @@ func (r *Repository) CreateReceivingInspectionOrder(ctx context.Context, order *
 }
 
 func (r *Repository) GetReceivingInspectionOrder(ctx context.Context, id int64) (*entity.ReceivingInspectionOrder, error) {
-	rows, err := r.pool.Query(ctx, baseInspectionOrderSelect()+` WHERE id=$1`, id)
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, baseInspectionOrderSelect()+` WHERE id=$1 AND enterprise_code=$2`, id, emp)
 	if err != nil {
 		return nil, fmt.Errorf("fetching receiving inspection order: %w", err)
 	}
@@ -269,16 +337,20 @@ func (r *Repository) GetReceivingInspectionOrder(ctx context.Context, id int64) 
 		return nil, err
 	}
 	if len(orders) == 0 {
-		return nil, pgx.ErrNoRows
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", id))
 	}
 	return orders[0], nil
 }
 
 func (r *Repository) ListReceivingInspectionOrders(ctx context.Context, status string) ([]*entity.ReceivingInspectionOrder, error) {
-	query := baseInspectionOrderSelect()
-	args := []any{}
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	query := baseInspectionOrderSelect() + ` WHERE enterprise_code=$1`
+	args := []any{emp}
 	if status != "" {
-		query += ` WHERE status=$1`
+		query += ` AND status=$2`
 		args = append(args, status)
 	}
 	query += ` ORDER BY created_at DESC, id DESC LIMIT 200`
@@ -291,6 +363,10 @@ func (r *Repository) ListReceivingInspectionOrders(ctx context.Context, status s
 }
 
 func (r *Repository) CreateReceivingInspectionResult(ctx context.Context, result *entity.ReceivingInspectionResult) (*entity.ReceivingInspectionResult, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning inspection result tx: %w", err)
@@ -301,11 +377,14 @@ func (r *Repository) CreateReceivingInspectionResult(ctx context.Context, result
 		INSERT INTO receiving_inspection_results
 			(order_id, step_id, sequence, sample_index, measured_value, min_value, max_value,
 			 attribute_description, is_approved, notes, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		SELECT o.id,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11 FROM receiving_inspection_orders o WHERE o.id=$1 AND o.enterprise_code=$12
 		RETURNING id, created_at`,
 		result.OrderID, result.StepID, result.Sequence, result.SampleIndex, result.MeasuredValue, result.MinValue,
-		result.MaxValue, result.AttributeDescription, result.IsApproved, result.Notes, result.CreatedBy,
+		result.MaxValue, result.AttributeDescription, result.IsApproved, result.Notes, result.CreatedBy, emp,
 	).Scan(&result.ID, &result.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", result.OrderID))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating receiving inspection result: %w", err)
 	}
@@ -321,8 +400,8 @@ func (r *Repository) CreateReceivingInspectionResult(ctx context.Context, result
 		    rejected_qty = rejected_qty + CASE WHEN $2 THEN 0 ELSE 1 END,
 		    status = CASE WHEN $3 = 'PENDING_ANALYSIS' THEN 'PENDING_ANALYSIS'::receiving_inspection_order_status ELSE status END,
 		    updated_at = NOW()
-		WHERE id=$1`,
-		result.OrderID, result.IsApproved, status)
+		WHERE id=$1 AND enterprise_code=$4`,
+		result.OrderID, result.IsApproved, status, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating receiving inspection order from result: %w", err)
 	}
@@ -333,6 +412,10 @@ func (r *Repository) CreateReceivingInspectionResult(ctx context.Context, result
 }
 
 func (r *Repository) CreateReceivingInspectionAnalysis(ctx context.Context, analysis *entity.ReceivingInspectionAnalysis) (*entity.ReceivingInspectionAnalysis, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning inspection analysis tx: %w", err)
@@ -342,11 +425,14 @@ func (r *Repository) CreateReceivingInspectionAnalysis(ctx context.Context, anal
 	err = tx.QueryRow(ctx, `
 		INSERT INTO receiving_inspection_analyses
 			(order_id, conform_qty, rejected_qty, rework_qty, restricted_qty, treatment, affects_supplier_score, notes, analyzed_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		SELECT o.id,$2,$3,$4,$5,$6,$7,$8,$9 FROM receiving_inspection_orders o WHERE o.id=$1 AND o.enterprise_code=$10
 		RETURNING id, analyzed_at`,
 		analysis.OrderID, analysis.ConformQty, analysis.RejectedQty, analysis.ReworkQty, analysis.RestrictedQty,
-		analysis.Treatment, analysis.AffectsSupplierScore, analysis.Notes, analysis.AnalyzedBy,
+		analysis.Treatment, analysis.AffectsSupplierScore, analysis.Notes, analysis.AnalyzedBy, emp,
 	).Scan(&analysis.ID, &analysis.AnalyzedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", analysis.OrderID))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating receiving inspection analysis: %w", err)
 	}
@@ -362,8 +448,8 @@ func (r *Repository) CreateReceivingInspectionAnalysis(ctx context.Context, anal
 		UPDATE receiving_inspection_orders
 		SET approved_qty=$2, rejected_qty=$3, rework_qty=$4, restricted_qty=$5,
 		    status=$6::receiving_inspection_order_status, updated_at=NOW()
-		WHERE id=$1`,
-		analysis.OrderID, analysis.ConformQty, analysis.RejectedQty, analysis.ReworkQty, analysis.RestrictedQty, status)
+		WHERE id=$1 AND enterprise_code=$7`,
+		analysis.OrderID, analysis.ConformQty, analysis.RejectedQty, analysis.ReworkQty, analysis.RestrictedQty, status, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating receiving inspection order from analysis: %w", err)
 	}
@@ -594,7 +680,12 @@ func ParseDate(value string) (time.Time, error) {
 // ---- Approval limits (alçada de valores) ----
 
 func (r *Repository) CreateApprovalLimit(ctx context.Context, limit *entity.ApprovalLimit) (*entity.ApprovalLimit, error) {
-	err := r.pool.QueryRow(ctx, `
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	limit.EnterpriseCode = emp
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO purchase_approval_limits
 			(enterprise_code, scope, scope_ref, currency, auto_approve_max, block_above,
 			 valid_from, valid_to, notes, created_by)
@@ -688,6 +779,11 @@ func scanApprovalLimits(rows pgx.Rows) ([]*entity.ApprovalLimit, error) {
 // ---- Supplier contracts ----
 
 func (r *Repository) CreateSupplierContract(ctx context.Context, c *entity.SupplierContract) (*entity.SupplierContract, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c.EnterpriseCode = emp
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning contract tx: %w", err)
@@ -726,12 +822,16 @@ func (r *Repository) CreateSupplierContract(ctx context.Context, c *entity.Suppl
 }
 
 func (r *Repository) GetSupplierContract(ctx context.Context, id int64) (*entity.SupplierContract, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var c entity.SupplierContract
-	err := r.pool.QueryRow(ctx, baseSupplierContractSelect()+` WHERE id=$1`, id).Scan(
+	err = r.pool.QueryRow(ctx, baseSupplierContractSelect()+` WHERE id=$1 AND enterprise_code=$2`, id, emp).Scan(
 		&c.ID, &c.EnterpriseCode, &c.SupplierCode, &c.ContractNumber, &c.Description, &c.Status, &c.Currency,
 		&c.ValidFrom, &c.ValidTo, &c.PriceIndex, &c.Notes, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("fetching supplier contract: %w", err)
+		return nil, naoEncontrado(fmt.Errorf("fetching supplier contract: %w", err), fmt.Sprintf("contrato %d não encontrado", id))
 	}
 	items, err := r.listContractItems(ctx, c.ID)
 	if err != nil {
@@ -742,9 +842,13 @@ func (r *Repository) GetSupplierContract(ctx context.Context, id int64) (*entity
 }
 
 func (r *Repository) ListSupplierContracts(ctx context.Context, supplierCode int64, status string) ([]*entity.SupplierContract, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	query := baseSupplierContractSelect()
-	args := []any{}
-	conds := []string{}
+	args := []any{emp}
+	conds := []string{"enterprise_code=$1"}
 	if supplierCode > 0 {
 		args = append(args, supplierCode)
 		conds = append(conds, fmt.Sprintf("supplier_code=$%d", len(args)))
@@ -788,19 +892,31 @@ func (r *Repository) ListSupplierContracts(ctx context.Context, supplierCode int
 }
 
 func (r *Repository) UpdateSupplierContractStatus(ctx context.Context, id int64, status string) (*entity.SupplierContract, error) {
-	_, err := r.pool.Exec(ctx, `UPDATE supplier_contracts SET status=$2, updated_at=NOW() WHERE id=$1`, id, status)
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE supplier_contracts SET status=$2, updated_at=NOW() WHERE id=$1 AND enterprise_code=$3`, id, status, emp)
 	if err != nil {
 		return nil, fmt.Errorf("updating supplier contract status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("contrato %d não encontrado", id))
 	}
 	return r.GetSupplierContract(ctx, id)
 }
 
 func (r *Repository) FindContractItem(ctx context.Context, contractID, itemCode int64, mask string) (*entity.SupplierContractItem, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var it entity.SupplierContractItem
-	err := r.pool.QueryRow(ctx, `
-		SELECT id, contract_id, item_code, mask, unit, contracted_qty, consumed_qty, unit_price, min_order_qty, notes
-		FROM supplier_contract_items
-		WHERE contract_id=$1 AND item_code=$2 AND mask=$3`, contractID, itemCode, mask).Scan(
+	err = r.pool.QueryRow(ctx, `
+		SELECT ci.id, ci.contract_id, ci.item_code, ci.mask, ci.unit, ci.contracted_qty, ci.consumed_qty, ci.unit_price, ci.min_order_qty, ci.notes
+		FROM supplier_contract_items ci
+		JOIN supplier_contracts c ON c.id = ci.contract_id AND c.enterprise_code = $4
+		WHERE ci.contract_id=$1 AND ci.item_code=$2 AND ci.mask=$3`, contractID, itemCode, mask, emp).Scan(
 		&it.ID, &it.ContractID, &it.ItemCode, &it.Mask, &it.Unit, &it.ContractedQty, &it.ConsumedQty, &it.UnitPrice, &it.MinOrderQty, &it.Notes)
 	if err != nil {
 		return nil, fmt.Errorf("finding contract item: %w", err)
@@ -811,13 +927,18 @@ func (r *Repository) FindContractItem(ctx context.Context, contractID, itemCode 
 // ConsumeContractItem atomically increases consumed_qty without exceeding the
 // contracted balance, returning the updated line.
 func (r *Repository) ConsumeContractItem(ctx context.Context, contractItemID int64, qty float64) (*entity.SupplierContractItem, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var it entity.SupplierContractItem
-	err := r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		UPDATE supplier_contract_items
 		SET consumed_qty = consumed_qty + $2
 		WHERE id=$1 AND consumed_qty + $2 <= contracted_qty + 0.0001
+		  AND EXISTS (SELECT 1 FROM supplier_contracts c WHERE c.id = supplier_contract_items.contract_id AND c.enterprise_code = $3)
 		RETURNING id, contract_id, item_code, mask, unit, contracted_qty, consumed_qty, unit_price, min_order_qty, notes`,
-		contractItemID, qty).Scan(
+		contractItemID, qty, emp).Scan(
 		&it.ID, &it.ContractID, &it.ItemCode, &it.Mask, &it.Unit, &it.ContractedQty, &it.ConsumedQty, &it.UnitPrice, &it.MinOrderQty, &it.Notes)
 	if err == pgx.ErrNoRows {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("o consumo de %.4f excede o saldo contratado do item de contrato %d", qty, contractItemID))
@@ -859,18 +980,22 @@ func baseSupplierContractSelect() string {
 // ---- Supplier performance for IQF ----
 
 func (r *Repository) AggregateSupplierPerformance(ctx context.Context, supplierCode int64, from, to time.Time) (*entity.SupplierPerformanceAggregate, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	agg := &entity.SupplierPerformanceAggregate{}
 	// Quality: from receiving inspection orders/analyses in the window.
-	err := r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE o.rejected_qty > 0 OR o.status = 'REJECTED'),
 			COALESCE(SUM(o.quantity), 0),
 			COALESCE(SUM(o.rejected_qty), 0)
 		FROM receiving_inspection_orders o
-		WHERE o.supplier_code = $1
+		WHERE o.supplier_code = $1 AND o.enterprise_code = $4
 		  AND o.created_at >= $2 AND o.created_at < ($3::date + INTERVAL '1 day')`,
-		supplierCode, from, to).Scan(&agg.TotalReceipts, &agg.RejectedReceipts, &agg.InspectedQty, &agg.RejectedQty)
+		supplierCode, from, to, emp).Scan(&agg.TotalReceipts, &agg.RejectedReceipts, &agg.InspectedQty, &agg.RejectedQty)
 	if err != nil {
 		return nil, fmt.Errorf("aggregating supplier quality: %w", err)
 	}
@@ -879,12 +1004,12 @@ func (r *Repository) AggregateSupplierPerformance(ctx context.Context, supplierC
 		SELECT COUNT(*)
 		FROM purchase_order_items i
 		JOIN purchase_orders o ON o.code = i.purchase_order_code
-		WHERE o.supplier_code = $1
+		WHERE o.supplier_code = $1 AND o.enterprise_code = $4
 		  AND i.received_qty > 0
 		  AND COALESCE(i.promised_date, i.delivery_date, o.delivery_date) IS NOT NULL
 		  AND i.updated_at::date > COALESCE(i.promised_date, i.delivery_date, o.delivery_date)::date
 		  AND o.emission_date >= $2 AND o.emission_date < ($3::date + INTERVAL '1 day')`,
-		supplierCode, from, to).Scan(&agg.LateReceipts)
+		supplierCode, from, to, emp).Scan(&agg.LateReceipts)
 	if err != nil {
 		return nil, fmt.Errorf("aggregating supplier delivery: %w", err)
 	}
@@ -897,8 +1022,12 @@ func (r *Repository) ListPurchaseMovementHistory(ctx context.Context, supplierCo
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	args := []any{}
-	conds := []string{}
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	args := []any{emp}
+	conds := []string{"o.enterprise_code=$1"}
 	if supplierCode != nil {
 		args = append(args, *supplierCode)
 		conds = append(conds, fmt.Sprintf("o.supplier_code=$%d", len(args)))

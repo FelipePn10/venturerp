@@ -3,7 +3,7 @@ package overhead_allocation_uc
 import (
 	"context"
 	"fmt"
-	"time"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -28,8 +28,14 @@ func (uc *CreateOverheadAllocationUseCase) Execute(
 	if dto.CostCenterCode == 0 {
 		return nil, errorsuc.NewValidationError("informe o centro de custo")
 	}
-	start, _ := time.Parse("2006-01-02", dto.PeriodStart)
-	end, _ := time.Parse("2006-01-02", dto.PeriodEnd)
+	start, msg := datetime.Obrigatoria("data inicial do período", dto.PeriodStart)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
+	end, msg := datetime.Obrigatoria("data final do período", dto.PeriodEnd)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 
 	oa := &entity.OverheadAllocation{
 		CostCenterCode:  dto.CostCenterCode,

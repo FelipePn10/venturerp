@@ -800,7 +800,9 @@ func (r *Repository) AcquireProviderPermit(ctx context.Context, tenant int64, ow
 		return ProviderPermit{}, err
 	}
 	if !ok {
-		_, _ = tx.Exec(ctx, `UPDATE notification_provider_rate_windows SET sent_count=GREATEST(sent_count-1,0) WHERE scope_key='GLOBAL' AND window_start=$1`, window)
+		if _, err := tx.Exec(ctx, `UPDATE notification_provider_rate_windows SET sent_count=GREATEST(sent_count-1,0) WHERE scope_key='GLOBAL' AND window_start=$1`, window); err != nil {
+			return ProviderPermit{}, err
+		}
 		return ProviderPermit{RetryAt: window.Add(time.Minute), Reason: "LIMITE_EMPRESA"}, tx.Commit(ctx)
 	}
 	return ProviderPermit{Allowed: true}, tx.Commit(ctx)
@@ -877,7 +879,7 @@ func (r *Repository) CreateCycleCount(ctx context.Context, c notificationentity.
 		return notificationentity.CycleCount{}, err
 	}
 	var associationsValid bool
-	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM warehouse WHERE id=$1)`, c.WarehouseID).Scan(&associationsValid)
+	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM warehouse WHERE id=$1 AND enterprise_id=$2)`, c.WarehouseID, c.EnterpriseID).Scan(&associationsValid)
 	if err != nil {
 		return notificationentity.CycleCount{}, err
 	}

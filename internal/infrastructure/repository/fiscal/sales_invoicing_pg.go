@@ -26,7 +26,7 @@ func (r *FiscalRepositoryPG) QuantidadesEmNota(ctx context.Context, salesOrderCo
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT i.sales_order_item_code, SUM(i.quantity)
 		   FROM fiscal_exit_items i
 		   JOIN fiscal_exits e ON e.id = i.fiscal_exit_id
@@ -60,7 +60,7 @@ func (r *FiscalRepositoryPG) RegistrarFaturamento(ctx context.Context, fiscalExi
 	if err != nil {
 		return false, false, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return false, false, err
 	}
@@ -115,8 +115,12 @@ func (r *FiscalRepositoryPG) RegistrarFaturamento(ctx context.Context, fiscalExi
 }
 
 func (r *FiscalRepositoryPG) NomeRepresentante(ctx context.Context, code int64) (string, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return "", err
+	}
 	var n string
-	err := r.pool.QueryRow(ctx, `SELECT name FROM representatives WHERE code=$1`, code).Scan(&n)
+	err = r.db.QueryRow(ctx, `SELECT name FROM representatives WHERE code=$1 AND enterprise_code=$2`, code, empresa).Scan(&n)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
@@ -128,7 +132,7 @@ func (r *FiscalRepositoryPG) NotasDoPedido(ctx context.Context, salesOrderCode i
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, numero_nf, status, valor_total FROM fiscal_exits
 		  WHERE enterprise_id=$1 AND sales_order_code=$2 AND is_active ORDER BY id`, empresa, salesOrderCode)
 	if err != nil {

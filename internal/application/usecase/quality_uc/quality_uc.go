@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -46,9 +47,12 @@ func (uc *QualityUseCase) CreatePlan(ctx context.Context, dto request.CreateInsp
 func (uc *QualityUseCase) GetPlan(ctx context.Context, id int64) (*response.InspectionPlanResponse, error) {
 	plan, err := uc.repo.GetPlanByID(ctx, id)
 	if err != nil {
-		return nil, errorsuc.NewNotFoundError("plano de inspeção não encontrado")
+		return nil, err
 	}
-	chars, _ := uc.repo.ListCharacteristics(ctx, id)
+	chars, errCaract := uc.repo.ListCharacteristics(ctx, id)
+	if errCaract != nil {
+		return nil, fmt.Errorf("lendo as características do plano de inspeção: %w", errCaract)
+	}
 	return toPlanResponse(plan, chars), nil
 }
 
@@ -59,7 +63,10 @@ func (uc *QualityUseCase) ListPlansByItem(ctx context.Context, itemCode int64) (
 	}
 	out := make([]*response.InspectionPlanResponse, 0, len(plans))
 	for _, p := range plans {
-		chars, _ := uc.repo.ListCharacteristics(ctx, p.ID)
+		chars, errCaract := uc.repo.ListCharacteristics(ctx, p.ID)
+		if errCaract != nil {
+			return nil, fmt.Errorf("lendo as características do plano de inspeção: %w", errCaract)
+		}
 		out = append(out, toPlanResponse(p, chars))
 	}
 	return out, nil
@@ -72,6 +79,20 @@ func (uc *QualityUseCase) DeactivatePlan(ctx context.Context, id int64) error {
 // ─── characteristics ──────────────────────────────────────────────────────────
 
 func (uc *QualityUseCase) AddCharacteristic(ctx context.Context, dto request.AddCharacteristicDTO) (*response.CharacteristicResponse, error) {
+	if dto.PlanID <= 0 {
+		return nil, errorsuc.NewValidationError("informe o plano de inspeção")
+	}
+	if strings.TrimSpace(dto.Name) == "" {
+		return nil, errorsuc.NewValidationError("informe o nome da característica")
+	}
+	if dto.ToleranceLower != nil && dto.ToleranceUpper != nil && *dto.ToleranceLower > *dto.ToleranceUpper {
+		return nil, errorsuc.NewValidationError("a tolerância inferior não pode ser maior que a superior")
+	}
+	// Antes o plano inexistente (ou de outra empresa) só era recusado pela
+	// chave estrangeira, e o usuário lia a mensagem do banco.
+	if _, err := uc.repo.GetPlanByID(ctx, dto.PlanID); err != nil {
+		return nil, err
+	}
 	c := &entity.InspectionCharacteristic{
 		PlanID:         dto.PlanID,
 		Name:           dto.Name,
@@ -113,12 +134,14 @@ func (uc *QualityUseCase) CreateRecord(ctx context.Context, dto request.CreateQu
 	}
 
 	for _, m := range dto.Measurements {
-		_ = uc.repo.AddMeasurement(ctx, &entity.QualityMeasurement{
+		if err := uc.repo.AddMeasurement(ctx, &entity.QualityMeasurement{
 			RecordID:         created.ID,
 			CharacteristicID: m.CharacteristicID,
 			MeasuredValue:    m.MeasuredValue,
 			IsConformant:     m.IsConformant,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("gravando a medição: %w", err)
+		}
 	}
 
 	return toRecordResponse(created), nil

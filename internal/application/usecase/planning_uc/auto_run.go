@@ -7,6 +7,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/google/uuid"
 )
@@ -28,6 +29,7 @@ const (
 // AutoRunSettings é a janela noturna configurada para uma empresa.
 type AutoRunSettings struct {
 	EnterpriseID       int64
+	EnterpriseCode     int64
 	IsEnabled          bool
 	RunHour            int
 	RunMinute          int
@@ -36,6 +38,10 @@ type AutoRunSettings struct {
 	GenerateLLC        bool
 	LastSnapshotAt     *time.Time
 	LastRunAt          *time.Time
+	LastRunStatus      string
+	// UpdatedBy é quem salvou a parametrização: a execução automática roda em
+	// nome dele, como se ele tivesse clicado em "Calcular".
+	UpdatedBy *uuid.UUID
 }
 
 // RunRecord é a linha de histórico de uma execução.
@@ -45,13 +51,18 @@ type RunRecord struct {
 	PlanCode     int64
 	Trigger      Trigger
 	TriggeredBy  *uuid.UUID
-	SnapshotAt   time.Time
-	ChangedItems int
-	MRPOrders    int
-	CRPOverload  int
-	Viable       *bool
-	Status       string
-	Notes        string
+	// TriggeredByName é o nome de quem disparou (ou de quem ligou a execução
+	// automática), para o histórico não mostrar um identificador.
+	TriggeredByName string
+	SnapshotAt      time.Time
+	StartedAt       time.Time
+	FinishedAt      *time.Time
+	ChangedItems    int
+	MRPOrders       int
+	CRPOverload     int
+	Viable          *bool
+	Status          string
+	Notes           string
 }
 
 // PlanningRunRepository guarda a parametrização, o histórico e o cadeado que
@@ -72,6 +83,14 @@ type PlanningRunRepository interface {
 	StartRun(ctx context.Context, rec RunRecord) (int64, error)
 	FinishRun(ctx context.Context, id int64, rec RunRecord) error
 	SaveSnapshot(ctx context.Context, enterpriseID int64, snapshotAt time.Time, status string) error
+	// SaveSettings grava a parametrização da empresa sem tocar no corte nem na
+	// última execução.
+	SaveSettings(ctx context.Context, s AutoRunSettings) error
+	// ListRuns devolve as últimas execuções da empresa, da mais recente para a
+	// mais antiga.
+	ListRuns(ctx context.Context, enterpriseID int64, limit int) ([]RunRecord, error)
+	// PlanExists diz se o plano pertence à empresa.
+	PlanExists(ctx context.Context, enterpriseID, planCode int64) (bool, error)
 }
 
 // AutoRunPlanningUseCase executa o planejamento com as garantias que um MRP
@@ -87,6 +106,11 @@ type PlanningRunRepository interface {
 type AutoRunPlanningUseCase struct {
 	Pipeline pipelineRunner
 	Repo     PlanningRunRepository
+	Auth     ports.AuthService
+	// Session monta a sessão da empresa para a execução automática, que roda
+	// sem ninguém logado. Sem ela o MRP não sabe de qual empresa são os dados
+	// nem em nome de quem gravar as ordens.
+	Session func(context.Context, AutoRunSettings) context.Context
 	// Now permite fixar o relógio nos testes.
 	Now func() time.Time
 }
@@ -107,7 +131,11 @@ func (uc *AutoRunPlanningUseCase) RunDue(ctx context.Context) (int, error) {
 	}
 	executadas := 0
 	for _, s := range pendentes {
-		if _, err := uc.Run(ctx, s, TriggerAutomatico, nil); err != nil {
+		ectx := ctx
+		if uc.Session != nil {
+			ectx = uc.Session(ctx, s)
+		}
+		if _, err := uc.Run(ectx, s, TriggerAutomatico, s.UpdatedBy); err != nil {
 			// Uma empresa com problema não pode impedir as demais.
 			continue
 		}
@@ -157,6 +185,7 @@ func (uc *AutoRunPlanningUseCase) Run(
 		Trigger:      trigger,
 		TriggeredBy:  actor,
 		SnapshotAt:   snapshot,
+		StartedAt:    snapshot,
 		ChangedItems: alterados,
 		Status:       "RUNNING",
 	}
@@ -175,9 +204,16 @@ func (uc *AutoRunPlanningUseCase) Run(
 	if err != nil {
 		rec.Status = "FAILED"
 		rec.Notes = err.Error()
-		_ = uc.Repo.FinishRun(context.WithoutCancel(ctx), id, rec)
-		_ = uc.Repo.SaveSnapshot(context.WithoutCancel(ctx), s.EnterpriseID, snapshot, "FAILED")
-		return nil, fmt.Errorf("execução do planejamento: %w", err)
+		// A falha da execução é o erro principal; se nem o registro dela gravar,
+		// isso vai junto na mensagem (o histórico ficaria "em andamento").
+		msg := ""
+		if errFim := uc.Repo.FinishRun(context.WithoutCancel(ctx), id, rec); errFim != nil {
+			msg += "; o histórico da execução não pôde ser encerrado: " + errFim.Error()
+		}
+		if errFoto := uc.Repo.SaveSnapshot(context.WithoutCancel(ctx), s.EnterpriseID, snapshot, "FAILED"); errFoto != nil {
+			msg += "; a fotografia do plano não pôde ser gravada: " + errFoto.Error()
+		}
+		return nil, fmt.Errorf("execução do planejamento: %w%s", err, msg)
 	}
 
 	viavel := result.Viable
@@ -191,6 +227,8 @@ func (uc *AutoRunPlanningUseCase) Run(
 	if err := uc.Repo.FinishRun(ctx, id, rec); err != nil {
 		return nil, err
 	}
+	fim := uc.now()
+	rec.FinishedAt = &fim
 	// O corte só avança quando o ciclo termina bem: se falhar, a próxima
 	// execução reprocessa a mesma janela em vez de pular alterações.
 	if err := uc.Repo.SaveSnapshot(ctx, s.EnterpriseID, snapshot, "SUCCESS"); err != nil {

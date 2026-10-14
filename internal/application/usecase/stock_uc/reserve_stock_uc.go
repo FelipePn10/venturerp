@@ -2,6 +2,7 @@ package stock_uc
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -40,16 +41,19 @@ func (uc *ReserveStockUseCase) Execute(ctx context.Context, dto request.CreateRe
 		CreatedBy:         userID,
 	}
 
-	if dto.ReservationDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.ReservationDate)
-		res.ReservationDate = t
-	} else {
-		res.ReservationDate = time.Now()
+	res.ReservationDate = time.Now()
+	if t, msg := datetime.Opcional("data da reserva", dto.ReservationDate); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	} else if t != nil {
+		res.ReservationDate = *t
 	}
 
 	if dto.ExpirationDate != nil {
-		t, _ := time.Parse("2006-01-02", *dto.ExpirationDate)
-		res.ExpirationDate = &t
+		t, msg := datetime.Opcional("data de validade da reserva", dto.ExpirationDate)
+		if msg != "" {
+			return nil, errorsuc.NewValidationError(msg)
+		}
+		res.ExpirationDate = t
 	}
 
 	created, err := uc.Repo.CreateReservation(ctx, res)

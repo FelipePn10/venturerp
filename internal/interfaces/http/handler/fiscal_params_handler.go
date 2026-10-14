@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -33,13 +32,12 @@ func NewFiscalParamsHandler(
 
 func (h *FiscalParamsHandler) CreateLegalDevice(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateLegalDeviceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.legalDeviceUC.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -47,13 +45,12 @@ func (h *FiscalParamsHandler) CreateLegalDevice(w http.ResponseWriter, r *http.R
 
 func (h *FiscalParamsHandler) UpdateLegalDevice(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateLegalDeviceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.legalDeviceUC.Update(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -98,13 +95,12 @@ func (h *FiscalParamsHandler) ListLegalDevicesByType(w http.ResponseWriter, r *h
 
 func (h *FiscalParamsHandler) CreateCFOP(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCFOPDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.cfopUC.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -112,13 +108,12 @@ func (h *FiscalParamsHandler) CreateCFOP(w http.ResponseWriter, r *http.Request)
 
 func (h *FiscalParamsHandler) UpdateCFOP(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateCFOPDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.cfopUC.Update(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -163,13 +158,12 @@ func (h *FiscalParamsHandler) ListCFOPsByDirection(w http.ResponseWriter, r *htt
 
 func (h *FiscalParamsHandler) CreateTaxParam(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateTaxParamDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.taxParamUC.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -177,13 +171,12 @@ func (h *FiscalParamsHandler) CreateTaxParam(w http.ResponseWriter, r *http.Requ
 
 func (h *FiscalParamsHandler) UpdateTaxParam(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateTaxParamDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.taxParamUC.Update(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"math"
 	"strings"
 	"time"
@@ -201,13 +202,13 @@ type Region struct {
 
 func NewRegion(code int64, description string, uf, city string, createdBy uuid.UUID) (*Region, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if uf == "" {
-		return nil, fmt.Errorf("informe a UF")
+		return nil, domainerr.NewValidation("informe a UF")
 	}
 	if city == "" {
-		return nil, fmt.Errorf("informe a cidade")
+		return nil, domainerr.NewValidation("informe a cidade")
 	}
 	return &Region{
 		Code:        code,
@@ -235,10 +236,10 @@ type MarketSegment struct {
 
 func NewMarketSegment(code int64, description string, parentID *int64, hasRetention bool, retentionIndicator *int16) (*MarketSegment, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if hasRetention && retentionIndicator == nil {
-		return nil, fmt.Errorf("informe o indicador de retenção quando houver retenção de PIS/COFINS")
+		return nil, domainerr.NewValidation("informe o indicador de retenção quando houver retenção de PIS/COFINS")
 	}
 	return &MarketSegment{
 		Code:                  code,
@@ -263,7 +264,7 @@ type CustomerContactType struct {
 
 func NewContactType(code int64, description string) (*CustomerContactType, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	return &CustomerContactType{
 		Code:        code,
@@ -287,10 +288,10 @@ type CustomerType struct {
 
 func NewCustomerType(code int64, description string, category CustomerCategory, deliveryDays int16) (*CustomerType, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if category == "" {
 		category = CategoryNormal
@@ -332,7 +333,7 @@ type Carrier struct {
 
 func NewCarrier(code int64, description string, billingType CarrierBillingType) (*Carrier, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if billingType == "" {
 		billingType = BillingCarteira
@@ -398,12 +399,12 @@ func NormalizarParcelStart(valor string) (PaymentParcelStart, error) {
 	case ParcelStartEmissao, ParcelStartProximoMes, ParcelStartProximaQuinzena:
 		return v, nil
 	}
-	return "", fmt.Errorf("início das parcelas inválido: use EMISSAO, PROXIMO_MES ou PROXIMA_QUINZENA")
+	return "", domainerr.NewValidation("início das parcelas inválido: use EMISSAO, PROXIMO_MES ou PROXIMA_QUINZENA")
 }
 
 func NewPaymentCondition(code int64, description string, analysisType PaymentAnalysis) (*PaymentCondition, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if analysisType == "" {
 		analysisType = AnalysisLiberaSemAnalise
@@ -659,13 +660,13 @@ type CommercialPolicyEvaluation struct {
 
 func NewCommercialPolicy(code int64, description string, kind CommercialPolicyKind) (*CommercialPolicy, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if !ValidCommercialPolicyKind(kind) {
-		return nil, fmt.Errorf("tipo de política comercial inválido")
+		return nil, domainerr.NewValidation("tipo de política comercial inválido")
 	}
 	now := time.Now()
 	return &CommercialPolicy{
@@ -715,10 +716,10 @@ func ValidCommercialPolicyChoiceType(choice CommercialPolicyChoiceType) bool {
 
 func EvaluateCommercialPolicies(policies []*CommercialPolicy, ctx CommercialPolicyContext) (*CommercialPolicyEvaluation, error) {
 	if ctx.GrossValue < 0 {
-		return nil, fmt.Errorf("o valor bruto deve ser maior ou igual a zero")
+		return nil, domainerr.NewValidation("o valor bruto deve ser maior ou igual a zero")
 	}
 	if ctx.Quantity < 0 {
-		return nil, fmt.Errorf("a quantidade deve ser maior ou igual a zero")
+		return nil, domainerr.NewValidation("a quantidade deve ser maior ou igual a zero")
 	}
 	result := &CommercialPolicyEvaluation{GrossValue: ctx.GrossValue, NetValue: ctx.GrossValue}
 	appliedNonStackable := map[CommercialPolicyKind]bool{}
@@ -819,10 +820,10 @@ func (p *CommercialPolicy) CommercialPolicyValue(baseValue float64, now time.Tim
 		maxValue = line.MaxValue
 	}
 	if !ValidCommercialPolicyCalcType(calcType) {
-		return 0, calcType, percentValue, fixedValue, fmt.Errorf("tipo de cálculo da política comercial inválido: use percentual, valor fixo ou tabela")
+		return 0, calcType, percentValue, fixedValue, domainerr.NewValidation("tipo de cálculo da política comercial inválido: use percentual, valor fixo ou tabela")
 	}
 	if percentValue < 0 || fixedValue < 0 || p.MaxPercent < 0 || maxValue < 0 {
-		return 0, calcType, percentValue, fixedValue, fmt.Errorf("os valores da política comercial devem ser maiores ou iguais a zero")
+		return 0, calcType, percentValue, fixedValue, domainerr.NewValidation("os valores da política comercial devem ser maiores ou iguais a zero")
 	}
 	value := fixedValue
 	if calcType == CommercialPolicyPercent {
@@ -879,16 +880,16 @@ type SalesTablePriceHistory struct {
 
 func NewSalesPricePolicy(code int64, description string, source SalesCostSource) (*SalesPricePolicy, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if source == "" {
 		source = SalesCostStandardTotal
 	}
 	if !ValidSalesCostSource(source) {
-		return nil, fmt.Errorf("origem de custo inválida para a política de preço")
+		return nil, domainerr.NewValidation("origem de custo inválida para a política de preço")
 	}
 	now := time.Now()
 	return &SalesPricePolicy{
@@ -915,7 +916,7 @@ func ValidSalesCostSource(source SalesCostSource) bool {
 
 func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, error) {
 	if in.BaseCost < 0 {
-		return nil, fmt.Errorf("o custo base deve ser maior ou igual a zero")
+		return nil, domainerr.NewValidation("o custo base deve ser maior ou igual a zero")
 	}
 	for name, pct := range map[string]float64{
 		"markup_pct":     in.MarkupPct,
@@ -927,7 +928,7 @@ func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, er
 		"discount_pct":   in.DiscountPct,
 	} {
 		if pct < 0 {
-			return nil, fmt.Errorf("%s deve ser maior ou igual a zero", name)
+			return nil, domainerr.NewValidation(fmt.Sprintf("%s deve ser maior ou igual a zero", name))
 		}
 	}
 	if in.DecimalPlaces < 0 {
@@ -938,7 +939,7 @@ func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, er
 	if in.MarginPct > 0 || in.ExpensesPct > 0 || in.TaxesPct > 0 || in.FreightPct > 0 || in.CommissionPct > 0 || in.DiscountPct > 0 {
 		loadPct := in.MarginPct + in.ExpensesPct + in.TaxesPct + in.FreightPct + in.CommissionPct + in.DiscountPct
 		if loadPct >= 100 {
-			return nil, fmt.Errorf("a soma dos percentuais de margem e carga comercial deve ser menor que 100")
+			return nil, domainerr.NewValidation("a soma dos percentuais de margem e carga comercial deve ser menor que 100")
 		}
 		price = in.BaseCost * (1 + in.MarkupPct/100) / (1 - loadPct/100)
 	} else {
@@ -972,7 +973,7 @@ func roundMoney(v float64, places int16) float64 {
 
 func NewSalesTable(code int64, description string, formation PriceFormation) (*SalesTable, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if formation == "" {
 		formation = PriceInformado
@@ -983,8 +984,7 @@ func NewSalesTable(code int64, description string, formation PriceFormation) (*S
 	// humanização de erro esconde texto técnico e troca por "Dados inválidos".
 	// O usuário ficava sem saber qual campo nem o que serve.
 	if !formation.IsValid() {
-		return nil, fmt.Errorf("formação de preço %q não existe — use uma destas: %s",
-			string(formation), strings.Join(FormacoesDePreco(), ", "))
+		return nil, domainerr.NewValidation(fmt.Sprintf("formação de preço %q não existe — use uma destas: %s", string(formation), strings.Join(FormacoesDePreco(), ", ")))
 	}
 	return &SalesTable{
 		Code:           code,
@@ -1086,7 +1086,7 @@ type InvoiceType struct {
 
 func NewInvoiceType(code int64, description string, kind InvoiceTypeKind) (*InvoiceType, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if kind == "" {
 		kind = InvoiceVenda
@@ -1141,7 +1141,7 @@ type TaxType struct {
 
 func NewTaxType(code int64, description string) (*TaxType, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	return &TaxType{
 		Code:                          code,
@@ -1200,13 +1200,13 @@ type Customer struct {
 
 func NewCustomer(code int64, name string, docType DocumentType, docNumber string, createdBy uuid.UUID) (*Customer, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if name == "" {
-		return nil, fmt.Errorf("informe o nome")
+		return nil, domainerr.NewValidation("informe o nome")
 	}
 	if docNumber == "" {
-		return nil, fmt.Errorf("informe o número do documento")
+		return nil, domainerr.NewValidation("informe o número do documento")
 	}
 	if docType == "" {
 		docType = DocumentCNPJ

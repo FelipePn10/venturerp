@@ -787,7 +787,7 @@ func (uc *CustomerUseCase) applySalesPricePolicyDTO(ctx context.Context, p *enti
 		source = entity.SalesCostStandardTotal
 	}
 	if !entity.ValidSalesCostSource(source) {
-		return fmt.Errorf("invalid cost_source")
+		return errorsuc.NewValidationError("origem de custo inválida")
 	}
 	p.Description = dto.Description
 	p.CostSource = source
@@ -937,7 +937,7 @@ func (uc *CustomerUseCase) ListCommercialPolicies(ctx context.Context, onlyActiv
 	if rawKind != "" {
 		k := entity.CommercialPolicyKind(rawKind)
 		if !entity.ValidCommercialPolicyKind(k) {
-			return nil, fmt.Errorf("invalid kind")
+			return nil, errorsuc.NewValidationError("tipo de política inválido")
 		}
 		kind = &k
 	}
@@ -1081,14 +1081,14 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 	}
 	kind := entity.CommercialPolicyKind(dto.Kind)
 	if !entity.ValidCommercialPolicyKind(kind) {
-		return fmt.Errorf("invalid kind")
+		return errorsuc.NewValidationError("tipo de política inválido")
 	}
 	calcType := entity.CommercialPolicyCalcType(dto.CalcType)
 	if calcType == "" {
 		calcType = entity.CommercialPolicyPercent
 	}
 	if !entity.ValidCommercialPolicyCalcType(calcType) {
-		return fmt.Errorf("invalid calc_type")
+		return errorsuc.NewValidationError("tipo de cálculo inválido")
 	}
 	for name, value := range map[string]float64{
 		"percent_value":   dto.PercentValue,
@@ -1117,7 +1117,7 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 		choiceType = entity.CommercialPolicyInformation
 	}
 	if !entity.ValidCommercialPolicyChoiceType(choiceType) {
-		return fmt.Errorf("invalid choice_type")
+		return errorsuc.NewValidationError("tipo de escolha inválido")
 	}
 	p.ChoiceType = choiceType
 	p.CalcType = calcType
@@ -1199,10 +1199,10 @@ func (uc *CustomerUseCase) AddCommercialPolicyLine(ctx context.Context, dto requ
 		calcType = entity.CommercialPolicyPercent
 	}
 	if !entity.ValidCommercialPolicyCalcType(calcType) {
-		return nil, fmt.Errorf("invalid calc_type")
+		return nil, errorsuc.NewValidationError("tipo de cálculo inválido")
 	}
 	if dto.PercentValue < 0 || dto.FixedValue < 0 || dto.MinValue < 0 || dto.MaxValue < 0 {
-		return nil, fmt.Errorf("os valores da linha devem ser maiores ou iguais a zero")
+		return nil, errorsuc.NewValidationError("os valores da linha devem ser maiores ou iguais a zero")
 	}
 	if dto.MaxValue > 0 && dto.MinValue > dto.MaxValue {
 		return nil, errorsuc.NewValidationError("o valor mínimo não pode ser maior que o máximo")
@@ -2158,33 +2158,33 @@ func toSalesTablePriceHistoryResponse(h *entity.SalesTablePriceHistory) *respons
 
 func validateSalesTableForPricing(st *entity.SalesTable, now time.Time) error {
 	if !st.IsActive {
-		return fmt.Errorf("a tabela de venda está inativa")
+		return errorsuc.NewValidationError("a tabela de venda está inativa")
 	}
 	if st.ValidityStart != nil && now.Before(*st.ValidityStart) {
-		return fmt.Errorf("a vigência da tabela de venda ainda não começou")
+		return errorsuc.NewValidationError("a vigência da tabela de venda ainda não começou")
 	}
 	if st.ValidityEnd != nil && now.After(st.ValidityEnd.Add(24*time.Hour)) {
-		return fmt.Errorf("sales table validity has expired")
+		return errorsuc.NewValidationError("a vigência da tabela de venda expirou")
 	}
 	return nil
 }
 
 func validateSalesPricePolicyForPricing(p *entity.SalesPricePolicy, now time.Time) error {
 	if !p.IsActive {
-		return fmt.Errorf("a política de preço de venda está inativa")
+		return errorsuc.NewValidationError("a política de preço de venda está inativa")
 	}
 	if p.ValidityStart != nil && now.Before(*p.ValidityStart) {
-		return fmt.Errorf("a vigência da política de preço de venda ainda não começou")
+		return errorsuc.NewValidationError("a vigência da política de preço de venda ainda não começou")
 	}
 	if p.ValidityEnd != nil && now.After(p.ValidityEnd.Add(24*time.Hour)) {
-		return fmt.Errorf("sales price policy validity has expired")
+		return errorsuc.NewValidationError("a vigência da política de preço expirou")
 	}
 	margin := effectivePolicyMargin(p)
 	if margin < p.MinMarginPct {
-		return fmt.Errorf("a margem da política de preço é menor que a margem mínima")
+		return errorsuc.NewValidationError("a margem da política de preço é menor que a margem mínima")
 	}
 	if p.MaxMarginPct > 0 && margin > p.MaxMarginPct {
-		return fmt.Errorf("a margem da política de preço é maior que a margem máxima")
+		return errorsuc.NewValidationError("a margem da política de preço é maior que a margem máxima")
 	}
 	return nil
 }
@@ -2440,11 +2440,17 @@ func (uc *CustomerUseCase) GetCustomer(ctx context.Context, code int64) (*respon
 	}
 	resp := toCustomerResponse(c)
 	// Load addresses and contacts
-	addrs, _ := uc.repo.ListAddresses(ctx, c.ID)
+	addrs, errEnderecos := uc.repo.ListAddresses(ctx, c.ID)
+	if errEnderecos != nil {
+		return nil, fmt.Errorf("lendo os endereços do cliente: %w", errEnderecos)
+	}
 	for _, a := range addrs {
 		resp.Addresses = append(resp.Addresses, toAddressResponse(a))
 	}
-	contacts, _ := uc.repo.ListContacts(ctx, c.ID)
+	contacts, errContatos := uc.repo.ListContacts(ctx, c.ID)
+	if errContatos != nil {
+		return nil, fmt.Errorf("lendo os contatos do cliente: %w", errContatos)
+	}
 	for _, ct := range contacts {
 		resp.Contacts = append(resp.Contacts, toContactResponse(ct))
 	}

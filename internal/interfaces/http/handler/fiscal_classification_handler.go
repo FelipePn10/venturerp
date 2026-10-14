@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -21,13 +20,12 @@ func NewFiscalClassificationHandler(uc *fiscal_classification_uc.FiscalClassific
 
 func (h *FiscalClassificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateFiscalClassificationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -35,13 +33,12 @@ func (h *FiscalClassificationHandler) Create(w http.ResponseWriter, r *http.Requ
 
 func (h *FiscalClassificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateFiscalClassificationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.Update(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -73,13 +70,12 @@ func (h *FiscalClassificationHandler) List(w http.ResponseWriter, r *http.Reques
 
 func (h *FiscalClassificationHandler) AddLanguage(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddFiscalClassificationLanguageDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddLanguage(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -87,13 +83,12 @@ func (h *FiscalClassificationHandler) AddLanguage(w http.ResponseWriter, r *http
 
 func (h *FiscalClassificationHandler) AddExportAttribute(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddFiscalClassificationExportAttributeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddExportAttribute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)

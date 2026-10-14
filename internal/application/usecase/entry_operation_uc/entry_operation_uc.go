@@ -153,9 +153,13 @@ func (uc *EntryOperationUseCase) ValidateUF(ctx context.Context, code int64, ent
 	enterpriseUF = strings.ToUpper(strings.TrimSpace(enterpriseUF))
 	ufInGroup := false
 	if o.StateGroupCode != nil {
-		if in, gerr := uc.repo.UFInGroup(ctx, *o.StateGroupCode, enterpriseUF); gerr == nil {
-			ufInGroup = in
+		in, gerr := uc.repo.UFInGroup(ctx, *o.StateGroupCode, enterpriseUF)
+		if gerr != nil {
+			// Antes virava "UF fora do grupo" e a operação era recusada com a
+			// mensagem errada.
+			return fmt.Errorf("conferindo o grupo de estados da operação: %w", gerr)
 		}
+		ufInGroup = in
 	}
 	return o.ValidateUF(enterpriseUF, ufInGroup)
 }

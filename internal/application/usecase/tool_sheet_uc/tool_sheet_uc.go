@@ -6,6 +6,7 @@ package tool_sheet_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
@@ -14,6 +15,8 @@ import (
 	toolentity "github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -57,23 +60,47 @@ func mapSheetOrder(o sqlc.DBToolSheetOrder) response.ToolProductionSheetOrderRes
 	}
 }
 
-// enterprise resolves the "Empresa" being accessed. The deployment is
-// single-tenant, so the first registered enterprise is used.
-func (uc *ToolSheetUseCase) enterprise(ctx context.Context) (int64, string) {
-	ents, err := uc.Q.ListEnterprises(ctx)
-	if err != nil || len(ents) == 0 {
-		return 0, ""
+// enterprise é a empresa da sessão. A versão anterior supunha "uma empresa por
+// banco" e pegava a primeira cadastrada — com duas empresas no banco, a ficha
+// listava as ordens de todas e as rotulava com o nome de outra.
+func (uc *ToolSheetUseCase) enterprise(ctx context.Context) (int64, string, error) {
+	id, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, "", err
 	}
-	return ents[0].ID, ents[0].Name
+	e, err := uc.Q.GetEnterpriseByID(ctx, id)
+	if err != nil {
+		return 0, "", fmt.Errorf("lendo a empresa da sessão: %w", err)
+	}
+	return e.ID, e.Name, nil
+}
+
+// operacaoDaEmpresa recusa etapa de ordem de outra empresa.
+func (uc *ToolSheetUseCase) operacaoDaEmpresa(ctx context.Context, operationID int64) error {
+	id, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	ok, err := uc.Q.OperationBelongsToEnterprise(ctx, operationID, id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("operação %d não encontrada", operationID))
+	}
+	return nil
 }
 
 // ListOrders returns the production orders eligible for the sheet (OFC excluded).
 func (uc *ToolSheetUseCase) ListOrders(ctx context.Context, search string) ([]response.ToolProductionSheetOrderResponse, error) {
-	rows, err := uc.Q.ListEligibleSheetOrders(ctx, search)
+	entID, entName, err := uc.enterprise(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := uc.Q.ListEligibleSheetOrders(ctx, search, entID)
 	if err != nil {
 		return nil, fmt.Errorf("listing eligible orders: %w", err)
 	}
-	entID, entName := uc.enterprise(ctx)
 	out := make([]response.ToolProductionSheetOrderResponse, 0, len(rows))
 	for _, r := range rows {
 		h := mapSheetOrder(r)
@@ -87,12 +114,19 @@ func (uc *ToolSheetUseCase) ListOrders(ctx context.Context, search string) ([]re
 // each operation listing its tools with the assigned serial and the serials
 // available for selection.
 func (uc *ToolSheetUseCase) GetSheet(ctx context.Context, orderID int64) (*response.ToolProductionSheetResponse, error) {
-	order, err := uc.Q.GetToolSheetOrder(ctx, orderID)
+	entID, entName, err := uc.enterprise(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("order %d not found: %w", orderID, err)
+		return nil, err
+	}
+	order, err := uc.Q.GetToolSheetOrder(ctx, orderID, entID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem %d não encontrada", orderID))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo a ordem %d: %w", orderID, err)
 	}
 	header := mapSheetOrder(order)
-	header.EnterpriseID, header.EnterpriseName = uc.enterprise(ctx)
+	header.EnterpriseID, header.EnterpriseName = entID, entName
 
 	rows, err := uc.Q.ListSheetOperationTools(ctx, orderID)
 	if err != nil {
@@ -197,17 +231,20 @@ func (uc *ToolSheetUseCase) Assign(ctx context.Context, dto request.AssignToolSe
 // the change in the audit trail. It requires an existing binding — the
 // "Substituir" action is only functional when a serial is already assigned.
 func (uc *ToolSheetUseCase) Substitute(ctx context.Context, dto request.SubstituteToolSerialDTO) (*response.SheetOperationToolResponse, error) {
+	if err := uc.operacaoDaEmpresa(ctx, dto.OperationID); err != nil {
+		return nil, err
+	}
 	current, err := uc.Q.GetOperationToolSerial(ctx, sqlc.GetOperationToolSerialParams{
 		OperationID: dto.OperationID, ToolID: dto.ToolID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("operação não possui série vinculada para substituir")
+		return nil, errorsuc.NewValidationError("operação não possui série vinculada para substituir")
 	}
 	if err := uc.validateAssignment(ctx, dto.OperationID, dto.ToolID, dto.NewSerialID); err != nil {
 		return nil, err
 	}
 	if current.ToolSerialID == dto.NewSerialID {
-		return nil, fmt.Errorf("a nova série é igual à série atual")
+		return nil, errorsuc.NewValidationError("a nova série é igual à série atual")
 	}
 	if _, err := uc.Q.AssignToolSerial(ctx, sqlc.AssignToolSerialParams{
 		OperationID:  dto.OperationID,
@@ -233,6 +270,9 @@ func (uc *ToolSheetUseCase) Substitute(ctx context.Context, dto request.Substitu
 
 // ListSubstitutions returns the substitution history for an operation/tool.
 func (uc *ToolSheetUseCase) ListSubstitutions(ctx context.Context, operationID, toolID int64) ([]response.ToolSerialSubstitutionResponse, error) {
+	if err := uc.operacaoDaEmpresa(ctx, operationID); err != nil {
+		return nil, err
+	}
 	rows, err := uc.Q.ListToolSerialSubstitutions(ctx, sqlc.ListToolSerialSubstitutionsParams{
 		OperationID: operationID, ToolID: toolID,
 	})
@@ -264,18 +304,27 @@ func (uc *ToolSheetUseCase) validateAssignment(ctx context.Context, operationID,
 	if operationID <= 0 || toolID <= 0 || serialID <= 0 {
 		return errorsuc.NewValidationError("informe a operação, a ferramenta e o número de série")
 	}
-	if _, err := uc.Q.GetProductionOrderOperation(ctx, operationID); err != nil {
-		return errorsuc.NewNotFoundError(fmt.Sprintf("operação %d não encontrada", operationID))
+	if err := uc.operacaoDaEmpresa(ctx, operationID); err != nil {
+		return err
+	}
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	if ok, err := uc.Q.ToolBelongsToEnterprise(ctx, toolID, empresa); err != nil {
+		return err
+	} else if !ok {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("ferramenta %d não encontrada", toolID))
 	}
 	serial, err := uc.Q.GetToolSerial(ctx, serialID)
 	if err != nil {
 		return errorsuc.NewNotFoundError(fmt.Sprintf("série %d não encontrada", serialID))
 	}
 	if serial.ToolID != toolID {
-		return fmt.Errorf("a série %d não pertence à ferramenta %d", serialID, toolID)
+		return errorsuc.NewValidationError(fmt.Sprintf("a série %d não pertence à ferramenta %d", serialID, toolID))
 	}
 	if !serial.IsActive || serial.Status != toolentity.SerialActive {
-		return fmt.Errorf("a série %s não está disponível (status %s)", serial.SerialNumber, serial.Status)
+		return errorsuc.NewValidationError(fmt.Sprintf("a série %s não está disponível (status %s)", serial.SerialNumber, serial.Status))
 	}
 	return nil
 }
@@ -306,6 +355,8 @@ func (uc *ToolSheetUseCase) operationToolView(ctx context.Context, operationID, 
 	if t, err := uc.Q.GetTool(ctx, toolID); err == nil {
 		view.ToolCode = t.Code
 		view.ToolName = t.Name
+	} else if !errorsuc.EhNaoEncontrado(err) {
+		return nil, fmt.Errorf("lendo a ferramenta %d: %w", toolID, err)
 	}
 	return view, nil
 }

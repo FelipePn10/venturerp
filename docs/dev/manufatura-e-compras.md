@@ -458,6 +458,13 @@ Lead Time = max(2h, 5h, 5.4h) = 5.4h   ← 36 minutos a menos
 | POST | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}/primary` | Tornar recurso o primário (espelha no CT da operação) |
 | DELETE | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}` | Remover recurso |
 
+**Empresa.** Etapas, recursos, precedências e ferramentas da etapa não têm coluna
+de empresa: valem pela empresa do roteiro (`manufacturing_routes.enterprise_id`).
+Toda consulta e gravação desses filhos filtra por ela no próprio SQL; etapa,
+recurso ou precedência de outra empresa responde **404**. Incluir etapa exige
+operação e centro de trabalho da empresa; incluir recurso, centro da empresa;
+ligar precedência, as duas etapas no mesmo roteiro da empresa.
+
 > **Nota (CRP/custo).** As colunas legadas `standard_time` são mantidas espelhadas a
 > `run_time` para os consumidores que ainda as leem (roll-up de custo interino,
 > horas de operação externa). A migração do **custo por centro de trabalho real** e do
@@ -679,6 +686,11 @@ O sistema respeita o **limite de horas disponíveis por dia** do centro (padrão
 | GET | `/api/aps/gantt/board/export?...&format=svg\|pdf` | **Exporta o quadro do range** em SVG/PDF |
 | POST | `/api/aps/gantt/reschedule` | **Remaneja** uma sequência (drag-drop) com cascata + checagem de capacidade (§3.1) |
 
+Tudo é da empresa da sessão: o sequenciamento lê só as ordens abertas (e as
+operações/precedências delas) da empresa; o quadro filtra barras, dependências e
+carga por empresa, e a carga só soma planos ativos **que não são cenário**. A
+barra da ordem traz `sub_label` = "código do item · nome".
+
 **Gantt (trecho de resposta):**
 ```json
 [
@@ -822,6 +834,13 @@ custo_total     = custo_material + custo_operação + custo_overhead
 ### O que é
 
 Registra pontos de inspeção ao longo do processo produtivo com laudo (aprovado/reprovado/condicional), quantidades e observações.
+
+**Isolamento:** as tabelas de qualidade não têm coluna de empresa; toda consulta
+filtra pela empresa do **item** (`EXISTS (SELECT 1 FROM items it WHERE it.code =
+x.item_code AND it.enterprise_id = $empresa)`), inclusive características (pelo
+plano) e não conformidades (pelo registro). Alterar/desativar registro de outra
+empresa afeta 0 linhas e responde 404. Característica exige plano existente,
+nome e tolerância mínima ≤ máxima.
 
 ### Tipos de ponto de inspeção
 
@@ -985,6 +1004,15 @@ Após o MRP rodar, exceções são geradas para situações que exigem atenção
 | E-mail | `email_to` | SMTP configurado via `.env` |
 
 Ambos os canais funcionam simultaneamente. Se o SMTP não estiver configurado, o e-mail é silenciosamente ignorado sem afetar o webhook.
+
+**Validação (422 em português, antes de enviar):** `plan_code` > 0; `webhook_url`
+só HTTPS, sem usuário/senha na URL, e o host precisa resolver só para IP público
+— recusa loopback, rede privada, link-local, multicast, CGNAT (100.64/10), redes
+de documentação/teste (192.0.2/24, 198.18/15, 198.51.100/24, 203.0.113/24,
+2001:db8::/32), 0/8, 240/4, broadcast e NAT64 (64:ff9b::/96). O IP é conferido de
+novo na conexão (contra DNS rebinding), sem proxy, e redirecionamentos passam
+pela mesma regra. `email_to`: endereços exatos com domínio, no máximo 20.
+Falha do webhook responde 422 com o motivo; falha ao enfileirar o e-mail é erro.
 
 ### Configuração SMTP (`.env`)
 

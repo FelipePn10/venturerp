@@ -2,12 +2,12 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/commercial_commission/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 )
 
-var ErrInvalidState = errors.New("estado da comissão não permite a operação")
-var ErrIdempotencyConflict = errors.New("chave de idempotência reutilizada em outra operação")
+var ErrInvalidState = domainerr.NewValidation("estado da comissão não permite a operação")
+var ErrIdempotencyConflict = domainerr.NewConflict("chave de idempotência reutilizada em outra operação")
 
 type Repository interface {
 	UpsertSettings(context.Context, int64, *entity.Settings) (*entity.Settings, error)

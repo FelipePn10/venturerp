@@ -2,7 +2,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -64,7 +64,7 @@ type DrawingCharacteristic struct {
 
 func NewDrawing(code, digit, format string, createdBy uuid.UUID) (*Drawing, error) {
 	if strings.TrimSpace(code) == "" {
-		return nil, errors.New("código do desenho é obrigatório")
+		return nil, domainerr.NewValidation("código do desenho é obrigatório")
 	}
 	return &Drawing{
 		Code: code, Digit: digit, Format: format, IsActive: true, CreatedBy: createdBy,
@@ -83,10 +83,10 @@ func (d *Drawing) CompositeCode(revision string) string {
 
 func (r *DrawingRevision) Validate() error {
 	if strings.TrimSpace(r.Revision) == "" {
-		return errors.New("código da revisão é obrigatório")
+		return domainerr.NewValidation("código da revisão é obrigatório")
 	}
 	if r.StartDate != nil && r.EndDate != nil && r.EndDate.Before(*r.StartDate) {
-		return errors.New("data fim não pode ser anterior à data início")
+		return domainerr.NewValidation("data fim não pode ser anterior à data início")
 	}
 	return nil
 }

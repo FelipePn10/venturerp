@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -44,8 +43,7 @@ func (h *PurchaseSuggestionHandler) Approve(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var dto request.ApprovePurchaseSuggestionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.PlannedOrderCode = code

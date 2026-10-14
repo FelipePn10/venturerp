@@ -162,8 +162,11 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 				continue
 			}
 			centro, err := uc.Centers.WorkCenterOfMachine(ctx, tempo.MachineCode)
+			if errorsuc.EhNaoEncontrado(err) {
+				continue // máquina inativa ou sem tipo resolvido não conta como apta
+			}
 			if err != nil {
-				continue // máquina sem tipo resolvido não conta como apta
+				return nil, fmt.Errorf("lendo o centro da máquina %d: %w", tempo.MachineCode, err)
 			}
 			comMaquina[centro] = true
 		}
@@ -172,9 +175,11 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 	for _, check := range centros {
 		check.HasMachine = comMaquina[check.WorkCenterID]
 		if uc.Rates != nil {
-			if rate, found, err := uc.Rates.HourlyRate(ctx, check.WorkCenterID); err == nil {
-				check.HasRate, check.HourlyRate = found, rate
+			rate, found, err := uc.Rates.HourlyRate(ctx, check.WorkCenterID)
+			if err != nil {
+				return nil, fmt.Errorf("lendo a taxa horária do centro %d: %w", check.WorkCenterID, err)
 			}
+			check.HasRate, check.HourlyRate = found, rate
 		}
 		nome := check.WorkCenterName
 		if nome == "" {

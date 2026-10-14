@@ -1,20 +1,20 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidWeek          = errors.New("a semana deve estar entre 1 e 53")
-	ErrInvalidYear          = errors.New("o ano deve ser maior que 2000")
-	ErrInvalidQuantity      = errors.New("a quantidade deve ser maior que zero")
-	ErrInvalidItemCode      = errors.New("o código do item deve ser maior que zero")
-	ErrInvalidBlockDates    = errors.New("a data inicial deve ser anterior à final")
-	ErrInvalidDescription   = errors.New("informe a descrição")
-	ErrPercentageSumTooHigh = errors.New("a soma dos percentuais dos dias não pode passar de 100")
+	ErrInvalidWeek          = domainerr.NewValidation("a semana deve estar entre 1 e 53")
+	ErrInvalidYear          = domainerr.NewValidation("o ano deve ser maior que 2000")
+	ErrInvalidQuantity      = domainerr.NewValidation("a quantidade deve ser maior que zero")
+	ErrInvalidItemCode      = domainerr.NewValidation("o código do item deve ser maior que zero")
+	ErrInvalidBlockDates    = domainerr.NewValidation("a data inicial deve ser anterior à final")
+	ErrInvalidDescription   = domainerr.NewValidation("informe a descrição")
+	ErrPercentageSumTooHigh = domainerr.NewValidation("a soma dos percentuais dos dias não pode passar de 100")
 )
 
 func NewSalesForecast(

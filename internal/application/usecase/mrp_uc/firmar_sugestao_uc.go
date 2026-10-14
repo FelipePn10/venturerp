@@ -2,7 +2,6 @@ package mrp_uc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -67,6 +66,11 @@ func mapMRPDemandType(mrpDemand string) types.DemandType {
 // a firm planned_order. This is the "accept MRP suggestion" step that bridges
 // the two tables: the MRP engine writes to mrp_planned_suggestions; the
 // procurement/production flow reads from planned_orders.
+// scenarioPlanChecker diz se o plano é de um cenário de simulação.
+type scenarioPlanChecker interface {
+	IsScenarioPlan(ctx context.Context, planCode int64) (bool, error)
+}
+
 type FirmarSugestaoMRPUseCase struct {
 	MRPRepo     mrpcalcrepo.MRPCalculationRepository
 	PlannedRepo plannedrepo.PlannedOrderRepository
@@ -104,8 +108,19 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 	if err != nil {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("sugestão %d não encontrada", suggestionCode))
 	}
+	if checker, ok := uc.MRPRepo.(scenarioPlanChecker); ok {
+		cenario, err := checker.IsScenarioPlan(ctx, sugg.PlanCode)
+		if err != nil {
+			return nil, err
+		}
+		if cenario {
+			return nil, errorsuc.NewValidationError("sugestão de cenário de simulação não pode ser firmada; promova o cenário ou recalcule o plano real")
+		}
+	}
 	if existing, existingErr := uc.PlannedRepo.GetByMRPSuggestionCode(ctx, suggestionCode); existingErr == nil {
 		return suggestionResponse(sugg.Code, existing), nil
+	} else if !errorsuc.EhNaoEncontrado(existingErr) {
+		return nil, fmt.Errorf("conferindo se a sugestão já foi firmada: %w", existingErr)
 	}
 
 	var nextNum int64
@@ -118,7 +133,10 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 		}
 	}
 
-	userID, _ := uc.Auth.UserID(ctx)
+	userID, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 
 	order := &plannedentity.PlannedOrder{
 		OrderNumber:          nextNum,
@@ -175,7 +193,7 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 	} else if uc.Firmer != nil {
 		transitioner, ok := uc.Firmer.(orderTransitioner)
 		if !ok {
-			return nil, errors.New("a liberação configurada não permite passar a ordem para liberada")
+			return nil, errorsuc.NewValidationError("a liberação configurada não permite passar a ordem para liberada")
 		}
 		released, releaseErr := transitioner.ExecuteTransition(ctx, request.TransitionPlannedOrderDTO{OrderCodes: []int64{created.Code}, Target: "RELEASED"})
 		if releaseErr != nil {

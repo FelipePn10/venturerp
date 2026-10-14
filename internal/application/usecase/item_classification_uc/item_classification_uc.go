@@ -263,7 +263,11 @@ func (uc *ItemClassificationUseCase) UpdateClassification(ctx context.Context, d
 		return nil, errorsuc.NewNotFoundError("classificação não encontrada nesta empresa")
 	}
 	if mask == nil {
-		mask, _ = uc.Repo.GetClassificationMaskByCode(ctx, dto.MaskCode)
+		var errMascara error
+		mask, errMascara = uc.Repo.GetClassificationMaskByCode(ctx, dto.MaskCode)
+		if errMascara != nil && !errorsuc.EhNaoEncontrado(errMascara) {
+			return nil, fmt.Errorf("lendo a máscara da classificação: %w", errMascara)
+		}
 	}
 	if mask == nil {
 		return newClassificationView(nil, nil).toResponse(updated), nil

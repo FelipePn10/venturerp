@@ -1,16 +1,16 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidName       = errors.New("informe o nome")
-	ErrInvalidEmail      = errors.New("informe o e-mail")
-	ErrInvalidPassword   = errors.New("informe a senha")
-	ErrInvalidEnterprise = errors.New("o código da empresa deve ser maior que zero")
+	ErrInvalidName       = domainerr.NewValidation("informe o nome")
+	ErrInvalidEmail      = domainerr.NewValidation("informe o e-mail")
+	ErrInvalidPassword   = domainerr.NewValidation("informe a senha")
+	ErrInvalidEnterprise = domainerr.NewValidation("o código da empresa deve ser maior que zero")
 )
 
 func NewUser(id uuid.UUID, name, email, password string) (*User, error) {

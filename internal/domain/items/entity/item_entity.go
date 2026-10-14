@@ -3,6 +3,7 @@ package entity
 import (
 	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -226,11 +227,11 @@ func (i *Item) Validate() error {
 		i.BusinessCode = valueobject.BusinessCode(fmt.Sprintf("%d", i.Code))
 	}
 	if !i.BusinessCode.IsValid() {
-		return errors.New("código inválido")
+		return domainerr.NewValidation("código inválido")
 	}
 	i.Name = strings.TrimSpace(i.Name)
 	if i.Name == "" {
-		return errors.New("Informe o nome do item.")
+		return domainerr.NewValidation("Informe o nome do item.")
 	}
 	if i.Engineering.ItemBaseCod != nil && *i.Engineering.ItemBaseCod == 0 {
 		i.Engineering.ItemBaseCod = nil
@@ -238,16 +239,16 @@ func (i *Item) Validate() error {
 	if !i.Situation.IsValid() || !i.Health.IsValid() || !i.Warehouse.UnitOfMeasurement.IsValid() ||
 		!i.Engineering.Type.IsValid() || !i.Engineering.TypeStruct.IsValid() ||
 		!i.Planning.TypeMRP.IsValid() || !i.Supplies.TypeOfUse.IsValid() {
-		return errors.New("valor inválido para um campo de lista do item")
+		return domainerr.NewValidation("valor inválido para um campo de lista do item")
 	}
 	if i.Supplies.PurchaseUOM != nil && !i.Supplies.PurchaseUOM.IsValid() {
-		return errors.New("unidade de medida de compra inválida")
+		return domainerr.NewValidation("unidade de medida de compra inválida")
 	}
 	if i.Planning.MinimumLot < 0 || i.Planning.MultipleLot < 0 || i.Planning.SafetyStock < 0 || i.Commercial.WarrantyDays < 0 {
-		return errors.New("as quantidades de planejamento e os dias de garantia não podem ser negativos")
+		return domainerr.NewValidation("as quantidades de planejamento e os dias de garantia não podem ser negativos")
 	}
 	if i.Commercial.SaleType != nil && *i.Commercial.SaleType != "VENDA" && *i.Commercial.SaleType != "REVENDA" {
-		return errors.New("o tipo de venda deve ser venda ou revenda")
+		return domainerr.NewValidation("o tipo de venda deve ser venda ou revenda")
 	}
 	for name, value := range map[string]*decimal.Decimal{
 		"commercial.volume_conversion_factor": i.Commercial.VolumeConversionFactor,
@@ -258,20 +259,20 @@ func (i *Item) Validate() error {
 		}
 	}
 	if i.Commercial.MinimumSaleQuantity != nil && i.Commercial.MinimumSaleQuantity.IsNegative() {
-		return errors.New("a quantidade mínima de venda não pode ser negativa")
+		return domainerr.NewValidation("a quantidade mínima de venda não pode ser negativa")
 	}
 	if i.Commercial.EstimatedDeliveryDays != nil && *i.Commercial.EstimatedDeliveryDays < 0 {
-		return errors.New("o prazo estimado de entrega não pode ser negativo")
+		return domainerr.NewValidation("o prazo estimado de entrega não pode ser negativo")
 	}
 	if i.Code.IsValid() && i.Commercial.PackagingItemCode != nil && *i.Commercial.PackagingItemCode == int64(i.Code) {
-		return errors.New("o item de embalagem não pode ser o próprio item")
+		return domainerr.NewValidation("o item de embalagem não pode ser o próprio item")
 	}
 	if i.Accounting.Origin != nil && (*i.Accounting.Origin < 0 || *i.Accounting.Origin > 8) {
-		return errors.New("a origem da mercadoria deve estar entre 0 e 8")
+		return domainerr.NewValidation("a origem da mercadoria deve estar entre 0 e 8")
 	}
 	for _, value := range []*string{i.Accounting.SaleIPIType, i.Accounting.PurchaseIPIType} {
 		if value != nil && *value != "PERCENTUAL" && *value != "VALOR" {
-			return errors.New("o tipo de IPI contábil deve ser percentual ou valor")
+			return domainerr.NewValidation("o tipo de IPI contábil deve ser percentual ou valor")
 		}
 	}
 	for name, value := range map[string]*decimal.Decimal{"accounting.sale_ipi_rate": i.Accounting.SaleIPIRate, "accounting.purchase_ipi_rate": i.Accounting.PurchaseIPIRate, "accounting.icms_rate": i.Accounting.ICMSRate} {
@@ -280,18 +281,18 @@ func (i *Item) Validate() error {
 		}
 	}
 	if i.Accounting.SaleUnitOfMeasurement != nil && !i.Accounting.SaleUnitOfMeasurement.IsValid() {
-		return errors.New("unidade de medida de venda inválida na pasta Contábil")
+		return domainerr.NewValidation("unidade de medida de venda inválida na pasta Contábil")
 	}
 	if i.Accounting.PurchaseUnitOfMeasurement != nil && !i.Accounting.PurchaseUnitOfMeasurement.IsValid() {
-		return errors.New("unidade de medida de compra inválida na pasta Contábil")
+		return domainerr.NewValidation("unidade de medida de compra inválida na pasta Contábil")
 	}
 	if i.Accounting.CEST != nil {
 		if len(*i.Accounting.CEST) != 7 {
-			return errors.New("o CEST deve ter exatamente 7 dígitos")
+			return domainerr.NewValidation("o CEST deve ter exatamente 7 dígitos")
 		}
 		for _, c := range *i.Accounting.CEST {
 			if c < '0' || c > '9' {
-				return errors.New("o CEST deve ter exatamente 7 dígitos")
+				return domainerr.NewValidation("o CEST deve ter exatamente 7 dígitos")
 			}
 		}
 	}
@@ -304,26 +305,26 @@ func (i *Item) Validate() error {
 		"accounting.accounting_classification_code": {i.Accounting.AccountingClassificationCode, 80}, "accounting.input_code": {i.Accounting.InputCode, 20}, "accounting.notes": {i.Accounting.Notes, 1000},
 	} {
 		if field.value != nil && len(*field.value) > field.max {
-			return fmt.Errorf("o campo %s passou do tamanho máximo de %d caracteres", name, field.max)
+			return domainerr.NewValidation(fmt.Sprintf("o campo %s passou do tamanho máximo de %d caracteres", name, field.max))
 		}
 	}
 	if i.Planning.ABCClass != nil && *i.Planning.ABCClass != "A" && *i.Planning.ABCClass != "B" && *i.Planning.ABCClass != "C" {
-		return errors.New("a curva ABC deve ser A, B ou C")
+		return domainerr.NewValidation("a curva ABC deve ser A, B ou C")
 	}
 
 	if i.Engineering.Dimensions != nil && !i.Engineering.Dimensions.IsValid() {
-		return errors.New("as dimensões do item devem ser todas maiores que zero")
+		return domainerr.NewValidation("as dimensões do item devem ser todas maiores que zero")
 	}
 	if i.Warehouse.CyclicalCountConfig != nil && !i.Warehouse.CyclicalCountConfig.IsValid() {
-		return errors.New("configuração de contagem cíclica inválida")
+		return domainerr.NewValidation("configuração de contagem cíclica inválida")
 	}
 
 	if !i.Engineering.Weight.IsValid() {
-		return errors.New("o peso do item não pode ser negativo")
+		return domainerr.NewValidation("o peso do item não pode ser negativo")
 	}
 
 	if i.Planning.ReorderPoint != nil && !i.Planning.ReorderPoint.IsValid() {
-		return errors.New("ponto de reposição inválido")
+		return domainerr.NewValidation("ponto de reposição inválido")
 	}
 
 	return nil

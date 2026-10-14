@@ -58,7 +58,11 @@ func (r *CRPRepositorySQLC) ListOverloadedByPlan(ctx context.Context, planCode i
 }
 
 func (r *CRPRepositorySQLC) ListByWorkCenter(ctx context.Context, workCenterID int64, from, to time.Time) ([]*entity.CapacityRequirement, error) {
-	rows, err := r.q.ListCRPByWorkCenter(ctx, workCenterID, sqlc.ToPgDate(from), sqlc.ToPgDate(to))
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCRPByWorkCenter(ctx, workCenterID, sqlc.ToPgDate(from), sqlc.ToPgDate(to), e)
 	if err != nil {
 		return nil, fmt.Errorf("listing CRP for work center %d: %w", workCenterID, err)
 	}
@@ -142,6 +146,15 @@ func crpSlice(rows []sqlc.DBCapacityRequirement) []*entity.CapacityRequirement {
 		out = append(out, crpRowToEntity(row))
 	}
 	return out
+}
+
+// GetAvailableHoursForPlan é a capacidade com os ajustes do cenário de
+// simulação dono do plano (day nil = horas por dia sem calendário).
+func (r *CRPRepositorySQLC) GetAvailableHoursForPlan(ctx context.Context, wc int64, day *time.Time, plan int64) (float64, error) {
+	if r.pool == nil {
+		return r.GetMachineAvailableHoursPerDay(ctx, wc)
+	}
+	return capacity.HoursForPlan(ctx, r.pool, wc, day, plan)
 }
 
 func (r *CRPRepositorySQLC) GetAvailableHoursOnDate(ctx context.Context, wc int64, day time.Time) (float64, error) {

@@ -1,5 +1,7 @@
 package repository
 
-import "errors"
+import (
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+)
 
-var ErrNotFound = errors.New("registro não encontrado")
+var ErrNotFound = domainerr.NewNotFound("registro não encontrado")

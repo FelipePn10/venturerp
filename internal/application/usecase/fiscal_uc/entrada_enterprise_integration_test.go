@@ -80,7 +80,7 @@ func TestIntegration_NotaDeEntradaEnterprise(t *testing.T) {
 
 	// Plano de contas financeiro ligado ao plano contábil.
 	var planoContabil int64
-	if err := pool.QueryRow(bg, `INSERT INTO accounting_plans(plan_number,description,valid_from,status) VALUES($1,'Plano teste','2020-01-01','A') RETURNING id`, u%1_000_000).Scan(&planoContabil); err != nil {
+	if err := pool.QueryRow(bg, `INSERT INTO accounting_plans(plan_number,description,valid_from,status,enterprise_id) VALUES($1,'Plano teste','2020-01-01','A',$2) RETURNING id`, u%1_000_000, empresa).Scan(&planoContabil); err != nil {
 		t.Fatal(err)
 	}
 	conta := func(numero, nome string) int64 {

@@ -390,7 +390,9 @@ func (r *SalesOrderRepositorySQLC) Cancel(ctx context.Context, code int64, reaso
 	if affected == 0 {
 		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
-	_ = r.insertEvent(ctx, code, "CANCEL", "", reason, complement, nil, nil)
+	if err := r.insertEvent(ctx, code, "CANCEL", "", reason, complement, nil, nil); err != nil {
+		return fmt.Errorf("registrando o histórico do pedido %d: %w", code, err)
+	}
 	return nil
 }
 
@@ -410,7 +412,9 @@ func (r *SalesOrderRepositorySQLC) Block(ctx context.Context, code int64, reason
 	if affected == 0 {
 		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
-	_ = r.insertEvent(ctx, code, "BLOCK", "", reason, nil, nil, nil)
+	if err := r.insertEvent(ctx, code, "BLOCK", "", reason, nil, nil, nil); err != nil {
+		return fmt.Errorf("registrando o histórico do pedido %d: %w", code, err)
+	}
 	return nil
 }
 
@@ -426,7 +430,9 @@ func (r *SalesOrderRepositorySQLC) Unblock(ctx context.Context, code int64) erro
 	if affected == 0 {
 		return errorsuc.NewNotFoundError("pedido de venda não encontrado")
 	}
-	_ = r.insertEvent(ctx, code, "UNBLOCK", "", "Desbloqueio manual", nil, nil, nil)
+	if err := r.insertEvent(ctx, code, "UNBLOCK", "", "Desbloqueio manual", nil, nil, nil); err != nil {
+		return fmt.Errorf("registrando o histórico do pedido %d: %w", code, err)
+	}
 	return nil
 }
 

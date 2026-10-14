@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,8 +22,7 @@ func NewPurchasePriceHandler(uc *purchase_price_uc.PurchasePriceUseCase) *Purcha
 
 func (h *PurchasePriceHandler) CreateTable(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePurchasePriceTableDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.CreateTable(r.Context(), dto)
@@ -37,8 +35,7 @@ func (h *PurchasePriceHandler) CreateTable(w http.ResponseWriter, r *http.Reques
 
 func (h *PurchasePriceHandler) UpdateTable(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdatePurchasePriceTableDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.UpdateTable(r.Context(), dto)
@@ -114,8 +111,7 @@ func (h *PurchasePriceHandler) ListCandidates(w http.ResponseWriter, r *http.Req
 
 func (h *PurchasePriceHandler) CopyAdjustments(w http.ResponseWriter, r *http.Request) {
 	var dto request.CopyPriceAdjustmentsDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.uc.CopyAdjustments(r.Context(), dto); err != nil {
@@ -163,8 +159,7 @@ func (h *PurchasePriceHandler) ListSourcePrices(w http.ResponseWriter, r *http.R
 
 func (h *PurchasePriceHandler) ApplySourcePrices(w http.ResponseWriter, r *http.Request) {
 	var dto request.ApplyPurchasePriceSourcesDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	n, err := h.uc.ApplySourcePrices(r.Context(), dto)
@@ -177,8 +172,7 @@ func (h *PurchasePriceHandler) ApplySourcePrices(w http.ResponseWriter, r *http.
 
 func (h *PurchasePriceHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddPurchasePriceItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.AddItem(r.Context(), dto)

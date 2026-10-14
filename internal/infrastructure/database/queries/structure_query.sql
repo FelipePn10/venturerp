@@ -14,6 +14,7 @@ WITH RECURSIVE where_used AS (
     FROM item_structures s
     WHERE s.child_code = $1
       AND s.is_active = TRUE
+      AND EXISTS (SELECT 1 FROM items ci WHERE ci.code = s.child_code AND ci.enterprise_id = $3)
 
     UNION ALL
 
@@ -41,7 +42,7 @@ SELECT
     wu.parent_mask,
     wu.sequence
 FROM where_used wu
-JOIN items p ON p.code = wu.parent_code
+JOIN items p ON p.code = wu.parent_code AND p.enterprise_id = $3
 ORDER BY wu.level, wu.parent_code, wu.sequence;
 
 -- name: GetChildrenForConsult :many
@@ -81,6 +82,7 @@ WHERE s.parent_code = $1
   AND (s.parent_mask IS NULL OR s.parent_mask = $2)
   AND (s.start_date IS NULL OR $3::date IS NULL OR s.start_date <= $3::date)
   AND (s.end_date   IS NULL OR $3::date IS NULL OR s.end_date   >= $3::date)
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = s.parent_code AND pi.enterprise_id = $4)
 ORDER BY
     CASE WHEN s.parent_mask IS NOT NULL THEN 0 ELSE 1 END,
     s.sequence,

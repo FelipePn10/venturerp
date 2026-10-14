@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -42,13 +41,13 @@ func NewICMSApuracaoHandler(
 
 func (h *ICMSApuracaoHandler) CreateDAPIReason(w http.ResponseWriter, r *http.Request) {
 	var d fiscalEntity.DAPITransferReason
-	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
+	if err := decodeEntityBody(r, &d); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.dapiUC.Create(r.Context(), &d)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -56,13 +55,13 @@ func (h *ICMSApuracaoHandler) CreateDAPIReason(w http.ResponseWriter, r *http.Re
 
 func (h *ICMSApuracaoHandler) UpdateDAPIReason(w http.ResponseWriter, r *http.Request) {
 	var d fiscalEntity.DAPITransferReason
-	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
+	if err := decodeEntityBody(r, &d); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.dapiUC.Update(r.Context(), &d)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -92,13 +91,13 @@ func (h *ICMSApuracaoHandler) ListDAPIReasons(w http.ResponseWriter, r *http.Req
 
 func (h *ICMSApuracaoHandler) CreateApuracaoAdjCode(w http.ResponseWriter, r *http.Request) {
 	var c fiscalEntity.ICMSApuracaoAdjustmentCode
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+	if err := decodeEntityBody(r, &c); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.apuracaoAdjUC.Create(r.Context(), &c)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -106,13 +105,13 @@ func (h *ICMSApuracaoHandler) CreateApuracaoAdjCode(w http.ResponseWriter, r *ht
 
 func (h *ICMSApuracaoHandler) UpdateApuracaoAdjCode(w http.ResponseWriter, r *http.Request) {
 	var c fiscalEntity.ICMSApuracaoAdjustmentCode
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+	if err := decodeEntityBody(r, &c); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.apuracaoAdjUC.Update(r.Context(), &c)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -147,13 +146,13 @@ func (h *ICMSApuracaoHandler) ListApuracaoAdjCodes(w http.ResponseWriter, r *htt
 
 func (h *ICMSApuracaoHandler) CreateAdjCode(w http.ResponseWriter, r *http.Request) {
 	var c fiscalEntity.ICMSAdjustmentCode
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+	if err := decodeEntityBody(r, &c); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.adjCodeUC.Create(r.Context(), &c)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -161,13 +160,13 @@ func (h *ICMSApuracaoHandler) CreateAdjCode(w http.ResponseWriter, r *http.Reque
 
 func (h *ICMSApuracaoHandler) UpdateAdjCode(w http.ResponseWriter, r *http.Request) {
 	var c fiscalEntity.ICMSAdjustmentCode
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+	if err := decodeEntityBody(r, &c); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.adjCodeUC.Update(r.Context(), &c)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -203,13 +202,13 @@ func (h *ICMSApuracaoHandler) ListAdjCodes(w http.ResponseWriter, r *http.Reques
 
 func (h *ICMSApuracaoHandler) CreateApuracaoLine(w http.ResponseWriter, r *http.Request) {
 	var l fiscalEntity.ICMSApuracaoLine
-	if err := json.NewDecoder(r.Body).Decode(&l); err != nil {
+	if err := decodeEntityBody(r, &l); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.apuracaoLineUC.Create(r.Context(), &l)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -217,13 +216,13 @@ func (h *ICMSApuracaoHandler) CreateApuracaoLine(w http.ResponseWriter, r *http.
 
 func (h *ICMSApuracaoHandler) UpdateApuracaoLine(w http.ResponseWriter, r *http.Request) {
 	var l fiscalEntity.ICMSApuracaoLine
-	if err := json.NewDecoder(r.Body).Decode(&l); err != nil {
+	if err := decodeEntityBody(r, &l); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.apuracaoLineUC.Update(r.Context(), &l)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -253,13 +252,13 @@ func (h *ICMSApuracaoHandler) ListApuracaoLines(w http.ResponseWriter, r *http.R
 
 func (h *ICMSApuracaoHandler) CreateSummaryEntry(w http.ResponseWriter, r *http.Request) {
 	var e fiscalEntity.ICMSSummaryEntry
-	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+	if err := decodeEntityBody(r, &e); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.summaryUC.Create(r.Context(), &e)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -267,13 +266,13 @@ func (h *ICMSApuracaoHandler) CreateSummaryEntry(w http.ResponseWriter, r *http.
 
 func (h *ICMSApuracaoHandler) UpdateSummaryEntry(w http.ResponseWriter, r *http.Request) {
 	var e fiscalEntity.ICMSSummaryEntry
-	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+	if err := decodeEntityBody(r, &e); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.summaryUC.Update(r.Context(), &e)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -306,13 +305,13 @@ func (h *ICMSApuracaoHandler) ListSummaryEntries(w http.ResponseWriter, r *http.
 
 func (h *ICMSApuracaoHandler) AddSummaryEntryNote(w http.ResponseWriter, r *http.Request) {
 	var n fiscalEntity.ICMSSummaryEntryNote
-	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
+	if err := decodeEntityBody(r, &n); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.summaryUC.AddNote(r.Context(), &n)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -336,13 +335,13 @@ func (h *ICMSApuracaoHandler) ListSummaryEntryNotes(w http.ResponseWriter, r *ht
 
 func (h *ICMSApuracaoHandler) CreateSimplesApuracao(w http.ResponseWriter, r *http.Request) {
 	var s fiscalEntity.SimplesNacionalApuracao
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+	if err := decodeEntityBody(r, &s); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.simplesUC.Create(r.Context(), &s)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -350,13 +349,13 @@ func (h *ICMSApuracaoHandler) CreateSimplesApuracao(w http.ResponseWriter, r *ht
 
 func (h *ICMSApuracaoHandler) UpdateSimplesApuracao(w http.ResponseWriter, r *http.Request) {
 	var s fiscalEntity.SimplesNacionalApuracao
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+	if err := decodeEntityBody(r, &s); err != nil {
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
 		return
 	}
 	result, err := h.simplesUC.Update(r.Context(), &s)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondFiscalError(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
