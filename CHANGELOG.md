@@ -6,6 +6,9 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(métricas): as métricas de notificação nunca eram coletadas — a consulta somava
+  uma coluna inexistente (`message_count`; o nome é `sent_count`) e o erro era ignorado
+
 ## [v1.6.0] — 2026-10-14
 
 - feat: isolamento por empresa, efeitos da NF-e como pendência e erros que não somem mais (`5fab9265`)
