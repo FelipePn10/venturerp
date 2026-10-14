@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.6.2] — 2026-10-14
+
+- fix: erro conhecido sai do log de erro e mensagem de código de item legível (`ac12a14c`)
+
 - fix(log): erro conhecido (validação, não encontrado, duplicidade) não é mais registrado
   como "internal server error" — só a falha de verdade vai para o log de erro
 - fix(itens): a mensagem de código de item inválido vem acentuada, mostra o que foi
