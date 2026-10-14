@@ -46,6 +46,9 @@ func (h *AdiantamentoHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdiantamentoHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"parceiro_id"}}) {
+		return
+	}
 	var tipo *string
 	if v := r.URL.Query().Get("tipo"); v != "" {
 		tipo = &v

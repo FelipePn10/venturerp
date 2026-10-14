@@ -53,6 +53,9 @@ func NewSalesForecastHandler(
 }
 
 func (h *SalesForecastHandler) ListActuals(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	year, err := strconv.Atoi(r.URL.Query().Get("year"))
 	if err != nil || year <= 0 {
 		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PREVISAO_ANO_INVALIDO", "o campo 'year' deve ser um ano positivo")

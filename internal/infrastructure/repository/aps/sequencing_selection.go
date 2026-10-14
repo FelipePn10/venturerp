@@ -216,10 +216,16 @@ func (r *APSRepositorySQLC) ListMachineDowntimeWindows(ctx context.Context, mach
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT starts_at,COALESCE(ends_at,NOW()) FROM machine_downtimes WHERE enterprise_id=$1 AND machine_id=$2 AND starts_at<$4 AND COALESCE(ends_at,NOW())>$3
- UNION ALL SELECT sl.starts_at::timestamptz,sl.ends_at::timestamptz FROM mrp_machine_allocation_slots sl
+	// As reservas do MRP são hora de parede da fábrica (timestamp sem fuso):
+	// viram instante no fuso da EMPRESA, o mesmo do agendamento. Com ::timestamptz
+	// valia o fuso da sessão — com o banco em UTC a reserva das 09:00 aparecia às
+	// 06:00 e o APS liberava a máquina na hora errada.
+	rows, err := r.pool.Query(ctx, `WITH fuso AS (SELECT COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo') AS tz)
+ SELECT starts_at,COALESCE(ends_at,NOW()) FROM machine_downtimes WHERE enterprise_id=$1 AND machine_id=$2 AND starts_at<$4 AND COALESCE(ends_at,NOW())>$3
+ UNION ALL SELECT sl.starts_at AT TIME ZONE f.tz,sl.ends_at AT TIME ZONE f.tz FROM mrp_machine_allocation_slots sl
+ CROSS JOIN fuso f
  JOIN mrp_machine_allocations a ON a.suggestion_code=sl.suggestion_code
- WHERE a.enterprise_id=$1 AND sl.machine_id=$2 AND sl.starts_at<$4 AND sl.ends_at>$3
+ WHERE a.enterprise_id=$1 AND sl.machine_id=$2 AND (sl.starts_at AT TIME ZONE f.tz)<$4 AND (sl.ends_at AT TIME ZONE f.tz)>$3
  -- Reserva de cenário de simulação não ocupa máquina da programação real.
  AND NOT EXISTS(SELECT 1 FROM mrp_planned_suggestions ms JOIN production_plans pp ON pp.code=ms.plan_code AND pp.is_scenario WHERE ms.code=a.suggestion_code)
  AND NOT EXISTS(SELECT 1 FROM planned_orders po WHERE po.mrp_suggestion_code=a.suggestion_code AND po.enterprise_id=$1 AND (NOT po.is_active OR po.status='CANCELLED'))

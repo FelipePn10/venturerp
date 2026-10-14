@@ -6,6 +6,22 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(isolamento): o banco também confere as colunas de código sem FK
+  (`sales_order_code`, `customer_code`, `supplier_code`… — 87 vínculos): o código
+  precisa existir na empresa do registro. Código repetido entre empresas (cada uma
+  com a sua cópia do cliente) é aceito; o da outra empresa, não (migração 000403)
+- fix(validação): filtro numérico ou de data mal digitado nas listagens (cerca de 60
+  rotas: compras, comissões, auditoria, materiais de cliente, contabilidade,
+  representantes, orçamentos, serviços de terceiros, estoque, manutenção…) passa a
+  responder 422 dizendo o filtro e o valor, em vez de listar tudo sem o filtro. Filtro
+  em branco enviado como `undefined`/`null` continua valendo como "sem filtro".
+  Código inválido no endereço (reprogramação de entrega, centro de custo, firmar
+  ordem planejada, prioridade) também é recusado — antes virava 0
+- fix(crédito): a conferência do limite de crédito soma e compara em decimal; em
+  float um pedido que fechava exatamente no limite podia ser bloqueado
+- fix(capacidade): com o banco fora do fuso da empresa, o CRP e o agendamento finito
+  das máquinas liam as paradas em horários diferentes e o plano saía com mais horas
+  que a capacidade do dia. Os dois usam o fuso da empresa
 - fix(métricas): as métricas de notificação nunca eram coletadas — a consulta somava
   uma coluna inexistente (`message_count`; o nome é `sent_count`) e o erro era ignorado
 

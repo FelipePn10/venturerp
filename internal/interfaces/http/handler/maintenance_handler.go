@@ -47,6 +47,9 @@ func (h *MaintenanceHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MaintenanceHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	onlyActive := r.URL.Query().Get("active") != "false"
 	results, err := h.uc.ListPlans(r.Context(), onlyActive)
 	if err != nil {
@@ -57,6 +60,9 @@ func (h *MaintenanceHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MaintenanceHandler) ListPlansByMachine(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	machineID, err := strconv.ParseInt(chi.URLParam(r, "machineId"), 10, 64)
 	if err != nil {
 		security.RespondErrorCode(w, http.StatusBadRequest, "MAQUINA_ID_INVALIDO", "identificador da máquina inválido")
@@ -110,6 +116,9 @@ func (h *MaintenanceHandler) AdvanceOrder(w http.ResponseWriter, r *http.Request
 }
 
 func (h *MaintenanceHandler) ListOrdersByPlan(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	planID, err := strconv.ParseInt(chi.URLParam(r, "planId"), 10, 64)
 	if err != nil {
 		security.RespondErrorCode(w, http.StatusBadRequest, "PLANO_ID_INVALIDO", "identificador do plano inválido")
@@ -124,6 +133,9 @@ func (h *MaintenanceHandler) ListOrdersByPlan(w http.ResponseWriter, r *http.Req
 }
 
 func (h *MaintenanceHandler) ListOrdersByWorkCenter(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	wcID, err := strconv.ParseInt(chi.URLParam(r, "wcId"), 10, 64)
 	if err != nil {
 		security.RespondErrorCode(w, http.StatusBadRequest, "CENTRO_TRABALHO_ID_INVALIDO", "identificador do centro de trabalho inválido")
@@ -153,6 +165,9 @@ func (h *MaintenanceHandler) ListOrdersByWorkCenter(w http.ResponseWriter, r *ht
 }
 
 func (h *MaintenanceHandler) GenerateOrders(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"horizon_days"}}) {
+		return
+	}
 	horizonDays := 30
 	if v := r.URL.Query().Get("horizon_days"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {

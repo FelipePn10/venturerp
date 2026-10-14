@@ -120,6 +120,9 @@ func (h *RepresentativeHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RepresentativeHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"type_code", "region_code"}, Listas: []string{"codes"}}) {
+		return
+	}
 	result, err := h.uc.List(r.Context(), parseRepresentativeFilter(r))
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -255,6 +258,9 @@ func (h *RepresentativeHandler) AddContact(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *RepresentativeHandler) Report(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"type_code", "region_code"}, Listas: []string{"codes"}}) {
+		return
+	}
 	result, err := h.uc.Report(r.Context(), parseRepresentativeFilter(r))
 	if err != nil {
 		security.RespondUseCaseError(w, err)
@@ -264,6 +270,9 @@ func (h *RepresentativeHandler) Report(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RepresentativeHandler) FollowUp(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Listas: []string{"customer_codes", "representative_codes"}, Datas: []string{"from", "to"}}) {
+		return
+	}
 	if !filtroValido(w, r) {
 		return
 	}

@@ -374,6 +374,9 @@ func (h *ShipmentHandler) CreateDeliveryInstruction(w http.ResponseWriter, r *ht
 }
 
 func (h *ShipmentHandler) ListDeliveryInstructions(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"load_code"}}) {
+		return
+	}
 	var loadCode *int64
 	if v := r.URL.Query().Get("load_code"); v != "" {
 		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {

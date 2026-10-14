@@ -523,6 +523,9 @@ func (h *StockHandler) ListInventoryItems(w http.ResponseWriter, r *http.Request
 // SugerirSeparacao responde de quais lotes e endereços tirar a quantidade
 // pedida. GET /api/stock/separation/suggest/{itemCode}?qty=&warehouse_id=&mask=&rule=
 func (h *StockHandler) SugerirSeparacao(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"warehouse_id"}}) {
+		return
+	}
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
 		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
@@ -546,6 +549,9 @@ func (h *StockHandler) SugerirSeparacao(w http.ResponseWriter, r *http.Request) 
 // SaldoPorEndereco lista o estoque quebrado por endereço.
 // GET /api/stock/balances/by-address?warehouse_id=&item_code=
 func (h *StockHandler) SaldoPorEndereco(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"warehouse_id", "item_code"}}) {
+		return
+	}
 	almoxarifado, _ := strconv.ParseInt(r.URL.Query().Get("warehouse_id"), 10, 64)
 	item, _ := strconv.ParseInt(r.URL.Query().Get("item_code"), 10, 64)
 	saldos, err := h.separacaoUC.SaldoPorEndereco(r.Context(), almoxarifado, item)
@@ -594,6 +600,9 @@ func (h *StockHandler) ApurarCurvaABC(w http.ResponseWriter, r *http.Request) {
 // SugerirGuarda recomenda onde guardar o material recebido.
 // GET /api/stock/putaway/suggest/{itemCode}?qty=&warehouse_id=&zone=&mask=
 func (h *StockHandler) SugerirGuarda(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"warehouse_id"}}) {
+		return
+	}
 	itemCode, err := strconv.ParseInt(chi.URLParam(r, "itemCode"), 10, 64)
 	if err != nil {
 		security.RespondError(w, http.StatusBadRequest, "código do item inválido")

@@ -23,6 +23,9 @@ func NewDeliveryPromiseHandler(uc *delivery_promise_uc.DeliveryPromiseUseCase) *
 }
 
 func (h *DeliveryPromiseHandler) Occupation(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Decimais: []string{"daily_capacity"}, Listas: []string{"tank_code"}}) {
+		return
+	}
 	dto := request.DeliveryPromiseOccupationDTO{
 		FromDate:      r.URL.Query().Get("from_date"),
 		ToDate:        r.URL.Query().Get("to_date"),

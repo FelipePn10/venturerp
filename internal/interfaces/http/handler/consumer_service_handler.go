@@ -139,6 +139,9 @@ func (h *ConsumerServiceHandler) CreateCustomerContact(w http.ResponseWriter, r 
 }
 
 func (h *ConsumerServiceHandler) ListCustomerContacts(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"customer_code"}}) {
+		return
+	}
 	result, err := h.uc.ListCustomerContacts(r.Context(), csrepo.CustomerContactFilter{
 		CustomerCode: int64Query(r, "customer_code"),
 		From:         parseHandlerDatePtr(r.URL.Query().Get("from")),
@@ -158,6 +161,9 @@ func (h *ConsumerServiceHandler) CreateCall(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ConsumerServiceHandler) ListCalls(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"call_number", "call_type_code", "consumer_code", "defect_group_code", "defect_reason_code", "responsible_user_code"}}) {
+		return
+	}
 	result, err := h.uc.ListCalls(r.Context(), h.callFilter(r))
 	h.respond(w, result, err, http.StatusOK)
 }
@@ -311,6 +317,9 @@ func (h *ConsumerServiceHandler) SetChecklistItemDone(w http.ResponseWriter, r *
 }
 
 func (h *ConsumerServiceHandler) ReportCalls(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"call_number", "call_type_code", "consumer_code", "defect_group_code", "defect_reason_code", "responsible_user_code"}}) {
+		return
+	}
 	result, err := h.uc.ReportCalls(r.Context(), h.callFilter(r))
 	h.respond(w, result, err, http.StatusOK)
 }

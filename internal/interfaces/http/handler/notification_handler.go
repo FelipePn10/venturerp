@@ -161,6 +161,9 @@ func (h *NotificationHandler) TestEmail(w http.ResponseWriter, r *http.Request) 
 	jsonResponse(w, http.StatusAccepted, map[string]string{"status": "PENDENTE"})
 }
 func (h *NotificationHandler) ListDeliveries(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	l, o := page(r)
 	v, err := h.service.ListRecords(r.Context(), "deliveries", l, o)
 	if err != nil {
@@ -182,6 +185,9 @@ func (h *NotificationHandler) RetryDelivery(w http.ResponseWriter, r *http.Reque
 	jsonResponse(w, http.StatusAccepted, map[string]string{"status": "PENDENTE"})
 }
 func (h *NotificationHandler) ListDeadLetters(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	l, o := page(r)
 	v, err := h.service.ListRecords(r.Context(), "dead_letters", l, o)
 	if err != nil {
@@ -191,6 +197,9 @@ func (h *NotificationHandler) ListDeadLetters(w http.ResponseWriter, r *http.Req
 	jsonResponse(w, http.StatusOK, v)
 }
 func (h *NotificationHandler) ListAlerts(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	l, o := page(r)
 	v, err := h.service.ListRecords(r.Context(), "alerts", l, o)
 	if err != nil {
@@ -226,6 +235,9 @@ func (h *NotificationHandler) CreateCycleCount(w http.ResponseWriter, r *http.Re
 	jsonResponse(w, http.StatusCreated, created)
 }
 func (h *NotificationHandler) ListCycleCounts(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	l, o := page(r)
 	items, err := h.service.ListCycleCounts(r.Context(), l, o)
 	if err != nil {

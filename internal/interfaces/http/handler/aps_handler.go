@@ -197,6 +197,9 @@ func (h *APSHandler) CreateMachineDowntime(w http.ResponseWriter, r *http.Reques
 	jsonResponse(w, 201, v)
 }
 func (h *APSHandler) ListMachineDowntimes(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	machineID, machineErr := strconv.ParseInt(r.URL.Query().Get("machine_id"), 10, 64)
 	if machineErr != nil || machineID <= 0 {
 		jsonError(w, http.StatusBadRequest, "o campo 'machine_id' deve ser um identificador positivo")

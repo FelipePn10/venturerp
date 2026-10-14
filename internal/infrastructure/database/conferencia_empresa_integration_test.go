@@ -11,6 +11,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -143,5 +144,54 @@ func TestConferenciaDeEmpresaRespeitaExcecoes(t *testing.T) {
 	}
 	if len(excecoes) > 0 {
 		t.Fatalf("tabelas de exceção entraram na conferência: %v", excecoes)
+	}
+}
+
+// Colunas de código sem FK (migração 000403): o código pode repetir entre
+// empresas, então vale "existe na minha empresa", não "o pai é da minha".
+func TestConferenciaDeEmpresaPorCodigo(t *testing.T) {
+	pool := testutil.Pool(t)
+	ctx := context.Background()
+	ator := testutil.Actor(t, pool)
+	a := novaEmpresaDeTeste(t, pool, "POR CODIGO A")
+	b := novaEmpresaDeTeste(t, pool, "POR CODIGO B")
+
+	var pedidoA int64
+	if err := pool.QueryRow(ctx, `INSERT INTO sales_orders(order_number, enterprise_code, created_by)
+		VALUES (1, $1, $2) RETURNING code`, a.code, ator).Scan(&pedidoA); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		testutil.Exec(t, pool, `DELETE FROM fiscal_exits WHERE enterprise_id = ANY($1)`, []int64{a.id, b.id})
+		testutil.Exec(t, pool, `DELETE FROM sales_orders WHERE enterprise_code = ANY($1)`, []int64{a.code, b.code})
+		testutil.Exec(t, pool, `DELETE FROM customers WHERE enterprise_id = ANY($1)`, []int64{a.id, b.id})
+		testutil.Exec(t, pool, `DELETE FROM notification_outbox WHERE enterprise_id = ANY($1)`, []int64{a.id, b.id})
+	})
+	nota := `INSERT INTO fiscal_exits(numero_nf, data_emissao, cfop, natureza_operacao, valor_total, sales_order_code, customer_code, status, created_by, enterprise_id)
+		VALUES (1, $5::date, '5102', 'Venda', 10, $1, $2, 'DRAFT', $3, $4)`
+	hoje := time.Now()
+
+	// Pedido de código único no banco: o da A não serve para a nota da B.
+	_, err := pool.Exec(ctx, nota, pedidoA, nil, ator, b.id, hoje)
+	exigeVinculoRecusado(t, err, "conferencia_empresa_fiscal_exits_sales_order_code")
+	if _, err := pool.Exec(ctx, nota, pedidoA, nil, ator, a.id, hoje); err != nil {
+		t.Fatalf("nota da empresa do pedido foi recusada: %v", err)
+	}
+	// Código que não existe em lugar nenhum segue livre (como sem FK).
+	if _, err := pool.Exec(ctx, nota, int64(987_654_321_000), nil, ator, b.id, hoje); err != nil {
+		t.Fatalf("pedido inexistente foi tratado como de outra empresa: %v", err)
+	}
+
+	// Cliente com o MESMO código nas duas empresas (cada uma tem a sua cópia).
+	cliente := 1_800_000_000 + testutil.UniqueCode()%90_000_000
+	testutil.Exec(t, pool, `INSERT INTO customers(code, name, document_number, created_by, enterprise_id) VALUES ($1, 'CLIENTE A', '11111111000191', $2, $3)`, cliente, ator, a.id)
+	if _, err := pool.Exec(ctx, nota, nil, cliente, ator, b.id, hoje); err == nil {
+		t.Fatal("B usou o cliente que só existe na A")
+	} else {
+		exigeVinculoRecusado(t, err, "conferencia_empresa_fiscal_exits_customer_code")
+	}
+	testutil.Exec(t, pool, `INSERT INTO customers(code, name, document_number, created_by, enterprise_id) VALUES ($1, 'CLIENTE B', '22222222000191', $2, $3)`, cliente, ator, b.id)
+	if _, err := pool.Exec(ctx, nota, nil, cliente, ator, b.id, hoje); err != nil {
+		t.Fatalf("B com a própria cópia do cliente foi recusada: %v", err)
 	}
 }

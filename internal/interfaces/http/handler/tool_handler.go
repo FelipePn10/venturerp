@@ -105,6 +105,9 @@ func (h *ToolHandler) ResetToolLife(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ToolHandler) ListToolsNeedingReplacement(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Decimais: []string{"threshold"}}) {
+		return
+	}
 	// `threshold` em fração (0.8) ou em porcentagem (80) — quem chama de uma
 	// tela pensa em porcentagem, e recusar "80" seria pedantismo.
 	limiar, _ := strconv.ParseFloat(r.URL.Query().Get("threshold"), 64)

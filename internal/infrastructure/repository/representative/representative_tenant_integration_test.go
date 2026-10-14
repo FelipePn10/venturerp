@@ -110,10 +110,9 @@ func TestRepresentativesAndGoalsAreIsolatedByTenant(t *testing.T) {
 	}
 
 	// Pedido da B com o código do representante da A não conta no realizado da A.
-	if _, err := pool.Exec(base, `INSERT INTO sales_orders (order_number, enterprise_code, created_by, representative_code, total_net, emission_date)
-		VALUES ($1, $2, $3, $4, 500, $5::date)`, repCode, b.Code, testutil.Actor(t, pool), repCode, inicio.AddDate(0, 0, 5)); err != nil {
-		t.Fatal(err)
-	}
+	// É dado legado cruzado (o banco recusa gravar isso desde a 000403).
+	testutil.DadoLegadoCruzado(t, pool, "sales_orders", `INSERT INTO sales_orders (order_number, enterprise_code, created_by, representative_code, total_net, emission_date)
+		VALUES ($1, $2, $3, $4, 500, $5::date)`, repCode, b.Code, testutil.Actor(t, pool), repCode, inicio.AddDate(0, 0, 5))
 	rel, err := goals.Report(a.Ctx, goalrepo.ReportFilter{PeriodCode: &per.Code})
 	if err != nil {
 		t.Fatal(err)

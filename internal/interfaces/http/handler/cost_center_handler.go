@@ -2,12 +2,10 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
-	"github.com/go-chi/chi/v5"
 )
 
 type CostCenterHandler struct {
@@ -39,7 +37,10 @@ func (h *CostCenterHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CostCenterHandler) Get(w http.ResponseWriter, r *http.Request) {
-	costCenterCode, _ := strconv.ParseInt(chi.URLParam(r, "costCenterCode"), 10, 64)
+	costCenterCode, ok := codigoDaRota(w, r, "costCenterCode")
+	if !ok {
+		return
+	}
 	result, err := h.getUC.Execute(r.Context(), int32(costCenterCode))
 	if err != nil {
 		respondErrStatus(w, http.StatusNotFound, err)

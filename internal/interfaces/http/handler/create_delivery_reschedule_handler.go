@@ -25,7 +25,10 @@ func (h *DeliveryRescheduleHandler) Create(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *DeliveryRescheduleHandler) ListByOrder(w http.ResponseWriter, r *http.Request) {
-	salesOrderCode, _ := strconv.ParseInt(chi.URLParam(r, "sales_order_code"), 10, 64)
+	salesOrderCode, ok := codigoDaRota(w, r, "sales_order_code")
+	if !ok {
+		return
+	}
 	results, err := h.listUC.Execute(r.Context(), salesOrderCode)
 	if err != nil {
 		security.RespondUseCaseError(w, err)

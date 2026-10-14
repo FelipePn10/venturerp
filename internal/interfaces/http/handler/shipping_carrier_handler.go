@@ -117,6 +117,9 @@ func (h *ShippingCarrierHandler) SetStatus(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ShippingCarrierHandler) ListOccurrences(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit"}}) {
+		return
+	}
 	id, ok := parseCarrierID(w, r, "id")
 	if !ok {
 		return

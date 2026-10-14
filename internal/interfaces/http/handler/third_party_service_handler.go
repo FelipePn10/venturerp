@@ -133,6 +133,9 @@ func (h *ThirdPartyServiceHandler) GetPrice(w http.ResponseWriter, r *http.Reque
 	jsonResponse(w, 200, v)
 }
 func (h *ThirdPartyServiceHandler) ListPrices(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"item_from", "item_to", "supplier_from", "supplier_to", "operation_id", "classification_mask_code", "limit", "offset"}, Datas: []string{"reference_date"}}) {
+		return
+	}
 	q := r.URL.Query()
 	f := domain.PriceFilter{ItemFrom: optInt(q.Get("item_from")), ItemTo: optInt(q.Get("item_to")), SupplierFrom: optInt(q.Get("supplier_from")), SupplierTo: optInt(q.Get("supplier_to")), OperationID: optInt(q.Get("operation_id")), ReferenceDate: optDate(q.Get("reference_date")), PriceType: q.Get("price_type"), OrderBy: q.Get("order_by"), ItemSearch: q.Get("item_search"), SupplierSearch: q.Get("supplier_search"), ClassificationMaskCode: optInt(q.Get("classification_mask_code")), ClassificationCodes: split(q.Get("classification_codes"))}
 	if v := q.Get("mask"); v != "" {
@@ -156,6 +159,9 @@ func (h *ThirdPartyServiceHandler) ListPrices(w http.ResponseWriter, r *http.Req
 	jsonResponse(w, 200, v)
 }
 func (h *ThirdPartyServiceHandler) ResolvePrice(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"item_code", "operation_id", "supplier_code"}}) {
+		return
+	}
 	q := r.URL.Query()
 	item := optInt(q.Get("item_code"))
 	op := optInt(q.Get("operation_id"))
@@ -186,6 +192,9 @@ func (h *ThirdPartyServiceHandler) ResolvePrice(w http.ResponseWriter, r *http.R
 	jsonResponse(w, 200, v)
 }
 func (h *ThirdPartyServiceHandler) ResolveCost(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"item_code", "operation_id"}}) {
+		return
+	}
 	q := r.URL.Query()
 	item, op := optInt(q.Get("item_code")), optInt(q.Get("operation_id"))
 	if item == nil || op == nil {
@@ -273,6 +282,9 @@ func (h *ThirdPartyServiceHandler) CreateOrders(w http.ResponseWriter, r *http.R
 	jsonResponse(w, 201, v)
 }
 func (h *ThirdPartyServiceHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"plan_code", "item_from", "item_to", "production_order_id", "service_order_code", "operation_id", "supplier_code", "purchase_order_code", "classification_mask_code", "limit", "offset"}, Listas: []string{"production_order_ids", "service_order_codes", "operation_ids", "supplier_codes", "purchase_order_codes"}, Datas: []string{"from", "to", "emitted_from", "emitted_to", "delivery_from", "delivery_to"}}) {
+		return
+	}
 	q := r.URL.Query()
 	f := domain.OrderFilter{PlanCode: optInt(q.Get("plan_code")), ItemFrom: optInt(q.Get("item_from")), ItemTo: optInt(q.Get("item_to")), ProductionOrderID: optInt(q.Get("production_order_id")), ServiceOrderCode: optInt(q.Get("service_order_code")), OperationID: optInt(q.Get("operation_id")), SupplierCode: optInt(q.Get("supplier_code")), PurchaseOrderCode: optInt(q.Get("purchase_order_code")), ProductionOrderIDs: splitInt64(q.Get("production_order_ids")), ServiceOrderCodes: splitInt64(q.Get("service_order_codes")), OperationIDs: splitInt64(q.Get("operation_ids")), SupplierCodes: splitInt64(q.Get("supplier_codes")), PurchaseOrderCodes: splitInt64(q.Get("purchase_order_codes")), From: optDate(q.Get("from")), To: optDate(q.Get("to")), EmittedFrom: optDate(q.Get("emitted_from")), EmittedTo: optDate(q.Get("emitted_to")), DeliveryFrom: optDate(q.Get("delivery_from")), DeliveryTo: optDate(q.Get("delivery_to")), Position: q.Get("position"), OnlyKanban: q.Get("only_kanban") == "true", Statuses: split(q.Get("statuses")), ItemSearch: q.Get("item_search"), SupplierSearch: q.Get("supplier_search"), OrderBy: q.Get("order_by"), ClassificationMaskCode: optInt(q.Get("classification_mask_code")), ClassificationCodes: split(q.Get("classification_codes"))}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))

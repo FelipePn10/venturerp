@@ -10,6 +10,9 @@ import (
 )
 
 func (h *PlanningParamsHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset"}}) {
+		return
+	}
 	results, err := h.listUC.Execute(r.Context())
 	if err != nil {
 		security.RespondUseCaseError(w, err)
