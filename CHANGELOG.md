@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.6.1] — 2026-10-14
+
+- fix: filtros de lista, conferência de empresa por código, crédito em decimal e fuso da capacidade (`3436d5f5`)
+- fix(métricas): coleta de métricas de notificação usava coluna inexistente (`3a01e5b1`)
+
 - feat(isolamento): o banco também confere as colunas de código sem FK
   (`sales_order_code`, `customer_code`, `supplier_code`… — 87 vínculos): o código
   precisa existir na empresa do registro. Código repetido entre empresas (cada uma
