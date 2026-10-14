@@ -280,6 +280,9 @@ func (h *CustomerMaterialHandler) Receber(w http.ResponseWriter, r *http.Request
 }
 
 func (h *CustomerMaterialHandler) Listar(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"customer_code", "nfe_number", "sales_order_code", "limit", "offset"}, Datas: []string{"due_until"}}) {
+		return
+	}
 	q := r.URL.Query()
 	filtro := cmrepo.FiltroRemessa{
 		Busca:            q.Get("q"),
@@ -348,6 +351,9 @@ func (h *CustomerMaterialHandler) Obter(w http.ResponseWriter, r *http.Request) 
 
 // Saldo é a visão que o inventário mostra ao lado do estoque próprio.
 func (h *CustomerMaterialHandler) Saldo(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"customer_code", "item_code"}}) {
+		return
+	}
 	q := r.URL.Query()
 	filtro := cmrepo.FiltroSaldo{
 		CustomerItemCode: q.Get("customer_item_code"),

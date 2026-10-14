@@ -11,6 +11,9 @@ import (
 // ConsultStructure implements  Product Structure Consultation.
 // GET /api/items/structure/consult?item_code=2210&levels=1&mask=...&effectiveness_date=2026-05-20
 func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"levels"}, Datas: []string{"effectiveness_date"}}) {
+		return
+	}
 	q := r.URL.Query()
 
 	itemCode := request.TextCode(q.Get("item_code"))
@@ -49,6 +52,9 @@ func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *h
 // WhereUsed implements implosão de estrutura — dado um componente, retorna todos os produtos que o utilizam.
 // GET /api/items/structure/where-used/{itemCode}?levels=0
 func (h *ItemQueryStructureHandler) WhereUsed(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"levels"}}) {
+		return
+	}
 	itemCode := request.TextCode(itemCodePathParam(r, "itemCode"))
 	if itemCode.String() == "" {
 		jsonError(w, http.StatusBadRequest, "itemCode é obrigatório")

@@ -193,6 +193,9 @@ func (h *ICMSReductionHandler) GetSTRestitution(w http.ResponseWriter, r *http.R
 }
 
 func (h *ICMSReductionHandler) ListSTRestitutions(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"empresa_id"}}) {
+		return
+	}
 	q := r.URL.Query()
 	empresaID, _ := strconv.Atoi(q.Get("empresa_id"))
 	period := q.Get("period")
@@ -250,6 +253,9 @@ func (h *ICMSReductionHandler) GetSpecialNote(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ICMSReductionHandler) ListSpecialNotes(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"empresa_id"}}) {
+		return
+	}
 	q := r.URL.Query()
 	empresaID, _ := strconv.Atoi(q.Get("empresa_id"))
 	period := q.Get("period")

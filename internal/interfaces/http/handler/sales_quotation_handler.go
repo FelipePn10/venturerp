@@ -71,6 +71,9 @@ func (h *SalesQuotationHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SalesQuotationHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"quotation_number", "customer_code", "sales_division_code", "limit", "offset"}, Datas: []string{"from", "to"}}) {
+		return
+	}
 	if !filtroValido(w, r, "quotation_number", "customer_code", "sales_division_code") {
 		return
 	}
@@ -196,6 +199,9 @@ func (h *SalesQuotationHandler) PaymentSchedule(w http.ResponseWriter, r *http.R
 }
 
 func (h *SalesQuotationHandler) Report(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"quotation_number", "customer_code", "sales_division_code", "limit", "offset"}, Datas: []string{"from", "to"}}) {
+		return
+	}
 	if !filtroValido(w, r, "quotation_number", "customer_code", "sales_division_code") {
 		return
 	}

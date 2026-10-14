@@ -52,6 +52,9 @@ func (h *TechnicalAssistanceHandler) CreateDefectReason(w http.ResponseWriter, r
 }
 
 func (h *TechnicalAssistanceHandler) ListDefectReasons(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"group_code"}}) {
+		return
+	}
 	result, err := h.uc.ListDefectReasons(r.Context(), int64Query(r, "group_code"), r.URL.Query().Get("active") != "false")
 	h.respond(w, result, err, http.StatusOK)
 }
@@ -89,6 +92,9 @@ func (h *TechnicalAssistanceHandler) GetCall(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *TechnicalAssistanceHandler) ListCalls(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"customer_code"}}) {
+		return
+	}
 	if !filtroValido(w, r, "customer_code") {
 		return
 	}
@@ -156,6 +162,9 @@ func (h *TechnicalAssistanceHandler) UpdateStatus(w http.ResponseWriter, r *http
 }
 
 func (h *TechnicalAssistanceHandler) Report(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"customer_code"}}) {
+		return
+	}
 	if !filtroValido(w, r, "customer_code") {
 		return
 	}

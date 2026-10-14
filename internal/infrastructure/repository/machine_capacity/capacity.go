@@ -34,7 +34,12 @@ func HoursForPlan(ctx context.Context, pool *pgxpool.Pool, workCenterID int64, d
 		return h, err
 	}
 	// range_agg merges overlapping shifts and downtimes instead of counting twice.
-	err = pool.QueryRow(ctx, `WITH machine_windows AS (
+	// As paradas são timestamptz e viram hora de parede no fuso da EMPRESA — o
+	// mesmo que o agendamento finito fixa na sessão. Com ::timestamp a conversão
+	// usava o fuso da sessão: com o banco em UTC, a parada das 09:00 caía às 06:00
+	// para o agendamento e às 09:00 aqui, e o CRP via 5 h onde o MRP alocava 6.
+	err = pool.QueryRow(ctx, `WITH fuso AS (SELECT COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$2),'America/Sao_Paulo') AS tz),
+machine_windows AS (
  SELECT m.id,CASE WHEN m.calendar_id IS NULL THEN
   CASE WHEN EXTRACT(ISODOW FROM $3::date)<6 THEN tsmultirange(tsrange($3::date::timestamp,$3::date::timestamp+make_interval(secs=>(COALESCE(m.available_hours_per_day,mt.capacity_hours)*3600)::double precision),'[)')) ELSE '{}'::tsmultirange END
  ELSE COALESCE((SELECT range_agg(tsrange($3::date+i.start_time,$3::date+i.end_time+CASE WHEN i.end_time<=i.start_time THEN INTERVAL '1 day' ELSE INTERVAL '0' END,'[)')) FROM machine_calendar_intervals i JOIN machine_calendars c ON c.id=i.calendar_id AND c.enterprise_id=$2 WHERE i.calendar_id=m.calendar_id AND i.weekday=EXTRACT(DOW FROM $3::date)), '{}'::tsmultirange) END AS windows,
@@ -54,7 +59,7 @@ func HoursForPlan(ctx context.Context, pool *pgxpool.Pool, workCenterID int64, d
    ELSE tsmultirange(tsrange(lower(windows),lower(windows)+make_interval(secs=>(scenario_hours*3600)::double precision),'[)')) END AS windows
  FROM machine_windows
 ), remaining AS (
- SELECT w.id,CASE WHEN w.scenario_stop OR EXISTS(SELECT 1 FROM maintenance_orders o LEFT JOIN maintenance_plans p ON p.id=o.plan_id WHERE COALESCE(o.machine_id,p.machine_id)=w.id AND o.scheduled_date=$3::date AND o.is_active AND o.status IN ('PLANNED','IN_PROGRESS')) THEN '{}'::tsmultirange ELSE w.windows-COALESCE((SELECT range_agg(tsrange(d.starts_at::timestamp,COALESCE(d.ends_at,NOW())::timestamp,'[)')) FROM machine_downtimes d WHERE d.machine_id=w.id AND d.enterprise_id=$2 AND d.starts_at<$3::date+INTERVAL '2 days' AND COALESCE(d.ends_at,NOW())>$3::date),'{}'::tsmultirange) END AS windows FROM adjusted w
+ SELECT w.id,CASE WHEN w.scenario_stop OR EXISTS(SELECT 1 FROM maintenance_orders o LEFT JOIN maintenance_plans p ON p.id=o.plan_id WHERE COALESCE(o.machine_id,p.machine_id)=w.id AND o.scheduled_date=$3::date AND o.is_active AND o.status IN ('PLANNED','IN_PROGRESS')) THEN '{}'::tsmultirange ELSE w.windows-COALESCE((SELECT range_agg(tsrange(d.starts_at AT TIME ZONE (SELECT tz FROM fuso),COALESCE(d.ends_at,NOW()) AT TIME ZONE (SELECT tz FROM fuso),'[)')) FROM machine_downtimes d WHERE d.machine_id=w.id AND d.enterprise_id=$2 AND d.starts_at<$3::date+INTERVAL '2 days' AND COALESCE(d.ends_at,NOW())>$3::date),'{}'::tsmultirange) END AS windows FROM adjusted w
 ), hours AS (SELECT r.id,COALESCE(SUM(EXTRACT(EPOCH FROM upper(span)-lower(span))/3600),0) AS h FROM remaining r LEFT JOIN LATERAL unnest(r.windows) span ON TRUE GROUP BY r.id)
  SELECT COALESCE(SUM(h),0) FROM hours`, workCenterID, e, *day, planCode).Scan(&h)
 	return h, err

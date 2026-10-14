@@ -213,7 +213,10 @@ Para conferir, rode a suíte em mais de um fuso:
 `TZ=UTC go test -tags=integration ./...` e `TZ=Asia/Tokyo ...` (verde nos dois
 desde a v1.3.0).
 
-⚠️ `TestMachineProductivityMRPAndCRPIntegration` continua **em aberto** com o
-BANCO em UTC (o CRP soma 6 h de necessidade num dia de 5 h de capacidade).
-Reproduzido na v1.1.33; não morde hoje porque produção roda no mesmo fuso do CI.
-Ao investigar, reproduza com `ALTER DATABASE <base> SET timezone TO 'UTC'`.
+`TestMachineProductivityMRPAndCRPIntegration` falhava com o BANCO em UTC (o CRP
+somava 6 h num dia de 5 h): o CRP convertia as paradas pelo fuso da sessão e o
+agendamento finito pelo fuso da empresa. Resolvido na v1.6.1 — os dois usam o
+fuso da empresa (`enterprise_notification_settings.timezone`, padrão
+America/Sao_Paulo). **Regra:** timestamptz que vira hora de parede de turno
+converte com `AT TIME ZONE` no fuso da empresa, nunca com `::timestamp`; e teste
+que grava horário de parada escreve o fuso no literal.

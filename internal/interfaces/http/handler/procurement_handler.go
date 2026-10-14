@@ -279,6 +279,9 @@ func (h *ProcurementHandler) CreateApprovalLimit(w http.ResponseWriter, r *http.
 }
 
 func (h *ProcurementHandler) ListApprovalLimits(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"enterprise_code"}}) {
+		return
+	}
 	enterpriseCode, _ := strconv.ParseInt(r.URL.Query().Get("enterprise_code"), 10, 64)
 	result, err := h.uc.ListApprovalLimits(r.Context(), enterpriseCode)
 	if err != nil {
@@ -316,6 +319,9 @@ func (h *ProcurementHandler) GetSupplierContract(w http.ResponseWriter, r *http.
 }
 
 func (h *ProcurementHandler) ListSupplierContracts(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"supplier_code"}}) {
+		return
+	}
 	supplierCode, _ := strconv.ParseInt(r.URL.Query().Get("supplier_code"), 10, 64)
 	result, err := h.uc.ListSupplierContracts(r.Context(), supplierCode, r.URL.Query().Get("status"))
 	if err != nil {
@@ -431,6 +437,9 @@ func (h *ProcurementHandler) CreateReceivingDivergence(w http.ResponseWriter, r 
 }
 
 func (h *ProcurementHandler) ListReceivingDivergences(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"supplier_code"}}) {
+		return
+	}
 	var supplierCode *int64
 	if v := r.URL.Query().Get("supplier_code"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -493,6 +502,9 @@ func (h *ProcurementHandler) GetEDIMessage(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ProcurementHandler) ListEDIMessages(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"supplier_code"}}) {
+		return
+	}
 	var supplierCode *int64
 	if v := r.URL.Query().Get("supplier_code"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -593,6 +605,9 @@ func (h *ProcurementHandler) UpsertParameter(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ProcurementHandler) ListParameters(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"enterprise_code"}}) {
+		return
+	}
 	enterpriseCode, _ := strconv.ParseInt(r.URL.Query().Get("enterprise_code"), 10, 64)
 	result, err := h.uc.ListParameters(r.Context(), enterpriseCode, r.URL.Query().Get("domain"))
 	if err != nil {
@@ -646,6 +661,9 @@ func (h *ProcurementHandler) ListSupplierHomologations(w http.ResponseWriter, r 
 }
 
 func (h *ProcurementHandler) ListPurchaseMovementHistory(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"supplier_code", "item_code", "limit"}}) {
+		return
+	}
 	var supplierCode, itemCode *int64
 	if v := r.URL.Query().Get("supplier_code"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {

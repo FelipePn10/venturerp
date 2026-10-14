@@ -30,6 +30,9 @@ func NewAuditHandler(reader *audit.Reader) *AuditHandler {
 //	limit       page size (default 100, max 500)
 //	offset      pagination offset
 func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"min_status", "limit", "offset"}, Datas: []string{"from", "to"}}) {
+		return
+	}
 	q := r.URL.Query()
 
 	f := audit.Filter{

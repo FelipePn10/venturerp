@@ -91,6 +91,9 @@ func (h *MarginHandler) SaveParameters(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MarginHandler) GetParameters(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"ano", "mes"}}) {
+		return
+	}
 	ano, _ := strconv.Atoi(r.URL.Query().Get("ano"))
 	mes, _ := strconv.Atoi(r.URL.Query().Get("mes"))
 	if ano == 0 || mes == 0 {
@@ -115,6 +118,9 @@ func (h *MarginHandler) GetParameters(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MarginHandler) ListParameters(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"ano"}}) {
+		return
+	}
 	ano, _ := strconv.Atoi(r.URL.Query().Get("ano"))
 	if ano == 0 {
 		ano = time.Now().Year()

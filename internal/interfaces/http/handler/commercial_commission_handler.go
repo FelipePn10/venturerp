@@ -32,6 +32,9 @@ func (h *CommercialCommissionHandler) GetSettings(w http.ResponseWriter, r *http
 	respondCommission(w, v, err, 200)
 }
 func (h *CommercialCommissionHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit", "offset", "representative_code"}}) {
+		return
+	}
 	f := entity.Filter{}
 	if raw := r.URL.Query().Get("representative_code"); raw != "" {
 		v, err := strconv.ParseInt(raw, 10, 64)

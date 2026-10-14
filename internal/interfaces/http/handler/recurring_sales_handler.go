@@ -52,6 +52,9 @@ func (h *RecurringSalesHandler) CreateAdjustmentDate(w http.ResponseWriter, r *h
 }
 
 func (h *RecurringSalesHandler) ListAdjustmentDates(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"enterprise_code", "customer_code", "establishment_code", "item_code", "representative_code"}}) {
+		return
+	}
 	result, err := h.uc.ListAdjustmentDates(r.Context(), h.filter(r))
 	h.respond(w, result, err, http.StatusOK)
 }
@@ -66,6 +69,9 @@ func (h *RecurringSalesHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RecurringSalesHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"enterprise_code", "customer_code", "establishment_code", "item_code", "representative_code"}}) {
+		return
+	}
 	result, err := h.uc.List(r.Context(), h.filter(r))
 	h.respond(w, result, err, http.StatusOK)
 }
@@ -164,11 +170,17 @@ func (h *RecurringSalesHandler) RecalculateAdjustment(w http.ResponseWriter, r *
 }
 
 func (h *RecurringSalesHandler) RevenueProjection(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"enterprise_code", "customer_code", "item_code", "representative_code"}, Decimais: []string{"adjustment_percent"}, Datas: []string{"from", "to"}}) {
+		return
+	}
 	result, err := h.uc.RevenueProjection(r.Context(), h.projectionFilter(r))
 	h.respond(w, result, err, http.StatusOK)
 }
 
 func (h *RecurringSalesHandler) CommissionProjection(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"enterprise_code", "customer_code", "item_code", "representative_code"}, Decimais: []string{"adjustment_percent"}, Datas: []string{"from", "to"}}) {
+		return
+	}
 	result, err := h.uc.CommissionProjection(r.Context(), h.projectionFilter(r))
 	h.respond(w, result, err, http.StatusOK)
 }

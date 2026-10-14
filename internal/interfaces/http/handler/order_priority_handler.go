@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -40,7 +43,11 @@ func (h *OrderPriorityHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderPriorityHandler) FindByValue(w http.ResponseWriter, r *http.Request) {
-	value, _ := strconv.ParseFloat(chi.URLParam(r, "value"), 64)
+	value, err := strconv.ParseFloat(strings.TrimSpace(chi.URLParam(r, "value")), 64)
+	if err != nil {
+		respondErr(w, errorsuc.NewValidationError(fmt.Sprintf("valor de prioridade inválido no endereço (%q)", chi.URLParam(r, "value"))))
+		return
+	}
 	result, err := h.findUC.Execute(r.Context(), value)
 	if err != nil {
 		respondErrStatus(w, http.StatusNotFound, err)

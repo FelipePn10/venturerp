@@ -2,11 +2,9 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
-	"github.com/go-chi/chi/v5"
 )
 
 func (h *PlannedOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +30,10 @@ func (h *PlannedOrderHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PlannedOrderHandler) Firm(w http.ResponseWriter, r *http.Request) {
-	code, _ := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	code, ok := codigoDaRota(w, r, "code")
+	if !ok {
+		return
+	}
 	result, err := h.firmUC.Execute(r.Context(), request.FirmOrderDTO{OrderCode: code})
 	if err != nil {
 		security.RespondUseCaseError(w, err)

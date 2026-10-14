@@ -40,6 +40,9 @@ func (h *StructureExtrasHandler) SimulateFormula(w http.ResponseWriter, r *http.
 
 // History devolve quem alterou o quê na estrutura do item pai.
 func (h *StructureExtrasHandler) History(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Inteiros: []string{"limit"}}) {
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	out, err := h.history.Execute(r.Context(), request.TextCode(itemCodePathParam(r, "itemCode")), limit)
 	if err != nil {

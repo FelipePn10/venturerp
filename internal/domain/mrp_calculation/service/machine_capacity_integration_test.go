@@ -134,7 +134,7 @@ func TestMachineProductivityMRPAndCRPIntegration(t *testing.T) {
 	if err != nil || h != 6 {
 		t.Fatalf("overlapping shifts %v %v", h, err)
 	}
-	exec(`INSERT INTO machine_downtimes(enterprise_id,machine_id,starts_at,ends_at,downtime_type,reason) VALUES($1,$2,'2026-09-14 09:00','2026-09-14 10:00','PLANNED','test')`, enterprise, m.ID)
+	exec(`INSERT INTO machine_downtimes(enterprise_id,machine_id,starts_at,ends_at,downtime_type,reason) VALUES($1,$2,'2026-09-14 09:00 America/Sao_Paulo','2026-09-14 10:00 America/Sao_Paulo','PLANNED','test')`, enterprise, m.ID)
 	h, err = capacity.Hours(ctx, pool, mt.ID, &day)
 	if err != nil || h != 5 {
 		t.Fatalf("downtime %v %v", h, err)

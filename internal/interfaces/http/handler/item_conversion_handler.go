@@ -80,6 +80,9 @@ type conversionResult struct {
 }
 
 func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Decimais: []string{"qty"}}) {
+		return
+	}
 	q := r.URL.Query()
 	from := strings.TrimSpace(q.Get("from"))
 	to := strings.TrimSpace(q.Get("to"))

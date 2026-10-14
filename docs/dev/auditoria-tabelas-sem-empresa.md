@@ -114,6 +114,17 @@ UPDATE que não mexe na referência nem na empresa. Exceções de propósito
 
 **Migration que cria tabela ou FK nova termina com
 `SELECT instalar_conferencia_de_empresa();`** — o teste
-`TestConferenciaDeEmpresaCobreTodosOsVinculos` falha se esquecer. Colunas de código
-sem FK (ex.: `fiscal_exits.sales_order_code`, `customer_code`) não são conferidas.
+`TestConferenciaDeEmpresaCobreTodosOsVinculos` falha se esquecer.
 Teste que precisa simular dado legado cruzado usa `testutil.DadoLegadoCruzado`.
+
+### Colunas de código sem FK (migração 000403)
+
+Coluna `X_code` sem FK que tem uma tabela `X(e)s` com `code` e empresa também é
+conferida — `fiscal_exits.sales_order_code`, `sales_orders.customer_code`,
+`purchase_orders.supplier_code` etc. (87 vínculos). Como o código pode repetir
+entre empresas (cada uma tem a sua cópia do cliente), a regra é outra: é violação
+quando o código **não existe na empresa do registro e existe em outra**. Código
+inexistente segue livre; cadastro global (empresa nula) vale para todas.
+Exceções por coluna em `conferencia_empresa_excecao_coluna`: plano de corte,
+`sales_order_demands` (planejamento interfábricas) e `warehouse_code` (o nome
+coincide com a tabela `warehouse` sem ser ela).
