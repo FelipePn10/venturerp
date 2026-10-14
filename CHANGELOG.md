@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.6.0] — 2026-10-14
+
+- feat: isolamento por empresa, efeitos da NF-e como pendência e erros que não somem mais (`5fab9265`)
+
 - feat(nf-e): os efeitos da NF-e autorizada (títulos a receber, baixa de estoque,
   consumo das reservas e faturamento do pedido) viram uma PENDÊNCIA registrada antes
   de rodar e aplicada numa transação só — ou entram todos, ou nenhum. Falhando, a
