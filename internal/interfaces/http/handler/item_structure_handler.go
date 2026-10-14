@@ -16,8 +16,7 @@ import (
 func (h *ItemStructureHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateStructureComponentDTO
 
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 
@@ -36,8 +35,7 @@ func (h *ItemStructureHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateStructureComponentDTO
 
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 
@@ -68,7 +66,7 @@ func (h *ItemStructureHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		mask = &value
 	}
 	if err := h.deleteUC.Execute(r.Context(), parent, child, mask); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -88,7 +86,7 @@ func (h *ItemStructureHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.treeUC.Execute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 
@@ -109,7 +107,7 @@ func (h *ItemStructureHandler) GetAllDirectChildren(w http.ResponseWriter, r *ht
 
 	result, err := h.getAllStructure.Execute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 

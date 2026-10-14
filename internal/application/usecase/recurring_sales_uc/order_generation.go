@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -101,7 +102,11 @@ func (uc *UseCase) GenerateSalesOrder(ctx context.Context, code int64, dto reque
 	completed := false
 	defer func() {
 		if !completed {
-			_ = operationRepo.FailOperation(ctx, operation)
+			if err := operationRepo.FailOperation(ctx, operation); err != nil {
+				// O erro da geração já volta para quem chamou; a operação que não
+				// pôde ser marcada como falha fica "em andamento" e trava a próxima.
+				slog.Error("falha ao marcar a operação de venda recorrente como falha", "operacao", operation, "erro", err)
+			}
 		}
 	}()
 	if rec.GeneratedOrderCode != nil {

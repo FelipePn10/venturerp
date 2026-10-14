@@ -15,22 +15,17 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
+// Reprogramação é da empresa do pedido de venda: a coluna é enterprise_code e
+// o filtro usa tenant.Code (o ID só coincide com o código na empresa 1).
+
 func (r *DeliveryRescheduleRepositorySQLC) Create(
 	ctx context.Context,
 	res *entity.DeliveryReschedule,
 ) (*entity.DeliveryReschedule, error) {
-	if r.pool != nil {
-		enterpriseID, err := tenant.ID(ctx)
-		if err != nil {
-			return nil, err
-		}
-		row := r.pool.QueryRow(ctx, `INSERT INTO delivery_reschedules(sales_order_code,item_code,old_date,new_date,reason,created_by,enterprise_code) SELECT $1,$2,$3,$4,$5,$6,$7 WHERE EXISTS(SELECT 1 FROM sales_orders WHERE code=$1 AND enterprise_code=$7) RETURNING code,created_at`, res.SalesOrderCode, int64(res.ItemCode), res.OldDate, res.NewDate, res.Reason, res.CreatedBy, enterpriseID)
-		if err := row.Scan(&res.Code, &res.CreatedAt); err != nil {
-			return nil, fmt.Errorf("criando reprogramação na empresa autenticada: %w", err)
-		}
-		return res, nil
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	row, err := r.q.CreateDeliveryReschedule(
 		ctx,
 		sqlc.CreateDeliveryRescheduleParams{
@@ -38,13 +33,15 @@ func (r *DeliveryRescheduleRepositorySQLC) Create(
 			ItemCode:       int64(res.ItemCode),
 			OldDate:        pgutil.ToPgDate(res.OldDate),
 			NewDate:        pgutil.ToPgDate(res.NewDate),
-
-			Reason: pgutil.ToPgTextFromPtr(res.Reason),
-
-			CreatedBy: pgutil.ToPgUUID(res.CreatedBy),
+			Reason:         pgutil.ToPgTextFromPtr(res.Reason),
+			CreatedBy:      pgutil.ToPgUUID(res.CreatedBy),
+			EnterpriseCode: empresa,
 		},
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("pedido de venda %d não encontrado", res.SalesOrderCode))
+		}
 		return nil, fmt.Errorf("creating delivery reschedule: %w", err)
 	}
 
@@ -55,8 +52,11 @@ func (r *DeliveryRescheduleRepositorySQLC) GetByCode(
 	ctx context.Context,
 	code int64,
 ) (*entity.DeliveryReschedule, error) {
-
-	row, err := r.q.GetDeliveryRescheduleByCode(ctx, code)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetDeliveryRescheduleByCode(ctx, sqlc.GetDeliveryRescheduleByCodeParams{Code: code, EnterpriseCode: empresa})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("reprogramação de entrega %d não encontrada", code))
@@ -71,30 +71,11 @@ func (r *DeliveryRescheduleRepositorySQLC) ListByOrder(
 	ctx context.Context,
 	salesOrderCode int64,
 ) ([]*entity.DeliveryReschedule, error) {
-	if r.pool != nil {
-		enterpriseID, err := tenant.ID(ctx)
-		if err != nil {
-			return nil, err
-		}
-		rows, err := r.pool.Query(ctx, `SELECT code,sales_order_code,item_code,old_date,new_date,reason,created_at,created_by FROM delivery_reschedules WHERE sales_order_code=$1 AND enterprise_code=$2 ORDER BY created_at DESC`, salesOrderCode, enterpriseID)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var out []*entity.DeliveryReschedule
-		for rows.Next() {
-			v := new(entity.DeliveryReschedule)
-			var item int64
-			if err = rows.Scan(&v.Code, &v.SalesOrderCode, &item, &v.OldDate, &v.NewDate, &v.Reason, &v.CreatedAt, &v.CreatedBy); err != nil {
-				return nil, err
-			}
-			v.ItemCode = valueobject.ItemCode(item)
-			out = append(out, v)
-		}
-		return out, rows.Err()
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	rows, err := r.q.ListReschedulesByOrder(ctx, salesOrderCode)
+	rows, err := r.q.ListReschedulesByOrder(ctx, sqlc.ListReschedulesByOrderParams{SalesOrderCode: salesOrderCode, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing reschedules by order: %w", err)
 	}
@@ -106,8 +87,11 @@ func (r *DeliveryRescheduleRepositorySQLC) ListByItem(
 	ctx context.Context,
 	itemCode valueobject.ItemCode,
 ) ([]*entity.DeliveryReschedule, error) {
-
-	rows, err := r.q.ListReschedulesByItem(ctx, int64(itemCode))
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListReschedulesByItem(ctx, sqlc.ListReschedulesByItemParams{ItemCode: int64(itemCode), EnterpriseCode: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing reschedules by item: %w", err)
 	}
@@ -119,7 +103,18 @@ func (r *DeliveryRescheduleRepositorySQLC) Delete(
 	ctx context.Context,
 	id int64,
 ) error {
-	return r.q.DeleteDeliveryReschedule(ctx, id)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.DeleteDeliveryReschedule(ctx, sqlc.DeleteDeliveryRescheduleParams{Code: id, EnterpriseCode: empresa})
+	if err != nil {
+		return fmt.Errorf("deleting delivery reschedule: %w", err)
+	}
+	if n == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("reprogramação de entrega %d não encontrada", id))
+	}
+	return nil
 }
 
 func rowToEntity(row sqlc.DeliveryReschedule) *entity.DeliveryReschedule {

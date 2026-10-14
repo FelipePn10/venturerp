@@ -97,8 +97,9 @@ INSERT INTO icms_ipi_tax_params (
     icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib,
     fcp_st_partilha_pct,
     icms_difal_red_pct, icms_difal_type,
-    difal_purchase_red_pct, difal_purchase_red_target
-) VALUES (
+    difal_purchase_red_pct, difal_purchase_red_target,
+    enterprise_id
+) SELECT
     $1,  $2,  $3,  $4,  $5,
     $6,  $7,  $8,  $9,  $10, $11,
     $12, $13,
@@ -112,8 +113,11 @@ INSERT INTO icms_ipi_tax_params (
     $54, $55, $56, $57, $58, $59, $60, $61,
     $62, $63, $64, $65, $66, $67,
     $68, $69, $70, $71, $72, $73, $74,
-    $75, $76, $77, $78
-)
+    $75, $76, $77, $78,
+    $79
+-- Item e cliente citados na regra têm de ser da empresa.
+ WHERE ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $2 AND i.enterprise_id = $79))
+   AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $6 AND c.enterprise_id = $79))
 RETURNING *;
 
 -- name: UpdateTaxParam :one
@@ -147,33 +151,36 @@ SET ncm_code = $2, item_code = $3, item_config_mask = $4, uf = $5, operation_typ
     icms_difal_red_pct = $76, icms_difal_type = $77,
     difal_purchase_red_pct = $78, difal_purchase_red_target = $79,
     is_active = $80, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $81
 RETURNING *;
 
 -- name: GetTaxParamByID :one
-SELECT * FROM icms_ipi_tax_params WHERE id = $1;
+SELECT * FROM icms_ipi_tax_params WHERE id = $1 AND enterprise_id = $2;
 
 -- name: ListTaxParams :many
 SELECT * FROM icms_ipi_tax_params
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY id;
 
 -- name: ListTaxParamsByUF :many
 SELECT * FROM icms_ipi_tax_params
 WHERE uf = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+  AND enterprise_id = $3
 ORDER BY id;
 
 -- name: ListTaxParamsByItem :many
 SELECT * FROM icms_ipi_tax_params
 WHERE item_code = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+  AND enterprise_id = $3
 ORDER BY uf, operation_type;
 
 -- name: ListTaxParamsByNCM :many
 SELECT * FROM icms_ipi_tax_params
 WHERE ncm_code = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
+  AND enterprise_id = $3
 ORDER BY uf, operation_type;
 
 -- name: NextTaxParamID :one

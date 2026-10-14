@@ -64,24 +64,29 @@ INSERT INTO purchase_quotation_items (
     quotation_code, sequence, item_code, quantity, uom, delivery_date,
     source_type, source_code, source_item_id, is_configured
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+ WHERE EXISTS (SELECT 1 FROM purchase_quotations q
+                WHERE q.code = $1 AND q.enterprise_code = $11)
 RETURNING id, quotation_code, sequence, item_code, quantity, uom, delivery_date, source_type, source_code, source_item_id, is_configured, created_at
 `
 
 type CreatePurchaseQuotationItemParams struct {
-	QuotationCode int64
-	Sequence      int32
-	ItemCode      int64
-	Quantity      pgtype.Numeric
-	Uom           pgtype.Text
-	DeliveryDate  pgtype.Date
-	SourceType    string
-	SourceCode    *int64
-	SourceItemID  *int64
-	IsConfigured  bool
+	QuotationCode  int64
+	Sequence       int32
+	ItemCode       int64
+	Quantity       pgtype.Numeric
+	Uom            pgtype.Text
+	DeliveryDate   pgtype.Date
+	SourceType     string
+	SourceCode     *int64
+	SourceItemID   *int64
+	IsConfigured   bool
+	EnterpriseCode int64
 }
 
 // ─── Items ────────────────────────────────────────────────────────────────────
+// Filhos da cotação seguem a empresa dela (enterprise_code): sem cotação da
+// empresa autenticada, nada é gravado.
 func (q *Queries) CreatePurchaseQuotationItem(ctx context.Context, arg CreatePurchaseQuotationItemParams) (PurchaseQuotationItem, error) {
 	row := q.db.QueryRow(ctx, createPurchaseQuotationItem,
 		arg.QuotationCode,
@@ -94,6 +99,7 @@ func (q *Queries) CreatePurchaseQuotationItem(ctx context.Context, arg CreatePur
 		arg.SourceCode,
 		arg.SourceItemID,
 		arg.IsConfigured,
+		arg.EnterpriseCode,
 	)
 	var i PurchaseQuotationItem
 	err := row.Scan(
@@ -116,19 +122,24 @@ func (q *Queries) CreatePurchaseQuotationItem(ctx context.Context, arg CreatePur
 const createPurchaseQuotationSupplier = `-- name: CreatePurchaseQuotationSupplier :one
 
 INSERT INTO purchase_quotation_suppliers (quotation_code, supplier_code)
-VALUES ($1, $2)
+SELECT $1, $2
+ WHERE EXISTS (SELECT 1 FROM purchase_quotations q
+                WHERE q.code = $1 AND q.enterprise_code = $3)
+   AND EXISTS (SELECT 1 FROM suppliers s JOIN enterprise e ON e.id = s.enterprise_id
+                WHERE s.code = $2 AND e.code = $3)
 ON CONFLICT (quotation_code, supplier_code) DO UPDATE SET invited_at = NOW()
 RETURNING id, quotation_code, supplier_code, invited_at
 `
 
 type CreatePurchaseQuotationSupplierParams struct {
-	QuotationCode int64
-	SupplierCode  int64
+	QuotationCode  int64
+	SupplierCode   int64
+	EnterpriseCode int64
 }
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 func (q *Queries) CreatePurchaseQuotationSupplier(ctx context.Context, arg CreatePurchaseQuotationSupplierParams) (PurchaseQuotationSupplier, error) {
-	row := q.db.QueryRow(ctx, createPurchaseQuotationSupplier, arg.QuotationCode, arg.SupplierCode)
+	row := q.db.QueryRow(ctx, createPurchaseQuotationSupplier, arg.QuotationCode, arg.SupplierCode, arg.EnterpriseCode)
 	var i PurchaseQuotationSupplier
 	err := row.Scan(
 		&i.ID,
@@ -168,11 +179,18 @@ func (q *Queries) GetPurchaseQuotationByCode(ctx context.Context, arg GetPurchas
 }
 
 const getPurchaseQuotationItem = `-- name: GetPurchaseQuotationItem :one
-SELECT id, quotation_code, sequence, item_code, quantity, uom, delivery_date, source_type, source_code, source_item_id, is_configured, created_at FROM purchase_quotation_items WHERE id = $1
+SELECT i.id, i.quotation_code, i.sequence, i.item_code, i.quantity, i.uom, i.delivery_date, i.source_type, i.source_code, i.source_item_id, i.is_configured, i.created_at FROM purchase_quotation_items i
+JOIN purchase_quotations q ON q.code = i.quotation_code
+WHERE i.id = $1 AND q.enterprise_code = $2
 `
 
-func (q *Queries) GetPurchaseQuotationItem(ctx context.Context, id int64) (PurchaseQuotationItem, error) {
-	row := q.db.QueryRow(ctx, getPurchaseQuotationItem, id)
+type GetPurchaseQuotationItemParams struct {
+	ID             int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) GetPurchaseQuotationItem(ctx context.Context, arg GetPurchaseQuotationItemParams) (PurchaseQuotationItem, error) {
+	row := q.db.QueryRow(ctx, getPurchaseQuotationItem, arg.ID, arg.EnterpriseCode)
 	var i PurchaseQuotationItem
 	err := row.Scan(
 		&i.ID,
@@ -192,11 +210,19 @@ func (q *Queries) GetPurchaseQuotationItem(ctx context.Context, id int64) (Purch
 }
 
 const getPurchaseQuotationPrice = `-- name: GetPurchaseQuotationPrice :one
-SELECT id, quotation_item_id, supplier_code, unit_price, lead_time_days, payment_term_code, notes, is_selected, created_at FROM purchase_quotation_prices WHERE id = $1
+SELECT p.id, p.quotation_item_id, p.supplier_code, p.unit_price, p.lead_time_days, p.payment_term_code, p.notes, p.is_selected, p.created_at FROM purchase_quotation_prices p
+JOIN purchase_quotation_items i ON i.id = p.quotation_item_id
+JOIN purchase_quotations q ON q.code = i.quotation_code
+WHERE p.id = $1 AND q.enterprise_code = $2
 `
 
-func (q *Queries) GetPurchaseQuotationPrice(ctx context.Context, id int64) (PurchaseQuotationPrice, error) {
-	row := q.db.QueryRow(ctx, getPurchaseQuotationPrice, id)
+type GetPurchaseQuotationPriceParams struct {
+	ID             int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) GetPurchaseQuotationPrice(ctx context.Context, arg GetPurchaseQuotationPriceParams) (PurchaseQuotationPrice, error) {
+	row := q.db.QueryRow(ctx, getPurchaseQuotationPrice, arg.ID, arg.EnterpriseCode)
 	var i PurchaseQuotationPrice
 	err := row.Scan(
 		&i.ID,
@@ -213,11 +239,19 @@ func (q *Queries) GetPurchaseQuotationPrice(ctx context.Context, id int64) (Purc
 }
 
 const listPurchaseQuotationItems = `-- name: ListPurchaseQuotationItems :many
-SELECT id, quotation_code, sequence, item_code, quantity, uom, delivery_date, source_type, source_code, source_item_id, is_configured, created_at FROM purchase_quotation_items WHERE quotation_code = $1 ORDER BY sequence
+SELECT i.id, i.quotation_code, i.sequence, i.item_code, i.quantity, i.uom, i.delivery_date, i.source_type, i.source_code, i.source_item_id, i.is_configured, i.created_at FROM purchase_quotation_items i
+JOIN purchase_quotations q ON q.code = i.quotation_code
+WHERE i.quotation_code = $1 AND q.enterprise_code = $2
+ORDER BY i.sequence
 `
 
-func (q *Queries) ListPurchaseQuotationItems(ctx context.Context, quotationCode int64) ([]PurchaseQuotationItem, error) {
-	rows, err := q.db.Query(ctx, listPurchaseQuotationItems, quotationCode)
+type ListPurchaseQuotationItemsParams struct {
+	QuotationCode  int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) ListPurchaseQuotationItems(ctx context.Context, arg ListPurchaseQuotationItemsParams) ([]PurchaseQuotationItem, error) {
+	rows, err := q.db.Query(ctx, listPurchaseQuotationItems, arg.QuotationCode, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -250,11 +284,20 @@ func (q *Queries) ListPurchaseQuotationItems(ctx context.Context, quotationCode 
 }
 
 const listPurchaseQuotationPricesByItem = `-- name: ListPurchaseQuotationPricesByItem :many
-SELECT id, quotation_item_id, supplier_code, unit_price, lead_time_days, payment_term_code, notes, is_selected, created_at FROM purchase_quotation_prices WHERE quotation_item_id = $1 ORDER BY unit_price
+SELECT p.id, p.quotation_item_id, p.supplier_code, p.unit_price, p.lead_time_days, p.payment_term_code, p.notes, p.is_selected, p.created_at FROM purchase_quotation_prices p
+JOIN purchase_quotation_items i ON i.id = p.quotation_item_id
+JOIN purchase_quotations q ON q.code = i.quotation_code
+WHERE p.quotation_item_id = $1 AND q.enterprise_code = $2
+ORDER BY p.unit_price
 `
 
-func (q *Queries) ListPurchaseQuotationPricesByItem(ctx context.Context, quotationItemID int64) ([]PurchaseQuotationPrice, error) {
-	rows, err := q.db.Query(ctx, listPurchaseQuotationPricesByItem, quotationItemID)
+type ListPurchaseQuotationPricesByItemParams struct {
+	QuotationItemID int64
+	EnterpriseCode  int64
+}
+
+func (q *Queries) ListPurchaseQuotationPricesByItem(ctx context.Context, arg ListPurchaseQuotationPricesByItemParams) ([]PurchaseQuotationPrice, error) {
+	rows, err := q.db.Query(ctx, listPurchaseQuotationPricesByItem, arg.QuotationItemID, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -284,11 +327,19 @@ func (q *Queries) ListPurchaseQuotationPricesByItem(ctx context.Context, quotati
 }
 
 const listPurchaseQuotationSuppliers = `-- name: ListPurchaseQuotationSuppliers :many
-SELECT id, quotation_code, supplier_code, invited_at FROM purchase_quotation_suppliers WHERE quotation_code = $1 ORDER BY supplier_code
+SELECT s.id, s.quotation_code, s.supplier_code, s.invited_at FROM purchase_quotation_suppliers s
+JOIN purchase_quotations q ON q.code = s.quotation_code
+WHERE s.quotation_code = $1 AND q.enterprise_code = $2
+ORDER BY s.supplier_code
 `
 
-func (q *Queries) ListPurchaseQuotationSuppliers(ctx context.Context, quotationCode int64) ([]PurchaseQuotationSupplier, error) {
-	rows, err := q.db.Query(ctx, listPurchaseQuotationSuppliers, quotationCode)
+type ListPurchaseQuotationSuppliersParams struct {
+	QuotationCode  int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) ListPurchaseQuotationSuppliers(ctx context.Context, arg ListPurchaseQuotationSuppliersParams) ([]PurchaseQuotationSupplier, error) {
+	rows, err := q.db.Query(ctx, listPurchaseQuotationSuppliers, arg.QuotationCode, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -358,12 +409,18 @@ func (q *Queries) ListPurchaseQuotations(ctx context.Context, arg ListPurchaseQu
 const listSelectedQuotationPrices = `-- name: ListSelectedQuotationPrices :many
 SELECT p.id, p.quotation_item_id, p.supplier_code, p.unit_price, p.lead_time_days, p.payment_term_code, p.notes, p.is_selected, p.created_at FROM purchase_quotation_prices p
 JOIN purchase_quotation_items i ON i.id = p.quotation_item_id
-WHERE i.quotation_code = $1 AND p.is_selected = TRUE
+JOIN purchase_quotations q ON q.code = i.quotation_code
+WHERE i.quotation_code = $1 AND p.is_selected = TRUE AND q.enterprise_code = $2
 ORDER BY p.supplier_code, p.quotation_item_id
 `
 
-func (q *Queries) ListSelectedQuotationPrices(ctx context.Context, quotationCode int64) ([]PurchaseQuotationPrice, error) {
-	rows, err := q.db.Query(ctx, listSelectedQuotationPrices, quotationCode)
+type ListSelectedQuotationPricesParams struct {
+	QuotationCode  int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) ListSelectedQuotationPrices(ctx context.Context, arg ListSelectedQuotationPricesParams) ([]PurchaseQuotationPrice, error) {
+	rows, err := q.db.Query(ctx, listSelectedQuotationPrices, arg.QuotationCode, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -394,13 +451,13 @@ func (q *Queries) ListSelectedQuotationPrices(ctx context.Context, quotationCode
 
 const nextPurchaseQuotationCode = `-- name: NextPurchaseQuotationCode :one
 SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM purchase_quotations
-WHERE enterprise_code = $1
 `
 
-// A numeração é por empresa. Global, o próximo código de uma empresa saltava
-// conforme o volume da outra — além de revelar esse volume.
-func (q *Queries) NextPurchaseQuotationCode(ctx context.Context, enterpriseCode int64) (int64, error) {
-	row := q.db.QueryRow(ctx, nextPurchaseQuotationCode, enterpriseCode)
+// purchase_quotations.code é único no banco inteiro (os filhos referenciam só o
+// código), então a numeração também tem de ser: por empresa, a segunda empresa
+// recebia um código já usado pela primeira e a criação falhava.
+func (q *Queries) NextPurchaseQuotationCode(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, nextPurchaseQuotationCode)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -449,7 +506,12 @@ func (q *Queries) UpdatePurchaseQuotationStatus(ctx context.Context, arg UpdateP
 const upsertPurchaseQuotationPrice = `-- name: UpsertPurchaseQuotationPrice :one
 
 INSERT INTO purchase_quotation_prices (quotation_item_id, supplier_code, unit_price, lead_time_days, payment_term_code, notes)
-VALUES ($1, $2, $3, $4, $5, $6)
+SELECT $1, $2, $3, $4, $5, $6
+ WHERE EXISTS (SELECT 1 FROM purchase_quotation_items i
+                 JOIN purchase_quotations q ON q.code = i.quotation_code
+                WHERE i.id = $1 AND q.enterprise_code = $7)
+   AND EXISTS (SELECT 1 FROM suppliers s JOIN enterprise e ON e.id = s.enterprise_id
+                WHERE s.code = $2 AND e.code = $7)
 ON CONFLICT (quotation_item_id, supplier_code) DO UPDATE SET
     unit_price = EXCLUDED.unit_price,
     lead_time_days = EXCLUDED.lead_time_days,
@@ -465,6 +527,7 @@ type UpsertPurchaseQuotationPriceParams struct {
 	LeadTimeDays    int32
 	PaymentTermCode *int64
 	Notes           pgtype.Text
+	EnterpriseCode  int64
 }
 
 // ─── Prices ───────────────────────────────────────────────────────────────────
@@ -476,6 +539,7 @@ func (q *Queries) UpsertPurchaseQuotationPrice(ctx context.Context, arg UpsertPu
 		arg.LeadTimeDays,
 		arg.PaymentTermCode,
 		arg.Notes,
+		arg.EnterpriseCode,
 	)
 	var i PurchaseQuotationPrice
 	err := row.Scan(

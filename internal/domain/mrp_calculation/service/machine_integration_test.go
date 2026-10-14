@@ -69,6 +69,27 @@ func TestMachineMaterialDependencies(t *testing.T) {
 	}
 }
 
+// A ordem do pai espera só os componentes pedidos até o início dela. Antes o
+// pronto era um horário único por item pai — o do componente mais tardio de
+// todas as ordens — e a ordem de amanhã esperava a compra do mês seguinte.
+func TestProntidaoDeMaterialPorOrdemDoPai(t *testing.T) {
+	pai := int64(10)
+	dia := func(d int) time.Time { return time.Date(2026, 10, d, 0, 0, 0, 0, time.UTC) }
+	prontos := materialReadiness{}
+	prontos.record(&entity.PlannedOrderSuggestion{ItemCode: 20, ParentItemCode: &pai, NeedDate: dia(17)}, dia(17))
+	prontos.record(&entity.PlannedOrderSuggestion{ItemCode: 30, ParentItemCode: &pai, NeedDate: dia(17)}, dia(19))
+	prontos.record(&entity.PlannedOrderSuggestion{ItemCode: 20, ParentItemCode: &pai, NeedDate: dia(31)}, dia(31))
+	if got := prontos.readyFor(pai, dia(17)); !got.Equal(dia(19)) {
+		t.Fatalf("ordem de 17/10 pronta em %s, esperado 19/10 (o componente atrasado dela, não o de 31/10)", got)
+	}
+	if got := prontos.readyFor(pai, dia(31)); !got.Equal(dia(31)) {
+		t.Fatalf("ordem de 31/10 pronta em %s, esperado 31/10", got)
+	}
+	if got := prontos.readyFor(int64(99), dia(17)); !got.IsZero() {
+		t.Fatalf("item sem componentes ficou esperando %s", got)
+	}
+}
+
 // Três máquinas idênticas são três recursos que fazem o mesmo, não uma preferida
 // com duas reservas. Empilhar a fila na primeira estica o prazo com capacidade
 // sobrando ao lado — que é o pior jeito de errar, porque ninguém vê.

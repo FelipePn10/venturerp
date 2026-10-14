@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"regexp"
 	"strings"
 	"time"
@@ -186,7 +187,7 @@ type SupplierType struct {
 
 func NewSupplierType(code int64, description string, kind SupplierKind) (*SupplierType, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if kind == "" {
 		kind = KindNormal
@@ -212,7 +213,7 @@ type SupplierContactType struct {
 
 func NewSupplierContactType(code int64, description string) (*SupplierContactType, error) {
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	return &SupplierContactType{
 		Code:        code,
@@ -289,10 +290,10 @@ type SupplierInput struct {
 
 func NewSupplier(code int64, in SupplierInput, createdBy uuid.UUID) (*Supplier, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if in.Name == "" {
-		return nil, fmt.Errorf("name (razão social) is required")
+		return nil, domainerr.NewValidation("name (razão social) is required")
 	}
 	if in.PersonType == "" {
 		in.PersonType = PersonJuridica
@@ -305,25 +306,25 @@ func NewSupplier(code int64, in SupplierInput, createdBy uuid.UUID) (*Supplier, 
 		}
 	}
 	if in.DocumentNumber == "" {
-		return nil, fmt.Errorf("informe o CNPJ ou o CPF")
+		return nil, domainerr.NewValidation("informe o CNPJ ou o CPF")
 	}
 	// Validate the check digits for Brazilian documents (ESTRANGEIRO/ISENTO skip).
 	switch in.DocumentType {
 	case DocumentCNPJ:
 		if !validation.ValidateCNPJ(in.DocumentNumber) {
-			return nil, fmt.Errorf("CNPJ inválido")
+			return nil, domainerr.NewValidation("CNPJ inválido")
 		}
 	case DocumentCPF:
 		if !validation.ValidateCPF(in.DocumentNumber) {
-			return nil, fmt.Errorf("CPF inválido")
+			return nil, domainerr.NewValidation("CPF inválido")
 		}
 	}
 	// MEI cannot be set for individuals (Pessoa Física).
 	if in.IsMEI && in.PersonType == PersonFisica {
-		return nil, fmt.Errorf("microempreendedor individual não pode ser marcado para pessoa física")
+		return nil, domainerr.NewValidation("microempreendedor individual não pode ser marcado para pessoa física")
 	}
 	if !in.ICMSContributor.IsValid() {
-		return nil, fmt.Errorf("condição de ICMS %q não existe — use CONTRIBUINTE, NAO_CONTRIBUINTE ou ISENTO", string(in.ICMSContributor))
+		return nil, domainerr.NewValidation(fmt.Sprintf("condição de ICMS %q não existe — use CONTRIBUINTE, NAO_CONTRIBUINTE ou ISENTO", string(in.ICMSContributor)))
 	}
 	// A inscrição estadual é exigida quando o TIPO do fornecedor pede (transportadora
 	// e redespacho não pedem) E quando ele é contribuinte de ICMS. Ver
@@ -338,7 +339,7 @@ func NewSupplier(code int64, in SupplierInput, createdBy uuid.UUID) (*Supplier, 
 	}
 	if in.AgricultureMinistryRegistration != nil && *in.AgricultureMinistryRegistration != "" {
 		if !agriRegRe.MatchString(*in.AgricultureMinistryRegistration) {
-			return nil, fmt.Errorf("registro M.A. deve obedecer o formato AA-99999-9")
+			return nil, domainerr.NewValidation("registro M.A. deve obedecer o formato AA-99999-9")
 		}
 	}
 

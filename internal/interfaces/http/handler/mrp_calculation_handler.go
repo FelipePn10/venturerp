@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -16,8 +15,7 @@ import (
 
 func (h *MRPCalculationHandler) Run(w http.ResponseWriter, r *http.Request) {
 	var dto request.RunMRPCalculationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.runUC.Execute(r.Context(), dto)
@@ -90,8 +88,7 @@ func (h *MRPCalculationHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 
 func (h *MRPCalculationHandler) CreateConfiguredRule(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateConfiguredItemRuleDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.configuredRulesUC.Create(r.Context(), dto)

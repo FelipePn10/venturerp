@@ -18,17 +18,18 @@ SET name                  = $2,
     order_item_code       = $8,
     parameters            = $9,
     updated_at            = NOW()
-WHERE code = $1 AND enterprise_id = @enterprise_id
+WHERE code = $1 AND enterprise_id = @enterprise_id AND NOT is_scenario
 RETURNING *;
 
 -- name: GetProductionPlanByCode :one
 SELECT * FROM production_plans WHERE code = $1 AND enterprise_id = @enterprise_id AND is_active = TRUE;
 
 -- name: ListProductionPlans :many
-SELECT * FROM production_plans WHERE enterprise_id = @enterprise_id AND is_active = TRUE ORDER BY code;
+-- Plano de cenário (simulação) é interno do cenário: não aparece nas listas.
+SELECT * FROM production_plans WHERE enterprise_id = @enterprise_id AND is_active = TRUE AND NOT is_scenario ORDER BY code;
 
 -- name: DeleteProductionPlan :exec
-UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = @enterprise_id;
+UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = @enterprise_id AND NOT is_scenario;
 
 -- name: UpdateProductionPlanLastCalculated :exec
 UPDATE production_plans SET last_calculated_at = NOW(), updated_at = NOW() WHERE code = $1 AND enterprise_id = @enterprise_id;

@@ -63,7 +63,9 @@ func (w *Worker) drain(ctx context.Context) {
 	for _, e := range events {
 		if err = w.repo.ProcessOutbox(ctx, e); err != nil {
 			attempt := e.Attempts + 1
-			_ = w.repo.FailOutbox(ctx, e.ID.String(), attempt, time.Now().Add(notificationentity.RetryDelay(attempt)), "PROCESSAMENTO", err.Error(), attempt >= 6)
+			if failErr := w.repo.FailOutbox(ctx, e.ID.String(), attempt, time.Now().Add(notificationentity.RetryDelay(attempt)), "PROCESSAMENTO", err.Error(), attempt >= 6); failErr != nil {
+				slog.Error("falha ao reagendar evento de notificação", "evento_id", e.ID, "erro_original", err, "erro", failErr)
+			}
 		}
 	}
 	deliveries, err := w.repo.ClaimDeliveries(ctx, w.owner, 50, w.lease)
@@ -80,12 +82,16 @@ func (w *Worker) drain(ctx context.Context) {
 			continue
 		}
 		if !permit.Allowed {
-			_ = w.repo.DeferDelivery(ctx, d.EnterpriseID, d.ID, permit.RetryAt, permit.Reason)
+			if deferErr := w.repo.DeferDelivery(ctx, d.EnterpriseID, d.ID, permit.RetryAt, permit.Reason); deferErr != nil {
+				slog.Error("falha ao adiar entrega de notificação", "entrega_id", d.ID, "erro", deferErr)
+			}
 			continue
 		}
 		html, text := RenderDelivery(d.EnterpriseName, d.BrandColor, d.LogoDataURI, d.RecipientName, d.Subject, "", d.Payload)
 		sendErr := w.provider.Send(ctx, ports.EmailMessage{EnterpriseID: d.EnterpriseID, MessageID: d.MessageID, To: []string{d.Recipient}, Subject: d.Subject, HTML: html, Text: text, Attachments: d.Attachments})
-		_ = w.repo.RecordProviderResult(ctx, sendErr == nil)
+		if recErr := w.repo.RecordProviderResult(ctx, sendErr == nil); recErr != nil {
+			slog.Error("falha ao registrar resultado do provedor de e-mail", "erro", recErr)
+		}
 		if err = w.repo.CompleteDelivery(ctx, d, sendErr); err != nil {
 			slog.Error("falha ao registrar entrega de notificação", "entrega_id", d.ID, "erro", err)
 		}

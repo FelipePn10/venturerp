@@ -2,7 +2,7 @@ package independent_demand_uc
 
 import (
 	"context"
-	"time"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -24,7 +24,10 @@ func (uc *CreateIndependentDemandUseCase) Execute(
 	if !uc.Auth.CanCreateIndependentDemand(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	date, _ := time.Parse("2006-01-02", dto.DemandDate)
+	date, msg := datetime.Obrigatoria("data da demanda", dto.DemandDate)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	demand := &entity.IndependentDemand{
 		CodeDemand:     dto.CodeDemand,
 		ItemCode:       dto.ItemCode,

@@ -2,7 +2,7 @@ package fiscal_params_uc
 
 import (
 	"context"
-	"errors"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -17,13 +17,13 @@ type TaxParamUseCase struct {
 
 func (uc *TaxParamUseCase) Create(ctx context.Context, dto request.CreateTaxParamDTO) (*response.TaxParamResponse, error) {
 	if dto.UF == "" {
-		return nil, errors.New("informe a UF")
+		return nil, errorsuc.NewValidationError("informe a UF")
 	}
 	if dto.NCMCode == nil && dto.ItemCode == nil {
-		return nil, errors.New("informe o NCM ou o item")
+		return nil, errorsuc.NewValidationError("informe o NCM ou o item")
 	}
 	if dto.NCMCode != nil && dto.ItemCode != nil {
-		return nil, errors.New("informe o NCM ou o item, não os dois")
+		return nil, errorsuc.NewValidationError("informe o NCM ou o item, não os dois")
 	}
 	p := dtoToTaxParamEntity(dto)
 	p.IsActive = true
@@ -36,7 +36,7 @@ func (uc *TaxParamUseCase) Create(ctx context.Context, dto request.CreateTaxPara
 
 func (uc *TaxParamUseCase) Update(ctx context.Context, dto request.UpdateTaxParamDTO) (*response.TaxParamResponse, error) {
 	if dto.UF == "" {
-		return nil, errors.New("informe a UF")
+		return nil, errorsuc.NewValidationError("informe a UF")
 	}
 	createDTO := request.CreateTaxParamDTO(dto.CreateTaxParamDTO)
 	p := dtoToTaxParamEntity(createDTO)

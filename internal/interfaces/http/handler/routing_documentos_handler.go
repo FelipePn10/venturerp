@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -14,8 +13,7 @@ import (
 
 func (h *RoutingHandler) AddOperationDocument(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateOperationDocumentDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.routeUC.AddDocument(r.Context(), dto)
@@ -33,8 +31,7 @@ func (h *RoutingHandler) UpdateOperationDocument(w http.ResponseWriter, r *http.
 		return
 	}
 	var dto request.UpdateOperationDocumentDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
@@ -99,8 +96,7 @@ func (h *RoutingHandler) AddRouteInspection(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var dto request.CreateRouteInspectionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.RouteOperationID = opID

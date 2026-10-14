@@ -27,7 +27,7 @@ type ManifestarDestinatarioDTO struct {
 
 func (uc *ManifestarDestinatarioUseCase) Execute(ctx context.Context, dto ManifestarDestinatarioDTO) (map[string]interface{}, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
-		return nil, fmt.Errorf("não autorizado")
+		return nil, errorsuc.NewValidationError("não autorizado")
 	}
 	tipo := normalizarTipoManifestacao(dto.Tipo)
 	if !tiposManifestacao[tipo] {
@@ -81,7 +81,7 @@ type InutilizarNumeracaoDTO struct {
 
 func (uc *InutilizarNumeracaoUseCase) Execute(ctx context.Context, dto InutilizarNumeracaoDTO) (map[string]interface{}, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
-		return nil, fmt.Errorf("não autorizado")
+		return nil, errorsuc.NewValidationError("não autorizado")
 	}
 	if dto.NumeroFinal < dto.NumeroInicial {
 		return nil, errorsuc.NewValidationError("o número final deve ser maior ou igual ao número inicial")

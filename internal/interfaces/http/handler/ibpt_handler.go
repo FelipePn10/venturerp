@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 
@@ -25,13 +24,12 @@ type ibptImportRequest struct {
 // Import loads an IBPT TabelaIBPTax CSV for a UF.
 func (h *IBPTHandler) Import(w http.ResponseWriter, r *http.Request) {
 	var req ibptImportRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	n, err := h.uc.ImportFromCSV(r.Context(), req.UF, req.CSV)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]interface{}{"imported": n})

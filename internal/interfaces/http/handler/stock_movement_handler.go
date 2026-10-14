@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -21,13 +20,12 @@ func NewStockMovementTypeHandler(uc *stock_movement_uc.StockMovementTypeUseCase)
 
 func (h *StockMovementTypeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var s entity.StockMovementType
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &s) {
 		return
 	}
 	result, err := h.uc.Create(r.Context(), &s)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -35,13 +33,12 @@ func (h *StockMovementTypeHandler) Create(w http.ResponseWriter, r *http.Request
 
 func (h *StockMovementTypeHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var s entity.StockMovementType
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &s) {
 		return
 	}
 	result, err := h.uc.Update(r.Context(), &s)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

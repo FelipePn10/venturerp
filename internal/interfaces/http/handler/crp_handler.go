@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -25,8 +24,7 @@ func (h *CRPHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 
 func (h *CRPHandler) CalculateCRP(w http.ResponseWriter, r *http.Request) {
 	var dto request.CalculateCRPDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CalculateCRP(r.Context(), dto)

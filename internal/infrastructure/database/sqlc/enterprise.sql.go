@@ -12,14 +12,15 @@ import (
 )
 
 const createEnterprise = `-- name: CreateEnterprise :one
-INSERT INTO enterprise (
-    code,
-    name,
-    created_by,
-    created_at
-) VALUES (
-    $1, $2, $3, now()
-) RETURNING id, code, name, created_at, created_by
+WITH nova AS (
+    INSERT INTO enterprise (code, name, created_by, created_at)
+    VALUES ($1, $2, $3, now())
+    RETURNING id, code, name, created_at, created_by
+), vinculo AS (
+    INSERT INTO user_enterprises (user_id, enterprise_id, role)
+    SELECT nova.created_by, nova.id, 'ADMIN' FROM nova WHERE nova.created_by IS NOT NULL
+)
+SELECT id, code, name, created_at, created_by FROM nova
 `
 
 type CreateEnterpriseParams struct {
@@ -28,9 +29,19 @@ type CreateEnterpriseParams struct {
 	CreatedBy pgtype.UUID
 }
 
-func (q *Queries) CreateEnterprise(ctx context.Context, arg CreateEnterpriseParams) (Enterprise, error) {
+type CreateEnterpriseRow struct {
+	ID        int64
+	Code      int32
+	Name      string
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
+// Quem cria a empresa fica vinculado a ela como ADMIN, na mesma instrução: sem
+// o vínculo, a empresa nasceria invisível para o próprio criador.
+func (q *Queries) CreateEnterprise(ctx context.Context, arg CreateEnterpriseParams) (CreateEnterpriseRow, error) {
 	row := q.db.QueryRow(ctx, createEnterprise, arg.Code, arg.Name, arg.CreatedBy)
-	var i Enterprise
+	var i CreateEnterpriseRow
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
@@ -41,12 +52,20 @@ func (q *Queries) CreateEnterprise(ctx context.Context, arg CreateEnterprisePara
 	return i, err
 }
 
-const getEnterpriseByCode = `-- name: GetEnterpriseByCode :one
-SELECT id, code, name, created_at, created_by FROM enterprise WHERE code = $1
+const getEnterpriseByCodeForUser = `-- name: GetEnterpriseByCodeForUser :one
+SELECT e.id, e.code, e.name, e.created_at, e.created_by FROM enterprise e
+  JOIN user_enterprises ue ON ue.enterprise_id = e.id
+ WHERE e.code = $1 AND ue.user_id = $2
 `
 
-func (q *Queries) GetEnterpriseByCode(ctx context.Context, code int32) (Enterprise, error) {
-	row := q.db.QueryRow(ctx, getEnterpriseByCode, code)
+type GetEnterpriseByCodeForUserParams struct {
+	Code   int32
+	UserID pgtype.UUID
+}
+
+// Só devolve a empresa se o usuário estiver vinculado a ela.
+func (q *Queries) GetEnterpriseByCodeForUser(ctx context.Context, arg GetEnterpriseByCodeForUserParams) (Enterprise, error) {
+	row := q.db.QueryRow(ctx, getEnterpriseByCodeForUser, arg.Code, arg.UserID)
 	var i Enterprise
 	err := row.Scan(
 		&i.ID,
@@ -75,12 +94,15 @@ func (q *Queries) GetEnterpriseByID(ctx context.Context, id int64) (Enterprise, 
 	return i, err
 }
 
-const listEnterprises = `-- name: ListEnterprises :many
-SELECT id, code, name, created_at, created_by FROM enterprise ORDER BY code
+const listEnterprisesForUser = `-- name: ListEnterprisesForUser :many
+SELECT e.id, e.code, e.name, e.created_at, e.created_by FROM enterprise e
+  JOIN user_enterprises ue ON ue.enterprise_id = e.id
+ WHERE ue.user_id = $1
+ ORDER BY e.code
 `
 
-func (q *Queries) ListEnterprises(ctx context.Context) ([]Enterprise, error) {
-	rows, err := q.db.Query(ctx, listEnterprises)
+func (q *Queries) ListEnterprisesForUser(ctx context.Context, userID pgtype.UUID) ([]Enterprise, error) {
+	rows, err := q.db.Query(ctx, listEnterprisesForUser, userID)
 	if err != nil {
 		return nil, err
 	}

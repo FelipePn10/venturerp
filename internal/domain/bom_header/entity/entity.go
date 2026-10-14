@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,7 +41,7 @@ func ValidStatus(s string) bool {
 
 func NewBomHeader(itemCode int64, mask *string, bomType string, version int32, validFrom *time.Time, createdBy uuid.UUID) (*BomHeader, error) {
 	if itemCode <= 0 {
-		return nil, errors.New("informe o item do cabeçalho de estrutura")
+		return nil, domainerr.NewValidation("informe o item do cabeçalho de estrutura")
 	}
 	if bomType == "" {
 		bomType = "MBOM"

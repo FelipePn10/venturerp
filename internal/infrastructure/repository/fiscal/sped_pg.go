@@ -52,7 +52,7 @@ func (r *FiscalRepositoryPG) CarregarPeriodoEFD(ctx context.Context, inicio, fim
 }
 
 func (r *FiscalRepositoryPG) empresaEFD(ctx context.Context, empresa int64, e *sped.EFDEmpresa) error {
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT COALESCE(cnpj_empresa,''), COALESCE(razao_social,''), COALESCE(uf_empresa,''), COALESCE(ie_empresa,''),
 		        COALESCE(codigo_municipio,''), COALESCE(trade_name,''), COALESCE(cep,''), COALESCE(logradouro,''),
 		        COALESCE(numero,''), COALESCE(complemento,''), COALESCE(bairro,''), COALESCE(telefone,''), COALESCE(email,'')
@@ -137,7 +137,7 @@ func participanteEFD(cnpj, nome, ie string, end enderecoXML) sped.Participante {
 // As alíquotas das notas ficam como fração (0,12); a EFD as quer em % (12,00).
 
 func (r *FiscalRepositoryPG) entradasEFD(ctx context.Context, empresa int64, ini, fin string) ([]sped.NotaEntrada, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, COALESCE(modelo,'55'), serie, numero_nf::text, COALESCE(chave_acesso,''), data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, COALESCE(ie_emitente,''), COALESCE(modalidade_frete,''), sem_pagamento,
 		        valor_total, valor_produtos, valor_frete, valor_seguro, valor_desconto, valor_outras, valor_ipi,
@@ -180,7 +180,7 @@ func (r *FiscalRepositoryPG) entradasEFD(ctx context.Context, empresa int64, ini
 	for i, id := range ids {
 		pos[id] = i
 	}
-	irows, err := r.pool.Query(ctx,
+	irows, err := r.db.Query(ctx,
 		`SELECT fi.fiscal_entry_id, fi.id, fi.sequence, fi.item_code, COALESCE(i.name, fi.description, ''), COALESCE(i.warehouse_unit_of_measurement::text,''),
 		        i.engineering_type, i.supplies_type_of_use, COALESCE(i.commercial_sale_type,'') = 'REVENDA', COALESCE(i.commercial_is_packaging,false),
 		        COALESCE(fi.ncm,''), COALESCE(fi.cest,''), COALESCE(fi.ean,''),
@@ -245,7 +245,7 @@ func (r *FiscalRepositoryPG) entradasEFD(ctx context.Context, empresa int64, ini
 }
 
 func (r *FiscalRepositoryPG) saidasEFD(ctx context.Context, empresa int64, ini, fin string) ([]sped.NotaSaida, []sped.ItemCadastro, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, serie, numero_nf::text, COALESCE(chave_acesso,''), data_emissao, COALESCE(data_saida, data_emissao), status,
 		        COALESCE(cnpj_destinatario,''), COALESCE(razao_social_destinatario,''), COALESCE(ie_destinatario,''),
 		        COALESCE(dest_codigo_municipio,''), COALESCE(dest_logradouro,''), COALESCE(dest_numero,''),
@@ -303,7 +303,7 @@ func (r *FiscalRepositoryPG) saidasEFD(ctx context.Context, empresa int64, ini, 
 	for i, id := range ids {
 		pos[id] = i
 	}
-	irows, err := r.pool.Query(ctx,
+	irows, err := r.db.Query(ctx,
 		`SELECT xi.fiscal_exit_id, xi.item_code, COALESCE(i.name, xi.description, ''), COALESCE(i.warehouse_unit_of_measurement::text, xi.unidade_comercial, ''),
 		        i.engineering_type, i.supplies_type_of_use, COALESCE(i.commercial_sale_type,'') = 'REVENDA', COALESCE(i.commercial_is_packaging,false),
 		        COALESCE(xi.ncm,''), COALESCE(i.accounting_cest,''),
@@ -347,7 +347,7 @@ func (r *FiscalRepositoryPG) saidasEFD(ctx context.Context, empresa int64, ini, 
 }
 
 func (r *FiscalRepositoryPG) fretesEFD(ctx context.Context, empresa int64, ini, fin string) ([]sped.Frete, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT serie, numero::text, COALESCE(chave_cte,''), data_emissao, lancado_em::date, cnpj_transportadora,
 		        nome_transportadora, COALESCE(cfop,''), valor_frete, base_icms, aliq_icms, valor_icms, credita_icms,
 		        COALESCE(xml_content,'')
@@ -404,7 +404,7 @@ func cadastroDoItem(engType, tipoUso *int16, revenda, embalagem bool) sped.Cadas
 // ajustesEFD: as notas especiais de ajuste (VFIS0560) emitidas para o mês,
 // com o código de ajuste da própria nota ou o da linha de apuração.
 func (r *FiscalRepositoryPG) ajustesEFD(ctx context.Context, empresa int64, periodo string) ([]sped.AjusteApuracao, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT COALESCE(ac.code, lc.code, ''), COALESCE(n.history, n.observation, ''), n.total_icms
 		   FROM special_adjustment_notes n
 		   LEFT JOIN icms_apuracao_adjustment_codes ac ON ac.id = n.adjustment_code_id
@@ -437,7 +437,7 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`WITH mov AS (
 		    SELECT m.item_code,
 		           CASE WHEN m.movement_type IN ('IN','TRANSFER_IN','EP','EPP','EPE','ENTRADA') THEN 1
@@ -491,7 +491,7 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 		return nil, "", err
 	}
 	var conta string
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT COALESCE(a.account_number,'') FROM accounting_posting_params p
 		   JOIN accounting_accounts a ON a.id = p.estoque_account_id WHERE p.enterprise_id = $1`, empresa).Scan(&conta)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {

@@ -89,6 +89,9 @@ func (h *TechnicalAssistanceHandler) GetCall(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *TechnicalAssistanceHandler) ListCalls(w http.ResponseWriter, r *http.Request) {
+	if !filtroValido(w, r, "customer_code") {
+		return
+	}
 	var status *taentity.CallStatus
 	if raw := r.URL.Query().Get("status"); raw != "" {
 		v := taentity.CallStatus(raw)
@@ -153,6 +156,9 @@ func (h *TechnicalAssistanceHandler) UpdateStatus(w http.ResponseWriter, r *http
 }
 
 func (h *TechnicalAssistanceHandler) Report(w http.ResponseWriter, r *http.Request) {
+	if !filtroValido(w, r, "customer_code") {
+		return
+	}
 	var status *taentity.CallStatus
 	if raw := r.URL.Query().Get("status"); raw != "" {
 		v := taentity.CallStatus(raw)

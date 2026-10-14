@@ -110,6 +110,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	dfesched "github.com/FelipePn10/panossoerp/internal/infrastructure/dfe"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/fiscalefeitos"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/nesting"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
@@ -157,6 +158,7 @@ import (
 	planned "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
 	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
 	planningrunrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_run"
+	planningscenariorepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_scenario"
 	procurementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/procurement"
 	productionOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
 	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
@@ -197,15 +199,16 @@ import (
 )
 
 type application struct {
-	config             *config.Config
-	logger             *applogger.Logger
-	db                 *database.DB
-	authDB             *database.DB
-	metrics            *httpmw.Metrics
-	auditSink          *audit.PgSink
-	notificationWorker *notification.Worker
-	planningScheduler  *planningsched.Scheduler
-	dfeScheduler       *dfesched.Scheduler
+	config              *config.Config
+	logger              *applogger.Logger
+	db                  *database.DB
+	authDB              *database.DB
+	metrics             *httpmw.Metrics
+	auditSink           *audit.PgSink
+	notificationWorker  *notification.Worker
+	planningScheduler   *planningsched.Scheduler
+	dfeScheduler        *dfesched.Scheduler
+	efeitosNFeScheduler *fiscalefeitos.Scheduler
 }
 
 func (app *application) mount() chi.Router {
@@ -622,20 +625,29 @@ func (app *application) mount() chi.Router {
 	mrpRepo := mrpCalculation.NewMRPCalculationRepositorySQLC(queries, app.db.Pool)
 	supplyPort := planned.NewPlannedOrderSupplyAdapter(queries)
 	mrpService := mrpservice.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, supplyPort, productionPlanRepo, sfRepo, restrictionR, rRepo, itemRepoStructureQuery)
+	// Cenários de simulação: o motor lê os ajustes do cenário dono do plano.
+	scenarioRepo := planningscenariorepo.New(app.db.Pool)
+	if impl, ok := mrpService.(*mrpservice.MRPServiceImpl); ok {
+		impl.Scenarios = scenarioRepo
+	}
 	mrpRunUC := &mrp_calculation_uc.RunMRPCalculationUseCase{Service: mrpService, Auth: authService, Plans: productionPlanRepo}
 	mrpGetProfileUC := &mrp_calculation_uc.GetItemProfileUseCase{Repo: mrpRepo, Auth: authService}
 	mrpCreateConfiguredRule := &mrp_calculation_uc.ManageConfiguredItemRulesUseCase{Repo: mrpRepo, Auth: authService, Items: itemRepo}
-	mrpListExceptionsUC := &mrp_calculation_uc.ListMRPExceptionsUseCase{Repo: mrpRepo, Auth: authService}
+	peggingUC := &mrp_calculation_uc.PeggingUseCase{Store: mrpRepo, Auth: authService}
+	mrpListExceptionsUC := &mrp_calculation_uc.ListMRPExceptionsUseCase{Repo: mrpRepo, Auth: authService, Pegging: peggingUC}
 
 	// planning pipeline (MRP → CRP → APS in one shot)
 	planningPipelineUC := &planning_uc.RunPlanningPipelineUseCase{MRP: mrpRunUC, CRP: crpUC, APS: apsUC}
-	planningHandler := handler.NewPlanningHandler(planningPipelineUC)
 
 	// Execução automática do planejamento na janela noturna. O cadeado por
 	// empresa vive no banco, então vários processos da API podem subir sem
 	// disputar o mesmo ciclo.
 	planningRunRepo := planningrunrepo.New(app.db.Pool)
-	planningAutoRunUC := &planning_uc.AutoRunPlanningUseCase{Pipeline: planningPipelineUC, Repo: planningRunRepo}
+	planningAutoRunUC := &planning_uc.AutoRunPlanningUseCase{
+		Pipeline: planningPipelineUC, Repo: planningRunRepo, Auth: authService,
+		Session: planningsched.SessaoDaEmpresa,
+	}
+	planningHandler := handler.NewPlanningHandler(planningPipelineUC, planningAutoRunUC)
 	app.planningScheduler = planningsched.NewScheduler(planningAutoRunUC, app.logger)
 
 	//order priority
@@ -662,8 +674,15 @@ func (app *application) mount() chi.Router {
 	// generating the OF (production) / service requisition — one-step conversion.
 	mrpFirmarSugestaoUC := &mrp_uc.FirmarSugestaoMRPUseCase{MRPRepo: mrpRepo, PlannedRepo: plannedRepo, Auth: authService, Firmer: plannedFirmUC}
 	mrpRunUC.AutoReleaser = mrpFirmarSugestaoUC
+	peggingHandler := handler.NewPeggingHandler(peggingUC)
 	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC, mrpFirmarSugestaoUC)
-	mrpReportHandler := handler.NewMRPReportHandler(&mrp_report_uc.UseCase{Reader: mrpReportRepo.New(app.db.Pool), Auth: authService})
+	mrpReportUC := &mrp_report_uc.UseCase{Reader: mrpReportRepo.New(app.db.Pool), Auth: authService}
+	mrpReportHandler := handler.NewMRPReportHandler(mrpReportUC)
+	scenarioHandler := handler.NewScenarioHandler(&planning_uc.ScenarioUseCase{
+		Repo: scenarioRepo, MRP: mrpService, CRP: crpUC, Coverage: mrpReportUC, Results: mrpRepo,
+		Pegging: peggingUC,
+		Lock:    planningRunRepo, Plans: scenarioRepo, Auth: authService,
+	})
 
 	// production order
 	prodOrderRepo := productionOrderRepo.NewProductionOrderRepositoryPGX(app.db.Pool)
@@ -973,6 +992,20 @@ func (app *application) mount() chi.Router {
 	// Appointment backflush: auto-consume BOM components from stock.
 	prodOrderAddAppointmentUC.StructureRepo = itemRepoStructure
 	prodOrderAddAppointmentUC.StockRepo = stockRepository
+	prodOrderAddAppointmentUC.Transacao = func(ctx context.Context, fn func(productionOrderUc.ApontamentoRepos) error) error {
+		tx, err := app.db.Pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		if err := fn(productionOrderUc.ApontamentoRepos{
+			Ordens:  productionOrderRepo.NewProductionOrderRepositoryPGX(tx),
+			Estoque: stockRepo.NewStockRepositoryTx(tx),
+		}); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
 	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService}
 	listStockMovementsUC := &stock_uc.ListStockMovementsUseCase{Repo: stockRepository, Auth: authService}
 	getStockBalanceUC := &stock_uc.GetStockBalanceUseCase{Repo: stockRepository, Auth: authService}
@@ -1032,6 +1065,20 @@ func (app *application) mount() chi.Router {
 	ibptHandler := handler.NewIBPTHandler(&ibpt_uc.IBPTUseCase{Repo: ibptRepo.NewIBPTRepositoryPG(app.db.Pool)})
 	shipmentRepoPG := shipmentRepo.NewShipmentRepositoryPG(app.db.Pool)
 	shipmentBaseUC := &shipment_uc.ShipmentUseCase{Repo: shipmentRepoPG, Stock: stockRepository}
+	shipmentBaseUC.Transacao = func(ctx context.Context, fn func(shipment_uc.RomaneioRepos) error) error {
+		tx, err := app.db.Pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		if err := fn(shipment_uc.RomaneioRepos{
+			Romaneios: shipmentRepo.NewShipmentRepositoryTx(tx),
+			Estoque:   stockRepo.NewStockRepositoryTx(tx),
+		}); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
 	shipmentAutoFillUC := &shipment_uc.ShipmentAutoFillUseCase{
 		ShipmentRepo:   shipmentRepoPG,
 		SalesRepo:      &shipmentRepo.SalesOrderAdapter{Repo: soRepo},
@@ -1167,6 +1214,35 @@ func (app *application) mount() chi.Router {
 		Comissoes:   salesCommissionRepo.New(app.db.Pool),
 		Auth:        authService,
 	})
+	// Efeitos da NF-e (estoque, reservas, títulos, pedido) como pendência
+	// reprocessável: rodam numa transação só, que também resolve a pendência.
+	efeitosNFe := &fiscalUC.EfeitosNFe{
+		Fiscal:      fiscalRepository,
+		Customers:   custRepo,
+		Orders:      soRepo,
+		Itens:       itemRepo,
+		Pendencias:  fiscalRepo.NewPendenciasPG(app.db.Pool),
+		GeraTitulos: true,
+		Transacao: func(ctx context.Context, fn func(fiscalUC.EfeitosRepos) error) error {
+			tx, err := app.db.Pool.Begin(ctx)
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback(ctx)
+			if err := fn(fiscalUC.EfeitosRepos{
+				Financeiro:  financialRepo.NewFinancialRepositoryTx(tx),
+				Estoque:     stockRepo.NewStockRepositoryTx(tx),
+				Pedidos:     salesOrderRepo.NewSalesOrderRepositorySQLC(sqlc.New(tx)),
+				Faturamento: fiscalRepo.NewFiscalRepositoryTx(tx),
+				Pendencias:  fiscalRepo.NewPendenciasTx(tx),
+			}); err != nil {
+				return err
+			}
+			return tx.Commit(ctx)
+		},
+	}
+	app.efeitosNFeScheduler = fiscalefeitos.NewScheduler(efeitosNFe, app.logger)
+	pendenciasNFeHandler := handler.NewPendenciasNFeHandler(efeitosNFe, authService)
 	fiscalHandler := handler.NewFiscalHandler(
 		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Docs: fiscalEntryDocs, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
 		uploadNFeEntryUC,
@@ -1182,10 +1258,10 @@ func (app *application) mount() chi.Router {
 			ShipmentRepo:   shipmentRepoPG,
 			SalesOrderRepo: soRepo,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC},
+		&fiscalUC.AuthorizeFiscalExitUseCase{Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
-		&fiscalUC.CancelFiscalExitUseCase{Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC},
+		&fiscalUC.CancelFiscalExitUseCase{Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalConfigUseCase{Repo: fiscalRepository, Auth: authService},
@@ -1201,7 +1277,7 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.ListICMSInterstateUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.UpsertICMSInternalUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.ListICMSInternalUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.ConsultarNFeUseCase{Repo: fiscalRepository, Auth: authService},
+		&fiscalUC.ConsultarNFeUseCase{Repo: fiscalRepository, Auth: authService, Efeitos: efeitosNFe},
 		&fiscalUC.ListCartasCorrecaoUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService},
 	)
@@ -1232,7 +1308,8 @@ func (app *application) mount() chi.Router {
 		DataEnvironment: app.config.DataEnvironment,
 	})
 	notifyExcUC := mrp_uc.NewNotifyExceptionsUseCase(mrpRepo, emailSvc).WithOutbox(notificationRepository)
-	mrpExcHandler := handler.NewMRPExceptionsHandler(notifyExcUC)
+	mrpHandleExcUC := &mrp_calculation_uc.HandleMRPExceptionUseCase{Exceptions: mrpRepo, Orders: plannedRepo, Auth: authService}
+	mrpExcHandler := handler.NewMRPExceptionsHandler(notifyExcUC, mrpHandleExcUC)
 
 	// Pedido de compra: documento (PDF/e-mail), acompanhamento de entregas,
 	// histórico de preço, notas por linha e previsão de pagamentos.
@@ -1309,11 +1386,29 @@ func (app *application) mount() chi.Router {
 		SalesRepo: soRepo,
 		StockRepo: stockRepository,
 	}
+	// Confirmação do pedido é tudo ou nada: status, crédito, demandas e reservas
+	// na mesma transação.
+	changeStatusSalesOrderUC.Transacao = func(ctx context.Context, fn func(sales_order_uc.ConfirmacaoRepos) error) error {
+		tx, err := app.db.Pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		q := sqlc.New(tx)
+		if err := fn(sales_order_uc.ConfirmacaoRepos{
+			Pedidos:  salesOrderRepo.NewSalesOrderRepositorySQLC(q),
+			Demandas: independentDemand.NewIndependentDemandRepositorySQLC(q),
+			Estoque:  stockRepo.NewStockRepositoryTx(tx),
+		}); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
 
 	// fiscal params (legal devices, CFOPs, ICMS/IPI tax params + ICMS apuração + Simples Nacional)
 	fpRepo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
-	legalDeviceUC := &fiscal_params_uc.LegalDeviceUseCase{Repo: fpRepo}
-	cfopUC := &fiscal_params_uc.CFOPUseCase{Repo: fpRepo}
+	legalDeviceUC := &fiscal_params_uc.LegalDeviceUseCase{Repo: fpRepo, Auth: authService}
+	cfopUC := &fiscal_params_uc.CFOPUseCase{Repo: fpRepo, Auth: authService}
 	taxParamUC := &fiscal_params_uc.TaxParamUseCase{Repo: fpRepo}
 	fiscalParamsHandler := handler.NewFiscalParamsHandler(legalDeviceUC, cfopUC, taxParamUC)
 
@@ -1536,6 +1631,11 @@ func (app *application) mount() chi.Router {
 			// MRP suggestion bridge: list suggestions for a plan, firm one into planned_orders
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suggestions/{plan_code}", mrpHandler.ListSuggestions)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/suggestions/{code}/firm", mrpHandler.FirmarSugestao)
+			// Pegging do último cálculo: origens, cadeia para baixo e para cima.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/pegging/{plan_code}/roots", peggingHandler.Roots)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/pegging/{plan_code}/down", peggingHandler.Down)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/pegging/{plan_code}/up", peggingHandler.Up)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/pegging/sales-order/{order_code}", peggingHandler.SalesOrder)
 		})
 		r.Route("/api/item-calendar-promise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemCalendarPromiseHandler.UpsertDay)
@@ -1568,6 +1668,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/list", prodOrderHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/maintenance", prodOrderHandler.Maintenance)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/delivery-candidates", prodOrderHandler.DeliveryCandidates)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/material-availability", prodOrderHandler.MaterialAvailabilitySummary)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}", prodOrderHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", prodOrderHandler.Maintain)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/operational", prodOrderHandler.Operational)
@@ -1586,6 +1687,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/operations", prodOrderHandler.ListOrderOperations)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/operations/advance", prodOrderHandler.AdvanceOperation)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/materials", prodOrderHandler.ListMaterials)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/material-availability", prodOrderHandler.MaterialAvailability)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials", prodOrderHandler.AddMaterial)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials/replace", prodOrderHandler.ReplaceMaterial)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/materials/{materialID}", prodOrderHandler.DeleteMaterial)
@@ -1606,6 +1708,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/grouped-needs", mrpReportHandler.GroupedNeeds)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/explosion/{itemCode}", mrpReportHandler.Explosion)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/reorder-point", mrpReportHandler.ReorderPoint)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/coverage", mrpReportHandler.Coverage)
 		})
 		// Configurador antigo (`questions`) REMOVIDO — substituído por /api/configurator.
 		// BOM header (versão/status/tipo) — as linhas da estrutura ficam em /api/items/structure.
@@ -1631,7 +1734,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/modifiers/{id}", modifierHandler.UpdateModifier)
 		})
 		r.Route("/api/enterprise", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", enterpriseHandler.CreateEnterprise)
+			// Criar empresa é ato de administrador; o criador fica vinculado a ela.
+			r.With(httpmw.RequireRole("ADMIN")).Post("/create", enterpriseHandler.CreateEnterprise)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", enterpriseHandler.ListEnterprises)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", enterpriseHandler.GetEnterprise)
 		})
@@ -2151,6 +2255,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/{code}", nfseHandler.Get)
 			// NF-e status consultation, CC-e list, DANFE PDF URL
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/status", fiscalHandler.ConsultarNFe)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/pendencias", pendenciasNFeHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{id}/reprocessar-efeitos", pendenciasNFeHandler.Reprocessar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/cartas-correcao", fiscalHandler.ListCartasCorrecao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/danfe", fiscalHandler.GetDANFE)
 			// Prévia da nota: monta o documento que iria para a SEFAZ e lista as
@@ -2168,15 +2274,15 @@ func (app *application) mount() chi.Router {
 			// Fiscal params support tables
 			r.Route("/support", func(r chi.Router) {
 				r.Route("/dispositivos-legais", func(r chi.Router) {
-					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", fiscalParamsHandler.CreateLegalDevice)
-					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", fiscalParamsHandler.UpdateLegalDevice)
+					r.With(httpmw.RequireRole("ADMIN")).Post("/", fiscalParamsHandler.CreateLegalDevice)
+					r.With(httpmw.RequireRole("ADMIN")).Put("/", fiscalParamsHandler.UpdateLegalDevice)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", fiscalParamsHandler.ListLegalDevices)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", fiscalParamsHandler.GetLegalDevice)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tipo/{type}", fiscalParamsHandler.ListLegalDevicesByType)
 				})
 				r.Route("/cfops", func(r chi.Router) {
-					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", fiscalParamsHandler.CreateCFOP)
-					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", fiscalParamsHandler.UpdateCFOP)
+					r.With(httpmw.RequireRole("ADMIN")).Post("/", fiscalParamsHandler.CreateCFOP)
+					r.With(httpmw.RequireRole("ADMIN")).Put("/", fiscalParamsHandler.UpdateCFOP)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", fiscalParamsHandler.ListCFOPs)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", fiscalParamsHandler.GetCFOP)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/direcao/{direction}", fiscalParamsHandler.ListCFOPsByDirection)
@@ -2639,6 +2745,22 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/planning", func(r chi.Router) {
 			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun), httpmw.RequireIdempotencyKey).Post("/run-pipeline", planningHandler.RunPipeline)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/auto-run", planningHandler.GetAutoRun)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Put("/auto-run", planningHandler.UpdateAutoRun)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/auto-run/run-now", planningHandler.RunAutoRunNow)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/runs", planningHandler.ListRuns)
+			// Cenários de simulação (what-if) do planejamento.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/scenarios", scenarioHandler.List)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/scenarios", scenarioHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/scenarios/{id}", scenarioHandler.Get)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Put("/scenarios/{id}", scenarioHandler.Update)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Delete("/scenarios/{id}", scenarioHandler.Delete)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/scenarios/{id}/base-demands", scenarioHandler.BaseDemands)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/scenarios/{id}/changes", scenarioHandler.AddChange)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Delete("/scenarios/{id}/changes/{changeID}", scenarioHandler.DeleteChange)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/scenarios/{id}/calculate", scenarioHandler.Calculate)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/scenarios/{id}/compare", scenarioHandler.Compare)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/scenarios/{id}/promote", scenarioHandler.Promote)
 		})
 		r.Route("/api/shipments", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/loads", shipmentHandler.CreateLoad)
@@ -2765,6 +2887,7 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/mrp-calculation/exceptions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{plan_code}", mrpHandler.ListExceptions)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/notify", mrpExcHandler.Notify)
+			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/{code}/handle", mrpExcHandler.Handle)
 		})
 		r.Route("/api/fiscal/entries/import-nfe", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", importNFeHandler.Import)
@@ -3162,6 +3285,9 @@ func (app *application) run(r chi.Router) error {
 	serverErr := make(chan error, 1)
 	if app.dfeScheduler != nil {
 		go app.dfeScheduler.Run(ctx)
+	}
+	if app.efeitosNFeScheduler != nil {
+		go app.efeitosNFeScheduler.Run(ctx)
 	}
 	if app.planningScheduler != nil {
 		go app.planningScheduler.Run(ctx)

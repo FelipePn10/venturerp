@@ -1,6 +1,9 @@
 package entity
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+)
 
 // ValidateOperationTransition keeps execution changes explicit and terminal states immutable.
 func ValidateOperationTransition(from, to, reason string) error {
@@ -11,10 +14,10 @@ func ValidateOperationTransition(from, to, reason string) error {
 		"INTERRUPTED": {"IN_PROGRESS": true},
 	}
 	if !allowed[from][to] {
-		return fmt.Errorf("transição de etapa não permitida: %s → %s", from, to)
+		return domainerr.NewValidation(fmt.Sprintf("transição de etapa não permitida: %s → %s", from, to))
 	}
 	if (to == "PAUSED" || to == "INTERRUPTED" || to == "SKIPPED") && reason == "" {
-		return fmt.Errorf("informe o motivo da pausa, interrupção ou dispensa")
+		return domainerr.NewValidation("informe o motivo da pausa, interrupção ou dispensa")
 	}
 	return nil
 }

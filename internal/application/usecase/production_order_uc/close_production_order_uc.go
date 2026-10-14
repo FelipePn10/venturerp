@@ -32,11 +32,27 @@ func (uc *CloseProductionOrderUseCase) Execute(
 		return nil, err
 	}
 
-	// Settle the actual cost on close. Best-effort: a costing failure must not
-	// undo the close, which is the authoritative state transition.
+	// O encerramento vale (é o estado oficial da ordem). Se a apuração do custo
+	// real falhar, a OF fica marcada com "custo pendente" e o motivo — visível
+	// até "Apurar custo" dar certo. Antes a falha era ignorada e a OF ficava sem
+	// custo sem ninguém saber.
 	if uc.SettleUC != nil {
-		_, _ = uc.SettleUC.Execute(ctx, dto.ID)
+		if _, errCusto := uc.SettleUC.Execute(ctx, dto.ID); errCusto != nil {
+			motivo := "o custo real não foi apurado no encerramento: " + errCusto.Error()
+			if m, ok := uc.Repo.(custoPendenteRepo); ok {
+				if err := m.MarcarCustoPendente(ctx, dto.ID, &motivo); err != nil {
+					motivo += "; e a pendência não pôde ser registrada: " + err.Error()
+				}
+			}
+			order.CostPending = &motivo
+		}
 	}
 
 	return order, nil
+}
+
+// custoPendenteRepo: repositórios que guardam o motivo da OF sem custo apurado.
+type custoPendenteRepo interface {
+	MarcarCustoPendente(ctx context.Context, id int64, motivo *string) error
+	CustoPendente(ctx context.Context, id int64) (*string, error)
 }

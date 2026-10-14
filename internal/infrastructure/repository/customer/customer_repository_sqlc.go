@@ -2,6 +2,7 @@ package customer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,7 +45,11 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.CustomerRepository {
 // ─── Regions ─────────────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateRegion(ctx context.Context, reg *entity.Region) (*entity.Region, error) {
-	row, err := r.q.CreateRegion(ctx, sqlc.CreateRegionParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateRegion(ctx, sqlc.CreateRegionParams{EnterpriseID: empresa,
 		Code:        reg.Code,
 		Description: reg.Description,
 		Uf:          reg.UF,
@@ -57,7 +63,11 @@ func (r *CustomerRepositorySQLC) CreateRegion(ctx context.Context, reg *entity.R
 }
 
 func (r *CustomerRepositorySQLC) UpdateRegion(ctx context.Context, reg *entity.Region) (*entity.Region, error) {
-	row, err := r.q.UpdateRegion(ctx, sqlc.UpdateRegionParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateRegion(ctx, sqlc.UpdateRegionParams{EnterpriseID: empresa,
 		ID:          reg.ID,
 		Description: reg.Description,
 		Uf:          reg.UF,
@@ -71,7 +81,11 @@ func (r *CustomerRepositorySQLC) UpdateRegion(ctx context.Context, reg *entity.R
 }
 
 func (r *CustomerRepositorySQLC) GetRegionByCode(ctx context.Context, code int64) (*entity.Region, error) {
-	row, err := r.q.GetRegionByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetRegionByCode(ctx, sqlc.GetRegionByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching region %d: %w", code, err)
 	}
@@ -79,7 +93,11 @@ func (r *CustomerRepositorySQLC) GetRegionByCode(ctx context.Context, code int64
 }
 
 func (r *CustomerRepositorySQLC) ListRegions(ctx context.Context, onlyActive bool) ([]*entity.Region, error) {
-	rows, err := r.q.ListRegions(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRegions(ctx, sqlc.ListRegionsParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing regions: %w", err)
 	}
@@ -91,7 +109,11 @@ func (r *CustomerRepositorySQLC) ListRegions(ctx context.Context, onlyActive boo
 }
 
 func (r *CustomerRepositorySQLC) NextRegionCode(ctx context.Context) (int64, error) {
-	code, err := r.q.NextRegionCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.q.NextRegionCode(ctx, empresa)
 	return int64(code), err
 }
 
@@ -111,7 +133,11 @@ func regionToEntity(row sqlc.Region) *entity.Region {
 // ─── Market Segments ──────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateMarketSegment(ctx context.Context, s *entity.MarketSegment) (*entity.MarketSegment, error) {
-	row, err := r.q.CreateMarketSegment(ctx, sqlc.CreateMarketSegmentParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateMarketSegment(ctx, sqlc.CreateMarketSegmentParams{EnterpriseID: empresa,
 		Code:                  s.Code,
 		Description:           s.Description,
 		ParentID:              s.ParentID,
@@ -125,7 +151,11 @@ func (r *CustomerRepositorySQLC) CreateMarketSegment(ctx context.Context, s *ent
 }
 
 func (r *CustomerRepositorySQLC) UpdateMarketSegment(ctx context.Context, s *entity.MarketSegment) (*entity.MarketSegment, error) {
-	row, err := r.q.UpdateMarketSegment(ctx, sqlc.UpdateMarketSegmentParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateMarketSegment(ctx, sqlc.UpdateMarketSegmentParams{EnterpriseID: empresa,
 		ID:                    s.ID,
 		Description:           s.Description,
 		ParentID:              s.ParentID,
@@ -140,7 +170,11 @@ func (r *CustomerRepositorySQLC) UpdateMarketSegment(ctx context.Context, s *ent
 }
 
 func (r *CustomerRepositorySQLC) GetMarketSegmentByCode(ctx context.Context, code int64) (*entity.MarketSegment, error) {
-	row, err := r.q.GetMarketSegmentByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetMarketSegmentByCode(ctx, sqlc.GetMarketSegmentByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching market segment %d: %w", code, err)
 	}
@@ -148,7 +182,11 @@ func (r *CustomerRepositorySQLC) GetMarketSegmentByCode(ctx context.Context, cod
 }
 
 func (r *CustomerRepositorySQLC) ListMarketSegments(ctx context.Context, onlyActive bool) ([]*entity.MarketSegment, error) {
-	rows, err := r.q.ListMarketSegments(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListMarketSegments(ctx, sqlc.ListMarketSegmentsParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing market segments: %w", err)
 	}
@@ -160,7 +198,11 @@ func (r *CustomerRepositorySQLC) ListMarketSegments(ctx context.Context, onlyAct
 }
 
 func (r *CustomerRepositorySQLC) NextMarketSegmentCode(ctx context.Context) (int64, error) {
-	code, err := r.q.NextMarketSegmentCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.q.NextMarketSegmentCode(ctx, empresa)
 	return int64(code), err
 }
 
@@ -180,7 +222,11 @@ func segmentToEntity(row sqlc.MarketSegment) *entity.MarketSegment {
 // ─── Customer Contact Types ───────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateContactType(ctx context.Context, ct *entity.CustomerContactType) (*entity.CustomerContactType, error) {
-	row, err := r.q.CreateContactType(ctx, sqlc.CreateContactTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateContactType(ctx, sqlc.CreateContactTypeParams{EnterpriseID: empresa,
 		Code:        ct.Code,
 		Description: ct.Description,
 	})
@@ -191,7 +237,11 @@ func (r *CustomerRepositorySQLC) CreateContactType(ctx context.Context, ct *enti
 }
 
 func (r *CustomerRepositorySQLC) UpdateContactType(ctx context.Context, ct *entity.CustomerContactType) (*entity.CustomerContactType, error) {
-	row, err := r.q.UpdateContactType(ctx, sqlc.UpdateContactTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateContactType(ctx, sqlc.UpdateContactTypeParams{EnterpriseID: empresa,
 		ID:          ct.ID,
 		Description: ct.Description,
 		IsActive:    ct.IsActive,
@@ -203,7 +253,11 @@ func (r *CustomerRepositorySQLC) UpdateContactType(ctx context.Context, ct *enti
 }
 
 func (r *CustomerRepositorySQLC) GetContactTypeByCode(ctx context.Context, code int64) (*entity.CustomerContactType, error) {
-	row, err := r.q.GetContactTypeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetContactTypeByCode(ctx, sqlc.GetContactTypeByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching contact type %d: %w", code, err)
 	}
@@ -211,7 +265,11 @@ func (r *CustomerRepositorySQLC) GetContactTypeByCode(ctx context.Context, code 
 }
 
 func (r *CustomerRepositorySQLC) ListContactTypes(ctx context.Context, onlyActive bool) ([]*entity.CustomerContactType, error) {
-	rows, err := r.q.ListContactTypes(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListContactTypes(ctx, sqlc.ListContactTypesParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing contact types: %w", err)
 	}
@@ -223,7 +281,11 @@ func (r *CustomerRepositorySQLC) ListContactTypes(ctx context.Context, onlyActiv
 }
 
 func (r *CustomerRepositorySQLC) NextContactTypeCode(ctx context.Context) (int64, error) {
-	code, err := r.q.NextContactTypeCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.q.NextContactTypeCode(ctx, empresa)
 	return int64(code), err
 }
 
@@ -240,7 +302,11 @@ func contactTypeToEntity(row sqlc.CustomerContactType) *entity.CustomerContactTy
 // ─── Customer Types ───────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateCustomerType(ctx context.Context, ct *entity.CustomerType) (*entity.CustomerType, error) {
-	row, err := r.q.CreateCustomerType(ctx, sqlc.CreateCustomerTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateCustomerType(ctx, sqlc.CreateCustomerTypeParams{EnterpriseID: empresa,
 		Code:         ct.Code,
 		Description:  ct.Description,
 		Category:     sqltypes.CustomerCategoryEnum(ct.Category),
@@ -253,7 +319,11 @@ func (r *CustomerRepositorySQLC) CreateCustomerType(ctx context.Context, ct *ent
 }
 
 func (r *CustomerRepositorySQLC) UpdateCustomerType(ctx context.Context, ct *entity.CustomerType) (*entity.CustomerType, error) {
-	row, err := r.q.UpdateCustomerType(ctx, sqlc.UpdateCustomerTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateCustomerType(ctx, sqlc.UpdateCustomerTypeParams{EnterpriseID: empresa,
 		ID:           ct.ID,
 		Description:  ct.Description,
 		Category:     sqltypes.CustomerCategoryEnum(ct.Category),
@@ -267,7 +337,11 @@ func (r *CustomerRepositorySQLC) UpdateCustomerType(ctx context.Context, ct *ent
 }
 
 func (r *CustomerRepositorySQLC) GetCustomerTypeByCode(ctx context.Context, code int64) (*entity.CustomerType, error) {
-	row, err := r.q.GetCustomerTypeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetCustomerTypeByCode(ctx, sqlc.GetCustomerTypeByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching customer type %d: %w", code, err)
 	}
@@ -275,7 +349,11 @@ func (r *CustomerRepositorySQLC) GetCustomerTypeByCode(ctx context.Context, code
 }
 
 func (r *CustomerRepositorySQLC) ListCustomerTypes(ctx context.Context, onlyActive bool) ([]*entity.CustomerType, error) {
-	rows, err := r.q.ListCustomerTypes(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCustomerTypes(ctx, sqlc.ListCustomerTypesParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing customer types: %w", err)
 	}
@@ -301,7 +379,11 @@ func customerTypeToEntity(row sqlc.CustomerType) *entity.CustomerType {
 // ─── Carriers ─────────────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateCarrier(ctx context.Context, c *entity.Carrier) (*entity.Carrier, error) {
-	row, err := r.q.CreateCarrier(ctx, sqlc.CreateCarrierParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateCarrier(ctx, sqlc.CreateCarrierParams{EnterpriseID: empresa,
 		Code:              c.Code,
 		Description:       c.Description,
 		BillingType:       sqltypes.CarrierBillingTypeEnum(c.BillingType),
@@ -318,7 +400,11 @@ func (r *CustomerRepositorySQLC) CreateCarrier(ctx context.Context, c *entity.Ca
 }
 
 func (r *CustomerRepositorySQLC) UpdateCarrier(ctx context.Context, c *entity.Carrier) (*entity.Carrier, error) {
-	row, err := r.q.UpdateCarrier(ctx, sqlc.UpdateCarrierParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateCarrier(ctx, sqlc.UpdateCarrierParams{EnterpriseID: empresa,
 		ID:                c.ID,
 		Description:       c.Description,
 		BillingType:       sqltypes.CarrierBillingTypeEnum(c.BillingType),
@@ -336,7 +422,11 @@ func (r *CustomerRepositorySQLC) UpdateCarrier(ctx context.Context, c *entity.Ca
 }
 
 func (r *CustomerRepositorySQLC) GetCarrierByCode(ctx context.Context, code int64) (*entity.Carrier, error) {
-	row, err := r.q.GetCarrierByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetCarrierByCode(ctx, sqlc.GetCarrierByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching carrier %d: %w", code, err)
 	}
@@ -344,7 +434,11 @@ func (r *CustomerRepositorySQLC) GetCarrierByCode(ctx context.Context, code int6
 }
 
 func (r *CustomerRepositorySQLC) GetCarrierByID(ctx context.Context, id int64) (*entity.Carrier, error) {
-	row, err := r.q.GetCarrierByID(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetCarrierByID(ctx, sqlc.GetCarrierByIDParams{ID: id, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching carrier id %d: %w", id, err)
 	}
@@ -352,7 +446,11 @@ func (r *CustomerRepositorySQLC) GetCarrierByID(ctx context.Context, id int64) (
 }
 
 func (r *CustomerRepositorySQLC) ListCarriers(ctx context.Context, onlyActive bool) ([]*entity.Carrier, error) {
-	rows, err := r.q.ListCarriers(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCarriers(ctx, sqlc.ListCarriersParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing carriers: %w", err)
 	}
@@ -364,7 +462,11 @@ func (r *CustomerRepositorySQLC) ListCarriers(ctx context.Context, onlyActive bo
 }
 
 func (r *CustomerRepositorySQLC) NextCarrierCode(ctx context.Context) (int64, error) {
-	code, err := r.q.NextCarrierCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.q.NextCarrierCode(ctx, empresa)
 	return int64(code), err
 }
 
@@ -387,7 +489,11 @@ func carrierToEntity(row sqlc.Carrier) *entity.Carrier {
 // ─── Carrier Groups ───────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateCarrierGroup(ctx context.Context, g *entity.CarrierGroup) (*entity.CarrierGroup, error) {
-	row, err := r.q.CreateCarrierGroup(ctx, sqlc.CreateCarrierGroupParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateCarrierGroup(ctx, sqlc.CreateCarrierGroupParams{EnterpriseID: empresa,
 		Code:        g.Code,
 		Description: g.Description,
 	})
@@ -398,7 +504,11 @@ func (r *CustomerRepositorySQLC) CreateCarrierGroup(ctx context.Context, g *enti
 }
 
 func (r *CustomerRepositorySQLC) GetCarrierGroupByCode(ctx context.Context, code int64) (*entity.CarrierGroup, error) {
-	row, err := r.q.GetCarrierGroupByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetCarrierGroupByCode(ctx, sqlc.GetCarrierGroupByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching carrier group %d: %w", code, err)
 	}
@@ -406,7 +516,11 @@ func (r *CustomerRepositorySQLC) GetCarrierGroupByCode(ctx context.Context, code
 }
 
 func (r *CustomerRepositorySQLC) UpdateCarrierGroup(ctx context.Context, group *entity.CarrierGroup) (*entity.CarrierGroup, error) {
-	row, err := r.q.UpdateCarrierGroup(ctx, sqlc.UpdateCarrierGroupParams{ID: group.ID, Description: group.Description})
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateCarrierGroup(ctx, sqlc.UpdateCarrierGroupParams{EnterpriseID: empresa, ID: group.ID, Description: group.Description})
 	if err != nil {
 		return nil, fmt.Errorf("atualizar grupo de portadores: %w", err)
 	}
@@ -414,7 +528,11 @@ func (r *CustomerRepositorySQLC) UpdateCarrierGroup(ctx context.Context, group *
 }
 
 func (r *CustomerRepositorySQLC) ListCarrierGroups(ctx context.Context) ([]*entity.CarrierGroup, error) {
-	rows, err := r.q.ListCarrierGroups(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCarrierGroups(ctx, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing carrier groups: %w", err)
 	}
@@ -426,15 +544,40 @@ func (r *CustomerRepositorySQLC) ListCarrierGroups(ctx context.Context) ([]*enti
 }
 
 func (r *CustomerRepositorySQLC) AddCarrierToGroup(ctx context.Context, groupID, carrierID int64) error {
-	return r.q.AddCarrierToGroup(ctx, sqlc.AddCarrierToGroupParams{CarrierGroupID: groupID, CarrierID: carrierID})
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.AddCarrierToGroup(ctx, sqlc.AddCarrierToGroupParams{EnterpriseID: empresa, CarrierGroupID: groupID, CarrierID: carrierID})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		var existe bool
+		if err := r.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM carrier_group_carriers WHERE carrier_group_id=$1 AND carrier_id=$2)`, groupID, carrierID).Scan(&existe); err != nil {
+			return err
+		}
+		if !existe { // já vinculado não é erro; grupo/portador de outra empresa é
+			return errorsuc.NewNotFoundError("grupo ou portador não encontrado nesta empresa")
+		}
+	}
+	return nil
 }
 
 func (r *CustomerRepositorySQLC) RemoveCarrierFromGroup(ctx context.Context, groupID, carrierID int64) error {
-	return r.q.RemoveCarrierFromGroup(ctx, sqlc.RemoveCarrierFromGroupParams{CarrierGroupID: groupID, CarrierID: carrierID})
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.RemoveCarrierFromGroup(ctx, sqlc.RemoveCarrierFromGroupParams{EnterpriseID: empresa, CarrierGroupID: groupID, CarrierID: carrierID})
 }
 
 func (r *CustomerRepositorySQLC) NextCarrierGroupCode(ctx context.Context) (int64, error) {
-	code, err := r.q.NextCarrierGroupCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.q.NextCarrierGroupCode(ctx, empresa)
 	return int64(code), err
 }
 
@@ -1040,7 +1183,9 @@ func (r *CustomerRepositorySQLC) GetCommercialPolicyByCode(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("fetching commercial policy %d: %w", code, err)
 	}
-	p.Lines, _ = r.ListCommercialPolicyLines(ctx, code)
+	if p.Lines, err = r.ListCommercialPolicyLines(ctx, code); err != nil {
+		return nil, fmt.Errorf("lendo as linhas da política comercial %d: %w", code, err)
+	}
 	return p, nil
 }
 
@@ -1074,7 +1219,11 @@ func (r *CustomerRepositorySQLC) ListCommercialPolicies(ctx context.Context, onl
 		return nil, err
 	}
 	for _, p := range out {
-		p.Lines, _ = r.ListCommercialPolicyLines(ctx, p.Code)
+		lines, err := r.ListCommercialPolicyLines(ctx, p.Code)
+		if err != nil {
+			return nil, fmt.Errorf("lendo as linhas da política comercial %d: %w", p.Code, err)
+		}
+		p.Lines = lines
 	}
 	return out, nil
 }
@@ -1277,7 +1426,11 @@ func invoiceTypeImpostosNFe(it *entity.InvoiceType) sqlc.NullImpostosNfeEnum {
 }
 
 func (r *CustomerRepositorySQLC) CreateInvoiceType(ctx context.Context, it *entity.InvoiceType) (*entity.InvoiceType, error) {
-	row, err := r.q.CreateInvoiceType(ctx, sqlc.CreateInvoiceTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateInvoiceType(ctx, sqlc.CreateInvoiceTypeParams{EnterpriseID: empresa,
 		Code:                    it.Code,
 		Description:             it.Description,
 		Type:                    sqltypes.InvoiceTypeEnum(it.Type),
@@ -1359,11 +1512,15 @@ func (r *CustomerRepositorySQLC) CreateInvoiceType(ctx context.Context, it *enti
 }
 
 func (r *CustomerRepositorySQLC) UpdateInvoiceType(ctx context.Context, it *entity.InvoiceType) (*entity.InvoiceType, error) {
-	existing, err := r.q.GetInvoiceTypeByCode(ctx, it.Code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := r.q.GetInvoiceTypeByCode(ctx, sqlc.GetInvoiceTypeByCodeParams{Code: it.Code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao buscar o tipo de nota fiscal para alteração: %w", err)
 	}
-	row, err := r.q.UpdateInvoiceType(ctx, sqlc.UpdateInvoiceTypeParams{
+	row, err := r.q.UpdateInvoiceType(ctx, sqlc.UpdateInvoiceTypeParams{EnterpriseID: empresa,
 		ID:                      existing.ID,
 		Description:             it.Description,
 		Type:                    sqltypes.InvoiceTypeEnum(it.Type),
@@ -1446,7 +1603,11 @@ func (r *CustomerRepositorySQLC) UpdateInvoiceType(ctx context.Context, it *enti
 }
 
 func (r *CustomerRepositorySQLC) GetInvoiceTypeByCode(ctx context.Context, code int64) (*entity.InvoiceType, error) {
-	row, err := r.q.GetInvoiceTypeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetInvoiceTypeByCode(ctx, sqlc.GetInvoiceTypeByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching invoice type %d: %w", code, err)
 	}
@@ -1454,7 +1615,11 @@ func (r *CustomerRepositorySQLC) GetInvoiceTypeByCode(ctx context.Context, code 
 }
 
 func (r *CustomerRepositorySQLC) ListInvoiceTypes(ctx context.Context, onlyActive bool) ([]*entity.InvoiceType, error) {
-	rows, err := r.q.ListInvoiceTypes(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListInvoiceTypes(ctx, sqlc.ListInvoiceTypesParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing invoice types: %w", err)
 	}
@@ -1466,7 +1631,11 @@ func (r *CustomerRepositorySQLC) ListInvoiceTypes(ctx context.Context, onlyActiv
 }
 
 func (r *CustomerRepositorySQLC) NextInvoiceTypeCode(ctx context.Context) (int64, error) {
-	code, err := r.q.NextInvoiceTypeCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.q.NextInvoiceTypeCode(ctx, empresa)
 	return int64(code), err
 }
 
@@ -1559,7 +1728,11 @@ func invoiceTypeToEntity(row sqlc.InvoiceType) *entity.InvoiceType {
 // ─── Tax Types ────────────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) CreateTaxType(ctx context.Context, tt *entity.TaxType) (*entity.TaxType, error) {
-	row, err := r.q.CreateTaxType(ctx, sqlc.CreateTaxTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateTaxType(ctx, sqlc.CreateTaxTypeParams{EnterpriseID: empresa,
 		Code:                          tt.Code,
 		Description:                   tt.Description,
 		IpiBaseTotalItems:             tt.IPIBaseTotalItems,
@@ -1590,12 +1763,58 @@ func (r *CustomerRepositorySQLC) CreateTaxType(ctx context.Context, tt *entity.T
 	return taxTypeToEntity(row), nil
 }
 
+// UpdateTaxType grava a tributação (antes era um stub que devolvia o objeto
+// sem gravar nada). Localiza pelo código dentro da empresa.
 func (r *CustomerRepositorySQLC) UpdateTaxType(ctx context.Context, tt *entity.TaxType) (*entity.TaxType, error) {
-	return tt, nil
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	atual, err := r.q.GetTaxTypeByCode(ctx, sqlc.GetTaxTypeByCodeParams{Code: tt.Code, EnterpriseID: empresa})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("tributação %d não encontrada", tt.Code))
+	}
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateTaxType(ctx, sqlc.UpdateTaxTypeParams{EnterpriseID: empresa,
+		ID:                            atual.ID,
+		Description:                   tt.Description,
+		IpiBaseTotalItems:             tt.IPIBaseTotalItems,
+		IpiBaseSubtractDiscount:       tt.IPIBaseSubtractDiscount,
+		IpiBaseAddFreight:             tt.IPIBaseAddFreight,
+		IpiBaseAddExpenses:            tt.IPIBaseAddExpenses,
+		IcmsBaseTotalItems:            tt.ICMSBaseTotalItems,
+		IcmsBaseSubtractDiscount:      tt.ICMSBaseSubtractDiscount,
+		IcmsBaseAddFreight:            tt.ICMSBaseAddFreight,
+		IcmsBaseAddIpi:                tt.ICMSBaseAddIPI,
+		IcmsBaseAddExpenses:           tt.ICMSBaseAddExpenses,
+		PisCofinsBaseTotalItems:       tt.PISCOFINSBaseTotalItems,
+		PisCofinsBaseSubtractDiscount: tt.PISCOFINSBaseSubtractDiscount,
+		PisCofinsBaseAddFreight:       tt.PISCOFINSBaseAddFreight,
+		PisCofinsBaseAddInsurance:     tt.PISCOFINSBaseAddInsurance,
+		PisCofinsBaseAddExpenses:      tt.PISCOFINSBaseAddExpenses,
+		CsllBaseTotalItems:            tt.CSLLBaseTotalItems,
+		CsllBaseSubtractDiscount:      tt.CSLLBaseSubtractDiscount,
+		CsllBaseAddFreight:            tt.CSLLBaseAddFreight,
+		IrBaseTotalItems:              tt.IRBaseTotalItems,
+		IrBaseSubtractDiscount:        tt.IRBaseSubtractDiscount,
+		IrBaseAddFreight:              tt.IRBaseAddFreight,
+		IsConsumer:                    tt.IsConsumer,
+		IsActive:                      tt.IsActive,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("updating tax type: %w", err)
+	}
+	return taxTypeToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) GetTaxTypeByCode(ctx context.Context, code int64) (*entity.TaxType, error) {
-	row, err := r.q.GetTaxTypeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetTaxTypeByCode(ctx, sqlc.GetTaxTypeByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching tax type %d: %w", code, err)
 	}
@@ -1603,7 +1822,11 @@ func (r *CustomerRepositorySQLC) GetTaxTypeByCode(ctx context.Context, code int6
 }
 
 func (r *CustomerRepositorySQLC) ListTaxTypes(ctx context.Context, onlyActive bool) ([]*entity.TaxType, error) {
-	rows, err := r.q.ListTaxTypes(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListTaxTypes(ctx, sqlc.ListTaxTypesParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing tax types: %w", err)
 	}
@@ -1615,7 +1838,11 @@ func (r *CustomerRepositorySQLC) ListTaxTypes(ctx context.Context, onlyActive bo
 }
 
 func (r *CustomerRepositorySQLC) NextTaxTypeCode(ctx context.Context) (int64, error) {
-	code, err := r.q.NextTaxTypeCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.q.NextTaxTypeCode(ctx, empresa)
 	return int64(code), err
 }
 
@@ -1652,8 +1879,22 @@ func taxTypeToEntity(row sqlc.TaxType) *entity.TaxType {
 
 // ─── Customers ────────────────────────────────────────────────────────────────
 
+// naoAchou traduz "nenhuma linha" (inclusive o registro de OUTRA empresa, que
+// o filtro esconde) para 404 — sem dizer se o código existe em outra empresa.
+func naoAchou(err error, msg string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(msg)
+	}
+	return err
+}
+
 func (r *CustomerRepositorySQLC) CreateCustomer(ctx context.Context, c *entity.Customer) (*entity.Customer, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateCustomer(ctx, sqlc.CreateCustomerParams{
+		EnterpriseID:          enterpriseID,
 		Code:                  c.Code,
 		CorporateCode:         c.CorporateCode,
 		IsCorporate:           c.IsCorporate,
@@ -1680,13 +1921,22 @@ func (r *CustomerRepositorySQLC) CreateCustomer(ctx context.Context, c *entity.C
 		CreatedBy:             pgutil.ToPgUUID(c.CreatedBy),
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "customers_enterprise_code_key" {
+			return nil, errorsuc.NewConflictError(fmt.Sprintf("já existe cliente com o código %d nesta empresa", c.Code))
+		}
 		return nil, fmt.Errorf("creating customer: %w", err)
 	}
 	return customerToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) UpdateCustomer(ctx context.Context, c *entity.Customer) (*entity.Customer, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateCustomer(ctx, sqlc.UpdateCustomerParams{
+		EnterpriseID:          enterpriseID,
 		ID:                    c.ID,
 		Name:                  c.Name,
 		TradeName:             pgutil.ToPgTextFromPtr(c.TradeName),
@@ -1709,29 +1959,41 @@ func (r *CustomerRepositorySQLC) UpdateCustomer(ctx context.Context, c *entity.C
 		IsActive:              c.IsActive,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("updating customer %d: %w", c.ID, err)
+		return nil, naoAchou(err, fmt.Sprintf("cliente %d não encontrado", c.Code))
 	}
 	return customerToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) GetCustomerByCode(ctx context.Context, code int64) (*entity.Customer, error) {
-	row, err := r.q.GetCustomerByCode(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("fetching customer %d: %w", code, err)
+		return nil, err
+	}
+	row, err := r.q.GetCustomerByCode(ctx, sqlc.GetCustomerByCodeParams{Code: code, EnterpriseID: enterpriseID})
+	if err != nil {
+		return nil, naoAchou(err, fmt.Sprintf("cliente %d não encontrado", code))
 	}
 	return customerToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) GetCustomerByDocument(ctx context.Context, document string) (*entity.Customer, error) {
-	row, err := r.q.GetCustomerByDocument(ctx, document)
+	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("fetching customer by document %s: %w", document, err)
+		return nil, err
+	}
+	row, err := r.q.GetCustomerByDocument(ctx, sqlc.GetCustomerByDocumentParams{DocumentNumber: document, EnterpriseID: enterpriseID})
+	if err != nil {
+		return nil, naoAchou(err, "cliente não encontrado para o documento informado")
 	}
 	return customerToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) ListCustomers(ctx context.Context, onlyActive bool) ([]*entity.Customer, error) {
-	rows, err := r.q.ListCustomers(ctx, onlyActive)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCustomers(ctx, sqlc.ListCustomersParams{EnterpriseID: enterpriseID, OnlyActive: onlyActive})
 	if err != nil {
 		return nil, fmt.Errorf("listing customers: %w", err)
 	}
@@ -1743,7 +2005,11 @@ func (r *CustomerRepositorySQLC) ListCustomers(ctx context.Context, onlyActive b
 }
 
 func (r *CustomerRepositorySQLC) ListEstablishments(ctx context.Context, corporateCode int64) ([]*entity.Customer, error) {
-	rows, err := r.q.ListEstablishments(ctx, &corporateCode)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListEstablishments(ctx, sqlc.ListEstablishmentsParams{CorporateCode: &corporateCode, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os estabelecimentos do grupo %d: %w", corporateCode, err)
 	}
@@ -1755,14 +2021,31 @@ func (r *CustomerRepositorySQLC) ListEstablishments(ctx context.Context, corpora
 }
 
 func (r *CustomerRepositorySQLC) BlockCustomer(ctx context.Context, code int64, reason string) error {
-	return r.q.BlockCustomer(ctx, sqlc.BlockCustomerParams{
-		Code:        code,
-		BlockReason: pgutil.ToPgTextFromString(reason),
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.BlockCustomer(ctx, sqlc.BlockCustomerParams{
+		Code:         code,
+		BlockReason:  pgutil.ToPgTextFromString(reason),
+		EnterpriseID: enterpriseID,
 	})
+	if err == nil && n == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", code))
+	}
+	return err
 }
 
 func (r *CustomerRepositorySQLC) UnblockCustomer(ctx context.Context, code int64) error {
-	return r.q.UnblockCustomer(ctx, code)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.UnblockCustomer(ctx, sqlc.UnblockCustomerParams{Code: code, EnterpriseID: enterpriseID})
+	if err == nil && n == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", code))
+	}
+	return err
 }
 
 func (r *CustomerRepositorySQLC) NextCustomerCode(ctx context.Context) (int64, error) {
@@ -1808,8 +2091,13 @@ func customerToEntity(row sqlc.Customer) *entity.Customer {
 // ─── Customer Addresses ───────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) AddAddress(ctx context.Context, addr *entity.CustomerAddress) (*entity.CustomerAddress, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddAddress(ctx, sqlc.AddAddressParams{
 		CustomerID:   addr.CustomerID,
+		EnterpriseID: enterpriseID,
 		AddressType:  sqltypes.CustomerAddressTypeEnum(addr.AddressType),
 		ZipCode:      pgutil.ToPgTextFromPtr(addr.ZipCode),
 		Street:       pgutil.ToPgTextFromPtr(addr.Street),
@@ -1822,17 +2110,43 @@ func (r *CustomerRepositorySQLC) AddAddress(ctx context.Context, addr *entity.Cu
 		IsDefault:    addr.IsDefault,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("adding address: %w", err)
+		return nil, naoAchou(err, "cliente não encontrado")
 	}
 	return addressToEntity(row), nil
 }
 
+// UpdateAddress grava o endereço (antes devolvia o objeto sem gravar nada).
 func (r *CustomerRepositorySQLC) UpdateAddress(ctx context.Context, addr *entity.CustomerAddress) (*entity.CustomerAddress, error) {
-	return addr, nil
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateAddress(ctx, sqlc.UpdateAddressParams{
+		ID:           addr.ID,
+		AddressType:  sqltypes.CustomerAddressTypeEnum(addr.AddressType),
+		ZipCode:      pgutil.ToPgTextFromPtr(addr.ZipCode),
+		Street:       pgutil.ToPgTextFromPtr(addr.Street),
+		Number:       pgutil.ToPgTextFromPtr(addr.Number),
+		Complement:   pgutil.ToPgTextFromPtr(addr.Complement),
+		Neighborhood: pgutil.ToPgTextFromPtr(addr.Neighborhood),
+		City:         pgutil.ToPgTextFromPtr(addr.City),
+		Uf:           pgutil.ToPgTextFromPtr(addr.UF),
+		Country:      addr.Country,
+		IsDefault:    addr.IsDefault,
+		EnterpriseID: enterpriseID,
+	})
+	if err != nil {
+		return nil, naoAchou(err, "endereço não encontrado")
+	}
+	return addressToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) ListAddresses(ctx context.Context, customerID int64) ([]*entity.CustomerAddress, error) {
-	rows, err := r.q.ListAddresses(ctx, customerID)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAddresses(ctx, sqlc.ListAddressesParams{CustomerID: customerID, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("listing addresses: %w", err)
 	}
@@ -1844,7 +2158,15 @@ func (r *CustomerRepositorySQLC) ListAddresses(ctx context.Context, customerID i
 }
 
 func (r *CustomerRepositorySQLC) DeleteAddress(ctx context.Context, id int64) error {
-	return r.q.DeleteAddress(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.DeleteAddress(ctx, sqlc.DeleteAddressParams{ID: id, EnterpriseID: enterpriseID})
+	if err == nil && n == 0 {
+		return errorsuc.NewNotFoundError("endereço não encontrado")
+	}
+	return err
 }
 
 func addressToEntity(row sqlc.CustomerAddress) *entity.CustomerAddress {
@@ -1868,8 +2190,13 @@ func addressToEntity(row sqlc.CustomerAddress) *entity.CustomerAddress {
 // ─── Customer Contacts ────────────────────────────────────────────────────────
 
 func (r *CustomerRepositorySQLC) AddContact(ctx context.Context, c *entity.CustomerContact) (*entity.CustomerContact, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddContact(ctx, sqlc.AddContactParams{
 		CustomerID:    c.CustomerID,
+		EnterpriseID:  enterpriseID,
 		ContactTypeID: c.ContactTypeID,
 		Name:          c.Name,
 		Email:         pgutil.ToPgTextFromPtr(c.Email),
@@ -1879,17 +2206,41 @@ func (r *CustomerRepositorySQLC) AddContact(ctx context.Context, c *entity.Custo
 		IsPrimary:     c.IsPrimary,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("adding contact: %w", err)
+		return nil, naoAchou(err, "cliente não encontrado")
 	}
 	return contactToEntity(row), nil
 }
 
+// UpdateContact grava o contato (antes devolvia o objeto sem gravar nada).
 func (r *CustomerRepositorySQLC) UpdateContact(ctx context.Context, c *entity.CustomerContact) (*entity.CustomerContact, error) {
-	return c, nil
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateContact(ctx, sqlc.UpdateContactParams{
+		ID:            c.ID,
+		ContactTypeID: c.ContactTypeID,
+		Name:          c.Name,
+		Email:         pgutil.ToPgTextFromPtr(c.Email),
+		Phone:         pgutil.ToPgTextFromPtr(c.Phone),
+		Mobile:        pgutil.ToPgTextFromPtr(c.Mobile),
+		Position:      pgutil.ToPgTextFromPtr(c.Position),
+		IsPrimary:     c.IsPrimary,
+		IsActive:      c.IsActive,
+		EnterpriseID:  enterpriseID,
+	})
+	if err != nil {
+		return nil, naoAchou(err, "contato não encontrado")
+	}
+	return contactToEntity(row), nil
 }
 
 func (r *CustomerRepositorySQLC) ListContacts(ctx context.Context, customerID int64) ([]*entity.CustomerContact, error) {
-	rows, err := r.q.ListContacts(ctx, customerID)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListContacts(ctx, sqlc.ListContactsParams{CustomerID: customerID, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("listing contacts: %w", err)
 	}
@@ -1901,7 +2252,15 @@ func (r *CustomerRepositorySQLC) ListContacts(ctx context.Context, customerID in
 }
 
 func (r *CustomerRepositorySQLC) DeleteContact(ctx context.Context, id int64) error {
-	return r.q.DeleteContact(ctx, id)
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.DeleteContact(ctx, sqlc.DeleteContactParams{ID: id, EnterpriseID: enterpriseID})
+	if err == nil && n == 0 {
+		return errorsuc.NewNotFoundError("contato não encontrado")
+	}
+	return err
 }
 
 func contactToEntity(row sqlc.CustomerContact) *entity.CustomerContact {
@@ -2088,22 +2447,30 @@ func (r *CustomerRepositorySQLC) DeleteSalesTablePrice(ctx context.Context, id i
 }
 
 func (r *CustomerRepositorySQLC) ResolveSalesCost(ctx context.Context, itemCode int64, mask string, source entity.SalesCostSource, warehouseID *int64) (float64, string, error) {
+	// O custo é da empresa do item: item de outra empresa não tem custo aqui.
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, string(source), err
+	}
 	var value float64
 	switch source {
 	case entity.SalesCostStandardTotal:
-		err := r.pool.QueryRow(ctx,
+		err = r.pool.QueryRow(ctx,
 			`SELECT total_cost FROM item_standard_costs
-			 WHERE item_code=$1 AND mask=$2 ORDER BY calculated_at DESC LIMIT 1`, itemCode, mask).Scan(&value)
+			 WHERE item_code=$1 AND mask=$2 AND EXISTS (SELECT 1 FROM items i WHERE i.code=$1 AND i.enterprise_id=$3)
+			 ORDER BY calculated_at DESC LIMIT 1`, itemCode, mask, enterpriseID).Scan(&value)
 		return value, string(source), normalizeCostErr(err, itemCode, source)
 	case entity.SalesCostStandardMaterial:
-		err := r.pool.QueryRow(ctx,
+		err = r.pool.QueryRow(ctx,
 			`SELECT material_cost FROM item_standard_costs
-			 WHERE item_code=$1 AND mask=$2 ORDER BY calculated_at DESC LIMIT 1`, itemCode, mask).Scan(&value)
+			 WHERE item_code=$1 AND mask=$2 AND EXISTS (SELECT 1 FROM items i WHERE i.code=$1 AND i.enterprise_id=$3)
+			 ORDER BY calculated_at DESC LIMIT 1`, itemCode, mask, enterpriseID).Scan(&value)
 		return value, string(source), normalizeCostErr(err, itemCode, source)
 	case entity.SalesCostPurchase:
-		err := r.pool.QueryRow(ctx,
+		err = r.pool.QueryRow(ctx,
 			`SELECT unit_cost FROM item_purchase_costs
-			 WHERE item_code=$1 ORDER BY updated_at DESC LIMIT 1`, itemCode).Scan(&value)
+			 WHERE item_code=$1 AND EXISTS (SELECT 1 FROM items i WHERE i.code=$1 AND i.enterprise_id=$2)
+			 ORDER BY updated_at DESC LIMIT 1`, itemCode, enterpriseID).Scan(&value)
 		return value, string(source), normalizeCostErr(err, itemCode, source)
 	case entity.SalesCostStockAvg:
 		return r.resolveStockCost(ctx, itemCode, mask, warehouseID, true)
@@ -2121,16 +2488,19 @@ func (r *CustomerRepositorySQLC) resolveStockCost(ctx context.Context, itemCode 
 		col = "avg_cost"
 		source = "STOCK_AVG"
 	}
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, source, err
+	}
 	var value float64
-	var err error
 	if warehouseID != nil {
 		err = r.pool.QueryRow(ctx,
-			fmt.Sprintf(`SELECT %s FROM stock_balances WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3`, col),
-			itemCode, mask, *warehouseID).Scan(&value)
+			fmt.Sprintf(`SELECT %s FROM stock_balances WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4`, col),
+			itemCode, mask, *warehouseID, enterpriseID).Scan(&value)
 	} else {
 		err = r.pool.QueryRow(ctx,
-			fmt.Sprintf(`SELECT %s FROM stock_balances WHERE item_code=$1 AND mask=$2 ORDER BY quantity DESC LIMIT 1`, col),
-			itemCode, mask).Scan(&value)
+			fmt.Sprintf(`SELECT %s FROM stock_balances WHERE item_code=$1 AND mask=$2 AND enterprise_id=$3 ORDER BY quantity DESC LIMIT 1`, col),
+			itemCode, mask, enterpriseID).Scan(&value)
 	}
 	return value, source, normalizeCostErr(err, itemCode, entity.SalesCostSource(source))
 }

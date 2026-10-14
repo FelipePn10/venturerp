@@ -2,14 +2,18 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
 	salesdivision "github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
 )
 
-var ErrCalculationInProgress = errors.New("já existe um cálculo de planejamento de materiais em andamento")
+var ErrCalculationInProgress = domainerr.NewConflict("já existe um cálculo de planejamento de materiais em andamento")
+
+// ErrOrderNumberInUse: o número já pertence a uma ordem planejada ativa ou a
+// uma sugestão de outro plano. O cálculo pula para o próximo número.
+var ErrOrderNumberInUse = domainerr.NewConflict("número de ordem já em uso")
 
 type MRPCalculationRepository interface {
 	CreateProfile(ctx context.Context, p *entity.MRPItemProfile) (*entity.MRPItemProfile, error)

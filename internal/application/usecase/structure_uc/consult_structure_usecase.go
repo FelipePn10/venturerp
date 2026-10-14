@@ -110,11 +110,19 @@ func (uc *ConsultStructureUseCase) buildRow(
 	// fórmula de quantidade quanto a de perda.
 	vars := map[string]float64{}
 	if (s.HasQuantityFormula() || (s.LossFormula != nil && *s.LossFormula != "")) && childMask != "" {
-		vars, _ = uc.Repo.GetMaskAnswersWithNames(ctx, s.ChildCode, childMask)
+		var errMascara error
+		vars, errMascara = uc.Repo.GetMaskAnswersWithNames(ctx, s.ChildCode, childMask)
+		if errMascara != nil {
+			return row, "", fmt.Errorf("lendo as respostas da máscara do componente: %w", errMascara)
+		}
 		if len(vars) == 0 && parentMask != "" {
 			// Fórmula escrita com as variáveis do pai (caso mais comum em
 			// FENG0210: COMPRIMENTO/PROFUNDIDADE são perguntas do produto pai).
-			vars, _ = uc.Repo.GetMaskAnswersWithNames(ctx, s.ParentCode, parentMask)
+			var errMascaraPai error
+			vars, errMascaraPai = uc.Repo.GetMaskAnswersWithNames(ctx, s.ParentCode, parentMask)
+			if errMascaraPai != nil {
+				return row, "", fmt.Errorf("lendo as respostas da máscara do item pai: %w", errMascaraPai)
+			}
 		}
 	}
 

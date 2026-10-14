@@ -179,8 +179,7 @@ func (h *FiscalEntryHandler) SaveConciliation(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var dto request.SaveFiscalEntryConciliationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.conciliar.Execute(r.Context(), id, dto)

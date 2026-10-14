@@ -1,7 +1,7 @@
 package third_party_service
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -9,7 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-var ErrNotFound = errors.New("registro de serviço terceirizado não encontrado")
+var ErrNotFound = domainerr.NewNotFound("registro de serviço terceirizado não encontrado")
 
 type Price struct {
 	ID, EnterpriseID, ItemCode, SupplierCode, OperationID int64
@@ -105,16 +105,16 @@ func (p *Price) Validate() error {
 	p.UOM = strings.ToUpper(strings.TrimSpace(p.UOM))
 	p.FreightType = strings.ToUpper(strings.TrimSpace(p.FreightType))
 	if p.ItemCode <= 0 || p.SupplierCode <= 0 || p.OperationID <= 0 || p.UOM == "" || p.ReferenceDate.IsZero() {
-		return errors.New("item, fornecedor, operação, unidade e data de referência são obrigatórios")
+		return domainerr.NewValidation("item, fornecedor, operação, unidade e data de referência são obrigatórios")
 	}
 	if p.UnitPrice.IsNegative() || p.FreightValue.IsNegative() || p.TaxPercent.IsNegative() || p.TaxPercent.GreaterThan(decimal.NewFromInt(100)) {
-		return errors.New("valores de preço, frete ou imposto são inválidos")
+		return domainerr.NewValidation("valores de preço, frete ou imposto são inválidos")
 	}
 	if p.FreightType != "FIXED" && p.FreightType != "PERCENT" {
-		return errors.New("frete deve ser FIXO ou PERCENTUAL")
+		return domainerr.NewValidation("frete deve ser FIXO ou PERCENTUAL")
 	}
 	if p.ConversionFactor != nil && !p.ConversionFactor.IsPositive() {
-		return errors.New("fator de conversão deve ser positivo")
+		return domainerr.NewValidation("fator de conversão deve ser positivo")
 	}
 	return nil
 }

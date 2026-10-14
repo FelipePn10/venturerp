@@ -3,6 +3,7 @@ package supplier_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
 
@@ -60,7 +61,7 @@ func (uc *ConsultSupplierSefazUseCase) Execute(ctx context.Context, supplierCode
 		}
 	}
 	if uf != "" && unsupportedSefazUFs[uf] {
-		return nil, fmt.Errorf("o estado %s não é contemplado pelo processo de consulta cadastral junto à SEFAZ", uf)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o estado %s não é contemplado pelo processo de consulta cadastral junto à SEFAZ", uf))
 	}
 
 	cfg, err := uc.FiscalRepo.GetFiscalConfig(ctx)

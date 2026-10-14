@@ -69,11 +69,15 @@ func (q *Queries) ListOverloadedCRPByPlan(ctx context.Context, planCode int64) (
 	return scanCRPRows(rows)
 }
 
-const listCRPByWorkCenter = `SELECT id, plan_code, work_center_id, req_date, required_hours, available_hours, load_pct, created_at
-FROM capacity_requirements WHERE work_center_id=$1 AND req_date BETWEEN $2 AND $3 ORDER BY req_date`
+// A carga é a dos planos reais da empresa: capacity_requirements não tem
+// empresa, e plano de cenário de simulação não ocupa o centro de verdade.
+const listCRPByWorkCenter = `SELECT cr.id, cr.plan_code, cr.work_center_id, cr.req_date, cr.required_hours, cr.available_hours, cr.load_pct, cr.created_at
+FROM capacity_requirements cr
+JOIN production_plans p ON p.code = cr.plan_code AND p.enterprise_id = $4 AND NOT p.is_scenario
+WHERE cr.work_center_id=$1 AND cr.req_date BETWEEN $2 AND $3 ORDER BY cr.req_date`
 
-func (q *Queries) ListCRPByWorkCenter(ctx context.Context, workCenterID int64, from, to pgtype.Date) ([]DBCapacityRequirement, error) {
-	rows, err := q.db.Query(ctx, listCRPByWorkCenter, workCenterID, from, to)
+func (q *Queries) ListCRPByWorkCenter(ctx context.Context, workCenterID int64, from, to pgtype.Date, enterpriseID int64) ([]DBCapacityRequirement, error) {
+	rows, err := q.db.Query(ctx, listCRPByWorkCenter, workCenterID, from, to, enterpriseID)
 	if err != nil {
 		return nil, err
 	}

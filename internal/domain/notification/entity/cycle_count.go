@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -57,10 +57,10 @@ type CycleCount struct {
 
 func (c CycleCount) ValidateSchedule() error {
 	if c.EnterpriseID <= 0 || c.WarehouseID <= 0 || strings.TrimSpace(c.ItemCode) == "" {
-		return errors.New("empresa, almoxarifado e item são obrigatórios")
+		return domainerr.NewValidation("empresa, almoxarifado e item são obrigatórios")
 	}
 	if c.ScheduledFor.IsZero() {
-		return errors.New("data programada é obrigatória")
+		return domainerr.NewValidation("data programada é obrigatória")
 	}
 	return nil
 }

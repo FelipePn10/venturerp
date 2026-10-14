@@ -13,7 +13,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
 
-var ErrItemBaseNotFound = errors.New("O item-base informado não existe.")
+var ErrItemBaseNotFound = errorsuc.NewValidationError("O item-base informado não existe.")
 
 type automaticBusinessCodeRepository interface {
 	NextAutomaticBusinessCode(context.Context, int64) (valueobject.BusinessCode, error)

@@ -13,8 +13,10 @@ import (
 
 const addAllocationTarget = `-- name: AddAllocationTarget :one
 INSERT INTO overhead_allocation_targets (overhead_code, cost_center_code, percentage, amount)
-VALUES ($1, $2, $3, $4)
-    RETURNING id, overhead_id, cost_center_id, percentage, amount, created_at, code, overhead_code, cost_center_code
+SELECT $1, $2, $3, $4
+ WHERE EXISTS (SELECT 1 FROM overhead_allocations o WHERE o.code = $1 AND o.enterprise_id = $5)
+   AND ($2::int IS NULL OR EXISTS (SELECT 1 FROM cost_centers cc WHERE cc.code = $2 AND cc.enterprise_id = $5))
+RETURNING id, overhead_id, cost_center_id, percentage, amount, created_at, code, overhead_code, cost_center_code
 `
 
 type AddAllocationTargetParams struct {
@@ -22,6 +24,7 @@ type AddAllocationTargetParams struct {
 	CostCenterCode *int32
 	Percentage     pgtype.Numeric
 	Amount         pgtype.Numeric
+	EnterpriseID   int64
 }
 
 func (q *Queries) AddAllocationTarget(ctx context.Context, arg AddAllocationTargetParams) (OverheadAllocationTarget, error) {
@@ -30,6 +33,7 @@ func (q *Queries) AddAllocationTarget(ctx context.Context, arg AddAllocationTarg
 		arg.CostCenterCode,
 		arg.Percentage,
 		arg.Amount,
+		arg.EnterpriseID,
 	)
 	var i OverheadAllocationTarget
 	err := row.Scan(
@@ -47,9 +51,13 @@ func (q *Queries) AddAllocationTarget(ctx context.Context, arg AddAllocationTarg
 }
 
 const createOverheadAllocation = `-- name: CreateOverheadAllocation :one
-INSERT INTO overhead_allocations (cost_center_code, plan_account_code, account_code, period_start, period_end, allocation_type, base_code, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code
+
+INSERT INTO overhead_allocations (cost_center_code, plan_account_code, account_code, period_start, period_end, allocation_type, base_code, created_by, enterprise_id)
+SELECT $1, $2, $3, $4, $5,
+       $6, $7, $8, $9
+ WHERE ($1::int IS NULL OR EXISTS (SELECT 1 FROM cost_centers cc WHERE cc.code = $1 AND cc.enterprise_id = $9))
+   AND ($7::bigint IS NULL OR EXISTS (SELECT 1 FROM allocation_bases b WHERE b.code = $7 AND b.enterprise_id = $9))
+RETURNING id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code, enterprise_id
 `
 
 type CreateOverheadAllocationParams struct {
@@ -61,8 +69,12 @@ type CreateOverheadAllocationParams struct {
 	AllocationType  string
 	BaseCode        *int64
 	CreatedBy       pgtype.UUID
+	EnterpriseID    int64
 }
 
+// O rateio é da empresa (enterprise_id). Centro de custo de origem e de
+// destino e a base de rateio têm de ser da mesma empresa; os destinos são
+// alcançados pelo rateio.
 func (q *Queries) CreateOverheadAllocation(ctx context.Context, arg CreateOverheadAllocationParams) (OverheadAllocation, error) {
 	row := q.db.QueryRow(ctx, createOverheadAllocation,
 		arg.CostCenterCode,
@@ -73,6 +85,7 @@ func (q *Queries) CreateOverheadAllocation(ctx context.Context, arg CreateOverhe
 		arg.AllocationType,
 		arg.BaseCode,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i OverheadAllocation
 	err := row.Scan(
@@ -91,34 +104,57 @@ func (q *Queries) CreateOverheadAllocation(ctx context.Context, arg CreateOverhe
 		&i.CostCenterCode,
 		&i.PlanAccountCode,
 		&i.BaseCode,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const deleteAllocationTargets = `-- name: DeleteAllocationTargets :exec
-DELETE FROM overhead_allocation_targets WHERE overhead_code = $1
+DELETE FROM overhead_allocation_targets t
+ USING overhead_allocations o
+ WHERE t.overhead_code = $1 AND o.code = t.overhead_code AND o.enterprise_id = $2
 `
 
-func (q *Queries) DeleteAllocationTargets(ctx context.Context, overheadCode *int64) error {
-	_, err := q.db.Exec(ctx, deleteAllocationTargets, overheadCode)
+type DeleteAllocationTargetsParams struct {
+	OverheadCode *int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteAllocationTargets(ctx context.Context, arg DeleteAllocationTargetsParams) error {
+	_, err := q.db.Exec(ctx, deleteAllocationTargets, arg.OverheadCode, arg.EnterpriseID)
 	return err
 }
 
-const deleteOverheadAllocation = `-- name: DeleteOverheadAllocation :exec
-DELETE FROM overhead_allocations WHERE code = $1
+const deleteOverheadAllocation = `-- name: DeleteOverheadAllocation :execrows
+DELETE FROM overhead_allocations WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) DeleteOverheadAllocation(ctx context.Context, code int64) error {
-	_, err := q.db.Exec(ctx, deleteOverheadAllocation, code)
-	return err
+type DeleteOverheadAllocationParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteOverheadAllocation(ctx context.Context, arg DeleteOverheadAllocationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOverheadAllocation, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getAllocationTargets = `-- name: GetAllocationTargets :many
-SELECT id, overhead_id, cost_center_id, percentage, amount, created_at, code, overhead_code, cost_center_code FROM overhead_allocation_targets WHERE overhead_code = $1
+SELECT t.id, t.overhead_id, t.cost_center_id, t.percentage, t.amount, t.created_at, t.code, t.overhead_code, t.cost_center_code FROM overhead_allocation_targets t
+  JOIN overhead_allocations o ON o.code = t.overhead_code AND o.enterprise_id = $2
+ WHERE t.overhead_code = $1
 `
 
-func (q *Queries) GetAllocationTargets(ctx context.Context, overheadCode *int64) ([]OverheadAllocationTarget, error) {
-	rows, err := q.db.Query(ctx, getAllocationTargets, overheadCode)
+type GetAllocationTargetsParams struct {
+	OverheadCode *int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetAllocationTargets(ctx context.Context, arg GetAllocationTargetsParams) ([]OverheadAllocationTarget, error) {
+	rows, err := q.db.Query(ctx, getAllocationTargets, arg.OverheadCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -148,11 +184,16 @@ func (q *Queries) GetAllocationTargets(ctx context.Context, overheadCode *int64)
 }
 
 const getOverheadAllocationByCode = `-- name: GetOverheadAllocationByCode :one
-SELECT id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code FROM overhead_allocations WHERE code = $1
+SELECT id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code, enterprise_id FROM overhead_allocations WHERE code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) GetOverheadAllocationByCode(ctx context.Context, code int64) (OverheadAllocation, error) {
-	row := q.db.QueryRow(ctx, getOverheadAllocationByCode, code)
+type GetOverheadAllocationByCodeParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetOverheadAllocationByCode(ctx context.Context, arg GetOverheadAllocationByCodeParams) (OverheadAllocation, error) {
+	row := q.db.QueryRow(ctx, getOverheadAllocationByCode, arg.Code, arg.EnterpriseID)
 	var i OverheadAllocation
 	err := row.Scan(
 		&i.ID,
@@ -170,16 +211,17 @@ func (q *Queries) GetOverheadAllocationByCode(ctx context.Context, code int64) (
 		&i.CostCenterCode,
 		&i.PlanAccountCode,
 		&i.BaseCode,
+		&i.EnterpriseID,
 	)
 	return i, err
 }
 
 const listOverheadAllocations = `-- name: ListOverheadAllocations :many
-SELECT id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code FROM overhead_allocations ORDER BY created_at DESC
+SELECT id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code, enterprise_id FROM overhead_allocations WHERE enterprise_id = $1 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListOverheadAllocations(ctx context.Context) ([]OverheadAllocation, error) {
-	rows, err := q.db.Query(ctx, listOverheadAllocations)
+func (q *Queries) ListOverheadAllocations(ctx context.Context, enterpriseID int64) ([]OverheadAllocation, error) {
+	rows, err := q.db.Query(ctx, listOverheadAllocations, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +245,7 @@ func (q *Queries) ListOverheadAllocations(ctx context.Context) ([]OverheadAlloca
 			&i.CostCenterCode,
 			&i.PlanAccountCode,
 			&i.BaseCode,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}
@@ -215,11 +258,16 @@ func (q *Queries) ListOverheadAllocations(ctx context.Context) ([]OverheadAlloca
 }
 
 const listOverheadAllocationsByCostCenter = `-- name: ListOverheadAllocationsByCostCenter :many
-SELECT id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code FROM overhead_allocations WHERE cost_center_code = $1
+SELECT id, cost_center_id, plan_account_id, account_code, period_start, period_end, allocation_type, base_id, created_at, updated_at, created_by, code, cost_center_code, plan_account_code, base_code, enterprise_id FROM overhead_allocations WHERE cost_center_code = $1 AND enterprise_id = $2
 `
 
-func (q *Queries) ListOverheadAllocationsByCostCenter(ctx context.Context, costCenterCode *int32) ([]OverheadAllocation, error) {
-	rows, err := q.db.Query(ctx, listOverheadAllocationsByCostCenter, costCenterCode)
+type ListOverheadAllocationsByCostCenterParams struct {
+	CostCenterCode *int32
+	EnterpriseID   int64
+}
+
+func (q *Queries) ListOverheadAllocationsByCostCenter(ctx context.Context, arg ListOverheadAllocationsByCostCenterParams) ([]OverheadAllocation, error) {
+	rows, err := q.db.Query(ctx, listOverheadAllocationsByCostCenter, arg.CostCenterCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +291,7 @@ func (q *Queries) ListOverheadAllocationsByCostCenter(ctx context.Context, costC
 			&i.CostCenterCode,
 			&i.PlanAccountCode,
 			&i.BaseCode,
+			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
 		}

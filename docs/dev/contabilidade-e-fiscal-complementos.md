@@ -24,9 +24,24 @@ demonstrativos, SPED ECD), **NFS-e** (nota de serviço) e **Operações de Entra
 Cobre a escrituração contábil: plano de contas, lançamentos de débito/crédito,
 balancete de verificação, demonstrativos e a obrigação **SPED Contábil (ECD)**.
 
+**Por empresa.** Plano de contas e demonstrativos são da empresa da sessão
+(`enterprise_id`); a conta é da empresa do seu plano; o lançamento usa
+`empresa_id` (= id da empresa). Conta-pai, conta de lançamento, conta vinculada
+ao plano financeiro ou à conta bancária e parâmetros de contabilização só
+aceitam contas de um plano da própria empresa. O plano referencial
+(`accounting_reference_accounts`) é tabela oficial e continua global. A
+migração `000386` deu a cada empresa a sua cópia dos planos que ela já usava
+(o original fica com a menor), remapeando parâmetros, lançamentos, plano
+financeiro, contas bancárias e vínculos referenciais.
+
 ---
 
 ## 2. NFS-e — Nota Fiscal de Serviço (`/api/fiscal/nfse`)
+
+A NFS-e é da empresa da sessão (`nfse.enterprise_id`, migração `000388`):
+leitura, autorização e cancelamento só alcançam notas da própria empresa — a
+transmissão usa o token Focus da sessão, então nota de outra empresa nunca é
+carregada. O pedido de venda informado tem de ser da empresa.
 
 | Método | Rota | Permissão |
 |---|---|---|

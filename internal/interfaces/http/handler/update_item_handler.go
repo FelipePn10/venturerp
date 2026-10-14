@@ -27,10 +27,10 @@ func (h *ItemHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, repository.ErrInvalidReference) {
-			jsonError(w, http.StatusUnprocessableEntity, err.Error())
+			respondErr(w, err)
 			return
 		}
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	h.OK(w, updated, "item updated successfully")

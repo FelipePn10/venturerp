@@ -27,7 +27,7 @@ func (r *FiscalRepositoryPG) QuantidadesDevolvidas(ctx context.Context, entryID 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT i.fiscal_entry_item_id, SUM(i.quantity)
 		   FROM fiscal_exit_items i JOIN fiscal_exits x ON x.id = i.fiscal_exit_id
 		  WHERE x.enterprise_id=$1 AND x.fiscal_entry_id=$2 AND x.is_active
@@ -59,7 +59,7 @@ func (r *FiscalRepositoryPG) EfetivarDevolucao(ctx context.Context, e repository
 	if err != nil {
 		return nil, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (r *FiscalRepositoryPG) EstornarDevolucao(ctx context.Context, exitID int64
 	if err != nil {
 		return err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -260,7 +260,7 @@ func (r *FiscalRepositoryPG) ChecarEstornoDevolucao(ctx context.Context, exitID 
 		return err
 	}
 	var cpPago, crRecebido bool
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT EXISTS (SELECT 1 FROM fiscal_return_settlements s JOIN contas_pagar c ON c.id = s.conta_pagar_id
 		                 WHERE s.enterprise_id=$1 AND s.fiscal_exit_id=$2 AND s.estornado_em IS NULL AND s.quitou_titulo AND COALESCE(c.valor_pago,0) > 0),
 		        EXISTS (SELECT 1 FROM fiscal_return_settlements s JOIN contas_receber c ON c.id = s.conta_receber_id

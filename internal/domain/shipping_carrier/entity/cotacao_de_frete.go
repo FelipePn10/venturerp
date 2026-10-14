@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -39,17 +39,17 @@ type Cotacao struct {
 	Alertas         []string
 }
 
-var ErrRegiaoNaoAtendida = errors.New("a transportadora não atende o destino informado")
+var ErrRegiaoNaoAtendida = domainerr.NewValidation("a transportadora não atende o destino informado")
 
 // Cotar aplica a tabela da região atendida e, na falta dela, a tabela da capa.
 // Ordem dos componentes: peso + ad valorem + GRIS + pedágio, e o piso só levanta
 // o total — nunca substitui os componentes, senão a conferência não fecha.
 func (t *Transportadora) Cotar(c Carga) (*Cotacao, error) {
 	if !t.IsActive {
-		return nil, errors.New("a transportadora está inativa")
+		return nil, domainerr.NewValidation("a transportadora está inativa")
 	}
 	if c.PesoKg.IsNegative() || c.ValorMercadoria.IsNegative() {
-		return nil, errors.New("peso e valor da mercadoria não podem ser negativos")
+		return nil, domainerr.NewValidation("peso e valor da mercadoria não podem ser negativos")
 	}
 	cem := decimal.NewFromInt(100)
 

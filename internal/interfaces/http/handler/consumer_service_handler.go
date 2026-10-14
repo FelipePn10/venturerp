@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"io"
 	"mime"
 	"net/http"
@@ -187,10 +186,7 @@ func (h *ConsumerServiceHandler) UpdateCall(w http.ResponseWriter, r *http.Reque
 
 func (h *ConsumerServiceHandler) AddCallReturn(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddConsumerServiceCallReturnDTO
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBodyStrict(w, r, &dto) {
 		return
 	}
 	if code, ok := optionalPathInt64(r, "code"); ok {

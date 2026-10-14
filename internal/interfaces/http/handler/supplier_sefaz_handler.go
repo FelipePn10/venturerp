@@ -25,7 +25,7 @@ func (h *SupplierSefazHandler) Query(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.uc.Execute(r.Context(), code)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)

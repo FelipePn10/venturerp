@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -104,7 +104,7 @@ func NewPriceAdjustment(sequence int32, kind, calculationType string, value deci
 	kind = strings.ToUpper(strings.TrimSpace(kind))
 	calculationType = strings.ToUpper(strings.TrimSpace(calculationType))
 	if sequence <= 0 || (kind != "DISCOUNT" && kind != "SURCHARGE") || (calculationType != "PERCENT" && calculationType != "FIXED") || value.IsNegative() {
-		return nil, fmt.Errorf("reajuste de preço inválido")
+		return nil, domainerr.NewValidation("reajuste de preço inválido")
 	}
 	return &PriceAdjustment{Sequence: sequence, Kind: kind, CalculationType: calculationType, Value: value}, nil
 }

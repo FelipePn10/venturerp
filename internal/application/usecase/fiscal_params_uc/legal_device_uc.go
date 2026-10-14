@@ -2,7 +2,7 @@ package fiscal_params_uc
 
 import (
 	"context"
-	"errors"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -13,6 +13,20 @@ import (
 
 type LegalDeviceUseCase struct {
 	Repo repository.FiscalParamsRepository
+	Auth catalogAuth
+}
+
+// catalogAuth: CFOP e dispositivo legal são cadastro único do banco, valem para
+// todas as empresas — só administrador inclui ou altera.
+type catalogAuth interface {
+	CanManageGlobalCatalogs(ctx context.Context) bool
+}
+
+func podeAlterarCatalogo(ctx context.Context, a catalogAuth) error {
+	if a == nil || !a.CanManageGlobalCatalogs(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	return nil
 }
 
 var validLegalDeviceTypes = map[string]bool{
@@ -20,11 +34,14 @@ var validLegalDeviceTypes = map[string]bool{
 }
 
 func (uc *LegalDeviceUseCase) Create(ctx context.Context, dto request.CreateLegalDeviceDTO) (*response.LegalDeviceResponse, error) {
+	if err := podeAlterarCatalogo(ctx, uc.Auth); err != nil {
+		return nil, err
+	}
 	if dto.Description == "" {
-		return nil, errors.New("informe a descrição")
+		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
 	if !validLegalDeviceTypes[dto.Type] {
-		return nil, errors.New("o tipo deve ser ICMS, IPI, laudo, PIS ou COFINS")
+		return nil, errorsuc.NewValidationError("o tipo deve ser ICMS, IPI, laudo, PIS ou COFINS")
 	}
 	d := &entity.LegalDevice{
 		Type:        entity.LegalDeviceType(dto.Type),
@@ -39,8 +56,11 @@ func (uc *LegalDeviceUseCase) Create(ctx context.Context, dto request.CreateLega
 }
 
 func (uc *LegalDeviceUseCase) Update(ctx context.Context, dto request.UpdateLegalDeviceDTO) (*response.LegalDeviceResponse, error) {
+	if err := podeAlterarCatalogo(ctx, uc.Auth); err != nil {
+		return nil, err
+	}
 	if !validLegalDeviceTypes[dto.Type] {
-		return nil, errors.New("o tipo deve ser ICMS, IPI, laudo, PIS ou COFINS")
+		return nil, errorsuc.NewValidationError("o tipo deve ser ICMS, IPI, laudo, PIS ou COFINS")
 	}
 	d := &entity.LegalDevice{
 		ID:          dto.ID,

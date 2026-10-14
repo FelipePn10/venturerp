@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -15,6 +17,7 @@ import (
 	structqueryrepo "github.com/FelipePn10/panossoerp/internal/domain/structure_query/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 )
 
@@ -24,9 +27,14 @@ func (r *StructureQueryRepositorySQLC) GetDirectChildrenForMask(
 	mask string,
 ) ([]*str.ItemStructure, error) {
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.GetDirectChildrenForMask(ctx, sqlc.GetDirectChildrenForMaskParams{
-		ParentCode: parentCode,
-		ParentMask: pgutil.ToPgTextFromString(mask),
+		EnterpriseID: empresa,
+		ParentCode:   parentCode,
+		ParentMask:   pgutil.ToPgTextFromString(mask),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching children of item %d: %w", parentCode, err)
@@ -171,10 +179,15 @@ func (r *StructureQueryRepositorySQLC) ConsultChildren(
 	effectivenessDate *time.Time,
 ) ([]*str.ConsultRow, error) {
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.GetChildrenForConsult(ctx, sqlc.GetChildrenForConsultParams{
-		ParentCode: parentCode,
-		ParentMask: pgutil.ToPgText(mask),
-		Column3:    pgutil.ToPgDateFromPtr(effectivenessDate),
+		EnterpriseID: empresa,
+		ParentCode:   parentCode,
+		ParentMask:   pgutil.ToPgText(mask),
+		Column3:      pgutil.ToPgDateFromPtr(effectivenessDate),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching consult children of item %d: %w", parentCode, err)
@@ -250,9 +263,16 @@ func (r *StructureQueryRepositorySQLC) GetLatestMaskForItem(
 	itemCode int64,
 ) (string, error) {
 
-	mask, err := r.q.GetProductMaskByItemCode(ctx, itemCode)
+	empresa, err := tenant.ID(ctx)
 	if err != nil {
+		return "", err
+	}
+	mask, err := r.q.GetProductMaskByItemCode(ctx, sqlc.GetProductMaskByItemCodeParams{ItemCode: itemCode, EnterpriseID: empresa})
+	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil // sem máscara cadastrada = retorna vazio sem erro
+	}
+	if err != nil {
+		return "", fmt.Errorf("máscara do item %d: %w", itemCode, err)
 	}
 	return mask.Mask, nil
 }
@@ -263,9 +283,14 @@ func (r *StructureQueryRepositorySQLC) GetWhereUsed(
 	levels int,
 ) ([]*str.WhereUsedRow, error) {
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.GetWhereUsed(ctx, sqlc.GetWhereUsedParams{
-		ChildCode: itemCode,
-		Column2:   int32(levels),
+		EnterpriseID: empresa,
+		ChildCode:    itemCode,
+		Column2:      int32(levels),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching where-used for item %d: %w", itemCode, err)

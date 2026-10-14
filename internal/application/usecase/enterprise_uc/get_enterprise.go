@@ -15,21 +15,30 @@ type GetEnterpriseUseCase struct {
 }
 
 func (uc *GetEnterpriseUseCase) Execute(ctx context.Context, code int) (*response.EnterpriseResponse, error) {
-	e, err := uc.Repo.GetByCode(ctx, code)
+	userID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	e, err := uc.Repo.GetByCodeForUser(ctx, code, userID)
 	if err != nil {
 		return nil, err
 	}
 	return toEnterpriseResponse(e), nil
 }
 
-// ListEnterprisesUseCase returns all enterprises ordered by code.
+// ListEnterprisesUseCase devolve as empresas a que o usuário está vinculado.
+// Antes listava todas as empresas do banco para qualquer usuário.
 type ListEnterprisesUseCase struct {
 	Repo repository.EnterpriseRepository
 	Auth ports.AuthService
 }
 
 func (uc *ListEnterprisesUseCase) Execute(ctx context.Context) ([]*response.EnterpriseResponse, error) {
-	items, err := uc.Repo.List(ctx)
+	userID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items, err := uc.Repo.ListForUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}

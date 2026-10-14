@@ -32,13 +32,12 @@ func (uc *ScheduleMachineUseCase) CreateSchedule(
 	// time (0001-01-01) when the client omits or malforms the date.
 	date := datetime.ParseDateOrDefault(dto.ScheduleDate, time.Now())
 	var start, end *time.Time
-	if dto.StartTime != nil {
-		s, _ := time.Parse("15:04:05", *dto.StartTime)
-		start = &s
+	var msg string
+	if start, msg = datetime.Hora("horário de início", dto.StartTime); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
 	}
-	if dto.EndTime != nil {
-		e, _ := time.Parse("15:04:05", *dto.EndTime)
-		end = &e
+	if end, msg = datetime.Hora("horário de fim", dto.EndTime); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
 	}
 	var orderCode *int64
 	if dto.OrderCode != 0 {

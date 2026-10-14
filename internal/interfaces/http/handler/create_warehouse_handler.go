@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -11,8 +11,7 @@ import (
 func (h *WarehouseHandler) CreateWarehouse(w http.ResponseWriter, r *http.Request) {
 	var req request.CreateWarehouseRequestDTO
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 

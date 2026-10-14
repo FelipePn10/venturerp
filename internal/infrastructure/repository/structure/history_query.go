@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"sort"
 	"strings"
 
@@ -104,16 +105,21 @@ func (r *ItemStructureRepositorySQLC) ListByParent(
 	if r.pool == nil {
 		return []structure_uc.StructureHistoryEntry{}, nil
 	}
+	// O histórico é da empresa do item pai.
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT h.id, p.business_code, c.business_code, h.action, h.changed_by,
 		       COALESCE(u.name, ''), h.changed_at, h.before_state, h.after_state
 		  FROM item_structure_history h
-		  LEFT JOIN items p ON p.code = h.parent_code
+		  JOIN items p ON p.code = h.parent_code AND p.enterprise_id = $3
 		  LEFT JOIN items c ON c.code = h.child_code
 		  LEFT JOIN users u ON u.id = h.changed_by
 		 WHERE h.parent_code = $1
 		 ORDER BY h.changed_at DESC, h.id DESC
-		 LIMIT $2`, parentCode, limit)
+		 LIMIT $2`, parentCode, limit, empresa)
 	if err != nil {
 		return nil, err
 	}

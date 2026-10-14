@@ -9,17 +9,26 @@ import (
 	reschedulerepo "github.com/FelipePn10/panossoerp/internal/domain/delivery_reschedule/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 )
+
+// Duas convenções convivem aqui: pedido de venda, pedido de compra e as
+// reprogramações usam enterprise_code (tenant.Code); demandas, ordens
+// planejadas, reservas, notas e expedição usam enterprise_id (tenant.ID).
 
 func (r *DeliveryRescheduleRepositorySQLC) Preview(ctx context.Context, orderCode int64) ([]reschedulerepo.PlanningItem, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if r.pool == nil {
 		return nil, errors.New("repositório de planejamento não configurado")
 	}
-	rows, err := r.pool.Query(ctx, `SELECT soi.code,soi.item_code,soi.sequence,soi.requested_qty::text,soi.attended_qty::text,soi.cancelled_qty::text,GREATEST(soi.requested_qty-soi.attended_qty-soi.cancelled_qty,0)::text,soi.delivery_date,soi.delivery_date_firm FROM sales_order_items soi JOIN sales_orders so ON so.code=soi.sales_order_code WHERE so.code=$1 AND so.enterprise_code=$2 AND soi.is_active ORDER BY soi.sequence`, orderCode, enterpriseID)
+	rows, err := r.pool.Query(ctx, `SELECT soi.code,soi.item_code,soi.sequence,soi.requested_qty::text,soi.attended_qty::text,soi.cancelled_qty::text,GREATEST(soi.requested_qty-soi.attended_qty-soi.cancelled_qty,0)::text,soi.delivery_date,soi.delivery_date_firm FROM sales_order_items soi JOIN sales_orders so ON so.code=soi.sales_order_code WHERE so.code=$1 AND so.enterprise_code=$2 AND soi.is_active ORDER BY soi.sequence`, orderCode, enterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -31,15 +40,41 @@ func (r *DeliveryRescheduleRepositorySQLC) Preview(ctx context.Context, orderCod
 			return nil, err
 		}
 		v.ReservedQty, v.IndependentDemandQty, v.InvoicedQty = "0", "0", "0"
-		_ = r.pool.QueryRow(ctx, `SELECT COALESCE(SUM(quantity),0)::text FROM stock_reservations WHERE reference_type='SALES_ORDER' AND reference_code=$1 AND item_code=$2 AND status='ACTIVE'`, orderCode, int64(v.ItemCode)).Scan(&v.ReservedQty)
-		_ = r.pool.QueryRow(ctx, `SELECT COALESCE(SUM(quantity-delivered_qty),0)::text FROM sales_order_demands WHERE sales_order_code=$1 AND item_code=$2 AND enterprise_id=$3 AND is_active`, orderCode, int64(v.ItemCode), enterpriseID).Scan(&v.IndependentDemandQty)
-		_ = r.pool.QueryRow(ctx, `SELECT COUNT(*),COUNT(*) FILTER(WHERE po.is_firm),COALESCE(MAX(po.end_date),MAX(po.need_date)) FROM planned_orders po WHERE po.enterprise_id=$1 AND po.item_code=$2 AND po.is_active`, enterpriseID, int64(v.ItemCode)).Scan(&v.PlannedOrderCount, &v.FirmOrderCount, &v.SuggestedDate)
-		_ = r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM purchase_order_items poi JOIN purchase_orders po ON po.code=poi.purchase_order_code WHERE po.enterprise_code=$1 AND poi.item_code=$2 AND poi.is_active AND po.is_active AND po.status NOT IN ('CANCELLED','CLOSED')`, enterpriseID, int64(v.ItemCode)).Scan(&v.PurchaseOrderCount)
-		_ = r.pool.QueryRow(ctx, `SELECT COUNT(*),MAX(s.status) FROM shipment_items si JOIN shipments s ON s.id=si.shipment_id WHERE s.sales_order_code=$1 AND si.sales_order_item_code=$2 AND s.status<>'CANCELLED'`, orderCode, v.SalesOrderItemCode).Scan(&v.ShipmentCount, &v.ShipmentStatus)
-		_ = r.pool.QueryRow(ctx, `SELECT COALESCE(SUM(fei.quantity),0)::text FROM fiscal_exit_items fei JOIN fiscal_exits fe ON fe.id=fei.fiscal_exit_id WHERE fe.sales_order_code=$1 AND fei.item_code=$2 AND fe.is_active AND fe.status NOT IN ('DRAFT','CANCELLED','REJECTED')`, orderCode, int64(v.ItemCode)).Scan(&v.InvoicedQty)
-		_ = r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM capacity_requirements cr JOIN planned_orders po ON po.plan_code=cr.plan_code WHERE po.enterprise_id=$1 AND po.item_code=$2 AND cr.load_pct>100)`, enterpriseID, int64(v.ItemCode)).Scan(&v.CRPOverloaded)
-		_ = r.pool.QueryRow(ctx, `SELECT MIN(ps.scheduled_end)::date FROM production_sequences ps JOIN production_orders prod ON prod.id=ps.production_order_id JOIN planned_orders po ON po.id=prod.planned_order_id WHERE po.enterprise_id=$1 AND po.item_code=$2`, enterpriseID, int64(v.ItemCode)).Scan(&v.APSDate)
-		v.CanReschedule = v.OpenQty != "0" && v.InvoicedQty == "0" && (v.ShipmentStatus == nil || *v.ShipmentStatus != "SHIPPED")
+		// Lê todas as linhas antes de consultar o planejamento: com o cursor
+		// aberto, cada consulta pegaria outra conexão do pool.
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if len(out) == 0 {
+		return nil, reschedulerepo.ErrOrderNotFound
+	}
+	for i := range out {
+		v := &out[i]
+		item := int64(v.ItemCode)
+		consultas := []struct {
+			nome string
+			sql  string
+			args []any
+			dest []any
+		}{
+			{"reservas", `SELECT COALESCE(SUM(quantity),0)::text FROM stock_reservations WHERE enterprise_id=$3 AND reference_type='SALES_ORDER' AND reference_code=$1 AND item_code=$2 AND status='ACTIVE'`, []any{orderCode, item, enterpriseID}, []any{&v.ReservedQty}},
+			{"demanda independente", `SELECT COALESCE(SUM(quantity-delivered_qty),0)::text FROM sales_order_demands WHERE sales_order_code=$1 AND item_code=$2 AND enterprise_id=$3 AND is_active`, []any{orderCode, item, enterpriseID}, []any{&v.IndependentDemandQty}},
+			{"ordens planejadas", `SELECT COUNT(*),COUNT(*) FILTER(WHERE po.is_firm),COALESCE(MAX(po.end_date),MAX(po.need_date)) FROM planned_orders po WHERE po.enterprise_id=$1 AND po.item_code=$2 AND po.is_active`, []any{enterpriseID, item}, []any{&v.PlannedOrderCount, &v.FirmOrderCount, &v.SuggestedDate}},
+			{"pedidos de compra", `SELECT COUNT(*) FROM purchase_order_items poi JOIN purchase_orders po ON po.code=poi.purchase_order_code WHERE po.enterprise_code=$1 AND poi.item_code=$2 AND poi.is_active AND po.is_active AND po.status NOT IN ('CANCELLED','CLOSED')`, []any{enterpriseCode, item}, []any{&v.PurchaseOrderCount}},
+			{"expedição", `SELECT COUNT(*),MAX(s.status) FROM shipment_items si JOIN shipments s ON s.id=si.shipment_id WHERE s.enterprise_id=$3 AND s.sales_order_code=$1 AND si.sales_order_item_code=$2 AND s.status<>'CANCELLED'`, []any{orderCode, v.SalesOrderItemCode, enterpriseID}, []any{&v.ShipmentCount, &v.ShipmentStatus}},
+			{"faturamento", `SELECT COALESCE(SUM(fei.quantity),0)::text FROM fiscal_exit_items fei JOIN fiscal_exits fe ON fe.id=fei.fiscal_exit_id WHERE fe.enterprise_id=$3 AND fe.sales_order_code=$1 AND fei.item_code=$2 AND fe.is_active AND fe.status NOT IN ('DRAFT','CANCELLED','REJECTED')`, []any{orderCode, item, enterpriseID}, []any{&v.InvoicedQty}},
+			{"capacidade (CRP)", `SELECT EXISTS(SELECT 1 FROM capacity_requirements cr JOIN planned_orders po ON po.plan_code=cr.plan_code WHERE po.enterprise_id=$1 AND po.item_code=$2 AND cr.load_pct>100)`, []any{enterpriseID, item}, []any{&v.CRPOverloaded}},
+			{"sequenciamento (APS)", `SELECT MIN(ps.scheduled_end)::date FROM production_sequences ps JOIN production_orders prod ON prod.id=ps.production_order_id JOIN planned_orders po ON po.id=prod.planned_order_id WHERE po.enterprise_id=$1 AND po.item_code=$2`, []any{enterpriseID, item}, []any{&v.APSDate}},
+		}
+		for _, c := range consultas {
+			if err := r.pool.QueryRow(ctx, c.sql, c.args...).Scan(c.dest...); err != nil {
+				return nil, fmt.Errorf("prévia da reprogramação, %s do item %d: %w", c.nome, v.ItemCode, err)
+			}
+		}
+		v.CanReschedule = !zerado(v.OpenQty) && zerado(v.InvoicedQty) && (v.ShipmentStatus == nil || *v.ShipmentStatus != "SHIPPED")
 		switch {
 		case !v.CanReschedule:
 			v.Severity = "BLOCK"
@@ -64,19 +99,16 @@ func (r *DeliveryRescheduleRepositorySQLC) Preview(ctx context.Context, orderCod
 			v.SuggestedDate = v.CurrentDate
 			v.Justification = "sem sinal de planejamento posterior; mantida a data atual"
 		}
-		out = append(out, v)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(out) == 0 {
-		return nil, reschedulerepo.ErrOrderNotFound
 	}
 	return out, nil
 }
 
 func (r *DeliveryRescheduleRepositorySQLC) CreateBatch(ctx context.Context, c reschedulerepo.BatchCommand) (*reschedulerepo.BatchResult, error) {
 	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	enterpriseCode, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +121,12 @@ func (r *DeliveryRescheduleRepositorySQLC) CreateBatch(ctx context.Context, c re
 	}
 	defer tx.Rollback(ctx)
 	var existingHash string
-	err = tx.QueryRow(ctx, `SELECT payload_hash FROM delivery_reschedule_batches WHERE enterprise_code=$1 AND idempotency_key=$2 FOR UPDATE`, enterpriseID, c.IdempotencyKey).Scan(&existingHash)
+	err = tx.QueryRow(ctx, `SELECT payload_hash FROM delivery_reschedule_batches WHERE enterprise_code=$1 AND idempotency_key=$2 FOR UPDATE`, enterpriseCode, c.IdempotencyKey).Scan(&existingHash)
 	if err == nil {
 		if existingHash != c.PayloadHash {
 			return nil, reschedulerepo.ErrBatchConflict
 		}
-		rows, e := tx.Query(ctx, `SELECT code FROM delivery_reschedules WHERE enterprise_code=$1 AND batch_id=(SELECT id FROM delivery_reschedule_batches WHERE enterprise_code=$1 AND idempotency_key=$2) ORDER BY code`, enterpriseID, c.IdempotencyKey)
+		rows, e := tx.Query(ctx, `SELECT code FROM delivery_reschedules WHERE enterprise_code=$1 AND batch_id=(SELECT id FROM delivery_reschedule_batches WHERE enterprise_code=$1 AND idempotency_key=$2) ORDER BY code`, enterpriseCode, c.IdempotencyKey)
 		if e != nil {
 			return nil, e
 		}
@@ -113,21 +145,24 @@ func (r *DeliveryRescheduleRepositorySQLC) CreateBatch(ctx context.Context, c re
 		return nil, err
 	}
 	var exists bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sales_orders WHERE code=$1 AND enterprise_code=$2 AND is_active)`, c.SalesOrderCode, enterpriseID).Scan(&exists); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sales_orders WHERE code=$1 AND enterprise_code=$2 AND is_active)`, c.SalesOrderCode, enterpriseCode).Scan(&exists); err != nil {
 		return nil, err
 	}
 	if !exists {
 		return nil, reschedulerepo.ErrOrderNotFound
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO delivery_reschedule_batches(id,enterprise_code,sales_order_code,idempotency_key,payload_hash,created_by) VALUES($1,$2,$3,$4,$5,$6)`, c.ID, enterpriseID, c.SalesOrderCode, c.IdempotencyKey, c.PayloadHash, c.CreatedBy); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO delivery_reschedule_batches(id,enterprise_code,sales_order_code,idempotency_key,payload_hash,created_by) VALUES($1,$2,$3,$4,$5,$6)`, c.ID, enterpriseCode, c.SalesOrderCode, c.IdempotencyKey, c.PayloadHash, c.CreatedBy); err != nil {
 		return nil, err
 	}
 	result := &reschedulerepo.BatchResult{}
 	for _, line := range c.Lines {
 		var current time.Time
 		var open string
-		err = tx.QueryRow(ctx, `SELECT COALESCE(soi.delivery_date,so.delivery_date,CURRENT_DATE),GREATEST(soi.requested_qty-soi.attended_qty-soi.cancelled_qty,0)::text FROM sales_order_items soi JOIN sales_orders so ON so.code=soi.sales_order_code WHERE soi.sales_order_code=$1 AND soi.code=$2 AND soi.item_code=$3 AND so.enterprise_code=$4 AND soi.is_active FOR UPDATE`, c.SalesOrderCode, line.SalesOrderItemCode, int64(line.ItemCode), enterpriseID).Scan(&current, &open)
-		if err != nil || open == "0" || !sameDate(current, line.OldDate) {
+		err = tx.QueryRow(ctx, `SELECT COALESCE(soi.delivery_date,so.delivery_date,CURRENT_DATE),GREATEST(soi.requested_qty-soi.attended_qty-soi.cancelled_qty,0)::text FROM sales_order_items soi JOIN sales_orders so ON so.code=soi.sales_order_code WHERE soi.sales_order_code=$1 AND soi.code=$2 AND soi.item_code=$3 AND so.enterprise_code=$4 AND soi.is_active FOR UPDATE`, c.SalesOrderCode, line.SalesOrderItemCode, int64(line.ItemCode), enterpriseCode).Scan(&current, &open)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		if err != nil || zerado(open) || !sameDate(current, line.OldDate) {
 			return nil, fmt.Errorf("%w: item %d não possui saldo ou a data atual foi alterada", reschedulerepo.ErrLinePrecondition, line.ItemCode)
 		}
 		var invoiced bool
@@ -145,7 +180,7 @@ func (r *DeliveryRescheduleRepositorySQLC) CreateBatch(ctx context.Context, c re
 			return nil, fmt.Errorf("%w: item %d já foi despachado e não pode ser reprogramado", reschedulerepo.ErrLinePrecondition, line.ItemCode)
 		}
 		var code int64
-		err = tx.QueryRow(ctx, `INSERT INTO delivery_reschedules(sales_order_code,item_code,old_date,new_date,reason,created_by,enterprise_code,batch_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING code`, c.SalesOrderCode, int64(line.ItemCode), line.OldDate, line.NewDate, line.Reason, c.CreatedBy, enterpriseID, c.ID).Scan(&code)
+		err = tx.QueryRow(ctx, `INSERT INTO delivery_reschedules(sales_order_code,item_code,old_date,new_date,reason,created_by,enterprise_code,batch_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING code`, c.SalesOrderCode, int64(line.ItemCode), line.OldDate, line.NewDate, line.Reason, c.CreatedBy, enterpriseCode, c.ID).Scan(&code)
 		if err != nil {
 			return nil, err
 		}
@@ -164,6 +199,13 @@ func (r *DeliveryRescheduleRepositorySQLC) CreateBatch(ctx context.Context, c re
 		return nil, err
 	}
 	return result, nil
+}
+
+// zerado compara quantidade numérica vinda como texto: o banco devolve
+// "0.0000", e a comparação com "0" deixava reprogramar linha já atendida.
+func zerado(q string) bool {
+	d, err := decimal.NewFromString(q)
+	return err == nil && d.IsZero()
 }
 
 func sameDate(a, b time.Time) bool {

@@ -3,7 +3,6 @@
 package entry_operation_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -16,7 +15,7 @@ import (
 func TestIntegration_EntryOperation_StateGroupAndOp(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := eorepo.New(q, pool)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool) // TES e grupos de UF são da empresa da sessão
 
 	// State group with PR and SC.
 	gCode, err := repo.NextStateGroupCode(ctx)

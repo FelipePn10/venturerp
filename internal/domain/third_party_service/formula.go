@@ -2,6 +2,7 @@ package third_party_service
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"unicode"
 
@@ -33,7 +34,7 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 				j++
 			}
 		} else {
-			return decimal.Zero, fmt.Errorf("a fórmula contém um caractere inválido")
+			return decimal.Zero, domainerr.NewValidation("a fórmula contém um caractere inválido")
 		}
 		tokens = append(tokens, expr[i:j])
 		i = j
@@ -64,7 +65,7 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 				ops = ops[:len(ops)-1]
 			}
 			if len(ops) == 0 {
-				return decimal.Zero, fmt.Errorf("unbalanced formula")
+				return decimal.Zero, domainerr.NewValidation("fórmula com parênteses desbalanceados")
 			}
 			ops = ops[:len(ops)-1]
 		default:
@@ -73,7 +74,7 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 	}
 	for len(ops) > 0 {
 		if ops[len(ops)-1] == "(" {
-			return decimal.Zero, fmt.Errorf("unbalanced formula")
+			return decimal.Zero, domainerr.NewValidation("fórmula com parênteses desbalanceados")
 		}
 		out = append(out, ops[len(ops)-1])
 		ops = ops[:len(ops)-1]
@@ -86,14 +87,14 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 				var ok bool
 				v, ok = vars[t]
 				if !ok {
-					return decimal.Zero, fmt.Errorf("a variável %s usada na fórmula não está definida", t)
+					return decimal.Zero, domainerr.NewValidation(fmt.Sprintf("a variável %s usada na fórmula não está definida", t))
 				}
 			}
 			stack = append(stack, v)
 			continue
 		}
 		if len(stack) < 2 {
-			return decimal.Zero, fmt.Errorf("fórmula inválida: confira os operadores e a ordem dos valores")
+			return decimal.Zero, domainerr.NewValidation("fórmula inválida: confira os operadores e a ordem dos valores")
 		}
 		b, a := stack[len(stack)-1], stack[len(stack)-2]
 		stack = stack[:len(stack)-2]
@@ -107,14 +108,14 @@ func EvaluateFormula(expr string, vars map[string]decimal.Decimal) (decimal.Deci
 			v = a.Mul(b)
 		case "/":
 			if b.IsZero() {
-				return decimal.Zero, fmt.Errorf("a fórmula divide por zero: confira o valor do divisor")
+				return decimal.Zero, domainerr.NewValidation("a fórmula divide por zero: confira o valor do divisor")
 			}
 			v = a.Div(b)
 		}
 		stack = append(stack, v)
 	}
 	if len(stack) != 1 {
-		return decimal.Zero, fmt.Errorf("fórmula inválida: confira os operadores e a ordem dos valores")
+		return decimal.Zero, domainerr.NewValidation("fórmula inválida: confira os operadores e a ordem dos valores")
 	}
 	return stack[0], nil
 }

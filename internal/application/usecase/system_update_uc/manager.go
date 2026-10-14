@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,13 +21,13 @@ import (
 )
 
 var (
-	ErrUpdateInProgress = errors.New("uma atualização já está em andamento")
-	ErrInvalidVersion   = errors.New("versão inválida")
-	ErrNoRelease        = errors.New("nenhuma versão publicada foi encontrada")
+	ErrUpdateInProgress = errorsuc.NewConflictError("uma atualização já está em andamento")
+	ErrInvalidVersion   = errorsuc.NewValidationError("versão inválida")
+	ErrNoRelease        = errorsuc.NewValidationError("nenhuma versão publicada foi encontrada")
 	// A VPS hospeda várias empresas sobre uma única fila de atualização, montada
 	// como somente leitura fora do ambiente principal. Sem este erro, o pedido
 	// falharia com um 500 genérico e o administrador não saberia por quê.
-	ErrUpdateNotAllowedHere = errors.New("esta empresa não administra a atualização da plataforma")
+	ErrUpdateNotAllowedHere = errorsuc.NewValidationError("esta empresa não administra a atualização da plataforma")
 	semverPattern           = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
 )
 
@@ -131,7 +133,10 @@ func (m *Manager) Request(ctx context.Context, requestedVersion string) (Status,
 	cleanup := true
 	defer func() {
 		if cleanup {
-			_ = os.Remove(lockPath)
+			if err := os.Remove(lockPath); err != nil && !os.IsNotExist(err) {
+				// Trava que fica no disco impede o próximo pedido de atualização.
+				slog.Error("falha ao remover a trava do pedido de atualização", "arquivo", lockPath, "erro", err)
+			}
 		}
 	}()
 

@@ -10,6 +10,9 @@ import (
 // hand-written (like aps.sql.go) so they can join across production_sequences,
 // production_orders, machine_types and production_order_operations without a
 // codegen pass.
+//
+// Toda consulta recebe a empresa da sessão: antes o quadro mostrava as ordens,
+// dependências e carga de TODAS as empresas do banco.
 
 // ─── scheduled bars (APS sequences) ───────────────────────────────────────────
 
@@ -37,12 +40,15 @@ SELECT ps.id,
        po.end_date,
        COALESCE(poo.status, '')         AS op_status,
        COALESCE(poo.actual_hours, 0)    AS op_actual_hours,
-       COALESCE(poo.planned_hours, 0)   AS op_planned_hours
+       COALESCE(poo.planned_hours, 0)   AS op_planned_hours,
+       COALESCE(it.business_code::text, '') AS item_business_code,
+       COALESCE(it.name, '')            AS item_name
 FROM production_sequences ps
-JOIN production_orders po ON po.id = ps.production_order_id
-LEFT JOIN machine_types mt ON mt.id = ps.work_center_id
+JOIN production_orders po ON po.id = ps.production_order_id AND po.enterprise_id = $3
+LEFT JOIN items it ON it.code = po.item_code AND it.enterprise_id = po.enterprise_id
+LEFT JOIN machine_types mt ON mt.id = ps.work_center_id AND mt.enterprise_id = po.enterprise_id
 LEFT JOIN production_order_operations poo ON poo.id = ps.operation_id
-WHERE ps.scheduled_start < $2 AND ps.scheduled_end >= $1
+WHERE ps.scheduled_start < $2 AND ps.scheduled_end >= $1 AND ps.enterprise_id = $3
 ORDER BY ps.work_center_id, ps.scheduled_start`
 
 type DBGanttScheduledBar struct {
@@ -67,10 +73,12 @@ type DBGanttScheduledBar struct {
 	OpStatus          string
 	OpActualHours     pgtype.Numeric
 	OpPlannedHours    pgtype.Numeric
+	ItemBusinessCode  string
+	ItemName          string
 }
 
-func (q *Queries) ListGanttScheduledBars(ctx context.Context, from, to pgtype.Timestamptz) ([]DBGanttScheduledBar, error) {
-	rows, err := q.db.Query(ctx, listGanttScheduledBars, from, to)
+func (q *Queries) ListGanttScheduledBars(ctx context.Context, from, to pgtype.Timestamptz, enterpriseID int64) ([]DBGanttScheduledBar, error) {
+	rows, err := q.db.Query(ctx, listGanttScheduledBars, from, to, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +91,7 @@ func (q *Queries) ListGanttScheduledBars(ctx context.Context, from, to pgtype.Ti
 			&i.WorkCenterID, &i.WorkCenterName, &i.OperationID, &i.OperationName,
 			&i.SequencePosition, &i.ScheduledStart, &i.ScheduledEnd, &i.Status,
 			&i.Priority, &i.PlannedQty, &i.ProducedQty, &i.OrderStatus, &i.EndDate,
-			&i.OpStatus, &i.OpActualHours, &i.OpPlannedHours,
+			&i.OpStatus, &i.OpActualHours, &i.OpPlannedHours, &i.ItemBusinessCode, &i.ItemName,
 		); err != nil {
 			return nil, err
 		}
@@ -108,9 +116,12 @@ SELECT po.id,
        po.status,
        COALESCE(po.priority, '')  AS priority,
        po.planned_qty,
-       po.produced_qty
+       po.produced_qty,
+       COALESCE(it.business_code::text, '') AS item_business_code,
+       COALESCE(it.name, '')      AS item_name
 FROM production_orders po
-WHERE po.is_active = TRUE
+LEFT JOIN items it ON it.code = po.item_code AND it.enterprise_id = po.enterprise_id
+WHERE po.is_active = TRUE AND po.enterprise_id = $3
   AND po.status IN ('OPEN', 'IN_PROGRESS', 'COMPLETED')
   AND NOT EXISTS (SELECT 1 FROM production_sequences ps WHERE ps.production_order_id = po.id)
   AND COALESCE(po.start_date, po.end_date) IS NOT NULL
@@ -119,21 +130,23 @@ WHERE po.is_active = TRUE
 ORDER BY COALESCE(po.start_date, po.end_date), po.order_number`
 
 type DBGanttFallbackBar struct {
-	ID          int64
-	OrderNumber int64
-	ItemCode    int64
-	Mask        string
-	MachineID   int64
-	StartDate   pgtype.Date
-	EndDate     pgtype.Date
-	Status      string
-	Priority    string
-	PlannedQty  pgtype.Numeric
-	ProducedQty pgtype.Numeric
+	ID               int64
+	OrderNumber      int64
+	ItemCode         int64
+	Mask             string
+	MachineID        int64
+	StartDate        pgtype.Date
+	EndDate          pgtype.Date
+	Status           string
+	Priority         string
+	PlannedQty       pgtype.Numeric
+	ProducedQty      pgtype.Numeric
+	ItemBusinessCode string
+	ItemName         string
 }
 
-func (q *Queries) ListGanttFallbackBars(ctx context.Context, from, to pgtype.Date) ([]DBGanttFallbackBar, error) {
-	rows, err := q.db.Query(ctx, listGanttFallbackBars, from, to)
+func (q *Queries) ListGanttFallbackBars(ctx context.Context, from, to pgtype.Date, enterpriseID int64) ([]DBGanttFallbackBar, error) {
+	rows, err := q.db.Query(ctx, listGanttFallbackBars, from, to, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +157,7 @@ func (q *Queries) ListGanttFallbackBars(ctx context.Context, from, to pgtype.Dat
 		if err := rows.Scan(
 			&i.ID, &i.OrderNumber, &i.ItemCode, &i.Mask, &i.MachineID,
 			&i.StartDate, &i.EndDate, &i.Status, &i.Priority, &i.PlannedQty, &i.ProducedQty,
+			&i.ItemBusinessCode, &i.ItemName,
 		); err != nil {
 			return nil, err
 		}
@@ -169,6 +183,7 @@ JOIN production_order_operations poo_s ON poo_s.route_operation_id = ron.success
 JOIN production_sequences ps_pred ON ps_pred.operation_id = poo_p.id
 JOIN production_sequences ps_succ ON ps_succ.operation_id = poo_s.id
 WHERE ps_pred.scheduled_start < $2 AND ps_pred.scheduled_end >= $1
+  AND ps_pred.enterprise_id = $3 AND ps_succ.enterprise_id = $3
   AND ps_succ.scheduled_start < $2 AND ps_succ.scheduled_end >= $1`
 
 // listGanttOrderDependencies is the same edge mapping scoped to a single order,
@@ -183,7 +198,7 @@ JOIN production_order_operations poo_s ON poo_s.route_operation_id = ron.success
                                        AND poo_s.production_order_id = poo_p.production_order_id
 JOIN production_sequences ps_pred ON ps_pred.operation_id = poo_p.id
 JOIN production_sequences ps_succ ON ps_succ.operation_id = poo_s.id
-WHERE poo_p.production_order_id = $1`
+WHERE poo_p.production_order_id = $1 AND ps_pred.enterprise_id = $2 AND ps_succ.enterprise_id = $2`
 
 type DBGanttDependency struct {
 	FromSeq    int64
@@ -207,8 +222,8 @@ func scanGanttDependencies(rows interface {
 	return items, rows.Err()
 }
 
-func (q *Queries) ListGanttDependencies(ctx context.Context, from, to pgtype.Timestamptz) ([]DBGanttDependency, error) {
-	rows, err := q.db.Query(ctx, listGanttDependencies, from, to)
+func (q *Queries) ListGanttDependencies(ctx context.Context, from, to pgtype.Timestamptz, enterpriseID int64) ([]DBGanttDependency, error) {
+	rows, err := q.db.Query(ctx, listGanttDependencies, from, to, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,8 +231,8 @@ func (q *Queries) ListGanttDependencies(ctx context.Context, from, to pgtype.Tim
 	return scanGanttDependencies(rows)
 }
 
-func (q *Queries) ListGanttOrderDependencies(ctx context.Context, orderID int64) ([]DBGanttDependency, error) {
-	rows, err := q.db.Query(ctx, listGanttOrderDependencies, orderID)
+func (q *Queries) ListGanttOrderDependencies(ctx context.Context, orderID, enterpriseID int64) ([]DBGanttDependency, error) {
+	rows, err := q.db.Query(ctx, listGanttOrderDependencies, orderID, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -227,15 +242,17 @@ func (q *Queries) ListGanttOrderDependencies(ctx context.Context, orderID int64)
 
 // ─── per-resource capacity load (CRP) ─────────────────────────────────────────
 
-// Capacity load is aggregated across every MRP plan: required hours sum up, the
-// available hours take the per-work-center maximum (the same capacity is mirrored
-// per plan, so MAX avoids double counting).
+// Capacity load is aggregated across every MRP plan of the enterprise: required
+// hours sum up, the available hours take the per-work-center maximum (the same
+// capacity is mirrored per plan, so MAX avoids double counting). Plano de
+// cenário de simulação fica de fora: a carga simulada não é a da fábrica.
 const listGanttResourceLoad = `
 SELECT cr.work_center_id,
        cr.req_date,
        SUM(cr.required_hours)  AS required_hours,
        MAX(cr.available_hours) AS available_hours
 FROM capacity_requirements cr
+JOIN production_plans p ON p.code = cr.plan_code AND p.enterprise_id = $3 AND p.is_active AND NOT p.is_scenario
 WHERE cr.req_date >= $1::date AND cr.req_date < $2::date
 GROUP BY cr.work_center_id, cr.req_date
 ORDER BY cr.work_center_id, cr.req_date`
@@ -247,8 +264,8 @@ type DBGanttResourceLoad struct {
 	AvailableHours pgtype.Numeric
 }
 
-func (q *Queries) ListGanttResourceLoad(ctx context.Context, from, to pgtype.Date) ([]DBGanttResourceLoad, error) {
-	rows, err := q.db.Query(ctx, listGanttResourceLoad, from, to)
+func (q *Queries) ListGanttResourceLoad(ctx context.Context, from, to pgtype.Date, enterpriseID int64) ([]DBGanttResourceLoad, error) {
+	rows, err := q.db.Query(ctx, listGanttResourceLoad, from, to, enterpriseID)
 	if err != nil {
 		return nil, err
 	}

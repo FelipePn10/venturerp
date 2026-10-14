@@ -83,7 +83,11 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		if sel.SupplierCode != nil {
 			supplierCode = *sel.SupplierCode
 		} else if uc.Preferred != nil {
-			if code, found, _ := uc.Preferred.GetPreferredSupplier(ctx, reqItem.ItemCode); found {
+			code, found, errPref := uc.Preferred.GetPreferredSupplier(ctx, reqItem.ItemCode)
+			if errPref != nil {
+				return nil, fmt.Errorf("lendo o fornecedor preferido do item: %w", errPref)
+			}
+			if found {
 				supplierCode = code
 			}
 		}
@@ -166,7 +170,11 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		for i, ln := range lines {
 			unitPrice := ln.suggested
 			if unitPrice == 0 && priceTable != nil && uc.PriceProvider != nil {
-				if p, _, found, _ := uc.PriceProvider.GetItemPrice(ctx, *priceTable, ln.itemCode, &sc); found {
+				p, _, found, errPreco := uc.PriceProvider.GetItemPrice(ctx, *priceTable, ln.itemCode, &sc)
+				if errPreco != nil {
+					return nil, fmt.Errorf("lendo o preço do item na tabela: %w", errPreco)
+				}
+				if found {
 					unitPrice = p
 				}
 			}

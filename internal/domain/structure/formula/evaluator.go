@@ -2,6 +2,7 @@ package formula
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strconv"
 	"unicode"
 )
@@ -66,7 +67,7 @@ func tokenize(expr string) ([]token, error) {
 			raw = append(raw, token{tokIdent, expr[i:j]})
 			i = j
 		default:
-			return nil, fmt.Errorf("unexpected character %q at position %d", ch, i)
+			return nil, domainerr.NewValidation(fmt.Sprintf("caractere inesperado %q na posição %d da fórmula", ch, i))
 		}
 	}
 	raw = append(raw, token{tokEOF, ""})
@@ -135,7 +136,7 @@ func (p *parser) parseTerm() (float64, error) {
 			left *= right
 		} else {
 			if right == 0 {
-				return 0, fmt.Errorf("division by zero in formula")
+				return 0, domainerr.NewValidation("divisão por zero na fórmula")
 			}
 			left /= right
 		}
@@ -150,14 +151,14 @@ func (p *parser) parsePrimary() (float64, error) {
 		p.consume()
 		v, err := strconv.ParseFloat(tok.value, 64)
 		if err != nil {
-			return 0, fmt.Errorf("número inválido na fórmula: %q", tok.value)
+			return 0, domainerr.NewValidation(fmt.Sprintf("número inválido na fórmula: %q", tok.value))
 		}
 		return v, nil
 	case tokIdent:
 		p.consume()
 		v, ok := p.vars[tok.value]
 		if !ok {
-			return 0, fmt.Errorf("undefined variable %q in formula", tok.value)
+			return 0, domainerr.NewValidation(fmt.Sprintf("variável %q não definida na fórmula", tok.value))
 		}
 		return v, nil
 	case tokMinus:
@@ -174,12 +175,12 @@ func (p *parser) parsePrimary() (float64, error) {
 			return 0, err
 		}
 		if p.peek().kind != tokRParen {
-			return 0, fmt.Errorf("falta fechar um parêntese perto da posição %d", p.pos)
+			return 0, domainerr.NewValidation(fmt.Sprintf("falta fechar um parêntese perto da posição %d", p.pos))
 		}
 		p.consume()
 		return v, nil
 	default:
-		return 0, fmt.Errorf("unexpected token %q at position %d", tok.value, p.pos)
+		return 0, domainerr.NewValidation(fmt.Sprintf("símbolo inesperado %q na posição %d da fórmula", tok.value, p.pos))
 	}
 }
 
@@ -197,7 +198,7 @@ func Evaluate(expr string, vars map[string]float64) (float64, error) {
 		return 0, err
 	}
 	if p.peek().kind != tokEOF {
-		return 0, fmt.Errorf("trailing content in formula at position %d", p.pos)
+		return 0, domainerr.NewValidation(fmt.Sprintf("conteúdo sobrando na fórmula a partir da posição %d", p.pos))
 	}
 	return result, nil
 }

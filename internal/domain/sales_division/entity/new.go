@@ -1,17 +1,17 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrDescriptionRequired       = errors.New("informe a descrição")
-	ErrCodeInvalid               = errors.New("o código deve ser maior que zero")
-	ErrInvalidCommercialAnalysis = errors.New("análise comercial inválida: use livre, bloquear sempre ou analisar sempre")
-	ErrInvalidFinancialAnalysis  = errors.New("análise financeira inválida: use livre, bloquear sempre ou analisar sempre")
+	ErrDescriptionRequired       = domainerr.NewValidation("informe a descrição")
+	ErrCodeInvalid               = domainerr.NewValidation("o código deve ser maior que zero")
+	ErrInvalidCommercialAnalysis = domainerr.NewValidation("análise comercial inválida: use livre, bloquear sempre ou analisar sempre")
+	ErrInvalidFinancialAnalysis  = domainerr.NewValidation("análise financeira inválida: use livre, bloquear sempre ou analisar sempre")
 )
 
 func isValidAnalysis(a SalesDivisionAnalysis) bool {

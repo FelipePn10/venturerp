@@ -131,6 +131,8 @@ LIMIT 1;
 -- ─── route_operations ────────────────────────────────────────────────────────
 
 -- name: AddRouteOperation :one
+-- Só entra em roteiro da empresa, com operação e centro de trabalho dela;
+-- fora disso não grava nada (sem linha = não encontrado).
 INSERT INTO route_operations (
     route_id, sequence, operation_id, work_center_id,
     standard_time, setup_time,
@@ -139,7 +141,8 @@ INSERT INTO route_operations (
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
     scrap_pct, inspection_required,
     situation, notes, is_active
-) VALUES (
+)
+SELECT
     $1, $2, $3, $4,
     $5, $6,
     $7, $8, $9,
@@ -147,7 +150,10 @@ INSERT INTO route_operations (
     $15, $16, $17, $18, $19,
     $22, $23,
     $20, $21, TRUE
-) RETURNING *;
+WHERE EXISTS (SELECT 1 FROM manufacturing_routes mr WHERE mr.id = $1 AND mr.enterprise_id = sqlc.arg(enterprise_id))
+  AND EXISTS (SELECT 1 FROM operations op WHERE op.id = $3 AND op.enterprise_id = sqlc.arg(enterprise_id))
+  AND ($4::bigint IS NULL OR EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $4 AND mt.enterprise_id = sqlc.arg(enterprise_id)))
+RETURNING *;
 
 -- name: UpdateRouteOperation :one
 UPDATE route_operations SET
@@ -172,7 +178,11 @@ UPDATE route_operations SET
     situation = $18,
     notes = $19,
     updated_at = NOW()
-WHERE id = $1
+WHERE route_operations.id = $1
+  AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operations.id AND emr.enterprise_id = sqlc.arg(enterprise_id))
+  AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $2 AND mt.enterprise_id = sqlc.arg(enterprise_id)))
 RETURNING *;
 
 -- name: GetRouteOperations :many
@@ -203,21 +213,33 @@ WHERE ro.route_id = $1 AND ro.is_active = TRUE
   AND mr.enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY ro.sequence;
 
--- name: RemoveRouteOperation :exec
-UPDATE route_operations SET is_active = FALSE, updated_at = NOW() WHERE id = $1;
+-- name: RemoveRouteOperation :execrows
+UPDATE route_operations SET is_active = FALSE, updated_at = NOW()
+WHERE route_operations.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operations.id AND emr.enterprise_id = sqlc.arg(enterprise_id));
 
 -- ─── route_operation_network ─────────────────────────────────────────────────
 
 -- name: UpsertNetworkEdge :one
+-- As duas etapas precisam ser da empresa (e do mesmo roteiro).
 INSERT INTO route_operation_network (predecessor_id, successor_id, overlap_pct)
-VALUES ($1, $2, $3)
+SELECT $1, $2, $3
+WHERE EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = sqlc.arg(enterprise_id))
+  AND EXISTS (SELECT 1 FROM route_operations a JOIN route_operations b ON b.route_id = a.route_id
+               WHERE a.id = $1 AND b.id = $2)
 ON CONFLICT (predecessor_id, successor_id)
 DO UPDATE SET overlap_pct = EXCLUDED.overlap_pct
 RETURNING *;
 
--- name: DeleteNetworkEdge :exec
+-- name: DeleteNetworkEdge :execrows
 DELETE FROM route_operation_network
-WHERE predecessor_id = $1 AND successor_id = $2;
+WHERE predecessor_id = $1 AND successor_id = $2
+  AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_network.predecessor_id AND emr.enterprise_id = sqlc.arg(enterprise_id));
 
 -- name: GetNetworkEdges :many
 SELECT ron.*
@@ -258,7 +280,12 @@ WHERE mr.item_code = $1
 -- name: AddRouteOpResource :one
 INSERT INTO route_operation_resources (
     route_operation_id, work_center_id, priority, time_factor, is_primary
-) VALUES ($1, $2, $3, $4, $5)
+)
+SELECT $1, $2, $3, $4, $5
+WHERE EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = sqlc.arg(enterprise_id))
+  AND EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $2 AND mt.enterprise_id = sqlc.arg(enterprise_id))
 RETURNING *;
 
 -- name: UpdateRouteOpResource :one
@@ -266,40 +293,58 @@ UPDATE route_operation_resources SET
     priority    = $2,
     time_factor = $3,
     updated_at  = NOW()
-WHERE id = $1
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = sqlc.arg(enterprise_id))
 RETURNING *;
 
 -- name: GetRouteOpResource :one
-SELECT * FROM route_operation_resources WHERE id = $1;
+SELECT * FROM route_operation_resources
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = sqlc.arg(enterprise_id));
 
--- name: RemoveRouteOpResource :exec
-DELETE FROM route_operation_resources WHERE id = $1;
+-- name: RemoveRouteOpResource :execrows
+DELETE FROM route_operation_resources
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = sqlc.arg(enterprise_id));
 
 -- name: ClearPrimaryResources :exec
 UPDATE route_operation_resources SET is_primary = FALSE, updated_at = NOW()
-WHERE route_operation_id = $1;
+WHERE route_operation_id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = sqlc.arg(enterprise_id));
 
 -- name: SetResourcePrimary :one
 UPDATE route_operation_resources SET is_primary = TRUE, updated_at = NOW()
-WHERE id = $1
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = sqlc.arg(enterprise_id))
 RETURNING *;
 
 -- name: SetRouteOpWorkCenter :exec
-UPDATE route_operations SET work_center_id = $2, updated_at = NOW() WHERE id = $1;
+UPDATE route_operations SET work_center_id = $2, updated_at = NOW()
+WHERE route_operations.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operations.id AND emr.enterprise_id = sqlc.arg(enterprise_id));
 
 -- name: ListResourcesByRouteOp :many
 SELECT r.*, mt.name AS work_center_name
 FROM route_operation_resources r
 LEFT JOIN machine_types mt ON mt.id = r.work_center_id
-WHERE r.route_operation_id = $1
+WHERE r.route_operation_id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = r.route_operation_id AND emr.enterprise_id = sqlc.arg(enterprise_id))
 ORDER BY r.is_primary DESC, r.priority, r.id;
 
 -- name: ListResourcesByRoute :many
 SELECT r.*, mt.name AS work_center_name
 FROM route_operation_resources r
 JOIN route_operations ro ON ro.id = r.route_operation_id
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
 LEFT JOIN machine_types mt ON mt.id = r.work_center_id
-WHERE ro.route_id = $1
+WHERE ro.route_id = $1 AND mr.enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY r.route_operation_id, r.is_primary DESC, r.priority, r.id;
 
 -- ─── operation_documents (desenho / instrução / ficha de processo) ────────────

@@ -75,3 +75,16 @@ func TestLegacyItemPathStillRequiresTranslation(t *testing.T) {
 		t.Fatal("rota legada de estoque não pode ignorar a tradução para a chave interna")
 	}
 }
+
+func TestCodigoDoItemEmTextoLivreNaoEhTraduzido(t *testing.T) {
+	livre := httptest.NewRequest("POST", "/api/fiscal/notas-especiais/7/itens", nil)
+	if !itemCodeIsFreeText(livre, "item_code") {
+		t.Fatal("item da nota especial guarda o código como texto e não pode ser traduzido")
+	}
+	if itemCodeIsFreeText(livre, "parent_item_code") {
+		t.Fatal("só item_code é texto livre nessa rota")
+	}
+	if itemCodeIsFreeText(httptest.NewRequest("POST", "/api/sales-order/create", nil), "item_code") {
+		t.Fatal("pedido de venda referencia item cadastrado e precisa da tradução")
+	}
+}

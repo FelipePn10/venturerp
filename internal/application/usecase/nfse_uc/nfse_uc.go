@@ -5,6 +5,7 @@ package nfse_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -186,7 +187,11 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-		_ = uc.Repo.SaveFocusLog(ctx, endpoint, method, reqBody, respBody, statusCode, durationMs)
+		if errLog := uc.Repo.SaveFocusLog(ctx, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+			// de registrar a comunicação não pode sumir.
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "endpoint", endpoint, "erro", errLog)
+		}
 	})
 	ref := fmt.Sprintf("nfse%d%d", id, time.Now().UnixNano()%1000000)
 	if len(ref) > 50 {
@@ -195,7 +200,9 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 
 	resp, err := cli.EmitirNFSe(ctx, ref, payload)
 	if err != nil {
-		_, _ = uc.Repo.UpdateStatus(ctx, id, entity.NFSeStatusRejeitada)
+		if _, errSit := uc.Repo.UpdateStatus(ctx, id, entity.NFSeStatusRejeitada); errSit != nil {
+			return nil, fmt.Errorf("Focus NFS-e: %w; a NFS-e não pôde ser marcada como rejeitada: %v", err, errSit)
+		}
 		return nil, fmt.Errorf("Focus NFS-e: %w", err)
 	}
 	authorized, err := uc.Repo.UpdateAuthorization(ctx, id, resp.NumeroNFSe, resp.CodigoVerificacao, resp.URL, ref)
@@ -217,17 +224,17 @@ func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if len(dto.Justificativa) < 15 {
-		return nil, fmt.Errorf("justificativa deve ter no mínimo 15 caracteres")
+		return nil, errorsuc.NewValidationError("justificativa deve ter no mínimo 15 caracteres")
 	}
 	n, err := uc.Repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if n.Status != entity.NFSeStatusAutorizada {
-		return nil, fmt.Errorf("apenas NFS-e autorizada pode ser cancelada")
+		return nil, errorsuc.NewValidationError("apenas NFS-e autorizada pode ser cancelada")
 	}
 	if n.FocusRef == nil || *n.FocusRef == "" {
-		return nil, fmt.Errorf("NFS-e %d não possui referência Focus", id)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("NFS-e %d não possui referência Focus", id))
 	}
 	cfg, err := uc.Config.GetFiscalConfig(ctx)
 	if err != nil {
@@ -238,7 +245,11 @@ func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.
 	}
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-		_ = uc.Repo.SaveFocusLog(ctx, endpoint, method, reqBody, respBody, statusCode, durationMs)
+		if errLog := uc.Repo.SaveFocusLog(ctx, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+			// de registrar a comunicação não pode sumir.
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "endpoint", endpoint, "erro", errLog)
+		}
 	})
 	if _, err := cli.CancelarNFSe(ctx, *n.FocusRef, dto.Justificativa); err != nil {
 		return nil, fmt.Errorf("Focus NFS-e cancelamento: %w", err)

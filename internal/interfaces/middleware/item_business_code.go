@@ -114,6 +114,18 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 	}
 }
 
+// itemCodeIsFreeText: rotas em que `item_code` é texto do documento, não
+// referência a um item cadastrado. O item da nota especial de ajuste (SPED)
+// guarda o código como veio no documento; traduzido para a chave interna, o
+// número não cabia no campo de texto e nenhum item podia ser incluído.
+func itemCodeIsFreeText(r *http.Request, key string) bool {
+	if key != "item_code" {
+		return false
+	}
+	return strings.HasPrefix(r.URL.Path, "/api/stock/cycle-counts") ||
+		strings.HasPrefix(r.URL.Path, "/api/fiscal/notas-especiais")
+}
+
 func nativeItemBusinessCodeRequest(r *http.Request) bool {
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	return path == "/api/machine/time/create" || path == "/api/machine/time/list"
@@ -392,7 +404,7 @@ func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) (bool, e
 	case map[string]any:
 		for key, v := range node {
 			if isItemInputReferenceKey(r, key) {
-				if key == "item_code" && strings.HasPrefix(r.URL.Path, "/api/stock/cycle-counts") {
+				if itemCodeIsFreeText(r, key) {
 					continue
 				}
 				translated, err := translateInputReference(r, pool, e, v)

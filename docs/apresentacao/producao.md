@@ -73,6 +73,15 @@ A **Ordem de Produção (OF)** é o documento que autoriza e acompanha a fabrica
 
 É possível **listar** as ordens, **consultar** uma ordem e ver seu histórico de **apontamentos** e **consumos**.
 
+### Faltas de material antes de liberar
+
+Antes de liberar uma OF, a tela de Ordem de Produção (VPRO0900) mostra **quais
+componentes vão faltar**. A conta é a da fábrica de verdade: o saldo livre do
+depósito **menos o que as ordens da frente já vão consumir**. A lista de ordens
+traz um selo nas que têm falta, e o detalhe da ordem mostra item a item quanto
+falta. Assim o PCP não libera para o chão de fábrica uma ordem que vai parar no
+meio por falta de chapa.
+
 ---
 
 ## 4. Operações da ordem (acompanhamento por etapa)

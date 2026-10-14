@@ -34,6 +34,14 @@ func (r *fakeQuotRepo) Create(_ context.Context, q *entity.PurchaseQuotation) (*
 	r.created = q
 	return q, nil
 }
+func (r *fakeQuotRepo) CreateWithChildren(ctx context.Context, q *entity.PurchaseQuotation, items []*entity.PurchaseQuotationItem, _ []int64) (*entity.PurchaseQuotation, error) {
+	created, err := r.Create(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	created.Items = items
+	return created, nil
+}
 func (r *fakeQuotRepo) AddItem(_ context.Context, item *entity.PurchaseQuotationItem) (*entity.PurchaseQuotationItem, error) {
 	item.ID = 1
 	return item, nil

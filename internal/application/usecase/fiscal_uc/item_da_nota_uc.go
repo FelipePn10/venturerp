@@ -165,7 +165,10 @@ func (uc *ItemDaNotaUseCase) Execute(ctx context.Context, entryID, itemID int64,
 	if c := soDigitos(deref(linha.CEST)); len(c) == 7 {
 		cest = &c
 	}
-	userID, _ := uc.Auth.UserID(ctx)
+	userID, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	criador, _ := uuid.Parse(userID.String())
 	item, err := itementity.NewItem("", nome, nil, itementity.ItemGeneric,
 		itementity.PDM{DescriptionTechnique: nome}, types.LINHA, types.ACTIVE,

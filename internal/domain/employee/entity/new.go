@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 
 	"github.com/google/uuid"
@@ -10,10 +10,10 @@ import (
 func NewEmployee(code int64, name, role string, participatesBudget, technicalAssistant bool, createdBy uuid.UUID) (*Employee, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return nil, errors.New("informe o nome do funcionário")
+		return nil, domainerr.NewValidation("informe o nome do funcionário")
 	}
 	if code <= 0 {
-		return nil, errors.New("o código do funcionário deve ser maior que zero")
+		return nil, domainerr.NewValidation("o código do funcionário deve ser maior que zero")
 	}
 	role = strings.TrimSpace(role)
 	if role == "" {

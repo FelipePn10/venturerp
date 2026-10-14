@@ -910,6 +910,7 @@ SELECT code, order_number, enterprise_code, status, origin, emission_date, deliv
 WHERE enterprise_code = $1 AND is_active = TRUE
   AND ($2::text IS NULL OR EXISTS (
     SELECT 1 FROM public.customers c
+    JOIN public.enterprise e ON e.id = c.enterprise_id AND e.code = sales_orders.enterprise_code
     WHERE c.code = sales_orders.customer_code
       AND (c.name ILIKE '%' || $2::text || '%'
         OR c.trade_name ILIKE '%' || $2::text || '%'
@@ -1443,6 +1444,7 @@ FROM public.sales_orders
 WHERE enterprise_code = $1 AND is_active = TRUE
   AND ($2::text IS NULL OR EXISTS (
     SELECT 1 FROM public.customers c
+    JOIN public.enterprise e ON e.id = c.enterprise_id AND e.code = sales_orders.enterprise_code
     WHERE c.code = sales_orders.customer_code
       AND (c.name ILIKE '%' || $2::text || '%'
         OR c.trade_name ILIKE '%' || $2::text || '%'

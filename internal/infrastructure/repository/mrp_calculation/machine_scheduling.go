@@ -54,18 +54,34 @@ func (r *MRPCalculationRepositorySQLC) MachinePlanningWindows(ctx context.Contex
 	if err != nil {
 		return nil, nil, err
 	}
+	// Máquina sem calendário trabalha as horas do dia a partir das 08:00 (antes
+	// começava à meia-noite, e as ordens saíam programadas de madrugada). O
+	// mesmo padrão vale no sequenciamento do APS.
 	// Turno com fim menor ou igual ao início atravessa a meia-noite: 22:00–06:00
 	// é uma janela contínua de segunda 22:00 a terça 06:00. Sem o dia extra a
 	// janela nasceria invertida e seria descartada em silêncio pelo alocador.
-	rows, err := r.db.Query(ctx, `SELECT day::date+COALESCE(i.start_time,TIME '00:00'),
- day::date+COALESCE(i.end_time,TIME '00:00')+CASE WHEN i.id IS NULL THEN make_interval(secs=>(COALESCE(m.available_hours_per_day,mt.capacity_hours)*3600)::double precision) ELSE INTERVAL '0' END
- +CASE WHEN i.id IS NOT NULL AND i.end_time<=i.start_time THEN INTERVAL '1 day' ELSE INTERVAL '0' END
+	// Paradas do cenário (no fim da lista de ocupação) vão sem filtro de data:
+	// aqui $3/$4 são timestamptz e ::date converteria pelo fuso da sessão,
+	// trocando o dia. São poucas linhas, e o alocador ignora o que está fora.
+	// Cenário de simulação: com horas ajustadas a máquina trabalha um turno
+	// contínuo desse tamanho a partir do primeiro turno do dia, nos dias em
+	// que já trabalha (a mesma regra da capacidade do CRP).
+	rows, err := r.db.Query(ctx, `WITH base AS (SELECT day::date AS dia, day::date+COALESCE(i.start_time,TIME '08:00') AS ini,
+ day::date+COALESCE(i.end_time,TIME '08:00')+CASE WHEN i.id IS NULL THEN make_interval(secs=>(COALESCE(m.available_hours_per_day,mt.capacity_hours)*3600)::double precision) ELSE INTERVAL '0' END
+ +CASE WHEN i.id IS NOT NULL AND i.end_time<=i.start_time THEN INTERVAL '1 day' ELSE INTERVAL '0' END AS fim
  FROM generate_series($3::date,$4::date,'1 day') day
  JOIN machines m ON m.id=$1 AND m.enterprise_id=$2 AND m.is_active
  JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=m.enterprise_id AND mt.is_active
  LEFT JOIN machine_calendars c ON c.id=m.calendar_id AND c.enterprise_id=$2
  LEFT JOIN machine_calendar_intervals i ON i.calendar_id=c.id AND i.weekday=EXTRACT(DOW FROM day)
- WHERE i.id IS NOT NULL OR m.calendar_id IS NULL AND EXTRACT(ISODOW FROM day)<6 ORDER BY 1`, machineID, e, from, to)
+ WHERE i.id IS NOT NULL OR m.calendar_id IS NULL AND EXTRACT(ISODOW FROM day)<6
+), aj AS (SELECT c.hours_per_day::float8 AS h FROM planning_scenario_changes c JOIN planning_scenarios s ON s.id=c.scenario_id
+ WHERE s.scenario_plan_code=$5 AND s.enterprise_id=$2 AND c.kind='CAPACIDADE' AND c.machine_id=$1 AND c.hours_per_day IS NOT NULL
+ ORDER BY c.id DESC LIMIT 1)
+ SELECT ini,fim FROM base WHERE NOT EXISTS(SELECT 1 FROM aj)
+ UNION ALL
+ SELECT MIN(b.ini),MIN(b.ini)+make_interval(secs=>(aj.h*3600)::double precision) FROM base b CROSS JOIN aj WHERE aj.h>0 GROUP BY b.dia,aj.h
+ ORDER BY 1`, machineID, e, from, to, plan)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -75,9 +91,10 @@ func (r *MRPCalculationRepositorySQLC) MachinePlanningWindows(ctx context.Contex
 	}
 	rows, err = r.db.Query(ctx, `SELECT starts_at::timestamp,COALESCE(ends_at,NOW())::timestamp FROM machine_downtimes WHERE machine_id=$1 AND enterprise_id=$2 AND starts_at<$4 AND COALESCE(ends_at,NOW())>$3
  UNION ALL SELECT ps.scheduled_start::timestamp,ps.scheduled_end::timestamp FROM production_sequences ps JOIN production_orders po ON po.id=ps.production_order_id AND po.enterprise_id=ps.enterprise_id WHERE ps.machine_id=$1 AND ps.enterprise_id=$2 AND po.is_active AND po.status NOT IN ('COMPLETED','CANCELLED') AND ps.scheduled_start<$4 AND ps.scheduled_end>$3
- UNION ALL SELECT sl.starts_at,sl.ends_at FROM mrp_machine_allocation_slots sl JOIN mrp_machine_allocations a ON a.suggestion_code=sl.suggestion_code JOIN mrp_planned_suggestions s ON s.code=a.suggestion_code AND s.enterprise_id=a.enterprise_id WHERE sl.machine_id=$1 AND a.enterprise_id=$2 AND (s.plan_code<>$5 OR EXISTS(SELECT 1 FROM planned_orders po WHERE po.mrp_suggestion_code=s.code AND po.enterprise_id=$2 AND po.is_active AND po.status<>'CANCELLED')) AND sl.starts_at<$4 AND sl.ends_at>$3 AND NOT EXISTS(SELECT 1 FROM planned_orders po WHERE po.mrp_suggestion_code=s.code AND po.enterprise_id=$2 AND (NOT po.is_active OR po.status='CANCELLED')) AND NOT EXISTS(SELECT 1 FROM production_orders prod JOIN planned_orders po ON po.id=prod.planned_order_id AND po.enterprise_id=prod.enterprise_id WHERE po.mrp_suggestion_code=s.code AND prod.enterprise_id=$2 AND prod.status IN ('COMPLETED','CANCELLED'))
+ UNION ALL SELECT sl.starts_at,sl.ends_at FROM mrp_machine_allocation_slots sl JOIN mrp_machine_allocations a ON a.suggestion_code=sl.suggestion_code JOIN mrp_planned_suggestions s ON s.code=a.suggestion_code AND s.enterprise_id=a.enterprise_id WHERE sl.machine_id=$1 AND a.enterprise_id=$2 AND ((s.plan_code<>$5 AND NOT EXISTS(SELECT 1 FROM production_plans pp WHERE pp.code=s.plan_code AND pp.is_scenario) AND s.plan_code IS DISTINCT FROM (SELECT sc.base_plan_code FROM planning_scenarios sc WHERE sc.scenario_plan_code=$5 AND sc.enterprise_id=$2)) OR EXISTS(SELECT 1 FROM planned_orders po WHERE po.mrp_suggestion_code=s.code AND po.enterprise_id=$2 AND po.is_active AND po.status<>'CANCELLED')) AND sl.starts_at<$4 AND sl.ends_at>$3 AND NOT EXISTS(SELECT 1 FROM planned_orders po WHERE po.mrp_suggestion_code=s.code AND po.enterprise_id=$2 AND (NOT po.is_active OR po.status='CANCELLED')) AND NOT EXISTS(SELECT 1 FROM production_orders prod JOIN planned_orders po ON po.id=prod.planned_order_id AND po.enterprise_id=prod.enterprise_id WHERE po.mrp_suggestion_code=s.code AND prod.enterprise_id=$2 AND prod.status IN ('COMPLETED','CANCELLED'))
  UNION ALL SELECT ms.schedule_date+ms.start_time,ms.schedule_date+ms.end_time FROM machine_schedules ms JOIN machines m ON m.code=ms.machine_code AND m.enterprise_id=ms.enterprise_id WHERE m.id=$1 AND ms.enterprise_id=$2 AND ms.is_active AND ms.status IN ('SCHEDULED','IN_PROGRESS') AND ms.start_time IS NOT NULL AND ms.end_time>ms.start_time AND ms.schedule_date BETWEEN $3::date AND $4::date
- UNION ALL SELECT o.scheduled_date::timestamp,o.scheduled_date::timestamp+INTERVAL '1 day' FROM maintenance_orders o LEFT JOIN maintenance_plans p ON p.id=o.plan_id JOIN machines m ON m.id=COALESCE(o.machine_id,p.machine_id) WHERE m.id=$1 AND m.enterprise_id=$2 AND o.is_active AND o.status IN ('PLANNED','IN_PROGRESS') AND o.scheduled_date BETWEEN $3::date AND $4::date`, machineID, e, from, to, plan)
+ UNION ALL SELECT o.scheduled_date::timestamp,o.scheduled_date::timestamp+INTERVAL '1 day' FROM maintenance_orders o LEFT JOIN maintenance_plans p ON p.id=o.plan_id JOIN machines m ON m.id=COALESCE(o.machine_id,p.machine_id) WHERE m.id=$1 AND m.enterprise_id=$2 AND o.is_active AND o.status IN ('PLANNED','IN_PROGRESS') AND o.scheduled_date BETWEEN $3::date AND $4::date
+ UNION ALL SELECT c.stop_from::timestamp,(COALESCE(c.stop_to,c.stop_from)+1)::timestamp FROM planning_scenario_changes c JOIN planning_scenarios sc ON sc.id=c.scenario_id WHERE sc.scenario_plan_code=$5 AND sc.enterprise_id=$2 AND c.kind='CAPACIDADE' AND c.machine_id=$1 AND c.stop_from IS NOT NULL`, machineID, e, from, to, plan)
 	if err != nil {
 		return nil, nil, err
 	}

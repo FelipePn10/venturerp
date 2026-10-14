@@ -2,7 +2,6 @@ package item_conversion_uc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -20,7 +19,7 @@ import (
 )
 
 // ErrNoConversion is returned when no direct/inverse factor is registered.
-var ErrNoConversion = errors.New("não existe fator de conversão cadastrado para o item — cadastre em Conversões por Item")
+var ErrNoConversion = errorsuc.NewValidationError("não existe fator de conversão cadastrado para o item — cadastre em Conversões por Item")
 
 type ItemConversionUseCase struct {
 	repo repository.ItemConversionRepository
@@ -143,7 +142,10 @@ func (uc *ItemConversionUseCase) FactorConfigured(ctx context.Context, itemCode 
 	if !supportsPolicy {
 		return uc.Factor(ctx, itemCode, from, to)
 	}
-	conversion, inverse := resolveConfiguredConversion(ctx, repo, itemCode, mask, from, to)
+	conversion, inverse, err := resolveConfiguredConversion(ctx, repo, itemCode, mask, from, to)
+	if err != nil {
+		return 0, false, err
+	}
 	if conversion == nil {
 		return 0, false, nil
 	}
@@ -153,22 +155,43 @@ func (uc *ItemConversionUseCase) FactorConfigured(ctx context.Context, itemCode 
 	return conversion.Factor, true, nil
 }
 
-func resolveConfiguredConversion(ctx context.Context, repo configuredConversionRepository, itemCode int64, mask, from, to string) (*entity.ItemUnitConversion, bool) {
-	conversion, _ := repo.GetConfigured(ctx, itemCode, mask, from, to)
+// Conversão não cadastrada segue para a próxima tentativa; falha de leitura é
+// erro — antes virava "sem conversão" e a quantidade saía sem converter.
+func resolveConfiguredConversion(ctx context.Context, repo configuredConversionRepository, itemCode int64, mask, from, to string) (*entity.ItemUnitConversion, bool, error) {
+	busca := func(m, de, para string) (*entity.ItemUnitConversion, error) {
+		c, err := repo.GetConfigured(ctx, itemCode, m, de, para)
+		if err != nil && !errorsuc.EhNaoEncontrado(err) {
+			return nil, fmt.Errorf("lendo a conversão %s→%s do item %d: %w", de, para, itemCode, err)
+		}
+		if err != nil {
+			return nil, nil
+		}
+		return c, nil
+	}
+	conversion, err := busca(mask, from, to)
+	if err != nil {
+		return nil, false, err
+	}
 	inverse := false
 	if conversion == nil {
-		conversion, _ = repo.GetConfigured(ctx, itemCode, mask, to, from)
+		if conversion, err = busca(mask, to, from); err != nil {
+			return nil, false, err
+		}
 		inverse = conversion != nil
 	}
 	if conversion == nil && mask != "" {
-		conversion, _ = repo.GetConfigured(ctx, itemCode, "", from, to)
+		if conversion, err = busca("", from, to); err != nil {
+			return nil, false, err
+		}
 		inverse = false
 		if conversion == nil {
-			conversion, _ = repo.GetConfigured(ctx, itemCode, "", to, from)
+			if conversion, err = busca("", to, from); err != nil {
+				return nil, false, err
+			}
 			inverse = conversion != nil
 		}
 	}
-	return conversion, inverse
+	return conversion, inverse, nil
 }
 
 func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, itemCode int64, mask string, qty float64, fromUOM, toUOM string) (float64, bool, error) {
@@ -184,7 +207,10 @@ func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, 
 		}
 		return qty * f, true, nil
 	}
-	conversion, inverse := resolveConfiguredConversion(ctx, repo, itemCode, mask, from, to)
+	conversion, inverse, err := resolveConfiguredConversion(ctx, repo, itemCode, mask, from, to)
+	if err != nil {
+		return 0, false, err
+	}
 	if conversion == nil {
 		return 0, false, nil
 	}

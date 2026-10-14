@@ -254,28 +254,34 @@ LIMIT $4`, empresa, itemCode, mask, limite)
 // CentrosDoRoteiro devolve os centros de trabalho que o roteiro ativo do item usa.
 // É o que decide quais regras com escopo de centro alcançam este item.
 func (r *StandardCostRepositorySQLC) CentrosDoRoteiro(ctx context.Context, itemCode int64, mask string) (map[int64]bool, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx, `
-SELECT DISTINCT COALESCE(ro.work_center_id, o.work_center_id)
+SELECT DISTINCT COALESCE(ro.work_center_id, o.default_work_center_id)
 FROM manufacturing_routes mr
 JOIN route_operations ro ON ro.route_id = mr.id
 LEFT JOIN operations o ON o.id = ro.operation_id
 WHERE mr.item_code = $1 AND COALESCE(mr.mask,'') = COALESCE($2,'') AND mr.is_active
-  AND COALESCE(ro.work_center_id, o.work_center_id) IS NOT NULL`, itemCode, mask)
+  AND mr.enterprise_id = $3
+  AND COALESCE(ro.work_center_id, o.default_work_center_id) IS NOT NULL`, itemCode, mask, empresa)
 	if err != nil {
-		// Roteiro ausente ou schema diferente não impede a apuração: sem centro
-		// conhecido, só as regras de escopo geral aplicam. Parar a apuração de custo
-		// porque o item não tem roteiro seria pior.
-		return map[int64]bool{}, nil
+		// Item sem roteiro chega aqui como lista vazia (só as regras de escopo
+		// geral aplicam). Erro é falha de leitura: antes também virava "sem
+		// centro", e o rateio por centro sumia da apuração sem aviso.
+		return nil, fmt.Errorf("lendo os centros do roteiro do item %d: %w", itemCode, err)
 	}
 	defer rows.Close()
 	centros := map[int64]bool{}
 	for rows.Next() {
 		var id int64
-		if err := rows.Scan(&id); err == nil {
-			centros[id] = true
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("lendo os centros do roteiro do item %d: %w", itemCode, err)
 		}
+		centros[id] = true
 	}
-	return centros, nil
+	return centros, rows.Err()
 }
 
 // traduzirErroDeRateio transforma violação de restrição em mensagem que a pessoa

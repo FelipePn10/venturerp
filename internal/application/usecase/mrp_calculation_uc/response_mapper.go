@@ -27,14 +27,21 @@ func toMRPExceptionResponse(m *entity.MRPExceptionMessage) *response.MRPExceptio
 		return nil
 	}
 	return &response.MRPExceptionMessageResponse{
-		Code:        m.Code,
-		PlanCode:    m.PlanCode,
-		ItemCode:    m.ItemCode,
-		MessageType: string(m.MessageType),
-		SourceCode:  m.SourceCode,
-		SourceType:  m.SourceType,
-		Description: m.Description,
-		CreatedAt:   m.CreatedAt,
+		Code:              m.Code,
+		PlanCode:          m.PlanCode,
+		ItemCode:          m.ItemCode,
+		MessageType:       string(m.MessageType),
+		SourceCode:        m.SourceCode,
+		SourceType:        m.SourceType,
+		Description:       m.Description,
+		CreatedAt:         m.CreatedAt,
+		SuggestedDate:     m.SuggestedDate,
+		SourceOrderNumber: m.SourceOrderNumber,
+		SourceNeedDate:    m.SourceNeedDate,
+		HandlingAction:    m.HandlingAction,
+		HandlingNote:      m.HandlingNote,
+		HandledAt:         m.HandledAt,
+		HandledByName:     m.HandledByName,
 	}
 }
 

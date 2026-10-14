@@ -2,6 +2,7 @@ package production_order_uc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -30,7 +31,19 @@ type AddAppointmentUseCase struct {
 	// interna que `production_appointments` exige. Opcional: sem ele o valor
 	// segue como está (comportamento anterior).
 	Employees employeeresolution.Finder
+	// Transacao grava o apontamento e as baixas dos componentes juntos: ou os
+	// dois, ou nenhum. Sem ela (testes), roda direto nos repositórios.
+	Transacao EmTransacaoApontamento
 }
+
+// ApontamentoRepos são os repositórios ligados à transação do apontamento.
+type ApontamentoRepos struct {
+	Ordens  repository.ProductionOrderRepository
+	Estoque stockrepo.StockRepository
+}
+
+// EmTransacaoApontamento roda fn numa transação; erro devolvido desfaz tudo.
+type EmTransacaoApontamento func(ctx context.Context, fn func(ApontamentoRepos) error) error
 
 func (uc *AddAppointmentUseCase) Execute(
 	ctx context.Context,
@@ -62,6 +75,10 @@ func (uc *AddAppointmentUseCase) Execute(
 		return nil, errorsuc.NewValidationError("informe o motivo do refugo")
 	}
 
+	// Data vazia é hoje; data mal digitada é erro (antes virava "hoje" em silêncio).
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data do apontamento", &dto.AppointmentDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	appointmentDate := datetime.ParseDateOrDefault(dto.AppointmentDate, time.Now())
 
 	appointment := &entity.ProductionAppointment{
@@ -78,15 +95,37 @@ func (uc *AddAppointmentUseCase) Execute(
 		CreatedBy:         dto.CreatedBy,
 	}
 
-	saved, err := uc.Repo.AddAppointment(ctx, appointment)
+	// A estrutura é lida antes de gravar qualquer coisa: se a leitura falhar,
+	// nada é gravado.
+	var baixas []*stockentity.StockMovement
+	if uc.shouldBackflush(dto) {
+		if baixas, err = uc.planejarBaixas(ctx, dto); err != nil {
+			return nil, err
+		}
+	}
+
+	emTransacao := uc.Transacao
+	if emTransacao == nil {
+		emTransacao = func(ctx context.Context, fn func(ApontamentoRepos) error) error {
+			return fn(ApontamentoRepos{Ordens: uc.Repo, Estoque: uc.StockRepo})
+		}
+	}
+	var saved *entity.ProductionAppointment
+	err = emTransacao(ctx, func(r ApontamentoRepos) error {
+		var err error
+		if saved, err = r.Ordens.AddAppointment(ctx, appointment); err != nil {
+			return err
+		}
+		for _, mov := range baixas {
+			if _, err := r.Estoque.CreateMovement(ctx, mov); err != nil {
+				return fmt.Errorf("baixando o componente %d (backflush): %w", mov.ItemCode, err)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	if uc.shouldBackflush(dto) {
-		uc.backflush(ctx, dto, saved)
-	}
-
 	return saved, nil
 }
 
@@ -95,12 +134,13 @@ func (uc *AddAppointmentUseCase) shouldBackflush(dto request.AddAppointmentDTO) 
 		dto.BackflushWarehouseID != nil && dto.ProducedQty > 0
 }
 
-// backflush consumes the BOM components for the produced quantity. Best-effort:
-// it never fails the appointment itself.
-func (uc *AddAppointmentUseCase) backflush(ctx context.Context, dto request.AddAppointmentDTO, ap *entity.ProductionAppointment) {
+// planejarBaixas calcula as saídas dos componentes (backflush) para a
+// quantidade produzida. Falha de leitura é erro — antes o apontamento era
+// gravado e os componentes não saíam do estoque, sem aviso.
+func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request.AddAppointmentDTO) ([]*stockentity.StockMovement, error) {
 	order, err := uc.Repo.GetByCode(ctx, dto.ProductionOrderID)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("lendo a OF para a baixa dos componentes: %w", err)
 	}
 
 	var children []*structureChild
@@ -115,8 +155,9 @@ func (uc *AddAppointmentUseCase) backflush(ctx context.Context, dto request.AddA
 		children = structureChildrenForBackflush(raw)
 	}
 	if rawErr != nil {
-		return
+		return nil, fmt.Errorf("lendo a estrutura do item para a baixa dos componentes: %w", rawErr)
 	}
+	var baixas []*stockentity.StockMovement
 
 	refType := stockentity.ReferenceTypeProductionOrder
 	refCode := dto.ProductionOrderID
@@ -140,9 +181,9 @@ func (uc *AddAppointmentUseCase) backflush(ctx context.Context, dto request.AddA
 			ReferenceCode: &refCode,
 			CreatedBy:     dto.CreatedBy,
 		}
-		_, _ = uc.StockRepo.CreateMovement(ctx, mov)
+		baixas = append(baixas, mov)
 	}
-	_ = ap
+	return baixas, nil
 }
 
 func structureChildrenForBackflush(raw []*structentity.ItemStructure) []*structureChild {

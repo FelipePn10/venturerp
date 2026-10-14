@@ -2,6 +2,7 @@ package financial_uc
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -19,7 +20,12 @@ func (uc *GetFluxoProjetadoUseCase) Execute(ctx context.Context, startDate strin
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	start, _ := time.Parse("2006-01-02", startDate)
+	var start time.Time
+	if d, msg := datetime.Opcional("data inicial", &startDate); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	} else if d != nil {
+		start = *d
+	}
 
 	return uc.Repo.GetFluxoProjetado(ctx, start)
 }

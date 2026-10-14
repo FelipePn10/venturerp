@@ -59,7 +59,9 @@ func (uc *FindItemByCode) Execute(
 				}); ok {
 					item, err = finder.FindItemByCode(ctx, valueobject.ItemCode(legacy))
 					if err == nil {
-						fillReferenceBusinessCodes(ctx, uc.Repo, item)
+						if err := fillReferenceBusinessCodes(ctx, uc.Repo, item); err != nil {
+							return nil, err
+						}
 						return toItemResponse(item), nil
 					}
 				}
@@ -71,6 +73,8 @@ func (uc *FindItemByCode) Execute(
 
 	// A tela trabalha por código de negócio: traduz as referências antes de
 	// devolver, para que um cadastro parcial reabra exatamente como foi salvo.
-	fillReferenceBusinessCodes(ctx, uc.Repo, item)
+	if err := fillReferenceBusinessCodes(ctx, uc.Repo, item); err != nil {
+		return nil, err
+	}
 	return toItemResponse(item), nil
 }

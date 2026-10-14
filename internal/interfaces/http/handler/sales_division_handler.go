@@ -59,8 +59,7 @@ func (h *SalesDivisionHandler) SetStatus(w http.ResponseWriter, r *http.Request)
 
 func (h *SalesDivisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesDivisionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -88,7 +87,7 @@ func (h *SalesDivisionHandler) GetByCode(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -101,8 +100,7 @@ func (h *SalesDivisionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateSalesDivisionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.updateUC.Execute(r.Context(), code, dto)

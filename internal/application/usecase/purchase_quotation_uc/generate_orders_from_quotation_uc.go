@@ -66,7 +66,7 @@ func (uc *GenerateOrdersFromQuotationUseCase) Execute(ctx context.Context, dto r
 		return nil, err
 	}
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("nenhum preço selecionado na cotação %d", dto.QuotationCode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("nenhum preço selecionado na cotação %d", dto.QuotationCode))
 	}
 
 	result := &GenerateOrdersFromQuotationResult{}

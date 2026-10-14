@@ -2,7 +2,7 @@ package valueobject
 
 import (
 	"encoding/json"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"regexp"
 	"strings"
 )
@@ -20,7 +20,7 @@ type BusinessCode string
 func NewBusinessCode(code string) (BusinessCode, error) {
 	normalized := strings.ToUpper(strings.TrimSpace(code))
 	if !businessCodePattern.MatchString(normalized) {
-		return "", errors.New("codigo do item deve ter de 1 a 60 caracteres alfanumericos e pode conter ponto, hifen, barra ou sublinhado")
+		return "", domainerr.NewValidation("codigo do item deve ter de 1 a 60 caracteres alfanumericos e pode conter ponto, hifen, barra ou sublinhado")
 	}
 	return BusinessCode(normalized), nil
 }
@@ -31,7 +31,7 @@ func (c BusinessCode) IsValid() bool {
 
 func NewItemCode(code int64) (ItemCode, error) {
 	if code <= 0 {
-		return 0, errors.New("o código do item deve ser maior que zero")
+		return 0, domainerr.NewValidation("o código do item deve ser maior que zero")
 	}
 	return ItemCode(code), nil
 }
@@ -58,7 +58,7 @@ func NewDimensions(length, width int, height float64) (*Dimensions, error) {
 	}
 
 	if !d.IsValid() {
-		return nil, errors.New("dimensões inválidas: informe comprimento, largura e altura maiores que zero")
+		return nil, domainerr.NewValidation("dimensões inválidas: informe comprimento, largura e altura maiores que zero")
 	}
 
 	return d, nil
@@ -90,7 +90,7 @@ func NewWeight(gross, net float64, unit string) (Weight, error) {
 	}
 
 	if !w.IsValid() {
-		return Weight{}, errors.New("peso inválido: informe o peso líquido e o bruto maiores que zero, com o bruto não menor que o líquido")
+		return Weight{}, domainerr.NewValidation("peso inválido: informe o peso líquido e o bruto maiores que zero, com o bruto não menor que o líquido")
 	}
 
 	return w, nil
@@ -125,7 +125,7 @@ func NewAttribute(name, value string) (Attribute, error) {
 	}
 
 	if !a.IsValid() {
-		return Attribute{}, errors.New("atributo do PDM inválido: informe nome e valor")
+		return Attribute{}, domainerr.NewValidation("atributo do PDM inválido: informe nome e valor")
 	}
 
 	return a, nil
@@ -171,7 +171,7 @@ func NewCyclicalCountConfig(days int) (*CyclicalCountConfig, error) {
 	}
 
 	if !c.IsValid() {
-		return nil, errors.New("configuração de contagem cíclica inválida")
+		return nil, domainerr.NewValidation("configuração de contagem cíclica inválida")
 	}
 
 	return c, nil
@@ -201,7 +201,7 @@ func NewReorderPoint(tr, cm int16, cr int, es int16) (*ReorderPoint, error) {
 	}
 
 	if !r.IsValid() {
-		return nil, errors.New("ponto de reposição inválido")
+		return nil, domainerr.NewValidation("ponto de reposição inválido")
 	}
 
 	return r, nil
@@ -213,7 +213,7 @@ func (r ReorderPoint) IsValid() bool {
 
 func (r ReorderPoint) Calculate() (int, error) {
 	if r.CR == 0 {
-		return 0, errors.New("o CR não pode ser zero")
+		return 0, domainerr.NewValidation("o CR não pode ser zero")
 	}
 
 	result := (int(r.TR) * int(r.CM) / r.CR) + int(r.ES)

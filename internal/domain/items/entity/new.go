@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	ErrInvalidCode      = errors.New("código inválido")
-	ErrInvalidCreatedBy = errors.New("não foi possível identificar o usuário que está criando o registro")
+	ErrInvalidCode      = domainerr.NewValidation("código inválido")
+	ErrInvalidCreatedBy = domainerr.NewValidation("não foi possível identificar o usuário que está criando o registro")
 )
 
 func NewItem(

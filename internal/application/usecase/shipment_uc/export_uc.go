@@ -3,6 +3,7 @@ package shipment_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
@@ -86,18 +87,25 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 
 	if uc.Enricher != nil {
 		ent, err := uc.Enricher.GetEnterprise(ctx)
-		if err == nil {
+		if ok, err := opcional(err, "a empresa"); err != nil {
+			return nil, err
+		} else if ok {
 			d.Enterprise = ent
 		}
 
-		if logo, color, err := uc.Enricher.GetBranding(ctx); err == nil {
+		logo, color, err := uc.Enricher.GetBranding(ctx)
+		if ok, err := opcional(err, "a identidade visual"); err != nil {
+			return nil, err
+		} else if ok {
 			d.Logo = logo
 			d.BrandColorHex = color
 		}
 
 		if s.CarrierCode != nil {
 			carrier, err := uc.Enricher.GetCarrier(ctx, *s.CarrierCode)
-			if err == nil {
+			if ok, err := opcional(err, "a transportadora"); err != nil {
+				return nil, err
+			} else if ok {
 				d.Carrier = carrier
 			}
 		}
@@ -129,9 +137,14 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 			case entity.ShipmentRefSalesOrder:
 				if s.SalesOrderCode != nil {
 					so, err := uc.Enricher.GetSalesOrder(ctx, *s.SalesOrderCode)
-					if err == nil {
+					if ok, err := opcional(err, "o pedido de venda"); err != nil {
+						return nil, err
+					} else if ok {
 						if so.CustomerCode != nil {
-							if cust, err := uc.Enricher.GetCustomer(ctx, *so.CustomerCode); err == nil {
+							cust, err := uc.Enricher.GetCustomer(ctx, *so.CustomerCode)
+							if ok, err := opcional(err, "o cliente"); err != nil {
+								return nil, err
+							} else if ok {
 								d.Destinatario = cust
 							}
 						}
@@ -156,9 +169,14 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 			case entity.ShipmentRefPurchaseOrder:
 				if s.PurchaseOrderCode != nil {
 					po, err := uc.Enricher.GetPurchaseOrder(ctx, *s.PurchaseOrderCode)
-					if err == nil {
+					if ok, err := opcional(err, "o pedido de compra"); err != nil {
+						return nil, err
+					} else if ok {
 						if po.SupplierCode != nil {
-							if sup, err := uc.Enricher.GetSupplier(ctx, *po.SupplierCode); err == nil {
+							sup, err := uc.Enricher.GetSupplier(ctx, *po.SupplierCode)
+							if ok, err := opcional(err, "o fornecedor"); err != nil {
+								return nil, err
+							} else if ok {
 								d.Destinatario = sup
 							}
 						}
@@ -177,7 +195,9 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 			case entity.ShipmentRefProductionOrder:
 				if s.ProductionOrderCode != nil {
 					po, err := uc.Enricher.GetProductionOrder(ctx, *s.ProductionOrderCode)
-					if err == nil {
+					if ok, err := opcional(err, "a ordem de produção"); err != nil {
+						return nil, err
+					} else if ok {
 						d.ReferenceCode = po.Code
 					}
 				}
@@ -252,4 +272,17 @@ func strOrEmpty(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// opcional: o que não existe mais (cliente, transportadora…) só deixa o campo do
+// romaneio em branco; falha de leitura é erro — antes o PDF saía sem
+// destinatário ou sem preços, e ninguém sabia por quê.
+func opcional(err error, oque string) (bool, error) {
+	if err == nil {
+		return true, nil
+	}
+	if errorsuc.EhNaoEncontrado(err) {
+		return false, nil
+	}
+	return false, fmt.Errorf("lendo %s para o romaneio: %w", oque, err)
 }

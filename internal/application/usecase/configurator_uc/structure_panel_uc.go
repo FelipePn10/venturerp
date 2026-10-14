@@ -191,7 +191,10 @@ func (uc *ConfiguratorUseCase) ValidateCombination(ctx context.Context, itemCode
 	if !ok || uc.Restrictions == nil {
 		return nil, nil
 	}
-	codes := uc.resolveAnswerCodes(ctx, answers)
+	codes, err := uc.resolveAnswerCodes(ctx, answers)
+	if err != nil {
+		return nil, err
+	}
 	valid, violations, err := explainer.ExplainCombination(ctx, &itemCode, nil, nil, codes)
 	if err != nil {
 		return nil, err
@@ -211,7 +214,7 @@ func (uc *ConfiguratorUseCase) ValidateCombination(ctx context.Context, itemCode
 
 // FormulaVariables devolve variável → valor numérico das respostas, no formato
 // que as fórmulas de quantidade da estrutura consomem.
-func (uc *ConfiguratorUseCase) FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) map[string]float64 {
+func (uc *ConfiguratorUseCase) FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]float64, error) {
 	return uc.formulaVars(ctx, answers)
 }
 

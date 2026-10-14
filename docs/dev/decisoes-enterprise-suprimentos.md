@@ -22,6 +22,13 @@ e [Odoo Subcontracting](https://www.odoo.com/documentation/18.0/applications/inv
 - Empresa e ator são claims autenticadas. Campos `enterprise_code`,
   `enterprise_id` e `created_by` não fazem parte de bodies públicos; valores
   enviados por clientes antigos são ignorados durante a compatibilidade.
+- Todos os registros do módulo de suprimentos são da empresa (`enterprise_code`):
+  registros e inspeções de recebimento, avisos, divergências, homologação, IQF,
+  EDI, importação, contratos, alçadas e parâmetros. Leitura, lista e alteração
+  filtram pela empresa da sessão; filhos (resultados, análises, itens de
+  importação, itens de contrato) são alcançados pelo pai da mesma empresa. A
+  migração `000385` atribui os registros antigos pela origem (pedido, registro,
+  roteiro, fornecedor, almoxarifado), e por último à menor empresa.
 - Mutações de pedido e recebimento devem usar chave idempotente e auditoria
   imutável de antes/depois. Identidade do responsável é resolvida pelo cadastro de
   usuários, mantendo o UUID como fallback técnico e nunca o texto "Usuário não localizado".

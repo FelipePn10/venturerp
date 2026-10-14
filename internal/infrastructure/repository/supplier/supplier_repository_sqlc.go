@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -28,7 +29,11 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.SupplierRepository {
 // ─── Supplier Types ─────────────────────────────────────────────────────────
 
 func (r *SupplierRepositorySQLC) CreateSupplierType(ctx context.Context, t *entity.SupplierType) (*entity.SupplierType, error) {
-	row, err := r.q.CreateSupplierType(ctx, sqlc.CreateSupplierTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateSupplierType(ctx, sqlc.CreateSupplierTypeParams{EnterpriseID: empresa,
 		Code:        t.Code,
 		Description: t.Description,
 		Kind:        string(t.Kind),
@@ -40,7 +45,11 @@ func (r *SupplierRepositorySQLC) CreateSupplierType(ctx context.Context, t *enti
 }
 
 func (r *SupplierRepositorySQLC) UpdateSupplierType(ctx context.Context, t *entity.SupplierType) (*entity.SupplierType, error) {
-	row, err := r.q.UpdateSupplierType(ctx, sqlc.UpdateSupplierTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateSupplierType(ctx, sqlc.UpdateSupplierTypeParams{EnterpriseID: empresa,
 		Code:        t.Code,
 		Description: t.Description,
 		Kind:        string(t.Kind),
@@ -53,7 +62,11 @@ func (r *SupplierRepositorySQLC) UpdateSupplierType(ctx context.Context, t *enti
 }
 
 func (r *SupplierRepositorySQLC) GetSupplierTypeByCode(ctx context.Context, code int64) (*entity.SupplierType, error) {
-	row, err := r.q.GetSupplierTypeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSupplierTypeByCode(ctx, sqlc.GetSupplierTypeByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("supplier type %d not found: %w", code, err)
 	}
@@ -61,7 +74,11 @@ func (r *SupplierRepositorySQLC) GetSupplierTypeByCode(ctx context.Context, code
 }
 
 func (r *SupplierRepositorySQLC) ListSupplierTypes(ctx context.Context, onlyActive bool) ([]*entity.SupplierType, error) {
-	rows, err := r.q.ListSupplierTypes(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierTypes(ctx, sqlc.ListSupplierTypesParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -73,14 +90,22 @@ func (r *SupplierRepositorySQLC) ListSupplierTypes(ctx context.Context, onlyActi
 }
 
 func (r *SupplierRepositorySQLC) NextSupplierTypeCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextSupplierTypeCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextSupplierTypeCode(ctx, empresa)
 	return int64(v), err
 }
 
 // ─── Supplier Contact Types ───────────────────────────────────────────────────
 
 func (r *SupplierRepositorySQLC) CreateContactType(ctx context.Context, ct *entity.SupplierContactType) (*entity.SupplierContactType, error) {
-	row, err := r.q.CreateSupplierContactType(ctx, sqlc.CreateSupplierContactTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.CreateSupplierContactType(ctx, sqlc.CreateSupplierContactTypeParams{EnterpriseID: empresa,
 		Code:        ct.Code,
 		Description: ct.Description,
 	})
@@ -91,7 +116,11 @@ func (r *SupplierRepositorySQLC) CreateContactType(ctx context.Context, ct *enti
 }
 
 func (r *SupplierRepositorySQLC) UpdateContactType(ctx context.Context, ct *entity.SupplierContactType) (*entity.SupplierContactType, error) {
-	row, err := r.q.UpdateSupplierContactType(ctx, sqlc.UpdateSupplierContactTypeParams{
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.UpdateSupplierContactType(ctx, sqlc.UpdateSupplierContactTypeParams{EnterpriseID: empresa,
 		Code:        ct.Code,
 		Description: ct.Description,
 		IsActive:    ct.IsActive,
@@ -103,7 +132,11 @@ func (r *SupplierRepositorySQLC) UpdateContactType(ctx context.Context, ct *enti
 }
 
 func (r *SupplierRepositorySQLC) GetContactTypeByCode(ctx context.Context, code int64) (*entity.SupplierContactType, error) {
-	row, err := r.q.GetSupplierContactTypeByCode(ctx, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetSupplierContactTypeByCode(ctx, sqlc.GetSupplierContactTypeByCodeParams{Code: code, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("contact type %d not found: %w", code, err)
 	}
@@ -111,7 +144,11 @@ func (r *SupplierRepositorySQLC) GetContactTypeByCode(ctx context.Context, code 
 }
 
 func (r *SupplierRepositorySQLC) ListContactTypes(ctx context.Context, onlyActive bool) ([]*entity.SupplierContactType, error) {
-	rows, err := r.q.ListSupplierContactTypes(ctx, onlyActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSupplierContactTypes(ctx, sqlc.ListSupplierContactTypesParams{Column1: onlyActive, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +160,11 @@ func (r *SupplierRepositorySQLC) ListContactTypes(ctx context.Context, onlyActiv
 }
 
 func (r *SupplierRepositorySQLC) NextContactTypeCode(ctx context.Context) (int64, error) {
-	v, err := r.q.NextSupplierContactTypeCode(ctx)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	v, err := r.q.NextSupplierContactTypeCode(ctx, empresa)
 	return int64(v), err
 }
 
@@ -528,7 +569,12 @@ func (r *SupplierRepositorySQLC) DeleteEmail(ctx context.Context, id int64) erro
 // ─── Due Dates ─────────────────────────────────────────────────────────────────
 
 func (r *SupplierRepositorySQLC) AddDueDate(ctx context.Context, d *entity.SupplierDueDate) (*entity.SupplierDueDate, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSupplierDueDate(ctx, sqlc.CreateSupplierDueDateParams{
+		EnterpriseID:       empresa,
 		SupplierID:         d.SupplierID,
 		Description:        d.Description,
 		Ranking:            d.Ranking,
@@ -541,6 +587,9 @@ func (r *SupplierRepositorySQLC) AddDueDate(ctx context.Context, d *entity.Suppl
 		ReceiptEndTime:     pgutil.ToPgTextFromPtr(d.ReceiptEndTime),
 		AvgUnloadMinutes:   d.AvgUnloadMinutes,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("fornecedor ou condição de pagamento não encontrado")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding due date: %w", err)
 	}
@@ -629,11 +678,19 @@ func (r *SupplierRepositorySQLC) DeleteContact(ctx context.Context, id int64) er
 }
 
 func (r *SupplierRepositorySQLC) AddContactPhone(ctx context.Context, p *entity.SupplierContactPhone) (*entity.SupplierContactPhone, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSupplierContactPhone(ctx, sqlc.CreateSupplierContactPhoneParams{
-		ContactID: p.ContactID,
-		Value:     p.Value,
-		Ranking:   p.Ranking,
+		ContactID:    p.ContactID,
+		Value:        p.Value,
+		Ranking:      p.Ranking,
+		EnterpriseID: empresa,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("contato não encontrado")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding contact phone: %w", err)
 	}
@@ -641,11 +698,19 @@ func (r *SupplierRepositorySQLC) AddContactPhone(ctx context.Context, p *entity.
 }
 
 func (r *SupplierRepositorySQLC) AddContactEmail(ctx context.Context, e *entity.SupplierContactEmail) (*entity.SupplierContactEmail, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateSupplierContactEmail(ctx, sqlc.CreateSupplierContactEmailParams{
-		ContactID: e.ContactID,
-		Value:     e.Value,
-		Ranking:   e.Ranking,
+		ContactID:    e.ContactID,
+		Value:        e.Value,
+		Ranking:      e.Ranking,
+		EnterpriseID: empresa,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("contato não encontrado")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding contact email: %w", err)
 	}
@@ -687,6 +752,13 @@ func (r *SupplierRepositorySQLC) ListContactEmails(ctx context.Context, contactI
 // ─── Enterprise links ──────────────────────────────────────────────────────
 
 func (r *SupplierRepositorySQLC) AddEnterprise(ctx context.Context, e *entity.SupplierEnterprise) (*entity.SupplierEnterprise, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if e.EnterpriseCode != empresa {
+		return nil, errorsuc.NewValidationError("o vínculo só pode ser feito para a empresa autenticada")
+	}
 	row, err := r.q.CreateSupplierEnterprise(ctx, sqlc.CreateSupplierEnterpriseParams{
 		SupplierID:           e.SupplierID,
 		EnterpriseCode:       e.EnterpriseCode,
@@ -695,6 +767,9 @@ func (r *SupplierRepositorySQLC) AddEnterprise(ctx context.Context, e *entity.Su
 		DefaultInvoiceTypeID: e.DefaultInvoiceTypeID,
 		PurchasePriceTableID: e.PurchasePriceTableID,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("fornecedor ou tabela de preço de compra não encontrado na empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding enterprise link: %w", err)
 	}
@@ -702,7 +777,12 @@ func (r *SupplierRepositorySQLC) AddEnterprise(ctx context.Context, e *entity.Su
 }
 
 func (r *SupplierRepositorySQLC) UpdateEnterprise(ctx context.Context, e *entity.SupplierEnterprise) (*entity.SupplierEnterprise, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateSupplierEnterprise(ctx, sqlc.UpdateSupplierEnterpriseParams{
+		EnterpriseCode:       empresa,
 		ID:                   e.ID,
 		FinancialAccount:     pgutil.ToPgTextFromPtr(e.FinancialAccount),
 		AppliesIpi:           e.AppliesIPI,
@@ -710,6 +790,9 @@ func (r *SupplierRepositorySQLC) UpdateEnterprise(ctx context.Context, e *entity
 		PurchasePriceTableID: e.PurchasePriceTableID,
 		IsActive:             e.IsActive,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("vínculo %d ou tabela de preço de compra não encontrado na empresa", e.ID))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("updating enterprise link: %w", err)
 	}
@@ -729,7 +812,18 @@ func (r *SupplierRepositorySQLC) ListEnterprises(ctx context.Context, supplierID
 }
 
 func (r *SupplierRepositorySQLC) DeleteEnterprise(ctx context.Context, id int64) error {
-	return r.q.DeleteSupplierEnterprise(ctx, id)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	linhas, err := r.q.DeleteSupplierEnterprise(ctx, sqlc.DeleteSupplierEnterpriseParams{ID: id, EnterpriseCode: empresa})
+	if err != nil {
+		return err
+	}
+	if linhas == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("vínculo %d não encontrado", id))
+	}
+	return nil
 }
 
 // ─── Parameters ─────────────────────────────────────────────────────────────

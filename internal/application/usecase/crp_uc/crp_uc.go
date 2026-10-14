@@ -21,6 +21,12 @@ type requirementWriter interface {
 	ReplaceRequirements(context.Context, int64, []*crpentity.CapacityRequirement) error
 }
 
+// planCapacityReader lê a capacidade considerando o cenário de simulação dono
+// do plano (plano real: igual à capacidade de cadastro).
+type planCapacityReader interface {
+	GetAvailableHoursForPlan(ctx context.Context, wc int64, day *time.Time, plan int64) (float64, error)
+}
+
 type dailyCapacityReader interface {
 	GetAvailableHoursOnDate(context.Context, int64, time.Time) (float64, error)
 }
@@ -101,7 +107,13 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 		if v, ok := capacidadePorCentro[wcID]; ok {
 			return v
 		}
-		v, err := uc.repo.GetMachineAvailableHoursPerDay(ctx, wcID)
+		var v float64
+		var err error
+		if porPlano, ok := uc.repo.(planCapacityReader); ok {
+			v, err = porPlano.GetAvailableHoursForPlan(ctx, wcID, nil, dto.PlanCode)
+		} else {
+			v, err = uc.repo.GetMachineAvailableHoursPerDay(ctx, wcID)
+		}
 		if err != nil {
 			capacityErr = err
 		}
@@ -194,7 +206,16 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 	for k, reqHours := range reqMap {
 		avail := capacidade(k.wcID)
 		daily, hasDaily := uc.repo.(dailyCapacityReader)
-		if hasDaily {
+		if porPlano, ok := uc.repo.(planCapacityReader); ok {
+			// Mesma consulta diária, com os ajustes do cenário dono do plano.
+			dia := dateMap[k]
+			var err error
+			avail, err = porPlano.GetAvailableHoursForPlan(ctx, k.wcID, &dia, dto.PlanCode)
+			if err != nil {
+				return nil, fmt.Errorf("consultando capacidade diária: %w", err)
+			}
+			hasDaily = true
+		} else if hasDaily {
 			var err error
 			avail, err = daily.GetAvailableHoursOnDate(ctx, k.wcID, dateMap[k])
 			if err != nil {

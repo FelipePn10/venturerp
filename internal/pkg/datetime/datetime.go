@@ -7,6 +7,7 @@
 package datetime
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -56,4 +57,69 @@ func ParseDatePtr(s *string) *time.Time {
 		return &t
 	}
 	return nil
+}
+
+// CampoData é uma data em texto vinda da tela, com o nome que o usuário conhece.
+type CampoData struct {
+	Nome  string
+	Valor *string
+}
+
+// Campo monta um CampoData.
+func Campo(nome string, valor *string) CampoData { return CampoData{Nome: nome, Valor: valor} }
+
+// PrimeiraInvalida devolve a mensagem da primeira data preenchida que não é uma
+// data aceita, ou "" quando todas estão vazias ou válidas. ParseDatePtr devolve
+// nil para texto inválido — sem esta conferência antes, a data mal digitada
+// sumia em silêncio e o registro era gravado sem ela.
+func PrimeiraInvalida(campos ...CampoData) string {
+	for _, c := range campos {
+		if c.Valor == nil || strings.TrimSpace(*c.Valor) == "" {
+			continue
+		}
+		if _, ok := ParseDate(*c.Valor); !ok {
+			return fmt.Sprintf("%s inválida (%q): use AAAA-MM-DD ou DD/MM/AAAA", c.Nome, strings.TrimSpace(*c.Valor))
+		}
+	}
+	return ""
+}
+
+// Obrigatoria converte uma data obrigatória digitada na tela. msg vem
+// preenchida quando a data falta ou não é uma data aceita — antes o
+// time.Parse descartado gravava 0001-01-01 em silêncio.
+func Obrigatoria(nome, valor string) (t time.Time, msg string) {
+	if strings.TrimSpace(valor) == "" {
+		return time.Time{}, "informe a " + nome
+	}
+	t, ok := ParseDate(valor)
+	if !ok {
+		return time.Time{}, fmt.Sprintf("%s inválida (%q): use AAAA-MM-DD ou DD/MM/AAAA", nome, strings.TrimSpace(valor))
+	}
+	return t, ""
+}
+
+// Opcional converte uma data opcional: vazia devolve nil; inválida devolve msg.
+func Opcional(nome string, valor *string) (t *time.Time, msg string) {
+	if valor == nil || strings.TrimSpace(*valor) == "" {
+		return nil, ""
+	}
+	d, ok := ParseDate(*valor)
+	if !ok {
+		return nil, fmt.Sprintf("%s inválida (%q): use AAAA-MM-DD ou DD/MM/AAAA", nome, strings.TrimSpace(*valor))
+	}
+	return &d, ""
+}
+
+// Hora converte um horário opcional (HH:MM ou HH:MM:SS): vazio devolve nil.
+func Hora(nome string, valor *string) (t *time.Time, msg string) {
+	if valor == nil || strings.TrimSpace(*valor) == "" {
+		return nil, ""
+	}
+	v := strings.TrimSpace(*valor)
+	for _, layout := range []string{"15:04:05", "15:04"} {
+		if h, err := time.Parse(layout, v); err == nil {
+			return &h, ""
+		}
+	}
+	return nil, fmt.Sprintf("%s inválido (%q): use HH:MM", nome, v)
 }

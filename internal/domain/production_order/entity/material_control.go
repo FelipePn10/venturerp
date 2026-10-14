@@ -105,3 +105,26 @@ type WMSWarehouseSettings struct {
 	IsWMS                      bool   `json:"is_wms"`
 	IntermediateOutWarehouseID *int64 `json:"intermediate_out_warehouse_id,omitempty"`
 }
+
+// MaterialAvailabilityLine é a posição de um material da OF para a checagem de
+// disponibilidade (as "faltas" antes de liberar): o que ainda falta baixar, o
+// saldo livre no depósito e o que OFs anteriores já vão consumir dele.
+type MaterialAvailabilityLine struct {
+	ProductionOrderID int64
+	MaterialID        int64
+	ItemCode          int64
+	BusinessCode      string
+	Description       string
+	Mask              string
+	UOM               string
+	WarehouseID       *int64
+	Required          decimal.Decimal
+	Issued            decimal.Decimal
+	// FreeStock é o saldo do depósito menos o reservado (pedido de venda,
+	// onda de separação).
+	FreeStock decimal.Decimal
+	// CommittedEarlier é o que falta baixar nas OFs abertas que começam antes
+	// desta (ou no mesmo dia e foram criadas antes): elas têm prioridade sobre
+	// o mesmo saldo.
+	CommittedEarlier decimal.Decimal
+}

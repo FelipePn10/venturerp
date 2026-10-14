@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -23,8 +22,7 @@ func NewItemClassificationHandler(uc *item_classification_uc.ItemClassificationU
 
 func (h *ItemClassificationHandler) CreateMask(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateClassificationMaskDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateMask(r.Context(), dto)
@@ -37,8 +35,7 @@ func (h *ItemClassificationHandler) CreateMask(w http.ResponseWriter, r *http.Re
 
 func (h *ItemClassificationHandler) UpdateMask(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateClassificationMaskDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateMask(r.Context(), dto)
@@ -77,8 +74,7 @@ func (h *ItemClassificationHandler) ListMasks(w http.ResponseWriter, r *http.Req
 
 func (h *ItemClassificationHandler) CreateClassification(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateItemClassificationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateClassification(r.Context(), dto)
@@ -91,8 +87,7 @@ func (h *ItemClassificationHandler) CreateClassification(w http.ResponseWriter, 
 
 func (h *ItemClassificationHandler) UpdateClassification(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateItemClassificationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateClassification(r.Context(), dto)

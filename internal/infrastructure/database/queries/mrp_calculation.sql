@@ -78,6 +78,9 @@ WHERE NOT EXISTS (
     SELECT 1 FROM planned_orders po
     WHERE po.enterprise_id = @enterprise_id AND po.order_number = $1 AND po.is_active = TRUE
 )
+-- Número já usado por sugestão de outro plano: nenhuma linha, como o NOT
+-- EXISTS acima. Erro de unicidade aqui abortaria a transação do cálculo.
+ON CONFLICT (enterprise_id, order_number) WHERE enterprise_id IS NOT NULL AND order_number IS NOT NULL DO NOTHING
     RETURNING *;
 
 -- name: ListMRPPlannedSuggestions :many
@@ -96,14 +99,33 @@ WHERE i.id = codes.item_code;
 
 -- name: CreateMRPExceptionMessage :one
 INSERT INTO mrp_exception_messages
-    (plan_code, item_code, message_type, source_code, source_type, description, enterprise_id)
-VALUES ($1, $2, $3, $4, $5, $6, @enterprise_id)
+    (plan_code, item_code, message_type, source_code, source_type, description, enterprise_id, suggested_date)
+VALUES ($1, $2, $3, $4, $5, $6, @enterprise_id, sqlc.narg(suggested_date))
 RETURNING *;
 
 -- name: ListMRPExceptionMessages :many
+SELECT m.code, m.plan_code, m.item_code, m.message_type, m.source_code, m.source_type,
+       m.description, m.created_at, m.suggested_date, m.handled_at, m.handled_by,
+       m.handling_action, m.handling_note,
+       COALESCE(u.name, '')::text AS handled_by_name,
+       po.order_number AS source_order_number, po.need_date AS source_need_date
+FROM mrp_exception_messages m
+LEFT JOIN users u ON u.id = m.handled_by
+LEFT JOIN planned_orders po ON po.code = m.source_code AND po.enterprise_id = m.enterprise_id
+                           AND m.source_type = 'PLANNED_ORDER'
+WHERE m.plan_code = $1 AND m.enterprise_id = @enterprise_id
+ORDER BY m.item_code, m.code;
+
+-- name: GetMRPExceptionMessage :one
 SELECT * FROM mrp_exception_messages
-WHERE plan_code = $1 AND enterprise_id = @enterprise_id
-ORDER BY item_code, code;
+WHERE code = $1 AND enterprise_id = @enterprise_id;
+
+-- name: MarkMRPExceptionHandled :one
+UPDATE mrp_exception_messages
+   SET handled_at = NOW(), handled_by = @handled_by, handling_action = @handling_action,
+       handling_note = sqlc.narg(handling_note)
+ WHERE code = @code AND enterprise_id = @enterprise_id AND handled_at IS NULL
+RETURNING *;
 
 -- name: DeleteMRPExceptionMessages :exec
 DELETE FROM mrp_exception_messages WHERE plan_code = $1 AND enterprise_id = @enterprise_id;

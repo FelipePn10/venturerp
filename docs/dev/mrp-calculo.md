@@ -86,6 +86,28 @@ Um log `RUNNING` não é expirado automaticamente. Se uma execução for interro
 sem finalizar o log, a equipe deve investigar e corrigir seu status antes de uma
 nova rodada, preservando a regra de não concorrência.
 
+### Execução automática (janela noturna)
+
+O pipeline MRP → CRP → APS pode rodar sozinho uma vez por dia por empresa
+(`planning_auto_run_settings`). O agendador verifica a cada minuto as empresas
+cuja hora (`run_hour:run_minute`, no fuso da empresa —
+`enterprise_notification_settings.timezone`, padrão America/Sao_Paulo) já
+passou e que ainda não rodaram naquele dia local.
+
+A rodada usa a **sessão da empresa em nome de quem salvou a configuração**
+(`updated_by`): é o que dá ao MRP a empresa e o autor das ordens. Configuração
+sem responsável não roda. O mesmo cadeado por empresa (advisory lock) impede
+duas execuções simultâneas; cada rodada fica em `planning_run_history` com o
+corte (`snapshot_at`), itens alterados desde o corte anterior, ordens geradas e
+o parecer de viabilidade. O corte só avança quando a rodada termina bem.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/planning/auto-run` | Configuração e situação da última rodada |
+| `PUT` | `/api/planning/auto-run` | Liga/desliga, horário, plano, nº inicial, LLC (`planning:run`) |
+| `POST` | `/api/planning/auto-run/run-now` | Roda agora com a configuração salva (`planning:run`) |
+| `GET` | `/api/planning/runs?limit=50` | Histórico de execuções |
+
 ### Passo 1 — Coleta das Demandas
 
 O MRP começa lendo tudo que precisa ser produzido ou entregue. Existem dois tipos de demanda:
@@ -502,8 +524,11 @@ remoção da associação faz com que seus pedidos deixem de participar do cálc
 
 `initial_order_number` é obrigatório, positivo e define o primeiro número da
 sequência de sugestões. A numeração é preservada ao converter a sugestão em
-ordem planejada e em OF. Números já usados por ordens ativas do mesmo tenant são
-rejeitados. Quando `generate_llc=true`, o nível mais baixo encontrado para cada
+ordem planejada e em OF. Número já usado — por ordem planejada ativa ou por
+sugestão de outro plano do mesmo tenant — é pulado: a sugestão recebe o próximo
+número livre (antes ela se perdia e o cálculo terminava `COMPLETED_WITH_ERRORS`
+sem nenhuma ordem). A lista de sugestões traz `planned_order_code` quando a
+sugestão já foi firmada. Quando `generate_llc=true`, o nível mais baixo encontrado para cada
 item da estrutura é persistido em `items.planning_llc`; com `false`, o LLC é
 calculado somente em memória para ordenar a execução.
 | `GET` | `/api/mrp-calculation/profile/{item_code}/{plan_code}` | Perfil do item: demanda, estoque projetado, ordens |
@@ -511,6 +536,7 @@ calculado somente em memória para ordenar a execução.
 | `POST` | `/api/mrp-calculation/configured-rules` | Cria regra configurada por item |
 | `GET` | `/api/mrp-calculation/configured-rules/{item_code}` | Lista regras configuradas de um item |
 | `GET` | `/api/mrp-calculation/exceptions/{plan_code}` | Lista exceções e alertas do cálculo |
+| `POST` | `/api/mrp-calculation/exceptions/{code}/handle` | Trata a exceção: `REPROGRAMAR`, `CANCELAR` ou `TRATAR` (ver "Mensagens de exceção") |
 
 ### Sugestões e Ponte para Ordens Planejadas
 
@@ -680,6 +706,128 @@ e `to=YYYY-MM-DD`. `CALCULATION` conserva a fotografia do último MRP;
 as linhas filtradas e totais de demanda, ordens planejadas, ordens firmes,
 estoque projetado e, quando aplicável, estoque atual.
 
+### Mensagens de exceção
+
+As mensagens comparam cada **ordem planejada firme** com a necessidade que ela
+de fato cobre (pegging), não com a primeira necessidade do item:
+
+1. O estoque disponível antes do cálculo (saldo − reservado − segurança) cobre
+   as primeiras necessidades brutas, em ordem de data.
+2. As ordens firmes, em ordem de chegada, cobrem as necessidades seguintes. A
+   data da necessidade que a ordem cobre é a data **sugerida**.
+3. Chegada até 5 dias depois da sugerida → `EXPEDITE`; mais que isso →
+   `RESCHEDULE_IN`; mais de 30 dias antes → `RESCHEDULE_OUT`; ordem que não
+   cobre necessidade nenhuma → `CANCEL`; sobra parcial acima de 1 % da
+   necessidade em aberto → `EXCESS_PROJECTED` (uma por item).
+
+A análise usa uma cópia do estoque e do suprimento firme tirada antes do
+netting (`service/exceptions.go`). Antes ela olhava o suprimento já consumido e
+a necessidade líquida, e quase nenhuma mensagem saía.
+
+Tratamento (`POST .../exceptions/{code}/handle`, permissão `planning:run`):
+
+- `REPROGRAMAR` (acelerar/antecipar/postergar): leva a necessidade da ordem
+  planejada para `new_date` ou para a data sugerida (sugerida no passado vira
+  hoje), deslocando início e fim pelo mesmo intervalo;
+- `CANCELAR` (cancelar ordem): cancela a ordem planejada;
+- `TRATAR`: só registra, com `note` obrigatória.
+
+Ordem planejada que já gerou OF não é alterada (ajusta-se a OF). A mensagem
+guarda `handled_at`, `handled_by`, `handling_action` e `handling_note`; tratar
+duas vezes responde `409`. As mensagens são refeitas a cada cálculo.
+
+### Rastreamento (pegging)
+
+Cada cálculo grava em `mrp_pegging` (pegging fixo, como o SAP MD04) que parte de
+cada necessidade foi coberta por qual suprimento, na mesma ordem do netting:
+estoque disponível → ordens planejadas firmes que chegam até a data → sugestões
+do cálculo com necessidade até a data; o que nada cobre fica como `FALTA`. A
+necessidade de um componente aponta a **sugestão do pai** (`demand_kind =
+SUGESTAO`), e é por essa ponte que se anda entre os níveis. Item fantasma não
+gravado passa a origem do pai direto aos filhos. Sugestão de SERVIÇO
+(operação externa) não é suprimento do item.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/mrp-calculation/pegging/{plan_code}/roots` | Necessidades de origem (pedido, demanda, previsão…) com estoque/firmes/sugestões, falta direta, falta em qualquer nível da cadeia e data do último suprimento |
+| `GET` | `/api/mrp-calculation/pegging/{plan_code}/down?demand_kind=&demand_code=&item_code=&need_date=` | Cadeia de uma origem até as compras; componentes repartidos na proporção do que a sugestão do pai dedicou a esta origem |
+| `GET` | `/api/mrp-calculation/pegging/{plan_code}/up?supply_kind=SUGESTAO\|ORDEM_FIRME&supply_code=` | De uma ordem até os pedidos/demandas que dependem dela |
+| `GET` | `/api/mrp-calculation/pegging/sales-order/{order_code}` | Atendimento do pedido de venda (`sales_orders.code`): um item por plano ativo (não cenário) cujo último cálculo vinculou linhas do pedido, com `roots` (só as linhas do pedido) e `trees[i]` = cadeia de `roots[i]` |
+
+O vínculo é o do último cálculo: firmar ou reprogramar só aparece no próximo.
+
+**Elo atrasado.** Um nó com suprimento `SUGESTAO` sai com `late = true` e
+`late_reason` quando a sugestão termina na programação da máquina
+(`mrp_machine_allocations.scheduled_end`) mais de 1 dia depois da necessidade
+(falta de capacidade), ou quando o início dela já passou (data da empresa). A
+raiz traz `chain_late` e o `late_reason` do primeiro elo atrasado da cadeia;
+falta pesa mais que atraso na apresentação. A comparação de cenário conta essas
+raízes em `roots_late`. A data do suprimento de uma sugestão é o dia do fim
+programado na máquina quando ele passa da data do pegging, e `latest_supply`
+(o "pronto em") é a maior dessas datas na cadeia.
+
+**Texto das exceções.** A mensagem cita o código de negócio do item
+(`items.business_code`, lido no fim do cálculo) e a quantidade sem zeros à direita
+e com vírgula; item sem código de negócio aparece como "Item {código interno}".
+
+**Exceções afetadas.** `GET /api/mrp-calculation/exceptions` preenche
+`affected_demands` (rótulos das origens, ex. "Pedido 1234") nas exceções cuja
+origem é uma ordem planejada, subindo o pegging do último cálculo.
+
+### Cenários de simulação (what-if)
+
+O cenário (`planning_scenarios`) calcula num **plano oculto**
+(`production_plans.is_scenario`) clonado do plano base a cada cálculo, com os
+ajustes de `planning_scenario_changes`:
+
+- `DEMANDA` — altera quantidade/data de uma demanda independente ou item de
+  pedido (quantidade 0 retira) ou cria uma demanda nova;
+- `ESTOQUE` — entrada (+) ou baixa (−) simulada do item;
+- `LEAD_TIME` — prazo do item em dias (vence regra configurada e roteiro);
+- `CAPACIDADE` — horas/dia da máquina (um turno contínuo a partir do início do
+  primeiro turno do dia, nos dias em que já trabalha) e/ou parada de/até.
+
+Demanda, estoque e prazo entram no motor em memória; a capacidade entra nas
+consultas de janela do MRP e de capacidade do CRP. Calcular roda **MRP + CRP**
+(o APS não roda: ele sequencia as OFs reais) sob o mesmo cadeado da execução
+automática.
+
+Proteções do plano real: plano oculto não aparece em `/api/production-plan/list`
+nem é alterado pelo cadastro; `POST /api/mrp-calculation/run` recusa plano de
+cenário; sugestão de cenário não recebe número de ordem, não pode ser firmada e
+não dispara a liberação automática inter-fábrica; exceção de cenário não é
+tratada; o LLC dos itens não é regravado; reserva de máquina de cenário não
+ocupa a máquina no MRP nem no APS do plano real, e o cenário ignora as reservas
+não firmadas do próprio plano base.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET`/`POST` | `/api/planning/scenarios` | Lista / cria (nome, plano base) |
+| `GET`/`PUT`/`DELETE` | `/api/planning/scenarios/{id}` | Detalhe com ajustes / renomeia / descarta (apaga tudo o que calculou) |
+| `GET` | `/api/planning/scenarios/{id}/base-demands` | Demandas que o último cálculo do plano base considerou |
+| `POST`/`DELETE` | `/api/planning/scenarios/{id}/changes[/{changeID}]` | Inclui / remove ajuste (volta o cenário para RASCUNHO) |
+| `POST` | `/api/planning/scenarios/{id}/calculate` | MRP + CRP do cenário |
+| `GET` | `/api/planning/scenarios/{id}/compare` | Plano real × cenário: ordens, cobertura, exceções, carga dos centros, origens com falta; itens e centros que mudam |
+| `POST` | `/api/planning/scenarios/{id}/promote` | Aplica ao plano real **só a demanda** (nova → demanda independente; ajuste de demanda independente → altera/desativa); pedido de venda não é alterado; uma vez só |
+
+Escrita exige `planning:run` (ADMIN e USER).
+
+### Cobertura de materiais
+
+`GET /api/mrp-reports/coverage?plan_code=&planner=&item_type=&warehouse_id=&only_with_message=true`
+lê o perfil do último cálculo, o estoque atual (com a entrada/baixa simulada,
+quando o plano é de um cenário) e as sugestões ainda não firmadas, e devolve por item: dias de cobertura do estoque
+(`days_of_supply`), dias com ordens firmes (`receipt_days_of_supply`), falta
+sem planejada e o farol:
+
+- `CRITICO` — falta firme hoje ou antes, planejada que já devia ter começado,
+  ou necessidade que nem as planejadas cobrem;
+- `ATENCAO` — falta coberta só por planejada não firmada, ou projetado abaixo
+  do estoque de segurança;
+- `OK` — estoque e ordens firmes cobrem o horizonte.
+
+A lista vem do mais urgente para o mais tranquilo.
+
 ### Relatórios operacionais
 
 Os relatórios abaixo retornam JSON tenant-aware e aceitam filtros por item,
@@ -690,6 +838,7 @@ plano, período e, quando aplicável, almoxarifado:
 - `GET /api/mrp-reports/grouped-needs`
 - `GET /api/mrp-reports/explosion/{itemCode}?quantity=1&at=YYYY-MM-DD`
 - `GET /api/mrp-reports/reorder-point`
+- `GET /api/mrp-reports/coverage?plan_code=` — cobertura de materiais (abaixo)
 
 A explosão é multinível, aplica perdas e validade da estrutura e interrompe
 ciclos. Disponibilidade consolida estoque, ordens planejadas/firmes e demanda;

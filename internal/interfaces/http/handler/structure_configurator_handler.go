@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -47,8 +46,7 @@ func (h *StructureConfiguratorHandler) Apply(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var dto request.ApplyStructureConfigurationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.Apply(r.Context(), request.TextCode(code), dto)

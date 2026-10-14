@@ -27,6 +27,9 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateSalesOrderItemDTO,
 ) (*response.SalesOrderItemResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de entrega", dto.DeliveryDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -122,6 +125,9 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 	ctx context.Context,
 	dto request.UpdateSalesOrderItemDTO,
 ) (*response.SalesOrderItemResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de entrega", dto.DeliveryDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}

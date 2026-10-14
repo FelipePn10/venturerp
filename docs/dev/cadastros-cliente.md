@@ -426,6 +426,21 @@ Cada conjunto de flags controla a **composição da base de cálculo** de cada i
 
 ## 2. Cadastro do Cliente (`/api/customers`)
 
+> **Cliente é por empresa** (migração 000384). `customers.enterprise_id` é obrigatório e a
+> unicidade é **(empresa, código)**: o mesmo código pode existir em duas empresas, cada uma
+> com o seu cadastro, e nenhuma lê, altera, bloqueia ou apaga o da outra (o registro de outra
+> empresa responde 404). Endereços e contatos seguem o cliente. O próximo código continua
+> crescendo no banco inteiro, para um cliente novo não coincidir com o de outra empresa.
+> Toda consulta que junta `customers` por código precisa da empresa
+> (`c.code = x.customer_code AND c.enterprise_id = …`) — sem ela a junção multiplica linhas.
+>
+> Backfill: cada empresa que já usava o cliente em algum documento recebeu a sua cópia, com o
+> mesmo código; cliente sem uso foi para todas as empresas. Condição de pagamento e tabela de
+> venda de outra empresa foram desligadas do cadastro copiado.
+>
+> Títulos a receber (`contas_receber.cliente_id`) guardam o **código** do cliente.
+
+
 > **Auto-fill por CNPJ:** antes de digitar, a tela pode chamar
 > `GET /api/cnpj/{cnpj}` para pré-preencher razão social, inscrição estadual,
 > endereço e CNAE. **Exportação:** `GET /api/customers?format=xlsx|pdf|csv` baixa

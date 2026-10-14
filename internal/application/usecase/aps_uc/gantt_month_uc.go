@@ -137,14 +137,18 @@ func (uc *APSUseCase) BuildBoard(ctx context.Context, from, to time.Time, scale 
 	}
 	summary.TotalBars = len(bars)
 
+	deps, err := uc.buildDependencies(ctx, bars, from, to)
+	if err != nil {
+		return nil, err
+	}
 	m := &entity.GanttMonth{
+		Dependencies: deps,
 		RangeFrom:    from,
 		RangeTo:      to,
 		Scale:        scale,
 		GroupBy:      groupBy,
 		Days:         uc.buildColumns(ctx, from, to, scale, today),
 		Rows:         groupRows(bars, groupBy),
-		Dependencies: uc.buildDependencies(ctx, bars, from, to),
 		GeneratedAt:  nowFunc(),
 	}
 	summary.TotalRows = len(m.Rows)
@@ -251,7 +255,7 @@ func (uc *APSUseCase) workdayLookup(ctx context.Context, from, to time.Time) (ma
 // edges come from route_operation_network (mapped to on-board sequence ids); orders
 // with no explicit edge get a synthesised linear chain from their operation order,
 // so the planner always sees the precedence between an order's operations.
-func (uc *APSUseCase) buildDependencies(ctx context.Context, bars []*entity.GanttBar, from, to time.Time) []entity.GanttDependency {
+func (uc *APSUseCase) buildDependencies(ctx context.Context, bars []*entity.GanttBar, from, to time.Time) ([]entity.GanttDependency, error) {
 	seqToOrder := map[int64]int64{}
 	onBoard := map[int64]bool{}
 	byOrder := map[int64][]*entity.GanttBar{}
@@ -266,12 +270,16 @@ func (uc *APSUseCase) buildDependencies(ctx context.Context, bars []*entity.Gant
 
 	deps := []entity.GanttDependency{}
 	ordersWithReal := map[int64]bool{}
-	if real, err := uc.repo.ListDependencies(ctx, from, to); err == nil {
-		for _, d := range real {
-			if onBoard[d.FromSequenceID] && onBoard[d.ToSequenceID] {
-				deps = append(deps, *d)
-				ordersWithReal[seqToOrder[d.FromSequenceID]] = true
-			}
+	// Sem as dependências reais o quadro desenharia só as sintéticas (por ordem),
+	// e o planejador veria uma rede que não é a cadastrada — falha é erro.
+	real, err := uc.repo.ListDependencies(ctx, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("lendo as dependências entre operações: %w", err)
+	}
+	for _, d := range real {
+		if onBoard[d.FromSequenceID] && onBoard[d.ToSequenceID] {
+			deps = append(deps, *d)
+			ordersWithReal[seqToOrder[d.FromSequenceID]] = true
 		}
 	}
 
@@ -301,7 +309,7 @@ func (uc *APSUseCase) buildDependencies(ctx context.Context, bars []*entity.Gant
 		}
 		return deps[i].ToSequenceID < deps[j].ToSequenceID
 	})
-	return deps
+	return deps, nil
 }
 
 // groupRows lays the bars into timeline lanes, either by work center or by order.
@@ -374,7 +382,15 @@ func sortRows(rows []*entity.GanttRow, groupBy entity.GanttGroupBy) {
 }
 
 func orderSubLabel(b *entity.GanttBar) string {
+	// Código de negócio e nome — a chave interna ("Item 9002") não diz nada a
+	// quem olha o quadro.
 	s := "Item " + strconv.FormatInt(b.ItemCode, 10)
+	if b.ItemBusinessCode != "" {
+		s = b.ItemBusinessCode
+		if b.ItemName != "" {
+			s += " · " + b.ItemName
+		}
+	}
 	if b.Mask != "" {
 		s += " · " + b.Mask
 	}

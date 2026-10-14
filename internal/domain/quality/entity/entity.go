@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
@@ -110,10 +110,10 @@ type NonConformance struct {
 func NewInspectionPlan(itemCode int64, pointType InspectionPointType, description string,
 	sampleSize, acceptanceLevel float64, createdBy uuid.UUID) (*InspectionPlan, error) {
 	if itemCode <= 0 {
-		return nil, errors.New("o item deve ser um código maior que zero")
+		return nil, domainerr.NewValidation("o item deve ser um código maior que zero")
 	}
 	if description == "" {
-		return nil, errors.New("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	return &InspectionPlan{
 		ItemCode:        itemCode,
@@ -129,13 +129,13 @@ func NewInspectionPlan(itemCode int64, pointType InspectionPointType, descriptio
 func NewNonConformance(code, itemCode int64, description string, qty float64,
 	severity NCSeverity, createdBy uuid.UUID) (*NonConformance, error) {
 	if code <= 0 {
-		return nil, errors.New("o código deve ser maior que zero")
+		return nil, domainerr.NewValidation("o código deve ser maior que zero")
 	}
 	if description == "" {
-		return nil, errors.New("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	if qty <= 0 {
-		return nil, errors.New("a quantidade não conforme deve ser maior que zero")
+		return nil, domainerr.NewValidation("a quantidade não conforme deve ser maior que zero")
 	}
 	return &NonConformance{
 		Code:          code,

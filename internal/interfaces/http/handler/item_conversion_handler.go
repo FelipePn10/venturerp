@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,8 +21,7 @@ func NewItemConversionHandler(uc *item_conversion_uc.ItemConversionUseCase) *Ite
 
 func (h *ItemConversionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateItemConversionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.Create(r.Context(), dto)

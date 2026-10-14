@@ -2,7 +2,7 @@ package fiscal_uc
 
 import (
 	"context"
-	"errors"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -34,13 +34,13 @@ type SpedRequest struct {
 // fiscal params repository as apuração data.
 func (uc *SPEDUseCase) GenerateEFD(ctx context.Context, req SpedRequest) (string, error) {
 	if req.Empresa.CNPJ == "" {
-		return "", errors.New("empresa.cnpj is required")
+		return "", errorsuc.NewValidationError("informe o CNPJ da empresa")
 	}
 	if req.DataInicial.IsZero() || req.DataFinal.IsZero() {
-		return "", errors.New("data_inicial and data_final are required")
+		return "", errorsuc.NewValidationError("informe a data inicial e a data final")
 	}
 	if req.DataFinal.Before(req.DataInicial) {
-		return "", errors.New("data_final must be after data_inicial")
+		return "", errorsuc.NewValidationError("a data final deve ser posterior à data inicial")
 	}
 	if req.Empresa.RegimeTributario == "" {
 		req.Empresa.RegimeTributario = "2"

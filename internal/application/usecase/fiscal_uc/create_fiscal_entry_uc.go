@@ -108,7 +108,10 @@ func (uc *CreateFiscalEntryUseCase) Execute(ctx context.Context, dto request.Cre
 		}
 	}
 
-	items, _ := uc.Repo.GetEntryItems(ctx, created.ID)
+	items, errItens := uc.Repo.GetEntryItems(ctx, created.ID)
+	if errItens != nil {
+		return nil, fmt.Errorf("relendo os itens da nota de entrada criada: %w", errItens)
+	}
 	created.Itens = items
 
 	return toFiscalEntryResponse(created), nil

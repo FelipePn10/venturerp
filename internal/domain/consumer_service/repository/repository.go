@@ -2,13 +2,13 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/consumer_service/entity"
 )
 
-var ErrAttachmentNotFound = errors.New("anexo do atendimento não encontrado")
+var ErrAttachmentNotFound = domainerr.NewNotFound("anexo do atendimento não encontrado")
 
 type ConsumerFilter struct {
 	Search     *string

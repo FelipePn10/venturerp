@@ -2,6 +2,7 @@ package purchase_quotation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -10,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,6 +35,38 @@ func (r *PurchaseQuotationRepositorySQLC) Create(ctx context.Context, qt *entity
 		return nil, fmt.Errorf("creating quotation: %w", err)
 	}
 	return quotationToEntity(row), nil
+}
+
+func (r *PurchaseQuotationRepositorySQLC) CreateWithChildren(ctx context.Context, qt *entity.PurchaseQuotation, items []*entity.PurchaseQuotationItem, supplierCodes []int64) (*entity.PurchaseQuotation, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	txRepo := &PurchaseQuotationRepositorySQLC{q: r.q.WithTx(tx), pool: r.pool}
+	created, err := txRepo.Create(ctx, qt)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		item.QuotationCode = created.Code
+		ci, err := txRepo.AddItem(ctx, item)
+		if err != nil {
+			return nil, err
+		}
+		created.Items = append(created.Items, ci)
+	}
+	for _, sc := range supplierCodes {
+		s, err := txRepo.AddSupplier(ctx, &entity.PurchaseQuotationSupplier{QuotationCode: created.Code, SupplierCode: sc})
+		if err != nil {
+			return nil, err
+		}
+		created.Suppliers = append(created.Suppliers, s)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+	return created, nil
 }
 
 func (r *PurchaseQuotationRepositorySQLC) GetByCode(ctx context.Context, code int64) (*entity.PurchaseQuotation, error) {
@@ -64,11 +98,10 @@ func (r *PurchaseQuotationRepositorySQLC) List(ctx context.Context, onlyOpen boo
 }
 
 func (r *PurchaseQuotationRepositorySQLC) NextCode(ctx context.Context) (int64, error) {
-	empresa, err := tenant.Code(ctx)
-	if err != nil {
+	if _, err := tenant.Code(ctx); err != nil {
 		return 0, err
 	}
-	v, err := r.q.NextPurchaseQuotationCode(ctx, empresa)
+	v, err := r.q.NextPurchaseQuotationCode(ctx)
 	return int64(v), err
 }
 
@@ -92,18 +125,26 @@ func (r *PurchaseQuotationRepositorySQLC) UpdateStatus(ctx context.Context, code
 }
 
 func (r *PurchaseQuotationRepositorySQLC) AddItem(ctx context.Context, item *entity.PurchaseQuotationItem) (*entity.PurchaseQuotationItem, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreatePurchaseQuotationItem(ctx, sqlc.CreatePurchaseQuotationItemParams{
-		QuotationCode: item.QuotationCode,
-		Sequence:      item.Sequence,
-		ItemCode:      item.ItemCode,
-		Quantity:      pgutil.ToPgNumericFromFloat64(item.Quantity),
-		Uom:           pgutil.ToPgTextFromPtr(item.UOM),
-		DeliveryDate:  pgutil.ToPgDateFromPtr(item.DeliveryDate),
-		SourceType:    string(item.SourceType),
-		SourceCode:    item.SourceCode,
-		SourceItemID:  item.SourceItemID,
-		IsConfigured:  item.IsConfigured,
+		EnterpriseCode: empresa,
+		QuotationCode:  item.QuotationCode,
+		Sequence:       item.Sequence,
+		ItemCode:       item.ItemCode,
+		Quantity:       pgutil.ToPgNumericFromFloat64(item.Quantity),
+		Uom:            pgutil.ToPgTextFromPtr(item.UOM),
+		DeliveryDate:   pgutil.ToPgDateFromPtr(item.DeliveryDate),
+		SourceType:     string(item.SourceType),
+		SourceCode:     item.SourceCode,
+		SourceItemID:   item.SourceItemID,
+		IsConfigured:   item.IsConfigured,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("cotação %d não encontrada", item.QuotationCode))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding quotation item: %w", err)
 	}
@@ -111,7 +152,11 @@ func (r *PurchaseQuotationRepositorySQLC) AddItem(ctx context.Context, item *ent
 }
 
 func (r *PurchaseQuotationRepositorySQLC) ListItems(ctx context.Context, quotationCode int64) ([]*entity.PurchaseQuotationItem, error) {
-	rows, err := r.q.ListPurchaseQuotationItems(ctx, quotationCode)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPurchaseQuotationItems(ctx, sqlc.ListPurchaseQuotationItemsParams{QuotationCode: quotationCode, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +168,14 @@ func (r *PurchaseQuotationRepositorySQLC) ListItems(ctx context.Context, quotati
 }
 
 func (r *PurchaseQuotationRepositorySQLC) GetItem(ctx context.Context, itemID int64) (*entity.PurchaseQuotationItem, error) {
-	row, err := r.q.GetPurchaseQuotationItem(ctx, itemID)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPurchaseQuotationItem(ctx, sqlc.GetPurchaseQuotationItemParams{ID: itemID, EnterpriseCode: empresa})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item de cotação %d não encontrado", itemID))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("quotation item %d not found: %w", itemID, err)
 	}
@@ -131,10 +183,18 @@ func (r *PurchaseQuotationRepositorySQLC) GetItem(ctx context.Context, itemID in
 }
 
 func (r *PurchaseQuotationRepositorySQLC) AddSupplier(ctx context.Context, s *entity.PurchaseQuotationSupplier) (*entity.PurchaseQuotationSupplier, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreatePurchaseQuotationSupplier(ctx, sqlc.CreatePurchaseQuotationSupplierParams{
-		QuotationCode: s.QuotationCode,
-		SupplierCode:  s.SupplierCode,
+		QuotationCode:  s.QuotationCode,
+		SupplierCode:   s.SupplierCode,
+		EnterpriseCode: empresa,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("cotação %d ou fornecedor %d não encontrado na empresa", s.QuotationCode, s.SupplierCode))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding quotation supplier: %w", err)
 	}
@@ -142,7 +202,11 @@ func (r *PurchaseQuotationRepositorySQLC) AddSupplier(ctx context.Context, s *en
 }
 
 func (r *PurchaseQuotationRepositorySQLC) ListSuppliers(ctx context.Context, quotationCode int64) ([]*entity.PurchaseQuotationSupplier, error) {
-	rows, err := r.q.ListPurchaseQuotationSuppliers(ctx, quotationCode)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPurchaseQuotationSuppliers(ctx, sqlc.ListPurchaseQuotationSuppliersParams{QuotationCode: quotationCode, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +218,12 @@ func (r *PurchaseQuotationRepositorySQLC) ListSuppliers(ctx context.Context, quo
 }
 
 func (r *PurchaseQuotationRepositorySQLC) UpsertPrice(ctx context.Context, p *entity.PurchaseQuotationPrice) (*entity.PurchaseQuotationPrice, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpsertPurchaseQuotationPrice(ctx, sqlc.UpsertPurchaseQuotationPriceParams{
+		EnterpriseCode:  empresa,
 		QuotationItemID: p.QuotationItemID,
 		SupplierCode:    p.SupplierCode,
 		UnitPrice:       pgutil.ToPgNumericFromFloat64(p.UnitPrice),
@@ -162,6 +231,9 @@ func (r *PurchaseQuotationRepositorySQLC) UpsertPrice(ctx context.Context, p *en
 		PaymentTermCode: p.PaymentTermCode,
 		Notes:           pgutil.ToPgTextFromPtr(p.Notes),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item de cotação %d ou fornecedor %d não encontrado na empresa", p.QuotationItemID, p.SupplierCode))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("upserting quotation price: %w", err)
 	}
@@ -169,7 +241,11 @@ func (r *PurchaseQuotationRepositorySQLC) UpsertPrice(ctx context.Context, p *en
 }
 
 func (r *PurchaseQuotationRepositorySQLC) ListPricesByItem(ctx context.Context, quotationItemID int64) ([]*entity.PurchaseQuotationPrice, error) {
-	rows, err := r.q.ListPurchaseQuotationPricesByItem(ctx, quotationItemID)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPurchaseQuotationPricesByItem(ctx, sqlc.ListPurchaseQuotationPricesByItemParams{QuotationItemID: quotationItemID, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +257,11 @@ func (r *PurchaseQuotationRepositorySQLC) ListPricesByItem(ctx context.Context, 
 }
 
 func (r *PurchaseQuotationRepositorySQLC) ListSelectedPrices(ctx context.Context, quotationCode int64) ([]*entity.PurchaseQuotationPrice, error) {
-	rows, err := r.q.ListSelectedQuotationPrices(ctx, quotationCode)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListSelectedQuotationPrices(ctx, sqlc.ListSelectedQuotationPricesParams{QuotationCode: quotationCode, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +275,16 @@ func (r *PurchaseQuotationRepositorySQLC) ListSelectedPrices(ctx context.Context
 // SelectPrice clears the selection for the item and selects the given price,
 // atomically.
 func (r *PurchaseQuotationRepositorySQLC) SelectPrice(ctx context.Context, priceID int64) (*entity.PurchaseQuotationPrice, error) {
-	price, err := r.q.GetPurchaseQuotationPrice(ctx, priceID)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// O preço só é selecionado se for de cotação da empresa autenticada; as
+	// escritas abaixo usam o item lido aqui.
+	price, err := r.q.GetPurchaseQuotationPrice(ctx, sqlc.GetPurchaseQuotationPriceParams{ID: priceID, EnterpriseCode: empresa})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("preço de cotação %d não encontrado", priceID))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("quotation price %d not found: %w", priceID, err)
 	}

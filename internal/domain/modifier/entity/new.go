@@ -1,13 +1,13 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidDescription = errors.New("a descrição do modificador é obrigatória")
+	ErrInvalidDescription = domainerr.NewValidation("a descrição do modificador é obrigatória")
 )
 
 func NewModifier(

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"mime"
 	"net/http"
@@ -22,13 +21,12 @@ func NewItemSupplierHandler(uc *item_supplier_uc.ItemSupplierUseCase) *ItemSuppl
 
 func (h *ItemSupplierHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpsertItemPreferredSupplierDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.Upsert(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)
@@ -70,7 +68,7 @@ func (h *ItemSupplierHandler) SearchExternal(w http.ResponseWriter, r *http.Requ
 	}
 	res, err := h.uc.SearchExternal(r.Context(), supplier, r.URL.Query().Get("term"))
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, res)
@@ -83,13 +81,12 @@ func (h *ItemSupplierHandler) CreateQualityReport(w http.ResponseWriter, r *http
 		return
 	}
 	var dto request.CreateItemSupplierQualityReportDTO
-	if err = json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	res, err := h.uc.CreateQualityReport(r.Context(), id, dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, res)

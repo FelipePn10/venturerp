@@ -3,7 +3,7 @@ package valueobject
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 	"strings"
 
@@ -27,16 +27,16 @@ type ItemMask struct {
 
 func NewMaskAnswer(questionID, optionID int64, position int, value string) (MaskAnswer, error) {
 	if questionID <= 0 {
-		return MaskAnswer{}, errors.New("pergunta inválida")
+		return MaskAnswer{}, domainerr.NewValidation("pergunta inválida")
 	}
 	if optionID <= 0 {
-		return MaskAnswer{}, errors.New("opção inválida")
+		return MaskAnswer{}, domainerr.NewValidation("opção inválida")
 	}
 	if position <= 0 {
-		return MaskAnswer{}, errors.New("a posição da resposta na máscara deve ser maior que zero")
+		return MaskAnswer{}, domainerr.NewValidation("a posição da resposta na máscara deve ser maior que zero")
 	}
 	if value == "" {
-		return MaskAnswer{}, errors.New("valor de opção inválido")
+		return MaskAnswer{}, domainerr.NewValidation("valor de opção inválido")
 	}
 
 	return MaskAnswer{
@@ -49,10 +49,10 @@ func NewMaskAnswer(questionID, optionID int64, position int, value string) (Mask
 
 func NewItemMask(itemCode int64, answers []MaskAnswer) (ItemMask, error) {
 	if itemCode < 0 {
-		return ItemMask{}, errors.New("código de item inválido")
+		return ItemMask{}, domainerr.NewValidation("código de item inválido")
 	}
 	if len(answers) == 0 {
-		return ItemMask{}, errors.New("a máscara precisa de ao menos uma resposta")
+		return ItemMask{}, domainerr.NewValidation("a máscara precisa de ao menos uma resposta")
 	}
 
 	mask := generateMask(answers)

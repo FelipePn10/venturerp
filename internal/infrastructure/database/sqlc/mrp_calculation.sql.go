@@ -114,19 +114,20 @@ func (q *Queries) CreateConfiguredItemRule(ctx context.Context, arg CreateConfig
 
 const createMRPExceptionMessage = `-- name: CreateMRPExceptionMessage :one
 INSERT INTO mrp_exception_messages
-    (plan_code, item_code, message_type, source_code, source_type, description, enterprise_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING code, plan_code, item_code, message_type, source_code, source_type, description, created_at, enterprise_id
+    (plan_code, item_code, message_type, source_code, source_type, description, enterprise_id, suggested_date)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING code, plan_code, item_code, message_type, source_code, source_type, description, created_at, enterprise_id, suggested_date, handled_at, handled_by, handling_action, handling_note
 `
 
 type CreateMRPExceptionMessageParams struct {
-	PlanCode     int64
-	ItemCode     int64
-	MessageType  string
-	SourceCode   *int64
-	SourceType   pgtype.Text
-	Description  string
-	EnterpriseID *int64
+	PlanCode      int64
+	ItemCode      int64
+	MessageType   string
+	SourceCode    *int64
+	SourceType    pgtype.Text
+	Description   string
+	EnterpriseID  *int64
+	SuggestedDate pgtype.Date
 }
 
 func (q *Queries) CreateMRPExceptionMessage(ctx context.Context, arg CreateMRPExceptionMessageParams) (MrpExceptionMessage, error) {
@@ -138,6 +139,7 @@ func (q *Queries) CreateMRPExceptionMessage(ctx context.Context, arg CreateMRPEx
 		arg.SourceType,
 		arg.Description,
 		arg.EnterpriseID,
+		arg.SuggestedDate,
 	)
 	var i MrpExceptionMessage
 	err := row.Scan(
@@ -150,6 +152,11 @@ func (q *Queries) CreateMRPExceptionMessage(ctx context.Context, arg CreateMRPEx
 		&i.Description,
 		&i.CreatedAt,
 		&i.EnterpriseID,
+		&i.SuggestedDate,
+		&i.HandledAt,
+		&i.HandledBy,
+		&i.HandlingAction,
+		&i.HandlingNote,
 	)
 	return i, err
 }
@@ -212,6 +219,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM planned_orders po
     WHERE po.enterprise_id = $21 AND po.order_number = $1 AND po.is_active = TRUE
 )
+ON CONFLICT (enterprise_id, order_number) WHERE enterprise_id IS NOT NULL AND order_number IS NOT NULL DO NOTHING
     RETURNING code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes, enterprise_id, order_number, warehouse_code, inter_factory, source_enterprise_code, auto_release, mask, route_operation_id, operation_id, supplier_code, service_item_code, remittance_type
 `
 
@@ -239,6 +247,8 @@ type CreateMRPPlannedSuggestionParams struct {
 	EnterpriseID         *int64
 }
 
+// Número já usado por sugestão de outro plano: nenhuma linha, como o NOT
+// EXISTS acima. Erro de unicidade aqui abortaria a transação do cálculo.
 func (q *Queries) CreateMRPPlannedSuggestion(ctx context.Context, arg CreateMRPPlannedSuggestionParams) (MrpPlannedSuggestion, error) {
 	row := q.db.QueryRow(ctx, createMRPPlannedSuggestion,
 		arg.OrderNumber,
@@ -602,6 +612,38 @@ func (q *Queries) GetMRPCalculationLog(ctx context.Context, arg GetMRPCalculatio
 	return i, err
 }
 
+const getMRPExceptionMessage = `-- name: GetMRPExceptionMessage :one
+SELECT code, plan_code, item_code, message_type, source_code, source_type, description, created_at, enterprise_id, suggested_date, handled_at, handled_by, handling_action, handling_note FROM mrp_exception_messages
+WHERE code = $1 AND enterprise_id = $2
+`
+
+type GetMRPExceptionMessageParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) GetMRPExceptionMessage(ctx context.Context, arg GetMRPExceptionMessageParams) (MrpExceptionMessage, error) {
+	row := q.db.QueryRow(ctx, getMRPExceptionMessage, arg.Code, arg.EnterpriseID)
+	var i MrpExceptionMessage
+	err := row.Scan(
+		&i.Code,
+		&i.PlanCode,
+		&i.ItemCode,
+		&i.MessageType,
+		&i.SourceCode,
+		&i.SourceType,
+		&i.Description,
+		&i.CreatedAt,
+		&i.EnterpriseID,
+		&i.SuggestedDate,
+		&i.HandledAt,
+		&i.HandledBy,
+		&i.HandlingAction,
+		&i.HandlingNote,
+	)
+	return i, err
+}
+
 const getMRPItemProfiles = `-- name: GetMRPItemProfiles :many
 SELECT id, item_code, plan_code, calculation_date, demand, orders_planned, orders_firm, stock_projected, llc, need_date, created_at, code, enterprise_id FROM mrp_item_profiles WHERE item_code = $1 AND plan_code = $2 AND enterprise_id = $3 ORDER BY need_date
 `
@@ -826,9 +868,17 @@ func (q *Queries) ListMRPCalculationLogsByPlan(ctx context.Context, arg ListMRPC
 }
 
 const listMRPExceptionMessages = `-- name: ListMRPExceptionMessages :many
-SELECT code, plan_code, item_code, message_type, source_code, source_type, description, created_at, enterprise_id FROM mrp_exception_messages
-WHERE plan_code = $1 AND enterprise_id = $2
-ORDER BY item_code, code
+SELECT m.code, m.plan_code, m.item_code, m.message_type, m.source_code, m.source_type,
+       m.description, m.created_at, m.suggested_date, m.handled_at, m.handled_by,
+       m.handling_action, m.handling_note,
+       COALESCE(u.name, '')::text AS handled_by_name,
+       po.order_number AS source_order_number, po.need_date AS source_need_date
+FROM mrp_exception_messages m
+LEFT JOIN users u ON u.id = m.handled_by
+LEFT JOIN planned_orders po ON po.code = m.source_code AND po.enterprise_id = m.enterprise_id
+                           AND m.source_type = 'PLANNED_ORDER'
+WHERE m.plan_code = $1 AND m.enterprise_id = $2
+ORDER BY m.item_code, m.code
 `
 
 type ListMRPExceptionMessagesParams struct {
@@ -836,15 +886,34 @@ type ListMRPExceptionMessagesParams struct {
 	EnterpriseID *int64
 }
 
-func (q *Queries) ListMRPExceptionMessages(ctx context.Context, arg ListMRPExceptionMessagesParams) ([]MrpExceptionMessage, error) {
+type ListMRPExceptionMessagesRow struct {
+	Code              int64
+	PlanCode          int64
+	ItemCode          int64
+	MessageType       string
+	SourceCode        *int64
+	SourceType        pgtype.Text
+	Description       string
+	CreatedAt         pgtype.Timestamptz
+	SuggestedDate     pgtype.Date
+	HandledAt         pgtype.Timestamptz
+	HandledBy         pgtype.UUID
+	HandlingAction    pgtype.Text
+	HandlingNote      pgtype.Text
+	HandledByName     string
+	SourceOrderNumber *int64
+	SourceNeedDate    pgtype.Date
+}
+
+func (q *Queries) ListMRPExceptionMessages(ctx context.Context, arg ListMRPExceptionMessagesParams) ([]ListMRPExceptionMessagesRow, error) {
 	rows, err := q.db.Query(ctx, listMRPExceptionMessages, arg.PlanCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []MrpExceptionMessage
+	var items []ListMRPExceptionMessagesRow
 	for rows.Next() {
-		var i MrpExceptionMessage
+		var i ListMRPExceptionMessagesRow
 		if err := rows.Scan(
 			&i.Code,
 			&i.PlanCode,
@@ -854,7 +923,14 @@ func (q *Queries) ListMRPExceptionMessages(ctx context.Context, arg ListMRPExcep
 			&i.SourceType,
 			&i.Description,
 			&i.CreatedAt,
-			&i.EnterpriseID,
+			&i.SuggestedDate,
+			&i.HandledAt,
+			&i.HandledBy,
+			&i.HandlingAction,
+			&i.HandlingNote,
+			&i.HandledByName,
+			&i.SourceOrderNumber,
+			&i.SourceNeedDate,
 		); err != nil {
 			return nil, err
 		}
@@ -962,6 +1038,50 @@ func (q *Queries) ListSalesOrderDemandsByItem(ctx context.Context, arg ListSales
 		return nil, err
 	}
 	return items, nil
+}
+
+const markMRPExceptionHandled = `-- name: MarkMRPExceptionHandled :one
+UPDATE mrp_exception_messages
+   SET handled_at = NOW(), handled_by = $1, handling_action = $2,
+       handling_note = $3
+ WHERE code = $4 AND enterprise_id = $5 AND handled_at IS NULL
+RETURNING code, plan_code, item_code, message_type, source_code, source_type, description, created_at, enterprise_id, suggested_date, handled_at, handled_by, handling_action, handling_note
+`
+
+type MarkMRPExceptionHandledParams struct {
+	HandledBy      pgtype.UUID
+	HandlingAction pgtype.Text
+	HandlingNote   pgtype.Text
+	Code           int64
+	EnterpriseID   *int64
+}
+
+func (q *Queries) MarkMRPExceptionHandled(ctx context.Context, arg MarkMRPExceptionHandledParams) (MrpExceptionMessage, error) {
+	row := q.db.QueryRow(ctx, markMRPExceptionHandled,
+		arg.HandledBy,
+		arg.HandlingAction,
+		arg.HandlingNote,
+		arg.Code,
+		arg.EnterpriseID,
+	)
+	var i MrpExceptionMessage
+	err := row.Scan(
+		&i.Code,
+		&i.PlanCode,
+		&i.ItemCode,
+		&i.MessageType,
+		&i.SourceCode,
+		&i.SourceType,
+		&i.Description,
+		&i.CreatedAt,
+		&i.EnterpriseID,
+		&i.SuggestedDate,
+		&i.HandledAt,
+		&i.HandledBy,
+		&i.HandlingAction,
+		&i.HandlingNote,
+	)
+	return i, err
 }
 
 const startMRPCalculation = `-- name: StartMRPCalculation :one

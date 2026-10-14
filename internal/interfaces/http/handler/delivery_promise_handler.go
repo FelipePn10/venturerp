@@ -105,7 +105,7 @@ func (h *DeliveryPromiseHandler) handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, errorsuc.ErrUnauthorized):
 		security.RespondError(w, http.StatusUnauthorized, err.Error())
 	case func() bool { _, ok := errorsuc.AsValidation(err); return ok }():
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 	default:
 		security.RespondUseCaseError(w, err)
 	}

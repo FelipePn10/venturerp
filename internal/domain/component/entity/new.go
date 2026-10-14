@@ -1,16 +1,16 @@
 package entity
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidCode      = errors.New("informe o código")
-	ErrInvalidName      = errors.New("informe o nome")
-	ErrInvalidWarehouse = errors.New("informe a mercadoria")
-	ErrInvalidGroupCode = errors.New("o código do grupo deve ser maior que zero")
+	ErrInvalidCode      = domainerr.NewValidation("informe o código")
+	ErrInvalidName      = domainerr.NewValidation("informe o nome")
+	ErrInvalidWarehouse = domainerr.NewValidation("informe a mercadoria")
+	ErrInvalidGroupCode = domainerr.NewValidation("o código do grupo deve ser maior que zero")
 )
 
 func NewComponent(
@@ -42,7 +42,7 @@ func NewComponent(
 
 func ValidateComponentDeletion(id int64) error {
 	if id < 0 {
-		return errors.New("o produto deve ser um código maior que zero")
+		return domainerr.NewValidation("o produto deve ser um código maior que zero")
 	}
 	return nil
 }

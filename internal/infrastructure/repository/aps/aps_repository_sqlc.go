@@ -164,7 +164,11 @@ func scanTenantSequences(rows pgx.Rows) ([]*entity.ProductionSequence, error) {
 }
 
 func (r *APSRepositorySQLC) GetOpenProductionOrders(ctx context.Context) ([]domainrepo.OrderRow, error) {
-	rows, err := r.q.GetOpenProductionOrders(ctx)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetOpenProductionOrders(ctx, e)
 	if err != nil {
 		return nil, fmt.Errorf("fetching open production orders: %w", err)
 	}
@@ -180,7 +184,11 @@ func (r *APSRepositorySQLC) GetOpenProductionOrders(ctx context.Context) ([]doma
 }
 
 func (r *APSRepositorySQLC) GetOrderOperations(ctx context.Context, orderID int64) ([]domainrepo.OpRow, error) {
-	rows, err := r.q.GetOrderOperations(ctx, orderID)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetOrderOperations(ctx, orderID, e)
 	if err != nil {
 		return nil, fmt.Errorf("fetching operations for order %d: %w", orderID, err)
 	}
@@ -208,7 +216,11 @@ func (r *APSRepositorySQLC) GetOrderOperations(ctx context.Context, orderID int6
 // GetOrderOperationEdges traz a rede de precedências do roteiro já traduzida
 // para as operações desta ordem.
 func (r *APSRepositorySQLC) GetOrderOperationEdges(ctx context.Context, orderID int64) ([]domainrepo.OpEdge, error) {
-	rows, err := r.q.GetOrderOperationEdges(ctx, orderID)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetOrderOperationEdges(ctx, orderID, e)
 	if err != nil {
 		return nil, fmt.Errorf("carregando precedências da ordem %d: %w", orderID, err)
 	}
@@ -233,7 +245,11 @@ func (r *APSRepositorySQLC) GetWorkCenterCapacity(ctx context.Context, workCente
 // ─── monthly schedule board (Gantt) ───────────────────────────────────────────
 
 func (r *APSRepositorySQLC) ListScheduledBars(ctx context.Context, from, to time.Time) ([]*entity.GanttBar, error) {
-	rows, err := r.q.ListGanttScheduledBars(ctx, pgutil.ToPgTimestamptz(from), pgutil.ToPgTimestamptz(to))
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListGanttScheduledBars(ctx, pgutil.ToPgTimestamptz(from), pgutil.ToPgTimestamptz(to), e)
 	if err != nil {
 		return nil, fmt.Errorf("listing scheduled bars: %w", err)
 	}
@@ -246,6 +262,8 @@ func (r *APSRepositorySQLC) ListScheduledBars(ctx context.Context, from, to time
 			ProductionOrderID: row.ProductionOrderID,
 			OrderNumber:       row.OrderNumber,
 			ItemCode:          row.ItemCode,
+			ItemBusinessCode:  row.ItemBusinessCode,
+			ItemName:          row.ItemName,
 			Mask:              row.Mask,
 			WorkCenterID:      row.WorkCenterID,
 			WorkCenterName:    row.WorkCenterName,
@@ -275,7 +293,11 @@ func (r *APSRepositorySQLC) ListScheduledBars(ctx context.Context, from, to time
 }
 
 func (r *APSRepositorySQLC) ListFallbackBars(ctx context.Context, from, to time.Time) ([]*entity.GanttBar, error) {
-	rows, err := r.q.ListGanttFallbackBars(ctx, pgutil.ToPgDate(from), pgutil.ToPgDate(to))
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListGanttFallbackBars(ctx, pgutil.ToPgDate(from), pgutil.ToPgDate(to), e)
 	if err != nil {
 		return nil, fmt.Errorf("listing fallback bars: %w", err)
 	}
@@ -295,6 +317,8 @@ func (r *APSRepositorySQLC) ListFallbackBars(ctx context.Context, from, to time.
 			ProductionOrderID: row.ID,
 			OrderNumber:       row.OrderNumber,
 			ItemCode:          row.ItemCode,
+			ItemBusinessCode:  row.ItemBusinessCode,
+			ItemName:          row.ItemName,
 			Mask:              row.Mask,
 			WorkCenterID:      0,
 			WorkCenterName:    "",
@@ -315,7 +339,11 @@ func (r *APSRepositorySQLC) ListFallbackBars(ctx context.Context, from, to time.
 }
 
 func (r *APSRepositorySQLC) ListResourceLoad(ctx context.Context, from, to time.Time) ([]*entity.GanttResourceLoad, error) {
-	rows, err := r.q.ListGanttResourceLoad(ctx, pgutil.ToPgDate(from), pgutil.ToPgDate(to))
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListGanttResourceLoad(ctx, pgutil.ToPgDate(from), pgutil.ToPgDate(to), e)
 	if err != nil {
 		return nil, fmt.Errorf("listing resource load: %w", err)
 	}
@@ -340,7 +368,11 @@ func (r *APSRepositorySQLC) ListResourceLoad(ctx context.Context, from, to time.
 }
 
 func (r *APSRepositorySQLC) ListDependencies(ctx context.Context, from, to time.Time) ([]*entity.GanttDependency, error) {
-	rows, err := r.q.ListGanttDependencies(ctx, pgutil.ToPgTimestamptz(from), pgutil.ToPgTimestamptz(to))
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListGanttDependencies(ctx, pgutil.ToPgTimestamptz(from), pgutil.ToPgTimestamptz(to), e)
 	if err != nil {
 		return nil, fmt.Errorf("listing dependencies: %w", err)
 	}
@@ -348,7 +380,11 @@ func (r *APSRepositorySQLC) ListDependencies(ctx context.Context, from, to time.
 }
 
 func (r *APSRepositorySQLC) ListOrderDependencies(ctx context.Context, orderID int64) ([]*entity.GanttDependency, error) {
-	rows, err := r.q.ListGanttOrderDependencies(ctx, orderID)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListGanttOrderDependencies(ctx, orderID, e)
 	if err != nil {
 		return nil, fmt.Errorf("listing dependencies for order %d: %w", orderID, err)
 	}

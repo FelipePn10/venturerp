@@ -2,7 +2,9 @@ package item_supplier
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/item_supplier/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
@@ -34,11 +36,26 @@ func (r *ItemSupplierRepositorySQLC) Upsert(ctx context.Context, s *entity.ItemP
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	// Código de item e de fornecedor são únicos no banco inteiro: sem esta
+	// conferência, o vínculo apontava para o item ou o fornecedor de outra empresa.
+	var doEmpresa bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM items WHERE code=$2 AND enterprise_id=$1)
+		AND EXISTS(SELECT 1 FROM suppliers WHERE code=$3 AND enterprise_id=$1)`, s.EnterpriseID, s.ItemCode, s.SupplierCode).Scan(&doEmpresa); err != nil {
+		return nil, err
+	}
+	if !doEmpresa {
+		return nil, errorsuc.NewNotFoundError("item ou fornecedor não encontrado na empresa")
+	}
 	if s.SupplierUF == nil {
-		_ = tx.QueryRow(ctx, `SELECT a.uf FROM suppliers p JOIN supplier_addresses a ON a.supplier_id=p.id WHERE p.code=$1 ORDER BY a.is_default DESC,a.id LIMIT 1`, s.SupplierCode).Scan(&s.SupplierUF)
+		// UF do endereço do fornecedor da mesma empresa; sem endereço, fica vazia.
+		if err = tx.QueryRow(ctx, `SELECT a.uf FROM suppliers p JOIN supplier_addresses a ON a.supplier_id=p.id WHERE p.code=$1 AND p.enterprise_id=$2 ORDER BY a.is_default DESC,a.id LIMIT 1`, s.SupplierCode, s.EnterpriseID).Scan(&s.SupplierUF); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 	}
 	if s.ClassificationID == nil && s.ClassificationDate == nil {
-		_ = tx.QueryRow(ctx, `SELECT classification_id,classification_date,classification_grade FROM item_preferred_suppliers WHERE enterprise_id=$1 AND item_code=$2 AND supplier_code=$3 AND is_active LIMIT 1`, s.EnterpriseID, s.ItemCode, s.SupplierCode).Scan(&s.ClassificationID, &s.ClassificationDate, &s.ClassificationGrade)
+		if err = tx.QueryRow(ctx, `SELECT classification_id,classification_date,classification_grade FROM item_preferred_suppliers WHERE enterprise_id=$1 AND item_code=$2 AND supplier_code=$3 AND is_active LIMIT 1`, s.EnterpriseID, s.ItemCode, s.SupplierCode).Scan(&s.ClassificationID, &s.ClassificationDate, &s.ClassificationGrade); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 	}
 	if s.IsPreferred {
 		if _, err = tx.Exec(ctx, `UPDATE item_preferred_suppliers SET is_preferred=FALSE,ranking=GREATEST(ranking,2),updated_at=NOW() WHERE enterprise_id=$1 AND item_code=$2 AND supplier_code<>$3 AND is_active`, s.EnterpriseID, s.ItemCode, s.SupplierCode); err != nil {

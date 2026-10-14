@@ -68,21 +68,25 @@ type GanttBar struct {
 	ProductionOrderID int64
 	OrderNumber       int64
 	ItemCode          int64
-	Mask              string
-	WorkCenterID      int64 // machine_types.id; 0 when unknown (fallback)
-	WorkCenterName    string
-	OperationID       *int64
-	OperationName     string
-	SequencePosition  int
-	Start             time.Time
-	End               time.Time
-	DurationHours     float64
-	Status            string // sequence status, or order status for fallback bars
-	Priority          string
-	PercentComplete   float64 // 0..100
-	IsLate            bool    // behind schedule / past due and not finished
-	IsFallback        bool    // plotted from the order's dates, not APS-sequenced
-	ColorHex          string  // resolved fill, by status/priority/lateness
+	// ItemBusinessCode/ItemName identificam o item para o usuário — o
+	// ItemCode é a chave interna.
+	ItemBusinessCode string
+	ItemName         string
+	Mask             string
+	WorkCenterID     int64 // machine_types.id; 0 when unknown (fallback)
+	WorkCenterName   string
+	OperationID      *int64
+	OperationName    string
+	SequencePosition int
+	Start            time.Time
+	End              time.Time
+	DurationHours    float64
+	Status           string // sequence status, or order status for fallback bars
+	Priority         string
+	PercentComplete  float64 // 0..100
+	IsLate           bool    // behind schedule / past due and not finished
+	IsFallback       bool    // plotted from the order's dates, not APS-sequenced
+	ColorHex         string  // resolved fill, by status/priority/lateness
 }
 
 // GanttRow is a single horizontal lane of the board.

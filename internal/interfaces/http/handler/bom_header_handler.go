@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,8 +21,7 @@ func NewBomHeaderHandler(uc *bom_header_uc.BomHeaderUseCase) *BomHeaderHandler {
 
 func (h *BomHeaderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateBomHeaderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.Create(r.Context(), dto)
@@ -70,8 +68,7 @@ func (h *BomHeaderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var dto request.UpdateBomHeaderStatusDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id

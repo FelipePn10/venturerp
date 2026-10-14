@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -75,8 +74,7 @@ type createPlanRequest struct {
 
 func (h *AccountingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var req createPlanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
@@ -100,7 +98,7 @@ func (h *AccountingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := h.planUC.Create(r.Context(), p)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, created)
@@ -132,8 +130,7 @@ type createAccountRequest struct {
 
 func (h *AccountingHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	var req createAccountRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
@@ -162,7 +159,7 @@ func (h *AccountingHandler) CreateAccount(w http.ResponseWriter, r *http.Request
 	}
 	created, err := h.acctUC.Create(r.Context(), a)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, created)
@@ -203,8 +200,7 @@ type createJournalEntryRequest struct {
 
 func (h *AccountingHandler) CreateJournalEntry(w http.ResponseWriter, r *http.Request) {
 	var req createJournalEntryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	entryDate, err := time.Parse("2006-01-02", req.EntryDate)
@@ -229,7 +225,7 @@ func (h *AccountingHandler) CreateJournalEntry(w http.ResponseWriter, r *http.Re
 	}
 	created, err := h.entryUC.Create(r.Context(), e)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, created)
@@ -272,8 +268,7 @@ type createDemonstrativeRequest struct {
 
 func (h *AccountingHandler) CreateDemonstrative(w http.ResponseWriter, r *http.Request) {
 	var req createDemonstrativeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	d := &accountingEntity.AccountingDemonstrative{
@@ -283,7 +278,7 @@ func (h *AccountingHandler) CreateDemonstrative(w http.ResponseWriter, r *http.R
 	}
 	created, err := h.demUC.Create(r.Context(), d)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, created)
@@ -302,8 +297,7 @@ type generateECDRequest struct {
 
 func (h *AccountingHandler) GenerateECD(w http.ResponseWriter, r *http.Request) {
 	var req generateECDRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &req) {
 		return
 	}
 	from, err := time.Parse("2006-01-02", req.From)
@@ -326,7 +320,7 @@ func (h *AccountingHandler) GenerateECD(w http.ResponseWriter, r *http.Request) 
 		Livros:    req.Livros,
 	})
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 

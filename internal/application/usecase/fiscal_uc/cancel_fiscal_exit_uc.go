@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 )
 
 type CancelFiscalExitUseCase struct {
+	// Efeitos cancela títulos e devolve o pedido como pendência reprocessável.
+	Efeitos       *EfeitosNFe
 	Repo          repository.FiscalRepository
 	FinancialRepo financialRepo.FinancialRepository
 	Auth          ports.AuthService
@@ -68,12 +71,12 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	}
 
 	if exit.Status != entity.ExitStatusAuthorized {
-		return nil, fmt.Errorf("apenas NF-e autorizadas podem ser canceladas, status atual: %s", exit.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("apenas NF-e autorizadas podem ser canceladas, status atual: %s", exit.Status))
 	}
 
 	// 24-hour window check
 	if time.Since(exit.DataEmissao) > 24*time.Hour {
-		return nil, fmt.Errorf("prazo de cancelamento expirado: NF-e emitida há mais de 24 horas")
+		return nil, errorsuc.NewValidationError("prazo de cancelamento expirado: NF-e emitida há mais de 24 horas")
 	}
 
 	// Devolução que já mexeu em título pago depois não pode ser cancelada na
@@ -94,7 +97,11 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	if cfg.FocusNfeToken != nil && *cfg.FocusNfeToken != "" && exit.FocusRef != nil {
 		cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 		cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-			_ = uc.Repo.SaveFocusLog(ctx, params.ID, endpoint, method, reqBody, respBody, statusCode, durationMs)
+			if errLog := uc.Repo.SaveFocusLog(ctx, params.ID, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+				// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+				// de registrar a comunicação não pode sumir.
+				slog.Error("falha ao gravar o registro da comunicação com a Focus", "documento", params.ID, "endpoint", endpoint, "erro", errLog)
+			}
 		})
 		if _, err := cli.CancelarNFe(ctx, *exit.FocusRef, params.Motivo); err != nil {
 			return nil, errorsuc.NewExternalServiceError("Focus NF-e (cancelamento)", err.Error())
@@ -106,9 +113,22 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 		return nil, err
 	}
 
-	// Revert associated Conta a Receber
-	if uc.FinancialRepo != nil {
-		_ = uc.FinancialRepo.CancelContasReceberByFiscalExit(ctx, params.ID)
+	// Títulos e pedido: a nota já está cancelada na SEFAZ, então viram pendência
+	// (como na autorização) — se falharem, nada deles fica pela metade e o
+	// reprocesso automático/manual conclui. Antes a falha era ignorada e o título
+	// de uma nota cancelada continuava a receber.
+	var avisosEfeitos []string
+	if uc.Efeitos != nil && exit.FiscalEntryID == nil {
+		if err := uc.Efeitos.Registrar(ctx, params.ID, entity.PendenciaCancelamento, userID); err != nil {
+			slog.Error("NF-e cancelada sem pendência de efeitos registrada", "nota", params.ID, "erro", err)
+			avisosEfeitos = append(avisosEfeitos, "a nota foi cancelada, mas a pendência dos títulos/pedido não pôde ser registrada — títulos e pedido NÃO foram atualizados: "+err.Error())
+		} else if err := uc.Efeitos.Executar(ctx, params.ID, entity.PendenciaCancelamento, userID); err != nil {
+			avisosEfeitos = append(avisosEfeitos, "nota cancelada; o cancelamento dos títulos e a volta do pedido ficaram PENDENTES e serão reprocessados automaticamente: "+err.Error())
+		}
+	} else if uc.FinancialRepo != nil {
+		if err := uc.FinancialRepo.CancelContasReceberByFiscalExit(ctx, params.ID); err != nil {
+			return nil, fmt.Errorf("a NF-e %d foi cancelada, mas os títulos a receber não foram cancelados: %w", exit.NumeroNF, err)
+		}
 	}
 	// A mercadoria não saiu: o estoque volta pelo mesmo custo e a venda é
 	// estornada na contabilidade.
@@ -121,16 +141,22 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 
 	// O que a nota atendeu do pedido volta a ficar pendente. Sem isso o pedido
 	// continuaria "faturado" com a nota cancelada e não daria para refaturar.
-	if uc.Faturamento != nil && exit.SalesOrderCode != nil {
+	// (Com Efeitos configurado isso já foi feito acima, na pendência.)
+	if uc.Efeitos == nil && uc.Faturamento != nil && exit.SalesOrderCode != nil {
 		ligada, _, err := uc.Faturamento.RegistrarFaturamento(ctx, params.ID, true)
 		if err != nil {
 			return nil, fmt.Errorf("a NF-e %d foi cancelada, mas o pedido %d não voltou a ficar pendente: %w",
 				exit.NumeroNF, *exit.SalesOrderCode, err)
 		}
 		if ligada && uc.Pedidos != nil {
-			if pedido, err := uc.Pedidos.GetByCode(ctx, *exit.SalesOrderCode); err == nil && pedido != nil &&
-				pedido.Status == salesentity.SalesOrderStatusInvoiced {
-				_ = uc.Pedidos.ChangeStatus(ctx, *exit.SalesOrderCode, salesentity.SalesOrderStatusOrder)
+			pedido, err := uc.Pedidos.GetByCode(ctx, *exit.SalesOrderCode)
+			if err != nil {
+				return nil, fmt.Errorf("a NF-e %d foi cancelada, mas o pedido %d não pôde ser lido: %w", exit.NumeroNF, *exit.SalesOrderCode, err)
+			}
+			if pedido != nil && pedido.Status == salesentity.SalesOrderStatusInvoiced {
+				if err := uc.Pedidos.ChangeStatus(ctx, *exit.SalesOrderCode, salesentity.SalesOrderStatusOrder); err != nil {
+					return nil, fmt.Errorf("a NF-e %d foi cancelada, mas o pedido %d não voltou para pedido: %w", exit.NumeroNF, *exit.SalesOrderCode, err)
+				}
 			}
 		}
 	}
@@ -152,6 +178,7 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	}
 
 	resp := toFiscalExitResponse(updated)
+	resp.Warnings = append(resp.Warnings, avisosEfeitos...)
 	resp.Warnings = append(resp.Warnings, avisos...)
 	return resp, nil
 }

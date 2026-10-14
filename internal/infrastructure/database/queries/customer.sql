@@ -1,153 +1,157 @@
 -- ─── Regions ─────────────────────────────────────────────────────────────────
 
 -- name: CreateRegion :one
-INSERT INTO regions (code, description, uf, city, created_by)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO regions (enterprise_id, code, description, uf, city, created_by)
+VALUES ($6, $1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateRegion :one
 UPDATE regions
 SET description = $2, uf = $3, city = $4, is_active = $5
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $6
 RETURNING *;
 
 -- name: GetRegionByCode :one
-SELECT * FROM regions WHERE code = $1;
+SELECT * FROM regions WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListRegions :many
 SELECT * FROM regions
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextRegionCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM regions;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM regions WHERE enterprise_id = $1;
 
 -- ─── Market Segments ──────────────────────────────────────────────────────────
 
 -- name: CreateMarketSegment :one
-INSERT INTO market_segments (code, description, parent_id, has_pis_cofins_retention, retention_indicator)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO market_segments (enterprise_id, code, description, parent_id, has_pis_cofins_retention, retention_indicator)
+VALUES ($6, $1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateMarketSegment :one
 UPDATE market_segments
 SET description = $2, parent_id = $3, has_pis_cofins_retention = $4,
     retention_indicator = $5, is_active = $6
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $7
 RETURNING *;
 
 -- name: GetMarketSegmentByCode :one
-SELECT * FROM market_segments WHERE code = $1;
+SELECT * FROM market_segments WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListMarketSegments :many
 SELECT * FROM market_segments
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextMarketSegmentCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM market_segments;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM market_segments WHERE enterprise_id = $1;
 
 -- ─── Customer Contact Types ───────────────────────────────────────────────────
 
 -- name: CreateContactType :one
-INSERT INTO customer_contact_types (code, description)
-VALUES ($1, $2)
+INSERT INTO customer_contact_types (enterprise_id, code, description)
+VALUES ($3, $1, $2)
 RETURNING *;
 
 -- name: UpdateContactType :one
 UPDATE customer_contact_types
 SET description = $2, is_active = $3
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $4
 RETURNING *;
 
 -- name: GetContactTypeByCode :one
-SELECT * FROM customer_contact_types WHERE code = $1;
+SELECT * FROM customer_contact_types WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListContactTypes :many
 SELECT * FROM customer_contact_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextContactTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customer_contact_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customer_contact_types WHERE enterprise_id = $1;
 
 -- ─── Customer Types ───────────────────────────────────────────────────────────
 
 -- name: CreateCustomerType :one
-INSERT INTO customer_types (code, description, category, delivery_days)
-VALUES ($1, $2, $3, $4)
+INSERT INTO customer_types (enterprise_id, code, description, category, delivery_days)
+VALUES ($5, $1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpdateCustomerType :one
 UPDATE customer_types
 SET description = $2, category = $3, delivery_days = $4, is_active = $5
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $6
 RETURNING *;
 
 -- name: GetCustomerTypeByCode :one
-SELECT * FROM customer_types WHERE code = $1;
+SELECT * FROM customer_types WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListCustomerTypes :many
 SELECT * FROM customer_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- ─── Carriers ─────────────────────────────────────────────────────────────────
 
 -- name: CreateCarrier :one
-INSERT INTO carriers (code, description, billing_type, uses_credit_limit, consider_available,
+INSERT INTO carriers (enterprise_id, code, description, billing_type, uses_credit_limit, consider_available,
                       postpone_due_date, receipt_days, payment_days)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($9, $1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: UpdateCarrier :one
 UPDATE carriers
 SET description = $2, billing_type = $3, uses_credit_limit = $4, consider_available = $5,
     postpone_due_date = $6, receipt_days = $7, payment_days = $8, is_active = $9
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $10
 RETURNING *;
 
 -- name: GetCarrierByCode :one
-SELECT * FROM carriers WHERE code = $1;
+SELECT * FROM carriers WHERE code = $1 AND enterprise_id = $2;
 
 -- name: GetCarrierByID :one
-SELECT * FROM carriers WHERE id = $1;
+SELECT * FROM carriers WHERE id = $1 AND enterprise_id = $2;
 
 -- name: ListCarriers :many
 SELECT * FROM carriers
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextCarrierCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carriers;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carriers WHERE enterprise_id = $1;
 
 -- ─── Carrier Groups ───────────────────────────────────────────────────────────
 
 -- name: CreateCarrierGroup :one
-INSERT INTO carrier_groups (code, description)
-VALUES ($1, $2)
+INSERT INTO carrier_groups (enterprise_id, code, description)
+VALUES ($3, $1, $2)
 RETURNING *;
 
 -- name: GetCarrierGroupByCode :one
-SELECT * FROM carrier_groups WHERE code = $1;
+SELECT * FROM carrier_groups WHERE code = $1 AND enterprise_id = $2;
 
 -- name: UpdateCarrierGroup :one
-UPDATE carrier_groups SET description=$2 WHERE id=$1 RETURNING *;
+UPDATE carrier_groups SET description=$2 WHERE id=$1 AND enterprise_id = $3 RETURNING *;
 
 -- name: ListCarrierGroups :many
-SELECT * FROM carrier_groups ORDER BY code;
+SELECT * FROM carrier_groups WHERE enterprise_id = $1 ORDER BY code;
 
--- name: AddCarrierToGroup :exec
+-- name: AddCarrierToGroup :execrows
+-- Grupo e portador têm de ser da empresa.
 INSERT INTO carrier_group_carriers (carrier_group_id, carrier_id)
-VALUES ($1, $2)
+SELECT $1, $2
+ WHERE EXISTS (SELECT 1 FROM carrier_groups g WHERE g.id = $1 AND g.enterprise_id = $3)
+   AND EXISTS (SELECT 1 FROM carriers c WHERE c.id = $2 AND c.enterprise_id = $3)
 ON CONFLICT DO NOTHING;
 
 -- name: RemoveCarrierFromGroup :exec
 DELETE FROM carrier_group_carriers
-WHERE carrier_group_id = $1 AND carrier_id = $2;
+WHERE carrier_group_id = $1 AND carrier_id = $2
+  AND EXISTS (SELECT 1 FROM carrier_groups g WHERE g.id = $1 AND g.enterprise_id = $3);
 
 -- name: NextCarrierGroupCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carrier_groups;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carrier_groups WHERE enterprise_id = $1;
 
 -- ─── Payment Conditions ───────────────────────────────────────────────────────
 
@@ -252,7 +256,7 @@ SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM sales_tables;
 -- ─── Invoice Types ────────────────────────────────────────────────────────────
 
 -- name: CreateInvoiceType :one
-INSERT INTO invoice_types (
+INSERT INTO invoice_types (enterprise_id, 
     code, description, type, stock_movement, icms_type,
     icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct,
     issqn_pct, ir_pct, csll_pct, inss_pct,
@@ -274,7 +278,7 @@ INSERT INTO invoice_types (
     desc_icms_licitacoes, sisdeclara,
     cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal
 ) VALUES (
-    $1, $2, $3, $4, $5,
+    $73, $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
     $11, $12, $13, $14,
     $15, $16, $17,
@@ -326,24 +330,24 @@ SET description = $2, type = $3, stock_movement = $4, icms_type = $5,
     desc_icms_licitacoes = $68, sisdeclara = $69,
     cod_clas_trib = $70, cod_clas_trib_trib_reg = $71,
     cod_motivo_rest_comp_icms_st = $72, cod_beneficio_fiscal = $73
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $74
 RETURNING *;
 
 -- name: GetInvoiceTypeByCode :one
-SELECT * FROM invoice_types WHERE code = $1;
+SELECT * FROM invoice_types WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListInvoiceTypes :many
 SELECT * FROM invoice_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextInvoiceTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM invoice_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM invoice_types WHERE enterprise_id = $1;
 
 -- ─── Tax Types ────────────────────────────────────────────────────────────────
 
 -- name: CreateTaxType :one
-INSERT INTO tax_types (
+INSERT INTO tax_types (enterprise_id, 
     code, description,
     ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses,
     icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses,
@@ -353,7 +357,7 @@ INSERT INTO tax_types (
     ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight,
     is_consumer
 ) VALUES (
-    $1, $2,
+    $24, $1, $2,
     $3, $4, $5, $6,
     $7, $8, $9, $10, $11,
     $12, $13, $14,
@@ -373,23 +377,24 @@ SET description = $2,
     csll_base_total_items = $17, csll_base_subtract_discount = $18, csll_base_add_freight = $19,
     ir_base_total_items = $20, ir_base_subtract_discount = $21, ir_base_add_freight = $22,
     is_consumer = $23, is_active = $24
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = $25
 RETURNING *;
 
 -- name: GetTaxTypeByCode :one
-SELECT * FROM tax_types WHERE code = $1;
+SELECT * FROM tax_types WHERE code = $1 AND enterprise_id = $2;
 
 -- name: ListTaxTypes :many
 SELECT * FROM tax_types
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextTaxTypeCode :one
-SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM tax_types;
+SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM tax_types WHERE enterprise_id = $1;
 
 -- ─── Customers ────────────────────────────────────────────────────────────────
 
 -- name: CreateCustomer :one
+-- O cliente pertence à empresa que o cadastrou (convenção enterprise_id).
 INSERT INTO customers (
     code, corporate_code, is_corporate, name, trade_name,
     document_type, document_number, state_registration, municipal_registration,
@@ -397,7 +402,7 @@ INSERT INTO customers (
     region_id, market_segment_id, customer_type_id,
     payment_condition_id, sales_table_id, carrier_id, carrier_group_id,
     invoice_type_id, tax_type_id, payment_cond_visibility,
-    credit_limit, website, created_by
+    credit_limit, website, created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
@@ -405,7 +410,7 @@ INSERT INTO customers (
     $12, $13, $14,
     $15, $16, $17, $18,
     $19, $20, $21,
-    $22, $23, $24
+    $22, $23, $24, $25
 ) RETURNING *;
 
 -- name: UpdateCustomer :one
@@ -417,45 +422,54 @@ SET name = $2, trade_name = $3, state_registration = $4, municipal_registration 
     carrier_group_id = $14, invoice_type_id = $15, tax_type_id = $16,
     payment_cond_visibility = $17, credit_limit = $18, website = $19,
     is_active = $20, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: GetCustomerByCode :one
-SELECT * FROM customers WHERE code = $1;
+SELECT * FROM customers WHERE code = $1 AND enterprise_id = $2;
 
 -- name: GetCustomerByDocument :one
-SELECT * FROM customers WHERE document_number = $1 LIMIT 1;
+SELECT * FROM customers WHERE document_number = $1 AND enterprise_id = $2 LIMIT 1;
 
 -- name: ListCustomers :many
 SELECT * FROM customers
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE enterprise_id = sqlc.arg(enterprise_id)
+  AND (sqlc.arg(only_active)::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code;
 
 -- name: ListEstablishments :many
 SELECT * FROM customers
-WHERE corporate_code = $1 AND is_active = TRUE
+WHERE corporate_code = $1 AND enterprise_id = $2 AND is_active = TRUE
 ORDER BY code;
 
--- name: BlockCustomer :exec
+-- name: BlockCustomer :execrows
 UPDATE customers
 SET blocked = TRUE, block_reason = $2, updated_at = NOW()
-WHERE code = $1;
+WHERE code = $1 AND enterprise_id = $3;
 
--- name: UnblockCustomer :exec
+-- name: UnblockCustomer :execrows
 UPDATE customers
 SET blocked = FALSE, block_reason = NULL, updated_at = NOW()
-WHERE code = $1;
+WHERE code = $1 AND enterprise_id = $2;
 
 -- name: NextCustomerCode :one
+-- O código continua crescendo no banco inteiro (não por empresa): um código
+-- novo nunca coincide com o de outra empresa, o que evita confusão em relatório
+-- e integração. A unicidade garantida pelo banco é (empresa, código).
 SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM customers;
 
 -- ─── Customer Addresses ───────────────────────────────────────────────────────
 
 -- name: AddAddress :one
+-- Só grava se o cliente for da empresa autenticada (sem linha = não achou).
 INSERT INTO customer_addresses (
     customer_id, address_type, zip_code, street, number,
     complement, neighborhood, city, uf, country, is_default
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+)
+SELECT c.id, sqlc.arg(address_type), sqlc.arg(zip_code), sqlc.arg(street), sqlc.arg(number),
+       sqlc.arg(complement), sqlc.arg(neighborhood), sqlc.arg(city), sqlc.arg(uf), sqlc.arg(country), sqlc.arg(is_default)
+  FROM customers c
+ WHERE c.id = sqlc.arg(customer_id) AND c.enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: UpdateAddress :one
@@ -463,34 +477,47 @@ UPDATE customer_addresses
 SET address_type = $2, zip_code = $3, street = $4, number = $5,
     complement = $6, neighborhood = $7, city = $8, uf = $9,
     country = $10, is_default = $11
-WHERE id = $1
+WHERE customer_addresses.id = $1
+  AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_addresses.customer_id AND c.enterprise_id = sqlc.arg(enterprise_id))
 RETURNING *;
 
 -- name: ListAddresses :many
-SELECT * FROM customer_addresses WHERE customer_id = $1 ORDER BY address_type, is_default DESC;
+SELECT a.* FROM customer_addresses a
+  JOIN customers c ON c.id = a.customer_id AND c.enterprise_id = $2
+ WHERE a.customer_id = $1
+ ORDER BY a.address_type, a.is_default DESC;
 
--- name: DeleteAddress :exec
-DELETE FROM customer_addresses WHERE id = $1;
+-- name: DeleteAddress :execrows
+DELETE FROM customer_addresses
+ WHERE customer_addresses.id = $1
+   AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_addresses.customer_id AND c.enterprise_id = $2);
 
 -- ─── Customer Contacts ────────────────────────────────────────────────────────
 
 -- name: AddContact :one
 INSERT INTO customer_contacts (
     customer_id, contact_type_id, name, email, phone, mobile, position, is_primary
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+)
+SELECT c.id, sqlc.arg(contact_type_id), sqlc.arg(name), sqlc.arg(email), sqlc.arg(phone), sqlc.arg(mobile), sqlc.arg(position), sqlc.arg(is_primary)
+  FROM customers c
+ WHERE c.id = sqlc.arg(customer_id) AND c.enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 
 -- name: UpdateContact :one
 UPDATE customer_contacts
 SET contact_type_id = $2, name = $3, email = $4, phone = $5,
     mobile = $6, position = $7, is_primary = $8, is_active = $9
-WHERE id = $1
+WHERE customer_contacts.id = $1
+  AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_contacts.customer_id AND c.enterprise_id = sqlc.arg(enterprise_id))
 RETURNING *;
 
 -- name: ListContacts :many
-SELECT * FROM customer_contacts
-WHERE customer_id = $1 AND is_active = TRUE
-ORDER BY is_primary DESC, name;
+SELECT ct.* FROM customer_contacts ct
+  JOIN customers c ON c.id = ct.customer_id AND c.enterprise_id = $2
+ WHERE ct.customer_id = $1 AND ct.is_active = TRUE
+ ORDER BY ct.is_primary DESC, ct.name;
 
--- name: DeleteContact :exec
-UPDATE customer_contacts SET is_active = FALSE WHERE id = $1;
+-- name: DeleteContact :execrows
+UPDATE customer_contacts SET is_active = FALSE
+ WHERE customer_contacts.id = $1
+   AND EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_contacts.customer_id AND c.enterprise_id = $2);

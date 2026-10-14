@@ -2336,6 +2336,50 @@ POST /api/planning/run-pipeline
   "start_from": "2026-06-10T00:00:00Z"
 }
 
+PUT /api/planning/auto-run
+-- Escopo: planning:run. Janela noturna da empresa; quem salva vira o responsável
+-- (a rodada automática grava as ordens em nome dele). Ligada exige plan_code.
+{
+  "is_enabled": true,
+  "run_hour": 2,
+  "run_minute": 0,
+  "plan_code": 1,
+  "initial_order_number": 50000,
+  "generate_llc": true
+}
+
+POST /api/planning/auto-run/run-now
+-- Escopo: planning:run. Sem corpo. Roda agora com a configuração salva.
+
+POST /api/planning/scenarios
+-- Escopo: planning:run. Cria o cenário e o plano oculto clonado do plano base.
+{
+  "name": "Pedido grande da Usimac",
+  "base_plan_code": 1,
+  "description": "dobrar a demanda de outubro"
+}
+
+POST /api/planning/scenarios/{id}/changes
+-- Escopo: planning:run. Um ajuste por chamada; datas ano-mês-dia.
+{ "kind": "DEMANDA", "demand_ref_kind": "NOVA", "item_code": "CARRINHO-01", "quantity": "25", "need_date": "2026-11-10" }
+{ "kind": "DEMANDA", "demand_ref_kind": "DEMANDA_INDEPENDENTE", "demand_ref_code": 2, "quantity": "60" }
+{ "kind": "DEMANDA", "demand_ref_kind": "PEDIDO_VENDA", "demand_ref_code": 7012, "quantity": "0" }
+{ "kind": "ESTOQUE", "item_code": "TUBO-30", "quantity": "500" }
+{ "kind": "LEAD_TIME", "item_code": "RODA-200", "lead_time_days": 15 }
+{ "kind": "CAPACIDADE", "machine_id": 1, "hours_per_day": "16", "stop_from": "2026-10-14", "stop_to": "2026-10-20" }
+
+POST /api/planning/scenarios/{id}/calculate      -- sem corpo (MRP + CRP do cenário)
+POST /api/planning/scenarios/{id}/promote        -- sem corpo (só a demanda; uma vez)
+
+POST /api/mrp-calculation/exceptions/{code}/handle
+-- Escopo: planning:run. action: REPROGRAMAR (new_date opcional, padrão = data
+-- sugerida), CANCELAR (só exceção CANCEL) ou TRATAR (note obrigatória).
+{
+  "action": "REPROGRAMAR",
+  "new_date": "2026-10-25",
+  "note": "fornecedor confirmou antecipação"
+}
+
 ============================================================
 MÓDULO: PRODUÇÃO — APONTAMENTO/CONSUMO/CONCLUSÃO (estoque automático)
 ============================================================

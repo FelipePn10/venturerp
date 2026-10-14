@@ -214,6 +214,9 @@ type RescheduleResultResponse struct {
 	Shifted        []RescheduledBarResponse  `json:"shifted"`
 	CascadeApplied bool                      `json:"cascade_applied"`
 	Warnings       []CapacityWarningResponse `json:"warnings,omitempty"`
+	// CapacityCheckError: o remanejamento foi gravado, mas a conferência de
+	// capacidade não rodou — sem aviso não quer dizer "cabe".
+	CapacityCheckError string `json:"capacity_check_error,omitempty"`
 }
 
 type RescheduledBarResponse struct {

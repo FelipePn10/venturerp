@@ -18,7 +18,7 @@ INSERT INTO production_plans (
     parameters, created_by, enterprise_id
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id
+RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id, is_scenario
 `
 
 type CreateProductionPlanParams struct {
@@ -67,12 +67,13 @@ func (q *Queries) CreateProductionPlan(ctx context.Context, arg CreateProduction
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.IsScenario,
 	)
 	return i, err
 }
 
 const deleteProductionPlan = `-- name: DeleteProductionPlan :exec
-UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = $2
+UPDATE production_plans SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = $2 AND NOT is_scenario
 `
 
 type DeleteProductionPlanParams struct {
@@ -86,7 +87,7 @@ func (q *Queries) DeleteProductionPlan(ctx context.Context, arg DeleteProduction
 }
 
 const getProductionPlanByCode = `-- name: GetProductionPlanByCode :one
-SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id FROM production_plans WHERE code = $1 AND enterprise_id = $2 AND is_active = TRUE
+SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id, is_scenario FROM production_plans WHERE code = $1 AND enterprise_id = $2 AND is_active = TRUE
 `
 
 type GetProductionPlanByCodeParams struct {
@@ -114,14 +115,16 @@ func (q *Queries) GetProductionPlanByCode(ctx context.Context, arg GetProduction
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.IsScenario,
 	)
 	return i, err
 }
 
 const listProductionPlans = `-- name: ListProductionPlans :many
-SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id FROM production_plans WHERE enterprise_id = $1 AND is_active = TRUE ORDER BY code
+SELECT id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id, is_scenario FROM production_plans WHERE enterprise_id = $1 AND is_active = TRUE AND NOT is_scenario ORDER BY code
 `
 
+// Plano de cenário (simulação) é interno do cenário: não aparece nas listas.
 func (q *Queries) ListProductionPlans(ctx context.Context, enterpriseID *int64) ([]ProductionPlan, error) {
 	rows, err := q.db.Query(ctx, listProductionPlans, enterpriseID)
 	if err != nil {
@@ -148,6 +151,7 @@ func (q *Queries) ListProductionPlans(ctx context.Context, enterpriseID *int64) 
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.EnterpriseID,
+			&i.IsScenario,
 		); err != nil {
 			return nil, err
 		}
@@ -170,8 +174,8 @@ SET name                  = $2,
     order_item_code       = $8,
     parameters            = $9,
     updated_at            = NOW()
-WHERE code = $1 AND enterprise_id = $10
-RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id
+WHERE code = $1 AND enterprise_id = $10 AND NOT is_scenario
+RETURNING id, code, name, independent_demands, group_same_date_orders, planning_types, classification, class_item_codes, order_item_code, last_calculated_at, parameters, is_active, created_at, updated_at, created_by, enterprise_id, is_scenario
 `
 
 type UpdateProductionPlanParams struct {
@@ -218,6 +222,7 @@ func (q *Queries) UpdateProductionPlan(ctx context.Context, arg UpdateProduction
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.IsScenario,
 	)
 	return i, err
 }

@@ -120,6 +120,7 @@ SELECT * FROM public.sales_orders
 WHERE enterprise_code = sqlc.arg(tenant_enterprise_code) AND is_active = TRUE
   AND (sqlc.narg('search')::text IS NULL OR EXISTS (
     SELECT 1 FROM public.customers c
+    JOIN public.enterprise e ON e.id = c.enterprise_id AND e.code = sales_orders.enterprise_code
     WHERE c.code = sales_orders.customer_code
       AND (c.name ILIKE '%' || sqlc.narg('search')::text || '%'
         OR c.trade_name ILIKE '%' || sqlc.narg('search')::text || '%'
@@ -170,6 +171,7 @@ FROM public.sales_orders
 WHERE enterprise_code = sqlc.arg(tenant_enterprise_code) AND is_active = TRUE
   AND (sqlc.narg('search')::text IS NULL OR EXISTS (
     SELECT 1 FROM public.customers c
+    JOIN public.enterprise e ON e.id = c.enterprise_id AND e.code = sales_orders.enterprise_code
     WHERE c.code = sales_orders.customer_code
       AND (c.name ILIKE '%' || sqlc.narg('search')::text || '%'
         OR c.trade_name ILIKE '%' || sqlc.narg('search')::text || '%'

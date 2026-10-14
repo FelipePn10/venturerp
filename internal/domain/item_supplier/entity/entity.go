@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -43,7 +43,7 @@ type ItemPreferredSupplier struct {
 
 func NewItemPreferredSupplier(enterpriseID, itemCode, supplierCode int64, mask string, ranking int32, createdBy uuid.UUID) (*ItemPreferredSupplier, error) {
 	if enterpriseID <= 0 || itemCode <= 0 || supplierCode <= 0 {
-		return nil, fmt.Errorf("informe a empresa, o item e o fornecedor")
+		return nil, domainerr.NewValidation("informe a empresa, o item e o fornecedor")
 	}
 	if ranking <= 0 {
 		ranking = 1
@@ -53,22 +53,22 @@ func NewItemPreferredSupplier(enterpriseID, itemCode, supplierCode int64, mask s
 }
 func (s *ItemPreferredSupplier) Validate() error {
 	if s.PackageQuantity.IsNegative() {
-		return fmt.Errorf("a quantidade por embalagem não pode ser negativa")
+		return domainerr.NewValidation("a quantidade por embalagem não pode ser negativa")
 	}
 	if s.LeadTimeDays < 0 {
-		return fmt.Errorf("o lead time em dias não pode ser negativo")
+		return domainerr.NewValidation("o lead time em dias não pode ser negativo")
 	}
 	if s.IsPreferred {
 		s.Ranking = 1
 	}
 	if s.DirectBilling && !s.IsPreferred {
-		return fmt.Errorf("direct_billing requires preferred supplier")
+		return domainerr.NewValidation("faturamento direto exige fornecedor preferencial")
 	}
 	if s.ThirdPartyOrder && !s.DirectBilling {
-		return fmt.Errorf("third_party_order requires direct_billing")
+		return domainerr.NewValidation("ordem de terceiro exige faturamento direto")
 	}
 	if s.XMLUOM != nil && s.UOM == nil {
-		return fmt.Errorf("xml_uom requires supplier uom")
+		return domainerr.NewValidation("a unidade do XML exige a unidade do fornecedor")
 	}
 	return nil
 }
@@ -90,7 +90,7 @@ type QualityReport struct {
 func NewQualityReport(e, link int64, on time.Time, status string, by uuid.UUID) (*QualityReport, error) {
 	status = strings.ToUpper(strings.TrimSpace(status))
 	if e <= 0 || link <= 0 || on.IsZero() || (status != "PENDENTE" && status != "APROVADO" && status != "REJEITADO" && status != "EXPIRADO") {
-		return nil, fmt.Errorf("laudo de qualidade inválido")
+		return nil, domainerr.NewValidation("laudo de qualidade inválido")
 	}
 	return &QualityReport{EnterpriseID: e, ItemSupplierID: link, RegisteredOn: on, Status: status, CreatedBy: by}, nil
 }

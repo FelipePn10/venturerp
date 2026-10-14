@@ -5,6 +5,7 @@ import (
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -69,20 +70,28 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 	if len(dataEmissaoStr) > 10 {
 		dataEmissaoStr = dataEmissaoStr[:10]
 	}
-	dataEmissao, _ := time.Parse("2006-01-02", dataEmissaoStr)
+	// A NF-e veio da SEFAZ: data ou número ilegível é documento fora do layout,
+	// não algo a gravar como 0001-01-01 / nota 0.
+	dataEmissao, err := time.Parse("2006-01-02", dataEmissaoStr)
+	if err != nil {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a NF-e baixada tem data de emissão ilegível (%q)", nfe.DataEmissao))
+	}
 	dataEntrada := time.Now()
 
-	// Parse NF-e number as int64 (Focus returns as string).
-	var numNF int64
-	if n, parseErr := strconv.ParseInt(nfe.NumeroNF, 10, 64); parseErr == nil {
-		numNF = n
+	numNF, err := strconv.ParseInt(strings.TrimSpace(nfe.NumeroNF), 10, 64)
+	if err != nil {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a NF-e baixada tem número ilegível (%q)", nfe.NumeroNF))
 	}
 
 	// Best-effort: link the emitter to a registered supplier by CNPJ/CPF.
 	var supplierCode *int64
 	supplierMatched := false
 	if uc.SupplierDefaults != nil && nfe.CnpjEmitente != "" {
-		if code, found, _ := uc.SupplierDefaults.FindSupplierCodeByDocument(ctx, nfe.CnpjEmitente); found {
+		code, found, errForn := uc.SupplierDefaults.FindSupplierCodeByDocument(ctx, nfe.CnpjEmitente)
+		if errForn != nil {
+			return nil, fmt.Errorf("procurando o fornecedor pelo CNPJ da nota: %w", errForn)
+		}
+		if found {
 			c := code
 			supplierCode = &c
 			supplierMatched = true
@@ -120,8 +129,6 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 				item.NumeroItem, item.CodigoProduto))
 			continue
 		}
-		receivedByItem[itemCode] += item.QuantidadeComercial
-
 		ic := itemCode
 		entryItem := &entity.FiscalEntryItem{
 			FiscalEntryID: created.ID,
@@ -132,7 +139,13 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 			UnitPrice:     item.ValorUnitario,
 			TotalPrice:    item.ValorTotal,
 		}
-		_, _ = uc.FiscalRepo.CreateEntryItem(ctx, entryItem)
+		if _, err := uc.FiscalRepo.CreateEntryItem(ctx, entryItem); err != nil {
+			// Item que não entrou na nota não movimenta estoque; o motivo volta
+			// na resposta em vez de sumir.
+			skipped = append(skipped, fmt.Sprintf("item %d: não gravado na nota: %v", item.NumeroItem, err))
+			continue
+		}
+		receivedByItem[itemCode] += item.QuantidadeComercial
 
 		refType := stockentity.ReferenceTypeNFEntry
 		mov := &stockentity.StockMovement{
@@ -154,7 +167,9 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 	}
 
 	if movementsCreated > 0 {
-		_, _ = uc.FiscalRepo.UpdateEntryStatus(ctx, created.ID, entity.EntryStatusApproved)
+		if _, err := uc.FiscalRepo.UpdateEntryStatus(ctx, created.ID, entity.EntryStatusApproved); err != nil {
+			skipped = append(skipped, fmt.Sprintf("nota não aprovada: %v", err))
+		}
 	}
 
 	// Write the received quantities down against the purchase order lines so the

@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
 
 	"github.com/google/uuid"
@@ -282,15 +283,14 @@ type DispatchBox struct {
 // and, unless divergences are explicitly accepted, no quantity divergences.
 func (s *Shipment) ValidateForShipping(acceptDivergences bool) error {
 	if len(s.Items) == 0 {
-		return fmt.Errorf("romaneio %d não possui itens", s.Code)
+		return domainerr.NewValidation(fmt.Sprintf("romaneio %d não possui itens", s.Code))
 	}
 	for _, it := range s.Items {
 		if !it.IsConferred {
-			return fmt.Errorf("item %d (seq %d) ainda não conferido", it.ItemCode, it.Sequence)
+			return domainerr.NewValidation(fmt.Sprintf("item %d (seq %d) ainda não conferido", it.ItemCode, it.Sequence))
 		}
 		if it.HasDivergence() && !acceptDivergences {
-			return fmt.Errorf("item %d (seq %d) com divergência: planejado %.4f, conferido %.4f",
-				it.ItemCode, it.Sequence, it.Quantity, it.ConferredQty)
+			return domainerr.NewValidation(fmt.Sprintf("item %d (seq %d) com divergência: planejado %.4f, conferido %.4f", it.ItemCode, it.Sequence, it.Quantity, it.ConferredQty))
 		}
 	}
 	return nil

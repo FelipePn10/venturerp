@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	machineentity "github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 	machinesvc "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
@@ -91,12 +92,12 @@ func minutosDoRoteiro(mt *entity.MachineTimeInfo, t routing.OperationTime, qty f
 
 func machineMinutes(mt *entity.MachineTimeInfo, qty float64) (float64, error) {
 	if mt.ProductionTime <= 0 || mt.ProductionBaseQty <= 0 || mt.SetupTime < 0 {
-		return 0, fmt.Errorf("produtividade inválida do item %d na máquina %d", mt.ItemCode, mt.MachineCode)
+		return 0, domainerr.NewValidation(fmt.Sprintf("produtividade inválida do item %d na máquina %d", mt.ItemCode, mt.MachineCode))
 	}
 	switch mt.ProductionTimeUnit {
 	case "SEGUNDO", "MINUTO", "HORA", "DIA":
 	default:
-		return 0, fmt.Errorf("unidade de tempo inválida do item %d", mt.ItemCode)
+		return 0, domainerr.NewValidation(fmt.Sprintf("unidade de tempo inválida do item %d", mt.ItemCode))
 	}
 	imt := &machineentity.ItemMachineTime{ProductionTime: mt.ProductionTime, ProductionTimeUnit: types.CapacityPeriod(mt.ProductionTimeUnit), ProductionBaseQty: mt.ProductionBaseQty, SetupTime: mt.SetupTime, EfficiencyRate: mt.EfficiencyRate, TimeBasis: mt.TimeBasis}
 	// Trocar o cilindro para a máquina. Sem contar essas paradas a ordem cabe no
@@ -118,7 +119,7 @@ func machineMinutes(mt *entity.MachineTimeInfo, qty float64) (float64, error) {
 	m := &machineentity.Machine{EfficiencyRate: mt.MachineEfficiencyRate}
 	result := machinesvc.CalculateProductionTime(imt, m, qty, 1, mt.WorkingHoursPerDay*60)
 	if math.IsNaN(result.TotalMinutes) || math.IsInf(result.TotalMinutes, 0) || result.TotalMinutes <= 0 {
-		return 0, fmt.Errorf("duração inválida do item %d", mt.ItemCode)
+		return 0, domainerr.NewValidation(fmt.Sprintf("duração inválida do item %d", mt.ItemCode))
 	}
 	return result.TotalMinutes, nil
 }
@@ -164,7 +165,7 @@ func escolherMaquinaQueTerminaAntes(
 		if primeiroErro != nil {
 			return nil, nil, primeiroErro
 		}
-		return nil, nil, fmt.Errorf("nenhuma máquina equivalente tem janela disponível")
+		return nil, nil, domainerr.NewValidation("nenhuma máquina equivalente tem janela disponível")
 	}
 	return melhores, escolhida, nil
 }
@@ -213,12 +214,12 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 	if err != nil {
 		return err
 	}
-	ready := map[int64]time.Time{}
+	ready := materialReadiness{}
 	reserved := map[int64][]machinesvc.CapacityWindow{}
 	calendar, finite := s.MRPRepo.(machinePlanningCalendar)
 	for _, sug := range suggestions {
 		if sug.OrderType != "FABRICACAO" {
-			recordMaterialReady(ready, sug, sug.NeedDate)
+			ready.record(sug, sug.NeedDate)
 			continue
 		}
 		if reader, ok := s.MRPRepo.(interface {
@@ -233,7 +234,7 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 				if sug.EstimatedEndAt != nil {
 					end = *sug.EstimatedEndAt
 				}
-				recordMaterialReady(ready, sug, end)
+				ready.record(sug, end)
 				continue
 			}
 		}
@@ -242,7 +243,7 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 			return err
 		}
 		if len(steps) == 0 {
-			recordMaterialReady(ready, sug, sug.NeedDate)
+			ready.record(sug, sug.NeedDate)
 			continue
 		}
 		totalMinutes := 0.0
@@ -256,8 +257,8 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 		if sug.RequestedStartDate != nil {
 			day = *sug.RequestedStartDate
 		}
-		if ready[sug.ItemCode].After(day) {
-			day = ready[sug.ItemCode]
+		if pronto := ready.readyFor(sug.ItemCode, day); pronto.After(day) {
+			day = pronto
 		}
 		firstStart := day
 		for i, step := range steps {
@@ -312,7 +313,7 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 				return err
 			}
 		}
-		recordMaterialReady(ready, sug, day)
+		ready.record(sug, day)
 	}
 	return nil
 }
@@ -347,8 +348,33 @@ func orderMachineSuggestions(in []*entity.PlannedOrderSuggestion) ([]*entity.Pla
 	}
 	return out, nil
 }
-func recordMaterialReady(ready map[int64]time.Time, s *entity.PlannedOrderSuggestion, end time.Time) {
-	if s.ParentItemCode != nil && end.After(ready[*s.ParentItemCode]) {
-		ready[*s.ParentItemCode] = end
+
+// materialReadiness guarda, por item pai, quando cada lote de componente fica
+// pronto e para quando ele foi pedido. Antes era um único horário por item pai —
+// o do componente mais tardio de TODAS as ordens —, e a ordem que vence amanhã
+// esperava a compra pedida para a ordem do mês que vem.
+type materialReadiness map[int64][]componentReady
+
+type componentReady struct {
+	need time.Time
+	end  time.Time
+}
+
+func (r materialReadiness) record(s *entity.PlannedOrderSuggestion, end time.Time) {
+	if s.ParentItemCode != nil {
+		r[*s.ParentItemCode] = append(r[*s.ParentItemCode], componentReady{need: s.NeedDate, end: end})
 	}
+}
+
+// readyFor devolve quando ficam prontos os componentes que a ordem do pai que
+// começa em `start` consome: os pedidos para até essa data. Componente pedido
+// para depois abastece uma ordem posterior do mesmo item.
+func (r materialReadiness) readyFor(parent int64, start time.Time) time.Time {
+	var pronto time.Time
+	for _, c := range r[parent] {
+		if !c.need.After(start) && c.end.After(pronto) {
+			pronto = c.end
+		}
+	}
+	return pronto
 }

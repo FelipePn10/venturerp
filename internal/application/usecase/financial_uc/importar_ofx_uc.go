@@ -334,7 +334,7 @@ func parseOFXDate(s string) (time.Time, error) {
 			}
 		}
 	}
-	return time.Time{}, fmt.Errorf("data OFX não reconhecida: %q", s)
+	return time.Time{}, errorsuc.NewValidationError(fmt.Sprintf("data OFX não reconhecida: %q", s))
 }
 
 // dataOFXLegivel devolve a data do cabeçalho em DD/MM/AAAA, ou vazio.

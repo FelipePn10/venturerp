@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,13 +31,12 @@ func NewCustomerHandler(uc *customer_uc.CustomerUseCase) *CustomerHandler {
 
 func (h *CustomerHandler) CreateRegion(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateRegionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateRegion(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -44,13 +44,12 @@ func (h *CustomerHandler) CreateRegion(w http.ResponseWriter, r *http.Request) {
 
 func (h *CustomerHandler) UpdateRegion(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateRegionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateRegion(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -84,13 +83,12 @@ func (h *CustomerHandler) ListRegions(w http.ResponseWriter, r *http.Request) {
 
 func (h *CustomerHandler) CreateMarketSegment(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateMarketSegmentDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateMarketSegment(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -120,13 +118,12 @@ func (h *CustomerHandler) UpdateMarketSegment(w http.ResponseWriter, r *http.Req
 
 func (h *CustomerHandler) CreateContactType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateContactTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateContactType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -156,13 +153,12 @@ func (h *CustomerHandler) UpdateContactType(w http.ResponseWriter, r *http.Reque
 
 func (h *CustomerHandler) CreateCustomerType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCustomerTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateCustomerType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -192,13 +188,12 @@ func (h *CustomerHandler) UpdateCustomerType(w http.ResponseWriter, r *http.Requ
 
 func (h *CustomerHandler) CreateCarrier(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCarrierDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateCarrier(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -228,13 +223,12 @@ func (h *CustomerHandler) UpdateCarrier(w http.ResponseWriter, r *http.Request) 
 
 func (h *CustomerHandler) CreateCarrierGroup(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCarrierGroupDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateCarrierGroup(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -261,12 +255,11 @@ func (h *CustomerHandler) UpdateCarrierGroup(w http.ResponseWriter, r *http.Requ
 
 func (h *CustomerHandler) AddCarrierToGroup(w http.ResponseWriter, r *http.Request) {
 	var dto request.CarrierGroupMemberDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.uc.AddCarrierToGroup(r.Context(), dto); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -276,13 +269,12 @@ func (h *CustomerHandler) AddCarrierToGroup(w http.ResponseWriter, r *http.Reque
 
 func (h *CustomerHandler) CreatePaymentCondition(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePaymentConditionDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreatePaymentCondition(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -317,8 +309,7 @@ func customerPathCode(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return code, true
 }
 func customerDecode(w http.ResponseWriter, r *http.Request, dto any) bool {
-	if err := json.NewDecoder(r.Body).Decode(dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+	if !security.DecodeBody(w, r, dto) {
 		return false
 	}
 	return true
@@ -333,13 +324,12 @@ func customerRespond(w http.ResponseWriter, result any, err error) {
 
 func (h *CustomerHandler) AddInstallment(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddInstallmentDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.AddInstallment(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -417,13 +407,12 @@ func (h *CustomerHandler) SimulatePaymentPlan(w http.ResponseWriter, r *http.Req
 
 func (h *CustomerHandler) CreateSalesTable(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesTableDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateSalesTable(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -455,8 +444,7 @@ func (h *CustomerHandler) GetSalesTable(w http.ResponseWriter, r *http.Request) 
 
 func (h *CustomerHandler) UpdateSalesTable(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSalesTableDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if dto.Code == 0 {
@@ -469,7 +457,7 @@ func (h *CustomerHandler) UpdateSalesTable(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := h.uc.UpdateSalesTable(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -479,13 +467,12 @@ func (h *CustomerHandler) UpdateSalesTable(w http.ResponseWriter, r *http.Reques
 
 func (h *CustomerHandler) CreateSalesPricePolicy(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesPricePolicyDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateSalesPricePolicy(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -493,8 +480,7 @@ func (h *CustomerHandler) CreateSalesPricePolicy(w http.ResponseWriter, r *http.
 
 func (h *CustomerHandler) UpdateSalesPricePolicy(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSalesPricePolicyDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if dto.Code == 0 {
@@ -507,7 +493,7 @@ func (h *CustomerHandler) UpdateSalesPricePolicy(w http.ResponseWriter, r *http.
 	}
 	result, err := h.uc.UpdateSalesPricePolicy(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -541,13 +527,12 @@ func (h *CustomerHandler) ListSalesPricePolicies(w http.ResponseWriter, r *http.
 
 func (h *CustomerHandler) CreateCommercialPolicy(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCommercialPolicyDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateCommercialPolicy(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -555,8 +540,7 @@ func (h *CustomerHandler) CreateCommercialPolicy(w http.ResponseWriter, r *http.
 
 func (h *CustomerHandler) UpdateCommercialPolicy(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateCommercialPolicyDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if dto.Code == 0 {
@@ -569,7 +553,7 @@ func (h *CustomerHandler) UpdateCommercialPolicy(w http.ResponseWriter, r *http.
 	}
 	result, err := h.uc.UpdateCommercialPolicy(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -594,10 +578,13 @@ func (h *CustomerHandler) ListCommercialPolicies(w http.ResponseWriter, r *http.
 	kind := r.URL.Query().Get("kind")
 	result, err := h.uc.ListCommercialPolicies(r.Context(), onlyActive, kind)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
-	if done, _ := export.WriteSlice(w, r, "Politicas Comerciais", "politicas-comerciais", result); done {
+	if done, err := export.WriteSlice(w, r, "Politicas Comerciais", "politicas-comerciais", result); done {
+		if err != nil {
+			slog.Error("falha ao exportar a lista", "lista", "Politicas Comerciais", "erro", err)
+		}
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -605,8 +592,7 @@ func (h *CustomerHandler) ListCommercialPolicies(w http.ResponseWriter, r *http.
 
 func (h *CustomerHandler) AddCommercialPolicySpecificItem(w http.ResponseWriter, r *http.Request) {
 	var dto request.CommercialPolicySpecificItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if dto.PolicyCode == 0 {
@@ -619,7 +605,7 @@ func (h *CustomerHandler) AddCommercialPolicySpecificItem(w http.ResponseWriter,
 	}
 	result, err := h.uc.AddCommercialPolicySpecificItem(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -627,8 +613,7 @@ func (h *CustomerHandler) AddCommercialPolicySpecificItem(w http.ResponseWriter,
 
 func (h *CustomerHandler) AddCommercialPolicyLine(w http.ResponseWriter, r *http.Request) {
 	var dto request.CommercialPolicyLineDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if dto.PolicyCode == 0 {
@@ -641,7 +626,7 @@ func (h *CustomerHandler) AddCommercialPolicyLine(w http.ResponseWriter, r *http
 	}
 	result, err := h.uc.AddCommercialPolicyLine(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -677,13 +662,12 @@ func (h *CustomerHandler) ListCommercialPolicySpecificItems(w http.ResponseWrite
 
 func (h *CustomerHandler) EvaluateCommercialPolicies(w http.ResponseWriter, r *http.Request) {
 	var dto request.EvaluateCommercialPoliciesDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.EvaluateCommercialPolicies(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -693,13 +677,12 @@ func (h *CustomerHandler) EvaluateCommercialPolicies(w http.ResponseWriter, r *h
 
 func (h *CustomerHandler) CreateInvoiceType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateInvoiceTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateInvoiceType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -707,13 +690,12 @@ func (h *CustomerHandler) CreateInvoiceType(w http.ResponseWriter, r *http.Reque
 
 func (h *CustomerHandler) UpdateInvoiceType(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateInvoiceTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateInvoiceType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -733,13 +715,12 @@ func (h *CustomerHandler) ListInvoiceTypes(w http.ResponseWriter, r *http.Reques
 
 func (h *CustomerHandler) CreateTaxType(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateTaxTypeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateTaxType(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -759,13 +740,12 @@ func (h *CustomerHandler) ListTaxTypes(w http.ResponseWriter, r *http.Request) {
 
 func (h *CustomerHandler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCustomerDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateCustomer(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -853,8 +833,7 @@ func (h *CustomerHandler) UpdateCustomer(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var dto request.CreateCustomerDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateCustomer(r.Context(), code, dto)
@@ -874,7 +853,10 @@ func (h *CustomerHandler) ListCustomers(w http.ResponseWriter, r *http.Request) 
 	}
 	// When ?format=xlsx|pdf|csv is present, stream the same rows as a file
 	// instead of JSON. Any other list endpoint can opt in the same way.
-	if done, _ := export.WriteSlice(w, r, "Clientes", "clientes", result); done {
+	if done, err := export.WriteSlice(w, r, "Clientes", "clientes", result); done {
+		if err != nil {
+			slog.Error("falha ao exportar a lista", "lista", "Clientes", "erro", err)
+		}
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -896,12 +878,11 @@ func (h *CustomerHandler) ListEstablishments(w http.ResponseWriter, r *http.Requ
 
 func (h *CustomerHandler) BlockCustomer(w http.ResponseWriter, r *http.Request) {
 	var dto request.BlockCustomerDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.uc.BlockCustomer(r.Context(), dto); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -914,7 +895,7 @@ func (h *CustomerHandler) UnblockCustomer(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.uc.UnblockCustomer(r.Context(), code); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -924,13 +905,12 @@ func (h *CustomerHandler) UnblockCustomer(w http.ResponseWriter, r *http.Request
 
 func (h *CustomerHandler) AddAddress(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddAddressDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.AddAddress(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -940,13 +920,12 @@ func (h *CustomerHandler) AddAddress(w http.ResponseWriter, r *http.Request) {
 
 func (h *CustomerHandler) AddContact(w http.ResponseWriter, r *http.Request) {
 	var dto request.AddContactDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.AddContact(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -970,7 +949,7 @@ func (h *CustomerHandler) CreateSalesTablePrice(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.uc.CreateSalesTablePrice(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -978,8 +957,7 @@ func (h *CustomerHandler) CreateSalesTablePrice(w http.ResponseWriter, r *http.R
 
 func (h *CustomerHandler) UpdateSalesTablePrice(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateSalesTablePriceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateSalesTablePrice(r.Context(), dto)
@@ -1021,8 +999,7 @@ func (h *CustomerHandler) ListSalesTablePrices(w http.ResponseWriter, r *http.Re
 
 func (h *CustomerHandler) GenerateSalesTablePrices(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateSalesTablePricesDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.GenerateSalesTablePrices(r.Context(), dto)
@@ -1066,8 +1043,7 @@ func (h *CustomerHandler) DeleteSalesTablePrice(w http.ResponseWriter, r *http.R
 
 func (h *CustomerHandler) PriceSalesItem(w http.ResponseWriter, r *http.Request) {
 	var dto request.PriceSalesItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.PriceSalesItem(r.Context(), dto)
@@ -1115,8 +1091,7 @@ func (h *CustomerHandler) ResolveSalesTablesForItem(w http.ResponseWriter, r *ht
 
 func (h *CustomerHandler) FormSalesPrice(w http.ResponseWriter, r *http.Request) {
 	var dto request.FormSalesPriceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.FormSalesPrice(r.Context(), dto)

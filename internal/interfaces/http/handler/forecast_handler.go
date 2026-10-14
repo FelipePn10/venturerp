@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/forecast_uc"
@@ -9,13 +9,12 @@ import (
 
 func StatisticalForecastHandler(w http.ResponseWriter, r *http.Request) {
 	var dto forecast_uc.StatisticalForecastDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := forecast_uc.Execute(dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

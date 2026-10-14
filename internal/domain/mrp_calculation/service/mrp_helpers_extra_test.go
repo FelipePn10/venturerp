@@ -118,10 +118,10 @@ func TestGetLeadTimeDays_FallbackToConfiguredRule(t *testing.T) {
 			{FieldName: "lead_time", RuleValue: "x"}, // unparsable → ignored
 		},
 	}
-	if got := s.getLeadTimeDays(rulesMap, 7); got != 5 {
+	if got, err := s.getLeadTimeDays(context.Background(), rulesMap, 7); err != nil || got != 5 {
 		t.Fatalf("lead time = %d, want 5 (max configured)", got)
 	}
-	if got := s.getLeadTimeDays(rulesMap, 999); got != 0 {
+	if got, err := s.getLeadTimeDays(context.Background(), rulesMap, 999); err != nil || got != 0 {
 		t.Fatalf("unknown item lead time = %d, want 0", got)
 	}
 }

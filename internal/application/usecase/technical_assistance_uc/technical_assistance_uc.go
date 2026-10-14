@@ -168,6 +168,9 @@ func (uc *UseCase) ListWarrantyResponsibles(ctx context.Context, onlyActive bool
 }
 
 func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAssistanceCallDTO) (*response.TechnicalAssistanceCallResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data prometida", &dto.PromisedDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
 		return nil, err
@@ -181,9 +184,11 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 	}
 	openedAt := time.Now()
 	if dto.OpenedAt != "" {
-		if parsed, err := time.Parse(time.RFC3339, dto.OpenedAt); err == nil {
-			openedAt = parsed
+		parsed, ok := datetime.ParseDate(dto.OpenedAt)
+		if !ok {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("data de abertura inválida (%q)", dto.OpenedAt))
 		}
+		openedAt = parsed
 	}
 	callNumber, err := uc.Repo.NextCallNumber(ctx, tenantID)
 	if err != nil {
@@ -226,6 +231,9 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 }
 
 func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalAssistanceCallItemDTO) (*response.TechnicalAssistanceCallItemResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data da nota de compra", &dto.PurchaseInvoiceDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	tenantID, tenantErr := uc.tenantID(ctx)
 	if tenantErr != nil {
 		return nil, tenantErr
@@ -330,6 +338,9 @@ func (uc *UseCase) ListCalls(ctx context.Context, filter tarepo.CallFilter) ([]*
 }
 
 func (uc *UseCase) AddReturnNote(ctx context.Context, dto request.AddTechnicalAssistanceReturnNoteDTO) (*response.TechnicalAssistanceReturnNoteResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de emissão", &dto.EmissionDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
 		return nil, err
@@ -417,7 +428,9 @@ func (uc *UseCase) GenerateOrders(ctx context.Context, dto request.GenerateTechn
 		out.GeneratedLinks++
 	}
 	call.Status = entity.CallStatusWaitingOrder
-	_, _ = uc.Repo.UpdateCall(ctx, tenantID, call)
+	if _, errChamado := uc.Repo.UpdateCall(ctx, tenantID, call); errChamado != nil {
+		return nil, fmt.Errorf("atualizando o chamado com as ordens geradas: %w", errChamado)
+	}
 	return out, nil
 }
 
@@ -496,7 +509,7 @@ func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dt
 		if !uc.itemNeedsSalesOrder(ctx, item) {
 			continue
 		}
-		_, _ = uc.SalesOrders.CreateItem(ctx, &orderentity.SalesOrderItem{
+		if _, errItem := uc.SalesOrders.CreateItem(ctx, &orderentity.SalesOrderItem{
 			SalesOrderCode: created.Code,
 			Sequence:       i + 1,
 			ItemCode:       item.ItemCode,
@@ -507,9 +520,13 @@ func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dt
 			UnitPrice:      0,
 			Status:         orderentity.SalesOrderItemStatusOpen,
 			Notes:          strPtr("Item gerado por assistência técnica"),
-		})
+		}); errItem != nil {
+			return 0, fmt.Errorf("incluindo o item no pedido de venda da assistência: %w", errItem)
+		}
 	}
-	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, GeneratedType: "SALES_ORDER", SalesOrderCode: &created.Code, CreatedBy: actor})
+	if _, errVinculo := uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, GeneratedType: "SALES_ORDER", SalesOrderCode: &created.Code, CreatedBy: actor}); errVinculo != nil {
+		return 0, fmt.Errorf("vinculando o pedido de venda ao chamado: %w", errVinculo)
+	}
 	return created.Code, nil
 }
 
@@ -535,7 +552,9 @@ func (uc *UseCase) generateProductionOrder(ctx context.Context, call *entity.Cal
 	if err != nil {
 		return 0, err
 	}
-	_, _ = uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, CallItemCode: &item.Code, GeneratedType: "PRODUCTION_ORDER", ProductionOrderID: &prod.ID, CreatedBy: actor})
+	if _, errVinculo := uc.Repo.AddOrderLink(ctx, tenantID, &entity.OrderLink{CallCode: call.Code, CallItemCode: &item.Code, GeneratedType: "PRODUCTION_ORDER", ProductionOrderID: &prod.ID, CreatedBy: actor}); errVinculo != nil {
+		return 0, fmt.Errorf("vinculando a OF ao chamado: %w", errVinculo)
+	}
 	return prod.ID, nil
 }
 

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -12,8 +11,7 @@ import (
 
 func (h *PlannedOrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreatePlannedOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -45,8 +43,7 @@ func (h *PlannedOrderHandler) Firm(w http.ResponseWriter, r *http.Request) {
 
 func (h *PlannedOrderHandler) Transition(w http.ResponseWriter, r *http.Request) {
 	var dto request.TransitionPlannedOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.firmUC.ExecuteTransition(r.Context(), dto)

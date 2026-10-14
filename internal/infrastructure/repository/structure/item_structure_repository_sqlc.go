@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
@@ -22,8 +23,13 @@ func (r *ItemStructureRepositorySQLC) Create(
 	ctx context.Context,
 	s *entity.ItemStructure,
 ) (*entity.ItemStructure, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	row, err := r.q.CreateStructureComponent(ctx, sqlc.CreateStructureComponentParams{
+		EnterpriseID:        empresa,
 		ParentCode:          s.ParentCode,
 		ChildCode:           s.ChildCode,
 		ParentMask:          stringPtrToPgText(s.ParentMask),
@@ -56,6 +62,9 @@ func (r *ItemStructureRepositorySQLC) Create(
 		QuantityStockUom:    quantidadeDeEstoque(s),
 		ConversionFactor:    fatorDeConversao(s),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("item pai ou componente não encontrado nesta empresa")
+	}
 	if err != nil {
 		// O índice único do componente é o erro mais comum aqui: o usuário
 		// inclui algo que já está na estrutura. Sem esta tradução, a tela
@@ -80,7 +89,12 @@ func (r *ItemStructureRepositorySQLC) Update(
 	// histórico, que sem isto só mostraria o resultado.
 	anterior := r.componenteAtual(ctx, s.ParentCode, s.ChildCode, s.ParentMask)
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpdateStructureComponent(ctx, sqlc.UpdateStructureComponentParams{
+		EnterpriseID:        empresa,
 		ParentCode:          s.ParentCode,
 		ChildCode:           s.ChildCode,
 		ParentMask:          stringPtrToPgText(s.ParentMask),
@@ -111,6 +125,9 @@ func (r *ItemStructureRepositorySQLC) Update(
 		QuantityStockUom:    quantidadeDeEstoque(s),
 		ConversionFactor:    fatorDeConversao(s),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("componente não encontrado na estrutura deste item")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("updating structure: %w", err)
 	}
@@ -124,7 +141,18 @@ func (r *ItemStructureRepositorySQLC) Delete(
 	ctx context.Context,
 	id int64,
 ) error {
-	return r.q.DeactivateStructureComponent(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.DeactivateStructureComponent(ctx, sqlc.DeactivateStructureComponentParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return fmt.Errorf("removendo componente da estrutura: %w", err)
+	}
+	if n == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("componente %d não encontrado", id))
+	}
+	return nil
 }
 
 func (r *ItemStructureRepositorySQLC) DeleteByCodes(ctx context.Context, parentCode, childCode int64, parentMask *string) error {
@@ -153,7 +181,14 @@ func (r *ItemStructureRepositorySQLC) GetByID(
 	id int64,
 ) (*entity.ItemStructure, error) {
 
-	row, err := r.q.GetStructureComponentByID(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetStructureComponentByID(ctx, sqlc.GetStructureComponentByIDParams{ID: id, EnterpriseID: empresa})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("componente %d não encontrado", id))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("fetching structure: %w", err)
 	}
@@ -166,7 +201,11 @@ func (r *ItemStructureRepositorySQLC) GetAllDirectChildren(
 	parentCode int64,
 ) ([]*entity.ItemStructure, error) {
 
-	rows, err := r.q.GetAllDirectChildren(ctx, parentCode)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.GetAllDirectChildren(ctx, sqlc.GetAllDirectChildrenParams{ParentCode: parentCode, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("fetching children: %w", err)
 	}
@@ -180,9 +219,14 @@ func (r *ItemStructureRepositorySQLC) GetDirectChildrenForMask(
 	mask string,
 ) ([]*entity.ItemStructure, error) {
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.GetDirectChildrenForMask(ctx, sqlc.GetDirectChildrenForMaskParams{
-		ParentCode: parentCode,
-		ParentMask: pgutil.ToPgTextFromString(mask),
+		EnterpriseID: empresa,
+		ParentCode:   parentCode,
+		ParentMask:   pgutil.ToPgTextFromString(mask),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching children by mask: %w", err)
@@ -195,7 +239,11 @@ func (r *ItemStructureRepositorySQLC) ItemExists(
 	ctx context.Context,
 	itemCode int64,
 ) (bool, error) {
-	return r.q.ItemExists(ctx, itemCode)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	return r.q.ItemExists(ctx, sqlc.ItemExistsParams{Code: itemCode, EnterpriseID: empresa})
 }
 
 func (r *ItemStructureRepositorySQLC) HasCyclicReference(
@@ -215,9 +263,14 @@ func (r *ItemStructureRepositorySQLC) SequenceExists(
 	sequence int,
 ) (bool, error) {
 
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
 	return r.q.SequenceExists(ctx, sqlc.SequenceExistsParams{
-		ParentCode: parentCode,
-		Sequence:   int32(sequence),
+		EnterpriseID: empresa,
+		ParentCode:   parentCode,
+		Sequence:     int32(sequence),
 	})
 }
 
@@ -226,7 +279,11 @@ func (r *ItemStructureRepositorySQLC) GetItemCodeAndDesc(
 	itemCode int64,
 ) (int64, string, error) {
 
-	row, err := r.q.GetItemCodeAndDescription(ctx, itemCode)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, "", err
+	}
+	row, err := r.q.GetItemCodeAndDescription(ctx, sqlc.GetItemCodeAndDescriptionParams{Code: itemCode, EnterpriseID: empresa})
 	if err != nil {
 		return 0, "", fmt.Errorf("fetching item: %w", err)
 	}

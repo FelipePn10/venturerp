@@ -1,9 +1,13 @@
+-- Ferramenta é da empresa (enterprise_id). As consultas por id sem empresa são
+-- usadas a partir de operação/roteiro já conferidos; o repositório confere a
+-- posse antes (ver tool_serials.sql.go: ToolBelongsToEnterprise etc.).
+
 -- ─── tools (master) ────────────────────────────────────────────────────────────
 
 -- name: CreateTool :one
 INSERT INTO tools (
-    code, name, tool_type, life_type, life_limit, cost, status, created_by
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    code, name, tool_type, life_type, life_limit, cost, status, created_by, enterprise_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: UpdateTool :one
@@ -23,7 +27,7 @@ SELECT * FROM tools WHERE id = $1;
 
 -- name: ListTools :many
 SELECT * FROM tools
-WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE)
+WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code;
 
 -- name: NextToolCode :one
@@ -51,19 +55,27 @@ RETURNING *;
 -- já estouraram, que é o comportamento antigo.
 -- name: ListToolsNeedingReplacement :many
 SELECT * FROM tools
-WHERE is_active = TRUE AND life_limit > 0
+WHERE is_active = TRUE AND life_limit > 0 AND enterprise_id = sqlc.arg(enterprise_id)
   AND life_used >= life_limit * sqlc.arg(threshold)::NUMERIC
 ORDER BY (life_used / life_limit) DESC, code;
 
 -- ─── route_operation_tools (association) ─────────────────────────────────────────
 
 -- name: AddRouteOpTool :one
+-- Etapa e ferramenta da empresa da sessão; senão, nada é gravado.
 INSERT INTO route_operation_tools (route_operation_id, tool_id, qty_required)
-VALUES ($1, $2, $3)
+SELECT $1, $2, $3
+WHERE EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = sqlc.arg(enterprise_id))
+  AND EXISTS (SELECT 1 FROM tools t WHERE t.id = $2 AND t.enterprise_id = sqlc.arg(enterprise_id))
 RETURNING *;
 
--- name: RemoveRouteOpTool :exec
-DELETE FROM route_operation_tools WHERE id = $1;
+-- name: RemoveRouteOpTool :execrows
+DELETE FROM route_operation_tools
+WHERE route_operation_tools.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_tools.route_operation_id AND emr.enterprise_id = sqlc.arg(enterprise_id));
 
 -- name: ListToolsByRouteOp :many
 SELECT rot.id, rot.route_operation_id, rot.tool_id, rot.qty_required,
@@ -71,7 +83,7 @@ SELECT rot.id, rot.route_operation_id, rot.tool_id, rot.qty_required,
        t.life_used, t.status
 FROM route_operation_tools rot
 JOIN tools t ON t.id = rot.tool_id
-WHERE rot.route_operation_id = $1
+WHERE rot.route_operation_id = $1 AND t.enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY rot.id;
 
 -- name: ListToolsByRoute :many
@@ -80,6 +92,7 @@ SELECT rot.id, rot.route_operation_id, rot.tool_id, rot.qty_required,
        t.life_used, t.status
 FROM route_operation_tools rot
 JOIN route_operations ro ON ro.id = rot.route_operation_id
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
 JOIN tools t ON t.id = rot.tool_id
-WHERE ro.route_id = $1
+WHERE ro.route_id = $1 AND mr.enterprise_id = sqlc.arg(enterprise_id)
 ORDER BY rot.route_operation_id, rot.id;

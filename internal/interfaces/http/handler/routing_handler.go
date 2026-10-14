@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -14,13 +13,12 @@ import (
 
 func (h *RoutingHandler) CreateOperation(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateOperationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.operationUC.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -33,14 +31,13 @@ func (h *RoutingHandler) UpdateOperation(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var dto request.UpdateOperationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
 	result, err := h.operationUC.Update(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -107,7 +104,7 @@ func (h *RoutingHandler) DeactivateOperation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := h.operationUC.Deactivate(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -117,13 +114,12 @@ func (h *RoutingHandler) DeactivateOperation(w http.ResponseWriter, r *http.Requ
 
 func (h *RoutingHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateRouteDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.routeUC.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -136,14 +132,13 @@ func (h *RoutingHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.UpdateRouteDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
 	result, err := h.routeUC.Update(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -204,7 +199,7 @@ func (h *RoutingHandler) DeactivateRoute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.routeUC.Deactivate(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -219,14 +214,13 @@ func (h *RoutingHandler) AddRouteOperation(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var dto request.AddRouteOperationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.RouteID = routeID
 	result, err := h.routeUC.AddOperation(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -239,14 +233,13 @@ func (h *RoutingHandler) UpdateRouteOperation(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var dto request.UpdateRouteOperationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = id
 	result, err := h.routeUC.UpdateOperation(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -259,7 +252,7 @@ func (h *RoutingHandler) RemoveRouteOperation(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := h.routeUC.RemoveOperation(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -275,7 +268,7 @@ func (h *RoutingHandler) GetNetworkEdges(w http.ResponseWriter, r *http.Request)
 	}
 	edges, err := h.routeUC.GetEdges(r.Context(), routeID)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, edges)
@@ -283,8 +276,7 @@ func (h *RoutingHandler) GetNetworkEdges(w http.ResponseWriter, r *http.Request)
 
 func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) {
 	var dto request.SetNetworkEdgeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	routeID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -295,7 +287,7 @@ func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) 
 	dto.RouteID = routeID
 	result, err := h.routeUC.SetEdge(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -303,12 +295,11 @@ func (h *RoutingHandler) SetNetworkEdge(w http.ResponseWriter, r *http.Request) 
 
 func (h *RoutingHandler) DeleteNetworkEdge(w http.ResponseWriter, r *http.Request) {
 	var dto request.DeleteNetworkEdgeDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.routeUC.DeleteEdge(r.Context(), dto); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -323,14 +314,13 @@ func (h *RoutingHandler) AddRouteOpResource(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var dto request.AddRouteOpResourceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.RouteOperationID = opID
 	result, err := h.routeUC.AddResource(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -344,7 +334,7 @@ func (h *RoutingHandler) ListRouteOpResources(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.routeUC.ListResources(r.Context(), opID)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -357,14 +347,13 @@ func (h *RoutingHandler) UpdateRouteOpResource(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var dto request.UpdateRouteOpResourceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.ID = resID
 	result, err := h.routeUC.UpdateResource(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -378,7 +367,7 @@ func (h *RoutingHandler) SetRouteOpResourcePrimary(w http.ResponseWriter, r *htt
 	}
 	result, err := h.routeUC.SetPrimaryResource(r.Context(), resID)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -391,7 +380,7 @@ func (h *RoutingHandler) RemoveRouteOpResource(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if err := h.routeUC.RemoveResource(r.Context(), resID); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -414,7 +403,7 @@ func (h *RoutingHandler) GetLeadTime(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.leadTimeUC.Execute(r.Context(), id, qty)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

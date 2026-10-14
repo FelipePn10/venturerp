@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -36,8 +35,7 @@ func (h *FaturarPedidoHandler) Previa(w http.ResponseWriter, r *http.Request) {
 
 func (h *FaturarPedidoHandler) Faturar(w http.ResponseWriter, r *http.Request) {
 	var dto fiscal_uc.FaturarPedidoDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	out, err := h.uc.Execute(r.Context(), dto)

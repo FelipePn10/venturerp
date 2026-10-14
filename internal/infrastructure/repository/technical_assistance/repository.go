@@ -2,7 +2,10 @@ package technical_assistance
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"strings"
 	"time"
 
@@ -28,21 +31,32 @@ func (r *RepositoryPGX) NextCallNumber(ctx context.Context, enterpriseID int64) 
 	return n, err
 }
 
+// Grupos e motivos de defeito são catálogos da empresa (enterprise_id); o
+// motivo pertence a um grupo da mesma empresa.
+
 func (r *RepositoryPGX) CreateDefectGroup(ctx context.Context, g *entity.DefectGroup) (*entity.DefectGroup, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_defect_groups (description, is_active, created_by)
-		VALUES ($1,$2,$3)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_defect_groups (description, is_active, created_by, enterprise_id)
+		VALUES ($1,$2,$3,$4)
 		RETURNING code, description, is_active, created_at, updated_at, created_by`,
-		g.Description, trueOrDefault(g.IsActive), pgutil.ToPgUUID(g.CreatedBy))
+		g.Description, trueOrDefault(g.IsActive), pgutil.ToPgUUID(g.CreatedBy), empresa)
 	return scanDefectGroup(row)
 }
 
 func (r *RepositoryPGX) ListDefectGroups(ctx context.Context, onlyActive bool) ([]*entity.DefectGroup, error) {
-	q := `SELECT code, description, is_active, created_at, updated_at, created_by FROM technical_assistance_defect_groups`
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT code, description, is_active, created_at, updated_at, created_by FROM technical_assistance_defect_groups WHERE enterprise_id = $1`
 	if onlyActive {
-		q += ` WHERE is_active`
+		q += ` AND is_active`
 	}
 	q += ` ORDER BY description`
-	rows, err := r.pool.Query(ctx, q)
+	rows, err := r.pool.Query(ctx, q, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -59,22 +73,35 @@ func (r *RepositoryPGX) ListDefectGroups(ctx context.Context, onlyActive bool) (
 }
 
 func (r *RepositoryPGX) CreateDefectReason(ctx context.Context, d *entity.DefectReason) (*entity.DefectReason, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_defect_reasons
 		(group_code, description, allows_complement, generates_revenue, requires_return_note,
-		 generates_sales_order, generates_production_order, is_replacement, is_service, available_web, is_active, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		 generates_sales_order, generates_production_order, is_replacement, is_service, available_web, is_active, created_by, enterprise_id)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
+		 WHERE EXISTS (SELECT 1 FROM technical_assistance_defect_groups g WHERE g.code = $1 AND g.enterprise_id = $13)
 		RETURNING code, group_code, description, allows_complement, generates_revenue, requires_return_note,
 		          generates_sales_order, generates_production_order, is_replacement, is_service, available_web,
 		          is_active, created_at, updated_at, created_by`,
 		d.GroupCode, d.Description, d.AllowsComplement, d.GeneratesRevenue, d.RequiresReturnNote,
 		d.GeneratesSalesOrder, d.GeneratesProductionOrder, d.IsReplacement, d.IsService, d.AvailableWeb,
-		trueOrDefault(d.IsActive), pgutil.ToPgUUID(d.CreatedBy))
-	return scanDefectReason(row)
+		trueOrDefault(d.IsActive), pgutil.ToPgUUID(d.CreatedBy), empresa)
+	v, err := scanDefectReason(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("grupo de defeito %d não encontrado", d.GroupCode))
+	}
+	return v, err
 }
 
 func (r *RepositoryPGX) ListDefectReasons(ctx context.Context, groupCode *int64, onlyActive bool) ([]*entity.DefectReason, error) {
-	conds := []string{}
-	args := []any{}
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conds := []string{"enterprise_id=$1"}
+	args := []any{empresa}
 	if groupCode != nil {
 		args = append(args, *groupCode)
 		conds = append(conds, fmt.Sprintf("group_code=$%d", len(args)))
@@ -107,29 +134,47 @@ func (r *RepositoryPGX) ListDefectReasons(ctx context.Context, groupCode *int64,
 }
 
 func (r *RepositoryPGX) GetDefectReason(ctx context.Context, code int64) (*entity.DefectReason, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `SELECT code, group_code, description, allows_complement, generates_revenue, requires_return_note,
 		generates_sales_order, generates_production_order, is_replacement, is_service, available_web,
 		is_active, created_at, updated_at, created_by
-		FROM technical_assistance_defect_reasons WHERE code=$1`, code)
-	return scanDefectReason(row)
+		FROM technical_assistance_defect_reasons WHERE code=$1 AND enterprise_id=$2`, code, empresa)
+	v, err := scanDefectReason(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("motivo de defeito %d não encontrado", code))
+	}
+	return v, err
 }
 
 func (r *RepositoryPGX) CreateWarrantyResponsible(ctx context.Context, w *entity.WarrantyResponsible) (*entity.WarrantyResponsible, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// O responsável é da empresa da sessão; o cliente citado também.
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_warranty_responsibles
-		(name, employee_code, customer_code, email, phone, is_active, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		(name, employee_code, customer_code, email, phone, is_active, created_by, enterprise_code)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8::bigint
+		 WHERE $3::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c JOIN enterprise e ON e.id = c.enterprise_id WHERE c.code = $3 AND e.code = $8::bigint)
 		RETURNING code, name, employee_code, customer_code, email, phone, is_active, created_at, updated_at, created_by`,
-		w.Name, w.EmployeeCode, w.CustomerCode, w.Email, w.Phone, trueOrDefault(w.IsActive), pgutil.ToPgUUID(w.CreatedBy))
+		w.Name, w.EmployeeCode, w.CustomerCode, w.Email, w.Phone, trueOrDefault(w.IsActive), pgutil.ToPgUUID(w.CreatedBy), empresa)
 	return scanWarrantyResponsible(row)
 }
 
 func (r *RepositoryPGX) ListWarrantyResponsibles(ctx context.Context, onlyActive bool) ([]*entity.WarrantyResponsible, error) {
-	q := `SELECT code, name, employee_code, customer_code, email, phone, is_active, created_at, updated_at, created_by FROM technical_assistance_warranty_responsibles`
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT code, name, employee_code, customer_code, email, phone, is_active, created_at, updated_at, created_by FROM technical_assistance_warranty_responsibles WHERE enterprise_code = $1`
 	if onlyActive {
-		q += ` WHERE is_active`
+		q += ` AND is_active`
 	}
 	q += ` ORDER BY name`
-	rows, err := r.pool.Query(ctx, q)
+	rows, err := r.pool.Query(ctx, q, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +190,35 @@ func (r *RepositoryPGX) ListWarrantyResponsibles(ctx context.Context, onlyActive
 	return out, rows.Err()
 }
 
+// referenciasDaEmpresa confere que cliente, responsável de garantia, pedido de
+// venda e ordem de produção citados no atendimento são da empresa.
+func (r *RepositoryPGX) referenciasDaEmpresa(ctx context.Context, enterpriseID int64, cliente, responsavel, pedido, ordem *int64) error {
+	var cli, resp, ped, op bool
+	err := r.pool.QueryRow(ctx, `SELECT
+		($2::bigint IS NULL OR EXISTS (SELECT 1 FROM customers WHERE code = $2 AND enterprise_id = $1)),
+		($3::bigint IS NULL OR EXISTS (SELECT 1 FROM technical_assistance_warranty_responsibles w JOIN enterprise e ON e.code = w.enterprise_code WHERE w.code = $3 AND e.id = $1)),
+		($4::bigint IS NULL OR EXISTS (SELECT 1 FROM sales_orders so JOIN enterprise e ON e.code = so.enterprise_code WHERE so.code = $4 AND e.id = $1)),
+		($5::bigint IS NULL OR EXISTS (SELECT 1 FROM production_orders po WHERE po.id = $5 AND po.enterprise_id = $1))`,
+		enterpriseID, cliente, responsavel, pedido, ordem).Scan(&cli, &resp, &ped, &op)
+	switch {
+	case err != nil:
+		return err
+	case !cli:
+		return errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", *cliente))
+	case !resp:
+		return errorsuc.NewNotFoundError(fmt.Sprintf("responsável de garantia %d não encontrado", *responsavel))
+	case !ped:
+		return errorsuc.NewNotFoundError(fmt.Sprintf("pedido de venda %d não encontrado", *pedido))
+	case !op:
+		return errorsuc.NewNotFoundError(fmt.Sprintf("ordem de produção %d não encontrada", *ordem))
+	}
+	return nil
+}
+
 func (r *RepositoryPGX) CreateCall(ctx context.Context, enterpriseID int64, c *entity.Call) (*entity.Call, error) {
+	if err := r.referenciasDaEmpresa(ctx, enterpriseID, &c.CustomerCode, c.WarrantyResponsibleCode, nil, nil); err != nil {
+		return nil, err
+	}
 	if err := r.pool.QueryRow(ctx, `SELECT code FROM enterprise WHERE id=$1`, enterpriseID).Scan(&c.EnterpriseCode); err != nil {
 		return nil, err
 	}
@@ -166,6 +239,9 @@ func (r *RepositoryPGX) CreateCall(ctx context.Context, enterpriseID int64, c *e
 }
 
 func (r *RepositoryPGX) UpdateCall(ctx context.Context, enterpriseID int64, c *entity.Call) (*entity.Call, error) {
+	if err := r.referenciasDaEmpresa(ctx, enterpriseID, nil, nil, c.SalesOrderCode, c.ProductionOrderID); err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `UPDATE technical_assistance_calls SET
 		status=$2, priority=$3, promised_date=$4, attended_at=$5, closed_at=$6, subject=$7, description=$8,
 		diagnosis=$9, solution=$10, return_note_required=$11, sales_order_code=$12, production_order_id=$13,
@@ -188,8 +264,12 @@ func (r *RepositoryPGX) GetCall(ctx context.Context, enterpriseID, code int64) (
 	if err != nil {
 		return nil, err
 	}
-	call.Items, _ = r.ListCallItems(ctx, enterpriseID, code)
-	call.ReturnNotes, _ = r.ListReturnNotes(ctx, enterpriseID, code)
+	if call.Items, err = r.ListCallItems(ctx, enterpriseID, code); err != nil {
+		return nil, fmt.Errorf("itens do atendimento %d: %w", code, err)
+	}
+	if call.ReturnNotes, err = r.ListReturnNotes(ctx, enterpriseID, code); err != nil {
+		return nil, fmt.Errorf("notas de retorno do atendimento %d: %w", code, err)
+	}
 	return call, nil
 }
 
@@ -272,6 +352,9 @@ func (r *RepositoryPGX) ListCallItems(ctx context.Context, enterpriseID, callCod
 }
 
 func (r *RepositoryPGX) AddReturnNote(ctx context.Context, enterpriseID int64, n *entity.ReturnNote) (*entity.ReturnNote, error) {
+	if err := r.referenciasDaEmpresa(ctx, enterpriseID, n.CustomerCode, nil, nil, nil); err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_return_notes
 		(call_code, note_number, note_series, emission_date, customer_code, operation_type, access_key, total_value, notes, created_by)
 		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
@@ -303,6 +386,9 @@ func (r *RepositoryPGX) ListReturnNotes(ctx context.Context, enterpriseID, callC
 }
 
 func (r *RepositoryPGX) AddOrderLink(ctx context.Context, enterpriseID int64, l *entity.OrderLink) (*entity.OrderLink, error) {
+	if err := r.referenciasDaEmpresa(ctx, enterpriseID, nil, nil, l.SalesOrderCode, l.ProductionOrderID); err != nil {
+		return nil, err
+	}
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_order_links
 		(call_code, call_item_code, generated_type, sales_order_code, production_order_id, created_by, notes)
 		SELECT $1,$2,$3,$4,$5,$6,$7

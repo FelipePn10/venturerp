@@ -2,6 +2,7 @@ package financial_uc
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -20,8 +21,19 @@ func (uc *GetFluxoCaixaUseCase) Execute(ctx context.Context, startDate, endDate 
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	start, _ := time.Parse("2006-01-02", startDate)
-	end, _ := time.Parse("2006-01-02", endDate)
+	// Período em branco segue como antes (sem limite daquele lado); data mal
+	// digitada é recusada — antes virava 0001-01-01 e o fluxo vinha errado.
+	var start, end time.Time
+	if d, msg := datetime.Opcional("data inicial", &startDate); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	} else if d != nil {
+		start = *d
+	}
+	if d, msg := datetime.Opcional("data final", &endDate); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	} else if d != nil {
+		end = *d
+	}
 
 	list, err := uc.Repo.GetFluxoCaixa(ctx, start, end)
 	if err != nil {

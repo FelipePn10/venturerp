@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,13 +21,12 @@ func NewMaintenanceHandler(uc *maintenance_uc.MaintenanceUseCase) *MaintenanceHa
 
 func (h *MaintenanceHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var dto maintenance_uc.CreatePlanDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreatePlan(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -42,7 +40,7 @@ func (h *MaintenanceHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.GetPlan(r.Context(), id)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -87,13 +85,12 @@ func (h *MaintenanceHandler) DeactivatePlan(w http.ResponseWriter, r *http.Reque
 
 func (h *MaintenanceHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	var dto maintenance_uc.CreateOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.CreateOrder(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusCreated, result)
@@ -101,13 +98,12 @@ func (h *MaintenanceHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 
 func (h *MaintenanceHandler) AdvanceOrder(w http.ResponseWriter, r *http.Request) {
 	var dto maintenance_uc.AdvanceOrderDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.AdvanceOrder(r.Context(), dto)
 	if err != nil {
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

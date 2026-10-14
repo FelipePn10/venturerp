@@ -44,6 +44,7 @@ WHERE s.parent_code = $1
   AND (s.parent_mask IS NULL OR s.parent_mask = $2)
   AND (s.start_date IS NULL OR $3::date IS NULL OR s.start_date <= $3::date)
   AND (s.end_date   IS NULL OR $3::date IS NULL OR s.end_date   >= $3::date)
+  AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = s.parent_code AND pi.enterprise_id = $4)
 ORDER BY
     CASE WHEN s.parent_mask IS NOT NULL THEN 0 ELSE 1 END,
     s.sequence,
@@ -51,9 +52,10 @@ ORDER BY
 `
 
 type GetChildrenForConsultParams struct {
-	ParentCode int64
-	ParentMask pgtype.Text
-	Column3    pgtype.Date
+	ParentCode   int64
+	ParentMask   pgtype.Text
+	Column3      pgtype.Date
+	EnterpriseID int64
 }
 
 type GetChildrenForConsultRow struct {
@@ -88,7 +90,12 @@ type GetChildrenForConsultRow struct {
 // $1 = parent_code, $2 = parent_mask (NULL → apenas genéricos),
 // $3 = effectiveness_date (NULL → sem filtro de data).
 func (q *Queries) GetChildrenForConsult(ctx context.Context, arg GetChildrenForConsultParams) ([]GetChildrenForConsultRow, error) {
-	rows, err := q.db.Query(ctx, getChildrenForConsult, arg.ParentCode, arg.ParentMask, arg.Column3)
+	rows, err := q.db.Query(ctx, getChildrenForConsult,
+		arg.ParentCode,
+		arg.ParentMask,
+		arg.Column3,
+		arg.EnterpriseID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +153,7 @@ WITH RECURSIVE where_used AS (
     FROM item_structures s
     WHERE s.child_code = $1
       AND s.is_active = TRUE
+      AND EXISTS (SELECT 1 FROM items ci WHERE ci.code = s.child_code AND ci.enterprise_id = $3)
 
     UNION ALL
 
@@ -173,13 +181,14 @@ SELECT
     wu.parent_mask,
     wu.sequence
 FROM where_used wu
-JOIN items p ON p.code = wu.parent_code
+JOIN items p ON p.code = wu.parent_code AND p.enterprise_id = $3
 ORDER BY wu.level, wu.parent_code, wu.sequence
 `
 
 type GetWhereUsedParams struct {
-	ChildCode int64
-	Column2   int32
+	ChildCode    int64
+	Column2      int32
+	EnterpriseID int64
 }
 
 type GetWhereUsedRow struct {
@@ -196,7 +205,7 @@ type GetWhereUsedRow struct {
 // Implosão de estrutura: retorna todos os pais que utilizam o item $1,
 // recursivamente até o nível $2 (0 = todos).
 func (q *Queries) GetWhereUsed(ctx context.Context, arg GetWhereUsedParams) ([]GetWhereUsedRow, error) {
-	rows, err := q.db.Query(ctx, getWhereUsed, arg.ChildCode, arg.Column2)
+	rows, err := q.db.Query(ctx, getWhereUsed, arg.ChildCode, arg.Column2, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}

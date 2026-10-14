@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -15,6 +16,10 @@ import (
 type ConsultarNFeUseCase struct {
 	Repo repository.FiscalRepository
 	Auth ports.AuthService
+	// Efeitos: quando a consulta descobre a nota autorizada (a resposta da
+	// emissão se perdeu), estoque, títulos e pedido entram por aqui — antes só a
+	// situação mudava e os efeitos nunca aconteciam.
+	Efeitos *EfeitosNFe
 }
 
 type ConsultarNFeResult struct {
@@ -27,6 +32,8 @@ type ConsultarNFeResult struct {
 	// Document URLs (DANFE PDF and XML) served by Focus NF-e once authorized.
 	DanfeURL string `json:"danfe_url,omitempty"`
 	XMLURL   string `json:"xml_url,omitempty"`
+	// Avisos: efeitos que ficaram pendentes (reprocessados automaticamente).
+	Avisos []string `json:"avisos,omitempty"`
 }
 
 func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*ConsultarNFeResult, error) {
@@ -40,7 +47,7 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 	}
 
 	if exit.FocusRef == nil {
-		return nil, fmt.Errorf("NF-e %d não possui referência Focus — não foi enviada para autorização", exitID)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e %d não possui referência Focus — não foi enviada para autorização", exitID))
 	}
 
 	cfg, err := uc.Repo.GetFiscalConfig(ctx)
@@ -53,7 +60,11 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-		_ = uc.Repo.SaveFocusLog(ctx, exitID, endpoint, method, reqBody, respBody, statusCode, durationMs)
+		if errLog := uc.Repo.SaveFocusLog(ctx, exitID, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+			// de registrar a comunicação não pode sumir.
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "documento", exitID, "endpoint", endpoint, "erro", errLog)
+		}
 	})
 
 	resp, err := cli.ConsultarNFe(ctx, *exit.FocusRef)
@@ -61,25 +72,36 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 		return nil, fmt.Errorf("consultando NF-e no Focus: %w", err)
 	}
 
+	var avisos []string
 	// Sync local status if Focus shows a terminal state
 	if resp != nil {
 		switch resp.Status {
 		case "autorizado":
 			if exit.Status != entity.ExitStatusAuthorized {
-				_, _ = uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusAuthorized)
+				if _, errSituacao := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusAuthorized); errSituacao != nil {
+					return nil, fmt.Errorf("gravando a situação autorizada da NF-e: %w", errSituacao)
+				}
+				if uc.Efeitos != nil && exit.FiscalEntryID == nil {
+					avisos = append(avisos, uc.aplicarEfeitos(ctx, exitID)...)
+				}
 			}
 		case "cancelado":
 			if exit.Status != entity.ExitStatusCancelled {
-				_, _ = uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusCancelled)
+				if _, errSituacao := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusCancelled); errSituacao != nil {
+					return nil, fmt.Errorf("gravando a situação cancelada da NF-e: %w", errSituacao)
+				}
 			}
 		case "rejeitado", "erro_autorizacao":
 			if exit.Status != entity.ExitStatusRejected {
-				_, _ = uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusRejected)
+				if _, errSituacao := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusRejected); errSituacao != nil {
+					return nil, fmt.Errorf("gravando a situação rejeitada da NF-e: %w", errSituacao)
+				}
 			}
 		}
 	}
 
 	result := &ConsultarNFeResult{
+		Avisos:   avisos,
 		ExitID:   exitID,
 		FocusRef: *exit.FocusRef,
 	}
@@ -107,4 +129,21 @@ func (uc *ListCartasCorrecaoUseCase) Execute(ctx context.Context, exitID int64) 
 		return nil, err
 	}
 	return toCartaCorrecaoResponses(list), nil
+}
+
+// aplicarEfeitos registra e roda a pendência da autorização descoberta pela
+// consulta; o que falhar volta como aviso (a pendência é reprocessada).
+func (uc *ConsultarNFeUseCase) aplicarEfeitos(ctx context.Context, exitID int64) []string {
+	userID, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return []string{"a nota está autorizada, mas os efeitos não puderam ser registrados sem o usuário da sessão"}
+	}
+	if err := uc.Efeitos.Registrar(ctx, exitID, entity.PendenciaAutorizacao, userID); err != nil {
+		slog.Error("NF-e autorizada (consulta) sem pendência de efeitos registrada", "nota", exitID, "erro", err)
+		return []string{"a nota está autorizada, mas a pendência dos efeitos não pôde ser registrada — estoque e financeiro NÃO foram atualizados: " + err.Error()}
+	}
+	if err := uc.Efeitos.Executar(ctx, exitID, entity.PendenciaAutorizacao, userID); err != nil {
+		return []string{"nota autorizada; estoque, títulos e pedido ficaram PENDENTES e serão reprocessados automaticamente: " + err.Error()}
+	}
+	return nil
 }

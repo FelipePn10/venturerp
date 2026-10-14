@@ -24,28 +24,46 @@ func New(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+// Tipo de representante é catálogo da empresa (enterprise_id).
+
 func (r *Repository) CreateType(ctx context.Context, t *entity.RepresentativeType) (*entity.RepresentativeType, error) {
-	row := r.pool.QueryRow(ctx, `INSERT INTO public.representative_types (description,is_free,ignores_direct_billing,is_active) VALUES ($1,$2,$3,$4) RETURNING code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at`, t.Description, t.IsFree, t.IgnoresDirectBilling, t.IsActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO public.representative_types (description,is_free,ignores_direct_billing,is_active,enterprise_id) VALUES ($1,$2,$3,$4,$5) RETURNING code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at`, t.Description, t.IsFree, t.IgnoresDirectBilling, t.IsActive, empresa)
 	return scanType(row)
 }
 
 func (r *Repository) UpdateType(ctx context.Context, t *entity.RepresentativeType) (*entity.RepresentativeType, error) {
-	row := r.pool.QueryRow(ctx, `UPDATE public.representative_types SET description=$2,is_free=$3,ignores_direct_billing=$4,is_active=$5,updated_at=NOW() WHERE code=$1 RETURNING code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at`, t.Code, t.Description, t.IsFree, t.IgnoresDirectBilling, t.IsActive)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `UPDATE public.representative_types SET description=$2,is_free=$3,ignores_direct_billing=$4,is_active=$5,updated_at=NOW() WHERE code=$1 AND enterprise_id=$6 RETURNING code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at`, t.Code, t.Description, t.IsFree, t.IgnoresDirectBilling, t.IsActive, empresa)
 	return scanType(row)
 }
 
 func (r *Repository) GetType(ctx context.Context, code int64) (*entity.RepresentativeType, error) {
-	row := r.pool.QueryRow(ctx, `SELECT code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at FROM public.representative_types WHERE code=$1`, code)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := r.pool.QueryRow(ctx, `SELECT code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at FROM public.representative_types WHERE code=$1 AND enterprise_id=$2`, code, empresa)
 	return scanType(row)
 }
 
 func (r *Repository) ListTypes(ctx context.Context, onlyActive bool) ([]*entity.RepresentativeType, error) {
-	sqlText := `SELECT code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at FROM public.representative_types WHERE TRUE`
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sqlText := `SELECT code,description,is_free,ignores_direct_billing,is_active,created_at,updated_at FROM public.representative_types WHERE enterprise_id=$1`
 	if onlyActive {
 		sqlText += ` AND is_active=TRUE`
 	}
 	sqlText += ` ORDER BY code`
-	rows, err := r.pool.Query(ctx, sqlText)
+	rows, err := r.pool.Query(ctx, sqlText, empresa)
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +77,27 @@ func (r *Repository) ListTypes(ctx context.Context, onlyActive bool) ([]*entity.
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// O representante é da empresa da sessão (representatives.enterprise_code,
+// convenção comercial). O código é único no banco; leitura, alteração e os
+// filhos só alcançam representante da própria empresa.
+
+// doRepresentante confere que o representante é da empresa da sessão e devolve
+// o código da empresa.
+func (r *Repository) doRepresentante(ctx context.Context, code int64) (int64, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var ok bool
+	if err := r.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM public.representatives WHERE code=$1 AND enterprise_code=$2)`, code, empresa).Scan(&ok); err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado", code))
+	}
+	return empresa, nil
 }
 
 // Create grava o representante E o vínculo com a empresa da sessão. Sem o
@@ -78,10 +117,10 @@ func (r *Repository) Create(ctx context.Context, rep *entity.Representative) (*e
 	defer tx.Rollback(ctx)
 	row := tx.QueryRow(ctx, `INSERT INTO public.representatives (
 is_customer,customer_code,is_supplier,supplier_code,name,trade_name,type_code,category_code,register_date,core_number,document_number,
-postal_code,city,state,full_address,street,street_number,complement,district,device_quantity,is_active
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING `+repColumns,
+postal_code,city,state,full_address,street,street_number,complement,district,device_quantity,is_active,enterprise_code
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING `+repColumns,
 		rep.IsCustomer, rep.CustomerCode, rep.IsSupplier, rep.SupplierCode, rep.Name, rep.TradeName, rep.TypeCode, rep.CategoryCode, rep.RegisterDate, rep.CoreNumber, rep.DocumentNumber,
-		rep.PostalCode, rep.City, rep.State, rep.FullAddress, rep.Street, rep.StreetNumber, rep.Complement, rep.District, rep.DeviceQuantity, rep.IsActive)
+		rep.PostalCode, rep.City, rep.State, rep.FullAddress, rep.Street, rep.StreetNumber, rep.Complement, rep.District, rep.DeviceQuantity, rep.IsActive, enterpriseCode)
 	criado, err := scanRep(row)
 	if err != nil {
 		return nil, err
@@ -108,7 +147,7 @@ func (r *Repository) Update(ctx context.Context, rep *entity.Representative) (*e
 is_customer=$2,customer_code=$3,is_supplier=$4,supplier_code=$5,name=$6,trade_name=$7,type_code=$8,category_code=$9,register_date=$10,
 core_number=$11,document_number=$12,postal_code=$13,city=$14,state=$15,full_address=$16,street=$17,street_number=$18,complement=$19,
 district=$20,device_quantity=$21,is_active=$22,updated_at=NOW()
-WHERE code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=representatives.code AND re.enterprise_code=$23)
+WHERE code=$1 AND representatives.enterprise_code=$23
 RETURNING `+repColumns,
 		rep.Code, rep.IsCustomer, rep.CustomerCode, rep.IsSupplier, rep.SupplierCode, rep.Name, rep.TradeName, rep.TypeCode, rep.CategoryCode, rep.RegisterDate,
 		rep.CoreNumber, rep.DocumentNumber, rep.PostalCode, rep.City, rep.State, rep.FullAddress, rep.Street, rep.StreetNumber, rep.Complement,
@@ -125,7 +164,7 @@ func (r *Repository) Get(ctx context.Context, code int64) (*entity.Representativ
 	if err != nil {
 		return nil, err
 	}
-	row := r.pool.QueryRow(ctx, `SELECT `+prefixedRepColumns("r")+` FROM public.representatives r WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseCode)
+	row := r.pool.QueryRow(ctx, `SELECT `+prefixedRepColumns("r")+` FROM public.representatives r WHERE r.code=$1 AND r.enterprise_code=$2`, code, enterpriseCode)
 	rep, err := scanRep(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -148,7 +187,7 @@ func (r *Repository) List(ctx context.Context, filter reprepo.RepresentativeFilt
 	}
 	sqlText, args := listSQL(filter, `SELECT DISTINCT `+prefixedRepColumns("r")+` FROM public.representatives r`)
 	args = append(args, enterpriseCode)
-	sqlText += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$%d)`, len(args))
+	sqlText += fmt.Sprintf(` AND r.enterprise_code=$%d`, len(args))
 	sqlText += orderSQL(filter.SortBy)
 	rows, err := r.pool.Query(ctx, sqlText, args...)
 	if err != nil {
@@ -171,7 +210,7 @@ func (r *Repository) Block(ctx context.Context, code int64, reason string) error
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=TRUE, block_reason=$2, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$3)`, code, reason, enterpriseCode)
+	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=TRUE, block_reason=$2, updated_at=NOW() WHERE r.code=$1 AND r.enterprise_code=$3`, code, reason, enterpriseCode)
 	if err == nil && tag.RowsAffected() == 0 {
 		return errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado na empresa autenticada", code))
 	}
@@ -183,7 +222,7 @@ func (r *Repository) Unblock(ctx context.Context, code int64) error {
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=FALSE, block_reason=NULL, updated_at=NOW() WHERE r.code=$1 AND EXISTS (SELECT 1 FROM public.representative_enterprises re WHERE re.representative_code=r.code AND re.enterprise_code=$2)`, code, enterpriseCode)
+	tag, err := r.pool.Exec(ctx, `UPDATE public.representatives r SET blocked=FALSE, block_reason=NULL, updated_at=NOW() WHERE r.code=$1 AND r.enterprise_code=$2`, code, enterpriseCode)
 	if err == nil && tag.RowsAffected() == 0 {
 		return errorsuc.NewNotFoundError(fmt.Sprintf("representante %d não encontrado na empresa autenticada", code))
 	}
@@ -191,6 +230,11 @@ func (r *Repository) Unblock(ctx context.Context, code int64) error {
 }
 
 func (r *Repository) AddEnterprise(ctx context.Context, row *entity.RepresentativeEnterprise) (*entity.RepresentativeEnterprise, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	row.EnterpriseCode = empresa // dados comerciais do representante são da empresa dele
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_enterprises (representative_code,enterprise_code,enterprise_name,commission_pattern_code,commission_pct,is_default,is_active)
 VALUES ($1,$2,$3,$4,$5,$6,$7)
 ON CONFLICT (representative_code,enterprise_code) DO UPDATE SET enterprise_name=$3,commission_pattern_code=$4,commission_pct=$5,is_default=$6,is_active=$7,updated_at=NOW()
@@ -200,6 +244,11 @@ RETURNING id,representative_code,enterprise_code,enterprise_name,commission_patt
 }
 
 func (r *Repository) AddAccounting(ctx context.Context, row *entity.RepresentativeAccounting) (*entity.RepresentativeAccounting, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	row.EnterpriseCode = &empresa // dados comerciais do representante são da empresa dele
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_accounting (representative_code,enterprise_code,event_type,debit_account_code,debit_cost_center_code,credit_account_code,credit_cost_center_code,history_code)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 ON CONFLICT (representative_code,enterprise_code,event_type) DO UPDATE SET debit_account_code=$4,debit_cost_center_code=$5,credit_account_code=$6,credit_cost_center_code=$7,history_code=$8,updated_at=NOW()
@@ -209,16 +258,31 @@ RETURNING id,representative_code,enterprise_code,event_type,debit_account_code,d
 }
 
 func (r *Repository) AddRegion(ctx context.Context, row *entity.RepresentativeRegion) (*entity.RepresentativeRegion, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	row.EnterpriseCode = &empresa // dados comerciais do representante são da empresa dele
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_regions (representative_code,enterprise_code,region_code,microregion_code,is_active) VALUES ($1,$2,$3,$4,$5) RETURNING id,representative_code,enterprise_code,region_code,microregion_code,is_active,created_at`, row.RepresentativeCode, row.EnterpriseCode, row.RegionCode, row.MicroregionCode, row.IsActive)
 	return scanRegion(scan)
 }
 
 func (r *Repository) AddSegment(ctx context.Context, row *entity.RepresentativeSegment) (*entity.RepresentativeSegment, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	row.EnterpriseCode = &empresa // dados comerciais do representante são da empresa dele
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_segments (representative_code,enterprise_code,microregion_code,market_segment_code,is_active) VALUES ($1,$2,$3,$4,$5) RETURNING id,representative_code,enterprise_code,microregion_code,market_segment_code,is_active,created_at`, row.RepresentativeCode, row.EnterpriseCode, row.MicroregionCode, row.MarketSegmentCode, row.IsActive)
 	return scanSegment(scan)
 }
 
 func (r *Repository) AddSalesPlan(ctx context.Context, row *entity.RepresentativeSalesPlan) (*entity.RepresentativeSalesPlan, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	row.EnterpriseCode = &empresa // dados comerciais do representante são da empresa dele
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_sales_plans (representative_code,enterprise_code,microregion_code,sales_plan_code,is_active) VALUES ($1,$2,$3,$4,$5) RETURNING id,representative_code,enterprise_code,microregion_code,sales_plan_code,is_active,created_at`, row.RepresentativeCode, row.EnterpriseCode, row.MicroregionCode, row.SalesPlanCode, row.IsActive)
 	return scanSalesPlan(scan)
 }
@@ -257,6 +321,11 @@ ORDER BY sales_plan_code`, enterpriseCode)
 }
 
 func (r *Repository) AddInterest(ctx context.Context, row *entity.RepresentativeInterest) (*entity.RepresentativeInterest, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	_ = empresa // só a conferência; o filho não tem coluna de empresa
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_interests (representative_code,item_classification_code,is_active) VALUES ($1,$2,$3) ON CONFLICT (representative_code,item_classification_code) DO UPDATE SET is_active=$3 RETURNING id,representative_code,item_classification_code,is_active,created_at`, row.RepresentativeCode, row.ItemClassificationCode, row.IsActive)
 	return scanInterest(scan)
 }
@@ -301,6 +370,11 @@ ORDER BY mask.code, classification.code`, enterpriseID)
 }
 
 func (r *Repository) AddPhone(ctx context.Context, row *entity.RepresentativePhone) (*entity.RepresentativePhone, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	_ = empresa // só a conferência; o filho não tem coluna de empresa
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_phones (representative_code,ddi,ddd,phone,phone_type,ranking) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id,representative_code,ddi,ddd,phone,phone_type,ranking,created_at`, row.RepresentativeCode, row.DDI, row.DDD, row.Phone, row.PhoneType, row.Ranking)
 	out, err := scanPhone(scan)
 	if err == nil {
@@ -310,6 +384,11 @@ func (r *Repository) AddPhone(ctx context.Context, row *entity.RepresentativePho
 }
 
 func (r *Repository) AddEmail(ctx context.Context, row *entity.RepresentativeEmail) (*entity.RepresentativeEmail, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	_ = empresa // só a conferência; o filho não tem coluna de empresa
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_emails (representative_code,email,ranking) VALUES ($1,$2,$3) RETURNING id,representative_code,email,ranking,created_at`, row.RepresentativeCode, row.Email, row.Ranking)
 	out, err := scanEmail(scan)
 	if err == nil {
@@ -319,11 +398,21 @@ func (r *Repository) AddEmail(ctx context.Context, row *entity.RepresentativeEma
 }
 
 func (r *Repository) AddCorrespondenceAddress(ctx context.Context, row *entity.RepresentativeCorrespondenceAddress) (*entity.RepresentativeCorrespondenceAddress, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	_ = empresa // só a conferência; o filho não tem coluna de empresa
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_correspondence_addresses (representative_code,postal_code,city,state,full_address,street,street_number,complement,district,is_default) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,representative_code,postal_code,city,state,full_address,street,street_number,complement,district,is_default,created_at,updated_at`, row.RepresentativeCode, row.PostalCode, row.City, row.State, row.FullAddress, row.Street, row.StreetNumber, row.Complement, row.District, row.IsDefault)
 	return scanCorrespondence(scan)
 }
 
 func (r *Repository) AddContact(ctx context.Context, row *entity.RepresentativeContact) (*entity.RepresentativeContact, error) {
+	empresa, err := r.doRepresentante(ctx, row.RepresentativeCode)
+	if err != nil {
+		return nil, err
+	}
+	_ = empresa // só a conferência; o filho não tem coluna de empresa
 	scan := r.pool.QueryRow(ctx, `INSERT INTO public.representative_contacts (representative_code,contact_type_code,name,role,phone,email,notes,is_active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,representative_code,contact_type_code,name,role,phone,email,notes,is_active,created_at,updated_at`, row.RepresentativeCode, row.ContactTypeCode, row.Name, row.Role, row.Phone, row.Email, row.Notes, row.IsActive)
 	return scanContact(scan)
 }
@@ -411,8 +500,8 @@ LEFT JOIN public.representative_accounting ra ON ra.representative_code=r.code A
 	default:
 		sqlText += " AND r.is_active=TRUE"
 	}
-	// Só os representantes vinculados à empresa da sessão.
-	sqlText += " AND EXISTS (SELECT 1 FROM public.representative_enterprises rev WHERE rev.representative_code=r.code AND rev.enterprise_code=$1)"
+	// Só os representantes da empresa da sessão.
+	sqlText += " AND r.enterprise_code=$1"
 	sqlText += ` GROUP BY r.code,rt.description`
 	sqlText += orderSQL(filter.SortBy)
 	return sqlText, args
@@ -447,7 +536,7 @@ COALESCE(SUM(c.total_quoted),0),COALESCE(SUM(c.total_ordered),0),
 CASE WHEN COALESCE(SUM(c.order_count),0)=0 THEN 0 ELSE COALESCE(SUM(c.total_ordered),0)/SUM(c.order_count) END,
 COALESCE(SUM(c.total_ordered),0),COALESCE(SUM(c.commission_value),0),MAX(c.last_quotation_date),MAX(c.last_order_date)
 FROM public.representatives r LEFT JOIN c ON c.representative_code=r.code ` + where +
-		` AND EXISTS (SELECT 1 FROM public.representative_enterprises rev WHERE rev.representative_code=r.code AND rev.enterprise_code=` + empresa + `)` +
+		` AND r.enterprise_code=` + empresa +
 		` GROUP BY r.code ORDER BY r.name`
 	rows, err := r.pool.Query(ctx, sqlText, args...)
 	if err != nil {
@@ -463,7 +552,11 @@ FROM public.representatives r LEFT JOIN c ON c.representative_code=r.code ` + wh
 		}
 		row.LastQuotationDate = timePtr(lastQ)
 		row.LastOrderDate = timePtr(lastO)
-		row.Customers, _ = r.followCustomers(ctx, row.RepresentativeCode, enterpriseCode, filter)
+		customers, err := r.followCustomers(ctx, row.RepresentativeCode, enterpriseCode, filter)
+		if err != nil {
+			return nil, fmt.Errorf("clientes do representante %d: %w", row.RepresentativeCode, err)
+		}
+		row.Customers = customers
 		out = append(out, row)
 	}
 	return out, rows.Err()

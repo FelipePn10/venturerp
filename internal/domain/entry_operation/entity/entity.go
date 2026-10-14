@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -22,10 +23,10 @@ type StateGroup struct {
 
 func NewStateGroup(code int64, description string, createdBy uuid.UUID) (*StateGroup, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	return &StateGroup{
 		Code:        code,
@@ -62,19 +63,19 @@ type EntryOperationType struct {
 
 func NewEntryOperationType(code int64, description, natureOperation string, createdBy uuid.UUID) (*EntryOperationType, error) {
 	if code == 0 {
-		return nil, fmt.Errorf("informe o código")
+		return nil, domainerr.NewValidation("informe o código")
 	}
 	if description == "" {
-		return nil, fmt.Errorf("informe a descrição")
+		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	natureOperation = strings.TrimSpace(natureOperation)
 	if natureOperation == "" {
-		return nil, fmt.Errorf("informe a natureza da operação")
+		return nil, domainerr.NewValidation("informe a natureza da operação")
 	}
 	switch natureOperation[0] {
 	case '1', '2', '3':
 	default:
-		return nil, fmt.Errorf("a natureza da operação deve iniciar por 1 (dentro do estado), 2 (fora do estado) ou 3 (fora do país)")
+		return nil, domainerr.NewValidation("a natureza da operação deve iniciar por 1 (dentro do estado), 2 (fora do estado) ou 3 (fora do país)")
 	}
 	return &EntryOperationType{
 		Code:             code,
@@ -101,11 +102,11 @@ func (o *EntryOperationType) ValidateUF(enterpriseUF string, ufInGroup bool) err
 	switch o.NatureOperation[0] {
 	case '1': // dentro do estado → UF deve pertencer ao grupo
 		if !ufInGroup {
-			return fmt.Errorf("natureza 1 (dentro do estado): a UF %s da empresa deve pertencer ao grupo de estado da operação", enterpriseUF)
+			return domainerr.NewValidation(fmt.Sprintf("natureza 1 (dentro do estado): a UF %s da empresa deve pertencer ao grupo de estado da operação", enterpriseUF))
 		}
 	case '2': // fora do estado → UF NÃO deve pertencer ao grupo
 		if ufInGroup {
-			return fmt.Errorf("natureza 2 (fora do estado): a UF %s da empresa não deve pertencer ao grupo de estado da operação", enterpriseUF)
+			return domainerr.NewValidation(fmt.Sprintf("natureza 2 (fora do estado): a UF %s da empresa não deve pertencer ao grupo de estado da operação", enterpriseUF))
 		}
 	case '3': // fora do país → operação estrangeira (sem validação de grupo)
 	}

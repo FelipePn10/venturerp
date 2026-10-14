@@ -13,16 +13,32 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )
 
+// conexao é o que o repositório usa do banco: o pool ou uma transação já
+// aberta (pgx.Tx). Dentro de uma transação, o Begin interno vira savepoint, e
+// as gravações entram no tudo-ou-nada de quem chamou.
+type conexao interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 type StockRepositorySQLC struct {
-	pool *pgxpool.Pool
+	pool conexao
 }
 
 func NewStockRepositorySQLC(pool *pgxpool.Pool) *StockRepositorySQLC {
 	return &StockRepositorySQLC{pool: pool}
+}
+
+// NewStockRepositoryTx devolve o repositório ligado a uma transação aberta.
+func NewStockRepositoryTx(tx pgx.Tx) *StockRepositorySQLC {
+	return &StockRepositorySQLC{pool: tx}
 }
 
 var _ repository.StockRepository = (*StockRepositorySQLC)(nil)
@@ -1353,10 +1369,12 @@ func (r *StockRepositorySQLC) TransferirEntreEnderecos(
 	}
 
 	var custoMedio, custoTotal float64
-	_ = tx.QueryRow(ctx,
+	if err := tx.QueryRow(ctx,
 		`SELECT avg_cost, total_cost FROM public.stock_balances
 		  WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4 AND address=$5`,
-		enterpriseID, m.ItemCode, m.Mask, m.WarehouseID, origem).Scan(&custoMedio, &custoTotal)
+		enterpriseID, m.ItemCode, m.Mask, m.WarehouseID, origem).Scan(&custoMedio, &custoTotal); err != nil {
+		return nil, fmt.Errorf("lendo o custo do saldo de origem: %w", err)
+	}
 	valorMovido, _ := quantidade.Float64()
 	valorMovido *= custoMedio
 

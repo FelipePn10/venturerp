@@ -3,6 +3,7 @@ package routing_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -140,6 +141,8 @@ func (uc *RouteUseCase) GetDetail(ctx context.Context, id int64) (*response.Rout
 	docResps := []response.OperationDocumentResponse{}
 	if docs, errDoc := uc.repo.ListDocumentsByRoute(ctx, id); errDoc == nil {
 		docResps = mapDocumentos(docs)
+	} else {
+		slog.Warn("roteiro exibido sem os documentos: falha ao lê-los", "roteiro", id, "erro", errDoc)
 	}
 	insResps := []response.RouteInspectionResponse{}
 	if ins, errIns := uc.repo.ListInspectionsByRoute(ctx, id); errIns == nil {
@@ -147,6 +150,8 @@ func (uc *RouteUseCase) GetDetail(ctx context.Context, id int64) (*response.Rout
 		for _, i := range ins {
 			insResps = append(insResps, toInspectionResponse(i))
 		}
+	} else {
+		slog.Warn("roteiro exibido sem as inspeções: falha ao lê-las", "roteiro", id, "erro", errIns)
 	}
 
 	return &response.RouteDetailResponse{
@@ -355,7 +360,12 @@ func (uc *RouteUseCase) etapaEnriquecida(ctx context.Context, routeID int64, cru
 	if err != nil {
 		return toRouteOpResponse(crua)
 	}
-	edges, _ := uc.repo.GetNetworkEdges(ctx, routeID)
+	edges, err := uc.repo.GetNetworkEdges(ctx, routeID)
+	if err != nil {
+		// Sem a rede, a quantidade de entrada sairia errada: devolve a etapa
+		// como gravada, sem o cálculo derivado.
+		return toRouteOpResponse(crua)
+	}
 	entra := entity.QuantidadePorOperacao(ops, edges, 1)
 	for _, op := range ops {
 		if op.ID == crua.ID {
@@ -408,6 +418,20 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 	}
 	if err := validaRefugo(dto.ScrapPct); err != nil {
 		return nil, err
+	}
+	// Situação não informada mantém a atual. Antes o vazio ia para a coluna
+	// enum e voltava erro do banco; e usar um padrão (APROVADA) reativaria em
+	// silêncio uma operação inativada.
+	switch op.Situation {
+	case "":
+		atual, err := uc.situacaoAtual(ctx, dto.ID)
+		if err != nil {
+			return nil, err
+		}
+		op.Situation = atual
+	case entity.RouteOpApproved, entity.RouteOpInactive, entity.RouteOpGhost:
+	default:
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida: use APROVADA, INATIVA ou FANTASMA", dto.Situation))
 	}
 	updated, err := uc.repo.UpdateRouteOperation(ctx, op)
 	if err != nil {
@@ -576,4 +600,22 @@ func toRouteOpResponse(op *entity.RouteOperation) response.RouteOperationRespons
 		Situation:            string(op.Situation),
 		Notes:                op.Notes,
 	}
+}
+
+// situacaoAtual lê a situação atual da operação do roteiro (da empresa).
+func (uc *RouteUseCase) situacaoAtual(ctx context.Context, opID int64) (entity.RouteOpSituation, error) {
+	routeID, err := uc.repo.RouteIDOfOperation(ctx, opID)
+	if err != nil {
+		return "", err
+	}
+	ops, err := uc.repo.GetRouteOperations(ctx, routeID)
+	if err != nil {
+		return "", err
+	}
+	for _, op := range ops {
+		if op.ID == opID {
+			return op.Situation, nil
+		}
+	}
+	return "", errorsuc.NewNotFoundError("operação do roteiro não encontrada")
 }

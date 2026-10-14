@@ -2,6 +2,7 @@ package production_order
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -23,11 +24,12 @@ const qualifiedMaterialColumns = `material.id,material.production_order_id,mater
 	material.quantity,material.attended_quantity,material.warehouse_id,material.automatic_issue,material.notes,material.created_at,material.updated_at,material.created_by`
 
 func (r *ProductionOrderRepositoryPGX) GetManualOrderPlanner(ctx context.Context, itemCode int64) (*int64, error) {
-	if _, err := tenant.ID(ctx); err != nil {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
 		return nil, err
 	}
 	var planner *int64
-	err := r.pool.QueryRow(ctx, `SELECT planner_employee_code FROM items WHERE code=$1`, itemCode).Scan(&planner)
+	err = r.pool.QueryRow(ctx, `SELECT planner_employee_code FROM items WHERE code=$1 AND enterprise_id=$2`, itemCode, enterpriseID).Scan(&planner)
 	return planner, err
 }
 
@@ -61,7 +63,9 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 		return nil, err
 	}
 	var orderIssueType string
-	_ = tx.QueryRow(ctx, `SELECT automatic_issue_type FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, order.ItemCode).Scan(&orderIssueType)
+	if err := opcional(tx.QueryRow(ctx, `SELECT automatic_issue_type FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, order.ItemCode).Scan(&orderIssueType)); err != nil {
+		return nil, fmt.Errorf("lendo o controle de estoque do item %d: %w", order.ItemCode, err)
+	}
 	for _, material := range materials {
 		if !material.Quantity.IsPositive() {
 			return nil, fmt.Errorf("a quantidade do material deve ser maior que zero")
@@ -156,8 +160,10 @@ func (r *ProductionOrderRepositoryPGX) AddMaterial(ctx context.Context, material
 	}
 	if material.Kind == entity.MaterialDemand && material.ItemCode == orderItem {
 		var enabled bool
-		_ = r.pool.QueryRow(ctx, `SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params
-			WHERE enterprise_id=$1 AND (param_number=66 OR param_key='VALIDA_QUANTIDADE_RETRABALHO') LIMIT 1`, enterpriseID).Scan(&enabled)
+		if err := opcional(r.pool.QueryRow(ctx, `SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params
+			WHERE enterprise_id=$1 AND (param_number=66 OR param_key='VALIDA_QUANTIDADE_RETRABALHO') LIMIT 1`, enterpriseID).Scan(&enabled)); err != nil {
+			return nil, fmt.Errorf("lendo o parâmetro 66: %w", err)
+		}
 		if enabled && !material.Quantity.Equal(planned) {
 			return nil, fmt.Errorf("parameter 66 requires rework demand quantity to equal production order quantity")
 		}
@@ -358,7 +364,9 @@ func (r *ProductionOrderRepositoryPGX) AllocateLotsWithPolicy(ctx context.Contex
 		}
 		total = total.Add(allocation.Quantity)
 		var controlsAddress bool
-		_ = tx.QueryRow(ctx, `SELECT controls_address FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, material.ItemCode).Scan(&controlsAddress)
+		if err := opcional(tx.QueryRow(ctx, `SELECT controls_address FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, material.ItemCode).Scan(&controlsAddress)); err != nil {
+			return nil, fmt.Errorf("lendo o controle de estoque do item %d: %w", material.ItemCode, err)
+		}
 		if controlsAddress && (allocation.Address == nil || strings.TrimSpace(*allocation.Address) == "") {
 			return nil, fmt.Errorf("informe o endereço de estoque do item %d", material.ItemCode)
 		}
@@ -640,7 +648,7 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 		return nil, fmt.Errorf("demand destination requires production_order_material_id")
 	}
 	var valued bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_costs WHERE production_order_id=$1) AND $2 < date_trunc('month',CURRENT_DATE)::date`, destination.ProductionOrderID, destination.DestinationDate).Scan(&valued); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_costs c JOIN production_orders po ON po.id=c.production_order_id AND po.enterprise_id=$3 WHERE c.production_order_id=$1) AND $2 < date_trunc('month',CURRENT_DATE)::date`, destination.ProductionOrderID, destination.DestinationDate, enterpriseID).Scan(&valued); err != nil {
 		return nil, err
 	}
 	if valued {
@@ -682,7 +690,9 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 	}
 	if destination.DestinationKind == "DEMAND" {
 		var sourceLot, sourceAddress bool
-		_ = tx.QueryRow(ctx, `SELECT controls_lot,controls_address FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, sourceItem).Scan(&sourceLot, &sourceAddress)
+		if err := opcional(tx.QueryRow(ctx, `SELECT controls_lot,controls_address FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, sourceItem).Scan(&sourceLot, &sourceAddress)); err != nil {
+			return nil, fmt.Errorf("lendo o controle de estoque do item %d: %w", sourceItem, err)
+		}
 		if sourceLot && (destination.Lot == nil || strings.TrimSpace(*destination.Lot) == "") {
 			return nil, fmt.Errorf("informe o lote para devolver a demanda")
 		}
@@ -727,7 +737,9 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 		destination.ScrapUOM = scrapUOM
 	}
 	if destination.SourceUOM == "" {
-		_ = tx.QueryRow(ctx, `SELECT stock_uom FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, sourceItem).Scan(&destination.SourceUOM)
+		if err := opcional(tx.QueryRow(ctx, `SELECT stock_uom FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, sourceItem).Scan(&destination.SourceUOM)); err != nil {
+			return nil, fmt.Errorf("lendo a unidade de estoque do item %d: %w", sourceItem, err)
+		}
 		if destination.SourceUOM == "" {
 			destination.SourceUOM = destination.ScrapUOM
 		}
@@ -735,7 +747,10 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 	convertedScrap := destination.ScrapQuantity
 	if destination.ScrapQuantity.IsPositive() && destination.SourceUOM != destination.ScrapUOM {
 		var factor decimal.Decimal
-		err := tx.QueryRow(ctx, `SELECT factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$2 AND to_uom=$3 AND is_active UNION ALL SELECT 1/factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$3 AND to_uom=$2 AND is_active LIMIT 1`, destination.ScrapItemCode, destination.SourceUOM, destination.ScrapUOM).Scan(&factor)
+		err := tx.QueryRow(ctx, `SELECT factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$2 AND to_uom=$3 AND is_active
+			   AND NOT EXISTS (SELECT 1 FROM items i WHERE i.code=$1 AND i.enterprise_id<>$4)
+			 UNION ALL SELECT 1/factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$3 AND to_uom=$2 AND is_active
+			   AND NOT EXISTS (SELECT 1 FROM items i WHERE i.code=$1 AND i.enterprise_id<>$4) LIMIT 1`, destination.ScrapItemCode, destination.SourceUOM, destination.ScrapUOM, enterpriseID).Scan(&factor)
 		if err != nil {
 			return nil, fmt.Errorf("cadastre a conversão de unidade de %s para %s", destination.SourceUOM, destination.ScrapUOM)
 		}
@@ -927,6 +942,9 @@ func (r *ProductionOrderRepositoryPGX) HasProductionActivity(ctx context.Context
 	return exists, err
 }
 
+// Os parâmetros de alteração da OF são lidos pela chave: os números 10 e 14 do
+// catálogo são ITENS_FANTASMAS_GRAVAR e UTILIZA_CALCULO_MPS, e lê-los por número
+// bloqueava a quantidade e liberava as datas conforme parâmetros sem relação.
 func (r *ProductionOrderRepositoryPGX) CanChangeOrderQuantity(ctx context.Context, productionOrderID int64) (bool, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
@@ -934,7 +952,7 @@ func (r *ProductionOrderRepositoryPGX) CanChangeOrderQuantity(ctx context.Contex
 	}
 	var allowed bool
 	err = r.pool.QueryRow(ctx, `SELECT po.allow_quantity_change AND po.origin_type NOT IN ('KANBAN','COMMERCIAL')
-		AND COALESCE((SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params WHERE enterprise_id=$2 AND (param_number=10 OR param_key='PERMITE_ALTERAR_QUANTIDADE_OF') LIMIT 1),TRUE)
+		AND COALESCE((SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params WHERE enterprise_id=$2 AND param_key='PERMITE_ALTERAR_QUANTIDADE_OF' LIMIT 1),TRUE)
 		AND NOT EXISTS(SELECT 1 FROM production_order_service_links WHERE enterprise_id=$2 AND production_order_id=po.id)
 		AND NOT EXISTS(SELECT 1 FROM production_order_materials m JOIN production_order_wms_requests w ON w.production_order_material_id=m.id WHERE m.production_order_id=po.id AND w.enterprise_id=$2 AND w.status<>'CANCELLED')
 		FROM production_orders po WHERE po.id=$1 AND po.enterprise_id=$2`, productionOrderID, enterpriseID).Scan(&allowed)
@@ -947,16 +965,17 @@ func (r *ProductionOrderRepositoryPGX) CanChangeOrderDates(ctx context.Context, 
 	}
 	var allowed bool
 	err = r.pool.QueryRow(ctx, `SELECT po.allow_date_change AND po.origin_type NOT IN ('KANBAN','COMMERCIAL')
-		AND CASE WHEN po.origin_type='MRP' THEN COALESCE((SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params WHERE enterprise_id=$2 AND (param_number=14 OR param_key='PERMITE_ALTERAR_DATAS_OF') LIMIT 1),FALSE) ELSE TRUE END
+		AND CASE WHEN po.origin_type='MRP' THEN COALESCE((SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params WHERE enterprise_id=$2 AND param_key='PERMITE_ALTERAR_DATAS_OF' LIMIT 1),FALSE) ELSE TRUE END
 		FROM production_orders po WHERE po.id=$1 AND po.enterprise_id=$2`, productionOrderID, enterpriseID).Scan(&allowed)
 	return allowed, err
 }
 func (r *ProductionOrderRepositoryPGX) AcceptsFractionalQuantity(ctx context.Context, itemCode int64) (bool, error) {
-	if _, err := tenant.ID(ctx); err != nil {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
 		return false, err
 	}
 	var allowed bool
-	err := r.pool.QueryRow(ctx, `SELECT accepts_fractional_quantity FROM items WHERE code=$1`, itemCode).Scan(&allowed)
+	err = r.pool.QueryRow(ctx, `SELECT accepts_fractional_quantity FROM items WHERE code=$1 AND enterprise_id=$2`, itemCode, enterpriseID).Scan(&allowed)
 	return allowed, err
 }
 
@@ -1106,4 +1125,14 @@ func maintenanceOrderType(origin string, status entity.ProductionOrderStatus) st
 		return "OFA"
 	}
 	return "OFM"
+}
+
+// opcional trata "sem linha" como ausência de configuração (vale o padrão) e
+// devolve qualquer outra falha — antes os dois casos viravam o valor zero, e
+// uma queda do banco passava a operação sem a regra do item.
+func opcional(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	return err
 }

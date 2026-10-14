@@ -13,14 +13,16 @@ import (
 
 const deleteItemCalendarDay = `-- name: DeleteItemCalendarDay :exec
 DELETE FROM item_calendar_promises WHERE item_code = $1 AND mask = $2 AND year = $3 AND month = $4 AND day = $5
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_calendar_promises.item_code AND i.enterprise_id = $6)
 `
 
 type DeleteItemCalendarDayParams struct {
-	ItemCode int64
-	Mask     string
-	Year     int32
-	Month    int32
-	Day      int32
+	ItemCode     int64
+	Mask         string
+	Year         int32
+	Month        int32
+	Day          int32
+	EnterpriseID int64
 }
 
 func (q *Queries) DeleteItemCalendarDay(ctx context.Context, arg DeleteItemCalendarDayParams) error {
@@ -30,20 +32,23 @@ func (q *Queries) DeleteItemCalendarDay(ctx context.Context, arg DeleteItemCalen
 		arg.Year,
 		arg.Month,
 		arg.Day,
+		arg.EnterpriseID,
 	)
 	return err
 }
 
 const getItemCalendarDay = `-- name: GetItemCalendarDay :one
 SELECT id, item_code, mask, year, month, day, is_workday, description, created_at, updated_at FROM item_calendar_promises WHERE item_code = $1 AND mask = $2 AND year = $3 AND month = $4 AND day = $5
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_calendar_promises.item_code AND i.enterprise_id = $6)
 `
 
 type GetItemCalendarDayParams struct {
-	ItemCode int64
-	Mask     string
-	Year     int32
-	Month    int32
-	Day      int32
+	ItemCode     int64
+	Mask         string
+	Year         int32
+	Month        int32
+	Day          int32
+	EnterpriseID int64
 }
 
 func (q *Queries) GetItemCalendarDay(ctx context.Context, arg GetItemCalendarDayParams) (ItemCalendarPromise, error) {
@@ -53,6 +58,7 @@ func (q *Queries) GetItemCalendarDay(ctx context.Context, arg GetItemCalendarDay
 		arg.Year,
 		arg.Month,
 		arg.Day,
+		arg.EnterpriseID,
 	)
 	var i ItemCalendarPromise
 	err := row.Scan(
@@ -71,14 +77,17 @@ func (q *Queries) GetItemCalendarDay(ctx context.Context, arg GetItemCalendarDay
 }
 
 const getItemWorkdaysInMonth = `-- name: GetItemWorkdaysInMonth :many
-SELECT id, item_code, mask, year, month, day, is_workday, description, created_at, updated_at FROM item_calendar_promises WHERE item_code = $1 AND mask = $2 AND year = $3 AND month = $4 AND is_workday = TRUE ORDER BY day
+SELECT id, item_code, mask, year, month, day, is_workday, description, created_at, updated_at FROM item_calendar_promises WHERE item_code = $1 AND mask = $2 AND year = $3 AND month = $4 AND is_workday = TRUE
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_calendar_promises.item_code AND i.enterprise_id = $5)
+ORDER BY day
 `
 
 type GetItemWorkdaysInMonthParams struct {
-	ItemCode int64
-	Mask     string
-	Year     int32
-	Month    int32
+	ItemCode     int64
+	Mask         string
+	Year         int32
+	Month        int32
+	EnterpriseID int64
 }
 
 func (q *Queries) GetItemWorkdaysInMonth(ctx context.Context, arg GetItemWorkdaysInMonthParams) ([]ItemCalendarPromise, error) {
@@ -87,6 +96,7 @@ func (q *Queries) GetItemWorkdaysInMonth(ctx context.Context, arg GetItemWorkday
 		arg.Mask,
 		arg.Year,
 		arg.Month,
+		arg.EnterpriseID,
 	)
 	if err != nil {
 		return nil, err
@@ -118,14 +128,17 @@ func (q *Queries) GetItemWorkdaysInMonth(ctx context.Context, arg GetItemWorkday
 }
 
 const listItemCalendarMonth = `-- name: ListItemCalendarMonth :many
-SELECT id, item_code, mask, year, month, day, is_workday, description, created_at, updated_at FROM item_calendar_promises WHERE item_code = $1 AND mask = $2 AND year = $3 AND month = $4 ORDER BY day
+SELECT id, item_code, mask, year, month, day, is_workday, description, created_at, updated_at FROM item_calendar_promises WHERE item_code = $1 AND mask = $2 AND year = $3 AND month = $4
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_calendar_promises.item_code AND i.enterprise_id = $5)
+ORDER BY day
 `
 
 type ListItemCalendarMonthParams struct {
-	ItemCode int64
-	Mask     string
-	Year     int32
-	Month    int32
+	ItemCode     int64
+	Mask         string
+	Year         int32
+	Month        int32
+	EnterpriseID int64
 }
 
 func (q *Queries) ListItemCalendarMonth(ctx context.Context, arg ListItemCalendarMonthParams) ([]ItemCalendarPromise, error) {
@@ -134,6 +147,7 @@ func (q *Queries) ListItemCalendarMonth(ctx context.Context, arg ListItemCalenda
 		arg.Mask,
 		arg.Year,
 		arg.Month,
+		arg.EnterpriseID,
 	)
 	if err != nil {
 		return nil, err
@@ -165,22 +179,26 @@ func (q *Queries) ListItemCalendarMonth(ctx context.Context, arg ListItemCalenda
 }
 
 const upsertItemCalendarDay = `-- name: UpsertItemCalendarDay :one
+
 INSERT INTO item_calendar_promises (item_code, mask, year, month, day, is_workday, description)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+SELECT $1, $2, $3, $4, $5, $6, $7
+ WHERE EXISTS (SELECT 1 FROM items i WHERE i.code = $1 AND i.enterprise_id = $8)
     ON CONFLICT (item_code, mask, year, month, day) DO UPDATE SET is_workday = EXCLUDED.is_workday, description = EXCLUDED.description
                                                            RETURNING id, item_code, mask, year, month, day, is_workday, description, created_at, updated_at
 `
 
 type UpsertItemCalendarDayParams struct {
-	ItemCode    int64
-	Mask        string
-	Year        int32
-	Month       int32
-	Day         int32
-	IsWorkday   bool
-	Description pgtype.Text
+	ItemCode     int64
+	Mask         string
+	Year         int32
+	Month        int32
+	Day          int32
+	IsWorkday    bool
+	Description  pgtype.Text
+	EnterpriseID int64
 }
 
+// Registros do item são da empresa do item (items.enterprise_id).
 func (q *Queries) UpsertItemCalendarDay(ctx context.Context, arg UpsertItemCalendarDayParams) (ItemCalendarPromise, error) {
 	row := q.db.QueryRow(ctx, upsertItemCalendarDay,
 		arg.ItemCode,
@@ -190,6 +208,7 @@ func (q *Queries) UpsertItemCalendarDay(ctx context.Context, arg UpsertItemCalen
 		arg.Day,
 		arg.IsWorkday,
 		arg.Description,
+		arg.EnterpriseID,
 	)
 	var i ItemCalendarPromise
 	err := row.Scan(

@@ -5,6 +5,7 @@ package entrada
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 
 	"github.com/shopspring/decimal"
@@ -109,7 +110,7 @@ func DistribuirProporcional(parcelas []*entity.FiscalEntryInstallment, totais ma
 		totalParcelas = totalParcelas.Add(p.Valor)
 	}
 	if !totalClassificado.IsPositive() {
-		return fmt.Errorf("os itens classificados não têm valor para distribuir nas parcelas")
+		return domainerr.NewValidation("os itens classificados não têm valor para distribuir nas parcelas")
 	}
 	base := decimal.Max(totalParcelas, totalClassificado)
 	fechaLinha := totalClassificado.Sub(totalParcelas).Abs().LessThanOrEqual(Tolerancia)

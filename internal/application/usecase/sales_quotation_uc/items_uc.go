@@ -17,6 +17,9 @@ import (
 )
 
 func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotationItemDTO) (*response.SalesQuotationItemResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de entrega", dto.DeliveryDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanCreateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -90,6 +93,9 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 }
 
 func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotationItemDTO) (*response.SalesQuotationItemResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de entrega", dto.DeliveryDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}

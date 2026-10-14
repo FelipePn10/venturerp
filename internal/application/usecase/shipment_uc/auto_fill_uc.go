@@ -132,7 +132,9 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromSalesOrder(ctx context.Context, s
 			return nil, fmt.Errorf("adding auto-fill item %d: %w", it.ItemCode, err)
 		}
 	}
-	_ = uc.ShipmentRepo.RecalcTotals(ctx, code)
+	if err := uc.ShipmentRepo.RecalcTotals(ctx, code); err != nil {
+		return nil, fmt.Errorf("recalculando os totais do romaneio: %w", err)
+	}
 
 	return uc.getShipment(ctx, code)
 }

@@ -2,7 +2,11 @@ package item_conversion
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/item_conversion/repository"
@@ -21,7 +25,12 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.ItemConversionRepositor
 }
 
 func (r *ItemConversionRepositorySQLC) Create(ctx context.Context, c *entity.ItemUnitConversion) (*entity.ItemUnitConversion, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateItemUnitConversion(ctx, sqlc.CreateItemUnitConversionParams{
+		EnterpriseID:    empresa,
 		ItemCode:        c.ItemCode,
 		Mask:            c.Mask,
 		FromUom:         c.FromUOM,
@@ -30,6 +39,9 @@ func (r *ItemConversionRepositorySQLC) Create(ctx context.Context, c *entity.Ite
 		RoundingPercent: pgutil.ToPgNumericFromFloat64(c.RoundingPercent), ToleranceValue: pgutil.ToPgNumericFromFloat64(c.ToleranceValue), ToleranceType: c.ToleranceType,
 		CreatedBy: pgutil.ToPgUUID(c.CreatedBy),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado", c.ItemCode))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating item unit conversion: %w", err)
 	}
@@ -37,7 +49,11 @@ func (r *ItemConversionRepositorySQLC) Create(ctx context.Context, c *entity.Ite
 }
 
 func (r *ItemConversionRepositorySQLC) ListByItem(ctx context.Context, itemCode int64) ([]*entity.ItemUnitConversion, error) {
-	rows, err := r.q.ListItemUnitConversions(ctx, itemCode)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListItemUnitConversions(ctx, sqlc.ListItemUnitConversionsParams{ItemCode: itemCode, EnterpriseID: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -53,11 +69,16 @@ func (r *ItemConversionRepositorySQLC) Get(ctx context.Context, itemCode int64, 
 }
 
 func (r *ItemConversionRepositorySQLC) GetConfigured(ctx context.Context, itemCode int64, mask, fromUOM, toUOM string) (*entity.ItemUnitConversion, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.GetItemUnitConversion(ctx, sqlc.GetItemUnitConversionParams{
-		ItemCode: itemCode,
-		Mask:     mask,
-		FromUom:  fromUOM,
-		ToUom:    toUOM,
+		EnterpriseID: empresa,
+		ItemCode:     itemCode,
+		Mask:         mask,
+		FromUom:      fromUOM,
+		ToUom:        toUOM,
 	})
 	if err != nil {
 		return nil, err
@@ -67,12 +88,30 @@ func (r *ItemConversionRepositorySQLC) GetConfigured(ctx context.Context, itemCo
 
 func (r *ItemConversionRepositorySQLC) AcceptsFractional(ctx context.Context, itemCode int64) (bool, error) {
 	var value bool
-	err := r.pool.QueryRow(ctx, `SELECT accepts_fractional_quantity FROM items WHERE code=$1`, itemCode).Scan(&value)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	err = r.pool.QueryRow(ctx, `SELECT accepts_fractional_quantity FROM items WHERE code=$1 AND enterprise_id=$2`, itemCode, empresa).Scan(&value)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado", itemCode))
+	}
 	return value, err
 }
 
 func (r *ItemConversionRepositorySQLC) Delete(ctx context.Context, id int64) error {
-	return r.q.DeleteItemUnitConversion(ctx, id)
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := r.q.DeleteItemUnitConversion(ctx, sqlc.DeleteItemUnitConversionParams{ID: id, EnterpriseID: empresa})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("conversão %d não encontrada", id))
+	}
+	return nil
 }
 
 func conversionToEntity(row sqlc.ItemUnitConversion) *entity.ItemUnitConversion {

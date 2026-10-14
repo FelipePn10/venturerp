@@ -314,7 +314,7 @@ func (r *PlannedOrderRepositorySQLC) HasProductionMovements(ctx context.Context,
 	if err != nil {
 		return false, err
 	}
-	return r.q.HasPlannedOrderProductionMovements(ctx, sqlc.HasPlannedOrderProductionMovementsParams{PlannedOrderID: &code, EnterpriseID: enterpriseID})
+	return r.q.HasPlannedOrderProductionMovements(ctx, sqlc.HasPlannedOrderProductionMovementsParams{Code: code, EnterpriseID: enterpriseID})
 }
 
 func (r *PlannedOrderRepositorySQLC) UpdateDates(

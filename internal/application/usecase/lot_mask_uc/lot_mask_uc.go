@@ -114,7 +114,10 @@ func (uc *LotMaskUseCase) Update(ctx context.Context, dto request.LotMaskDTO) (*
 	if err != nil {
 		return nil, fmt.Errorf("atualizando máscara de lote: %w", err)
 	}
-	parts, _ := uc.Q.ListLotMaskParts(ctx, dto.ID)
+	parts, errPartes := uc.Q.ListLotMaskParts(ctx, dto.ID)
+	if errPartes != nil {
+		return nil, fmt.Errorf("lendo as partições da máscara de lote: %w", errPartes)
+	}
 	return lotMaskToResponse(row, parts), nil
 }
 
@@ -133,7 +136,10 @@ func (uc *LotMaskUseCase) Get(ctx context.Context, id int64) (*response.LotMaskR
 	if err != nil {
 		return nil, fmt.Errorf("máscara de lote não encontrada: %w", err)
 	}
-	parts, _ := uc.Q.ListLotMaskParts(ctx, id)
+	parts, errPartes := uc.Q.ListLotMaskParts(ctx, id)
+	if errPartes != nil {
+		return nil, fmt.Errorf("lendo as partições da máscara de lote: %w", errPartes)
+	}
 	return lotMaskToResponse(row, parts), nil
 }
 
@@ -223,7 +229,7 @@ func (uc *LotMaskUseCase) Generate(ctx context.Context, dto request.GenerateLotD
 		return nil, fmt.Errorf("carregando partições: %w", err)
 	}
 	if len(parts) == 0 {
-		return nil, fmt.Errorf("máscara %d não possui partições", maskID)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("máscara %d não possui partições", maskID))
 	}
 	domainParts := make([]entity.LotMaskPart, 0, len(parts))
 	for _, p := range parts {
@@ -343,7 +349,7 @@ func (uc *LotMaskUseCase) resolveMaskID(ctx context.Context, dto request.Generat
 		id, err = uc.Q.ResolveLotMask(ctx, app, pgutil.ToPgInt8Ptr(dto.CustomerCode), pgutil.ToPgInt8Ptr(itemCode), pgutil.ToPgInt8Ptr(dto.ClassificationCode))
 	}
 	if err != nil {
-		return 0, fmt.Errorf("nenhuma máscara de lote aplicável para o contexto informado")
+		return 0, errorsuc.NewValidationError("nenhuma máscara de lote aplicável para o contexto informado")
 	}
 	return id, nil
 }

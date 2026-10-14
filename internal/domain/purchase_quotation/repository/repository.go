@@ -8,6 +8,9 @@ import (
 
 type PurchaseQuotationRepository interface {
 	Create(ctx context.Context, q *entity.PurchaseQuotation) (*entity.PurchaseQuotation, error)
+	// CreateWithChildren grava a cotação, os itens e os fornecedores convidados
+	// numa transação: qualquer falha desfaz tudo, sem cotação vazia no banco.
+	CreateWithChildren(ctx context.Context, q *entity.PurchaseQuotation, items []*entity.PurchaseQuotationItem, supplierCodes []int64) (*entity.PurchaseQuotation, error)
 	GetByCode(ctx context.Context, code int64) (*entity.PurchaseQuotation, error)
 	List(ctx context.Context, onlyOpen bool) ([]*entity.PurchaseQuotation, error)
 	NextCode(ctx context.Context) (int64, error)

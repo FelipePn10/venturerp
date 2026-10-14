@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -45,7 +46,11 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
-		_ = uc.Repo.SaveFocusLog(ctx, exitID, endpoint, method, reqBody, respBody, statusCode, durationMs)
+		if errLog := uc.Repo.SaveFocusLog(ctx, exitID, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
+			// de registrar a comunicação não pode sumir.
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "documento", exitID, "endpoint", endpoint, "erro", errLog)
+		}
 	})
 
 	// If paths are already persisted, use them without an extra FocusNFE call.
@@ -65,7 +70,7 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 
 	// Paths not stored — refresh from FocusNFE and persist.
 	if exit.FocusRef == nil {
-		return nil, fmt.Errorf("NF-e %d não possui referência Focus — ainda não foi enviada para autorização", exitID)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e %d não possui referência Focus — ainda não foi enviada para autorização", exitID))
 	}
 
 	resp, err := cli.ConsultarNFe(ctx, *exit.FocusRef)
@@ -73,18 +78,20 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 		return nil, fmt.Errorf("consultando NF-e no Focus: %w", err)
 	}
 	if resp == nil || (resp.PathDANFE == "" && resp.PathXML == "") {
-		return nil, fmt.Errorf("DANFE não disponível: NF-e status=%q", resp.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("DANFE não disponível: NF-e status=%q", resp.Status))
 	}
 
 	// Persist so subsequent calls skip the network round-trip.
-	_, _ = uc.Repo.UpdateExitAuthorization(ctx,
+	if _, errAutorizacao := uc.Repo.UpdateExitAuthorization(ctx,
 		exitID,
 		derefStr(exit.ChaveAcesso),
 		derefStr(exit.Protocolo),
 		*exit.FocusRef,
 		resp.PathXML,
 		resp.PathDANFE,
-	)
+	); errAutorizacao != nil {
+		return nil, fmt.Errorf("gravando a autorização da NF-e: %w", errAutorizacao)
+	}
 
 	return &DANFEResult{
 		ExitID:   exitID,

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -25,7 +24,7 @@ func NewToolSheetHandler(uc *tool_sheet_uc.ToolSheetUseCase) *ToolSheetHandler {
 func (h *ToolSheetHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListOrders(r.Context(), r.URL.Query().Get("q"))
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -50,14 +49,13 @@ func (h *ToolSheetHandler) GetSheet(w http.ResponseWriter, r *http.Request) {
 // Assign binds a serial to an operation/tool.
 func (h *ToolSheetHandler) Assign(w http.ResponseWriter, r *http.Request) {
 	var dto request.AssignToolSerialDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.AssignedBy = actingUser(r)
 	result, err := h.uc.Assign(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -66,14 +64,13 @@ func (h *ToolSheetHandler) Assign(w http.ResponseWriter, r *http.Request) {
 // Substitute replaces the serial already bound to an operation/tool.
 func (h *ToolSheetHandler) Substitute(w http.ResponseWriter, r *http.Request) {
 	var dto request.SubstituteToolSerialDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.SubstitutedBy = actingUser(r)
 	result, err := h.uc.Substitute(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -93,7 +90,7 @@ func (h *ToolSheetHandler) ListSubstitutions(w http.ResponseWriter, r *http.Requ
 	}
 	result, err := h.uc.ListSubstitutions(r.Context(), operationID, toolID)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)

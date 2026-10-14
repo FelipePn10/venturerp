@@ -24,7 +24,7 @@ func (r *FiscalRepositoryPG) DFeVersion(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	var v int64
-	err = r.pool.QueryRow(ctx, `SELECT COALESCE((SELECT dfe_ultima_versao FROM fiscal_configs WHERE enterprise_id=$1 LIMIT 1),0)`, empresa).Scan(&v)
+	err = r.db.QueryRow(ctx, `SELECT COALESCE((SELECT dfe_ultima_versao FROM fiscal_configs WHERE enterprise_id=$1 LIMIT 1),0)`, empresa).Scan(&v)
 	return v, err
 }
 
@@ -33,7 +33,7 @@ func (r *FiscalRepositoryPG) UpsertReceivedDocuments(ctx context.Context, docs [
 	if err != nil {
 		return 0, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -45,8 +45,8 @@ func (r *FiscalRepositoryPG) UpsertReceivedDocuments(ctx context.Context, docs [
 			`INSERT INTO fiscal_received_documents
 				(enterprise_id, chave_acesso, cnpj_emitente, nome_emitente, numero_nf, serie, data_emissao, valor_total,
 				 situacao, manifestacao, xml_completo, versao, fiscal_entry_id, synced_at)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-			         (SELECT id FROM fiscal_entries WHERE enterprise_id=$1 AND chave_acesso=$2 AND is_active AND status <> 'CANCELLED' LIMIT 1), NOW())
+			 VALUES ($1,$2::varchar,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+			         (SELECT id FROM fiscal_entries WHERE enterprise_id=$1 AND chave_acesso=$2::varchar AND is_active AND status <> 'CANCELLED' LIMIT 1), NOW())
 			 ON CONFLICT (enterprise_id, chave_acesso) DO UPDATE SET
 				cnpj_emitente=EXCLUDED.cnpj_emitente, nome_emitente=EXCLUDED.nome_emitente, numero_nf=EXCLUDED.numero_nf,
 				serie=EXCLUDED.serie, data_emissao=EXCLUDED.data_emissao, valor_total=EXCLUDED.valor_total,
@@ -80,7 +80,7 @@ func (r *FiscalRepositoryPG) ListReceivedDocuments(ctx context.Context, f reposi
 		f.Limite = 300
 	}
 	busca := strings.TrimSpace(f.Busca)
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, chave_acesso, COALESCE(cnpj_emitente,''), COALESCE(nome_emitente,''), numero_nf, serie, data_emissao, valor_total,
 		        COALESCE(situacao,''), manifestacao, xml_completo, COALESCE(versao,0), fiscal_entry_id, synced_at
 		   FROM fiscal_received_documents
@@ -111,7 +111,7 @@ func (r *FiscalRepositoryPG) SetManifestacao(ctx context.Context, chave, tipo st
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE fiscal_received_documents SET manifestacao=$3 WHERE enterprise_id=$1 AND chave_acesso=$2`, empresa, chave, tipo)
+	tag, err := r.db.Exec(ctx, `UPDATE fiscal_received_documents SET manifestacao=$3 WHERE enterprise_id=$1 AND chave_acesso=$2`, empresa, chave, tipo)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func dataOuHoje(t time.Time) time.Time {
 }
 
 func (r *FiscalRepositoryPG) ReservarSincronizacaoDFe(ctx context.Context, intervalo time.Duration) ([]repository.EmpresaDFe, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`UPDATE fiscal_configs fc SET dfe_ultima_tentativa = NOW()
 		   FROM enterprise e
 		  WHERE e.id = fc.enterprise_id
@@ -170,7 +170,7 @@ func (r *FiscalRepositoryPG) RegistrarResultadoDFe(ctx context.Context, erro *st
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx, `UPDATE fiscal_configs SET dfe_ultima_tentativa=NOW(), dfe_ultimo_erro=$2 WHERE enterprise_id=$1`, empresa, erro)
+	_, err = r.db.Exec(ctx, `UPDATE fiscal_configs SET dfe_ultima_tentativa=NOW(), dfe_ultimo_erro=$2 WHERE enterprise_id=$1`, empresa, erro)
 	return err
 }
 
@@ -180,7 +180,7 @@ func (r *FiscalRepositoryPG) DFeStatus(ctx context.Context, hoje time.Time) (*re
 		return nil, err
 	}
 	st := &repository.DFeStatus{}
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT COALESCE((SELECT dfe_sync_automatico FROM fiscal_configs WHERE enterprise_id=$1 LIMIT 1), FALSE),
 		        (SELECT dfe_sincronizado_em FROM fiscal_configs WHERE enterprise_id=$1 LIMIT 1),
 		        (SELECT dfe_ultima_tentativa FROM fiscal_configs WHERE enterprise_id=$1 LIMIT 1),
@@ -202,7 +202,7 @@ func (r *FiscalRepositoryPG) SetDFeAutomatico(ctx context.Context, ativo bool) e
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE fiscal_configs SET dfe_sync_automatico=$2 WHERE enterprise_id=$1`, empresa, ativo)
+	tag, err := r.db.Exec(ctx, `UPDATE fiscal_configs SET dfe_sync_automatico=$2 WHERE enterprise_id=$1`, empresa, ativo)
 	if err != nil {
 		return err
 	}

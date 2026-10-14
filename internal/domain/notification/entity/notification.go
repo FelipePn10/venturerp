@@ -2,8 +2,8 @@ package entity
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -46,9 +46,9 @@ const (
 )
 
 var (
-	ErrNotFound   = errors.New("recurso de notificação não encontrado")
-	ErrConflict   = errors.New("conflito de estado da notificação")
-	ErrValidation = errors.New("regra de notificação inválida")
+	ErrNotFound   = domainerr.NewNotFound("recurso de notificação não encontrado")
+	ErrConflict   = domainerr.NewValidation("conflito de estado da notificação")
+	ErrValidation = domainerr.NewValidation("regra de notificação inválida")
 )
 
 type Event struct {
@@ -93,22 +93,22 @@ type Settings struct {
 
 func (s Settings) Validate() error {
 	if s.EnterpriseID <= 0 {
-		return errors.New("empresa inválida")
+		return domainerr.NewValidation("empresa inválida")
 	}
 	if _, err := time.Parse("15:04", s.DigestTime); err != nil {
-		return errors.New("horário deve usar HH:MM")
+		return domainerr.NewValidation("horário deve usar HH:MM")
 	}
 	if _, err := time.LoadLocation(s.Timezone); err != nil {
 		return fmt.Errorf("fuso IANA inválido: %w", err)
 	}
 	if s.RetentionDays < 30 || s.RetentionDays > 3650 {
-		return errors.New("retenção deve estar entre 30 e 3650 dias")
+		return domainerr.NewValidation("retenção deve estar entre 30 e 3650 dias")
 	}
 	if s.MaxAttachmentBytes < 0 || s.MaxAttachmentBytes > 25*1024*1024 {
-		return errors.New("limite de anexos inválido")
+		return domainerr.NewValidation("limite de anexos inválido")
 	}
 	if s.MaxEmailsPerMinute < 1 || s.MaxEmailsPerMinute > 1000 {
-		return errors.New("limite de e-mails por minuto inválido")
+		return domainerr.NewValidation("limite de e-mails por minuto inválido")
 	}
 	return nil
 }
@@ -132,29 +132,29 @@ type Subscription struct {
 
 func (s Subscription) Validate() error {
 	if s.EnterpriseID <= 0 || strings.TrimSpace(s.EventKey) == "" {
-		return errors.New("empresa e evento são obrigatórios")
+		return domainerr.NewValidation("empresa e evento são obrigatórios")
 	}
 	if s.Cadence != CadenceImmediate && s.Cadence != CadenceDailyDigest && s.Cadence != CadenceBoth {
-		return errors.New("cadência inválida")
+		return domainerr.NewValidation("cadência inválida")
 	}
 	if len(s.Thresholds) > 0 {
 		var thresholds map[string]json.RawMessage
 		if err := json.Unmarshal(s.Thresholds, &thresholds); err != nil {
-			return errors.New("limiares devem ser um objeto JSON válido")
+			return domainerr.NewValidation("limiares devem ser um objeto JSON válido")
 		}
 		for _, key := range []string{"antecedencia_dias", "quantidade_limite", "valor_limite", "tolerancia_quantidade"} {
 			if raw, ok := thresholds[key]; ok && !validNonNegativeDecimal(raw) {
-				return fmt.Errorf("limiar %s inválido", key)
+				return domainerr.NewValidation(fmt.Sprintf("limiar %s inválido", key))
 			}
 		}
 		for _, key := range []string{"horario_inicio", "horario_fim"} {
 			if raw, ok := thresholds[key]; ok {
 				var value string
 				if json.Unmarshal(raw, &value) != nil {
-					return fmt.Errorf("limiar %s inválido", key)
+					return domainerr.NewValidation(fmt.Sprintf("limiar %s inválido", key))
 				}
 				if _, err := time.Parse("15:04", value); err != nil {
-					return fmt.Errorf("limiar %s inválido", key)
+					return domainerr.NewValidation(fmt.Sprintf("limiar %s inválido", key))
 				}
 			}
 		}
@@ -162,31 +162,31 @@ func (s Subscription) Validate() error {
 			if raw, ok := thresholds[key]; ok {
 				var overrides map[string]json.RawMessage
 				if json.Unmarshal(raw, &overrides) != nil {
-					return fmt.Errorf("limiar %s inválido", key)
+					return domainerr.NewValidation(fmt.Sprintf("limiar %s inválido", key))
 				}
 				for _, value := range overrides {
 					if !validNonNegativeDecimal(value) {
-						return fmt.Errorf("limiar %s inválido", key)
+						return domainerr.NewValidation(fmt.Sprintf("limiar %s inválido", key))
 					}
 				}
 			}
 		}
 	}
 	if len(s.Recipients) == 0 {
-		return errors.New("ao menos um destinatário interno é obrigatório")
+		return domainerr.NewValidation("ao menos um destinatário interno é obrigatório")
 	}
 	for _, r := range s.Recipients {
 		switch r.Type {
 		case RecipientUser:
 			if r.UserID == nil || *r.UserID == uuid.Nil || r.Key != "" {
-				return errors.New("destinatário USUARIO inválido")
+				return domainerr.NewValidation("destinatário USUARIO inválido")
 			}
 		case RecipientRole, RecipientDepartment:
 			if r.UserID != nil || strings.TrimSpace(r.Key) == "" {
-				return errors.New("papel/departamento inválido")
+				return domainerr.NewValidation("papel/departamento inválido")
 			}
 		default:
-			return errors.New("tipo de destinatário inválido")
+			return domainerr.NewValidation("tipo de destinatário inválido")
 		}
 	}
 	return nil

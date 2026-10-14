@@ -278,14 +278,16 @@ func (r *ProductionOrderRepositoryPGX) ValidateProductionRelease(ctx context.Con
 		return err
 	}
 	var enabled bool
-	_ = r.pool.QueryRow(ctx, `SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params
-		WHERE enterprise_id=$1 AND (param_number=45 OR param_key='OBRIGAR_CONTROLE_ESTOQUE_TERCEIROS') LIMIT 1`, enterpriseID).Scan(&enabled)
+	if err := opcional(r.pool.QueryRow(ctx, `SELECT UPPER(value) IN ('S','SIM','1','TRUE','YES') FROM planning_params
+		WHERE enterprise_id=$1 AND (param_number=45 OR param_key='OBRIGAR_CONTROLE_ESTOQUE_TERCEIROS') LIMIT 1`, enterpriseID).Scan(&enabled)); err != nil {
+		return fmt.Errorf("lendo o parâmetro 45: %w", err)
+	}
 	if !enabled {
 		return nil
 	}
 	var reporting, issue string
 	if err := r.pool.QueryRow(ctx, `SELECT production_reporting_type,material_issue_timing FROM items
-		WHERE code=$1`, itemCode).Scan(&reporting, &issue); err != nil {
+		WHERE code=$1 AND enterprise_id=$2`, itemCode, enterpriseID).Scan(&reporting, &issue); err != nil {
 		return err
 	}
 	if reporting == "ORDER" && issue == "REGISTRATION_RELEASE" {
@@ -480,7 +482,10 @@ func (r *ProductionOrderRepositoryPGX) CreateFromPlannedOrder(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	nextNum, _ := r.GetNextOrderNumber(ctx)
+	nextNum, err := r.GetNextOrderNumber(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("numerando a ordem de produção: %w", err)
+	}
 
 	row := r.pool.QueryRow(ctx,
 		`INSERT INTO public.production_orders
@@ -955,4 +960,35 @@ func (r *ProductionOrderRepositoryPGX) HasGeneratedProduction(ctx context.Contex
 	var exists bool
 	err = r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_orders WHERE enterprise_id=$1 AND planned_order_id=$2)`, enterprise, plannedID).Scan(&exists)
 	return exists, err
+}
+
+// MarcarCustoPendente grava (ou limpa, com motivo nil) o motivo de a OF estar
+// sem custo real apurado.
+func (r *ProductionOrderRepositoryPGX) MarcarCustoPendente(ctx context.Context, id int64, motivo *string) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE public.production_orders SET custo_pendente=$3 WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID, motivo)
+	if err != nil {
+		return fmt.Errorf("gravando o custo pendente da OF %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewNotFoundError("ordem de fabricação não encontrada")
+	}
+	return nil
+}
+
+// CustoPendente lê o motivo de a OF estar sem custo real apurado (nil = apurado
+// ou ainda não encerrada).
+func (r *ProductionOrderRepositoryPGX) CustoPendente(ctx context.Context, id int64) (*string, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var motivo *string
+	if err := r.pool.QueryRow(ctx, `SELECT custo_pendente FROM public.production_orders WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID).Scan(&motivo); err != nil {
+		return nil, fmt.Errorf("lendo o custo pendente da OF %d: %w", id, err)
+	}
+	return motivo, nil
 }

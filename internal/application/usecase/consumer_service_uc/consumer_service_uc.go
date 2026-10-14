@@ -296,6 +296,9 @@ func (uc *UseCase) CreateCustomerContact(ctx context.Context, dto request.Create
 	if dto.CustomerCode == 0 || strings.TrimSpace(dto.ContactType) == "" || strings.TrimSpace(dto.Description) == "" {
 		return nil, errorsuc.NewValidationError("informe o cliente, o tipo de contato e a descrição")
 	}
+	if err := datasValidas(datetime.Campo("data de abertura", &dto.OpenedAt), datetime.Campo("data agendada", &dto.ScheduledAt)); err != nil {
+		return nil, err
+	}
 	openedAt := parseDateTimeOrNow(dto.OpenedAt)
 	scheduledAt := parseDateTimeOrNow(dto.ScheduledAt)
 	created, err := uc.Repo.CreateCustomerContact(ctx, tenantID, &entity.CustomerContactHistory{
@@ -325,6 +328,9 @@ func (uc *UseCase) ListCustomerContacts(ctx context.Context, filter csrepo.Custo
 }
 
 func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerServiceCallDTO) (*response.ConsumerServiceCallResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de abertura", &dto.OpenedAt), datetime.Campo("data de retorno", &dto.ReturnDate), datetime.Campo("data solicitada da visita", &dto.VisitRequestedDate), datetime.Campo("data de retorno da visita", &dto.VisitReturnedDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
 		return nil, err
@@ -348,6 +354,10 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 	if callType.IsComplaint && (dto.Symptoms == nil || strings.TrimSpace(*dto.Symptoms) == "") {
 		return nil, errorsuc.NewValidationError("chamados de reclamação exigem a descrição dos sintomas")
 	}
+	if err := datasValidas(datetime.Campo("data de abertura", &dto.OpenedAt), datetime.Campo("data de retorno", &dto.ReturnDate),
+		datetime.Campo("data solicitada da visita", &dto.VisitRequestedDate), datetime.Campo("data de retorno da visita", &dto.VisitReturnedDate)); err != nil {
+		return nil, err
+	}
 	callNumber, err := uc.Repo.NextCallNumber(ctx, tenantID)
 	if err != nil {
 		return nil, err
@@ -370,6 +380,9 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateConsumerSer
 }
 
 func (uc *UseCase) UpdateCall(ctx context.Context, code int64, dto request.UpdateConsumerServiceCallDTO) (*response.ConsumerServiceCallResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de retorno", &dto.ReturnDate), datetime.Campo("data solicitada da visita", &dto.VisitRequestedDate), datetime.Campo("data de retorno da visita", &dto.VisitReturnedDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
 		return nil, err
@@ -391,6 +404,9 @@ func (uc *UseCase) UpdateCall(ctx context.Context, code int64, dto request.Updat
 	current.Position = normalizePosition(dto.Position)
 	current.Situation = normalizeSituation(dto.Situation)
 	if err := validateVisitDates(current.Situation, dto.VisitRequestedDate, dto.VisitReturnedDate); err != nil {
+		return nil, err
+	}
+	if err := datasValidas(datetime.Campo("data de retorno", &dto.ReturnDate)); err != nil {
 		return nil, err
 	}
 	current.ReturnDate = parseDatePtr(dto.ReturnDate)
@@ -441,6 +457,9 @@ func (uc *UseCase) ListCalls(ctx context.Context, filter csrepo.CallFilter) ([]*
 }
 
 func (uc *UseCase) AddCallReturn(ctx context.Context, dto request.AddConsumerServiceCallReturnDTO) (*response.ConsumerServiceCallReturnResponse, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data do próximo retorno", &dto.NextReturnAt)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	tenantID, err := uc.tenantID(ctx)
 	if err != nil {
 		return nil, err
@@ -451,6 +470,9 @@ func (uc *UseCase) AddCallReturn(ctx context.Context, dto request.AddConsumerSer
 	actor, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	if err := datasValidas(datetime.Campo("data do contato", &dto.ContactedAt), datetime.Campo("data do próximo retorno", &dto.NextReturnAt)); err != nil {
+		return nil, err
 	}
 	created, err := uc.Repo.AddCallReturn(ctx, tenantID, &entity.CallReturn{
 		CallCode: dto.CallCode, ContactedAt: parseDateTimeOrNow(dto.ContactedAt),
@@ -646,6 +668,16 @@ func validateVisitDates(situation entity.CallSituation, requested, returned stri
 
 func parseDatePtr(value string) *time.Time {
 	return datetime.ParseDatePtr(&value)
+}
+
+// datasValidas recusa data preenchida e ilegível. Os conversores abaixo trocam
+// texto inválido por "agora" ou por vazio — sem esta conferência antes, a data
+// digitada errada sumia e o atendimento era gravado com outra.
+func datasValidas(campos ...datetime.CampoData) error {
+	if msg := datetime.PrimeiraInvalida(campos...); msg != "" {
+		return errorsuc.NewValidationError(msg)
+	}
+	return nil
 }
 
 func parseDateTimeOrNow(value string) time.Time {

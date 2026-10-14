@@ -148,7 +148,7 @@ SELECT id,
        END AS priority,
        COALESCE(start_date, end_date)::timestamptz AS planned_date
 FROM production_orders
-WHERE status IN ('OPEN', 'IN_PROGRESS') AND is_active = TRUE
+WHERE status IN ('OPEN', 'IN_PROGRESS') AND is_active = TRUE AND enterprise_id = $1
 ORDER BY 2 ASC, planned_date ASC`
 
 type DBOpenProductionOrder struct {
@@ -157,8 +157,10 @@ type DBOpenProductionOrder struct {
 	PlannedDate pgtype.Timestamptz
 }
 
-func (q *Queries) GetOpenProductionOrders(ctx context.Context) ([]DBOpenProductionOrder, error) {
-	rows, err := q.db.Query(ctx, getOpenProductionOrders)
+// GetOpenProductionOrders lista as OFs abertas da empresa: antes o APS de uma
+// empresa percorria as ordens de todas.
+func (q *Queries) GetOpenProductionOrders(ctx context.Context, enterpriseID int64) ([]DBOpenProductionOrder, error) {
+	rows, err := q.db.Query(ctx, getOpenProductionOrders, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +179,7 @@ func (q *Queries) GetOpenProductionOrders(ctx context.Context) ([]DBOpenProducti
 const getOrderOperations = `
 SELECT id, sequence, work_center_id, planned_hours, setup_hours, route_operation_id
 FROM production_order_operations
-WHERE production_order_id=$1 AND status NOT IN ('DONE','SKIPPED')
+WHERE production_order_id=$1 AND enterprise_id=$2 AND status NOT IN ('DONE','SKIPPED')
 ORDER BY sequence`
 
 type DBOrderOperation struct {
@@ -196,9 +198,9 @@ const getOrderOperationEdges = `
 SELECT p.id AS predecessor_id, s.id AS successor_id, COALESCE(n.overlap_pct, 0) AS overlap_pct
 FROM route_operation_network n
 JOIN production_order_operations p
-  ON p.route_operation_id = n.predecessor_id AND p.production_order_id = $1
+  ON p.route_operation_id = n.predecessor_id AND p.production_order_id = $1 AND p.enterprise_id = $2
 JOIN production_order_operations s
-  ON s.route_operation_id = n.successor_id  AND s.production_order_id = $1
+  ON s.route_operation_id = n.successor_id  AND s.production_order_id = $1 AND s.enterprise_id = $2
 WHERE p.status NOT IN ('DONE','SKIPPED') AND s.status NOT IN ('DONE','SKIPPED')`
 
 type DBOrderOperationEdge struct {
@@ -207,8 +209,8 @@ type DBOrderOperationEdge struct {
 	OverlapPct    pgtype.Numeric
 }
 
-func (q *Queries) GetOrderOperationEdges(ctx context.Context, orderID int64) ([]DBOrderOperationEdge, error) {
-	rows, err := q.db.Query(ctx, getOrderOperationEdges, orderID)
+func (q *Queries) GetOrderOperationEdges(ctx context.Context, orderID, enterpriseID int64) ([]DBOrderOperationEdge, error) {
+	rows, err := q.db.Query(ctx, getOrderOperationEdges, orderID, enterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,8 +226,8 @@ func (q *Queries) GetOrderOperationEdges(ctx context.Context, orderID int64) ([]
 	return out, rows.Err()
 }
 
-func (q *Queries) GetOrderOperations(ctx context.Context, orderID int64) ([]DBOrderOperation, error) {
-	rows, err := q.db.Query(ctx, getOrderOperations, orderID)
+func (q *Queries) GetOrderOperations(ctx context.Context, orderID, enterpriseID int64) ([]DBOrderOperation, error) {
+	rows, err := q.db.Query(ctx, getOrderOperations, orderID, enterpriseID)
 	if err != nil {
 		return nil, err
 	}

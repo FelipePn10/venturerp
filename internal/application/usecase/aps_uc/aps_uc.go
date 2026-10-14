@@ -111,7 +111,9 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		}
 
 		// Clear previous sequences for this order.
-		_ = uc.repo.DeleteByOrder(ctx, order.ID)
+		if err := uc.repo.DeleteByOrder(ctx, order.ID); err != nil {
+			return nil, fmt.Errorf("limpando a sequência anterior da ordem %d: %w", order.ID, err)
+		}
 
 		// A rede de precedências do roteiro decide a ordem e o que pode correr
 		// em paralelo. Sem ela o sequenciamento encadeava tudo em fila e
@@ -126,7 +128,10 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 				"a ordem %d tem precedências em ciclo (operações %v); corrija o roteiro antes de sequenciar",
 				order.ID, ciclo))
 		}
-		itemDaOrdem, familiaDaOrdem, _ := uc.repo.GetOrderItem(ctx, order.ID)
+		itemDaOrdem, familiaDaOrdem, errItem := uc.repo.GetOrderItem(ctx, order.ID)
+		if errItem != nil && !errorsuc.EhNaoEncontrado(errItem) {
+			return nil, fmt.Errorf("lendo o item da ordem %d: %w", order.ID, errItem)
+		}
 		predecessores := make(map[int64][]repository.OpEdge, len(edges))
 		for _, e := range edges {
 			predecessores[e.SuccessorID] = append(predecessores[e.SuccessorID], e)
@@ -141,7 +146,10 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 				continue
 			}
 			wcID := *op.WorkCenterID
-			avail, _ := uc.repo.GetWorkCenterCapacity(ctx, wcID)
+			avail, errCapacidade := uc.repo.GetWorkCenterCapacity(ctx, wcID)
+			if errCapacidade != nil {
+				return nil, fmt.Errorf("lendo a capacidade do centro de trabalho: %w", errCapacidade)
+			}
 			if avail <= 0 {
 				avail = 8
 			}
@@ -214,7 +222,7 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 			}
 			if end.IsZero() {
 				if selected {
-					return nil, fmt.Errorf("não há capacidade disponível para a operação %d no horizonte de um ano", op.ID)
+					return nil, errorsuc.NewValidationError(fmt.Sprintf("não há capacidade disponível para a operação %d no horizonte de um ano", op.ID))
 				}
 				end = advanceByWorkHours(earliest, totalHours, avail)
 			}
@@ -258,7 +266,7 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 func (uc *APSUseCase) ExportSequencingEvents(ctx context.Context, dto request.SequenceOrdersDTO) ([]response.SequencingExportRowResponse, error) {
 	repo, ok := uc.repo.(repository.SelectionRepository)
 	if !ok {
-		return nil, fmt.Errorf("a exportação de eventos de sequenciamento não está disponível")
+		return nil, errorsuc.NewValidationError("a exportação de eventos de sequenciamento não está disponível")
 	}
 	rows, err := repo.ListSequencingEvents(ctx, repository.SequenceFilter{OrderIDs: dto.OrderIDs, MachineIDs: dto.MachineIDs, WorkCenterIDs: dto.WorkCenterIDs, OperationIDs: dto.OperationIDs})
 	if err != nil {
@@ -274,7 +282,7 @@ func (uc *APSUseCase) ExportSequencingEvents(ctx context.Context, dto request.Se
 func (uc *APSUseCase) ListSequencingResources(ctx context.Context) ([]response.SequencingResourceResponse, error) {
 	repo, ok := uc.repo.(repository.SelectionRepository)
 	if !ok {
-		return nil, fmt.Errorf("os recursos de sequenciamento não estão disponíveis")
+		return nil, errorsuc.NewValidationError("os recursos de sequenciamento não estão disponíveis")
 	}
 	rows, err := repo.ListSequencingResources(ctx)
 	if err != nil {
@@ -292,7 +300,7 @@ func (uc *APSUseCase) ViewSequencing(ctx context.Context, dto request.Sequencing
 		return nil, errorsuc.NewValidationError("informe o grupo de recursos")
 	}
 	if dto.From.IsZero() || dto.To.IsZero() || !dto.To.After(dto.From) {
-		return nil, fmt.Errorf("as datas inicial e final devem formar um intervalo válido")
+		return nil, errorsuc.NewValidationError("as datas inicial e final devem formar um intervalo válido")
 	}
 	unit := strings.ToUpper(strings.TrimSpace(dto.TimeUnit))
 	if unit != "" && unit != "HOUR" && unit != "MINUTE" && unit != "HORA" && unit != "MINUTO" {
@@ -303,7 +311,7 @@ func (uc *APSUseCase) ViewSequencing(ctx context.Context, dto request.Sequencing
 	}
 	repo, ok := uc.repo.(repository.SelectionRepository)
 	if !ok {
-		return nil, fmt.Errorf("a visão de sequenciamento não está disponível")
+		return nil, errorsuc.NewValidationError("a visão de sequenciamento não está disponível")
 	}
 	rows, err := repo.ListSequencingView(ctx, repository.SequencingViewFilter{From: dto.From, To: dto.To, ResourceGroupID: dto.ResourceGroupID, FromOrder: dto.FromOrder, ToOrder: dto.ToOrder, FromMachine: dto.FromMachine, ToMachine: dto.ToMachine, FromWorkCenter: dto.FromWorkCenter, ToWorkCenter: dto.ToWorkCenter, FromPlanner: dto.FromPlanner, ToPlanner: dto.ToPlanner})
 	if err != nil {
@@ -350,7 +358,7 @@ func toGanttSlice(seqs []*entity.ProductionSequence) []*response.GanttTaskRespon
 func (uc *APSUseCase) configurationRepo() (repository.ConfigurationRepository, error) {
 	repo, ok := uc.repo.(repository.ConfigurationRepository)
 	if !ok {
-		return nil, fmt.Errorf("a configuração de sequenciamento não está disponível")
+		return nil, errorsuc.NewValidationError("a configuração de sequenciamento não está disponível")
 	}
 	return repo, nil
 }
@@ -458,7 +466,7 @@ func (uc *APSUseCase) UpdateResourceSequencing(ctx context.Context, id int64, dt
 		return err
 	}
 	if id <= 0 {
-		return fmt.Errorf("invalid resource")
+		return errorsuc.NewValidationError("recurso inválido")
 	}
 	return repo.UpdateResourceSequencing(ctx, id, dto.ResourceGroupID, dto.CalendarID, dto.Location, dto.IsCritical, dto.IsActive)
 }
@@ -534,7 +542,7 @@ func (uc *APSUseCase) UpsertEmployeeSequencingProfile(ctx context.Context, id in
 	for _, v := range dto.Contacts {
 		kind := strings.ToUpper(strings.TrimSpace(v.ContactType))
 		if kind != "PHONE" && kind != "EMAIL" {
-			return fmt.Errorf("invalid contact_type")
+			return errorsuc.NewValidationError("tipo de contato inválido")
 		}
 		if strings.TrimSpace(v.Value) == "" {
 			return errorsuc.NewValidationError("informe o valor do contato")
@@ -721,7 +729,7 @@ func validateSpecialValue(v request.SpecialValueDTO) (repository.SpecialValue, e
 	typ := strings.ToUpper(strings.TrimSpace(v.ValueType))
 	name := strings.TrimSpace(v.Name)
 	if name == "" || (typ != "TEXT" && typ != "NUMBER") || (typ == "TEXT" && v.TextValue == "") || (typ == "NUMBER" && v.NumericValue == "") || (typ == "TEXT" && v.NumericValue != "") || (typ == "NUMBER" && v.TextValue != "") {
-		return repository.SpecialValue{}, fmt.Errorf("o campo especial exige nome, tipo válido e exatamente um valor correspondente")
+		return repository.SpecialValue{}, errorsuc.NewValidationError("o campo especial exige nome, tipo válido e exatamente um valor correspondente")
 	}
 	return repository.SpecialValue{Name: name, ValueType: typ, TextValue: v.TextValue, NumericValue: v.NumericValue, MaxLength: v.MaxLength}, nil
 }
@@ -1033,7 +1041,9 @@ func (uc *APSUseCase) sequenciaRegressivo(
 			sucessores[e.PredecessorID] = append(sucessores[e.PredecessorID], e)
 		}
 
-		_ = uc.repo.DeleteByOrder(ctx, order.ID)
+		if err := uc.repo.DeleteByOrder(ctx, order.ID); err != nil {
+			return nil, fmt.Errorf("limpando a sequência anterior da ordem %d: %w", order.ID, err)
+		}
 
 		inicioDaOperacao := make(map[int64]time.Time, len(ops))
 		duracao := make(map[int64]time.Duration, len(ops))
@@ -1047,7 +1057,10 @@ func (uc *APSUseCase) sequenciaRegressivo(
 				continue
 			}
 			wcID := *op.WorkCenterID
-			capacidade, _ := uc.repo.GetWorkCenterCapacity(ctx, wcID)
+			capacidade, errCapacidade := uc.repo.GetWorkCenterCapacity(ctx, wcID)
+			if errCapacidade != nil {
+				return nil, fmt.Errorf("lendo a capacidade do centro de trabalho: %w", errCapacidade)
+			}
 			if capacidade <= 0 {
 				capacidade = 8
 			}

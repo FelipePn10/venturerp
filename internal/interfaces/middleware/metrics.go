@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -125,7 +126,10 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		collector := m.extra
 		m.mu.Unlock()
 		if collector != nil {
-			extra, _ = collector(r.Context())
+			var err error
+			if extra, err = collector(r.Context()); err != nil {
+				slog.Warn("falha ao coletar métricas adicionais", "erro", err)
+			}
 		}
 		m.mu.Lock()
 		defer m.mu.Unlock()

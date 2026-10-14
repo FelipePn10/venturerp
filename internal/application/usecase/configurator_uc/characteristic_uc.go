@@ -74,7 +74,10 @@ func (uc *ConfiguratorUseCase) UpdateCharacteristic(ctx context.Context, dto req
 	if err != nil {
 		return nil, fmt.Errorf("atualizando característica: %w", err)
 	}
-	langs, _ := uc.Q.ListCfgCharacteristicLanguages(ctx, dto.ID)
+	langs, errIdiomas := uc.Q.ListCfgCharacteristicLanguages(ctx, dto.ID)
+	if errIdiomas != nil {
+		return nil, fmt.Errorf("lendo os idiomas da característica: %w", errIdiomas)
+	}
 	return characteristicToResponse(row, langs), nil
 }
 
@@ -83,7 +86,10 @@ func (uc *ConfiguratorUseCase) GetCharacteristic(ctx context.Context, id int64) 
 	if err != nil {
 		return nil, fmt.Errorf("característica não encontrada: %w", err)
 	}
-	langs, _ := uc.Q.ListCfgCharacteristicLanguages(ctx, id)
+	langs, errIdiomas := uc.Q.ListCfgCharacteristicLanguages(ctx, id)
+	if errIdiomas != nil {
+		return nil, fmt.Errorf("lendo os idiomas da característica: %w", errIdiomas)
+	}
 	return characteristicToResponse(row, langs), nil
 }
 
@@ -135,7 +141,7 @@ func (uc *ConfiguratorUseCase) checkCharRefs(ctx context.Context, c *entity.Char
 			return errorsuc.NewNotFoundError(fmt.Sprintf("variável default %d não encontrada", *c.DefaultVariableID))
 		}
 		if c.SetID != nil && v.SetID != *c.SetID {
-			return fmt.Errorf("a variável default não pertence ao conjunto da característica")
+			return errorsuc.NewValidationError("a variável default não pertence ao conjunto da característica")
 		}
 	}
 	return nil

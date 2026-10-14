@@ -3363,11 +3363,12 @@ type AccountingAccountRef struct {
 }
 
 type AccountingDemonstrative struct {
-	ID          int64
-	Code        string
-	Description string
-	TermText    string
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         string
+	Description  string
+	TermText     string
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type AccountingDemonstrativeItem struct {
@@ -3407,13 +3408,14 @@ type AccountingJournalEntry struct {
 }
 
 type AccountingPlan struct {
-	ID          int64
-	PlanNumber  int32
-	Description string
-	ValidFrom   pgtype.Date
-	ValidTo     pgtype.Date
-	Status      string
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	PlanNumber   int32
+	Description  string
+	ValidFrom    pgtype.Date
+	ValidTo      pgtype.Date
+	Status       string
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type AccountingPostingParam struct {
@@ -3481,6 +3483,7 @@ type Adiantamento struct {
 	CreatedBy        pgtype.UUID
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
+	EnterpriseID     int64
 }
 
 type AdiantamentoAplicaco struct {
@@ -3587,13 +3590,15 @@ type Carrier struct {
 	PaymentDays       int16
 	IsActive          bool
 	CreatedAt         pgtype.Timestamptz
+	EnterpriseID      int64
 }
 
 type CarrierGroup struct {
-	ID          int64
-	Code        int64
-	Description string
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         int64
+	Description  string
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type CarrierGroupCarrier struct {
@@ -4092,13 +4097,14 @@ type ConsumerServiceCallReturn struct {
 }
 
 type ConsumerServiceCallType struct {
-	Code        int64
-	Description string
-	IsComplaint bool
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	Code         int64
+	Description  string
+	IsComplaint  bool
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type ConsumerServiceConsumer struct {
@@ -4174,12 +4180,13 @@ type ConsumerServiceCustomerContact struct {
 }
 
 type ConsumerServiceKnowledgeSource struct {
-	Code        int64
-	Description string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	Code         int64
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type ContasBancaria struct {
@@ -4426,6 +4433,7 @@ type Customer struct {
 	CreatedAt             pgtype.Timestamptz
 	CreatedBy             pgtype.UUID
 	UpdatedAt             pgtype.Timestamptz
+	EnterpriseID          int64
 }
 
 type CustomerAddress struct {
@@ -4459,11 +4467,12 @@ type CustomerContact struct {
 }
 
 type CustomerContactType struct {
-	ID          int64
-	Code        int64
-	Description string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         int64
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type CustomerMaterialAudit struct {
@@ -4562,6 +4571,7 @@ type CustomerType struct {
 	DeliveryDays int16
 	IsActive     bool
 	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type CuttingPattern struct {
@@ -4731,6 +4741,7 @@ type DeliveryPromiseParam struct {
 	CreatedAt               pgtype.Timestamptz
 	UpdatedAt               pgtype.Timestamptz
 	UpdatedBy               pgtype.UUID
+	EnterpriseID            int64
 }
 
 type DeliveryReschedule struct {
@@ -4773,11 +4784,34 @@ type DeliveryTankReservation struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
+	EnterpriseID   int64
 }
 
 type DeliveryTankReservationSequence struct {
 	ID       int64
 	LastCode int64
+}
+
+type DestinoCliente struct {
+	CustomerID   int64
+	Code         int64
+	EnterpriseID int64
+}
+
+type DestinoPlano struct {
+	PlanID       int64
+	EnterpriseID int64
+}
+
+type DestinoR struct {
+	ID           int64
+	EnterpriseID int64
+	CustomerID   int64
+}
+
+type DestinoTp struct {
+	ID           int64
+	EnterpriseID int64
 }
 
 type Drawing struct {
@@ -4882,6 +4916,14 @@ type EmployeeLegacyOld struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type EmpresaFiscal struct {
+	ID interface{}
+}
+
+type EmpresaPrincipal struct {
+	Code interface{}
+}
+
 type Enterprise struct {
 	ID        int64
 	Code      int32
@@ -4960,6 +5002,7 @@ type EntryOperationType struct {
 	CreditaIcms        bool
 	CreditaIpi         bool
 	CreditaPisCofins   bool
+	EnterpriseID       int64
 }
 
 type ExtratoBancario struct {
@@ -5608,6 +5651,7 @@ type IcmsApuracaoLine struct {
 	ApuracaoAdjustmentCodeID *int64
 	IsActive                 bool
 	CreatedAt                pgtype.Timestamptz
+	EnterpriseID             int64
 }
 
 type IcmsInternal struct {
@@ -5711,6 +5755,7 @@ type IcmsIpiTaxParam struct {
 	IsActive                         bool
 	CreatedAt                        pgtype.Timestamptz
 	UpdatedAt                        pgtype.Timestamptz
+	EnterpriseID                     int64
 }
 
 type IcmsReductionSubstitution struct {
@@ -5792,6 +5837,7 @@ type IcmsReductionSubstitution struct {
 	IsSimplesOptante                 bool
 	IsActive                         bool
 	CreatedAt                        pgtype.Timestamptz
+	EnterpriseID                     int64
 }
 
 type IcmsStRestitution struct {
@@ -5835,6 +5881,7 @@ type IcmsSummaryEntry struct {
 	IcmsValueOther pgtype.Numeric
 	IsActive       bool
 	CreatedAt      pgtype.Timestamptz
+	EnterpriseID   int64
 }
 
 type IcmsSummaryEntryAdditional struct {
@@ -6044,6 +6091,7 @@ type InvoiceType struct {
 	CodClasTribTribReg       pgtype.Text
 	CodMotivoRestCompIcmsSt  pgtype.Text
 	CodBeneficioFiscal       pgtype.Text
+	EnterpriseID             int64
 }
 
 type Item struct {
@@ -6771,6 +6819,48 @@ type ManufacturingWarehouseAddress struct {
 	PickSequence int32
 }
 
+type MapaContum struct {
+	Antigo       *int64
+	EnterpriseID *int64
+	Novo         int64
+}
+
+type MapaFerr struct {
+	Antigo       *int64
+	EnterpriseID *int64
+	Novo         int64
+}
+
+type MapaPeriodo struct {
+	Antigo         int64
+	EnterpriseCode *int64
+	Novo           int64
+}
+
+type MapaPlano struct {
+	Antigo       *int64
+	EnterpriseID *int64
+	Novo         int64
+}
+
+type MapaRep struct {
+	Antigo         int64
+	EnterpriseCode int64
+	Novo           int64
+}
+
+type MapaResp struct {
+	Antigo         *int64
+	EnterpriseCode int64
+	Novo           int64
+}
+
+type MapaSerie struct {
+	Antigo       *int64
+	EnterpriseID *int64
+	Novo         int64
+}
+
 // Percentuais e prazos do mês usados no cálculo da margem de contribuição.
 type MarginParameter struct {
 	ID           int64
@@ -6804,6 +6894,7 @@ type MarketSegment struct {
 	RetentionIndicator    pgtype.Int2
 	IsActive              bool
 	CreatedAt             pgtype.Timestamptz
+	EnterpriseID          int64
 }
 
 type MaskComposition struct {
@@ -6817,6 +6908,10 @@ type MaterialConsumption struct {
 	MaterialID      int64
 	Quantity        pgtype.Numeric
 	Unit            string
+}
+
+type Menor struct {
+	Code int32
 }
 
 type Modifier struct {
@@ -6868,6 +6963,13 @@ type MrpExceptionMessage struct {
 	Description  string
 	CreatedAt    pgtype.Timestamptz
 	EnterpriseID *int64
+	// Data em que o MRP precisa do suprimento; reprogramar a ordem leva a ela.
+	SuggestedDate pgtype.Date
+	HandledAt     pgtype.Timestamptz
+	HandledBy     pgtype.UUID
+	// Como o planejador tratou a mensagem: REPROGRAMADA, CANCELADA ou TRATADA (sem alterar a ordem).
+	HandlingAction pgtype.Text
+	HandlingNote   pgtype.Text
 }
 
 type MrpItemProfile struct {
@@ -6909,6 +7011,22 @@ type MrpParameter struct {
 	PlanningType string
 	LeadTimeDays int32
 	SafetyStock  pgtype.Numeric
+}
+
+// Vínculo necessidade × suprimento do último cálculo de cada plano (pegging fixo).
+type MrpPegging struct {
+	ID           int64
+	EnterpriseID int64
+	PlanCode     int64
+	ItemCode     int64
+	DemandKind   string
+	DemandCode   *int64
+	NeedDate     pgtype.Date
+	SupplyKind   string
+	SupplyCode   *int64
+	SupplyDate   pgtype.Date
+	Quantity     pgtype.Numeric
+	CreatedAt    pgtype.Timestamptz
 }
 
 type MrpPlannedSuggestion struct {
@@ -7006,6 +7124,7 @@ type Nfse struct {
 	CreatedBy                 pgtype.UUID
 	CreatedAt                 pgtype.Timestamptz
 	UpdatedAt                 pgtype.Timestamptz
+	EnterpriseID              int64
 }
 
 type NonConformance struct {
@@ -7270,6 +7389,10 @@ type OrderPriority struct {
 	EnterpriseID  *int64
 }
 
+type Originai struct {
+	ID int64
+}
+
 type OverheadAllocation struct {
 	ID              int64
 	CostCenterID    *int64
@@ -7286,6 +7409,7 @@ type OverheadAllocation struct {
 	CostCenterCode  *int32
 	PlanAccountCode *int32
 	BaseCode        *int64
+	EnterpriseID    int64
 }
 
 type OverheadAllocationTarget struct {
@@ -7456,6 +7580,8 @@ type PlanningAutoRunSetting struct {
 	LastRunAt      pgtype.Timestamptz
 	LastRunStatus  pgtype.Text
 	UpdatedAt      pgtype.Timestamptz
+	// Usuário que salvou a parametrização; a execução automática roda em nome dele.
+	UpdatedBy pgtype.UUID
 }
 
 type PlanningParam struct {
@@ -7468,6 +7594,10 @@ type PlanningParam struct {
 	UpdatedAt    pgtype.Timestamptz
 	UpdatedBy    pgtype.UUID
 	EnterpriseID *int64
+}
+
+type PlanningParamsSemeado struct {
+	PlanningParamID int64
 }
 
 // Uma linha por execução do planejamento, com o corte lido e a origem do disparo.
@@ -7486,6 +7616,44 @@ type PlanningRunHistory struct {
 	CrpOverload  int32
 	Viable       pgtype.Bool
 	Notes        pgtype.Text
+}
+
+type PlanningScenario struct {
+	ID               int64
+	EnterpriseID     int64
+	Name             string
+	Description      pgtype.Text
+	BasePlanCode     int64
+	ScenarioPlanCode int64
+	Status           string
+	CalculatedAt     pgtype.Timestamptz
+	CalculationNotes pgtype.Text
+	PromotedAt       pgtype.Timestamptz
+	PromotedBy       pgtype.UUID
+	CreatedBy        pgtype.UUID
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
+type PlanningScenarioChange struct {
+	ID            int64
+	EnterpriseID  int64
+	ScenarioID    int64
+	Kind          string
+	ItemCode      *int64
+	Mask          string
+	DemandRefKind pgtype.Text
+	DemandRefCode *int64
+	Quantity      pgtype.Numeric
+	NeedDate      pgtype.Date
+	LeadTimeDays  *int32
+	MachineID     *int64
+	HoursPerDay   pgtype.Numeric
+	StopFrom      pgtype.Date
+	StopTo        pgtype.Date
+	Notes         pgtype.Text
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
 }
 
 type PlanoConta struct {
@@ -7565,6 +7733,7 @@ type ProcurementRecord struct {
 	ClosedAt              pgtype.Timestamptz
 	CreatedBy             pgtype.UUID
 	UpdatedAt             pgtype.Timestamptz
+	EnterpriseCode        int64
 }
 
 type Product struct {
@@ -7835,6 +8004,7 @@ type ProductionPlan struct {
 	UpdatedAt           pgtype.Timestamptz
 	CreatedBy           pgtype.UUID
 	EnterpriseID        *int64
+	IsScenario          bool
 }
 
 type ProductionPlanInterFactory struct {
@@ -8251,6 +8421,7 @@ type ReceivingDivergence struct {
 	CreatedBy             pgtype.UUID
 	CreatedAt             pgtype.Timestamptz
 	ResolvedAt            pgtype.Timestamptz
+	EnterpriseCode        int64
 }
 
 type ReceivingInspectionAnalysis struct {
@@ -8297,6 +8468,7 @@ type ReceivingInspectionOrder struct {
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
 	CreatedBy             pgtype.UUID
+	EnterpriseCode        int64
 }
 
 type ReceivingInspectionQualityReport struct {
@@ -8525,14 +8697,15 @@ type RecurringSalesRepresentative struct {
 }
 
 type Region struct {
-	ID          int64
-	Code        int64
-	Description string
-	Uf          string
-	City        string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	Code         int64
+	Description  string
+	Uf           string
+	City         string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type Representative struct {
@@ -8564,6 +8737,7 @@ type Representative struct {
 	BlockReason    pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	EnterpriseCode int64
 }
 
 type RepresentativeAccounting struct {
@@ -8688,6 +8862,7 @@ type RepresentativeType struct {
 	IsActive             bool
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
+	EnterpriseID         int64
 }
 
 type Restriction struct {
@@ -8857,6 +9032,7 @@ type SalesGoal struct {
 	IsActive           bool
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
+	EnterpriseCode     int64
 }
 
 type SalesGoalBalance struct {
@@ -8874,6 +9050,7 @@ type SalesGoalBalance struct {
 	Notes               pgtype.Text
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
+	EnterpriseCode      int64
 }
 
 type SalesGoalGroupCustomer struct {
@@ -8906,6 +9083,7 @@ type SalesGoalGroupTarget struct {
 	IsActive            bool
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
+	EnterpriseCode      int64
 }
 
 type SalesGoalItem struct {
@@ -8925,14 +9103,15 @@ type SalesGoalItem struct {
 }
 
 type SalesGoalPeriod struct {
-	Code        int64
-	Description string
-	PeriodType  string
-	StartDate   pgtype.Date
-	EndDate     pgtype.Date
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	Code           int64
+	Description    string
+	PeriodType     string
+	StartDate      pgtype.Date
+	EndDate        pgtype.Date
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	EnterpriseCode int64
 }
 
 type SalesOrder struct {
@@ -9650,6 +9829,7 @@ type SimplesNacionalApuraco struct {
 	Observation         pgtype.Text
 	IsActive            bool
 	CreatedAt           pgtype.Timestamptz
+	EnterpriseID        int64
 }
 
 type SpecialAdjustmentNote struct {
@@ -9702,18 +9882,20 @@ type SpecialAdjustmentNoteItem struct {
 }
 
 type StateGroup struct {
-	ID          int64
-	Code        int64
-	Description string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	ID           int64
+	Code         int64
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type StateGroupUf struct {
 	ID             int64
 	StateGroupCode int64
 	Uf             string
+	EnterpriseID   int64
 }
 
 type Stock struct {
@@ -9858,6 +10040,7 @@ type StockMovementType struct {
 	GeneratesFciMovement bool
 	IsActive             bool
 	CreatedAt            pgtype.Timestamptz
+	EnterpriseID         int64
 }
 
 type StockPickingWafe struct {
@@ -10030,11 +10213,12 @@ type SupplierContactPhone struct {
 }
 
 type SupplierContactType struct {
-	ID          int64
-	Code        int64
-	Description string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         int64
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type SupplierContract struct {
@@ -10135,15 +10319,16 @@ type SupplierEnterprise struct {
 }
 
 type SupplierHomologation struct {
-	ID           int64
-	SupplierCode int64
-	Status       string
-	IqfScore     pgtype.Numeric
-	Category     pgtype.Text
-	ValidUntil   pgtype.Date
-	Notes        pgtype.Text
-	DecidedBy    pgtype.UUID
-	DecidedAt    pgtype.Timestamptz
+	ID             int64
+	SupplierCode   int64
+	Status         string
+	IqfScore       pgtype.Numeric
+	Category       pgtype.Text
+	ValidUntil     pgtype.Date
+	Notes          pgtype.Text
+	DecidedBy      pgtype.UUID
+	DecidedAt      pgtype.Timestamptz
+	EnterpriseCode int64
 }
 
 type SupplierParameter struct {
@@ -10188,15 +10373,17 @@ type SupplierScorecardSnapshot struct {
 	Notes            pgtype.Text
 	CreatedAt        pgtype.Timestamptz
 	CreatedBy        pgtype.UUID
+	EnterpriseCode   int64
 }
 
 type SupplierType struct {
-	ID          int64
-	Code        int64
-	Description string
-	Kind        string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
+	ID           int64
+	Code         int64
+	Description  string
+	Kind         string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type TaxAssessment struct {
@@ -10228,6 +10415,7 @@ type TaxScenario struct {
 	IsActive        bool
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+	EnterpriseID    int64
 }
 
 type TaxType struct {
@@ -10257,6 +10445,7 @@ type TaxType struct {
 	IsConsumer                    bool
 	IsActive                      bool
 	CreatedAt                     pgtype.Timestamptz
+	EnterpriseID                  int64
 }
 
 type TechnicalAssistanceCall struct {
@@ -10313,12 +10502,13 @@ type TechnicalAssistanceCallItem struct {
 }
 
 type TechnicalAssistanceDefectGroup struct {
-	Code        int64
-	Description string
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	CreatedBy   pgtype.UUID
+	Code         int64
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type TechnicalAssistanceDefectReason struct {
@@ -10337,6 +10527,7 @@ type TechnicalAssistanceDefectReason struct {
 	CreatedAt                pgtype.Timestamptz
 	UpdatedAt                pgtype.Timestamptz
 	CreatedBy                pgtype.UUID
+	EnterpriseID             int64
 }
 
 type TechnicalAssistanceOrderLink struct {
@@ -10434,16 +10625,17 @@ type TechnicalAssistanceRmaItem struct {
 }
 
 type TechnicalAssistanceWarrantyResponsible struct {
-	Code         int64
-	Name         string
-	EmployeeCode *int64
-	CustomerCode *int64
-	Email        pgtype.Text
-	Phone        pgtype.Text
-	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
-	CreatedBy    pgtype.UUID
+	Code           int64
+	Name           string
+	EmployeeCode   *int64
+	CustomerCode   *int64
+	Email          pgtype.Text
+	Phone          pgtype.Text
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+	EnterpriseCode int64
 }
 
 type ThirdPartyServiceMovement struct {
@@ -10547,19 +10739,20 @@ type ThirdPartyServicePriceRule struct {
 }
 
 type Tool struct {
-	ID        int64
-	Code      int64
-	Name      string
-	ToolType  string
-	LifeType  string
-	LifeLimit pgtype.Numeric
-	LifeUsed  pgtype.Numeric
-	Cost      pgtype.Numeric
-	Status    string
-	IsActive  bool
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-	CreatedBy pgtype.UUID
+	ID           int64
+	Code         int64
+	Name         string
+	ToolType     string
+	LifeType     string
+	LifeLimit    pgtype.Numeric
+	LifeUsed     pgtype.Numeric
+	Cost         pgtype.Numeric
+	Status       string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	EnterpriseID int64
 }
 
 type ToolSerial struct {
@@ -10616,9 +10809,56 @@ type UserEnterprise struct {
 	Role         string
 }
 
+type UsoCliente struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+type UsoFerr struct {
+	ToolID       int64
+	EnterpriseID int64
+}
+
+type UsoPeriodo struct {
+	Code           int64
+	EnterpriseCode *int64
+}
+
+type UsoPlano struct {
+	PlanID       int64
+	EnterpriseID int64
+}
+
+type UsoRep struct {
+	Code           int64
+	EnterpriseCode int64
+}
+
+type UsoResp struct {
+	Code           *int64
+	EnterpriseCode int64
+}
+
 type UsuariosPerfi struct {
 	UsuarioID pgtype.UUID
 	PerfilID  int64
+}
+
+type Vigente struct {
+	ID                      int64
+	UseDeliveryPromise      bool
+	BlockedOrdersInPromise  bool
+	DefaultOrderSort        string
+	ShowOrderValues         int32
+	BlockedExportInPromise  bool
+	BreakTankOccupation     bool
+	RecalculateAfterRelease bool
+	ReprogramLoadedOrders   bool
+	AllowDeliveryDateChange bool
+	CreatedAt               pgtype.Timestamptz
+	UpdatedAt               pgtype.Timestamptz
+	UpdatedBy               pgtype.UUID
+	EnterpriseID            *int64
 }
 
 type Warehouse struct {

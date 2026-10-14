@@ -1,7 +1,7 @@
 package service
 
 import (
-	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"math"
 	"sort"
 	"time"
@@ -14,7 +14,7 @@ type CapacityWindow struct{ Start, End time.Time }
 // exact reservations, so a later order may use gaps between shifts safely.
 func AllocateMachineTime(earliest time.Time, minutes float64, windows, occupied []CapacityWindow) ([]CapacityWindow, error) {
 	if minutes > float64(math.MaxInt64)/float64(time.Minute) || minutes <= 0 || math.IsNaN(minutes) || math.IsInf(minutes, 0) {
-		return nil, fmt.Errorf("duração de produção inválida")
+		return nil, domainerr.NewValidation("duração de produção inválida")
 	}
 	merged := freeMachineWindows(windows, occupied)
 	remaining := time.Duration(math.Ceil(minutes * float64(time.Minute)))
@@ -36,7 +36,7 @@ func AllocateMachineTime(earliest time.Time, minutes float64, windows, occupied 
 			return slots, nil
 		}
 	}
-	return nil, fmt.Errorf("não há capacidade disponível no horizonte de um ano; revise turnos, paradas e produtividade")
+	return nil, domainerr.NewValidation("não há capacidade disponível no horizonte de um ano; revise turnos, paradas e produtividade")
 }
 
 func freeMachineWindows(windows, occupied []CapacityWindow) []CapacityWindow {
@@ -80,7 +80,7 @@ func freeMachineWindows(windows, occupied []CapacityWindow) []CapacityWindow {
 // cycles may share a window; setup is charged once, before the first cycle.
 func AllocateMachineCycles(earliest time.Time, cycles, cycleMinutes, setupMinutes float64, windows, occupied []CapacityWindow) ([]CapacityWindow, error) {
 	if cycles < 1 || cycles != math.Trunc(cycles) || cycleMinutes <= 0 || setupMinutes < 0 || math.IsNaN(cycles+cycleMinutes+setupMinutes) || math.IsInf(cycles+cycleMinutes+setupMinutes, 0) || cycleMinutes+setupMinutes >= float64(math.MaxInt64)/float64(time.Minute) {
-		return nil, fmt.Errorf("ciclo de produção inválido")
+		return nil, domainerr.NewValidation("ciclo de produção inválido")
 	}
 	cycle := time.Duration(math.Ceil(cycleMinutes * float64(time.Minute)))
 	setup := time.Duration(math.Ceil(setupMinutes * float64(time.Minute)))
@@ -105,5 +105,5 @@ func AllocateMachineCycles(earliest time.Time, cycles, cycleMinutes, setupMinute
 			return slots, nil
 		}
 	}
-	return nil, fmt.Errorf("não há janela suficiente para os ciclos completos; revise turnos, paradas e duração do ciclo")
+	return nil, domainerr.NewValidation("não há janela suficiente para os ciclos completos; revise turnos, paradas e duração do ciclo")
 }

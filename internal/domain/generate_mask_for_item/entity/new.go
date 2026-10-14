@@ -3,17 +3,17 @@ package entity
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidItemCode = errors.New("informe o código do item")
-	ErrInvalidMask     = errors.New("informe a máscara")
-	ErrInvalidMaskHash = errors.New("o identificador da máscara não pode ficar vazio")
-	ErrInvalidHash     = errors.New("o identificador não corresponde à máscara informada")
-	ErrInvalidUser     = errors.New("é preciso identificar o usuário que está criando o registro")
+	ErrInvalidItemCode = domainerr.NewValidation("informe o código do item")
+	ErrInvalidMask     = domainerr.NewValidation("informe a máscara")
+	ErrInvalidMaskHash = domainerr.NewValidation("o identificador da máscara não pode ficar vazio")
+	ErrInvalidHash     = domainerr.NewValidation("o identificador não corresponde à máscara informada")
+	ErrInvalidUser     = domainerr.NewValidation("é preciso identificar o usuário que está criando o registro")
 )
 
 func NewItemMask(

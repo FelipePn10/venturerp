@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -15,8 +14,7 @@ import (
 
 func (h *ProductionPlanHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateProductionPlanDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
@@ -26,7 +24,7 @@ func (h *ProductionPlanHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, repository.ErrAlreadyExists) {
-			security.RespondError(w, http.StatusConflict, err.Error())
+			respondErrStatus(w, http.StatusConflict, err)
 			return
 		}
 		security.RespondUseCaseError(w, err)
@@ -52,7 +50,7 @@ func (h *ProductionPlanHandler) GetByCode(w http.ResponseWriter, r *http.Request
 	}
 	result, err := h.getUC.Execute(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -60,8 +58,7 @@ func (h *ProductionPlanHandler) GetByCode(w http.ResponseWriter, r *http.Request
 
 func (h *ProductionPlanHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateProductionPlanDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.updateUC.Execute(r.Context(), dto)
@@ -97,7 +94,7 @@ func (h *ProductionPlanHandler) ListInterFactories(w http.ResponseWriter, r *htt
 	}
 	result, err := h.interFactoryUC.List(r.Context(), code)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -110,8 +107,7 @@ func (h *ProductionPlanHandler) ReplaceInterFactories(w http.ResponseWriter, r *
 		return
 	}
 	var dto request.ReplaceProductionPlanInterFactoriesDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.interFactoryUC.Replace(r.Context(), code, dto)
@@ -120,7 +116,7 @@ func (h *ProductionPlanHandler) ReplaceInterFactories(w http.ResponseWriter, r *
 			security.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		security.RespondError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

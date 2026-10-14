@@ -1,7 +1,7 @@
 package valueobject
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/shopspring/decimal"
 )
@@ -22,7 +22,7 @@ func (q Quantity) Add(other Quantity) Quantity {
 
 func NewQuantity(value decimal.Decimal) (Quantity, error) {
 	if value.LessThanOrEqual(decimal.Zero) {
-		return Quantity{}, errors.New("a quantidade deve ser maior que zero")
+		return Quantity{}, domainerr.NewValidation("a quantidade deve ser maior que zero")
 	}
 
 	return Quantity{value: value}, nil

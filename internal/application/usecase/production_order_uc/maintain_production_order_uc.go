@@ -2,7 +2,6 @@ package production_order_uc
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/shopspring/decimal"
 
@@ -20,6 +19,9 @@ type MaintainProductionOrderUseCase struct {
 }
 
 func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto request.MaintainProductionOrderDTO) (*entity.ProductionOrder, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de início", dto.StartDate), datetime.Campo("data de fim", dto.EndDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -31,7 +33,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, err
 		}
 		if len(views) != 1 {
-			return nil, fmt.Errorf("esta ordem de produção não está disponível para alteração")
+			return nil, errorsuc.NewValidationError("esta ordem de produção não está disponível para alteração")
 		}
 	}
 	order, err := uc.Repo.GetByCode(ctx, dto.ID)
@@ -54,7 +56,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, err
 		}
 		if !allowed {
-			return nil, fmt.Errorf("o parâmetro de produção 10 não permite alterar a quantidade")
+			return nil, errorsuc.NewValidationError("o parâmetro de produção 10 não permite alterar a quantidade")
 		}
 		if !dto.PlannedQty.IsPositive() || dto.PlannedQty.LessThan(decimal.NewFromFloat(order.ProducedQty)) {
 			return nil, errorsuc.NewValidationError("a quantidade planejada deve ser maior que zero e não pode ser menor que a produzida")
@@ -64,7 +66,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, err
 		}
 		if !fractional && !dto.PlannedQty.Equal(dto.PlannedQty.Truncate(0)) {
-			return nil, fmt.Errorf("este item não aceita quantidade fracionada")
+			return nil, errorsuc.NewValidationError("este item não aceita quantidade fracionada")
 		}
 		order.PlannedQty, _ = dto.PlannedQty.Float64()
 	}
@@ -74,7 +76,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 			return nil, err
 		}
 		if !allowed {
-			return nil, fmt.Errorf("o parâmetro de produção 14 não permite alterar as datas")
+			return nil, errorsuc.NewValidationError("o parâmetro de produção 14 não permite alterar as datas")
 		}
 		if dto.StartDate != nil {
 			order.StartDate = datetime.ParseDatePtr(dto.StartDate)

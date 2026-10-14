@@ -9,7 +9,6 @@ import (
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
-	"github.com/google/uuid"
 )
 
 func strp(s string) *string { return &s }
@@ -130,7 +129,7 @@ func TestBuildFocusItems_DiferimentoCST51(t *testing.T) {
 	}
 }
 
-// ─── settleStockAndOrder: stock write-down + order settlement ────────────────
+// ─── fakes dos efeitos da NF-e (ver efeitos_nfe_test.go) ─────────────────────
 
 type fakeStockRepo struct {
 	stockrepo.StockRepository
@@ -157,6 +156,9 @@ type fakeSalesRepo struct {
 	changed map[int64]salesentity.SalesOrderStatus
 }
 
+func (f *fakeSalesRepo) GetByCode(_ context.Context, code int64) (*salesentity.SalesOrder, error) {
+	return &salesentity.SalesOrder{Code: code, Status: salesentity.SalesOrderStatusOrder}, nil
+}
 func (f *fakeSalesRepo) ListItems(context.Context, int64) ([]*salesentity.SalesOrderItem, error) {
 	return f.items, nil
 }
@@ -166,76 +168,4 @@ func (f *fakeSalesRepo) ChangeStatus(_ context.Context, code int64, status sales
 	}
 	f.changed[code] = status
 	return nil
-}
-
-func TestSettleStockAndOrder_WritesDownResolvableItemsOnly(t *testing.T) {
-	stock := &fakeStockRepo{
-		reservations: []*stockentity.StockReservation{
-			{ID: 42, ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 500},
-			{ID: 99, ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 777}, // other order
-		},
-	}
-	sales := &fakeSalesRepo{
-		items: []*salesentity.SalesOrderItem{
-			{ItemCode: 1001, WarehouseCode: i64p(7)},
-			{ItemCode: 1002, WarehouseCode: i64p(8)},
-			// 1003 has no warehouse → item should be skipped
-		},
-	}
-
-	uc := AuthorizeFiscalExitUseCase{StockRepo: stock, SalesOrderRepo: sales}
-	exit := &fiscalentity.FiscalExit{ID: 99, SalesOrderCode: i64p(500)}
-	items := []*fiscalentity.FiscalExitItem{
-		{ItemCode: i64p(1001), Quantity: 5, UnitPrice: 10, TotalPrice: 50},
-		{ItemCode: i64p(1002), Quantity: 3, UnitPrice: 20, TotalPrice: 60},
-		{ItemCode: i64p(1003), Quantity: 1}, // no warehouse → skipped
-		{ItemCode: nil, Quantity: 9},        // nil code → skipped
-	}
-
-	uc.settleStockAndOrder(context.Background(), exit, items, uuid.New())
-
-	if len(stock.movements) != 2 {
-		t.Fatalf("expected 2 OUT movements (resolvable items), got %d", len(stock.movements))
-	}
-	for _, m := range stock.movements {
-		if m.MovementType != stockentity.MovementTypeOut {
-			t.Fatalf("movement must be OUT, got %s", m.MovementType)
-		}
-		if m.ReferenceType == nil || *m.ReferenceType != stockentity.ReferenceTypeNFExit {
-			t.Fatalf("reference type must be NF_SAIDA")
-		}
-	}
-	// Warehouse resolution: 1001→7, 1002→8.
-	byItem := map[int64]int64{}
-	for _, m := range stock.movements {
-		byItem[m.ItemCode] = m.WarehouseID
-	}
-	if byItem[1001] != 7 || byItem[1002] != 8 {
-		t.Fatalf("warehouse resolution wrong: %+v", byItem)
-	}
-
-	// Only the reservation tied to order 500 is consumed.
-	if len(stock.consumed) != 1 || stock.consumed[0] != 42 {
-		t.Fatalf("consumed reservations = %v, want [42]", stock.consumed)
-	}
-
-	// The linked order is flagged invoiced.
-	if got := sales.changed[500]; got != salesentity.SalesOrderStatusInvoiced {
-		t.Fatalf("order 500 status = %v, want invoiced", got)
-	}
-}
-
-func TestSettleStockAndOrder_NoStockRepoIsNoOp(t *testing.T) {
-	sales := &fakeSalesRepo{}
-	uc := AuthorizeFiscalExitUseCase{SalesOrderRepo: sales} // StockRepo nil
-	exit := &fiscalentity.FiscalExit{ID: 1, SalesOrderCode: i64p(10)}
-
-	// Must not panic and should still flag the order invoiced.
-	uc.settleStockAndOrder(context.Background(), exit, []*fiscalentity.FiscalExitItem{
-		{ItemCode: i64p(1), Quantity: 1},
-	}, uuid.New())
-
-	if sales.changed[10] != salesentity.SalesOrderStatusInvoiced {
-		t.Fatal("order should be flagged invoiced even without a stock repo")
-	}
 }

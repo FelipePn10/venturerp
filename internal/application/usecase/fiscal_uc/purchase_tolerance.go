@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -40,7 +41,7 @@ func validatePurchaseEntryTolerances(ctx context.Context, orders porepo.Purchase
 			return nil
 		}
 		if action == "BLOCK" {
-			return fmt.Errorf("purchase tolerance blocked entry invoice: %s", msg)
+			return errorsuc.NewValidationError(fmt.Sprintf("a tolerância de compra bloqueou a nota de entrada: %s", msg))
 		}
 		if action == "WARN" {
 			warnings = append(warnings, msg)

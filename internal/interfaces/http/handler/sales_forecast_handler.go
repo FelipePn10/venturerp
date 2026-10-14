@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -77,8 +76,7 @@ func (h *SalesForecastHandler) ListActuals(w http.ResponseWriter, r *http.Reques
 
 func (h *SalesForecastHandler) CreateMonthlyForecast(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateMonthlySalesForecastDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createMonthlyUC.Execute(r.Context(), dto)
@@ -91,8 +89,7 @@ func (h *SalesForecastHandler) CreateMonthlyForecast(w http.ResponseWriter, r *h
 
 func (h *SalesForecastHandler) GenerateForecast(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateSalesForecastDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.generateForecastUC.Execute(r.Context(), dto)
@@ -107,8 +104,7 @@ func (h *SalesForecastHandler) GenerateForecast(w http.ResponseWriter, r *http.R
 
 func (h *SalesForecastHandler) CreateForecast(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateSalesForecastDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createForecastUC.Execute(r.Context(), dto)
@@ -152,8 +148,7 @@ func (h *SalesForecastHandler) GetForecastByItem(w http.ResponseWriter, r *http.
 
 func (h *SalesForecastHandler) CreateBlock(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateForecastBlockDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createBlockUC.Execute(r.Context(), dto)
@@ -177,8 +172,7 @@ func (h *SalesForecastHandler) ListBlocks(w http.ResponseWriter, r *http.Request
 
 func (h *SalesForecastHandler) CreateAppropriation(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateAppropriationTableDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createAppropriationUC.Execute(r.Context(), dto)
@@ -200,8 +194,7 @@ func (h *SalesForecastHandler) ListAppropriations(w http.ResponseWriter, r *http
 
 func (h *SalesForecastHandler) SetDefaultAppropriation(w http.ResponseWriter, r *http.Request) {
 	var dto request.SetDefaultAppropriationDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	if err := h.setDefaultUC.Execute(r.Context(), dto.ID); err != nil {

@@ -17,7 +17,8 @@ type CRPPlanRow struct {
 }
 
 // ListCRPPlans devolve os planos da empresa com o resumo da carga já calculada,
-// dos mais recentes para os mais antigos.
+// dos mais recentes para os mais antigos. Plano de cenário de simulação fica
+// de fora: a carga dele aparece só na comparação do próprio cenário.
 func (q *Queries) ListCRPPlans(ctx context.Context, enterpriseID int64, onlyCalculated bool) ([]CRPPlanRow, error) {
 	const sql = `SELECT p.code, p.name,
 		COUNT(c.id) AS total_entries,
@@ -26,7 +27,7 @@ func (q *Queries) ListCRPPlans(ctx context.Context, enterpriseID int64, onlyCalc
 		to_char(p.last_calculated_at, 'YYYY-MM-DD"T"HH24:MI:SSOF:00') AS last_calculated_at
 		FROM production_plans p
 		LEFT JOIN capacity_requirements c ON c.plan_code = p.code
-		WHERE p.enterprise_id = $1 AND p.is_active
+		WHERE p.enterprise_id = $1 AND p.is_active AND NOT p.is_scenario
 		GROUP BY p.code, p.name, p.last_calculated_at
 		HAVING ($2::boolean = FALSE OR COUNT(c.id) > 0)
 		ORDER BY p.last_calculated_at DESC NULLS LAST, p.code DESC`

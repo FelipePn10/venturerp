@@ -216,27 +216,27 @@ type ICMSIPITaxParam struct {
 // ─── DAPI Transfer Reason ─────────────────────────────────────────────────────
 
 type DAPITransferReason struct {
-	ID          int64
-	Code        string
-	Reason      string
-	Destination *string
-	ValidFrom   *time.Time
-	ValidTo     *time.Time
-	IsActive    bool
-	CreatedAt   time.Time
+	ID          int64      `json:"id"`
+	Code        string     `json:"code"`
+	Reason      string     `json:"reason"`
+	Destination *string    `json:"destination"`
+	ValidFrom   *time.Time `json:"valid_from"`
+	ValidTo     *time.Time `json:"valid_to"`
+	IsActive    bool       `json:"is_active"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // ─── ICMS Apuração Adjustment Code (SPED tabela 5.1.1) ───────────────────────
 
 type ICMSApuracaoAdjustmentCode struct {
-	ID          int64
-	Code        string
-	UF          string
-	Description string
-	ValidFrom   *time.Time
-	ValidTo     *time.Time
-	IsActive    bool
-	CreatedAt   time.Time
+	ID          int64      `json:"id"`
+	Code        string     `json:"code"`
+	UF          string     `json:"uf"`
+	Description string     `json:"description"`
+	ValidFrom   *time.Time `json:"valid_from"`
+	ValidTo     *time.Time `json:"valid_to"`
+	IsActive    bool       `json:"is_active"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // ─── ICMS Adjustment Code (SPED tabelas 5.2/5.3/5.6/5.7) ────────────────────
@@ -251,15 +251,15 @@ const (
 )
 
 type ICMSAdjustmentCode struct {
-	ID          int64
-	UF          string
-	Code        string
-	Description string
-	TableRef    ICMSAdjustmentTableRef
-	ValidFrom   *time.Time
-	ValidTo     *time.Time
-	IsActive    bool
-	CreatedAt   time.Time
+	ID          int64                  `json:"id"`
+	UF          string                 `json:"uf"`
+	Code        string                 `json:"code"`
+	Description string                 `json:"description"`
+	TableRef    ICMSAdjustmentTableRef `json:"table_ref"`
+	ValidFrom   *time.Time             `json:"valid_from"`
+	ValidTo     *time.Time             `json:"valid_to"`
+	IsActive    bool                   `json:"is_active"`
+	CreatedAt   time.Time              `json:"created_at"`
 }
 
 // ─── ICMS Apuração Line ───────────────────────────────────────────────────────
@@ -275,44 +275,44 @@ const (
 )
 
 type ICMSApuracaoLine struct {
-	ID                int64
-	Code              string
-	Description       string
-	LineType          ApuracaoLineType
-	AcceptsEntries    bool
-	Nature            *string
-	ApuracaoAdjCodeID *int64
-	IsActive          bool
-	CreatedAt         time.Time
+	ID                int64            `json:"id"`
+	Code              string           `json:"code"`
+	Description       string           `json:"description"`
+	LineType          ApuracaoLineType `json:"line_type"`
+	AcceptsEntries    bool             `json:"accepts_entries"`
+	Nature            *string          `json:"nature"`
+	ApuracaoAdjCodeID *int64           `json:"apuracao_adj_code_id"`
+	IsActive          bool             `json:"is_active"`
+	CreatedAt         time.Time        `json:"created_at"`
 }
 
 // ─── ICMS Summary Entry ───────────────────────────────────────────────────────
 
 type ICMSSummaryEntry struct {
-	ID             int64
-	Period         string
-	UF             string
-	CFOPID         *int64
-	ICMSBase       float64
-	ICMSValue      float64
-	ICMSBaseOther  float64
-	ICMSValueOther float64
-	IsActive       bool
-	CreatedAt      time.Time
+	ID             int64     `json:"id"`
+	Period         string    `json:"period"`
+	UF             string    `json:"uf"`
+	CFOPID         *int64    `json:"cfop_id"`
+	ICMSBase       float64   `json:"icms_base"`
+	ICMSValue      float64   `json:"icms_value"`
+	ICMSBaseOther  float64   `json:"icms_base_other"`
+	ICMSValueOther float64   `json:"icms_value_other"`
+	IsActive       bool      `json:"is_active"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type ICMSSummaryEntryNote struct {
-	ID             int64
-	SummaryEntryID int64
-	NoteNumber     string
-	NoteSeries     *string
-	EmitterCNPJ    *string
-	IssueDate      time.Time
-	ItemValue      float64
-	ICMSBase       float64
-	ICMSValue      float64
-	Observation    *string
-	CreatedAt      time.Time
+	ID             int64     `json:"id"`
+	SummaryEntryID int64     `json:"summary_entry_id"`
+	NoteNumber     string    `json:"note_number"`
+	NoteSeries     *string   `json:"note_series"`
+	EmitterCNPJ    *string   `json:"emitter_cnpj"`
+	IssueDate      time.Time `json:"issue_date"`
+	ItemValue      float64   `json:"item_value"`
+	ICMSBase       float64   `json:"icms_base"`
+	ICMSValue      float64   `json:"icms_value"`
+	Observation    *string   `json:"observation"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // ─── Simples Nacional Apuração ────────────────────────────────────────────────
@@ -341,21 +341,21 @@ func IsValidSimplesNacionalAnnex(value string) bool {
 }
 
 type SimplesNacionalApuracao struct {
-	ID                  int64
-	Period              string
-	Annex               SimplesNacionalAnnex
-	ReceitaInterna      float64
-	ReceitaExterna      float64
-	FolhaPagamento      float64
-	ReceitaBruta12M     float64
-	SimplesRecolhido    float64
-	AliquotaNominal     float64
-	AliquotaEfetiva     float64
-	AliquotaEfetivaICMS float64
-	ParcelaDeduzir      float64
-	Observation         *string
-	IsActive            bool
-	CreatedAt           time.Time
+	ID                  int64                `json:"id"`
+	Period              string               `json:"period"`
+	Annex               SimplesNacionalAnnex `json:"annex"`
+	ReceitaInterna      float64              `json:"receita_interna"`
+	ReceitaExterna      float64              `json:"receita_externa"`
+	FolhaPagamento      float64              `json:"folha_pagamento"`
+	ReceitaBruta12M     float64              `json:"receita_bruta_12m"`
+	SimplesRecolhido    float64              `json:"simples_recolhido"`
+	AliquotaNominal     float64              `json:"aliquota_nominal"`
+	AliquotaEfetiva     float64              `json:"aliquota_efetiva"`
+	AliquotaEfetivaICMS float64              `json:"aliquota_efetiva_icms"`
+	ParcelaDeduzir      float64              `json:"parcela_deduzir"`
+	Observation         *string              `json:"observation"`
+	IsActive            bool                 `json:"is_active"`
+	CreatedAt           time.Time            `json:"created_at"`
 }
 
 // ─── ICMS Reduction/Substitution/Deferral ────────────────────────────────────
@@ -377,95 +377,95 @@ const (
 )
 
 type ICMSReductionSubstitution struct {
-	ID               int64
-	ItemID           *int64
-	ItemMask         *string
-	NCMCode          *string
-	UF               string
-	OperationType    ICMSOperationType
-	CustomerID       *int64
-	EstablishmentID  *int64
-	SupplierID       *int64
-	InvoiceTypeOutID *int64
-	InvoiceTypeInID  *int64
-	MarketSegmentID  *int64
-	IsPreferential   bool
+	ID               int64             `json:"id"`
+	ItemID           *int64            `json:"item_id"`
+	ItemMask         *string           `json:"item_mask"`
+	NCMCode          *string           `json:"ncm_code"`
+	UF               string            `json:"uf"`
+	OperationType    ICMSOperationType `json:"operation_type"`
+	CustomerID       *int64            `json:"customer_id"`
+	EstablishmentID  *int64            `json:"establishment_id"`
+	SupplierID       *int64            `json:"supplier_id"`
+	InvoiceTypeOutID *int64            `json:"invoice_type_out_id"`
+	InvoiceTypeInID  *int64            `json:"invoice_type_in_id"`
+	MarketSegmentID  *int64            `json:"market_segment_id"`
+	IsPreferential   bool              `json:"is_preferential"`
 	// ICMS alíquotas
-	ICMSPctContrib              *float64
-	ICMSPctNonContrib           *float64
-	LegalDeviceICMSContribID    *int64
-	LegalDeviceICMSNonContribID *int64
+	ICMSPctContrib              *float64 `json:"icms_pct_contrib"`
+	ICMSPctNonContrib           *float64 `json:"icms_pct_non_contrib"`
+	LegalDeviceICMSContribID    *int64   `json:"legal_device_icms_contrib_id"`
+	LegalDeviceICMSNonContribID *int64   `json:"legal_device_icms_non_contrib_id"`
 	// Redução ICMS
-	ICMSRedPctContrib              *float64
-	ICMSRedTargetContrib           ICMSReductionTarget
-	ICMSRedPctNonContrib           *float64
-	ICMSRedTargetNonContrib        ICMSReductionTarget
-	LegalDeviceICMSRedContribID    *int64
-	LegalDeviceICMSRedNonContribID *int64
+	ICMSRedPctContrib              *float64            `json:"icms_red_pct_contrib"`
+	ICMSRedTargetContrib           ICMSReductionTarget `json:"icms_red_target_contrib"`
+	ICMSRedPctNonContrib           *float64            `json:"icms_red_pct_non_contrib"`
+	ICMSRedTargetNonContrib        ICMSReductionTarget `json:"icms_red_target_non_contrib"`
+	LegalDeviceICMSRedContribID    *int64              `json:"legal_device_icms_red_contrib_id"`
+	LegalDeviceICMSRedNonContribID *int64              `json:"legal_device_icms_red_non_contrib_id"`
 	// Diferimento
-	ICMSDeferralPct           *float64
-	ICMSDeferralTarget        ICMSReductionTarget
-	LegalDeviceICMSDeferralID *int64
-	ICMSDeferralBenefitCode   *string
+	ICMSDeferralPct           *float64            `json:"icms_deferral_pct"`
+	ICMSDeferralTarget        ICMSReductionTarget `json:"icms_deferral_target"`
+	LegalDeviceICMSDeferralID *int64              `json:"legal_device_icms_deferral_id"`
+	ICMSDeferralBenefitCode   *string             `json:"icms_deferral_benefit_code"`
 	// Substituição tributária
-	ICMSSubstPctContrib              *float64
-	ICMSSubstPctNonContrib           *float64
-	ICMSSubstPctContribUC            *float64
-	ICMSSubstRedPct                  *float64
-	ICMSInternalPct                  *float64
-	LegalDeviceICMSSubstContribID    *int64
-	LegalDeviceICMSSubstNonContribID *int64
-	LegalDeviceICMSSubstRedID        *int64
-	ModBCICMSST                      *string
-	ICMSPctForSTContrib              *float64
-	ICMSPctForSTNonContrib           *float64
+	ICMSSubstPctContrib              *float64 `json:"icms_subst_pct_contrib"`
+	ICMSSubstPctNonContrib           *float64 `json:"icms_subst_pct_non_contrib"`
+	ICMSSubstPctContribUC            *float64 `json:"icms_subst_pct_contrib_uc"`
+	ICMSSubstRedPct                  *float64 `json:"icms_subst_red_pct"`
+	ICMSInternalPct                  *float64 `json:"icms_internal_pct"`
+	LegalDeviceICMSSubstContribID    *int64   `json:"legal_device_icms_subst_contrib_id"`
+	LegalDeviceICMSSubstNonContribID *int64   `json:"legal_device_icms_subst_non_contrib_id"`
+	LegalDeviceICMSSubstRedID        *int64   `json:"legal_device_icms_subst_red_id"`
+	ModBCICMSST                      *string  `json:"mod_bc_icms_st"`
+	ICMSPctForSTContrib              *float64 `json:"icms_pct_for_st_contrib"`
+	ICMSPctForSTNonContrib           *float64 `json:"icms_pct_for_st_non_contrib"`
 	// CST / CSOSN
-	CSTICMSContrib       *string
-	CSTICMSNonContrib    *string
-	CSOSNTICMS           *string
-	CSTICMSContribDev    *string
-	CSTICMSNonContribDev *string
-	CSTSitTribB          *string
+	CSTICMSContrib       *string `json:"cst_icms_contrib"`
+	CSTICMSNonContrib    *string `json:"cst_icms_non_contrib"`
+	CSOSNTICMS           *string `json:"csosn_icms"`
+	CSTICMSContribDev    *string `json:"cst_icms_contrib_dev"`
+	CSTICMSNonContribDev *string `json:"cst_icms_non_contrib_dev"`
+	CSTSitTribB          *string `json:"cst_sit_trib_b"`
 	// Benefício fiscal
-	FiscalBenefitCodeContrib    *string
-	FiscalBenefitCodeNonContrib *string
-	FiscalBenefitCode           *string
+	FiscalBenefitCodeContrib    *string `json:"fiscal_benefit_code_contrib"`
+	FiscalBenefitCodeNonContrib *string `json:"fiscal_benefit_code_non_contrib"`
+	FiscalBenefitCode           *string `json:"fiscal_benefit_code"`
 	// IPI redução
-	IPIRedPctContrib           *float64
-	IPIRedTargetContrib        ICMSReductionTarget
-	IPIRedPctNonContrib        *float64
-	IPIRedTargetNonContrib     ICMSReductionTarget
-	LegalDeviceIPIContribID    *int64
-	LegalDeviceIPINonContribID *int64
-	CSTIPIOut                  *string
-	CSTIPIIn                   *string
+	IPIRedPctContrib           *float64            `json:"ipi_red_pct_contrib"`
+	IPIRedTargetContrib        ICMSReductionTarget `json:"ipi_red_target_contrib"`
+	IPIRedPctNonContrib        *float64            `json:"ipi_red_pct_non_contrib"`
+	IPIRedTargetNonContrib     ICMSReductionTarget `json:"ipi_red_target_non_contrib"`
+	LegalDeviceIPIContribID    *int64              `json:"legal_device_ipi_contrib_id"`
+	LegalDeviceIPINonContribID *int64              `json:"legal_device_ipi_non_contrib_id"`
+	CSTIPIOut                  *string             `json:"cst_ipi_out"`
+	CSTIPIIn                   *string             `json:"cst_ipi_in"`
 	// FCI
-	FCIICMSPct             *float64
-	FCIReduceBase          bool
-	FCIICMSSubstPct        *float64
-	FCICSTICMs             *string
-	FCIUseICMSZF           bool
-	FCIDIFALSTContribUCPct *float64
+	FCIICMSPct             *float64 `json:"fci_icms_pct"`
+	FCIReduceBase          bool     `json:"fci_reduce_base"`
+	FCIICMSSubstPct        *float64 `json:"fci_icms_subst_pct"`
+	FCICSTICMs             *string  `json:"fci_cst_icms"`
+	FCIUseICMSZF           bool     `json:"fci_use_icms_zf"`
+	FCIDIFALSTContribUCPct *float64 `json:"fci_difal_st_contrib_uc_pct"`
 	// Acréscimos ICMS
-	ICMSAddPctContrib        *float64
-	ICMSAddTypeContrib       *string
-	ICMSAddSumAliqContrib    bool
-	ICMSAddPctNonContrib     *float64
-	ICMSAddTypeNonContrib    *string
-	ICMSAddSumAliqNonContrib bool
-	ICMSSTAddPctContrib      *float64
-	ICMSSTAddTypeContrib     *string
-	ICMSSTAddPctNonContrib   *float64
-	ICMSSTAddTypeNonContrib  *string
-	FCPPartitionPct          *float64
+	ICMSAddPctContrib        *float64 `json:"icms_add_pct_contrib"`
+	ICMSAddTypeContrib       *string  `json:"icms_add_type_contrib"`
+	ICMSAddSumAliqContrib    bool     `json:"icms_add_sum_aliq_contrib"`
+	ICMSAddPctNonContrib     *float64 `json:"icms_add_pct_non_contrib"`
+	ICMSAddTypeNonContrib    *string  `json:"icms_add_type_non_contrib"`
+	ICMSAddSumAliqNonContrib bool     `json:"icms_add_sum_aliq_non_contrib"`
+	ICMSSTAddPctContrib      *float64 `json:"icms_st_add_pct_contrib"`
+	ICMSSTAddTypeContrib     *string  `json:"icms_st_add_type_contrib"`
+	ICMSSTAddPctNonContrib   *float64 `json:"icms_st_add_pct_non_contrib"`
+	ICMSSTAddTypeNonContrib  *string  `json:"icms_st_add_type_non_contrib"`
+	FCPPartitionPct          *float64 `json:"fcp_partition_pct"`
 	// DIFAL EC 87/2015
-	DIFALICMSRedPct     *float64
-	DIFALICMSType       *string
-	DIFALPurchaseRedPct *float64
+	DIFALICMSRedPct     *float64 `json:"difal_icms_red_pct"`
+	DIFALICMSType       *string  `json:"difal_icms_type"`
+	DIFALPurchaseRedPct *float64 `json:"difal_purchase_red_pct"`
 	// Optante Simples
-	IsSimplesOptante bool
-	IsActive         bool
-	CreatedAt        time.Time
+	IsSimplesOptante bool      `json:"is_simples_optante"`
+	IsActive         bool      `json:"is_active"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // ─── ICMS Summary Entry Additional (Aba Adicionais) ──────────────────────────
@@ -480,16 +480,16 @@ const (
 )
 
 type ICMSSummaryEntryAdditional struct {
-	ID                   int64
-	SummaryEntryID       int64
-	Sequence             int
-	ArrecadacaoIndicator ArrecadacaoIndicator
-	Processo             *string
-	Arrecadacao          *string
-	Description          *string
-	DIEFTable            *string
-	DIEFCode             *string
-	CreatedAt            time.Time
+	ID                   int64                `json:"id"`
+	SummaryEntryID       int64                `json:"summary_entry_id"`
+	Sequence             int                  `json:"sequence"`
+	ArrecadacaoIndicator ArrecadacaoIndicator `json:"arrecadacao_indicator"`
+	Processo             *string              `json:"processo"`
+	Arrecadacao          *string              `json:"arrecadacao"`
+	Description          *string              `json:"description"`
+	DIEFTable            *string              `json:"dief_table"`
+	DIEFCode             *string              `json:"dief_code"`
+	CreatedAt            time.Time            `json:"created_at"`
 }
 
 // ─── ICMS ST Restitution / Ressarcimento / Complementação ────────────────────
@@ -503,33 +503,33 @@ const (
 )
 
 type ICMSSTRestitution struct {
-	ID                      int64
-	EmpresaID               int
-	Period                  string
-	RestitutionType         ICMSSTRestitutionType
-	UF                      string
-	OrigDocModel            *string
-	OrigDocSeries           *string
-	OrigDocNumber           *string
-	OrigDocDate             *time.Time
-	OrigEmitterCNPJ         *string
-	OrigEmitterIE           *string
-	ItemID                  *int64
-	ItemCode                *string
-	CFOP                    *string
-	MotivoCode              *string
-	CSTICMS                 *string
-	ICMSSTBase              float64
-	ICMSSTAliq              float64
-	ICMSSTValue             float64
-	ICMSSTBaseRestitution   float64
-	ICMSSTValueRestitution  float64
-	ICMSSTConsolidatedBase  float64
-	ICMSSTConsolidatedValue float64
-	H030IndEstoque          *string
-	SpedBlock               *string
-	IsActive                bool
-	CreatedAt               time.Time
+	ID                      int64                 `json:"id"`
+	EmpresaID               int                   `json:"empresa_id"`
+	Period                  string                `json:"period"`
+	RestitutionType         ICMSSTRestitutionType `json:"restitution_type"`
+	UF                      string                `json:"uf"`
+	OrigDocModel            *string               `json:"orig_doc_model"`
+	OrigDocSeries           *string               `json:"orig_doc_series"`
+	OrigDocNumber           *string               `json:"orig_doc_number"`
+	OrigDocDate             *time.Time            `json:"orig_doc_date"`
+	OrigEmitterCNPJ         *string               `json:"orig_emitter_cnpj"`
+	OrigEmitterIE           *string               `json:"orig_emitter_ie"`
+	ItemID                  *int64                `json:"item_id"`
+	ItemCode                *string               `json:"item_code"`
+	CFOP                    *string               `json:"cfop"`
+	MotivoCode              *string               `json:"motivo_code"`
+	CSTICMS                 *string               `json:"cst_icms"`
+	ICMSSTBase              float64               `json:"icms_st_base"`
+	ICMSSTAliq              float64               `json:"icms_st_aliq"`
+	ICMSSTValue             float64               `json:"icms_st_value"`
+	ICMSSTBaseRestitution   float64               `json:"icms_st_base_restitution"`
+	ICMSSTValueRestitution  float64               `json:"icms_st_value_restitution"`
+	ICMSSTConsolidatedBase  float64               `json:"icms_st_consolidated_base"`
+	ICMSSTConsolidatedValue float64               `json:"icms_st_consolidated_value"`
+	H030IndEstoque          *string               `json:"h030_ind_estoque"`
+	SpedBlock               *string               `json:"sped_block"`
+	IsActive                bool                  `json:"is_active"`
+	CreatedAt               time.Time             `json:"created_at"`
 }
 
 // ─── Nota Especial de Ajuste ──────────────────────────────────────────────────
@@ -550,51 +550,51 @@ const (
 )
 
 type SpecialAdjustmentNote struct {
-	ID                      int64
-	EmpresaID               int
-	Purpose                 SpecialNotePurpose
-	Status                  SpecialNoteStatus
-	Number                  *string
-	Series                  *string
-	IssueDate               time.Time
-	Period                  string
-	InvoiceTypeID           *int64
-	CFOPID                  *int64
-	ICMSApuracaoLineID      *int64
-	AdjustmentCodeID        *int64
-	AdjustmentDocCodeID     *int64
-	History                 *string
-	AutoGenerateSummary     bool
-	GeneratedSummaryEntryID *int64
-	TotalValue              float64
-	TotalICMS               float64
-	TotalIPI                float64
-	Observation             *string
-	Items                   []SpecialAdjustmentNoteItem
-	CreatedAt               time.Time
+	ID                      int64                       `json:"id"`
+	EmpresaID               int                         `json:"empresa_id"`
+	Purpose                 SpecialNotePurpose          `json:"purpose"`
+	Status                  SpecialNoteStatus           `json:"status"`
+	Number                  *string                     `json:"number"`
+	Series                  *string                     `json:"series"`
+	IssueDate               time.Time                   `json:"issue_date"`
+	Period                  string                      `json:"period"`
+	InvoiceTypeID           *int64                      `json:"invoice_type_id"`
+	CFOPID                  *int64                      `json:"cfop_id"`
+	ICMSApuracaoLineID      *int64                      `json:"icms_apuracao_line_id"`
+	AdjustmentCodeID        *int64                      `json:"adjustment_code_id"`
+	AdjustmentDocCodeID     *int64                      `json:"adjustment_doc_code_id"`
+	History                 *string                     `json:"history"`
+	AutoGenerateSummary     bool                        `json:"auto_generate_summary"`
+	GeneratedSummaryEntryID *int64                      `json:"generated_summary_entry_id"`
+	TotalValue              float64                     `json:"total_value"`
+	TotalICMS               float64                     `json:"total_icms"`
+	TotalIPI                float64                     `json:"total_ipi"`
+	Observation             *string                     `json:"observation"`
+	Items                   []SpecialAdjustmentNoteItem `json:"items"`
+	CreatedAt               time.Time                   `json:"created_at"`
 }
 
 type SpecialAdjustmentNoteItem struct {
-	ID                int64
-	NoteID            int64
-	Sequence          int
-	ItemID            *int64
-	ItemCode          *string
-	Description       *string
-	Quantity          float64
-	Unit              *string
-	UnitValue         float64
-	TotalValue        float64
-	ICMSBase          float64
-	ICMSPct           float64
-	ICMSDeferralPct   float64
-	ICMSValue         float64
-	ICMSDeferredValue float64
-	IPIBase           float64
-	IPIPct            float64
-	IPIValue          float64
-	CSTICMS           *string
-	CSTIPI            *string
-	CFOPID            *int64
-	CreatedAt         time.Time
+	ID                int64     `json:"id"`
+	NoteID            int64     `json:"note_id"`
+	Sequence          int       `json:"sequence"`
+	ItemID            *int64    `json:"item_id"`
+	ItemCode          *string   `json:"item_code"`
+	Description       *string   `json:"description"`
+	Quantity          float64   `json:"quantity"`
+	Unit              *string   `json:"unit"`
+	UnitValue         float64   `json:"unit_value"`
+	TotalValue        float64   `json:"total_value"`
+	ICMSBase          float64   `json:"icms_base"`
+	ICMSPct           float64   `json:"icms_pct"`
+	ICMSDeferralPct   float64   `json:"icms_deferral_pct"`
+	ICMSValue         float64   `json:"icms_value"`
+	ICMSDeferredValue float64   `json:"icms_deferred_value"`
+	IPIBase           float64   `json:"ipi_base"`
+	IPIPct            float64   `json:"ipi_pct"`
+	IPIValue          float64   `json:"ipi_value"`
+	CSTICMS           *string   `json:"cst_icms"`
+	CSTIPI            *string   `json:"cst_ipi"`
+	CFOPID            *int64    `json:"cfop_id"`
+	CreatedAt         time.Time `json:"created_at"`
 }

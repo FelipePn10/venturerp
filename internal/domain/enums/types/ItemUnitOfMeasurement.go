@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 )
 
 type TypeUnitOfMeasurementItem string
@@ -52,14 +53,14 @@ func (t *TypeUnitOfMeasurementItem) UnmarshalJSON(data []byte) error {
 
 func (t TypeUnitOfMeasurementItem) Value() (driver.Value, error) {
 	if !t.IsValid() {
-		return nil, fmt.Errorf("unidade de medida do item inválida: %s", t)
+		return nil, domainerr.NewValidation(fmt.Sprintf("unidade de medida do item inválida: %s", t))
 	}
 	return string(t), nil
 }
 
 func (t *TypeUnitOfMeasurementItem) Scan(value interface{}) error {
 	if value == nil {
-		return fmt.Errorf("a unidade de medida do item não pode ficar vazia")
+		return domainerr.NewValidation("a unidade de medida do item não pode ficar vazia")
 	}
 
 	var str string
@@ -70,13 +71,13 @@ func (t *TypeUnitOfMeasurementItem) Scan(value interface{}) error {
 	case []byte:
 		str = string(v)
 	default:
-		return fmt.Errorf("não foi possível interpretar %T como unidade de medida do item", value)
+		return domainerr.NewValidation(fmt.Sprintf("não foi possível interpretar %T como unidade de medida do item", value))
 	}
 
 	tmp := TypeUnitOfMeasurementItem(str)
 
 	if !tmp.IsValid() {
-		return fmt.Errorf("unidade de medida do item inválida no banco: %s", str)
+		return domainerr.NewValidation(fmt.Sprintf("unidade de medida do item inválida no banco: %s", str))
 	}
 
 	*t = tmp

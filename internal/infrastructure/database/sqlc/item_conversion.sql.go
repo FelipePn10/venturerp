@@ -13,8 +13,10 @@ import (
 
 const createItemUnitConversion = `-- name: CreateItemUnitConversion :one
 
+
 INSERT INTO item_unit_conversions (item_code, mask, from_uom, to_uom, factor, rounding_percent, tolerance_value, tolerance_type, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+ WHERE EXISTS (SELECT 1 FROM items i WHERE i.code = $1 AND i.enterprise_id = $10)
 ON CONFLICT (item_code, mask, from_uom, to_uom)
 DO UPDATE SET factor = EXCLUDED.factor, rounding_percent=EXCLUDED.rounding_percent, tolerance_value=EXCLUDED.tolerance_value, tolerance_type=EXCLUDED.tolerance_type, is_active = TRUE
 RETURNING id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by, mask, rounding_percent, tolerance_value, tolerance_type
@@ -30,8 +32,10 @@ type CreateItemUnitConversionParams struct {
 	ToleranceValue  pgtype.Numeric
 	ToleranceType   string
 	CreatedBy       pgtype.UUID
+	EnterpriseID    int64
 }
 
+// Registros do item são da empresa do item (items.enterprise_id).
 // ─── Item Unit Conversions ────────────────────────────────────────────────────
 func (q *Queries) CreateItemUnitConversion(ctx context.Context, arg CreateItemUnitConversionParams) (ItemUnitConversion, error) {
 	row := q.db.QueryRow(ctx, createItemUnitConversion,
@@ -44,6 +48,7 @@ func (q *Queries) CreateItemUnitConversion(ctx context.Context, arg CreateItemUn
 		arg.ToleranceValue,
 		arg.ToleranceType,
 		arg.CreatedBy,
+		arg.EnterpriseID,
 	)
 	var i ItemUnitConversion
 	err := row.Scan(
@@ -63,25 +68,37 @@ func (q *Queries) CreateItemUnitConversion(ctx context.Context, arg CreateItemUn
 	return i, err
 }
 
-const deleteItemUnitConversion = `-- name: DeleteItemUnitConversion :exec
-UPDATE item_unit_conversions SET is_active = FALSE WHERE id = $1
+const deleteItemUnitConversion = `-- name: DeleteItemUnitConversion :execrows
+UPDATE item_unit_conversions SET is_active = FALSE
+WHERE item_unit_conversions.id = $1
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_unit_conversions.item_code AND i.enterprise_id = $2)
 `
 
-func (q *Queries) DeleteItemUnitConversion(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteItemUnitConversion, id)
-	return err
+type DeleteItemUnitConversionParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteItemUnitConversion(ctx context.Context, arg DeleteItemUnitConversionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteItemUnitConversion, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getItemUnitConversion = `-- name: GetItemUnitConversion :one
 SELECT id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by, mask, rounding_percent, tolerance_value, tolerance_type FROM item_unit_conversions
 WHERE item_code = $1 AND mask = $2 AND from_uom = $3 AND to_uom = $4 AND is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_unit_conversions.item_code AND i.enterprise_id = $5)
 `
 
 type GetItemUnitConversionParams struct {
-	ItemCode int64
-	Mask     string
-	FromUom  string
-	ToUom    string
+	ItemCode     int64
+	Mask         string
+	FromUom      string
+	ToUom        string
+	EnterpriseID int64
 }
 
 func (q *Queries) GetItemUnitConversion(ctx context.Context, arg GetItemUnitConversionParams) (ItemUnitConversion, error) {
@@ -90,6 +107,7 @@ func (q *Queries) GetItemUnitConversion(ctx context.Context, arg GetItemUnitConv
 		arg.Mask,
 		arg.FromUom,
 		arg.ToUom,
+		arg.EnterpriseID,
 	)
 	var i ItemUnitConversion
 	err := row.Scan(
@@ -112,11 +130,17 @@ func (q *Queries) GetItemUnitConversion(ctx context.Context, arg GetItemUnitConv
 const listItemUnitConversions = `-- name: ListItemUnitConversions :many
 SELECT id, item_code, from_uom, to_uom, factor, is_active, created_at, created_by, mask, rounding_percent, tolerance_value, tolerance_type FROM item_unit_conversions
 WHERE item_code = $1 AND is_active = TRUE
+  AND EXISTS (SELECT 1 FROM items i WHERE i.code = item_unit_conversions.item_code AND i.enterprise_id = $2)
 ORDER BY mask, from_uom, to_uom
 `
 
-func (q *Queries) ListItemUnitConversions(ctx context.Context, itemCode int64) ([]ItemUnitConversion, error) {
-	rows, err := q.db.Query(ctx, listItemUnitConversions, itemCode)
+type ListItemUnitConversionsParams struct {
+	ItemCode     int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListItemUnitConversions(ctx context.Context, arg ListItemUnitConversionsParams) ([]ItemUnitConversion, error) {
+	rows, err := q.db.Query(ctx, listItemUnitConversions, arg.ItemCode, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}

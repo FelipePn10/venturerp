@@ -6,6 +6,295 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(nf-e): os efeitos da NF-e autorizada (títulos a receber, baixa de estoque,
+  consumo das reservas e faturamento do pedido) viram uma PENDÊNCIA registrada antes
+  de rodar e aplicada numa transação só — ou entram todos, ou nenhum. Falhando, a
+  pendência guarda o motivo e é reprocessada sozinha (1, 2, 4… até 60 min) ou pelo botão
+  "Reprocessar agora" da tela de NF-e. Antes, uma falha depois da SEFAZ deixava a nota
+  autorizada sem título, sem baixa ou com o pedido aberto, e ninguém sabia. O mesmo vale
+  para o cancelamento. Rotas: `GET /api/fiscal/exits/{id}/pendencias` e
+  `POST /api/fiscal/exits/{id}/reprocessar-efeitos`
+- feat(nf-e): a baixa da nota usa o depósito da linha do pedido e, sem ele, o depósito
+  padrão do item; sem nenhum dos dois a autorização é recusada ANTES de transmitir
+- feat(isolamento): o banco recusa gravar referência a registro de outra empresa
+  (migração 000402). Cada vínculo por FK, mais `item_code`, é conferido por um gatilho
+  gerado do catálogo — 253 vínculos em 153 tabelas. Ficam de fora, por serem cruzados de
+  propósito, o fluxo interfábricas (MRP, planejamento, ordens planejadas) e as tabelas
+  de vínculo `*_enterprises`. Migration que criar tabela ou FK chama
+  `SELECT instalar_conferencia_de_empresa();` (um teste de integração cobra)
+- fix(vendas): confirmar o pedido é tudo ou nada — status, demanda do MRP e reserva de
+  estoque entram juntos. Falha na conferência de crédito não confirma e diz o motivo
+  (antes o pedido seguia sem a análise)
+- fix(expedição): separar, expedir e cancelar romaneio gravam a situação e as reservas
+  juntas; criar romaneio e carga grava o evento e a caixa de expedição juntos
+- fix(produção): apontamento com baixa automática dos componentes é tudo ou nada; a
+  falha na baixa não deixa mais o apontamento gravado sem o consumo
+- feat(produção): OF encerrada com falha na apuração do custo fica marcada "custo não
+  apurado", com o motivo, até "Apurar custo" dar certo (antes ficava sem custo, calada)
+- fix(custos): o rateio de indiretos por centro de trabalho nunca entrava — a consulta
+  dos centros do roteiro usava uma coluna inexistente e o erro era engolido. Agora usa o
+  centro padrão da operação e erro de leitura aparece
+- fix(erros): leituras que falhavam em silêncio e seguiam com valor vazio ou padrão
+  passam a devolver o erro (ou ir para o log quando a operação principal já aconteceu):
+  MRP (registradas no log do cálculo), configurador (regras e fórmulas avaliadas sem a
+  variável), APS/Gantt, devolução de compra, romaneio impresso sem destinatário ou
+  preços, defaults de compra do fornecedor, parâmetros 25/45/66, numeração de ordem
+  planejada e de OF (caía em "1"), conciliação automática do extrato, histórico do
+  pedido de venda, notificações e idempotência
+- fix(validação): data mal digitada não grava mais 0001-01-01 em silêncio — títulos a
+  pagar/receber, nota de saída, demanda independente, ordem planejada, rateio, centro de
+  custo, reserva e movimento de estoque, agenda da máquina, atendimento ao consumidor,
+  remessa CNAB, previsão de entrega e relatórios financeiros recusam com a mensagem do
+  campo (aceitam AAAA-MM-DD e DD/MM/AAAA)
+- fix(validação): corpo opcional com JSON quebrado (motivo do cancelamento/bloqueio,
+  atender pedido, expedir, recalcular consumo médio, curva ABC) era ignorado; agora é 400.
+  Filtros de data, transportadora e paginação das listas de romaneio e carga também
+- fix(aps): reprogramar a operação informa quando a conferência de capacidade falhou
+  (`capacity_check_error`) em vez de devolver "sem conflitos"
+- fix(clientes): cada empresa tem o seu cadastro de clientes. O cadastro não tinha
+  empresa nenhuma e o mesmo cliente aparecia (e podia ser alterado, bloqueado ou ter
+  endereço apagado) em todas as empresas do banco. Na atualização, cada empresa que já
+  usava o cliente recebe o seu cadastro com o mesmo código; cliente nunca usado vai para
+  todas as empresas
+- fix(contas a receber): o título gerado pela NF-e guardava o id interno do cliente em vez
+  do código — sumia do filtro por cliente e da análise de crédito. Os títulos existentes
+  são corrigidos na atualização
+- fix(clientes): alterar endereço e contato do cliente passa a gravar de fato
+- fix(isolamento): uma empresa não lê nem altera mais os dados de outra em:
+  registros de suprimentos, inspeção de recebimento, avisos de recebimento,
+  divergências, homologação e IQF de fornecedor, mensagens EDI, processos de
+  importação, contratos, histórico de compras, telefones e e-mails de contato do
+  fornecedor, ficha de ferramentas e reprogramação de entrega. Na atualização, os
+  registros de suprimentos existentes vão para a empresa do pedido/fornecedor de origem
+- fix(empresas): a lista de empresas mostra só as empresas do usuário (mostrava todas
+  as do banco), e criar empresa exige perfil de administrador; quem cria passa a
+  pertencer a ela
+- fix(reprogramação de entrega): a prévia e a reprogramação em lote não achavam o
+  pedido fora da empresa 1, e linha já atendida aparecia como reprogramável
+- fix(suprimentos): "gerar itens do fornecedor pelo histórico" falhava sempre
+- fix(isolamento): contabilidade por empresa — plano de contas, contas e
+  demonstrativos eram compartilhados (uma empresa via, alterava e lançava no plano
+  da outra). Na atualização, cada empresa recebe a sua cópia dos planos que já usava,
+  com parâmetros de contabilização, lançamentos, plano financeiro e contas bancárias
+  apontando para ela
+- fix(isolamento): NFS-e por empresa — pelo id, uma empresa lia, autorizava e
+  cancelava (com o próprio token Focus) a nota de serviço da outra
+- fix(isolamento): parâmetros ICMS/IPI, redução/substituição de ICMS, linhas e
+  totalizadores da apuração de ICMS, apuração do Simples Nacional, cenários fiscais,
+  rateio de despesas indiretas e adiantamentos passam a ser da empresa. Apurações
+  vão para a empresa fiscal; parametrização é copiada para cada empresa (regra que
+  cita item, cliente ou fornecedor vai só para a empresa dona dele)
+- fix(fiscal): cadastrar redução/substituição de ICMS falhava sempre (a gravação
+  enviava menos valores que colunas)
+- fix(fiscal): período mal informado na restituição de ICMS-ST respondia "erro
+  interno" em vez de pedir o formato ano-mês
+- fix(isolamento): representantes por empresa — o cadastro era compartilhado e,
+  pelo código, outra empresa se vinculava ao representante e incluía telefone,
+  e-mail, contato, região e contabilização nele. Representante usado por mais de
+  uma empresa vira um por empresa (código novo para as demais), com pedidos,
+  orçamentos, comissões e venda recorrente de cada empresa apontando para o dela
+- fix(isolamento): metas de venda por empresa — períodos, metas e saldos eram do
+  banco inteiro, e o relatório somava como realizado os pedidos de todas as empresas
+- fix(isolamento): estrutura de produto (BOM) é da empresa do item pai — antes
+  outra empresa criava componente, lia, alterava e removia a estrutura alheia; o
+  mesmo vale para histórico da estrutura, "onde é usado", máscaras, conversões de
+  unidade, calendário de promessa e custos do item na formação de preço
+- fix(isolamento): ferramentas e séries, responsáveis de garantia, reservas de
+  tanque e parâmetros da promessa de entrega passam a ser por empresa; atendimento
+  de SAC e de assistência técnica não aceita mais consumidor, cliente, responsável,
+  pedido ou ordem de produção de outra empresa
+- fix(ferramentas): a ficha aceitava atribuir série de ferramenta de outra empresa
+- fix(reprogramação/assistência técnica/estrutura): erros ao carregar itens,
+  notas de retorno e clientes do acompanhamento eram ignorados em silêncio
+- fix(isolamento): cadastros de apoio por empresa — regiões, segmentos, tipos de
+  cliente/fornecedor/contato, portadores e grupos, tipos de nota, tributação, TES,
+  grupos de UF, tipos de movimento de estoque, tipos de representante, tipos de
+  chamado e fontes de conhecimento do SAC, grupos e motivos de defeito. Na
+  atualização, cada empresa recebe a sua cópia com o MESMO código (tipos de
+  representante, de chamado e defeitos ganham código novo nas demais empresas), e
+  clientes, fornecedores, políticas, parâmetros fiscais e documentos passam a
+  apontar para o catálogo da própria empresa. O banco recusa vínculo com catálogo
+  de outra empresa
+- fix(fiscal): a lista de cartas de correção mostrava as de nota de outra empresa
+- fix(clientes): alterar a tributação não gravava nada
+- nota: empresa criada a partir desta versão começa com os cadastros de apoio vazios
+- fix(compras): a segunda empresa do banco não conseguia criar cotação nem
+  requisição de compra — a numeração era por empresa, mas o código é único no
+  banco inteiro, e o código gerado já existia na outra empresa
+- fix(isolamento): itens, fornecedores convidados e preços da cotação de compra e
+  itens da requisição eram lidos e gravados pelo id, sem olhar a empresa — outra
+  empresa incluía item, convidava fornecedor, gravava e selecionava preço na
+  cotação alheia e levava item de requisição alheia para a própria cotação. A
+  cotação também recusa fornecedor de outra empresa
+- fix(isolamento): o vínculo fornecedor×empresa era alterado e excluído pelo id
+  sem conferir a empresa, e aceitava tabela de preço de compra de outra empresa
+- fix(isolamento): o vínculo item×fornecedor aceitava item ou fornecedor de outra
+  empresa; contagem cíclica aceitava almoxarifado de outra empresa
+- fix(fiscal): a sincronização das NF-e recebidas (DF-e) falhava em toda nota ao
+  gravá-la ("inconsistent types deduced for parameter $2") — nenhuma nota recebida
+  era importada, nem pelo agendamento nem pelo botão
+- fix(compras): gravar preço da cotação ignorava a falha ao marcá-la como cotada,
+  e a importação de NF-e de compra ignorava a falha ao gravar o item da nota (o
+  estoque entrava sem o item na nota e o pedido recebia baixa) — agora o motivo
+  volta na resposta
+- fix(planejamento): empresa criada depois da v1.0 não tinha parâmetros de
+  planejamento — a tela vinha vazia e nada podia ser alterado. Cada empresa
+  recebe o catálogo de parâmetros (também as criadas daqui em diante), com os
+  valores que o MRP já usava como padrão: o cálculo não muda
+- fix(produção): a permissão de alterar quantidade e datas da OF lia os
+  parâmetros 10 e 14 do catálogo (itens fantasmas e cálculo do MPS), sem relação
+  com a OF; agora lê só os próprios parâmetros
+- fix(compras): falha ao criar a cotação (item de requisição inválido, fornecedor
+  de outra empresa) deixava uma cotação vazia gravada; agora nada é gravado
+- fix(mrp): a programação das máquinas esperava os componentes de TODAS as ordens
+  do item pai — a ordem de amanhã aguardava a compra do mês seguinte e todas as
+  ordens de fabricação saíam "atrasadas" na mesma data. Agora cada ordem espera
+  só os componentes pedidos até o início dela
+- fix(mrp): número inicial de ordem já em uso (ordem planejada ativa ou sugestão
+  de outro plano) fazia o cálculo perder as sugestões e terminar "com erros"
+  sem nenhuma ordem; agora a sugestão pega o próximo número livre
+- feat(mrp): a lista de sugestões informa a ordem planejada gerada ao firmar
+  (`planned_order_code`)
+- fix(aps): o turno do calendário da máquina era lido como UTC — o APS
+  programava três horas antes do expediente (turno das 07:00 começava às 04:00
+  em Brasília). A janela usa o fuso da empresa, o mesmo do MRP
+- fix(fiscal): doze cadastros da apuração de ICMS (resumo e notas do resumo,
+  redução/substituição, ressarcimento de ST, notas especiais e itens, Simples
+  Nacional, linhas, códigos de ajuste, motivos DAPI) eram decodificados direto na
+  entidade sem nome de campo: tudo que tinha nome composto (`cfop_id`,
+  `icms_base`, `issue_date`…) era descartado em silêncio. Aceitam data só com o
+  dia nos campos de data, e o erro do banco não aparece mais cru para o usuário
+- fix(fiscal): regra de redução/substituição de ICMS nunca gravava — o alvo da
+  redução não informado ia como texto vazio para a coluna enum; vale BASE
+- fix(fiscal): item da nota especial de ajuste não podia ser incluído — o código
+  do item (texto do documento) era traduzido para a chave interna numérica
+- fix(compras): gerar vínculos item × fornecedor pelo histórico (FFOR0204)
+  falhava sempre — o ator ia como texto para a coluna uuid
+- fix(erros): cerca de 600 validações de regra de negócio (cadastro, planejamento,
+  produção, fiscal, financeiro…) voltavam como "erro interno" (500); agora voltam
+  como erro de validação (422), registro não encontrado (404) ou conflito (409),
+  com a mensagem em português
+- fix(máquinas): máquina sem calendário trabalhava a partir da meia-noite no MRP e
+  no APS; o turno padrão passa a começar às 08:00 (até completar as horas
+  disponíveis por dia)
+- fix(planejamento): a execução automática (janela noturna) rodava sem a sessão
+  da empresa e falhava sempre; agora roda em nome de quem salvou a configuração.
+  Da segunda rodada em diante também falhava (contagem de itens alterados lia
+  uma coluna inexistente), e a hora da janela era a do banco, não a da empresa
+- feat(planejamento): configuração da execução automática por empresa
+  (`GET/PUT /api/planning/auto-run`), "rodar agora" (`POST
+  /api/planning/auto-run/run-now`) e histórico de execuções (`GET
+  /api/planning/runs`)
+- feat(mrp): monitor de cobertura de materiais por plano
+  (`GET /api/mrp-reports/coverage`): dias de cobertura do estoque e com ordens
+  firmes, falta sem planejada e farol (crítico/atenção/coberto), filtrável por
+  planejador e tipo de item
+- fix(mrp): mensagens de exceção eram geradas sobre o suprimento já consumido
+  pelo cálculo e comparadas com a necessidade líquida e com a primeira data do
+  item: ordem firme atrasada só gerava mensagem se chegasse depois da última
+  necessidade, o excesso quase nunca aparecia, e uma ordem que cobria a
+  necessidade de novembro era "atrasada" em relação à de outubro. Agora cada
+  ordem firme é comparada com a necessidade que de fato cobre (depois do estoque)
+- feat(mrp): ação direto na exceção (`POST
+  /api/mrp-calculation/exceptions/{code}/handle`): reprogramar a ordem planejada
+  para a data sugerida, cancelar a ordem sem necessidade ou marcar como tratada
+  com observação. A exceção guarda a data sugerida, quem tratou e como
+- fix(ordens planejadas): voltar uma ordem para "planejada" podia ser recusado
+  por movimento de OUTRA ordem — a checagem ligava a OF pelo código da ordem
+  planejada em vez do id
+- feat(mrp): rastreamento (pegging) gravado a cada cálculo — de cada pedido ou
+  demanda até as compras dos componentes, e de uma ordem até quem depende dela
+  (`/api/mrp-calculation/pegging/{plano}/roots|down|up`)
+- feat(planejamento): cenários de simulação (`/api/planning/scenarios`) —
+  ajustes de demanda, estoque, prazo e capacidade de máquina calculados (MRP +
+  CRP) num plano oculto, comparados com o plano real; só a demanda pode ser
+  aplicada ao plano real
+- fix(mrp): operação externa (ordem de SERVIÇO) era tratada como suprimento do
+  item — a necessidade seguinte do item saía menor — e explodia a estrutura de
+  novo, pedindo os componentes em dobro
+- fix(mrp): o perfil do item gravava "ordens planejadas" negativas quando o
+  estoque sobrava (a necessidade líquida negativa); agora grava zero
+- fix(mrp): duas pessoas tratando a mesma exceção ao mesmo tempo gravavam as
+  duas (a segunda sobrescrevia); agora a segunda recebe conflito
+- fix(api): corpo JSON quebrado, incompleto ou com tipo errado respondia com o
+  texto técnico do decodificador ("invalid character…", "cannot unmarshal…");
+  agora a mensagem é em português
+- fix(crp): planos de cenário de simulação apareciam na lista de planos do CRP
+- fix(produção): faltas de material de OF inexistente ou de outra empresa
+  respondiam "sem lista" em vez de "não encontrada" (404)
+- fix(planejamento): o plano oculto do cenário usa uma faixa reservada de
+  códigos — antes podia ocupar o código que o usuário escolheria para um plano
+  novo, que recebia "já existe" para um plano invisível
+- feat(produção): faltas de material da OF antes de liberar
+  (`GET /api/production-order/{id}/material-availability` e resumo
+  `GET /api/production-order/material-availability?ids=`): saldo livre do
+  depósito menos o que as OFs da frente vão consumir
+- feat(mrp): atendimento do pedido de venda pelo MRP
+  (`GET /api/mrp-calculation/pegging/sales-order/{order_code}`): por plano ativo,
+  as linhas do pedido com estoque, ordens, sugestões, falta e a cadeia até as compras
+- feat(mrp): o rastreamento marca o elo atrasado — sugestão que termina depois da
+  necessidade na programação das máquinas ou que já devia ter começado — com o
+  motivo por extenso (`late`, `late_reason`; na raiz, `chain_late`)
+- feat(mrp): a exceção de ordem planejada informa os pedidos/demandas que dependem
+  dela (`affected_demands`)
+- feat(planejamento): a comparação de cenário conta os pedidos/demandas com cadeia
+  atrasada (`roots_late`)
+- fix(mrp): a mensagem de exceção citava o código interno do item ("Item 9003: ordem
+  firme de 80.00 un.…"); agora cita o código de negócio e a quantidade como se lê
+  ("RODA-200: ordem firme de 80 un.…", "12,5 un.")
+- fix(mrp): no rastreamento, a sugestão que a máquina só termina depois da
+  necessidade passa a ter como data o fim programado — "pronto em" (`latest_supply`)
+  e o motivo do atraso mostram o dia em que a cadeia fica pronta de fato
+- fix(isolamento): a consulta de carga por centro do CRP (sem uso em rota hoje) lia
+  planos de todas as empresas e os de cenário; agora só os planos reais da empresa
+- fix(isolamento): roteiro — pelo id, outra empresa alterava e inativava etapa,
+  incluía, alterava, lia, tornava principal e removia recurso alternativo, e ligava
+  ou apagava precedência de roteiro alheio; a própria empresa podia apontar
+  operação ou centro de trabalho de outra. Agora tudo filtra pela empresa do
+  roteiro e responde "não encontrado"
+- fix(isolamento): o vencimento do fornecedor aceitava condição de pagamento de
+  outra empresa
+- fix(fiscal): CFOP e dispositivo legal valem para todas as empresas do banco; incluir
+  e alterar passa a exigir o perfil ADMIN (USER consulta normalmente)
+- fix(roteiro): trocar o recurso principal da etapa é tudo ou nada — uma falha no meio
+  deixava a etapa sem recurso principal
+- fix(validação): data mal digitada era descartada em silêncio e o registro gravado sem
+  ela (pedido e item de venda, orçamento, OF, ordem planejada, venda recorrente,
+  desenho, SAC, assistência técnica, atributo de exportação). Agora responde 422 dizendo
+  o campo e os formatos aceitos (AAAA-MM-DD ou DD/MM/AAAA)
+- fix(validação): filtro de data ou número mal digitado nas listas de orçamentos,
+  chamados de assistência técnica e acompanhamento de representantes era ignorado (a
+  lista vinha inteira); agora responde 422
+- fix(mrp): falha ao ler as operações externas do item era ignorada e o cálculo deixava
+  de sugerir a ordem de serviço; agora o cálculo falha com o motivo
+- fix(desenhos): falha ao ler revisões e distribuições era ignorada (a resposta vinha
+  incompleta) e falha de banco virava "não encontrado"
+- feat(auditoria): `scripts/audit-referencias-entre-empresas.sh` lista vínculos em que
+  um registro aponta para cadastro de outra empresa (somente leitura; serve em produção)
+- fix(isolamento): qualidade por empresa — planos de inspeção, características,
+  registros e não conformidades eram lidos e alterados por id sem olhar a empresa.
+  O filtro é pela empresa do item; alterar registro inexistente ou de outra
+  empresa responde "não encontrado"
+- fix(isolamento): o quadro mensal (Gantt) do APS mostrava ordens, dependências e
+  carga de máquina de todas as empresas, e a carga somava os planos de cenário de
+  simulação; o sequenciamento do APS também lia as ordens abertas de todas as empresas
+- fix(gantt): a barra da ordem mostra o código e o nome do item
+- fix(qualidade): característica com tolerância mínima maior que a máxima, sem nome
+  ou de plano inexistente era aceita
+- fix(fiscal): CFOP com utilização, indicador de operação ou tipo de utilização
+  inválido era gravado (e no PUT, campo vazio virava valor inválido); agora a
+  mensagem lista os valores aceitos
+- fix(roteiro): alterar uma operação sem informar a situação gravava situação vazia;
+  agora mantém a atual, e situação inválida é recusada
+- fix(mrp): envio de exceções por webhook/e-mail valida o plano, o endereço e os
+  e-mails antes de enviar; endereço recusado e falha de envio respondem em português
+- fix(segurança): o webhook recusa também as faixas reservadas (CGNAT 100.64/10,
+  redes de documentação e de teste, 0/8, 240/4, NAT64) além das internas que já recusava
+- fix(api): erros de validação, "não encontrado", duplicidade e vínculo inexistente
+  vindos dos handlers respondiam o texto técnico do banco ou do Go; passam pela
+  mesma tradução para português dos demais endpoints. Corpo com campo desconhecido
+  nas operações estritas responde qual campo não é aceito
+
 ## [v1.5.1] — 2026-10-07
 
 - feat(compras): pedido de compra por empresa, com documento e acompanhamento (`0136247`)

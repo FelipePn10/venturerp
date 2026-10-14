@@ -63,7 +63,9 @@ INSERT INTO purchase_requisition_items (
     requisition_code, sequence, item_code, quantity, uom, cost_center_code,
     accounting_account, suggested_price, delivery_date, application, utilization_type
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+ WHERE EXISTS (SELECT 1 FROM purchase_requisitions r
+                WHERE r.code = $1 AND r.enterprise_code = $12)
 RETURNING id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at
 `
 
@@ -79,9 +81,11 @@ type CreatePurchaseRequisitionItemParams struct {
 	DeliveryDate      pgtype.Date
 	Application       pgtype.Text
 	UtilizationType   pgtype.Text
+	EnterpriseCode    int64
 }
 
 // ─── Items ────────────────────────────────────────────────────────────────────
+// Itens seguem a empresa da requisição (enterprise_code).
 func (q *Queries) CreatePurchaseRequisitionItem(ctx context.Context, arg CreatePurchaseRequisitionItemParams) (PurchaseRequisitionItem, error) {
 	row := q.db.QueryRow(ctx, createPurchaseRequisitionItem,
 		arg.RequisitionCode,
@@ -95,6 +99,7 @@ func (q *Queries) CreatePurchaseRequisitionItem(ctx context.Context, arg CreateP
 		arg.DeliveryDate,
 		arg.Application,
 		arg.UtilizationType,
+		arg.EnterpriseCode,
 	)
 	var i PurchaseRequisitionItem
 	err := row.Scan(
@@ -150,11 +155,18 @@ func (q *Queries) GetPurchaseRequisitionByCode(ctx context.Context, arg GetPurch
 }
 
 const getPurchaseRequisitionItem = `-- name: GetPurchaseRequisitionItem :one
-SELECT id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at FROM purchase_requisition_items WHERE id = $1
+SELECT i.id, i.requisition_code, i.sequence, i.item_code, i.quantity, i.attended_qty, i.cancelled_qty, i.uom, i.cost_center_code, i.accounting_account, i.suggested_price, i.delivery_date, i.application, i.utilization_type, i.status, i.is_active, i.created_at FROM purchase_requisition_items i
+JOIN purchase_requisitions r ON r.code = i.requisition_code
+WHERE i.id = $1 AND r.enterprise_code = $2
 `
 
-func (q *Queries) GetPurchaseRequisitionItem(ctx context.Context, id int64) (PurchaseRequisitionItem, error) {
-	row := q.db.QueryRow(ctx, getPurchaseRequisitionItem, id)
+type GetPurchaseRequisitionItemParams struct {
+	ID             int64
+	EnterpriseCode int64
+}
+
+func (q *Queries) GetPurchaseRequisitionItem(ctx context.Context, arg GetPurchaseRequisitionItemParams) (PurchaseRequisitionItem, error) {
+	row := q.db.QueryRow(ctx, getPurchaseRequisitionItem, arg.ID, arg.EnterpriseCode)
 	var i PurchaseRequisitionItem
 	err := row.Scan(
 		&i.ID,
@@ -179,13 +191,19 @@ func (q *Queries) GetPurchaseRequisitionItem(ctx context.Context, id int64) (Pur
 }
 
 const listPurchaseRequisitionItems = `-- name: ListPurchaseRequisitionItems :many
-SELECT id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at FROM purchase_requisition_items
-WHERE requisition_code = $1 AND is_active = TRUE
-ORDER BY sequence
+SELECT i.id, i.requisition_code, i.sequence, i.item_code, i.quantity, i.attended_qty, i.cancelled_qty, i.uom, i.cost_center_code, i.accounting_account, i.suggested_price, i.delivery_date, i.application, i.utilization_type, i.status, i.is_active, i.created_at FROM purchase_requisition_items i
+JOIN purchase_requisitions r ON r.code = i.requisition_code
+WHERE i.requisition_code = $1 AND i.is_active = TRUE AND r.enterprise_code = $2
+ORDER BY i.sequence
 `
 
-func (q *Queries) ListPurchaseRequisitionItems(ctx context.Context, requisitionCode int64) ([]PurchaseRequisitionItem, error) {
-	rows, err := q.db.Query(ctx, listPurchaseRequisitionItems, requisitionCode)
+type ListPurchaseRequisitionItemsParams struct {
+	RequisitionCode int64
+	EnterpriseCode  int64
+}
+
+func (q *Queries) ListPurchaseRequisitionItems(ctx context.Context, arg ListPurchaseRequisitionItemsParams) ([]PurchaseRequisitionItem, error) {
+	rows, err := q.db.Query(ctx, listPurchaseRequisitionItems, arg.RequisitionCode, arg.EnterpriseCode)
 	if err != nil {
 		return nil, err
 	}
@@ -269,12 +287,11 @@ func (q *Queries) ListPurchaseRequisitions(ctx context.Context, arg ListPurchase
 
 const nextPurchaseRequisitionCode = `-- name: NextPurchaseRequisitionCode :one
 SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM purchase_requisitions
-WHERE enterprise_code = $1
 `
 
-// Numeração por empresa, mesmo motivo da cotação.
-func (q *Queries) NextPurchaseRequisitionCode(ctx context.Context, enterpriseCode int64) (int64, error) {
-	row := q.db.QueryRow(ctx, nextPurchaseRequisitionCode, enterpriseCode)
+// Global, como a cotação: purchase_requisitions.code é único no banco inteiro.
+func (q *Queries) NextPurchaseRequisitionCode(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, nextPurchaseRequisitionCode)
 	var next_code int64
 	err := row.Scan(&next_code)
 	return next_code, err
@@ -288,17 +305,21 @@ SET attended_qty = attended_qty + $2,
         WHEN attended_qty + $2 > 0 THEN 'PARTIAL'
         ELSE status
     END
-WHERE id = $1
+WHERE purchase_requisition_items.id = $1
+  AND EXISTS (SELECT 1 FROM purchase_requisitions r
+               WHERE r.code = purchase_requisition_items.requisition_code
+                 AND r.enterprise_code = $3)
 RETURNING id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at
 `
 
 type RegisterRequisitionItemAttendanceParams struct {
-	ID          int64
-	AttendedQty pgtype.Numeric
+	ID             int64
+	AttendedQty    pgtype.Numeric
+	EnterpriseCode int64
 }
 
 func (q *Queries) RegisterRequisitionItemAttendance(ctx context.Context, arg RegisterRequisitionItemAttendanceParams) (PurchaseRequisitionItem, error) {
-	row := q.db.QueryRow(ctx, registerRequisitionItemAttendance, arg.ID, arg.AttendedQty)
+	row := q.db.QueryRow(ctx, registerRequisitionItemAttendance, arg.ID, arg.AttendedQty, arg.EnterpriseCode)
 	var i PurchaseRequisitionItem
 	err := row.Scan(
 		&i.ID,

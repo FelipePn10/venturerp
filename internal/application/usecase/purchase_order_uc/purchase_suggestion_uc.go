@@ -167,10 +167,12 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 		if _, aerr := uc.Aprovacao.Execute(ctx, created.Code); aerr != nil {
 			return nil, aerr
 		}
-		if atual, gerr := uc.Repo.GetByCode(ctx, created.Code); gerr == nil {
-			atual.Items = created.Items
-			created = atual
+		atual, gerr := uc.Repo.GetByCode(ctx, created.Code)
+		if gerr != nil {
+			return nil, fmt.Errorf("relendo o pedido aprovado: %w", gerr)
 		}
+		atual.Items = created.Items
+		created = atual
 	}
 	return created, nil
 }

@@ -3,7 +3,6 @@
 package tool_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -18,7 +17,7 @@ import (
 func TestIntegration_Tool_LifeCycle(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := toolrepo.New(q)
-	ctx := context.Background()
+	ctx := testutil.TenantContext(t, pool) // a ferramenta é da empresa da sessão
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()

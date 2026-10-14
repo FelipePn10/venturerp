@@ -21,9 +21,8 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 	if err != nil {
 		return nil, err
 	}
-	// O adiantamento não tem coluna de empresa: pertence à empresa da conta
-	// bancária. Sem esta conferência, o id de conta vindo do corpo movimentava o
-	// saldo do banco de outra empresa.
+	// A conta bancária tem de ser da empresa: sem esta conferência, o id de
+	// conta vindo do corpo movimentava o saldo do banco de outra empresa.
 	if err := r.contaDaEmpresa(ctx, a.ContaBancariaID); err != nil {
 		return nil, err
 	}
@@ -36,11 +35,11 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 	err = tx.QueryRow(ctx,
 		`INSERT INTO public.adiantamentos
 		    (tipo, parceiro_id, conta_bancaria_id, numero_documento, data_adiantamento,
-		     valor_original, valor_utilizado, status, descricao, created_by)
-		 VALUES ($1,$2,$3,$4,$5,$6,0,'ABERTO',$7,$8)
+		     valor_original, valor_utilizado, status, descricao, created_by, enterprise_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,0,'ABERTO',$7,$8,$9)
 		 RETURNING id, status, valor_utilizado, is_active, created_at, updated_at`,
 		string(a.Tipo), a.ParceiroID, a.ContaBancariaID, a.NumeroDocumento, a.DataAdiantamento,
-		a.ValorOriginal.InexactFloat64(), a.Descricao, a.CreatedBy,
+		a.ValorOriginal.InexactFloat64(), a.Descricao, a.CreatedBy, empresa,
 	).Scan(&a.ID, &a.Status, &a.ValorUtilizado, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating adiantamento: %w", err)
@@ -225,9 +224,8 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 	return ap, nil
 }
 
-// adiantamentoDaEmpresa: o adiantamento é da empresa dona da conta bancária
-// ($2 nas consultas que o usam).
-const adiantamentoDaEmpresa = `EXISTS (SELECT 1 FROM contas_bancarias cb WHERE cb.id = adiantamentos.conta_bancaria_id AND cb.enterprise_id = $2)`
+// adiantamentoDaEmpresa: $2 nas consultas que o usam é a empresa da sessão.
+const adiantamentoDaEmpresa = `adiantamentos.enterprise_id = $2`
 
 func (r *FinancialRepositoryPG) GetAdiantamento(ctx context.Context, id int64) (*entity.Adiantamento, error) {
 	empresa, err := tenant.ID(ctx)
@@ -274,8 +272,7 @@ func (r *FinancialRepositoryPG) ListAplicacoesByAdiantamento(ctx context.Context
 		`SELECT id, adiantamento_id, conta_tipo, conta_id, valor_aplicado, data_aplicacao, created_by, created_at
 		   FROM public.adiantamento_aplicacoes
 		  WHERE adiantamento_id = $1
-		    AND EXISTS (SELECT 1 FROM public.adiantamentos JOIN contas_bancarias cb ON cb.id = adiantamentos.conta_bancaria_id
-		                 WHERE adiantamentos.id = $1 AND cb.enterprise_id = $2)
+		    AND EXISTS (SELECT 1 FROM public.adiantamentos WHERE adiantamentos.id = $1 AND `+adiantamentoDaEmpresa+`)
 		  ORDER BY id`, advID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing aplicações: %w", err)

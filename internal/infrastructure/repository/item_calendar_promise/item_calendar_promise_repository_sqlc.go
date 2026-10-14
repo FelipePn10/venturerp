@@ -2,9 +2,11 @@ package item_calendar_promise
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/item_calendar_promise/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -12,15 +14,23 @@ import (
 )
 
 func (r *ItemCalendarPromiseRepositorySQLC) UpsertDay(ctx context.Context, c *entity.ItemCalendarPromise) (*entity.ItemCalendarPromise, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.UpsertItemCalendarDay(ctx, sqlc.UpsertItemCalendarDayParams{
-		ItemCode:    c.ItemCode,
-		Mask:        c.Mask,
-		Year:        int32(c.Year),
-		Month:       int32(c.Month),
-		Day:         int32(c.Day),
-		IsWorkday:   c.IsWorkday,
-		Description: pgutil.ToPgTextFromPtr(c.Description),
+		EnterpriseID: empresa,
+		ItemCode:     c.ItemCode,
+		Mask:         c.Mask,
+		Year:         int32(c.Year),
+		Month:        int32(c.Month),
+		Day:          int32(c.Day),
+		IsWorkday:    c.IsWorkday,
+		Description:  pgutil.ToPgTextFromPtr(c.Description),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado", c.ItemCode))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("upserting item calendar day: %w", err)
 	}
@@ -28,15 +38,20 @@ func (r *ItemCalendarPromiseRepositorySQLC) UpsertDay(ctx context.Context, c *en
 }
 
 func (r *ItemCalendarPromiseRepositorySQLC) GetDay(ctx context.Context, itemCode int64, mask string, year, month, day int) (*entity.ItemCalendarPromise, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.GetItemCalendarDay(ctx, sqlc.GetItemCalendarDayParams{
-		ItemCode: itemCode,
-		Mask:     mask,
-		Year:     int32(year),
-		Month:    int32(month),
-		Day:      int32(day),
+		EnterpriseID: empresa,
+		ItemCode:     itemCode,
+		Mask:         mask,
+		Year:         int32(year),
+		Month:        int32(month),
+		Day:          int32(day),
 	})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError("dia do calendário do item não encontrado")
 		}
 		return nil, fmt.Errorf("fetching item calendar day: %w", err)
@@ -45,11 +60,16 @@ func (r *ItemCalendarPromiseRepositorySQLC) GetDay(ctx context.Context, itemCode
 }
 
 func (r *ItemCalendarPromiseRepositorySQLC) GetWorkdaysInMonth(ctx context.Context, itemCode int64, mask string, year, month int) ([]*entity.ItemCalendarPromise, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.GetItemWorkdaysInMonth(ctx, sqlc.GetItemWorkdaysInMonthParams{
-		ItemCode: itemCode,
-		Mask:     mask,
-		Year:     int32(year),
-		Month:    int32(month),
+		EnterpriseID: empresa,
+		ItemCode:     itemCode,
+		Mask:         mask,
+		Year:         int32(year),
+		Month:        int32(month),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching item workdays: %w", err)
@@ -58,11 +78,16 @@ func (r *ItemCalendarPromiseRepositorySQLC) GetWorkdaysInMonth(ctx context.Conte
 }
 
 func (r *ItemCalendarPromiseRepositorySQLC) ListMonth(ctx context.Context, itemCode int64, mask string, year, month int) ([]*entity.ItemCalendarPromise, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.q.ListItemCalendarMonth(ctx, sqlc.ListItemCalendarMonthParams{
-		ItemCode: itemCode,
-		Mask:     mask,
-		Year:     int32(year),
-		Month:    int32(month),
+		EnterpriseID: empresa,
+		ItemCode:     itemCode,
+		Mask:         mask,
+		Year:         int32(year),
+		Month:        int32(month),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("listing item calendar month: %w", err)
@@ -71,12 +96,17 @@ func (r *ItemCalendarPromiseRepositorySQLC) ListMonth(ctx context.Context, itemC
 }
 
 func (r *ItemCalendarPromiseRepositorySQLC) DeleteDay(ctx context.Context, itemCode int64, mask string, year, month, day int) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	return r.q.DeleteItemCalendarDay(ctx, sqlc.DeleteItemCalendarDayParams{
-		ItemCode: itemCode,
-		Mask:     mask,
-		Year:     int32(year),
-		Month:    int32(month),
-		Day:      int32(day),
+		EnterpriseID: empresa,
+		ItemCode:     itemCode,
+		Mask:         mask,
+		Year:         int32(year),
+		Month:        int32(month),
+		Day:          int32(day),
 	})
 }
 

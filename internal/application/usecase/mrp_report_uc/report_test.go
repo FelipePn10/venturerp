@@ -19,8 +19,9 @@ type reportAuth struct {
 func (a reportAuth) CanRunMRPCalculation(context.Context) bool { return a.allowed }
 
 type reportReader struct {
-	calls []string
-	err   error
+	calls    []string
+	err      error
+	coverage []CoverageInput
 }
 
 func (r *reportReader) add(name string) ([]ReportRow, error) {
@@ -39,6 +40,10 @@ func (r *reportReader) Explosion(context.Context, int64, decimal.Decimal, *time.
 }
 func (r *reportReader) ReorderPoint(context.Context, Filter) ([]ReportRow, error) {
 	return r.add("reorder")
+}
+func (r *reportReader) Coverage(context.Context, Filter) ([]CoverageInput, error) {
+	r.calls = append(r.calls, "coverage")
+	return r.coverage, r.err
 }
 
 func TestReportUseCaseAuthorizesAndDelegatesEveryReport(t *testing.T) {

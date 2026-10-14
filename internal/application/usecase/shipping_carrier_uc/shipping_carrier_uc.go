@@ -42,17 +42,19 @@ func (uc *UseCase) Obter(ctx context.Context, id int64) (*response.Transportador
 	out := montar(t)
 	// Doze meses é a janela que o comercial usa para renegociar frete.
 	desde := time.Now().AddDate(-1, 0, 0)
-	if d, err := uc.Repo.Desempenho(ctx, id, desde); err == nil {
-		out.Desempenho = &response.TransportadoraDesempenhoResponse{
-			Ocorrencias: d.Ocorrencias,
-			AtrasoMedio: d.AtrasoMedio,
-			CustoTotal:  d.CustoTotal,
-			Desde:       desde.Format(formatoData),
-		}
-		if d.UltimaData != nil {
-			s := d.UltimaData.Format(formatoData)
-			out.Desempenho.UltimaData = &s
-		}
+	d, err := uc.Repo.Desempenho(ctx, id, desde)
+	if err != nil {
+		return nil, err
+	}
+	out.Desempenho = &response.TransportadoraDesempenhoResponse{
+		Ocorrencias: d.Ocorrencias,
+		AtrasoMedio: d.AtrasoMedio,
+		CustoTotal:  d.CustoTotal,
+		Desde:       desde.Format(formatoData),
+	}
+	if d.UltimaData != nil {
+		s := d.UltimaData.Format(formatoData)
+		out.Desempenho.UltimaData = &s
 	}
 	return out, nil
 }

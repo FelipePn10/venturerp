@@ -71,7 +71,9 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 		t.Fatalf("CreateSupplier: %v", err)
 	}
 
-	const itemCode = int64(556677)
+	// O vínculo item×fornecedor exige item e fornecedor da própria empresa.
+	itemCode := testutil.UniqueCode()
+	testutil.SeedItem(t, pool, ctx, itemCode, testutil.Actor(t, pool))
 
 	// 2) Preferred supplier for the item.
 	if _, err := itemSupplierUC.Upsert(ctx, request.UpsertItemPreferredSupplierDTO{
@@ -114,6 +116,7 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 		testutil.Exec(t, pool, "DELETE FROM item_preferred_suppliers WHERE item_code = $1", itemCode)
 		testutil.Exec(t, pool, "DELETE FROM suppliers WHERE code = $1", supplierCode)
 		testutil.Exec(t, pool, "DELETE FROM production_orders WHERE id=$1", productionOrderID)
+		testutil.Exec(t, pool, "DELETE FROM items WHERE code=$1", itemCode)
 	}()
 
 	// 4) Generate purchase orders from the selected requisition item.

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -14,13 +13,12 @@ import (
 
 func (h *CuttingPlanHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCuttingPlanDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.Create(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -57,7 +55,7 @@ func (h *CuttingPlanHandler) DeletePlan(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := h.uc.Delete(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -72,7 +70,7 @@ func (h *CuttingPlanHandler) Optimize(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.Optimize(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -88,7 +86,7 @@ func (h *CuttingPlanHandler) Release(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.ReleasePlan(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -98,13 +96,12 @@ func (h *CuttingPlanHandler) Release(w http.ResponseWriter, r *http.Request) {
 // orders, aggregating parts of the same raw material into one plan per material.
 func (h *CuttingPlanHandler) GenerateFromOrders(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateCuttingFromOrdersDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.demand.GenerateFromOrders(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -123,7 +120,7 @@ func (h *CuttingPlanHandler) ExportMap(w http.ResponseWriter, r *http.Request) {
 	}
 	data, contentType, err := h.uc.ExportMap(r.Context(), id, format)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", contentType)
@@ -141,7 +138,7 @@ func (h *CuttingPlanHandler) GetProgram(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := h.uc.GetProgram(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -156,7 +153,7 @@ func (h *CuttingPlanHandler) Schedule(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.uc.ScheduleOnMachine(r.Context(), id)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -190,13 +187,12 @@ func (h *CuttingPlanHandler) GetSettings(w http.ResponseWriter, r *http.Request)
 
 func (h *CuttingPlanHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var dto request.CuttingSettingsDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.UpdateSettings(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusOK, result)
@@ -228,14 +224,13 @@ func (h *CuttingPlanHandler) AddPart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.AddCuttingPlanPartDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.PlanID = id
 	result, err := h.uc.AddPart(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -248,7 +243,7 @@ func (h *CuttingPlanHandler) RemovePart(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := h.uc.RemovePart(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -263,14 +258,13 @@ func (h *CuttingPlanHandler) AddStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dto request.AddCuttingStockPieceDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.PlanID = id
 	result, err := h.uc.AddStock(r.Context(), dto)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	jsonResponse(w, http.StatusCreated, result)
@@ -283,7 +277,7 @@ func (h *CuttingPlanHandler) RemoveStock(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.uc.RemoveStock(r.Context(), id); err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, err.Error())
+		respondErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

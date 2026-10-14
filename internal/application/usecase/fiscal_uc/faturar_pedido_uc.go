@@ -99,7 +99,9 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 
 	// Destinatário como a nota vai sair (mesma resolução da emissão).
 	dest := request.CreateFiscalExitDTO{CustomerCode: pedido.CustomerCode, SalesOrderCode: &pedido.Code}
-	resolverDestinatario(ctx, &dest, uc.Clientes, uc.Pedidos)
+	if err := resolverDestinatario(ctx, &dest, uc.Clientes, uc.Pedidos); err != nil {
+		return nil, err
+	}
 	out.CustomerName = deref(dest.RazaoSocialDestinatario)
 	out.CustomerDocument = deref(dest.CnpjDestinatario)
 	out.CustomerIE = deref(dest.IEDestinatario)

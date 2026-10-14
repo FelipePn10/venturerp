@@ -2,6 +2,7 @@ package production_order_uc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -44,7 +45,13 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 	var std entity.StandardUnitCost
 	currency := "BRL"
 	if uc.StdCostRepo != nil {
-		if sc, scErr := uc.StdCostRepo.GetItemStandardCost(ctx, order.ItemCode, order.Mask); scErr == nil && sc != nil {
+		// Item sem custo-padrão apura com padrão zero; falha de leitura é erro
+		// (antes também apurava com zero, e a variação saía inflada).
+		sc, scErr := uc.StdCostRepo.GetItemStandardCost(ctx, order.ItemCode, order.Mask)
+		if scErr != nil && !errorsuc.EhNaoEncontrado(scErr) {
+			return nil, fmt.Errorf("lendo o custo-padrão do item: %w", scErr)
+		}
+		if scErr == nil && sc != nil {
 			std = entity.StandardUnitCost{
 				Material: sc.MaterialCost,
 				Labor:    sc.LaborCost,
@@ -56,14 +63,27 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 		}
 	}
 
-	settledBy, _ := uc.Auth.UserID(ctx)
+	settledBy, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	settlement := entity.BuildSettlement(
 		productionOrderID,
 		entity.ActualCostInputs{ProducedQty: qty, MaterialCostReal: materialReal, LaborCostReal: laborReal},
 		std, currency, settledBy,
 	)
 
-	return uc.Repo.SettleCost(ctx, settlement)
+	custo, err := uc.Repo.SettleCost(ctx, settlement)
+	if err != nil {
+		return nil, err
+	}
+	// Custo apurado: a pendência do encerramento (se havia) deixa de valer.
+	if m, ok := uc.Repo.(custoPendenteRepo); ok {
+		if err := m.MarcarCustoPendente(ctx, productionOrderID, nil); err != nil {
+			return nil, err
+		}
+	}
+	return custo, nil
 }
 
 // GetProductionCostUseCase reads the cost settlement of a production order.

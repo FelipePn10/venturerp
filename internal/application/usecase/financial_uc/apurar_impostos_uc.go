@@ -51,7 +51,10 @@ func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.Apurar
 	var results []*entity.TaxAssessment
 
 	for _, imposto := range impostos {
-		existing, _ := uc.Repo.GetTaxAssessment(ctx, imposto, dto.Competencia)
+		existing, errApuracao := uc.Repo.GetTaxAssessment(ctx, imposto, dto.Competencia)
+		if errApuracao != nil && !errorsuc.EhNaoEncontrado(errApuracao) {
+			return nil, fmt.Errorf("lendo a apuração existente: %w", errApuracao)
+		}
 		if existing != nil {
 			results = append(results, existing)
 			continue

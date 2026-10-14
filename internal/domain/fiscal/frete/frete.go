@@ -7,6 +7,7 @@ package frete
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -59,11 +60,11 @@ func base(tipo string, it Item) (decimal.Decimal, error) {
 		return it.Quantidade, nil
 	case RateioPeso:
 		if it.PesoUnitario == nil || !it.PesoUnitario.IsPositive() {
-			return decimal.Zero, fmt.Errorf("item %q sem peso no cadastro", it.Descricao)
+			return decimal.Zero, domainerr.NewValidation(fmt.Sprintf("item %q sem peso no cadastro", it.Descricao))
 		}
 		return it.Quantidade.Mul(*it.PesoUnitario), nil
 	}
-	return decimal.Zero, fmt.Errorf("tipo de rateio inválido: %s (VALOR, QUANTIDADE ou PESO)", tipo)
+	return decimal.Zero, domainerr.NewValidation(fmt.Sprintf("tipo de rateio inválido: %s (VALOR, QUANTIDADE ou PESO)", tipo))
 }
 
 // Ratear distribui o custo pelos itens na proporção da base escolhida (a
@@ -72,10 +73,10 @@ func base(tipo string, it Item) (decimal.Decimal, error) {
 func Ratear(custo decimal.Decimal, tipo string, itens []Item) ([]Parte, error) {
 	tipo = strings.ToUpper(strings.TrimSpace(tipo))
 	if len(itens) == 0 {
-		return nil, fmt.Errorf("o frete não tem itens de nota para ratear: vincule as notas de entrada que ele transportou")
+		return nil, domainerr.NewValidation("o frete não tem itens de nota para ratear: vincule as notas de entrada que ele transportou")
 	}
 	if !custo.IsPositive() {
-		return nil, fmt.Errorf("o custo do frete precisa ser positivo")
+		return nil, domainerr.NewValidation("o custo do frete precisa ser positivo")
 	}
 	bases := make([]decimal.Decimal, len(itens))
 	total := decimal.Zero
@@ -96,10 +97,10 @@ func Ratear(custo decimal.Decimal, tipo string, itens []Item) ([]Parte, error) {
 		total = total.Add(b)
 	}
 	if len(semPeso) > 0 {
-		return nil, fmt.Errorf("rateio por peso: itens sem peso no cadastro — %s", strings.Join(semPeso, "; "))
+		return nil, domainerr.NewValidation(fmt.Sprintf("rateio por peso: itens sem peso no cadastro — %s", strings.Join(semPeso, "; ")))
 	}
 	if !total.IsPositive() {
-		return nil, fmt.Errorf("a base do rateio por %s é zero", strings.ToLower(tipo))
+		return nil, domainerr.NewValidation(fmt.Sprintf("a base do rateio por %s é zero", strings.ToLower(tipo)))
 	}
 	out := make([]Parte, len(itens))
 	acumulado := decimal.Zero

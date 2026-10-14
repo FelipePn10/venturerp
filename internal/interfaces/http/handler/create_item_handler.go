@@ -26,15 +26,15 @@ func (h *ItemHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	created, err := h.createItemUC.Execute(r.Context(), item)
 	if err != nil {
 		if errors.Is(err, item_uc.ErrItemBaseNotFound) {
-			jsonError(w, http.StatusUnprocessableEntity, err.Error())
+			respondErr(w, err)
 			return
 		}
 		if errors.Is(err, repository.ErrInvalidReference) {
-			jsonError(w, http.StatusUnprocessableEntity, err.Error())
+			respondErr(w, err)
 			return
 		}
 		if errors.Is(err, repository.ErrConflict) {
-			jsonError(w, http.StatusConflict, err.Error())
+			respondErrStatus(w, http.StatusConflict, err)
 			return
 		}
 		h.InternalError(w, r, err)

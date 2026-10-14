@@ -24,7 +24,7 @@ func (uc *ConfiguratorUseCase) AddItemCharacteristic(ctx context.Context, dto re
 	// A fórmula é obrigatória quando a característica é do tipo FORMULA (o cálculo
 	// depende de informações do item, logo é definido aqui).
 	if char.CharType == entity.TypeFormula && dto.Formula == "" {
-		return nil, fmt.Errorf("característica do tipo fórmula exige o preenchimento da fórmula")
+		return nil, errorsuc.NewValidationError("característica do tipo fórmula exige o preenchimento da fórmula")
 	}
 	if err := uc.validateParent(ctx, dto.ParentID, dto.ItemCode); err != nil {
 		return nil, err
@@ -60,8 +60,12 @@ func (uc *ConfiguratorUseCase) UpdateItemCharacteristic(ctx context.Context, dto
 	// Guard: a sequência só pode mudar enquanto o item não tiver máscara gerada
 	// nem fórmula no cadastro de estruturas.
 	if int32(dto.Sequence) != existing.Sequence {
-		if locked, reason := uc.itemLocked(ctx, existing.ItemCode); locked {
-			return nil, fmt.Errorf("não é permitido alterar a sequência: %s", reason)
+		locked, reason, errTrava := uc.itemLocked(ctx, existing.ItemCode)
+		if errTrava != nil {
+			return nil, errTrava
+		}
+		if locked {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("não é permitido alterar a sequência: %s", reason))
 		}
 	}
 	if err := uc.validateParent(ctx, dto.ParentID, existing.ItemCode); err != nil {
@@ -93,7 +97,10 @@ func (uc *ConfiguratorUseCase) ListItemCharacteristics(ctx context.Context, item
 	}
 	out := make([]*response.CfgItemCharacteristicResponse, 0, len(rows))
 	for _, r := range rows {
-		defaults, _ := uc.Q.ListCfgItemCharDefaultAnswers(ctx, r.ID)
+		defaults, errPadrao := uc.Q.ListCfgItemCharDefaultAnswers(ctx, r.ID)
+		if errPadrao != nil {
+			return nil, fmt.Errorf("lendo as respostas padrão da característica: %w", errPadrao)
+		}
 		out = append(out, itemCharToResponse(r, defaults))
 	}
 	return out, nil
@@ -104,22 +111,36 @@ func (uc *ConfiguratorUseCase) RemoveItemCharacteristic(ctx context.Context, id 
 	if err != nil {
 		return fmt.Errorf("característica do item não encontrada: %w", err)
 	}
-	if locked, reason := uc.itemLocked(ctx, existing.ItemCode); locked {
-		return fmt.Errorf("não é permitido excluir: %s", reason)
+	locked, reason, errTrava := uc.itemLocked(ctx, existing.ItemCode)
+	if errTrava != nil {
+		return errTrava
+	}
+	if locked {
+		return errorsuc.NewValidationError(fmt.Sprintf("não é permitido excluir: %s", reason))
 	}
 	return uc.Q.RemoveCfgItemCharacteristic(ctx, id)
 }
 
 // itemLocked reports whether the item's characteristics/sequences are frozen: it
 // already has a generated mask or a structure loss formula (spec guard).
-func (uc *ConfiguratorUseCase) itemLocked(ctx context.Context, itemCode int64) (bool, string) {
-	if hasMask, _ := uc.Q.ItemHasGeneratedMask(ctx, itemCode); hasMask {
-		return true, "o item já possui máscara gerada"
+// Falha de leitura é erro: antes contava como "não travado" e liberava mexer
+// numa característica que já gerou máscara.
+func (uc *ConfiguratorUseCase) itemLocked(ctx context.Context, itemCode int64) (bool, string, error) {
+	hasMask, err := uc.Q.ItemHasGeneratedMask(ctx, itemCode)
+	if err != nil {
+		return false, "", fmt.Errorf("conferindo se o item tem máscara gerada: %w", err)
 	}
-	if hasFormula, _ := uc.Q.ItemHasStructureFormula(ctx, itemCode); hasFormula {
-		return true, "o item possui fórmula no cadastro de estruturas"
+	if hasMask {
+		return true, "o item já possui máscara gerada", nil
 	}
-	return false, ""
+	hasFormula, err := uc.Q.ItemHasStructureFormula(ctx, itemCode)
+	if err != nil {
+		return false, "", fmt.Errorf("conferindo se o item tem fórmula na estrutura: %w", err)
+	}
+	if hasFormula {
+		return true, "o item possui fórmula no cadastro de estruturas", nil
+	}
+	return false, "", nil
 }
 
 // ListItemsByCharacteristic returns the item codes that use a characteristic
@@ -138,7 +159,7 @@ func (uc *ConfiguratorUseCase) validateParent(ctx context.Context, parentID *int
 		return errorsuc.NewNotFoundError(fmt.Sprintf("característica pai %d não encontrada", *parentID))
 	}
 	if parent.ItemCode != itemCode {
-		return fmt.Errorf("a característica pai pertence a outro item")
+		return errorsuc.NewValidationError("a característica pai pertence a outro item")
 	}
 	return nil
 }

@@ -29,7 +29,7 @@ func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.Cfg
 		return nil, fmt.Errorf("carregando características do item: %w", err)
 	}
 	if len(itemChars) == 0 {
-		return nil, fmt.Errorf("item %d não possui características configuradas", dto.ItemCode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("item %d não possui características configuradas", dto.ItemCode))
 	}
 	// Restrições e dependências (FENG0116) valem para qualquer caminho que gere
 	// máscara, não só para a geração em lote.
@@ -82,7 +82,7 @@ func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.Cfg
 		})
 	}
 	if len(segments) == 0 {
-		return nil, fmt.Errorf("nenhuma resposta válida para compor a máscara")
+		return nil, errorsuc.NewValidationError("nenhuma resposta válida para compor a máscara")
 	}
 
 	mask, hash := entity.BuildMask(segments)
@@ -96,8 +96,10 @@ func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.Cfg
 			return nil, fmt.Errorf("persistindo máscara: %w", err)
 		}
 		for _, a := range respAnswers {
-			_ = uc.Q.InsertCfgItemMaskAnswer(ctx, maskID, a.CharacteristicID,
-				pgutil.ToPgInt8Ptr(a.VariableID), a.Value, int32(a.Position))
+			if err := uc.Q.InsertCfgItemMaskAnswer(ctx, maskID, a.CharacteristicID,
+				pgutil.ToPgInt8Ptr(a.VariableID), a.Value, int32(a.Position)); err != nil {
+				return nil, fmt.Errorf("gravando a resposta da máscara: %w", err)
+			}
 		}
 		out.Persisted = true
 		out.MaskID = &maskID
@@ -167,7 +169,10 @@ func (uc *ConfiguratorUseCase) resolveMultiChoice(ctx context.Context, ic sqlc.D
 		}
 	}
 	if len(ids) == 0 {
-		defaults, _ := uc.Q.ListCfgItemCharDefaultAnswers(ctx, ic.ID)
+		defaults, errPadrao := uc.Q.ListCfgItemCharDefaultAnswers(ctx, ic.ID)
+		if errPadrao != nil {
+			return "", nil, fmt.Errorf("lendo as respostas padrão da característica: %w", errPadrao)
+		}
 		ids = defaults
 	}
 	if len(ids) == 0 {
@@ -190,13 +195,13 @@ func resolveNumeric(char sqlc.DBCfgCharacteristic, val string) (string, *int64, 
 	}
 	n, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
 	if err != nil {
-		return "", nil, fmt.Errorf("característica %s exige um número", char.Code)
+		return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s exige um número", char.Code))
 	}
 	if char.NumMin.Valid && n < pgutil.FromPgNumericToFloat64(char.NumMin) {
-		return "", nil, fmt.Errorf("característica %s: valor abaixo do mínimo", char.Code)
+		return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s: valor abaixo do mínimo", char.Code))
 	}
 	if char.NumMax.Valid && n > pgutil.FromPgNumericToFloat64(char.NumMax) {
-		return "", nil, fmt.Errorf("característica %s: valor acima do máximo", char.Code)
+		return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s: valor acima do máximo", char.Code))
 	}
 	if char.NumMultiple.Valid {
 		m := pgutil.FromPgNumericToFloat64(char.NumMultiple)
@@ -241,7 +246,7 @@ func (uc *ConfiguratorUseCase) evalFormulaAnswer(ic sqlc.DBCfgItemCharacteristic
 		expr = pgutil.FromPgText(char.Formula)
 	}
 	if expr == "" {
-		return "", fmt.Errorf("característica %s é do tipo fórmula mas não possui fórmula", char.Code)
+		return "", errorsuc.NewValidationError(fmt.Sprintf("característica %s é do tipo fórmula mas não possui fórmula", char.Code))
 	}
 	r, err := formula.Evaluate(expr, vars)
 	if err != nil {

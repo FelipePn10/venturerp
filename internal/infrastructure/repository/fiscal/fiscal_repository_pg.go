@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/jackc/pgx/v5/pgconn"
 	"strings"
 	"time"
 
@@ -18,20 +19,38 @@ import (
 var _ = time.Now
 var _ = uuid.UUID{}
 
+// conexao: o pool ou uma transação aberta — dentro de uma transação, o Begin
+// interno vira savepoint e as gravações entram no tudo-ou-nada de quem chamou.
+type conexao interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 type FiscalRepositoryPG struct {
+	// pool só para a trava consultiva do faturamento (precisa de conexão
+	// dedicada); todo o resto passa por db, que pode ser uma transação.
 	pool *pgxpool.Pool
+	db   conexao
 }
 
 var _ repository.FiscalRepository = (*FiscalRepositoryPG)(nil)
 
 func NewFiscalRepositoryPG(pool *pgxpool.Pool) repository.FiscalRepository {
-	return &FiscalRepositoryPG{pool: pool}
+	return &FiscalRepositoryPG{pool: pool, db: pool}
+}
+
+// NewFiscalRepositoryTx devolve o repositório ligado a uma transação aberta
+// (sem a trava consultiva, que exige conexão própria do pool).
+func NewFiscalRepositoryTx(tx pgx.Tx) *FiscalRepositoryPG {
+	return &FiscalRepositoryPG{db: tx}
 }
 
 // ---------- Fiscal Entries ----------
 
 func (r *FiscalRepositoryPG) CreateEntry(ctx context.Context, e *entity.FiscalEntry) (*entity.FiscalEntry, error) {
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`INSERT INTO public.fiscal_entries
 			(chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 			 cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
@@ -53,7 +72,7 @@ func (r *FiscalRepositoryPG) CreateEntry(ctx context.Context, e *entity.FiscalEn
 }
 
 func (r *FiscalRepositoryPG) CreateEntryItem(ctx context.Context, item *entity.FiscalEntryItem) (*entity.FiscalEntryItem, error) {
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`INSERT INTO public.fiscal_entry_items
 			(fiscal_entry_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 			 base_icms, aliq_icms, valor_icms, base_ipi, aliq_ipi, valor_ipi, valor_pis, valor_cofins,
@@ -80,7 +99,7 @@ func (r *FiscalRepositoryPG) GetEntryByID(ctx context.Context, id int64) (*entit
 		return nil, err
 	}
 	var e entity.FiscalEntry
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		        valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -108,7 +127,7 @@ func (r *FiscalRepositoryPG) GetEntryItems(ctx context.Context, fiscalEntryID in
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, fiscal_entry_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 		        base_icms, aliq_icms, valor_icms, base_ipi, aliq_ipi, valor_ipi, valor_pis, valor_cofins,
 		        cst_icms, cst_ipi, cst_pis, cst_cofins,
@@ -129,7 +148,7 @@ func (r *FiscalRepositoryPG) ListEntries(ctx context.Context) ([]*entity.FiscalE
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		        valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -149,7 +168,7 @@ func (r *FiscalRepositoryPG) ListEntriesByStatus(ctx context.Context, status ent
 	if tenantErr != nil {
 		return nil, tenantErr
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		        valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -170,7 +189,7 @@ func (r *FiscalRepositoryPG) UpdateEntryStatus(ctx context.Context, id int64, st
 		return nil, tenantErr
 	}
 	var e entity.FiscalEntry
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`UPDATE public.fiscal_entries SET status = $1, updated_at = NOW() WHERE id = $2 AND enterprise_id=$3
 		 RETURNING id, chave_acesso, numero_nf, serie, modelo, data_emissao, data_entrada,
 		           cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
@@ -197,7 +216,7 @@ func (r *FiscalRepositoryPG) GetNextNFNumber(ctx context.Context) (int64, error)
 		return 0, tenantErr
 	}
 	var next int64
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT COALESCE(MAX(numero_nf), 0) + 1 FROM public.fiscal_exits WHERE enterprise_id=$1`, enterpriseID).Scan(&next)
 	if err != nil {
 		return 0, fmt.Errorf("getting next NF number: %w", err)
@@ -250,7 +269,7 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 		return nil, err
 	}
 	e.EnterpriseID = enterpriseID
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`INSERT INTO public.fiscal_exits
 			(chave_acesso, numero_nf, serie, data_emissao, data_saida,
 			 cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
@@ -283,7 +302,7 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 }
 
 func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.FiscalExitItem) (*entity.FiscalExitItem, error) {
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`INSERT INTO public.fiscal_exit_items
 			(fiscal_exit_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 			 base_icms, aliq_icms, valor_icms, valor_icms_diferido,
@@ -312,7 +331,7 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		return nil, err
 	}
 	var e entity.FiscalExit
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		        cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 		        cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -350,7 +369,7 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 	if tenantErr != nil {
 		return nil, tenantErr
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, fiscal_exit_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
 		        base_icms, aliq_icms, valor_icms, valor_icms_diferido,
 		        base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
@@ -370,7 +389,7 @@ func (r *FiscalRepositoryPG) ListExits(ctx context.Context) ([]*entity.FiscalExi
 	if tenantErr != nil {
 		return nil, tenantErr
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		        cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 		        cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -395,7 +414,7 @@ func (r *FiscalRepositoryPG) ListExitsByStatus(ctx context.Context, status entit
 	if tenantErr != nil {
 		return nil, tenantErr
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		        cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
 		        cfop, natureza_operacao, valor_produtos, valor_frete, valor_seguro, valor_desconto,
@@ -421,7 +440,7 @@ func (r *FiscalRepositoryPG) UpdateExitStatus(ctx context.Context, id int64, sta
 		return nil, tenantErr
 	}
 	var e entity.FiscalExit
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`UPDATE public.fiscal_exits SET status = $1, updated_at = NOW() WHERE id = $2 AND enterprise_id=$3
 		 RETURNING id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		           cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
@@ -457,7 +476,7 @@ func (r *FiscalRepositoryPG) UpdateExitNumbering(ctx context.Context, id, numero
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx,
+	_, err = r.db.Exec(ctx,
 		`UPDATE public.fiscal_exits SET numero_nf = $3, serie = COALESCE(NULLIF($4,''), serie), updated_at = NOW()
 		  WHERE id = $1 AND enterprise_id = $2`, id, enterpriseID, numero, strings.TrimSpace(serie))
 	if err != nil {
@@ -472,7 +491,7 @@ func (r *FiscalRepositoryPG) UpdateExitAuthorization(ctx context.Context, id int
 		return nil, tenantErr
 	}
 	var e entity.FiscalExit
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`UPDATE public.fiscal_exits SET
 		     chave_acesso = $1, protocolo = $2, focus_ref = $3,
 		     xml_path    = NULLIF($5, ''),
@@ -559,7 +578,7 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		return nil, err
 	}
 	var cfg entity.FiscalConfig
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT id, enterprise_id, cnpj_empresa, razao_social, COALESCE(trade_name,''), COALESCE(email,''), ie_empresa, regime_tributario, uf_empresa,
 		        icms_interno_aliquota, icms_diferimento_percentual,
 		        focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
@@ -594,7 +613,7 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		return nil, err
 	}
 	cfg.EnterpriseID = enterpriseID
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`INSERT INTO public.fiscal_configs
 		     (enterprise_id, cnpj_empresa, razao_social, trade_name, email, ie_empresa, regime_tributario, uf_empresa,
 		      icms_interno_aliquota, icms_diferimento_percentual,
@@ -657,7 +676,7 @@ func (r *FiscalRepositoryPG) SetBranding(ctx context.Context, logo []byte, logoM
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx,
+	_, err = r.db.Exec(ctx,
 		`INSERT INTO public.fiscal_configs (enterprise_id, cnpj_empresa, razao_social, updated_by)
 		 VALUES ($1, '00000000000000', 'Empresa', $2)
 		 ON CONFLICT (enterprise_id) DO NOTHING`, enterpriseID, by)
@@ -665,7 +684,7 @@ func (r *FiscalRepositoryPG) SetBranding(ctx context.Context, logo []byte, logoM
 		return fmt.Errorf("ensuring fiscal config row: %w", err)
 	}
 
-	_, err = r.pool.Exec(ctx,
+	_, err = r.db.Exec(ctx,
 		`UPDATE public.fiscal_configs SET
 		     logo        = COALESCE($1, logo),
 		     logo_mime   = COALESCE($2, logo_mime),
@@ -698,7 +717,7 @@ func nullStr(s string) *string {
 
 func (r *FiscalRepositoryPG) GetNcmTax(ctx context.Context, ncm string) (*entity.NcmTaxTable, error) {
 	var n entity.NcmTaxTable
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT id, ncm, aliq_ipi, aliq_pis, aliq_cofins, cst_pis, cst_cofins, cst_ipi, description, is_active, created_at
 		 FROM public.ncm_tax_table WHERE ncm = $1`, ncm,
 	).Scan(&n.ID, &n.Ncm, &n.AliqIPI, &n.AliqPis, &n.AliqCofins, &n.CstPis, &n.CstCofins, &n.CstIPI, &n.Description, &n.IsActive, &n.CreatedAt)
@@ -712,7 +731,7 @@ func (r *FiscalRepositoryPG) GetNcmTax(ctx context.Context, ncm string) (*entity
 }
 
 func (r *FiscalRepositoryPG) ListNcmTaxes(ctx context.Context) ([]*entity.NcmTaxTable, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, ncm, aliq_ipi, aliq_pis, aliq_cofins, cst_pis, cst_cofins, cst_ipi, description, is_active, created_at
 		 FROM public.ncm_tax_table ORDER BY ncm`)
 	if err != nil {
@@ -734,10 +753,14 @@ func (r *FiscalRepositoryPG) ListNcmTaxes(ctx context.Context) ([]*entity.NcmTax
 // ---------- Tax Scenarios ----------
 
 func (r *FiscalRepositoryPG) ListTaxScenarios(ctx context.Context) ([]*entity.TaxScenario, error) {
-	rows, err := r.pool.Query(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx,
 		`SELECT id, scenario_name, destination_uf, destination_type, aliq_icms, dif_icms_pct,
 		        cst_icms, calc_difal, aliq_fcp, is_active, created_at, updated_at
-		 FROM public.tax_scenarios ORDER BY id`)
+		 FROM public.tax_scenarios WHERE enterprise_id = $1 ORDER BY id`, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing tax scenarios: %w", err)
 	}
@@ -760,7 +783,7 @@ func (r *FiscalRepositoryPG) ListTaxScenarios(ctx context.Context) ([]*entity.Ta
 
 func (r *FiscalRepositoryPG) GetICMSInterstate(ctx context.Context, originUF, destUF string) (*float64, error) {
 	var aliq float64
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT aliq_icms FROM public.icms_interstate WHERE origin_uf = $1 AND destination_uf = $2 AND is_active = TRUE`,
 		originUF, destUF,
 	).Scan(&aliq)
@@ -775,7 +798,7 @@ func (r *FiscalRepositoryPG) GetICMSInterstate(ctx context.Context, originUF, de
 
 func (r *FiscalRepositoryPG) GetICMSInternal(ctx context.Context, uf string) (*float64, *float64, error) {
 	var aliqICMS, aliqFCP float64
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT aliq_icms, aliq_fcp FROM public.icms_internal WHERE uf = $1 AND is_active = TRUE`, uf,
 	).Scan(&aliqICMS, &aliqFCP)
 	if err != nil {
@@ -788,7 +811,7 @@ func (r *FiscalRepositoryPG) GetICMSInternal(ctx context.Context, uf string) (*f
 }
 
 func (r *FiscalRepositoryPG) ListICMSInterstate(ctx context.Context) (map[string]float64, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT origin_uf, destination_uf, aliq_icms FROM public.icms_interstate WHERE is_active = TRUE`)
 	if err != nil {
 		return nil, fmt.Errorf("listing ICMS interstate: %w", err)
@@ -808,7 +831,7 @@ func (r *FiscalRepositoryPG) ListICMSInterstate(ctx context.Context) (map[string
 }
 
 func (r *FiscalRepositoryPG) ListICMSInternal(ctx context.Context) (map[string]struct{ ICMS, FCP float64 }, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT uf, aliq_icms, aliq_fcp FROM public.icms_internal WHERE is_active = TRUE`)
 	if err != nil {
 		return nil, fmt.Errorf("listing ICMS internal: %w", err)
@@ -835,7 +858,7 @@ func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64,
 		return nil, tenantErr
 	}
 	var e entity.FiscalExit
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`UPDATE public.fiscal_exits SET
 		     status = 'CANCELLED',
 		     motivo_cancelamento = $1,
@@ -875,7 +898,7 @@ func (r *FiscalRepositoryPG) CancelExitWithMotivo(ctx context.Context, id int64,
 // ---------- Focus NF-e Logs ----------
 
 func (r *FiscalRepositoryPG) SaveFocusLog(ctx context.Context, fiscalExitID int64, endpoint, method, reqBody, respBody string, statusCode, durationMs int) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := r.db.Exec(ctx,
 		`INSERT INTO public.focus_nfe_logs (fiscal_exit_id, endpoint, method, request_body, response_body, status_code, duration_ms)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
 		fiscalExitID, endpoint, method, reqBody, respBody, statusCode, durationMs)
@@ -886,13 +909,13 @@ func (r *FiscalRepositoryPG) SaveFocusLog(ctx context.Context, fiscalExitID int6
 
 func (r *FiscalRepositoryPG) SaveCartaCorrecao(ctx context.Context, fiscalExitID int64, texto, focusRef string, userID uuid.UUID) (int, error) {
 	var seq int
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT COALESCE(MAX(numero_seq), 0) + 1 FROM public.carta_correcao WHERE fiscal_exit_id = $1`,
 		fiscalExitID).Scan(&seq)
 	if err != nil {
 		return 0, fmt.Errorf("getting CC-e sequence: %w", err)
 	}
-	_, err = r.pool.Exec(ctx,
+	_, err = r.db.Exec(ctx,
 		`INSERT INTO public.carta_correcao (fiscal_exit_id, numero_seq, texto_correcao, focus_ref, status, created_by)
 		 VALUES ($1,$2,$3,$4,'ENVIADA',$5)`,
 		fiscalExitID, seq, texto, focusRef, userID)
@@ -902,10 +925,18 @@ func (r *FiscalRepositoryPG) SaveCartaCorrecao(ctx context.Context, fiscalExitID
 	return seq, nil
 }
 
+// ListCartasCorrecao: as cartas são da nota, e a nota tem de ser da empresa.
 func (r *FiscalRepositoryPG) ListCartasCorrecao(ctx context.Context, fiscalExitID int64) ([]*entity.CartaCorrecao, error) {
-	rows, err := r.pool.Query(ctx,
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx,
 		`SELECT id, fiscal_exit_id, numero_seq, texto_correcao, focus_ref, status, protocolo, chave_evento, created_at, created_by
-		 FROM public.carta_correcao WHERE fiscal_exit_id = $1 ORDER BY numero_seq`, fiscalExitID)
+		 FROM public.carta_correcao
+		 WHERE fiscal_exit_id = $1
+		   AND EXISTS (SELECT 1 FROM public.fiscal_exits fe WHERE fe.id = $1 AND fe.enterprise_id = $2)
+		 ORDER BY numero_seq`, fiscalExitID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing cartas correcao: %w", err)
 	}
@@ -930,7 +961,7 @@ func (r *FiscalRepositoryPG) CreateCTe(ctx context.Context, c *entity.FiscalCTe)
 	if err != nil {
 		return nil, err
 	}
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`INSERT INTO public.fiscal_cte
 		     (chave_acesso, numero_cte, serie, data_emissao, data_entrada,
 		      cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
@@ -957,7 +988,7 @@ func (r *FiscalRepositoryPG) GetCTeByID(ctx context.Context, id int64) (*entity.
 	if err != nil {
 		return nil, err
 	}
-	err = r.pool.QueryRow(ctx,
+	err = r.db.QueryRow(ctx,
 		`SELECT id, chave_acesso, numero_cte, serie, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		        cfop, valor_frete, valor_seguro, valor_outros, valor_total,
@@ -985,7 +1016,7 @@ func (r *FiscalRepositoryPG) ListCTe(ctx context.Context) ([]*entity.FiscalCTe, 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx,
+	rows, err := r.db.Query(ctx,
 		`SELECT id, chave_acesso, numero_cte, serie, data_emissao, data_entrada,
 		        cnpj_emitente, razao_social_emitente, ie_emitente, uf_emitente,
 		        cfop, valor_frete, valor_seguro, valor_outros, valor_total,
@@ -1018,7 +1049,7 @@ func (r *FiscalRepositoryPG) UpdateCTeStatus(ctx context.Context, id int64, stat
 	if err != nil {
 		return nil, err
 	}
-	_, err = r.pool.Exec(ctx,
+	_, err = r.db.Exec(ctx,
 		`UPDATE public.fiscal_cte SET status = $1, updated_at = NOW() WHERE id = $2 AND enterprise_id = $3`, status, id, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("updating CT-e status: %w", err)
@@ -1031,7 +1062,7 @@ func (r *FiscalRepositoryPG) UpdateCTeAuthorization(ctx context.Context, id int6
 	if err != nil {
 		return nil, err
 	}
-	_, err = r.pool.Exec(ctx,
+	_, err = r.db.Exec(ctx,
 		`UPDATE public.fiscal_cte SET chave_acesso = $1, protocolo = $2, focus_ref = $3,
 		     status = 'AUTORIZADO', updated_at = NOW() WHERE id = $4 AND enterprise_id = $5`,
 		chaveAcesso, protocolo, focusRef, id, empresa)
@@ -1044,7 +1075,7 @@ func (r *FiscalRepositoryPG) UpdateCTeAuthorization(ctx context.Context, id int6
 // ---------- NCM Tax Table write operations ----------
 
 func (r *FiscalRepositoryPG) UpsertNcmTax(ctx context.Context, n *entity.NcmTaxTable) (*entity.NcmTaxTable, error) {
-	err := r.pool.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`INSERT INTO public.ncm_tax_table (ncm, aliq_ipi, aliq_pis, aliq_cofins, cst_pis, cst_cofins, cst_ipi, description, is_active)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
 		 ON CONFLICT (ncm) DO UPDATE SET
@@ -1066,7 +1097,7 @@ func (r *FiscalRepositoryPG) UpsertNcmTax(ctx context.Context, n *entity.NcmTaxT
 }
 
 func (r *FiscalRepositoryPG) DeleteNcmTax(ctx context.Context, ncm string) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := r.db.Exec(ctx,
 		`UPDATE public.ncm_tax_table SET is_active = false WHERE ncm = $1`, ncm)
 	if err != nil {
 		return fmt.Errorf("deleting NCM tax: %w", err)
@@ -1077,7 +1108,7 @@ func (r *FiscalRepositoryPG) DeleteNcmTax(ctx context.Context, ncm string) error
 // ---------- ICMS table write operations ----------
 
 func (r *FiscalRepositoryPG) UpsertICMSInterstate(ctx context.Context, originUF, destUF string, aliq float64) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := r.db.Exec(ctx,
 		`INSERT INTO public.icms_interstate (origin_uf, destination_uf, aliq_icms, is_active)
 		 VALUES ($1, $2, $3, true)
 		 ON CONFLICT (origin_uf, destination_uf) DO UPDATE SET aliq_icms = EXCLUDED.aliq_icms, is_active = true`,
@@ -1089,7 +1120,7 @@ func (r *FiscalRepositoryPG) UpsertICMSInterstate(ctx context.Context, originUF,
 }
 
 func (r *FiscalRepositoryPG) UpsertICMSInternal(ctx context.Context, uf string, aliqICMS, aliqFCP float64) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := r.db.Exec(ctx,
 		`INSERT INTO public.icms_internal (uf, aliq_icms, aliq_fcp, is_active)
 		 VALUES ($1, $2, $3, true)
 		 ON CONFLICT (uf) DO UPDATE SET aliq_icms = EXCLUDED.aliq_icms, aliq_fcp = EXCLUDED.aliq_fcp, is_active = true`,
@@ -1117,7 +1148,7 @@ func (r *FiscalRepositoryPG) RascunhoDeBeneficiamento(ctx context.Context, remes
 		return nil, err
 	}
 	var id int64
-	err = r.pool.QueryRow(ctx, `
+	err = r.db.QueryRow(ctx, `
 SELECT id FROM public.fiscal_exits
 WHERE customer_material_remittance_id = $1 AND enterprise_id = $2
   AND status = 'DRAFT' AND is_active

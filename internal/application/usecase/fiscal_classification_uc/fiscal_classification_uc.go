@@ -3,6 +3,9 @@ package fiscal_classification_uc
 import (
 	"context"
 	"fmt"
+	"strings"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -199,19 +202,33 @@ func (uc *FiscalClassificationUseCase) AddExportAttribute(ctx context.Context, d
 		Description:      dto.Description,
 		Domain:           dto.Domain,
 	}
-	if dto.StartDate != nil {
-		if t, perr := time.Parse("2006-01-02", *dto.StartDate); perr == nil {
-			attr.StartDate = &t
-		}
+	// Data mal digitada era descartada em silêncio: o atributo ficava sem
+	// vigência e a pessoa achava que tinha gravado.
+	var err2 error
+	if attr.StartDate, err2 = dataOpcional(dto.StartDate, "início da vigência"); err2 != nil {
+		return nil, err2
 	}
-	if dto.EndDate != nil {
-		if t, perr := time.Parse("2006-01-02", *dto.EndDate); perr == nil {
-			attr.EndDate = &t
-		}
+	if attr.EndDate, err2 = dataOpcional(dto.EndDate, "fim da vigência"); err2 != nil {
+		return nil, err2
+	}
+	if attr.StartDate != nil && attr.EndDate != nil && attr.EndDate.Before(*attr.StartDate) {
+		return nil, errorsuc.NewValidationError("o fim da vigência não pode ser antes do início")
 	}
 	created, err := uc.repo.AddExportAttribute(ctx, attr)
 	if err != nil {
 		return nil, err
 	}
 	return toFiscalClassificationExportAttributeResponse(created), nil
+}
+
+// dataOpcional lê uma data AAAA-MM-DD opcional; vazia é "sem data".
+func dataOpcional(v *string, campo string) (*time.Time, error) {
+	if v == nil || strings.TrimSpace(*v) == "" {
+		return nil, nil
+	}
+	t, err := time.Parse("2006-01-02", strings.TrimSpace(*v))
+	if err != nil {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("%s inválida: use o formato AAAA-MM-DD", campo))
+	}
+	return &t, nil
 }

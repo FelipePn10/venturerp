@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -16,7 +15,7 @@ type DeliveryPromiseParamsHandler struct {
 func (h *DeliveryPromiseParamsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.Get(r.Context())
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -24,8 +23,7 @@ func (h *DeliveryPromiseParamsHandler) Get(w http.ResponseWriter, r *http.Reques
 
 func (h *DeliveryPromiseParamsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdateDeliveryPromiseParamsDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.uc.Save(r.Context(), dto, "system")

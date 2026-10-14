@@ -15,7 +15,8 @@ import (
 
 type numberedSuggestionRepo struct {
 	mrprepo.MRPCalculationRepository
-	created *entity.PlannedOrderSuggestion
+	created  *entity.PlannedOrderSuggestion
+	ocupados map[int64]bool
 }
 
 type externalRoutingStub struct {
@@ -28,8 +29,26 @@ func (s *externalRoutingStub) GetExternalOpsByItem(context.Context, int64) ([]*r
 }
 
 func (r *numberedSuggestionRepo) CreatePlannedOrderSuggestion(_ context.Context, suggestion *entity.PlannedOrderSuggestion) (*entity.PlannedOrderSuggestion, error) {
+	if suggestion.OrderNumber != nil && r.ocupados[*suggestion.OrderNumber] {
+		return nil, mrprepo.ErrOrderNumberInUse
+	}
 	r.created = suggestion
 	return suggestion, nil
+}
+
+// Número inicial repetindo o de uma rodada anterior: a sugestão pega o
+// próximo livre em vez de se perder e deixar o plano "com erros".
+func TestCreateNumberedSuggestionSkipsNumbersInUse(t *testing.T) {
+	repo := &numberedSuggestionRepo{ocupados: map[int64]bool{500: true, 501: true}}
+	service := &MRPServiceImpl{MRPRepo: repo}
+	next := int64(500)
+	created, err := service.createNumberedSuggestion(context.Background(), &entity.PlannedOrderSuggestion{}, &next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.OrderNumber == nil || *created.OrderNumber != 502 || next != 503 {
+		t.Fatalf("sugestão numerada %v, próximo %d; esperado 502 e 503", created.OrderNumber, next)
+	}
 }
 
 func TestCreateNumberedSuggestionAdvancesSequence(t *testing.T) {
@@ -251,6 +270,26 @@ func TestAdvanceNettingStateDoesNotReuseConsumedStockOrSupply(t *testing.T) {
 	}
 	if len(supplies[1]) != 1 || supplies[1][0].Quantity != 9 {
 		t.Fatalf("expected only future supply to remain, got %+v", supplies[1])
+	}
+}
+
+// A ordem de serviço (operação externa) não é suprimento do item: a sobra
+// projetada conta só a ordem de fabricação.
+func TestAdvanceNettingStateIgnoraOrdemDeServico(t *testing.T) {
+	need := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	snapshots := map[int64]*entity.StockSnapshot{}
+	advanceNettingState(
+		&entity.MRPInput{ItemCode: 1, NeedDate: need},
+		&entity.MRPOutput{StockProjected: -15, PlannedOrders: []*entity.PlannedOrderSuggestion{
+			{Quantity: 15, OrderType: "FABRICACAO"}, {Quantity: 15, OrderType: "SERVICO"},
+		}},
+		snapshots, map[int64][]ports.SupplyEntry{},
+	)
+	if snapshots[1].Quantity != 0 {
+		t.Fatalf("a ordem de serviço virou estoque do item: %v", snapshots[1].Quantity)
+	}
+	if suppliesItem(&entity.PlannedOrderSuggestion{OrderType: "SERVICO"}) || !suppliesItem(&entity.PlannedOrderSuggestion{OrderType: "COMPRA"}) {
+		t.Fatal("classificação de suprimento errada")
 	}
 }
 

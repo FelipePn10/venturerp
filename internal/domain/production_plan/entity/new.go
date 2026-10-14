@@ -1,8 +1,8 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 	"strings"
 	"time"
@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	ErrInvalidPlan = errors.New("plano de produção inválido")
+	ErrInvalidPlan = domainerr.NewValidation("plano de produção inválido")
 )
 
 var validPlanningTypes = map[string]struct{}{

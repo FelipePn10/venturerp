@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -84,8 +83,7 @@ func (h *PurchaseOrderComprasHandler) Enviar(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var dto purchase_order_uc.EnviarDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	out, err := h.Documento.Enviar(r.Context(), code, dto)
@@ -135,8 +133,7 @@ func (h *PurchaseOrderComprasHandler) RegistrarFollowup(w http.ResponseWriter, r
 		return
 	}
 	var dto purchase_order_uc.FollowupDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	out, err := h.AcompanhamentoUC.RegistrarFollowup(r.Context(), code, linha, dto)

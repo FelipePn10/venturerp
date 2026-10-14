@@ -358,7 +358,9 @@ func (c *ConsultasPG) RegistrarEnvio(ctx context.Context, e purchase_order_uc.En
 		return nil, fmt.Errorf("registrando envio do pedido: %w", err)
 	}
 	if e.EnviadoPor != nil {
-		_ = c.db.QueryRow(ctx, `SELECT COALESCE((SELECT name FROM users WHERE id = $1), '')`, *e.EnviadoPor).Scan(&e.EnviadoPorNome)
+		if err := c.db.QueryRow(ctx, `SELECT COALESCE((SELECT name FROM users WHERE id = $1), '')`, *e.EnviadoPor).Scan(&e.EnviadoPorNome); err != nil {
+			return nil, fmt.Errorf("lendo quem enviou o pedido: %w", err)
+		}
 	}
 	return &e, nil
 }
@@ -453,13 +455,26 @@ func (c *ConsultasPG) DadosDocumento(ctx context.Context, orderCode int64) (*pur
 		d.Fornecedor = f
 	}
 	if carrierCode != nil {
-		_ = c.db.QueryRow(ctx, `SELECT description FROM carriers WHERE code = $1`, *carrierCode).Scan(&d.Transportadora)
+		empresa, err := tenant.ID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// Portador é catálogo da empresa: o mesmo código existe em cada uma.
+		err = c.db.QueryRow(ctx, `SELECT description FROM carriers WHERE code = $1 AND enterprise_id = $2`, *carrierCode, empresa).Scan(&d.Transportadora)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("portador do pedido: %w", err)
+		}
 	}
 	if termCode != nil {
 		// O pedido guarda o CÓDIGO da condição (é o que a tela escolhe).
-		_ = c.db.QueryRow(ctx, `SELECT description FROM payment_conditions WHERE code = $1 AND enterprise_id = $2`, *termCode, id).Scan(&d.Condicao)
+		err := c.db.QueryRow(ctx, `SELECT description FROM payment_conditions WHERE code = $1 AND enterprise_id = $2`, *termCode, id).Scan(&d.Condicao)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("condição de pagamento do pedido: %w", err)
+		}
 	}
-	_ = c.db.QueryRow(ctx, `SELECT COALESCE((SELECT name FROM users WHERE id = $1), '')`, createdBy).Scan(&d.Comprador)
+	if err := c.db.QueryRow(ctx, `SELECT COALESCE((SELECT name FROM users WHERE id = $1), '')`, createdBy).Scan(&d.Comprador); err != nil {
+		return nil, fmt.Errorf("comprador do pedido: %w", err)
+	}
 
 	rows, err := c.db.Query(ctx, `
 		SELECT poi.sequence, COALESCE(it.business_code, poi.item_code::text), COALESCE(NULLIF(it.name, ''), 'Item ' || poi.item_code),

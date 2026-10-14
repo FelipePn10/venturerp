@@ -2,6 +2,7 @@ package production_order_uc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -56,6 +57,9 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateProductionOrderDTO,
 ) (*entity.ProductionOrder, error) {
+	if msg := datetime.PrimeiraInvalida(datetime.Campo("data de início", dto.StartDate), datetime.Campo("data de fim", dto.EndDate)); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if !uc.Auth.CanCreatePlannedOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -141,7 +145,11 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	}
 	var vars map[string]float64
 	if uc.MaskVars != nil && dto.Mask != "" {
-		vars, _ = uc.MaskVars.GetMaskAnswersWithNames(ctx, itemCode, dto.Mask)
+		var errMascara error
+		vars, errMascara = uc.MaskVars.GetMaskAnswersWithNames(ctx, itemCode, dto.Mask)
+		if errMascara != nil {
+			return nil, fmt.Errorf("lendo as respostas da máscara do item: %w", errMascara)
+		}
 	}
 	materials := []*entity.ProductionOrderMaterial{}
 	rework := false

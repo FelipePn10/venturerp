@@ -106,7 +106,10 @@ func (uc *DevolucaoCompraUseCase) Previa(ctx context.Context, entryID int64) (*r
 	mesmaUF, exterior := uc.ufs(ctx, doc)
 	r := &response.DevolucaoPreviaResponse{FiscalEntryID: doc.ID, NumeroNF: doc.NumeroNF, Serie: doc.Serie, Fornecedor: doc.RazaoSocialEmitente,
 		Status: string(doc.Status), ChaveAcesso: doc.ChaveAcesso}
-	end := uc.enderecoDoFornecedor(ctx, doc.ID)
+	end, err := uc.enderecoDoFornecedor(ctx, doc.ID)
+	if err != nil {
+		return nil, err
+	}
 	r.Endereco = response.DevolucaoEndereco{Logradouro: end.Logradouro, Numero: end.Numero, Complemento: end.Complemento, Bairro: end.Bairro,
 		Municipio: end.Municipio, CodigoMunicipio: end.CodigoMunicipio, CEP: end.CEP, Faltando: end.faltando()}
 	for _, it := range doc.Itens {
@@ -197,7 +200,10 @@ func (uc *DevolucaoCompraUseCase) Criar(ctx context.Context, dto DevolucaoCompra
 	}
 	src := SourceDevolucaoCompra
 	exit.SourceType = &src
-	end := uc.enderecoDoFornecedor(ctx, doc.ID)
+	end, err := uc.enderecoDoFornecedor(ctx, doc.ID)
+	if err != nil {
+		return nil, err
+	}
 	end.sobrepor(dto)
 	if falta := end.faltando(); len(falta) > 0 {
 		return nil, errorsuc.NewValidationError("o endereço do fornecedor está incompleto (" + strings.Join(falta, ", ") + "): informe-o na devolução")
@@ -580,9 +586,17 @@ type enderecoFornecedor struct {
 	Logradouro, Numero, Complemento, Bairro, Municipio, CodigoMunicipio, CEP, Telefone string
 }
 
-func (uc *DevolucaoCompraUseCase) enderecoDoFornecedor(ctx context.Context, entryID int64) enderecoFornecedor {
+// enderecoDoFornecedor tira o endereço do emitente do XML da nota de entrada.
+// Nota sem XML (ou XML que não é NF-e) deixa o endereço em branco para ser
+// digitado na devolução; falha ao ler o XML é erro — antes também virava
+// "em branco", e a devolução pedia um endereço que o sistema tinha.
+func (uc *DevolucaoCompraUseCase) enderecoDoFornecedor(ctx context.Context, entryID int64) (enderecoFornecedor, error) {
 	var e enderecoFornecedor
-	if _, xmlTxt, err := uc.Docs.GetEntryXML(ctx, entryID); err == nil && strings.TrimSpace(xmlTxt) != "" {
+	_, xmlTxt, err := uc.Docs.GetEntryXML(ctx, entryID)
+	if err != nil && !errorsuc.EhNaoEncontrado(err) {
+		return e, fmt.Errorf("lendo o XML da nota de entrada: %w", err)
+	}
+	if err == nil && strings.TrimSpace(xmlTxt) != "" {
 		if n, err := LerNFe([]byte(xmlTxt)); err == nil {
 			e = enderecoFornecedor{Logradouro: strings.TrimSpace(n.EmitenteLogradouro), Numero: strings.TrimSpace(n.EmitenteNumero),
 				Complemento: strings.TrimSpace(n.EmitenteComplemento), Bairro: strings.TrimSpace(n.EmitenteBairro),
@@ -590,7 +604,7 @@ func (uc *DevolucaoCompraUseCase) enderecoDoFornecedor(ctx context.Context, entr
 				CEP: strings.TrimSpace(n.EmitenteCEP), Telefone: strings.TrimSpace(n.EmitenteFone)}
 		}
 	}
-	return e
+	return e, nil
 }
 
 func (e *enderecoFornecedor) sobrepor(dto DevolucaoCompraDTO) {

@@ -122,3 +122,68 @@ func TestIntegration_DFeReservaEPrazos(t *testing.T) {
 		t.Fatalf("filtro de prazo devolveu %d notas, esperado 2 (próxima e vencida)", len(lista))
 	}
 }
+
+// A gravação das notas recebidas passa pelo caminho real do sincronismo. O
+// parâmetro da chave aparecia no INSERT (varchar) e na busca da nota de entrada
+// (text) e o Postgres recusava a consulta: a sincronização DF-e falhava em toda
+// nota desde a v1.5.0 — o teste acima inseria as notas direto, sem passar aqui.
+func TestIntegration_DFeGravaNotasRecebidas(t *testing.T) {
+	pool := testutil.Pool(t)
+	bg := context.Background()
+	actor := testutil.Actor(t, pool)
+	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		ids := []int64{a.ID, b.ID}
+		_, _ = pool.Exec(bg, `DELETE FROM fiscal_received_documents WHERE enterprise_id = ANY($1)`, ids)
+		_, _ = pool.Exec(bg, `DELETE FROM fiscal_entries WHERE enterprise_id = ANY($1)`, ids)
+		_, _ = pool.Exec(bg, `DELETE FROM fiscal_configs WHERE enterprise_id = ANY($1)`, ids)
+	})
+	testutil.Exec(t, pool, `INSERT INTO fiscal_configs(cnpj_empresa,razao_social,uf_empresa,updated_by,enterprise_id)
+		VALUES('52454668000102','DFE GRAVA','PR',$1,$2)`, actor, a.ID)
+	u := testutil.UniqueCode()
+	lancada, nova := fmt.Sprintf("%044d", u*10+1), fmt.Sprintf("%044d", u*10+2)
+	var entrada int64
+	if err := pool.QueryRow(bg, `INSERT INTO fiscal_entries(numero_nf,data_emissao,cnpj_emitente,razao_social_emitente,created_by,enterprise_id,chave_acesso)
+		VALUES(10,$1::date,'00000000000191','FORNECEDOR',$2,$3,$4) RETURNING id`, time.Now(), actor, a.ID, lancada).Scan(&entrada); err != nil {
+		t.Fatal(err)
+	}
+	repo := fiscalpg.NewReceivedDocumentsRepositoryPG(fiscalpg.NewFiscalRepositoryPG(pool))
+	emissao := time.Now()
+	docs := []repository.ReceivedDocument{
+		{ChaveAcesso: lancada, CNPJEmitente: "00000000000191", NomeEmitente: "FORNECEDOR", DataEmissao: &emissao, Situacao: "autorizada", Versao: 7},
+		{ChaveAcesso: nova, CNPJEmitente: "00000000000191", NomeEmitente: "FORNECEDOR", DataEmissao: &emissao, Situacao: "autorizada", Versao: 8},
+	}
+	novos, err := repo.UpsertReceivedDocuments(a.Ctx, docs, 8)
+	if err != nil {
+		t.Fatalf("gravando as notas recebidas: %v", err)
+	}
+	if novos != 2 {
+		t.Fatalf("%d nota(s) nova(s), esperado 2", novos)
+	}
+	// Reenvio da mesma nota atualiza, não duplica.
+	docs[1].Situacao = "cancelada"
+	if novos, err = repo.UpsertReceivedDocuments(a.Ctx, docs[1:], 9); err != nil || novos != 0 {
+		t.Fatalf("reenvio: %d nova(s), erro %v", novos, err)
+	}
+	lista, err := repo.ListReceivedDocuments(a.Ctx, repository.ReceivedDocumentsFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lista) != 2 {
+		t.Fatalf("listou %d nota(s), esperado 2", len(lista))
+	}
+	for _, d := range lista {
+		switch d.ChaveAcesso {
+		case lancada:
+			if d.FiscalEntryID == nil || *d.FiscalEntryID != entrada {
+				t.Fatalf("a nota já lançada não foi ligada à entrada %d: %v", entrada, d.FiscalEntryID)
+			}
+		case nova:
+			if d.Situacao != "cancelada" {
+				t.Fatalf("o reenvio não atualizou a situação: %q", d.Situacao)
+			}
+		}
+	}
+	if v, err := repo.DFeVersion(a.Ctx); err != nil || v != 9 {
+		t.Fatalf("versão do sincronismo %d, esperado 9 (%v)", v, err)
+	}
+}

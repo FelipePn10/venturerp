@@ -2,6 +2,7 @@ package purchase_requisition
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -10,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -67,16 +69,20 @@ func (r *PurchaseRequisitionRepositorySQLC) List(ctx context.Context, onlyOpen b
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) NextCode(ctx context.Context) (int64, error) {
-	empresa, err := tenant.Code(ctx)
-	if err != nil {
+	if _, err := tenant.Code(ctx); err != nil {
 		return 0, err
 	}
-	v, err := r.q.NextPurchaseRequisitionCode(ctx, empresa)
+	v, err := r.q.NextPurchaseRequisitionCode(ctx)
 	return int64(v), err
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) AddItem(ctx context.Context, item *entity.PurchaseRequisitionItem) (*entity.PurchaseRequisitionItem, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreatePurchaseRequisitionItem(ctx, sqlc.CreatePurchaseRequisitionItemParams{
+		EnterpriseCode:    empresa,
 		RequisitionCode:   item.RequisitionCode,
 		Sequence:          item.Sequence,
 		ItemCode:          item.ItemCode,
@@ -89,6 +95,9 @@ func (r *PurchaseRequisitionRepositorySQLC) AddItem(ctx context.Context, item *e
 		Application:       pgutil.ToPgTextFromPtr(item.Application),
 		UtilizationType:   pgutil.ToPgTextFromPtr(item.UtilizationType),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("requisição %d não encontrada", item.RequisitionCode))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("adding requisition item: %w", err)
 	}
@@ -96,7 +105,11 @@ func (r *PurchaseRequisitionRepositorySQLC) AddItem(ctx context.Context, item *e
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) ListItems(ctx context.Context, requisitionCode int64) ([]*entity.PurchaseRequisitionItem, error) {
-	rows, err := r.q.ListPurchaseRequisitionItems(ctx, requisitionCode)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPurchaseRequisitionItems(ctx, sqlc.ListPurchaseRequisitionItemsParams{RequisitionCode: requisitionCode, EnterpriseCode: empresa})
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +121,14 @@ func (r *PurchaseRequisitionRepositorySQLC) ListItems(ctx context.Context, requi
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) GetItem(ctx context.Context, id int64) (*entity.PurchaseRequisitionItem, error) {
-	row, err := r.q.GetPurchaseRequisitionItem(ctx, id)
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetPurchaseRequisitionItem(ctx, sqlc.GetPurchaseRequisitionItemParams{ID: id, EnterpriseCode: empresa})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item de requisição %d não encontrado", id))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("requisition item %d not found: %w", id, err)
 	}
@@ -116,10 +136,18 @@ func (r *PurchaseRequisitionRepositorySQLC) GetItem(ctx context.Context, id int6
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) RegisterAttendance(ctx context.Context, itemID int64, qty float64) (*entity.PurchaseRequisitionItem, error) {
+	empresa, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.RegisterRequisitionItemAttendance(ctx, sqlc.RegisterRequisitionItemAttendanceParams{
-		ID:          itemID,
-		AttendedQty: pgutil.ToPgNumericFromFloat64(qty),
+		EnterpriseCode: empresa,
+		ID:             itemID,
+		AttendedQty:    pgutil.ToPgNumericFromFloat64(qty),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item de requisição %d não encontrado", itemID))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("registering attendance: %w", err)
 	}

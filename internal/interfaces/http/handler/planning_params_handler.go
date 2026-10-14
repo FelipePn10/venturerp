@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -42,7 +41,7 @@ func (h *PlanningParamsHandler) GetByNumber(w http.ResponseWriter, r *http.Reque
 	}
 	result, err := h.getUC.Execute(r.Context(), num)
 	if err != nil {
-		security.RespondError(w, http.StatusNotFound, err.Error())
+		respondErrStatus(w, http.StatusNotFound, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
@@ -50,8 +49,7 @@ func (h *PlanningParamsHandler) GetByNumber(w http.ResponseWriter, r *http.Reque
 
 func (h *PlanningParamsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var dto request.UpdatePlanningParamDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.updateUC.Execute(r.Context(), dto)

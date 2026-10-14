@@ -88,6 +88,7 @@ type Reader interface {
 	GroupedNeeds(context.Context, Filter) ([]ReportRow, error)
 	Explosion(context.Context, int64, decimal.Decimal, *time.Time, Filter) ([]ReportRow, error)
 	ReorderPoint(context.Context, Filter) ([]ReportRow, error)
+	Coverage(context.Context, Filter) ([]CoverageInput, error)
 }
 
 type UseCase struct {

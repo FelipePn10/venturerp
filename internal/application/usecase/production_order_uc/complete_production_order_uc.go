@@ -87,6 +87,8 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 			return nil, errorsuc.NewValidationError("a chave desta entrega já foi usada com outros dados; consulte a entrega registrada antes de tentar novamente")
 		}
 		return uc.Repo.GetByCode(ctx, existing.ProductionOrderID)
+	} else if !errorsuc.EhNaoEncontrado(existingErr) {
+		return nil, fmt.Errorf("conferindo a chave da entrega: %w", existingErr)
 	}
 	if dto.Final {
 		pending, pendingErr := uc.Repo.HasPendingServicePurchaseOrders(ctx, dto.ID)

@@ -1,7 +1,7 @@
 package forecast_uc
 
 import (
-	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"math"
 )
 
@@ -53,7 +53,7 @@ type StatisticalForecastResponse struct {
 // Execute picks the best model (or uses the requested one) and returns forecasts.
 func Execute(dto StatisticalForecastDTO) (*StatisticalForecastResponse, error) {
 	if len(dto.History) < 3 {
-		return nil, fmt.Errorf("são necessários ao menos 3 períodos de histórico")
+		return nil, errorsuc.NewValidationError("são necessários ao menos 3 períodos de histórico")
 	}
 	if dto.Periods <= 0 {
 		dto.Periods = 3

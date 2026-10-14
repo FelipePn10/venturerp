@@ -2,6 +2,7 @@ package financial_uc
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -29,8 +30,14 @@ func (uc *CreateContaReceberUseCase) Execute(
 		return nil, err
 	}
 
-	dataEmissao, _ := time.Parse("2006-01-02", dto.DataEmissao)
-	dataVencimento, _ := time.Parse("2006-01-02", dto.DataVencimento)
+	dataEmissao, msg := datetime.Obrigatoria("data de emissão", dto.DataEmissao)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
+	dataVencimento, msg := datetime.Obrigatoria("data de vencimento", dto.DataVencimento)
+	if msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 
 	c := &entity.ContaReceber{
 		NumeroDocumento: dto.NumeroDocumento,

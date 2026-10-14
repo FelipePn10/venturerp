@@ -2,6 +2,7 @@ package item_uc
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -50,22 +51,39 @@ type legacyItemFinder interface {
 
 // fillReferenceBusinessCodes traduz item-base e item de embalagem da chave
 // legada para o código de negócio, para que a tela de cadastro reabra o item
-// com os mesmos códigos que enviou. Referência ausente não impede a leitura.
-func fillReferenceBusinessCodes(ctx context.Context, items any, item *entity.Item) {
+// com os mesmos códigos que enviou. Referência ausente não impede a leitura;
+// falha de leitura impede — a tela reabriria o campo vazio e o próximo
+// salvamento apagaria a referência.
+func fillReferenceBusinessCodes(ctx context.Context, items any, item *entity.Item) error {
 	finder, ok := items.(legacyItemFinder)
 	if !ok || item == nil {
-		return
+		return nil
+	}
+	codigo := func(ref int64) (string, error) {
+		it, err := finder.FindItemByCode(ctx, valueobject.ItemCode(ref))
+		if errorsuc.EhNaoEncontrado(err) {
+			return "", nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("lendo o item de referência %d: %w", ref, err)
+		}
+		return string(it.BusinessCode), nil
 	}
 	if item.Engineering.ItemBaseCod != nil && item.Engineering.ItemBaseBusinessCode == "" {
-		if base, err := finder.FindItemByCode(ctx, valueobject.ItemCode(*item.Engineering.ItemBaseCod)); err == nil {
-			item.Engineering.ItemBaseBusinessCode = string(base.BusinessCode)
+		c, err := codigo(int64(*item.Engineering.ItemBaseCod))
+		if err != nil {
+			return err
 		}
+		item.Engineering.ItemBaseBusinessCode = c
 	}
 	if item.Commercial.PackagingItemCode != nil && item.Commercial.PackagingItemBusinessCode == "" {
-		if packaging, err := finder.FindItemByCode(ctx, valueobject.ItemCode(*item.Commercial.PackagingItemCode)); err == nil {
-			item.Commercial.PackagingItemBusinessCode = string(packaging.BusinessCode)
+		c, err := codigo(*item.Commercial.PackagingItemCode)
+		if err != nil {
+			return err
 		}
+		item.Commercial.PackagingItemBusinessCode = c
 	}
+	return nil
 }
 
 // fiscalClassificationCatalog é a fatia do catálogo canônico de classificações

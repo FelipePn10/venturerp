@@ -11,6 +11,65 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelPlannedOrder = `-- name: CancelPlannedOrder :one
+UPDATE planned_orders
+   SET status = 'CANCELLED', is_firm = FALSE, is_active = FALSE, updated_at = NOW()
+ WHERE code = $1 AND enterprise_id = $2 AND is_active
+RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days, enterprise_id, warehouse_code, inter_factory, source_enterprise_code, auto_release, mrp_suggestion_code
+`
+
+type CancelPlannedOrderParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+func (q *Queries) CancelPlannedOrder(ctx context.Context, arg CancelPlannedOrderParams) (PlannedOrder, error) {
+	row := q.db.QueryRow(ctx, cancelPlannedOrder, arg.Code, arg.EnterpriseID)
+	var i PlannedOrder
+	err := row.Scan(
+		&i.ID,
+		&i.OrderNumber,
+		&i.ItemCode,
+		&i.Mask,
+		&i.Quantity,
+		&i.QuantityLoss,
+		&i.QuantityCorrected,
+		&i.OrderType,
+		&i.Status,
+		&i.DemandType,
+		&i.DemandID,
+		&i.NeedDate,
+		&i.StartDate,
+		&i.EndDate,
+		&i.ProductionTime,
+		&i.Priority,
+		&i.Llc,
+		&i.Notes,
+		&i.IsFirm,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CreatedBy,
+		&i.Code,
+		&i.MachineCode,
+		&i.CostCenterCode,
+		&i.EmployeeCode,
+		&i.ParentOrderCode,
+		&i.PlanCode,
+		&i.DemandCode,
+		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
+		&i.EnterpriseID,
+		&i.WarehouseCode,
+		&i.InterFactory,
+		&i.SourceEnterpriseCode,
+		&i.AutoRelease,
+		&i.MrpSuggestionCode,
+	)
+	return i, err
+}
+
 const createPlannedOrder = `-- name: CreatePlannedOrder :one
 INSERT INTO planned_orders (
     order_number,
@@ -259,6 +318,30 @@ func (q *Queries) GetNextOrderNumber(ctx context.Context, enterpriseID *int64) (
 	return next_number, err
 }
 
+const getPlannedOrderActiveProductionOrder = `-- name: GetPlannedOrderActiveProductionOrder :one
+SELECT po.order_number
+  FROM production_orders po
+  JOIN planned_orders planned ON planned.id = po.planned_order_id
+ WHERE planned.code = $1 AND planned.enterprise_id = $2
+   AND po.status NOT IN ('CANCELLED')
+ ORDER BY po.id DESC
+ LIMIT 1
+`
+
+type GetPlannedOrderActiveProductionOrderParams struct {
+	Code         int64
+	EnterpriseID *int64
+}
+
+// OF ainda viva gerada pela ordem planejada. O vínculo é pelo ID interno da
+// ordem planejada (production_orders.planned_order_id → planned_orders.id).
+func (q *Queries) GetPlannedOrderActiveProductionOrder(ctx context.Context, arg GetPlannedOrderActiveProductionOrderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getPlannedOrderActiveProductionOrder, arg.Code, arg.EnterpriseID)
+	var order_number int64
+	err := row.Scan(&order_number)
+	return order_number, err
+}
+
 const getPlannedOrderByCode = `-- name: GetPlannedOrderByCode :one
 SELECT id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days, enterprise_id, warehouse_code, inter_factory, source_enterprise_code, auto_release, mrp_suggestion_code FROM planned_orders WHERE code = $1 AND enterprise_id = $2
 `
@@ -431,8 +514,8 @@ const hasPlannedOrderProductionMovements = `-- name: HasPlannedOrderProductionMo
 SELECT EXISTS (
     SELECT 1
     FROM production_orders po
-    JOIN planned_orders planned ON planned.code = po.planned_order_id
-    WHERE po.planned_order_id = $1
+    JOIN planned_orders planned ON planned.id = po.planned_order_id
+    WHERE planned.code = $1
       AND planned.enterprise_id = $2
       AND (
           EXISTS (SELECT 1 FROM production_appointments pa WHERE pa.production_order_id = po.id)
@@ -446,12 +529,12 @@ SELECT EXISTS (
 `
 
 type HasPlannedOrderProductionMovementsParams struct {
-	PlannedOrderID *int64
-	EnterpriseID   *int64
+	Code         int64
+	EnterpriseID *int64
 }
 
 func (q *Queries) HasPlannedOrderProductionMovements(ctx context.Context, arg HasPlannedOrderProductionMovementsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, hasPlannedOrderProductionMovements, arg.PlannedOrderID, arg.EnterpriseID)
+	row := q.db.QueryRow(ctx, hasPlannedOrderProductionMovements, arg.Code, arg.EnterpriseID)
 	var has_movements bool
 	err := row.Scan(&has_movements)
 	return has_movements, err
@@ -861,6 +944,71 @@ func (q *Queries) ListPlannedOrdersByType(ctx context.Context, arg ListPlannedOr
 		return nil, err
 	}
 	return items, nil
+}
+
+const reschedulePlannedOrder = `-- name: ReschedulePlannedOrder :one
+UPDATE planned_orders
+   SET start_date = start_date + ($1::date - need_date),
+       end_date   = end_date + ($1::date - need_date),
+       need_date  = $1::date,
+       updated_at = NOW()
+ WHERE code = $2 AND enterprise_id = $3 AND is_active
+RETURNING id, order_number, item_code, mask, quantity, quantity_loss, quantity_corrected, order_type, status, demand_type, demand_id, need_date, start_date, end_date, production_time, priority, llc, notes, is_firm, is_active, created_at, updated_at, created_by, code, machine_code, cost_center_code, employee_code, parent_order_code, plan_code, demand_code, sales_order_code, safety_time_days, coverage_days, enterprise_id, warehouse_code, inter_factory, source_enterprise_code, auto_release, mrp_suggestion_code
+`
+
+type ReschedulePlannedOrderParams struct {
+	NeedDate     pgtype.Date
+	Code         int64
+	EnterpriseID *int64
+}
+
+// Move a necessidade da ordem e desloca início e fim pelo mesmo intervalo, para
+// preservar o prazo de fabricação/compra.
+func (q *Queries) ReschedulePlannedOrder(ctx context.Context, arg ReschedulePlannedOrderParams) (PlannedOrder, error) {
+	row := q.db.QueryRow(ctx, reschedulePlannedOrder, arg.NeedDate, arg.Code, arg.EnterpriseID)
+	var i PlannedOrder
+	err := row.Scan(
+		&i.ID,
+		&i.OrderNumber,
+		&i.ItemCode,
+		&i.Mask,
+		&i.Quantity,
+		&i.QuantityLoss,
+		&i.QuantityCorrected,
+		&i.OrderType,
+		&i.Status,
+		&i.DemandType,
+		&i.DemandID,
+		&i.NeedDate,
+		&i.StartDate,
+		&i.EndDate,
+		&i.ProductionTime,
+		&i.Priority,
+		&i.Llc,
+		&i.Notes,
+		&i.IsFirm,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CreatedBy,
+		&i.Code,
+		&i.MachineCode,
+		&i.CostCenterCode,
+		&i.EmployeeCode,
+		&i.ParentOrderCode,
+		&i.PlanCode,
+		&i.DemandCode,
+		&i.SalesOrderCode,
+		&i.SafetyTimeDays,
+		&i.CoverageDays,
+		&i.EnterpriseID,
+		&i.WarehouseCode,
+		&i.InterFactory,
+		&i.SourceEnterpriseCode,
+		&i.AutoRelease,
+		&i.MrpSuggestionCode,
+	)
+	return i, err
 }
 
 const setPlannedOrderPlanningState = `-- name: SetPlannedOrderPlanningState :one

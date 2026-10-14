@@ -65,7 +65,10 @@ func (uc *UseCase) ComputeSupplierScorecard(ctx context.Context, dto request.Com
 	out := toScorecardResponse(score)
 	out.Computed = true
 	if dto.Persist {
-		actor, _ := uc.Auth.UserID(ctx)
+		actor, errUsuario := uc.Auth.UserID(ctx)
+		if errUsuario != nil {
+			return nil, errorsuc.ErrUnauthorized
+		}
 		score.CreatedBy = &actor
 		created, err := uc.Repo.CreateSupplierScorecard(ctx, score)
 		if err != nil {
@@ -134,7 +137,10 @@ func (uc *UseCase) CreateApprovalLimit(ctx context.Context, dto request.CreateAp
 	if err != nil {
 		return nil, fmt.Errorf("data final inválida: %w", err)
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	limit := &entity.ApprovalLimit{
 		EnterpriseCode: dto.EnterpriseCode,
 		Scope:          dto.Scope,
@@ -240,7 +246,10 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 	if err != nil {
 		return nil, fmt.Errorf("fim da vigência inválido: %w", err)
 	}
-	actor, _ := uc.Auth.UserID(ctx)
+	actor, errUsuario := uc.Auth.UserID(ctx)
+	if errUsuario != nil {
+		return nil, errorsuc.ErrUnauthorized
+	}
 	contract := &entity.SupplierContract{
 		EnterpriseCode: dto.EnterpriseCode,
 		SupplierCode:   dto.SupplierCode,
@@ -256,10 +265,10 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 	}
 	for _, it := range dto.Items {
 		if it.ItemCode <= 0 {
-			return nil, fmt.Errorf("contract item requires item_code")
+			return nil, errorsuc.NewValidationError("contract item requires item_code")
 		}
 		if it.ContractedQty < 0 || it.UnitPrice < 0 {
-			return nil, fmt.Errorf("as quantidades e os preços dos itens do contrato devem ser maiores ou iguais a zero")
+			return nil, errorsuc.NewValidationError("as quantidades e os preços dos itens do contrato devem ser maiores ou iguais a zero")
 		}
 		contract.Items = append(contract.Items, &entity.SupplierContractItem{
 			ItemCode:      it.ItemCode,
@@ -324,11 +333,11 @@ func (uc *UseCase) ConsumeSupplierContract(ctx context.Context, id int64, dto re
 		return nil, err
 	}
 	if contract.Status != "ACTIVE" {
-		return nil, fmt.Errorf("o contrato %d não está ativo (situação %s)", id, contract.Status)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o contrato %d não está ativo (situação %s)", id, contract.Status))
 	}
 	item, err := uc.Repo.FindContractItem(ctx, id, dto.ItemCode, dto.Mask)
 	if err != nil {
-		return nil, fmt.Errorf("o item %d/%s não faz parte do contrato %d", dto.ItemCode, dto.Mask, id)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d/%s não faz parte do contrato %d", dto.ItemCode, dto.Mask, id))
 	}
 	updated, err := uc.Repo.ConsumeContractItem(ctx, item.ID, dto.Quantity)
 	if err != nil {

@@ -29,6 +29,19 @@ type MRPExceptionMessageResponse struct {
 	SourceType  *string   `json:"source_type,omitempty"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
+	// SuggestedDate é a data em que o cálculo precisa do suprimento.
+	SuggestedDate *time.Time `json:"suggested_date,omitempty"`
+	// Ordem planejada de origem: número e necessidade atual.
+	SourceOrderNumber *int64     `json:"source_order_number,omitempty"`
+	SourceNeedDate    *time.Time `json:"source_need_date,omitempty"`
+	// Tratamento (vazio = pendente): REPROGRAMADA, CANCELADA ou TRATADA.
+	HandlingAction string     `json:"handling_action,omitempty"`
+	HandlingNote   string     `json:"handling_note,omitempty"`
+	HandledAt      *time.Time `json:"handled_at,omitempty"`
+	HandledByName  string     `json:"handled_by_name,omitempty"`
+	// AffectedDemands: pedidos/demandas de origem que dependem da ordem da
+	// mensagem (pelo rastreamento do último cálculo).
+	AffectedDemands []string `json:"affected_demands,omitempty"`
 }
 
 // MRPItemProfileResponse is the API representation of an MRP item profile bucket.

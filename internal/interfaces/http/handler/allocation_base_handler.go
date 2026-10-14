@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -10,8 +9,7 @@ import (
 
 func (h *AllocationBaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateAllocationBaseDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)

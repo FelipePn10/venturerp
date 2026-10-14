@@ -2,6 +2,7 @@ package item_uc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -85,12 +86,18 @@ func (uc *ValidateItemActivationUseCase) validate(ctx context.Context, item *ite
 
 	switch item.Engineering.Type {
 	case types.FABRICADO:
-		children, _ := uc.StructureRepo.GetAllDirectChildren(ctx, code)
+		children, errEstrutura := uc.StructureRepo.GetAllDirectChildren(ctx, code)
+		if errEstrutura != nil {
+			return nil, fmt.Errorf("lendo a estrutura do item: %w", errEstrutura)
+		}
 		if len(children) == 0 {
 			report.Issues = append(report.Issues, "item fabricado sem estrutura (BOM): cadastre os componentes")
 		}
 		if uc.RoutingRepo != nil {
-			routes, _ := uc.RoutingRepo.ListRoutesByItem(ctx, code)
+			routes, errRoteiros := uc.RoutingRepo.ListRoutesByItem(ctx, code)
+			if errRoteiros != nil {
+				return nil, fmt.Errorf("lendo os roteiros do item: %w", errRoteiros)
+			}
 			if len(routes) == 0 {
 				report.Issues = append(report.Issues, "item fabricado sem roteiro de fabricação: cadastre o roteiro")
 			}
@@ -98,12 +105,19 @@ func (uc *ValidateItemActivationUseCase) validate(ctx context.Context, item *ite
 
 	case types.COMPRADO:
 		if uc.Suppliers != nil {
-			if _, found, _ := uc.Suppliers.GetPreferredSupplier(ctx, code); !found {
+			_, found, errForn := uc.Suppliers.GetPreferredSupplier(ctx, code)
+			if errForn != nil {
+				return nil, fmt.Errorf("lendo o fornecedor preferido do item: %w", errForn)
+			}
+			if !found {
 				report.Issues = append(report.Issues, "item comprado sem fornecedor preferencial")
 			}
 		}
 		if uc.Conversions != nil {
-			conversions, _ := uc.Conversions.ListByItem(ctx, code)
+			conversions, errConversoes := uc.Conversions.ListByItem(ctx, code)
+			if errConversoes != nil {
+				return nil, fmt.Errorf("lendo as conversões de unidade do item: %w", errConversoes)
+			}
 			if len(conversions) == 0 {
 				report.Warnings = append(report.Warnings,
 					"sem conversão de UM cadastrada — obrigatória se a UM de compra difere da de estoque")

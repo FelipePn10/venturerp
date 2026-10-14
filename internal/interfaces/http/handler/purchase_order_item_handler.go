@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -30,8 +29,7 @@ func (h *PurchaseOrderItemHandler) AddItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var dto request.CreatePurchaseOrderItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.PurchaseOrderCode = code
@@ -64,8 +62,7 @@ func (h *PurchaseOrderItemHandler) UpdateItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var dto request.UpdatePurchaseOrderItemDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, err.Error())
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	dto.PurchaseOrderCode, dto.ItemLineCode = code, linha
@@ -85,8 +82,7 @@ func (h *PurchaseOrderItemHandler) CancelItem(w http.ResponseWriter, r *http.Req
 	}
 	var dto request.CancelPurchaseOrderItemDTO
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-			security.RespondError(w, http.StatusBadRequest, err.Error())
+		if !security.DecodeBody(w, r, &dto) {
 			return
 		}
 	}

@@ -16,7 +16,12 @@ const addRouteOpResource = `-- name: AddRouteOpResource :one
 
 INSERT INTO route_operation_resources (
     route_operation_id, work_center_id, priority, time_factor, is_primary
-) VALUES ($1, $2, $3, $4, $5)
+)
+SELECT $1, $2, $3, $4, $5
+WHERE EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = $6)
+  AND EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $2 AND mt.enterprise_id = $6)
 RETURNING id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at
 `
 
@@ -26,6 +31,7 @@ type AddRouteOpResourceParams struct {
 	Priority         int16
 	TimeFactor       pgtype.Numeric
 	IsPrimary        bool
+	EnterpriseID     int64
 }
 
 // ─── route_operation_resources (alternative work centers) ─────────────────────
@@ -36,6 +42,7 @@ func (q *Queries) AddRouteOpResource(ctx context.Context, arg AddRouteOpResource
 		arg.Priority,
 		arg.TimeFactor,
 		arg.IsPrimary,
+		arg.EnterpriseID,
 	)
 	var i RouteOperationResource
 	err := row.Scan(
@@ -61,7 +68,8 @@ INSERT INTO route_operations (
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
     scrap_pct, inspection_required,
     situation, notes, is_active
-) VALUES (
+)
+SELECT
     $1, $2, $3, $4,
     $5, $6,
     $7, $8, $9,
@@ -69,7 +77,10 @@ INSERT INTO route_operations (
     $15, $16, $17, $18, $19,
     $22, $23,
     $20, $21, TRUE
-) RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required
+WHERE EXISTS (SELECT 1 FROM manufacturing_routes mr WHERE mr.id = $1 AND mr.enterprise_id = $24)
+  AND EXISTS (SELECT 1 FROM operations op WHERE op.id = $3 AND op.enterprise_id = $24)
+  AND ($4::bigint IS NULL OR EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $4 AND mt.enterprise_id = $24))
+RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required
 `
 
 type AddRouteOperationParams struct {
@@ -96,9 +107,12 @@ type AddRouteOperationParams struct {
 	Notes                pgtype.Text
 	ScrapPct             pgtype.Numeric
 	InspectionRequired   bool
+	EnterpriseID         int64
 }
 
 // ─── route_operations ────────────────────────────────────────────────────────
+// Só entra em roteiro da empresa, com operação e centro de trabalho dela;
+// fora disso não grava nada (sem linha = não encontrado).
 func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationParams) (RouteOperation, error) {
 	row := q.db.QueryRow(ctx, addRouteOperation,
 		arg.RouteID,
@@ -124,6 +138,7 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		arg.Notes,
 		arg.ScrapPct,
 		arg.InspectionRequired,
+		arg.EnterpriseID,
 	)
 	var i RouteOperation
 	err := row.Scan(
@@ -160,11 +175,18 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 
 const clearPrimaryResources = `-- name: ClearPrimaryResources :exec
 UPDATE route_operation_resources SET is_primary = FALSE, updated_at = NOW()
-WHERE route_operation_id = $1
+WHERE route_operation_id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = $2)
 `
 
-func (q *Queries) ClearPrimaryResources(ctx context.Context, routeOperationID int64) error {
-	_, err := q.db.Exec(ctx, clearPrimaryResources, routeOperationID)
+type ClearPrimaryResourcesParams struct {
+	RouteOperationID int64
+	EnterpriseID     int64
+}
+
+func (q *Queries) ClearPrimaryResources(ctx context.Context, arg ClearPrimaryResourcesParams) error {
+	_, err := q.db.Exec(ctx, clearPrimaryResources, arg.RouteOperationID, arg.EnterpriseID)
 	return err
 }
 
@@ -435,19 +457,26 @@ func (q *Queries) DeactivateRoute(ctx context.Context, arg DeactivateRouteParams
 	return err
 }
 
-const deleteNetworkEdge = `-- name: DeleteNetworkEdge :exec
+const deleteNetworkEdge = `-- name: DeleteNetworkEdge :execrows
 DELETE FROM route_operation_network
 WHERE predecessor_id = $1 AND successor_id = $2
+  AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_network.predecessor_id AND emr.enterprise_id = $3)
 `
 
 type DeleteNetworkEdgeParams struct {
 	PredecessorID int64
 	SuccessorID   int64
+	EnterpriseID  int64
 }
 
-func (q *Queries) DeleteNetworkEdge(ctx context.Context, arg DeleteNetworkEdgeParams) error {
-	_, err := q.db.Exec(ctx, deleteNetworkEdge, arg.PredecessorID, arg.SuccessorID)
-	return err
+func (q *Queries) DeleteNetworkEdge(ctx context.Context, arg DeleteNetworkEdgeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteNetworkEdge, arg.PredecessorID, arg.SuccessorID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getExternalRouteOpsForItem = `-- name: GetExternalRouteOpsForItem :many
@@ -685,11 +714,19 @@ func (q *Queries) GetRouteByItemAndAlternative(ctx context.Context, arg GetRoute
 }
 
 const getRouteOpResource = `-- name: GetRouteOpResource :one
-SELECT id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at FROM route_operation_resources WHERE id = $1
+SELECT id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at FROM route_operation_resources
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = $2)
 `
 
-func (q *Queries) GetRouteOpResource(ctx context.Context, id int64) (RouteOperationResource, error) {
-	row := q.db.QueryRow(ctx, getRouteOpResource, id)
+type GetRouteOpResourceParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) GetRouteOpResource(ctx context.Context, arg GetRouteOpResourceParams) (RouteOperationResource, error) {
+	row := q.db.QueryRow(ctx, getRouteOpResource, arg.ID, arg.EnterpriseID)
 	var i RouteOperationResource
 	err := row.Scan(
 		&i.ID,
@@ -1343,10 +1380,16 @@ const listResourcesByRoute = `-- name: ListResourcesByRoute :many
 SELECT r.id, r.route_operation_id, r.work_center_id, r.priority, r.time_factor, r.is_primary, r.created_at, r.updated_at, mt.name AS work_center_name
 FROM route_operation_resources r
 JOIN route_operations ro ON ro.id = r.route_operation_id
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
 LEFT JOIN machine_types mt ON mt.id = r.work_center_id
-WHERE ro.route_id = $1
+WHERE ro.route_id = $1 AND mr.enterprise_id = $2
 ORDER BY r.route_operation_id, r.is_primary DESC, r.priority, r.id
 `
+
+type ListResourcesByRouteParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
 
 type ListResourcesByRouteRow struct {
 	ID               int64
@@ -1360,8 +1403,8 @@ type ListResourcesByRouteRow struct {
 	WorkCenterName   pgtype.Text
 }
 
-func (q *Queries) ListResourcesByRoute(ctx context.Context, routeID int64) ([]ListResourcesByRouteRow, error) {
-	rows, err := q.db.Query(ctx, listResourcesByRoute, routeID)
+func (q *Queries) ListResourcesByRoute(ctx context.Context, arg ListResourcesByRouteParams) ([]ListResourcesByRouteRow, error) {
+	rows, err := q.db.Query(ctx, listResourcesByRoute, arg.RouteID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1394,9 +1437,16 @@ const listResourcesByRouteOp = `-- name: ListResourcesByRouteOp :many
 SELECT r.id, r.route_operation_id, r.work_center_id, r.priority, r.time_factor, r.is_primary, r.created_at, r.updated_at, mt.name AS work_center_name
 FROM route_operation_resources r
 LEFT JOIN machine_types mt ON mt.id = r.work_center_id
-WHERE r.route_operation_id = $1
+WHERE r.route_operation_id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = r.route_operation_id AND emr.enterprise_id = $2)
 ORDER BY r.is_primary DESC, r.priority, r.id
 `
+
+type ListResourcesByRouteOpParams struct {
+	RouteOperationID int64
+	EnterpriseID     int64
+}
 
 type ListResourcesByRouteOpRow struct {
 	ID               int64
@@ -1410,8 +1460,8 @@ type ListResourcesByRouteOpRow struct {
 	WorkCenterName   pgtype.Text
 }
 
-func (q *Queries) ListResourcesByRouteOp(ctx context.Context, routeOperationID int64) ([]ListResourcesByRouteOpRow, error) {
-	rows, err := q.db.Query(ctx, listResourcesByRouteOp, routeOperationID)
+func (q *Queries) ListResourcesByRouteOp(ctx context.Context, arg ListResourcesByRouteOpParams) ([]ListResourcesByRouteOpRow, error) {
+	rows, err := q.db.Query(ctx, listResourcesByRouteOp, arg.RouteOperationID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
@@ -1525,22 +1575,44 @@ func (q *Queries) OperationUsedInRoutes(ctx context.Context, arg OperationUsedIn
 	return exists, err
 }
 
-const removeRouteOpResource = `-- name: RemoveRouteOpResource :exec
-DELETE FROM route_operation_resources WHERE id = $1
+const removeRouteOpResource = `-- name: RemoveRouteOpResource :execrows
+DELETE FROM route_operation_resources
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = $2)
 `
 
-func (q *Queries) RemoveRouteOpResource(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, removeRouteOpResource, id)
-	return err
+type RemoveRouteOpResourceParams struct {
+	ID           int64
+	EnterpriseID int64
 }
 
-const removeRouteOperation = `-- name: RemoveRouteOperation :exec
-UPDATE route_operations SET is_active = FALSE, updated_at = NOW() WHERE id = $1
+func (q *Queries) RemoveRouteOpResource(ctx context.Context, arg RemoveRouteOpResourceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeRouteOpResource, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const removeRouteOperation = `-- name: RemoveRouteOperation :execrows
+UPDATE route_operations SET is_active = FALSE, updated_at = NOW()
+WHERE route_operations.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operations.id AND emr.enterprise_id = $2)
 `
 
-func (q *Queries) RemoveRouteOperation(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, removeRouteOperation, id)
-	return err
+type RemoveRouteOperationParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) RemoveRouteOperation(ctx context.Context, arg RemoveRouteOperationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeRouteOperation, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const routeIDOfOperation = `-- name: RouteIDOfOperation :one
@@ -1567,12 +1639,19 @@ func (q *Queries) RouteIDOfOperation(ctx context.Context, arg RouteIDOfOperation
 
 const setResourcePrimary = `-- name: SetResourcePrimary :one
 UPDATE route_operation_resources SET is_primary = TRUE, updated_at = NOW()
-WHERE id = $1
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = $2)
 RETURNING id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at
 `
 
-func (q *Queries) SetResourcePrimary(ctx context.Context, id int64) (RouteOperationResource, error) {
-	row := q.db.QueryRow(ctx, setResourcePrimary, id)
+type SetResourcePrimaryParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+func (q *Queries) SetResourcePrimary(ctx context.Context, arg SetResourcePrimaryParams) (RouteOperationResource, error) {
+	row := q.db.QueryRow(ctx, setResourcePrimary, arg.ID, arg.EnterpriseID)
 	var i RouteOperationResource
 	err := row.Scan(
 		&i.ID,
@@ -1588,16 +1667,20 @@ func (q *Queries) SetResourcePrimary(ctx context.Context, id int64) (RouteOperat
 }
 
 const setRouteOpWorkCenter = `-- name: SetRouteOpWorkCenter :exec
-UPDATE route_operations SET work_center_id = $2, updated_at = NOW() WHERE id = $1
+UPDATE route_operations SET work_center_id = $2, updated_at = NOW()
+WHERE route_operations.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operations.id AND emr.enterprise_id = $3)
 `
 
 type SetRouteOpWorkCenterParams struct {
 	ID           int64
 	WorkCenterID *int64
+	EnterpriseID int64
 }
 
 func (q *Queries) SetRouteOpWorkCenter(ctx context.Context, arg SetRouteOpWorkCenterParams) error {
-	_, err := q.db.Exec(ctx, setRouteOpWorkCenter, arg.ID, arg.WorkCenterID)
+	_, err := q.db.Exec(ctx, setRouteOpWorkCenter, arg.ID, arg.WorkCenterID, arg.EnterpriseID)
 	return err
 }
 
@@ -1820,18 +1903,26 @@ UPDATE route_operation_resources SET
     priority    = $2,
     time_factor = $3,
     updated_at  = NOW()
-WHERE id = $1
+WHERE route_operation_resources.id = $1 AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operation_resources.route_operation_id AND emr.enterprise_id = $4)
 RETURNING id, route_operation_id, work_center_id, priority, time_factor, is_primary, created_at, updated_at
 `
 
 type UpdateRouteOpResourceParams struct {
-	ID         int64
-	Priority   int16
-	TimeFactor pgtype.Numeric
+	ID           int64
+	Priority     int16
+	TimeFactor   pgtype.Numeric
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateRouteOpResource(ctx context.Context, arg UpdateRouteOpResourceParams) (RouteOperationResource, error) {
-	row := q.db.QueryRow(ctx, updateRouteOpResource, arg.ID, arg.Priority, arg.TimeFactor)
+	row := q.db.QueryRow(ctx, updateRouteOpResource,
+		arg.ID,
+		arg.Priority,
+		arg.TimeFactor,
+		arg.EnterpriseID,
+	)
 	var i RouteOperationResource
 	err := row.Scan(
 		&i.ID,
@@ -1869,7 +1960,11 @@ UPDATE route_operations SET
     situation = $18,
     notes = $19,
     updated_at = NOW()
-WHERE id = $1
+WHERE route_operations.id = $1
+  AND EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = route_operations.id AND emr.enterprise_id = $22)
+  AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $2 AND mt.enterprise_id = $22))
 RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required
 `
 
@@ -1895,6 +1990,7 @@ type UpdateRouteOperationParams struct {
 	Notes                pgtype.Text
 	ScrapPct             pgtype.Numeric
 	InspectionRequired   bool
+	EnterpriseID         int64
 }
 
 func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOperationParams) (RouteOperation, error) {
@@ -1920,6 +2016,7 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		arg.Notes,
 		arg.ScrapPct,
 		arg.InspectionRequired,
+		arg.EnterpriseID,
 	)
 	var i RouteOperation
 	err := row.Scan(
@@ -1957,7 +2054,12 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 const upsertNetworkEdge = `-- name: UpsertNetworkEdge :one
 
 INSERT INTO route_operation_network (predecessor_id, successor_id, overlap_pct)
-VALUES ($1, $2, $3)
+SELECT $1, $2, $3
+WHERE EXISTS (
+      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
+       WHERE eo.id = $1 AND emr.enterprise_id = $4)
+  AND EXISTS (SELECT 1 FROM route_operations a JOIN route_operations b ON b.route_id = a.route_id
+               WHERE a.id = $1 AND b.id = $2)
 ON CONFLICT (predecessor_id, successor_id)
 DO UPDATE SET overlap_pct = EXCLUDED.overlap_pct
 RETURNING id, predecessor_id, successor_id, overlap_pct, created_at
@@ -1967,11 +2069,18 @@ type UpsertNetworkEdgeParams struct {
 	PredecessorID int64
 	SuccessorID   int64
 	OverlapPct    pgtype.Numeric
+	EnterpriseID  int64
 }
 
 // ─── route_operation_network ─────────────────────────────────────────────────
+// As duas etapas precisam ser da empresa (e do mesmo roteiro).
 func (q *Queries) UpsertNetworkEdge(ctx context.Context, arg UpsertNetworkEdgeParams) (RouteOperationNetwork, error) {
-	row := q.db.QueryRow(ctx, upsertNetworkEdge, arg.PredecessorID, arg.SuccessorID, arg.OverlapPct)
+	row := q.db.QueryRow(ctx, upsertNetworkEdge,
+		arg.PredecessorID,
+		arg.SuccessorID,
+		arg.OverlapPct,
+		arg.EnterpriseID,
+	)
 	var i RouteOperationNetwork
 	err := row.Scan(
 		&i.ID,

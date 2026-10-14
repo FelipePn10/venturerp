@@ -2,13 +2,18 @@ package quality
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/quality/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/quality/entity"
 )
@@ -24,7 +29,12 @@ func New(q *sqlc.Queries) domainrepo.QualityRepository {
 // ─── inspection plans ─────────────────────────────────────────────────────────
 
 func (r *QualityRepositorySQLC) CreatePlan(ctx context.Context, plan *entity.InspectionPlan) (*entity.InspectionPlan, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateInspectionPlan(ctx, sqlc.CreateInspectionPlanParams{
+		EnterpriseID:     e,
 		ItemCode:         plan.ItemCode,
 		RouteOperationID: pgutil.ToPgInt8Ptr(plan.RouteOperationID),
 		PointType:        sqlc.InspectionPointType(plan.PointType),
@@ -41,15 +51,26 @@ func (r *QualityRepositorySQLC) CreatePlan(ctx context.Context, plan *entity.Ins
 }
 
 func (r *QualityRepositorySQLC) GetPlanByID(ctx context.Context, id int64) (*entity.InspectionPlan, error) {
-	row, err := r.q.GetInspectionPlanByID(ctx, id)
+	e, err := tenant.ID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("fetching plan %d: %w", id, err)
+		return nil, err
+	}
+	row, err := r.q.GetInspectionPlanByID(ctx, id, e)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError("plano de inspeção não encontrado")
+		}
+		return nil, fmt.Errorf("lendo o plano de inspeção %d: %w", id, err)
 	}
 	return planRowToEntity(row), nil
 }
 
 func (r *QualityRepositorySQLC) ListPlansByItem(ctx context.Context, itemCode int64) ([]*entity.InspectionPlan, error) {
-	rows, err := r.q.ListPlansByItem(ctx, itemCode)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPlansByItem(ctx, itemCode, e)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os planos do item %d: %w", itemCode, err)
 	}
@@ -61,13 +82,22 @@ func (r *QualityRepositorySQLC) ListPlansByItem(ctx context.Context, itemCode in
 }
 
 func (r *QualityRepositorySQLC) DeactivatePlan(ctx context.Context, id int64) error {
-	return r.q.DeactivateInspectionPlan(ctx, id)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	return r.q.DeactivateInspectionPlan(ctx, id, e)
 }
 
 // ─── characteristics ──────────────────────────────────────────────────────────
 
 func (r *QualityRepositorySQLC) AddCharacteristic(ctx context.Context, c *entity.InspectionCharacteristic) (*entity.InspectionCharacteristic, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.AddCharacteristic(ctx, sqlc.AddCharacteristicParams{
+		EnterpriseID:   e,
 		PlanID:         c.PlanID,
 		Name:           c.Name,
 		Nominal:        float64PtrToPgFloat8(c.Nominal),
@@ -83,7 +113,11 @@ func (r *QualityRepositorySQLC) AddCharacteristic(ctx context.Context, c *entity
 }
 
 func (r *QualityRepositorySQLC) ListCharacteristics(ctx context.Context, planID int64) ([]*entity.InspectionCharacteristic, error) {
-	rows, err := r.q.ListCharacteristics(ctx, planID)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListCharacteristics(ctx, planID, e)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar as características do plano %d: %w", planID, err)
 	}
@@ -97,7 +131,12 @@ func (r *QualityRepositorySQLC) ListCharacteristics(ctx context.Context, planID 
 // ─── quality records ──────────────────────────────────────────────────────────
 
 func (r *QualityRepositorySQLC) CreateRecord(ctx context.Context, rec *entity.QualityRecord) (*entity.QualityRecord, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateQualityRecord(ctx, sqlc.CreateQualityRecordParams{
+		EnterpriseID:      e,
 		PlanID:            rec.PlanID,
 		ProductionOrderID: pgutil.ToPgInt8Ptr(rec.ProductionOrderID),
 		Lot:               pgutil.ToPgTextFromPtr(rec.Lot),
@@ -117,7 +156,12 @@ func (r *QualityRepositorySQLC) CreateRecord(ctx context.Context, rec *entity.Qu
 }
 
 func (r *QualityRepositorySQLC) AddMeasurement(ctx context.Context, m *entity.QualityMeasurement) error {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	return r.q.AddMeasurement(ctx, sqlc.AddMeasurementParams{
+		EnterpriseID:     e,
 		RecordID:         m.RecordID,
 		CharacteristicID: m.CharacteristicID,
 		MeasuredValue:    m.MeasuredValue,
@@ -126,7 +170,11 @@ func (r *QualityRepositorySQLC) AddMeasurement(ctx context.Context, m *entity.Qu
 }
 
 func (r *QualityRepositorySQLC) GetRecordByID(ctx context.Context, id int64) (*entity.QualityRecord, error) {
-	row, err := r.q.GetQualityRecordByID(ctx, id)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetQualityRecordByID(ctx, id, e)
 	if err != nil {
 		return nil, fmt.Errorf("fetching quality record %d: %w", id, err)
 	}
@@ -134,7 +182,11 @@ func (r *QualityRepositorySQLC) GetRecordByID(ctx context.Context, id int64) (*e
 }
 
 func (r *QualityRepositorySQLC) ListRecordsByOrder(ctx context.Context, orderID int64) ([]*entity.QualityRecord, error) {
-	rows, err := r.q.ListRecordsByOrder(ctx, orderID)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRecordsByOrder(ctx, orderID, e)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os registros da ordem %d: %w", orderID, err)
 	}
@@ -146,7 +198,11 @@ func (r *QualityRepositorySQLC) ListRecordsByOrder(ctx context.Context, orderID 
 }
 
 func (r *QualityRepositorySQLC) ListRecordsByItem(ctx context.Context, itemCode int64) ([]*entity.QualityRecord, error) {
-	rows, err := r.q.ListRecordsByItem(ctx, itemCode)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRecordsByItem(ctx, itemCode, e)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os registros do item %d: %w", itemCode, err)
 	}
@@ -160,7 +216,12 @@ func (r *QualityRepositorySQLC) ListRecordsByItem(ctx context.Context, itemCode 
 // ─── non-conformances ─────────────────────────────────────────────────────────
 
 func (r *QualityRepositorySQLC) CreateNC(ctx context.Context, nc *entity.NonConformance) (*entity.NonConformance, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	row, err := r.q.CreateNC(ctx, sqlc.CreateNCParams{
+		EnterpriseID:      e,
 		Code:              nc.Code,
 		QualityRecordID:   pgutil.ToPgInt8Ptr(nc.QualityRecordID),
 		ProductionOrderID: pgutil.ToPgInt8Ptr(nc.ProductionOrderID),
@@ -178,7 +239,11 @@ func (r *QualityRepositorySQLC) CreateNC(ctx context.Context, nc *entity.NonConf
 }
 
 func (r *QualityRepositorySQLC) GetNCByID(ctx context.Context, id int64) (*entity.NonConformance, error) {
-	row, err := r.q.GetNCByID(ctx, id)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.q.GetNCByID(ctx, id, e)
 	if err != nil {
 		return nil, fmt.Errorf("fetching NC %d: %w", id, err)
 	}
@@ -186,7 +251,11 @@ func (r *QualityRepositorySQLC) GetNCByID(ctx context.Context, id int64) (*entit
 }
 
 func (r *QualityRepositorySQLC) ListOpenNCs(ctx context.Context) ([]*entity.NonConformance, error) {
-	rows, err := r.q.ListOpenNCs(ctx)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListOpenNCs(ctx, e)
 	if err != nil {
 		return nil, fmt.Errorf("listing open NCs: %w", err)
 	}
@@ -198,7 +267,11 @@ func (r *QualityRepositorySQLC) ListOpenNCs(ctx context.Context) ([]*entity.NonC
 }
 
 func (r *QualityRepositorySQLC) ListNCsByItem(ctx context.Context, itemCode int64) ([]*entity.NonConformance, error) {
-	rows, err := r.q.ListNCsByItem(ctx, itemCode)
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListNCsByItem(ctx, itemCode, e)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar as não conformidades do item %d: %w", itemCode, err)
 	}
@@ -210,14 +283,19 @@ func (r *QualityRepositorySQLC) ListNCsByItem(ctx context.Context, itemCode int6
 }
 
 func (r *QualityRepositorySQLC) DispositionNC(ctx context.Context, id int64, disposition entity.NCDisposition, disposedBy string) error {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
 	uid, err := uuid.Parse(disposedBy)
 	if err != nil {
 		return fmt.Errorf("usuário responsável pelo descarte inválido: %w", err)
 	}
 	return r.q.DispositionNC(ctx, sqlc.DispositionNCParams{
-		ID:          id,
-		Disposition: sqlc.NcDispositionEnum(disposition),
-		DisposedBy:  pgutil.ToPgUUID(uid),
+		EnterpriseID: e,
+		ID:           id,
+		Disposition:  sqlc.NcDispositionEnum(disposition),
+		DisposedBy:   pgutil.ToPgUUID(uid),
 	})
 }
 

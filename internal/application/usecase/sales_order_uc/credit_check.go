@@ -2,6 +2,7 @@ package sales_order_uc
 
 import (
 	"context"
+	"fmt"
 
 	custrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	finentity "github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
@@ -20,41 +21,53 @@ type CreditChecker struct {
 	FinancialRepo finrepo.FinancialRepository
 }
 
-// Check returns true when the order is approved (within the limit) and false
-// when it was blocked. It is best-effort: if exposure cannot be computed (e.g. a
-// repository error), the check is skipped and the order is approved, so a
-// transient failure never blocks a legitimate order by mistake.
-func (c *CreditChecker) Check(ctx context.Context, code int64) bool {
-	order, err := c.SalesRepo.GetByCode(ctx, code)
-	if err != nil || order.CustomerCode == nil {
-		return true
+// Check confere o limite ao confirmar o pedido: true = aprovado, false = o
+// pedido foi BLOQUEADO (por `pedidos`, o repositório da transação da
+// confirmação). Se a conferência não conseguir rodar, devolve erro e a
+// confirmação inteira é desfeita — antes o pedido era aprovado em silêncio, e
+// uma falha técnica deixava passar pedido acima do limite.
+func (c *CreditChecker) Check(ctx context.Context, code int64, pedidos repository.SalesOrderRepository) (bool, error) {
+	order, err := pedidos.GetByCode(ctx, code)
+	if err != nil {
+		return false, fmt.Errorf("lendo o pedido: %w", err)
+	}
+	if order.CustomerCode == nil {
+		return true, nil
 	}
 	customerCode := *order.CustomerCode
 
 	customer, err := c.CustomerRepo.GetCustomerByCode(ctx, customerCode)
 	if err != nil {
-		return true
+		return false, fmt.Errorf("lendo o cliente: %w", err)
 	}
 
-	openReceivables := c.openReceivables(ctx, customerCode)
-	openOrders := c.openOrders(ctx, customerCode, code)
+	openReceivables, err := c.openReceivables(ctx, customerCode)
+	if err != nil {
+		return false, err
+	}
+	openOrders, err := c.openOrders(ctx, customerCode, code)
+	if err != nil {
+		return false, err
+	}
 	orderValue := orderExposureValue(order)
 
 	decision := entity.EvaluateCredit(customer.CreditLimit, openReceivables, openOrders, orderValue, customer.Blocked)
 	if !decision.Approved {
-		_ = c.SalesRepo.Block(ctx, code, decision.Reason)
-		return false
+		if err := pedidos.Block(ctx, code, decision.Reason); err != nil {
+			return false, fmt.Errorf("bloqueando o pedido por crédito: %w", err)
+		}
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
 // openReceivables sums the outstanding balance (billed minus received) of the
 // customer's receivables that are still open.
-func (c *CreditChecker) openReceivables(ctx context.Context, customerCode int64) float64 {
+func (c *CreditChecker) openReceivables(ctx context.Context, customerCode int64) (float64, error) {
 	cc := customerCode
 	list, err := c.FinancialRepo.ListContasReceber(ctx, finrepo.CRFilter{ClienteID: &cc})
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("lendo os títulos em aberto do cliente: %w", err)
 	}
 	var total float64
 	for _, cr := range list {
@@ -63,15 +76,15 @@ func (c *CreditChecker) openReceivables(ctx context.Context, customerCode int64)
 		}
 		total += cr.ValorBruto.Sub(cr.ValorRecebido).InexactFloat64()
 	}
-	return total
+	return total, nil
 }
 
 // openOrders sums the value of the customer's other confirmed-but-not-yet-billed
 // orders, excluding the order being confirmed.
-func (c *CreditChecker) openOrders(ctx context.Context, customerCode, excludeCode int64) float64 {
+func (c *CreditChecker) openOrders(ctx context.Context, customerCode, excludeCode int64) (float64, error) {
 	list, err := c.SalesRepo.ListByCustomer(ctx, customerCode)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("lendo os pedidos em aberto do cliente: %w", err)
 	}
 	var total float64
 	for _, o := range list {
@@ -83,7 +96,7 @@ func (c *CreditChecker) openOrders(ctx context.Context, customerCode, excludeCod
 			total += orderExposureValue(o)
 		}
 	}
-	return total
+	return total, nil
 }
 
 func isOpenReceivable(s finentity.ContaReceberStatus) bool {
