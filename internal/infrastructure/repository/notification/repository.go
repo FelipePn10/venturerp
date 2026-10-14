@@ -73,7 +73,7 @@ func (r *Repository) PrometheusMetrics(ctx context.Context) (string, error) {
 	rows.Close()
 	var deadLetters, attempts, digests, throttled int64
 	var latency float64
-	err = r.pool.QueryRow(ctx, `SELECT (SELECT COUNT(*) FROM notification_dead_letters WHERE retried_at IS NULL),(SELECT COUNT(*) FROM notification_delivery_attempts),(SELECT COUNT(*) FROM notification_digest_runs WHERE state='ENVIADO'),(SELECT COALESCE(SUM(message_count),0) FROM notification_provider_rate_windows WHERE window_start>NOW()-INTERVAL '2 minutes'),(SELECT COALESCE(AVG(EXTRACT(EPOCH FROM sent_at-created_at)),0) FROM notification_deliveries WHERE sent_at IS NOT NULL)`).Scan(&deadLetters, &attempts, &digests, &throttled, &latency)
+	err = r.pool.QueryRow(ctx, `SELECT (SELECT COUNT(*) FROM notification_dead_letters WHERE retried_at IS NULL),(SELECT COUNT(*) FROM notification_delivery_attempts),(SELECT COUNT(*) FROM notification_digest_runs WHERE state='ENVIADO'),(SELECT COALESCE(SUM(sent_count),0) FROM notification_provider_rate_windows WHERE window_start>NOW()-INTERVAL '2 minutes'),(SELECT COALESCE(AVG(EXTRACT(EPOCH FROM sent_at-created_at)),0) FROM notification_deliveries WHERE sent_at IS NOT NULL)`).Scan(&deadLetters, &attempts, &digests, &throttled, &latency)
 	if err != nil {
 		return "", err
 	}
