@@ -44,15 +44,20 @@ func (h *BaseHandler) NotFound(w http.ResponseWriter, message ...string) {
 // for conhecido — chave duplicada vira 409 "já existe", registro ausente vira
 // 404, violação de domínio vira 422. Sem isso, cadastrar um código repetido
 // respondia "ocorreu um erro interno", que não diz ao usuário o que houve.
+//
+// Só o que NÃO foi classificado é registrado como erro do servidor: uma busca
+// com código mal digitado (422) aparecia no log de produção como "internal
+// server error" e enchia o monitoramento de alarme falso. O 4xx continua no
+// log de requisições, como aviso.
 func (h *BaseHandler) InternalError(w http.ResponseWriter, r *http.Request, err error) {
-	applogger.FromContext(r.Context()).Error(
-		"internal server error",
-		"error", err,
-	)
 	if isClassified(err) {
 		RespondUseCaseError(w, err)
 		return
 	}
+	applogger.FromContext(r.Context()).Error(
+		"internal server error",
+		"error", err,
+	)
 	WriteError(w, http.StatusInternalServerError, "internal_error", "ocorreu um erro interno")
 }
 

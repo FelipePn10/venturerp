@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(log): erro conhecido (validação, não encontrado, duplicidade) não é mais registrado
+  como "internal server error" — só a falha de verdade vai para o log de erro
+- fix(itens): a mensagem de código de item inválido vem acentuada, mostra o que foi
+  digitado e orienta a buscar pela descrição
+
 ## [v1.6.1] — 2026-10-14
 
 - fix: filtros de lista, conferência de empresa por código, crédito em decimal e fuso da capacidade (`3436d5f5`)

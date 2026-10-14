@@ -2,6 +2,7 @@ package valueobject
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"regexp"
 	"strings"
@@ -20,7 +21,7 @@ type BusinessCode string
 func NewBusinessCode(code string) (BusinessCode, error) {
 	normalized := strings.ToUpper(strings.TrimSpace(code))
 	if !businessCodePattern.MatchString(normalized) {
-		return "", domainerr.NewValidation("codigo do item deve ter de 1 a 60 caracteres alfanumericos e pode conter ponto, hifen, barra ou sublinhado")
+		return "", domainerr.NewValidation(fmt.Sprintf("código de item inválido (%q): use de 1 a 60 caracteres — letras, números, ponto, hífen, barra ou sublinhado, sem espaço. Para procurar pela descrição, use a busca por descrição", strings.TrimSpace(code)))
 	}
 	return BusinessCode(normalized), nil
 }
