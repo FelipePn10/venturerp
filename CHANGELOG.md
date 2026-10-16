@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.6.3] — 2026-10-16
+
+- fix(nf-e): validado na SEFAZ do PR em homologação; cBenef, rejeição e demora da SEFAZ (`091ab3ba`)
+
 - fix(nf-e): validado contra a SEFAZ do PR em homologação (autorização, efeitos,
   cancelamento e estorno). Correções encontradas no caminho:
   - venda interna a contribuinte sem diferimento configurado saía CST 51 e era
