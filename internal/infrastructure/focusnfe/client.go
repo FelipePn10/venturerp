@@ -7,6 +7,8 @@ import (
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"io"
+	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -138,21 +140,24 @@ type NFEDestinatario struct {
 }
 
 type NFEItem struct {
-	NumeroItem                     int      `json:"numero_item"`
-	CodigoProduto                  string   `json:"codigo_produto"`
-	Descricao                      string   `json:"descricao"`
-	CodigoNCM                      string   `json:"codigo_ncm"`
-	CFOP                           string   `json:"cfop"`
-	UnidadeComercial               string   `json:"unidade_comercial"`
-	QuantidadeComercial            float64  `json:"quantidade_comercial"`
-	ValorUnitarioComercial         float64  `json:"valor_unitario_comercial"`
-	ValorBruto                     float64  `json:"valor_bruto"`
-	CodigoSituacaoTributariaICMS   string   `json:"codigo_situacao_tributaria_icms"`
-	ModalidadeBaseCalculoICMS      int      `json:"modalidade_determinacao_bc_icms"`
-	ValorBaseCalculoICMS           float64  `json:"valor_base_calculo_icms"`
-	AliquotaICMS                   float64  `json:"aliquota_icms"`
-	ValorICMS                      float64  `json:"valor_icms"`
-	PercentualDiferimento          *float64 `json:"percentual_diferimento,omitempty"`
+	NumeroItem                   int      `json:"numero_item"`
+	CodigoProduto                string   `json:"codigo_produto"`
+	Descricao                    string   `json:"descricao"`
+	CodigoNCM                    string   `json:"codigo_ncm"`
+	CFOP                         string   `json:"cfop"`
+	UnidadeComercial             string   `json:"unidade_comercial"`
+	QuantidadeComercial          float64  `json:"quantidade_comercial"`
+	ValorUnitarioComercial       float64  `json:"valor_unitario_comercial"`
+	ValorBruto                   float64  `json:"valor_bruto"`
+	CodigoSituacaoTributariaICMS string   `json:"codigo_situacao_tributaria_icms"`
+	ModalidadeBaseCalculoICMS    int      `json:"modalidade_determinacao_bc_icms"`
+	ValorBaseCalculoICMS         float64  `json:"valor_base_calculo_icms"`
+	AliquotaICMS                 float64  `json:"aliquota_icms"`
+	ValorICMS                    float64  `json:"valor_icms"`
+	PercentualDiferimento        *float64 `json:"percentual_diferimento,omitempty"`
+	// CodigoBeneficioFiscal é o cBenef (PR, RS, RJ, SC, GO e DF o exigem nos CSTs
+	// com benefício). Vazio não vai no payload.
+	CodigoBeneficioFiscal          string   `json:"codigo_beneficio_fiscal,omitempty"`
 	ValorICMSDiferido              *float64 `json:"valor_icms_diferido,omitempty"`
 	ModalidadeBaseCalculoICMSST    *int     `json:"modalidade_determinacao_bc_icms_st,omitempty"`
 	BaseCalculoICMSST              *float64 `json:"valor_base_calculo_icms_st,omitempty"`
@@ -344,6 +349,15 @@ func (it NFEItem) campos() map[string]any {
 	}
 	if it.ValorICMSDiferido != nil {
 		m["icms_valor_diferido"] = *it.ValorICMSDiferido
+		// CST 51: a SEFAZ confere vICMS = vICMSOp − vICMSDif (rejeição 353). O
+		// ValorICMS da linha é o da operação; o destacado é a diferença.
+		if *it.ValorICMSDiferido > 0 && it.CodigoSituacaoTributariaICMS == "51" {
+			m["icms_valor_operacao"] = it.ValorICMS
+			m["icms_valor"] = math.Round((it.ValorICMS-*it.ValorICMSDiferido)*100) / 100
+		}
+	}
+	if strings.TrimSpace(it.CodigoBeneficioFiscal) != "" {
+		m["codigo_beneficio_fiscal"] = strings.TrimSpace(it.CodigoBeneficioFiscal)
 	}
 	if it.ValorICMSST != nil {
 		if it.ModalidadeBaseCalculoICMSST != nil {
@@ -447,6 +461,14 @@ func (r *NFEResponse) Chave() string { return strings.TrimPrefix(strings.TrimSpa
 // Autorizada diz se a SEFAZ autorizou o uso (a API v2 diz "autorizado").
 func (r *NFEResponse) Autorizada() bool { return r.Status == "autorizado" || r.Status == "autorizada" }
 
+// EmProcessamento: a SEFAZ ainda não deu o resultado.
+func (r *NFEResponse) EmProcessamento() bool {
+	return r.Status == "processando_autorizacao" || r.Status == "processando"
+}
+
+// Motivo é a mensagem da SEFAZ (ou da Focus) com o código, quando houver.
+func (r *NFEResponse) Motivo() string { return r.motivo() }
+
 func (r *NFEResponse) motivo() string {
 	msg := r.MensagemSEFAZ
 	if msg == "" {
@@ -466,6 +488,11 @@ func (c *Client) EmitirNFe(ctx context.Context, ref string, payload NFEPayload) 
 	path := fmt.Sprintf("/nfe?ref=%s", ref)
 	body, statusCode, err := c.do(ctx, http.MethodPost, path, payload)
 	if err != nil {
+		// 4xx: a Focus recusou a nota (dado inválido) — é rejeição, o usuário
+		// corrige. Rede e 5xx seguem como falha do serviço.
+		if statusCode >= 400 && statusCode < 500 {
+			return nil, &RejeicaoError{Status: fmt.Sprintf("HTTP %d", statusCode), Motivo: strings.TrimPrefix(err.Error(), "Focus NF-e ")}
+		}
 		return nil, err
 	}
 
@@ -480,15 +507,28 @@ func (c *Client) EmitirNFe(ctx context.Context, ref string, payload NFEPayload) 
 			resp.Status == "cancelado" || resp.Status == "cancelada" {
 			break
 		}
-		time.Sleep(2 * time.Second)
+		select {
+		case <-ctx.Done():
+			return &resp, &EmProcessamentoError{Ref: ref}
+		case <-time.After(2 * time.Second):
+		}
 		pollBody, _, pollErr := c.do(ctx, http.MethodGet, fmt.Sprintf("/nfe/%s", ref), nil)
-		if pollErr == nil {
-			_ = json.Unmarshal(pollBody, &resp)
+		if pollErr != nil {
+			slog.WarnContext(ctx, "consulta da NF-e na Focus falhou durante a espera da autorização", "ref", ref, "erro", pollErr)
+			continue
+		}
+		if err := json.Unmarshal(pollBody, &resp); err != nil {
+			slog.WarnContext(ctx, "resposta ilegível da Focus durante a espera da autorização", "ref", ref, "erro", err)
 		}
 	}
 
+	if resp.EmProcessamento() {
+		// A SEFAZ ainda não respondeu: NÃO é rejeição. Antes a nota era marcada
+		// rejeitada e, autorizada depois, ficava sem os efeitos.
+		return &resp, &EmProcessamentoError{Ref: ref}
+	}
 	if !resp.Autorizada() {
-		return &resp, fmt.Errorf("NF-e não autorizada (%s): %s", resp.Status, resp.motivo())
+		return &resp, &RejeicaoError{Status: resp.Status, Motivo: resp.Motivo()}
 	}
 	resp.ChaveNFe = resp.Chave()
 	return &resp, nil
@@ -514,7 +554,10 @@ func (c *Client) DocumentURL(path string) string {
 
 // ConsultarNFe returns current status of a NF-e.
 func (c *Client) ConsultarNFe(ctx context.Context, ref string) (*NFEResponse, error) {
-	body, _, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/nfe/%s", ref), nil)
+	body, statusCode, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/nfe/%s", ref), nil)
+	if statusCode == http.StatusNotFound {
+		return nil, &NaoEncontradaError{Ref: ref}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1025,4 +1068,35 @@ func (c *Client) EmitirCCe(ctx context.Context, ref, textoCorrecao string) (map[
 		return resp, fmt.Errorf("carta de correção não aceita pela SEFAZ (%s): %s", st, msg)
 	}
 	return resp, nil
+}
+
+// RejeicaoError: a nota foi recusada (pela SEFAZ ou pela validação da Focus).
+// O motivo é para o usuário corrigir o cadastro e enviar de novo.
+type RejeicaoError struct {
+	Status string
+	Motivo string
+}
+
+func (e *RejeicaoError) Error() string {
+	return fmt.Sprintf("NF-e não autorizada (%s): %s", e.Status, e.Motivo)
+}
+
+// EmProcessamentoError: a SEFAZ não respondeu dentro da espera. A nota não foi
+// rejeitada — o resultado sai na consulta de status.
+type EmProcessamentoError struct {
+	Ref string
+}
+
+func (e *EmProcessamentoError) Error() string {
+	return "a SEFAZ ainda está processando a NF-e; consulte o status em instantes"
+}
+
+// NaoEncontradaError: a Focus não tem nota com essa referência — o envio não
+// chegou, e a nota pode ser enviada de novo.
+type NaoEncontradaError struct {
+	Ref string
+}
+
+func (e *NaoEncontradaError) Error() string {
+	return "a Focus não recebeu a NF-e com a referência " + e.Ref
 }

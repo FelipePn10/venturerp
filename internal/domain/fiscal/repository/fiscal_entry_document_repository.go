@@ -236,7 +236,9 @@ type ItemAccount struct {
 
 // ItemCandidate é um item do cadastro oferecido na conciliação.
 type ItemCandidate struct {
-	Code               int64
+	Code int64
+	// BusinessCode é o código que a pessoa conhece (RN-01001); Code é a chave interna.
+	BusinessCode       string
 	Name               string
 	UOM                string
 	NCM                string

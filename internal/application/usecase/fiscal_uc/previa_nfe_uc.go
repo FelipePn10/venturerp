@@ -269,6 +269,13 @@ func conferirNota(
 			impede(fmt.Sprintf("itens[%d].valor_unitario", it.Sequence), fmt.Sprintf("%s está com preço zero", ref),
 				"informe o preço do item; verifique se há preço vigente na tabela de venda em VCST0202")
 		}
+		// cBenef: a SEFAZ dessas UFs rejeita (930) CST com benefício sem o código.
+		if cst := derefStr(it.CstICMS); cstComBeneficio[cst] && ufExigeBeneficioFiscal[strings.ToUpper(cfg.UFEmpresa)] &&
+			(it.CodigoBeneficioFiscal == nil || strings.TrimSpace(*it.CodigoBeneficioFiscal) == "") {
+			impede(fmt.Sprintf("itens[%d].codigo_beneficio_fiscal", it.Sequence),
+				fmt.Sprintf("%s tem CST %s, e a SEFAZ do %s exige o código de benefício fiscal (cBenef) para ele", ref, cst, strings.ToUpper(cfg.UFEmpresa)),
+				"cadastre o código de benefício no parâmetro de ICMS/IPI do item ou do NCM em VFIS0320 — Parâmetros ICMS/IPI e gere a nota de novo")
+		}
 		if it.ValorICMSST > 0 {
 			atencao(fmt.Sprintf("itens[%d].cest", it.Sequence),
 				fmt.Sprintf("%s tem ICMS-ST calculado; itens com substituição tributária normalmente exigem CEST", ref),
@@ -357,3 +364,7 @@ func reais(v float64) string {
 	s := fmt.Sprintf("%.2f", v)
 	return "R$ " + strings.Replace(s, ".", ",", 1)
 }
+
+// ufExigeBeneficioFiscal: UFs em que a SEFAZ exige o cBenef nos CSTs com
+// benefício (NT 2019.001 e regras próprias de cada estado).
+var ufExigeBeneficioFiscal = map[string]bool{"PR": true, "RS": true, "RJ": true, "SC": true, "GO": true, "DF": true}

@@ -261,12 +261,17 @@ func calculateItemTax(
 		valorICMS := baseICMS.Mul(aliqICMS)
 		r.ValorICMS, _ = valorICMS.Round(2).Float64()
 
-		if params.DestinoTipo == "contribuinte" {
-			// Diferimento parcial 38.46% → CST 51
-			difPct := decimal.NewFromFloat(fiscalConfig.IcmsDiferimentoPercentual).Div(decimal.NewFromInt(100))
-			diferido := valorICMS.Mul(difPct)
-			r.ValorICMSDiferido, _ = diferido.Round(2).Float64()
+		if difPct := FracaoDiferimento(fiscalConfig.IcmsDiferimentoPercentual); params.DestinoTipo == "contribuinte" && difPct.IsPositive() {
+			// Diferimento parcial → CST 51. ValorICMS segue sendo o da operação;
+			// o destacado na nota (operação − diferido) é montado no payload.
+			r.ValorICMSDiferido, _ = valorICMS.Mul(difPct).Round(2).Float64()
 			r.CSTICMS = "51"
+		} else if params.DestinoTipo == "contribuinte" {
+			// Sem diferimento configurado a venda é tributada integralmente: CST 00.
+			// Antes saía CST 51 com 0% diferido, e a SEFAZ do PR rejeitava a nota
+			// pedindo o código de benefício fiscal (rejeição 930).
+			r.ValorICMSDiferido = 0
+			r.CSTICMS = "00"
 		} else {
 			r.ValorICMSDiferido = 0
 			r.CSTICMS = "00"
@@ -327,8 +332,7 @@ func calculateItemTax(
 		r.ValorICMS, _ = newValorICMS.Round(2).Float64()
 		// Recalculate diferimento over the reduced amount
 		if r.ValorICMSDiferido > 0 {
-			difPct := decimal.NewFromFloat(fiscalConfig.IcmsDiferimentoPercentual).Div(decimal.NewFromInt(100))
-			r.ValorICMSDiferido, _ = newValorICMS.Mul(difPct).Round(2).Float64()
+			r.ValorICMSDiferido, _ = newValorICMS.Mul(FracaoDiferimento(fiscalConfig.IcmsDiferimentoPercentual)).Round(2).Float64()
 		}
 	}
 
@@ -426,3 +430,18 @@ type FiscalConfig struct {
 }
 
 var _ = fmt.Println
+
+// FracaoDiferimento normaliza o percentual de diferimento da configuração fiscal
+// para fração. A configuração guarda fração (0,3846 = 38,46%, como diz a tela),
+// mas o motor dividia por 100 de novo e o ICMS diferido saía cem vezes menor.
+// Valor acima de 1 é tratado como porcentagem, para não errar em quem digitou 38,46.
+func FracaoDiferimento(v float64) decimal.Decimal {
+	d := decimal.NewFromFloat(v)
+	if d.GreaterThan(decimal.NewFromInt(1)) {
+		return d.Div(decimal.NewFromInt(100))
+	}
+	if d.IsNegative() {
+		return decimal.Zero
+	}
+	return d
+}

@@ -309,15 +309,15 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 			 base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 			 cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description,
 			 base_icms_st, aliq_icms_st, valor_icms_st, mva,
-			 unidade_comercial, codigo_produto, sales_order_item_code, fiscal_entry_item_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
+			 unidade_comercial, codigo_produto, sales_order_item_code, fiscal_entry_item_id, codigo_beneficio_fiscal)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
 		 RETURNING id, created_at`,
 		item.FiscalExitID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.ValorICMSDiferido,
 		item.BaseIPI, item.AliqIPI, item.ValorIPI, item.AliqPIS, item.ValorPIS, item.AliqCOFINS, item.ValorCOFINS,
 		item.CstICMS, item.CstIPI, item.CstPIS, item.CstCOFINS, item.OrigemMercadoria, item.Description,
 		item.BaseICMSST, item.AliqICMSST, item.ValorICMSST, item.MVA,
-		item.UnidadeComercial, item.CodigoProduto, item.SalesOrderItemCode, item.FiscalEntryItemID,
+		item.UnidadeComercial, item.CodigoProduto, item.SalesOrderItemCode, item.FiscalEntryItemID, item.CodigoBeneficioFiscal,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit item: %w", err)
@@ -375,7 +375,8 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 		        base_ipi, aliq_ipi, valor_ipi, aliq_pis, valor_pis, aliq_cofins, valor_cofins,
 		        cst_icms, cst_ipi, cst_pis, cst_cofins, origem_mercadoria, description,
 		        base_icms_st, aliq_icms_st, valor_icms_st, mva,
-		        unidade_comercial, codigo_produto, created_at, sales_order_item_code, fiscal_entry_item_id
+		        unidade_comercial, codigo_produto, created_at, sales_order_item_code, fiscal_entry_item_id,
+		        codigo_beneficio_fiscal
 		 FROM public.fiscal_exit_items i WHERE fiscal_exit_id = $1 AND EXISTS(SELECT 1 FROM fiscal_exits x WHERE x.id=i.fiscal_exit_id AND x.enterprise_id=$2) ORDER BY sequence`, fiscalExitID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exit items: %w", err)
@@ -562,6 +563,7 @@ func scanExitItems(rows pgx.Rows) ([]*entity.FiscalExitItem, error) {
 			&it.CstICMS, &it.CstIPI, &it.CstPIS, &it.CstCOFINS, &it.OrigemMercadoria, &it.Description,
 			&it.BaseICMSST, &it.AliqICMSST, &it.ValorICMSST, &it.MVA,
 			&it.UnidadeComercial, &it.CodigoProduto, &it.CreatedAt, &it.SalesOrderItemCode, &it.FiscalEntryItemID,
+			&it.CodigoBeneficioFiscal,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit item: %w", err)
 		}
@@ -1168,4 +1170,56 @@ func finalidadeOuVenda(f int) int {
 		return 1
 	}
 	return f
+}
+
+// RegistrarEnvioFocus grava a referência da Focus ANTES do envio: se a resposta
+// não voltar (queda, demora da SEFAZ), a nota continua consultável — antes ela
+// ficava sem referência e a consulta dizia "não foi enviada".
+func (r *FiscalRepositoryPG) RegistrarEnvioFocus(ctx context.Context, id int64, ref string) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.db.Exec(ctx,
+		`UPDATE public.fiscal_exits SET focus_ref = $3, motivo_rejeicao = NULL, updated_at = NOW()
+		  WHERE id = $1 AND enterprise_id = $2`, id, enterpriseID, ref)
+	if err != nil {
+		return fmt.Errorf("gravando a referência da Focus da NF-e %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de saída %d não encontrada", id))
+	}
+	return nil
+}
+
+// RegistrarRejeicao marca a nota como rejeitada guardando o motivo da SEFAZ.
+func (r *FiscalRepositoryPG) RegistrarRejeicao(ctx context.Context, id int64, motivo string) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(ctx,
+		`UPDATE public.fiscal_exits SET status = 'REJECTED', motivo_rejeicao = NULLIF($3, ''), updated_at = NOW()
+		  WHERE id = $1 AND enterprise_id = $2`, id, enterpriseID, motivo)
+	if err != nil {
+		return fmt.Errorf("gravando a rejeição da NF-e %d: %w", id, err)
+	}
+	return nil
+}
+
+// MotivoRejeicao devolve o motivo guardado da última rejeição (nil se não houver).
+func (r *FiscalRepositoryPG) MotivoRejeicao(ctx context.Context, id int64) (*string, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var motivo *string
+	if err := r.db.QueryRow(ctx, `SELECT motivo_rejeicao FROM public.fiscal_exits WHERE id = $1 AND enterprise_id = $2`,
+		id, enterpriseID).Scan(&motivo); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de saída %d não encontrada", id))
+		}
+		return nil, fmt.Errorf("lendo o motivo da rejeição da NF-e %d: %w", id, err)
+	}
+	return motivo, nil
 }

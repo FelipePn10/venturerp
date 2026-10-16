@@ -18,7 +18,7 @@ func defaultFiscalConfig() FiscalConfig {
 	return FiscalConfig{
 		UFEmpresa:                 "PR",
 		IcmsInternoAliquota:       0.12,
-		IcmsDiferimentoPercentual: 38.46,
+		IcmsDiferimentoPercentual: 0.3846, // fração, como a configuração guarda
 	}
 }
 
@@ -722,6 +722,32 @@ func TestScenario_CenarioString(t *testing.T) {
 		res, _ := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
 		if res.Cenario != tc.want {
 			t.Errorf("cenario %s→%s %s: want %s, got %s", tc.emitenteUF, tc.destinoUF, tc.destinoTipo, tc.want, res.Cenario)
+		}
+	}
+}
+
+// Sem diferimento configurado, a venda interna a contribuinte é CST 00 — CST 51
+// com 0% fazia a SEFAZ do PR exigir o código de benefício (rejeição 930).
+func TestScenario_IntraState_Contributor_SemDiferimento_CST00(t *testing.T) {
+	cfg := defaultFiscalConfig()
+	cfg.IcmsDiferimentoPercentual = 0
+	params := TaxCalculationParams{Itens: []TaxItem{{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1}},
+		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101"}
+	res, err := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it := res.Itens[0]; it.CSTICMS != "00" || it.ValorICMSDiferido != 0 {
+		t.Fatalf("CST = %s, diferido = %.2f; quer CST 00 sem diferido", it.CSTICMS, it.ValorICMSDiferido)
+	}
+}
+
+// A configuração guarda fração; quem digitou porcentagem não pode ter o
+// diferimento dividido de novo.
+func TestFracaoDiferimento(t *testing.T) {
+	for _, c := range []struct{ in, want float64 }{{0.3846, 0.3846}, {38.46, 0.3846}, {0, 0}, {-1, 0}} {
+		if got, _ := FracaoDiferimento(c.in).Float64(); math.Abs(got-c.want) > 1e-9 {
+			t.Errorf("FracaoDiferimento(%v) = %v, quer %v", c.in, got, c.want)
 		}
 	}
 }

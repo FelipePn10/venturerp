@@ -2,7 +2,9 @@ package fiscal_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -86,6 +88,11 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization && exit.Status != entity.ExitStatusRejected {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e deve estar em rascunho ou rejeitada para autorizar, status atual: %s", exit.Status))
 	}
+	// Já enviada e sem resposta: reenviar criaria outra nota na Focus, e as duas
+	// poderiam ser autorizadas. A consulta resolve (autoriza ou libera o reenvio).
+	if exit.Status == entity.ExitStatusAwaitingAuthorization && exit.FocusRef != nil && strings.TrimSpace(*exit.FocusRef) != "" {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("a NF-e %d já foi enviada e aguarda a resposta da SEFAZ: use \"Status\" antes de enviar de novo", id))
+	}
 
 	// Beneficiamento: o material do cliente tem de estar baixado ANTES de a nota
 	// ser transmitida. Transmitir sem a baixa deixaria material que saiu
@@ -161,13 +168,45 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		}
 	}
 
+	// A referência é gravada ANTES do envio: se a resposta não voltar, a nota
+	// continua consultável (antes ficava sem referência e "não enviada").
+	envio, guardaEnvio := uc.Repo.(registroEnvioFocus)
+	if guardaEnvio {
+		if err := envio.RegistrarEnvioFocus(ctx, id, ref); err != nil {
+			return nil, err
+		}
+	}
+
 	focusResp, err := focusCli.EmitirNFe(ctx, ref, payload)
 	if err != nil {
-		msg := err.Error()
-		if _, errSit := uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusRejected); errSit != nil {
-			msg += "; a nota não pôde ser marcada como rejeitada e continua aguardando autorização (" + errSit.Error() + ")"
+		var rejeicao *focusnfe.RejeicaoError
+		var processando *focusnfe.EmProcessamentoError
+		switch {
+		case errors.As(err, &processando):
+			// Não é rejeição: a nota fica aguardando e a consulta conclui.
+			atual, errLer := uc.Repo.GetExitByID(ctx, id)
+			if errLer != nil {
+				return nil, errLer
+			}
+			resp := toFiscalExitResponse(atual)
+			resp.Warnings = append(resp.Warnings, "a SEFAZ ainda está processando a NF-e — use \"Status\" em instantes; os títulos, o estoque e o pedido entram quando ela for autorizada")
+			return resp, nil
+		case errors.As(err, &rejeicao):
+			if guardaEnvio {
+				if errSit := envio.RegistrarRejeicao(ctx, id, rejeicao.Motivo); errSit != nil {
+					return nil, fmt.Errorf("a SEFAZ rejeitou a NF-e (%s) e a rejeição não pôde ser gravada: %w", rejeicao.Motivo, errSit)
+				}
+			} else if _, errSit := uc.Repo.UpdateExitStatus(ctx, id, entity.ExitStatusRejected); errSit != nil {
+				return nil, fmt.Errorf("a SEFAZ rejeitou a NF-e (%s) e a rejeição não pôde ser gravada: %w", rejeicao.Motivo, errSit)
+			}
+			// Rejeição é dado a corrigir, não falha do servidor: 422 com o motivo.
+			return nil, errorsuc.NewValidationError("a SEFAZ rejeitou a NF-e: " + rejeicao.Motivo + ". Corrija e envie de novo")
+		default:
+			// Rede ou erro da Focus: não se sabe se a nota chegou. Ela fica
+			// aguardando, com a referência gravada, para a consulta resolver.
+			return nil, errorsuc.NewExternalServiceError("Focus NF-e",
+				err.Error()+" — a nota ficou aguardando autorização; use \"Status\" antes de enviar de novo")
 		}
-		return nil, errorsuc.NewExternalServiceError("Focus NF-e", msg)
 	}
 
 	// O número e a série são os que a SEFAZ autorizou: a Focus numera a nota.
@@ -310,11 +349,15 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			OrigemMercadoria:               origem,
 		}
 
-		// Diferimento parcial CST 51
+		// Diferimento parcial CST 51 (a configuração guarda fração; aceita
+		// porcentagem por engano, como o motor).
 		if cstICMS == "51" && it.ValorICMSDiferido > 0 {
-			pct := cfg.IcmsDiferimentoPercentual * 100
+			pct, _ := engine.FracaoDiferimento(cfg.IcmsDiferimentoPercentual).Mul(decimal.NewFromInt(100)).Float64()
 			nfeIt.PercentualDiferimento = &pct
 			nfeIt.ValorICMSDiferido = &it.ValorICMSDiferido
+		}
+		if it.CodigoBeneficioFiscal != nil {
+			nfeIt.CodigoBeneficioFiscal = *it.CodigoBeneficioFiscal
 		}
 
 		// Substituição Tributária (CST 10/70) — populated when the engine computed ST
@@ -351,3 +394,10 @@ func derefStr(p *string) string {
 }
 
 var _ = uuid.UUID{}
+
+// registroEnvioFocus: repositórios que guardam a referência do envio e o motivo
+// da rejeição (o FiscalRepositoryPG). Opcional para não quebrar os dublês.
+type registroEnvioFocus interface {
+	RegistrarEnvioFocus(ctx context.Context, id int64, ref string) error
+	RegistrarRejeicao(ctx context.Context, id int64, motivo string) error
+}

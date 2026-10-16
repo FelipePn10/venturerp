@@ -213,6 +213,9 @@ type CreateFiscalExitItemDTO struct {
 	SalesOrderItemCode *int64  `json:"sales_order_item_code,omitempty"`
 	UnidadeComercial   *string `json:"unidade_comercial,omitempty"`
 	CodigoProduto      *string `json:"codigo_produto,omitempty"`
+	// CodigoBeneficioFiscal (cBenef) informado na linha; sem ele, vem dos
+	// parâmetros de ICMS/IPI do item ou do NCM.
+	CodigoBeneficioFiscal *string `json:"codigo_beneficio_fiscal,omitempty"`
 }
 
 type CreateFiscalExitFromLoadDTO struct {

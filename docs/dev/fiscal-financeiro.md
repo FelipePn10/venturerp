@@ -660,6 +660,25 @@ Envia a NF-e para a SEFAZ via API Focus NF-e. Só funciona se o status for `"ras
 
 ---
 
+### Rejeição, demora da SEFAZ e código de benefício fiscal
+
+- A referência da Focus é gravada **antes** do envio. Se a SEFAZ não responder dentro
+  da espera (~60 s) a nota fica `AGUARDANDO_AUTORIZACAO`, a resposta traz um aviso e
+  `GET /api/fiscal/exits/{id}/status` conclui (grava número, chave, protocolo, XML,
+  DANFE e aplica os efeitos). Enquanto aguarda, novo envio responde `409`.
+- Rejeição (SEFAZ ou validação da Focus) responde `422` com o motivo — ex.:
+  `930 — CST com benefício fiscal e não informado o código de benefício fiscal` — e
+  grava `fiscal_exits.motivo_rejeicao`, que a consulta de status devolve em `motivo`.
+  Se a Focus não tiver a referência (o envio não chegou), a consulta marca a nota
+  rejeitada e libera o reenvio.
+- **cBenef:** `fiscal_exit_items.codigo_beneficio_fiscal` vem do item da nota ou dos
+  parâmetros de ICMS/IPI (VFIS0320): item antes de NCM, cliente antes de geral, UF de
+  destino, operação SAIDA/AMBAS. Só vai para CST com benefício (20, 30, 40, 41, 50,
+  51, 53, 70, 90). Em PR, RS, RJ, SC, GO e DF a prévia barra a emissão sem ele.
+- Diferimento: `icms_diferimento_percentual` é **fração** (0,3846 = 38,46%). Sem
+  diferimento, venda interna a contribuinte é CST 00; com diferimento, CST 51 com
+  `icms_valor_operacao` (cheio) e `icms_valor` (operação − diferido).
+
 ### Pendências de efeitos da NF-e
 
 `GET /api/fiscal/exits/{id}/pendencias` lista as pendências da nota (abertas e

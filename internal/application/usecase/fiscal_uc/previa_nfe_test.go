@@ -319,3 +319,27 @@ func TestDataHoraEmissaoNoFusoDeBrasilia(t *testing.T) {
 		t.Errorf("data passada = %s", got)
 	}
 }
+
+// No PR, CST com benefício sem cBenef é rejeitado pela SEFAZ (930): a prévia
+// barra antes. Com o código, ou com CST sem benefício, passa.
+func TestCSTComBeneficioSemCodigoImpedeNoPR(t *testing.T) {
+	items := itemBase()
+	items[0].CstICMS = strp("51")
+	if pend := conferirNota(notaBase(), items, configBase(), PlanoDaNota{}); !temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+		t.Fatalf("CST 51 sem cBenef no PR tem de impedir: %+v", pend)
+	}
+	items[0].CodigoBeneficioFiscal = strp("PR830001")
+	if pend := conferirNota(notaBase(), items, configBase(), PlanoDaNota{}); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+		t.Fatal("com o cBenef informado não deveria impedir")
+	}
+	items[0].CstICMS, items[0].CodigoBeneficioFiscal = strp("00"), nil
+	if pend := conferirNota(notaBase(), items, configBase(), PlanoDaNota{}); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+		t.Fatal("CST 00 não exige cBenef")
+	}
+	cfg := configBase()
+	cfg.UFEmpresa = "SP"
+	items[0].CstICMS = strp("51")
+	if pend := conferirNota(notaBase(), items, cfg, PlanoDaNota{}); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+		t.Fatal("SP não exige cBenef")
+	}
+}
