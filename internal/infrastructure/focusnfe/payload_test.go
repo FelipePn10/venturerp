@@ -99,3 +99,27 @@ func TestNFEPayloadReferenciaNumNivelSo(t *testing.T) {
 		t.Error("sem referência por item, a da nota vai")
 	}
 }
+
+// CST 51: a SEFAZ confere vICMS = vICMSOp − vICMSDif (rejeição 353); o cBenef
+// vai quando informado (rejeição 930 sem ele no PR).
+func TestNFEItemCST51ComDiferimentoEBeneficio(t *testing.T) {
+	dif, pct := 46.15, 38.46
+	m := NFEItem{CodigoSituacaoTributariaICMS: "51", ValorBaseCalculoICMS: 1000, AliquotaICMS: 12, ValorICMS: 120,
+		PercentualDiferimento: &pct, ValorICMSDiferido: &dif, CodigoBeneficioFiscal: " PR830001 "}.campos()
+	if m["icms_valor_operacao"] != 120.0 {
+		t.Fatalf("icms_valor_operacao = %v, quer 120 (o ICMS da operação)", m["icms_valor_operacao"])
+	}
+	if m["icms_valor"] != 73.85 {
+		t.Fatalf("icms_valor = %v, quer 73.85 (operação − diferido)", m["icms_valor"])
+	}
+	if m["codigo_beneficio_fiscal"] != "PR830001" {
+		t.Fatalf("codigo_beneficio_fiscal = %v", m["codigo_beneficio_fiscal"])
+	}
+	semDif := NFEItem{CodigoSituacaoTributariaICMS: "00", ValorICMS: 120}.campos()
+	if _, ok := semDif["icms_valor_operacao"]; ok || semDif["icms_valor"] != 120.0 {
+		t.Fatalf("CST 00 não leva valor da operação: %v", semDif)
+	}
+	if _, ok := semDif["codigo_beneficio_fiscal"]; ok {
+		t.Fatal("cBenef vazio não pode ir no payload")
+	}
+}

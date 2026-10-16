@@ -27,7 +27,20 @@ type CreateFiscalExitUseCase struct {
 	// nota. Sem eles a nota continua sendo criada com o que foi informado.
 	Customers   customerrepo.CustomerRepository
 	SalesOrders salesrepo.SalesOrderRepository
+	// Beneficios resolve o cBenef da linha pelos parâmetros de ICMS/IPI.
+	// Opcional: sem ele, só vale o código informado na linha.
+	Beneficios ResolvedorBeneficioFiscal
 }
+
+// ResolvedorBeneficioFiscal acha o código de benefício fiscal (cBenef) de um
+// item numa operação de saída para a UF de destino.
+type ResolvedorBeneficioFiscal interface {
+	BeneficioFiscal(ctx context.Context, itemCode *int64, ncm *string, ufDestino string, cliente *int64) (*string, error)
+}
+
+// cstComBeneficio: CSTs de ICMS que levam cBenef nas UFs que o exigem. Mandar o
+// código num CST sem benefício (00, 10…) também é rejeitado pela SEFAZ.
+var cstComBeneficio = map[string]bool{"20": true, "30": true, "40": true, "41": true, "50": true, "51": true, "53": true, "70": true, "90": true}
 
 func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.CreateFiscalExitDTO) (*response.FiscalExitResponse, error) {
 	if !uc.Auth.CanCreateFiscalExit(ctx) {
@@ -270,6 +283,16 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 			SalesOrderItemCode: it.SalesOrderItemCode,
 			UnidadeComercial:   it.UnidadeComercial,
 			CodigoProduto:      it.CodigoProduto,
+		}
+		if cstComBeneficio[itemTax.CSTICMS] {
+			item.CodigoBeneficioFiscal = it.CodigoBeneficioFiscal
+			if (item.CodigoBeneficioFiscal == nil || strings.TrimSpace(*item.CodigoBeneficioFiscal) == "") && uc.Beneficios != nil {
+				cb, err := uc.Beneficios.BeneficioFiscal(ctx, it.ItemCode, it.Ncm, destUF, dto.CustomerCode)
+				if err != nil {
+					return nil, fmt.Errorf("lendo o código de benefício fiscal da linha %d: %w", it.Sequence, err)
+				}
+				item.CodigoBeneficioFiscal = cb
+			}
 		}
 		if _, err := uc.Repo.CreateExitItem(ctx, item); err != nil {
 			return nil, err

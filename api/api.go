@@ -299,6 +299,7 @@ func (app *application) mount() chi.Router {
 	createItemUc := item_uc.NewCreateItemUseCase(itemRepo, authService, fiscalClassificationCatalog)
 	updateItemUc := item_uc.NewUpdateItemUseCase(itemRepo, authService, fiscalClassificationCatalog)
 	findItemByCodeUc := item_uc.NewFindItemByCode(itemRepo, authService)
+	findItemByCodeUc.Descricao = item.NewBuscaPorDescricaoPG(app.db.Pool)
 	listItemsUC := item_uc.NewListItemsUseCase(itemRepo, authService)
 	listItemsWithMasksUC := item_uc.NewListItemsWithMasksUseCase(itemRepo, authService)
 	itemHandler := handler.NewCreateItemHandler(createItemUc, updateItemUc, findItemByCodeUc, listItemsUC, listItemsWithMasksUC)
@@ -1152,7 +1153,7 @@ func (app *application) mount() chi.Router {
 	// fiscal module
 	// Customers/SalesOrders completam o destinatário da nota (endereço exigido
 	// pela NF-e) e resolvem a condição de pagamento que vira duplicata e título.
-	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo}
+	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo, Beneficios: fiscalRepo.NewBeneficioFiscalPG(app.db.Pool)}
 	previaNFeUC := &fiscalUC.PreviaNFeUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo}
 	previaNFeHandler := handler.NewPreviaNFeHandler(previaNFeUC)
 	// Nota de entrada completa: XML lido por inteiro, conciliação dos itens com

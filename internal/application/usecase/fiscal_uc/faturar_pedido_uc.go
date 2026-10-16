@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,11 +252,11 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 				continue
 			}
 			if q.IsNegative() {
-				return nil, errorsuc.NewValidationError(fmt.Sprintf("item %d: quantidade negativa", l.item.ItemCode))
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("item %s: quantidade negativa", codigoDaLinha(l)))
 			}
 			if q.GreaterThan(l.pendente) {
 				return nil, errorsuc.NewValidationError(fmt.Sprintf(
-					"item %d (%s): quer faturar %s, mas só faltam %s", l.item.ItemCode, l.cadastro.Name, q.String(), l.pendente.String()))
+					"item %s (%s): quer faturar %s, mas só faltam %s", codigoDaLinha(l), l.cadastro.Name, q.String(), l.pendente.String()))
 			}
 			c := cfop
 			if it.Cfop != nil && len(soDigitos(*it.Cfop)) == 4 {
@@ -444,14 +445,23 @@ func impedimentosDoPedido(p *salesentity.SalesOrder, linhas []linhaPedido, ender
 			temPendente = true
 		}
 		if l.pendente.IsPositive() && l.unitario.Sign() <= 0 {
-			out = append(out, fmt.Sprintf("o item %d está sem preço no pedido", l.item.ItemCode))
+			out = append(out, fmt.Sprintf("o item %s está sem preço no pedido", codigoDaLinha(&l)))
 		}
 		if l.pendente.IsPositive() && soDigitos(l.cadastro.NCM) == "" {
-			out = append(out, fmt.Sprintf("o item %d (%s) está sem NCM na classificação fiscal do cadastro", l.item.ItemCode, l.cadastro.Name))
+			out = append(out, fmt.Sprintf("o item %s (%s) está sem NCM na classificação fiscal do cadastro — preencha em VENT0200, aba Contábil, Classif. Fiscal Venda", codigoDaLinha(&l), l.cadastro.Name))
 		}
 	}
 	if !temPendente && p.Status != salesentity.SalesOrderStatusInvoiced {
 		out = append(out, "não há quantidade pendente: tudo já foi faturado ou está em nota não autorizada")
 	}
 	return out
+}
+
+// codigoDaLinha: as mensagens citam o código que a pessoa conhece (RN-01001),
+// não a chave interna do item.
+func codigoDaLinha(l *linhaPedido) string {
+	if c := strings.TrimSpace(l.cadastro.BusinessCode); c != "" {
+		return c
+	}
+	return strconv.FormatInt(l.item.ItemCode, 10)
 }

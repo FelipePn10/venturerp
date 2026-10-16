@@ -6,6 +6,28 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(nf-e): validado contra a SEFAZ do PR em homologação (autorização, efeitos,
+  cancelamento e estorno). Correções encontradas no caminho:
+  - venda interna a contribuinte sem diferimento configurado saía CST 51 e era
+    rejeitada (930, código de benefício fiscal); agora sai CST 00
+  - o percentual de diferimento era dividido por 100 duas vezes (ICMS diferido cem
+    vezes menor); a configuração guarda fração e o motor passa a usá-la assim
+  - no CST 51 o ICMS destacado é o da operação menos o diferido (`icms_valor_operacao`),
+    como a SEFAZ confere (rejeição 353)
+  - código de benefício fiscal (cBenef) por item: vem do parâmetro de ICMS/IPI do item
+    ou do NCM (VFIS0320), vai para a Focus, e a prévia barra a emissão quando o CST
+    exige e o código falta (PR, RS, RJ, SC, GO, DF) — migração 000404
+  - rejeição da SEFAZ responde 422 com o motivo (era 502) e o motivo fica gravado na
+    nota; a consulta de status o mostra
+  - a referência da Focus é gravada antes do envio: nota sem resposta (SEFAZ demorando,
+    queda) fica "aguardando autorização" e é concluída pela consulta — antes era
+    marcada rejeitada e, autorizada depois, ficava sem título, baixa e pedido
+  - a consulta que descobre a autorização grava número, chave, protocolo e DANFE
+  - reenviar nota que aguarda resposta é recusado (evita duas notas na SEFAZ)
+- feat(itens): o campo de código do item aceita também a descrição — um item só abre
+  direto; vários listam os códigos para escolher
+- fix(faturamento): as mensagens citam o código do item (RN-01001), não a chave interna
+
 ## [v1.6.2] — 2026-10-14
 
 - fix: erro conhecido sai do log de erro e mensagem de código de item legível (`ac12a14c`)

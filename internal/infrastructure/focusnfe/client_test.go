@@ -3,6 +3,7 @@ package focusnfe
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -64,5 +65,38 @@ func TestEmitirNFeStopsOnHTTPErrorWithoutPolling(t *testing.T) {
 	}
 	if getCalls != 0 {
 		t.Fatalf("GET polling calls = %d, want 0 after terminal HTTP error", getCalls)
+	}
+}
+
+// A SEFAZ que demora não é rejeição: a nota fica aguardando e a consulta
+// conclui. Rejeição da SEFAZ volta tipada, com o motivo.
+func TestEmitirNFeClassificaRejeicaoEProcessamento(t *testing.T) {
+	t.Parallel()
+	resposta := func(body string) *http.Response {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(body))}
+	}
+	rejeita := &http.Client{Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		return resposta(`{"status":"erro_autorizacao","status_sefaz":"930","mensagem_sefaz":"CST com beneficio fiscal e nao informado o codigo"}`), nil
+	})}
+	c := NewClient("t", "homologacao")
+	c.baseURL, c.httpCli = "https://focus.invalid/v2", rejeita
+	_, err := c.EmitirNFe(context.Background(), "r1", NFEPayload{})
+	var rej *RejeicaoError
+	if !errors.As(err, &rej) || !strings.Contains(rej.Motivo, "930") {
+		t.Fatalf("erro = %v, quer RejeicaoError com o código 930", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // a espera termina na hora: o que importa é a classificação
+	processando := &http.Client{Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		return resposta(`{"status":"processando_autorizacao"}`), nil
+	})}
+	c2 := NewClient("t", "homologacao")
+	c2.baseURL, c2.httpCli = "https://focus.invalid/v2", processando
+	_, err = c2.EmitirNFe(ctx, "r2", NFEPayload{})
+	var proc *EmProcessamentoError
+	if !errors.As(err, &proc) {
+		t.Fatalf("erro = %v, quer EmProcessamentoError (não é rejeição)", err)
 	}
 }

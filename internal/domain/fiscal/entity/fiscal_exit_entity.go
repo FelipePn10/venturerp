@@ -131,5 +131,8 @@ type FiscalExitItem struct {
 	SalesOrderItemCode *int64
 	// FiscalEntryItemID: a linha da nota de entrada devolvida por esta linha.
 	FiscalEntryItemID *int64
-	CreatedAt         time.Time
+	// CodigoBeneficioFiscal é o cBenef da linha (exigido pela SEFAZ de algumas
+	// UFs para CST com benefício: diferimento, isenção, redução…).
+	CodigoBeneficioFiscal *string
+	CreatedAt             time.Time
 }

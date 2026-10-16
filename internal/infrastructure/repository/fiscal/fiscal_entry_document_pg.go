@@ -643,7 +643,8 @@ func (r *FiscalRepositoryPG) PlanoContasByCodigo(ctx context.Context, codigo str
 
 const candidatoCols = `it.code, it.name, it.warehouse_unit_of_measurement::text, ` + ncmDoItemSQL + `, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
 	COALESCE((SELECT w.id FROM warehouse w WHERE w.id = it.supplies_warehouse_code AND w.enterprise_id = it.enterprise_id),
-	         (SELECT w.id FROM warehouse w WHERE w.id = it.warehouse_code AND w.enterprise_id = it.enterprise_id))`
+	         (SELECT w.id FROM warehouse w WHERE w.id = it.warehouse_code AND w.enterprise_id = it.enterprise_id)),
+	COALESCE(it.business_code, '')`
 
 func (r *FiscalRepositoryPG) SearchItems(ctx context.Context, termos []string, limite int) ([]repository.ItemCandidate, error) {
 	empresa, err := tenant.ID(ctx)
@@ -732,7 +733,7 @@ func (r *FiscalRepositoryPG) queryCandidatos(ctx context.Context, q string, args
 	var out []repository.ItemCandidate
 	for rows.Next() {
 		var c repository.ItemCandidate
-		if err := rows.Scan(&c.Code, &c.Name, &c.UOM, &c.NCM, &c.IsActive, &c.Origem, &c.DefaultWarehouseID); err != nil {
+		if err := rows.Scan(&c.Code, &c.Name, &c.UOM, &c.NCM, &c.IsActive, &c.Origem, &c.DefaultWarehouseID, &c.BusinessCode); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

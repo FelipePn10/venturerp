@@ -2,8 +2,11 @@ package fiscal_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -47,6 +50,21 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 	}
 
 	if exit.FocusRef == nil {
+		// Rejeitada antes de chegar à SEFAZ: mostra o motivo guardado em vez de
+		// dizer que a nota "não foi enviada".
+		if exit.Status == entity.ExitStatusRejected {
+			if m, ok := uc.Repo.(motivoRejeicaoRepo); ok {
+				motivo, err := m.MotivoRejeicao(ctx, exitID)
+				if err != nil {
+					return nil, err
+				}
+				res := &ConsultarNFeResult{ExitID: exitID, Status: "rejeitado"}
+				if motivo != nil {
+					res.Motivo = *motivo
+				}
+				return res, nil
+			}
+		}
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e %d não possui referência Focus — não foi enviada para autorização", exitID))
 	}
 
@@ -68,6 +86,19 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 	})
 
 	resp, err := cli.ConsultarNFe(ctx, *exit.FocusRef)
+	var naoEncontrada *focusnfe.NaoEncontradaError
+	if errors.As(err, &naoEncontrada) && exit.Status == entity.ExitStatusAwaitingAuthorization {
+		// O envio não chegou à Focus: libera o reenvio.
+		motivo := "o envio não chegou à Focus — envie a nota de novo"
+		if r, ok := uc.Repo.(registroEnvioFocus); ok {
+			if errSit := r.RegistrarRejeicao(ctx, exitID, motivo); errSit != nil {
+				return nil, errSit
+			}
+		} else if _, errSit := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusRejected); errSit != nil {
+			return nil, errSit
+		}
+		return &ConsultarNFeResult{ExitID: exitID, FocusRef: *exit.FocusRef, Status: "nao_encontrado", Motivo: motivo}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("consultando NF-e no Focus: %w", err)
 	}
@@ -76,10 +107,18 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 	// Sync local status if Focus shows a terminal state
 	if resp != nil {
 		switch resp.Status {
-		case "autorizado":
+		case "autorizado", "autorizada":
 			if exit.Status != entity.ExitStatusAuthorized {
-				if _, errSituacao := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusAuthorized); errSituacao != nil {
-					return nil, fmt.Errorf("gravando a situação autorizada da NF-e: %w", errSituacao)
+				// Autorização descoberta pela consulta (a emissão não esperou a
+				// SEFAZ): grava número, chave, protocolo e documentos, não só a
+				// situação — antes a nota ficava autorizada sem chave nem DANFE.
+				if n, convErr := strconv.ParseInt(strings.TrimSpace(resp.Numero), 10, 64); convErr == nil && n > 0 {
+					if errNum := uc.Repo.UpdateExitNumbering(ctx, exitID, n, resp.Serie); errNum != nil {
+						return nil, errNum
+					}
+				}
+				if _, errSituacao := uc.Repo.UpdateExitAuthorization(ctx, exitID, resp.Chave(), resp.Protocolo, *exit.FocusRef, resp.PathXML, resp.PathDANFE); errSituacao != nil {
+					return nil, fmt.Errorf("gravando a autorização da NF-e: %w", errSituacao)
 				}
 				if uc.Efeitos != nil && exit.FiscalEntryID == nil {
 					avisos = append(avisos, uc.aplicarEfeitos(ctx, exitID)...)
@@ -91,9 +130,13 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 					return nil, fmt.Errorf("gravando a situação cancelada da NF-e: %w", errSituacao)
 				}
 			}
-		case "rejeitado", "erro_autorizacao":
+		case "rejeitado", "erro_autorizacao", "denegado", "denegada":
 			if exit.Status != entity.ExitStatusRejected {
-				if _, errSituacao := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusRejected); errSituacao != nil {
+				if r, ok := uc.Repo.(registroEnvioFocus); ok {
+					if errSituacao := r.RegistrarRejeicao(ctx, exitID, resp.Motivo()); errSituacao != nil {
+						return nil, fmt.Errorf("gravando a rejeição da NF-e: %w", errSituacao)
+					}
+				} else if _, errSituacao := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusRejected); errSituacao != nil {
 					return nil, fmt.Errorf("gravando a situação rejeitada da NF-e: %w", errSituacao)
 				}
 			}
@@ -109,6 +152,9 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 		result.Status = resp.Status
 		result.ChaveNFe = resp.ChaveNFe
 		result.Protocolo = resp.Protocolo
+		if !resp.Autorizada() {
+			result.Motivo = resp.Motivo()
+		}
 		result.DanfeURL = cli.DocumentURL(resp.PathDANFE)
 		result.XMLURL = cli.DocumentURL(resp.PathXML)
 	}
@@ -146,4 +192,8 @@ func (uc *ConsultarNFeUseCase) aplicarEfeitos(ctx context.Context, exitID int64)
 		return []string{"nota autorizada; estoque, títulos e pedido ficaram PENDENTES e serão reprocessados automaticamente: " + err.Error()}
 	}
 	return nil
+}
+
+type motivoRejeicaoRepo interface {
+	MotivoRejeicao(ctx context.Context, id int64) (*string, error)
 }
