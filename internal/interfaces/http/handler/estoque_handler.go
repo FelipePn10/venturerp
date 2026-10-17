@@ -9,6 +9,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/estoque_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
@@ -46,7 +47,13 @@ func (h *EstoqueHandler) Transferir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.UC.Transferir(r.Context(), dto)
-	h.responder(w, http.StatusCreated, out, err)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, map[string]any{
+		"saida": stock_uc.ToStockMovementResponse(out.Saida), "entrada": stock_uc.ToStockMovementResponse(out.Entrada),
+	})
 }
 
 // POST /api/stock/movements/{id}/reverse
@@ -60,7 +67,11 @@ func (h *EstoqueHandler) Estornar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.UC.Estornar(r.Context(), id, dto)
-	h.responder(w, http.StatusCreated, out, err)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusCreated, stock_uc.ToStockMovementResponses(out))
 }
 
 // GET /api/stock/kardex/{itemCode}?warehouse_id=&from=&to=

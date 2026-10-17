@@ -305,4 +305,6 @@ type StockMovementTypeResponse struct {
 	GeneratesFCIMovement bool      `json:"generates_fci_movement"`
 	IsActive             bool      `json:"is_active"`
 	CreatedAt            time.Time `json:"created_at"`
+	RequiresCostCenter   bool      `json:"requires_cost_center"`
+	AllowsManual         bool      `json:"allows_manual"`
 }

@@ -25,6 +25,8 @@ func toStockMovementTypeResponse(s *entity.StockMovementType) *response.StockMov
 		GeneratesFCIMovement: s.GeneratesFCIMovement,
 		IsActive:             s.IsActive,
 		CreatedAt:            s.CreatedAt,
+		RequiresCostCenter:   s.RequiresCostCenter,
+		AllowsManual:         s.AllowsManual,
 	}
 }
 

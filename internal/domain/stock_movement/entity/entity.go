@@ -38,4 +38,9 @@ type StockMovementType struct {
 	GeneratesFCIMovement bool
 	IsActive             bool
 	CreatedAt            time.Time
+	// RequiresCostCenter: o lançamento manual com este tipo exige centro de custo.
+	RequiresCostCenter bool
+	// AllowsManual: o tipo pode ser usado no lançamento manual (os gerados por
+	// processo — nota, produção — não).
+	AllowsManual bool
 }

@@ -164,3 +164,14 @@ func toPhysicalInventoryItemResponses(list []*entity.PhysicalInventoryItem) []*r
 	}
 	return out
 }
+
+// ToStockMovementResponse expõe o mapeamento para outros pacotes (operações de
+// estoque devolvem o movimento no mesmo formato do lançamento).
+func ToStockMovementResponse(m *entity.StockMovement) *response.StockMovementResponse {
+	return toStockMovementResponse(m)
+}
+
+// ToStockMovementResponses idem, para listas.
+func ToStockMovementResponses(list []*entity.StockMovement) []*response.StockMovementResponse {
+	return toStockMovementResponses(list)
+}
