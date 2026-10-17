@@ -33,6 +33,10 @@ type PreviaNFeUseCase struct {
 	// Devolucao, quando presente, liga os itens da devolução de compra à nota
 	// de origem (DFeReferenciado), como na transmissão.
 	Devolucao *DevolucaoCompraUseCase
+	// Efeitos confere, antes da transmissão, se a baixa de estoque vai conseguir
+	// converter a unidade da nota para a de estoque. Sem isso a nota seria
+	// autorizada na SEFAZ e só a baixa falharia, depois.
+	Efeitos *EfeitosNFe
 }
 
 func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.PreviaNFeResponse, error) {
@@ -147,6 +151,17 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	}
 
 	out.Pendencias = conferirNota(exit, items, cfg, plano)
+	if uc.Efeitos != nil {
+		if _, err := uc.Efeitos.quantidadesEmEstoque(ctx, items); err != nil {
+			if _, ok := errorsuc.AsValidation(err); !ok {
+				return nil, err
+			}
+			out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
+				Nivel: NivelImpede, Campo: "itens.unidade", Mensagem: err.Error(),
+				ComoResolver: "cadastre a conversão de unidade do item em VSUP0110 — Conversão de UM por Item, ou emita a nota na unidade de estoque",
+			})
+		}
+	}
 	out.PodeAutorizar = true
 	for _, p := range out.Pendencias {
 		if p.Nivel == NivelImpede {

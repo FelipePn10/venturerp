@@ -93,6 +93,21 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 		}
 	}
 
+	// Conversão cadastrada depois da importação (ou nota importada antes de a
+	// entrada consultar o cadastro): reaplica antes de conferir, para a nota
+	// entrar na unidade de estoque em vez de ser barrada.
+	if mudou, err := servico.AplicarConversoes(ctx, doc); err != nil {
+		return nil, err
+	} else if mudou {
+		cab := repository.HeaderConciliation{EntryOperationCode: doc.EntryOperationCode, PurchaseOrderCode: doc.PurchaseOrderCode}
+		if err := uc.Docs.SaveConciliation(ctx, doc.ID, cab, conciliacoesDoDoc(doc), nil, doc.Parcelas, doc.Status); err != nil {
+			return nil, err
+		}
+		if doc, err = uc.Docs.GetEntryDocument(ctx, dto.ID); err != nil {
+			return nil, err
+		}
+	}
+
 	pend, _, err := servico.Conferir(ctx, doc)
 	if err != nil {
 		return nil, err

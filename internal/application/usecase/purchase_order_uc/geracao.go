@@ -18,6 +18,7 @@ type Geracao struct {
 	Repo          repository.PurchaseOrderRepository
 	Almoxarifados AlmoxarifadoPadrao
 	Aprovacao     *ApprovePurchaseOrderUseCase
+	Unidade       *UnidadeInterna
 }
 
 // NovaCapa prepara a capa gerada: rascunho, alçada ainda não avaliada.
@@ -32,6 +33,13 @@ func (g *Geracao) CompletarLinhas(ctx context.Context, itens []*entity.PurchaseO
 	var avisos []string
 	for _, it := range itens {
 		it.TotalPrice = entity.TotalDaLinha(it.RequestedQty, it.UnitPrice, it.DiscountPct)
+		var unidade *UnidadeInterna
+		if g != nil {
+			unidade = g.Unidade
+		}
+		if err := unidade.Preencher(ctx, it); err != nil {
+			return nil, err
+		}
 		if it.WarehouseID != nil && *it.WarehouseID > 0 {
 			continue
 		}

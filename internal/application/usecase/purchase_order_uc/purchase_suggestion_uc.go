@@ -59,6 +59,8 @@ type ApprovePurchaseSuggestionUseCase struct {
 	// Aprovacao passa o pedido gerado pela alçada de valores. Sem ela o pedido
 	// fica em rascunho para ser aprovado em VPDC0200.
 	Aprovacao *ApprovePurchaseOrderUseCase
+	// Unidade: a quantidade da sugestão está na unidade de estoque.
+	Unidade *UnidadeInterna
 }
 
 func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto request.ApprovePurchaseSuggestionDTO) (*poentity.PurchaseOrder, error) {
@@ -151,6 +153,9 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 	}
 	demandType := string(planned.DemandType)
 	item.DemandType = &demandType
+	if err := uc.Unidade.Preencher(ctx, item); err != nil {
+		return nil, err
+	}
 
 	// Atomic: order + item are created in one transaction.
 	created, err := uc.Repo.CreateWithItems(ctx, po, []*poentity.PurchaseOrderItem{item})

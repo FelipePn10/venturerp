@@ -810,9 +810,12 @@ func (app *application) mount() chi.Router {
 	// purchase order
 	poRepo := purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(app.db.Pool)
 	poApproveUC := &purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC}
-	poGeracao := &purchase_order_uc.Geracao{Repo: poRepo, Almoxarifados: poRepo, Aprovacao: poApproveUC}
+	// Unidade interna: toda linha de pedido guarda quantidade e preço na unidade
+	// de estoque do cadastro (e recusa unidade de compra sem conversão).
+	poUnidade := &purchase_order_uc.UnidadeInterna{Unidades: poRepo, Conversor: itemConversionUC}
+	poGeracao := &purchase_order_uc.Geracao{Repo: poRepo, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade}
 	purchaseOrderHandler := handler.NewPurchaseOrderHandler(
-		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo},
+		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Unidade: poUnidade},
 		&purchase_order_uc.UpdatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC},
 		&purchase_order_uc.GetPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersUseCase{Repo: poRepo, Auth: authService},
@@ -821,7 +824,7 @@ func (app *application) mount() chi.Router {
 		&purchase_order_uc.CancelPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		// Inspection gate wires FINS0212: material with an active inspection route is
 		// received into the inspection warehouse and an inspection order is opened.
-		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC, Tolerances: purchaseToleranceUC},
+		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC, Tolerances: purchaseToleranceUC, Unidade: poUnidade},
 		// Alçada de valores: procurementUC resolves the approval limit rule.
 		poApproveUC,
 		&purchase_order_uc.ConsultPurchaseOrdersUseCase{Reader: poRepo, Auth: authService},
@@ -837,6 +840,7 @@ func (app *application) mount() chi.Router {
 			UOMConverter:  itemConversionUC,
 			FiscalClass:   fiscalClassUC,
 			Almoxarifados: poRepo,
+			Unidade:       poUnidade,
 		},
 		&purchase_order_uc.UpdatePurchaseOrderItemUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.CancelPurchaseOrderItemUseCase{Repo: poRepo, Auth: authService},
@@ -845,7 +849,7 @@ func (app *application) mount() chi.Router {
 	// MRP purchase suggestions (PURCHASE planned orders → purchase order)
 	purchaseSuggestionHandler := handler.NewPurchaseSuggestionHandler(
 		&purchase_order_uc.ListPurchaseSuggestionsUseCase{Planned: plannedRepo, Auth: authService},
-		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC},
+		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade},
 		&purchase_order_uc.RejectPurchaseSuggestionUseCase{Planned: plannedRepo, Auth: authService},
 	)
 
@@ -1241,6 +1245,7 @@ func (app *application) mount() chi.Router {
 		Itens:       itemRepo,
 		Pendencias:  fiscalRepo.NewPendenciasPG(app.db.Pool),
 		GeraTitulos: true,
+		Conversor:   itemConversionUC,
 		Transacao: func(ctx context.Context, fn func(fiscalUC.EfeitosRepos) error) error {
 			tx, err := app.db.Pool.Begin(ctx)
 			if err != nil {
@@ -1259,6 +1264,8 @@ func (app *application) mount() chi.Router {
 			return tx.Commit(ctx)
 		},
 	}
+	// A prévia confere a conversão de unidade que a baixa de estoque vai precisar.
+	previaNFeUC.Efeitos = efeitosNFe
 	app.efeitosNFeScheduler = fiscalefeitos.NewScheduler(efeitosNFe, app.logger)
 	pendenciasNFeHandler := handler.NewPendenciasNFeHandler(efeitosNFe, authService)
 	fiscalHandler := handler.NewFiscalHandler(

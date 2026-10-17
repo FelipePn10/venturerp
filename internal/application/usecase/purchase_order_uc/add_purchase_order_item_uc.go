@@ -23,6 +23,8 @@ type AddPurchaseOrderItemUseCase struct {
 	UOMConverter  ports.UOMConverter
 	FiscalClass   ports.FiscalClassificationProvider
 	Almoxarifados AlmoxarifadoPadrao
+	// Unidade completa quantidade e preço na unidade de estoque do item.
+	Unidade *UnidadeInterna
 }
 
 func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.CreatePurchaseOrderItemDTO) (*response.PurchaseOrderItemResponse, error) {
@@ -77,18 +79,6 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		}
 	}
 
-	// 3) Internal UM/qty/price — via conversões por item.
-	internalQty := dto.RequestedQty
-	internalPrice := unitPrice
-	if purchaseUOM != nil && dto.InternalUOM != nil && uc.UOMConverter != nil {
-		if q, found, cerr := uc.UOMConverter.ConvertQuantity(ctx, dto.ItemCode, dto.RequestedQty, *purchaseUOM, *dto.InternalUOM); cerr == nil && found {
-			internalQty = q
-		}
-		if p, found, cerr := uc.UOMConverter.ConvertUnitPrice(ctx, dto.ItemCode, unitPrice, *purchaseUOM, *dto.InternalUOM); cerr == nil && found {
-			internalPrice = p
-		}
-	}
-
 	total := entity.TotalDaLinha(dto.RequestedQty, unitPrice, dto.DiscountPct)
 
 	// Próxima sequência: a maior + 1 (contar as linhas repetia o número de
@@ -120,8 +110,6 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		Status:                    entity.PurchaseOrderItemStatusOPEN,
 		PurchaseUOM:               purchaseUOM,
 		InternalUOM:               dto.InternalUOM,
-		InternalQty:               internalQty,
-		InternalPrice:             internalPrice,
 		WarehouseID:               dto.WarehouseID,
 		OperationTypeCode:         dto.OperationTypeCode,
 		InvoiceTypeCode:           dto.InvoiceTypeCode,
@@ -146,6 +134,15 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		return nil, err
 	}
 	if item.PromisedDate, err = dataOpcional(dto.PromisedDate, "prometida"); err != nil {
+		return nil, err
+	}
+
+	// 3) Unidade, quantidade e preço internos — unidade de estoque do cadastro.
+	unidade := uc.Unidade
+	if unidade == nil && uc.UOMConverter != nil {
+		unidade = &UnidadeInterna{Conversor: uc.UOMConverter}
+	}
+	if err := unidade.Preencher(ctx, item); err != nil {
 		return nil, err
 	}
 
