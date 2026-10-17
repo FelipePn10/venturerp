@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"strconv"
 	"strings"
 	"time"
@@ -842,6 +844,60 @@ func nullableNumeric(value string) any {
 	return value
 }
 
+// ajustarSaldoDaContagem lança no estoque a divergência da contagem concluída
+// ou aprovada. Antes a contagem só mudava de situação: a divergência aprovada
+// nunca chegava ao saldo, e a próxima contagem acusava a mesma diferença.
+//
+// Uma vez por contagem (adjustment_movement_id), no lote e no endereço contados,
+// ao custo médio do item — na mesma transação da transição.
+func ajustarSaldoDaContagem(ctx context.Context, tx pgx.Tx, tenant int64, id, actor uuid.UUID, c notificationentity.CycleCount) error {
+	if c.DivergenceQuantity == nil || c.DivergenceQuantity.IsZero() || c.LegacyItemCode <= 0 {
+		return nil
+	}
+	var jaAjustada *int64
+	if err := tx.QueryRow(ctx, `SELECT adjustment_movement_id FROM stock_cycle_counts WHERE enterprise_id=$1 AND id=$2`, tenant, id).Scan(&jaAjustada); err != nil {
+		return fmt.Errorf("conferindo o ajuste da contagem: %w", err)
+	}
+	if jaAjustada != nil {
+		return nil
+	}
+	qtd, _ := c.DivergenceQuantity.Float64()
+	ref := stockentity.ReferenceTypeCycleCount
+	nota := "Ajuste da contagem cíclica " + id.String()
+	mov := &stockentity.StockMovement{
+		ItemCode: c.LegacyItemCode, Mask: c.Mask, WarehouseID: c.WarehouseID,
+		MovementType: stockentity.MovementTypeAdjustment, Quantity: qtd, ExactQuantity: *c.DivergenceQuantity,
+		ReferenceType: &ref, Notes: &nota, CreatedBy: actor, PermiteSaldoNegativo: true,
+	}
+	if c.Address != "" {
+		addr := c.Address
+		mov.Address = &addr
+	}
+	if c.LotCode != "" {
+		lote := c.LotCode
+		mov.Lot = &lote
+	}
+	if c.DivergenceQuantity.IsPositive() {
+		var custo *float64
+		if err := tx.QueryRow(ctx,
+			`SELECT CASE WHEN SUM(quantity) > 0 THEN SUM(total_cost)/SUM(quantity) ELSE MAX(avg_cost) END
+			   FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4`,
+			tenant, c.LegacyItemCode, c.Mask, c.WarehouseID).Scan(&custo); err != nil {
+			return fmt.Errorf("lendo o custo médio para o ajuste da contagem: %w", err)
+		}
+		if custo != nil && *custo > 0 {
+			mov.UnitPrice, mov.TotalPrice = *custo, qtd**custo
+		}
+	}
+	if err := stockrepo.CreateMovementTx(ctx, tx, tenant, mov); err != nil {
+		return fmt.Errorf("lançando o ajuste da contagem: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE stock_cycle_counts SET adjustment_movement_id=$3 WHERE enterprise_id=$1 AND id=$2`, tenant, id, mov.ID); err != nil {
+		return fmt.Errorf("ligando o ajuste à contagem: %w", err)
+	}
+	return nil
+}
+
 func scanCycle(row rowScanner) (notificationentity.CycleCount, error) {
 	var c notificationentity.CycleCount
 	var state, origin string
@@ -1014,6 +1070,14 @@ func (r *Repository) TransitionCycleCount(ctx context.Context, tenant int64, id,
 	updated, err := scanCycle(tx.QueryRow(ctx, `UPDATE stock_cycle_counts SET `+set+` WHERE enterprise_id=$1 AND id=$2 RETURNING `+cycleColumns, args...))
 	if err != nil {
 		return notificationentity.CycleCount{}, fmt.Errorf("atualizar contagem (%T,%T,%T,%T): %w", args[0], args[1], args[2], args[3], err)
+	}
+	// Dentro da tolerância o ajuste sai na conclusão; contagem que foi
+	// divergente só ajusta na APROVAÇÃO, que é o controle dela.
+	if (actualTarget == notificationentity.CycleCompleted && current.State == notificationentity.CycleCounting) ||
+		actualTarget == notificationentity.CycleApproved {
+		if err := ajustarSaldoDaContagem(ctx, tx, tenant, id, actor, updated); err != nil {
+			return notificationentity.CycleCount{}, err
+		}
 	}
 	if actualTarget == notificationentity.CycleCompleted || actualTarget == notificationentity.CycleApproved {
 		_, err = tx.Exec(ctx, `UPDATE notification_alerts SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Contagem concluída' WHERE enterprise_id=$1 AND event_key='ESTOQUE_CONTAGEM_DIVERGENCIA' AND aggregate_internal_id=$2 AND state='ABERTO'`, tenant, id.String())

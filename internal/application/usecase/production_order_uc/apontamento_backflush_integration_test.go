@@ -72,6 +72,15 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 	if err := pool.QueryRow(bg, `INSERT INTO employees(code,name,created_by,enterprise_id) VALUES($1,'Operador',$2,$3) RETURNING id`, u%1_000_000_000, actor, empresaID).Scan(&operador); err != nil {
 		t.Fatal(err)
 	}
+	// Saldo dos componentes: sem ele a primeira baixa já seria recusada (saldo
+	// negativo bloqueado), e o teste é sobre a SEGUNDA falhar.
+	for _, c := range []int64{filhoA, filhoB} {
+		if _, err := stockpg.NewStockRepositorySQLC(pool).CreateMovement(ctx, &stockentity.StockMovement{
+			ItemCode: c, WarehouseID: 3, MovementType: stockentity.MovementTypeIn, Quantity: 100, UnitPrice: 1, CreatedBy: actor,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	t.Cleanup(func() {
 		_, _ = pool.Exec(bg, `DELETE FROM production_appointments WHERE production_order_id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM stock_movements WHERE enterprise_id=$1`, empresaID)

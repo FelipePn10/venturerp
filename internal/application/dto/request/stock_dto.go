@@ -70,6 +70,14 @@ type CreateInventoryDTO struct {
 	StartDate   string  `json:"start_date"`
 	EndDate     *string `json:"end_date,omitempty"`
 	Notes       *string `json:"notes,omitempty"`
+	// ItemCodes: inventário parcial (só esses itens). Vazio = almoxarifado inteiro.
+	ItemCodes []int64 `json:"item_codes,omitempty"`
+}
+
+// CloseInventoryDTO: fechar zerando os itens que não foram contados (o padrão é
+// recusar o fechamento enquanto houver item sem contagem).
+type CloseInventoryDTO struct {
+	ZerarNaoContados bool `json:"zerar_nao_contados"`
 }
 
 type CountInventoryItemDTO struct {

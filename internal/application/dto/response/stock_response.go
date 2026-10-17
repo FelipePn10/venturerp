@@ -96,23 +96,37 @@ type PhysicalInventoryResponse struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	CreatedBy    uuid.UUID  `json:"created_by"`
+	// Valor líquido dos ajustes lançados no fechamento.
+	AdjustmentValue *float64 `json:"adjustment_value,omitempty"`
+}
+
+// InventoryCloseResponse resume o que o fechamento lançou no estoque.
+type InventoryCloseResponse struct {
+	Adjustments     int     `json:"adjustments"`
+	SurplusQty      float64 `json:"surplus_qty"`
+	ShortageQty     float64 `json:"shortage_qty"`
+	AdjustedValue   float64 `json:"adjusted_value"`
+	UncountedZeroed int     `json:"uncounted_zeroed"`
 }
 
 // PhysicalInventoryItemResponse is the API representation of an inventory line.
 type PhysicalInventoryItemResponse struct {
-	ID               int64      `json:"id"`
-	InventoryID      int64      `json:"inventory_id"`
-	ItemCode         int64      `json:"item_code"`
-	Mask             string     `json:"mask"`
-	WarehouseID      int64      `json:"warehouse_id"`
-	SystemQty        float64    `json:"system_qty"`
-	CountedQty       *float64   `json:"counted_qty,omitempty"`
-	DifferenceQty    *float64   `json:"difference_qty,omitempty"`
-	UnitCost         *float64   `json:"unit_cost,omitempty"`
-	AdjustmentType   *string    `json:"adjustment_type,omitempty"`
-	AdjustmentReason *string    `json:"adjustment_reason,omitempty"`
-	CountedBy        *uuid.UUID `json:"counted_by,omitempty"`
-	CountedAt        *time.Time `json:"counted_at,omitempty"`
-	IsAdjusted       bool       `json:"is_adjusted"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ID                   int64      `json:"id"`
+	InventoryID          int64      `json:"inventory_id"`
+	ItemCode             int64      `json:"item_code"`
+	Mask                 string     `json:"mask"`
+	WarehouseID          int64      `json:"warehouse_id"`
+	SystemQty            float64    `json:"system_qty"`
+	CountedQty           *float64   `json:"counted_qty,omitempty"`
+	DifferenceQty        *float64   `json:"difference_qty,omitempty"`
+	UnitCost             *float64   `json:"unit_cost,omitempty"`
+	AdjustmentType       *string    `json:"adjustment_type,omitempty"`
+	AdjustmentReason     *string    `json:"adjustment_reason,omitempty"`
+	CountedBy            *uuid.UUID `json:"counted_by,omitempty"`
+	CountedAt            *time.Time `json:"counted_at,omitempty"`
+	IsAdjusted           bool       `json:"is_adjusted"`
+	CreatedAt            time.Time  `json:"created_at"`
+	CountNumber          int        `json:"count_number"`
+	PreviousCountedQty   *float64   `json:"previous_counted_qty,omitempty"`
+	AdjustmentMovementID *int64     `json:"adjustment_movement_id,omitempty"`
 }

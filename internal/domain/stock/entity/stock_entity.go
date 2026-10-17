@@ -39,6 +39,7 @@ const (
 	ReferenceTypeNFEntry         = "NF_ENTRADA"
 	ReferenceTypeNFExit          = "NF_SAIDA"
 	ReferenceTypeInventory       = "INVENTORY"
+	ReferenceTypeCycleCount      = "CONTAGEM_CICLICA"
 	ReferenceTypeManual          = "MANUAL"
 )
 
@@ -101,6 +102,11 @@ type StockMovement struct {
 	Notes          *string
 	CreatedAt      time.Time
 	CreatedBy      uuid.UUID
+	// PermiteSaldoNegativo libera ESTE movimento do bloqueio de saldo negativo
+	// (não é gravado). É para o ajuste de inventário: a diferença é calculada
+	// contra a foto da abertura, e uma saída lançada depois dela pode levar o
+	// saldo abaixo de zero — o que o ajuste precisa registrar, não esconder.
+	PermiteSaldoNegativo bool
 }
 
 type StockReservation struct {
@@ -153,6 +159,20 @@ type PhysicalInventory struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	CreatedBy    uuid.UUID
+	// ItemCodes restringe a abertura a esses itens (inventário parcial). Vazio =
+	// todo o almoxarifado. Não é gravado.
+	ItemCodes       []int64
+	ClosedBy        *uuid.UUID
+	AdjustmentValue *float64
+}
+
+// ResultadoFechamentoInventario é o que o fechamento lançou.
+type ResultadoFechamentoInventario struct {
+	Ajustes            int
+	Sobras             float64 // quantidade somada das diferenças positivas
+	Faltas             float64 // quantidade somada das diferenças negativas (em módulo)
+	ValorAjustado      float64 // valor líquido dos ajustes (sobra − falta, ao custo médio)
+	NaoContadosZerados int
 }
 
 type PhysicalInventoryItem struct {
@@ -171,4 +191,9 @@ type PhysicalInventoryItem struct {
 	CountedAt        *time.Time
 	IsAdjusted       bool
 	CreatedAt        time.Time
+	// CountNumber: quantas vezes o item foi contado (recontagem sobrescreve a
+	// anterior, que fica em PreviousCountedQty).
+	CountNumber          int
+	PreviousCountedQty   *float64
+	AdjustmentMovementID *int64
 }

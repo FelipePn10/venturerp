@@ -112,6 +112,8 @@ func toPhysicalInventoryResponse(i *entity.PhysicalInventory) *response.Physical
 		CreatedAt:    i.CreatedAt,
 		UpdatedAt:    i.UpdatedAt,
 		CreatedBy:    i.CreatedBy,
+
+		AdjustmentValue: i.AdjustmentValue,
 	}
 }
 
@@ -142,7 +144,11 @@ func toPhysicalInventoryItemResponse(it *entity.PhysicalInventoryItem) *response
 		CountedBy:        it.CountedBy,
 		CountedAt:        it.CountedAt,
 		IsAdjusted:       it.IsAdjusted,
-		CreatedAt:        it.CreatedAt,
+
+		CountNumber:          it.CountNumber,
+		PreviousCountedQty:   it.PreviousCountedQty,
+		AdjustmentMovementID: it.AdjustmentMovementID,
+		CreatedAt:            it.CreatedAt,
 	}
 }
 

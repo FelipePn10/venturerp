@@ -1266,6 +1266,7 @@ func (app *application) mount() chi.Router {
 	}
 	// A prévia confere a conversão de unidade que a baixa de estoque vai precisar.
 	previaNFeUC.Efeitos = efeitosNFe
+	previaNFeUC.Saldos = stockRepository
 	app.efeitosNFeScheduler = fiscalefeitos.NewScheduler(efeitosNFe, app.logger)
 	pendenciasNFeHandler := handler.NewPendenciasNFeHandler(efeitosNFe, authService)
 	fiscalHandler := handler.NewFiscalHandler(

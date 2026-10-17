@@ -313,6 +313,13 @@ func (s *EntradaServico) pendenciasDeUnidade(ctx context.Context, e *entity.Fisc
 		if !ok || !unidadeDifere(it.UOM, c.UOM) {
 			continue
 		}
+		// Conversão cadastrada com fator 1 (PC → UN) é legítima: o que impede é
+		// não haver conversão nenhuma.
+		if f, err := s.Docs.FatorDeConversao(ctx, *it.ItemCode, *it.UOM, c.UOM); err != nil {
+			return nil, err
+		} else if f != nil {
+			continue
+		}
 		codigo := c.BusinessCode
 		if codigo == "" {
 			codigo = fmt.Sprint(c.Code)

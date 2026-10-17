@@ -72,6 +72,12 @@ func novaNotaAutorizada(t *testing.T) cenario {
 	}
 	testutil.Exec(t, pool, `INSERT INTO fiscal_exit_items(fiscal_exit_id, item_code, cfop, quantity, unit_price, total_price)
 		VALUES ($1, $2, '5102', 3, 50, 150)`, c.nota, c.item)
+	// Saldo para a baixa: a saída sem estoque é recusada (saldo negativo bloqueado).
+	if _, err := stockRepo.NewStockRepositorySQLC(pool).CreateMovement(c.ctx, &stockentity.StockMovement{
+		ItemCode: c.item, WarehouseID: 7, MovementType: stockentity.MovementTypeIn, Quantity: 10, UnitPrice: 20, CreatedBy: c.ator,
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
 		testutil.Exec(t, pool, `DELETE FROM fiscal_exit_pendencias WHERE fiscal_exit_id = $1`, c.nota)

@@ -71,6 +71,9 @@ func TestIntegration_NotaDeEntradaXMLConciliacaoRateio(t *testing.T) {
 		t.Fatal(err)
 	}
 	testutil.Exec(t, pool, `UPDATE items SET warehouse_code=$3 WHERE code IN ($1,$2)`, chapa, luva, almox)
+	// A chapa é estocada em quilo e a luva em caixa, como vêm na nota.
+	testutil.Exec(t, pool, `UPDATE items SET warehouse_unit_of_measurement='KG' WHERE code=$1`, chapa)
+	testutil.Exec(t, pool, `UPDATE items SET warehouse_unit_of_measurement='CX' WHERE code=$1`, luva)
 	testutil.Exec(t, pool, `INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'ACO E SEGURANCA LTDA',$2,$3,$4)`,
 		supplierCode, cnpj, actor, empresa)
 	testutil.Exec(t, pool, `INSERT INTO item_preferred_suppliers(enterprise_id,item_code,supplier_code,supplier_item_code,created_by) VALUES($1,$2,$3,'LUV-01',$4)`,
