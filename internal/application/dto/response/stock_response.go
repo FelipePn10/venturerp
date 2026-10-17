@@ -25,10 +25,14 @@ type StockMovementResponse struct {
 	Notes          *string    `json:"notes,omitempty"`
 	// O endereço era gravado e nunca devolvido — campo só de escrita. A tela
 	// pedia onde guardar e depois não conseguia mostrar onde o material estava.
-	Address   *string   `json:"address,omitempty"`
-	AddressTo *string   `json:"address_to,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	CreatedBy uuid.UUID `json:"created_by"`
+	Address              *string   `json:"address,omitempty"`
+	AddressTo            *string   `json:"address_to,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	CreatedBy            uuid.UUID `json:"created_by"`
+	MovementTypeCode     *string   `json:"movement_type_code,omitempty"`
+	CostCenterCode       *int32    `json:"cost_center_code,omitempty"`
+	ReversesMovementID   *int64    `json:"reverses_movement_id,omitempty"`
+	ReversedByMovementID *int64    `json:"reversed_by_movement_id,omitempty"`
 }
 
 // StockReservationResponse is the API representation of a stock reservation.
@@ -67,18 +71,25 @@ type StockBalanceResponse struct {
 	TotalCost      float64    `json:"total_cost"`
 	LastMovementAt *time.Time `json:"last_movement_at,omitempty"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// Situação do estoque no ATP: LIVRE, INSPECAO ou BLOQUEADO; e se o saldo
+	// deste almoxarifado conta para promessa.
+	StockStatus        string `json:"stock_status,omitempty"`
+	AvailableToPromise bool   `json:"available_to_promise,omitempty"`
 }
 
 // ATPResponse is the available-to-promise summary of an item: how much can be
 // promised right now (on-hand minus reservations), with the per-warehouse
 // breakdown.
 type ATPResponse struct {
-	ItemCode       int64                   `json:"item_code"`
-	Mask           string                  `json:"mask"`
-	TotalOnHand    float64                 `json:"total_on_hand"`
-	TotalReserved  float64                 `json:"total_reserved"`
-	TotalAvailable float64                 `json:"total_available"`
-	Warehouses     []*StockBalanceResponse `json:"warehouses"`
+	ItemCode       int64   `json:"item_code"`
+	Mask           string  `json:"mask"`
+	TotalOnHand    float64 `json:"total_on_hand"`
+	TotalReserved  float64 `json:"total_reserved"`
+	TotalAvailable float64 `json:"total_available"`
+	// Saldo em almoxarifado que não conta para promessa (inspeção, rejeição,
+	// indisponível): está no estoque, mas não pode ser prometido.
+	TotalNotAvailable float64                 `json:"total_not_available"`
+	Warehouses        []*StockBalanceResponse `json:"warehouses"`
 }
 
 // PhysicalInventoryResponse is the API representation of a physical inventory.

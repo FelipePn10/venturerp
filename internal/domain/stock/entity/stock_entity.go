@@ -40,6 +40,9 @@ const (
 	ReferenceTypeNFExit          = "NF_SAIDA"
 	ReferenceTypeInventory       = "INVENTORY"
 	ReferenceTypeCycleCount      = "CONTAGEM_CICLICA"
+	ReferenceTypeTransfer        = "TRANSFERENCIA"
+	ReferenceTypeReversal        = "ESTORNO"
+	ReferenceTypeRequisition     = "REQUISICAO_MATERIAL"
 	ReferenceTypeManual          = "MANUAL"
 )
 
@@ -107,6 +110,16 @@ type StockMovement struct {
 	// contra a foto da abertura, e uma saída lançada depois dela pode levar o
 	// saldo abaixo de zero — o que o ajuste precisa registrar, não esconder.
 	PermiteSaldoNegativo bool
+	// MovementTypeCode: sigla do tipo de movimento do cadastro (VEST0200).
+	MovementTypeCode *string
+	// CostCenterCode: centro de custo da saída (requisição, consumo interno).
+	CostCenterCode *int32
+	// Estorno: este movimento estorna outro / foi estornado por outro.
+	ReversesMovementID   *int64
+	ReversedByMovementID *int64
+	// ValorizarPelaMedia: entrada que NÃO atualiza o custo médio (tipo de
+	// movimento com "atualiza custo" desligado) entra pelo custo médio atual.
+	ValorizarPelaMedia bool
 }
 
 type StockReservation struct {

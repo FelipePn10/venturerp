@@ -32,6 +32,11 @@ func novoAmbienteEstoque(t *testing.T) ambienteEstoque {
 	ator := testutil.Actor(t, pool)
 	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
 		for _, q := range []string{
+			`DELETE FROM material_requisition_items WHERE requisition_id IN (SELECT id FROM material_requisitions WHERE enterprise_id=$1)`,
+			`DELETE FROM material_requisitions WHERE enterprise_id=$1`,
+			`DELETE FROM item_unit_conversions WHERE item_code IN (SELECT code FROM items WHERE enterprise_id=$1)`,
+			`DELETE FROM item_consumption_averages WHERE enterprise_id=$1`,
+			`UPDATE stock_movements SET reversed_by_movement_id=NULL, reverses_movement_id=NULL WHERE enterprise_id=$1`,
 			`DELETE FROM physical_inventory_items WHERE inventory_id IN (SELECT id FROM physical_inventories WHERE enterprise_id=$1)`,
 			`DELETE FROM physical_inventories WHERE enterprise_id=$1`,
 			`DELETE FROM stock_lot_balances WHERE enterprise_id=$1`,

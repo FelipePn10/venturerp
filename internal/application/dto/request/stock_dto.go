@@ -21,6 +21,11 @@ type CreateStockMovementDTO struct {
 	// interna (TRANSFER_IN/TRANSFER_OUT) e indica para onde o material foi.
 	Address   *string `json:"address,omitempty"`
 	AddressTo *string `json:"address_to,omitempty"`
+	// MovementTypeCode: sigla do tipo de movimento do cadastro (VEST0200). Com
+	// ela o cadastro decide a direção, se exige centro de custo e se a entrada
+	// atualiza o custo médio.
+	MovementTypeCode *string `json:"movement_type_code,omitempty"`
+	CostCenterCode   *int32  `json:"cost_center_code,omitempty"`
 }
 
 // TransferenciaEnderecoDTO move material entre endereços do mesmo almoxarifado.

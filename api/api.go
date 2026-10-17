@@ -42,6 +42,7 @@ import (
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/entry_operation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/estoque_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/financial_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_classification_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
@@ -1019,7 +1020,11 @@ func (app *application) mount() chi.Router {
 		}
 		return tx.Commit(ctx)
 	}
-	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService}
+	estoqueHandler := &handler.EstoqueHandler{UC: &estoque_uc.UseCase{
+		Ops: stockRepository, Auth: authService,
+		Compras: purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService),
+	}}
+	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService, Tipos: stockRepository}
 	listStockMovementsUC := &stock_uc.ListStockMovementsUseCase{Repo: stockRepository, Auth: authService}
 	getStockBalanceUC := &stock_uc.GetStockBalanceUseCase{Repo: stockRepository, Auth: authService}
 	reserveStockUC := &stock_uc.ReserveStockUseCase{Repo: stockRepository, Auth: authService}
@@ -2155,7 +2160,25 @@ func (app *application) mount() chi.Router {
 			})
 		})
 		r.Route("/api/stock", func(r chi.Router) {
+			// Operações além do lançamento: transferência entre almoxarifados,
+			// estorno, kardex, posição em data, reposição, análise e requisição
+			// ao almoxarifado.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transfers", estoqueHandler.Transferir)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/kardex/{itemCode}", estoqueHandler.Kardex)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/position", estoqueHandler.Posicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/replenishment", estoqueHandler.Reposicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/replenishment/purchase-requisition", estoqueHandler.ReposicaoParaRequisicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/analysis", estoqueHandler.Analise)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lots/expiring", estoqueHandler.LotesAVencer)
+			r.Route("/material-requisitions", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", estoqueHandler.ListarRequisicoes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", estoqueHandler.CriarRequisicao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", estoqueHandler.ObterRequisicao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/issue", estoqueHandler.AtenderRequisicao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancel", estoqueHandler.CancelarRequisicao)
+			})
 			r.Route("/movements", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/reverse", estoqueHandler.Estornar)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", stockHandler.CreateMovement)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", stockHandler.ListMovements)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListMovementsByItem)
@@ -2190,7 +2213,8 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", stockHandler.ListBalances)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/warehouse/{warehouseId}", stockHandler.ListBalancesByWarehouse)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListBalancesByItem)
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/atp/{itemCode}", stockHandler.GetATP)
+				// ATP com situação do estoque: inspeção e rejeição não são prometíveis.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/atp/{itemCode}", estoqueHandler.ATP)
 			})
 			r.Route("/lots", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/register", stockHandler.RegisterLot)

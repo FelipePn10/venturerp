@@ -237,6 +237,8 @@ var itemPathPatterns = []struct {
 	{[]string{"api", "customers", "support", "sales-tables", "*", "prices"}, 6},
 	{[]string{"api", "stock", "separation", "suggest"}, 4},
 	{[]string{"api", "stock", "putaway", "suggest"}, 4},
+	// Extrato do item (kardex).
+	{[]string{"api", "stock", "kardex"}, 3},
 }
 
 func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID int64) error {

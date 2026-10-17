@@ -102,16 +102,23 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 	if err := valorizarSaidaPelaMedia(ctx, tx, enterpriseID, m); err != nil {
 		return err
 	}
+	// Preço sem total: o valor do movimento é quantidade × preço. Sem isto os
+	// chamadores internos que mandam só o preço gravavam valor zero — e o
+	// movimento sumia do extrato valorizado e do estorno.
+	if m.TotalPrice == 0 && m.UnitPrice != 0 {
+		q, _ := movementQuantity(m).Abs().Float64()
+		m.TotalPrice = q * m.UnitPrice
+	}
 	err := tx.QueryRow(ctx,
 		`INSERT INTO public.stock_movements
 			(item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
 			 reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, created_by, enterprise_id,
-			 address, address_to)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+			 address, address_to, movement_type_code, cost_center_code, reverses_movement_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		 RETURNING id, created_at`,
 		m.ItemCode, m.Mask, m.WarehouseID, m.MovementType, movementQuantity(m), m.UnitPrice, m.TotalPrice,
 		m.ReferenceType, m.ReferenceCode, m.Lot, m.SerialNumber, m.Batch, m.ExpirationDate, m.Notes, m.CreatedBy, enterpriseID,
-		m.Address, m.AddressTo,
+		m.Address, m.AddressTo, m.MovementTypeCode, m.CostCenterCode, m.ReversesMovementID,
 	).Scan(&m.ID, &m.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("creating stock movement: %w", err)
@@ -286,11 +293,16 @@ func barrarSaldoNegativo(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *
 // pelo valor certo. Aqui a saída passa a registrar o mesmo custo que consumiu:
 // o custo médio do item no almoxarifado (todos os endereços).
 func valorizarSaidaPelaMedia(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
-	if m.UnitPrice > 0 || m.TotalPrice > 0 {
-		return nil
-	}
-	if !signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsNegative() {
-		return nil
+	entrada := signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsPositive()
+	if m.ValorizarPelaMedia && entrada {
+		m.UnitPrice, m.TotalPrice = 0, 0
+	} else {
+		if m.UnitPrice > 0 || m.TotalPrice > 0 {
+			return nil
+		}
+		if !signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsNegative() {
+			return nil
+		}
 	}
 	var avgCost *float64
 	err := tx.QueryRow(ctx,
@@ -365,7 +377,8 @@ func (r *StockRepositorySQLC) ListMovements(ctx context.Context) ([]*entity.Stoc
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE enterprise_id=$1 ORDER BY created_at DESC`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements: %w", err)
@@ -381,7 +394,8 @@ func (r *StockRepositorySQLC) ListMovementsByItem(ctx context.Context, itemCode 
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE item_code = $1 AND enterprise_id=$2 ORDER BY created_at DESC`, itemCode, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements by item: %w", err)
@@ -397,7 +411,8 @@ func (r *StockRepositorySQLC) ListMovementsByWarehouse(ctx context.Context, ware
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE warehouse_id = $1 AND enterprise_id=$2 ORDER BY created_at DESC`, warehouseID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements by warehouse: %w", err)
@@ -413,7 +428,8 @@ func (r *StockRepositorySQLC) ListMovementsByDateRange(ctx context.Context, from
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE created_at >= $1 AND created_at <= $2 AND enterprise_id=$3 ORDER BY created_at DESC`, from, to, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements by date range: %w", err)
@@ -430,6 +446,7 @@ func scanMovements(rows pgx.Rows) ([]*entity.StockMovement, error) {
 			&m.ID, &m.ItemCode, &m.Mask, &m.WarehouseID, &m.MovementType, &m.Quantity, &m.UnitPrice, &m.TotalPrice,
 			&m.ReferenceType, &m.ReferenceCode, &m.Lot, &m.SerialNumber, &m.Batch, &m.ExpirationDate, &m.Notes,
 			&m.Address, &m.AddressTo, &m.CreatedAt, &m.CreatedBy,
+			&m.MovementTypeCode, &m.CostCenterCode, &m.ReversesMovementID, &m.ReversedByMovementID,
 		); err != nil {
 			return nil, fmt.Errorf("scanning stock movement: %w", err)
 		}
@@ -778,6 +795,15 @@ func scanReservations(rows pgx.Rows) ([]*entity.StockReservation, error) {
 
 // RecalcConsumptionAverage computes the average monthly consumption of an item
 // from its outbound movements over the trailing window and upserts the result.
+// consumoSQL: a saída que é CONSUMO. Transferência não é consumo (o material só
+// mudou de lugar) e contava como tal; estorno e movimento estornado se anulam;
+// e o tipo de movimento marcado como "não considera consumo" fica de fora.
+const consumoSQL = `m.movement_type IN ('OUT','SAIDA','REP')
+		   AND m.reverses_movement_id IS NULL AND m.reversed_by_movement_id IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM stock_movement_types t
+		                    WHERE t.enterprise_id = m.enterprise_id AND t.sigla = m.movement_type_code
+		                      AND NOT t.considers_consumption)`
+
 func (r *StockRepositorySQLC) RecalcConsumptionAverage(ctx context.Context, itemCode int64, windowMonths int) (*entity.ItemConsumptionAverage, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
@@ -789,12 +815,12 @@ func (r *StockRepositorySQLC) RecalcConsumptionAverage(ctx context.Context, item
 
 	var totalConsumed float64
 	err = r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(quantity), 0)
-		 FROM public.stock_movements
-		 WHERE item_code = $1
-		   AND movement_type IN ('OUT', 'TRANSFER_OUT')
-		   AND created_at >= NOW() - make_interval(months => $2)
-		   AND enterprise_id=$3`, itemCode, windowMonths, enterpriseID).Scan(&totalConsumed)
+		`SELECT COALESCE(SUM(ABS(m.quantity)), 0)
+		 FROM public.stock_movements m
+		 WHERE m.item_code = $1
+		   AND `+consumoSQL+`
+		   AND m.created_at >= NOW() - make_interval(months => $2)
+		   AND m.enterprise_id=$3`, itemCode, windowMonths, enterpriseID).Scan(&totalConsumed)
 	if err != nil {
 		return nil, fmt.Errorf("summing item consumption: %w", err)
 	}
@@ -831,9 +857,9 @@ func (r *StockRepositorySQLC) RecalcAllConsumptionAverages(ctx context.Context, 
 		windowMonths = 6
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT DISTINCT item_code FROM public.stock_movements
-		 WHERE movement_type IN ('OUT', 'TRANSFER_OUT')
-		   AND created_at >= NOW() - make_interval(months => $1) AND enterprise_id=$2`, windowMonths, enterpriseID)
+		`SELECT DISTINCT m.item_code FROM public.stock_movements m
+		 WHERE `+consumoSQL+`
+		   AND m.created_at >= NOW() - make_interval(months => $1) AND m.enterprise_id=$2`, windowMonths, enterpriseID)
 	if err != nil {
 		return 0, fmt.Errorf("listing items with consumption: %w", err)
 	}
@@ -1831,7 +1857,7 @@ func (r *StockRepositorySQLC) ApurarCurvaABC(ctx context.Context, janelaMeses in
 			  ) b ON TRUE
 			 WHERE m.enterprise_id = $1
 			   AND m.created_at >= NOW() - make_interval(months => $2)
-			   AND m.movement_type IN ('OUT','SAIDA','TRANSFER_OUT','REP')
+			   AND `+consumoSQL+`
 			 GROUP BY m.item_code
 			HAVING SUM(ABS(m.quantity) * COALESCE(NULLIF(m.unit_price,0), b.avg_cost, 0)) > 0
 		), total AS (

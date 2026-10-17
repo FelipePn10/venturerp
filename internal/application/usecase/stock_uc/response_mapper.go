@@ -29,6 +29,11 @@ func toStockMovementResponse(m *entity.StockMovement) *response.StockMovementRes
 		AddressTo:      m.AddressTo,
 		CreatedAt:      m.CreatedAt,
 		CreatedBy:      m.CreatedBy,
+
+		MovementTypeCode:     m.MovementTypeCode,
+		CostCenterCode:       m.CostCenterCode,
+		ReversesMovementID:   m.ReversesMovementID,
+		ReversedByMovementID: m.ReversedByMovementID,
 	}
 }
 
