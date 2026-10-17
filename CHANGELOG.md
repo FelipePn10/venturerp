@@ -6,6 +6,18 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.7.0] — 2026-10-17
+
+- fix(nf-e): prévia aponta item sem almoxarifado para a baixa; código sqlc regenerado com as migrações 405/406 (`f16013b3`)
+- docs(estoque): regras do lançamento, inventário, transferência, estorno, kardex, reposição e requisição (`2500b99a`)
+- feat(estoque): tipos de movimento com centro de custo e lançamento manual; respostas no DTO do movimento (`e4da1951`)
+- feat(estoque): transferência entre almoxarifados, estorno, kardex, posição em data, ATP por situação, reposição, análise, requisição ao almoxarifado e tipo de movimento no lançamento (`9ca8f726`)
+- wip(estoque): migração 406 (estorno, tipo de movimento no lançamento, requisição ao almoxarifado) — código ainda por fazer (`0906cdec`)
+- wip(estoque): alteração de almoxarifado e permissão de saldo negativo (`b49abf44`)
+- wip(estoque): inventário que ajusta o saldo, saldo negativo bloqueado, custo único por almoxarifado, período fechado e ajuste da contagem cíclica (`95308e41`)
+- wip(estoque): conversão de unidade na entrada da NF, no pedido de compra e na baixa da NF-e (`79be2c19`)
+- feat(cadastros): alterar e excluir plano de contas e centro de custo no momento certo (`56ad56c7`)
+
 - fix(estoque): a nota de entrada passa a converter a unidade da nota para a de estoque
   pelo cadastro de conversões do item (ou a global); sem conversão a nota é barrada.
   Caso Tecnofer: 115,8975 KG de tubo entravam como 115,8975 M ao preço do quilo
