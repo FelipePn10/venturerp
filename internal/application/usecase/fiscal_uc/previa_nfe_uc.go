@@ -212,6 +212,12 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 		}
 		k := chave{*it.ItemCode, depositos[*it.ItemCode]}
 		if k.almox == 0 {
+			// Sem almoxarifado no pedido nem no cadastro, a baixa depois da
+			// autorização não teria de onde sair — e a nota já estaria na SEFAZ.
+			if _, ja := necessario[k]; !ja {
+				ordem = append(ordem, k)
+				necessario[k] = 0
+			}
 			continue
 		}
 		q := it.Quantity
@@ -225,6 +231,14 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 	}
 	var out []response.PreviaPendenciaNFe
 	for _, k := range ordem {
+		if k.almox == 0 {
+			out = append(out, response.PreviaPendenciaNFe{
+				Nivel: NivelImpede, Campo: "itens.almoxarifado",
+				Mensagem:     fmt.Sprintf("o item %d não tem almoxarifado no pedido nem no cadastro: a baixa de estoque não teria de onde sair", k.item),
+				ComoResolver: "informe o almoxarifado na linha do pedido de venda ou o almoxarifado padrão no cadastro do item (VENT0200)",
+			})
+			continue
+		}
 		saldo, permite, err := uc.Saldos.SaldoParaSaida(ctx, k.item, k.almox)
 		if err != nil {
 			return nil, err

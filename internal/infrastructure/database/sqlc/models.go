@@ -6926,6 +6926,33 @@ type MaterialConsumption struct {
 	Unit            string
 }
 
+type MaterialRequisition struct {
+	ID                    int64
+	EnterpriseID          int64
+	Code                  int64
+	WarehouseID           int64
+	RequesterName         pgtype.Text
+	RequesterEmployeeCode *int64
+	CostCenterCode        *int32
+	NeededDate            pgtype.Date
+	Status                string
+	Notes                 pgtype.Text
+	CreatedBy             pgtype.UUID
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+}
+
+type MaterialRequisitionItem struct {
+	ID            int64
+	RequisitionID int64
+	Sequence      int32
+	ItemCode      int64
+	Mask          string
+	Quantity      pgtype.Numeric
+	IssuedQty     pgtype.Numeric
+	Notes         pgtype.Text
+}
+
 type Menor struct {
 	Code int32
 }
@@ -10025,26 +10052,30 @@ type StockLotBalance struct {
 }
 
 type StockMovement struct {
-	ID             int64
-	ItemCode       int64
-	Mask           string
-	WarehouseID    int64
-	MovementType   string
-	Quantity       pgtype.Numeric
-	UnitPrice      pgtype.Numeric
-	TotalPrice     pgtype.Numeric
-	ReferenceType  pgtype.Text
-	ReferenceCode  *int64
-	Lot            pgtype.Text
-	SerialNumber   pgtype.Text
-	Batch          pgtype.Text
-	ExpirationDate pgtype.Date
-	Notes          pgtype.Text
-	CreatedAt      pgtype.Timestamptz
-	CreatedBy      pgtype.UUID
-	EnterpriseID   *int64
-	Address        pgtype.Text
-	AddressTo      pgtype.Text
+	ID                   int64
+	ItemCode             int64
+	Mask                 string
+	WarehouseID          int64
+	MovementType         string
+	Quantity             pgtype.Numeric
+	UnitPrice            pgtype.Numeric
+	TotalPrice           pgtype.Numeric
+	ReferenceType        pgtype.Text
+	ReferenceCode        *int64
+	Lot                  pgtype.Text
+	SerialNumber         pgtype.Text
+	Batch                pgtype.Text
+	ExpirationDate       pgtype.Date
+	Notes                pgtype.Text
+	CreatedAt            pgtype.Timestamptz
+	CreatedBy            pgtype.UUID
+	EnterpriseID         *int64
+	Address              pgtype.Text
+	AddressTo            pgtype.Text
+	ReversesMovementID   *int64
+	ReversedByMovementID *int64
+	MovementTypeCode     pgtype.Text
+	CostCenterCode       *int32
 }
 
 type StockMovementType struct {
@@ -10064,6 +10095,8 @@ type StockMovementType struct {
 	IsActive             bool
 	CreatedAt            pgtype.Timestamptz
 	EnterpriseID         int64
+	RequiresCostCenter   bool
+	AllowsManual         bool
 }
 
 type StockPickingWafe struct {
