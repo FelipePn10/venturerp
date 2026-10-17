@@ -43,6 +43,7 @@ func (uc *CreateInventoryUseCase) Execute(ctx context.Context, dto request.Creat
 		Status:      "OPEN",
 		Notes:       dto.Notes,
 		CreatedBy:   userID,
+		ItemCodes:   dto.ItemCodes,
 	}
 
 	if dto.EndDate != nil {

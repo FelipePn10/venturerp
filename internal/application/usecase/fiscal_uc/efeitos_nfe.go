@@ -3,6 +3,8 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,6 +57,9 @@ type EfeitosNFe struct {
 	Transacao  EmTransacaoEfeitos
 	// GeraTitulos: com o financeiro configurado, a autorização gera os títulos.
 	GeraTitulos bool
+	// Conversor leva a quantidade da nota (unidade comercial) para a unidade de
+	// estoque do item antes da baixa.
+	Conversor ports.UOMConverter
 }
 
 // Registrar abre a pendência da etapa (antes de tentar aplicar os efeitos).
@@ -208,6 +213,10 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 	if err != nil {
 		return err
 	}
+	quantidades, err := e.quantidadesEmEstoque(ctx, items)
+	if err != nil {
+		return err
+	}
 	var clienteID *int64
 	if e.Customers != nil && exit.CustomerCode != nil {
 		// O título guarda o CÓDIGO do cliente: é por ele que Contas a Receber
@@ -227,7 +236,7 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 				return err
 			}
 		}
-		if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, userID); err != nil {
+		if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, userID); err != nil {
 			return err
 		}
 		if err := faturarPedido(ctx, r, exit); err != nil {
@@ -317,9 +326,53 @@ func gerarTitulos(ctx context.Context, fin financialRepo.FinancialRepository, ex
 	return nil
 }
 
+// quantidadesEmEstoque converte a quantidade de cada linha da unidade da nota
+// (uCom — a de venda) para a unidade de estoque do item. A nota de 2 CX de um
+// item estocado em UN baixava 2 UN; agora baixa 2 × o fator da caixa. Unidade
+// diferente sem conversão é recusada: a baixa sairia com o número errado.
+func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.FiscalExitItem) (map[int64]float64, error) {
+	out := map[int64]float64{}
+	for _, it := range items {
+		if it.ItemCode == nil || it.UnidadeComercial == nil || strings.TrimSpace(*it.UnidadeComercial) == "" || e.Itens == nil {
+			continue
+		}
+		code, err := valueobject.NewItemCode(*it.ItemCode)
+		if err != nil {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("item %d da nota inválido: %v", *it.ItemCode, err))
+		}
+		item, err := e.Itens.FindItemByCode(ctx, code)
+		if err != nil {
+			if errorsuc.EhNaoEncontrado(err) {
+				continue
+			}
+			return nil, fmt.Errorf("lendo a unidade de estoque do item %d: %w", *it.ItemCode, err)
+		}
+		daNota := strings.ToUpper(strings.TrimSpace(*it.UnidadeComercial))
+		doEstoque := strings.ToUpper(strings.TrimSpace(string(item.Warehouse.UnitOfMeasurement)))
+		if doEstoque == "" || daNota == doEstoque {
+			continue
+		}
+		semConversao := errorsuc.NewValidationError(fmt.Sprintf(
+			"item %s: a nota sai em %s e o item é estocado em %s, sem conversão — cadastre a conversão %s→%s do item (VSUP0110)",
+			descricaoItem(it), daNota, doEstoque, daNota, doEstoque))
+		if e.Conversor == nil {
+			return nil, semConversao
+		}
+		q, achou, err := e.Conversor.ConvertQuantity(ctx, *it.ItemCode, it.Quantity, daNota, doEstoque)
+		if err != nil {
+			return nil, err
+		}
+		if !achou {
+			return nil, semConversao
+		}
+		out[it.ID] = q
+	}
+	return out, nil
+}
+
 // baixarEstoque lança a saída de cada item no depósito resolvido e consome as
 // reservas do pedido.
-func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, items []*entity.FiscalExitItem, depositos map[int64]int64, userID uuid.UUID) error {
+func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, items []*entity.FiscalExitItem, depositos map[int64]int64, quantidades map[int64]float64, userID uuid.UUID) error {
 	if estoque == nil {
 		return nil
 	}
@@ -329,11 +382,15 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 		}
 		refType := stockentity.ReferenceTypeNFExit
 		refCode := exit.ID
+		qtd := it.Quantity
+		if q, ok := quantidades[it.ID]; ok {
+			qtd = q
+		}
 		mov := &stockentity.StockMovement{
 			ItemCode:     *it.ItemCode,
 			WarehouseID:  depositos[*it.ItemCode],
 			MovementType: stockentity.MovementTypeOut,
-			Quantity:     it.Quantity,
+			Quantity:     qtd,
 			// Sem preço: a saída é valorizada pelo custo médio (é o custo que sai
 			// do estoque e o CMV da venda).
 			UnitPrice:     0,

@@ -21,6 +21,8 @@ type CreatePurchaseOrderUseCase struct {
 	SupplierDefaults ports.SupplierPurchasingDefaultsProvider
 	// Almoxarifados completa a linha sem almoxarifado com o do cadastro do item.
 	Almoxarifados AlmoxarifadoPadrao
+	// Unidade completa quantidade e preço na unidade de estoque do item.
+	Unidade *UnidadeInterna
 }
 
 // AlmoxarifadoPadrao devolve o almoxarifado de suprimentos do cadastro do item
@@ -179,6 +181,11 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 	items, err := canonicalPurchaseOrderItems(dto.Items)
 	if err != nil {
 		return nil, err
+	}
+	for _, it := range items {
+		if err := uc.Unidade.Preencher(ctx, it); err != nil {
+			return nil, err
+		}
 	}
 	o.AplicarTotais(entity.CalcularTotais(o, items))
 	var created *entity.PurchaseOrder

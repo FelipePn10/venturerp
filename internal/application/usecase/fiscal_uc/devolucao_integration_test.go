@@ -50,6 +50,9 @@ func TestIntegration_DevolucaoDeCompra(t *testing.T) {
 	}
 	for _, c := range []int64{chapa, luva} {
 		testutil.Exec(t, pool, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id,name) VALUES($1,($1::bigint)::text,$2,$3,$4,'ITEM '||$1::text)`, c, almox, actor, empresa)
+		// O XML de teste traz KG e CX, e o item é estocado em UN: sem conversão a
+		// nota é barrada (a unidade da nota precisa virar a de estoque).
+		testutil.Exec(t, pool, `INSERT INTO item_unit_conversions(item_code,from_uom,to_uom,factor,created_by) VALUES($1,'KG','UN',1,$2),($1,'CX','UN',1,$2)`, c, actor)
 	}
 	testutil.Exec(t, pool, `INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'ACO LTDA',$2,$3,$4)`, supplier, cnpj, actor, empresa)
 	testutil.Exec(t, pool, `INSERT INTO item_preferred_suppliers(enterprise_id,item_code,supplier_code,supplier_item_code,created_by) VALUES($1,$2,$3,'CH-3MM',$4),($1,$5,$3,'LUV-01',$4)`,
@@ -94,7 +97,7 @@ func TestIntegration_DevolucaoDeCompra(t *testing.T) {
 			`DELETE FROM fiscal_entries WHERE enterprise_id=$1`, `DELETE FROM stock_movements WHERE enterprise_id=$1`,
 			`DELETE FROM stock_balances WHERE enterprise_id=$1`, `DELETE FROM contas_bancarias WHERE enterprise_id=$1`,
 			`DELETE FROM item_preferred_suppliers WHERE enterprise_id=$1`, `DELETE FROM suppliers WHERE enterprise_id=$1`,
-			`DELETE FROM plano_contas WHERE enterprise_id=$1`, `DELETE FROM items WHERE enterprise_id=$1`,
+			`DELETE FROM plano_contas WHERE enterprise_id=$1`, `DELETE FROM item_unit_conversions WHERE item_code IN (SELECT code FROM items WHERE enterprise_id=$1)`, `DELETE FROM items WHERE enterprise_id=$1`,
 			`DELETE FROM warehouse WHERE enterprise_id=$1`, `DELETE FROM fiscal_configs WHERE enterprise_id=$1`,
 		} {
 			if _, err := pool.Exec(bg, q, empresa); err != nil {

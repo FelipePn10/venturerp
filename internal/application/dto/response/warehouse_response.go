@@ -15,6 +15,7 @@ type WarehouseResponse struct {
 	Type                string    `json:"type"`
 	Disposition         bool      `json:"disposition"`
 	ReservationsAllowed bool      `json:"reservations_allowed"`
+	AllowNegativeStock  bool      `json:"allow_negative_stock"`
 	CreatedBy           uuid.UUID `json:"created_by"`
 	CreatedAt           time.Time `json:"created_at"`
 }

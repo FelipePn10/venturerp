@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -498,11 +499,20 @@ func (h *StockHandler) CloseInventory(w http.ResponseWriter, r *http.Request) {
 		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
 		return
 	}
-	if err := h.closeInventoryUC.Execute(r.Context(), code); err != nil {
+	// Corpo opcional: {"zerar_nao_contados": true}.
+	var dto request.CloseInventoryDTO
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&dto); err != nil && !errors.Is(err, io.EOF) {
+			security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+			return
+		}
+	}
+	res, err := h.closeInventoryUC.Execute(r.Context(), code, dto)
+	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	security.RespondJSON(w, http.StatusOK, res)
 }
 
 func (h *StockHandler) ListInventoryItems(w http.ResponseWriter, r *http.Request) {

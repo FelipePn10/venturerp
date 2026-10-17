@@ -20,7 +20,57 @@ movimentos/saldos/reservas também em [`visao-geral.md`](visao-geral.md) §5.2.
 
 > ✅ Movimentos atualizam `stock_balances` **na mesma transação** (quantidade, custo
 > médio ponderado e último custo). Tipo de entrada padronizado em `IN`. Ver
-> `repository/stock/stock_repository_pg.go` (`CreateMovement`).
+> `repository/stock/stock_repository_pg.go` (`CreateMovementTx`).
+
+Regras do lançamento (todas em `CreateMovementTx`, o único ponto que grava movimento):
+
+- **Custo médio único por item e almoxarifado.** A quantidade é por endereço
+  (uma linha por endereço), mas o custeio é feito sobre o total do almoxarifado e o
+  custo resultante vale para todas as linhas. Saída sem preço é valorizada por ele.
+- **Saldo negativo bloqueado** (migração 405): saída que deixa o almoxarifado — ou o
+  endereço — abaixo de zero responde 422, salvo `warehouse.allow_negative_stock`
+  (padrão verdadeiro na linha de produção, por causa da baixa automática). Ajuste de
+  inventário e de contagem cíclica passam (`PermiteSaldoNegativo`).
+- **Período fechado** (`manufacturing_stock_closed_periods`) recusa qualquer lançamento
+  com data dentro dele — antes só o refugo da produção respeitava.
+- Preço sem total: o total é quantidade × preço (chamadores internos gravavam zero).
+- **Tipo de movimento configurado** (`movement_type_code`, sigla da VEST0200): no
+  lançamento manual decide a direção, exige centro de custo (`requires_cost_center`),
+  recusa quando `allows_manual` é falso e, com `updates_avg_cost` falso, a entrada
+  entra pelo custo médio atual. `cost_center_code` fica no movimento.
+
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/{id}/reverse` | **Estorno** `{"reason"}`: movimento contrário pelo mesmo valor, ligado por `reverses_movement_id`/`reversed_by_movement_id`. Só manual ou transferência (as duas pernas); documento (nota, OF, inventário) é desfeito pelo documento; estorno duplo → 409 |
+
+### Transferência entre almoxarifados — `POST /api/stock/transfers`
+
+`{item_code, from_warehouse_id, to_warehouse_id, quantity, lot?, from_address?, to_address?}`.
+Uma operação: `TRANSFER_OUT` na origem ao custo médio e `TRANSFER_IN` no destino pelo
+mesmo custo; as pernas se referenciam (`reference_type TRANSFERENCIA`, `reference_code`
+= id da saída). Trânsito: transfira para um almoxarifado de localização `TRANSITO`.
+
+### Conversão de unidade (compras e vendas)
+
+- **Nota de entrada:** a linha em unidade diferente da de estoque recebe o fator do
+  cadastro do item (`item_unit_conversions`, direta ou inversa, sem máscara) ou, sem
+  ele, da conversão global (`global_unit_conversions`) — depois do vínculo com o
+  fornecedor e do pedido. Sem conversão nenhuma é **pendência impeditiva**. A
+  aprovação reaplica as conversões nas notas gravadas antes. (Caso Tecnofer, NF
+  78402: 115,8975 KG de tubo entravam como 115,8975 M.)
+- **Pedido de compra:** `purchase_order_uc.UnidadeInterna` grava a quantidade e o
+  preço na unidade de estoque do cadastro em todas as origens (linha, criação,
+  sugestão do MRP, requisição, cotação, recebimento de linha antiga); unidade de
+  compra sem conversão → 422.
+- **NF-e de saída:** a baixa converte da unidade da nota (`uCom`) para a de estoque;
+  a prévia barra a transmissão sem conversão ou sem saldo.
+
+### Extrato e posição
+
+| Método | Rota | Ação |
+|---|---|---|
+| GET | `/api/stock/kardex/{itemCode}?warehouse_id&from&to` | Saldo anterior, movimentos com saldo acumulado (qtd e valor), saldo final |
+| GET | `/api/stock/position?date&warehouse_id` | Saldo por item/almoxarifado ao fim do dia, valorizado, com a 2ª unidade (unidade de compra) quando há conversão |
 
 ## 2. Saldos (`/api/stock/balances`)
 
@@ -41,23 +91,25 @@ movimentos/saldos/reservas também em [`visao-geral.md`](visao-geral.md) §5.2.
 
 > A autorização da NF-e de saída consome as reservas do pedido automaticamente.
 
-## 4. Inventário (`/api/stock/inventories`)
+## 4. Inventário (`/api/inventory`; `/api/stock/inventories` por compatibilidade)
 
 | Método | Rota | Ação |
 |---|---|---|
-| POST | `/create` | Cria inventário |
-| GET | `/list` | Lista |
-| GET | `/{id}` | Consulta |
-| POST | `/{id}/close` | Fecha |
-| POST | `/count` | Registra contagem de um item |
-| POST | `/adjust` | Ajusta diferença (gera movimento de acerto) |
-| GET | `/{id}/items` | Lista itens do inventário |
+| POST | `/` | Abre: `{code, description, warehouse_id, start_date, item_codes?}` — grava a **foto** do saldo (qtd e custo médio) |
+| GET | `/` · `/{id}` · `/{id}/items` | Consulta |
+| POST | `/count` | Conta (upsert): diferença = contado − foto; recontagem guarda a anterior (`previous_counted_qty`, `count_number`) |
+| POST | `/{id}/close` | Fecha `{"zerar_nao_contados"}` — lança `ADJUSTMENT` de cada diferença ao custo médio (ref. `INVENTORY`), numa transação; responde o resumo |
 
-Fluxo: criar → contar → ajustar → fechar. O ajuste gera o movimento de acerto de saldo.
+Até a migração 405 o inventário não mexia no saldo: abrir não gerava itens, contar
+atualizava linha inexistente e fechar só trocava a situação. Um almoxarifado não tem
+dois inventários abertos. A **contagem cíclica** (VEST0500) também ajusta: dentro da
+tolerância na conclusão; divergente, só na aprovação (ref. `CONTAGEM_CICLICA`).
 
 ## 5. Tipos de movimento (`/api/estoque/tipos-movimento`)
 
-Classificação (com sigla) de cada lançamento de estoque.
+Classificação (com sigla) de cada lançamento de estoque. JSON em snake_case
+(`entry_exit`, `requires_cost_center`, `allows_manual`, `updates_avg_cost`,
+`considers_consumption`…) — antes sem tags, as flags com sublinhado não chegavam.
 
 | Método | Rota | Ação |
 |---|---|---|
@@ -69,7 +121,7 @@ Classificação (com sigla) de cada lançamento de estoque.
 
 | Método | Rota | Ação |
 |---|---|---|
-| GET | `/api/stock/balances/atp/{itemCode}` | Disponível = saldo − reservas (todos os depósitos; opcional `?mask=`) |
+| GET | `/api/stock/balances/atp/{itemCode}` | Disponível = saldo − reservas dos almoxarifados **prometíveis** (`disposition` e localização fora de `INSPECAO`/`REJEICAO`); o resto vai em `total_not_available`, e cada almoxarifado traz `stock_status` (LIVRE, INSPECAO, BLOQUEADO) |
 
 As **reservas** mantêm o `reserved_qty` do saldo consistente (criar/liberar/consumir,
 na mesma transação), então o ATP reflete o que realmente pode ser prometido.
@@ -94,17 +146,38 @@ concluir a OF com `lot`.
 
 ## 8. Consumo médio mensal (ROP)
 
-Migration `000154`. Calculado das saídas (`OUT`/`TRANSFER_OUT`) numa janela móvel
-(padrão 6 meses); alimenta o ponto de reposição.
+Migration `000154`. Calculado das saídas de **consumo** (`OUT`/`SAIDA`/`REP`, sem
+estornos e sem tipos com `considers_consumption` falso) numa janela móvel (padrão 6
+meses). Transferência deixou de contar como consumo (vale também para a curva ABC).
 
 | Método | Rota | Ação |
 |---|---|---|
 | POST | `/api/stock/consumption-average/recalc` | Recalcula (item específico via `item_code`, ou todos) |
 | GET | `/api/stock/consumption-average/{itemCode}` | Consulta consumo médio mensal do item |
 
+## 9. Reposição, análise e lotes a vencer
+
+| Método | Rota | Ação |
+|---|---|---|
+| GET | `/api/stock/replenishment` | Itens com projeção (disponível − reservado + pedido de compra aberto + requisição de compra aberta) ≤ ponto de pedido. PP = TR×CM/CR+ES do cadastro; sem CM, o consumo médio apurado; sem fórmula, o estoque mínimo. Sugerido = PP + segurança − projeção, ≥ lote mínimo, no múltiplo |
+| POST | `/api/stock/replenishment/purchase-requisition` | `{items:[{item_code, quantity}]}` → requisição de compra (VSUP0300) |
+| GET | `/api/stock/analysis?months&idle_days` | Valor, consumo, consumo médio, cobertura (meses), giro anualizado, dias sem movimento, parado, ABC |
+| GET | `/api/stock/lots/expiring?days` | Saldo em lote vencido ou a vencer |
+
+## 10. Requisição ao almoxarifado (`/api/stock/material-requisitions`)
+
+Migração 406. Pedido interno (solicitante, centro de custo, almoxarifado, itens).
+
+| Método | Rota | Ação |
+|---|---|---|
+| GET | `/?status=` · `/{id}` | Consulta (ABERTA, PARCIAL, ATENDIDA, CANCELADA) |
+| POST | `/` | Cria |
+| POST | `/{id}/issue` | Atende `{lines:[{item_id, quantity, lot?, address?}]}` — saída no centro de custo (ref. `REQUISICAO_MATERIAL`), até o pendente |
+| POST | `/{id}/cancel` | Cancela o pendente (o entregue fica) |
+
 ---
 
 ## Cadastros relacionados
-Armazém (`/api/warehouse`) e Localização (`/api/location` — países/UFs não; ver
+Armazém (`/api/warehouse`; `PUT /{code}` altera — só ADMIN — inclusive `allow_negative_stock`) e Localização (`/api/location` — países/UFs não; ver
 [`cadastros-apoio.md`](cadastros-apoio.md) para armazém/localização física). Tipos de
 armazém/localização: ver enums `WarehouseType`/`LocationType`.

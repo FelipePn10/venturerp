@@ -2,6 +2,7 @@ package stock
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/google/uuid"
@@ -43,6 +44,27 @@ func NewStockRepositoryTx(tx pgx.Tx) *StockRepositorySQLC {
 
 var _ repository.StockRepository = (*StockRepositorySQLC)(nil)
 
+// SaldoParaSaida devolve o saldo do item no almoxarifado (todos os endereços)
+// e se o almoxarifado aceita saldo negativo — o que a prévia da NF-e precisa
+// para avisar ANTES da transmissão que a baixa não vai passar.
+func (r *StockRepositorySQLC) SaldoParaSaida(ctx context.Context, itemCode int64, warehouseID int64) (float64, bool, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	var saldo float64
+	var permite bool
+	err = r.pool.QueryRow(ctx,
+		`SELECT COALESCE((SELECT SUM(quantity) FROM public.stock_balances
+		                   WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3), 0)::float8,
+		        COALESCE((SELECT allow_negative_stock FROM warehouse WHERE id=$3 AND enterprise_id=$1), FALSE)`,
+		enterpriseID, itemCode, warehouseID).Scan(&saldo, &permite)
+	if err != nil {
+		return 0, false, fmt.Errorf("lendo o saldo do item %d: %w", itemCode, err)
+	}
+	return saldo, permite, nil
+}
+
 // ---------- Stock Movements ----------
 
 // CreateMovement records the movement and atomically updates the stock balance
@@ -74,19 +96,29 @@ func (r *StockRepositorySQLC) CreateMovement(ctx context.Context, m *entity.Stoc
 // the caller's transaction. It is exported for infrastructure coordinators
 // that must settle production and stock atomically.
 func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
+	if err := conferirPeriodoFechado(ctx, tx, enterpriseID); err != nil {
+		return err
+	}
 	if err := valorizarSaidaPelaMedia(ctx, tx, enterpriseID, m); err != nil {
 		return err
+	}
+	// Preço sem total: o valor do movimento é quantidade × preço. Sem isto os
+	// chamadores internos que mandam só o preço gravavam valor zero — e o
+	// movimento sumia do extrato valorizado e do estorno.
+	if m.TotalPrice == 0 && m.UnitPrice != 0 {
+		q, _ := movementQuantity(m).Abs().Float64()
+		m.TotalPrice = q * m.UnitPrice
 	}
 	err := tx.QueryRow(ctx,
 		`INSERT INTO public.stock_movements
 			(item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
 			 reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, created_by, enterprise_id,
-			 address, address_to)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+			 address, address_to, movement_type_code, cost_center_code, reverses_movement_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		 RETURNING id, created_at`,
 		m.ItemCode, m.Mask, m.WarehouseID, m.MovementType, movementQuantity(m), m.UnitPrice, m.TotalPrice,
 		m.ReferenceType, m.ReferenceCode, m.Lot, m.SerialNumber, m.Batch, m.ExpirationDate, m.Notes, m.CreatedBy, enterpriseID,
-		m.Address, m.AddressTo,
+		m.Address, m.AddressTo, m.MovementTypeCode, m.CostCenterCode, m.ReversesMovementID,
 	).Scan(&m.ID, &m.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("creating stock movement: %w", err)
@@ -130,66 +162,126 @@ func applyMovementToLotBalance(ctx context.Context, tx pgx.Tx, enterpriseID int6
 	return nil
 }
 
-// applyMovementToBalance updates stock_balances within the given transaction
-// according to the movement direction. Weighted average cost is recomputed on
-// inbound movements; outbound movements consume at the current average cost.
+// applyMovementToBalance atualiza o saldo na transação do movimento.
+//
+// A QUANTIDADE é por endereço (cada endereço tem a sua linha), mas o CUSTO MÉDIO
+// é um só para o item no almoxarifado. Antes cada linha de endereço tinha o seu
+// próprio custo: o mesmo tubo valia uma coisa na prateleira A e outra na B, e a
+// saída sem endereço lia o custo de uma linha qualquer. Agora o custeio é feito
+// sobre o total do almoxarifado e o custo resultante vale para todas as linhas.
+//
+// É também aqui que a saída é barrada quando deixaria o saldo negativo — no
+// almoxarifado ou no endereço —, salvo onde o almoxarifado permite.
 func applyMovementToBalance(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
 	deltaExact := signedDecimalQuantity(m.MovementType, movementQuantity(m))
 	if deltaExact.IsZero() {
 		// Movement type does not affect on-hand quantity (e.g. reservation).
 		return nil
 	}
+	endereco := enderecoDoSaldo(m)
 
-	var qtyExact decimal.Decimal
-	var avgCost, totalCost float64
-	exists := true
-	err := tx.QueryRow(ctx,
-		`SELECT quantity, avg_cost, total_cost FROM public.stock_balances
-		 WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4 AND address=$5 FOR UPDATE`,
-		m.ItemCode, m.Mask, m.WarehouseID, enterpriseID, enderecoDoSaldo(m),
-	).Scan(&qtyExact, &avgCost, &totalCost)
-	if err == pgx.ErrNoRows {
-		exists = false
-	} else if err != nil {
+	// Trava todas as linhas do item no almoxarifado: o custo é comum a elas.
+	rows, err := tx.Query(ctx,
+		`SELECT address, quantity, avg_cost, total_cost FROM public.stock_balances
+		 WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4 FOR UPDATE`,
+		m.ItemCode, m.Mask, m.WarehouseID, enterpriseID)
+	if err != nil {
 		return fmt.Errorf("reading stock balance for update: %w", err)
+	}
+	var qtdTotal, qtdEndereco decimal.Decimal
+	var valorTotal, custoMedio float64
+	for rows.Next() {
+		var addr string
+		var q decimal.Decimal
+		var avg, total float64
+		if err := rows.Scan(&addr, &q, &avg, &total); err != nil {
+			rows.Close()
+			return fmt.Errorf("reading stock balance for update: %w", err)
+		}
+		qtdTotal = qtdTotal.Add(q)
+		valorTotal += total
+		if avg > custoMedio {
+			custoMedio = avg
+		}
+		if addr == endereco {
+			qtdEndereco = q
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("reading stock balance for update: %w", err)
+	}
+	qtd, _ := qtdTotal.Float64()
+	if qtd > 0 {
+		custoMedio = valorTotal / qtd
+	}
+
+	if deltaExact.IsNegative() && !m.PermiteSaldoNegativo {
+		novoTotal := qtdTotal.Add(deltaExact)
+		novoEndereco := qtdEndereco.Add(deltaExact)
+		if novoTotal.IsNegative() || (endereco != "" && novoEndereco.IsNegative()) {
+			if err := barrarSaldoNegativo(ctx, tx, enterpriseID, m, endereco, qtdTotal, qtdEndereco, deltaExact.Neg()); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Weighted-average costing is computed by the domain (single source of truth,
 	// unit-tested); the repository only persists the result.
-	qty, _ := qtyExact.Float64()
 	delta, _ := deltaExact.Float64()
 	next, lastCost := entity.ApplyMovementCosting(
-		entity.CostingState{Quantity: qty, AvgCost: avgCost, TotalCost: totalCost}, delta, m.UnitPrice,
+		entity.CostingState{Quantity: qtd, AvgCost: custoMedio, TotalCost: valorTotal}, delta, m.UnitPrice,
 	)
-	newQty, newAvg, newTotal := qtyExact.Add(deltaExact), next.AvgCost, next.TotalCost
 
-	if exists {
-		_, err = tx.Exec(ctx,
-			`UPDATE public.stock_balances
-			 SET quantity=$4, avg_cost=$5, last_cost=$6, total_cost=$7, last_movement_at=$8, updated_at=NOW()
-			 WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$9 AND address=$10`,
-			m.ItemCode, m.Mask, m.WarehouseID, newQty, newAvg, lastCost, newTotal, m.CreatedAt, enterpriseID, enderecoDoSaldo(m))
-	} else {
-		_, err = tx.Exec(ctx,
-			`INSERT INTO public.stock_balances
-				(item_code, mask, warehouse_id, quantity, avg_cost, last_cost, total_cost, last_movement_at, enterprise_id, address)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-			 ON CONFLICT (enterprise_id, item_code, mask, warehouse_id, address) DO UPDATE
-			 SET quantity = public.stock_balances.quantity + EXCLUDED.quantity,
-			     total_cost = public.stock_balances.total_cost + EXCLUDED.total_cost,
-			     avg_cost = CASE WHEN public.stock_balances.quantity + EXCLUDED.quantity > 0
-			                     THEN (public.stock_balances.total_cost + EXCLUDED.total_cost)
-			                          / (public.stock_balances.quantity + EXCLUDED.quantity)
-			                     ELSE EXCLUDED.avg_cost END,
-			     last_cost = EXCLUDED.last_cost,
-			     last_movement_at = EXCLUDED.last_movement_at,
-			     updated_at = NOW()`,
-			m.ItemCode, m.Mask, m.WarehouseID, newQty, newAvg, lastCost, newTotal, m.CreatedAt, enterpriseID, enderecoDoSaldo(m))
-	}
-	if err != nil {
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO public.stock_balances
+			(item_code, mask, warehouse_id, quantity, avg_cost, last_cost, total_cost, last_movement_at, enterprise_id, address)
+		 VALUES ($1,$2,$3,$4,$5,$6,0,$7,$8,$9)
+		 ON CONFLICT (enterprise_id, item_code, mask, warehouse_id, address) DO UPDATE
+		 SET quantity = public.stock_balances.quantity + EXCLUDED.quantity,
+		     last_movement_at = EXCLUDED.last_movement_at,
+		     updated_at = NOW()`,
+		m.ItemCode, m.Mask, m.WarehouseID, deltaExact, next.AvgCost, lastCost, m.CreatedAt, enterpriseID, endereco); err != nil {
 		return fmt.Errorf("updating stock balance: %w", err)
 	}
+	// O custo resultante vale para todas as linhas do item no almoxarifado; o
+	// valor de cada linha é a sua quantidade pelo custo comum.
+	if _, err = tx.Exec(ctx,
+		`UPDATE public.stock_balances
+		 SET avg_cost = $5, last_cost = $6,
+		     total_cost = CASE WHEN quantity > 0 THEN quantity * $5 ELSE 0 END,
+		     updated_at = NOW()
+		 WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4`,
+		m.ItemCode, m.Mask, m.WarehouseID, enterpriseID, next.AvgCost, lastCost); err != nil {
+		return fmt.Errorf("updating stock balance cost: %w", err)
+	}
 	return nil
+}
+
+// barrarSaldoNegativo recusa a saída que deixaria o saldo negativo, salvo no
+// almoxarifado que permite (warehouse.allow_negative_stock).
+func barrarSaldoNegativo(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement, endereco string, saldo, saldoEndereco, saida decimal.Decimal) error {
+	var permite bool
+	var almox, item string
+	err := tx.QueryRow(ctx,
+		`SELECT COALESCE(w.allow_negative_stock, FALSE), COALESCE(w.code::text, $2::text),
+		        COALESCE((SELECT COALESCE(NULLIF(i.business_code, ''), i.code::text) FROM items i WHERE i.code = $3 AND i.enterprise_id = $1), $3::text)
+		   FROM (SELECT 1) x LEFT JOIN warehouse w ON w.id = $2 AND w.enterprise_id = $1`,
+		enterpriseID, m.WarehouseID, m.ItemCode).Scan(&permite, &almox, &item)
+	if err != nil {
+		return fmt.Errorf("conferindo se o almoxarifado permite saldo negativo: %w", err)
+	}
+	if permite {
+		return nil
+	}
+	if endereco != "" && saldoEndereco.Sub(saida).IsNegative() && !saldo.Sub(saida).IsNegative() {
+		return errorsuc.NewValidationError(fmt.Sprintf(
+			"saldo insuficiente no endereço %s: o item %s tem %s ali e a saída é de %s — tire de outro endereço ou transfira antes",
+			endereco, item, saldoEndereco.String(), saida.String()))
+	}
+	return errorsuc.NewValidationError(fmt.Sprintf(
+		"saldo insuficiente: o item %s tem %s no almoxarifado %s e a saída é de %s. Lance a entrada antes ou, se a operação exige, permita saldo negativo no cadastro do almoxarifado",
+		item, saldo.String(), almox, saida.String()))
 }
 
 // valorizarSaidaPelaMedia preenche o valor de uma saída que veio sem preço.
@@ -198,32 +290,56 @@ func applyMovementToBalance(ctx context.Context, tx pgx.Tx, enterpriseID int64, 
 // corrente), mas o MOVIMENTO era gravado com o unit_price que o chamador
 // mandasse — e as telas de baixa não mandam preço. O extrato e os relatórios de
 // valorização ficavam com consumo a zero, embora o estoque tivesse sido baixado
-// pelo valor certo. Aqui a saída passa a registrar o mesmo custo que consumiu.
+// pelo valor certo. Aqui a saída passa a registrar o mesmo custo que consumiu:
+// o custo médio do item no almoxarifado (todos os endereços).
 func valorizarSaidaPelaMedia(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
-	if m.UnitPrice > 0 || m.TotalPrice > 0 {
-		return nil
+	entrada := signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsPositive()
+	if m.ValorizarPelaMedia && entrada {
+		m.UnitPrice, m.TotalPrice = 0, 0
+	} else {
+		if m.UnitPrice > 0 || m.TotalPrice > 0 {
+			return nil
+		}
+		if !signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsNegative() {
+			return nil
+		}
 	}
-	if !signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsNegative() {
-		return nil
-	}
-	var avgCost float64
+	var avgCost *float64
 	err := tx.QueryRow(ctx,
-		`SELECT avg_cost FROM public.stock_balances
-		 WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4`,
+		`SELECT CASE WHEN SUM(quantity) > 0 THEN SUM(total_cost) / SUM(quantity) ELSE MAX(avg_cost) END
+		   FROM public.stock_balances
+		  WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4`,
 		m.ItemCode, m.Mask, m.WarehouseID, enterpriseID).Scan(&avgCost)
-	if err == pgx.ErrNoRows {
-		return nil
-	}
 	if err != nil {
 		return fmt.Errorf("reading average cost to value the outbound movement: %w", err)
 	}
-	if avgCost <= 0 {
+	if avgCost == nil || *avgCost <= 0 {
 		return nil
 	}
 	quantidade, _ := movementQuantity(m).Abs().Float64()
-	m.UnitPrice = avgCost
-	m.TotalPrice = quantidade * avgCost
+	m.UnitPrice = *avgCost
+	m.TotalPrice = quantidade * *avgCost
 	return nil
+}
+
+// conferirPeriodoFechado recusa lançamento com data dentro de um período de
+// estoque fechado. Antes só o destino do refugo da produção respeitava o
+// fechamento; uma nota de entrada ou um ajuste manual passavam por cima.
+func conferirPeriodoFechado(ctx context.Context, tx pgx.Tx, enterpriseID int64) error {
+	var de, ate *time.Time
+	err := tx.QueryRow(ctx,
+		`SELECT period_from, period_to FROM manufacturing_stock_closed_periods
+		  WHERE enterprise_id = $1 AND CURRENT_DATE BETWEEN period_from AND period_to
+		  ORDER BY period_from LIMIT 1`, enterpriseID).Scan(&de, &ate)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("conferindo o período de estoque fechado: %w", err)
+	}
+	return errorsuc.NewValidationError(fmt.Sprintf(
+		"o período de estoque de %s a %s está fechado: reabra o período para lançar movimentos com data de hoje",
+		de.Format("02/01/2006"), ate.Format("02/01/2006")))
 }
 
 // enderecoDoSaldo devolve o endereço que identifica a linha de saldo. Vazio
@@ -261,7 +377,8 @@ func (r *StockRepositorySQLC) ListMovements(ctx context.Context) ([]*entity.Stoc
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE enterprise_id=$1 ORDER BY created_at DESC`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements: %w", err)
@@ -277,7 +394,8 @@ func (r *StockRepositorySQLC) ListMovementsByItem(ctx context.Context, itemCode 
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE item_code = $1 AND enterprise_id=$2 ORDER BY created_at DESC`, itemCode, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements by item: %w", err)
@@ -293,7 +411,8 @@ func (r *StockRepositorySQLC) ListMovementsByWarehouse(ctx context.Context, ware
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE warehouse_id = $1 AND enterprise_id=$2 ORDER BY created_at DESC`, warehouseID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements by warehouse: %w", err)
@@ -309,7 +428,8 @@ func (r *StockRepositorySQLC) ListMovementsByDateRange(ctx context.Context, from
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
-		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by
+		        reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, address, address_to, created_at, created_by,
+		        movement_type_code, cost_center_code, reverses_movement_id, reversed_by_movement_id
 		 FROM public.stock_movements WHERE created_at >= $1 AND created_at <= $2 AND enterprise_id=$3 ORDER BY created_at DESC`, from, to, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock movements by date range: %w", err)
@@ -326,6 +446,7 @@ func scanMovements(rows pgx.Rows) ([]*entity.StockMovement, error) {
 			&m.ID, &m.ItemCode, &m.Mask, &m.WarehouseID, &m.MovementType, &m.Quantity, &m.UnitPrice, &m.TotalPrice,
 			&m.ReferenceType, &m.ReferenceCode, &m.Lot, &m.SerialNumber, &m.Batch, &m.ExpirationDate, &m.Notes,
 			&m.Address, &m.AddressTo, &m.CreatedAt, &m.CreatedBy,
+			&m.MovementTypeCode, &m.CostCenterCode, &m.ReversesMovementID, &m.ReversedByMovementID,
 		); err != nil {
 			return nil, fmt.Errorf("scanning stock movement: %w", err)
 		}
@@ -674,6 +795,15 @@ func scanReservations(rows pgx.Rows) ([]*entity.StockReservation, error) {
 
 // RecalcConsumptionAverage computes the average monthly consumption of an item
 // from its outbound movements over the trailing window and upserts the result.
+// consumoSQL: a saída que é CONSUMO. Transferência não é consumo (o material só
+// mudou de lugar) e contava como tal; estorno e movimento estornado se anulam;
+// e o tipo de movimento marcado como "não considera consumo" fica de fora.
+const consumoSQL = `m.movement_type IN ('OUT','SAIDA','REP')
+		   AND m.reverses_movement_id IS NULL AND m.reversed_by_movement_id IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM stock_movement_types t
+		                    WHERE t.enterprise_id = m.enterprise_id AND t.sigla = m.movement_type_code
+		                      AND NOT t.considers_consumption)`
+
 func (r *StockRepositorySQLC) RecalcConsumptionAverage(ctx context.Context, itemCode int64, windowMonths int) (*entity.ItemConsumptionAverage, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
@@ -685,12 +815,12 @@ func (r *StockRepositorySQLC) RecalcConsumptionAverage(ctx context.Context, item
 
 	var totalConsumed float64
 	err = r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(quantity), 0)
-		 FROM public.stock_movements
-		 WHERE item_code = $1
-		   AND movement_type IN ('OUT', 'TRANSFER_OUT')
-		   AND created_at >= NOW() - make_interval(months => $2)
-		   AND enterprise_id=$3`, itemCode, windowMonths, enterpriseID).Scan(&totalConsumed)
+		`SELECT COALESCE(SUM(ABS(m.quantity)), 0)
+		 FROM public.stock_movements m
+		 WHERE m.item_code = $1
+		   AND `+consumoSQL+`
+		   AND m.created_at >= NOW() - make_interval(months => $2)
+		   AND m.enterprise_id=$3`, itemCode, windowMonths, enterpriseID).Scan(&totalConsumed)
 	if err != nil {
 		return nil, fmt.Errorf("summing item consumption: %w", err)
 	}
@@ -727,9 +857,9 @@ func (r *StockRepositorySQLC) RecalcAllConsumptionAverages(ctx context.Context, 
 		windowMonths = 6
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT DISTINCT item_code FROM public.stock_movements
-		 WHERE movement_type IN ('OUT', 'TRANSFER_OUT')
-		   AND created_at >= NOW() - make_interval(months => $1) AND enterprise_id=$2`, windowMonths, enterpriseID)
+		`SELECT DISTINCT m.item_code FROM public.stock_movements m
+		 WHERE `+consumoSQL+`
+		   AND m.created_at >= NOW() - make_interval(months => $1) AND m.enterprise_id=$2`, windowMonths, enterpriseID)
 	if err != nil {
 		return 0, fmt.Errorf("listing items with consumption: %w", err)
 	}
@@ -950,12 +1080,31 @@ func (r *StockRepositorySQLC) GetLotGenealogy(ctx context.Context, itemCode int6
 
 // ---------- Physical Inventory ----------
 
+// CreateInventory abre o inventário e grava a FOTO do saldo de cada item do
+// almoxarifado (quantidade somada dos endereços e custo médio) — é contra ela
+// que a contagem é comparada. Um almoxarifado não tem dois inventários abertos.
 func (r *StockRepositorySQLC) CreateInventory(ctx context.Context, inv *entity.PhysicalInventory) (*entity.PhysicalInventory, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	err = r.pool.QueryRow(ctx,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning inventory tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var aberto int64
+	err = tx.QueryRow(ctx,
+		`SELECT code FROM public.physical_inventories
+		  WHERE enterprise_id=$1 AND warehouse_id=$2 AND status='OPEN' LIMIT 1`, enterpriseID, inv.WarehouseID).Scan(&aberto)
+	if err == nil {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("o almoxarifado já tem o inventário %d aberto: feche-o antes de abrir outro", aberto))
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("checking open inventory: %w", err)
+	}
+
+	err = tx.QueryRow(ctx,
 		`INSERT INTO public.physical_inventories
 			(code, description, warehouse_id, start_date, end_date, status, notes, created_by, enterprise_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -964,6 +1113,46 @@ func (r *StockRepositorySQLC) CreateInventory(ctx context.Context, inv *entity.P
 	).Scan(&inv.ID, &inv.CreatedAt, &inv.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating physical inventory: %w", err)
+	}
+
+	var filtro []int64
+	if len(inv.ItemCodes) > 0 {
+		filtro = inv.ItemCodes
+	}
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO public.physical_inventory_items (inventory_id, item_code, mask, warehouse_id, system_qty, unit_cost)
+		 SELECT $1, b.item_code, b.mask, b.warehouse_id, SUM(b.quantity),
+		        CASE WHEN SUM(b.quantity) > 0 THEN SUM(b.total_cost) / SUM(b.quantity) ELSE MAX(b.avg_cost) END
+		   FROM public.stock_balances b
+		  WHERE b.enterprise_id = $2 AND b.warehouse_id = $3
+		    AND ($4::bigint[] IS NULL OR b.item_code = ANY($4::bigint[]))
+		  GROUP BY b.item_code, b.mask, b.warehouse_id
+		 HAVING SUM(b.quantity) <> 0`,
+		inv.ID, enterpriseID, inv.WarehouseID, filtro)
+	if err != nil {
+		return nil, fmt.Errorf("snapshotting inventory balances: %w", err)
+	}
+	// Inventário parcial: item pedido sem saldo também entra (foto zero), para
+	// a contagem dele aparecer na lista.
+	if len(filtro) > 0 {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO public.physical_inventory_items (inventory_id, item_code, mask, warehouse_id, system_qty, unit_cost)
+			 SELECT $1, i.code, '', $3, 0, 0 FROM items i
+			  WHERE i.enterprise_id = $2 AND i.code = ANY($4::bigint[])
+			 ON CONFLICT (inventory_id, item_code, mask, warehouse_id) DO NOTHING`,
+			inv.ID, enterpriseID, inv.WarehouseID, filtro); err != nil {
+			return nil, fmt.Errorf("adding requested items to the inventory: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE public.physical_inventories
+		    SET total_items = (SELECT COUNT(*) FROM public.physical_inventory_items WHERE inventory_id = $1)
+		  WHERE id = $1`, inv.ID); err != nil {
+		return nil, fmt.Errorf("counting inventory items: %w", err)
+	}
+	inv.TotalItems = int(tag.RowsAffected())
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing inventory: %w", err)
 	}
 	return inv, nil
 }
@@ -1068,6 +1257,146 @@ func (r *StockRepositorySQLC) CloseInventory(ctx context.Context, id int64) erro
 	return nil
 }
 
+// FecharInventario lança o ajuste de cada diferença e fecha o inventário.
+//
+// O ajuste é a DIFERENÇA contra a foto da abertura (contado − sistema na
+// abertura), aplicada ao saldo atual: o que entrou ou saiu depois da abertura
+// continua valendo. A sobra entra ao custo médio do item; a falta sai ao custo
+// médio. Tudo numa transação — ou o inventário fecha com todos os ajustes, ou
+// nada muda.
+func (r *StockRepositorySQLC) FecharInventario(ctx context.Context, id int64, ator uuid.UUID, zerarNaoContados bool) (*entity.ResultadoFechamentoInventario, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning inventory close tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var codigo, almox int64
+	var status string
+	err = tx.QueryRow(ctx,
+		`SELECT code, warehouse_id, status FROM public.physical_inventories WHERE id=$1 AND enterprise_id=$2 FOR UPDATE`,
+		id, enterpriseID).Scan(&codigo, &almox, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("inventário %d não encontrado", id))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("locking inventory: %w", err)
+	}
+	if status != "OPEN" {
+		return nil, errorsuc.NewValidationError("somente inventário aberto pode ser fechado")
+	}
+
+	res := &entity.ResultadoFechamentoInventario{}
+	if zerarNaoContados {
+		tag, err := tx.Exec(ctx,
+			`UPDATE public.physical_inventory_items
+			    SET counted_qty = 0, difference_qty = -system_qty, counted_at = NOW(), counted_by = $2,
+			        adjustment_reason = COALESCE(adjustment_reason, 'não contado: zerado no fechamento')
+			  WHERE inventory_id = $1 AND counted_qty IS NULL`, id, ator)
+		if err != nil {
+			return nil, fmt.Errorf("zeroing uncounted items: %w", err)
+		}
+		res.NaoContadosZerados = int(tag.RowsAffected())
+	}
+	var faltando int
+	if err := tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM public.physical_inventory_items WHERE inventory_id=$1 AND counted_qty IS NULL`, id).Scan(&faltando); err != nil {
+		return nil, fmt.Errorf("checking uncounted items: %w", err)
+	}
+	if faltando > 0 {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"%d item(ns) ainda sem contagem: conte-os ou feche zerando os não contados", faltando))
+	}
+
+	rows, err := tx.Query(ctx,
+		`SELECT id, item_code, mask, difference_qty, COALESCE(unit_cost, 0)
+		   FROM public.physical_inventory_items
+		  WHERE inventory_id=$1 AND difference_qty IS NOT NULL AND difference_qty <> 0
+		  ORDER BY item_code`, id)
+	if err != nil {
+		return nil, fmt.Errorf("listing inventory differences: %w", err)
+	}
+	type diferenca struct {
+		id, item int64
+		mask     string
+		qtd      decimal.Decimal
+		custo    float64
+	}
+	var difs []diferenca
+	for rows.Next() {
+		var d diferenca
+		if err := rows.Scan(&d.id, &d.item, &d.mask, &d.qtd, &d.custo); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scanning inventory difference: %w", err)
+		}
+		difs = append(difs, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	ref := entity.ReferenceTypeInventory
+	nota := fmt.Sprintf("Ajuste do inventário %d", codigo)
+	for _, d := range difs {
+		qtd, _ := d.qtd.Float64()
+		mov := &entity.StockMovement{
+			ItemCode: d.item, Mask: d.mask, WarehouseID: almox,
+			MovementType: entity.MovementTypeAdjustment, Quantity: qtd, ExactQuantity: d.qtd,
+			ReferenceType: &ref, ReferenceCode: &codigo, Notes: &nota, CreatedBy: ator,
+			PermiteSaldoNegativo: true,
+		}
+		if d.qtd.IsPositive() {
+			// Sobra entra ao custo médio atual (o da foto, se o item zerou).
+			custo := d.custo
+			var atual *float64
+			if err := tx.QueryRow(ctx,
+				`SELECT CASE WHEN SUM(quantity) > 0 THEN SUM(total_cost)/SUM(quantity) ELSE MAX(avg_cost) END
+				   FROM public.stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4`,
+				enterpriseID, d.item, d.mask, almox).Scan(&atual); err != nil {
+				return nil, fmt.Errorf("reading average cost for the inventory adjustment: %w", err)
+			}
+			if atual != nil && *atual > 0 {
+				custo = *atual
+			}
+			mov.UnitPrice, mov.TotalPrice = custo, qtd*custo
+			res.Sobras += qtd
+		} else {
+			res.Faltas += -qtd
+		}
+		if err := CreateMovementTx(ctx, tx, enterpriseID, mov); err != nil {
+			return nil, fmt.Errorf("lançando o ajuste do item %d: %w", d.item, err)
+		}
+		if d.qtd.IsPositive() {
+			res.ValorAjustado += mov.TotalPrice
+		} else {
+			res.ValorAjustado -= mov.TotalPrice
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE public.physical_inventory_items
+			    SET is_adjusted = TRUE, adjustment_movement_id = $2,
+			        adjustment_type = CASE WHEN difference_qty > 0 THEN 'IN' ELSE 'OUT' END
+			  WHERE id = $1`, d.id, mov.ID); err != nil {
+			return nil, fmt.Errorf("linking the adjustment to the inventory item: %w", err)
+		}
+		res.Ajustes++
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE public.physical_inventories
+		    SET status='CLOSED', end_date=CURRENT_DATE, closed_by=$2, adjustment_value=$3, updated_at=NOW()
+		  WHERE id=$1`, id, ator, res.ValorAjustado); err != nil {
+		return nil, fmt.Errorf("closing inventory: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing inventory close: %w", err)
+	}
+	return res, nil
+}
+
 func scanInventories(rows pgx.Rows) ([]*entity.PhysicalInventory, error) {
 	var result []*entity.PhysicalInventory
 	for rows.Next() {
@@ -1125,7 +1454,7 @@ func (r *StockRepositorySQLC) ListInventoryItems(ctx context.Context, inventoryI
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, inventory_id, item_code, mask, warehouse_id, system_qty, counted_qty,
 		        difference_qty, unit_cost, adjustment_type, adjustment_reason, counted_by,
-		        counted_at, is_adjusted, created_at
+		        counted_at, is_adjusted, created_at, count_number, previous_counted_qty, adjustment_movement_id
 		 FROM public.physical_inventory_items item WHERE inventory_id=$1 AND EXISTS
 		 (SELECT 1 FROM physical_inventories inventory WHERE inventory.id=item.inventory_id AND inventory.enterprise_id=$2)
 		 ORDER BY item_code`, inventoryID, enterpriseID)
@@ -1136,21 +1465,71 @@ func (r *StockRepositorySQLC) ListInventoryItems(ctx context.Context, inventoryI
 	return scanInventoryItems(rows)
 }
 
+// CountInventoryItem grava a contagem e calcula a diferença contra a foto da
+// abertura. Item que não estava na foto (achado no almoxarifado) entra com saldo
+// do sistema zero. Contar de novo é recontagem: a anterior fica guardada.
+//
+// Antes era um UPDATE numa linha que nunca era criada — não gravava nada e
+// respondia sucesso.
 func (r *StockRepositorySQLC) CountInventoryItem(ctx context.Context, item *entity.PhysicalInventoryItem) error {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx,
-		`UPDATE public.physical_inventory_items SET
-		     counted_qty = $1, unit_cost = $2, counted_by = $3, counted_at = NOW()
-		 WHERE inventory_id=$4 AND item_code=$5 AND mask=$6 AND warehouse_id=$7 AND EXISTS
-		 (SELECT 1 FROM physical_inventories inventory WHERE inventory.id=$4 AND inventory.enterprise_id=$8)`,
-		item.CountedQty, item.UnitCost, item.CountedBy, item.InventoryID, item.ItemCode, item.Mask, item.WarehouseID, enterpriseID)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning inventory count tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var existe bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM items WHERE code=$1 AND enterprise_id=$2)`, item.ItemCode, enterpriseID).Scan(&existe); err != nil {
+		return fmt.Errorf("checking inventory item: %w", err)
+	}
+	if !existe {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado nesta empresa", item.ItemCode))
+	}
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO public.physical_inventory_items
+			(inventory_id, item_code, mask, warehouse_id, system_qty, unit_cost,
+			 counted_qty, difference_qty, counted_by, counted_at, count_number)
+		 SELECT $1::bigint, $2::bigint, $3::text, $4::bigint, 0,
+		        COALESCE((SELECT CASE WHEN SUM(b.quantity) > 0 THEN SUM(b.total_cost)/SUM(b.quantity) ELSE MAX(b.avg_cost) END
+		                    FROM public.stock_balances b
+		                   WHERE b.enterprise_id=$7 AND b.item_code=$2::bigint AND b.mask=$3::text AND b.warehouse_id=$4::bigint), 0),
+		        $5::numeric, $5::numeric, $6::uuid, NOW(), 1
+		  WHERE EXISTS (SELECT 1 FROM public.physical_inventories inv WHERE inv.id=$1 AND inv.enterprise_id=$7 AND inv.status='OPEN')
+		 ON CONFLICT (inventory_id, item_code, mask, warehouse_id) DO UPDATE SET
+		     previous_counted_qty = public.physical_inventory_items.counted_qty,
+		     counted_qty    = EXCLUDED.counted_qty,
+		     difference_qty = EXCLUDED.counted_qty - public.physical_inventory_items.system_qty,
+		     counted_by     = EXCLUDED.counted_by,
+		     counted_at     = NOW(),
+		     count_number   = public.physical_inventory_items.count_number + 1,
+		     is_adjusted    = FALSE`,
+		item.InventoryID, item.ItemCode, item.Mask, item.WarehouseID, item.CountedQty, item.CountedBy, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("counting inventory item: %w", err)
 	}
-	return nil
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewValidationError("somente inventário aberto desta empresa pode receber contagem")
+	}
+	if item.AdjustmentReason != nil {
+		if _, err := tx.Exec(ctx,
+			`UPDATE public.physical_inventory_items SET adjustment_reason=$5
+			  WHERE inventory_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4`,
+			item.InventoryID, item.ItemCode, item.Mask, item.WarehouseID, item.AdjustmentReason); err != nil {
+			return fmt.Errorf("recording count reason: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE public.physical_inventories SET
+		     total_items   = (SELECT COUNT(*) FROM public.physical_inventory_items WHERE inventory_id=$1),
+		     counted_items = (SELECT COUNT(*) FROM public.physical_inventory_items WHERE inventory_id=$1 AND counted_qty IS NOT NULL),
+		     updated_at = NOW()
+		  WHERE id=$1`, item.InventoryID); err != nil {
+		return fmt.Errorf("updating inventory progress: %w", err)
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *StockRepositorySQLC) AdjustInventoryItem(ctx context.Context, item *entity.PhysicalInventoryItem) error {
@@ -1178,6 +1557,7 @@ func scanInventoryItems(rows pgx.Rows) ([]*entity.PhysicalInventoryItem, error) 
 			&item.ID, &item.InventoryID, &item.ItemCode, &item.Mask, &item.WarehouseID, &item.SystemQty,
 			&item.CountedQty, &item.DifferenceQty, &item.UnitCost, &item.AdjustmentType, &item.AdjustmentReason,
 			&item.CountedBy, &item.CountedAt, &item.IsAdjusted, &item.CreatedAt,
+			&item.CountNumber, &item.PreviousCountedQty, &item.AdjustmentMovementID,
 		); err != nil {
 			return nil, fmt.Errorf("scanning inventory item: %w", err)
 		}
@@ -1477,7 +1857,7 @@ func (r *StockRepositorySQLC) ApurarCurvaABC(ctx context.Context, janelaMeses in
 			  ) b ON TRUE
 			 WHERE m.enterprise_id = $1
 			   AND m.created_at >= NOW() - make_interval(months => $2)
-			   AND m.movement_type IN ('OUT','SAIDA','TRANSFER_OUT','REP')
+			   AND `+consumoSQL+`
 			 GROUP BY m.item_code
 			HAVING SUM(ABS(m.quantity) * COALESCE(NULLIF(m.unit_price,0), b.avg_cost, 0)) > 0
 		), total AS (

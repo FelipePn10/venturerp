@@ -36,6 +36,8 @@ type ReceivePurchaseOrderUseCase struct {
 	// Inspection is optional; nil disables auto-inspection on receipt.
 	Inspection ReceivingInspectionGate
 	Tolerances ports.PurchaseToleranceEvaluator
+	// Unidade converte linhas antigas, gravadas sem quantidade interna.
+	Unidade *UnidadeInterna
 }
 
 func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.ReceivePurchaseOrderDTO) (*response.PurchaseOrderReceiptResponse, error) {
@@ -118,6 +120,15 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			}
 		}
 
+		if line.InternalQty <= 0 && uc.Unidade != nil {
+			// Linha anterior à conversão obrigatória: converte agora, pela
+			// unidade de estoque do cadastro, em vez de receber em unidade de compra.
+			copia := *line
+			if err := uc.Unidade.Preencher(ctx, &copia); err != nil {
+				return nil, err
+			}
+			line.InternalQty, line.InternalPrice = copia.InternalQty, copia.InternalPrice
+		}
 		stockQty := item.Quantity
 		unitPrice := line.UnitPrice
 		if line.InternalQty > 0 && line.RequestedQty > 0 {

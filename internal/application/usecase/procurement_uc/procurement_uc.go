@@ -405,6 +405,16 @@ func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto req
 	return toReceivingInspectionOrderResponse(created), nil
 }
 
+// GetReceivingInspectionOrder abre uma ordem de inspeção da empresa da sessão
+// (VINS0400). A tela chamava esta rota, que não existia, e recebia 404.
+func (uc *UseCase) GetReceivingInspectionOrder(ctx context.Context, id int64) (*response.ReceivingInspectionOrderResponse, error) {
+	order, err := uc.Repo.GetReceivingInspectionOrder(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toReceivingInspectionOrderResponse(order), nil
+}
+
 func (uc *UseCase) ListReceivingInspectionOrders(ctx context.Context, status string) ([]*response.ReceivingInspectionOrderResponse, error) {
 	orders, err := uc.Repo.ListReceivingInspectionOrders(ctx, status)
 	if err != nil {

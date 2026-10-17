@@ -67,6 +67,9 @@ type StockRepository interface {
 	ListInventoriesByStatus(ctx context.Context, status string) ([]*entity.PhysicalInventory, error)
 	UpdateInventoryStatus(ctx context.Context, id int64, status string) error
 	CloseInventory(ctx context.Context, id int64) error
+	// FecharInventario lança o ajuste de cada diferença (contado − foto da
+	// abertura) e fecha o inventário, numa transação.
+	FecharInventario(ctx context.Context, id int64, ator uuid.UUID, zerarNaoContados bool) (*entity.ResultadoFechamentoInventario, error)
 
 	// Physical inventory items
 	UpsertInventoryItem(ctx context.Context, item *entity.PhysicalInventoryItem) error

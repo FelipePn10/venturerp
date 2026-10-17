@@ -11,13 +11,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const warehouseColumns = `id,code,description,location::text,type::text,disposition,reservations_allowed,created_by,created_at`
+const warehouseColumns = `id,code,description,location::text,type::text,disposition,reservations_allowed,created_by,created_at,allow_negative_stock`
 
 func scanWarehouse(row pgx.Row) (*entity.Warehouse, error) {
 	var out entity.Warehouse
 	var location, warehouseType string
 	if err := row.Scan(&out.ID, &out.Code, &out.Description, &location, &warehouseType,
-		&out.Disposition, &out.ReservationsAllowed, &out.CreatedBy, &out.CreatedAt); err != nil {
+		&out.Disposition, &out.ReservationsAllowed, &out.CreatedBy, &out.CreatedAt, &out.AllowNegativeStock); err != nil {
 		return nil, err
 	}
 	out.Location = mapper.WarehouseLocationToDomain(location)
@@ -31,10 +31,10 @@ func (r *repositoryWarehouseSQLC) Create(ctx context.Context, value *entity.Ware
 		return nil, err
 	}
 	row := r.pool.QueryRow(ctx, `INSERT INTO warehouse
-		(code,description,location,type,disposition,reservations_allowed,created_by,enterprise_id)
-		VALUES ($1,$2,$3::warehouse_location,$4::warehouse_type,$5,$6,$7,$8) RETURNING `+warehouseColumns,
+		(code,description,location,type,disposition,reservations_allowed,created_by,enterprise_id,allow_negative_stock)
+		VALUES ($1,$2,$3::warehouse_location,$4::warehouse_type,$5,$6,$7,$8,$9) RETURNING `+warehouseColumns,
 		value.Code, value.Description, mapper.WarehouseLocationToDB(value.Location), mapper.WarehouseTypeToDB(value.Type),
-		value.Disposition, value.ReservationsAllowed, value.CreatedBy, enterpriseID)
+		value.Disposition, value.ReservationsAllowed, value.CreatedBy, enterpriseID, value.AllowNegativeStock)
 	created, err := scanWarehouse(row)
 	if err != nil {
 		return nil, fmt.Errorf("criando almoxarifado: %w", err)
@@ -76,4 +76,26 @@ func (r *repositoryWarehouseSQLC) GetByCode(ctx context.Context, code string) (*
 		return nil, fmt.Errorf("consultando almoxarifado: %w", err)
 	}
 	return value, nil
+}
+
+// Update altera o almoxarifado da empresa (o código não muda: é a chave que o
+// cadastro do item e os movimentos guardam).
+func (r *repositoryWarehouseSQLC) Update(ctx context.Context, value *entity.Warehouse) (*entity.Warehouse, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := scanWarehouse(r.pool.QueryRow(ctx, `UPDATE warehouse SET
+		description=$3, location=$4::warehouse_location, type=$5::warehouse_type,
+		disposition=$6, reservations_allowed=$7, allow_negative_stock=$8
+		WHERE code=$1 AND enterprise_id=$2 RETURNING `+warehouseColumns,
+		value.Code, enterpriseID, value.Description, mapper.WarehouseLocationToDB(value.Location), mapper.WarehouseTypeToDB(value.Type),
+		value.Disposition, value.ReservationsAllowed, value.AllowNegativeStock))
+	if err == pgx.ErrNoRows {
+		return nil, errorsuc.NewNotFoundError("almoxarifado não encontrado")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("alterando almoxarifado: %w", err)
+	}
+	return updated, nil
 }

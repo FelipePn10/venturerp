@@ -42,3 +42,17 @@ func (h *WarehouseHandler) GetWarehouse(w http.ResponseWriter, r *http.Request) 
 	}
 	h.OK(w, wh)
 }
+
+// UpdateWarehouse altera o almoxarifado (PUT /api/warehouse/{code}).
+func (h *WarehouseHandler) UpdateWarehouse(w http.ResponseWriter, r *http.Request) {
+	var dto request.UpdateWarehouseRequestDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UpdateWarehouseUC.Execute(r.Context(), chi.URLParam(r, "code"), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}

@@ -59,6 +59,18 @@ para compor o custo dos intermediários antes do produto final e resolve a BOM p
 | Método | Rota | Ação |
 |---|---|---|
 | POST `/create` · GET `/list` · GET `/{costCenterCode}` | CRUD/consulta |
+| GET `/cadastro` | lista ativos e inativos (tela VCTB0102) |
+| GET `/{costCenterCode}/uso` | `{"em_uso", "usos": [{"onde", "quantidade"}]}` |
+| PUT `/{costCenterCode}` | altera (ADMIN e USER) |
+| DELETE `/{costCenterCode}` | exclui — só ADMIN, só sem uso |
+
+**Manutenção** (`cost_center_uc/cost_center_manutencao.go`): o código nunca muda —
+máquinas, estruturas, ordens, requisições, pedidos de compra, vendas recorrentes e
+rateios guardam o centro por ele (metade sem FK). Descrição, data final e situação
+mudam sempre; tipo, centro-pai, "rateio de absorção" e data inicial só sem uso
+(409 listando onde é usado). O pai é conferido (existe na empresa, ativo, sem
+ciclo) também no `POST /create`. Desativar com filho ativo → 409. `end_date`
+ausente no `PUT` **limpa** a data final — mande a atual para mantê-la.
 
 Enum de classificação: `CostCenterEnum`. Também há centros de custo no financeiro
 (`/api/financial/centros-custo`) para o plano financeiro.

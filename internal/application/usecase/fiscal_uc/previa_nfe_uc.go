@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -33,6 +34,18 @@ type PreviaNFeUseCase struct {
 	// Devolucao, quando presente, liga os itens da devolução de compra à nota
 	// de origem (DFeReferenciado), como na transmissão.
 	Devolucao *DevolucaoCompraUseCase
+	// Efeitos confere, antes da transmissão, se a baixa de estoque vai conseguir
+	// converter a unidade da nota para a de estoque. Sem isso a nota seria
+	// autorizada na SEFAZ e só a baixa falharia, depois.
+	Efeitos *EfeitosNFe
+	// Saldos: com o saldo negativo bloqueado, a prévia avisa a falta de estoque
+	// antes da transmissão (depois de autorizada, a nota não volta).
+	Saldos SaldoParaSaida
+}
+
+// SaldoParaSaida lê o saldo do item no almoxarifado e se ele aceita negativo.
+type SaldoParaSaida interface {
+	SaldoParaSaida(ctx context.Context, itemCode int64, warehouseID int64) (float64, bool, error)
 }
 
 func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.PreviaNFeResponse, error) {
@@ -147,12 +160,98 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	}
 
 	out.Pendencias = conferirNota(exit, items, cfg, plano)
+	if uc.Efeitos != nil && uc.Saldos != nil {
+		faltas, err := uc.faltasDeEstoque(ctx, exit, items)
+		if err != nil {
+			return nil, err
+		}
+		out.Pendencias = append(out.Pendencias, faltas...)
+	}
+	if uc.Efeitos != nil {
+		if _, err := uc.Efeitos.quantidadesEmEstoque(ctx, items); err != nil {
+			if _, ok := errorsuc.AsValidation(err); !ok {
+				return nil, err
+			}
+			out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
+				Nivel: NivelImpede, Campo: "itens.unidade", Mensagem: err.Error(),
+				ComoResolver: "cadastre a conversão de unidade do item em VSUP0110 — Conversão de UM por Item, ou emita a nota na unidade de estoque",
+			})
+		}
+	}
 	out.PodeAutorizar = true
 	for _, p := range out.Pendencias {
 		if p.Nivel == NivelImpede {
 			out.PodeAutorizar = false
 			break
 		}
+	}
+	return out, nil
+}
+
+// faltasDeEstoque soma, por item e almoxarifado, o que a nota vai baixar (na
+// unidade de estoque) e compara com o saldo. Unidade sem conversão é apontada
+// à parte (quantidadesEmEstoque), então aqui ela é ignorada.
+func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.FiscalExit, items []*entity.FiscalExitItem) ([]response.PreviaPendenciaNFe, error) {
+	depositos, err := uc.Efeitos.depositos(ctx, exit, items)
+	if err != nil {
+		return nil, err
+	}
+	quantidades, err := uc.Efeitos.quantidadesEmEstoque(ctx, items)
+	if err != nil {
+		if _, ok := errorsuc.AsValidation(err); !ok {
+			return nil, err
+		}
+		quantidades = map[int64]float64{}
+	}
+	type chave struct{ item, almox int64 }
+	necessario := map[chave]float64{}
+	var ordem []chave
+	for _, it := range items {
+		if it.ItemCode == nil {
+			continue
+		}
+		k := chave{*it.ItemCode, depositos[*it.ItemCode]}
+		if k.almox == 0 {
+			// Sem almoxarifado no pedido nem no cadastro, a baixa depois da
+			// autorização não teria de onde sair — e a nota já estaria na SEFAZ.
+			if _, ja := necessario[k]; !ja {
+				ordem = append(ordem, k)
+				necessario[k] = 0
+			}
+			continue
+		}
+		q := it.Quantity
+		if v, ok := quantidades[it.ID]; ok {
+			q = v
+		}
+		if _, ok := necessario[k]; !ok {
+			ordem = append(ordem, k)
+		}
+		necessario[k] += q
+	}
+	var out []response.PreviaPendenciaNFe
+	for _, k := range ordem {
+		if k.almox == 0 {
+			out = append(out, response.PreviaPendenciaNFe{
+				Nivel: NivelImpede, Campo: "itens.almoxarifado",
+				Mensagem:     fmt.Sprintf("o item %d não tem almoxarifado no pedido nem no cadastro: a baixa de estoque não teria de onde sair", k.item),
+				ComoResolver: "informe o almoxarifado na linha do pedido de venda ou o almoxarifado padrão no cadastro do item (VENT0200)",
+			})
+			continue
+		}
+		saldo, permite, err := uc.Saldos.SaldoParaSaida(ctx, k.item, k.almox)
+		if err != nil {
+			return nil, err
+		}
+		if permite || saldo+1e-9 >= necessario[k] {
+			continue
+		}
+		out = append(out, response.PreviaPendenciaNFe{
+			Nivel: NivelImpede, Campo: "itens.estoque",
+			Mensagem: fmt.Sprintf("o item %d tem %s em estoque no almoxarifado %d e a nota baixa %s: a baixa seria recusada depois da autorização",
+				k.item, strconv.FormatFloat(saldo, 'f', -1, 64), k.almox, strconv.FormatFloat(necessario[k], 'f', -1, 64)),
+			ComoResolver: "lance a entrada (produção ou compra) antes de emitir, ou permita saldo negativo no cadastro do almoxarifado (VENT0800)",
+		})
 	}
 	return out, nil
 }

@@ -21,6 +21,11 @@ type CreateStockMovementDTO struct {
 	// interna (TRANSFER_IN/TRANSFER_OUT) e indica para onde o material foi.
 	Address   *string `json:"address,omitempty"`
 	AddressTo *string `json:"address_to,omitempty"`
+	// MovementTypeCode: sigla do tipo de movimento do cadastro (VEST0200). Com
+	// ela o cadastro decide a direção, se exige centro de custo e se a entrada
+	// atualiza o custo médio.
+	MovementTypeCode *string `json:"movement_type_code,omitempty"`
+	CostCenterCode   *int32  `json:"cost_center_code,omitempty"`
 }
 
 // TransferenciaEnderecoDTO move material entre endereços do mesmo almoxarifado.
@@ -70,6 +75,14 @@ type CreateInventoryDTO struct {
 	StartDate   string  `json:"start_date"`
 	EndDate     *string `json:"end_date,omitempty"`
 	Notes       *string `json:"notes,omitempty"`
+	// ItemCodes: inventário parcial (só esses itens). Vazio = almoxarifado inteiro.
+	ItemCodes []int64 `json:"item_codes,omitempty"`
+}
+
+// CloseInventoryDTO: fechar zerando os itens que não foram contados (o padrão é
+// recusar o fechamento enquanto houver item sem contagem).
+type CloseInventoryDTO struct {
+	ZerarNaoContados bool `json:"zerar_nao_contados"`
 }
 
 type CountInventoryItemDTO struct {

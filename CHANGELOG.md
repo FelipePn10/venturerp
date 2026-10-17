@@ -6,6 +6,47 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(estoque): a nota de entrada passa a converter a unidade da nota para a de estoque
+  pelo cadastro de conversões do item (ou a global); sem conversão a nota é barrada.
+  Caso Tecnofer: 115,8975 KG de tubo entravam como 115,8975 M ao preço do quilo
+- fix(compras): pedido de compra grava quantidade e preço na unidade de estoque do
+  cadastro em todas as origens; unidade de compra sem conversão é recusada (antes o
+  erro era engolido)
+- fix(fiscal): a baixa da NF-e converte a unidade de venda para a de estoque; a prévia
+  barra a transmissão sem conversão ou sem saldo
+- fix(estoque): inventário físico corrige o saldo — foto na abertura, contagem e
+  recontagem, ajustes lançados no fechamento (antes não mexia em nada); contagem
+  cíclica aprovada também ajusta
+- fix(estoque): custo médio único por item e almoxarifado (era por endereço); saída
+  sem saldo bloqueada, salvo no almoxarifado que permite (migração 405); período de
+  estoque fechado vale para todo lançamento; transferência deixa de contar como
+  consumo (média e curva ABC); ATP não promete saldo em inspeção/rejeição
+- feat(estoque): transferência entre almoxarifados numa operação, estorno de
+  movimento, kardex, posição em data com 2ª unidade, reposição por ponto de pedido
+  com geração de requisição de compra, análise (giro, cobertura, parados), lotes a
+  vencer, requisição ao almoxarifado por centro de custo e tipo de movimento
+  configurado no lançamento (migração 406)
+- feat(almoxarifado): `PUT /api/warehouse/{code}` (alterar almoxarifado e a permissão
+  de saldo negativo)
+- fix(estoque): tipos de movimento aceitam as flags em snake_case (antes ignoradas)
+
+- feat(cadastros): plano de contas e centro de custo (financeiro VFIN0120/VFIN0130 e
+  industrial VCTB0102) podem ser alterados, desativados e excluídos no momento certo:
+  - em uso (títulos, notas, rateios, máquinas, estruturas, ordens, filhos…), só a
+    descrição e a situação mudam (no industrial, também a data final); código, tipo,
+    natureza e pai respondem 409 listando onde o cadastro é usado; excluir também
+  - sem uso, a estrutura muda com conferência do pai (existe, ativo, sem ciclo)
+  - desativar com filho ativo e reativar com pai inativo são recusados
+  - excluir é só do ADMIN; a listagem de cadastro traz os inativos para reativar,
+    e as escolhas continuam só com ativos
+  - rotas: `GET …/cadastro`, `GET …/{id}/uso`, `PUT …/{id}`, `DELETE …/{id}`
+- fix(cadastros): conta-pai e centro-pai inexistentes passam a ser recusados no
+  cadastro (422) — deixavam galhos soltos na árvore
+- fix(fiscal): código IBGE do município da empresa é conferido ao salvar (7 dígitos,
+  da UF da empresa) — código de outra UF saía errado no CT-e, na NFS-e e no SPED
+- fix(compras): `GET /api/procurement/receiving-inspection-orders/{id}` existia só no
+  front (VINS0400 recebia 404)
+
 ## [v1.6.3] — 2026-10-16
 
 - fix(nf-e): validado na SEFAZ do PR em homologação; cBenef, rejeição e demora da SEFAZ (`091ab3ba`)

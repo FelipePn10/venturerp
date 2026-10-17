@@ -54,6 +54,10 @@ type FiscalEntryDocumentRepository interface {
 	PlanoContasByCodigo(ctx context.Context, codigo string) (*int64, error)
 	SearchItems(ctx context.Context, termos []string, limite int) ([]ItemCandidate, error)
 	ItemsByCode(ctx context.Context, codes []int64) (map[int64]ItemCandidate, error)
+	// FatorDeConversao: quanto 1 unidade `de` vale na unidade `para` para o
+	// item — conversão do item (direta ou inversa, sem máscara), depois a
+	// conversão global da empresa. Nil quando não há conversão cadastrada.
+	FatorDeConversao(ctx context.Context, itemCode int64, de, para string) (*decimal.Decimal, error)
 	ExistingPlanos(ctx context.Context, ids []int64) (map[int64]bool, error)
 	ExistingCentros(ctx context.Context, ids []int64) (map[int64]bool, error)
 	ExistingWarehouses(ctx context.Context, ids []int64) (map[int64]string, error)

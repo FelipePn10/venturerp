@@ -29,6 +29,11 @@ func toStockMovementResponse(m *entity.StockMovement) *response.StockMovementRes
 		AddressTo:      m.AddressTo,
 		CreatedAt:      m.CreatedAt,
 		CreatedBy:      m.CreatedBy,
+
+		MovementTypeCode:     m.MovementTypeCode,
+		CostCenterCode:       m.CostCenterCode,
+		ReversesMovementID:   m.ReversesMovementID,
+		ReversedByMovementID: m.ReversedByMovementID,
 	}
 }
 
@@ -112,6 +117,8 @@ func toPhysicalInventoryResponse(i *entity.PhysicalInventory) *response.Physical
 		CreatedAt:    i.CreatedAt,
 		UpdatedAt:    i.UpdatedAt,
 		CreatedBy:    i.CreatedBy,
+
+		AdjustmentValue: i.AdjustmentValue,
 	}
 }
 
@@ -142,7 +149,11 @@ func toPhysicalInventoryItemResponse(it *entity.PhysicalInventoryItem) *response
 		CountedBy:        it.CountedBy,
 		CountedAt:        it.CountedAt,
 		IsAdjusted:       it.IsAdjusted,
-		CreatedAt:        it.CreatedAt,
+
+		CountNumber:          it.CountNumber,
+		PreviousCountedQty:   it.PreviousCountedQty,
+		AdjustmentMovementID: it.AdjustmentMovementID,
+		CreatedAt:            it.CreatedAt,
 	}
 }
 
@@ -152,4 +163,15 @@ func toPhysicalInventoryItemResponses(list []*entity.PhysicalInventoryItem) []*r
 		out = append(out, toPhysicalInventoryItemResponse(it))
 	}
 	return out
+}
+
+// ToStockMovementResponse expõe o mapeamento para outros pacotes (operações de
+// estoque devolvem o movimento no mesmo formato do lançamento).
+func ToStockMovementResponse(m *entity.StockMovement) *response.StockMovementResponse {
+	return toStockMovementResponse(m)
+}
+
+// ToStockMovementResponses idem, para listas.
+func ToStockMovementResponses(list []*entity.StockMovement) []*response.StockMovementResponse {
+	return toStockMovementResponses(list)
 }

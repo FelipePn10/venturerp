@@ -317,6 +317,26 @@ func (r *PurchaseOrderRepositorySQLC) Cancel(ctx context.Context, code int64) er
 	return tx.Commit(ctx)
 }
 
+// UnidadeDeEstoqueDoItem é a unidade em que o item é estocado. Itens são da
+// convenção enterprise_id.
+func (r *PurchaseOrderRepositorySQLC) UnidadeDeEstoqueDoItem(ctx context.Context, itemCode int64) (string, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return "", err
+	}
+	var u string
+	err = r.db.QueryRow(ctx,
+		`SELECT COALESCE(it.warehouse_unit_of_measurement::text, '') FROM items it WHERE it.enterprise_id = $1 AND it.code = $2`,
+		enterpriseID, itemCode).Scan(&u)
+	if err == pgx.ErrNoRows {
+		return "", errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado nesta empresa", itemCode))
+	}
+	if err != nil {
+		return "", fmt.Errorf("unidade de estoque do item %d: %w", itemCode, err)
+	}
+	return u, nil
+}
+
 // AlmoxarifadoPadraoDoItem é o almoxarifado de suprimentos do cadastro do
 // item (ou, sem ele, o de estoque). Itens são da convenção enterprise_id.
 func (r *PurchaseOrderRepositorySQLC) AlmoxarifadoPadraoDoItem(ctx context.Context, itemCode int64) (*int64, error) {

@@ -32,11 +32,13 @@ func (r *StockMovementTypeRepositoryPG) Create(ctx context.Context, s *entity.St
 	err = r.pool.QueryRow(ctx,
 		`INSERT INTO stock_movement_types
 		 (sigla, description, usage_type, entry_order, exit_order, considers_consumption, updates_avg_cost,
-		  is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, enterprise_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13) RETURNING id, created_at`,
+		  is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, enterprise_id,
+		  requires_cost_center, allows_manual)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15) RETURNING id, created_at`,
 		s.Sigla, s.Description, string(s.UsageType), s.EntryOrder, s.ExitOrder,
 		s.ConsidersConsumption, s.UpdatesAvgCost, s.IsAdjustment, s.UpdatesCycleCount,
 		s.ShowsInSummary, string(s.EntryExit), s.GeneratesFCIMovement, empresa,
+		s.RequiresCostCenter, s.AllowsManual,
 	).Scan(&s.ID, &s.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating stock movement type: %w", err)
@@ -53,11 +55,13 @@ func (r *StockMovementTypeRepositoryPG) Update(ctx context.Context, s *entity.St
 		`UPDATE stock_movement_types
 		 SET description=$1, usage_type=$2, entry_order=$3, exit_order=$4, considers_consumption=$5,
 		     updates_avg_cost=$6, is_adjustment=$7, updates_cycle_count=$8, shows_in_summary=$9,
-		     entry_exit=$10, generates_fci_movement=$11, is_active=$12
+		     entry_exit=$10, generates_fci_movement=$11, is_active=$12,
+		     requires_cost_center=$15, allows_manual=$16
 		 WHERE id=$13 AND enterprise_id=$14`,
 		s.Description, string(s.UsageType), s.EntryOrder, s.ExitOrder, s.ConsidersConsumption,
 		s.UpdatesAvgCost, s.IsAdjustment, s.UpdatesCycleCount, s.ShowsInSummary,
-		string(s.EntryExit), s.GeneratesFCIMovement, s.IsActive, s.ID, empresa)
+		string(s.EntryExit), s.GeneratesFCIMovement, s.IsActive, s.ID, empresa,
+		s.RequiresCostCenter, s.AllowsManual)
 	if err != nil {
 		return nil, fmt.Errorf("updating stock movement type %d: %w", s.ID, err)
 	}
@@ -74,7 +78,8 @@ func (r *StockMovementTypeRepositoryPG) GetByID(ctx context.Context, id int64) (
 	}
 	row := r.pool.QueryRow(ctx,
 		`SELECT id, sigla, description, usage_type, entry_order, exit_order, considers_consumption,
-		 updates_avg_cost, is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, created_at
+		 updates_avg_cost, is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, created_at,
+		 requires_cost_center, allows_manual
 		 FROM stock_movement_types WHERE id=$1 AND enterprise_id=$2`, id, empresa)
 	s, err := scanSMT(row)
 	if err != nil {
@@ -93,7 +98,8 @@ func (r *StockMovementTypeRepositoryPG) GetBySigla(ctx context.Context, sigla st
 	}
 	row := r.pool.QueryRow(ctx,
 		`SELECT id, sigla, description, usage_type, entry_order, exit_order, considers_consumption,
-		 updates_avg_cost, is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, created_at
+		 updates_avg_cost, is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, created_at,
+		 requires_cost_center, allows_manual
 		 FROM stock_movement_types WHERE sigla=$1 AND enterprise_id=$2`, sigla, empresa)
 	s, err := scanSMT(row)
 	if err != nil {
@@ -111,7 +117,8 @@ func (r *StockMovementTypeRepositoryPG) List(ctx context.Context, onlyActive boo
 		return nil, err
 	}
 	q := `SELECT id, sigla, description, usage_type, entry_order, exit_order, considers_consumption,
-	      updates_avg_cost, is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, created_at
+	      updates_avg_cost, is_adjustment, updates_cycle_count, shows_in_summary, entry_exit, generates_fci_movement, is_active, created_at,
+		 requires_cost_center, allows_manual
 	      FROM stock_movement_types WHERE enterprise_id = $1`
 	if onlyActive {
 		q += ` AND is_active = TRUE`
@@ -142,7 +149,8 @@ func scanSMT(row scannable) (*entity.StockMovementType, error) {
 	var usage, dir string
 	err := row.Scan(&s.ID, &s.Sigla, &s.Description, &usage, &s.EntryOrder, &s.ExitOrder,
 		&s.ConsidersConsumption, &s.UpdatesAvgCost, &s.IsAdjustment, &s.UpdatesCycleCount,
-		&s.ShowsInSummary, &dir, &s.GeneratesFCIMovement, &s.IsActive, &s.CreatedAt)
+		&s.ShowsInSummary, &dir, &s.GeneratesFCIMovement, &s.IsActive, &s.CreatedAt,
+		&s.RequiresCostCenter, &s.AllowsManual)
 	if err != nil {
 		return nil, err
 	}

@@ -5408,44 +5408,60 @@ type FiscalExit struct {
 	NfeReferenciada              pgtype.Text
 	FiscalEntryID                *int64
 	SupplierCode                 *int64
+	MotivoRejeicao               pgtype.Text
 }
 
 type FiscalExitItem struct {
-	ID                 int64
-	FiscalExitID       int64
-	Sequence           int32
-	ItemCode           *int64
-	Ncm                pgtype.Text
-	Cfop               string
-	Quantity           pgtype.Numeric
-	UnitPrice          pgtype.Numeric
-	TotalPrice         pgtype.Numeric
-	BaseIcms           pgtype.Numeric
-	AliqIcms           pgtype.Numeric
-	ValorIcms          pgtype.Numeric
-	ValorIcmsDiferido  pgtype.Numeric
-	BaseIpi            pgtype.Numeric
-	AliqIpi            pgtype.Numeric
-	ValorIpi           pgtype.Numeric
-	ValorPis           pgtype.Numeric
-	ValorCofins        pgtype.Numeric
-	CstIcms            pgtype.Text
-	CstIpi             pgtype.Text
-	CstPis             pgtype.Text
-	CstCofins          pgtype.Text
-	OrigemMercadoria   string
-	Description        pgtype.Text
-	CreatedAt          pgtype.Timestamptz
-	AliqPis            pgtype.Numeric
-	AliqCofins         pgtype.Numeric
-	BaseIcmsSt         pgtype.Numeric
-	AliqIcmsSt         pgtype.Numeric
-	ValorIcmsSt        pgtype.Numeric
-	Mva                pgtype.Numeric
-	UnidadeComercial   pgtype.Text
-	CodigoProduto      pgtype.Text
-	SalesOrderItemCode *int64
-	FiscalEntryItemID  *int64
+	ID                    int64
+	FiscalExitID          int64
+	Sequence              int32
+	ItemCode              *int64
+	Ncm                   pgtype.Text
+	Cfop                  string
+	Quantity              pgtype.Numeric
+	UnitPrice             pgtype.Numeric
+	TotalPrice            pgtype.Numeric
+	BaseIcms              pgtype.Numeric
+	AliqIcms              pgtype.Numeric
+	ValorIcms             pgtype.Numeric
+	ValorIcmsDiferido     pgtype.Numeric
+	BaseIpi               pgtype.Numeric
+	AliqIpi               pgtype.Numeric
+	ValorIpi              pgtype.Numeric
+	ValorPis              pgtype.Numeric
+	ValorCofins           pgtype.Numeric
+	CstIcms               pgtype.Text
+	CstIpi                pgtype.Text
+	CstPis                pgtype.Text
+	CstCofins             pgtype.Text
+	OrigemMercadoria      string
+	Description           pgtype.Text
+	CreatedAt             pgtype.Timestamptz
+	AliqPis               pgtype.Numeric
+	AliqCofins            pgtype.Numeric
+	BaseIcmsSt            pgtype.Numeric
+	AliqIcmsSt            pgtype.Numeric
+	ValorIcmsSt           pgtype.Numeric
+	Mva                   pgtype.Numeric
+	UnidadeComercial      pgtype.Text
+	CodigoProduto         pgtype.Text
+	SalesOrderItemCode    *int64
+	FiscalEntryItemID     *int64
+	CodigoBeneficioFiscal pgtype.Text
+}
+
+type FiscalExitPendencia struct {
+	ID               int64
+	EnterpriseID     int64
+	FiscalExitID     int64
+	Etapa            string
+	Situacao         string
+	Tentativas       int32
+	UltimoErro       pgtype.Text
+	ProximaTentativa pgtype.Timestamptz
+	CriadoPor        pgtype.UUID
+	CriadoEm         pgtype.Timestamptz
+	ResolvidoEm      pgtype.Timestamptz
 }
 
 type FiscalFreightAllocation struct {
@@ -6910,6 +6926,33 @@ type MaterialConsumption struct {
 	Unit            string
 }
 
+type MaterialRequisition struct {
+	ID                    int64
+	EnterpriseID          int64
+	Code                  int64
+	WarehouseID           int64
+	RequesterName         pgtype.Text
+	RequesterEmployeeCode *int64
+	CostCenterCode        *int32
+	NeededDate            pgtype.Date
+	Status                string
+	Notes                 pgtype.Text
+	CreatedBy             pgtype.UUID
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+}
+
+type MaterialRequisitionItem struct {
+	ID            int64
+	RequisitionID int64
+	Sequence      int32
+	ItemCode      int64
+	Mask          string
+	Quantity      pgtype.Numeric
+	IssuedQty     pgtype.Numeric
+	Notes         pgtype.Text
+}
+
 type Menor struct {
 	Code int32
 }
@@ -7490,38 +7533,43 @@ type Permisso struct {
 }
 
 type PhysicalInventory struct {
-	ID           int64
-	Code         int64
-	Description  string
-	WarehouseID  int64
-	StartDate    pgtype.Date
-	EndDate      pgtype.Date
-	Status       string
-	TotalItems   int32
-	CountedItems int32
-	Notes        pgtype.Text
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
-	CreatedBy    pgtype.UUID
-	EnterpriseID int64
+	ID              int64
+	Code            int64
+	Description     string
+	WarehouseID     int64
+	StartDate       pgtype.Date
+	EndDate         pgtype.Date
+	Status          string
+	TotalItems      int32
+	CountedItems    int32
+	Notes           pgtype.Text
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	CreatedBy       pgtype.UUID
+	EnterpriseID    int64
+	ClosedBy        pgtype.UUID
+	AdjustmentValue pgtype.Numeric
 }
 
 type PhysicalInventoryItem struct {
-	ID               int64
-	InventoryID      int64
-	ItemCode         int64
-	Mask             string
-	WarehouseID      int64
-	SystemQty        pgtype.Numeric
-	CountedQty       pgtype.Numeric
-	DifferenceQty    pgtype.Numeric
-	UnitCost         pgtype.Numeric
-	AdjustmentType   pgtype.Text
-	AdjustmentReason pgtype.Text
-	CountedBy        pgtype.UUID
-	CountedAt        pgtype.Timestamptz
-	IsAdjusted       bool
-	CreatedAt        pgtype.Timestamptz
+	ID                   int64
+	InventoryID          int64
+	ItemCode             int64
+	Mask                 string
+	WarehouseID          int64
+	SystemQty            pgtype.Numeric
+	CountedQty           pgtype.Numeric
+	DifferenceQty        pgtype.Numeric
+	UnitCost             pgtype.Numeric
+	AdjustmentType       pgtype.Text
+	AdjustmentReason     pgtype.Text
+	CountedBy            pgtype.UUID
+	CountedAt            pgtype.Timestamptz
+	IsAdjusted           bool
+	CreatedAt            pgtype.Timestamptz
+	CountNumber          int32
+	PreviousCountedQty   pgtype.Numeric
+	AdjustmentMovementID *int64
 }
 
 type PlannedOrder struct {
@@ -7843,6 +7891,7 @@ type ProductionOrder struct {
 	TemporaryLotManufacturedOn pgtype.Date
 	TemporaryLotExpiresOn      pgtype.Date
 	RoutingSnapshotAt          pgtype.Timestamptz
+	CustoPendente              pgtype.Text
 }
 
 type ProductionOrderCost struct {
@@ -9955,7 +10004,8 @@ type StockCycleCount struct {
 	Origin             string
 	PolicyDays         *int32
 	// Endereço contado; vazio = contagem do almoxarifado inteiro.
-	Address string
+	Address              string
+	AdjustmentMovementID *int64
 }
 
 type StockCycleCountAudit struct {
@@ -10002,26 +10052,30 @@ type StockLotBalance struct {
 }
 
 type StockMovement struct {
-	ID             int64
-	ItemCode       int64
-	Mask           string
-	WarehouseID    int64
-	MovementType   string
-	Quantity       pgtype.Numeric
-	UnitPrice      pgtype.Numeric
-	TotalPrice     pgtype.Numeric
-	ReferenceType  pgtype.Text
-	ReferenceCode  *int64
-	Lot            pgtype.Text
-	SerialNumber   pgtype.Text
-	Batch          pgtype.Text
-	ExpirationDate pgtype.Date
-	Notes          pgtype.Text
-	CreatedAt      pgtype.Timestamptz
-	CreatedBy      pgtype.UUID
-	EnterpriseID   *int64
-	Address        pgtype.Text
-	AddressTo      pgtype.Text
+	ID                   int64
+	ItemCode             int64
+	Mask                 string
+	WarehouseID          int64
+	MovementType         string
+	Quantity             pgtype.Numeric
+	UnitPrice            pgtype.Numeric
+	TotalPrice           pgtype.Numeric
+	ReferenceType        pgtype.Text
+	ReferenceCode        *int64
+	Lot                  pgtype.Text
+	SerialNumber         pgtype.Text
+	Batch                pgtype.Text
+	ExpirationDate       pgtype.Date
+	Notes                pgtype.Text
+	CreatedAt            pgtype.Timestamptz
+	CreatedBy            pgtype.UUID
+	EnterpriseID         *int64
+	Address              pgtype.Text
+	AddressTo            pgtype.Text
+	ReversesMovementID   *int64
+	ReversedByMovementID *int64
+	MovementTypeCode     pgtype.Text
+	CostCenterCode       *int32
 }
 
 type StockMovementType struct {
@@ -10041,6 +10095,8 @@ type StockMovementType struct {
 	IsActive             bool
 	CreatedAt            pgtype.Timestamptz
 	EnterpriseID         int64
+	RequiresCostCenter   bool
+	AllowsManual         bool
 }
 
 type StockPickingWafe struct {
@@ -10872,6 +10928,8 @@ type Warehouse struct {
 	Disposition         bool
 	ReservationsAllowed bool
 	EnterpriseID        int64
+	// Permite saída que deixa o saldo negativo. Falso por padrão; verdadeiro na linha de produção (baixa automática).
+	AllowNegativeStock bool
 }
 
 type WarehouseInventoryAudit struct {

@@ -25,10 +25,14 @@ type StockMovementResponse struct {
 	Notes          *string    `json:"notes,omitempty"`
 	// O endereço era gravado e nunca devolvido — campo só de escrita. A tela
 	// pedia onde guardar e depois não conseguia mostrar onde o material estava.
-	Address   *string   `json:"address,omitempty"`
-	AddressTo *string   `json:"address_to,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	CreatedBy uuid.UUID `json:"created_by"`
+	Address              *string   `json:"address,omitempty"`
+	AddressTo            *string   `json:"address_to,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	CreatedBy            uuid.UUID `json:"created_by"`
+	MovementTypeCode     *string   `json:"movement_type_code,omitempty"`
+	CostCenterCode       *int32    `json:"cost_center_code,omitempty"`
+	ReversesMovementID   *int64    `json:"reverses_movement_id,omitempty"`
+	ReversedByMovementID *int64    `json:"reversed_by_movement_id,omitempty"`
 }
 
 // StockReservationResponse is the API representation of a stock reservation.
@@ -67,18 +71,25 @@ type StockBalanceResponse struct {
 	TotalCost      float64    `json:"total_cost"`
 	LastMovementAt *time.Time `json:"last_movement_at,omitempty"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// Situação do estoque no ATP: LIVRE, INSPECAO ou BLOQUEADO; e se o saldo
+	// deste almoxarifado conta para promessa.
+	StockStatus        string `json:"stock_status,omitempty"`
+	AvailableToPromise bool   `json:"available_to_promise,omitempty"`
 }
 
 // ATPResponse is the available-to-promise summary of an item: how much can be
 // promised right now (on-hand minus reservations), with the per-warehouse
 // breakdown.
 type ATPResponse struct {
-	ItemCode       int64                   `json:"item_code"`
-	Mask           string                  `json:"mask"`
-	TotalOnHand    float64                 `json:"total_on_hand"`
-	TotalReserved  float64                 `json:"total_reserved"`
-	TotalAvailable float64                 `json:"total_available"`
-	Warehouses     []*StockBalanceResponse `json:"warehouses"`
+	ItemCode       int64   `json:"item_code"`
+	Mask           string  `json:"mask"`
+	TotalOnHand    float64 `json:"total_on_hand"`
+	TotalReserved  float64 `json:"total_reserved"`
+	TotalAvailable float64 `json:"total_available"`
+	// Saldo em almoxarifado que não conta para promessa (inspeção, rejeição,
+	// indisponível): está no estoque, mas não pode ser prometido.
+	TotalNotAvailable float64                 `json:"total_not_available"`
+	Warehouses        []*StockBalanceResponse `json:"warehouses"`
 }
 
 // PhysicalInventoryResponse is the API representation of a physical inventory.
@@ -96,23 +107,37 @@ type PhysicalInventoryResponse struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	CreatedBy    uuid.UUID  `json:"created_by"`
+	// Valor líquido dos ajustes lançados no fechamento.
+	AdjustmentValue *float64 `json:"adjustment_value,omitempty"`
+}
+
+// InventoryCloseResponse resume o que o fechamento lançou no estoque.
+type InventoryCloseResponse struct {
+	Adjustments     int     `json:"adjustments"`
+	SurplusQty      float64 `json:"surplus_qty"`
+	ShortageQty     float64 `json:"shortage_qty"`
+	AdjustedValue   float64 `json:"adjusted_value"`
+	UncountedZeroed int     `json:"uncounted_zeroed"`
 }
 
 // PhysicalInventoryItemResponse is the API representation of an inventory line.
 type PhysicalInventoryItemResponse struct {
-	ID               int64      `json:"id"`
-	InventoryID      int64      `json:"inventory_id"`
-	ItemCode         int64      `json:"item_code"`
-	Mask             string     `json:"mask"`
-	WarehouseID      int64      `json:"warehouse_id"`
-	SystemQty        float64    `json:"system_qty"`
-	CountedQty       *float64   `json:"counted_qty,omitempty"`
-	DifferenceQty    *float64   `json:"difference_qty,omitempty"`
-	UnitCost         *float64   `json:"unit_cost,omitempty"`
-	AdjustmentType   *string    `json:"adjustment_type,omitempty"`
-	AdjustmentReason *string    `json:"adjustment_reason,omitempty"`
-	CountedBy        *uuid.UUID `json:"counted_by,omitempty"`
-	CountedAt        *time.Time `json:"counted_at,omitempty"`
-	IsAdjusted       bool       `json:"is_adjusted"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ID                   int64      `json:"id"`
+	InventoryID          int64      `json:"inventory_id"`
+	ItemCode             int64      `json:"item_code"`
+	Mask                 string     `json:"mask"`
+	WarehouseID          int64      `json:"warehouse_id"`
+	SystemQty            float64    `json:"system_qty"`
+	CountedQty           *float64   `json:"counted_qty,omitempty"`
+	DifferenceQty        *float64   `json:"difference_qty,omitempty"`
+	UnitCost             *float64   `json:"unit_cost,omitempty"`
+	AdjustmentType       *string    `json:"adjustment_type,omitempty"`
+	AdjustmentReason     *string    `json:"adjustment_reason,omitempty"`
+	CountedBy            *uuid.UUID `json:"counted_by,omitempty"`
+	CountedAt            *time.Time `json:"counted_at,omitempty"`
+	IsAdjusted           bool       `json:"is_adjusted"`
+	CreatedAt            time.Time  `json:"created_at"`
+	CountNumber          int        `json:"count_number"`
+	PreviousCountedQty   *float64   `json:"previous_counted_qty,omitempty"`
+	AdjustmentMovementID *int64     `json:"adjustment_movement_id,omitempty"`
 }

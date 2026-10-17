@@ -157,6 +157,20 @@ func (h *ProcurementHandler) GenerateReceivingInspectionOrder(w http.ResponseWri
 	security.RespondJSON(w, http.StatusCreated, result)
 }
 
+func (h *ProcurementHandler) GetReceivingInspectionOrder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "id da inspeção inválido")
+		return
+	}
+	result, err := h.uc.GetReceivingInspectionOrder(r.Context(), id)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
 func (h *ProcurementHandler) ListReceivingInspectionOrders(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.ListReceivingInspectionOrders(r.Context(), r.URL.Query().Get("status"))
 	if err != nil {

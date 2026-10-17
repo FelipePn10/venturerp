@@ -3,6 +3,8 @@ package warehouse_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -50,6 +52,10 @@ func (uc *CreateWarehouseUseCase) Execute(
 	)
 	if err != nil {
 		return nil, err
+	}
+	warehouse.AllowNegativeStock = warehouse.Type == types.LINHA_DE_PRODUCAO
+	if dto.AllowNegativeStock != nil {
+		warehouse.AllowNegativeStock = *dto.AllowNegativeStock
 	}
 
 	create, err := uc.Repo.Create(ctx, warehouse)

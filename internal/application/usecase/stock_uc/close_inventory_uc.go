@@ -3,6 +3,8 @@ package stock_uc
 import (
 	"context"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
@@ -13,31 +15,37 @@ type CloseInventoryUseCase struct {
 	Auth ports.AuthService
 }
 
-func (uc *CloseInventoryUseCase) Execute(ctx context.Context, id int64) error {
+// Execute fecha o inventário lançando o ajuste de cada diferença.
+//
+// Antes o fechamento só trocava a situação para CLOSED: a contagem nunca
+// chegava ao saldo, e a conferência "todas as divergências ajustadas" nunca
+// disparava porque a diferença não era calculada. As regras (item sem contagem,
+// ajuste ao custo médio, transação única) estão no repositório, que trava o
+// inventário enquanto lança.
+func (uc *CloseInventoryUseCase) Execute(ctx context.Context, id int64, dto request.CloseInventoryDTO) (*response.InventoryCloseResponse, error) {
 	if !uc.Auth.CanCloseInventory(ctx) {
-		return errorsuc.ErrUnauthorized
+		return nil, errorsuc.ErrUnauthorized
+	}
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
 	}
 	inv, err := uc.Repo.GetInventory(ctx, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if inv.Status != "OPEN" {
-		return errorsuc.NewValidationError("somente inventário aberto pode ser fechado")
+		return nil, errorsuc.NewValidationError("somente inventário aberto pode ser fechado")
 	}
-	items, err := uc.Repo.ListInventoryItems(ctx, id)
+	if inv.TotalItems == 0 {
+		return nil, errorsuc.NewValidationError("inventário sem itens não pode ser fechado: conte ao menos um item")
+	}
+	res, err := uc.Repo.FecharInventario(ctx, id, ator, dto.ZerarNaoContados)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if len(items) == 0 {
-		return errorsuc.NewValidationError("inventário sem itens não pode ser fechado")
-	}
-	for _, item := range items {
-		if item.CountedQty == nil {
-			return errorsuc.NewValidationError("todos os itens devem ser contados antes do fechamento")
-		}
-		if item.DifferenceQty != nil && *item.DifferenceQty != 0 && !item.IsAdjusted {
-			return errorsuc.NewValidationError("todas as divergências devem ser ajustadas antes do fechamento")
-		}
-	}
-	return uc.Repo.CloseInventory(ctx, id)
+	return &response.InventoryCloseResponse{
+		Adjustments: res.Ajustes, SurplusQty: res.Sobras, ShortageQty: res.Faltas,
+		AdjustedValue: res.ValorAjustado, UncountedZeroed: res.NaoContadosZerados,
+	}, nil
 }

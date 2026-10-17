@@ -42,6 +42,7 @@ import (
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/entry_operation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/estoque_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/financial_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_classification_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_params_uc"
@@ -333,6 +334,7 @@ func (app *application) mount() chi.Router {
 	listWarehousesUc := warehouse_uc.NewListWarehousesUseCase(warehouseRepo, authService)
 	getWarehouseUc := warehouse_uc.NewGetWarehouseUseCase(warehouseRepo, authService)
 	warehouseHandler := handler.NewCreateWarehouseHandler(createWarehouseUc, listWarehousesUc, getWarehouseUc)
+	warehouseHandler.UpdateWarehouseUC = &warehouse_uc.UpdateWarehouseUseCase{Repo: warehouseRepo, Auth: authService}
 
 	// group
 	groupRepo := group.NewRepositoryGroupSQLC(queries)
@@ -458,6 +460,13 @@ func (app *application) mount() chi.Router {
 	listCostCenterUC := &cost_center_uc.ListCostCentersUseCase{Repo: costCenterRepo, Auth: authService}
 	getCostCenterUC := &cost_center_uc.GetCostCenterUseCase{Repo: costCenterRepo, Auth: authService}
 	costCenterHandler := handler.NewCostCenterHandler(createCostCenterUC, listCostCenterUC, getCostCenterUC)
+	costCenterManut := cost_center.NewManutencaoPG(app.db.Pool)
+	costCenterManutHandler := &handler.CostCenterManutencaoHandler{
+		List:   &cost_center_uc.ListCostCentersCadastroUseCase{Manut: costCenterManut, Auth: authService},
+		Uso:    &cost_center_uc.UsoCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
+		Update: &cost_center_uc.UpdateCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
+		Delete: &cost_center_uc.DeleteCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
+	}
 
 	// delivery promise params
 	deliveryPromiseParamsRepo := deliveryPromiseParams.NewDeliveryPromiseParamsRepositorySQLC(queries)
@@ -803,9 +812,12 @@ func (app *application) mount() chi.Router {
 	// purchase order
 	poRepo := purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(app.db.Pool)
 	poApproveUC := &purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC}
-	poGeracao := &purchase_order_uc.Geracao{Repo: poRepo, Almoxarifados: poRepo, Aprovacao: poApproveUC}
+	// Unidade interna: toda linha de pedido guarda quantidade e preço na unidade
+	// de estoque do cadastro (e recusa unidade de compra sem conversão).
+	poUnidade := &purchase_order_uc.UnidadeInterna{Unidades: poRepo, Conversor: itemConversionUC}
+	poGeracao := &purchase_order_uc.Geracao{Repo: poRepo, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade}
 	purchaseOrderHandler := handler.NewPurchaseOrderHandler(
-		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo},
+		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Unidade: poUnidade},
 		&purchase_order_uc.UpdatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC},
 		&purchase_order_uc.GetPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.ListPurchaseOrdersUseCase{Repo: poRepo, Auth: authService},
@@ -814,7 +826,7 @@ func (app *application) mount() chi.Router {
 		&purchase_order_uc.CancelPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		// Inspection gate wires FINS0212: material with an active inspection route is
 		// received into the inspection warehouse and an inspection order is opened.
-		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC, Tolerances: purchaseToleranceUC},
+		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC, Tolerances: purchaseToleranceUC, Unidade: poUnidade},
 		// Alçada de valores: procurementUC resolves the approval limit rule.
 		poApproveUC,
 		&purchase_order_uc.ConsultPurchaseOrdersUseCase{Reader: poRepo, Auth: authService},
@@ -830,6 +842,7 @@ func (app *application) mount() chi.Router {
 			UOMConverter:  itemConversionUC,
 			FiscalClass:   fiscalClassUC,
 			Almoxarifados: poRepo,
+			Unidade:       poUnidade,
 		},
 		&purchase_order_uc.UpdatePurchaseOrderItemUseCase{Repo: poRepo, Auth: authService},
 		&purchase_order_uc.CancelPurchaseOrderItemUseCase{Repo: poRepo, Auth: authService},
@@ -838,7 +851,7 @@ func (app *application) mount() chi.Router {
 	// MRP purchase suggestions (PURCHASE planned orders → purchase order)
 	purchaseSuggestionHandler := handler.NewPurchaseSuggestionHandler(
 		&purchase_order_uc.ListPurchaseSuggestionsUseCase{Planned: plannedRepo, Auth: authService},
-		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC},
+		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade},
 		&purchase_order_uc.RejectPurchaseSuggestionUseCase{Planned: plannedRepo, Auth: authService},
 	)
 
@@ -1007,7 +1020,11 @@ func (app *application) mount() chi.Router {
 		}
 		return tx.Commit(ctx)
 	}
-	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService}
+	estoqueHandler := &handler.EstoqueHandler{UC: &estoque_uc.UseCase{
+		Ops: stockRepository, Auth: authService,
+		Compras: purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService),
+	}}
+	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService, Tipos: stockRepository}
 	listStockMovementsUC := &stock_uc.ListStockMovementsUseCase{Repo: stockRepository, Auth: authService}
 	getStockBalanceUC := &stock_uc.GetStockBalanceUseCase{Repo: stockRepository, Auth: authService}
 	reserveStockUC := &stock_uc.ReserveStockUseCase{Repo: stockRepository, Auth: authService}
@@ -1093,6 +1110,16 @@ func (app *application) mount() chi.Router {
 	shipmentHandler := handler.NewShipmentHandler(shipmentBaseUC).
 		WithAutoFill(shipmentAutoFillUC).
 		WithExport(shipmentExportUC)
+	cadastroFinanceiroHandler := &handler.CadastroFinanceiroHandler{
+		ListPlanos:   &financial_uc.ListPlanoContasCadastroUseCase{Repo: fRepo, Auth: authService},
+		UsoPlano:     &financial_uc.UsoPlanoContasUseCase{Repo: fRepo, Auth: authService},
+		UpdatePlano:  &financial_uc.UpdatePlanoContasUseCase{Repo: fRepo, Auth: authService},
+		DeletePlano:  &financial_uc.DeletePlanoContasUseCase{Repo: fRepo, Auth: authService},
+		ListCentros:  &financial_uc.ListCentrosCustoCadastroUseCase{Repo: fRepo, Auth: authService},
+		UsoCentro:    &financial_uc.UsoCentroCustoUseCase{Repo: fRepo, Auth: authService},
+		UpdateCentro: &financial_uc.UpdateCentroCustoUseCase{Repo: fRepo, Auth: authService},
+		DeleteCentro: &financial_uc.DeleteCentroCustoUseCase{Repo: fRepo, Auth: authService},
+	}
 	financialHandler := handler.NewFinancialHandler(
 		&financial_uc.CreateContaBancariaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasBancariasUseCase{Repo: fRepo, Auth: authService},
@@ -1224,6 +1251,7 @@ func (app *application) mount() chi.Router {
 		Itens:       itemRepo,
 		Pendencias:  fiscalRepo.NewPendenciasPG(app.db.Pool),
 		GeraTitulos: true,
+		Conversor:   itemConversionUC,
 		Transacao: func(ctx context.Context, fn func(fiscalUC.EfeitosRepos) error) error {
 			tx, err := app.db.Pool.Begin(ctx)
 			if err != nil {
@@ -1242,6 +1270,9 @@ func (app *application) mount() chi.Router {
 			return tx.Commit(ctx)
 		},
 	}
+	// A prévia confere a conversão de unidade que a baixa de estoque vai precisar.
+	previaNFeUC.Efeitos = efeitosNFe
+	previaNFeUC.Saldos = stockRepository
 	app.efeitosNFeScheduler = fiscalefeitos.NewScheduler(efeitosNFe, app.logger)
 	pendenciasNFeHandler := handler.NewPendenciasNFeHandler(efeitosNFe, authService)
 	fiscalHandler := handler.NewFiscalHandler(
@@ -1551,7 +1582,11 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/cost-center", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", costCenterHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", costCenterHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cadastro", costCenterManutHandler.ListCadastro)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}", costCenterHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}/uso", costCenterManutHandler.UsoCentro)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{costCenterCode}", costCenterManutHandler.UpdateCentro)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{costCenterCode}", costCenterManutHandler.DeleteCentro)
 		})
 		r.Route("/api/delivery-promise-params", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", deliveryPromiseParamsHandler.Get)
@@ -1723,6 +1758,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", warehouseHandler.CreateWarehouse)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", warehouseHandler.ListWarehouses)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", warehouseHandler.GetWarehouse)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/{code}", warehouseHandler.UpdateWarehouse)
 		})
 		r.Route("/api/pdm", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create-group", groupHandler.CreateGroup)
@@ -2060,6 +2096,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-routes/{id}", procurementHandler.GetReceivingInspectionRoute)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders", procurementHandler.GenerateReceivingInspectionOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders", procurementHandler.ListReceivingInspectionOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders/{id}", procurementHandler.GetReceivingInspectionOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/results", procurementHandler.RecordReceivingInspectionResult)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/analysis", procurementHandler.AnalyzeReceivingInspectionOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/quality-reports", procurementHandler.LinkReceivingInspectionQualityReport)
@@ -2123,7 +2160,25 @@ func (app *application) mount() chi.Router {
 			})
 		})
 		r.Route("/api/stock", func(r chi.Router) {
+			// Operações além do lançamento: transferência entre almoxarifados,
+			// estorno, kardex, posição em data, reposição, análise e requisição
+			// ao almoxarifado.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transfers", estoqueHandler.Transferir)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/kardex/{itemCode}", estoqueHandler.Kardex)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/position", estoqueHandler.Posicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/replenishment", estoqueHandler.Reposicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/replenishment/purchase-requisition", estoqueHandler.ReposicaoParaRequisicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/analysis", estoqueHandler.Analise)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lots/expiring", estoqueHandler.LotesAVencer)
+			r.Route("/material-requisitions", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", estoqueHandler.ListarRequisicoes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", estoqueHandler.CriarRequisicao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", estoqueHandler.ObterRequisicao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/issue", estoqueHandler.AtenderRequisicao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancel", estoqueHandler.CancelarRequisicao)
+			})
 			r.Route("/movements", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/reverse", estoqueHandler.Estornar)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", stockHandler.CreateMovement)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", stockHandler.ListMovements)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListMovementsByItem)
@@ -2158,7 +2213,8 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", stockHandler.ListBalances)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/warehouse/{warehouseId}", stockHandler.ListBalancesByWarehouse)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListBalancesByItem)
-				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/atp/{itemCode}", stockHandler.GetATP)
+				// ATP com situação do estoque: inspeção e rejeição não são prometíveis.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/atp/{itemCode}", estoqueHandler.ATP)
 			})
 			r.Route("/lots", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/register", stockHandler.RegisterLot)
@@ -2402,6 +2458,16 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN")).Put("/contas-bancarias/{id}/conta-contabil", fiscalEntryEnterpriseHandler.VincularContaBancariaContabil)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/centros-custo/create", financialHandler.CreateCentroCusto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/centros-custo/list", financialHandler.ListCentrosCusto)
+			// Manutenção do cadastro: alterar e excluir só no "momento certo" —
+			// as regras (uso, filhas, conta-pai) ficam nos casos de uso.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plano-contas/cadastro", cadastroFinanceiroHandler.ListPlanoContas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plano-contas/{id}/uso", cadastroFinanceiroHandler.UsoPlanoContas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/plano-contas/{id}", cadastroFinanceiroHandler.UpdatePlanoContas)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/plano-contas/{id}", cadastroFinanceiroHandler.DeletePlanoContas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/centros-custo/cadastro", cadastroFinanceiroHandler.ListCentrosCusto)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/centros-custo/{id}/uso", cadastroFinanceiroHandler.UsoCentroCusto)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/centros-custo/{id}", cadastroFinanceiroHandler.UpdateCentroCusto)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/centros-custo/{id}", cadastroFinanceiroHandler.DeleteCentroCusto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/create", financialHandler.CreateContaPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/list", financialHandler.ListContasPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/{id}", financialHandler.GetContaPagar)

@@ -1928,6 +1928,28 @@ GET /api/cost-center/{costCenterCode}
 -- Parâmetro na URL: costCenterCode (int32)
 -- Exemplo: GET /api/cost-center/10
 
+GET /api/cost-center/cadastro
+-- Ativos e inativos (tela VCTB0102); /list traz só ativos
+
+GET /api/cost-center/{costCenterCode}/uso
+-- Resposta: {"em_uso": true, "usos": [{"onde": "máquinas", "quantidade": 3}]}
+
+PUT /api/cost-center/{costCenterCode}
+{
+  "description": "Centro de Custo - Produção",
+  "parent_code": null,
+  "type": "PRODUCTIVE",
+  "is_ratio": true,
+  "start_date": "2025-01-01",
+  "end_date": "2026-12-31",
+  "is_active": true
+}
+-- O código não muda. Em uso, só description, end_date e is_active mudam (409).
+-- end_date ausente LIMPA a data final.
+
+DELETE /api/cost-center/{costCenterCode}
+-- Só ADMIN e só sem uso (409); 204 sem corpo
+
 ============================================================
 MÓDULO: FISCAL (ENTRADAS E SAÍDAS FISCAIS)
 ============================================================
@@ -2174,14 +2196,36 @@ POST /api/financial/plano-contas/create
 {
   "codigo": "1.1.01.001",
   "descricao": "Caixa Geral",
-  "tipo": "ANALITICA",
-  "natureza": "DEVEDORA",
+  "tipo": "ATIVO",
+  "natureza": "DEBITO",
   "parent_code": "1.1.01",
-  "nivel": 5
+  "nivel": 4
 }
+-- tipo: RECEITA | DESPESA | ATIVO | PASSIVO | PATRIMONIO; natureza: DEBITO | CREDITO
+-- conta-pai precisa existir e estar ativa (422); nivel ausente = segmentos do código
 
 GET /api/financial/plano-contas/list
--- Sem corpo de requisição
+-- Sem corpo de requisição (somente ativos)
+
+GET /api/financial/plano-contas/cadastro
+-- Ativos e inativos (tela de cadastro)
+
+GET /api/financial/plano-contas/{id}/uso
+-- Resposta: {"em_uso": true, "usos": [{"onde": "títulos a pagar", "quantidade": 4}]}
+
+PUT /api/financial/plano-contas/{id}
+{
+  "codigo": "1.1.01.001",
+  "descricao": "Caixa Geral (matriz)",
+  "tipo": "ATIVO",
+  "natureza": "DEBITO",
+  "parent_code": "1.1.01",
+  "is_active": true
+}
+-- Em uso, só descricao e is_active mudam (o resto responde 409 listando o uso)
+
+DELETE /api/financial/plano-contas/{id}
+-- Só ADMIN e só sem uso (409); 204 sem corpo
 
 --- CENTROS DE CUSTO (FINANCEIRO) ---
 
@@ -2193,7 +2237,13 @@ POST /api/financial/centros-custo/create
 }
 
 GET /api/financial/centros-custo/list
--- Sem corpo de requisição
+-- Sem corpo de requisição (somente ativos)
+
+GET /api/financial/centros-custo/cadastro · GET /api/financial/centros-custo/{id}/uso
+PUT /api/financial/centros-custo/{id}
+{ "codigo": "CC-001", "descricao": "Administrativo", "tipo": "ADMINISTRATIVO", "is_active": false }
+DELETE /api/financial/centros-custo/{id}
+-- Mesmas regras do plano de contas
 
 --- CONTAS A PAGAR ---
 
