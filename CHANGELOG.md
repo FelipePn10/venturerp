@@ -6,6 +6,30 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(estoque): a nota de entrada passa a converter a unidade da nota para a de estoque
+  pelo cadastro de conversões do item (ou a global); sem conversão a nota é barrada.
+  Caso Tecnofer: 115,8975 KG de tubo entravam como 115,8975 M ao preço do quilo
+- fix(compras): pedido de compra grava quantidade e preço na unidade de estoque do
+  cadastro em todas as origens; unidade de compra sem conversão é recusada (antes o
+  erro era engolido)
+- fix(fiscal): a baixa da NF-e converte a unidade de venda para a de estoque; a prévia
+  barra a transmissão sem conversão ou sem saldo
+- fix(estoque): inventário físico corrige o saldo — foto na abertura, contagem e
+  recontagem, ajustes lançados no fechamento (antes não mexia em nada); contagem
+  cíclica aprovada também ajusta
+- fix(estoque): custo médio único por item e almoxarifado (era por endereço); saída
+  sem saldo bloqueada, salvo no almoxarifado que permite (migração 405); período de
+  estoque fechado vale para todo lançamento; transferência deixa de contar como
+  consumo (média e curva ABC); ATP não promete saldo em inspeção/rejeição
+- feat(estoque): transferência entre almoxarifados numa operação, estorno de
+  movimento, kardex, posição em data com 2ª unidade, reposição por ponto de pedido
+  com geração de requisição de compra, análise (giro, cobertura, parados), lotes a
+  vencer, requisição ao almoxarifado por centro de custo e tipo de movimento
+  configurado no lançamento (migração 406)
+- feat(almoxarifado): `PUT /api/warehouse/{code}` (alterar almoxarifado e a permissão
+  de saldo negativo)
+- fix(estoque): tipos de movimento aceitam as flags em snake_case (antes ignoradas)
+
 - feat(cadastros): plano de contas e centro de custo (financeiro VFIN0120/VFIN0130 e
   industrial VCTB0102) podem ser alterados, desativados e excluídos no momento certo:
   - em uso (títulos, notas, rateios, máquinas, estruturas, ordens, filhos…), só a
