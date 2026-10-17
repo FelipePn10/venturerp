@@ -174,3 +174,24 @@ type AplicarAdiantamentoDTO struct {
 	Valor         float64 `json:"valor"`
 	DataAplicacao *string `json:"data_aplicacao,omitempty"`
 }
+
+// UpdatePlanoContasDTO altera um plano de contas. Descrição e situação mudam a
+// qualquer momento; código, tipo, natureza e conta-pai só enquanto nada usa o
+// plano (o caso de uso recusa com a lista do que usa).
+type UpdatePlanoContasDTO struct {
+	Codigo     string  `json:"codigo"`
+	Descricao  string  `json:"descricao"`
+	Tipo       string  `json:"tipo"`
+	Natureza   string  `json:"natureza"`
+	ParentCode *string `json:"parent_code,omitempty"`
+	// Nulo mantém a situação atual.
+	IsActive *bool `json:"is_active,omitempty"`
+}
+
+// UpdateCentroCustoDTO segue a mesma regra do plano de contas.
+type UpdateCentroCustoDTO struct {
+	Codigo    string `json:"codigo"`
+	Descricao string `json:"descricao"`
+	Tipo      string `json:"tipo"`
+	IsActive  *bool  `json:"is_active,omitempty"`
+}

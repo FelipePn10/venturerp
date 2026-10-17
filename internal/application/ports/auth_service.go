@@ -37,6 +37,9 @@ type AuthService interface {
 	CanCreateCostCenter(ctx context.Context) bool
 	CanListCostCenter(ctx context.Context) bool
 	CanGetCostCenter(ctx context.Context) bool
+	CanEditCostCenter(ctx context.Context) bool
+	// CanDeleteCostCenter: só ADMIN.
+	CanDeleteCostCenter(ctx context.Context) bool
 	CanCreateDeliveryReschedule(ctx context.Context) bool
 	CanListDeliveryReschedule(ctx context.Context) bool
 	CanManageDeliveryPromise(ctx context.Context) bool
@@ -132,6 +135,12 @@ type AuthService interface {
 	// Financial - Plano de Contas
 	CanCreatePlanoContas(ctx context.Context) bool
 	CanListPlanoContas(ctx context.Context) bool
+	// CanEditCadastroFinanceiro: alterar plano de contas e centro de custo
+	// (mesmo papel de quem cadastra).
+	CanEditCadastroFinanceiro(ctx context.Context) bool
+	// CanDeleteCadastroFinanceiro: excluir plano de contas e centro de custo — só
+	// ADMIN, porque some do histórico de quem consulta.
+	CanDeleteCadastroFinanceiro(ctx context.Context) bool
 
 	// Financial - Centros de Custo
 	CanCreateCentroCustoFinancial(ctx context.Context) bool

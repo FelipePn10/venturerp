@@ -458,6 +458,13 @@ func (app *application) mount() chi.Router {
 	listCostCenterUC := &cost_center_uc.ListCostCentersUseCase{Repo: costCenterRepo, Auth: authService}
 	getCostCenterUC := &cost_center_uc.GetCostCenterUseCase{Repo: costCenterRepo, Auth: authService}
 	costCenterHandler := handler.NewCostCenterHandler(createCostCenterUC, listCostCenterUC, getCostCenterUC)
+	costCenterManut := cost_center.NewManutencaoPG(app.db.Pool)
+	costCenterManutHandler := &handler.CostCenterManutencaoHandler{
+		List:   &cost_center_uc.ListCostCentersCadastroUseCase{Manut: costCenterManut, Auth: authService},
+		Uso:    &cost_center_uc.UsoCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
+		Update: &cost_center_uc.UpdateCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
+		Delete: &cost_center_uc.DeleteCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
+	}
 
 	// delivery promise params
 	deliveryPromiseParamsRepo := deliveryPromiseParams.NewDeliveryPromiseParamsRepositorySQLC(queries)
@@ -1093,6 +1100,16 @@ func (app *application) mount() chi.Router {
 	shipmentHandler := handler.NewShipmentHandler(shipmentBaseUC).
 		WithAutoFill(shipmentAutoFillUC).
 		WithExport(shipmentExportUC)
+	cadastroFinanceiroHandler := &handler.CadastroFinanceiroHandler{
+		ListPlanos:   &financial_uc.ListPlanoContasCadastroUseCase{Repo: fRepo, Auth: authService},
+		UsoPlano:     &financial_uc.UsoPlanoContasUseCase{Repo: fRepo, Auth: authService},
+		UpdatePlano:  &financial_uc.UpdatePlanoContasUseCase{Repo: fRepo, Auth: authService},
+		DeletePlano:  &financial_uc.DeletePlanoContasUseCase{Repo: fRepo, Auth: authService},
+		ListCentros:  &financial_uc.ListCentrosCustoCadastroUseCase{Repo: fRepo, Auth: authService},
+		UsoCentro:    &financial_uc.UsoCentroCustoUseCase{Repo: fRepo, Auth: authService},
+		UpdateCentro: &financial_uc.UpdateCentroCustoUseCase{Repo: fRepo, Auth: authService},
+		DeleteCentro: &financial_uc.DeleteCentroCustoUseCase{Repo: fRepo, Auth: authService},
+	}
 	financialHandler := handler.NewFinancialHandler(
 		&financial_uc.CreateContaBancariaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasBancariasUseCase{Repo: fRepo, Auth: authService},
@@ -1551,7 +1568,11 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/cost-center", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", costCenterHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", costCenterHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cadastro", costCenterManutHandler.ListCadastro)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}", costCenterHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}/uso", costCenterManutHandler.UsoCentro)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{costCenterCode}", costCenterManutHandler.UpdateCentro)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{costCenterCode}", costCenterManutHandler.DeleteCentro)
 		})
 		r.Route("/api/delivery-promise-params", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", deliveryPromiseParamsHandler.Get)
@@ -2060,6 +2081,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-routes/{id}", procurementHandler.GetReceivingInspectionRoute)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders", procurementHandler.GenerateReceivingInspectionOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders", procurementHandler.ListReceivingInspectionOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders/{id}", procurementHandler.GetReceivingInspectionOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/results", procurementHandler.RecordReceivingInspectionResult)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/analysis", procurementHandler.AnalyzeReceivingInspectionOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders/{id}/quality-reports", procurementHandler.LinkReceivingInspectionQualityReport)
@@ -2402,6 +2424,16 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN")).Put("/contas-bancarias/{id}/conta-contabil", fiscalEntryEnterpriseHandler.VincularContaBancariaContabil)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/centros-custo/create", financialHandler.CreateCentroCusto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/centros-custo/list", financialHandler.ListCentrosCusto)
+			// Manutenção do cadastro: alterar e excluir só no "momento certo" —
+			// as regras (uso, filhas, conta-pai) ficam nos casos de uso.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plano-contas/cadastro", cadastroFinanceiroHandler.ListPlanoContas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plano-contas/{id}/uso", cadastroFinanceiroHandler.UsoPlanoContas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/plano-contas/{id}", cadastroFinanceiroHandler.UpdatePlanoContas)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/plano-contas/{id}", cadastroFinanceiroHandler.DeletePlanoContas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/centros-custo/cadastro", cadastroFinanceiroHandler.ListCentrosCusto)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/centros-custo/{id}/uso", cadastroFinanceiroHandler.UsoCentroCusto)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/centros-custo/{id}", cadastroFinanceiroHandler.UpdateCentroCusto)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/centros-custo/{id}", cadastroFinanceiroHandler.DeleteCentroCusto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/create", financialHandler.CreateContaPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/list", financialHandler.ListContasPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/{id}", financialHandler.GetContaPagar)

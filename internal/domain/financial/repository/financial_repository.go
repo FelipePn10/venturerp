@@ -128,10 +128,26 @@ type FinancialRepository interface {
 	// Plano de Contas
 	CreatePlanoContas(ctx context.Context, p *entity.PlanoContas) (*entity.PlanoContas, error)
 	ListPlanoContas(ctx context.Context) ([]*entity.PlanoContas, error)
+	// ListPlanoContasComInativos devolve também os inativos (a tela de cadastro
+	// precisa deles para reativar).
+	ListPlanoContasComInativos(ctx context.Context) ([]*entity.PlanoContas, error)
+	GetPlanoContas(ctx context.Context, id int64) (*entity.PlanoContas, error)
+	GetPlanoContasPorCodigo(ctx context.Context, codigo string) (*entity.PlanoContas, error)
+	UpdatePlanoContas(ctx context.Context, p *entity.PlanoContas) (*entity.PlanoContas, error)
+	DeletePlanoContas(ctx context.Context, id int64) error
+	// UsosPlanoContas: onde o plano é usado (títulos, notas, rateios, contas filhas).
+	UsosPlanoContas(ctx context.Context, id int64) ([]entity.UsoCadastro, error)
+	// FilhasAtivasPlanoContas conta as contas filhas ativas (pelo código do pai).
+	FilhasAtivasPlanoContas(ctx context.Context, codigo string) (int64, error)
 
 	// Centros de Custo
 	CreateCentroCusto(ctx context.Context, c *entity.CentroCusto) (*entity.CentroCusto, error)
 	ListCentrosCusto(ctx context.Context) ([]*entity.CentroCusto, error)
+	ListCentrosCustoComInativos(ctx context.Context) ([]*entity.CentroCusto, error)
+	GetCentroCusto(ctx context.Context, id int64) (*entity.CentroCusto, error)
+	UpdateCentroCusto(ctx context.Context, c *entity.CentroCusto) (*entity.CentroCusto, error)
+	DeleteCentroCusto(ctx context.Context, id int64) error
+	UsosCentroCusto(ctx context.Context, id int64) ([]entity.UsoCadastro, error)
 
 	// Contas a Pagar
 	CreateContaPagar(ctx context.Context, c *entity.ContaPagar) (*entity.ContaPagar, error)

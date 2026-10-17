@@ -343,3 +343,14 @@ func TestCSTComBeneficioSemCodigoImpedeNoPR(t *testing.T) {
 		t.Fatal("SP não exige cBenef")
 	}
 }
+
+func TestConferirCodigoIBGE(t *testing.T) {
+	for _, c := range []struct {
+		codigo, uf string
+		ok         bool
+	}{{"", "PR", true}, {"0", "PR", true}, {"4106902", "PR", true}, {"3550308", "PR", false}, {"41069", "PR", false}, {"41O6902", "PR", false}, {"3550308", "SP", true}} {
+		if got := conferirCodigoIBGE(c.codigo, c.uf) == ""; got != c.ok {
+			t.Errorf("conferirCodigoIBGE(%q, %q) ok=%v, quer %v", c.codigo, c.uf, got, c.ok)
+		}
+	}
+}

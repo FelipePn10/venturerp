@@ -1416,6 +1416,43 @@ O campo `parcelas` é uma string de dias separados por vírgula. `"0"` = à vist
 | `tipo` | `RECEITA`, `DESPESA`, `ATIVO`, `PASSIVO`, `PATRIMONIO` | Classificação contábil |
 | `natureza` | `DEBITO`, `CREDITO` | Natureza do lançamento |
 
+`tipo`, `natureza` e conta-pai são conferidos no cadastro: conta-pai que não
+existe (ou está inativa) na empresa responde **422**; código repetido, **409**.
+`nivel` ausente é calculado pelos segmentos do código (`3.1.01` → 3).
+
+---
+
+### 7.3.1 Manutenção do plano de contas e do centro de custo
+
+Plano de contas e centro de custo financeiros podem ser alterados, desativados e
+excluídos — **só quando isso não muda o que já foi lançado**:
+
+| Rota | O que faz |
+|---|---|
+| `GET /plano-contas/cadastro` · `GET /centros-custo/cadastro` | lista ativos **e** inativos (a tela de cadastro); `/list` continua só com ativos (as telas que escolhem) |
+| `GET /plano-contas/{id}/uso` · `GET /centros-custo/{id}/uso` | `{"em_uso": bool, "usos": [{"onde", "quantidade"}]}` |
+| `PUT /plano-contas/{id}` · `PUT /centros-custo/{id}` | altera (ADMIN e USER) |
+| `DELETE /plano-contas/{id}` · `DELETE /centros-custo/{id}` | exclui — **só ADMIN**; responde 204 |
+
+Regras (nos casos de uso, `financial_uc/manutencao_cadastro_uc.go`):
+
+- **Uso** = títulos a pagar e a receber, rateios de título, itens e rateios de
+  parcela de nota de entrada, rateio de frete, regras de rateio de custo indireto
+  e, para o centro, referências do plano contábil (ECD). Para a conta, também as
+  **contas filhas**. Metade dessas colunas não tem FK — a conferência é feita no
+  código, não confiada ao banco.
+- **Com uso**, só `descricao` e a situação (`is_active`) mudam. Trocar código,
+  tipo, natureza ou conta-pai responde **409** listando o uso: reclassificaria
+  títulos e notas já lançados (o DRE de um mês fechado mudaria de linha). A saída
+  é cadastrar uma conta nova e desativar a antiga.
+- **Sem uso**, a estrutura muda, com conferência de conta-pai (existe, ativa, não
+  é a própria conta nem descendente dela) e `nivel` recalculado.
+- **Desativar** com conta filha ativa → 409; **reativar** com a conta-pai inativa
+  → 409. Inativo some das escolhas, e o histórico continua apontando para ele.
+- **Excluir** com uso → 409 (a mensagem sugere desativar).
+
+O corpo do `PUT` é o do cadastro mais `is_active` (nulo mantém a situação).
+
 ---
 
 ### 7.4 Centros de Custo

@@ -37,6 +37,15 @@ func (uc *CreateCostCenterUseCase) Execute(
 		}
 		end = &e
 	}
+	if !tiposCentro[dto.Type] {
+		return nil, errorsuc.NewValidationError("tipo inválido: use AUXILIARY, PRODUCTIVE, ADMINISTRATIVE ou COMMERCIAL")
+	}
+	if end != nil && end.Before(start) {
+		return nil, errorsuc.NewValidationError("a data de fim não pode ser anterior à data de início")
+	}
+	if err := conferirCentroPai(ctx, uc.Repo, dto.Code, dto.ParentCode); err != nil {
+		return nil, err
+	}
 	cc := &entity.CostCenter{
 		Code:        dto.Code,
 		Description: dto.Description,

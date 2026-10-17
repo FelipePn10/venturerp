@@ -6,6 +6,23 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(cadastros): plano de contas e centro de custo (financeiro VFIN0120/VFIN0130 e
+  industrial VCTB0102) podem ser alterados, desativados e excluídos no momento certo:
+  - em uso (títulos, notas, rateios, máquinas, estruturas, ordens, filhos…), só a
+    descrição e a situação mudam (no industrial, também a data final); código, tipo,
+    natureza e pai respondem 409 listando onde o cadastro é usado; excluir também
+  - sem uso, a estrutura muda com conferência do pai (existe, ativo, sem ciclo)
+  - desativar com filho ativo e reativar com pai inativo são recusados
+  - excluir é só do ADMIN; a listagem de cadastro traz os inativos para reativar,
+    e as escolhas continuam só com ativos
+  - rotas: `GET …/cadastro`, `GET …/{id}/uso`, `PUT …/{id}`, `DELETE …/{id}`
+- fix(cadastros): conta-pai e centro-pai inexistentes passam a ser recusados no
+  cadastro (422) — deixavam galhos soltos na árvore
+- fix(fiscal): código IBGE do município da empresa é conferido ao salvar (7 dígitos,
+  da UF da empresa) — código de outra UF saía errado no CT-e, na NFS-e e no SPED
+- fix(compras): `GET /api/procurement/receiving-inspection-orders/{id}` existia só no
+  front (VINS0400 recebia 404)
+
 ## [v1.6.3] — 2026-10-16
 
 - fix(nf-e): validado na SEFAZ do PR em homologação; cBenef, rejeição e demora da SEFAZ (`091ab3ba`)

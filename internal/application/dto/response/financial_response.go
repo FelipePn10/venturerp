@@ -228,3 +228,16 @@ type AdiantamentoAplicacaoResponse struct {
 	CreatedBy      uuid.UUID       `json:"created_by"`
 	CreatedAt      time.Time       `json:"created_at"`
 }
+
+// UsoCadastroResponse: onde um plano de contas ou centro de custo está em uso.
+type UsoCadastroResponse struct {
+	Onde       string `json:"onde"`
+	Quantidade int64  `json:"quantidade"`
+}
+
+// UsoCadastroResumoResponse responde "posso alterar/excluir?" antes de a tela
+// oferecer o botão: em uso, só descrição e situação mudam, e não se exclui.
+type UsoCadastroResumoResponse struct {
+	EmUso bool                  `json:"em_uso"`
+	Usos  []UsoCadastroResponse `json:"usos"`
+}

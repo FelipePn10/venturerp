@@ -177,6 +177,14 @@ func (a *AuthService) CanGetCostCenter(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
 
+func (a *AuthService) CanEditCostCenter(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanDeleteCostCenter(ctx context.Context) bool {
+	return a.IsAdmin(ctx)
+}
+
 func (a *AuthService) CanCreateDeliveryReschedule(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
 }
@@ -539,6 +547,14 @@ func (a *AuthService) CanCreatePlanoContas(ctx context.Context) bool {
 
 func (a *AuthService) CanListPlanoContas(ctx context.Context) bool {
 	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanEditCadastroFinanceiro(ctx context.Context) bool {
+	return a.hasWriteRole(ctx)
+}
+
+func (a *AuthService) CanDeleteCadastroFinanceiro(ctx context.Context) bool {
+	return a.IsAdmin(ctx)
 }
 
 // Financial - Centros de Custo
