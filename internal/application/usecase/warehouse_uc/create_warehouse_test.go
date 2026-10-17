@@ -27,6 +27,27 @@ func (r *warehouseRepo) Create(_ context.Context, value *entity.Warehouse) (*ent
 }
 func (*warehouseRepo) List(context.Context) ([]*entity.Warehouse, error)            { return nil, nil }
 func (*warehouseRepo) GetByCode(context.Context, string) (*entity.Warehouse, error) { return nil, nil }
+func (r *warehouseRepo) Update(_ context.Context, value *entity.Warehouse) (*entity.Warehouse, error) {
+	return value, nil
+}
+
+// Linha de produção nasce permitindo saldo negativo (baixa automática); os
+// demais almoxarifados, não — salvo pedido explícito.
+func TestCreateWarehouseSaldoNegativoPadraoDoTipo(t *testing.T) {
+	ctx := context.Background()
+	repo := &warehouseRepo{}
+	uc := NewCreateWarehouseUseCase(repo, warehouseAuth{user: uuid.New()})
+	if _, err := uc.Execute(ctx, request.CreateWarehouseRequestDTO{Code: "LIN", Description: "Linha", Location: types.INTERNO, Type: types.LINHA_DE_PRODUCAO}); err != nil || !repo.created.AllowNegativeStock {
+		t.Fatalf("linha de produção deveria permitir negativo: %+v %v", repo.created, err)
+	}
+	if _, err := uc.Execute(ctx, request.CreateWarehouseRequestDTO{Code: "EST", Description: "Estoque", Location: types.INTERNO, Type: types.NORMAL}); err != nil || repo.created.AllowNegativeStock {
+		t.Fatalf("almoxarifado normal não permite negativo por padrão: %+v %v", repo.created, err)
+	}
+	sim := true
+	if _, err := uc.Execute(ctx, request.CreateWarehouseRequestDTO{Code: "EST2", Description: "Estoque", Location: types.INTERNO, Type: types.NORMAL, AllowNegativeStock: &sim}); err != nil || !repo.created.AllowNegativeStock {
+		t.Fatalf("pedido explícito vale: %+v %v", repo.created, err)
+	}
+}
 
 func TestCreateWarehouseUsesJWTActor(t *testing.T) {
 	actor := uuid.New()

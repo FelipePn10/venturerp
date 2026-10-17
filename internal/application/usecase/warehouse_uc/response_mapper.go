@@ -17,6 +17,7 @@ func toWarehouseResponse(w *entity.Warehouse) *response.WarehouseResponse {
 		Type:                w.Type.String(),
 		Disposition:         w.Disposition,
 		ReservationsAllowed: w.ReservationsAllowed,
+		AllowNegativeStock:  w.AllowNegativeStock,
 		CreatedBy:           w.CreatedBy,
 		CreatedAt:           w.CreatedAt,
 	}

@@ -17,6 +17,8 @@ type Warehouse struct {
 
 	Disposition         bool
 	ReservationsAllowed bool
+	// AllowNegativeStock: saída que deixa o saldo negativo é aceita aqui.
+	AllowNegativeStock bool
 
 	CreatedBy uuid.UUID
 	CreatedAt time.Time

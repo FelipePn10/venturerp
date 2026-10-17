@@ -333,6 +333,7 @@ func (app *application) mount() chi.Router {
 	listWarehousesUc := warehouse_uc.NewListWarehousesUseCase(warehouseRepo, authService)
 	getWarehouseUc := warehouse_uc.NewGetWarehouseUseCase(warehouseRepo, authService)
 	warehouseHandler := handler.NewCreateWarehouseHandler(createWarehouseUc, listWarehousesUc, getWarehouseUc)
+	warehouseHandler.UpdateWarehouseUC = &warehouse_uc.UpdateWarehouseUseCase{Repo: warehouseRepo, Auth: authService}
 
 	// group
 	groupRepo := group.NewRepositoryGroupSQLC(queries)
@@ -1752,6 +1753,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", warehouseHandler.CreateWarehouse)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", warehouseHandler.ListWarehouses)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", warehouseHandler.GetWarehouse)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/{code}", warehouseHandler.UpdateWarehouse)
 		})
 		r.Route("/api/pdm", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create-group", groupHandler.CreateGroup)

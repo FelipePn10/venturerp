@@ -60,6 +60,8 @@ type WarehouseHandler struct {
 	createWarehouseUC *warehouse_uc.CreateWarehouseUseCase
 	listWarehousesUC  *warehouse_uc.ListWarehousesUseCase
 	getWarehouseUC    *warehouse_uc.GetWarehouseUseCase
+	// UpdateWarehouseUC: alteração do almoxarifado (opcional na montagem).
+	UpdateWarehouseUC *warehouse_uc.UpdateWarehouseUseCase
 }
 
 type GroupHandler struct {
