@@ -46,7 +46,7 @@ func configBase() *fiscalentity.FiscalConfig {
 		CnpjEmpresa: "22333444000155", RazaoSocial: "TECNOFER LTDA",
 		IEEmpresa: strp("9099999999"), UFEmpresa: "PR",
 		Logradouro: "AVENIDA DAS INDUSTRIAS", Numero: "1200", Bairro: "CENTRO",
-		Municipio: "MANDAGUARI", CodigoMunicipio: "4114302", CEP: "86975000",
+		Municipio: "MANDAGUARI", CodigoMunicipio: "4114203", CEP: "86975000",
 		FocusNfeToken: strp("token-valido"), FocusNfeAmbiente: "producao",
 	}
 }
