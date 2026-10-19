@@ -45,7 +45,9 @@ Regras do lançamento (todas em `CreateMovementTx`, o único ponto que grava mov
   exatamente total_cost ÷ quantity. A saída é valorizada em centavos, então o
   médio pode variar na 7ª casa — é o custo médio móvel, como nos ERPs de mercado.
   O pedido de compra guarda a unidade interna com as mesmas escalas (migração
-  408): 100 KG × 0,15530965 entram como 15,530965 M, não 15,5310.
+  408): 100 KG × 0,15530965 entram como 15,530965 M, não 15,5310. A inspeção de
+  recebimento (ordem, análise, disposição, registro) também (migração 409), e a
+  análise confere o saldo da inspeção antes de gravar.
   As respostas JSON continuam número (conversão só na fronteira do DTO); os
   read models de kardex, posição e análise devolvem texto decimal.
 - **Tipo de movimento configurado** (`movement_type_code`, sigla da VEST0200): no

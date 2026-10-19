@@ -6,6 +6,9 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(suprimentos): quantidades da inspeção de recebimento com 6 casas (migração
+  409) — a ordem guardava 6,1856 de 6,185567 recebidos e liberar o exibido era
+  recusado; a análise e a disposição conferem o saldo da inspeção antes de gravar
 - fix(usuários): aprovar, rejeitar ou concluir a troca de senha com identificador
   fora do formato respondia 500; agora 400 com a mensagem. Mensagens desse fluxo
   em português
