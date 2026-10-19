@@ -63,6 +63,11 @@ Regras do lançamento (todas em `CreateMovementTx`, o único ponto que grava mov
 Uma operação: `TRANSFER_OUT` na origem ao custo médio e `TRANSFER_IN` no destino pelo
 mesmo custo; as pernas se referenciam (`reference_type TRANSFERENCIA`, `reference_code`
 = id da saída). Trânsito: transfira para um almoxarifado de localização `TRANSITO`.
+Transferência originada de documento (liberação da inspeção de recebimento) usa a
+mesma operação com `ReferenciaTipo`/`ReferenciaCodigo` do documento: as pernas
+guardam a referência dele e se desfazem pelo documento, não pelo estorno avulso.
+Toda entrada de transferência vale o que saiu — inclusive a automática para o
+almoxarifado de linha da OF.
 
 ### Conversão de unidade (compras e vendas)
 

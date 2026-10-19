@@ -22,6 +22,11 @@ type TransferenciaEstoque struct {
 	EnderecoPara *string
 	Notas        *string
 	Ator         uuid.UUID
+	// Referência do documento que originou a transferência (ex.: a ordem de
+	// inspeção que liberou o material). Vazia = TRANSFERENCIA, ligada pelo id da
+	// saída, como na transferência manual.
+	ReferenciaTipo   *string
+	ReferenciaCodigo *int64
 }
 
 type ResultadoTransferencia struct {

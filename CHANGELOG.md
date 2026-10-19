@@ -6,6 +6,13 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(suprimentos): a liberação da inspeção de recebimento transferia a quantidade
+  e perdia o valor — a entrada no estoque/refugo ia sem preço e os reais do
+  material sumiam do inventário. Agora usa a transferência transacional do estoque
+  (as duas pernas na mesma transação, entrada pelo custo da saída, referência da
+  ordem de inspeção)
+- fix(produção): a transferência automática do componente para o almoxarifado de
+  linha também levava a quantidade sem o valor
 - fix(compras): a linha comprada em outra unidade guarda a quantidade e o preço
   internos com 6 e 10 casas (migração 408) — 100 KG × 0,15530965 entravam no
   estoque como 15,5310 M em vez de 15,530965

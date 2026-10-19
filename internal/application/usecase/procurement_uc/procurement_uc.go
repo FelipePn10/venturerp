@@ -24,6 +24,15 @@ type UseCase struct {
 	Repo      procrepo.Repository
 	StockRepo stockrepo.StockRepository
 	Auth      ports.AuthService
+	// Transferencias move o material entre almoxarifados numa transação, com a
+	// entrada pelo custo da saída. Sem ela as pernas eram gravadas em chamadas
+	// separadas e a entrada ia sem preço: o valor liberado da inspeção sumia.
+	Transferencias Transferidor
+}
+
+// Transferidor é a transferência transacional do estoque.
+type Transferidor interface {
+	TransferirEntreAlmoxarifados(ctx context.Context, t stockentity.TransferenciaEstoque) (*stockentity.ResultadoTransferencia, error)
 }
 
 func (uc *UseCase) CreateRecord(ctx context.Context, dto request.CreateProcurementRecordDTO) (*response.ProcurementRecordResponse, error) {
@@ -637,6 +646,16 @@ func (uc *UseCase) transfer(ctx context.Context, rec *entity.Record, from, to in
 }
 
 func (uc *UseCase) transferStock(ctx context.Context, itemCode int64, mask string, from, to int64, qty float64, refType string, refCode int64, actor uuid.UUID, notes *string) (*stockentity.StockMovement, *stockentity.StockMovement, error) {
+	if uc.Transferencias != nil {
+		r, err := uc.Transferencias.TransferirEntreAlmoxarifados(ctx, stockentity.TransferenciaEstoque{
+			ItemCode: itemCode, Mask: mask, DeAlmox: from, ParaAlmox: to, Quantidade: decimal.NewFromFloat(qty),
+			Notas: notes, Ator: actor, ReferenciaTipo: &refType, ReferenciaCodigo: &refCode,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return r.Saida, r.Entrada, nil
+	}
 	out := &stockentity.StockMovement{
 		ItemCode:      itemCode,
 		Mask:          mask,
@@ -652,12 +671,16 @@ func (uc *UseCase) transferStock(ctx context.Context, itemCode int64, mask strin
 	if err != nil {
 		return nil, nil, err
 	}
+	// A entrada vale o que saiu: sem preço, o destino recebia a quantidade com
+	// valor zero e o valor do material desaparecia do inventário.
 	in := &stockentity.StockMovement{
 		ItemCode:      itemCode,
 		Mask:          mask,
 		WarehouseID:   to,
 		MovementType:  stockentity.MovementTypeTransferIn,
 		Quantity:      decimal.NewFromFloat(qty),
+		UnitPrice:     createdOut.UnitPrice,
+		TotalPrice:    createdOut.TotalPrice,
 		ReferenceType: &refType,
 		ReferenceCode: &refCode,
 		Notes:         notes,
