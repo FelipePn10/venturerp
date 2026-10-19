@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.7.2] — 2026-10-19
+
+- Release v1.7.2.
+
 ## [v1.7.1] — 2026-10-19
 
 - fix(estoque): quantidade e custo em decimal de ponta a ponta; kardex no fuso da empresa (`d80e7b13`)
