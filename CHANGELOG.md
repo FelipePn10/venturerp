@@ -6,6 +6,13 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.7.3] — 2026-10-19
+
+- fix(suprimentos): quantidades da inspeção com 6 casas; análise confere o saldo antes de gravar (`3fb3ade1`)
+- fix(usuários): troca de senha com identificador inválido responde 400, não 500; mensagens em português (`733a5d54`)
+- fix(suprimentos,produção): transferência da inspeção e da linha da OF levam o valor do material (`92f91247`)
+- fix(compras,estoque): unidade interna do pedido com precisão do estoque; médio = valor ÷ quantidade (`4b5a3889`)
+
 - fix(suprimentos): quantidades da inspeção de recebimento com 6 casas (migração
   409) — a ordem guardava 6,1856 de 6,185567 recebidos e liberar o exibido era
   recusado; a análise e a disposição conferem o saldo da inspeção antes de gravar
