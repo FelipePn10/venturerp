@@ -42,6 +42,9 @@ type pendenciasFalsas struct {
 	falhas     []string
 }
 
+func (p *pendenciasFalsas) Reservar(context.Context, int64, string) (bool, error) {
+	return true, nil
+}
 func (p *pendenciasFalsas) Resolver(_ context.Context, _ int64, etapa string) error {
 	p.resolvidas = append(p.resolvidas, etapa)
 	return nil

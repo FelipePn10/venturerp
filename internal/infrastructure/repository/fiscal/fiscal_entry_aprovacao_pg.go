@@ -428,35 +428,16 @@ func estornarAprovacao(ctx context.Context, tx pgx.Tx, empresa, empresaCode int6
 	}
 	irows.Close()
 
-	ref := stockentity.ReferenceTypeNFEntry
+	ajustesPendentes := map[[2]int64]decimal.Decimal{}
 	for _, it := range itens {
 		if it.movID != nil {
-			var wh int64
-			var qtd decimal.Decimal
-			if err := tx.QueryRow(ctx, `SELECT warehouse_id, quantity FROM stock_movements WHERE id=$1 AND enterprise_id=$2`, *it.movID, empresa).Scan(&wh, &qtd); err != nil {
-				return fmt.Errorf("lendo movimento de estoque da nota: %w", err)
-			}
-			var saldo decimal.Decimal
-			if err := tx.QueryRow(ctx,
-				`SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3 AND mask=''`,
-				empresa, it.itemCode, wh).Scan(&saldo); err != nil {
+			estornou, err := estornarEstoqueDoItem(ctx, tx, empresa, c, numero, it.itemCode, *it.movID, ajustesPendentes)
+			if err != nil {
 				return err
 			}
-			if saldo.LessThan(qtd) {
-				return errorsuc.NewValidationError(fmt.Sprintf(
-					"o item %d tem só %s no almoxarifado da entrada e a nota deu entrada de %s: o material já foi consumido ou transferido — faça a devolução ao fornecedor em vez de cancelar a nota",
-					it.itemCode, saldo.String(), qtd.String()))
+			if estornou {
+				res.MovimentosEstorno++
 			}
-			nota := fmt.Sprintf("Estorno da NF %d (cancelamento da nota de entrada %d): %s", numero, c.EntryID, c.Motivo)
-			mov := &stockentity.StockMovement{
-				ItemCode: it.itemCode, WarehouseID: wh, MovementType: stockentity.MovementTypeOut,
-				Quantity: qtd, ReferenceType: &ref, ReferenceCode: &c.EntryID,
-				Notes: &nota, CreatedBy: c.UserID,
-			}
-			if err := stockrepo.CreateMovementTx(ctx, tx, empresa, mov); err != nil {
-				return fmt.Errorf("estornando estoque do item %d: %w", it.itemCode, err)
-			}
-			res.MovimentosEstorno++
 		}
 		if it.linha != nil {
 			l, err := lockLinhaPedido(ctx, tx, empresaCode, *it.linha)
@@ -490,6 +471,63 @@ func estornarAprovacao(ctx context.Context, tx pgx.Tx, empresa, empresaCode int6
 	}
 	res.LancamentosEstorno = int(tag.RowsAffected())
 	return nil
+}
+
+// estornarEstoqueDoItem tira do estoque o que a nota deixou nele: a entrada
+// mais os ajustes ligados à nota. Os ajustes corrigem a entrada (ex.: a NF
+// 78402 da Tecnofer, lançada em KG num item em M e acertada por ajuste em
+// 17/10/2026); sem eles o estorno exigiria e baixaria a quantidade bruta.
+// Os ajustes são do item no almoxarifado, não da linha: com duas linhas do
+// mesmo item entram uma vez só, e o que sobrar de uma linha passa para a
+// seguinte (pendentes guarda o ajuste ainda não aplicado por item/almoxarifado).
+func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repository.CancelamentoEntrada, numero, itemCode, movID int64, pendentes map[[2]int64]decimal.Decimal) (bool, error) {
+	ref := stockentity.ReferenceTypeNFEntry
+	var wh int64
+	var qtd decimal.Decimal
+	if err := tx.QueryRow(ctx, `SELECT warehouse_id, quantity FROM stock_movements WHERE id=$1 AND enterprise_id=$2`, movID, empresa).Scan(&wh, &qtd); err != nil {
+		return false, fmt.Errorf("lendo movimento de estoque da nota: %w", err)
+	}
+	chave := [2]int64{itemCode, wh}
+	ajustes, lidos := pendentes[chave]
+	if !lidos {
+		if err := tx.QueryRow(ctx,
+			`SELECT COALESCE(SUM(quantity),0) FROM stock_movements
+			  WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3 AND movement_type='ADJUSTMENT'
+			    AND reference_type=$4 AND reference_code=$5`,
+			empresa, itemCode, wh, ref, c.EntryID).Scan(&ajustes); err != nil {
+			return false, fmt.Errorf("lendo ajustes de estoque da nota: %w", err)
+		}
+	}
+	qtd = qtd.Add(ajustes)
+	if qtd.IsNegative() {
+		pendentes[chave] = qtd
+		return false, nil
+	}
+	pendentes[chave] = decimal.Zero
+	if qtd.IsZero() {
+		return false, nil
+	}
+	var saldo decimal.Decimal
+	if err := tx.QueryRow(ctx,
+		`SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3 AND mask=''`,
+		empresa, itemCode, wh).Scan(&saldo); err != nil {
+		return false, err
+	}
+	if saldo.LessThan(qtd) {
+		return false, errorsuc.NewValidationError(fmt.Sprintf(
+			"o item %d tem só %s no almoxarifado da entrada e a nota deu entrada de %s: o material já foi consumido ou transferido — faça a devolução ao fornecedor em vez de cancelar a nota",
+			itemCode, saldo.String(), qtd.String()))
+	}
+	nota := fmt.Sprintf("Estorno da NF %d (cancelamento da nota de entrada %d): %s", numero, c.EntryID, c.Motivo)
+	mov := &stockentity.StockMovement{
+		ItemCode: itemCode, WarehouseID: wh, MovementType: stockentity.MovementTypeOut,
+		Quantity: qtd, ReferenceType: &ref, ReferenceCode: &c.EntryID,
+		Notes: &nota, CreatedBy: c.UserID,
+	}
+	if err := stockrepo.CreateMovementTx(ctx, tx, empresa, mov); err != nil {
+		return false, fmt.Errorf("estornando estoque do item %d: %w", itemCode, err)
+	}
+	return true, nil
 }
 
 // ---- apoio ----

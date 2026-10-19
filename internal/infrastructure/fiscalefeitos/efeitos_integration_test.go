@@ -229,3 +229,66 @@ func TestEfeitosDaNFePendenciaIsolaEmpresa(t *testing.T) {
 		t.Fatalf("outra empresa aplicou os efeitos da nota (%d títulos)", n)
 	}
 }
+
+// O agendador lê a fila (pendência ainda aberta) enquanto a autorização aplica
+// os efeitos; quando ele executa, a pendência já foi resolvida. Antes a segunda
+// execução baixava o estoque e gerava os títulos de novo (visto no clone da
+// Tecnofer: duas saídas de 1 M para uma NF-e de 1 M).
+func TestEfeitosDaNFeNaoReaplicamDepoisDeResolvidos(t *testing.T) {
+	c := novaNotaAutorizada(t)
+	falhar := false
+	ef := c.efeitos(t, &falhar)
+	if err := ef.Registrar(c.ctx, c.nota, fiscalentity.PendenciaAutorizacao, c.ator); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := ef.Executar(c.ctx, c.nota, fiscalentity.PendenciaAutorizacao, c.ator); err != nil {
+			t.Fatalf("execução %d: %v", i+1, err)
+		}
+	}
+	if n := c.contar(t, `SELECT count(*) FROM stock_movements WHERE reference_type = 'NF_SAIDA' AND reference_code = $1`); n != 1 {
+		t.Fatalf("baixas = %d, quer 1", n)
+	}
+	if n := c.contar(t, `SELECT count(*) FROM contas_receber WHERE fiscal_exit_id = $1`); n != 1 {
+		t.Fatalf("títulos = %d, quer 1", n)
+	}
+}
+
+// Execuções simultâneas (autorização, reprocesso automático e consultas de
+// status ao mesmo tempo) aplicam os efeitos uma vez só.
+func TestEfeitosDaNFeSimultaneosAplicamUmaVez(t *testing.T) {
+	c := novaNotaAutorizada(t)
+	falhar := false
+	ef := c.efeitos(t, &falhar)
+	if err := ef.Registrar(c.ctx, c.nota, fiscalentity.PendenciaAutorizacao, c.ator); err != nil {
+		t.Fatal(err)
+	}
+	const n = 5
+	erros := make(chan error, n)
+	inicio := make(chan struct{})
+	for i := 0; i < n; i++ {
+		go func() {
+			<-inicio
+			erros <- ef.Executar(c.ctx, c.nota, fiscalentity.PendenciaAutorizacao, c.ator)
+		}()
+	}
+	close(inicio)
+	for i := 0; i < n; i++ {
+		if err := <-erros; err != nil {
+			t.Fatalf("execução simultânea: %v", err)
+		}
+	}
+	if q := c.contar(t, `SELECT count(*) FROM stock_movements WHERE reference_type = 'NF_SAIDA' AND reference_code = $1`); q != 1 {
+		t.Fatalf("baixas = %d com %d execuções simultâneas, quer 1", q, n)
+	}
+	if q := c.contar(t, `SELECT count(*) FROM contas_receber WHERE fiscal_exit_id = $1`); q != 1 {
+		t.Fatalf("títulos = %d com %d execuções simultâneas, quer 1", q, n)
+	}
+	var saldo decimal.Decimal
+	if err := c.pool.QueryRow(context.Background(), `SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id = $1 AND item_code = $2`, c.empresa, c.item).Scan(&saldo); err != nil {
+		t.Fatal(err)
+	}
+	if !saldo.Equal(decimal.NewFromInt(7)) {
+		t.Fatalf("saldo = %s, quer 7 (10 − 3 uma vez)", saldo)
+	}
+}

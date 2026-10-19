@@ -231,6 +231,9 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 		}
 	}
 	return e.Transacao(ctx, func(r EfeitosRepos) error {
+		if aberta, err := r.Pendencias.Reservar(ctx, exitID, entity.PendenciaAutorizacao); err != nil || !aberta {
+			return err
+		}
 		if e.GeraTitulos {
 			if err := gerarTitulos(ctx, r.Financeiro, exit, plano, clienteID, userID); err != nil {
 				return err
@@ -252,6 +255,9 @@ func (e *EfeitosNFe) cancelamento(ctx context.Context, exitID int64) error {
 		return fmt.Errorf("lendo a nota: %w", err)
 	}
 	return e.Transacao(ctx, func(r EfeitosRepos) error {
+		if aberta, err := r.Pendencias.Reservar(ctx, exitID, entity.PendenciaCancelamento); err != nil || !aberta {
+			return err
+		}
 		if e.GeraTitulos {
 			if err := r.Financeiro.CancelContasReceberByFiscalExit(ctx, exitID); err != nil {
 				return fmt.Errorf("cancelando os títulos da nota: %w", err)

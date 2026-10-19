@@ -6,6 +6,21 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(fiscal): a prévia da NF-e sem pedido avisava que "o estoque não será
+  baixado", mas a autorização baixa o estoque de todo item da nota; o aviso
+  agora diz o que de fato fica de fora (faturamento e reservas do pedido)
+- fix(fiscal): a NF-e autorizada podia baixar o estoque (e gerar os títulos)
+  duas vezes — o reprocesso automático, que roda a cada minuto, lia a pendência
+  de efeitos ainda aberta enquanto a autorização a aplicava e aplicava de novo.
+  Visto no clone da Tecnofer (duas saídas de 1 M para uma nota de 1 M). A
+  transação dos efeitos agora trava a pendência e não reaplica a já resolvida.
+  Nenhuma NF-e de saída foi emitida em produção ainda
+- fix(fiscal): cancelar nota de entrada acertada por ajuste de estoque (a NF
+  78402 da Tecnofer, lançada em KG num item em M e corrigida em 17/10) era
+  recusado com "o item tem só 18 e a nota deu entrada de 115,8975". O estorno
+  agora devolve o que a nota deixou no estoque: a entrada mais os ajustes
+  ligados a ela
+
 ## [v1.7.3] — 2026-10-19
 
 - fix(suprimentos): quantidades da inspeção com 6 casas; análise confere o saldo antes de gravar (`3fb3ade1`)
