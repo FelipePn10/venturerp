@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.7.5] — 2026-10-19
+
+- fix(fiscal): dica do código IBGE na prévia sem código fixo errado (`e48414ca`)
+
 - fix(fiscal): o aviso da prévia sobre o código IBGE zerado sugeria um código fixo
   e errado ("Mandaguari/PR é 4114302" — o certo é 4114203), mostrado também a
   empresas de outras cidades; agora orienta a consultar a lista oficial do IBGE
