@@ -20,8 +20,25 @@ import (
 // Nota lançada em KG num item estocado em M e acertada por ajuste ligado à
 // nota (o caso da NF 78402 da Tecnofer): o cancelamento estorna o que a nota
 // deixou no estoque (115,8975 − 97,8975 = 18 M), não a entrada bruta — antes
-// exigia 115,8975 de saldo e a nota não podia ser cancelada.
+// exigia 115,8975 de saldo e a nota não podia ser cancelada. Com duas linhas do
+// mesmo item o ajuste entra uma vez só, e a sobra de uma linha passa à seguinte.
 func TestCancelamentoDeNotaAcertadaPorAjuste(t *testing.T) {
+	casos := []struct {
+		nome     string
+		linhas   []string
+		ajuste   string
+		estornos []string
+	}{
+		{"NF 78402: uma linha", []string{"115.8975"}, "-97.8975", []string{"18"}},
+		{"duas linhas do mesmo item, ajuste maior que a primeira", []string{"10", "10"}, "-12", []string{"8"}},
+		{"duas linhas do mesmo item sem ajuste", []string{"4", "6"}, "", []string{"4", "6"}},
+	}
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) { cancelarNotaComAjuste(t, c.linhas, c.ajuste, c.estornos) })
+	}
+}
+
+func cancelarNotaComAjuste(t *testing.T, linhas []string, ajuste string, estornos []string) {
 	pool := testutil.Pool(t)
 	ctx, emp := empresaFiscal(t)
 	ator := testutil.Actor(t, pool)
@@ -65,10 +82,17 @@ func TestCancelamentoDeNotaAcertadaPorAjuste(t *testing.T) {
 		}
 		return m.ID
 	}
-	entrada := movimento(stockentity.MovementTypeIn, "115.8975", "6.246")
-	movimento(stockentity.MovementTypeAdjustment, "-97.8975", "0")
-	testutil.Exec(t, pool, `INSERT INTO fiscal_entry_items(fiscal_entry_id,sequence,item_code,description,quantity,unit_price,total_price,cfop,uom,fator_conversao,quantidade_estoque,stock_movement_id,movimenta_estoque)
-		VALUES($1,1,$2,'TUBO RET 80 X 60',115.8975,7.9,915.59,'1102','KG',0.15530965,18,$3,TRUE)`, nota, item, entrada)
+	esperado := decimal.Zero
+	for i, q := range linhas {
+		entrada := movimento(stockentity.MovementTypeIn, q, "6.246")
+		testutil.Exec(t, pool, `INSERT INTO fiscal_entry_items(fiscal_entry_id,sequence,item_code,description,quantity,unit_price,total_price,cfop,uom,fator_conversao,quantidade_estoque,stock_movement_id,movimenta_estoque)
+			VALUES($1,$2,$3,'TUBO RET 80 X 60',$4::numeric,7.9,10,'1102','KG',1,$4::numeric,$5,TRUE)`, nota, i+1, item, q, entrada)
+		esperado = esperado.Add(decimal.RequireFromString(q))
+	}
+	if ajuste != "" {
+		movimento(stockentity.MovementTypeAdjustment, ajuste, "0")
+		esperado = esperado.Add(decimal.RequireFromString(ajuste))
+	}
 
 	saldo := func() decimal.Decimal {
 		var q decimal.Decimal
@@ -77,8 +101,8 @@ func TestCancelamentoDeNotaAcertadaPorAjuste(t *testing.T) {
 		}
 		return q
 	}
-	if s := saldo(); !s.Equal(decimal.NewFromInt(18)) {
-		t.Fatalf("saldo antes do cancelamento = %s, quer 18", s)
+	if s := saldo(); !s.Equal(esperado) {
+		t.Fatalf("saldo antes do cancelamento = %s, quer %s", s, esperado)
 	}
 
 	r := fiscalpg.NewFiscalRepositoryPG(pool).(interface {
@@ -88,17 +112,26 @@ func TestCancelamentoDeNotaAcertadaPorAjuste(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cancelamento da nota acertada por ajuste: %v", err)
 	}
-	if res.MovimentosEstorno != 1 {
-		t.Fatalf("movimentos de estorno = %d, quer 1", res.MovimentosEstorno)
+	if res.MovimentosEstorno != len(estornos) {
+		t.Fatalf("movimentos de estorno = %d, quer %d", res.MovimentosEstorno, len(estornos))
 	}
 	if s := saldo(); !s.IsZero() {
-		t.Fatalf("saldo depois do estorno = %s, quer 0 (estornar 18 M, não 115,8975)", s)
+		t.Fatalf("saldo depois do estorno = %s, quer 0", s)
 	}
-	var estorno decimal.Decimal
-	if err := pool.QueryRow(bg, `SELECT quantity FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2 AND movement_type='OUT' AND reference_code=$3`, emp, item, nota).Scan(&estorno); err != nil {
+	rows, err := pool.Query(bg, `SELECT quantity FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2 AND movement_type='OUT' AND reference_code=$3 ORDER BY id`, emp, item, nota)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !estorno.Equal(decimal.NewFromInt(18)) {
-		t.Fatalf("estorno = %s, quer 18", estorno)
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var q decimal.Decimal
+		if err := rows.Scan(&q); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, q.String())
+	}
+	if fmt.Sprint(got) != fmt.Sprint(estornos) {
+		t.Fatalf("estornos = %v, quer %v", got, estornos)
 	}
 }

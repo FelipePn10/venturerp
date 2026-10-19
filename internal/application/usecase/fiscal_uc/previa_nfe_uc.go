@@ -408,8 +408,10 @@ func conferirNota(
 	// ── Efeitos fora da nota
 	if exit.SalesOrderCode == nil {
 		atencao("pedido_de_venda",
-			"a nota não está vinculada a um pedido de venda: o estoque não será baixado e o pedido não será marcado como faturado",
-			"fature a partir do pedido ou da carga (VFIS0640 — Faturamento de Carga e DANFE) para o estoque e o pedido acompanharem a nota")
+			// A baixa de estoque acontece de qualquer forma (efeitos da
+			// autorização): o que falta sem pedido é o faturamento e a reserva.
+			"a nota não está vinculada a um pedido de venda: o estoque é baixado pela nota, mas nenhum pedido é marcado como faturado nem tem as reservas consumidas",
+			"fature a partir do pedido ou da carga (VFIS0640 — Faturamento de Carga e DANFE) para o pedido e as reservas acompanharem a nota")
 	}
 
 	return p

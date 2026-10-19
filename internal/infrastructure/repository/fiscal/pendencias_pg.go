@@ -2,6 +2,7 @@ package fiscal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -43,6 +44,29 @@ func (r *PendenciasPG) Registrar(ctx context.Context, exitID int64, etapa string
 		return fmt.Errorf("registrando a pendência da NF-e %d: %w", exitID, err)
 	}
 	return nil
+}
+
+// Reservar trava a pendência aberta (FOR UPDATE). Duas execuções simultâneas
+// — a autorização e o reprocesso automático, ou duas consultas de status —
+// esperam uma pela outra; a segunda encontra a pendência já resolvida e não
+// aplica os efeitos de novo (antes baixava o estoque duas vezes).
+func (r *PendenciasPG) Reservar(ctx context.Context, exitID int64, etapa string) (bool, error) {
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	var id int64
+	err = r.db.QueryRow(ctx, `
+		SELECT id FROM fiscal_exit_pendencias
+		 WHERE enterprise_id = $1 AND fiscal_exit_id = $2 AND etapa = $3 AND situacao = 'PENDENTE'
+		 LIMIT 1 FOR UPDATE`, e, exitID, etapa).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("reservando a pendência da NF-e %d: %w", exitID, err)
+	}
+	return true, nil
 }
 
 func (r *PendenciasPG) Resolver(ctx context.Context, exitID int64, etapa string) error {

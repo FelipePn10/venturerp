@@ -428,9 +428,10 @@ func estornarAprovacao(ctx context.Context, tx pgx.Tx, empresa, empresaCode int6
 	}
 	irows.Close()
 
+	ajustesPendentes := map[[2]int64]decimal.Decimal{}
 	for _, it := range itens {
 		if it.movID != nil {
-			estornou, err := estornarEstoqueDoItem(ctx, tx, empresa, c, numero, it.itemCode, *it.movID)
+			estornou, err := estornarEstoqueDoItem(ctx, tx, empresa, c, numero, it.itemCode, *it.movID, ajustesPendentes)
 			if err != nil {
 				return err
 			}
@@ -476,23 +477,34 @@ func estornarAprovacao(ctx context.Context, tx pgx.Tx, empresa, empresaCode int6
 // mais os ajustes ligados à nota. Os ajustes corrigem a entrada (ex.: a NF
 // 78402 da Tecnofer, lançada em KG num item em M e acertada por ajuste em
 // 17/10/2026); sem eles o estorno exigiria e baixaria a quantidade bruta.
-func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repository.CancelamentoEntrada, numero, itemCode, movID int64) (bool, error) {
+// Os ajustes são do item no almoxarifado, não da linha: com duas linhas do
+// mesmo item entram uma vez só, e o que sobrar de uma linha passa para a
+// seguinte (pendentes guarda o ajuste ainda não aplicado por item/almoxarifado).
+func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repository.CancelamentoEntrada, numero, itemCode, movID int64, pendentes map[[2]int64]decimal.Decimal) (bool, error) {
 	ref := stockentity.ReferenceTypeNFEntry
 	var wh int64
 	var qtd decimal.Decimal
 	if err := tx.QueryRow(ctx, `SELECT warehouse_id, quantity FROM stock_movements WHERE id=$1 AND enterprise_id=$2`, movID, empresa).Scan(&wh, &qtd); err != nil {
 		return false, fmt.Errorf("lendo movimento de estoque da nota: %w", err)
 	}
-	var ajustes decimal.Decimal
-	if err := tx.QueryRow(ctx,
-		`SELECT COALESCE(SUM(quantity),0) FROM stock_movements
-		  WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3 AND movement_type='ADJUSTMENT'
-		    AND reference_type=$4 AND reference_code=$5`,
-		empresa, itemCode, wh, ref, c.EntryID).Scan(&ajustes); err != nil {
-		return false, fmt.Errorf("lendo ajustes de estoque da nota: %w", err)
+	chave := [2]int64{itemCode, wh}
+	ajustes, lidos := pendentes[chave]
+	if !lidos {
+		if err := tx.QueryRow(ctx,
+			`SELECT COALESCE(SUM(quantity),0) FROM stock_movements
+			  WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3 AND movement_type='ADJUSTMENT'
+			    AND reference_type=$4 AND reference_code=$5`,
+			empresa, itemCode, wh, ref, c.EntryID).Scan(&ajustes); err != nil {
+			return false, fmt.Errorf("lendo ajustes de estoque da nota: %w", err)
+		}
 	}
 	qtd = qtd.Add(ajustes)
-	if !qtd.IsPositive() {
+	if qtd.IsNegative() {
+		pendentes[chave] = qtd
+		return false, nil
+	}
+	pendentes[chave] = decimal.Zero
+	if qtd.IsZero() {
 		return false, nil
 	}
 	var saldo decimal.Decimal

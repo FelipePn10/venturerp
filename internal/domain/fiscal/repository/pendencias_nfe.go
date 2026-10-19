@@ -12,6 +12,9 @@ import (
 type PendenciasNFeRepository interface {
 	// Registrar abre a pendência (nada acontece se já houver uma aberta).
 	Registrar(ctx context.Context, exitID int64, etapa string, por uuid.UUID) error
+	// Reservar trava a pendência aberta na transação dos efeitos e diz se ela
+	// ainda está aberta: falso = outra execução já aplicou os efeitos.
+	Reservar(ctx context.Context, exitID int64, etapa string) (bool, error)
 	Resolver(ctx context.Context, exitID int64, etapa string) error
 	RegistrarFalha(ctx context.Context, exitID int64, etapa, motivo string) error
 	DaNota(ctx context.Context, exitID int64) ([]entity.PendenciaNFe, error)

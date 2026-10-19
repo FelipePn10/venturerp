@@ -694,8 +694,12 @@ resolvidas) da empresa autenticada:
 e devolve a lista atualizada; se continuarem falhando, responde `422` com o motivo.
 Etapas: `AUTORIZACAO` (títulos, baixa, reservas, pedido) e `CANCELAMENTO` (cancela os
 títulos, devolve ao pedido o que a nota atendeu e volta o pedido para "pedido").
-Reprocessar nunca aplica duas vezes: a pendência resolvida sai da fila na mesma
-transação dos efeitos.
+Reprocessar nunca aplica duas vezes: a transação dos efeitos começa travando a
+pendência aberta (`SELECT … FOR UPDATE`) e a resolve no fim. Execuções
+simultâneas — a autorização, o agendador (a cada minuto) e consultas de status —
+esperam uma pela outra, e a que chega depois encontra a pendência resolvida e
+não faz nada. Antes desse trava o agendador podia ler a pendência ainda aberta e
+baixar o estoque e gerar os títulos de novo.
 
 ---
 
